@@ -1,0 +1,74 @@
+import Context from './Context.ts';
+import Hash from './util/Hash.ts';
+import ConnectionService from './ConnectionService.ts';
+import ConnectionSpec from './ConnectionSpec.ts';
+import NodeService, { Node } from './NodeService.ts';
+import { getOrCreate } from './util/map.ts';
+import { ConnectionProvider } from './NetworkProvider.ts';
+import { Connection } from './ConnectionService.ts';
+import { error } from './util/functional.ts';
+import { BridgeEndMessage, BridgeStartMessage } from './messages.ts';
+
+export default class BridgingService {
+  private connectors: Map<string, {
+    tryConnect(spec: ConnectionSpec): void;
+  }> = new Map();
+
+  constructor(private ctx: Context) {
+  }
+
+  public sendConnSpec(
+    middle: Node,
+    farNodeHash: Hash,
+    connSpec: ConnectionSpec,
+  ) {
+    middle.defaultConn?.sendReliable({
+      BridgeStartMessage: {
+        dst_node_hash: farNodeHash,
+        connection_spec: connSpec,
+      },
+    });
+  }
+
+  public handleBridgeStartMessage(
+    conn: Connection,
+    msg: BridgeStartMessage,
+  ) {
+    const node = this.ctx.get(NodeService).lookup(msg.dst_node_hash);
+    if (node && node.defaultConn) {
+      node.defaultConn.sendReliable({
+        BridgeEndMessage: {
+          src_node_hash: conn.node.hash,
+          connection_spec: msg.connection_spec,
+        },
+      });
+    }
+  }
+
+  public handleBridgeEndMessage(
+    conn: Connection,
+    msg: BridgeEndMessage,
+  ) {
+    const { protocol, data } = msg.connection_spec;
+
+    const node = this.ctx.get(NodeService).lookup(msg.src_node_hash);
+    getOrCreate(
+      node.connections,
+      protocol,
+      () => {
+        const onListen = (spec: string) =>
+          this.ctx.get(BridgingService).sendConnSpec(conn.node, node.hash, {
+            protocol,
+            data: spec,
+          });
+        const onNewConn = (provider: ConnectionProvider) =>
+          this.ctx.get(ConnectionService).initConnection(protocol, provider);
+
+        return this.ctx.config.networkProvider.protocols.get(protocol)!.create(
+          onListen,
+          onNewConn,
+        );
+      },
+    ).tryConnect(data);
+  }
+}

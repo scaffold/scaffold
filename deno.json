@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "target": "esnext",
+    "module": "esnext",
+    "strict": true,
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "dom.asynciterable",
+      "deno.ns"
+    ],
+    "jsx": "react"
+  },
+  "lint": {},
+  "format": {
+    "options": {
+      "singleQuote": true
+    }
+  }
+}

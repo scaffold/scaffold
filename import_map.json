@@ -1,0 +1,17 @@
+{
+  "imports": {
+    "~/": "./",
+    "react": "https://esm.sh/react@17.0.2?target=esnext&pin=v66",
+    "react-dom": "https://esm.sh/react-dom@17.0.2?target=esnext&pin=v66",
+    "secp256k1": "https://deno.land/x/secp256k1@1.5.3/mod.ts",
+    "crypto": "./sbl/util/mock-crypto.ts",
+    "avro": "https://esm.sh/avsc@5.7.3?target=esnext&pin=v66",
+    "buffer": "https://deno.land/std@0.125.0/node/buffer.ts",
+    "stream/consumers": "https://deno.land/std@0.125.0/node/stream/consumers.js",
+    "stream/promises": "https://deno.land/std@0.125.0/node/stream/promises.js",
+    "avsc_types/stream": "https://cdn.esm.sh/v66/@types/node/stream.d.ts",
+    "avsc_types/events": "https://cdn.esm.sh/v66/@types/node/events.d.ts",
+    "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
+  },
+  "scopes": {}
+}
