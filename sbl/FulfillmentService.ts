@@ -25,19 +25,18 @@ export default class FulfillmentService {
 
   private sendSubs(question: Question) {
     for (let i = 0; i < numParallelSubs; i++) {
-      const entry = this.ctx.get(DhtService).getClosestEntry(question.hash);
-      if (entry) {
-        this.ctx.get(SubscriptionService).subscribe(
-          entry.node,
-          question.contractHash,
-          question.params,
-          question.hash,
-        );
-      }
+      // TODO
     }
+
+    this.ctx.get(SubscriptionService).subscribe(question);
   }
 
   private launchExecutor(question: Question) {
+    if (!question.contractHash || !question.params) {
+      // TODO: Populate these here first
+      return;
+    }
+
     const attemptCorrect = Hash.cmp(
       Hash.digest(
         arrConcat(secret, question.hash.toBytes()),
@@ -47,13 +46,13 @@ export default class FulfillmentService {
 
     const gen = this.ctx.config.generators.find(
       (g) =>
-        Hash.equals(g.contractHash, question.contractHash) &&
+        Hash.equals(g.contractHash, question.contractHash!) &&
         g.isCorrect === attemptCorrect,
     );
     if (gen) {
       callWithSyncRequestHandler(
         this.ctx,
-        (handler) => gen.func(question.params, handler),
+        (handler) => gen.func(question.params!, handler),
         (data) => {
           const answer = new Answer(question, data);
           answer.isCorrect = attemptCorrect;

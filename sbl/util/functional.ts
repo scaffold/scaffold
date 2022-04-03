@@ -2,6 +2,12 @@ export const error = (msg: string): never => {
   throw new Error(msg);
 };
 
+export const assert = (cond: boolean, msg?: string): void => {
+  if (!cond) {
+    throw new Error(msg);
+  }
+};
+
 export const memoize = <ArgType extends Object, ReturnType>(
   func: (arg: ArgType) => ReturnType,
 ) => {

@@ -136,8 +136,8 @@ export const registry = {
     name: 'Question',
     type: 'record',
     fields: [
-      { name: 'contract', type: ['null', 'Question'] },
-      { name: 'contract_hash', type: 'Hash' },
+      { name: 'contract', type: ['Question', 'Hash'] },
+      // { name: 'contract_hash', type: 'Hash' },
       { name: 'params', type: 'bytes' },
     ],
   },
@@ -207,18 +207,19 @@ export const registry = {
     name: 'SubscribeMessage',
     type: 'record',
     fields: [
-      { name: 'question', type: 'Question' },
-      { name: 'child_question', type: 'Question' },
-      // { name: 'destination', type: 'Hash' },
-      { name: 'expected_reward', type: 'long' },
+      { name: 'question_hash', type: 'Hash' },
+      // { name: 'question', type: 'Question' },
+      // { name: 'child_question', type: 'Question' },
+      // // { name: 'destination', type: 'Hash' },
+      // { name: 'expected_reward', type: 'long' },
     ],
   },
-  License: {
-    name: 'License',
+  Licenses: {
+    name: 'Licenses',
     type: 'record',
     fields: [
       { name: 'question_hash', type: 'Hash' },
-      { name: 'amount', type: 'Amount' }, // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs
+      { name: 'incentive', type: 'Amount' }, // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs
     ],
   },
   PublishMessage: {
@@ -230,9 +231,9 @@ export const registry = {
       // { name: 'birth_proof', type: 'HashExpr' },
       { name: 'answer', type: 'bytes' },
 
-      { name: 'licenses', type: { type: 'array', items: 'License' } },
+      { name: 'licenses', type: { type: 'array', items: 'Licenses' } },
 
-      // If the timestamp is too far back, nothing really happens
+      // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps
       // If timestamp is in the future, it will be rejected and it won't be useful for proving first
       // For questions with easy, rewarding answers (like epochs),
       //   the answer will be created as soon as possible after the required timestamp.

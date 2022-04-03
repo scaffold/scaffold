@@ -5,30 +5,30 @@ import PublicationService from './PublicationService.ts';
 import NodeService from './NodeService.ts';
 import { getOrCreate } from './util/map.ts';
 import { arrConcat } from './util/buffer.ts';
+import { Node } from './NodeService.ts';
 
 export default class Question {
-  public hash: Hash;
-
   // Map from parent question hash to input
   public inputs: Map<string, { answerHash: Hash; incentive: bigint }> =
     new Map();
 
   // List of node hashes
-  public subscriptions: Hash[];
+  public subscriptions: Node[] = [];
 
   public answers: Answer[] = []; // In order of reception
 
   public isFulfilling = false;
 
+  public canonicalCallbacks: ((answer: Answer) => void)[] = [];
+  public canonicalAnswer?: Answer;
+
   // public expectedReward = 0n;
 
   constructor(
-    // These could potentially be optional in the future
-    public contractHash: Hash,
-    public params: Uint8Array,
-  ) {
-    this.hash = Hash.digest(arrConcat(contractHash.toBytes(), params));
-  }
+    public hash: Hash,
+    public contractHash?: Hash,
+    public params?: Uint8Array,
+  ) {}
 
   public getContractHash() {
     return this.contractHash;

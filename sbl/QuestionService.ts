@@ -1,7 +1,7 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import FulfillmentService from './FulfillmentService.ts';
-import { arrConcat, fromNumber } from './util/buffer.ts';
+import { arrConcat, arrEquals, fromNumber } from './util/buffer.ts';
 import { bin2hex } from './util/hex.ts';
 import { Node } from './NodeService.ts';
 import * as hashes from './hashes.ts';
@@ -15,6 +15,7 @@ import Question from './Question.ts';
 import Answer from './Answer.ts';
 import NodeService from './NodeService.ts';
 import PublicationService from './PublicationService.ts';
+import { assert } from './util/functional.ts';
 
 export default class QuestionService {
   private registry: Map<string, Question> = new Map();
@@ -24,8 +25,9 @@ export default class QuestionService {
   public computeQuestionHash(
     contractHash: Hash,
     params: Uint8Array,
-    nonce?: number,
+    // nonce?: number,
   ) {
+    const nonce = undefined;
     return Hash.digest(
       arrConcat(
         contractHash.toBytes(),
@@ -53,21 +55,16 @@ export default class QuestionService {
     return getOrCreate(
       this.registry,
       questionHash.toHex(),
-      () => new Question(),
+      () => new Question(questionHash),
     );
   }
-
-  // public compute(question: Question) {
-  //   this.ctx.get(FulfillmentService).fulfill(question);
-  // }
 
   public addAnswer(question: Question, answer: Answer) {
     question.answers.push(answer);
 
-    question.subscriptions.forEach((nodeHash) => {
-      const node = this.ctx.get(NodeService).lookup(nodeHash);
-      this.ctx.get(PublicationService).publish(node, answer);
-    });
+    question.subscriptions.forEach((node) =>
+      this.ctx.get(PublicationService).publish(node, answer)
+    );
 
     // if (answer.timestamp) {
     //   this.set(
@@ -86,75 +83,77 @@ export default class QuestionService {
     // }
   }
 
-  // public getCanonical(
-  //   contractHash: Hash,
-  //   params: Uint8Array,
-  //   callback: (answer: Answer) => void,
-  // ): { release: () => void } {
-  //   this.ctx.get(Logger).log('QuestionService', 'getCanonical', {
-  //     contractHash,
-  //     params,
-  //   });
+  public getCanonical(
+    contractHash: Hash,
+    params: Uint8Array,
+    callback: (answer: Answer) => void,
+  ): { release: () => void } {
+    this.ctx.get(Logger).log('QuestionService', 'getCanonical', {
+      contractHash,
+      params,
+    });
 
-  //   const hash = this.computeQuestionHash(contractHash, params);
-  //   const entry = getOrCreate(
-  //     this.registry,
-  //     hash.toHex(),
-  //     () => ({
-  //       canonicalCallbacks: [],
-  //       answers: new Map<string, Answer>(),
-  //       isFulfilling: false,
-  //     }),
-  //   );
-  //   entry.canonicalCallbacks.push(callback);
-  //   if (entry.canonicalAnswer) {
-  //     callback(entry.canonicalAnswer);
-  //   }
+    const hash = this.computeQuestionHash(contractHash, params);
+    const entry = getOrCreate(
+      this.registry,
+      hash.toHex(),
+      () => new Question(hash, contractHash, params),
+      (q) => {
+        if (q.contractHash && !Hash.equals(contractHash, q.contractHash)) {
+          throw new Error(`Mismatching contract hash`);
+        }
+        if (q.params && !arrEquals(params, q.params)) {
+          throw new Error(`Mismatching params`);
+        }
+        q.contractHash = contractHash;
+        q.params = params;
+        return q;
+      },
+    );
 
-  //   if (!entry.isFulfilling) {
-  //     this.ctx.get(FulfillmentService).fulfill(contractHash, params);
-  //     entry.isFulfilling = true;
-  //   }
+    entry.canonicalCallbacks.push(callback);
+    if (entry.canonicalAnswer) {
+      callback(entry.canonicalAnswer);
+    }
 
-  //   // TODO
-  //   // Send SUB to DHT
-  //   // Send SUB to peers
+    if (!entry.isFulfilling) {
+      this.ctx.get(FulfillmentService).fulfill(entry);
+      assert(entry.isFulfilling);
+    }
 
-  //   // this.ctx.get(MetadataService).patchMetadata({});
+    // TODO
+    // Send SUB to DHT
+    // Send SUB to peers
 
-  //   // for (const [peerId, answer] of this.ctx
-  //   //   .get(Db)
-  //   //   .query(
-  //   //     'SELECT peer_id, answer FROM publications WHERE contract_name=? AND contract_params=? ORDER BY id ASC LIMIT 1',
-  //   //     [contractName, JSON.stringify(params)]
-  //   //   )) {
-  //   //   callback(JSON.parse(answer as string));
-  //   //   return;
-  //   // }
+    // this.ctx.get(MetadataService).patchMetadata({});
 
-  //   // this.ctx.get(SubscriptionManager).add(contractName, params);
+    // for (const [peerId, answer] of this.ctx
+    //   .get(Db)
+    //   .query(
+    //     'SELECT peer_id, answer FROM publications WHERE contract_name=? AND contract_params=? ORDER BY id ASC LIMIT 1',
+    //     [contractName, JSON.stringify(params)]
+    //   )) {
+    //   callback(JSON.parse(answer as string));
+    //   return;
+    // }
 
-  //   // this.ctx
-  //   //   .get(PeerManager)
-  //   //   .broadcast({ sub: { contractName, params, bid: 10 } });
-  //   // // TODO: Ask or calculate
+    // this.ctx.get(SubscriptionManager).add(contractName, params);
 
-  //   return {
-  //     release: () => {
-  //       const entry = this.registry.get(hash.toHex());
-  //       if (!entry) {
-  //         throw new Error(
-  //           `Entry not found in AnswerService.getCanonical().release(); this shouldn't happen.`,
-  //         );
-  //       }
-  //       const idx = entry.canonicalCallbacks.indexOf(callback);
-  //       if (idx === -1) {
-  //         throw new Error(
-  //           `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
-  //         );
-  //       }
-  //       entry.canonicalCallbacks.splice(idx, 1);
-  //     },
-  //   };
-  // }
+    // this.ctx
+    //   .get(PeerManager)
+    //   .broadcast({ sub: { contractName, params, bid: 10 } });
+    // // TODO: Ask or calculate
+
+    return {
+      release: () => {
+        const idx = entry.canonicalCallbacks.indexOf(callback);
+        if (idx === -1) {
+          throw new Error(
+            `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
+          );
+        }
+        entry.canonicalCallbacks.splice(idx, 1);
+      },
+    };
+  }
 }

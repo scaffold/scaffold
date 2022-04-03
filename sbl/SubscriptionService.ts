@@ -8,47 +8,26 @@ import { Node } from './NodeService.ts';
 import { SubscribeMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 import FulfillmentService from './FulfillmentService.ts';
+import DhtService from './DhtService.ts';
+import Question from './Question.ts';
 
 export default class SubscriptionService {
   constructor(private ctx: Context) {}
 
-  public subscribe(
-    node: Node,
-    contractHash: Hash,
-    params: Uint8Array,
-    destination: Hash,
-  ) {
-    node.defaultConn?.sendReliable({
-      SubscribeMessage: {
-        question: { contract: null, contract_hash: contractHash, params },
-        destination,
-      },
-    });
+  public subscribe(question: Question) {
+    const entry = this.ctx.get(DhtService).getClosestEntry(question.hash);
+    if (entry) {
+      entry.node.defaultConn?.sendReliable({
+        SubscribeMessage: {
+          question_hash: question.hash,
+        },
+      });
+    }
   }
 
   public handleSubscribeMessage(msgCtx: MessageCtx, msg: SubscribeMessage) {
-    const qs = this.ctx.get(QuestionService);
-
-    const questionHash = qs.computeQuestionHash(
-      msg.question.contract_hash,
-      msg.question.params,
-    );
-    const question = qs.getQuestion(questionHash);
-    question.addSubscription(
-      questionHash,
-      msg.expected_reward,
-      msgCtx.signedMsg,
-      msgCtx.conn.node.hash,
-    );
-
-    // TODO: Test question.expectedReward better
-    if (question.expectedReward) {
-      this.ctx.get(FulfillmentService).fulfill(
-        msg.question.contract_hash,
-        msg.question.params,
-      );
-    }
-
+    this.ctx.get(QuestionService).getQuestion(msg.question_hash).subscriptions
+      .push(msgCtx.conn.node);
     // this.ctx
     //   .get(QuestionService)
     //   .getCanonical(
