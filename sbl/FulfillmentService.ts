@@ -7,6 +7,7 @@ import DhtService from './DhtService.ts';
 import { arrConcat } from './util/buffer.ts';
 import SubscriptionService from './SubscriptionService.ts';
 import Answer from './Answer.ts';
+import Question from './Question.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
@@ -16,53 +17,47 @@ export default class FulfillmentService {
 
   constructor(private ctx: Context) {}
 
-  public fulfill(contractHash: Hash, params: Uint8Array) {
-    this.sendSubs(contractHash, params);
-    this.launchExecutor(contractHash, params);
+  public fulfill(question: Question) {
+    question.isFulfilling = true;
+    this.sendSubs(question);
+    this.launchExecutor(question);
   }
 
-  private sendSubs(contractHash: Hash, params: Uint8Array) {
+  private sendSubs(question: Question) {
     for (let i = 0; i < numParallelSubs; i++) {
-      const dst = this.ctx.get(QuestionService).computeQuestionHash(
-        contractHash,
-        params,
-        i,
-      );
-      const entry = this.ctx.get(DhtService).getClosestEntry(dst);
+      const entry = this.ctx.get(DhtService).getClosestEntry(question.hash);
       if (entry) {
         this.ctx.get(SubscriptionService).subscribe(
           entry.node,
-          contractHash,
-          params,
-          dst,
+          question.contractHash,
+          question.params,
+          question.hash,
         );
       }
     }
   }
 
-  private launchExecutor(contractHash: Hash, params: Uint8Array) {
+  private launchExecutor(question: Question) {
     const attemptCorrect = Hash.cmp(
       Hash.digest(
-        arrConcat(secret, contractHash.toBytes(), params),
+        arrConcat(secret, question.hash.toBytes()),
       ),
       this.attemptDupeFraction,
     ) === 1;
 
     const gen = this.ctx.config.generators.find(
       (g) =>
-        Hash.equals(g.contractHash, contractHash) &&
+        Hash.equals(g.contractHash, question.contractHash) &&
         g.isCorrect === attemptCorrect,
     );
     if (gen) {
       callWithSyncRequestHandler(
         this.ctx,
-        (handler) => gen.func(params, handler),
+        (handler) => gen.func(question.params, handler),
         (data) => {
-          const qs = this.ctx.get(QuestionService);
-          const questionHash = qs.computeQuestionHash(contractHash, params);
-          const answer = new Answer(data);
+          const answer = new Answer(question, data);
           answer.isCorrect = attemptCorrect;
-          qs.getQuestion(questionHash).addAnswer(answer);
+          this.ctx.get(QuestionService).addAnswer(question, answer);
         },
       );
     }

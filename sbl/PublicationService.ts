@@ -1,5 +1,6 @@
 import Context from './Context.ts';
 import QuestionService from './QuestionService.ts';
+import AnswerService from './AnswerService.ts';
 import { Connection } from './ConnectionService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
@@ -44,9 +45,11 @@ export default class PublicationService {
   public handlePublishMessage(conn: Connection, msg: PublishMessage) {
     if (!this.verifyTimestamp(msg)) {
       console.log(`Timestamp does not verfiy`);
-
       return;
     }
+
+    // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerService).getAnswer(input));
+    // inputs.reduce((acc, answer)=>acc + answer., 0n);
 
     const question = this.ctx.get(QuestionService).getQuestion(
       this.ctx.get(QuestionService).computeQuestionHash(

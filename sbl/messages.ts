@@ -131,9 +131,10 @@ export const registry = {
     logicalType: 'HashLogicalType',
   },
   bytes: { name: 'bytes', type: 'bytes', logicalType: 'Uint8ArrayLogicalType' },
+  Amount: { name: 'Amount', type: 'long' },
   Question: {
-    type: 'record',
     name: 'Question',
+    type: 'record',
     fields: [
       { name: 'contract', type: ['null', 'Question'] },
       { name: 'contract_hash', type: 'Hash' },
@@ -141,8 +142,8 @@ export const registry = {
     ],
   },
   Neighbor: {
-    type: 'record',
     name: 'Neighbor',
+    type: 'record',
     fields: [
       { name: 'node_hash', type: 'Hash' },
       // { name: 'public_key', type: 'bytes' },
@@ -150,8 +151,8 @@ export const registry = {
     ],
   },
   InfoMessage: {
-    type: 'record',
     name: 'InfoMessage',
+    type: 'record',
     fields: [
       { name: 'public_key', type: 'bytes' },
       { name: 'node_nonce', type: 'bytes' },
@@ -165,46 +166,46 @@ export const registry = {
     ],
   },
   PingMessage: {
-    type: 'record',
     name: 'PingMessage',
+    type: 'record',
     fields: [
       { name: 'secret', type: 'Hash' },
     ],
   },
   PongMessage: {
-    type: 'record',
     name: 'PongMessage',
+    type: 'record',
     fields: [
       { name: 'secret', type: 'Hash' },
     ],
   },
   ConnectionSpec: {
-    type: 'record',
     name: 'ConnectionSpec',
+    type: 'record',
     fields: [
       { name: 'protocol', type: 'string' },
       { name: 'data', type: 'string' },
     ],
   },
   BridgeStartMessage: {
-    type: 'record',
     name: 'BridgeStartMessage',
+    type: 'record',
     fields: [
       { name: 'dst_node_hash', type: 'Hash' },
       { name: 'connection_spec', type: 'ConnectionSpec' },
     ],
   },
   BridgeEndMessage: {
-    type: 'record',
     name: 'BridgeEndMessage',
+    type: 'record',
     fields: [
       { name: 'src_node_hash', type: 'Hash' },
       { name: 'connection_spec', type: 'ConnectionSpec' },
     ],
   },
   SubscribeMessage: {
-    type: 'record',
     name: 'SubscribeMessage',
+    type: 'record',
     fields: [
       { name: 'question', type: 'Question' },
       { name: 'child_question', type: 'Question' },
@@ -213,16 +214,16 @@ export const registry = {
     ],
   },
   License: {
-    type: 'record',
     name: 'License',
+    type: 'record',
     fields: [
-      { name: 'signature', type: 'bytes' },
-      { name: 'subscribe_msg', type: 'bytes' },
+      { name: 'question_hash', type: 'Hash' },
+      { name: 'amount', type: 'Amount' }, // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs
     ],
   },
   PublishMessage: {
-    type: 'record',
     name: 'PublishMessage',
+    type: 'record',
     fields: [
       { name: 'question', type: 'Question' }, // I think this can just be the question hash, since subscribers will know it?
       { name: 'inputs', type: { type: 'array', items: 'Hash' } },
@@ -232,43 +233,39 @@ export const registry = {
       { name: 'licenses', type: { type: 'array', items: 'License' } },
 
       // If the timestamp is too far back, nothing really happens
-      // If timestamp is forward, it will be rejected and it won't be useful for proving first
+      // If timestamp is in the future, it will be rejected and it won't be useful for proving first
       // For questions with easy, rewarding answers (like epochs),
       //   the answer will be created as soon as possible after the required timestamp.
       { name: 'timestamp', type: 'long' },
     ],
   },
   CiteMessage: {
-    type: 'record',
     name: 'CiteMessage',
+    type: 'record',
     fields: [
       { name: 'payment_proof', type: 'Hash' },
     ],
   },
   CollateralMessage: {
-    type: 'record',
     name: 'CollateralMessage',
+    type: 'record',
     fields: [
       { name: 'publication_hash', type: 'Hash' },
       { name: 'collateral', type: 'long' },
     ],
   },
-  BribeMessage: {
-    type: 'record',
-    name: 'BribeMessage',
-    fields: [],
-  },
+  BribeMessage: { name: 'BribeMessage', type: 'record', fields: [] },
   DerivedWorkMessage: {
-    type: 'record',
     name: 'DerivedWorkMessage',
+    type: 'record',
     fields: [
       { name: 'answer_hash', type: 'Hash' },
       { name: 'work_log2', type: 'int' },
     ],
   },
   HashExpr: {
-    type: 'record',
     name: 'HashExpr',
+    type: 'record',
     fields: [
       { name: 'pre_pad', type: 'bytes' },
       { name: 'parent', type: ['null', 'HashExpr'] },
@@ -276,15 +273,15 @@ export const registry = {
     ],
   },
   DhtJoinMessage: {
-    type: 'record',
     name: 'DhtJoinMessage',
+    type: 'record',
     fields: [
       { name: 'hash', type: 'Hash' },
     ],
   },
   Packet: {
-    type: 'record',
     name: 'Packet',
+    type: 'record',
     fields: [
       {
         name: 'message',

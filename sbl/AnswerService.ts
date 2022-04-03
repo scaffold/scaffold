@@ -8,8 +8,11 @@ import * as hashes from './hashes.ts';
 import Logger from './Logger.ts';
 import Peer from './Peer.ts';
 import { getOrCreate } from './util/map.ts';
-import QuestionService, { Question } from './QuestionService.ts';
+import QuestionService from './QuestionService.ts';
+import Question from './Question.ts';
+import Answer from './Answer.ts';
 
+/*
 export interface Answer {
   question: Question;
   data: Uint8Array;
@@ -18,6 +21,7 @@ export interface Answer {
   isCorrect?: boolean;
   timestamp?: BigInt;
 }
+*/
 
 export default class AnswerService {
   private registry: Map<string, Answer> = new Map();
@@ -35,6 +39,13 @@ export default class AnswerService {
         answer,
         nonce !== undefined ? fromNumber(nonce, 8) : new Uint8Array([]),
       ),
+    );
+  }
+
+  public getAnswer(answerHash: Hash) {
+    // TODO: Make non-dummy getter
+    return new Answer(
+      new Question(this.ctx, Hash.digest(''), new Uint8Array([])),
     );
   }
 

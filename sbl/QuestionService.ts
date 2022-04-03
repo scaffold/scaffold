@@ -13,6 +13,8 @@ import { HashExpr } from './messages.ts';
 import WorkQueue from './WorkQueue.ts';
 import Question from './Question.ts';
 import Answer from './Answer.ts';
+import NodeService from './NodeService.ts';
+import PublicationService from './PublicationService.ts';
 
 export default class QuestionService {
   private registry: Map<string, Question> = new Map();
@@ -53,6 +55,35 @@ export default class QuestionService {
       questionHash.toHex(),
       () => new Question(),
     );
+  }
+
+  // public compute(question: Question) {
+  //   this.ctx.get(FulfillmentService).fulfill(question);
+  // }
+
+  public addAnswer(question: Question, answer: Answer) {
+    question.answers.push(answer);
+
+    question.subscriptions.forEach((nodeHash) => {
+      const node = this.ctx.get(NodeService).lookup(nodeHash);
+      this.ctx.get(PublicationService).publish(node, answer);
+    });
+
+    // if (answer.timestamp) {
+    //   this.set(
+    //     hashes.timeHash,
+    //     Hash.digest(arrConcat(contractHash.toBytes(), params)).toBytes(),
+    //     { data: fromNumber(Number(answer.timestamp), 8) },
+    //   );
+    // }
+
+    // if (
+    //   !this.canonicalAnswer ||
+    //   answer.canonicalScore > this.canonicalAnswer.canonicalScore
+    // ) {
+    //   this.canonicalAnswer = answer;
+    //   this.canonicalCallbacks.forEach((cb) => cb(answer));
+    // }
   }
 
   // public getCanonical(
