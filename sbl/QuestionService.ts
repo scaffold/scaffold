@@ -11,14 +11,11 @@ import Peer from './Peer.ts';
 import MessageCtx from './MessageCtx.ts';
 import { HashExpr, QuestionSpec } from './messages.ts';
 import WorkQueue from './WorkQueue.ts';
-import Answer from './Answer.ts';
 import NodeService from './NodeService.ts';
 import PublicationService from './PublicationService.ts';
 import { assert, error } from './util/functional.ts';
-import QuestionRegistry, {
-  Question,
-  QuestionEntry,
-} from './QuestionRegistry.ts';
+import QuestionRegistry, { Question } from './QuestionRegistry.ts';
+import { Answer } from './AnswerRegistry.ts';
 
 export default class QuestionService {
   constructor(private ctx: Context) {}
@@ -46,10 +43,20 @@ export default class QuestionService {
   // }
 
   public addAnswer(question: Question, answer: Answer) {
+    if (question !== answer.question) throw new Error(`Invalid`);
+
     question.answers.push(answer);
 
     question.subscriptions.forEach((node) =>
       this.ctx.get(PublicationService).publish(node, answer)
+    );
+
+    answer.licenses.forEach(({ question_hash, incentive }) =>
+      this.ctx.get(QuestionRegistry).getByHash(question_hash).val.addIncentive(
+        question.hash,
+        answer.hash,
+        incentive,
+      )
     );
 
     // if (answer.timestamp) {

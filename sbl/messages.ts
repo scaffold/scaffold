@@ -267,7 +267,10 @@ export const registry = {
     type: 'record',
     fields: [
       { name: 'question_hash', type: 'Hash' },
-      { name: 'incentive', type: 'Amount' }, // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs
+
+      // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs.
+      // TODO: Make this Amount; not sure why it's not working yet.
+      { name: 'incentive', type: 'long' },
     ],
   },
   PublishMessage: {
@@ -416,6 +419,8 @@ type MsgType<Name extends keyof typeof registry> = ObjectType<
 
 export const Hash = makeMsg(registry, 'Hash');
 export type Hash = MsgType<'Hash'>;
+export const Amount = makeMsg(registry, 'Amount');
+export type Amount = MsgType<'Amount'>;
 export const QuestionSpec = makeMsg(registry, 'QuestionSpec');
 export type QuestionSpec = MsgType<'QuestionSpec'>;
 export const Neighbor = makeMsg(registry, 'Neighbor');

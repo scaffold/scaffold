@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import HashMap, { HashMapEntry } from './util/HashMap.ts';
+import HashMap from './util/HashMap.ts';
 import { HashExpr, QuestionSpec } from './messages.ts';
 import Question from './Question.ts';
 import { assert, error } from './util/functional.ts';
@@ -28,8 +28,9 @@ export class Question {
   // public expectedReward = 0n;
 
   constructor(
-    public contractAnswerHash: Hash,
-    public params: Uint8Array,
+    public hash: Hash,
+    public contractAnswerHash?: Hash,
+    public params?: Uint8Array,
     // public spec: QuestionSpec,
     // public hash: Hash,
     // public contractHash?: Hash,
@@ -122,16 +123,22 @@ export default class QuestionRegistry extends HashMap<Question> {
     super();
   }
 
-  // public get(spec: QuestionSpec) {
-  //   return this.getOrCreate(spec, () => new Question());
-  // }
+  public peek(hash: Hash) {
+    return super.get(hash);
+  }
 
-  public get(key: QuestionSpec) {
+  public getBySpec(key: QuestionSpec) {
+    const hash = QuestionRegistry.computeHash(
+      key.contract_answer_hash,
+      key.params,
+    );
     return this.getOrCreate(
-      QuestionRegistry.computeHash(key.contract_answer_hash, key.params),
-      () => new Question(key.contract_answer_hash, key.params),
+      hash,
+      () => new Question(hash, key.contract_answer_hash, key.params),
     );
   }
-}
 
-export type QuestionEntry = HashMapEntry<Question>;
+  public getByHash(hash: Hash) {
+    return this.getOrCreate(hash, () => new Question(hash));
+  }
+}

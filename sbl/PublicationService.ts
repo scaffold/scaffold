@@ -49,10 +49,17 @@ export default class PublicationService {
       return;
     }
 
-    // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerService).getAnswer(input));
-    // inputs.reduce((acc, answer)=>acc + answer., 0n);
+    const inputs = msg.inputs.map((input) => this.ctx.get(AnswerRegistry).peek(input));
+    inputs.reduce((acc, answer)=>acc + answer., 0n);
 
-    const { val: answer } = this.ctx.get(AnswerRegistry).get(msg);
+
+
+    if (msg.licenses.some((license) => license.incentive < 0)) {
+      console.log(`An incentive is negative`);
+      return;
+    }
+
+    const answer = this.ctx.get(AnswerRegistry).get(msg);
     this.ctx.get(QuestionService).addAnswer(answer.question, answer);
 
     const contract = this.ctx.config.contracts.find((c) =>

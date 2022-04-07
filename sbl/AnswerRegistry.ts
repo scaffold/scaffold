@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import HashMap, { HashMapEntry } from './util/HashMap.ts';
+import HashMap from './util/HashMap.ts';
 import { HashExpr, License, PublishMessage, QuestionSpec } from './messages.ts';
 import { assert, error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
@@ -39,6 +39,7 @@ export class Answer {
   public licensedFor?: Question[];
 
   constructor(
+    public hash: Hash,
     public question: Question,
     { inputs, answer, licenses, timestamp }: PublishMessage,
   ) {
@@ -64,18 +65,17 @@ export default class AnswerRegistry extends HashMap<Answer> {
     super();
   }
 
-  // public get(spec: QuestionSpec) {
-  //   return this.getOrCreate(spec, () => new Answer());
-  // }
+  public peek(hash: Hash) {
+    return super.get(hash);
+  }
 
-  public get(publication: PublishMessage) {
+  public getByPub(publication: PublishMessage) {
     const { hash: questionHash, val: question } = this.ctx.get(QuestionRegistry)
-      .get(publication.question);
+      .getBySpec(publication.question);
+    const hash = AnswerRegistry.computeHash(questionHash, publication.answer);
     return this.getOrCreate(
-      AnswerRegistry.computeHash(questionHash, publication.answer),
-      () => new Answer(question, publication),
+      hash,
+      () => new Answer(hash, question, publication),
     );
   }
 }
-
-export type AnswerEntry = HashMapEntry<Answer>;
