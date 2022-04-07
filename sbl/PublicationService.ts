@@ -7,7 +7,8 @@ import Hash from './util/Hash.ts';
 import { Node } from './NodeService.ts';
 import callWithSyncRequestHandler from './callWithSyncRequestHandler.ts';
 import { License, PublishMessage } from './messages.ts';
-import Answer from './Answer.ts';
+import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
+import QuestionRegistry from './QuestionRegistry.ts';
 
 export default class PublicationService {
   constructor(private ctx: Context) {}
@@ -51,24 +52,21 @@ export default class PublicationService {
     // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerService).getAnswer(input));
     // inputs.reduce((acc, answer)=>acc + answer., 0n);
 
-    const question = this.ctx.get(QuestionService).getQuestion(
-      this.ctx.get(QuestionService).computeQuestionHash(
-        msg.question.contract_hash,
-        msg.question.params,
-      ),
-    );
-    const answer = new Answer(question, msg.answer);
-    answer.fromNode = conn.node;
-    answer.timestamp = msg.timestamp;
-    question.addAnswer(answer);
+    const { val: answer } = this.ctx.get(AnswerRegistry).get(msg);
+    this.ctx.get(QuestionService).addAnswer(answer.question, answer);
 
     const contract = this.ctx.config.contracts.find((c) =>
-      Hash.equals(c.hash, msg.question.contract_hash)
+      Hash.equals(c.hash, answer.question.contractAnswerHash)
     );
     if (contract) {
       callWithSyncRequestHandler(
         this.ctx,
-        (handler) => contract.func(msg.question.params, msg.answer, handler),
+        (handler) =>
+          contract.func(
+            answer.question.params,
+            answer.data,
+            handler,
+          ),
         (isCorrect) => {
           // TODO: Publish collateral here
 

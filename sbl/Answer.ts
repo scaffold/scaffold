@@ -1,3 +1,4 @@
+/*
 import Peer from './Peer.ts';
 import Question from './Question.ts';
 import { Node } from './NodeService.ts';
@@ -43,3 +44,4 @@ export default class Answer {
   //   this.collateral.set(msgCtx.msgHash.toHex(), {});
   // }
 }
+*/

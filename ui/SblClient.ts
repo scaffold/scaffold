@@ -5,9 +5,10 @@ import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
 import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import QuestionService, { Answer } from '~/sbl/QuestionService.ts';
+import QuestionService from '~/sbl/QuestionService.ts';
 import SampleContracts from '~/graph/SampleContracts.ts';
 import EpochContract from '~/graph/EpochContract.ts';
+import Answer from '~/sbl/Answer.ts';
 
 // window['Deno'] = {};
 

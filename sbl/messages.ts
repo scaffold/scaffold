@@ -132,15 +132,50 @@ export const registry = {
   },
   bytes: { name: 'bytes', type: 'bytes', logicalType: 'Uint8ArrayLogicalType' },
   Amount: { name: 'Amount', type: 'long' },
-  Question: {
-    name: 'Question',
+
+  // LoadContract: { name: 'LoadContract', type: 'record', fields: [] },
+  // SelfDurationContract: {
+  //   name: 'SelfDurationContract',
+  //   type: 'record',
+  //   fields: [],
+  // },
+  // SelfInputsContract: {
+  //   name: 'SelfInputsContract',
+  //   type: 'record',
+  //   fields: [],
+  // },
+  // SelfLicensesContract: {
+  //   name: 'SelfLicensesContract',
+  //   type: 'record',
+  //   fields: [],
+  // },
+  // QuestionSpec: {
+  //   name: 'QuestionSpec',
+  //   type: 'record',
+  //   fields: [
+  //     {
+  //       name: 'contract',
+  //       type: [
+  //         'QuestionSpec',
+  //         'LoadContract',
+  //         'SelfDurationContract',
+  //         'SelfInputsContract',
+  //         'SelfLicensesContract',
+  //       ],
+  //     },
+  //     // { name: 'contract_hash', type: 'Hash' },
+  //     { name: 'params', type: 'bytes' },
+  //   ],
+  // },
+  QuestionSpec: {
+    name: 'QuestionSpec',
     type: 'record',
     fields: [
-      { name: 'contract', type: ['Question', 'Hash'] },
-      // { name: 'contract_hash', type: 'Hash' },
+      { name: 'contract_answer_hash', type: 'Hash' },
       { name: 'params', type: 'bytes' },
     ],
   },
+
   Neighbor: {
     name: 'Neighbor',
     type: 'record',
@@ -204,18 +239,31 @@ export const registry = {
     ],
   },
   SubscribeMessage: {
+    // This message is purely informational; publishing licenses with incentive, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
     name: 'SubscribeMessage',
     type: 'record',
     fields: [
-      { name: 'question_hash', type: 'Hash' },
-      // { name: 'question', type: 'Question' },
-      // { name: 'child_question', type: 'Question' },
+      // { name: 'question_hash', type: 'Hash' },
+      { name: 'question', type: 'QuestionSpec' },
+      // { name: 'child_question', type: 'QuestionSpec' },
       // // { name: 'destination', type: 'Hash' },
       // { name: 'expected_reward', type: 'long' },
     ],
   },
-  Licenses: {
-    name: 'Licenses',
+  UnsubscribeMessage: {
+    // This message is purely informational; publishing licenses with incentive, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
+    name: 'UnsubscribeMessage',
+    type: 'record',
+    fields: [
+      // { name: 'question_hash', type: 'Hash' },
+      { name: 'question', type: 'QuestionSpec' },
+      // { name: 'child_question', type: 'QuestionSpec' },
+      // // { name: 'destination', type: 'Hash' },
+      // { name: 'expected_reward', type: 'long' },
+    ],
+  },
+  License: {
+    name: 'License',
     type: 'record',
     fields: [
       { name: 'question_hash', type: 'Hash' },
@@ -226,15 +274,21 @@ export const registry = {
     name: 'PublishMessage',
     type: 'record',
     fields: [
-      { name: 'question', type: 'Question' }, // I think this can just be the question hash, since subscribers will know it?
+      // { name: 'question_hash', type: 'Hash' },
+      // { name: 'question', type: 'QuestionSpec' }, // I think this can just be the question hash, since subscribers will know it?
+
+      // Note that the answer in here behaves as an input - if it becomes non-canonical, this publication needs to become so as well.
+      // TODO: Perhaps add it as an input? Does it even need to be separate?
+      { name: 'question', type: 'QuestionSpec' },
+
       { name: 'inputs', type: { type: 'array', items: 'Hash' } },
       // { name: 'birth_proof', type: 'HashExpr' },
       { name: 'answer', type: 'bytes' },
 
-      { name: 'licenses', type: { type: 'array', items: 'Licenses' } },
+      { name: 'licenses', type: { type: 'array', items: 'License' } },
 
-      // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps
-      // If timestamp is in the future, it will be rejected and it won't be useful for proving first
+      // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
+      // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
       // For questions with easy, rewarding answers (like epochs),
       //   the answer will be created as soon as possible after the required timestamp.
       { name: 'timestamp', type: 'long' },
@@ -293,6 +347,7 @@ export const registry = {
           'BridgeStartMessage',
           'BridgeEndMessage',
           'SubscribeMessage',
+          'UnsubscribeMessage',
           'PublishMessage',
           'CollateralMessage',
           'BribeMessage',
@@ -361,8 +416,8 @@ type MsgType<Name extends keyof typeof registry> = ObjectType<
 
 export const Hash = makeMsg(registry, 'Hash');
 export type Hash = MsgType<'Hash'>;
-export const Question = makeMsg(registry, 'Question');
-export type Question = MsgType<'Question'>;
+export const QuestionSpec = makeMsg(registry, 'QuestionSpec');
+export type QuestionSpec = MsgType<'QuestionSpec'>;
 export const Neighbor = makeMsg(registry, 'Neighbor');
 export type Neighbor = MsgType<'Neighbor'>;
 export const InfoMessage = makeMsg(registry, 'InfoMessage');
@@ -379,6 +434,8 @@ export const BridgeEndMessage = makeMsg(registry, 'BridgeEndMessage');
 export type BridgeEndMessage = MsgType<'BridgeEndMessage'>;
 export const SubscribeMessage = makeMsg(registry, 'SubscribeMessage');
 export type SubscribeMessage = MsgType<'SubscribeMessage'>;
+export const UnsubscribeMessage = makeMsg(registry, 'UnsubscribeMessage');
+export type UnsubscribeMessage = MsgType<'UnsubscribeMessage'>;
 export const License = makeMsg(registry, 'License');
 export type License = MsgType<'License'>;
 export const PublishMessage = makeMsg(registry, 'PublishMessage');

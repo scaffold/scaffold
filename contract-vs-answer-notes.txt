@@ -1,0 +1,104 @@
+
+QuestionSpec:
+  /load/[contract_hash]/[params]
+
+SUB
+  This message is purely informational, so I think we can just inform of interest in some QuestionSpec
+  QuestionSpec
+    Why?
+
+PUB
+  Needs to be "dependent" on the contract answer, not question
+  Needs to be inserted into the QuestionRegistry
+
+Answer
+
+Properties for the correct, canonical answer (non-canonical or incorrect answers won't be reported by the question-based query):
+  data: Uint8Array;
+  hash: Hash; // can work around
+  authority: Peer; // probably don't need
+  timestamp: Timestamp; // don't need
+  duration: Duration; // probably don't need, also complicated to compute
+  collateral: ???; // probably don't need
+  inputs: { question_hash: Hash }[]; // probably don't need
+  licenses: { question_hash: Hash, incentive: bigint }[];
+
+Someone could copy an answer data, put their own licenses on it, and it would pass every contract.
+
+/load/[contract_hash]/[params]
+{ contract: { contract: 'load', params: '[contract_hash]' }, params: '[params]' }
+
+/load/[contract_hash]/[params]/[more_params]
+
+/time/[x]
+  Will block until the specified instant.
+  Timestamp will always be equal to X.
+  Since descendants must occur after this input, this gives a lower bound on the descendant's timestamp.
+
+/sign/[public_key]/[hash]
+  Will return the signature of the given hash, using the private key corresponding to the given public key.
+  In a contract, this 
+  
+
+Just do this for now
+  /self/data
+  /self/authority
+  /self/timestamp
+  /self/inputs
+  /self/licenses
+
+
+Timestamps in the future will be rejected
+
+A contract's inputs might be different than an answer's inputs.
+  I think all options are open here.
+  <strikethrough>
+  If the contract requests an input that's not an answer input, fail it.
+  All contract inputs must be an answer input.
+  Extra answer inputs are fine?
+  </strikethrough>
+
+/epoch/[x]
+  Request /time/[x], which will block until that instant.
+  Contracts with a /time/[x] input will double-check that the answer's timestamp is greater than or equal to the maximum X.
+  Actually, more generally, it'll check all inputs.
+  Timestamp validity check: Math.max(...contract.time_inputs) <= answer.timestamp <= Date.now()
+  Future timestamps will be rejected.
+  Past timestamps will fail the contract, since it requests the correct time input.
+
+/sig/[public_key]/[x]
+  {sig: bytes, data: JSON}
+  Check that answer data is signed with public key
+
+/account/[public_key]/[x]
+  Input /account/[public_key]/[x-1]
+  User-input path to signed command
+  Input /sig/[public_key]/[y]/data
+
+/collateral/
+
+
+
+QuestionHash:
+
+
+
+  public hash: Hash;
+  // fromPeer: Peer;
+
+  public publication: PublishMessage; // ???
+
+  // This gets (1) set when the answer is received, and (2) reduced to the min if we see another answer including this answer's hash in its inputs.
+  private latestTimestamp: number = Date.now();
+
+  private collateral: Map<
+    string,
+    { peer: Peer; amount: number; support: boolean; signedMsg: Uint8Array }
+  > = new Map();
+  private sumSupport = 0;
+
+  public fromNode?: Node;
+  public isCorrect?: boolean;
+  public timestamp?: BigInt;
+
+  public licensedFor?: Question[];

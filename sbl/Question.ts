@@ -1,11 +1,14 @@
+/*
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import Answer from './Answer.ts';
 import PublicationService from './PublicationService.ts';
 import NodeService from './NodeService.ts';
 import { getOrCreate } from './util/map.ts';
-import { arrConcat } from './util/buffer.ts';
 import { Node } from './NodeService.ts';
+import { QuestionSpec } from './messages.ts';
+import { assert, error } from './util/functional.ts';
+import { arrConcat, arrEquals, fromNumber } from './util/buffer.ts';
 
 export default class Question {
   // Map from parent question hash to input
@@ -25,18 +28,11 @@ export default class Question {
   // public expectedReward = 0n;
 
   constructor(
-    public hash: Hash,
-    public contractHash?: Hash,
-    public params?: Uint8Array,
+    public spec: QuestionSpec,
+    // public hash: Hash,
+    // public contractHash?: Hash,
+    // public params?: Uint8Array,
   ) {}
-
-  public getContractHash() {
-    return this.contractHash;
-  }
-
-  public getParams() {
-    return this.params;
-  }
 
   public addInput(questionHash: Hash, answerHash: Hash, incentive: bigint) {
     getOrCreate(
@@ -87,3 +83,4 @@ export default class Question {
   //   this.expectedReward = sumReward;
   // }
 }
+*/

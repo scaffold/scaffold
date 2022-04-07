@@ -9,33 +9,19 @@ import Logger from './Logger.ts';
 import { getOrCreate } from './util/map.ts';
 import Peer from './Peer.ts';
 import MessageCtx from './MessageCtx.ts';
-import { HashExpr } from './messages.ts';
+import { HashExpr, QuestionSpec } from './messages.ts';
 import WorkQueue from './WorkQueue.ts';
-import Question from './Question.ts';
 import Answer from './Answer.ts';
 import NodeService from './NodeService.ts';
 import PublicationService from './PublicationService.ts';
-import { assert } from './util/functional.ts';
+import { assert, error } from './util/functional.ts';
+import QuestionRegistry, {
+  Question,
+  QuestionEntry,
+} from './QuestionRegistry.ts';
 
 export default class QuestionService {
-  private registry: Map<string, Question> = new Map();
-
   constructor(private ctx: Context) {}
-
-  public computeQuestionHash(
-    contractHash: Hash,
-    params: Uint8Array,
-    // nonce?: number,
-  ) {
-    const nonce = undefined;
-    return Hash.digest(
-      arrConcat(
-        contractHash.toBytes(),
-        params,
-        nonce !== undefined ? fromNumber(nonce, 8) : new Uint8Array([]),
-      ),
-    );
-  }
 
   public computeAnswerHash(
     questionHash: Hash,
@@ -51,13 +37,13 @@ export default class QuestionService {
     );
   }
 
-  public getQuestion(questionHash: Hash) {
-    return getOrCreate(
-      this.registry,
-      questionHash.toHex(),
-      () => new Question(questionHash),
-    );
-  }
+  // public getQuestion(questionHash: Hash) {
+  //   return getOrCreate(
+  //     this.registry,
+  //     questionHash.toHex(),
+  //     () => new Question(questionHash),
+  //   );
+  // }
 
   public addAnswer(question: Question, answer: Answer) {
     question.answers.push(answer);
@@ -84,41 +70,24 @@ export default class QuestionService {
   }
 
   public getCanonical(
-    contractHash: Hash,
-    params: Uint8Array,
+    // contract:Answer,
+    // params: Uint8Array,
+
+    spec: QuestionSpec,
     callback: (answer: Answer) => void,
   ): { release: () => void } {
-    this.ctx.get(Logger).log('QuestionService', 'getCanonical', {
-      contractHash,
-      params,
-    });
+    this.ctx.get(Logger).log('QuestionService', 'getCanonical', { spec });
 
-    const hash = this.computeQuestionHash(contractHash, params);
-    const entry = getOrCreate(
-      this.registry,
-      hash.toHex(),
-      () => new Question(hash, contractHash, params),
-      (q) => {
-        if (q.contractHash && !Hash.equals(contractHash, q.contractHash)) {
-          throw new Error(`Mismatching contract hash`);
-        }
-        if (q.params && !arrEquals(params, q.params)) {
-          throw new Error(`Mismatching params`);
-        }
-        q.contractHash = contractHash;
-        q.params = params;
-        return q;
-      },
-    );
+    const entry = this.ctx.get(QuestionRegistry).get(spec);
 
-    entry.canonicalCallbacks.push(callback);
-    if (entry.canonicalAnswer) {
-      callback(entry.canonicalAnswer);
+    entry.val.canonicalCallbacks.push(callback);
+    if (entry.val.canonicalAnswer) {
+      callback(entry.val.canonicalAnswer);
     }
 
-    if (!entry.isFulfilling) {
+    if (!entry.val.isFulfilling) {
       this.ctx.get(FulfillmentService).fulfill(entry);
-      assert(entry.isFulfilling);
+      assert(entry.val.isFulfilling);
     }
 
     // TODO
@@ -146,13 +115,13 @@ export default class QuestionService {
 
     return {
       release: () => {
-        const idx = entry.canonicalCallbacks.indexOf(callback);
+        const idx = entry.val.canonicalCallbacks.indexOf(callback);
         if (idx === -1) {
           throw new Error(
             `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
           );
         }
-        entry.canonicalCallbacks.splice(idx, 1);
+        entry.val.canonicalCallbacks.splice(idx, 1);
       },
     };
   }

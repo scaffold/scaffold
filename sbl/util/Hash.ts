@@ -1,5 +1,6 @@
 import { Sha256 } from 'https://deno.land/std@0.121.0/hash/sha256.ts';
 import { bin2hex, hex2bin } from './hex.ts';
+import { arrConcat, fromNumber } from './buffer.ts';
 
 export default class Hash {
   public static fromBytes(bytes: Uint8Array) {
@@ -39,6 +40,21 @@ export default class Hash {
     algo.update(data);
     // const digest = await crypto.subtle.digest('SHA-256', data);
     return new Hash(new Uint8Array(algo.arrayBuffer()));
+  }
+
+  // TODO: Do we need this?
+  public static digestParts(...parts: (Hash | Uint8Array | number)[]) {
+    return Hash.digest(
+      arrConcat(
+        ...parts.map((p) =>
+          p instanceof Hash
+            ? p.toBytes()
+            : p instanceof Uint8Array
+            ? Hash.digest(p).toBytes()
+            : fromNumber(p, 8)
+        ),
+      ),
+    );
   }
 
   public static random() {
