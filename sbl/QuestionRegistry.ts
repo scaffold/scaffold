@@ -1,7 +1,6 @@
 import Context from './Context.ts';
 import HashMap from './util/HashMap.ts';
 import { HashExpr, QuestionSpec } from './messages.ts';
-import Question from './Question.ts';
 import { assert, error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import { arrConcat, arrEquals, fromNumber } from './util/buffer.ts';

@@ -67,9 +67,10 @@ export default class AnswerRegistry extends HashMap<Answer> {
   }
 
   public getByPub(publication: PublishMessage) {
-    const { hash: questionHash, val: question } = this.ctx.get(QuestionRegistry)
-      .getBySpec(publication.question);
-    const hash = AnswerRegistry.computeHash(questionHash, publication.answer);
+    const question = this.ctx.get(QuestionRegistry).getBySpec(
+      publication.question,
+    );
+    const hash = AnswerRegistry.computeHash(question.hash, publication.answer);
     return this.getOrCreate(
       hash,
       () => new Answer(hash, question, publication),

@@ -6,14 +6,8 @@
     "secp256k1": "https://deno.land/x/secp256k1@1.5.5/mod.ts",
     "crypto": "./sbl/util/mock-crypto.ts",
     "avro": "https://esm.sh/avsc@5.7.4?target=esnext&pin=v76",
-    "buffer": "https://deno.land/std@0.134.0/node/buffer.ts",
-    "events": "https://deno.land/std@0.134.0/node/events.ts",
-    "node:events": "https://deno.land/std@0.134.0/node/events.ts",
-    "stream": "https://deno.land/std@0.134.0/node/stream.ts",
-    "stream/consumers": "https://deno.land/std@0.134.0/node/stream/consumers.mjs",
-    "stream/promises": "https://deno.land/std@0.134.0/node/stream/promises.mjs",
-    "avsc_types/stream": "https://cdn.esm.sh/v76/@types/node/stream.d.ts",
-    "avsc_types/events": "https://cdn.esm.sh/v76/@types/node/events.d.ts",
+    "std-latest/": "https://deno.land/std@0.134.0/",
+    "std-fix-abortable/": "https://deno.land/std@0.128.0/",
     "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   },
   "scopes": {}

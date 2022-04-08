@@ -1,7 +1,7 @@
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config from '~/sbl/Config.ts';
-import { serve } from 'https://deno.land/std@0.134.0/http/mod.ts';
+import { serve } from 'std-fix-abortable/http/mod.ts';
 import {
   ConnectionProvider,
   ProtocolProvider,

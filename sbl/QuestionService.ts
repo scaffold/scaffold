@@ -52,7 +52,7 @@ export default class QuestionService {
     );
 
     answer.licenses.forEach(({ question_hash, incentive }) =>
-      this.ctx.get(QuestionRegistry).getByHash(question_hash).val.addIncentive(
+      this.ctx.get(QuestionRegistry).getByHash(question_hash).addIncentive(
         question.hash,
         answer.hash,
         incentive,
@@ -87,14 +87,14 @@ export default class QuestionService {
 
     const entry = this.ctx.get(QuestionRegistry).getBySpec(spec);
 
-    entry.val.canonicalCallbacks.push(callback);
-    if (entry.val.canonicalAnswer) {
-      callback(entry.val.canonicalAnswer);
+    entry.canonicalCallbacks.push(callback);
+    if (entry.canonicalAnswer) {
+      callback(entry.canonicalAnswer);
     }
 
-    if (!entry.val.isFulfilling) {
+    if (!entry.isFulfilling) {
       this.ctx.get(FulfillmentService).fulfill(entry);
-      assert(entry.val.isFulfilling);
+      assert(entry.isFulfilling);
     }
 
     // TODO
@@ -122,13 +122,13 @@ export default class QuestionService {
 
     return {
       release: () => {
-        const idx = entry.val.canonicalCallbacks.indexOf(callback);
+        const idx = entry.canonicalCallbacks.indexOf(callback);
         if (idx === -1) {
           throw new Error(
             `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
           );
         }
-        entry.val.canonicalCallbacks.splice(idx, 1);
+        entry.canonicalCallbacks.splice(idx, 1);
       },
     };
   }

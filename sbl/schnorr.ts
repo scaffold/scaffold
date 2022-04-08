@@ -1,4 +1,4 @@
-import { assert } from 'https://deno.land/std@0.134.0/testing/asserts.ts';
+import { assert } from 'std-latest/testing/asserts.ts';
 import * as secp from 'https://deno.land/x/secp256k1@1.5.5/mod.ts';
 
 const privateKey = secp.utils.randomPrivateKey();

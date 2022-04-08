@@ -1,4 +1,4 @@
-import { Sha256 } from 'https://deno.land/std@0.134.0/hash/sha256.ts';
+import { Sha256 } from 'std-latest/hash/sha256.ts';
 
 // TODO: Move these to WASM
 

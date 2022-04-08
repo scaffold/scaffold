@@ -1,4 +1,4 @@
-import { Buffer } from 'buffer';
+import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 // @deno-types="../avsc_types.d.ts"
 import * as avro from 'avro';
 import HashClass from './util/Hash.ts';

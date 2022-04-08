@@ -33,8 +33,9 @@ export default class SubscriptionService {
   }
 
   public handleSubscribeMessage(msgCtx: MessageCtx, msg: SubscribeMessage) {
-    this.ctx.get(QuestionRegistry).getBySpec(msg.question).val.subscriptions
-      .push(msgCtx.conn.node);
+    this.ctx.get(QuestionRegistry).getBySpec(msg.question).subscriptions.push(
+      msgCtx.conn.node,
+    );
 
     // this.ctx
     //   .get(QuestionService)

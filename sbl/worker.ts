@@ -1,4 +1,4 @@
-import { walk } from 'https://deno.land/std@0.134.0/fs/mod.ts';
+import { walk } from 'std-latest/fs/mod.ts';
 
 for await (const entry of walk('modules')) {
   if (entry.isFile && entry.name.slice(-3) === '.ts') {

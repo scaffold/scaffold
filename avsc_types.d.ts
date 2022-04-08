@@ -6,8 +6,9 @@
 // automatically. Either finish documenting the type signature or document why
 // `any` is appropriate.
 
-import * as stream from 'avsc_types/stream';
-import { EventEmitter } from 'avsc_types/events';
+import * as stream from 'std-fix-abortable/node/stream.ts';
+import { EventEmitter } from 'std-fix-abortable/node/events.ts';
+import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 
 //"virtual" namespace (no JS, just types) for Avro Schema
 declare namespace schema {
