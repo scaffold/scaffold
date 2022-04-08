@@ -4,10 +4,7 @@ import { HashExpr, License, PublishMessage, QuestionSpec } from './messages.ts';
 import { assert, error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import { arrConcat, arrEquals, fromNumber } from './util/buffer.ts';
-import QuestionRegistry, {
-  Question,
-  QuestionEntry,
-} from './QuestionRegistry.ts';
+import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 import PublicationService from './PublicationService.ts';
 import NodeService from './NodeService.ts';
 import { getOrCreate } from './util/map.ts';

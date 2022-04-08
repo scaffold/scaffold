@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import QuestionService, { Answer } from './QuestionService.ts';
+import QuestionService from './QuestionService.ts';
 import Hash from './util/Hash.ts';
 import { Connection } from './ConnectionService.ts';
 import { error } from './util/functional.ts';
@@ -9,21 +9,23 @@ import { SubscribeMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 import FulfillmentService from './FulfillmentService.ts';
 import DhtService from './DhtService.ts';
-import QuestionRegistry, { QuestionEntry } from './QuestionRegistry.ts';
+import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 
 export default class SubscriptionService {
   constructor(private ctx: Context) {}
 
-  public subscribe(questionEntry: QuestionEntry) {
-    const dhtEntry = this.ctx.get(DhtService).getClosestEntry(
-      questionEntry.hash,
-    );
+  public subscribe(question: Question) {
+    if (!question.contractAnswerHash || !question.params) {
+      throw new Error(`Question doesn't have contractAnswerHash or params`);
+    }
+
+    const dhtEntry = this.ctx.get(DhtService).getClosestEntry(question.hash);
     if (dhtEntry) {
       dhtEntry.node.defaultConn?.sendReliable({
         SubscribeMessage: {
           question: {
-            contract_answer_hash: questionEntry.val.contractAnswerHash,
-            params: questionEntry.val.params,
+            contract_answer_hash: question.contractAnswerHash,
+            params: question.params,
           },
         },
       });
@@ -31,9 +33,9 @@ export default class SubscriptionService {
   }
 
   public handleSubscribeMessage(msgCtx: MessageCtx, msg: SubscribeMessage) {
-    this.ctx.get(QuestionRegistry).get(msg.question).val.subscriptions.push(
-      msgCtx.conn.node,
-    );
+    this.ctx.get(QuestionRegistry).getBySpec(msg.question).val.subscriptions
+      .push(msgCtx.conn.node);
+
     // this.ctx
     //   .get(QuestionService)
     //   .getCanonical(

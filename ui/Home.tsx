@@ -1,4 +1,4 @@
-import { prettyBytes } from 'https://deno.land/std@0.125.0/fmt/bytes.ts';
+import { prettyBytes } from 'https://deno.land/std@0.134.0/fmt/bytes.ts';
 import React from 'react';
 import SblClient from './SblClient.ts';
 import { Answer } from '~/sbl/QuestionService.ts';

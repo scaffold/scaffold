@@ -1,5 +1,6 @@
 import Context from './Context.ts';
-import QuestionService, { Answer } from './QuestionService.ts';
+import QuestionService from './QuestionService.ts';
+import { Answer } from './AnswerRegistry.ts';
 import Hash from './util/Hash.ts';
 
 const noAnswerSentinel = Symbol('noAnswerSentinel');
@@ -20,17 +21,16 @@ const callWithSyncRequestHandler = <T>(
       let answer: Answer | typeof noAnswerSentinel = noAnswerSentinel;
 
       let inside = true;
-      ctx.get(QuestionService).getCanonical(
-        contractHash,
+      ctx.get(QuestionService).getCanonical({
+        contract_answer_hash: contractHash,
         params,
-        (a: Answer) => {
-          if (inside) {
-            answer = a;
-          } else {
-            callWithSyncRequestHandler(ctx, func, onAnswer);
-          }
-        },
-      );
+      }, (a: Answer) => {
+        if (inside) {
+          answer = a;
+        } else {
+          callWithSyncRequestHandler(ctx, func, onAnswer);
+        }
+      });
       inside = false;
 
       if (answer !== noAnswerSentinel) {

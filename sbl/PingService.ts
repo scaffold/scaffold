@@ -8,6 +8,7 @@ import NodeService from './NodeService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import { PingMessage, PongMessage } from './messages.ts';
+import MessageCtx from './MessageCtx.ts';
 
 const PING_TIMEOUT_MS = 10000;
 
@@ -53,11 +54,11 @@ export default class PingService {
     return conn.ping;
   }
 
-  public handlePingMessage(conn: Connection, msg: PingMessage) {
-    conn.sendFast({ PongMessage: { secret: msg.secret } });
+  public handlePingMessage(msgCtx: MessageCtx, msg: PingMessage) {
+    msgCtx.conn.sendFast({ PongMessage: { secret: msg.secret } });
   }
 
-  public handlePongMessage(conn: Connection, msg: PongMessage) {
+  public handlePongMessage(_msgCtx: MessageCtx, msg: PongMessage) {
     const resolver = this.pingResolvers.get(msg.secret.toHex());
     if (resolver) {
       resolver();

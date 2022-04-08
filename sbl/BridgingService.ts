@@ -8,6 +8,7 @@ import { ConnectionProvider } from './NetworkProvider.ts';
 import { Connection } from './ConnectionService.ts';
 import { error } from './util/functional.ts';
 import { BridgeEndMessage, BridgeStartMessage } from './messages.ts';
+import MessageCtx from './MessageCtx.ts';
 
 export default class BridgingService {
   private connectors: Map<string, {
@@ -30,25 +31,19 @@ export default class BridgingService {
     });
   }
 
-  public handleBridgeStartMessage(
-    conn: Connection,
-    msg: BridgeStartMessage,
-  ) {
+  public handleBridgeStartMessage(msgCtx: MessageCtx, msg: BridgeStartMessage) {
     const node = this.ctx.get(NodeService).lookup(msg.dst_node_hash);
     if (node && node.defaultConn) {
       node.defaultConn.sendReliable({
         BridgeEndMessage: {
-          src_node_hash: conn.node.hash,
+          src_node_hash: msgCtx.conn.node.hash,
           connection_spec: msg.connection_spec,
         },
       });
     }
   }
 
-  public handleBridgeEndMessage(
-    conn: Connection,
-    msg: BridgeEndMessage,
-  ) {
+  public handleBridgeEndMessage(msgCtx: MessageCtx, msg: BridgeEndMessage) {
     const { protocol, data } = msg.connection_spec;
 
     const node = this.ctx.get(NodeService).lookup(msg.src_node_hash);
@@ -57,10 +52,14 @@ export default class BridgingService {
       protocol,
       () => {
         const onListen = (spec: string) =>
-          this.ctx.get(BridgingService).sendConnSpec(conn.node, node.hash, {
-            protocol,
-            data: spec,
-          });
+          this.ctx.get(BridgingService).sendConnSpec(
+            msgCtx.conn.node,
+            node.hash,
+            {
+              protocol,
+              data: spec,
+            },
+          );
         const onNewConn = (provider: ConnectionProvider) =>
           this.ctx.get(ConnectionService).initConnection(protocol, provider);
 

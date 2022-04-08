@@ -9,71 +9,67 @@ import callWithSyncRequestHandler from './callWithSyncRequestHandler.ts';
 import { License, PublishMessage } from './messages.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import QuestionRegistry from './QuestionRegistry.ts';
+import MessageCtx from './MessageCtx.ts';
 
 export default class PublicationService {
   constructor(private ctx: Context) {}
 
-  public publish(
-    node: Node,
-    answer: Answer,
-  ) {
+  public publish(node: Node, answer: Answer) {
     if (!answer.data) {
       throw new Error(`Not sure what causes this case`);
     }
 
-    const licenses: License[] = [];
-    answer.question.subscriptions.forEach((commitments, childQuestionHex) =>
-      commitments.forEach(({ signature, msgData }, nodeHex) => {
-        licenses.push({ signature, subscribe_msg: msgData });
-      })
-    );
+    // const licenses: License[] = [];
+    // answer.question.subscriptions.forEach((commitments, childQuestionHex) =>
+    //   commitments.forEach(({ signature, msgData }, nodeHex) => {
+    //     licenses.push({ signature, subscribe_msg: msgData });
+    //   })
+    // );
 
-    node.defaultConn?.sendReliable({
-      PublishMessage: {
-        question: {
-          contract: null,
-          contract_hash: answer.question.getContractHash(),
-          params: answer.question.getParams(),
-        },
-        inputs: [],
-        answer: answer.data!,
-        licenses,
-        timestamp: this.now(),
-      },
-    });
+    // node.defaultConn?.sendReliable({
+    //   PublishMessage: {
+    //     question: {
+    //       contract: null,
+    //       contract_hash: answer.question.getContractHash(),
+    //       params: answer.question.getParams(),
+    //     },
+    //     inputs: [],
+    //     answer: answer.data!,
+    //     licenses,
+    //     timestamp: this.now(),
+    //   },
+    // });
   }
 
-  public handlePublishMessage(conn: Connection, msg: PublishMessage) {
+  public handlePublishMessage(msgCtx: MessageCtx, msg: PublishMessage) {
     if (!this.verifyTimestamp(msg)) {
       console.log(`Timestamp does not verfiy`);
       return;
     }
 
-    const inputs = msg.inputs.map((input) => this.ctx.get(AnswerRegistry).peek(input));
-    inputs.reduce((acc, answer)=>acc + answer., 0n);
+    // TODO: Working here
+    if (Math.random() >= 0) {
+      throw new Error(`TODO: Working here`);
+    }
 
-
+    // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerRegistry).peek(input));
+    // inputs.reduce((acc, answer)=>acc + answer., 0n);
 
     if (msg.licenses.some((license) => license.incentive < 0)) {
       console.log(`An incentive is negative`);
       return;
     }
 
-    const answer = this.ctx.get(AnswerRegistry).get(msg);
+    const answer = this.ctx.get(AnswerRegistry).getByPub(msg);
     this.ctx.get(QuestionService).addAnswer(answer.question, answer);
 
     const contract = this.ctx.config.contracts.find((c) =>
-      Hash.equals(c.hash, answer.question.contractAnswerHash)
+      Hash.equals(c.hash, msg.question.contract_answer_hash)
     );
     if (contract) {
       callWithSyncRequestHandler(
         this.ctx,
-        (handler) =>
-          contract.func(
-            answer.question.params,
-            answer.data,
-            handler,
-          ),
+        (handler) => contract.func(msg.question.params, answer.data, handler),
         (isCorrect) => {
           // TODO: Publish collateral here
 

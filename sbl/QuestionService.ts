@@ -85,7 +85,7 @@ export default class QuestionService {
   ): { release: () => void } {
     this.ctx.get(Logger).log('QuestionService', 'getCanonical', { spec });
 
-    const entry = this.ctx.get(QuestionRegistry).get(spec);
+    const entry = this.ctx.get(QuestionRegistry).getBySpec(spec);
 
     entry.val.canonicalCallbacks.push(callback);
     if (entry.val.canonicalAnswer) {

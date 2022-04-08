@@ -1,5 +1,5 @@
-import { assert } from 'https://deno.land/std@0.120.0/testing/asserts.ts';
-import * as secp from 'https://deno.land/x/secp256k1/mod.ts';
+import { assert } from 'https://deno.land/std@0.134.0/testing/asserts.ts';
+import * as secp from 'https://deno.land/x/secp256k1@1.5.5/mod.ts';
 
 const privateKey = secp.utils.randomPrivateKey();
 console.log('privateKey', privateKey.length, secp.utils.bytesToHex(privateKey));

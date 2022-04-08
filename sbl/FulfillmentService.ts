@@ -67,9 +67,12 @@ export default class FulfillmentService {
             timestamp: BigInt(Date.now()),
           };
 
-          const answer = this.ctx.get(AnswerRegistry).get(publication);
-          answer.isCorrect = attemptCorrect;
-          this.ctx.get(QuestionService).addAnswer(answer.question, answer);
+          // TODO: Working here
+          throw new Error(`TODO: Working here`);
+
+          // const answer = this.ctx.get(AnswerRegistry).get(publication);
+          // answer.isCorrect = attemptCorrect;
+          // this.ctx.get(QuestionService).addAnswer(answer.question, answer);
         },
       );
     }

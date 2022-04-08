@@ -1,4 +1,4 @@
-import { Sha256 } from 'https://deno.land/std@0.121.0/hash/sha256.ts';
+import { Sha256 } from 'https://deno.land/std@0.134.0/hash/sha256.ts';
 import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, fromNumber } from './buffer.ts';
 

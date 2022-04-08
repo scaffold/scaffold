@@ -1,4 +1,4 @@
-import { RBTree } from 'https://deno.land/x/collections@0.12.0/mod.ts';
+import { RBTree } from 'https://deno.land/std@0.134.0/collections/rb_tree.ts';
 
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';

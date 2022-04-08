@@ -19,13 +19,16 @@ export default class CollateralService {
   constructor(private ctx: Context) {}
 
   public handleCollateralMessage(msgCtx: MessageCtx, msg: CollateralMessage) {
-    this.ctx.get(QuestionService).addCollateral(msg.publication_hash);
-    let entry = this.registry.get(msg.signature);
-    if (!entry) {
-      entry = {};
-      this.registry.set(msg.signature, entry);
+    // TODO: Working here
+    throw new Error(`TODO: Working here`);
 
-      this.ctx.get(AnswerService).addCollateral(msg.answerHash, entry);
-    }
+    // this.ctx.get(QuestionService).addCollateral(msg.publication_hash);
+    // let entry = this.registry.get(msg.signature);
+    // if (!entry) {
+    //   entry = {};
+    //   this.registry.set(msg.signature, entry);
+
+    //   this.ctx.get(AnswerService).addCollateral(msg.answerHash, entry);
+    // }
   }
 }

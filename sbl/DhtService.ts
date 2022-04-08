@@ -5,6 +5,7 @@ import NodeService from './NodeService.ts';
 import { Connection } from './ConnectionService.ts';
 import { error } from './util/functional.ts';
 import { DhtJoinMessage } from './messages.ts';
+import MessageCtx from './MessageCtx.ts';
 
 const dhtEntryLifespanMs = 1000 * 60 * 60;
 
@@ -24,10 +25,10 @@ export default class DhtService {
     }, 10000);
   }
 
-  public handleDhtJoinMessage(conn: Connection, msg: DhtJoinMessage) {
+  public handleDhtJoinMessage(msgCtx: MessageCtx, msg: DhtJoinMessage) {
     const entry = {
       answer: msg.hash,
-      node: conn.node,
+      node: msgCtx.conn.node,
     };
 
     // Check answer hash

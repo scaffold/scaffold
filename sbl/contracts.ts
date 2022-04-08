@@ -1,4 +1,4 @@
-import { sha256 } from 'https://denopkg.com/chiefbiiko/sha256/mod.ts';
+import { Sha256 } from 'https://deno.land/std@0.134.0/hash/sha256.ts';
 
 // TODO: Move these to WASM
 
@@ -11,7 +11,10 @@ contracts.push({
   func: (params: any, request: (contractName: string, params: any) => any) => {
     const prevEpoch = params ? request('epoch', params - 1) : '';
     const delta = request('delta', params);
-    return sha256(prevEpoch + delta, 'utf8', 'hex');
+
+    const algo = new Sha256();
+    algo.update(prevEpoch + delta);
+    return algo.hex();
   },
 });
 

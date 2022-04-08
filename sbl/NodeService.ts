@@ -10,6 +10,7 @@ import BridgingService from './BridgingService.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
 import { getOrCreate } from './util/map.ts';
 import { InfoMessage } from './messages.ts';
+import MessageCtx from './MessageCtx.ts';
 
 // TODO: Split into connected and unconnected nodes. This will help eliminate optionals.
 export interface Node {
@@ -155,11 +156,8 @@ export default class NodeService {
     }
   }
 
-  public handleInfoMessage(
-    conn: Connection,
-    msg: InfoMessage,
-  ) {
-    const node = conn.node;
+  public handleInfoMessage(msgCtx: MessageCtx, msg: InfoMessage) {
+    const node = msgCtx.conn.node;
 
     node.neighbors.clear();
     node.hops = Infinity;
