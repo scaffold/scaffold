@@ -174,13 +174,12 @@ export default class SblClient {
     let height = 0n;
     setInterval(() => {
       const params = this.ctx.get(EpochContract).makeParams(height++);
-      this.ctx.get(QuestionService).getCanonical(
-        Hash.fromHex(
+      this.ctx.get(QuestionService).getCanonical({
+        contract_answer_hash: Hash.fromHex(
           'afc9b31d9f3f3645ae563606e1ddbe4b0e72b247e3bc9dff6251f5ee8961ae48',
         ),
         params,
-        (answer) => console.log(answer),
-      );
+      }, (answer) => console.log(answer));
     }, 1000);
 
     // const params = this.ctx.get(EpochContract).makeParams(10n);
@@ -198,11 +197,10 @@ export default class SblClient {
     contractParams: Uint8Array,
     onAnswer: (answer: Answer) => void,
   ) {
-    this.ctx.get(QuestionService).getCanonical(
-      contractHash,
-      contractParams,
-      onAnswer,
-    );
+    this.ctx.get(QuestionService).getCanonical({
+      contract_answer_hash: contractHash,
+      params: contractParams,
+    }, onAnswer);
   }
 
   public close() {}

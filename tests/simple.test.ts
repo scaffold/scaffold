@@ -100,7 +100,34 @@ const baseConfig: Config = {
 };
 
 Deno.test(
-  `simple request/response test`,
+  { name: `simple request/response test`, only: true },
+  deadline(async () => {
+    const ctx = new Context(baseConfig);
+
+    const params = new TextEncoder().encode('params');
+    const data = new TextEncoder().encode('data');
+    const contractHash = Hash.fromLiteralStr('contract');
+
+    const question = { contract_answer_hash: contractHash, params };
+
+    ctx.get(AnswerRegistry).getByPub({
+      question,
+      inputs: [],
+      answer: data,
+      licenses: [],
+      timestamp: BigInt(Date.now()),
+    });
+
+    const firstAnswer: Answer = await new Promise((resolve) =>
+      ctx.get(QuestionService).getCanonical(question, resolve)
+    );
+
+    assertEquals(firstAnswer.data, data);
+  }),
+);
+
+Deno.test(
+  { name: `generator test` },
   deadline(async () => {
     const ctx = new Context(baseConfig);
 

@@ -1,8 +1,6 @@
 {
   "compilerOptions": {
     "allowJs": true,
-    "target": "esnext", // These are only used in bundling
-    "module": "esnext", // These are only used in bundling
     "strict": true,
     "lib": [
       "dom",
@@ -13,7 +11,10 @@
     "jsx": "react"
   },
   "lint": {},
-  "format": {
+  "fmt": {
+    "files": {
+      "exclude": ["README.md"]
+    },
     "options": {
       "singleQuote": true
     }

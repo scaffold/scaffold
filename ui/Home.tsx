@@ -1,7 +1,7 @@
 import { prettyBytes } from 'std-latest/fmt/bytes.ts';
 import React from 'react';
 import SblClient from './SblClient.ts';
-import { Answer } from '~/sbl/QuestionService.ts';
+import { Answer } from '~/sbl/AnswerRegistry.ts';
 import Hash from '~/sbl/util/Hash.ts';
 
 export default () => {

@@ -10,6 +10,7 @@ import NodeService from './NodeService.ts';
 import { getOrCreate } from './util/map.ts';
 import { Node } from './NodeService.ts';
 import Peer from './Peer.ts';
+import QuestionService from './QuestionService.ts';
 
 export class Answer {
   // fromPeer: Peer;
@@ -71,9 +72,11 @@ export default class AnswerRegistry extends HashMap<Answer> {
       publication.question,
     );
     const hash = AnswerRegistry.computeHash(question.hash, publication.answer);
-    return this.getOrCreate(
+    const answer = this.getOrCreate(
       hash,
       () => new Answer(hash, question, publication),
     );
+    this.ctx.get(QuestionService).addAnswer(question, answer);
+    return answer;
   }
 }
