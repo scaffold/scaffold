@@ -95,10 +95,6 @@ const config: Config = {
 
   shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
 
-  contracts: [],
-
-  generators: [],
-
   networkProvider: {
     protocols: new Map(Object.entries({ websocket: websocketProvider })),
   },
@@ -112,4 +108,10 @@ const config: Config = {
 const ctx = new Context(config);
 ctx.get(SampleContracts).apply({});
 ctx.get(EpochContract).apply();
-ctx.get(ServingService);
+ctx.get(ServingService).serve((protocol: string, spec: string) =>
+  console.log(
+    `ProtocolProvider ${protocol} is listening with spec ${
+      JSON.stringify(spec)
+    }`,
+  )
+);

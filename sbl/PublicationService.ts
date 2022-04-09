@@ -63,6 +63,10 @@ export default class PublicationService {
     const answer = this.ctx.get(AnswerRegistry).getByPub(msg);
     this.ctx.get(QuestionService).addAnswer(answer.question, answer);
 
+    // TODO: Working here; need to execute contract
+    throw new Error(`TODO: Working here`);
+
+    /*
     const contract = this.ctx.config.contracts.find((c) =>
       Hash.equals(c.hash, msg.question.contract_answer_hash)
     );
@@ -79,6 +83,7 @@ export default class PublicationService {
         },
       );
     }
+    */
 
     // if (this.ctx.config.shouldVerify(this.ctx, fromPeer, pub)) {
     //   const contract = this.ctx.config.contracts.find(

@@ -147,10 +147,6 @@ export default class SblClient {
 
       shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
 
-      contracts: [],
-
-      generators: [],
-
       networkProvider: {
         protocols: new Map(
           Object.entries({

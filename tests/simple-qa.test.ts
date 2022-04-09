@@ -1,10 +1,4 @@
 import { assertEquals } from 'std-latest/testing/asserts.ts';
-import { deadline } from 'std-fix-abortable/async/mod.ts';
-import { deepMerge } from 'std-latest/collections/mod.ts';
-import secp from '~/sbl/util/secp.ts';
-import Context from '~/sbl/Context.ts';
-import Config from '~/sbl/Config.ts';
-import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
 import AnswerRegistry, { Answer } from '~/sbl/AnswerRegistry.ts';
@@ -12,40 +6,11 @@ import { arrEquals } from '~/sbl/util/buffer.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import CollatzContract from '~/graph/CollatzContract.ts';
 import { CollatzAnswer } from '~/graph/collatzMessages.ts';
-
-const baseConfig: Config = {
-  location: { x: 1, y: 2, z: 3 },
-
-  shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
-
-  contracts: [],
-
-  generators: [],
-
-  networkProvider: {
-    protocols: new Map(Object.entries({})),
-  },
-
-  trustedPeers: [],
-
-  selfPrivateKey: secp.utils.randomPrivateKey(),
-  nodeNonce: (new TextEncoder()).encode('test_0'),
-};
-
-const makeTest = (
-  func: (ctx: Context) => Promise<void> | void,
-  partialConfig: Partial<Config> = {},
-) =>
-  () => {
-    const ctx = new Context(deepMerge(baseConfig, partialConfig));
-    return deadline(Promise.resolve(func(ctx)), 1000).finally(() =>
-      ctx.destruct()
-    );
-  };
+import { makeTest } from './util.ts';
 
 Deno.test(
   { name: `simple put/get test` },
-  makeTest(async (ctx) => {
+  makeTest({}, async (ctx) => {
     const params = new TextEncoder().encode('params');
     const data = new TextEncoder().encode('data');
     const contractHash = Hash.fromLiteralStr('contract');
@@ -70,7 +35,7 @@ Deno.test(
 
 Deno.test(
   { name: `simple request/generate test` },
-  makeTest(async (ctx) => {
+  makeTest({}, async (ctx) => {
     const contractFunc = (
       contractHash: Hash,
       params: Uint8Array,
@@ -103,7 +68,7 @@ Deno.test(
 
 Deno.test(
   { name: `recursion test` },
-  makeTest(async (ctx) => {
+  makeTest({}, async (ctx) => {
     const params = ctx.get(CollatzContract).makeParams(10n);
 
     const firstAnswer: Answer = await new Promise((resolve) =>

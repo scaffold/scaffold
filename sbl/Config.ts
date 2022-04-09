@@ -20,28 +20,28 @@ type Config = {
 
   shouldVerify(ctx: Context, fromPeer: Peer, pub: any): boolean;
 
-  contracts: {
-    hash: Hash;
-    func: (
-      params: Uint8Array,
-      answer: Uint8Array, // TODO: Maybe we don't give the answer here, but make the func request it?
-      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-    ) => boolean;
-  }[];
+  // contracts: {
+  //   hash: Hash;
+  //   func: (
+  //     params: Uint8Array,
+  //     answer: Uint8Array, // TODO: Maybe we don't give the answer here, but make the func request it?
+  //     request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+  //   ) => boolean;
+  // }[];
 
-  generators: {
-    contractHash: Hash;
-    isCorrect: boolean;
-    func: (
-      params: Uint8Array,
-      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-    ) => Uint8Array;
+  // generators: {
+  //   contractHash: Hash;
+  //   isCorrect: boolean;
+  //   func: (
+  //     params: Uint8Array,
+  //     request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+  //   ) => Uint8Array;
 
-    emitTime?: (
-      params: Uint8Array,
-      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-    ) => Uint8Array;
-  }[];
+  //   emitTime?: (
+  //     params: Uint8Array,
+  //     request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+  //   ) => Uint8Array;
+  // }[];
 
   networkProvider: NetworkProvider;
 
