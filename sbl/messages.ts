@@ -131,6 +131,23 @@ export const registry = {
     logicalType: 'HashLogicalType',
   },
   bytes: { name: 'bytes', type: 'bytes', logicalType: 'Uint8ArrayLogicalType' },
+  Json: {
+    'type': 'record',
+    'name': 'Json',
+    'fields': [{
+      'name': 'value',
+      'type': [
+        'long',
+        'double',
+        'string',
+        'boolean',
+        'null',
+        { 'type': 'array', 'items': 'Json' },
+        { 'type': 'map', 'values': 'Json' },
+      ],
+    }],
+  },
+
   Amount: { name: 'Amount', type: 'long' },
 
   // LoadContract: { name: 'LoadContract', type: 'record', fields: [] },
@@ -171,6 +188,7 @@ export const registry = {
     name: 'QuestionSpec',
     type: 'record',
     fields: [
+      // TODO: Just call this contract_hash?
       { name: 'contract_answer_hash', type: 'Hash' },
       { name: 'params', type: 'bytes' },
     ],

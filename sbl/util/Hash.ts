@@ -31,6 +31,10 @@ export default class Hash {
     );
   }
 
+  public static fromLiteralStr(str: string) {
+    return new Hash(new TextEncoder().encode(str.padStart(32, '\0')));
+  }
+
   public static digest(data: Uint8Array | string) {
     if (typeof data === 'string') {
       const encoder = new TextEncoder();
