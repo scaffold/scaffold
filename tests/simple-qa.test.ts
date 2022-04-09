@@ -11,9 +11,9 @@ import { makeTest } from './util.ts';
 Deno.test(
   { name: `simple put/get test` },
   makeTest({}, async (ctx) => {
+    const contractHash = Hash.fromLiteralStr('contract');
     const params = new TextEncoder().encode('params');
     const data = new TextEncoder().encode('data');
-    const contractHash = Hash.fromLiteralStr('contract');
 
     const question = { contract_answer_hash: contractHash, params };
 

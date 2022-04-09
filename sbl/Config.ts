@@ -4,6 +4,16 @@ import Context from './Context.ts';
 import NetworkProvider from './NetworkProvider.ts';
 
 type Config = {
+  // To disable logging, unset the entire "log" object.
+  log: undefined | {
+    handler: (
+      ctx: Context,
+      className: string,
+      methodName: string,
+      params: Record<string, any>,
+    ) => void;
+  };
+
   location: { x: number; y: number; z: number };
 
   // initialPublicMetadata: {

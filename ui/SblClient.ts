@@ -9,6 +9,7 @@ import QuestionService from '~/sbl/QuestionService.ts';
 import SampleContracts from '~/graph/SampleContracts.ts';
 import EpochContract from '~/graph/EpochContract.ts';
 import Answer from '~/sbl/Answer.ts';
+import Logger from '~/sbl/Logger.ts';
 
 // window['Deno'] = {};
 
@@ -143,6 +144,20 @@ export default class SblClient {
 
   constructor() {
     const config: Config = {
+      log: {
+        handler: (
+          ctx: Context,
+          className: string,
+          methodName: string,
+          params: Record<string, any>,
+        ) =>
+          console.log(
+            `${className}.${methodName}(${
+              JSON.stringify(params, (key, val) => Logger.serialize(val), 0)
+            })`,
+          ),
+      },
+
       location: { x: 1, y: 2, z: 3 },
 
       shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,

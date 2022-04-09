@@ -10,6 +10,7 @@ import Peer from '~/sbl/Peer.ts';
 import ServingService from '~/sbl/ServingService.ts';
 import SampleContracts from '~/graph/SampleContracts.ts';
 import EpochContract from '~/graph/EpochContract.ts';
+import Logger from '~/sbl/Logger.ts';
 
 const websocketProvider: ProtocolProvider = {
   create: (
@@ -91,6 +92,20 @@ const websocketProvider: ProtocolProvider = {
 };
 
 const config: Config = {
+  log: {
+    handler: (
+      ctx: Context,
+      className: string,
+      methodName: string,
+      params: Record<string, any>,
+    ) =>
+      console.log(
+        `${className}.${methodName}(${
+          JSON.stringify(params, (key, val) => Logger.serialize(val), 0)
+        })`,
+      ),
+  },
+
   location: { x: 1, y: 2, z: 3 },
 
   shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,

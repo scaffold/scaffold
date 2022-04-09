@@ -201,7 +201,6 @@ export default class ConnectionService {
           }
           const msg = packet.message.InfoMessage;
 
-          // TODO: Theoretically this await can mix message ordering up; should probably do something about that.
           if (
             !secp.verify(
               signature,

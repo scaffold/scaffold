@@ -26,11 +26,13 @@ export default class Context {
 
   public destruct() {
     this.destructors.forEach((cb) => cb());
+    this.destructors = [];
   }
 
   public get<T>(Type: { new (context: Context): T }): T {
     if (!this.objs.has(Type)) {
       this.objs.set(Type, null);
+      // First set it to null, so if the constructor recursively calls itself inside the following line, we'll know.
       this.objs.set(Type, new Type(this));
     }
 
@@ -38,6 +40,7 @@ export default class Context {
     if (res === null) {
       throw new Error(`Constructor for ${Type.name} is probably recursive`);
     }
+
     return res;
   }
 

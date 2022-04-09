@@ -8,16 +8,14 @@ export default class Logger {
   public log(
     className: string,
     methodName: string,
-    params: { [key: string]: any },
+    params: Record<string, any>,
   ) {
-    console.log(
-      `${className}.${methodName}(${
-        JSON.stringify(params, (key, val) => this.serialize(val), 0)
-      })`,
-    );
+    if (this.ctx.config.log) {
+      this.ctx.config.log.handler(this.ctx, className, methodName, params);
+    }
   }
 
-  private serialize(val: any) {
+  public static serialize(val: any) {
     if (typeof val === 'bigint') return val.toString();
     else if (val instanceof Hash) return `Sha256:${val.toHex()}`;
     else if (val instanceof Uint8Array) return bin2hex(val);

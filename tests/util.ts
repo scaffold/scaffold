@@ -4,8 +4,14 @@ import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config from '~/sbl/Config.ts';
 import Peer from '~/sbl/Peer.ts';
+import Logger from '~/sbl/Logger.ts';
 
-const baseConfig: Config = {
+const makeConfig = (
+  _ctxIdx: number,
+  partialConfig: Partial<Config>,
+): Config => ({
+  log: undefined,
+
   location: { x: 1, y: 2, z: 3 },
 
   shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
@@ -18,16 +24,21 @@ const baseConfig: Config = {
 
   selfPrivateKey: secp.utils.randomPrivateKey(),
   nodeNonce: (new TextEncoder()).encode('test_0'),
-};
+
+  ...partialConfig,
+});
 
 export const makeTest = (
   partialConfig: Partial<Config>,
   func: (...ctx: Context[]) => Promise<void> | void,
 ) =>
   () => {
-    const config = deepMerge(baseConfig, partialConfig);
-    const ctxs = Array.from({ length: func.length }, () => new Context(config));
+    // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
+    const ctxs = Array.from({ length: func.length }, (_, i) =>
+      new Context(makeConfig(i, partialConfig)));
     return deadline(Promise.resolve(func(...ctxs)), 1000).finally(() =>
-      ctxs.forEach((ctx) => ctx.destruct())
+      ctxs.forEach((ctx) =>
+        ctx.destruct()
+      )
     );
   };
