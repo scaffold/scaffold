@@ -2,31 +2,17 @@ import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { CollatzAnswer, CollatzParams } from './collatzMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
 
 export default class CollatzContract {
-  constructor(private ctx: Context) {
-    // This is a hack until we get WASM working
-    (window as any).CollatzParams = CollatzParams;
-    (window as any).CollatzAnswer = CollatzAnswer;
-  }
+  constructor(private ctx: Context) {}
 
   public makeParams(num: bigint): Uint8Array {
     return CollatzParams.encode({ num });
   }
 
   public get() {
-    const contractFunc = (
-      _contractHash: Hash,
-      _params: Uint8Array,
-      _hint: Uint8Array,
-      _request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-    ) => {
-      // TODO: Fix this contract
-      const _ = 'collatz';
-      return true;
-    };
-
-    const generatorFunc = (
+    const collatzGenerator = (
       contractHash: Hash,
       params: Uint8Array,
       emitCorrect: boolean,
@@ -59,8 +45,25 @@ export default class CollatzContract {
       return CollatzAnswer.encode(answer);
     };
 
-    const contract = this.ctx.get(GraphUtils).supplyContract(contractFunc);
-    this.ctx.get(GraphUtils).supplyGenerator(contract, generatorFunc);
+    const collatzContract = (
+      contractHash: Hash,
+      params: Uint8Array,
+      hint: Uint8Array,
+      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+    ) =>
+      // Just run the generator and check it equals the candidate answer.
+      arrEquals(
+        collatzGenerator(contractHash, params, true, request),
+        request(contractHash, params),
+      );
+
+    // This is a nasty hack until we get WASM working
+    (window as any).collatzGenerator = collatzGenerator;
+    (window as any).CollatzParams = CollatzParams;
+    (window as any).CollatzAnswer = CollatzAnswer;
+
+    const contract = this.ctx.get(GraphUtils).supplyContract(collatzContract);
+    this.ctx.get(GraphUtils).supplyGenerator(contract, collatzGenerator);
 
     return contract;
   }
