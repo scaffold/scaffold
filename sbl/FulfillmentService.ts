@@ -9,6 +9,7 @@ import SubscriptionService from './SubscriptionService.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 import { PublishMessage } from './messages.ts';
+import GraphUtils from './GraphUtils.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
@@ -46,17 +47,25 @@ export default class FulfillmentService {
       this.attemptDupeFraction,
     ) === 1;
 
-    const gen = this.ctx.config.generators.find(
-      (g) =>
-        Hash.equals(g.contractHash, question.contractAnswerHash!) &&
-        g.isCorrect === attemptCorrect,
-    );
-    if (gen) {
-      callWithSyncRequestHandler(
+    const generators = this.ctx.get(QuestionRegistry).getBySpec({
+      contract_answer_hash:
+        this.ctx.get(GraphUtils).getGeneratorContract().hash,
+      params: question.contractAnswerHash.toBytes(),
+    }).answers;
+
+    generators.forEach((gen) => {
+      const genFunc = eval(new TextDecoder().decode(gen.data));
+      callWithSyncRequestHandler<Uint8Array>(
         this.ctx,
-        (handler) => gen.func(question.params!, handler),
+        (handler) =>
+          genFunc(
+            question.contractAnswerHash!,
+            question.params!,
+            true,
+            handler,
+          ),
         (data) => {
-          const publication: PublishMessage = {
+          const answer = this.ctx.get(AnswerRegistry).getByPub({
             question: {
               contract_answer_hash: question.contractAnswerHash!,
               params: question.params!,
@@ -65,16 +74,11 @@ export default class FulfillmentService {
             answer: data,
             licenses: [],
             timestamp: BigInt(Date.now()),
-          };
-
-          // TODO: Working here
-          throw new Error(`TODO: Working here`);
-
-          // const answer = this.ctx.get(AnswerRegistry).get(publication);
-          // answer.isCorrect = attemptCorrect;
-          // this.ctx.get(QuestionService).addAnswer(answer.question, answer);
+          });
+          answer.isCorrect = true;
+          this.ctx.get(QuestionService).addAnswer(answer.question, answer);
         },
       );
-    }
+    });
   }
 }

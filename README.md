@@ -39,7 +39,7 @@ sbl.get(QuestionService).getCanonical({
 ## Development
 ```sh
 deno fmt --config=deno.jsonc --watch
-deno test --config=deno.jsonc --import-map=import_map.json --allow-all --seed=123 --watch tests/
+deno test --config=deno.jsonc --import-map=import_map.json --allow-all --seed=123 --trace-ops --watch tests/
 deno run --config=deno.jsonc --import-map=import_map.json --allow-all --watch server/main.ts
 deno bundle --config=deno.jsonc --import-map=import_map.json --watch app.tsx build/index.js
 ```

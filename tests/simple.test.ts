@@ -8,9 +8,8 @@ import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
 import AnswerRegistry, { Answer } from '~/sbl/AnswerRegistry.ts';
-import { loadHash } from '~/sbl/hashes.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
-
+import GraphUtils from '~/sbl/GraphUtils.ts';
 /*
 const deadline = <Args extends any[], T>(
   func: (...args: Args) => Promise<T>,
@@ -56,66 +55,8 @@ const makeTest = (
     );
   };
 
-const supplyRawAnswer = (ctx: Context, answer: Uint8Array) => {
-  const hash = Hash.digest(answer);
-
-  return ctx.get(AnswerRegistry).getByPub({
-    question: { contract_answer_hash: loadHash, params: hash.toBytes() },
-    inputs: [],
-    answer,
-    licenses: [],
-    timestamp: BigInt(Date.now()),
-  });
-};
-
-const supplyContract = (
-  ctx: Context,
-  contract: (
-    contractHash: Hash,
-    params: Uint8Array,
-    hint: Uint8Array,
-    request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-  ) => boolean,
-) => supplyRawAnswer(ctx, new TextEncoder().encode(contract.toString()));
-
-// TODO: Does this work? Depends on how answer consistency is handled in caller.
-const getGeneratorContract = (ctx: Context) =>
-  supplyContract(ctx, (
-    _contractHash: Hash,
-    params: Uint8Array, // This is the contract hash we're generating for.
-    hint: Uint8Array, // This is the params we're evaluating at.
-    request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-  ) =>
-    eval(new TextDecoder().decode(request(loadHash, params)))(
-      params,
-      hint,
-      new Uint8Array([]),
-      request,
-    ));
-
-const supplyGenerator = (
-  ctx: Context,
-  contract: Answer,
-  generator: (
-    contractHash: Hash,
-    params: Uint8Array,
-    emitCorrect: boolean,
-    request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-  ) => Uint8Array,
-) =>
-  ctx.get(AnswerRegistry).getByPub({
-    question: {
-      contract_answer_hash: getGeneratorContract(ctx).hash,
-      params: contract.hash.toBytes(),
-    },
-    inputs: [],
-    answer: new TextEncoder().encode(generator.toString()),
-    licenses: [],
-    timestamp: BigInt(Date.now()),
-  });
-
 Deno.test(
-  { name: `simple request/response test`, only: true },
+  { name: `simple request/response test` },
   makeTest(async (ctx) => {
     const params = new TextEncoder().encode('params');
     const data = new TextEncoder().encode('data');
@@ -156,8 +97,8 @@ Deno.test(
       _request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
     ) => emitCorrect ? params : new TextEncoder().encode('DUPE');
 
-    const contract = supplyContract(ctx, contractFunc);
-    supplyGenerator(ctx, contract, generatorFunc);
+    const contract = ctx.get(GraphUtils).supplyContract(contractFunc);
+    ctx.get(GraphUtils).supplyGenerator(contract, generatorFunc);
 
     const params = new TextEncoder().encode('Sublime');
 
