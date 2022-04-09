@@ -10,20 +10,8 @@ import QuestionService from '~/sbl/QuestionService.ts';
 import AnswerRegistry, { Answer } from '~/sbl/AnswerRegistry.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
-/*
-const deadline = <Args extends any[], T>(
-  func: (...args: Args) => Promise<T>,
-  timeout = 1000,
-) =>
-  (...args: Args) =>
-    new Promise<T>((resolve, reject) => {
-      const idx = setTimeout(
-        () => reject(new Error(`Timeout of ${timeout}ms exceeded`)),
-        timeout,
-      );
-      func(...args).finally(() => clearTimeout(idx)).then(resolve, reject);
-    });
-*/
+import CollatzContract from '~/graph/CollatzContract.ts';
+import { CollatzAnswer } from '~/graph/collatzMessages.ts';
 
 const baseConfig: Config = {
   location: { x: 1, y: 2, z: 3 },
@@ -56,7 +44,7 @@ const makeTest = (
   };
 
 Deno.test(
-  { name: `simple request/response test` },
+  { name: `simple put/get test` },
   makeTest(async (ctx) => {
     const params = new TextEncoder().encode('params');
     const data = new TextEncoder().encode('data');
@@ -81,7 +69,7 @@ Deno.test(
 );
 
 Deno.test(
-  { name: `generator test` },
+  { name: `simple request/generate test` },
   makeTest(async (ctx) => {
     const contractFunc = (
       contractHash: Hash,
@@ -110,5 +98,24 @@ Deno.test(
     );
 
     assertEquals(firstAnswer.data, params);
+  }),
+);
+
+Deno.test(
+  { name: `recursion test` },
+  makeTest(async (ctx) => {
+    const params = ctx.get(CollatzContract).makeParams(10n);
+
+    const firstAnswer: Answer = await new Promise((resolve) =>
+      ctx.get(QuestionService).getCanonical({
+        contract_answer_hash: ctx.get(CollatzContract).get().hash,
+        params,
+      }, resolve)
+    );
+
+    assertEquals(
+      firstAnswer.data,
+      CollatzAnswer.encode({ stopping_time: 6n, maximum: 16n }),
+    );
   }),
 );

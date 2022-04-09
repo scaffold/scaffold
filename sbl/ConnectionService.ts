@@ -248,10 +248,10 @@ export default class ConnectionService {
 
   public async composePacket(message: Packet['message']) {
     let buf: Uint8Array;
-    const msg = Packet.encode((size) => {
+    const msg = Packet.encode({ message }, (size) => {
       buf = new Uint8Array(SIGNATURE_LENGTH + size);
       return buf.subarray(SIGNATURE_LENGTH);
-    }, { message });
+    });
 
     const sig = await secp.sign(
       Hash.digest(msg).toBytes(),

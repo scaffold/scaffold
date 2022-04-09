@@ -105,7 +105,7 @@ export type ObjectType<
 
 interface Message<T> {
   decode(src: Uint8Array): T;
-  encode(allocator: (size: number) => Uint8Array, msg: T): Uint8Array;
+  encode(msg: T, allocator?: (size: number) => Uint8Array): Uint8Array;
 }
 
 const long = avro.types.LongType.__with({
@@ -418,8 +418,9 @@ export const makeMsg = <
     decode: (src: Uint8Array): ObjectType<Name, R> =>
       type.decode(Buffer.from(src)).value,
     encode: (
-      allocator: (size: number) => Uint8Array,
       msg: ObjectType<Name, R>,
+      allocator: (size: number) => Uint8Array = (size: number) =>
+        new Uint8Array(size),
     ) => {
       // TODO: Eliminate copy; write directly into arr.
       const buf = type.toBuffer(msg);
@@ -474,7 +475,7 @@ export type DhtJoinMessage = MsgType<'DhtJoinMessage'>;
 export const Packet = makeMsg(registry, 'Packet');
 export type Packet = MsgType<'Packet'>;
 
-// const buf = Question.encode((size) => new Uint8Array(size), {
+// const buf = Question.encode({
 //   contract: {
 //     Question: {
 //       contract: null,
