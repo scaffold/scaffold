@@ -46,6 +46,10 @@ export default class QuestionService {
     if (question !== answer.question) throw new Error(`Invalid`);
 
     question.answers.push(answer);
+    if (!question.canonicalAnswer) {
+      question.canonicalAnswer = answer;
+      question.canonicalCallbacks.forEach((cb) => cb(answer));
+    }
 
     question.subscriptions.forEach((node) =>
       this.ctx.get(PublicationService).publish(node, answer)

@@ -1,7 +1,8 @@
 import Config from './Config.ts';
 
 export default class Context {
-  private objs = new Map();
+  private objs: Map<{ new (context: Context): any }, any> = new Map();
+  private destructors: (() => void)[] = [];
 
   constructor(public config: Config) {
     // This is for debugging
@@ -23,7 +24,11 @@ export default class Context {
     };
   }
 
-  get<T>(Type: { new (context: Context): T }): T {
+  public destruct() {
+    this.destructors.forEach((cb) => cb());
+  }
+
+  public get<T>(Type: { new (context: Context): T }): T {
     if (!this.objs.has(Type)) {
       this.objs.set(Type, null);
       this.objs.set(Type, new Type(this));
@@ -34,5 +39,9 @@ export default class Context {
       throw new Error(`Constructor for ${Type.name} is probably recursive`);
     }
     return res;
+  }
+
+  public onDestruct(cb: () => void) {
+    this.destructors.push(cb);
   }
 }

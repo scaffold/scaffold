@@ -1,4 +1,6 @@
 import { assertEquals } from 'std-latest/testing/asserts.ts';
+import { deadline } from 'std-fix-abortable/async/mod.ts';
+import { deepMerge } from 'std-latest/collections/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config from '~/sbl/Config.ts';
@@ -9,6 +11,7 @@ import AnswerRegistry, { Answer } from '~/sbl/AnswerRegistry.ts';
 import { loadHash } from '~/sbl/hashes.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 
+/*
 const deadline = <Args extends any[], T>(
   func: (...args: Args) => Promise<T>,
   timeout = 1000,
@@ -21,6 +24,37 @@ const deadline = <Args extends any[], T>(
       );
       func(...args).finally(() => clearTimeout(idx)).then(resolve, reject);
     });
+*/
+
+const baseConfig: Config = {
+  location: { x: 1, y: 2, z: 3 },
+
+  shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
+
+  contracts: [],
+
+  generators: [],
+
+  networkProvider: {
+    protocols: new Map(Object.entries({})),
+  },
+
+  trustedPeers: [],
+
+  selfPrivateKey: secp.utils.randomPrivateKey(),
+  nodeNonce: (new TextEncoder()).encode('test_0'),
+};
+
+const makeTest = (
+  func: (ctx: Context) => Promise<void> | void,
+  partialConfig: Partial<Config> = {},
+) =>
+  () => {
+    const ctx = new Context(deepMerge(baseConfig, partialConfig));
+    return deadline(Promise.resolve(func(ctx)), 1000).finally(() =>
+      ctx.destruct()
+    );
+  };
 
 const supplyRawAnswer = (ctx: Context, answer: Uint8Array) => {
   const hash = Hash.digest(answer);
@@ -80,30 +114,9 @@ const supplyGenerator = (
     timestamp: BigInt(Date.now()),
   });
 
-const baseConfig: Config = {
-  location: { x: 1, y: 2, z: 3 },
-
-  shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
-
-  contracts: [],
-
-  generators: [],
-
-  networkProvider: {
-    protocols: new Map(Object.entries({})),
-  },
-
-  trustedPeers: [],
-
-  selfPrivateKey: secp.utils.randomPrivateKey(),
-  nodeNonce: (new TextEncoder()).encode('server_0'),
-};
-
 Deno.test(
   { name: `simple request/response test`, only: true },
-  deadline(async () => {
-    const ctx = new Context(baseConfig);
-
+  makeTest(async (ctx) => {
     const params = new TextEncoder().encode('params');
     const data = new TextEncoder().encode('data');
     const contractHash = Hash.fromLiteralStr('contract');
@@ -128,9 +141,7 @@ Deno.test(
 
 Deno.test(
   { name: `generator test` },
-  deadline(async () => {
-    const ctx = new Context(baseConfig);
-
+  makeTest(async (ctx) => {
     const contractFunc = (
       contractHash: Hash,
       params: Uint8Array,

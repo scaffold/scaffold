@@ -20,9 +20,10 @@ export default class DhtService {
   constructor(private ctx: Context) {
     this.selfTable = new DhtTable(ctx, ctx.get(NodeService).getSelfHash());
 
-    setInterval(() => {
+    const idx = setInterval(() => {
       // TODO: Remove earned tables older than an hour
     }, 10000);
+    ctx.onDestruct(() => clearInterval(idx));
   }
 
   public handleDhtJoinMessage(msgCtx: MessageCtx, msg: DhtJoinMessage) {
