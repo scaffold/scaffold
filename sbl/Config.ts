@@ -59,6 +59,8 @@ type Config = {
 
   selfPrivateKey: Uint8Array;
   nodeNonce: Uint8Array;
+
+  approxComputePricePerSecond: bigint;
 };
 
 export default Config;

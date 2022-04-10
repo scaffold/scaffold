@@ -8,7 +8,6 @@ import {
 } from '../sbl/NetworkProvider.ts';
 import Peer from '~/sbl/Peer.ts';
 import ServingService from '~/sbl/ServingService.ts';
-import SampleContracts from '~/graph/SampleContracts.ts';
 import EpochContract from '~/graph/EpochContract.ts';
 import Logger from '~/sbl/Logger.ts';
 
@@ -118,11 +117,12 @@ const config: Config = {
 
   selfPrivateKey: secp.utils.randomPrivateKey(),
   nodeNonce: (new TextEncoder()).encode('server_0'),
+
+  approxComputePricePerSecond: 1000n,
 };
 
 const ctx = new Context(config);
-ctx.get(SampleContracts).apply({});
-ctx.get(EpochContract).apply();
+ctx.get(EpochContract).get();
 ctx.get(ServingService).serve((protocol: string, spec: string) =>
   console.log(
     `ProtocolProvider ${protocol} is listening with spec ${

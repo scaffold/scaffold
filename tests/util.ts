@@ -25,6 +25,8 @@ const makeConfig = (
   selfPrivateKey: secp.utils.randomPrivateKey(),
   nodeNonce: (new TextEncoder()).encode('test_0'),
 
+  approxComputePricePerSecond: 1000n,
+
   ...partialConfig,
 });
 

@@ -42,8 +42,19 @@ export default class QuestionService {
   //   );
   // }
 
-  public addAnswer(question: Question, answer: Answer) {
-    if (question !== answer.question) throw new Error(`Invalid`);
+  public addAnswerToQuestion(answer: Answer) {
+    if (answer.isAddedToQuestion) {
+      return;
+    }
+    answer.isAddedToQuestion = true;
+
+    const question = answer.question;
+
+    this.ctx.get(Logger).log('QuestionService', 'addAnswer', {
+      cah: question.contractAnswerHash,
+      params: question.params,
+      answer: answer.data,
+    });
 
     question.answers.push(answer);
     if (!question.canonicalAnswer) {
@@ -97,7 +108,7 @@ export default class QuestionService {
     }
 
     if (!entry.isFulfilling) {
-      this.ctx.get(FulfillmentService).fulfill(entry);
+      this.ctx.get(FulfillmentService).fulfill(entry, 1000000n);
       assert(entry.isFulfilling);
     }
 

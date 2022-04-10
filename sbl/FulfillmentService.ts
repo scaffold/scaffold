@@ -10,6 +10,7 @@ import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 import { PublishMessage } from './messages.ts';
 import GraphUtils from './GraphUtils.ts';
+import IncentiveService from './IncentiveService.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
@@ -19,21 +20,24 @@ export default class FulfillmentService {
 
   constructor(private ctx: Context) {}
 
-  public fulfill(question: Question) {
+  public fulfill(question: Question, incentive: bigint) {
     question.isFulfilling = true;
-    this.sendSubs(question);
-    this.launchExecutor(question);
+    this.sendSubs(question, incentive);
+    this.launchExecutor(question, 0n);
   }
 
-  private sendSubs(question: Question) {
+  private sendSubs(question: Question, incentive: bigint) {
     for (let i = 0; i < numParallelSubs; i++) {
       // TODO
     }
 
     this.ctx.get(SubscriptionService).subscribe(question);
+    if (incentive > 0n) {
+      this.ctx.get(IncentiveService).incentivize(question, incentive);
+    }
   }
 
-  private launchExecutor(question: Question) {
+  private launchExecutor(question: Question, incentive: bigint) {
     if (!question.contractAnswerHash || !question.params) {
       throw new Error(
         `Cannot generate if we don't know the contract hash or params`,
@@ -64,19 +68,21 @@ export default class FulfillmentService {
             true,
             handler,
           ),
-        (data) => {
+        (data, inputs: Answer[], durationMs: number) => {
           const answer = this.ctx.get(AnswerRegistry).getByPub({
             question: {
               contract_answer_hash: question.contractAnswerHash!,
               params: question.params!,
             },
-            inputs: [],
+            inputs: inputs.map((answer) => answer.hash),
             answer: data,
             licenses: [],
             timestamp: BigInt(Date.now()),
           });
           answer.isCorrect = true;
-          this.ctx.get(QuestionService).addAnswer(answer.question, answer);
+          answer.difficultyEstimate = BigInt(durationMs) *
+            this.ctx.config.approxComputePricePerSecond / 1000n;
+          this.ctx.get(QuestionService).addAnswerToQuestion(answer);
         },
       );
     });

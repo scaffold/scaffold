@@ -6,7 +6,6 @@ import ConnectionService from '~/sbl/ConnectionService.ts';
 import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
-import SampleContracts from '~/graph/SampleContracts.ts';
 import EpochContract from '~/graph/EpochContract.ts';
 import Answer from '~/sbl/Answer.ts';
 import Logger from '~/sbl/Logger.ts';
@@ -175,21 +174,18 @@ export default class SblClient {
 
       selfPrivateKey: secp.utils.randomPrivateKey(),
       nodeNonce: (new TextEncoder()).encode('browser_0'),
+
+      approxComputePricePerSecond: 1000n,
     };
 
     this.ctx = new Context(config);
-    this.ctx.get(SampleContracts).apply({ collatz: false });
-    this.ctx.get(EpochContract).apply();
     this.ctx.get(ConnectionService).connect('websocket', 'ws://127.0.0.1:8314');
 
     let height = 0n;
     setInterval(() => {
-      const params = this.ctx.get(EpochContract).makeParams(height++);
       this.ctx.get(QuestionService).getCanonical({
-        contract_answer_hash: Hash.fromHex(
-          'afc9b31d9f3f3645ae563606e1ddbe4b0e72b247e3bc9dff6251f5ee8961ae48',
-        ),
-        params,
+        contract_answer_hash: this.ctx.get(EpochContract).get().hash,
+        params: this.ctx.get(EpochContract).makeParams(height++),
       }, (answer) => console.log(answer));
     }, 1000);
 

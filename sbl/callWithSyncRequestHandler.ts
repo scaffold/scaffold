@@ -14,17 +14,22 @@ class NeedsMoreDataError extends Error {
 const callWithSyncRequestHandler = <T>(
   ctx: Context,
   func: (handler: (contractHash: Hash, params: Uint8Array) => Uint8Array) => T,
-  onAnswer: (answer: T) => void,
+  onAnswer: (answer: T, inputs: Answer[], durationMs: number) => void,
 ) => {
+  // console.log('cwsrh');
   try {
+    const inputs: Answer[] = [];
+    const startTime = Date.now();
     const out = func((contractHash: Hash, params: Uint8Array) => {
       let answer: Answer | typeof noAnswerSentinel = noAnswerSentinel;
 
       let inside = true;
+      // console.log('gc');
       ctx.get(QuestionService).getCanonical({
         contract_answer_hash: contractHash,
         params,
       }, (a: Answer) => {
+        // console.log('ga', inside);
         if (inside) {
           answer = a;
         } else {
@@ -34,6 +39,8 @@ const callWithSyncRequestHandler = <T>(
       inside = false;
 
       if (answer !== noAnswerSentinel) {
+        inputs.push(answer);
+        // console.log('in');
         return (answer as Answer).data;
       } else {
         // No answers
@@ -41,7 +48,8 @@ const callWithSyncRequestHandler = <T>(
       }
     });
 
-    onAnswer(out);
+    // console.log('oa');
+    onAnswer(out, inputs, Date.now() - startTime);
   } catch (err) {
     if (err instanceof NeedsMoreDataError) {
       // Needs more data

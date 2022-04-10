@@ -34,7 +34,11 @@ export class Answer {
   public isCorrect?: boolean;
   public timestamp: bigint;
 
+  public difficultyEstimate?: bigint;
+
   public licensedFor?: Question[];
+
+  public isAddedToQuestion = false;
 
   constructor(
     public hash: Hash,
@@ -76,7 +80,7 @@ export default class AnswerRegistry extends HashMap<Answer> {
       hash,
       () => new Answer(hash, question, publication),
     );
-    this.ctx.get(QuestionService).addAnswer(question, answer);
+    this.ctx.get(QuestionService).addAnswerToQuestion(answer);
     return answer;
   }
 }

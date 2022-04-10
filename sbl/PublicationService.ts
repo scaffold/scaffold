@@ -10,6 +10,8 @@ import { License, PublishMessage } from './messages.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import QuestionRegistry from './QuestionRegistry.ts';
 import MessageCtx from './MessageCtx.ts';
+import IncentiveService from './IncentiveService.ts';
+import { assert } from './util/functional.ts';
 
 export default class PublicationService {
   constructor(private ctx: Context) {}
@@ -17,6 +19,12 @@ export default class PublicationService {
   public publish(node: Node, answer: Answer) {
     if (!answer.data) {
       throw new Error(`Not sure what causes this case`);
+    }
+    if (!answer.isCorrect) {
+      throw new Error(`Can't publish an answer that we don't know to be true`);
+    }
+    if (!answer.difficultyEstimate) {
+      throw new Error(`Can't publish an answer that we didn't calculate`);
     }
 
     // const licenses: License[] = [];
@@ -26,19 +34,53 @@ export default class PublicationService {
     //   })
     // );
 
-    // node.defaultConn?.sendReliable({
-    //   PublishMessage: {
-    //     question: {
-    //       contract: null,
-    //       contract_hash: answer.question.getContractHash(),
-    //       params: answer.question.getParams(),
-    //     },
-    //     inputs: [],
-    //     answer: answer.data!,
-    //     licenses,
-    //     timestamp: this.now(),
-    //   },
-    // });
+    let inputIncentive = 0n;
+    for (const hash of answer.inputs) {
+      const inputAnswer = this.ctx.get(AnswerRegistry).peek(hash)!;
+      assert(Hash.equals(hash, inputAnswer.hash));
+      const license = inputAnswer.licenses.find((license) =>
+        Hash.equals(license.question_hash, answer.question.hash)
+      );
+      if (license) inputIncentive += license.incentive;
+    }
+
+    const inputs = [...answer.inputs];
+
+    for (const [_, { answerHash, incentive }] of answer.question.incentives) {
+      inputs.push(answerHash);
+      inputIncentive += incentive;
+    }
+
+    const selfIncentive = answer.difficultyEstimate < inputIncentive
+      ? answer.difficultyEstimate
+      : inputIncentive;
+    const remainingIncentive = inputIncentive - selfIncentive;
+
+    const licenses = this.ctx.get(IncentiveService).popIncentives(selfIncentive)
+      .map(({ question, incentive }) => ({
+        question_hash: question.hash,
+        incentive,
+      }));
+
+    // TODO: Who to incentivize here? The epoch?
+    // This is bad, but just put it towards a random question.
+    licenses.push({
+      question_hash: Hash.random(),
+      incentive: remainingIncentive,
+    });
+
+    node.defaultConn?.sendReliable({
+      PublishMessage: {
+        question: {
+          contract_answer_hash: answer.question.contractAnswerHash!,
+          params: answer.question.params!,
+        },
+        inputs,
+        answer: answer.data!,
+        licenses,
+        timestamp: this.now(),
+      },
+    });
   }
 
   public handlePublishMessage(msgCtx: MessageCtx, msg: PublishMessage) {
@@ -61,7 +103,7 @@ export default class PublicationService {
     }
 
     const answer = this.ctx.get(AnswerRegistry).getByPub(msg);
-    this.ctx.get(QuestionService).addAnswer(answer.question, answer);
+    this.ctx.get(QuestionService).addAnswerToQuestion(answer);
 
     // TODO: Working here; need to execute contract
     throw new Error(`TODO: Working here`);

@@ -38,8 +38,18 @@ sbl.get(QuestionService).getCanonical({
 
 ## Development
 ```sh
+# Run formatter
 deno fmt --config=deno.jsonc --watch
+
+# Run tests
 deno test --config=deno.jsonc --import-map=import_map.json --allow-all --seed=123 --trace-ops --watch tests/
+
+# Run websocket server (required for initial P2P connection)
 deno run --config=deno.jsonc --import-map=import_map.json --allow-all --watch server/main.ts
+
+# Bundle js
 deno bundle --config=deno.jsonc --import-map=import_map.json --watch app.tsx build/index.js
+
+# Open in browser
+open public/index.html
 ```
