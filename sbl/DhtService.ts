@@ -43,6 +43,13 @@ export default class DhtService {
     }
   }
 
+  public hackyAddEntry(entry: DhtEntry) {
+    this.selfTable.add(entry);
+    for (const table of this.earnedTables) {
+      table.add(entry);
+    }
+  }
+
   public getClosestEntry(key: Hash): DhtEntry | undefined {
     let bestDist: Hash = Hash.fromLiteral32(-1);
     let bestEntry;
@@ -61,6 +68,7 @@ export default class DhtService {
         node: this.ctx.get(NodeService).getSelfNode(),
       })
     );
+
     this.selfTable.forEach(testEntry);
     for (const table of this.earnedTables) {
       table.forEach(testEntry);
@@ -99,6 +107,6 @@ export default class DhtService {
       answerHash.toHex() + followingEpochHash.toHex() + answerCpuNs,
     );
     const threshold = Hash.fromFraction(answerCpuNs, 1e6 * dhtEntryLifespanMs);
-    return Hash.cmp(h, threshold) === -1;
+    return Hash.cmp(h, threshold) <= 0;
   }
 }

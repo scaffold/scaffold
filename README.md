@@ -38,6 +38,10 @@ sbl.get(QuestionService).getCanonical({
 
 ## Development
 ```sh
+# Clone
+git clone git@github.com:SublimeNet/sublime.git
+cd sublime
+
 # Run formatter
 deno fmt --config=deno.jsonc --watch
 

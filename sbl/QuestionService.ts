@@ -62,9 +62,9 @@ export default class QuestionService {
       question.canonicalCallbacks.forEach((cb) => cb(answer));
     }
 
-    question.subscriptions.forEach((node) =>
-      this.ctx.get(PublicationService).publish(node, answer)
-    );
+    // question.subscriptions.forEach((node) =>
+    //   this.ctx.get(PublicationService).publish(node, answer)
+    // );
 
     answer.licenses.forEach(({ question_hash, incentive }) =>
       this.ctx.get(QuestionRegistry).getByHash(question_hash).addIncentive(

@@ -15,7 +15,7 @@ export class Question {
   public incentives: Map<string, { answerHash: Hash; incentive: bigint }> =
     new Map();
 
-  public subscriptions: Node[] = [];
+  // public subscriptions: Node[] = [];
 
   public answers: Answer[] = []; // In order of reception
 

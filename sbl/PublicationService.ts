@@ -20,10 +20,10 @@ export default class PublicationService {
     if (!answer.data) {
       throw new Error(`Not sure what causes this case`);
     }
-    if (!answer.isCorrect) {
+    if (answer.isCorrect !== true) {
       throw new Error(`Can't publish an answer that we don't know to be true`);
     }
-    if (!answer.difficultyEstimate) {
+    if (answer.difficultyEstimate === undefined) {
       throw new Error(`Can't publish an answer that we didn't calculate`);
     }
 
@@ -89,24 +89,34 @@ export default class PublicationService {
       return;
     }
 
-    // TODO: Working here
-    if (Math.random() >= 0) {
-      throw new Error(`TODO: Working here`);
+    // TODO: Check inputs
+    if (msg.inputs.length) {
+      throw new Error(`TODO: Check inputs`);
     }
-
     // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerRegistry).peek(input));
     // inputs.reduce((acc, answer)=>acc + answer., 0n);
+    const inputIncentive = 0n;
 
     if (msg.licenses.some((license) => license.incentive < 0)) {
-      console.log(`An incentive is negative`);
+      console.log(
+        `Received publication where license incentive is negative; discarding.`,
+      );
+      return;
+    }
+    if (
+      msg.licenses.reduce((acc, { incentive }) => acc + incentive, 0n) !==
+        inputIncentive
+    ) {
+      console.log(
+        `Received publication where license incentive sum does not equal input incentive sum; discarding.`,
+      );
       return;
     }
 
     const answer = this.ctx.get(AnswerRegistry).getByPub(msg);
     this.ctx.get(QuestionService).addAnswerToQuestion(answer);
 
-    // TODO: Working here; need to execute contract
-    throw new Error(`TODO: Working here`);
+    console.log(`TODO: Need to possibly execute contract here`);
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>

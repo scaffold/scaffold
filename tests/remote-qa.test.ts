@@ -20,7 +20,11 @@ const mockNetworkProvider = makeMockNetworkProvider({
 });
 
 Deno.test(
-  { name: `network put/get test`, sanitizeOps: false },
+  {
+    name: `network put/get test`,
+    sanitizeOps: false, // TODO: Turn this on
+    sanitizeResources: false, // TODO: Turn this on
+  },
   makeTest({
     networkProvider: {
       protocols: new Map(Object.entries({ mock: mockNetworkProvider })),
@@ -33,6 +37,7 @@ Deno.test(
         idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
       )
     );
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const contractHash = Hash.fromLiteralStr('contract');
     const params = new TextEncoder().encode('params');
@@ -41,19 +46,21 @@ Deno.test(
     const question = { contract_answer_hash: contractHash, params };
 
     // Add answer to ctx1's registry
-    ctx1.get(AnswerRegistry).getByPub({
+    const putAnswer = ctx1.get(AnswerRegistry).getByPub({
       question,
       inputs: [],
       answer: data,
       licenses: [],
       timestamp: BigInt(Date.now()),
     });
+    putAnswer.isCorrect = true;
+    putAnswer.difficultyEstimate = 0n;
 
     // Query on ctx2
     const firstAnswer: Answer = await new Promise((resolve) =>
       ctx2.get(QuestionService).getCanonical(question, resolve)
     );
 
-    assertEquals(firstAnswer.data, data);
+    assertEquals(new Uint8Array(firstAnswer.data), data);
   }),
 );

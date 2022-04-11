@@ -10,6 +10,8 @@ import MessageCtx from './MessageCtx.ts';
 import FulfillmentService from './FulfillmentService.ts';
 import DhtService from './DhtService.ts';
 import QuestionRegistry, { Question } from './QuestionRegistry.ts';
+import { Answer } from './AnswerRegistry.ts';
+import NodeService from './NodeService.ts';
 
 export default class SubscriptionService {
   constructor(private ctx: Context) {}
@@ -33,22 +35,14 @@ export default class SubscriptionService {
   }
 
   public handleSubscribeMessage(msgCtx: MessageCtx, msg: SubscribeMessage) {
-    this.ctx.get(QuestionRegistry).getBySpec(msg.question).subscriptions.push(
-      msgCtx.conn.node,
-    );
+    // this.ctx.get(QuestionRegistry).getBySpec(msg.question).subscriptions.push(
+    //   msgCtx.conn.node,
+    // );
 
-    // this.ctx
-    //   .get(QuestionService)
-    //   .getCanonical(
-    //     msg.question.contract_hash,
-    //     msg.question.params,
-    //     (answer: Answer) =>
-    //       this.ctx.get(PublicationService).publish(
-    //         conn.node,
-    //         msg.question.contract_hash,
-    //         msg.question.params,
-    //         answer.data,
-    //       ),
-    //   );
+    this.ctx.get(QuestionService).getCanonical(
+      msg.question,
+      (answer: Answer) =>
+        this.ctx.get(PublicationService).publish(msgCtx.conn.node, answer),
+    );
   }
 }

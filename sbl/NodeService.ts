@@ -11,6 +11,7 @@ import { arrConcat, arrEquals } from './util/buffer.ts';
 import { getOrCreate } from './util/map.ts';
 import { InfoMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
+import DhtService from './DhtService.ts';
 
 // TODO: Split into connected and unconnected nodes. This will help eliminate optionals.
 export interface Node {
@@ -85,6 +86,18 @@ export default class NodeService {
         hops: Infinity,
       };
       this.nodes.set(key, node);
+
+      // TODO: Remove this, and build the DHT from actual provable work
+      if (hash !== this.selfHash) {
+        setTimeout(
+          () =>
+            this.ctx.get(DhtService).hackyAddEntry({
+              answer: hash,
+              node: node!,
+            }),
+          0,
+        );
+      }
     }
     return node;
   }
