@@ -66,13 +66,23 @@ export default class QuestionService {
     //   this.ctx.get(PublicationService).publish(node, answer)
     // );
 
-    answer.licenses.forEach(({ question_hash, incentive }) =>
-      this.ctx.get(QuestionRegistry).getByHash(question_hash).addIncentive(
-        question.hash,
-        answer.hash,
-        incentive,
-      )
-    );
+    answer.licenses.forEach(({ question_hash, incentive }) => {
+      const childQuestion = this.ctx.get(QuestionRegistry).getByHash(
+        question_hash,
+      );
+      childQuestion.addIncentive(question.hash, answer.hash, incentive);
+      this.ctx.get(WorkQueue).set(
+        childQuestion.hash,
+        Number(childQuestion.getTotalIncentive()),
+        () => {
+          if (!childQuestion.isFulfilling) {
+            this.ctx.get(FulfillmentService).fulfill(childQuestion, 1000000n);
+            assert(childQuestion.isFulfilling);
+          }
+          return Promise.resolve();
+        },
+      );
+    });
 
     // if (answer.timestamp) {
     //   this.set(
@@ -100,16 +110,16 @@ export default class QuestionService {
   ): { release: () => void } {
     this.ctx.get(Logger).log('QuestionService', 'getCanonical', { spec });
 
-    const entry = this.ctx.get(QuestionRegistry).getBySpec(spec);
+    const question = this.ctx.get(QuestionRegistry).getBySpec(spec);
 
-    entry.canonicalCallbacks.push(callback);
-    if (entry.canonicalAnswer) {
-      callback(entry.canonicalAnswer);
+    question.canonicalCallbacks.push(callback);
+    if (question.canonicalAnswer) {
+      callback(question.canonicalAnswer);
     }
 
-    if (!entry.isFulfilling) {
-      this.ctx.get(FulfillmentService).fulfill(entry, 1000000n);
-      assert(entry.isFulfilling);
+    if (!question.isFulfilling) {
+      this.ctx.get(FulfillmentService).fulfill(question, 1000000n);
+      assert(question.isFulfilling);
     }
 
     // TODO
@@ -137,13 +147,13 @@ export default class QuestionService {
 
     return {
       release: () => {
-        const idx = entry.canonicalCallbacks.indexOf(callback);
+        const idx = question.canonicalCallbacks.indexOf(callback);
         if (idx === -1) {
           throw new Error(
             `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
           );
         }
-        entry.canonicalCallbacks.splice(idx, 1);
+        question.canonicalCallbacks.splice(idx, 1);
       },
     };
   }

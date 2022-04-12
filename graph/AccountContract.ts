@@ -1,6 +1,6 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import { AccountAnswer, AccountParams } from './accountMessages.ts';
+import * as accountMessages from './accountMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 
@@ -8,7 +8,7 @@ export default class AccountContract {
   constructor(private ctx: Context) {}
 
   public makeParams(idx: bigint): Uint8Array {
-    return AccountParams.encode({ idx });
+    return accountMessages.Params.encode({ idx });
   }
 
   public get() {
@@ -22,7 +22,7 @@ export default class AccountContract {
         return new TextEncoder().encode('DUPE');
       }
 
-      return AccountAnswer.encode({});
+      return accountMessages.Answer.encode({});
     };
 
     const accountContract = (
@@ -39,8 +39,7 @@ export default class AccountContract {
 
     // This is a nasty hack until we get WASM working
     (window as any).accountGenerator = accountGenerator;
-    (window as any).AccountParams = AccountParams;
-    (window as any).AccountAnswer = AccountAnswer;
+    (window as any).accountMessages = accountMessages;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(accountContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, accountGenerator);

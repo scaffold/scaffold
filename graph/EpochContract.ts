@@ -1,7 +1,7 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
-import { EpochAnswer, EpochParams } from './epochMessages.ts';
+import * as epochMessages from './epochMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 
 const baseMs = 1642476485983;
@@ -17,7 +17,7 @@ export default class EpochContract {
   constructor(private ctx: Context) {}
 
   public makeParams(height: bigint): Uint8Array {
-    return EpochParams.encode({ height });
+    return epochMessages.Params.encode({ height });
   }
 
   public get() {
@@ -27,18 +27,21 @@ export default class EpochContract {
       emitCorrect: boolean,
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
     ) => {
-      const { height } = EpochParams.decode(params);
+      const { height } = epochMessages.Params.decode(params);
 
       const priorHash = Hash.digest(
         height
-          ? request(contractHash, EpochParams.encode({ height: height - 1n }))
+          ? request(
+            contractHash,
+            epochMessages.Params.encode({ height: height - 1n }),
+          )
           : IV,
       );
       const skipHash = Hash.digest(
         height
           ? request(
             contractHash,
-            EpochParams.encode({ height: height & (height - 1n) }),
+            epochMessages.Params.encode({ height: height & (height - 1n) }),
           )
           : IV,
       );
@@ -48,7 +51,7 @@ export default class EpochContract {
         priorHash.toBytes()[Math.floor(Math.random() * 32)] ^= 1;
       }
 
-      return EpochAnswer.encode({
+      return epochMessages.Answer.encode({
         prior_hash: priorHash,
         skip_hash: skipHash,
         events_hash: eventsHash,
@@ -69,8 +72,7 @@ export default class EpochContract {
 
     // This is a nasty hack until we get WASM working
     (window as any).epochGenerator = epochGenerator;
-    (window as any).EpochParams = EpochParams;
-    (window as any).EpochAnswer = EpochAnswer;
+    (window as any).epochMessages = epochMessages;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(epochContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, epochGenerator);

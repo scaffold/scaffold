@@ -4,8 +4,6 @@ import QuestionService from '~/sbl/QuestionService.ts';
 import AnswerRegistry, { Answer } from '~/sbl/AnswerRegistry.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
-import CollatzContract from '~/graph/CollatzContract.ts';
-import { CollatzAnswer } from '~/graph/collatzMessages.ts';
 import { makeTest } from './util.ts';
 import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
 import ServingService from '~/sbl/ServingService.ts';

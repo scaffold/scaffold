@@ -5,7 +5,7 @@ import AnswerRegistry, { Answer } from '~/sbl/AnswerRegistry.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import CollatzContract from '~/graph/CollatzContract.ts';
-import { CollatzAnswer } from '~/graph/collatzMessages.ts';
+import * as collatzMessages from '~/graph/collatzMessages.ts';
 import { makeTest } from './util.ts';
 
 Deno.test(
@@ -80,7 +80,7 @@ Deno.test(
 
     assertEquals(
       firstAnswer.data,
-      CollatzAnswer.encode({ stopping_time: 6n, maximum: 16n }),
+      collatzMessages.Answer.encode({ stopping_time: 6n, maximum: 16n }),
     );
   }),
 );

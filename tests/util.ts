@@ -39,8 +39,8 @@ export const makeTest = (
     const ctxs = Array.from({ length: func.length }, (_, i) =>
       new Context(makeConfig(i, partialConfig)));
     return deadline(Promise.resolve(func(...ctxs)), 1000).finally(() =>
-      ctxs.forEach((ctx) =>
+      Promise.all(ctxs.map((ctx) =>
         ctx.destruct()
-      )
+      ))
     );
   };

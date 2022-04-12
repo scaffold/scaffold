@@ -1,6 +1,6 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import { CollatzAnswer, CollatzParams } from './collatzMessages.ts';
+import * as collatzMessages from './collatzMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 
@@ -8,7 +8,7 @@ export default class CollatzContract {
   constructor(private ctx: Context) {}
 
   public makeParams(num: bigint): Uint8Array {
-    return CollatzParams.encode({ num });
+    return collatzMessages.Params.encode({ num });
   }
 
   public get() {
@@ -22,16 +22,16 @@ export default class CollatzContract {
         return new TextEncoder().encode('DUPE');
       }
 
-      const { num } = CollatzParams.decode(params);
+      const { num } = collatzMessages.Params.decode(params);
 
-      let answer: CollatzAnswer;
+      let answer: collatzMessages.Answer;
       if (num === 1n) {
         answer = { stopping_time: 0n, maximum: 1n };
       } else {
-        const prev = CollatzAnswer.decode(
+        const prev = collatzMessages.Answer.decode(
           request(
             contractHash,
-            CollatzParams.encode({
+            collatzMessages.Params.encode({
               num: num % 2n ? num * 3n + 1n : num / 2n,
             }),
           ),
@@ -42,7 +42,7 @@ export default class CollatzContract {
         };
       }
 
-      return CollatzAnswer.encode(answer);
+      return collatzMessages.Answer.encode(answer);
     };
 
     const collatzContract = (
@@ -59,8 +59,7 @@ export default class CollatzContract {
 
     // This is a nasty hack until we get WASM working
     (window as any).collatzGenerator = collatzGenerator;
-    (window as any).CollatzParams = CollatzParams;
-    (window as any).CollatzAnswer = CollatzAnswer;
+    (window as any).collatzMessages = collatzMessages;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(collatzContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, collatzGenerator);

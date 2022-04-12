@@ -2,14 +2,14 @@ import * as base from '~/sbl/messages.ts';
 
 const registry = {
   ...base.registry,
-  AccountParams: {
+  Params: {
+    name: 'Params',
     type: 'record',
-    name: 'AccountParams',
     fields: [{ name: 'idx', type: 'long' }],
   },
-  AccountAnswer: {
+  Answer: {
+    name: 'Answer',
     type: 'record',
-    name: 'AccountAnswer',
     fields: [],
   },
 } as const;
@@ -19,7 +19,7 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
-export const AccountParams = base.makeMsg(registry, 'AccountParams');
-export type AccountParams = MsgType<'AccountParams'>;
-export const AccountAnswer = base.makeMsg(registry, 'AccountAnswer');
-export type AccountAnswer = MsgType<'AccountAnswer'>;
+export const Params = base.makeMsg(registry, 'Params');
+export type Params = MsgType<'Params'>;
+export const Answer = base.makeMsg(registry, 'Answer');
+export type Answer = MsgType<'Answer'>;

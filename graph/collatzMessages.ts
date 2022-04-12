@@ -2,14 +2,14 @@ import * as base from '~/sbl/messages.ts';
 
 const registry = {
   ...base.registry,
-  CollatzParams: {
+  Params: {
+    name: 'Params',
     type: 'record',
-    name: 'CollatzParams',
     fields: [{ name: 'num', type: 'long' }],
   },
-  CollatzAnswer: {
+  Answer: {
+    name: 'Answer',
     type: 'record',
-    name: 'CollatzAnswer',
     fields: [
       { name: 'stopping_time', type: 'long' },
       { name: 'maximum', type: 'long' },
@@ -22,7 +22,7 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
-export const CollatzParams = base.makeMsg(registry, 'CollatzParams');
-export type CollatzParams = MsgType<'CollatzParams'>;
-export const CollatzAnswer = base.makeMsg(registry, 'CollatzAnswer');
-export type CollatzAnswer = MsgType<'CollatzAnswer'>;
+export const Params = base.makeMsg(registry, 'Params');
+export type Params = MsgType<'Params'>;
+export const Answer = base.makeMsg(registry, 'Answer');
+export type Answer = MsgType<'Answer'>;

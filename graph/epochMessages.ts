@@ -2,14 +2,14 @@ import * as base from '~/sbl/messages.ts';
 
 const registry = {
   ...base.registry,
-  EpochParams: {
+  Params: {
+    name: 'Params',
     type: 'record',
-    name: 'EpochParams',
     fields: [{ name: 'height', type: 'long' }],
   },
-  EpochAnswer: {
+  Answer: {
+    name: 'Answer',
     type: 'record',
-    name: 'EpochAnswer',
     fields: [
       // This is the hash of the epoch at `height - 1`.
       { name: 'prior_hash', type: 'Hash' },
@@ -29,7 +29,7 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
-export const EpochParams = base.makeMsg(registry, 'EpochParams');
-export type EpochParams = MsgType<'EpochParams'>;
-export const EpochAnswer = base.makeMsg(registry, 'EpochAnswer');
-export type EpochAnswer = MsgType<'EpochAnswer'>;
+export const Params = base.makeMsg(registry, 'Params');
+export type Params = MsgType<'Params'>;
+export const Answer = base.makeMsg(registry, 'Answer');
+export type Answer = MsgType<'Answer'>;

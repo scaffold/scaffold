@@ -2,7 +2,7 @@ import Config from './Config.ts';
 
 export default class Context {
   private objs: Map<{ new (context: Context): any }, any> = new Map();
-  private destructors: (() => void)[] = [];
+  private destructors: (() => Promise<void> | void)[] = [];
 
   constructor(public config: Config) {
     // This is for debugging
@@ -24,8 +24,8 @@ export default class Context {
     };
   }
 
-  public destruct() {
-    this.destructors.forEach((cb) => cb());
+  public async destruct() {
+    await Promise.all(this.destructors.map((cb) => cb()));
     this.destructors = [];
   }
 
@@ -44,7 +44,7 @@ export default class Context {
     return res;
   }
 
-  public onDestruct(cb: () => void) {
+  public onDestruct(cb: () => Promise<void> | void) {
     this.destructors.push(cb);
   }
 }
