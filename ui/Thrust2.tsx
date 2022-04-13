@@ -22,7 +22,7 @@ export default ({ sbl, match }: { sbl: Context; match: Hash }) => {
         contract_answer_hash: contractHash,
         params: thrustMessages.GameParams.encode({
           match,
-          time: idx,
+          tick: idx,
         }),
       }),
       (idx, state) =>

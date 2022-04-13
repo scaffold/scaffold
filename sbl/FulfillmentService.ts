@@ -20,13 +20,23 @@ export default class FulfillmentService {
 
   constructor(private ctx: Context) {}
 
-  public fulfill(question: Question, incentive: bigint) {
+  public fulfill(
+    question: Question,
+    incentive: bigint,
+    recursionLimit: number,
+    stack: string[],
+  ) {
     question.isFulfilling = true;
-    this.sendSubs(question, incentive);
-    this.launchExecutor(question, 0n);
+    this.sendSubs(question, incentive, recursionLimit, stack);
+    this.launchExecutor(question, 0n, recursionLimit, stack);
   }
 
-  private sendSubs(question: Question, incentive: bigint) {
+  private sendSubs(
+    question: Question,
+    incentive: bigint,
+    _recursionLimit: number,
+    _stack: string[],
+  ) {
     for (let i = 0; i < numParallelSubs; i++) {
       // TODO
     }
@@ -37,7 +47,12 @@ export default class FulfillmentService {
     }
   }
 
-  private launchExecutor(question: Question, incentive: bigint) {
+  private launchExecutor(
+    question: Question,
+    incentive: bigint,
+    recursionLimit: number,
+    stack: string[],
+  ) {
     if (!question.contractAnswerHash || !question.params) {
       throw new Error(
         `Cannot generate if we don't know the contract hash or params`,
@@ -85,6 +100,8 @@ export default class FulfillmentService {
             this.ctx.config.approxComputePricePerSecond / 1000n;
           this.ctx.get(QuestionService).addAnswerToQuestion(answer);
         },
+        recursionLimit,
+        stack,
       );
     });
   }

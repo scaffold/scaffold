@@ -3,6 +3,7 @@ import Hash from '~/sbl/util/Hash.ts';
 import * as thrustMessages from './thrustMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 // Inspiration:
 // https://experiments.withgoogle.com/wpilot
@@ -11,19 +12,19 @@ import { arrEquals } from '~/sbl/util/buffer.ts';
 export default class ThrustInputContract {
   private inputCallbacks: Map<
     string,
-    (time: bigint) => thrustMessages.InputEntry
+    (tick: bigint) => thrustMessages.InputEntry
   > = new Map();
 
   constructor(private ctx: Context) {}
 
-  public makeParams(match: Hash, player: Hash, time: bigint): Uint8Array {
-    return thrustMessages.InputParams.encode({ match, player, time });
+  public makeParams(match: Hash, player: Hash, tick: bigint): Uint8Array {
+    return thrustMessages.InputParams.encode({ match, player, tick });
   }
 
   public setInputCallback(
     match: Hash,
     player: Hash,
-    cb: (time: bigint) => thrustMessages.InputEntry,
+    cb: (tick: bigint) => thrustMessages.InputEntry,
   ) {
     this.inputCallbacks.set(match.toHex() + player.toHex(), cb);
   }
@@ -41,12 +42,12 @@ export default class ThrustInputContract {
         return new TextEncoder().encode('DUPE');
       }
 
-      const { match, player, time } = thrustMessages.InputParams.decode(params);
+      const { match, player, tick } = thrustMessages.InputParams.decode(params);
 
       const cb = thrustInputCallbacks.get(match.toHex() + player.toHex());
       if (cb) {
         return thrustMessages.InputAnswer.encode({
-          entry: { InputEntry: cb(time) },
+          entry: { InputEntry: cb(tick) },
         });
       } else {
         return thrustMessages.InputAnswer.encode({ entry: null });
@@ -73,6 +74,13 @@ export default class ThrustInputContract {
       thrustInputContract,
     );
     this.ctx.get(GraphUtils).supplyGenerator(contract, thrustInputGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'ThrustInputContract',
+      contract.hash,
+      (params) => thrustMessages.InputParams.decode(params),
+      (answer) => thrustMessages.InputAnswer.decode(answer),
+    );
 
     return contract;
   }

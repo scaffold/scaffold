@@ -60,7 +60,7 @@ export default () => {
           </pre>
         ))}
       </ul>
-      {/* <Thrust2 sbl={client.ctx} match={Hash.digest('abc')} /> */}
+      <Thrust2 sbl={client.ctx} match={Hash.digest('abc')} />
     </div>
   );
 };

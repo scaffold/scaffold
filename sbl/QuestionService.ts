@@ -16,6 +16,8 @@ import PublicationService from './PublicationService.ts';
 import { assert, error } from './util/functional.ts';
 import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 import { Answer } from './AnswerRegistry.ts';
+import QaDebugger from './QaDebugger.ts';
+import IncentiveService from './IncentiveService.ts';
 
 export default class QuestionService {
   constructor(private ctx: Context) {}
@@ -76,7 +78,12 @@ export default class QuestionService {
         Number(childQuestion.getTotalIncentive()),
         () => {
           if (!childQuestion.isFulfilling) {
-            this.ctx.get(FulfillmentService).fulfill(childQuestion, 1000000n);
+            this.ctx.get(FulfillmentService).fulfill(
+              childQuestion,
+              1000000n,
+              10,
+              ['addAnswerToQuestion'],
+            );
             assert(childQuestion.isFulfilling);
           }
           return Promise.resolve();
@@ -107,8 +114,14 @@ export default class QuestionService {
 
     spec: QuestionSpec,
     callback: (answer: Answer) => void,
-  ): { release: () => void } {
-    this.ctx.get(Logger).log('QuestionService', 'getCanonical', { spec });
+    recursionLimit = 10,
+    stack: string[] = [],
+  ) {
+    stack = [
+      ...stack,
+      this.ctx.get(QaDebugger).debugQuestion(spec) + '/' + recursionLimit,
+    ];
+    console.log('QuestionService.getCanonical', stack.join(' -> '));
 
     const question = this.ctx.get(QuestionRegistry).getBySpec(spec);
 
@@ -117,8 +130,13 @@ export default class QuestionService {
       callback(question.canonicalAnswer);
     }
 
-    if (!question.isFulfilling) {
-      this.ctx.get(FulfillmentService).fulfill(question, 1000000n);
+    if (!question.isFulfilling && recursionLimit > 0) {
+      this.ctx.get(FulfillmentService).fulfill(
+        question,
+        1000000n,
+        recursionLimit,
+        stack,
+      );
       assert(question.isFulfilling);
     }
 
@@ -146,6 +164,8 @@ export default class QuestionService {
     // // TODO: Ask or calculate
 
     return {
+      incentivize: (amount: bigint) =>
+        this.ctx.get(IncentiveService).incentivize(question, amount),
       release: () => {
         const idx = question.canonicalCallbacks.indexOf(callback);
         if (idx === -1) {

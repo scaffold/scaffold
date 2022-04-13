@@ -78,6 +78,14 @@ export default class WorkQueue {
     }
   }
 
+  public remove(key: Hash) {
+    const entry = this.map.get(key.toHex());
+    if (entry) {
+      this.queue.remove(entry);
+      this.map.delete(key.toHex());
+    }
+  }
+
   private cleanup() {
     const maxSize = 1000;
 

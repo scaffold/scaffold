@@ -3,7 +3,11 @@ import Hash from '~/sbl/util/Hash.ts';
 import * as thrustMessages from './thrustMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import ThrustInitContract from './ThrustInitContract.ts';
 import ThrustInputContract from './ThrustInputContract.ts';
+import * as timeMessages from './timeMessages.ts';
+import TimeContract from './TimeContract.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 // Inspiration:
 // https://experiments.withgoogle.com/wpilot
@@ -17,8 +21,10 @@ export default class ThrustGameContract {
   // }
 
   public get() {
+    const thrustInitContractHash = this.ctx.get(ThrustInitContract).get().hash;
     const thrustInputContractHash =
       this.ctx.get(ThrustInputContract).get().hash;
+    const timeContractHash = this.ctx.get(TimeContract).get().hash;
 
     const thrustGameGenerator = (
       contractHash: Hash,
@@ -31,14 +37,24 @@ export default class ThrustGameContract {
         return new TextEncoder().encode('DUPE');
       }
 
-      const { match, time } = thrustMessages.GameParams.decode(params);
+      const { match, tick } = thrustMessages.GameParams.decode(params);
 
-      const state = thrustMessages.GameAnswer.decode(
-        request(
-          contractHash,
-          thrustMessages.GameParams.encode({ match, time: time - 1n }),
-        ),
-      );
+      const state = tick
+        ? thrustMessages.GameAnswer.decode(
+          request(
+            contractHash,
+            thrustMessages.GameParams.encode({ match, tick: tick - 1n }),
+          ),
+        )
+        : {
+          game_state: {
+            center: { x: 0, y: 0 },
+            velocity: { x: 0, y: 0 },
+            size: 1000,
+          },
+          players: [],
+          bullets: [],
+        };
 
       // Notify network that we'll be requesting these contracts.
       // This isn't necessary, but without it, the network won't know which contracts will be requested until the previous call returns.
@@ -47,9 +63,29 @@ export default class ThrustGameContract {
       state.players.forEach(({ hash }) =>
         notify(
           thrustInputContractHash,
-          thrustMessages.InputParams.encode({ match, player: hash, time }),
+          thrustMessages.InputParams.encode({ match, player: hash, tick }),
         )
       );
+
+      // Get game parameters
+      const { init_time } = thrustMessages.InitAnswer.decode(
+        request(
+          thrustInitContractHash,
+          thrustMessages.InitParams.encode({ match }),
+        ),
+      );
+
+      if (tick === 7n) {
+        console.log('77777777777', init_time + tick * 1000n);
+      }
+      // Wait for time
+      request(
+        timeContractHash,
+        timeMessages.Params.encode({ time: init_time + tick * 1000n }),
+      );
+      if (tick === 7n) {
+        Deno.exit(1);
+      }
 
       let targCenterX = 0.0;
       let targCenterY = 0.0;
@@ -57,7 +93,7 @@ export default class ThrustGameContract {
         // Fetch player inputs
         const inputAnswer = request(
           thrustInputContractHash,
-          thrustMessages.InputParams.encode({ match, player: hash, time }),
+          thrustMessages.InputParams.encode({ match, player: hash, tick }),
         );
         const { entry } = thrustMessages.InputAnswer.decode(inputAnswer);
         const input: thrustMessages.InputEntry = entry ? entry.InputEntry : {
@@ -145,12 +181,21 @@ export default class ThrustGameContract {
     // This is a nasty hack until we get WASM working
     (window as any).thrustGameGenerator = thrustGameGenerator;
     (window as any).thrustMessages = thrustMessages;
+    (window as any).thrustInitContractHash = thrustInitContractHash;
     (window as any).thrustInputContractHash = thrustInputContractHash;
+    (window as any).timeContractHash = timeContractHash;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(
       thrustGameContract,
     );
     this.ctx.get(GraphUtils).supplyGenerator(contract, thrustGameGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'ThrustGameContract',
+      contract.hash,
+      (params) => thrustMessages.GameParams.decode(params),
+      (answer) => thrustMessages.GameAnswer.decode(answer),
+    );
 
     return contract;
   }

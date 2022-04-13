@@ -2,13 +2,28 @@ import * as base from '~/sbl/messages.ts';
 
 const registry = {
   ...base.registry,
+  InitParams: {
+    name: 'InitParams',
+    type: 'record',
+    fields: [
+      { name: 'match', type: 'Hash' },
+    ],
+  },
+  InitAnswer: {
+    name: 'InitAnswer',
+    type: 'record',
+    fields: [
+      { name: 'nonce', type: 'Hash' },
+      { name: 'init_time', type: 'long' },
+    ],
+  },
   InputParams: {
     name: 'InputParams',
     type: 'record',
     fields: [
       { name: 'match', type: 'Hash' },
       { name: 'player', type: 'Hash' },
-      { name: 'time', type: 'long' },
+      { name: 'tick', type: 'long' },
     ],
   },
   InputEntry: {
@@ -65,7 +80,7 @@ const registry = {
     fields: [
       { name: 'position', type: 'Vector2d' },
       { name: 'velocity', type: 'Vector2d' },
-      { name: 'death_time', type: 'long' },
+      { name: 'death_tick', type: 'long' },
     ],
   },
   PlayerJoin: {
@@ -81,7 +96,7 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'match', type: 'Hash' },
-      { name: 'time', type: 'long' },
+      { name: 'tick', type: 'long' },
     ],
   },
   GameAnswer: {
@@ -100,6 +115,10 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
+export const InitParams = base.makeMsg(registry, 'InitParams');
+export type InitParams = MsgType<'InitParams'>;
+export const InitAnswer = base.makeMsg(registry, 'InitAnswer');
+export type InitAnswer = MsgType<'InitAnswer'>;
 export const InputParams = base.makeMsg(registry, 'InputParams');
 export type InputParams = MsgType<'InputParams'>;
 export const InputEntry = base.makeMsg(registry, 'InputEntry');
