@@ -139,7 +139,7 @@ const webrtcProvider: ProtocolProvider = {
 };
 
 export default class SblClient {
-  private ctx: Context;
+  public ctx: Context;
 
   constructor() {
     const config: Config = {
@@ -183,10 +183,10 @@ export default class SblClient {
 
     let height = 0n;
     setInterval(() => {
-      this.ctx.get(QuestionService).getCanonical({
-        contract_answer_hash: this.ctx.get(EpochContract).get().hash,
-        params: this.ctx.get(EpochContract).makeParams(height++),
-      }, (answer) => console.log(answer));
+      // this.ctx.get(QuestionService).getCanonical({
+      //   contract_answer_hash: this.ctx.get(EpochContract).get().hash,
+      //   params: this.ctx.get(EpochContract).makeParams(height++),
+      // }, (answer) => console.log(answer));
     }, 1000);
 
     // const params = this.ctx.get(EpochContract).makeParams(10n);
@@ -199,18 +199,20 @@ export default class SblClient {
     // );
   }
 
-  public get(
-    contractHash: Hash,
-    contractParams: Uint8Array,
-    onAnswer: (answer: Answer) => void,
-  ) {
-    this.ctx.get(QuestionService).getCanonical({
-      contract_answer_hash: contractHash,
-      params: contractParams,
-    }, onAnswer);
-  }
+  // public get(
+  //   contractHash: Hash,
+  //   contractParams: Uint8Array,
+  //   onAnswer: (answer: Answer) => void,
+  // ) {
+  //   this.ctx.get(QuestionService).getCanonical({
+  //     contract_answer_hash: contractHash,
+  //     params: contractParams,
+  //   }, onAnswer);
+  // }
 
-  public close() {}
+  public close() {
+    return this.ctx.destruct();
+  }
 }
 
 /*

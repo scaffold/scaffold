@@ -3,6 +3,10 @@ import React from 'react';
 import SblClient from './SblClient.ts';
 import { Answer } from '~/sbl/AnswerRegistry.ts';
 import Hash from '~/sbl/util/Hash.ts';
+import QuestionService from '~/sbl/QuestionService.ts';
+import Thrust2 from './Thrust2.tsx';
+
+const client = new SblClient();
 
 export default () => {
   const [contractName, setContractName] = React.useState('');
@@ -14,18 +18,6 @@ export default () => {
     ) => [...priorAnswers, newAnswer],
     [],
   );
-  const [client, setClient] = React.useState<SblClient>();
-
-  React.useEffect(() => {
-    const client = new SblClient();
-    setClient(client);
-    return () => client.close();
-  }, []);
-
-  React.useEffect(() => {
-    const idx = setInterval(() => {}, 100);
-    return () => clearInterval(idx);
-  }, []);
 
   return (
     <div>
@@ -33,11 +25,10 @@ export default () => {
         onSubmit={async (event) => {
           event.preventDefault();
           const contractHash = await Hash.digest(contractName);
-          client?.get(
-            contractHash,
-            new TextEncoder().encode(contractParams),
-            addAnswer,
-          );
+          client.ctx.get(QuestionService).getCanonical({
+            contract_answer_hash: contractHash,
+            params: new TextEncoder().encode(contractParams),
+          }, addAnswer);
         }}
       >
         <label>
@@ -69,6 +60,7 @@ export default () => {
           </pre>
         ))}
       </ul>
+      {/* <Thrust2 sbl={client.ctx} match={Hash.digest('abc')} /> */}
     </div>
   );
 };

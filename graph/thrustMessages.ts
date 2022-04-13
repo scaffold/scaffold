@@ -8,11 +8,11 @@ const registry = {
     fields: [
       { name: 'match', type: 'Hash' },
       { name: 'player', type: 'Hash' },
-      { name: 'idx', type: 'long' },
+      { name: 'time', type: 'long' },
     ],
   },
-  InputAnswer: {
-    name: 'InputAnswer',
+  InputEntry: {
+    name: 'InputEntry',
     type: 'record',
     fields: [
       { name: 'pressing_fwd', type: 'boolean' },
@@ -20,6 +20,16 @@ const registry = {
       { name: 'pressing_left', type: 'boolean' },
       { name: 'pressing_right', type: 'boolean' },
       { name: 'pressing_fire', type: 'boolean' },
+    ],
+  },
+  InputAnswer: {
+    name: 'InputAnswer',
+    type: 'record',
+    fields: [
+      {
+        name: 'entry',
+        type: ['null', 'InputEntry'],
+      },
     ],
   },
   Vector2d: {
@@ -30,13 +40,40 @@ const registry = {
       { name: 'y', type: 'float' },
     ],
   },
+  GameState: {
+    name: 'GameState',
+    type: 'record',
+    fields: [
+      { name: 'center', type: 'Vector2d' },
+      { name: 'velocity', type: 'Vector2d' },
+      { name: 'size', type: 'float' },
+    ],
+  },
   PlayerState: {
     name: 'PlayerState',
     type: 'record',
     fields: [
+      { name: 'hash', type: 'Hash' },
       { name: 'position', type: 'Vector2d' },
       { name: 'velocity', type: 'Vector2d' },
       { name: 'direction', type: 'Vector2d' },
+    ],
+  },
+  BulletState: {
+    name: 'BulletState',
+    type: 'record',
+    fields: [
+      { name: 'position', type: 'Vector2d' },
+      { name: 'velocity', type: 'Vector2d' },
+      { name: 'death_time', type: 'long' },
+    ],
+  },
+  PlayerJoin: {
+    name: 'PlayerJoin',
+    type: 'record',
+    fields: [
+      { name: 'player_name', type: 'string' },
+      { name: 'color', type: 'int' },
     ],
   },
   GameParams: {
@@ -44,14 +81,16 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'match', type: 'Hash' },
-      { name: 'idx', type: 'long' },
+      { name: 'time', type: 'long' },
     ],
   },
   GameAnswer: {
     name: 'GameAnswer',
     type: 'record',
     fields: [
+      { name: 'game_state', type: 'GameState' },
       { name: 'players', type: { type: 'array', items: 'PlayerState' } },
+      { name: 'bullets', type: { type: 'array', items: 'BulletState' } },
     ],
   },
 } as const;
@@ -61,6 +100,12 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
+export const InputParams = base.makeMsg(registry, 'InputParams');
+export type InputParams = MsgType<'InputParams'>;
+export const InputEntry = base.makeMsg(registry, 'InputEntry');
+export type InputEntry = MsgType<'InputEntry'>;
+export const InputAnswer = base.makeMsg(registry, 'InputAnswer');
+export type InputAnswer = MsgType<'InputAnswer'>;
 export const GameParams = base.makeMsg(registry, 'GameParams');
 export type GameParams = MsgType<'GameParams'>;
 export const GameAnswer = base.makeMsg(registry, 'GameAnswer');

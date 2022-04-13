@@ -13,7 +13,10 @@ class NeedsMoreDataError extends Error {
 
 const callWithSyncRequestHandler = <T>(
   ctx: Context,
-  func: (handler: (contractHash: Hash, params: Uint8Array) => Uint8Array) => T,
+  func: (
+    handler: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+    notifier: (contractHash: Hash, params: Uint8Array) => void,
+  ) => T,
   onAnswer: (answer: T, inputs: Answer[], durationMs: number) => void,
 ) => {
   // console.log('cwsrh');
@@ -46,6 +49,9 @@ const callWithSyncRequestHandler = <T>(
         // No answers
         throw new NeedsMoreDataError();
       }
+    }, (contractHash: Hash, params: Uint8Array) => {
+      // TODO: Notify of interest
+      throw new Error(`TODO: Notify of interest`);
     });
 
     // console.log('oa');

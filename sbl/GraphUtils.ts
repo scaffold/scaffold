@@ -24,6 +24,7 @@ export default class GraphUtils {
       params: Uint8Array,
       hint: Uint8Array,
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+      notify: (contractHash: Hash, params: Uint8Array) => void,
     ) => boolean,
   ) {
     return this.supplyRawAnswer(new TextEncoder().encode(contract.toString()));
@@ -53,6 +54,7 @@ export default class GraphUtils {
       params: Uint8Array,
       emitCorrect: boolean,
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+      notify: (contractHash: Hash, params: Uint8Array) => void,
     ) => Uint8Array,
   ) {
     return this.ctx.get(AnswerRegistry).getByPub({

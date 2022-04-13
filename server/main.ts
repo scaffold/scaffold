@@ -130,3 +130,5 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
     }`,
   )
 );
+
+self.addEventListener('unload', () => ctx.destruct());

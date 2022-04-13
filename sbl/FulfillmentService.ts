@@ -61,12 +61,13 @@ export default class FulfillmentService {
       const genFunc = eval(new TextDecoder().decode(gen.data));
       callWithSyncRequestHandler<Uint8Array>(
         this.ctx,
-        (handler) =>
+        (handler, notifier) =>
           genFunc(
             question.contractAnswerHash!,
             question.params!,
             true,
             handler,
+            notifier,
           ),
         (data, inputs: Answer[], durationMs: number) => {
           const answer = this.ctx.get(AnswerRegistry).getByPub({
