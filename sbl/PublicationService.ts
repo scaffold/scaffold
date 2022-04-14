@@ -41,7 +41,9 @@ export default class PublicationService {
       const license = inputAnswer.licenses.find((license) =>
         Hash.equals(license.question_hash, answer.question.hash)
       );
-      if (license) inputIncentive += license.incentive;
+      if (license) {
+        inputIncentive += license.incentive;
+      }
     }
 
     const inputs = [...answer.inputs];

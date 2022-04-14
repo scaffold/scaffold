@@ -18,7 +18,7 @@ const callWithSyncRequestHandler = async <T>(
     notifier: (contractHash: Hash, params: Uint8Array) => void,
   ) => T | Promise<T>,
   onAnswer: (answer: T, inputs: Answer[], durationMs: number) => void,
-  recursionLimit: number,
+  incentive: bigint,
   stack: string[],
 ) => {
   // console.log('cwsrh');
@@ -27,6 +27,9 @@ const callWithSyncRequestHandler = async <T>(
     const startTime = Date.now();
     const out = await func((contractHash: Hash, params: Uint8Array) => {
       let answer: Answer | typeof noAnswerSentinel = noAnswerSentinel;
+
+      const subIncentive = incentive / 2n;
+      incentive -= subIncentive;
 
       let inside = true;
       // console.log('gc');
@@ -40,18 +43,11 @@ const callWithSyncRequestHandler = async <T>(
           if (inside) {
             answer = a;
           } else {
-            callWithSyncRequestHandler(
-              ctx,
-              func,
-              onAnswer,
-              recursionLimit,
-              stack,
-            );
+            callWithSyncRequestHandler(ctx, func, onAnswer, incentive, stack);
           }
         },
-        recursionLimit - 1,
         stack,
-      );
+      ).incentivize(subIncentive);
       inside = false;
 
       if (answer !== noAnswerSentinel) {

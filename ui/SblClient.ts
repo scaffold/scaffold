@@ -176,6 +176,8 @@ export default class SblClient {
       nodeNonce: (new TextEncoder()).encode('browser_0'),
 
       approxComputePricePerSecond: 1000n,
+
+      initialWorkerCount: 1,
     };
 
     this.ctx = new Context(config);

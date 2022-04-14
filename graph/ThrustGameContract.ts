@@ -75,17 +75,11 @@ export default class ThrustGameContract {
         ),
       );
 
-      if (tick === 7n) {
-        console.log('77777777777', init_time + tick * 1000n);
-      }
       // Wait for time
       request(
         timeContractHash,
         timeMessages.Params.encode({ time: init_time + tick * 1000n }),
       );
-      if (tick === 7n) {
-        Deno.exit(1);
-      }
 
       let targCenterX = 0.0;
       let targCenterY = 0.0;

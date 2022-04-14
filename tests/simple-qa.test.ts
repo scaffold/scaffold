@@ -26,7 +26,9 @@ Deno.test(
     });
 
     const firstAnswer: Answer = await new Promise((resolve) =>
-      ctx.get(QuestionService).getCanonical(question, resolve)
+      ctx.get(QuestionService).getCanonical(question, resolve).incentivize(
+        1000n,
+      )
     );
 
     assertEquals(firstAnswer.data, data);
@@ -59,7 +61,7 @@ Deno.test(
       ctx.get(QuestionService).getCanonical({
         contract_answer_hash: contract.hash,
         params,
-      }, resolve)
+      }, resolve).incentivize(1000n)
     );
 
     assertEquals(firstAnswer.data, params);
@@ -75,7 +77,7 @@ Deno.test(
       ctx.get(QuestionService).getCanonical({
         contract_answer_hash: ctx.get(CollatzContract).get().hash,
         params,
-      }, resolve)
+      }, resolve).incentivize(1000n)
     );
 
     assertEquals(

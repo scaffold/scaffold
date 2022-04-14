@@ -44,8 +44,7 @@ export default class StateTracker {
       }
       listeningIdxs.add(idx);
 
-      const sub = { idx, lastAnswerTime: Infinity, release: () => {} };
-      sub.release = this.ctx.get(QuestionService).getCanonical(
+      const questionSub = this.ctx.get(QuestionService).getCanonical(
         questionFactory(idx),
         (answer) => {
           onState(idx, answer);
@@ -78,7 +77,13 @@ export default class StateTracker {
             }
           }, 0);
         },
-      ).release;
+      );
+      questionSub.incentivize(10000n);
+      const sub = {
+        idx,
+        lastAnswerTime: Infinity,
+        release: questionSub.release,
+      };
       subs.push(sub);
       return sub;
     };

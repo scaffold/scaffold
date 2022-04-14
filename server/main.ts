@@ -125,6 +125,8 @@ const config: Config = {
   nodeNonce: (new TextEncoder()).encode('server_0'),
 
   approxComputePricePerSecond: 1000n,
+
+  initialWorkerCount: 1,
 };
 
 const ctx = new Context(config);

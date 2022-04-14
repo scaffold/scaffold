@@ -3,6 +3,7 @@ import Hash from '~/sbl/util/Hash.ts';
 import * as collatzMessages from './collatzMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 export default class CollatzContract {
   constructor(private ctx: Context) {}
@@ -63,6 +64,13 @@ export default class CollatzContract {
 
     const contract = this.ctx.get(GraphUtils).supplyContract(collatzContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, collatzGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'CollatzContract',
+      contract.hash,
+      (params) => collatzMessages.Params.decode(params),
+      (answer) => collatzMessages.Answer.decode(answer),
+    );
 
     return contract;
   }

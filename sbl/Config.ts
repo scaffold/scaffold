@@ -61,6 +61,8 @@ type Config = {
   nodeNonce: Uint8Array;
 
   approxComputePricePerSecond: bigint;
+
+  initialWorkerCount: number;
 };
 
 export default Config;

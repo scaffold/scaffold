@@ -56,7 +56,9 @@ Deno.test(
 
     // Query on ctx2
     const firstAnswer: Answer = await new Promise((resolve) =>
-      ctx2.get(QuestionService).getCanonical(question, resolve)
+      ctx2.get(QuestionService).getCanonical(question, resolve).incentivize(
+        1000n,
+      )
     );
 
     assertEquals(new Uint8Array(firstAnswer.data), data);

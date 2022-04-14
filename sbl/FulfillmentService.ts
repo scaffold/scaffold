@@ -23,18 +23,20 @@ export default class FulfillmentService {
   public fulfill(
     question: Question,
     incentive: bigint,
-    recursionLimit: number,
     stack: string[],
   ) {
+    if (!question.contractAnswerHash || !question.params) {
+      // TODO: Figure these things out
+      return;
+    }
     question.isFulfilling = true;
-    this.sendSubs(question, incentive, recursionLimit, stack);
-    this.launchExecutor(question, 0n, recursionLimit, stack);
+    this.sendSubs(question, incentive, stack);
+    this.launchExecutor(question, incentive, stack);
   }
 
   private sendSubs(
     question: Question,
     incentive: bigint,
-    _recursionLimit: number,
     _stack: string[],
   ) {
     for (let i = 0; i < numParallelSubs; i++) {
@@ -42,15 +44,14 @@ export default class FulfillmentService {
     }
 
     this.ctx.get(SubscriptionService).subscribe(question);
-    if (incentive > 0n) {
-      this.ctx.get(IncentiveService).incentivize(question, incentive);
-    }
+    // if (incentive > 0n) {
+    //   this.ctx.get(IncentiveService).incentivize(question, incentive);
+    // }
   }
 
   private launchExecutor(
     question: Question,
     incentive: bigint,
-    recursionLimit: number,
     stack: string[],
   ) {
     if (!question.contractAnswerHash || !question.params) {
@@ -100,7 +101,7 @@ export default class FulfillmentService {
             this.ctx.config.approxComputePricePerSecond / 1000n;
           this.ctx.get(QuestionService).addAnswerToQuestion(answer);
         },
-        recursionLimit,
+        incentive,
         stack,
       );
     });

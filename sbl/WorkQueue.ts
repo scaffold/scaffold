@@ -26,6 +26,8 @@ export default class WorkQueue {
 
     const idx = setInterval(() => this.cleanup(), 1000);
     ctx.onDestruct(() => clearInterval(idx));
+
+    this.setWorkerCount(ctx.config.initialWorkerCount);
   }
 
   // TODO: Force option?

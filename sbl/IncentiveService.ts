@@ -8,6 +8,7 @@ export default class IncentiveService {
   constructor(private ctx: Context) {}
 
   public incentivize(question: Question, incentive: bigint) {
+    question.selfIncentive += incentive;
     this.pending.push({ question, incentive });
   }
 
@@ -31,8 +32,10 @@ export default class IncentiveService {
 
       if (head.incentive <= amount) {
         amount -= head.incentive;
+        head.question.selfIncentive -= head.incentive;
         res.push(head);
       } else {
+        head.question.selfIncentive -= amount;
         this.pending.push({
           question: head.question,
           incentive: head.incentive - amount,
@@ -41,6 +44,7 @@ export default class IncentiveService {
           question: head.question,
           incentive: amount,
         });
+        break;
       }
     }
 

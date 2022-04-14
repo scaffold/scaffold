@@ -44,6 +44,28 @@ export default class QuestionService {
   //   );
   // }
 
+  private updateIncentives(question: Question, stack: string[]) {
+    const totalIncentive = question.getTotalIncentive();
+    if (totalIncentive > 10n) {
+      this.ctx.get(WorkQueue).set(
+        question.hash,
+        Number(totalIncentive),
+        () => {
+          if (!question.isFulfilling) {
+            this.ctx.get(FulfillmentService).fulfill(
+              question,
+              totalIncentive,
+              stack,
+            );
+          }
+          return Promise.resolve();
+        },
+      );
+    } else {
+      this.ctx.get(WorkQueue).remove(question.hash);
+    }
+  }
+
   public addAnswerToQuestion(answer: Answer) {
     if (answer.isAddedToQuestion) {
       return;
@@ -73,22 +95,7 @@ export default class QuestionService {
         question_hash,
       );
       childQuestion.addIncentive(question.hash, answer.hash, incentive);
-      this.ctx.get(WorkQueue).set(
-        childQuestion.hash,
-        Number(childQuestion.getTotalIncentive()),
-        () => {
-          if (!childQuestion.isFulfilling) {
-            this.ctx.get(FulfillmentService).fulfill(
-              childQuestion,
-              1000000n,
-              10,
-              ['addAnswerToQuestion'],
-            );
-            assert(childQuestion.isFulfilling);
-          }
-          return Promise.resolve();
-        },
-      );
+      this.updateIncentives(childQuestion, ['addAnswerToQuestion']);
     });
 
     // if (answer.timestamp) {
@@ -114,14 +121,10 @@ export default class QuestionService {
 
     spec: QuestionSpec,
     callback: (answer: Answer) => void,
-    recursionLimit = 10,
     stack: string[] = [],
   ) {
-    stack = [
-      ...stack,
-      this.ctx.get(QaDebugger).debugQuestion(spec) + '/' + recursionLimit,
-    ];
-    console.log('QuestionService.getCanonical', stack.join(' -> '));
+    stack = [...stack, this.ctx.get(QaDebugger).debugQuestion(spec)];
+    // console.log('QuestionService.getCanonical', stack.join(' -> '));
 
     const question = this.ctx.get(QuestionRegistry).getBySpec(spec);
 
@@ -130,15 +133,16 @@ export default class QuestionService {
       callback(question.canonicalAnswer);
     }
 
-    if (!question.isFulfilling && recursionLimit > 0) {
-      this.ctx.get(FulfillmentService).fulfill(
-        question,
-        1000000n,
-        recursionLimit,
-        stack,
+    const incentivize = (newAmount: bigint) => {
+      console.log(
+        'QuestionService.getCanonical.incentivize',
+        newAmount,
+        stack.join(' -> '),
       );
-      assert(question.isFulfilling);
-    }
+      this.ctx.get(IncentiveService).incentivize(question, newAmount);
+      this.updateIncentives(question, stack);
+    };
+    incentivize(0n);
 
     // TODO
     // Send SUB to DHT
@@ -164,8 +168,7 @@ export default class QuestionService {
     // // TODO: Ask or calculate
 
     return {
-      incentivize: (amount: bigint) =>
-        this.ctx.get(IncentiveService).incentivize(question, amount),
+      incentivize,
       release: () => {
         const idx = question.canonicalCallbacks.indexOf(callback);
         if (idx === -1) {

@@ -4,7 +4,7 @@ import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config from '~/sbl/Config.ts';
 import Peer from '~/sbl/Peer.ts';
-import Logger from '~/sbl/Logger.ts';
+import WorkQueue from '~/sbl/WorkQueue.ts';
 
 const makeConfig = (
   _ctxIdx: number,
@@ -26,6 +26,8 @@ const makeConfig = (
   nodeNonce: (new TextEncoder()).encode('test_0'),
 
   approxComputePricePerSecond: 1000n,
+
+  initialWorkerCount: 1,
 
   ...partialConfig,
 });

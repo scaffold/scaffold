@@ -12,8 +12,12 @@ import { Node } from './NodeService.ts';
 
 export class Question {
   // Map from parent question hash to input
+  // This is incentive that's already been "solidified" by an answer,
+  //   while IncentiveService and this.selfIncentive is incentive that needs to be licensed by an answer.
   public incentives: Map<string, { answerHash: Hash; incentive: bigint }> =
     new Map();
+
+  public selfIncentive = 0n;
 
   // public subscriptions: Node[] = [];
 
@@ -36,17 +40,21 @@ export class Question {
     // public params?: Uint8Array,
   ) {}
 
-  public addIncentive(questionHash: Hash, answerHash: Hash, incentive: bigint) {
+  public addIncentive(
+    parentQuestionHash: Hash,
+    answerHash: Hash,
+    incentive: bigint,
+  ) {
     getOrCreate(
       this.incentives,
-      questionHash.toHex(),
+      parentQuestionHash.toHex(),
       () => ({ answerHash, incentive }),
       (prev) => incentive > prev.incentive ? { answerHash, incentive } : prev,
     );
   }
 
   public getTotalIncentive() {
-    let total = 0n;
+    let total = this.selfIncentive;
     this.incentives.forEach(({ incentive }) => total += incentive);
     return total;
   }
