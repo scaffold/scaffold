@@ -151,6 +151,12 @@ export default class ConnectionService {
 
     const onVerifyNodeHash = (hash: Hash, publicKey: Uint8Array) => {
       const node = this.ctx.get(NodeService).lookup(hash);
+      const onSendError = (err: unknown) => {
+        console.error(
+          `Caught error sending packet; closing connection: ${err}`,
+        );
+        provider.close();
+      };
       conn = {
         node,
         peer: this.ctx.get(PeerService).lookup(publicKey),
@@ -158,11 +164,11 @@ export default class ConnectionService {
         sendReliable: (message: Packet['message']) =>
           this.composePacket(message).then((packet) =>
             provider.sendReliable(packet)
-          ),
+          ).catch(onSendError),
         sendFast: (message: Packet['message']) =>
           this.composePacket(message).then((packet) =>
             provider.sendFast(packet)
-          ),
+          ).catch(onSendError),
         lastMsgTimestamp: Date.now(),
         ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       };

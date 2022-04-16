@@ -52,7 +52,12 @@ export default class ThrustGameContract {
             velocity: { x: 0, y: 0 },
             size: 1000,
           },
-          players: [],
+          players: [{
+            hash: Hash.digest('plyr1'),
+            position: { x: 10, y: 20 },
+            velocity: { x: 0.3, y: 0.4 },
+            direction: { x: 0.5, y: 0.6 },
+          }],
           bullets: [],
         };
 

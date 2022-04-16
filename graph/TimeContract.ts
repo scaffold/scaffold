@@ -25,7 +25,6 @@ export default class TimeContract {
       const { time } = timeMessages.Params.decode(params);
 
       const wait = Number(time) - Date.now();
-      console.log('TIME_CONTRACT', wait);
       if (wait > 0) {
         await new Promise((resolve) => setTimeout(resolve, wait));
       }

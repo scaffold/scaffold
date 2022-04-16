@@ -99,8 +99,6 @@ export default class StateTracker<Key, State> {
     }
 
     const itvl = setInterval(() => {
-      console.log([...listeningIdxs].sort((a, b) => Number(a - b)).join(','));
-
       const threshold = Date.now() - unsubWaitMs;
       while (subs.length) {
         const last = subs[subs.length - 1];

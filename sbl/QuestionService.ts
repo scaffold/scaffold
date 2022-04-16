@@ -74,11 +74,11 @@ export default class QuestionService {
 
     const question = answer.question;
 
-    this.ctx.get(Logger).log('QuestionService', 'addAnswer', {
-      cah: question.contractAnswerHash,
-      params: question.params,
-      answer: answer.data,
-    });
+    // this.ctx.get(Logger).log('QuestionService', 'addAnswer', {
+    //   cah: question.contractAnswerHash,
+    //   params: question.params,
+    //   answer: answer.data,
+    // });
 
     question.answers.push(answer);
     if (!question.canonicalAnswer) {
@@ -134,11 +134,11 @@ export default class QuestionService {
     }
 
     const incentivize = (newAmount: bigint) => {
-      console.log(
-        'QuestionService.getCanonical.incentivize',
-        newAmount,
-        stack.join(' -> '),
-      );
+      // console.log(
+      //   'QuestionService.getCanonical.incentivize',
+      //   newAmount,
+      //   stack.join(' -> '),
+      // );
       this.ctx.get(IncentiveService).incentivize(question, newAmount);
       this.updateIncentives(question, stack);
     };

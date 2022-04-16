@@ -7,7 +7,7 @@ export type ConnectionProvider = {
 
   onRecv(handler: (data: Uint8Array) => void): void;
 
-  // After close() is called, the provider must call onClose().
+  // After close() is called, the provider must call the method passed to onClose().
   close(): void;
   onClose(handler: () => void): void;
 };

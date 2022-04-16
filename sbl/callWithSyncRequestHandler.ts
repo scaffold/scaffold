@@ -59,8 +59,12 @@ const callWithSyncRequestHandler = async <T>(
         throw new NeedsMoreDataError();
       }
     }, (contractHash: Hash, params: Uint8Array) => {
-      // TODO: Notify of interest
-      throw new Error(`TODO: Notify of interest`);
+      // TODO: Find a better way to notify of intent
+      ctx.get(QuestionService).getCanonical(
+        { contract_answer_hash: contractHash, params },
+        (_a: Answer) => {},
+        stack,
+      ).incentivize(incentive);
     });
 
     // console.log('oa');
