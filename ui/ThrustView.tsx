@@ -123,6 +123,8 @@ const initView = (canvas: HTMLCanvasElement) => {
       target: [0, 0, 0],
     });
   });
+
+  return { release: () => regl.destroy() };
 };
 
 export default (
