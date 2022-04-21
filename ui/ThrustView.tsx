@@ -7,6 +7,7 @@ import normals from 'angle-normals';
 import Hash from '~/sbl/util/Hash.ts';
 import SblContext from '~/sbl/Context.ts';
 import ThrustProvider from './ThrustProvider.ts';
+import VoxelMesher from './VoxelMesher.ts';
 
 const v2s = (v: vec3) => `${v[0]},${v[1]},${v[2]}`;
 
@@ -33,15 +34,21 @@ const initView = (
   canvas: HTMLCanvasElement,
 ) => {
   const regl = REGL(canvas);
+  const mesher = new VoxelMesher(regl);
+  mesher.set(10, 0, 0, true);
+  mesher.set(10, 4, 0, true);
+  mesher.set(4, 20, 0, true);
+  mesher.set(-2, 8, 0, true);
   const draw = regl<Uniforms, Attributes, Props, OwnContext>({
     vert: `
       attribute vec3 position;
-      attribute vec3 normal;
+      // attribute vec3 normal;
       uniform mat4 modelview, projection, normalMat;
       varying vec3 normalInterp;
       varying vec3 vertPos;
 
       void main(){
+        vec3 normal = vec3(0.0, 0.0, 0.0);
         vec4 vertPos4 = modelview * vec4(position, 1.0);
         vertPos = vec3(vertPos4) / vertPos4.w;
         normalInterp = vec3(normalMat * vec4(normal, 0.0));
@@ -88,11 +95,21 @@ const initView = (
     // },
     // elements: bunny.cells,
 
+    // attributes: {
+    //   position: [[2, 0, 0], [-2, 1, 0], [-2, -1, 0]],
+    //   normal: [[0, 0, 1], [0, 0, 1], [0, 0, 1]],
+    // },
+    // elements: [[0, 1, 2]],
+
     attributes: {
-      position: [[2, 0, 0], [-2, 1, 0], [-2, -1, 0]],
-      normal: [[0, 0, 1], [0, 0, 1], [0, 0, 1]],
+      position: {
+        buffer: () => mesher.vertPosBuf,
+        offset: 0,
+        stride: 3 * 4,
+        normalized: false,
+      },
     },
-    elements: [[0, 1, 2]],
+    elements: () => mesher.faceIdxBuf,
 
     context: {
       projection: ({ viewportWidth, viewportHeight }: Context) =>
