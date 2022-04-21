@@ -1,10 +1,8 @@
 import REGL from 'regl';
 import { getOrCreate } from '~/sbl/util/map.ts';
-import { assert } from '~/sbl/util/functional.ts';
 
 interface Cell {
-  isSolid: boolean;
-  vert?: number;
+  material: number;
   face_nx?: number;
   face_px?: number;
   face_ny?: number;
@@ -13,52 +11,63 @@ interface Cell {
   face_pz?: number;
 }
 
-const makeKey = (x: number, y: number, z: number) => `${x} ${y} ${z}`;
-const createCell = (): Cell => ({ isSolid: false });
+const makeCellKey = (x: number, y: number, z: number) => `${x} ${y} ${z}`;
+const createCell = (): Cell => ({ material: 0 });
+
+const makeVertKey = (x: number, y: number, z: number, material: number) =>
+  `${x} ${y} ${z} ${material}`;
+
+const showTriangles = true;
+const randomMaterial = () => Math.floor(Math.random() * 2) + 1;
 
 export default class VoxelMesher {
   private cells: Map<string, Cell> = new Map();
+
+  private verts: Map<string, number> = new Map();
 
   // private vertPoss: [number, number, number][] = [];
   // private vertNorms: [number, number, number][] = [];
   // private faceIdxs: [number, number, number][] = [];
 
   public vertPosBuf: REGL.Buffer;
+  public vertMatBuf: REGL.Buffer;
   public faceIdxBuf: REGL.Elements;
 
   private vertCount: number;
   private faceCount: number;
 
-  private freeVerts: number[] = [];
-  private freeFaces: number[] = [];
+  private freeVerts: number[];
+  private freeFaces: number[];
 
   private updateQueue: {}[] = [];
 
   constructor(regl: REGL.Regl) {
+    this.vertCount = 1024;
     this.vertPosBuf = regl.buffer({
-      // data: undefined,
-      length: 1024 * (3 * 4),
+      data: new Float32Array(new Array(this.vertCount * 3).fill(0)),
+      // length: this.vertCount * (3 * 4),
       type: 'float32',
       usage: 'dynamic',
     });
-    this.vertCount = 1024;
-    for (let i = 0; i < this.vertCount; i++) {
-      this.freeVerts.push(i);
-    }
+    this.vertMatBuf = regl.buffer({
+      data: new Uint8Array(new Array(this.vertCount).fill(0)),
+      // length: this.vertCount * (3 * 4),
+      type: 'uint8',
+      usage: 'dynamic',
+    });
+    this.freeVerts = [...Array(this.vertCount).keys()].reverse();
 
+    this.faceCount = 1024;
     this.faceIdxBuf = regl.elements({
-      // data: undefined,
-      length: 1024 * (6 * 2),
+      data: new Uint16Array(new Array(this.faceCount * 6).fill(0)),
+      // length: this.faceCount * (6 * 2),
       // count: undefined,
       primitive: 'triangles',
       // type: 'uint32',
       type: 'uint16',
       usage: 'dynamic',
     });
-    this.faceCount = 1024;
-    for (let i = 0; i < this.faceCount; i++) {
-      this.freeFaces.push(i);
-    }
+    this.freeFaces = [...Array(this.faceCount).keys()].reverse();
 
     // this.vertNormBuf({ length: 10 });
     // this.vertNormBuf.subdata([4, 5, 6], 2);
@@ -67,19 +76,24 @@ export default class VoxelMesher {
 
   public destruct() {
     this.vertPosBuf.destroy();
+    this.vertMatBuf.destroy();
     this.faceIdxBuf.destroy();
   }
 
-  public set(x: number, y: number, z: number, isSolid: boolean) {
-    const c_000 = getOrCreate(this.cells, makeKey(x, y, z), createCell);
-    const c_900 = getOrCreate(this.cells, makeKey(x - 1, y, z), createCell);
-    const c_100 = getOrCreate(this.cells, makeKey(x + 1, y, z), createCell);
-    const c_090 = getOrCreate(this.cells, makeKey(x, y - 1, z), createCell);
-    const c_010 = getOrCreate(this.cells, makeKey(x, y + 1, z), createCell);
-    const c_009 = getOrCreate(this.cells, makeKey(x, y, z - 1), createCell);
-    const c_001 = getOrCreate(this.cells, makeKey(x, y, z + 1), createCell);
+  public getElementsCount() {
+    return 1024 * 4;
+  }
 
-    c_000.isSolid = isSolid;
+  public set(x: number, y: number, z: number, material: number) {
+    const c_000 = getOrCreate(this.cells, makeCellKey(x, y, z), createCell);
+    const c_900 = getOrCreate(this.cells, makeCellKey(x - 1, y, z), createCell);
+    const c_100 = getOrCreate(this.cells, makeCellKey(x + 1, y, z), createCell);
+    const c_090 = getOrCreate(this.cells, makeCellKey(x, y - 1, z), createCell);
+    const c_010 = getOrCreate(this.cells, makeCellKey(x, y + 1, z), createCell);
+    const c_009 = getOrCreate(this.cells, makeCellKey(x, y, z - 1), createCell);
+    const c_001 = getOrCreate(this.cells, makeCellKey(x, y, z + 1), createCell);
+
+    c_000.material = material;
 
     this.updateFaceNx(c_000, c_900, x, y, z);
     this.updateFacePx(c_000, c_100, x, y, z);
@@ -109,6 +123,14 @@ export default class VoxelMesher {
     }
   }
 
+  private getVert(x: number, y: number, z: number, material: number) {
+    return getOrCreate(this.verts, makeVertKey(x, y, z, material), () => {
+      const vert = this.allocVert();
+      this.setVert(vert, [x, y, z], material);
+      return vert;
+    });
+  }
+
   private allocFace(): number {
     if (this.freeFaces.length) {
       return this.freeFaces.pop()!;
@@ -117,13 +139,22 @@ export default class VoxelMesher {
     }
   }
 
-  private getVert(x: number, y: number, z: number) {
-    const cell = getOrCreate(this.cells, makeKey(x, y, z), createCell);
-    if (!cell.vert) {
-      cell.vert = this.allocVert();
-      this.vertPosBuf.subdata([x, y, z], cell.vert * (3 * 4));
-    }
-    return cell.vert;
+  private setVert(
+    idx: number,
+    pos: [number, number, number],
+    material: number,
+  ) {
+    console.log('setVert', idx, pos, material);
+    this.vertPosBuf.subdata(pos, idx * (3 * 4));
+    this.vertMatBuf.subdata([material], idx);
+  }
+
+  private setFace(
+    idx: number,
+    verts: [number, number, number, number, number, number],
+  ) {
+    console.log('setFace', idx, verts);
+    this.faceIdxBuf.subdata(verts, idx * (6 * 2));
   }
 
   private updateFaceNx(
@@ -134,21 +165,23 @@ export default class VoxelMesher {
     innerZ: number,
   ) {
     if (inner.face_nx === undefined) {
-      if (inner.isSolid && !outer.isSolid) {
+      if (inner.material && outer.material === 0) {
         inner.face_nx = this.allocFace();
-        this.faceIdxBuf.subdata([
-          this.getVert(innerX + 0, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 0, innerZ + 1),
-        ], inner.face_nx * (6 * 2));
+        const mat_0 = showTriangles ? randomMaterial() : inner.material;
+        const mat_1 = showTriangles ? randomMaterial() : inner.material;
+        this.setFace(inner.face_nx, [
+          this.getVert(innerX + 0, innerY + 0, innerZ + 0, mat_0),
+          this.getVert(innerX + 0, innerY + 0, innerZ + 1, mat_0),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 0, mat_0),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 1, mat_1),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 0, mat_1),
+          this.getVert(innerX + 0, innerY + 0, innerZ + 1, mat_1),
+        ]);
       }
     } else {
-      if (!inner.isSolid || outer.isSolid) {
+      if (inner.material === 0 || outer.material) {
         this.freeFaces.push(inner.face_nx);
-        this.faceIdxBuf.subdata([0, 0, 0, 0, 0, 0], inner.face_nx * (6 * 2));
+        this.setFace(inner.face_nx, [0, 0, 0, 0, 0, 0]);
         inner.face_nx = undefined;
       }
     }
@@ -162,21 +195,23 @@ export default class VoxelMesher {
     innerZ: number,
   ) {
     if (inner.face_px === undefined) {
-      if (inner.isSolid && !outer.isSolid) {
+      if (inner.material && outer.material === 0) {
         inner.face_px = this.allocFace();
-        this.faceIdxBuf.subdata([
-          this.getVert(innerX + 1, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 0),
-        ], inner.face_px * (6 * 2));
+        const mat_0 = showTriangles ? randomMaterial() : inner.material;
+        const mat_1 = showTriangles ? randomMaterial() : inner.material;
+        this.setFace(inner.face_px, [
+          this.getVert(innerX + 1, innerY + 0, innerZ + 0, mat_0),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 0, mat_0),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 1, mat_0),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 1, mat_1),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 1, mat_1),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 0, mat_1),
+        ]);
       }
     } else {
-      if (!inner.isSolid || outer.isSolid) {
+      if (inner.material === 0 || outer.material) {
         this.freeFaces.push(inner.face_px);
-        this.faceIdxBuf.subdata([0, 0, 0, 0, 0, 0], inner.face_px * (6 * 2));
+        this.setFace(inner.face_px, [0, 0, 0, 0, 0, 0]);
         inner.face_px = undefined;
       }
     }
@@ -190,21 +225,23 @@ export default class VoxelMesher {
     innerZ: number,
   ) {
     if (inner.face_ny === undefined) {
-      if (inner.isSolid && !outer.isSolid) {
+      if (inner.material && outer.material === 0) {
         inner.face_ny = this.allocFace();
-        this.faceIdxBuf.subdata([
-          this.getVert(innerX + 0, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 0, innerZ + 1),
-        ], inner.face_ny * (6 * 2));
+        const mat_0 = showTriangles ? randomMaterial() : inner.material;
+        const mat_1 = showTriangles ? randomMaterial() : inner.material;
+        this.setFace(inner.face_ny, [
+          this.getVert(innerX + 0, innerY + 0, innerZ + 0, mat_0),
+          this.getVert(innerX + 0, innerY + 0, innerZ + 1, mat_0),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 0, mat_0),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 1, mat_1),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 0, mat_1),
+          this.getVert(innerX + 0, innerY + 0, innerZ + 1, mat_1),
+        ]);
       }
     } else {
-      if (!inner.isSolid || outer.isSolid) {
+      if (inner.material === 0 || outer.material) {
         this.freeFaces.push(inner.face_ny);
-        this.faceIdxBuf.subdata([0, 0, 0, 0, 0, 0], inner.face_ny * (6 * 2));
+        this.setFace(inner.face_ny, [0, 0, 0, 0, 0, 0]);
         inner.face_ny = undefined;
       }
     }
@@ -218,21 +255,23 @@ export default class VoxelMesher {
     innerZ: number,
   ) {
     if (inner.face_py === undefined) {
-      if (inner.isSolid && !outer.isSolid) {
+      if (inner.material && outer.material === 0) {
         inner.face_py = this.allocFace();
-        this.faceIdxBuf.subdata([
-          this.getVert(innerX + 0, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 0),
-        ], inner.face_py * (6 * 2));
+        const mat_0 = showTriangles ? randomMaterial() : inner.material;
+        const mat_1 = showTriangles ? randomMaterial() : inner.material;
+        this.setFace(inner.face_py, [
+          this.getVert(innerX + 0, innerY + 1, innerZ + 0, mat_0),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 0, mat_0),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 1, mat_0),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 1, mat_1),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 1, mat_1),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 0, mat_1),
+        ]);
       }
     } else {
-      if (!inner.isSolid || outer.isSolid) {
+      if (inner.material === 0 || outer.material) {
         this.freeFaces.push(inner.face_py);
-        this.faceIdxBuf.subdata([0, 0, 0, 0, 0, 0], inner.face_py * (6 * 2));
+        this.setFace(inner.face_py, [0, 0, 0, 0, 0, 0]);
         inner.face_py = undefined;
       }
     }
@@ -246,21 +285,23 @@ export default class VoxelMesher {
     innerZ: number,
   ) {
     if (inner.face_nz === undefined) {
-      if (inner.isSolid && !outer.isSolid) {
+      if (inner.material && outer.material === 0) {
         inner.face_nz = this.allocFace();
-        this.faceIdxBuf.subdata([
-          this.getVert(innerX + 0, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 0),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 0),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 0),
-        ], inner.face_nz * (6 * 2));
+        const mat_0 = showTriangles ? randomMaterial() : inner.material;
+        const mat_1 = showTriangles ? randomMaterial() : inner.material;
+        this.setFace(inner.face_nz, [
+          this.getVert(innerX + 0, innerY + 0, innerZ + 0, mat_0),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 0, mat_0),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 0, mat_0),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 0, mat_1),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 0, mat_1),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 0, mat_1),
+        ]);
       }
     } else {
-      if (!inner.isSolid || outer.isSolid) {
+      if (inner.material === 0 || outer.material) {
         this.freeFaces.push(inner.face_nz);
-        this.faceIdxBuf.subdata([0, 0, 0, 0, 0, 0], inner.face_nz * (6 * 2));
+        this.setFace(inner.face_nz, [0, 0, 0, 0, 0, 0]);
         inner.face_nz = undefined;
       }
     }
@@ -274,21 +315,23 @@ export default class VoxelMesher {
     innerZ: number,
   ) {
     if (inner.face_pz === undefined) {
-      if (inner.isSolid && !outer.isSolid) {
+      if (inner.material && outer.material === 0) {
         inner.face_pz = this.allocFace();
-        this.faceIdxBuf.subdata([
-          this.getVert(innerX + 0, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 1),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 0, innerY + 1, innerZ + 1),
-          this.getVert(innerX + 1, innerY + 0, innerZ + 1),
-        ], inner.face_pz * (6 * 2));
+        const mat_0 = showTriangles ? randomMaterial() : inner.material;
+        const mat_1 = showTriangles ? randomMaterial() : inner.material;
+        this.setFace(inner.face_pz, [
+          this.getVert(innerX + 0, innerY + 0, innerZ + 1, mat_0),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 1, mat_0),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 1, mat_0),
+          this.getVert(innerX + 1, innerY + 1, innerZ + 1, mat_1),
+          this.getVert(innerX + 0, innerY + 1, innerZ + 1, mat_1),
+          this.getVert(innerX + 1, innerY + 0, innerZ + 1, mat_1),
+        ]);
       }
     } else {
-      if (!inner.isSolid || outer.isSolid) {
+      if (inner.material === 0 || outer.material) {
         this.freeFaces.push(inner.face_pz);
-        this.faceIdxBuf.subdata([0, 0, 0, 0, 0, 0], inner.face_pz * (6 * 2));
+        this.setFace(inner.face_pz, [0, 0, 0, 0, 0, 0]);
         inner.face_pz = undefined;
       }
     }

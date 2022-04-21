@@ -1,6 +1,6 @@
 import React from 'react';
 import REGL from 'regl';
-import { mat4, vec3 } from 'gl-matrix';
+import { mat4, vec2, vec3 } from 'gl-matrix';
 import * as thrustMessages from '~/graph/thrustMessages.ts';
 import bunny from 'bunny';
 import normals from 'angle-normals';
@@ -10,6 +10,8 @@ import ThrustProvider from './ThrustProvider.ts';
 import VoxelMesher from './VoxelMesher.ts';
 
 const v2s = (v: vec3) => `${v[0]},${v[1]},${v[2]}`;
+
+const materials = [[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]];
 
 interface Uniforms {}
 interface Attributes {}
@@ -33,32 +35,50 @@ const initView = (
   // player: Hash,
   canvas: HTMLCanvasElement,
 ) => {
-  const regl = REGL(canvas);
+  const regl = REGL({
+    canvas,
+    extensions: [
+      'OES_standard_derivatives',
+      'OES_element_index_uint',
+      'OES_texture_float',
+    ],
+  });
+
+  (window as any).regl = regl;
+
   const mesher = new VoxelMesher(regl);
-  mesher.set(10, 0, 0, true);
-  mesher.set(10, 4, 0, true);
-  mesher.set(4, 20, 0, true);
-  mesher.set(-2, 8, 0, true);
+  const loadedVoxels: Set<string> = new Set();
+
   const draw = regl<Uniforms, Attributes, Props, OwnContext>({
     vert: `
-      attribute vec3 position;
-      // attribute vec3 normal;
-      uniform mat4 modelview, projection, normalMat;
-      varying vec3 normalInterp;
-      varying vec3 vertPos;
+      attribute vec3 a_position;
+      // attribute vec3 a_normal;
+      attribute float a_material;
+
+      uniform mat4 u_modelview, u_projection, u_normal;
+      uniform sampler2D u_matColor;
+
+      varying vec3 v_normalInterp;
+      varying vec3 v_vertPos;
+      varying vec4 v_material;
 
       void main(){
+        const float MATERIAL_TEXTURE_X_FACTOR = ${1 / materials.length};
         vec3 normal = vec3(0.0, 0.0, 0.0);
-        vec4 vertPos4 = modelview * vec4(position, 1.0);
-        vertPos = vec3(vertPos4) / vertPos4.w;
-        normalInterp = vec3(normalMat * vec4(normal, 0.0));
-        gl_Position = projection * vertPos4;
+        vec4 vertPos4 = u_modelview * vec4(a_position, 1.0);
+        v_vertPos = vec3(vertPos4) / vertPos4.w;
+        v_normalInterp = vec3(u_normal * vec4(normal, 0.0));
+        v_material = texture2D(u_matColor, vec2((a_material - 0.5) * MATERIAL_TEXTURE_X_FACTOR, 0.5));
+        gl_Position = u_projection * vertPos4;
       }`,
 
     frag: `
+      #extension GL_OES_standard_derivatives : enable
+
       precision mediump float;
-      varying vec3 normalInterp;  // Surface normal
-      varying vec3 vertPos;       // Vertex position
+      varying vec3 v_normalInterp;  // Surface normal
+      varying vec3 v_vertPos;       // Vertex position
+      varying vec4 v_material;
       uniform float Ka;   // Ambient reflection coefficient
       uniform float Kd;   // Diffuse reflection coefficient
       uniform float Ks;   // Specular reflection coefficient
@@ -69,16 +89,23 @@ const initView = (
       uniform vec3 specularColor;
       uniform vec3 lightPos; // Light position
 
+      highp float rand(float seed) {
+        highp float c = 43758.5453;
+        highp float sn = mod(seed, 3.14);
+        return fract(sin(sn) * c);
+      }
+
       void main() {
-        vec3 N = normalize(normalInterp);
-        vec3 L = normalize(lightPos - vertPos);
+        // dFdx() and dFdy()
+        vec3 N = normalize(v_normalInterp);
+        vec3 L = normalize(lightPos - v_vertPos);
 
         // Lambert's cosine law
         float lambertian = max(dot(N, L), 0.0);
         float specular = 0.0;
         if(lambertian > 0.0) {
           vec3 R = reflect(-L, N);      // Reflected light vector
-          vec3 V = normalize(-vertPos); // Vector to viewer
+          vec3 V = normalize(-v_vertPos); // Vector to viewer
           // Compute the specular term
           float specAngle = max(dot(R, V), 0.0);
           specular = pow(specAngle, shininessVal);
@@ -86,7 +113,7 @@ const initView = (
         gl_FragColor = vec4(Ka * ambientColor +
                             Kd * lambertian * diffuseColor +
                             Ks * specular * specularColor, 1.0);
-        // gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
+        gl_FragColor = v_material;
       }`,
 
     // attributes: {
@@ -102,14 +129,26 @@ const initView = (
     // elements: [[0, 1, 2]],
 
     attributes: {
-      position: {
+      a_position: {
         buffer: () => mesher.vertPosBuf,
         offset: 0,
         stride: 3 * 4,
         normalized: false,
       },
+      a_material: {
+        buffer: () => mesher.vertMatBuf,
+        offset: 0,
+        stride: 1,
+        normalized: false,
+      },
     },
     elements: () => mesher.faceIdxBuf,
+    count: () => mesher.getElementsCount(),
+
+    // cull: {
+    //   enable: true,
+    //   face: 'back',
+    // },
 
     context: {
       projection: ({ viewportWidth, viewportHeight }: Context) =>
@@ -128,12 +167,20 @@ const initView = (
     },
 
     uniforms: {
-      modelview: ({ view }: Context, { model }: Props) =>
+      u_modelview: ({ view }: Context, { model }: Props) =>
         mat4.multiply([], view, model),
-      invView: ({ view }: Context) => mat4.inverse([], view),
-      normalMat: ({ view }: Context, { model }: Props) =>
+      u_invView: ({ view }: Context) => mat4.inverse([], view),
+      u_normal: ({ view }: Context, { model }: Props) =>
         mat4.transpose([], mat4.invert([], mat4.multiply([], view, model))),
-      projection: regl.context<Context, 'projection'>('projection'),
+      u_projection: regl.context<Context, 'projection'>('projection'),
+
+      u_matColor: regl.texture({
+        data: materials,
+        width: materials.length,
+        height: 1,
+        format: 'rgba',
+        type: 'float',
+      }),
 
       Ka: 0.1, // Ambient reflection coefficient
       Kd: 0.5, // Diffuse reflection coefficient
@@ -198,6 +245,53 @@ const initView = (
     });
 
     const state = provider.getRenderState();
+
+    {
+      const { center, size } = state.game_state;
+      const queue = Array.from({ length: 1 }, () => {
+        const angle = Math.random() * Math.PI * 2;
+        return {
+          x: Math.round(center.x + Math.sin(angle) * size),
+          y: Math.round(center.y + Math.sin(angle) * size),
+        };
+      });
+
+      const dSqThresh = Math.pow(size + 0.5, 2) * 1.01;
+
+      while (true) {
+        const top = queue.pop();
+        if (!top) {
+          break;
+        }
+
+        // const dx = top.x - center.x;
+        // const dy = top.y - center.y;
+        const dx = top.x;
+        const dy = top.y;
+        if (dx * dx + dy * dy > dSqThresh) {
+          continue;
+        }
+
+        const key = `${top.x} ${top.y}`;
+        if (!loadedVoxels.has(key)) {
+          loadedVoxels.add(key);
+          new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
+            .then(() => provider.getCell(BigInt(top.x), BigInt(top.y)))
+            .then(
+              (cell) => {
+                if ('MazeCellWall' in cell) {
+                  mesher.set(top.x, top.y, 0, 1);
+                }
+              },
+            );
+
+          queue.push({ x: top.x - 1, y: top.y });
+          queue.push({ x: top.x + 1, y: top.y });
+          queue.push({ x: top.x, y: top.y - 1 });
+          queue.push({ x: top.x, y: top.y + 1 });
+        }
+      }
+    }
 
     if (state.players.length) {
       const players = state.players.map(
@@ -311,7 +405,12 @@ export default (
 
   return (
     <div>
-      <canvas width={750} height={500} ref={canvas} />
+      <canvas
+        width={750}
+        height={500}
+        ref={canvas}
+        style={{ border: '1px solid black' }}
+      />
     </div>
   );
 };

@@ -50,7 +50,7 @@ export default class ThrustGameContract {
           game_state: {
             center: { x: 0, y: 0 },
             velocity: { x: 0, y: 0 },
-            size: 1000,
+            size: 10,
           },
           players: [{
             hash: Hash.digest('plyr1'),
@@ -148,7 +148,7 @@ export default class ThrustGameContract {
         velocity.y = velocity.y * 0.99 + (targCenterY - center.y) * 0.01;
       }
 
-      const targSize = Math.sqrt(state.players.length || 1) * 1000;
+      const targSize = Math.sqrt(state.players.length || 1) * 10;
       state.game_state.size = state.game_state.size * 0.9999 +
         targSize * 0.0001;
 
