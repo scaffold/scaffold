@@ -17,6 +17,24 @@ const registry = {
       { name: 'init_time', type: 'long' },
     ],
   },
+  MazeParams: {
+    name: 'MazeParams',
+    type: 'record',
+    fields: [
+      { name: 'match', type: 'Hash' },
+      { name: 'x', type: 'long' },
+      { name: 'y', type: 'long' },
+    ],
+  },
+  MazeCellEmpty: { name: 'MazeCellEmpty', type: 'record', fields: [] },
+  MazeCellWall: { name: 'MazeCellWall', type: 'record', fields: [] },
+  MazeAnswer: {
+    name: 'MazeAnswer',
+    type: 'record',
+    fields: [
+      { name: 'cell', type: ['MazeCellEmpty', 'MazeCellWall'] },
+    ],
+  },
   InputParams: {
     name: 'InputParams',
     type: 'record',
@@ -71,7 +89,8 @@ const registry = {
       { name: 'hash', type: 'Hash' },
       { name: 'position', type: 'Vector2d' },
       { name: 'velocity', type: 'Vector2d' },
-      { name: 'direction', type: 'Vector2d' },
+      { name: 'angle_rads', type: 'float' },
+      // { name: 'angle_vel_rads', type: 'float' },
     ],
   },
   BulletState: {
@@ -119,6 +138,10 @@ export const InitParams = base.makeMsg(registry, 'InitParams');
 export type InitParams = MsgType<'InitParams'>;
 export const InitAnswer = base.makeMsg(registry, 'InitAnswer');
 export type InitAnswer = MsgType<'InitAnswer'>;
+export const MazeParams = base.makeMsg(registry, 'MazeParams');
+export type MazeParams = MsgType<'MazeParams'>;
+export const MazeAnswer = base.makeMsg(registry, 'MazeAnswer');
+export type MazeAnswer = MsgType<'MazeAnswer'>;
 export const InputParams = base.makeMsg(registry, 'InputParams');
 export type InputParams = MsgType<'InputParams'>;
 export const InputEntry = base.makeMsg(registry, 'InputEntry');

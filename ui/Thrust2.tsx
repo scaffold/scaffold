@@ -69,7 +69,7 @@ export default ({ sbl, match }: { sbl: Context; match: Hash }) => {
           </pre>
         </li>
       </ul>
-      <ThrustView state={state.gameState} />
+      <ThrustView sbl={sbl} match={match} state={state.gameState} />
     </div>
   );
 };

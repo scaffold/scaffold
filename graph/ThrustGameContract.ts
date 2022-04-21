@@ -54,9 +54,9 @@ export default class ThrustGameContract {
           },
           players: [{
             hash: Hash.digest('plyr1'),
-            position: { x: 10, y: 20 },
-            velocity: { x: 0.3, y: 0.4 },
-            direction: { x: 0.5, y: 0.6 },
+            position: { x: 10, y: 0 },
+            velocity: { x: 0, y: 0 },
+            angle_rads: 0,
           }],
           bullets: [],
         };
@@ -83,12 +83,14 @@ export default class ThrustGameContract {
       // Wait for time
       request(
         timeContractHash,
-        timeMessages.Params.encode({ time: init_time + tick * 1000n }),
+        timeMessages.Params.encode({ time: init_time + tick * 100n }),
       );
 
       let targCenterX = 0.0;
       let targCenterY = 0.0;
-      state.players.forEach(({ hash, position, velocity, direction }) => {
+      state.players.forEach((player) => {
+        const { hash, position, velocity } = player;
+
         // Fetch player inputs
         const inputAnswer = request(
           thrustInputContractHash,
@@ -105,25 +107,14 @@ export default class ThrustGameContract {
 
         // Steer
         if (input.pressing_left || input.pressing_right) {
-          const steerAmt = input.pressing_left ? 0.01 : -0.01;
-          const { x, y } = direction;
-          direction.x = x * Math.cos(steerAmt) - y * Math.sin(steerAmt);
-          direction.y = x * Math.sin(steerAmt) + y * Math.cos(steerAmt);
-        }
-
-        {
-          // Normalize direction
-          const d = Math.sqrt(
-            direction.x * direction.x + direction.y * direction.y,
-          );
-          direction.x /= d;
-          direction.y /= d;
+          player.angle_rads += input.pressing_left ? 0.1 : -0.1;
         }
 
         // Accelerate
         if (input.pressing_fwd) {
-          velocity.x += direction.x;
-          velocity.y += direction.y;
+          const acceleration = 0.1;
+          velocity.x += Math.cos(player.angle_rads) * acceleration;
+          velocity.y += Math.sin(player.angle_rads) * acceleration;
         }
 
         position.x += velocity.x;

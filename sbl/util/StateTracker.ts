@@ -1,3 +1,7 @@
+const NEVER: () => void = () => {
+  throw new Error(`This should never be called!`);
+};
+
 export default class StateTracker<Key, State> {
   constructor(
     private getter: (
@@ -44,13 +48,12 @@ export default class StateTracker<Key, State> {
       }
       listeningIdxs.add(idx);
 
-      const questionSub = this.getter(
+      const sub = { idx, lastAnswerTime: Infinity, release: NEVER };
+      sub.release = this.getter(
         questionFactory(idx),
         (state) => {
           onState(idx, state);
           sub.lastAnswerTime = Date.now();
-
-          // TODO: This could potentially be a problem if release() is called before this timeout runs.
 
           let nextSub = finalSub;
           subs.forEach((sub) => {
@@ -72,12 +75,7 @@ export default class StateTracker<Key, State> {
             }
           }
         },
-      );
-      const sub = {
-        idx,
-        lastAnswerTime: Infinity,
-        release: questionSub.release,
-      };
+      ).release;
       subs.push(sub);
       return sub;
     };

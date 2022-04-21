@@ -4,9 +4,13 @@ import SblClient from './SblClient.ts';
 import { Answer } from '~/sbl/AnswerRegistry.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
-import Thrust2 from './Thrust2.tsx';
+import ThrustView from './ThrustView.tsx';
+import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
+
+const match = client.ctx.get(ThrustInitContract).startGame(Hash.digest('abc'));
+const player = Hash.digest('plyr1');
 
 export default () => {
   const [contractName, setContractName] = React.useState('');
@@ -60,7 +64,7 @@ export default () => {
           </pre>
         ))}
       </ul>
-      <Thrust2 sbl={client.ctx} match={Hash.digest('abc')} />
+      <ThrustView sbl={client.ctx} match={match} player={player} />
     </div>
   );
 };

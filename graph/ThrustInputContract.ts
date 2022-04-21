@@ -24,9 +24,14 @@ export default class ThrustInputContract {
   public setInputCallback(
     match: Hash,
     player: Hash,
-    cb: (tick: bigint) => thrustMessages.InputEntry,
+    cb?: (tick: bigint) => thrustMessages.InputEntry,
   ) {
-    this.inputCallbacks.set(match.toHex() + player.toHex(), cb);
+    const key = match.toHex() + player.toHex();
+    if (cb) {
+      this.inputCallbacks.set(key, cb);
+    } else {
+      this.inputCallbacks.delete(key);
+    }
   }
 
   public get() {
