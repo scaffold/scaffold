@@ -119,8 +119,8 @@ export default class ThrustGameContract {
 
         position.x += velocity.x;
         position.y += velocity.y;
-        velocity.x *= 0.999;
-        velocity.y *= 0.999;
+        velocity.x *= 0.9;
+        velocity.y *= 0.9;
 
         {
           // Enforce boundaries
@@ -139,13 +139,19 @@ export default class ThrustGameContract {
         targCenterY += position.y;
       });
 
-      {
-        // Move boundaries
-        const { center, velocity } = state.game_state;
-        center.x += velocity.x;
-        center.y += velocity.y;
-        velocity.x = velocity.x * 0.99 + (targCenterX - center.x) * 0.01;
-        velocity.y = velocity.y * 0.99 + (targCenterY - center.y) * 0.01;
+      // Move boundaries
+      const { center, velocity } = state.game_state;
+      center.x += velocity.x;
+      center.y += velocity.y;
+      velocity.x *= 0.99;
+      velocity.y *= 0.99;
+
+      if (state.players.length) {
+        targCenterX /= state.players.length;
+        targCenterY /= state.players.length;
+
+        velocity.x += (targCenterX - center.x) * 0.01;
+        velocity.y += (targCenterY - center.y) * 0.01;
       }
 
       const targSize = Math.sqrt(state.players.length || 1) * 10;

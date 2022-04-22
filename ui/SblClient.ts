@@ -9,6 +9,7 @@ import QuestionService from '~/sbl/QuestionService.ts';
 import EpochContract from '~/graph/EpochContract.ts';
 import Answer from '~/sbl/Answer.ts';
 import Logger from '~/sbl/Logger.ts';
+import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 
 // window['Deno'] = {};
 
@@ -142,6 +143,17 @@ export default class SblClient {
   public ctx: Context;
 
   constructor() {
+    const getPrivateKey = () => {
+      const hex = localStorage.getItem('sbl_pk');
+      if (hex) {
+        return hex2bin(hex);
+      } else {
+        const key = secp.utils.randomPrivateKey();
+        localStorage.setItem('sbl_pk', bin2hex(key));
+        return key;
+      }
+    };
+
     const config: Config = {
       log: {
         handler: (
@@ -172,8 +184,8 @@ export default class SblClient {
 
       trustedPeers: [],
 
-      selfPrivateKey: secp.utils.randomPrivateKey(),
-      nodeNonce: (new TextEncoder()).encode('browser_0'),
+      selfPrivateKey: getPrivateKey(),
+      nodeNonce: Hash.digest('browser_0').toBytes(),
 
       approxComputePricePerSecond: 1000n,
 

@@ -11,6 +11,8 @@ import VoxelMesher from './VoxelMesher.ts';
 
 const v2s = (v: vec3) => `${v[0]},${v[1]},${v[2]}`;
 
+// const eyeHeight = 100;
+const eyeHeight = 25;
 const materials = [[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 1, 1]];
 
 interface Uniforms {}
@@ -46,11 +48,14 @@ const initView = (
 
   (window as any).regl = regl;
 
-  const mesher = new VoxelMesher(regl);
+  const maze = new VoxelMesher(regl);
   const loadedVoxels: Set<string> = new Set();
 
-  const draw = regl<Uniforms, Attributes, Props, OwnContext>({
-    vert: `
+  const makeRenderer = (
+    override: Partial<REGL.DrawConfig<Uniforms, Attributes, Props, OwnContext>>,
+  ) =>
+    regl<Uniforms, Attributes, Props, OwnContext>({
+      vert: `
       attribute vec3 a_position;
       // attribute vec3 a_normal;
       attribute float a_material;
@@ -63,7 +68,7 @@ const initView = (
       varying vec4 v_material;
 
       void main(){
-        const float MATERIAL_TEXTURE_X_FACTOR = ${1 / materials.length};
+        const float MATERIAL_TEXTURE_X_FACTOR = 1.0 / ${materials.length}.0;
         vec3 normal = vec3(0.0, 0.0, 0.0);
         vec4 vertPos4 = u_modelview * vec4(a_position, 1.0);
         v_vertPos = vec3(vertPos4) / vertPos4.w;
@@ -72,7 +77,7 @@ const initView = (
         gl_Position = u_projection * vertPos4;
       }`,
 
-    frag: `
+      frag: `
       #extension GL_OES_standard_derivatives : enable
 
       precision mediump float;
@@ -116,126 +121,138 @@ const initView = (
         gl_FragColor = v_material;
       }`,
 
-    // attributes: {
-    //   position: bunny.positions,
-    //   normal: normals(bunny.cells, bunny.positions),
-    // },
-    // elements: bunny.cells,
+      // attributes: {
+      //   position: bunny.positions,
+      //   normal: normals(bunny.cells, bunny.positions),
+      // },
+      // elements: bunny.cells,
 
-    // attributes: {
-    //   position: [[2, 0, 0], [-2, 1, 0], [-2, -1, 0]],
-    //   normal: [[0, 0, 1], [0, 0, 1], [0, 0, 1]],
-    // },
-    // elements: [[0, 1, 2]],
+      // attributes: {
+      //   position: [[2, 0, 0], [-2, 1, 0], [-2, -1, 0]],
+      //   normal: [[0, 0, 1], [0, 0, 1], [0, 0, 1]],
+      // },
+      // elements: [[0, 1, 2]],
 
+      // cull: {
+      //   enable: true,
+      //   face: 'back',
+      // },
+
+      context: {
+        projection: ({ viewportWidth, viewportHeight }: Context) =>
+          mat4.perspective(
+            [],
+            Math.PI / 4,
+            viewportWidth / viewportHeight,
+            0.01,
+            1000.0,
+          ),
+
+        view: ({}: Context, { eye, target }: Props) =>
+          mat4.lookAt([], eye, target, [0, 0, 1]),
+
+        eye: regl.prop<Props, 'eye'>('eye'),
+      },
+
+      uniforms: {
+        u_modelview: ({ view }: Context, { model }: Props) =>
+          mat4.multiply([], view, model),
+        u_invView: ({ view }: Context) => mat4.inverse([], view),
+        u_normal: ({ view }: Context, { model }: Props) =>
+          mat4.transpose([], mat4.invert([], mat4.multiply([], view, model))),
+        u_projection: regl.context<Context, 'projection'>('projection'),
+
+        u_matColor: regl.texture({
+          data: materials,
+          width: materials.length,
+          height: 1,
+          format: 'rgba',
+          type: 'float',
+        }),
+
+        Ka: 0.1, // Ambient reflection coefficient
+        Kd: 0.5, // Diffuse reflection coefficient
+        Ks: 0.1, // Specular reflection coefficient
+        shininessVal: 4, // Shininess
+
+        // Material color
+        ambientColor: [1, 0, 0],
+        diffuseColor: [1, 1, 1],
+        specularColor: [1, 1, 1],
+        lightPos: [0, 0, 10], // Light position
+      },
+      //   attributes: {
+      //     freq: {
+      //       buffer: pointBuffer,
+      //       stride: VERT_SIZE,
+      //       offset: 0,
+      //     },
+      //     phase: {
+      //       buffer: pointBuffer,
+      //       stride: VERT_SIZE,
+      //       offset: 16,
+      //     },
+      //     color: {
+      //       buffer: pointBuffer,
+      //       stride: VERT_SIZE,
+      //       offset: 32,
+      //     },
+      //   },
+
+      // uniforms: {
+      //   view: ({ tick }) => {
+      //     const t = 0.01 * tick;
+      //     return mat4.lookAt(
+      //       mat4.create(),
+      //       [30 * Math.cos(t), 2.5, 30 * Math.sin(t)],
+      //       [0, 0, 0],
+      //       [0, 1, 0],
+      //     );
+      //   },
+      //   projection: ({ viewportWidth, viewportHeight }) =>
+      //     mat4.perspective(
+      //       mat4.create(),
+      //       Math.PI / 4,
+      //       viewportWidth / viewportHeight,
+      //       0.01,
+      //       1000,
+      //     ),
+      //   time: ({ tick }) => tick * 0.001,
+      // },
+
+      // primitive: 'points',
+
+      ...override,
+    });
+
+  const drawMaze = makeRenderer({
     attributes: {
       a_position: {
-        buffer: () => mesher.vertPosBuf,
+        buffer: () => maze.vertPosBuf,
         offset: 0,
         stride: 3 * 4,
         normalized: false,
       },
       a_material: {
-        buffer: () => mesher.vertMatBuf,
+        buffer: () => maze.vertMatBuf,
         offset: 0,
         stride: 1,
         normalized: false,
       },
     },
-    elements: () => mesher.faceIdxBuf,
-    count: () => mesher.getElementsCount(),
-
-    // cull: {
-    //   enable: true,
-    //   face: 'back',
-    // },
-
-    context: {
-      projection: ({ viewportWidth, viewportHeight }: Context) =>
-        mat4.perspective(
-          [],
-          Math.PI / 4,
-          viewportWidth / viewportHeight,
-          0.01,
-          1000.0,
-        ),
-
-      view: ({}: Context, { eye, target }: Props) =>
-        mat4.lookAt([], eye, target, [0, 0, 1]),
-
-      eye: regl.prop<Props, 'eye'>('eye'),
-    },
-
-    uniforms: {
-      u_modelview: ({ view }: Context, { model }: Props) =>
-        mat4.multiply([], view, model),
-      u_invView: ({ view }: Context) => mat4.inverse([], view),
-      u_normal: ({ view }: Context, { model }: Props) =>
-        mat4.transpose([], mat4.invert([], mat4.multiply([], view, model))),
-      u_projection: regl.context<Context, 'projection'>('projection'),
-
-      u_matColor: regl.texture({
-        data: materials,
-        width: materials.length,
-        height: 1,
-        format: 'rgba',
-        type: 'float',
-      }),
-
-      Ka: 0.1, // Ambient reflection coefficient
-      Kd: 0.5, // Diffuse reflection coefficient
-      Ks: 0.1, // Specular reflection coefficient
-      shininessVal: 4, // Shininess
-
-      // Material color
-      ambientColor: [1, 0, 0],
-      diffuseColor: [1, 1, 1],
-      specularColor: [1, 1, 1],
-      lightPos: [0, 0, 10], // Light position
-    },
-    //   attributes: {
-    //     freq: {
-    //       buffer: pointBuffer,
-    //       stride: VERT_SIZE,
-    //       offset: 0,
-    //     },
-    //     phase: {
-    //       buffer: pointBuffer,
-    //       stride: VERT_SIZE,
-    //       offset: 16,
-    //     },
-    //     color: {
-    //       buffer: pointBuffer,
-    //       stride: VERT_SIZE,
-    //       offset: 32,
-    //     },
-    //   },
-
-    // uniforms: {
-    //   view: ({ tick }) => {
-    //     const t = 0.01 * tick;
-    //     return mat4.lookAt(
-    //       mat4.create(),
-    //       [30 * Math.cos(t), 2.5, 30 * Math.sin(t)],
-    //       [0, 0, 0],
-    //       [0, 1, 0],
-    //     );
-    //   },
-    //   projection: ({ viewportWidth, viewportHeight }) =>
-    //     mat4.perspective(
-    //       mat4.create(),
-    //       Math.PI / 4,
-    //       viewportWidth / viewportHeight,
-    //       0.01,
-    //       1000,
-    //     ),
-    //   time: ({ tick }) => tick * 0.001,
-    // },
-
-    // primitive: 'points',
+    elements: () => maze.faceIdxBuf,
+    count: () => maze.getElementsCount(),
   });
 
-  let eyePos = vec3.fromValues(0, 0, 20);
+  const drawPlayer = makeRenderer({
+    attributes: {
+      a_position: [[2, 0, 0], [-2, 1, 0], [-2, -1, 0]],
+      a_material: [1, 1, 1],
+    },
+    elements: [[0, 1, 2]],
+  });
+
+  let eyePos = vec3.fromValues(0, 0, eyeHeight);
   let eyeVel = vec3.create();
 
   regl.frame(({ time }) => {
@@ -246,6 +263,7 @@ const initView = (
 
     const state = provider.getRenderState();
 
+    // Add new voxels
     {
       const { center, size } = state.game_state;
       const queue = Array.from({ length: 1 }, () => {
@@ -264,10 +282,8 @@ const initView = (
           break;
         }
 
-        // const dx = top.x - center.x;
-        // const dy = top.y - center.y;
-        const dx = top.x;
-        const dy = top.y;
+        const dx = top.x - center.x;
+        const dy = top.y - center.y;
         if (dx * dx + dy * dy > dSqThresh) {
           continue;
         }
@@ -275,15 +291,55 @@ const initView = (
         const key = `${top.x} ${top.y}`;
         if (!loadedVoxels.has(key)) {
           loadedVoxels.add(key);
+          // console.log('load ', key);
           new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
             .then(() => provider.getCell(BigInt(top.x), BigInt(top.y)))
             .then(
               (cell) => {
+                // console.log('loaded ', key);
                 if ('MazeCellWall' in cell) {
-                  mesher.set(top.x, top.y, 0, 1);
+                  maze.set(top.x, top.y, 0, 1);
                 }
               },
             );
+
+          queue.push({ x: top.x - 1, y: top.y });
+          queue.push({ x: top.x + 1, y: top.y });
+          queue.push({ x: top.x, y: top.y - 1 });
+          queue.push({ x: top.x, y: top.y + 1 });
+        }
+      }
+    }
+
+    // Discard old voxels
+    {
+      const { center, size } = state.game_state;
+      const queue = Array.from({ length: 8 }, () => {
+        const angle = Math.random() * Math.PI * 2;
+        return {
+          x: Math.round(center.x + Math.sin(angle) * size * 2),
+          y: Math.round(center.y + Math.sin(angle) * size * 2),
+        };
+      });
+
+      const dSqThresh = Math.pow(size * 2 - 0.5, 2) / 1.01;
+
+      while (true) {
+        const top = queue.pop();
+        if (!top) {
+          break;
+        }
+
+        const dx = top.x - center.x;
+        const dy = top.y - center.y;
+        if (dx * dx + dy * dy < dSqThresh) {
+          continue;
+        }
+
+        const key = `${top.x} ${top.y}`;
+        if (loadedVoxels.has(key)) {
+          loadedVoxels.delete(key);
+          maze.set(top.x, top.y, 0, 0);
 
           queue.push({ x: top.x - 1, y: top.y });
           queue.push({ x: top.x + 1, y: top.y });
@@ -311,22 +367,52 @@ const initView = (
         [],
         eyeVel,
         vec3.sub([], selfPlayer.pos, eyePos),
-        0.001,
+        0.01,
       );
       eyeVel = vec3.scale([], eyeVel, 0.99);
       eyeVel[2] = 0;
       eyePos = vec3.scaleAndAdd([], eyePos, eyeVel, 0.01);
-      eyePos = vec3.fromValues(0, 0, 20);
 
-      // const target = vec3.scaleAndAdd([], selfPlayer.pos, selfPlayer.vel, 10);
-      const target = selfPlayer.pos;
+      const target = vec3.scaleAndAdd(
+        [],
+        selfPlayer.pos,
+        vec3.normalize(
+          [],
+          vec3.add(
+            [],
+            selfPlayer.vel,
+            vec3.fromValues(
+              Math.cos(selfPlayer.angle_rads) * 0.5,
+              Math.sin(selfPlayer.angle_rads) * 0.5,
+              0,
+            ),
+          ),
+        ),
+        4,
+      );
+      // const target = selfPlayer.pos;
+      // const target = vec3.fromValues(
+      //   state.game_state.center.x,
+      //   state.game_state.center.y,
+      //   0,
+      // );
+
+      drawMaze({
+        model: mat4.fromTranslation([], vec3.fromValues(0, 0, -0.5)),
+        eye: eyePos,
+        target,
+      });
 
       players.forEach((player) => {
-        draw({
-          model: mat4.rotateZ(
+        drawPlayer({
+          model: mat4.scale(
             [],
-            mat4.fromTranslation([], player.pos),
-            player.angle_rads,
+            mat4.rotateZ(
+              [],
+              mat4.fromTranslation([], player.pos),
+              player.angle_rads,
+            ),
+            [0.1, 0.1, 0.1],
           ),
           eye: eyePos,
           target,

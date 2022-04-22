@@ -12,7 +12,7 @@ export default class StateTracker
         key,
         onState,
       );
-      questionSub.incentivize(10000n);
+      questionSub.incentivize(100000n);
       return questionSub;
     });
   }

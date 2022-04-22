@@ -42,7 +42,7 @@ export default class VoxelMesher {
   private updateQueue: {}[] = [];
 
   constructor(regl: REGL.Regl) {
-    this.vertCount = 1024;
+    this.vertCount = 1024 * 1024;
     this.vertPosBuf = regl.buffer({
       data: new Float32Array(new Array(this.vertCount * 3).fill(0)),
       // length: this.vertCount * (3 * 4),
@@ -57,7 +57,7 @@ export default class VoxelMesher {
     });
     this.freeVerts = [...Array(this.vertCount).keys()].reverse();
 
-    this.faceCount = 1024;
+    this.faceCount = 1024 * 1024;
     this.faceIdxBuf = regl.elements({
       data: new Uint16Array(new Array(this.faceCount * 6).fill(0)),
       // length: this.faceCount * (6 * 2),
@@ -81,19 +81,24 @@ export default class VoxelMesher {
   }
 
   public getElementsCount() {
-    return 1024 * 4;
+    return this.faceCount;
   }
 
   public set(x: number, y: number, z: number, material: number) {
-    const c_000 = getOrCreate(this.cells, makeCellKey(x, y, z), createCell);
+    const centerKey = makeCellKey(x, y, z);
+    const c_000 = getOrCreate(this.cells, centerKey, createCell);
+
+    if (c_000.material === material) {
+      return;
+    }
+    c_000.material = material;
+
     const c_900 = getOrCreate(this.cells, makeCellKey(x - 1, y, z), createCell);
     const c_100 = getOrCreate(this.cells, makeCellKey(x + 1, y, z), createCell);
     const c_090 = getOrCreate(this.cells, makeCellKey(x, y - 1, z), createCell);
     const c_010 = getOrCreate(this.cells, makeCellKey(x, y + 1, z), createCell);
     const c_009 = getOrCreate(this.cells, makeCellKey(x, y, z - 1), createCell);
     const c_001 = getOrCreate(this.cells, makeCellKey(x, y, z + 1), createCell);
-
-    c_000.material = material;
 
     this.updateFaceNx(c_000, c_900, x, y, z);
     this.updateFacePx(c_000, c_100, x, y, z);
@@ -108,6 +113,18 @@ export default class VoxelMesher {
     this.updateFaceNy(c_010, c_000, x, y + 1, z);
     this.updateFacePz(c_009, c_000, x, y, z - 1);
     this.updateFaceNz(c_001, c_000, x, y, z + 1);
+
+    if (
+      c_000.material === 0 &&
+      c_000.face_nx === undefined &&
+      c_000.face_px === undefined &&
+      c_000.face_ny === undefined &&
+      c_000.face_py === undefined &&
+      c_000.face_nz === undefined &&
+      c_000.face_pz === undefined
+    ) {
+      this.cells.delete(centerKey);
+    }
   }
 
   private allocVert(): number {
@@ -123,14 +140,6 @@ export default class VoxelMesher {
     }
   }
 
-  private getVert(x: number, y: number, z: number, material: number) {
-    return getOrCreate(this.verts, makeVertKey(x, y, z, material), () => {
-      const vert = this.allocVert();
-      this.setVert(vert, [x, y, z], material);
-      return vert;
-    });
-  }
-
   private allocFace(): number {
     if (this.freeFaces.length) {
       return this.freeFaces.pop()!;
@@ -139,12 +148,20 @@ export default class VoxelMesher {
     }
   }
 
+  private getVert(x: number, y: number, z: number, material: number) {
+    return getOrCreate(this.verts, makeVertKey(x, y, z, material), () => {
+      const vert = this.allocVert();
+      this.setVert(vert, [x, y, z], material);
+      return vert;
+    });
+  }
+
   private setVert(
     idx: number,
     pos: [number, number, number],
     material: number,
   ) {
-    console.log('setVert', idx, pos, material);
+    // console.log('setVert', idx, pos, material);
     this.vertPosBuf.subdata(pos, idx * (3 * 4));
     this.vertMatBuf.subdata([material], idx);
   }
@@ -153,7 +170,7 @@ export default class VoxelMesher {
     idx: number,
     verts: [number, number, number, number, number, number],
   ) {
-    console.log('setFace', idx, verts);
+    // console.log('setFace', idx, verts);
     this.faceIdxBuf.subdata(verts, idx * (6 * 2));
   }
 

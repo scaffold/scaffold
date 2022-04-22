@@ -52,6 +52,7 @@ export default class ThrustProvider {
           this.latestStateIdx = idx;
           this.latestStateTime = Date.now();
           this.latestStateVal = thrustMessages.GameAnswer.decode(state.data);
+          console.log('got', idx);
         }
       },
       {
@@ -88,7 +89,7 @@ export default class ThrustProvider {
         hasResolved = true;
         resolve(thrustMessages.MazeAnswer.decode(answer.data).cell);
       });
-      questionSub.incentivize(10000n);
+      questionSub.incentivize(100000n);
     });
   }
 
