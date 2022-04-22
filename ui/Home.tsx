@@ -32,7 +32,7 @@ export default () => {
           client.ctx.get(QuestionService).getCanonical({
             contract_answer_hash: contractHash,
             params: new TextEncoder().encode(contractParams),
-          }, addAnswer);
+          }).onAnswer(addAnswer);
         }}
       >
         <label>

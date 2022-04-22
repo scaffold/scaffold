@@ -39,10 +39,8 @@ export default class SubscriptionService {
     //   msgCtx.conn.node,
     // );
 
-    this.ctx.get(QuestionService).getCanonical(
-      msg.question,
-      (answer: Answer) =>
-        this.ctx.get(PublicationService).publish(msgCtx.conn.node, answer),
-    );
+    this.ctx.get(QuestionService).getCanonical(msg.question).onAnswer((
+      answer: Answer,
+    ) => this.ctx.get(PublicationService).publish(msgCtx.conn.node, answer));
   }
 }

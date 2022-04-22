@@ -388,7 +388,7 @@ const initView = (
             ),
           ),
         ),
-        4,
+        6,
       );
       // const target = selfPlayer.pos;
       // const target = vec3.fromValues(

@@ -355,6 +355,27 @@ export const registry = {
       { name: 'hash', type: 'Hash' },
     ],
   },
+  FeedbackMessage: {
+    name: 'FeedbackMessage',
+    type: 'record',
+    fields: [
+      // { name: 'code', type: 'Hash' },
+      { name: 'msg_phrase', type: 'string' },
+      { name: 'msg_detail', type: 'string' },
+
+      // TODO: Make maps work
+      // { name: 'props', type: 'map', values: 'string' },
+
+      // Goodness is typically from -1 to 0.
+      // 0 is inconsequential, like a debug or info message.
+      // -1 is fatal; you can expect the connection to be severed.
+      // Values lower than -1 mean the peer or connection will be blocked for some time.
+      // Values between -1 and 0 are used for less significant warnings.
+      // In general, goodness is additive, so 10 feedback messages of goodness -0.1 are comparable to a message of goodness -1.
+      // Positive goodness can be used to signify positive feedback.
+      { name: 'goodness', type: 'float' },
+    ],
+  },
   Packet: {
     name: 'Packet',
     type: 'record',

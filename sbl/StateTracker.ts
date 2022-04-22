@@ -8,12 +8,9 @@ export default class StateTracker
   extends StateTrackerUtil<QuestionSpec, Answer> {
   constructor(private ctx: Context) {
     super((key: QuestionSpec, onState: (state: Answer) => void) => {
-      const questionSub = this.ctx.get(QuestionService).getCanonical(
-        key,
-        onState,
-      );
+      const questionSub = this.ctx.get(QuestionService).getCanonical(key);
       questionSub.incentivize(100000n);
-      return questionSub;
+      return questionSub.onAnswer(onState);
     });
   }
 }

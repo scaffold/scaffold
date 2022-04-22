@@ -52,11 +52,7 @@ export default class QuestionService {
         Number(totalIncentive),
         () => {
           if (!question.isFulfilling) {
-            this.ctx.get(FulfillmentService).fulfill(
-              question,
-              totalIncentive,
-              stack,
-            );
+            this.ctx.get(FulfillmentService).fulfill(question, stack);
           }
           return Promise.resolve();
         },
@@ -120,18 +116,12 @@ export default class QuestionService {
     // params: Uint8Array,
 
     spec: QuestionSpec,
-    callback: (answer: Answer) => void,
     stack: string[] = [],
   ) {
     stack = [...stack, this.ctx.get(QaDebugger).debugQuestion(spec)];
     // console.log('QuestionService.getCanonical', stack.join(' -> '));
 
     const question = this.ctx.get(QuestionRegistry).getBySpec(spec);
-
-    question.canonicalCallbacks.push(callback);
-    if (question.canonicalAnswer) {
-      callback(question.canonicalAnswer);
-    }
 
     const incentivize = (newAmount: bigint) => {
       // console.log(
@@ -168,15 +158,25 @@ export default class QuestionService {
     // // TODO: Ask or calculate
 
     return {
+      question,
       incentivize,
-      release: () => {
-        const idx = question.canonicalCallbacks.indexOf(callback);
-        if (idx === -1) {
-          throw new Error(
-            `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
-          );
+      onAnswer: (callback: (answer: Answer) => void) => {
+        question.canonicalCallbacks.push(callback);
+        if (question.canonicalAnswer) {
+          callback(question.canonicalAnswer);
         }
-        question.canonicalCallbacks.splice(idx, 1);
+
+        return {
+          release: () => {
+            const idx = question.canonicalCallbacks.indexOf(callback);
+            if (idx === -1) {
+              throw new Error(
+                `Callback not found in AnswerService.getCanonical().release(); did you call it twice?`,
+              );
+            }
+            question.canonicalCallbacks.splice(idx, 1);
+          },
+        };
       },
     };
   }

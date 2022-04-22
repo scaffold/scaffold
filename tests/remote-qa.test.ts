@@ -55,11 +55,11 @@ Deno.test(
     putAnswer.difficultyEstimate = 0n;
 
     // Query on ctx2
-    const firstAnswer: Answer = await new Promise((resolve) =>
-      ctx2.get(QuestionService).getCanonical(question, resolve).incentivize(
-        1000n,
-      )
-    );
+    const firstAnswer: Answer = await new Promise((resolve) => {
+      const sub = ctx2.get(QuestionService).getCanonical(question);
+      sub.incentivize(1000n);
+      sub.onAnswer(resolve);
+    });
 
     assertEquals(new Uint8Array(firstAnswer.data), data);
   }),

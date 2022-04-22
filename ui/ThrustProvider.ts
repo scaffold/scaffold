@@ -36,7 +36,7 @@ export default class ThrustProvider {
 
   private tracker: { release(): void };
 
-  constructor(public ctx: Context, public match: Hash, public player: Hash) {
+  constructor(private ctx: Context, public match: Hash, public player: Hash) {
     const contractHash = ctx.get(ThrustGameContract).get().hash;
 
     this.tracker = ctx.get(StateTracker).track(
@@ -82,14 +82,15 @@ export default class ThrustProvider {
       const questionSub = this.ctx.get(QuestionService).getCanonical({
         contract_answer_hash: this.ctx.get(ThrustMazeContract).get().hash,
         params: thrustMessages.MazeParams.encode({ match: this.match, x, y }),
-      }, (answer) => {
+      });
+      questionSub.incentivize(100000n);
+      questionSub.onAnswer((answer) => {
         if (hasResolved) {
           throw new Error(`Cell resolved more than once!`);
         }
         hasResolved = true;
         resolve(thrustMessages.MazeAnswer.decode(answer.data).cell);
       });
-      questionSub.incentivize(100000n);
     });
   }
 

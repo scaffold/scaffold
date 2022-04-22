@@ -45,6 +45,9 @@ cd sublime
 # Run formatter
 deno fmt --config=deno.jsonc --watch
 
+# Run linter
+deno lint --config=deno.jsonc --watch
+
 # Run tests
 deno test --config=deno.jsonc --import-map=import_map.json --allow-all --seed=123 --trace-ops --watch tests/
 

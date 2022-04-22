@@ -11,6 +11,7 @@ import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 import { PublishMessage } from './messages.ts';
 import GraphUtils from './GraphUtils.ts';
 import IncentiveService from './IncentiveService.ts';
+import DurationPredictionService from './DurationPredictionService.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
@@ -20,25 +21,17 @@ export default class FulfillmentService {
 
   constructor(private ctx: Context) {}
 
-  public fulfill(
-    question: Question,
-    incentive: bigint,
-    stack: string[],
-  ) {
+  public fulfill(question: Question, stack: string[]) {
     if (!question.contractAnswerHash || !question.params) {
       // TODO: Figure these things out
       return;
     }
     question.isFulfilling = true;
-    this.sendSubs(question, incentive, stack);
-    this.launchExecutor(question, incentive, stack);
+    this.sendSubs(question, stack);
+    this.launchExecutor(question, stack);
   }
 
-  private sendSubs(
-    question: Question,
-    incentive: bigint,
-    _stack: string[],
-  ) {
+  private sendSubs(question: Question, _stack: string[]) {
     for (let i = 0; i < numParallelSubs; i++) {
       // TODO
     }
@@ -49,11 +42,7 @@ export default class FulfillmentService {
     // }
   }
 
-  private launchExecutor(
-    question: Question,
-    incentive: bigint,
-    stack: string[],
-  ) {
+  private launchExecutor(question: Question, stack: string[]) {
     if (!question.contractAnswerHash || !question.params) {
       throw new Error(
         `Cannot generate if we don't know the contract hash or params`,
@@ -77,6 +66,7 @@ export default class FulfillmentService {
       const genFunc = eval(new TextDecoder().decode(gen.data));
       callWithSyncRequestHandler<Uint8Array>(
         this.ctx,
+        question,
         (handler, notifier) =>
           genFunc(
             question.contractAnswerHash!,
@@ -100,8 +90,9 @@ export default class FulfillmentService {
           answer.difficultyEstimate = BigInt(durationMs) *
             this.ctx.config.approxComputePricePerSecond / 1000n;
           this.ctx.get(QuestionService).addAnswerToQuestion(answer);
+
+          this.ctx.get(DurationPredictionService).learn(gen, durationMs);
         },
-        incentive,
         stack,
       );
     });

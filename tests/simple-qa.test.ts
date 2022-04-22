@@ -25,11 +25,11 @@ Deno.test(
       timestamp: BigInt(Date.now()),
     });
 
-    const firstAnswer: Answer = await new Promise((resolve) =>
-      ctx.get(QuestionService).getCanonical(question, resolve).incentivize(
-        1000n,
-      )
-    );
+    const firstAnswer: Answer = await new Promise((resolve) => {
+      const sub = ctx.get(QuestionService).getCanonical(question);
+      sub.incentivize(1000n);
+      sub.onAnswer(resolve);
+    });
 
     assertEquals(firstAnswer.data, data);
   }),
@@ -57,12 +57,14 @@ Deno.test(
 
     const params = new TextEncoder().encode('Sublime');
 
-    const firstAnswer: Answer = await new Promise((resolve) =>
-      ctx.get(QuestionService).getCanonical({
+    const firstAnswer: Answer = await new Promise((resolve) => {
+      const sub = ctx.get(QuestionService).getCanonical({
         contract_answer_hash: contract.hash,
         params,
-      }, resolve).incentivize(1000n)
-    );
+      });
+      sub.incentivize(1000n);
+      sub.onAnswer(resolve);
+    });
 
     assertEquals(firstAnswer.data, params);
   }),
@@ -73,12 +75,14 @@ Deno.test(
   makeTest({}, async (ctx) => {
     const params = ctx.get(CollatzContract).makeParams(10n);
 
-    const firstAnswer: Answer = await new Promise((resolve) =>
-      ctx.get(QuestionService).getCanonical({
+    const firstAnswer: Answer = await new Promise((resolve) => {
+      const sub = ctx.get(QuestionService).getCanonical({
         contract_answer_hash: ctx.get(CollatzContract).get().hash,
         params,
-      }, resolve).incentivize(1000n)
-    );
+      });
+      sub.incentivize(1000n);
+      sub.onAnswer(resolve);
+    });
 
     assertEquals(
       firstAnswer.data,
