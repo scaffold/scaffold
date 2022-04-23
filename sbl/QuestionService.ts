@@ -4,7 +4,7 @@ import FulfillmentService from './FulfillmentService.ts';
 import { arrConcat, arrEquals, fromNumber } from './util/buffer.ts';
 import { bin2hex } from './util/hex.ts';
 import { Node } from './NodeService.ts';
-import * as hashes from './hashes.ts';
+import * as constants from './constants.ts';
 import Logger from './Logger.ts';
 import { getOrCreate } from './util/map.ts';
 import Peer from './Peer.ts';
@@ -96,7 +96,7 @@ export default class QuestionService {
 
     // if (answer.timestamp) {
     //   this.set(
-    //     hashes.timeHash,
+    //     constants.timeHash,
     //     Hash.digest(arrConcat(contractHash.toBytes(), params)).toBytes(),
     //     { data: fromNumber(Number(answer.timestamp), 8) },
     //   );

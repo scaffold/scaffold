@@ -1,4 +1,3 @@
-import { prettyBytes } from 'std-latest/fmt/bytes.ts';
 import React from 'react';
 import SblClient from './SblClient.ts';
 import { Answer } from '~/sbl/AnswerRegistry.ts';
@@ -9,62 +8,23 @@ import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
 
-const match = client.ctx.get(ThrustInitContract).startGame(Hash.digest('abc'));
-const player = Hash.digest('plyr1');
+const params = new URLSearchParams(window.location.search);
+const urlGameHex = params.get('game');
+const game = urlGameHex
+  ? Hash.fromHex(urlGameHex)
+  : client.ctx.get(ThrustInitContract).startGame(Hash.random());
+const player = Hash.digest(client.ctx.config.selfPrivateKey);
 
 export default () => {
-  const [contractName, setContractName] = React.useState('');
-  const [contractParams, setContractParams] = React.useState('');
-  const [answers, addAnswer] = React.useReducer(
-    (
-      priorAnswers: Answer[],
-      newAnswer: Answer,
-    ) => [...priorAnswers, newAnswer],
-    [],
-  );
-
   return (
     <div>
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault();
-          const contractHash = await Hash.digest(contractName);
-          client.ctx.get(QuestionService).getCanonical({
-            contract_answer_hash: contractHash,
-            params: new TextEncoder().encode(contractParams),
-          }).onAnswer(addAnswer);
-        }}
-      >
-        <label>
-          Contract name:
-          <input
-            type='text'
-            value={contractName}
-            onChange={(e) => setContractName(e.currentTarget.value)}
-          />
-        </label>
-        <br />
-        <label>
-          Contract params:
-          <input
-            type='text'
-            value={contractParams}
-            onChange={(e) => setContractParams(e.currentTarget.value)}
-          />
-        </label>
-        <br />
-        <input type='submit' value='Submit' />
-      </form>
-      <ul>
-        {answers.map((answer) => (
-          <pre>
-            {prettyBytes(answer.data.byteLength, { binary: true })}
-            {': '}
-            {new TextDecoder().decode(answer.data)}
-          </pre>
-        ))}
-      </ul>
-      <ThrustView sbl={client.ctx} match={match} player={player} />
+      Game ID:{' '}
+      <a href={`${window.location.pathname}?game=${game.toHex()}`}>
+        <pre style={{ display: 'inline' }}>{game.toHex()}</pre>
+      </a>
+      <br />
+      <a href={window.location.pathname}>New Game</a>
+      {/* <ThrustView sbl={client.ctx} match={game} player={player} /> */}
     </div>
   );
 };

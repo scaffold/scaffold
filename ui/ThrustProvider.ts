@@ -28,7 +28,7 @@ export default class ThrustProvider {
     game_state: {
       center: { x: 0, y: 0 },
       velocity: { x: 0, y: 0 },
-      size: 1000,
+      size: 0,
     },
     players: [],
     bullets: [],

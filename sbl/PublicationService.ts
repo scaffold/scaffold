@@ -12,6 +12,7 @@ import QuestionRegistry from './QuestionRegistry.ts';
 import MessageCtx from './MessageCtx.ts';
 import IncentiveService from './IncentiveService.ts';
 import { assert } from './util/functional.ts';
+import RewardSpec from './RewardSpec.ts';
 
 export default class PublicationService {
   constructor(private ctx: Context) {}
@@ -97,7 +98,7 @@ export default class PublicationService {
     }
     // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerRegistry).peek(input));
     // inputs.reduce((acc, answer)=>acc + answer., 0n);
-    const inputIncentive = 0n;
+    const inputIncentive = this.ctx.get(RewardSpec).getReward(msg.question);
 
     if (msg.licenses.some((license) => license.incentive < 0)) {
       console.log(

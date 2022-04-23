@@ -174,12 +174,10 @@ export default class SblClient {
       shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
 
       networkProvider: {
-        protocols: new Map(
-          Object.entries({
-            websocket: websocketProvider,
-            webrtc: webrtcProvider,
-          }),
-        ),
+        protocols: new Map(Object.entries({
+          websocket: websocketProvider,
+          webrtc: webrtcProvider,
+        })),
       },
 
       trustedPeers: [],

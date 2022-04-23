@@ -10,6 +10,7 @@ import Hash from './util/Hash.ts';
 import { PingMessage, PongMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 
+const AVG_PING_INTERVAL_MS = 600000; // 10 minutes
 const PING_TIMEOUT_MS = 10000;
 
 export default class PingService {
@@ -24,11 +25,11 @@ export default class PingService {
       node.connections.forEach(({ conn }) => conn && this.ping(conn))
     );
 
-    setTimeout(() => this.tick(), 5000 * (Math.random() + 1));
+    setTimeout(() => this.tick(), AVG_PING_INTERVAL_MS * (Math.random() + 0.5));
   }
 
   public async ping(conn: Connection) {
-    const secret = Hash.fromBytes(secp.utils.randomBytes(32));
+    const secret = Hash.random();
 
     const startTime = Date.now();
     conn.sendFast({ PingMessage: { secret } });

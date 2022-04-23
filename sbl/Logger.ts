@@ -1,6 +1,7 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
+import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 
 export default class Logger {
   constructor(private ctx: Context) {}
@@ -19,6 +20,7 @@ export default class Logger {
     if (typeof val === 'bigint') return val.toString();
     else if (val instanceof Hash) return `Sha256:${val.toHex()}`;
     else if (val instanceof Uint8Array) return bin2hex(val);
+    if (val.type === 'Buffer') return bin2hex(new Uint8Array(val.data));
     else return val;
   }
 }

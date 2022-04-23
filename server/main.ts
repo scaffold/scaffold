@@ -16,6 +16,7 @@ import StateTracker from '~/sbl/StateTracker.ts';
 import * as thrustMessages from '~/graph/thrustMessages.ts';
 import Logger from '~/sbl/Logger.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
+import * as epochMessages from '~/graph/epochMessages.ts';
 
 const websocketProvider: ProtocolProvider = {
   create: (
@@ -116,7 +117,9 @@ const config: Config = {
   shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
 
   networkProvider: {
-    protocols: new Map(Object.entries({ websocket: websocketProvider })),
+    protocols: new Map(Object.entries({
+      websocket: websocketProvider,
+    })),
   },
 
   trustedPeers: [],
@@ -139,34 +142,20 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
   )
 );
 
+self.addEventListener('unload', () => ctx.destruct());
+
+// Let's start listening to the epoch.
+// We won't need this eventually because everyone will be requesting it.
 (() => {
-  const match = ctx.get(ThrustInitContract).startGame(Hash.digest('abc'));
-
-  const contractHash = ctx.get(ThrustGameContract).get().hash;
-
-  // const tick = 10n;
-  // ctx.get(QuestionService).getCanonical({
-  //   contract_answer_hash: contractHash,
-  //   params: thrustMessages.GameParams.encode({ match, tick }),
-  // }, (answer) =>
-  //   console.log({
-  //     tick,
-  //     gameState: thrustMessages.GameAnswer.decode(answer.data),
-  //   }));
+  const contractHash = ctx.get(EpochContract).get().hash;
 
   const tracker = ctx.get(StateTracker).track(
     (idx) => ({
       contract_answer_hash: contractHash,
-      params: thrustMessages.GameParams.encode({
-        match,
-        tick: idx,
-      }),
+      params: epochMessages.Params.encode({ height: idx }),
     }),
     (idx, state) =>
-      console.log({
-        tick: idx,
-        gameState: thrustMessages.GameAnswer.decode(state.data),
-      }),
+      console.log(`Epoch ${idx}: ${Hash.digest(state.data).toHex()}`),
     {
       initIdx: 0n,
       futureSubCount: 100n,
@@ -175,7 +164,5 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
     },
   );
 
-  return () => tracker.release();
+  ctx.onDestruct(() => tracker.release());
 })();
-
-self.addEventListener('unload', () => ctx.destruct());

@@ -5,7 +5,7 @@ import AnswerService from './AnswerService.ts';
 import { arrConcat, fromNumber } from './util/buffer.ts';
 import { bin2hex } from './util/hex.ts';
 import { Node } from './NodeService.ts';
-import * as hashes from './hashes.ts';
+import * as constants from './constants.ts';
 import { CollateralMessage } from './messages.ts';
 import QuestionService from './QuestionService.ts';
 import MessageCtx from './MessageCtx.ts';

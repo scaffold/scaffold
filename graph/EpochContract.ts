@@ -3,24 +3,38 @@ import Hash from '~/sbl/util/Hash.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import * as epochMessages from './epochMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
+import * as timeMessages from './timeMessages.ts';
+import TimeContract from './TimeContract.ts';
 
-const baseMs = 1642476485983;
-const epochsPerMs = 1 / 1000;
-
-// Also verify that the block isn't too big.
-
-const IV = Hash.fromHex(
+const epochIv = Hash.fromHex(
   'd2e66375ccb9e7c2ccdf5ef538a78f010d34aa3b4c7802837da358e833441c7e',
 ).toBytes();
+
+const epochBaseTime = BigInt((() => {
+  // This is temporary, for easy development.
+  // Eventually the base time will be fixed.
+  const hour = 1000 * 60 * 60;
+  return Math.floor(Date.now() / hour) * hour;
+})());
+// const epochBaseTime = BigInt(new Date('2022-04-22T18:40:00-0700').getTime());
+const epochIntervalMs = 1000n;
+
+// Also verify that the block isn't too big.
 
 export default class EpochContract {
   constructor(private ctx: Context) {}
 
-  public makeParams(height: bigint): Uint8Array {
-    return epochMessages.Params.encode({ height });
+  public timeToHeight(time: number) {
+    if (time > epochBaseTime) {
+      return (BigInt(time) - epochBaseTime) / epochIntervalMs;
+    } else {
+      return 0n;
+    }
   }
 
   public get() {
+    const timeContractHash = this.ctx.get(TimeContract).get().hash;
+
     const epochGenerator = (
       contractHash: Hash,
       params: Uint8Array,
@@ -35,7 +49,7 @@ export default class EpochContract {
             contractHash,
             epochMessages.Params.encode({ height: height - 1n }),
           )
-          : IV,
+          : epochIv,
       );
       const skipHash = Hash.digest(
         height
@@ -43,13 +57,21 @@ export default class EpochContract {
             contractHash,
             epochMessages.Params.encode({ height: height & (height - 1n) }),
           )
-          : IV,
+          : epochIv,
       );
       const eventsHash = Hash.digest(new Uint8Array([]));
 
       if (!emitCorrect) {
         priorHash.toBytes()[Math.floor(Math.random() * 32)] ^= 1;
       }
+
+      // Wait for time
+      request(
+        timeContractHash,
+        timeMessages.Params.encode({
+          time: epochBaseTime + height * epochIntervalMs,
+        }),
+      );
 
       return epochMessages.Answer.encode({
         prior_hash: priorHash,
@@ -73,6 +95,10 @@ export default class EpochContract {
     // This is a nasty hack until we get WASM working
     (window as any).epochGenerator = epochGenerator;
     (window as any).epochMessages = epochMessages;
+    (window as any).epochIv = epochIv;
+    (window as any).epochBaseTime = epochBaseTime;
+    (window as any).epochIntervalMs = epochIntervalMs;
+    (window as any).timeContractHash = timeContractHash;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(epochContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, epochGenerator);

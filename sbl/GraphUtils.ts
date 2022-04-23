@@ -1,7 +1,7 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
-import { loadHash } from '~/sbl/hashes.ts';
+import { loadHash } from '~/sbl/constants.ts';
 
 export default class GraphUtils {
   constructor(private ctx: Context) {}

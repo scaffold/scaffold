@@ -11,6 +11,7 @@ import InfoService from './InfoService.ts';
 import { error } from './util/functional.ts';
 import { Packet } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
+import Logger from './Logger.ts';
 
 export interface Connection {
   node: Node;
@@ -41,6 +42,8 @@ export default class ConnectionService {
   constructor(private ctx: Context) {}
 
   public connect(protocol: string, spec: string) {
+    console.log(`Attempting to connect via ${protocol} to ${spec}...`);
+
     const onListen = (spec: string) => {
       throw new Error(
         `onListen called with spec ${spec} but no way to send it to remote node`,
@@ -143,6 +146,10 @@ export default class ConnectionService {
     provider: ConnectionProvider,
     // expectedNodeHash?: Hash,
   ) {
+    console.log(
+      `Connection established via ${protocol}; sending init packet...`,
+    );
+
     this.ctx.get(InfoService).makeInitPacket().then((packet) =>
       provider.sendReliable(packet)
     );
@@ -150,6 +157,10 @@ export default class ConnectionService {
     let conn: Connection | undefined;
 
     const onVerifyNodeHash = (hash: Hash, publicKey: Uint8Array) => {
+      console.log(
+        `Node hash verified via ${protocol}; connection successfully established.`,
+      );
+
       const node = this.ctx.get(NodeService).lookup(hash);
       const onSendError = (err: unknown) => {
         console.error(
@@ -187,6 +198,15 @@ export default class ConnectionService {
         const msgData = data.subarray(SIGNATURE_LENGTH);
         const msgHash = Hash.digest(msgData);
         const packet = Packet.decode(msgData);
+
+        console.log(
+          `Received message`,
+          JSON.stringify(
+            packet.message,
+            (key, val) => Logger.serialize(val),
+            2,
+          ),
+        );
 
         if (conn) {
           if (
@@ -252,6 +272,11 @@ export default class ConnectionService {
   }
 
   public async composePacket(message: Packet['message']) {
+    console.log(
+      `Sending message`,
+      JSON.stringify(message, (key, val) => Logger.serialize(val), 2),
+    );
+
     let buf: Uint8Array;
     const msg = Packet.encode({ message }, (size) => {
       buf = new Uint8Array(SIGNATURE_LENGTH + size);

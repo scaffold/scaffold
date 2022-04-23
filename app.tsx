@@ -1,6 +1,7 @@
 // I don't know why this is necessary but it is :(
-import * as x from './sbl/messages.ts';
-console.log(x);
+import * as sblMessages from './sbl/messages.ts';
+import WorkQueueUtil from './sbl/util/WorkQueue.ts';
+console.log(sblMessages, WorkQueueUtil);
 
 import React, { FC } from 'react';
 import ReactDOM from 'react-dom';
