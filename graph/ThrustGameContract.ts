@@ -25,6 +25,7 @@ export default class ThrustGameContract {
     const thrustInputContractHash =
       this.ctx.get(ThrustInputContract).get().hash;
     const timeContractHash = this.ctx.get(TimeContract).get().hash;
+    const thrustPlayerHash = Hash.digest(this.ctx.config.selfPrivateKey);
 
     const thrustGameGenerator = (
       contractHash: Hash,
@@ -53,7 +54,7 @@ export default class ThrustGameContract {
             size: 10,
           },
           players: [{
-            hash: Hash.digest('plyr1'),
+            hash: thrustPlayerHash,
             position: { x: 10, y: 0 },
             velocity: { x: 0, y: 0 },
             angle_rads: 0,
@@ -180,6 +181,7 @@ export default class ThrustGameContract {
     (window as any).thrustInitContractHash = thrustInitContractHash;
     (window as any).thrustInputContractHash = thrustInputContractHash;
     (window as any).timeContractHash = timeContractHash;
+    (window as any).thrustPlayerHash = thrustPlayerHash;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(
       thrustGameContract,

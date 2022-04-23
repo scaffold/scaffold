@@ -3,6 +3,7 @@
     "~/": "./",
     "react": "https://esm.sh/react@18.0.0?target=esnext&pin=v77",
     "react-dom": "https://esm.sh/react-dom@18.0.0?target=esnext&pin=v77",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.3.0?target=esnext&pin=v77",
     "secp256k1": "https://deno.land/x/secp256k1@1.5.5/mod.ts",
     "crypto": "./sbl/util/mock-crypto.ts",
     "avro": "https://esm.sh/avsc@5.7.4?target=esnext&pin=v77",

@@ -7,24 +7,40 @@ import ThrustView from './ThrustView.tsx';
 import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
-
-const params = new URLSearchParams(window.location.search);
-const urlGameHex = params.get('game');
-const game = urlGameHex
-  ? Hash.fromHex(urlGameHex)
-  : client.ctx.get(ThrustInitContract).startGame(Hash.random());
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
 
 export default () => {
+  const [url, setUrl] = React.useState(new URL(window.location.href));
+  const gameHex = url.searchParams.get('game');
+
   return (
     <div>
-      Game ID:{' '}
-      <a href={`${window.location.pathname}?game=${game.toHex()}`}>
-        <pre style={{ display: 'inline' }}>{game.toHex()}</pre>
+      <a
+        href='#'
+        onClick={() => {
+          const newUrl = new URL(url);
+          newUrl.searchParams.set(
+            'game',
+            client.ctx.get(ThrustInitContract).startGame(Hash.random()).toHex(),
+          );
+          window.history.pushState({}, '', newUrl);
+          setUrl(newUrl);
+        }}
+      >
+        New Game
       </a>
       <br />
-      <a href={window.location.pathname}>New Game</a>
-      {/* <ThrustView sbl={client.ctx} match={game} player={player} /> */}
+
+      {gameHex && (
+        <>
+          Game ID: <pre style={{ display: 'inline' }}>{gameHex}</pre>
+          <ThrustView
+            sbl={client.ctx}
+            match={Hash.fromHex(gameHex)}
+            player={player}
+          />
+        </>
+      )}
     </div>
   );
 };

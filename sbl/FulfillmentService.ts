@@ -27,8 +27,11 @@ export default class FulfillmentService {
       return;
     }
     question.isFulfilling = true;
+
     this.sendSubs(question, stack);
+
     this.launchExecutor(question, stack);
+    // setTimeout(() => this.launchExecutor(question, stack), 0);
   }
 
   private sendSubs(question: Question, _stack: string[]) {
