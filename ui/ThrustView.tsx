@@ -57,15 +57,11 @@ const initView = (
       cellUpdateSequencer.run(
         `${x} ${y}`,
         () =>
-          new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
-            .then(() => provider.getCell(BigInt(x), BigInt(y)))
-            .then(
-              (cell) => {
-                if ('MazeCellWall' in cell) {
-                  maze.set(x, y, 0, 1);
-                }
-              },
-            ),
+          provider.getCell(BigInt(x), BigInt(y)).then((cell) => {
+            if ('MazeCellWall' in cell) {
+              maze.set(x, y, 0, 1);
+            }
+          }),
       ),
     (x, y) => cellUpdateSequencer.run(`${x} ${y}`, () => maze.set(x, y, 0, 0)),
   );
