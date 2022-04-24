@@ -9,6 +9,7 @@ import SblContext from '~/sbl/Context.ts';
 import ThrustProvider from './ThrustProvider.ts';
 import VoxelMesher from './VoxelMesher.ts';
 import ArenaCellUpdater from './ArenaCellUpdater.ts';
+import PromiseSequencer from './PromiseSequencer.ts';
 
 const v2s = (v: vec3) => `${v[0]},${v[1]},${v[2]}`;
 
@@ -50,18 +51,23 @@ const initView = (
   (window as any).regl = regl;
 
   const maze = new VoxelMesher(regl);
+  const cellUpdateSequencer = new PromiseSequencer();
   const arenaCellUpdater = new ArenaCellUpdater(
     (x, y) =>
-      new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
-        .then(() => provider.getCell(BigInt(x), BigInt(y)))
-        .then(
-          (cell) => {
-            if ('MazeCellWall' in cell) {
-              maze.set(x, y, 0, 1);
-            }
-          },
-        ),
-    (x, y) => maze.set(x, y, 0, 0),
+      cellUpdateSequencer.run(
+        `${x} ${y}`,
+        () =>
+          new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
+            .then(() => provider.getCell(BigInt(x), BigInt(y)))
+            .then(
+              (cell) => {
+                if ('MazeCellWall' in cell) {
+                  maze.set(x, y, 0, 1);
+                }
+              },
+            ),
+      ),
+    (x, y) => cellUpdateSequencer.run(`${x} ${y}`, () => maze.set(x, y, 0, 0)),
   );
 
   const makeRenderer = (
