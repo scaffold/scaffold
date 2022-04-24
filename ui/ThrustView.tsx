@@ -8,6 +8,7 @@ import Hash from '~/sbl/util/Hash.ts';
 import SblContext from '~/sbl/Context.ts';
 import ThrustProvider from './ThrustProvider.ts';
 import VoxelMesher from './VoxelMesher.ts';
+import ArenaCellUpdater from './ArenaCellUpdater.ts';
 
 const v2s = (v: vec3) => `${v[0]},${v[1]},${v[2]}`;
 
@@ -49,7 +50,19 @@ const initView = (
   (window as any).regl = regl;
 
   const maze = new VoxelMesher(regl);
-  const loadedVoxels: Set<string> = new Set();
+  const arenaCellUpdater = new ArenaCellUpdater(
+    (x, y) =>
+      new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
+        .then(() => provider.getCell(BigInt(x), BigInt(y)))
+        .then(
+          (cell) => {
+            if ('MazeCellWall' in cell) {
+              maze.set(x, y, 0, 1);
+            }
+          },
+        ),
+    (x, y) => maze.set(x, y, 0, 0),
+  );
 
   const makeRenderer = (
     override: Partial<REGL.DrawConfig<Uniforms, Attributes, Props, OwnContext>>,
@@ -263,91 +276,11 @@ const initView = (
 
     const state = provider.getRenderState();
 
-    // Add new voxels
-    {
-      const { center, size } = state.game_state;
-      const queue = Array.from({ length: 1 }, () => {
-        const angle = Math.random() * Math.PI * 2;
-        return {
-          x: Math.round(center.x + Math.sin(angle) * size),
-          y: Math.round(center.y + Math.sin(angle) * size),
-        };
-      });
-
-      const dSqThresh = Math.pow(size + 0.5, 2) * 1.01;
-
-      while (true) {
-        const top = queue.pop();
-        if (!top) {
-          break;
-        }
-
-        const dx = top.x - center.x;
-        const dy = top.y - center.y;
-        if (dx * dx + dy * dy > dSqThresh) {
-          continue;
-        }
-
-        const key = `${top.x} ${top.y}`;
-        if (!loadedVoxels.has(key)) {
-          loadedVoxels.add(key);
-          // console.log('load ', key);
-          new Promise((resolve) => setTimeout(resolve, Math.random() * 1000))
-            .then(() => provider.getCell(BigInt(top.x), BigInt(top.y)))
-            .then(
-              (cell) => {
-                // console.log('loaded ', key);
-                if ('MazeCellWall' in cell) {
-                  maze.set(top.x, top.y, 0, 1);
-                }
-              },
-            );
-
-          queue.push({ x: top.x - 1, y: top.y });
-          queue.push({ x: top.x + 1, y: top.y });
-          queue.push({ x: top.x, y: top.y - 1 });
-          queue.push({ x: top.x, y: top.y + 1 });
-        }
-      }
-    }
-
-    // Discard old voxels
-    {
-      const { center, size } = state.game_state;
-      const queue = Array.from({ length: 8 }, () => {
-        const angle = Math.random() * Math.PI * 2;
-        return {
-          x: Math.round(center.x + Math.sin(angle) * size * 2),
-          y: Math.round(center.y + Math.sin(angle) * size * 2),
-        };
-      });
-
-      const dSqThresh = Math.pow(size * 2 - 0.5, 2) / 1.01;
-
-      while (true) {
-        const top = queue.pop();
-        if (!top) {
-          break;
-        }
-
-        const dx = top.x - center.x;
-        const dy = top.y - center.y;
-        if (dx * dx + dy * dy < dSqThresh) {
-          continue;
-        }
-
-        const key = `${top.x} ${top.y}`;
-        if (loadedVoxels.has(key)) {
-          loadedVoxels.delete(key);
-          maze.set(top.x, top.y, 0, 0);
-
-          queue.push({ x: top.x - 1, y: top.y });
-          queue.push({ x: top.x + 1, y: top.y });
-          queue.push({ x: top.x, y: top.y - 1 });
-          queue.push({ x: top.x, y: top.y + 1 });
-        }
-      }
-    }
+    arenaCellUpdater.setArena(
+      Math.round(state.game_state.center.x),
+      Math.round(state.game_state.center.y),
+      Math.round(state.game_state.size),
+    );
 
     if (state.players.length) {
       const players = state.players.map(
@@ -422,7 +355,10 @@ const initView = (
   });
 
   return {
-    release: () => regl.destroy(),
+    release: () => {
+      arenaCellUpdater.destruct();
+      regl.destroy();
+    },
   };
 };
 

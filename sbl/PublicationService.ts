@@ -120,6 +120,9 @@ export default class PublicationService {
     this.ctx.get(QuestionService).addAnswerToQuestion(answer);
 
     console.log(`TODO: Need to possibly execute contract here`);
+    console.log(
+      `TODO: Need to forward the publication to the appropriate DHT entry`,
+    );
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>

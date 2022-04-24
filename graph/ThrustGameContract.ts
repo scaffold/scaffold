@@ -144,15 +144,15 @@ export default class ThrustGameContract {
       const { center, velocity } = state.game_state;
       center.x += velocity.x;
       center.y += velocity.y;
-      velocity.x *= 0.99;
-      velocity.y *= 0.99;
+      velocity.x *= 0.5;
+      velocity.y *= 0.5;
 
       if (state.players.length) {
         targCenterX /= state.players.length;
         targCenterY /= state.players.length;
 
-        velocity.x += (targCenterX - center.x) * 0.01;
-        velocity.y += (targCenterY - center.y) * 0.01;
+        velocity.x += (targCenterX - center.x) * 0.4;
+        velocity.y += (targCenterY - center.y) * 0.4;
       }
 
       const targSize = Math.sqrt(state.players.length || 1) * 10;

@@ -8,7 +8,7 @@ interface Entry {
 }
 
 export default class WorkQueue {
-  private queue: RBTree<Entry> = new RBTree((a: Entry, b: Entry) =>
+  private queue: RBTree<Entry> = new RBTree((a, b) =>
     a.valuePerSecond !== b.valuePerSecond
       ? a.valuePerSecond - b.valuePerSecond
       : Hash.cmp(a.key, b.key)
