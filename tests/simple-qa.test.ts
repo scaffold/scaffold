@@ -80,7 +80,7 @@ Deno.test(
         contract_answer_hash: ctx.get(CollatzContract).get().hash,
         params,
       });
-      sub.incentivize(1000n);
+      sub.incentivize(1000000n);
       sub.onAnswer(resolve);
     });
 
