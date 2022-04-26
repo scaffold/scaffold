@@ -18,6 +18,10 @@ import QuestionRegistry, { Question } from './QuestionRegistry.ts';
 import { Answer } from './AnswerRegistry.ts';
 import QaDebugger from './QaDebugger.ts';
 import IncentiveService from './IncentiveService.ts';
+import EnvoyContract from '~/graph/EnvoyContract.ts';
+import * as envoyMessages from '~/graph/envoyMessages.ts';
+
+const envoyIncentive = 10n;
 
 export default class QuestionService {
   constructor(private ctx: Context) {}
@@ -122,14 +126,42 @@ export default class QuestionService {
     // console.log('QuestionService.getCanonical', stack.join(' -> '));
 
     const question = this.ctx.get(QuestionRegistry).getBySpec(spec);
+    const envoy = this.ctx.get(QuestionRegistry).getBySpec({
+      contract_answer_hash: this.ctx.get(EnvoyContract).get().hash,
+      params: envoyMessages.Params.encode({
+        question: spec,
+        nonce: Hash.random(),
+      }),
+    });
 
     const incentivize = (newAmount: bigint) => {
-      // console.log(
-      //   'QuestionService.getCanonical.incentivize',
-      //   newAmount,
-      //   stack.join(' -> '),
-      // );
-      this.ctx.get(IncentiveService).incentivize(question, newAmount);
+      console.log(
+        'QuestionService.getCanonical.incentivize',
+        newAmount,
+        stack.join(' -> '),
+      );
+
+      if (question.canonicalAnswer) {
+        return;
+      }
+
+      // This incentivizes the computation of an answer to this question.
+      // To be claimed it must be included in the answer's inputs, so if the answer is already computed, it won't have any effect.
+      // If the answer is already computed, the incentive won't be consumed and can be reclaimed, however it's likely no answer will be returned.
+
+      // This incentivizes the fetching of an answer to this question.
+      // It incentivizes a special envoy message, which wraps the original answer.
+      // The envoy message can be created long after the answer is computed, so will be effective at any time.
+      // If the answer is not yet computed, some of the incentive will likely be paid towards computation.
+
+      const envoyAmount = newAmount < envoyIncentive
+        ? newAmount
+        : envoyIncentive;
+      this.ctx.get(IncentiveService).incentivize(envoy, envoyAmount);
+      this.ctx.get(IncentiveService).incentivize(
+        question,
+        newAmount - envoyAmount,
+      );
       this.updateIncentives(question, stack);
     };
     incentivize(0n);

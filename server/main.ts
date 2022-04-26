@@ -17,6 +17,7 @@ import * as thrustMessages from '~/graph/thrustMessages.ts';
 import Logger from '~/sbl/Logger.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
 import * as epochMessages from '~/graph/epochMessages.ts';
+import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 
 const websocketProvider: ProtocolProvider = {
   create: (
@@ -124,7 +125,10 @@ const config: Config = {
 
   trustedPeers: [],
 
-  selfPrivateKey: secp.utils.randomPrivateKey(),
+  // selfPrivateKey: secp.utils.randomPrivateKey(),
+  selfPrivateKey: hex2bin(
+    '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
+  ),
   nodeNonce: (new TextEncoder()).encode('server_0'),
 
   approxComputePricePerSecond: 1000n,
@@ -144,25 +148,36 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
 
 self.addEventListener('unload', () => ctx.destruct());
 
-// Let's start listening to the epoch.
-// We won't need this eventually because everyone will be requesting it.
-(() => {
-  const contractHash = ctx.get(EpochContract).get().hash;
+// // Let's start listening to the epoch.
+// // We won't need this eventually because everyone will be requesting it.
+// (() => {
+//   const contractHash = ctx.get(EpochContract).get().hash;
 
-  const tracker = ctx.get(StateTracker).track(
-    (idx) => ({
-      contract_answer_hash: contractHash,
-      params: epochMessages.Params.encode({ height: idx }),
-    }),
-    (idx, state) =>
-      console.log(`Epoch ${idx}: ${Hash.digest(state.data).toHex()}`),
-    {
-      initIdx: 0n,
-      futureSubCount: 100n,
-      narrowingSubCount: 16n,
-      unsubWaitMs: 10000,
-    },
-  );
+//   const tracker = ctx.get(StateTracker).track(
+//     (idx) => ({
+//       contract_answer_hash: contractHash,
+//       params: epochMessages.Params.encode({ height: idx }),
+//     }),
+//     (idx, state) =>
+//       console.log(`Epoch ${idx}: ${Hash.digest(state.data).toHex()}`),
+//     {
+//       initIdx: 0n,
+//       futureSubCount: 100n,
+//       narrowingSubCount: 16n,
+//       unsubWaitMs: 10000,
+//     },
+//   );
 
-  ctx.onDestruct(() => tracker.release());
-})();
+//   ctx.onDestruct(() => tracker.release());
+// })();
+
+// Start a game, and print the hash.
+// Other clients won't know the nonce or init_time, so will have to request it from this client.
+const gameHash = ctx.get(ThrustInitContract).startGame(Hash.random());
+setTimeout(
+  () =>
+    console.log(
+      `http://localhost:4507/public/index.html?game=${gameHash.toHex()}`,
+    ),
+  200,
+);

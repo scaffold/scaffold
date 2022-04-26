@@ -13,9 +13,15 @@ import MessageCtx from './MessageCtx.ts';
 import IncentiveService from './IncentiveService.ts';
 import { assert } from './util/functional.ts';
 import RewardSpec from './RewardSpec.ts';
+import EnvoyContract from '~/graph/EnvoyContract.ts';
+import * as envoyMessages from '~/graph/envoyMessages.ts';
 
 export default class PublicationService {
-  constructor(private ctx: Context) {}
+  private envoyContractHash: Hash;
+
+  constructor(private ctx: Context) {
+    this.envoyContractHash = this.ctx.get(EnvoyContract).get().hash;
+  }
 
   public publish(node: Node, answer: Answer) {
     if (!answer.data) {
@@ -123,6 +129,15 @@ export default class PublicationService {
     console.log(
       `TODO: Need to forward the publication to the appropriate DHT entry`,
     );
+
+    if (
+      Hash.equals(msg.question.contract_answer_hash, this.envoyContractHash)
+    ) {
+      this.handlePublishMessage(
+        msgCtx,
+        envoyMessages.Answer.decode(msg.answer).publication,
+      );
+    }
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>
