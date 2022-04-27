@@ -61,11 +61,7 @@ export default ({ sbl, match }: { sbl: Context; match: Hash }) => {
         <li>
           Game state:{' '}
           <pre>
-            {JSON.stringify(
-              state.gameState,
-              (key, val) => Logger.serialize(val),
-              2,
-            )}
+            {sbl.get(Logger).serialize(state.gameState)}
           </pre>
         </li>
       </ul>

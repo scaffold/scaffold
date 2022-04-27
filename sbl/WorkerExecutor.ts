@@ -1,20 +1,23 @@
 import Context from './Context.ts';
 import ExposedPromise from './util/ExposedPromise.ts';
 import QuestionService from './QuestionService.ts';
-import Hash from './util/Hash.ts';
-import { formatPath, str2bin } from './pathUtils.ts';
-import rootContract from './rootContract.ts';
-import { decode, encode } from './transportUtils.ts';
-import { Contract, Script } from './types.ts';
+import { formatPath } from './worker/pathUtils.ts';
+import { Contract, Script } from './scriptTypes.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import { WorkerComm, WorkerInit } from './worker/workerTypes.ts';
+import { QuestionSpec } from './messages.ts';
+import RootContract from '~/graph/RootContract.ts';
+import { Answer } from './AnswerRegistry.ts';
+import { error } from './util/functional.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
   path: Uint8Array[];
 
-  readerStream: Promise<IncentivizedStream<Uint8Array>>;
-  exposedData?: Promise<Uint8Array>;
+  answer: Promise<Answer>;
+  // question: QuestionSpec;
+  // readerStream: Promise<IncentivizedStream<Uint8Array>>;
+  // exposedData?: Promise<Uint8Array>;
 }
 
 export default class WorkerExecutor {
@@ -69,45 +72,8 @@ export default class WorkerExecutor {
     const result = ExposedPromise.create<Record<OutputKeys, Uint8Array>>();
     const hasDirtyInputs = ExposedPromise.create<true>();
 
-    const rootLoaders: {
-      [index: string]: () => Promise<IncentivizedStream<Uint8Array>>;
-    } = {
-      ext: async () => {
-        const stream = new IncentivizedStream<Uint8Array>(() => {});
-        stream.emit(encode(await rootContract));
-        return stream;
-      },
-    };
-
-    const getInodeContents = (inode: number): Promise<Uint8Array> => {
-      const file = inodes.get(inode);
-      if (!file) {
-        throw new Error(`Invalid inode ${inode}`);
-      }
-      if (!file.exposedData) {
-        console.log(`Read ${formatPath(file.path)}...`);
-        const promise = ExposedPromise.create<Uint8Array>();
-        file.readerStream.then((stream) =>
-          stream.on(0, (data) => {
-            promise.then((prev) => {
-              prev !== data && hasDirtyInputs.resolve(true);
-            });
-
-            promise.resolve(data);
-          })
-        );
-        file.exposedData = promise;
-        promise.then((contents) =>
-          console.log(
-            `Read ${formatPath(file.path)} -> ${
-              formatPath([
-                contents.slice(0, 128),
-              ])
-            }`,
-          )
-        );
-      }
-      return file.exposedData;
+    const rootLoaders: { [index: string]: Promise<Answer> } = {
+      ext: Promise.resolve(ctx.get(RootContract).get()),
     };
 
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
@@ -133,32 +99,40 @@ export default class WorkerExecutor {
       fsRoot(name: string, inode: number): undefined {
         inodes.set(inode, {
           path: [],
-          readerStream: rootLoaders[name](),
+          answer: rootLoaders[name],
         });
 
         return undefined;
       },
 
       fsOpen(baseInode: number, key: Uint8Array, subInode: number): undefined {
-        const path = [
-          ...(inodes.get(baseInode)?.path || [str2bin('__error')]),
-          key,
-        ];
+        const path = [...inodes.get(baseInode)!.path, key];
         console.log(`Preopen ${formatPath(path)}`);
 
+        let resolved = false;
         inodes.set(subInode, {
           path,
-          readerStream: getInodeContents(baseInode).then((parentContents) => {
-            const contract = decode(parentContents) as Contract;
-            // Assume valid Contract for now
-            // TODO: Binary format
+          answer: new Promise((resolve) => {
+            console.log(`Read ${formatPath(path)}...`);
+            inodes.get(baseInode)!.answer.then((parentAnswer) =>
+              ctx.get(QuestionService).getCanonical({
+                contract_answer_hash: parentAnswer.hash,
+                params: key,
+              }).onAnswer((answer) => {
+                console.log(
+                  `Read ${formatPath(path)} -> ${
+                    formatPath([answer.data.slice(0, 128)])
+                  }`,
+                );
 
-            const contractHash = Hash.digest(parentContents);
-
-            return ctx
-              .get(QuestionService)
-              .getCanonical({ contractHash, params: key })
-              .map(({ data }) => data);
+                if (resolved) {
+                  hasDirtyInputs.resolve(true);
+                } else {
+                  resolved = true;
+                  resolve(answer);
+                }
+              })
+            );
           }),
         });
 
@@ -170,14 +144,14 @@ export default class WorkerExecutor {
         offset: number,
         dstBufs: Uint8Array[],
       ): Promise<number> {
-        const contents = await getInodeContents(inode);
+        const answer = await inodes.get(inode)!.answer;
 
         let it = offset;
         for (const buf of dstBufs) {
-          const limit = Math.min(it + buf.length, contents.length);
-          buf.set(contents.subarray(it, limit));
+          const limit = Math.min(it + buf.length, answer.data.length);
+          buf.set(answer.data.subarray(it, limit));
           it = limit;
-          if (it === contents.length) {
+          if (it === answer.data.length) {
             break;
           }
         }
@@ -186,8 +160,8 @@ export default class WorkerExecutor {
       },
 
       async fsGetSize(inode: number): Promise<number> {
-        const contents = await getInodeContents(inode);
-        return contents.length;
+        const answer = await inodes.get(inode)!.answer;
+        return answer.data.length;
       },
 
       outputChunk(key: string, offset: number, data: Uint8Array): undefined {

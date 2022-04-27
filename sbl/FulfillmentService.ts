@@ -4,7 +4,7 @@ import callWithSyncRequestHandler from './callWithSyncRequestHandler.ts';
 import Hash from './util/Hash.ts';
 import QuestionService from './QuestionService.ts';
 import DhtService from './DhtService.ts';
-import { arrConcat } from './util/buffer.ts';
+import { arrConcat, arrEquals } from './util/buffer.ts';
 import SubscriptionService from './SubscriptionService.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import QuestionRegistry, { Question } from './QuestionRegistry.ts';
@@ -15,6 +15,7 @@ import DurationPredictionService from './DurationPredictionService.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
+const wasmMagic = new Uint8Array([0, 0x61, 0x73, 0x6D]);
 
 export default class FulfillmentService {
   private attemptDupeFraction = Hash.fromFraction(1, 8);
@@ -66,7 +67,9 @@ export default class FulfillmentService {
     }).answers;
 
     generators.forEach((gen) => {
-      const genFunc = eval(new TextDecoder().decode(gen.data));
+      const genFunc = arrEquals(gen.data.subarray(0, 4), wasmMagic)
+        ? () => {}
+        : eval(new TextDecoder().decode(gen.data));
       callWithSyncRequestHandler<Uint8Array>(
         this.ctx,
         question,

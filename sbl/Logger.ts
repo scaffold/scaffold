@@ -2,6 +2,7 @@ import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import { Buffer } from 'std-fix-abortable/node/buffer.ts';
+import QaDebugger from './QaDebugger.ts';
 
 export default class Logger {
   constructor(private ctx: Context) {}
@@ -16,11 +17,19 @@ export default class Logger {
     }
   }
 
-  public static serialize(val: any) {
-    if (typeof val === 'bigint') return val.toString();
-    else if (val instanceof Hash) return `Sha256:${val.toHex()}`;
-    else if (val instanceof Uint8Array) return bin2hex(val);
-    if (val.type === 'Buffer') return bin2hex(new Uint8Array(val.data));
-    else return val;
+  public serialize(val: any): string {
+    return JSON.stringify(val, (_key, val) => {
+      if (typeof val === 'bigint') return val.toString();
+      else if (val instanceof Hash) return `Sha256:${val.toHex()}`;
+      else if (val instanceof Uint8Array) return bin2hex(val);
+      else if (val.type === 'Buffer') return bin2hex(new Uint8Array(val.data));
+      else if (
+        typeof val === 'object' &&
+        'contract_answer_hash' in val &&
+        'params' in val
+      ) {
+        return { ...val, name: this.ctx.get(QaDebugger).debugQuestion(val) };
+      } else return val;
+    }, 2);
   }
 }

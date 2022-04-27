@@ -28,9 +28,8 @@ export default class QaDebugger {
   public debugQuestion(spec: QuestionSpec) {
     const dbgr = this.debuggers.get(spec.contract_answer_hash.toHex());
     if (dbgr) {
-      const paramStr = JSON.stringify(
+      const paramStr = this.ctx.get(Logger).serialize(
         dbgr.paramDebugger(spec.params),
-        (key, val) => Logger.serialize(val),
       );
       return `${dbgr.contractName}${paramStr}`;
     } else {

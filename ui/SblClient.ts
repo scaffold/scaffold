@@ -164,7 +164,7 @@ export default class SblClient {
         ) =>
           console.log(
             `${className}.${methodName}(${
-              JSON.stringify(params, (key, val) => Logger.serialize(val), 0)
+              this.ctx.get(Logger).serialize(params)
             })`,
           ),
       },

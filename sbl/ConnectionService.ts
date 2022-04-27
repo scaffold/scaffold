@@ -201,11 +201,7 @@ export default class ConnectionService {
 
         console.log(
           `Received message`,
-          JSON.stringify(
-            packet.message,
-            (key, val) => Logger.serialize(val),
-            2,
-          ),
+          this.ctx.get(Logger).serialize(packet.message),
         );
 
         if (conn) {
@@ -272,10 +268,7 @@ export default class ConnectionService {
   }
 
   public async composePacket(message: Packet['message']) {
-    console.log(
-      `Sending message`,
-      JSON.stringify(message, (key, val) => Logger.serialize(val), 2),
-    );
+    console.log(`Sending message`, this.ctx.get(Logger).serialize(message));
 
     let buf: Uint8Array;
     const msg = Packet.encode({ message }, (size) => {

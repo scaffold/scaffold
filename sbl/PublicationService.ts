@@ -24,6 +24,10 @@ export default class PublicationService {
   }
 
   public publish(node: Node, answer: Answer) {
+    if (answer.isCorrect !== true) {
+      return;
+    }
+
     if (!answer.data) {
       throw new Error(`Not sure what causes this case`);
     }
@@ -60,23 +64,29 @@ export default class PublicationService {
       inputIncentive += incentive;
     }
 
-    const selfIncentive = answer.difficultyEstimate < inputIncentive
-      ? answer.difficultyEstimate
-      : inputIncentive;
-    const remainingIncentive = inputIncentive - selfIncentive;
+    const licenses = answer.licenses.length ? answer.licenses : (() => {
+      const selfIncentive = answer.difficultyEstimate < inputIncentive
+        ? answer.difficultyEstimate
+        : inputIncentive;
+      const remainingIncentive = inputIncentive - selfIncentive;
 
-    const licenses = this.ctx.get(IncentiveService).popIncentives(selfIncentive)
-      .map(({ question, incentive }) => ({
-        question_hash: question.hash,
-        incentive,
-      }));
+      const licenses = this.ctx.get(IncentiveService).popIncentives(
+        selfIncentive,
+      )
+        .map(({ question, incentive }) => ({
+          question_hash: question.hash,
+          incentive,
+        }));
 
-    // TODO: Who to incentivize here? The epoch?
-    // This is bad, but just put it towards a random question.
-    licenses.push({
-      question_hash: Hash.random(),
-      incentive: remainingIncentive,
-    });
+      // TODO: Who to incentivize here? The epoch?
+      // This is bad, but just put it towards a random question.
+      licenses.push({
+        question_hash: Hash.random(),
+        incentive: remainingIncentive,
+      });
+
+      return licenses;
+    })();
 
     node.defaultConn?.sendReliable({
       PublishMessage: {
