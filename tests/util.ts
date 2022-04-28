@@ -5,6 +5,7 @@ import Context from '~/sbl/Context.ts';
 import Config from '~/sbl/Config.ts';
 import Peer from '~/sbl/Peer.ts';
 import WorkQueue from '~/sbl/WorkQueue.ts';
+import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 const makeConfig = (
   _ctxIdx: number,
@@ -19,6 +20,8 @@ const makeConfig = (
   networkProvider: {
     protocols: new Map(Object.entries({})),
   },
+
+  appraisalProvider: new DefaultAppraisalProvider(),
 
   trustedPeers: [],
 

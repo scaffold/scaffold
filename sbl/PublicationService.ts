@@ -15,6 +15,7 @@ import { assert } from './util/functional.ts';
 import RewardSpec from './RewardSpec.ts';
 import EnvoyContract from '~/graph/EnvoyContract.ts';
 import * as envoyMessages from '~/graph/envoyMessages.ts';
+import ActionExecutor from './ActionExecutor.ts';
 
 export default class PublicationService {
   private envoyContractHash: Hash;
@@ -148,6 +149,8 @@ export default class PublicationService {
         envoyMessages.Answer.decode(msg.answer).publication,
       );
     }
+
+    this.ctx.get(ActionExecutor).addAction({ type: 'verify', answer });
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>

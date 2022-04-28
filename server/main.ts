@@ -18,6 +18,7 @@ import Logger from '~/sbl/Logger.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
 import * as epochMessages from '~/graph/epochMessages.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
+import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 const websocketProvider: ProtocolProvider = {
   create: (
@@ -122,6 +123,8 @@ const config: Config = {
       websocket: websocketProvider,
     })),
   },
+
+  appraisalProvider: new DefaultAppraisalProvider(),
 
   trustedPeers: [],
 
