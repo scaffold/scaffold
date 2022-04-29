@@ -138,8 +138,7 @@ export default class PublicationService {
       return;
     }
 
-    const answer = this.ctx.get(AnswerRegistry).getOrCreate(msg, msgCtx.conn);
-    this.ctx.get(QuestionService).addAnswerToQuestion(answer);
+    const _answer = this.ctx.get(AnswerRegistry).getOrCreate(msg, msgCtx.conn);
 
     console.log(`TODO: Need to possibly execute contract here`);
     console.log(
@@ -156,8 +155,6 @@ export default class PublicationService {
     }
 
     // this.ctx.get(ActionExecutor).addAction({ type: 'verify', answer });
-
-    this.ctx.get(ForwardingService).forwardPublication(msgCtx.conn, msg);
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>

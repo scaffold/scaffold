@@ -34,9 +34,12 @@ export default class ForwardingService {
 
   constructor(private ctx: Context) {}
 
-  public forwardPublication(from: Connection, msg: PublishMessage) {
+  public forwardPublication(
+    msg: PublishMessage,
+    from: Connection | SELF_CONNECTION,
+  ) {
     this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (this.get(from, node).sum >= 0) {
+      if (from === SELF_CONNECTION || this.get(from, node).sum >= 0) {
         node.defaultConn?.sendReliable({ PublishMessage: msg });
       }
     });

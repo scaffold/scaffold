@@ -13,6 +13,7 @@ import GraphUtils from './GraphUtils.ts';
 import IncentiveService from './IncentiveService.ts';
 import DurationPredictionService from './DurationPredictionService.ts';
 import { SELF_CONNECTION } from './ConnectionService.ts';
+import WorkerExecutor from './WorkerExecutor.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
@@ -58,40 +59,62 @@ export default class FulfillmentService {
     }).answers;
 
     generators.forEach((gen) => {
-      const genFunc = arrEquals(gen.data.subarray(0, 4), wasmMagic)
-        ? () => {}
-        : eval(new TextDecoder().decode(gen.data));
-      callWithSyncRequestHandler<Uint8Array>(
-        this.ctx,
-        question,
-        (handler, notifier) =>
-          genFunc(
-            question.spec.contract_answer_hash,
-            question.spec.params,
-            true,
-            handler,
-            notifier,
-          ),
-        (data, inputs: Answer[], durationMs: number) => {
-          const answer = this.ctx.get(AnswerRegistry).getOrCreate({
-            question: {
-              contract_answer_hash: question.spec.contract_answer_hash,
-              params: question.spec.params,
-            },
-            inputs: inputs.map((answer) => answer.hash),
-            answer: data,
-            licenses: [],
-            timestamp: BigInt(Date.now()),
-          }, SELF_CONNECTION);
-          answer.isCorrect = true;
-          answer.difficultyEstimate = BigInt(durationMs) *
-            this.ctx.config.approxComputePricePerSecond / 1000n;
-          this.ctx.get(QuestionService).addAnswerToQuestion(answer);
+      const onAnswer = (
+        data: Uint8Array,
+        inputs: Answer[],
+        durationMs: number,
+      ) => {
+        const answer = this.ctx.get(AnswerRegistry).getOrCreate({
+          question: {
+            contract_answer_hash: question.spec.contract_answer_hash,
+            params: question.spec.params,
+          },
+          inputs: inputs.map((answer) => answer.hash),
+          answer: data,
+          licenses: [],
+          timestamp: BigInt(Date.now()),
+        }, SELF_CONNECTION);
+        answer.isCorrect = true;
+        answer.difficultyEstimate = BigInt(durationMs) *
+          this.ctx.config.approxComputePricePerSecond / 1000n;
+        this.ctx.get(QuestionService).addAnswerToQuestion(answer);
 
-          this.ctx.get(DurationPredictionService).learn(gen, durationMs);
-        },
-        stack,
-      );
+        this.ctx.get(DurationPredictionService).learn(gen, durationMs);
+
+        return answer;
+      };
+
+      const script = eval(new TextDecoder().decode(gen.data));
+      if (typeof script === 'object') {
+        const emitCorrect = true;
+        const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
+          .run(script, {
+            contractHash: question.spec.contract_answer_hash.toBytes(),
+            params: question.spec.params,
+            emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
+          }, { answer: null });
+        result.then(({ outputs: { answer: data }, usedAnswers }) => {
+          const _answer = onAnswer(data, [...usedAnswers], 0);
+          hasDirtyInputs.then(() => {});
+        });
+      } else if (typeof script === 'function') {
+        callWithSyncRequestHandler<Uint8Array>(
+          this.ctx,
+          question,
+          (handler, notifier) =>
+            script(
+              question.spec.contract_answer_hash,
+              question.spec.params,
+              true,
+              handler,
+              notifier,
+            ),
+          onAnswer,
+          stack,
+        );
+      } else {
+        throw new Error(`Invalid script type: ${typeof script}`);
+      }
     });
   }
 }

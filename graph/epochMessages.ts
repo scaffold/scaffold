@@ -5,7 +5,9 @@ const registry = {
   Params: {
     name: 'Params',
     type: 'record',
-    fields: [{ name: 'height', type: 'long' }],
+    fields: [
+      { name: 'height', type: 'long' },
+    ],
   },
   Answer: {
     name: 'Answer',

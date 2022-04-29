@@ -4,7 +4,11 @@ import QuestionService from './QuestionService.ts';
 import { formatPath } from './worker/pathUtils.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
-import { WorkerComm, WorkerInit } from './worker/workerTypes.ts';
+import {
+  InitialMessage,
+  JobMessage,
+  WorkerComm,
+} from './worker/workerTypes.ts';
 import { QuestionSpec } from './messages.ts';
 import RootContract from '~/graph/RootContract.ts';
 import { Answer } from './AnswerRegistry.ts';
@@ -28,10 +32,11 @@ export default class WorkerExecutor {
     script: Script,
     inputs: Record<InputKeys, Uint8Array>,
     outputSpec: Record<OutputKeys, null>,
-    onUseExternalInput: (path: Uint8Array[], contents: Uint8Array) => void,
   ): {
     cancel(): void;
-    result: Promise<Record<OutputKeys, Uint8Array>>;
+    result: Promise<
+      { outputs: Record<OutputKeys, Uint8Array>; usedAnswers: Set<Answer> }
+    >;
     hasDirtyInputs: Promise<true>;
   } {
     const ctx = this.context;
@@ -56,33 +61,37 @@ export default class WorkerExecutor {
     );
 
     const sigBuf = new SharedArrayBuffer(8);
-    worker.postMessage({ sigBuf });
-
-    //   {
-    //     eval: true,
-    //     workerData,
-    //     transferList: Object.entries(inputs).map(
-    //       ([key, buf]) => (buf as Uint8Array).buffer,
-    //     ),
-    //   },
+    const msg: InitialMessage = { sigBuf };
+    worker.postMessage(msg);
 
     const inodes = new Map<number, OpenFile>();
     const outputs: Record<string, { size: number; chunks: Uint8Array[] }> = {};
 
-    const result = ExposedPromise.create<Record<OutputKeys, Uint8Array>>();
+    const result = ExposedPromise.create<
+      { outputs: Record<OutputKeys, Uint8Array>; usedAnswers: Set<Answer> }
+    >();
     const hasDirtyInputs = ExposedPromise.create<true>();
 
     const rootLoaders: { [index: string]: Promise<Answer> } = {
       ext: Promise.resolve(ctx.get(RootContract).get()),
     };
 
+    const usedAnswers: Set<Answer> = new Set();
+
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
-      ready() {
+      ready(): undefined {
+        const msg: JobMessage = { script, inputs, outputSpec };
+        worker.postMessage(
+          msg,
+          Object.entries(inputs).map(([_key, buf]) =>
+            (buf as Uint8Array).buffer
+          ),
+        );
         return undefined;
       },
-      exit() {
-        result.resolve(
-          Object.fromEntries(
+      exit(): undefined {
+        result.resolve({
+          outputs: Object.fromEntries(
             Object.entries(outputs).map(([key, { size, chunks }]) => {
               const buf = new Uint8Array(size);
               chunks.reduce((offset, chunk) => {
@@ -92,7 +101,8 @@ export default class WorkerExecutor {
               return [key, buf];
             }),
           ) as Record<OutputKeys, Uint8Array>,
-        );
+          usedAnswers,
+        });
         return undefined;
       },
 
@@ -145,6 +155,7 @@ export default class WorkerExecutor {
         dstBufs: Uint8Array[],
       ): Promise<number> {
         const answer = await inodes.get(inode)!.answer;
+        usedAnswers.add(answer);
 
         let it = offset;
         for (const buf of dstBufs) {
@@ -161,6 +172,7 @@ export default class WorkerExecutor {
 
       async fsGetSize(inode: number): Promise<number> {
         const answer = await inodes.get(inode)!.answer;
+        usedAnswers.add(answer);
         return answer.data.length;
       },
 

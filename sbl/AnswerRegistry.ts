@@ -12,6 +12,7 @@ import { Node } from './NodeService.ts';
 import Peer from './Peer.ts';
 import QuestionService from './QuestionService.ts';
 import { Connection, SELF_CONNECTION } from './ConnectionService.ts';
+import ForwardingService from './ForwardingService.ts';
 
 export class Answer {
   // fromPeer: Peer;
@@ -47,7 +48,6 @@ export class Answer {
     public hash: Hash,
     public question: Question,
     { inputs, answer, licenses, timestamp }: PublishMessage,
-    // TODO: Whenever we create a question, immediately forward
     public receivedFrom: Connection | SELF_CONNECTION,
   ) {
     this.inputs = inputs;
@@ -85,12 +85,11 @@ export default class AnswerRegistry {
       publication.question,
     );
     const hash = AnswerRegistry.computeHash(question.hash, publication.answer);
-    const answer = getOrCreate(
-      this.registry,
-      hash.toHex(),
-      () => new Answer(hash, question, publication, conn),
-    );
-    this.ctx.get(QuestionService).addAnswerToQuestion(answer);
-    return answer;
+    return getOrCreate(this.registry, hash.toHex(), () => {
+      const answer = new Answer(hash, question, publication, conn);
+      this.ctx.get(QuestionService).addAnswerToQuestion(answer);
+      this.ctx.get(ForwardingService).forwardPublication(publication, conn);
+      return answer;
+    });
   }
 }

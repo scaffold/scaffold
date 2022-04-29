@@ -1,6 +1,10 @@
 import { Script } from '../scriptTypes.ts';
 
-export interface JobSpec {
+export interface InitialMessage {
+  sigBuf: SharedArrayBuffer;
+}
+
+export interface JobMessage {
   script: Script;
   inputs: Record<string, Uint8Array>;
   outputSpec: Record<string, null>;

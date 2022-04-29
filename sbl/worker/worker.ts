@@ -1,10 +1,10 @@
 import { WorkerChannelClient } from './WorkerChannel.ts';
-import { JobSpec, WorkerComm } from './workerTypes.ts';
+import { InitialMessage, JobMessage, WorkerComm } from './workerTypes.ts';
 import execJob from './execJob.ts';
 
 console.log('Worker starting...');
 
-const msg = await new Promise<MessageEvent<any>>((resolve) =>
+const msg = await new Promise<MessageEvent<InitialMessage>>((resolve) =>
   self.onmessage = resolve
 );
 const { sigBuf } = msg.data;
@@ -14,7 +14,7 @@ const client = new WorkerChannelClient<WorkerComm>(self, sigBuf);
 while (true) {
   console.log('Worker is ready...');
   client.inform('ready', [], []);
-  const msg = await new Promise<MessageEvent<JobSpec>>((resolve) =>
+  const msg = await new Promise<MessageEvent<JobMessage>>((resolve) =>
     self.onmessage = resolve
   );
 
