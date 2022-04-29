@@ -1,4 +1,4 @@
-import { bin2str, formatPath, str2bin } from './pathUtils.ts';
+import { bin2str, formatPath, str2bin } from '../pathUtils.ts';
 import { LinkExec, MkdirExec, WasmExec } from '../scriptTypes.ts';
 import ExtFs from './ExtFs.ts';
 import {
@@ -17,7 +17,7 @@ import IdentityFs from './IdentityFs.ts';
 import MemFs from './MemFs.ts';
 import WasiImpl, { FsNodeHandle } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
-import { JobSpec, WorkerComm } from './workerTypes.ts';
+import { JobMessage, WorkerComm } from './workerTypes.ts';
 
 const throwErr = (msg: string): never => {
   throw new Error(msg);
@@ -25,7 +25,7 @@ const throwErr = (msg: string): never => {
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { script, inputs, outputSpec }: JobSpec,
+  { script, inputs, outputSpec }: JobMessage,
 ) => {
   const inodeSource = { nextInode: 1 };
 

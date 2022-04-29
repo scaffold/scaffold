@@ -95,7 +95,7 @@ export default class ExtFs implements Fs {
       // FILE METHODS
 
       read(offset: number, dstBufs: Uint8Array[]) {
-        return fs.client.dispatch('fsRead', [inode, offset, dstBufs]);
+        return fs.client.dispatch('fsRead', [inode, offset, dstBufs], []);
       },
 
       write(offset: number, bufs: Uint8Array[]) {
@@ -103,7 +103,7 @@ export default class ExtFs implements Fs {
       },
 
       getSize() {
-        return fs.client.dispatch('fsGetSize', [inode]);
+        return fs.client.dispatch('fsGetSize', [inode], []);
       },
 
       resize(size: number) {

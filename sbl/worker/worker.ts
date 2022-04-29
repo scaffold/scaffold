@@ -9,6 +9,7 @@ const msg = await new Promise<MessageEvent<InitialMessage>>((resolve) =>
 );
 const { sigBuf } = msg.data;
 
+console.log('postMessage', self.postMessage.toString());
 const client = new WorkerChannelClient<WorkerComm>(self, sigBuf);
 
 while (true) {

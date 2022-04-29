@@ -1,6 +1,6 @@
 export class WorkerChannelClient<T> {
   constructor(
-    private port: Pick<Window, 'postMessage' | 'onmessage'>,
+    private port: Window,
     private sigBuf: SharedArrayBuffer,
   ) {
     if (this.sigBuf.byteLength !== 8) {
@@ -16,7 +16,7 @@ export class WorkerChannelClient<T> {
       : [never],
     transfer: Transferable[],
   ): void {
-    this.port.postMessage({ func, args }, '/', transfer);
+    this.port.postMessage({ func, args }, { transfer });
   }
 
   public dispatch<K extends keyof T>(
@@ -30,7 +30,7 @@ export class WorkerChannelClient<T> {
     const arr = new Int32Array(this.sigBuf);
 
     Atomics.store(arr, 0, 0);
-    this.port.postMessage({ func, args }, '/', transfer);
+    this.port.postMessage({ func, args }, { transfer });
     Atomics.wait(arr, 0, 0);
 
     return Atomics.load(arr, 1);

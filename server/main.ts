@@ -19,6 +19,12 @@ import QuestionService from '~/sbl/QuestionService.ts';
 import * as epochMessages from '~/graph/epochMessages.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
+import { unzip } from './tools.ts';
+import GraphUtils from '~/sbl/GraphUtils.ts';
+import { formatPath, parsePath } from '~/sbl/pathUtils.ts';
+import { Generator } from '~/sbl/scriptTypes.ts';
+import AnyContract from '~/graph/AnyContract.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
 
 const websocketProvider: ProtocolProvider = {
   create: (
@@ -172,13 +178,151 @@ self.addEventListener('unload', () => ctx.destruct());
 //   ctx.onDestruct(() => tracker.release());
 // })();
 
-// Start a game, and print the hash.
-// Other clients won't know the nonce or init_time, so will have to request it from this client.
-const gameHash = ctx.get(ThrustInitContract).startGame(Hash.random());
-setTimeout(
-  () =>
-    console.log(
-      `http://localhost:4507/public/index.html?game=${gameHash.toHex()}`,
-    ),
-  200,
-);
+// // Start a game, and print the hash.
+// // Other clients won't know the nonce or init_time, so will have to request it from this client.
+// const gameHash = ctx.get(ThrustInitContract).startGame(Hash.random());
+// setTimeout(
+//   () =>
+//     console.log(
+//       `http://localhost:4507/public/index.html?game=${gameHash.toHex()}`,
+//     ),
+//   200,
+// );
+
+(async () => {
+  const str2bin = (str: string) => new TextEncoder().encode(str);
+
+  console.log('Fetching zip file...');
+
+  const zip = await fetch(
+    // `https://github.com/wapm-packages/clang/archive/refs/heads/master.zip`,
+    `file:///Users/joel/Downloads/clang-master.zip`,
+  ).then((resp) => resp.arrayBuffer()).then((buf) => new Uint8Array(buf));
+
+  console.log('Unzipping...');
+
+  const cmds = unzip(zip, (key, contents) => {
+    key.unshift(str2bin('scratch'));
+
+    if (key[key.length - 1].length === 0) {
+      // Directory
+      return { mkdir: { at: key.slice(0, -1) } };
+    } else {
+      // File
+      const hash = ctx.get(GraphUtils).supplyRawAnswer(contents).hash;
+      return {
+        link: {
+          from: [str2bin('ext'), hash.toBytes()],
+          to: key,
+        },
+      };
+    }
+  });
+
+  console.log('Providing chunks...');
+
+  console.log(
+    cmds
+      .filter(
+        (cmd) => cmd.link && formatPath(cmd.link.to) === '/scratch/clang.wasm',
+      )
+      .map(
+        (cmd) =>
+          cmd.link &&
+          `${formatPath(cmd.link.from)} -> ${formatPath(cmd.link.to)}`,
+      ),
+  );
+  // /ext/:f310e582869203573dbbb7a06d8d5e8f9b457261f3b488bf2a37de85d227450ab -> /scratch/clang.wasm
+
+  console.log('Submitting...');
+
+  const clangGenerator: Generator = {
+    cmds: [
+      ...cmds,
+      {
+        wasm: {
+          execPath: parsePath('/scratch/clang.wasm'),
+          args: [
+            'clang',
+            '-cc1',
+            '-triple',
+            'wasm32-unknown-wasi',
+            '-isysroot',
+            '/sys',
+            '-internal-isystem',
+            '/sys/include',
+            '-emit-obj',
+            '-o',
+            './example.o',
+            '-',
+          ],
+          env: {},
+          cwd: parsePath('/scratch'),
+          // root: parsePath('/'),
+          stdinFrom: [
+            str2bin('identity'),
+            str2bin(
+              'int printf(const char *, ...); int main(){printf("hello world!\n");}',
+            ),
+          ],
+          stdoutTo: parsePath('/out/debug1'),
+          stderrTo: parsePath('/out/debug2'),
+        },
+      },
+      {
+        wasm: {
+          execPath: parsePath('/scratch/wasm-ld.wasm'),
+          args: [
+            'wasm-ld',
+            '-L/sys/lib/wasm32-wasi',
+            '/sys/lib/wasm32-wasi/crt1.o',
+            './example.o',
+            '-lc',
+            '-o',
+            './example.wasm',
+          ],
+          env: {},
+          cwd: parsePath('/'),
+          // root: parsePath('/'),
+          stdinFrom: [
+            str2bin('identity'),
+            str2bin(
+              'int printf(const char *, ...); int main(){printf("hello world!\n");}',
+            ),
+          ],
+          stdoutTo: parsePath('/out/debug3'),
+          stderrTo: parsePath('/out/debug4'),
+        },
+      },
+      {
+        link: {
+          from: parsePath('/example.wasm'),
+          to: parsePath('/out/output'),
+        },
+      },
+    ],
+    runtime: 0,
+    exposeEvent: false,
+    exposeSecret: false,
+  };
+
+  const clangContract = (
+    contractHash: Hash,
+    params: Uint8Array,
+    hint: Uint8Array,
+    request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+  ) => {
+    const name = 'clangContract';
+    return true;
+  };
+
+  const contract = ctx.get(GraphUtils).supplyContract(clangContract);
+  ctx.get(GraphUtils).supplyGenerator(contract, clangGenerator);
+
+  const question = ctx.get(QuestionService).getCanonical({
+    contract_answer_hash: contract.hash,
+    params: new Uint8Array([]),
+  });
+  question.onAnswer((answer) => console.log(answer));
+  question.incentivize(1000000n);
+})();

@@ -1,7 +1,7 @@
 import Context from './Context.ts';
 import ExposedPromise from './util/ExposedPromise.ts';
 import QuestionService from './QuestionService.ts';
-import { formatPath } from './worker/pathUtils.ts';
+import { formatPath } from './pathUtils.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import {
@@ -81,12 +81,11 @@ export default class WorkerExecutor {
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
       ready(): undefined {
         const msg: JobMessage = { script, inputs, outputSpec };
-        worker.postMessage(
-          msg,
-          Object.entries(inputs).map(([_key, buf]) =>
-            (buf as Uint8Array).buffer
-          ),
-        );
+        worker.postMessage(msg, {
+          // transfer: Object.values(inputs).map((buf) =>
+          //   (buf as Uint8Array).buffer
+          // ),
+        });
         return undefined;
       },
       exit(): undefined {

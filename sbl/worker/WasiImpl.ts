@@ -24,7 +24,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 */
 
-import { decodePathEntry, formatPath, str2bin } from './pathUtils.ts';
+import { decodePathEntry, formatPath, str2bin } from '../pathUtils.ts';
 import {
   FS_CAPABILITY_ALL,
   FS_CAPABILITY_DIR_ENTRY_CREATE,
@@ -309,10 +309,13 @@ export default class WasiImpl {
   }
 
   private advanceFdIt(): number {
+    // LFSR
+    // Will cycle through every 31-bit number before repeating
     this.fdIt ^= this.fdIt << 13;
     this.fdIt ^= this.fdIt >>> 17;
     this.fdIt ^= this.fdIt << 5;
-    return this.fdIt & 0x7fffffff;
+    this.fdIt &= 0x7fffffff;
+    return this.fdIt;
   }
   private allocFd(hdl: FsNodeHandle): number {
     let fd;

@@ -4,7 +4,7 @@ import { base32, base32hex } from 'multiformats/bases/base32';
 import { base36 } from 'multiformats/bases/base36';
 import { base58btc } from 'multiformats/bases/base58';
 import { base64url } from 'multiformats/bases/base64';
-import { memoize } from '../util/functional.ts';
+import { memoize } from './util/functional.ts';
 
 const MULTIBASE_PREFIX = ':';
 // const MULTIBASE_ENCODER = base58btc;

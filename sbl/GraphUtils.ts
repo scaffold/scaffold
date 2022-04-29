@@ -3,6 +3,11 @@ import Hash from './util/Hash.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import { loadHash } from './constants.ts';
 import { SELF_CONNECTION } from './ConnectionService.ts';
+import { Contract, Script } from './scriptTypes.ts';
+import { bin2hex, hex2bin } from './util/hex.ts';
+
+// Hacky
+(window as any).hex2bin = hex2bin;
 
 export default class GraphUtils {
   constructor(private ctx: Context) {}
@@ -50,13 +55,15 @@ export default class GraphUtils {
 
   public supplyGenerator(
     contract: Answer,
-    generator: (
-      contractHash: Hash,
-      params: Uint8Array,
-      emitCorrect: boolean,
-      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-      notify: (contractHash: Hash, params: Uint8Array) => void,
-    ) => Uint8Array | Promise<Uint8Array>,
+    generator:
+      | Script
+      | ((
+        contractHash: Hash,
+        params: Uint8Array,
+        emitCorrect: boolean,
+        request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+        notify: (contractHash: Hash, params: Uint8Array) => void,
+      ) => Uint8Array | Promise<Uint8Array>),
   ) {
     return this.ctx.get(AnswerRegistry).getOrCreate({
       question: {
@@ -64,7 +71,17 @@ export default class GraphUtils {
         params: contract.hash.toBytes(),
       },
       inputs: [],
-      answer: new TextEncoder().encode(generator.toString()),
+      answer: new TextEncoder().encode(
+        typeof generator === 'function'
+          ? generator.toString()
+          : `(${
+            JSON.stringify(
+              generator,
+              (key, val) =>
+                val instanceof Uint8Array ? `hex2bin(${bin2hex(val)})` : val,
+            ).replace(/"hex2bin\(([0-9a-h]*)\)"/g, 'hex2bin("$1")')
+          })`,
+      ),
       licenses: [],
       timestamp: BigInt(Date.now()),
     }, SELF_CONNECTION);
