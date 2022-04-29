@@ -8,7 +8,7 @@ import { makeTest } from './util.ts';
 import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
 import ServingService from '~/sbl/ServingService.ts';
 import { makeMockNetworkProvider } from './mockNetwork.ts';
-import ConnectionService from '~/sbl/ConnectionService.ts';
+import ConnectionService, { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
 
 const mockNetworkProvider = makeMockNetworkProvider({
   connectLatencyMs: 25,
@@ -44,13 +44,13 @@ Deno.test(
     const question = { contract_answer_hash: contractHash, params };
 
     // Add answer to ctx1's registry
-    const putAnswer = ctx1.get(AnswerRegistry).getByPub({
+    const putAnswer = ctx1.get(AnswerRegistry).getOrCreate({
       question,
       inputs: [],
       answer: data,
       licenses: [],
       timestamp: BigInt(Date.now()),
-    });
+    }, SELF_CONNECTION);
     putAnswer.isCorrect = true;
     putAnswer.difficultyEstimate = 0n;
 

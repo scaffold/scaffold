@@ -2,6 +2,7 @@ import { Answer } from './AnswerRegistry.ts';
 import { Question } from './QuestionRegistry.ts';
 import { Connection } from './ConnectionService.ts';
 import { Node } from './NodeService.ts';
+import Peer from './Peer.ts';
 
 export type PublishAction = {
   type: 'publish';
@@ -15,12 +16,26 @@ export type VerifyAction = {
   type: 'verify';
   answer: Answer;
 };
-export type ComputeAction = {
-  type: 'compute';
-  generatorAnswer: Answer;
-  question: Question;
-  params: Uint8Array;
+
+export type PrepareComputeAction = {
+  type: 'prepare_compute';
+  generator: Answer;
+  worker: {};
 };
+
+export type DoComputeAction = {
+  type: 'compute';
+  question: Question;
+  generator: Answer;
+};
+
+export type ConnectAction = {
+  type: 'connect';
+  node: Node;
+};
+
+// If an action B depends on A, B must not appraise, but must max-update (increase) A's descendant appraisal.
+// A descendant appraisal is initiated to zero.
 
 // Given a generator that requests N parents, get N weights to distribute the incentive appropriately.
 // What's the expected difficulty (price) of an answer to a question Q?
@@ -37,14 +52,26 @@ export type ComputeAction = {
 //   dependencies: { update(): void }[];
 // }
 
-export type Action = PublishAction | VerifyAction | ComputeAction;
+export type Action =
+  | PublishAction
+  | VerifyAction
+  | ComputeAction
+  | ConnectAction;
 
 export interface Appraisal {
+  // This is the expected "profit" of executing this action.
+  // For example, if the execution will cost $5, and there's a 10% chance of a $200 return, the expected profit is $200 * 0.1 - $5 = $15.
   value: number;
-  compute: number;
-  memory: number;
+
+  computeSeconds: number;
+  memoryBytes: number;
   lockedCoins: bigint;
+  lockedWorkers: number;
 }
+
+// Each "script" can be loaded in zero, one, or more workers.
+// Each worker has its own scheduler?
+// + Easier to better schedule scripts to where they're easiest to run
 
 export default interface AppraisalProvider {
   // Equivalent actions are guaranteed to be object-equal (===).

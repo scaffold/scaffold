@@ -5,6 +5,7 @@ import AccountContract from '~/graph/AccountContract.ts';
 import PublicationService from './PublicationService.ts';
 import NodeService from './NodeService.ts';
 import QuestionService from './QuestionService.ts';
+import { SELF_CONNECTION } from './ConnectionService.ts';
 
 export default class AccountService {
   private nextAccountIdx = 0n;
@@ -16,7 +17,7 @@ export default class AccountService {
     const params = this.ctx.get(AccountContract).makeParams(
       this.nextAccountIdx,
     );
-    return this.ctx.get(QuestionRegistry).getBySpec({
+    return this.ctx.get(QuestionRegistry).getOrCreate({
       contract_answer_hash: contract.hash,
       params,
     });
@@ -30,23 +31,23 @@ export default class AccountService {
       this.nextAccountIdx,
     );
 
-    const question = this.ctx.get(QuestionRegistry).getBySpec({
+    const question = this.ctx.get(QuestionRegistry).getOrCreate({
       contract_answer_hash: contract.hash,
       params,
     });
 
-    const answer = this.ctx.get(AnswerRegistry).getByPub({
+    const answer = this.ctx.get(AnswerRegistry).getOrCreate({
       question: { contract_answer_hash: contract.hash, params },
       inputs: [...question.incentives.values()].map(({ answerHash }) =>
         answerHash
       ),
       answer: new Uint8Array([]),
       licenses: incentives.map(({ question, incentive }) => ({
-        question_hash: question.hash,
+        question: question.spec,
         incentive,
       })),
       timestamp: BigInt(Date.now()),
-    });
+    }, SELF_CONNECTION);
 
     answer.isCorrect = true;
     answer.difficultyEstimate = 0n;

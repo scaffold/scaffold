@@ -17,19 +17,10 @@ export default class SubscriptionService {
   constructor(private ctx: Context) {}
 
   public subscribe(question: Question) {
-    if (!question.contractAnswerHash || !question.params) {
-      throw new Error(`Question doesn't have contractAnswerHash or params`);
-    }
-
     const dhtEntry = this.ctx.get(DhtService).getClosestEntry(question.hash);
     if (dhtEntry) {
       dhtEntry.node.defaultConn?.sendReliable({
-        SubscribeMessage: {
-          question: {
-            contract_answer_hash: question.contractAnswerHash,
-            params: question.params,
-          },
-        },
+        SubscribeMessage: { question: question.spec },
       });
     }
   }

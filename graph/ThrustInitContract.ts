@@ -4,6 +4,7 @@ import * as thrustMessages from './thrustMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import AnswerRegistry from '~/sbl/AnswerRegistry.ts';
 import QaDebugger from '~/sbl/QaDebugger.ts';
+import { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
 
 export default class ThrustInitContract {
   constructor(private ctx: Context) {}
@@ -20,13 +21,13 @@ export default class ThrustInitContract {
     const match = Hash.digest(answer);
     const params = thrustMessages.InitParams.encode({ match });
 
-    this.ctx.get(AnswerRegistry).getByPub({
+    this.ctx.get(AnswerRegistry).getOrCreate({
       question: { contract_answer_hash: this.get().hash, params },
       inputs: [],
       answer,
       licenses: [],
       timestamp: BigInt(Date.now()),
-    });
+    }, SELF_CONNECTION);
 
     return match;
   }

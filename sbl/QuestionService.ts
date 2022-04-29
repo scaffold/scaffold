@@ -72,29 +72,27 @@ export default class QuestionService {
     }
     answer.isAddedToQuestion = true;
 
-    const question = answer.question;
-
     // this.ctx.get(Logger).log('QuestionService', 'addAnswer', {
-    //   cah: question.contractAnswerHash,
-    //   params: question.params,
+    //   cah: answer.question.contractAnswerHash,
+    //   params: answer.question.params,
     //   answer: answer.data,
     // });
 
-    question.answers.push(answer);
-    if (!question.canonicalAnswer) {
-      question.canonicalAnswer = answer;
-      question.canonicalCallbacks.forEach((cb) => cb(answer));
+    answer.question.answers.push(answer);
+    if (!answer.question.canonicalAnswer) {
+      answer.question.canonicalAnswer = answer;
+      answer.question.canonicalCallbacks.forEach((cb) => cb(answer));
     }
 
-    // question.subscriptions.forEach((node) =>
+    // answer.question.subscriptions.forEach((node) =>
     //   this.ctx.get(PublicationService).publish(node, answer)
     // );
 
-    answer.licenses.forEach(({ question_hash, incentive }) => {
-      const childQuestion = this.ctx.get(QuestionRegistry).getByHash(
-        question_hash,
+    answer.licenses.forEach(({ question, incentive }) => {
+      const childQuestion = this.ctx.get(QuestionRegistry).getOrCreate(
+        question,
       );
-      childQuestion.addIncentive(question.hash, answer.hash, incentive);
+      childQuestion.addIncentive(answer.question.hash, answer.hash, incentive);
       this.updateIncentives(childQuestion, ['addAnswerToQuestion']);
     });
 
@@ -125,8 +123,8 @@ export default class QuestionService {
     stack = [...stack, this.ctx.get(QaDebugger).debugQuestion(spec)];
     // console.log('QuestionService.getCanonical', stack.join(' -> '));
 
-    const question = this.ctx.get(QuestionRegistry).getBySpec(spec);
-    const envoy = this.ctx.get(QuestionRegistry).getBySpec({
+    const question = this.ctx.get(QuestionRegistry).getOrCreate(spec);
+    const envoy = this.ctx.get(QuestionRegistry).getOrCreate({
       contract_answer_hash: this.ctx.get(EnvoyContract).get().hash,
       params: envoyMessages.Params.encode({
         question: spec,

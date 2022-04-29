@@ -15,7 +15,9 @@ import { assert } from './util/functional.ts';
 import RewardSpec from './RewardSpec.ts';
 import EnvoyContract from '~/graph/EnvoyContract.ts';
 import * as envoyMessages from '~/graph/envoyMessages.ts';
-import ActionExecutor from './ActionExecutor.ts';
+// import ActionExecutor from './ActionExecutor.ts';
+import ForwardingService from './ForwardingService.ts';
+import { arrEquals } from './util/buffer.ts';
 
 export default class PublicationService {
   private envoyContractHash: Hash;
@@ -51,7 +53,10 @@ export default class PublicationService {
       const inputAnswer = this.ctx.get(AnswerRegistry).peek(hash)!;
       assert(Hash.equals(hash, inputAnswer.hash));
       const license = inputAnswer.licenses.find((license) =>
-        Hash.equals(license.question_hash, answer.question.hash)
+        Hash.equals(
+          license.question.contract_answer_hash,
+          answer.question.spec.contract_answer_hash,
+        ) && arrEquals(license.question.params, answer.question.spec.params)
       );
       if (license) {
         inputIncentive += license.incentive;
@@ -75,14 +80,17 @@ export default class PublicationService {
         selfIncentive,
       )
         .map(({ question, incentive }) => ({
-          question_hash: question.hash,
+          question: question.spec,
           incentive,
         }));
 
       // TODO: Who to incentivize here? The epoch?
       // This is bad, but just put it towards a random question.
       licenses.push({
-        question_hash: Hash.random(),
+        question: {
+          contract_answer_hash: Hash.random(),
+          params: new Uint8Array([]),
+        },
         incentive: remainingIncentive,
       });
 
@@ -91,10 +99,7 @@ export default class PublicationService {
 
     node.defaultConn?.sendReliable({
       PublishMessage: {
-        question: {
-          contract_answer_hash: answer.question.contractAnswerHash!,
-          params: answer.question.params!,
-        },
+        question: answer.question.spec,
         inputs,
         answer: answer.data!,
         licenses,
@@ -133,7 +138,7 @@ export default class PublicationService {
       return;
     }
 
-    const answer = this.ctx.get(AnswerRegistry).getByPub(msg);
+    const answer = this.ctx.get(AnswerRegistry).getOrCreate(msg, msgCtx.conn);
     this.ctx.get(QuestionService).addAnswerToQuestion(answer);
 
     console.log(`TODO: Need to possibly execute contract here`);
@@ -150,7 +155,9 @@ export default class PublicationService {
       );
     }
 
-    this.ctx.get(ActionExecutor).addAction({ type: 'verify', answer });
+    // this.ctx.get(ActionExecutor).addAction({ type: 'verify', answer });
+
+    this.ctx.get(ForwardingService).forwardPublication(msgCtx.conn, msg);
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>

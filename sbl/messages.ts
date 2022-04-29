@@ -284,7 +284,7 @@ export const registry = {
     name: 'License',
     type: 'record',
     fields: [
-      { name: 'question_hash', type: 'Hash' },
+      { name: 'question', type: 'QuestionSpec' },
 
       // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs.
       // TODO: Make this Amount; not sure why it's not working yet.
@@ -313,6 +313,17 @@ export const registry = {
       // For questions with easy, rewarding answers (like epochs),
       //   the answer will be created as soon as possible after the required timestamp.
       { name: 'timestamp', type: 'long' },
+    ],
+  },
+  ForwardingFeedback: {
+    name: 'ForwardingFeedback',
+    type: 'record',
+    fields: [
+      { name: 'answer_hash', type: 'Hash' },
+
+      // Negative means you were too slow, by N ms.
+      // Positive means you were quicker than everyone else by N ms.
+      { name: 'relative_time_ms', type: 'int' },
     ],
   },
   CiteMessage: {
@@ -391,6 +402,7 @@ export const registry = {
           'SubscribeMessage',
           'UnsubscribeMessage',
           'PublishMessage',
+          'ForwardingFeedback',
           'CollateralMessage',
           'BribeMessage',
           'DhtJoinMessage',
@@ -485,6 +497,8 @@ export const License = makeMsg(registry, 'License');
 export type License = MsgType<'License'>;
 export const PublishMessage = makeMsg(registry, 'PublishMessage');
 export type PublishMessage = MsgType<'PublishMessage'>;
+export const ForwardingFeedback = makeMsg(registry, 'ForwardingFeedback');
+export type ForwardingFeedback = MsgType<'ForwardingFeedback'>;
 export const CollateralMessage = makeMsg(registry, 'CollateralMessage');
 export type CollateralMessage = MsgType<'CollateralMessage'>;
 export const BribeMessage = makeMsg(registry, 'BribeMessage');
@@ -493,6 +507,8 @@ export const HashExpr = makeMsg(registry, 'HashExpr');
 export type HashExpr = MsgType<'HashExpr'>;
 export const DhtJoinMessage = makeMsg(registry, 'DhtJoinMessage');
 export type DhtJoinMessage = MsgType<'DhtJoinMessage'>;
+export const FeedbackMessage = makeMsg(registry, 'FeedbackMessage');
+export type FeedbackMessage = MsgType<'FeedbackMessage'>;
 export const Packet = makeMsg(registry, 'Packet');
 export type Packet = MsgType<'Packet'>;
 

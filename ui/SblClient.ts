@@ -10,7 +10,7 @@ import EpochContract from '~/graph/EpochContract.ts';
 import Answer from '~/sbl/Answer.ts';
 import Logger from '~/sbl/Logger.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
-import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
+// import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 // window['Deno'] = {};
 
@@ -181,7 +181,7 @@ export default class SblClient {
         })),
       },
 
-      appraisalProvider: new DefaultAppraisalProvider(),
+      // appraisalProvider: new DefaultAppraisalProvider(),
 
       trustedPeers: [],
 

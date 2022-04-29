@@ -7,6 +7,7 @@ import GraphUtils from '~/sbl/GraphUtils.ts';
 import CollatzContract from '~/graph/CollatzContract.ts';
 import * as collatzMessages from '~/graph/collatzMessages.ts';
 import { makeTest } from './util.ts';
+import { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
 
 Deno.test(
   { name: `simple put/get test` },
@@ -17,13 +18,13 @@ Deno.test(
 
     const question = { contract_answer_hash: contractHash, params };
 
-    ctx.get(AnswerRegistry).getByPub({
+    ctx.get(AnswerRegistry).getOrCreate({
       question,
       inputs: [],
       answer: data,
       licenses: [],
       timestamp: BigInt(Date.now()),
-    });
+    }, SELF_CONNECTION);
 
     const firstAnswer: Answer = await new Promise((resolve) => {
       const sub = ctx.get(QuestionService).getCanonical(question);

@@ -11,6 +11,7 @@ import { getOrCreate } from './util/map.ts';
 import { Node } from './NodeService.ts';
 import Peer from './Peer.ts';
 import QuestionService from './QuestionService.ts';
+import { Connection, SELF_CONNECTION } from './ConnectionService.ts';
 
 export class Answer {
   // fromPeer: Peer;
@@ -40,19 +41,26 @@ export class Answer {
 
   public isAddedToQuestion = false;
 
+  public receptionTime: number;
+
   constructor(
     public hash: Hash,
     public question: Question,
     { inputs, answer, licenses, timestamp }: PublishMessage,
+    // TODO: Whenever we create a question, immediately forward
+    public receivedFrom: Connection | SELF_CONNECTION,
   ) {
     this.inputs = inputs;
     this.data = answer;
     this.licenses = licenses;
     this.timestamp = timestamp;
+    this.receptionTime = Date.now();
   }
 }
 
-export default class AnswerRegistry extends HashMap<Answer> {
+export default class AnswerRegistry {
+  private registry: Map<string, Answer> = new Map();
+
   private static computeHash(questionHash: Hash, answer: Uint8Array) {
     const nonce = 0;
 
@@ -63,22 +71,24 @@ export default class AnswerRegistry extends HashMap<Answer> {
     );
   }
 
-  constructor(private ctx: Context) {
-    super();
-  }
+  constructor(private ctx: Context) {}
 
   public peek(hash: Hash) {
-    return super.get(hash);
+    return this.registry.get(hash.toHex());
   }
 
-  public getByPub(publication: PublishMessage) {
-    const question = this.ctx.get(QuestionRegistry).getBySpec(
+  public getOrCreate(
+    publication: PublishMessage,
+    conn: Connection | SELF_CONNECTION,
+  ) {
+    const question = this.ctx.get(QuestionRegistry).getOrCreate(
       publication.question,
     );
     const hash = AnswerRegistry.computeHash(question.hash, publication.answer);
-    const answer = this.getOrCreate(
-      hash,
-      () => new Answer(hash, question, publication),
+    const answer = getOrCreate(
+      this.registry,
+      hash.toHex(),
+      () => new Answer(hash, question, publication, conn),
     );
     this.ctx.get(QuestionService).addAnswerToQuestion(answer);
     return answer;

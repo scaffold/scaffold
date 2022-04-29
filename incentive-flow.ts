@@ -4,12 +4,17 @@ interface Question {
 }
 
 interface Answer {
+  question:Question;
   inputs: Answer[];
-  outputs: { question: Question; amount: bigint }[];
+  outputs: { question: Question; incentive: bigint }[];
 }
 
 const x = (answer: Answer) => {
   let available = 0n;
   answer.inputs.forEach((input) => {
+    // Check for reclaims
+    input.outputs.forEach((reclaimCandidate)=>{
+      if (answer.inputs.some())
+    })
   });
 };

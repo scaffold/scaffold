@@ -13,6 +13,9 @@ import { Packet } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 import Logger from './Logger.ts';
 
+export const SELF_CONNECTION = Symbol('SELF_CONNECTION');
+export type SELF_CONNECTION = typeof SELF_CONNECTION;
+
 export interface Connection {
   node: Node;
   peer: Peer;

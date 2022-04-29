@@ -1,6 +1,27 @@
 import { Sha256 } from 'std-latest/hash/sha256.ts';
+import { Sha3_256, Shake256 } from 'std-latest/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, fromNumber } from './buffer.ts';
+// import { sha256 } from '@noble/hashes/sha256';
+
+const hasher = {
+  'sha2': (data: Uint8Array) => {
+    const algo = new Sha256();
+    algo.update(data);
+    // const digest = await crypto.subtle.digest('SHA-256', data);
+    return new Uint8Array(algo.arrayBuffer());
+  },
+  'sha3': (data: Uint8Array) => {
+    const algo = new Sha3_256();
+    algo.update(data);
+    return new Uint8Array(algo.digest());
+  },
+  'shake': (data: Uint8Array) => {
+    const algo = new Shake256(256);
+    algo.update(data);
+    return new Uint8Array(algo.digest());
+  },
+}.sha3;
 
 export default class Hash {
   public static fromBytes(bytes: Uint8Array) {
@@ -40,10 +61,7 @@ export default class Hash {
       const encoder = new TextEncoder();
       data = encoder.encode(data);
     }
-    const algo = new Sha256();
-    algo.update(data);
-    // const digest = await crypto.subtle.digest('SHA-256', data);
-    return new Hash(new Uint8Array(algo.arrayBuffer()));
+    return new Hash(hasher(data));
   }
 
   // TODO: Do we need this?

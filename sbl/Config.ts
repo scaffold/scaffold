@@ -2,7 +2,7 @@ import Peer from './Peer.ts';
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import NetworkProvider from './NetworkProvider.ts';
-import AppraisalProvider from './AppraisalProvider.ts';
+// import AppraisalProvider from './AppraisalProvider.ts';
 
 type Config = {
   // To disable logging, unset the entire "log" object.
@@ -56,7 +56,7 @@ type Config = {
 
   networkProvider: NetworkProvider;
 
-  appraisalProvider: AppraisalProvider;
+  // appraisalProvider: AppraisalProvider;
 
   trustedPeers: Peer[];
 
@@ -64,6 +64,8 @@ type Config = {
   nodeNonce: Uint8Array;
 
   approxComputePricePerSecond: bigint;
+
+  // requiredProfitPerComputeRatio: number;
 
   initialWorkerCount: number;
 };

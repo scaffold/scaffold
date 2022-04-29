@@ -1,7 +1,8 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
-import { loadHash } from '~/sbl/constants.ts';
+import { loadHash } from './constants.ts';
+import { SELF_CONNECTION } from './ConnectionService.ts';
 
 export default class GraphUtils {
   constructor(private ctx: Context) {}
@@ -9,13 +10,13 @@ export default class GraphUtils {
   public supplyRawAnswer(answer: Uint8Array) {
     const hash = Hash.digest(answer);
 
-    return this.ctx.get(AnswerRegistry).getByPub({
+    return this.ctx.get(AnswerRegistry).getOrCreate({
       question: { contract_answer_hash: loadHash, params: hash.toBytes() },
       inputs: [],
       answer,
       licenses: [],
       timestamp: BigInt(Date.now()),
-    });
+    }, SELF_CONNECTION);
   }
 
   public supplyContract(
@@ -57,7 +58,7 @@ export default class GraphUtils {
       notify: (contractHash: Hash, params: Uint8Array) => void,
     ) => Uint8Array | Promise<Uint8Array>,
   ) {
-    return this.ctx.get(AnswerRegistry).getByPub({
+    return this.ctx.get(AnswerRegistry).getOrCreate({
       question: {
         contract_answer_hash: this.getGeneratorContract().hash,
         params: contract.hash.toBytes(),
@@ -66,6 +67,6 @@ export default class GraphUtils {
       answer: new TextEncoder().encode(generator.toString()),
       licenses: [],
       timestamp: BigInt(Date.now()),
-    });
+    }, SELF_CONNECTION);
   }
 }

@@ -12,6 +12,7 @@ import { PublishMessage } from './messages.ts';
 import GraphUtils from './GraphUtils.ts';
 import IncentiveService from './IncentiveService.ts';
 import DurationPredictionService from './DurationPredictionService.ts';
+import { SELF_CONNECTION } from './ConnectionService.ts';
 
 const numParallelSubs = 8;
 const secret = secp.utils.randomBytes(32);
@@ -23,10 +24,6 @@ export default class FulfillmentService {
   constructor(private ctx: Context) {}
 
   public fulfill(question: Question, stack: string[]) {
-    if (!question.contractAnswerHash || !question.params) {
-      // TODO: Figure these things out
-      return;
-    }
     question.isFulfilling = true;
 
     this.sendSubs(question, stack);
@@ -47,12 +44,6 @@ export default class FulfillmentService {
   }
 
   private launchExecutor(question: Question, stack: string[]) {
-    if (!question.contractAnswerHash || !question.params) {
-      throw new Error(
-        `Cannot generate if we don't know the contract hash or params`,
-      );
-    }
-
     const attemptCorrect = Hash.cmp(
       Hash.digest(
         arrConcat(secret, question.hash.toBytes()),
@@ -60,10 +51,10 @@ export default class FulfillmentService {
       this.attemptDupeFraction,
     ) === 1;
 
-    const generators = this.ctx.get(QuestionRegistry).getBySpec({
+    const generators = this.ctx.get(QuestionRegistry).getOrCreate({
       contract_answer_hash:
         this.ctx.get(GraphUtils).getGeneratorContract().hash,
-      params: question.contractAnswerHash.toBytes(),
+      params: question.spec.contract_answer_hash.toBytes(),
     }).answers;
 
     generators.forEach((gen) => {
@@ -75,23 +66,23 @@ export default class FulfillmentService {
         question,
         (handler, notifier) =>
           genFunc(
-            question.contractAnswerHash!,
-            question.params!,
+            question.spec.contract_answer_hash,
+            question.spec.params,
             true,
             handler,
             notifier,
           ),
         (data, inputs: Answer[], durationMs: number) => {
-          const answer = this.ctx.get(AnswerRegistry).getByPub({
+          const answer = this.ctx.get(AnswerRegistry).getOrCreate({
             question: {
-              contract_answer_hash: question.contractAnswerHash!,
-              params: question.params!,
+              contract_answer_hash: question.spec.contract_answer_hash,
+              params: question.spec.params,
             },
             inputs: inputs.map((answer) => answer.hash),
             answer: data,
             licenses: [],
             timestamp: BigInt(Date.now()),
-          });
+          }, SELF_CONNECTION);
           answer.isCorrect = true;
           answer.difficultyEstimate = BigInt(durationMs) *
             this.ctx.config.approxComputePricePerSecond / 1000n;

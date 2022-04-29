@@ -18,7 +18,7 @@ import Logger from '~/sbl/Logger.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
 import * as epochMessages from '~/graph/epochMessages.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
-import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
+// import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 const websocketProvider: ProtocolProvider = {
   create: (
@@ -108,9 +108,7 @@ const config: Config = {
       params: Record<string, any>,
     ) =>
       console.log(
-        `${className}.${methodName}(${
-          JSON.stringify(params, (key, val) => Logger.serialize(val), 0)
-        })`,
+        `${className}.${methodName}(${ctx.get(Logger).serialize(params)})`,
       ),
   },
 
@@ -124,7 +122,7 @@ const config: Config = {
     })),
   },
 
-  appraisalProvider: new DefaultAppraisalProvider(),
+  // appraisalProvider: new DefaultAppraisalProvider(),
 
   trustedPeers: [],
 
