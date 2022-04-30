@@ -287,6 +287,7 @@ export default class WasiImpl {
   }
 
   public run(inst: WebAssembly.Instance): number {
+    // console.log((inst.exports.memory as any).buffer);
     this.logger.info({}, 'Running...');
     try {
       (inst.exports._start as CallableFunction)();
@@ -586,10 +587,9 @@ export default class WasiImpl {
     if (!hdl.preopenPath) {
       return wc.WASI_EINVAL;
     }
-    this.logger.info({ size: this.memory.buffer.byteLength }, `len`);
     const view = new DataView(this.memory.buffer);
     view.setUint8(bufPtr, wc.WASI_PREOPENTYPE_DIR);
-    view.setUint32(bufPtr + 4, hdl.preopenPath.length, true);
+    view.setUint32(bufPtr + 4, hdl.preopenPath.byteLength, true);
     return wc.WASI_ESUCCESS;
   }
 
@@ -603,7 +603,9 @@ export default class WasiImpl {
     if (!hdl.preopenPath) {
       return wc.WASI_EINVAL;
     }
-    new Uint8Array(this.memory.buffer, pathPtr, pathLen).set(hdl.preopenPath);
+    new Uint8Array(this.memory.buffer, pathPtr, pathLen).set(
+      hdl.preopenPath.subarray(0, pathLen), // TODO: Why is this subarray necessary???
+    );
     return wc.WASI_ESUCCESS;
   }
 
@@ -633,6 +635,7 @@ export default class WasiImpl {
   ) {
     this.logger.info({ fd, iovs, iovsLen, dstSizeWritten }, `wasi_fd_write`);
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
+    console.log('write', this.getIovs(iovs, iovsLen));
     const written = hdl.fileWrite(hdl.fileOffset, this.getIovs(iovs, iovsLen));
     hdl.fileOffset += written;
     const view = new DataView(this.memory.buffer);

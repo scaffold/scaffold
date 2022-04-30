@@ -2,6 +2,8 @@ import Hash from './util/Hash.ts';
 
 const SBL = Hash.fromLiteralStr('SBL'.padEnd(32, '\0'));
 
+export const rootHash = Hash.xor(SBL, Hash.fromLiteralStr('root'));
+
 export const loadHash = Hash.xor(SBL, Hash.fromLiteralStr('load'));
 
 export const timeHash = Hash.xor(SBL, Hash.fromLiteralStr('time'));

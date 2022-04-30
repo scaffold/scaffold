@@ -1,6 +1,9 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
+import AnswerRegistry from '~/sbl/AnswerRegistry.ts';
+import { rootHash } from '~/sbl/constants.ts';
+import { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
 
 export default class RootContract {
   constructor(private ctx: Context) {}
@@ -17,6 +20,12 @@ export default class RootContract {
         Hash.fromBytes(params),
       );
 
-    return this.ctx.get(GraphUtils).supplyContract(rootContract);
+    return this.ctx.get(AnswerRegistry).getOrCreate({
+      question: { contract_answer_hash: rootHash, params: new Uint8Array([]) },
+      inputs: [],
+      answer: new TextEncoder().encode(rootContract.toString()),
+      licenses: [],
+      timestamp: BigInt(Date.now()),
+    }, SELF_CONNECTION);
   }
 }

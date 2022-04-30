@@ -21,7 +21,7 @@ while (true) {
 
   if (msg.data) {
     console.log('Worker received job...');
-    await execJob(client, msg.data);
+    await execJob(client, msg.data).catch((err) => console.error(err));
   } else {
     break;
   }

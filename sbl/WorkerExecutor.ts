@@ -77,15 +77,19 @@ export default class WorkerExecutor {
     };
 
     const usedAnswers: Set<Answer> = new Set();
+    let sentJob = false;
 
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
       ready(): undefined {
-        const msg: JobMessage = { script, inputs, outputSpec };
-        worker.postMessage(msg, {
-          // transfer: Object.values(inputs).map((buf) =>
-          //   (buf as Uint8Array).buffer
-          // ),
-        });
+        if (!sentJob) {
+          const msg: JobMessage = { script, inputs, outputSpec };
+          worker.postMessage(msg, {
+            // transfer: Object.values(inputs).map((buf) =>
+            //   (buf as Uint8Array).buffer
+            // ),
+          });
+          sentJob = true;
+        }
         return undefined;
       },
       exit(): undefined {

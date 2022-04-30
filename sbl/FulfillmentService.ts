@@ -93,6 +93,7 @@ export default class FulfillmentService {
             params: question.spec.params,
             emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
           }, { answer: null });
+        result.then((out) => console.log('DONE', out));
         result.then(({ outputs: { answer: data }, usedAnswers }) => {
           const _answer = onAnswer(data, [...usedAnswers], 0);
           hasDirtyInputs.then(() => {});

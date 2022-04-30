@@ -106,8 +106,9 @@ export default async (
 
   const execWasm = async (spec: WasmExec) => {
     const memory = new WebAssembly.Memory({
-      initial: 10, // Each page is 64KiB
-      maximum: 65536, // Each page is 64KiB
+      // initial: 10, // Each page is 64KiB
+      initial: 1 << 12, // Each page is 64KiB
+      maximum: 1 << 12, // Each page is 64KiB
       shared: true,
     });
 

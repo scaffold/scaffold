@@ -5,6 +5,7 @@ import { loadHash } from './constants.ts';
 import { SELF_CONNECTION } from './ConnectionService.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
+import RootContract from '~/graph/RootContract.ts';
 
 // Hacky
 (window as any).hex2bin = hex2bin;
@@ -16,7 +17,10 @@ export default class GraphUtils {
     const hash = Hash.digest(answer);
 
     return this.ctx.get(AnswerRegistry).getOrCreate({
-      question: { contract_answer_hash: loadHash, params: hash.toBytes() },
+      question: {
+        contract_answer_hash: this.ctx.get(RootContract).get().hash,
+        params: hash.toBytes(),
+      },
       inputs: [],
       answer,
       licenses: [],
@@ -44,12 +48,11 @@ export default class GraphUtils {
       hint: Uint8Array, // This is the params we're evaluating at.
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
     ) =>
-      eval(new TextDecoder().decode(request(loadHash, params)))(
-        params,
-        hint,
-        new Uint8Array([]),
-        request,
-      )
+      eval(
+        new TextDecoder().decode(
+          request(this.ctx.get(RootContract).get().hash, params),
+        ),
+      )(params, hint, new Uint8Array([]), request)
     );
   }
 
@@ -79,7 +82,7 @@ export default class GraphUtils {
               generator,
               (key, val) =>
                 val instanceof Uint8Array ? `hex2bin(${bin2hex(val)})` : val,
-            ).replace(/"hex2bin\(([0-9a-h]*)\)"/g, 'hex2bin("$1")')
+            ).replace(/"hex2bin\(([0-9a-f]*)\)"/g, 'hex2bin("$1")')
           })`,
       ),
       licenses: [],

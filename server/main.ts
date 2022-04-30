@@ -209,10 +209,11 @@ self.addEventListener('unload', () => ctx.destruct());
       return { mkdir: { at: key.slice(0, -1) } };
     } else {
       // File
-      const hash = ctx.get(GraphUtils).supplyRawAnswer(contents).hash;
+      const hash =
+        ctx.get(GraphUtils).supplyRawAnswer(contents).question.spec.params;
       return {
         link: {
-          from: [str2bin('ext'), hash.toBytes()],
+          from: [str2bin('ext'), hash],
           to: key,
         },
       };
@@ -325,4 +326,4 @@ self.addEventListener('unload', () => ctx.destruct());
   });
   question.onAnswer((answer) => console.log(answer));
   question.incentivize(1000000n);
-})();
+})().catch((err) => console.error(err));
