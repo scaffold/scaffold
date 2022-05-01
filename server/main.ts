@@ -106,6 +106,8 @@ const websocketProvider: ProtocolProvider = {
 };
 
 const config: Config = {
+  debugName: 'Server',
+
   log: {
     handler: (
       ctx: Context,
@@ -189,7 +191,8 @@ self.addEventListener('unload', () => ctx.destruct());
 //   200,
 // );
 
-(async () => {
+const runWasm = false;
+runWasm && (async () => {
   const str2bin = (str: string) => new TextEncoder().encode(str);
 
   console.log('Fetching zip file...');
@@ -327,3 +330,7 @@ self.addEventListener('unload', () => ctx.destruct());
   question.onAnswer((answer) => console.log(answer));
   question.incentivize(1000000n);
 })().catch((err) => console.error(err));
+
+// https://wapm.io/mozilla/spidermonkey
+// https://github.com/golemfactory/sp-wasm
+// https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/spidermonkey.md

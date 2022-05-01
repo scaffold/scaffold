@@ -156,6 +156,8 @@ export default class SblClient {
     };
 
     const config: Config = {
+      debugName: 'SblClient',
+
       log: {
         handler: (
           ctx: Context,

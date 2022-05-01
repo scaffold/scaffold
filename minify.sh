@@ -30,3 +30,24 @@ npx javascript-obfuscator \
   --string-array-wrappers-type function \
   --target browser-no-eval \
   --transform-object-keys true
+
+npx babel-minify \
+  build/index.js \
+  --out-file build/index.babel-minify.min.js
+
+npx esbuild \
+  build/index.js \
+  --outfile=build/index.esbuild.min.js \
+  --minify
+
+npx uglify-js \
+  build/index.js \
+  --compress \
+  --mangle \
+  --toplevel \
+  --output build/index.uglify.min.js
+
+npx swc \
+  build/index.js \
+  --config-file swcrc.json \
+  --out-file build/index.swc.min.js

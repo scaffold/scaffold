@@ -4,6 +4,7 @@ import GraphUtils from '~/sbl/GraphUtils.ts';
 import AnswerRegistry from '~/sbl/AnswerRegistry.ts';
 import { rootHash } from '~/sbl/constants.ts';
 import { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 export default class RootContract {
   constructor(private ctx: Context) {}
@@ -20,12 +21,21 @@ export default class RootContract {
         Hash.fromBytes(params),
       );
 
-    return this.ctx.get(AnswerRegistry).getOrCreate({
+    const contract = this.ctx.get(AnswerRegistry).getOrCreate({
       question: { contract_answer_hash: rootHash, params: new Uint8Array([]) },
       inputs: [],
       answer: new TextEncoder().encode(rootContract.toString()),
       licenses: [],
       timestamp: BigInt(Date.now()),
     }, SELF_CONNECTION);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'RootContract',
+      contract.hash,
+      (params) => ({ hash: Hash.fromBytes(params) }),
+      (answer) => ({ answer }),
+    );
+
+    return contract;
   }
 }

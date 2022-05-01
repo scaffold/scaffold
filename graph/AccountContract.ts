@@ -3,6 +3,7 @@ import Hash from '~/sbl/util/Hash.ts';
 import * as accountMessages from './accountMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 export default class AccountContract {
   constructor(private ctx: Context) {}
@@ -43,6 +44,13 @@ export default class AccountContract {
 
     const contract = this.ctx.get(GraphUtils).supplyContract(accountContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, accountGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'AccountContract',
+      contract.hash,
+      (params) => accountMessages.Params.decode(params),
+      (answer) => accountMessages.Answer.decode(answer),
+    );
 
     return contract;
   }

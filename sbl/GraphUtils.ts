@@ -6,6 +6,7 @@ import { SELF_CONNECTION } from './ConnectionService.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
 import RootContract from '~/graph/RootContract.ts';
+import { PublishMessage } from './messages.ts';
 
 // Hacky
 (window as any).hex2bin = hex2bin;
@@ -28,6 +29,17 @@ export default class GraphUtils {
     }, SELF_CONNECTION);
   }
 
+  public supplyPubContract(
+    contract: (
+      publication: PublishMessage,
+      hint: Uint8Array,
+      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+      notify: (contractHash: Hash, params: Uint8Array) => void,
+    ) => boolean | Promise<boolean>,
+  ) {
+    return this.supplyRawAnswer(new TextEncoder().encode(contract.toString()));
+  }
+
   public supplyContract(
     contract: (
       contractHash: Hash,
@@ -37,7 +49,11 @@ export default class GraphUtils {
       notify: (contractHash: Hash, params: Uint8Array) => void,
     ) => boolean | Promise<boolean>,
   ) {
-    return this.supplyRawAnswer(new TextEncoder().encode(contract.toString()));
+    return this.supplyRawAnswer(
+      new TextEncoder().encode(
+        `(pub,hint,request,notify)=>(${contract.toString()})(pub.question.contract_answer_hash,pub.question.params,hint,request,notify)`,
+      ),
+    );
   }
 
   // TODO: Does this work? Depends on how answer consistency is handled in caller.

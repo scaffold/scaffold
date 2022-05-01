@@ -8,11 +8,12 @@ import QaDebugger from '~/sbl/QaDebugger.ts';
 export default class CollatzContract {
   constructor(private ctx: Context) {}
 
+  // TODO: Remove
   public makeParams(num: bigint): Uint8Array {
     return collatzMessages.Params.encode({ num });
   }
 
-  public get() {
+  public get(supplyGenerator = true) {
     const collatzGenerator = (
       contractHash: Hash,
       params: Uint8Array,
@@ -63,7 +64,9 @@ export default class CollatzContract {
     (window as any).collatzMessages = collatzMessages;
 
     const contract = this.ctx.get(GraphUtils).supplyContract(collatzContract);
-    this.ctx.get(GraphUtils).supplyGenerator(contract, collatzGenerator);
+    if (supplyGenerator) {
+      this.ctx.get(GraphUtils).supplyGenerator(contract, collatzGenerator);
+    }
 
     this.ctx.get(QaDebugger).addDebugger(
       'CollatzContract',

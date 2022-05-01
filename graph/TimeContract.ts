@@ -3,6 +3,7 @@ import Hash from '~/sbl/util/Hash.ts';
 import * as timeMessages from './timeMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 export default class TimeContract {
   constructor(private ctx: Context) {}
@@ -50,6 +51,13 @@ export default class TimeContract {
 
     const contract = this.ctx.get(GraphUtils).supplyContract(timeContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, timeGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'TimeContract',
+      contract.hash,
+      (params) => timeMessages.Params.decode(params),
+      (answer) => timeMessages.Answer.decode(answer),
+    );
 
     return contract;
   }

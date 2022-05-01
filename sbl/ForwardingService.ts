@@ -30,7 +30,8 @@ export default class ForwardingService {
   private nodeIds: WeakMap<Node, number> = new WeakMap();
   private nextNodeId = 0;
 
-  private forwardingFeedback: Map<number, { sum: number }> = new Map();
+  private forwardingFeedback: Map<number, { sum: number; count: number }> =
+    new Map();
 
   constructor(private ctx: Context) {}
 
@@ -60,6 +61,7 @@ export default class ForwardingService {
       const feedback = this.get(answer.receivedFrom, msgCtx.conn.node);
       feedback.sum *= 0.99;
       feedback.sum += msg.relative_time_ms;
+      feedback.count++;
     }
   }
 
@@ -68,6 +70,10 @@ export default class ForwardingService {
     const connId = getOrCreate(this.connIds, src, () => this.nextConnId++);
     const nodeId = getOrCreate(this.nodeIds, dst, () => this.nextNodeId++);
     const key = (connId << 16) + nodeId;
-    return getOrCreate(this.forwardingFeedback, key, () => ({ sum: 0 }));
+    return getOrCreate(
+      this.forwardingFeedback,
+      key,
+      () => ({ sum: 0, count: 0 }),
+    );
   }
 }

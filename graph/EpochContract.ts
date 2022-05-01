@@ -5,6 +5,7 @@ import * as epochMessages from './epochMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import * as timeMessages from './timeMessages.ts';
 import TimeContract from './TimeContract.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 const epochIv = Hash.fromHex(
   'd2e66375ccb9e7c2ccdf5ef538a78f010d34aa3b4c7802837da358e833441c7e',
@@ -102,6 +103,13 @@ export default class EpochContract {
 
     const contract = this.ctx.get(GraphUtils).supplyContract(epochContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, epochGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'EpochContract',
+      contract.hash,
+      (params) => epochMessages.Params.decode(params),
+      (answer) => epochMessages.Answer.decode(answer),
+    );
 
     return contract;
   }

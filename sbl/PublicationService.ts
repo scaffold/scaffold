@@ -18,6 +18,7 @@ import * as envoyMessages from '~/graph/envoyMessages.ts';
 // import ActionExecutor from './ActionExecutor.ts';
 import ForwardingService from './ForwardingService.ts';
 import { arrEquals } from './util/buffer.ts';
+import AccountService from './AccountService.ts';
 
 export default class PublicationService {
   private envoyContractHash: Hash;
@@ -70,32 +71,11 @@ export default class PublicationService {
       inputIncentive += incentive;
     }
 
-    const licenses = answer.licenses.length ? answer.licenses : (() => {
-      const selfIncentive = answer.difficultyEstimate < inputIncentive
-        ? answer.difficultyEstimate
-        : inputIncentive;
-      const remainingIncentive = inputIncentive - selfIncentive;
-
-      const licenses = this.ctx.get(IncentiveService).popIncentives(
-        selfIncentive,
-      )
-        .map(({ question, incentive }) => ({
-          question: question.spec,
-          incentive,
-        }));
-
-      // TODO: Who to incentivize here? The epoch?
-      // This is bad, but just put it towards a random question.
-      licenses.push({
-        question: {
-          contract_answer_hash: Hash.random(),
-          params: new Uint8Array([]),
-        },
-        incentive: remainingIncentive,
-      });
-
-      return licenses;
-    })();
+    const licenses = answer.licenses.length
+      ? answer.licenses
+      : this.ctx.get(IncentiveService).popIncentives(inputIncentive).map((
+        { question, incentive },
+      ) => ({ question: question.spec, incentive }));
 
     node.defaultConn?.sendReliable({
       PublishMessage: {

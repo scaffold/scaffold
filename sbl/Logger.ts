@@ -28,7 +28,11 @@ export default class Logger {
         'contract_answer_hash' in val &&
         'params' in val
       ) {
-        return { ...val, name: this.ctx.get(QaDebugger).debugQuestion(val) };
+        return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };
+      } else if (
+        typeof val === 'object' && 'question' in val && 'answer' in val
+      ) {
+        return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
       } else return val;
     }, 2);
   }

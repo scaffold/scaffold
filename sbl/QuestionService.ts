@@ -120,7 +120,8 @@ export default class QuestionService {
     spec: QuestionSpec,
     stack: string[] = [],
   ) {
-    stack = [...stack, this.ctx.get(QaDebugger).debugQuestion(spec)];
+    const dbg = this.ctx.get(QaDebugger).debugQuestion(spec);
+    stack = [...stack, dbg ? `${dbg.dbgContract}${dbg.dbgParams}` : 'unknown'];
     // console.log('QuestionService.getCanonical', stack.join(' -> '));
 
     const question = this.ctx.get(QuestionRegistry).getOrCreate(spec);

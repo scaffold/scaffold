@@ -28,12 +28,19 @@ export default class QaDebugger {
   public debugQuestion(spec: QuestionSpec) {
     const dbgr = this.debuggers.get(spec.contract_answer_hash.toHex());
     if (dbgr) {
-      const paramStr = this.ctx.get(Logger).serialize(
-        dbgr.paramDebugger(spec.params),
-      );
-      return `${dbgr.contractName}${paramStr}`;
-    } else {
-      return `[unknown]`;
+      return {
+        dbgContract: dbgr.contractName,
+        dbgParams: dbgr.paramDebugger(spec.params),
+      };
+    }
+  }
+
+  public debugAnswer(
+    { question, answer }: { question: QuestionSpec; answer: Uint8Array },
+  ) {
+    const dbgr = this.debuggers.get(question.contract_answer_hash.toHex());
+    if (dbgr) {
+      return { dbgAnswer: dbgr.answerDebugger(answer) };
     }
   }
 }

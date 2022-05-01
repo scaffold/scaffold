@@ -5,6 +5,8 @@ import NetworkProvider from './NetworkProvider.ts';
 // import AppraisalProvider from './AppraisalProvider.ts';
 
 type Config = {
+  debugName: string;
+
   // To disable logging, unset the entire "log" object.
   log: undefined | {
     handler: (

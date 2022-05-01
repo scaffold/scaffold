@@ -8,9 +8,11 @@ import WorkQueue from '~/sbl/WorkQueue.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 const makeConfig = (
-  _ctxIdx: number,
+  ctxIdx: number,
   partialConfig: Partial<Config>,
 ): Config => ({
+  debugName: `ctx_${ctxIdx}`,
+
   log: undefined,
 
   location: { x: 1, y: 2, z: 3 },

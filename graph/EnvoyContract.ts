@@ -6,6 +6,7 @@ import { Answer } from '~/sbl/AnswerRegistry.ts';
 import * as envoyMessages from './envoyMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
 import QuestionService from '~/sbl/QuestionService.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 export default class EnvoyContract {
   constructor(private ctx: Context) {}
@@ -67,6 +68,13 @@ export default class EnvoyContract {
 
     const contract = this.ctx.get(GraphUtils).supplyContract(envoyContract);
     this.ctx.get(GraphUtils).supplyGenerator(contract, envoyGenerator);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'EnvoyContract',
+      contract.hash,
+      (params) => envoyMessages.Params.decode(params),
+      (answer) => envoyMessages.Answer.decode(answer),
+    );
 
     return contract;
   }

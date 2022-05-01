@@ -1,6 +1,7 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
+import QaDebugger from '~/sbl/QaDebugger.ts';
 
 export default class AnyContract {
   constructor(private ctx: Context) {}
@@ -13,6 +14,15 @@ export default class AnyContract {
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
     ) => true;
 
-    return this.ctx.get(GraphUtils).supplyContract(anyContract);
+    const contract = this.ctx.get(GraphUtils).supplyContract(anyContract);
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'AnyContract',
+      contract.hash,
+      (params) => ({ params }),
+      (answer) => ({}),
+    );
+
+    return contract;
   }
 }
