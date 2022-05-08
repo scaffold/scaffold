@@ -1,6 +1,6 @@
-import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 // @deno-types="../avsc_types.d.ts"
 import * as avro from 'avro';
+import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 import HashClass from './util/Hash.ts';
 
 declare global {
@@ -69,38 +69,56 @@ const logicalTypes = {
 type UnionType<
   S extends avro.schema.DefinedType,
   R extends { [name: string]: avro.Schema },
-> = S extends 'null' ? null
-  : S extends string ? { [K in S]: ObjectType<S, R> }
-  : S extends { name: string } ? { [K in S['name']]: ObjectType<S, R> }
+> = S extends 'null'
+  ? null
+  : S extends string
+  ? { [K in S]: ObjectType<S, R> }
+  : S extends { name: string }
+  ? { [K in S['name']]: ObjectType<S, R> }
   : never;
 
 export type ObjectType<
   S extends avro.Schema,
   R extends { [name: string]: avro.Schema },
-> = S extends keyof R ? ObjectType<R[S], R>
-  : S extends 'null' ? null
-  : S extends 'boolean' ? boolean
-  : S extends 'int' ? number
-  : S extends 'long' ? never
-  : S extends 'float' ? number
-  : S extends 'double' ? number
-  : S extends 'bytes' ? Uint8Array
-  : S extends 'string' ? string
-  : S extends avro.types.LongType ? bigint
-  : S extends { logicalType: keyof typeof logicalTypes } ? ReturnType<
-    InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']
-  >
-  : S extends avro.schema.RecordType ? {
-    [K in S['fields'][number]['name']]: ObjectType<
-      Extract<S['fields'][number], { name: K }>['type'],
-      R
-    >;
-  }
-  : S extends avro.schema.EnumType ? S['symbols'][number]
-  : S extends avro.schema.ArrayType ? ObjectType<S['items'], R>[]
-  : S extends avro.schema.MapType ? Record<string, ObjectType<S['values'], R>>
-  : S extends avro.schema.FixedType ? Uint8Array
-  : S extends readonly avro.schema.DefinedType[] ? UnionType<S[number], R>
+> = S extends keyof R
+  ? ObjectType<R[S], R>
+  : S extends 'null'
+  ? null
+  : S extends 'boolean'
+  ? boolean
+  : S extends 'int'
+  ? number
+  : S extends 'long'
+  ? never
+  : S extends 'float'
+  ? number
+  : S extends 'double'
+  ? number
+  : S extends 'bytes'
+  ? Uint8Array
+  : S extends 'string'
+  ? string
+  : S extends avro.types.LongType
+  ? bigint
+  : S extends { logicalType: keyof typeof logicalTypes }
+  ? ReturnType<InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']>
+  : S extends avro.schema.RecordType
+  ? {
+      [K in S['fields'][number]['name']]: ObjectType<
+        Extract<S['fields'][number], { name: K }>['type'],
+        R
+      >;
+    }
+  : S extends avro.schema.EnumType
+  ? S['symbols'][number]
+  : S extends avro.schema.ArrayType
+  ? ObjectType<S['items'], R>[]
+  : S extends avro.schema.MapType
+  ? Record<string, ObjectType<S['values'], R>>
+  : S extends avro.schema.FixedType
+  ? Uint8Array
+  : S extends readonly avro.schema.DefinedType[]
+  ? UnionType<S[number], R>
   : never;
 
 interface Message<T> {
@@ -119,7 +137,7 @@ const long = avro.types.LongType.__with({
   toJSON: Number,
   isValid: (n: bigint) => typeof n == 'bigint',
   compare: (n1: bigint, n2: bigint) => {
-    return n1 === n2 ? 0 : (n1 < n2 ? -1 : 1);
+    return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
   },
 });
 
@@ -132,20 +150,22 @@ export const registry = {
   },
   bytes: { name: 'bytes', type: 'bytes', logicalType: 'Uint8ArrayLogicalType' },
   Json: {
-    'type': 'record',
-    'name': 'Json',
-    'fields': [{
-      'name': 'value',
-      'type': [
-        'long',
-        'double',
-        'string',
-        'boolean',
-        'null',
-        { 'type': 'array', 'items': 'Json' },
-        { 'type': 'map', 'values': 'Json' },
-      ],
-    }],
+    type: 'record',
+    name: 'Json',
+    fields: [
+      {
+        name: 'value',
+        type: [
+          'long',
+          'double',
+          'string',
+          'boolean',
+          'null',
+          { type: 'array', items: 'Json' },
+          { type: 'map', values: 'Json' },
+        ],
+      },
+    ],
   },
 
   Amount: { name: 'Amount', type: 'long' },
@@ -221,16 +241,12 @@ export const registry = {
   PingMessage: {
     name: 'PingMessage',
     type: 'record',
-    fields: [
-      { name: 'secret', type: 'Hash' },
-    ],
+    fields: [{ name: 'secret', type: 'Hash' }],
   },
   PongMessage: {
     name: 'PongMessage',
     type: 'record',
-    fields: [
-      { name: 'secret', type: 'Hash' },
-    ],
+    fields: [{ name: 'secret', type: 'Hash' }],
   },
   ConnectionSpec: {
     name: 'ConnectionSpec',
@@ -302,6 +318,8 @@ export const registry = {
       // TODO: Perhaps add it as an input? Does it even need to be separate?
       { name: 'question', type: 'QuestionSpec' },
 
+      // { name: 'author_public_key', type: 'bytes' },
+
       { name: 'inputs', type: { type: 'array', items: 'Hash' } },
       // { name: 'birth_proof', type: 'HashExpr' },
       { name: 'answer', type: 'bytes' },
@@ -329,9 +347,7 @@ export const registry = {
   CiteMessage: {
     name: 'CiteMessage',
     type: 'record',
-    fields: [
-      { name: 'payment_proof', type: 'Hash' },
-    ],
+    fields: [{ name: 'payment_proof', type: 'Hash' }],
   },
   CollateralMessage: {
     name: 'CollateralMessage',
@@ -362,9 +378,7 @@ export const registry = {
   DhtJoinMessage: {
     name: 'DhtJoinMessage',
     type: 'record',
-    fields: [
-      { name: 'hash', type: 'Hash' },
-    ],
+    fields: [{ name: 'hash', type: 'Hash' }],
   },
   FeedbackMessage: {
     name: 'FeedbackMessage',
@@ -441,7 +455,7 @@ export const makeMsg = <
         });
         return value;
       },
-    })
+    }),
   );
   const type = types[name];
 

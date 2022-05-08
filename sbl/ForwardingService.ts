@@ -1,25 +1,9 @@
-import Context from './Context.ts';
-import QuestionService from './QuestionService.ts';
-import AnswerService from './AnswerService.ts';
-import { Connection, SELF_CONNECTION } from './ConnectionService.ts';
-import { error } from './util/functional.ts';
-import Hash from './util/Hash.ts';
-import NodeService, { Node } from './NodeService.ts';
-import callWithSyncRequestHandler from './callWithSyncRequestHandler.ts';
-import {
-  FeedbackMessage,
-  ForwardingFeedback,
-  License,
-  PublishMessage,
-} from './messages.ts';
 import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
-import QuestionRegistry, { Question } from './QuestionRegistry.ts';
+import { Connection, SELF_CONNECTION } from './ConnectionService.ts';
+import Context from './Context.ts';
 import MessageCtx from './MessageCtx.ts';
-import IncentiveService from './IncentiveService.ts';
-import { assert } from './util/functional.ts';
-import RewardSpec from './RewardSpec.ts';
-import EnvoyContract from '~/graph/EnvoyContract.ts';
-import * as envoyMessages from '~/graph/envoyMessages.ts';
+import { ForwardingFeedback, PublishMessage } from './messages.ts';
+import NodeService, { Node } from './NodeService.ts';
 // import ActionExecutor from './ActionExecutor.ts';
 import { getOrCreate } from './util/map.ts';
 
@@ -35,15 +19,19 @@ export default class ForwardingService {
 
   constructor(private ctx: Context) {}
 
+  // TODO: Forward answer, not publication
   public forwardPublication(
     msg: PublishMessage,
     from: Connection | SELF_CONNECTION,
   ) {
-    this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (from === SELF_CONNECTION || this.get(from, node).sum >= 0) {
-        node.defaultConn?.sendReliable({ PublishMessage: msg });
-      }
-    });
+    this.ctx
+      .get(NodeService)
+      .getAll()
+      .forEach((node) => {
+        if (from === SELF_CONNECTION || this.get(from, node).sum >= 0) {
+          node.defaultConn?.sendReliable({ PublishMessage: msg });
+        }
+      });
   }
 
   public sendForwardingFeedback(node: Node, answer: Answer) {
@@ -70,10 +58,9 @@ export default class ForwardingService {
     const connId = getOrCreate(this.connIds, src, () => this.nextConnId++);
     const nodeId = getOrCreate(this.nodeIds, dst, () => this.nextNodeId++);
     const key = (connId << 16) + nodeId;
-    return getOrCreate(
-      this.forwardingFeedback,
-      key,
-      () => ({ sum: 0, count: 0 }),
-    );
+    return getOrCreate(this.forwardingFeedback, key, () => ({
+      sum: 0,
+      count: 0,
+    }));
   }
 }

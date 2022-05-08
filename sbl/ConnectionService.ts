@@ -1,17 +1,15 @@
-import secp from './util/secp.ts';
-import Hash from './util/Hash.ts';
-import Peer from './Peer.ts';
 import Context from './Context.ts';
-import MessageDispatcherService from './MessageDispatcherService.ts';
-import PeerService from './PeerService.ts';
-import { ConnectionProvider } from './NetworkProvider.ts';
-import { Node } from './NodeService.ts';
-import NodeService from './NodeService.ts';
 import InfoService from './InfoService.ts';
-import { error } from './util/functional.ts';
-import { Packet } from './messages.ts';
-import MessageCtx from './MessageCtx.ts';
 import Logger from './Logger.ts';
+import MessageDispatcherService from './MessageDispatcherService.ts';
+import { Packet } from './messages.ts';
+import { ConnectionProvider } from './NetworkProvider.ts';
+import NodeService, { Node } from './NodeService.ts';
+import Peer from './Peer.ts';
+import PeerService from './PeerService.ts';
+import { error } from './util/functional.ts';
+import Hash from './util/Hash.ts';
+import secp from './util/secp.ts';
 
 export const SELF_CONNECTION = Symbol('SELF_CONNECTION');
 export type SELF_CONNECTION = typeof SELF_CONNECTION;
@@ -54,9 +52,9 @@ export default class ConnectionService {
     };
     const onNewConn = (provider: ConnectionProvider) =>
       this.initConnection(protocol, provider);
-    const protocolProvider = this.ctx.config.networkProvider.protocols.get(
-      protocol,
-    ) || error(`Protocol ${protocol} has no provider`);
+    const protocolProvider =
+      this.ctx.config.networkProvider.protocols.get(protocol) ||
+      error(`Protocol ${protocol} has no provider`);
     protocolProvider.create(onListen, onNewConn).tryConnect(spec);
   }
 
@@ -153,9 +151,10 @@ export default class ConnectionService {
       `Connection established via ${protocol}; sending init packet...`,
     );
 
-    this.ctx.get(InfoService).makeInitPacket().then((packet) =>
-      provider.sendReliable(packet)
-    );
+    this.ctx
+      .get(InfoService)
+      .makeInitPacket()
+      .then((packet) => provider.sendReliable(packet));
 
     let conn: Connection | undefined;
 
@@ -176,13 +175,13 @@ export default class ConnectionService {
         peer: this.ctx.get(PeerService).lookup(publicKey),
         provider,
         sendReliable: (message: Packet['message']) =>
-          this.composePacket(message).then((packet) =>
-            provider.sendReliable(packet)
-          ).catch(onSendError),
+          this.composePacket(message)
+            .then((packet) => provider.sendReliable(packet))
+            .catch(onSendError),
         sendFast: (message: Packet['message']) =>
-          this.composePacket(message).then((packet) =>
-            provider.sendFast(packet)
-          ).catch(onSendError),
+          this.composePacket(message)
+            .then((packet) => provider.sendFast(packet))
+            .catch(onSendError),
         lastMsgTimestamp: Date.now(),
         ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       };
@@ -208,9 +207,7 @@ export default class ConnectionService {
         );
 
         if (conn) {
-          if (
-            !secp.verify(signature, msgHash.toBytes(), conn.peer.publicKey)
-          ) {
+          if (!secp.verify(signature, msgHash.toBytes(), conn.peer.publicKey)) {
             throw new Error(
               `Received message but the signature doesn't verify`,
             );
@@ -238,10 +235,9 @@ export default class ConnectionService {
             );
           }
 
-          const hash = this.ctx.get(NodeService).computeNodeHash(
-            msg.public_key,
-            msg.node_nonce,
-          );
+          const hash = this.ctx
+            .get(NodeService)
+            .computeNodeHash(msg.public_key, msg.node_nonce);
 
           // if (expectedNodeHash && !Hash.equals(hash, expectedNodeHash)) {
           //   throw new Error(`Node hash doesn't match what was expected`);
@@ -256,6 +252,7 @@ export default class ConnectionService {
           signature,
           msgData,
           msgHash,
+          packetData: data,
         });
       } catch (err) {
         console.error(err);

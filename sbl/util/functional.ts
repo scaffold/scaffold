@@ -2,7 +2,7 @@ export const error = (msg: string): never => {
   throw new Error(msg);
 };
 
-export const assert = (cond: boolean, msg?: string): void => {
+export const assert = (cond: boolean, msg?: string) => {
   if (!cond) {
     throw new Error(msg);
   }

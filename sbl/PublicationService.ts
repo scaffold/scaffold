@@ -1,24 +1,19 @@
-import Context from './Context.ts';
-import QuestionService from './QuestionService.ts';
-import AnswerService from './AnswerService.ts';
-import { Connection } from './ConnectionService.ts';
-import { error } from './util/functional.ts';
-import Hash from './util/Hash.ts';
-import { Node } from './NodeService.ts';
-import callWithSyncRequestHandler from './callWithSyncRequestHandler.ts';
-import { License, PublishMessage } from './messages.ts';
-import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
-import QuestionRegistry from './QuestionRegistry.ts';
-import MessageCtx from './MessageCtx.ts';
-import IncentiveService from './IncentiveService.ts';
-import { assert } from './util/functional.ts';
-import RewardSpec from './RewardSpec.ts';
 import EnvoyContract from '~/graph/EnvoyContract.ts';
 import * as envoyMessages from '~/graph/envoyMessages.ts';
-// import ActionExecutor from './ActionExecutor.ts';
-import ForwardingService from './ForwardingService.ts';
+import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
+import Context from './Context.ts';
+import IncentiveService from './IncentiveService.ts';
+import MessageCtx from './MessageCtx.ts';
+import { PublishMessage, QuestionSpec } from './messages.ts';
+import { Node } from './NodeService.ts';
+import RewardSpec from './RewardSpec.ts';
 import { arrEquals } from './util/buffer.ts';
-import AccountService from './AccountService.ts';
+import { assert } from './util/functional.ts';
+import Hash from './util/Hash.ts';
+
+const questionEquals = (q1: QuestionSpec, q2: QuestionSpec) =>
+  Hash.equals(q1.contract_answer_hash, q2.contract_answer_hash) &&
+  arrEquals(q1.params, q2.params);
 
 export default class PublicationService {
   private envoyContractHash: Hash;
@@ -53,11 +48,12 @@ export default class PublicationService {
     for (const hash of answer.inputs) {
       const inputAnswer = this.ctx.get(AnswerRegistry).peek(hash)!;
       assert(Hash.equals(hash, inputAnswer.hash));
-      const license = inputAnswer.licenses.find((license) =>
-        Hash.equals(
-          license.question.contract_answer_hash,
-          answer.question.spec.contract_answer_hash,
-        ) && arrEquals(license.question.params, answer.question.spec.params)
+      const license = inputAnswer.licenses.find(
+        (license) =>
+          Hash.equals(
+            license.question.contract_answer_hash,
+            answer.question.spec.contract_answer_hash,
+          ) && arrEquals(license.question.params, answer.question.spec.params),
       );
       if (license) {
         inputIncentive += license.incentive;
@@ -71,11 +67,13 @@ export default class PublicationService {
       inputIncentive += incentive;
     }
 
-    const licenses = answer.licenses.length
-      ? answer.licenses
-      : this.ctx.get(IncentiveService).popIncentives(inputIncentive).map((
-        { question, incentive },
-      ) => ({ question: question.spec, incentive }));
+    const licenses = this.ctx
+      .get(IncentiveService)
+      .popIncentives(inputIncentive)
+      .map(({ question, incentive }) => ({
+        question: question.spec,
+        incentive,
+      }));
 
     node.defaultConn?.sendReliable({
       PublishMessage: {
@@ -94,13 +92,18 @@ export default class PublicationService {
       return;
     }
 
-    // TODO: Check inputs
-    if (msg.inputs.length) {
-      throw new Error(`TODO: Check inputs`);
-    }
-    // const inputs = msg.inputs.map((input) => this.ctx.get(AnswerRegistry).peek(input));
-    // inputs.reduce((acc, answer)=>acc + answer., 0n);
-    const inputIncentive = this.ctx.get(RewardSpec).getReward(msg.question);
+    const inputIncentive = msg.inputs.reduce((acc, inputHash) => {
+      const inputAnswer = this.ctx.get(AnswerRegistry).peek(inputHash);
+      if (!inputAnswer) {
+        throw new Error(
+          `Cannot verify message because input ${inputHash.toHex()} is unknown`,
+        );
+      }
+      const foundIncentive = inputAnswer.licenses.find((license) =>
+        questionEquals(license.question, msg.question),
+      );
+      return foundIncentive ? acc + foundIncentive.incentive : acc;
+    }, this.ctx.get(RewardSpec).getReward(msg.question));
 
     if (msg.licenses.some((license) => license.incentive < 0)) {
       console.log(
@@ -110,7 +113,7 @@ export default class PublicationService {
     }
     if (
       msg.licenses.reduce((acc, { incentive }) => acc + incentive, 0n) !==
-        inputIncentive
+      inputIncentive
     ) {
       console.log(
         `Received publication where license incentive sum does not equal input incentive sum; discarding.`,
