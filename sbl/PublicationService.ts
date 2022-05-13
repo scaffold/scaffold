@@ -4,7 +4,7 @@ import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import Context from './Context.ts';
 import IncentiveService from './IncentiveService.ts';
 import MessageCtx from './MessageCtx.ts';
-import { PublishMessage, QuestionSpec } from './messages.ts';
+import { Packet, PublishMessage, QuestionSpec } from './messages.ts';
 import { Node } from './NodeService.ts';
 import RewardSpec from './RewardSpec.ts';
 import { arrEquals } from './util/buffer.ts';
@@ -23,13 +23,11 @@ export default class PublicationService {
   }
 
   public publish(node: Node, answer: Answer) {
-    if (answer.isCorrect !== true) {
+    // TODO: Get this removed (0)
+    if (!answer.computation) {
       return;
     }
 
-    if (!answer.data) {
-      throw new Error(`Not sure what causes this case`);
-    }
     if (answer.isCorrect !== true) {
       throw new Error(`Can't publish an answer that we don't know to be true`);
     }
@@ -100,7 +98,7 @@ export default class PublicationService {
         );
       }
       const foundIncentive = inputAnswer.licenses.find((license) =>
-        questionEquals(license.question, msg.question),
+        questionEquals(license.question, msg.question)
       );
       return foundIncentive ? acc + foundIncentive.incentive : acc;
     }, this.ctx.get(RewardSpec).getReward(msg.question));
@@ -113,7 +111,7 @@ export default class PublicationService {
     }
     if (
       msg.licenses.reduce((acc, { incentive }) => acc + incentive, 0n) !==
-      inputIncentive
+        inputIncentive
     ) {
       console.log(
         `Received publication where license incentive sum does not equal input incentive sum; discarding.`,

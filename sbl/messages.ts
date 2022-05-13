@@ -69,56 +69,38 @@ const logicalTypes = {
 type UnionType<
   S extends avro.schema.DefinedType,
   R extends { [name: string]: avro.Schema },
-> = S extends 'null'
-  ? null
-  : S extends string
-  ? { [K in S]: ObjectType<S, R> }
-  : S extends { name: string }
-  ? { [K in S['name']]: ObjectType<S, R> }
+> = S extends 'null' ? null
+  : S extends string ? { [K in S]: ObjectType<S, R> }
+  : S extends { name: string } ? { [K in S['name']]: ObjectType<S, R> }
   : never;
 
 export type ObjectType<
   S extends avro.Schema,
   R extends { [name: string]: avro.Schema },
-> = S extends keyof R
-  ? ObjectType<R[S], R>
-  : S extends 'null'
-  ? null
-  : S extends 'boolean'
-  ? boolean
-  : S extends 'int'
-  ? number
-  : S extends 'long'
-  ? never
-  : S extends 'float'
-  ? number
-  : S extends 'double'
-  ? number
-  : S extends 'bytes'
-  ? Uint8Array
-  : S extends 'string'
-  ? string
-  : S extends avro.types.LongType
-  ? bigint
-  : S extends { logicalType: keyof typeof logicalTypes }
-  ? ReturnType<InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']>
-  : S extends avro.schema.RecordType
-  ? {
-      [K in S['fields'][number]['name']]: ObjectType<
-        Extract<S['fields'][number], { name: K }>['type'],
-        R
-      >;
-    }
-  : S extends avro.schema.EnumType
-  ? S['symbols'][number]
-  : S extends avro.schema.ArrayType
-  ? ObjectType<S['items'], R>[]
-  : S extends avro.schema.MapType
-  ? Record<string, ObjectType<S['values'], R>>
-  : S extends avro.schema.FixedType
-  ? Uint8Array
-  : S extends readonly avro.schema.DefinedType[]
-  ? UnionType<S[number], R>
+> = S extends keyof R ? ObjectType<R[S], R>
+  : S extends 'null' ? null
+  : S extends 'boolean' ? boolean
+  : S extends 'int' ? number
+  : S extends 'long' ? never
+  : S extends 'float' ? number
+  : S extends 'double' ? number
+  : S extends 'bytes' ? Uint8Array
+  : S extends 'string' ? string
+  : S extends avro.types.LongType ? bigint
+  : S extends { logicalType: keyof typeof logicalTypes } ? ReturnType<
+    InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']
+  >
+  : S extends avro.schema.RecordType ? {
+    [K in S['fields'][number]['name']]: ObjectType<
+      Extract<S['fields'][number], { name: K }>['type'],
+      R
+    >;
+  }
+  : S extends avro.schema.EnumType ? S['symbols'][number]
+  : S extends avro.schema.ArrayType ? ObjectType<S['items'], R>[]
+  : S extends avro.schema.MapType ? Record<string, ObjectType<S['values'], R>>
+  : S extends avro.schema.FixedType ? Uint8Array
+  : S extends readonly avro.schema.DefinedType[] ? UnionType<S[number], R>
   : never;
 
 interface Message<T> {
@@ -455,7 +437,7 @@ export const makeMsg = <
         });
         return value;
       },
-    }),
+    })
   );
   const type = types[name];
 

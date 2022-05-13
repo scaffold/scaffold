@@ -51,6 +51,8 @@ export interface Answer {
 
   //   }
 
+  hash: Hash;
+
   question: Question;
 
   data: Uint8Array;
@@ -96,6 +98,7 @@ export default class AnswerRegistry {
     const hash = Hash.digest(msgCtx.packetData); // This is the hash of the entire packet (including the signature), not just the message.
     return getOrCreate(this.registry, hash.toHex(), () => {
       const answer: Answer = {
+        hash,
         question,
         data: publication.answer,
         firstReceivedFrom: msgCtx.conn,
