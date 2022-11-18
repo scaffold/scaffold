@@ -2,6 +2,8 @@
 This file is based on the implementation here:
 https://github.com/wasmerio/wasmer-js/blob/24f5508731c9b58371e4276ec8965dc1c48b5178/packages/wasi/src/index.ts
 
+Also useful: https://deno.land/std@0.142.0/wasi/snapshot_preview1.ts
+
 Original work: Copyright 2019 Gus Caplan
 Modified work: Copyright 2021 Joel Walker
 

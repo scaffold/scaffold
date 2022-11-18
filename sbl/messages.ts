@@ -304,7 +304,7 @@ export const registry = {
 
       { name: 'inputs', type: { type: 'array', items: 'Hash' } },
       // { name: 'birth_proof', type: 'HashExpr' },
-      { name: 'answer', type: 'bytes' },
+      { name: 'data', type: 'bytes' },
 
       { name: 'licenses', type: { type: 'array', items: 'License' } },
 
