@@ -77,10 +77,10 @@ type ObjectType<S extends Schema> = S extends 'null' ? null
   : S extends 'bytes' ? Buffer
   : S extends 'string' ? string
   : S extends RecordType ? {
-    [key in S['fields'][number]['name']]: ObjectType<
-      S['fields'][number]['type']
-    >;
-  }
+      [key in S['fields'][number]['name']]: ObjectType<
+        S['fields'][number]['type']
+      >;
+    }
   : S extends EnumType ? S['symbols'][number]
   : S extends ArrayType ? ObjectType<S['items']>[]
   : S extends MapType ? Record<string, ObjectType<S['values']>>

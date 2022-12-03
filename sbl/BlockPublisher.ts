@@ -1,0 +1,13 @@
+import Context from './Context.ts';
+import { Block } from './messages.ts';
+import NodeService from './NodeService.ts';
+
+export default class BlockPublisher {
+  constructor(private ctx: Context) {}
+
+  public publish(block: Block) {
+    this.ctx.get(NodeService).getAll().forEach((node) =>
+      node.defaultConn?.sendReliable({ PublicationMessage: { block } })
+    );
+  }
+}

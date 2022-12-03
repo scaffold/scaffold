@@ -2,8 +2,6 @@ import Context from './Context.ts';
 import DhtTable, { DhtEntry } from './DhtTable.ts';
 import Hash from './util/Hash.ts';
 import NodeService from './NodeService.ts';
-import { Connection } from './ConnectionService.ts';
-import { error } from './util/functional.ts';
 import { DhtJoinMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 

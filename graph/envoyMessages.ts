@@ -6,7 +6,7 @@ const registry = {
     name: 'Params',
     type: 'record',
     fields: [
-      { name: 'question', type: 'QuestionSpec' },
+      { name: 'question', type: 'Question' },
       { name: 'nonce', type: 'Hash' },
     ],
   },

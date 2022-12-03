@@ -9,7 +9,7 @@ import {
   JobMessage,
   WorkerComm,
 } from './worker/workerTypes.ts';
-import { QuestionSpec } from './messages.ts';
+import { Question } from './messages.ts';
 import RootContract from '~/graph/RootContract.ts';
 import { Answer } from './AnswerRegistry.ts';
 import { error } from './util/functional.ts';
@@ -19,7 +19,7 @@ interface OpenFile {
   path: Uint8Array[];
 
   answer: Promise<Answer>;
-  // question: QuestionSpec;
+  // question: Question;
   // readerStream: Promise<IncentivizedStream<Uint8Array>>;
   // exposedData?: Promise<Uint8Array>;
 }
@@ -129,7 +129,7 @@ export default class WorkerExecutor {
             console.log(`Read ${formatPath(path)}...`);
             inodes.get(baseInode)!.answer.then((parentAnswer) =>
               ctx.get(QuestionService).getCanonical({
-                contract_answer_hash: parentAnswer.hash,
+                contract_hash: parentAnswer.hash,
                 params: key,
               }).onAnswer((answer) => {
                 console.log(

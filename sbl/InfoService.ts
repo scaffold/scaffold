@@ -1,12 +1,5 @@
 import secp from './util/secp.ts';
-import Hash from './util/Hash.ts';
-import Peer from './Peer.ts';
 import Context from './Context.ts';
-import MessageDispatcherService from './MessageDispatcherService.ts';
-import PeerService from './PeerService.ts';
-import { ConnectionProvider } from './NetworkProvider.ts';
-import { Node } from './NodeService.ts';
-import { arrConcat, arrEquals } from './util/buffer.ts';
 import NodeService from './NodeService.ts';
 import ConnectionService from './ConnectionService.ts';
 

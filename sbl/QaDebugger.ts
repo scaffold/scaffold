@@ -1,6 +1,6 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
-import { QuestionSpec } from './messages.ts';
+import { Verifier } from './messages.ts';
 import Logger from './Logger.ts';
 
 export default class QaDebugger {
@@ -25,8 +25,8 @@ export default class QaDebugger {
     });
   }
 
-  public debugQuestion(spec: QuestionSpec) {
-    const dbgr = this.debuggers.get(spec.contract_answer_hash.toHex());
+  public debugQuestion(spec: Verifier) {
+    const dbgr = this.debuggers.get(spec.contract_hash.toHex());
     if (dbgr) {
       return {
         dbgContract: dbgr.contractName,
@@ -36,9 +36,9 @@ export default class QaDebugger {
   }
 
   public debugAnswer(
-    { question, answer }: { question: QuestionSpec; answer: Uint8Array },
+    { question, answer }: { question: Verifier; answer: Uint8Array },
   ) {
-    const dbgr = this.debuggers.get(question.contract_answer_hash.toHex());
+    const dbgr = this.debuggers.get(question.contract_hash.toHex());
     if (dbgr) {
       return { dbgAnswer: dbgr.answerDebugger(answer) };
     }

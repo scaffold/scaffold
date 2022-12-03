@@ -384,26 +384,25 @@ export default (
   React.useEffect(() => {
     console.log('reattach key event listeners');
 
-    const makeKeyHandler = (val: boolean) =>
-      (event: KeyboardEvent) => {
-        switch (event.code) {
-          case 'ArrowUp':
-            provider?.setFwd(val);
-            break;
-          case 'ArrowDown':
-            provider?.setBwd(val);
-            break;
-          case 'ArrowLeft':
-            provider?.setLeft(val);
-            break;
-          case 'ArrowRight':
-            provider?.setRight(val);
-            break;
-          case 'Space':
-            provider?.setFire(val);
-            break;
-        }
-      };
+    const makeKeyHandler = (val: boolean) => (event: KeyboardEvent) => {
+      switch (event.code) {
+        case 'ArrowUp':
+          provider?.setFwd(val);
+          break;
+        case 'ArrowDown':
+          provider?.setBwd(val);
+          break;
+        case 'ArrowLeft':
+          provider?.setLeft(val);
+          break;
+        case 'ArrowRight':
+          provider?.setRight(val);
+          break;
+        case 'Space':
+          provider?.setFire(val);
+          break;
+      }
+    };
 
     const onKeyDown = makeKeyHandler(true);
     const onKeyUp = makeKeyHandler(false);

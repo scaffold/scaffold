@@ -19,7 +19,7 @@ export default class GraphUtils {
 
     return this.ctx.get(AnswerRegistry).getOrCreate({
       question: {
-        contract_answer_hash: this.ctx.get(RootContract).get().hash,
+        contract_hash: this.ctx.get(RootContract).get().hash,
         params: hash.toBytes(),
       },
       inputs: [],
@@ -51,7 +51,7 @@ export default class GraphUtils {
   ) {
     return this.supplyRawAnswer(
       new TextEncoder().encode(
-        `(pub,hint,request,notify)=>(${contract.toString()})(pub.question.contract_answer_hash,pub.question.params,hint,request,notify)`,
+        `(pub,hint,request,notify)=>(${contract.toString()})(pub.question.contract_hash,pub.question.params,hint,request,notify)`,
       ),
     );
   }
@@ -86,7 +86,7 @@ export default class GraphUtils {
   ) {
     return this.ctx.get(AnswerRegistry).getOrCreate({
       question: {
-        contract_answer_hash: this.getGeneratorContract().hash,
+        contract_hash: this.getGeneratorContract().hash,
         params: contract.hash.toBytes(),
       },
       inputs: [],

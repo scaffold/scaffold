@@ -5,8 +5,6 @@ import ConnectionSpec from './ConnectionSpec.ts';
 import NodeService, { Node } from './NodeService.ts';
 import { getOrCreate } from './util/map.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
-import { Connection } from './ConnectionService.ts';
-import { error } from './util/functional.ts';
 import { BridgeEndMessage, BridgeStartMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 

@@ -25,7 +25,7 @@ export default class Logger {
       else if (val.type === 'Buffer') return bin2hex(new Uint8Array(val.data));
       else if (
         typeof val === 'object' &&
-        'contract_answer_hash' in val &&
+        'contract_hash' in val &&
         'params' in val
       ) {
         return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };

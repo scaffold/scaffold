@@ -41,13 +41,13 @@ export const makeTest = (
   partialConfig: Partial<Config>,
   func: (...ctx: Context[]) => Promise<void> | void,
 ) =>
-  () => {
-    // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
-    const ctxs = Array.from({ length: func.length }, (_, i) =>
-      new Context(makeConfig(i, partialConfig)));
-    return deadline(Promise.resolve(func(...ctxs)), 1000).finally(() =>
-      Promise.all(ctxs.map((ctx) =>
-        ctx.destruct()
-      ))
-    );
-  };
+() => {
+  // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
+  const ctxs = Array.from(
+    { length: func.length },
+    (_, i) => new Context(makeConfig(i, partialConfig)),
+  );
+  return deadline(Promise.resolve(func(...ctxs)), 1000).finally(() =>
+    Promise.all(ctxs.map((ctx) => ctx.destruct()))
+  );
+};

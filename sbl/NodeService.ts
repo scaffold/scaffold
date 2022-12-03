@@ -1,13 +1,10 @@
 import secp from './util/secp.ts';
-import MessageDispatcherService from './MessageDispatcherService.ts';
-import Peer from './Peer.ts';
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
 import ConnectionService, { Connection } from './ConnectionService.ts';
-import ConnectionSpec from './ConnectionSpec.ts';
 import BridgingService from './BridgingService.ts';
-import { arrConcat, arrEquals } from './util/buffer.ts';
+import { arrConcat } from './util/buffer.ts';
 import { getOrCreate } from './util/map.ts';
 import { InfoMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';

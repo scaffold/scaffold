@@ -88,14 +88,14 @@ export type ObjectType<
   : S extends 'string' ? string
   : S extends avro.types.LongType ? bigint
   : S extends { logicalType: keyof typeof logicalTypes } ? ReturnType<
-    InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']
-  >
+      InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']
+    >
   : S extends avro.schema.RecordType ? {
-    [K in S['fields'][number]['name']]: ObjectType<
-      Extract<S['fields'][number], { name: K }>['type'],
-      R
-    >;
-  }
+      [K in S['fields'][number]['name']]: ObjectType<
+        Extract<S['fields'][number], { name: K }>['type'],
+        R
+      >;
+    }
   : S extends avro.schema.EnumType ? S['symbols'][number]
   : S extends avro.schema.ArrayType ? ObjectType<S['items'], R>[]
   : S extends avro.schema.MapType ? Record<string, ObjectType<S['values'], R>>
@@ -152,6 +152,69 @@ export const registry = {
 
   Amount: { name: 'Amount', type: 'long' },
 
+  // BEGIN Nov 30
+
+  Verifier: {
+    name: 'Verifier',
+    type: 'record',
+    fields: [
+      { name: 'contract_hash', type: 'Hash' },
+      { name: 'params', type: 'bytes' },
+    ],
+  },
+  Claim: {
+    name: 'Claim',
+    type: 'record',
+    fields: [
+      { name: 'block_hash', type: 'Hash' },
+      { name: 'amount', type: 'long' },
+    ],
+  },
+  Incentive: {
+    name: 'Incentive',
+    type: 'record',
+    fields: [
+      { name: 'verifier', type: 'Verifier' },
+      { name: 'amount', type: 'long' },
+    ],
+  },
+  Block: {
+    name: 'Block',
+    type: 'record',
+    fields: [
+      // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically claims with zero amount
+      { name: 'claims', type: { type: 'array', items: 'Claim' } },
+      { name: 'incentives', type: { type: 'array', items: 'Incentive' } },
+
+      { name: 'verifier', type: 'Verifier' },
+      // { name: 'body', type: ['Publication', 'bytes'] },
+      { name: 'body', type: 'bytes' },
+
+      // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
+      // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
+      // For questions with easy, rewarding answers (like epochs),
+      //   the answer will be created as soon as possible after the required timestamp.
+      { name: 'timestamp', type: 'long' },
+    ],
+  },
+
+  PublicationMessage: {
+    name: 'PublicationMessage',
+    type: 'record',
+    fields: [
+      { name: 'block', type: 'Block' },
+    ],
+  },
+  RequestBlockMessage: {
+    name: 'RequestBlockMessage',
+    type: 'record',
+    fields: [
+      { name: 'hash', type: 'Hash' },
+    ],
+  },
+
+  // END Nov 30
+
   // LoadContract: { name: 'LoadContract', type: 'record', fields: [] },
   // SelfDurationContract: {
   //   name: 'SelfDurationContract',
@@ -168,14 +231,14 @@ export const registry = {
   //   type: 'record',
   //   fields: [],
   // },
-  // QuestionSpec: {
-  //   name: 'QuestionSpec',
+  // Question: {
+  //   name: 'Verifier',
   //   type: 'record',
   //   fields: [
   //     {
   //       name: 'contract',
   //       type: [
-  //         'QuestionSpec',
+  //         'Verifier',
   //         'LoadContract',
   //         'SelfDurationContract',
   //         'SelfInputsContract',
@@ -186,15 +249,6 @@ export const registry = {
   //     { name: 'params', type: 'bytes' },
   //   ],
   // },
-  QuestionSpec: {
-    name: 'QuestionSpec',
-    type: 'record',
-    fields: [
-      // TODO: Just call this contract_hash?
-      { name: 'contract_answer_hash', type: 'Hash' },
-      { name: 'params', type: 'bytes' },
-    ],
-  },
 
   Neighbor: {
     name: 'Neighbor',
@@ -260,8 +314,8 @@ export const registry = {
     type: 'record',
     fields: [
       // { name: 'question_hash', type: 'Hash' },
-      { name: 'question', type: 'QuestionSpec' },
-      // { name: 'child_question', type: 'QuestionSpec' },
+      { name: 'question', type: 'Verifier' },
+      // { name: 'child_question', type: 'Verifier' },
       // // { name: 'destination', type: 'Hash' },
       // { name: 'expected_reward', type: 'long' },
     ],
@@ -272,8 +326,8 @@ export const registry = {
     type: 'record',
     fields: [
       // { name: 'question_hash', type: 'Hash' },
-      { name: 'question', type: 'QuestionSpec' },
-      // { name: 'child_question', type: 'QuestionSpec' },
+      { name: 'question', type: 'Verifier' },
+      // { name: 'child_question', type: 'Verifier' },
       // // { name: 'destination', type: 'Hash' },
       // { name: 'expected_reward', type: 'long' },
     ],
@@ -282,7 +336,7 @@ export const registry = {
     name: 'License',
     type: 'record',
     fields: [
-      { name: 'question', type: 'QuestionSpec' },
+      { name: 'question', type: 'Verifier' },
 
       // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs.
       // TODO: Make this Amount; not sure why it's not working yet.
@@ -294,11 +348,11 @@ export const registry = {
     type: 'record',
     fields: [
       // { name: 'question_hash', type: 'Hash' },
-      // { name: 'question', type: 'QuestionSpec' }, // I think this can just be the question hash, since subscribers will know it?
+      // { name: 'question', type: 'Verifier' }, // I think this can just be the question hash, since subscribers will know it?
 
       // Note that the answer in here behaves as an input - if it becomes non-canonical, this publication needs to become so as well.
       // TODO: Perhaps add it as an input? Does it even need to be separate?
-      { name: 'question', type: 'QuestionSpec' },
+      { name: 'question', type: 'Verifier' },
 
       // { name: 'author_public_key', type: 'bytes' },
 
@@ -383,6 +437,7 @@ export const registry = {
       { name: 'goodness', type: 'float' },
     ],
   },
+
   Packet: {
     name: 'Packet',
     type: 'record',
@@ -390,6 +445,8 @@ export const registry = {
       {
         name: 'message',
         type: [
+          'PublicationMessage',
+          'RequestBlockMessage',
           'InfoMessage',
           'PingMessage',
           'PongMessage',
@@ -469,8 +526,18 @@ export const Hash = makeMsg(registry, 'Hash');
 export type Hash = MsgType<'Hash'>;
 export const Amount = makeMsg(registry, 'Amount');
 export type Amount = MsgType<'Amount'>;
-export const QuestionSpec = makeMsg(registry, 'QuestionSpec');
-export type QuestionSpec = MsgType<'QuestionSpec'>;
+export const Verifier = makeMsg(registry, 'Verifier');
+export type Verifier = MsgType<'Verifier'>;
+export const Claim = makeMsg(registry, 'Claim');
+export type Claim = MsgType<'Claim'>;
+export const Incentive = makeMsg(registry, 'Incentive');
+export type Incentive = MsgType<'Incentive'>;
+export const Block = makeMsg(registry, 'Block');
+export type Block = MsgType<'Block'>;
+export const PublicationMessage = makeMsg(registry, 'PublicationMessage');
+export type PublicationMessage = MsgType<'PublicationMessage'>;
+export const RequestBlockMessage = makeMsg(registry, 'RequestBlockMessage');
+export type RequestBlockMessage = MsgType<'RequestBlockMessage'>;
 export const Neighbor = makeMsg(registry, 'Neighbor');
 export type Neighbor = MsgType<'Neighbor'>;
 export const InfoMessage = makeMsg(registry, 'InfoMessage');

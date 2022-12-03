@@ -36,7 +36,7 @@ const callWithSyncRequestHandler = async <T>(
 
       let inside = true;
       const req = ctx.get(QuestionService).getCanonical({
-        contract_answer_hash: contractHash,
+        contract_hash: contractHash,
         params,
       }, stack);
       req.onAnswer((a: Answer) => {
@@ -58,7 +58,7 @@ const callWithSyncRequestHandler = async <T>(
       }
     }, (contractHash: Hash, params: Uint8Array) => {
       const req = ctx.get(QuestionService).getCanonical({
-        contract_answer_hash: contractHash,
+        contract_hash: contractHash,
         params,
       }, stack);
       if (req.question.canonicalAnswer) {

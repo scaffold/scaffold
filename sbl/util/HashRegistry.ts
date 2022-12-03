@@ -1,0 +1,72 @@
+import Context from '../Context.ts';
+import Hash from './Hash.ts';
+
+export default abstract class HashRegistry<V> {
+  private map: Map<string, V> = new Map();
+  private listeners: Map<string, ((value: V) => void)[]> = new Map();
+
+  constructor(private ctx: Context) {
+    // setInterval(() => {
+    //   console.log(this.constructor.name, this.map.size);
+    // }, 60000);
+  }
+
+  // public size() {
+  //   return this.map.size;
+  // }
+  // public getAll() {
+  //   return this.map.values();
+  // }
+
+  public get(hash: Hash): V | undefined {
+    return this.map.get(hash.toHex());
+  }
+
+  public getOrWait(hash: Hash): V | Promise<V> {
+    const key = hash.toHex();
+    const val = this.map.get(key);
+    if (val) {
+      return val;
+    } else {
+      return new Promise((resolve) => {
+        const ls = this.listeners.get(key);
+        if (ls) {
+          ls.push(resolve);
+        } else {
+          this.listeners.set(key, [resolve]);
+        }
+      });
+    }
+  }
+
+  public getOrCreate(
+    hash: Hash,
+    creator: () => V,
+    mutator?: (v: V) => V,
+  ) {
+    const hex = hash.toHex();
+    let val = this.map.get(hex);
+    if (!val) {
+      val = creator();
+      this.map.set(hex, val);
+      const ls = this.listeners.get(hex);
+      if (ls) {
+        this.listeners.delete(hex);
+        ls.forEach((l) => l(val!));
+      }
+    } else if (mutator) {
+      val = mutator(val);
+      this.map.set(hex, val);
+    }
+    return val;
+  }
+
+  public pop(hash: Hash) {
+    const hex = hash.toHex();
+    const val = this.map.get(hex);
+    if (val) {
+      this.map.delete(hex);
+    }
+    return val;
+  }
+}

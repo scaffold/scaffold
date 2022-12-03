@@ -53,9 +53,8 @@ export default class FulfillmentService {
     ) === 1;
 
     const generators = this.ctx.get(QuestionRegistry).getOrCreate({
-      contract_answer_hash:
-        this.ctx.get(GraphUtils).getGeneratorContract().hash,
-      params: question.spec.contract_answer_hash.toBytes(),
+      contract_hash: this.ctx.get(GraphUtils).getGeneratorContract().hash,
+      params: question.spec.contract_hash.toBytes(),
     }).answers;
 
     generators.forEach((gen) => {
@@ -66,7 +65,7 @@ export default class FulfillmentService {
       ) => {
         const answer = this.ctx.get(AnswerRegistry).getOrCreate({
           question: {
-            contract_answer_hash: question.spec.contract_answer_hash,
+            contract_hash: question.spec.contract_hash,
             params: question.spec.params,
           },
           inputs: inputs.map((answer) => answer.hash),
@@ -89,7 +88,7 @@ export default class FulfillmentService {
         const emitCorrect = true;
         const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
           .run(script, {
-            contractHash: question.spec.contract_answer_hash.toBytes(),
+            contractHash: question.spec.contract_hash.toBytes(),
             params: question.spec.params,
             emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
           }, { answer: null });
@@ -104,7 +103,7 @@ export default class FulfillmentService {
           question,
           (handler, notifier) =>
             script(
-              question.spec.contract_answer_hash,
+              question.spec.contract_hash,
               question.spec.params,
               true,
               handler,

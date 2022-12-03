@@ -22,7 +22,7 @@ export default class RootContract {
       );
 
     const contract = this.ctx.get(AnswerRegistry).getOrCreate({
-      question: { contract_answer_hash: rootHash, params: new Uint8Array([]) },
+      question: { contract_hash: rootHash, params: new Uint8Array([]) },
       inputs: [],
       answer: new TextEncoder().encode(rootContract.toString()),
       licenses: [],

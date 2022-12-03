@@ -4,15 +4,15 @@ import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
 import Context from './Context.ts';
 import IncentiveService from './IncentiveService.ts';
 import MessageCtx from './MessageCtx.ts';
-import { Packet, PublishMessage, QuestionSpec } from './messages.ts';
+import { Packet, PublishMessage, Question } from './messages.ts';
 import { Node } from './NodeService.ts';
 import RewardSpec from './RewardSpec.ts';
 import { arrEquals } from './util/buffer.ts';
 import { assert } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 
-const questionEquals = (q1: QuestionSpec, q2: QuestionSpec) =>
-  Hash.equals(q1.contract_answer_hash, q2.contract_answer_hash) &&
+const questionEquals = (q1: Question, q2: Question) =>
+  Hash.equals(q1.contract_hash, q2.contract_hash) &&
   arrEquals(q1.params, q2.params);
 
 export default class PublicationService {
@@ -49,8 +49,8 @@ export default class PublicationService {
       const license = inputAnswer.licenses.find(
         (license) =>
           Hash.equals(
-            license.question.contract_answer_hash,
-            answer.question.spec.contract_answer_hash,
+            license.question.contract_hash,
+            answer.question.spec.contract_hash,
           ) && arrEquals(license.question.params, answer.question.spec.params),
       );
       if (license) {
@@ -127,7 +127,7 @@ export default class PublicationService {
     );
 
     if (
-      Hash.equals(msg.question.contract_answer_hash, this.envoyContractHash)
+      Hash.equals(msg.question.contract_hash, this.envoyContractHash)
     ) {
       this.handlePublishMessage(
         msgCtx,
@@ -139,7 +139,7 @@ export default class PublicationService {
 
     /*
     const contract = this.ctx.config.contracts.find((c) =>
-      Hash.equals(c.hash, msg.question.contract_answer_hash)
+      Hash.equals(c.hash, msg.question.contract_hash)
     );
     if (contract) {
       callWithSyncRequestHandler(

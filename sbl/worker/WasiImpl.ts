@@ -99,7 +99,8 @@ const throwWasiErr = (code: number): never => {
   throw new WasiError(code);
 };
 
-const wrapWasi = <T extends (...args: any[]) => number>(f: T) =>
+const wrapWasi =
+  <T extends (...args: any[]) => number>(f: T) =>
   (...args: Parameters<T>): number => {
     try {
       return f(...args);

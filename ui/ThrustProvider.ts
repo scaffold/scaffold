@@ -41,7 +41,7 @@ export default class ThrustProvider {
 
     this.tracker = ctx.get(StateTracker).track(
       (idx) => ({
-        contract_answer_hash: contractHash,
+        contract_hash: contractHash,
         params: thrustMessages.GameParams.encode({
           match,
           tick: idx,
@@ -80,7 +80,7 @@ export default class ThrustProvider {
 
     return new Promise<thrustMessages.MazeAnswer['cell']>((resolve) => {
       const questionSub = this.ctx.get(QuestionService).getCanonical({
-        contract_answer_hash: this.ctx.get(ThrustMazeContract).get().hash,
+        contract_hash: this.ctx.get(ThrustMazeContract).get().hash,
         params: thrustMessages.MazeParams.encode({ match: this.match, x, y }),
       });
       questionSub.incentivize(100000n);

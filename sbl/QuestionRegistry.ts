@@ -1,6 +1,5 @@
 import Context from './Context.ts';
-import HashMap from './util/HashMap.ts';
-import { HashExpr, QuestionSpec } from './messages.ts';
+import { HashExpr, Question } from './messages.ts';
 import { assert, error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import { arrConcat, arrEquals, fromNumber } from './util/buffer.ts';
@@ -32,9 +31,9 @@ export class Question {
   // public expectedReward = 0n;
 
   constructor(
-    public spec: QuestionSpec,
+    public spec: Question,
     public hash: Hash,
-    // public spec: QuestionSpec,
+    // public spec: Question,
     // public hash: Hash,
     // public contractHash?: Hash,
     // public params?: Uint8Array,
@@ -97,13 +96,13 @@ export class Question {
 export default class QuestionRegistry {
   private registry: Map<string, Question> = new Map();
 
-  // private static computeHash(spec: QuestionSpec): Hash {
+  // private static computeHash(spec: Question): Hash {
   //   const nonce = 0;
 
   //   // Gotta make sure here that modifying params can't create collisions
   //   return Hash.digest(arrConcat(
-  //     ('QuestionSpec' in spec.contract
-  //       ? this.computeHash(spec.contract.QuestionSpec)
+  //     ('Question' in spec.contract
+  //       ? this.computeHash(spec.contract.Question)
   //       : 'LoadContract' in spec.contract
   //       ? Hash.fromLiteral32(1)
   //       : 'CollateralContract' in spec.contract
@@ -112,20 +111,20 @@ export default class QuestionRegistry {
   //       ? Hash.fromLiteral32(3)
   //       : 'InputsContract' in spec.contract
   //       ? Hash.fromLiteral32(4)
-  //       : error(`Don't know how to hash QuestionSpec ${JSON.stringify(spec)}`))
+  //       : error(`Don't know how to hash Question ${JSON.stringify(spec)}`))
   //       .toBytes(),
   //     fromNumber(nonce, 8),
   //     spec.params,
   //   ));
   // }
 
-  public static computeHash(spec: QuestionSpec) {
+  public static computeHash(spec: Question) {
     const nonce = 0;
 
     // Gotta make sure here that modifying params can't create collisions
     return Hash.digest(
       arrConcat(
-        spec.contract_answer_hash.toBytes(),
+        spec.contract_hash.toBytes(),
         fromNumber(nonce, 8),
         spec.params,
       ),
@@ -138,7 +137,7 @@ export default class QuestionRegistry {
     return this.registry.get(hash.toHex());
   }
 
-  public getOrCreate(spec: QuestionSpec) {
+  public getOrCreate(spec: Question) {
     const hash = QuestionRegistry.computeHash(spec);
     return getOrCreate(
       this.registry,

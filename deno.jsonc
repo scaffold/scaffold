@@ -1,4 +1,5 @@
 {
+  "importMap": "import_map.json",
   "compilerOptions": {
     "allowJs": true,
     "strict": true,
@@ -18,5 +19,10 @@
     "options": {
       "singleQuote": true
     }
+  },
+  "tasks": {
+    "fmt": "deno fmt --options-single-quote --watch",
+    "build": "deno bundle --check --config=deno.jsonc --watch app.tsx build/index.js",
+    "serve": "deno run --check --allow-all --watch server/main.ts"
   }
 }

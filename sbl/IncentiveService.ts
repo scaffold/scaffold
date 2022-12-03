@@ -1,13 +1,18 @@
 import Context from './Context.ts';
-import QuestionRegistry, { Question } from './QuestionRegistry.ts';
+import Hash from './util/Hash.ts';
+import { Incentive, Verifier } from './messages.ts';
 import AccountService from './AccountService.ts';
+import { getOrCreate } from './util/map.ts';
 
+interface Entry {
+  verifier: Verifier;
+  amount: bigint;
+  forceAfter: number;
+}
+
+// Perhaps IncentiveProvider?
 export default class IncentiveService {
-  private pending: {
-    question: Question;
-    incentive: bigint;
-    forceAfter: number;
-  }[] = [];
+  private pending: Map<string, Entry> = new Map();
 
   constructor(private ctx: Context) {
     const itv = setInterval(() => this.forceIncentives(), 100);
@@ -15,63 +20,74 @@ export default class IncentiveService {
   }
 
   private forceIncentives() {
-    const force: { question: Question; incentive: bigint }[] = [];
-    this.pending = this.pending.filter((entry) => {
-      if (entry.forceAfter) {
-        entry.forceAfter--;
-        return true;
-      } else {
+    const now = Date.now();
+    const force: Incentive[] = [];
+    this.pending.forEach((entry, key) => {
+      if (entry.forceAfter < now) {
         force.push(entry);
-        return false;
+        this.pending.delete(key);
       }
     });
-
-    console.log('force', force.length, this.pending.length);
 
     if (force.length) {
       this.ctx.get(AccountService).publishAnswer(force);
     }
   }
 
-  public incentivize(question: Question, incentive: bigint, forceAfter = 1) {
-    if (incentive > 0n) {
-      question.selfIncentive += incentive;
-      this.pending.push({ question, incentive, forceAfter });
+  public incentivize(
+    verifier: Verifier,
+    amount: bigint,
+    forceAfter = Date.now() + 1000,
+  ) {
+    if (amount > 0n) {
+      const key = Hash.digest(Verifier.encode(verifier)).toHex();
+      getOrCreate(
+        this.pending,
+        key,
+        () => ({ verifier, amount, forceAfter }),
+        (entry) => {
+          entry.amount += amount;
+          entry.forceAfter = Math.min(entry.forceAfter, forceAfter);
+          return entry;
+        },
+      );
     }
   }
 
   public popIncentives(amount: bigint) {
-    // Sort in order of increasing incentive
-    this.pending.sort((a, b) =>
-      a.incentive > b.incentive ? 1 : a.incentive < b.incentive ? -1 : 0
+    const sorted = [...this.pending.entries()].sort((a, b) =>
+      // Sort in order of increasing incentive
+      // a[1].amount > b[1].amount ? 1 : a[1].amount < b[1].amount ? -1 : 0
+      // Sort in order of force timestamp
+      a[1].forceAfter > b[1].forceAfter
+        ? 1
+        : a[1].forceAfter < b[1].forceAfter
+        ? -1
+        : 0
     );
 
-    const res: { question: Question; incentive: bigint }[] = [];
+    const res: Incentive[] = [];
 
     while (amount > 0n) {
-      const head = this.pending.pop();
+      const head = sorted.pop();
       if (!head) {
         res.push({
-          question: this.ctx.get(AccountService).getNextAccountQuestion(),
-          incentive: amount,
+          verifier: this.ctx.get(AccountService).getNextAccountVerifier(),
+          amount,
         });
         break;
       }
+      const [key, entry] = head;
 
-      if (head.incentive <= amount) {
-        amount -= head.incentive;
-        head.question.selfIncentive -= head.incentive;
-        res.push(head);
+      if (entry.amount <= amount) {
+        amount -= entry.amount;
+        this.pending.delete(key);
+        res.push(entry);
       } else {
-        head.question.selfIncentive -= amount;
-        this.pending.push({
-          question: head.question,
-          incentive: head.incentive - amount,
-          forceAfter: head.forceAfter,
-        });
+        entry.amount -= amount;
         res.push({
-          question: head.question,
-          incentive: amount,
+          verifier: entry.verifier,
+          amount,
         });
         break;
       }

@@ -9,7 +9,7 @@ import Logger from './Logger.ts';
 import { getOrCreate } from './util/map.ts';
 import Peer from './Peer.ts';
 import MessageCtx from './MessageCtx.ts';
-import { HashExpr, QuestionSpec } from './messages.ts';
+import { HashExpr, Question } from './messages.ts';
 import WorkQueue from './WorkQueue.ts';
 import NodeService from './NodeService.ts';
 import PublicationService from './PublicationService.ts';
@@ -117,7 +117,7 @@ export default class QuestionService {
     // contract:Answer,
     // params: Uint8Array,
 
-    spec: QuestionSpec,
+    spec: Question,
     stack: string[] = [],
   ) {
     const dbg = this.ctx.get(QaDebugger).debugQuestion(spec);
@@ -126,7 +126,7 @@ export default class QuestionService {
 
     const question = this.ctx.get(QuestionRegistry).getOrCreate(spec);
     const envoy = this.ctx.get(QuestionRegistry).getOrCreate({
-      contract_answer_hash: this.ctx.get(EnvoyContract).get().hash,
+      contract_hash: this.ctx.get(EnvoyContract).get().hash,
       params: envoyMessages.Params.encode({
         question: spec,
         nonce: Hash.random(),

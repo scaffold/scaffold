@@ -6,10 +6,13 @@ import { InfoMessage, Packet } from './messages.ts';
 import { Connection } from './ConnectionService.ts';
 import PingService from './PingService.ts';
 import DhtService from './DhtService.ts';
-import SubscriptionService from './SubscriptionService.ts';
-import PublicationService from './PublicationService.ts';
-import CollateralService from './CollateralService.ts';
+// import SubscriptionService from './SubscriptionService.ts';
+// import PublicationService from './PublicationService.ts';
+// import CollateralService from './CollateralService.ts';
 import MessageCtx from './MessageCtx.ts';
+import BlockIngestor from './BlockIngestor.ts';
+import BlockService from './BlockService.ts';
+import BlockFetcher from './BlockFetcher.ts';
 
 export class BadMessageError extends Error {
   constructor(msg: string, public trustDelta: number) {
@@ -63,26 +66,38 @@ export default class MessageDispatcherService {
       );
     }
 
-    if ('SubscribeMessage' in msg) {
-      this.ctx.get(SubscriptionService).handleSubscribeMessage(
-        msgCtx,
-        msg.SubscribeMessage,
-      );
+    if ('PublicationMessage' in msg) {
+      this.ctx.get(BlockService).ingest(msg.PublicationMessage.block);
+    }
+    if ('RequestBlockMessage' in msg) {
+      (async () => {
+        const block = await this.ctx.get(BlockFetcher).get(
+          msg.RequestBlockMessage.hash,
+        );
+        msgCtx.conn.sendReliable({ PublicationMessage: { block } });
+      })();
     }
 
-    if ('PublishMessage' in msg) {
-      this.ctx.get(PublicationService).handlePublishMessage(
-        msgCtx,
-        msg.PublishMessage,
-      );
-    }
+    // if ('SubscribeMessage' in msg) {
+    //   this.ctx.get(SubscriptionService).handleSubscribeMessage(
+    //     msgCtx,
+    //     msg.SubscribeMessage,
+    //   );
+    // }
 
-    if ('CollateralMessage' in msg) {
-      this.ctx.get(CollateralService).handleCollateralMessage(
-        msgCtx,
-        msg.CollateralMessage,
-      );
-    }
+    // if ('PublishMessage' in msg) {
+    //   this.ctx.get(PublicationService).handlePublishMessage(
+    //     msgCtx,
+    //     msg.PublishMessage,
+    //   );
+    // }
+
+    // if ('CollateralMessage' in msg) {
+    //   this.ctx.get(CollateralService).handleCollateralMessage(
+    //     msgCtx,
+    //     msg.CollateralMessage,
+    //   );
+    // }
 
     if ('BribeMessage' in msg) {}
 

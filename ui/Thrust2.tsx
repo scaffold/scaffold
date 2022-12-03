@@ -23,7 +23,7 @@ export default ({ sbl, match }: { sbl: Context; match: Hash }) => {
 
     const tracker = sbl.get(StateTracker).track(
       (idx) => ({
-        contract_answer_hash: contractHash,
+        contract_hash: contractHash,
         params: thrustMessages.GameParams.encode({
           match,
           tick: idx,
@@ -59,8 +59,7 @@ export default ({ sbl, match }: { sbl: Context; match: Hash }) => {
           Tick: <strong>{Number(state.tick)}</strong>
         </li>
         <li>
-          Game state:{' '}
-          <pre>
+          Game state: <pre>
             {sbl.get(Logger).serialize(state.gameState)}
           </pre>
         </li>

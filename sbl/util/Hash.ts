@@ -99,6 +99,15 @@ export default class Hash {
     return bin2hex(this.digest);
   }
 
+  public toNum() {
+    let num = 0n;
+    for (const b of this.digest) {
+      num <<= 8n;
+      num |= BigInt(b);
+    }
+    return num;
+  }
+
   public countLeadingZeros() {
     let count = 0;
     for (const b of this.digest) {

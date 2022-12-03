@@ -5,9 +5,6 @@ import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
 import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import QuestionService from '~/sbl/QuestionService.ts';
-import EpochContract from '~/graph/EpochContract.ts';
-import Answer from '~/sbl/Answer.ts';
 import Logger from '~/sbl/Logger.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
@@ -201,7 +198,7 @@ export default class SblClient {
     let height = 0n;
     setInterval(() => {
       // this.ctx.get(QuestionService).getCanonical({
-      //   contract_answer_hash: this.ctx.get(EpochContract).get().hash,
+      //   contract_hash: this.ctx.get(EpochContract).get().hash,
       //   params: this.ctx.get(EpochContract).makeParams(height++),
       // }, (answer) => console.log(answer));
     }, 1000);
@@ -222,7 +219,7 @@ export default class SblClient {
   //   onAnswer: (answer: Answer) => void,
   // ) {
   //   this.ctx.get(QuestionService).getCanonical({
-  //     contract_answer_hash: contractHash,
+  //     contract_hash: contractHash,
   //     params: contractParams,
   //   }, onAnswer);
   // }

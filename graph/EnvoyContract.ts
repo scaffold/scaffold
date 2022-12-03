@@ -1,7 +1,7 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
-import { QuestionSpec } from '~/sbl/messages.ts';
+import { Question } from '~/sbl/messages.ts';
 import { Answer } from '~/sbl/AnswerRegistry.ts';
 import * as envoyMessages from './envoyMessages.ts';
 import GraphUtils from '~/sbl/GraphUtils.ts';
@@ -12,7 +12,7 @@ export default class EnvoyContract {
   constructor(private ctx: Context) {}
 
   public get() {
-    const envoyFetchAnswer = (question: QuestionSpec) => {
+    const envoyFetchAnswer = (question: Question) => {
       let outerAnswer: Answer | undefined;
       this.ctx.get(QuestionService).getCanonical(question)
         .onAnswer((answer) => outerAnswer = answer)
@@ -29,7 +29,7 @@ export default class EnvoyContract {
       const { question } = envoyMessages.Params.decode(params);
 
       // Use this to block until a new answer becomes available,
-      const data = request(question.contract_answer_hash, question.params);
+      const data = request(question.contract_hash, question.params);
 
       // Then fetch the entire answer (not just the data portion).
       const answer = envoyFetchAnswer(question);
