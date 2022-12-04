@@ -22,7 +22,7 @@
   },
   "tasks": {
     "fmt": "deno fmt --options-single-quote --watch",
-    "build": "deno bundle --check --config=deno.jsonc --watch app.tsx build/index.js",
-    "serve": "deno run --check --allow-all --watch server/main.ts"
+    "serve-ui": "deno run --allow-all https://deno.land/x/packup/cli.ts index.html --import-map=import_map.json",
+    "serve-ws": "deno run --check --allow-all --watch server/main.ts"
   }
 }
