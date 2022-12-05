@@ -6,9 +6,10 @@
 // automatically. Either finish documenting the type signature or document why
 // `any` is appropriate.
 
-import * as stream from 'std-fix-abortable/node/stream.ts';
-import { EventEmitter } from 'std-fix-abortable/node/events.ts';
-import { Buffer } from 'std-fix-abortable/node/buffer.ts';
+// import * as stream from 'std-fix-abortable/node/stream.ts';
+// import { EventEmitter } from 'std-fix-abortable/node/events.ts';
+// import { Buffer } from 'std-latest/io/mod.ts';
+type Buffer = Uint8Array;
 
 //"virtual" namespace (no JS, just types) for Avro Schema
 declare namespace schema {
@@ -58,6 +59,7 @@ declare namespace schema {
     aliases?: readonly string[];
     doc?: string;
     symbols: readonly string[];
+    default?: string;
   }
 
   interface ArrayType {
@@ -161,6 +163,7 @@ declare class Resolver {
 
 //exported functions
 
+/*
 export function assembleProtocol(
   filePath: string,
   opts: Partial<AssembleOptions>,
@@ -206,6 +209,7 @@ export function readSchema(
   schemaIdl: string,
   options?: Partial<DecoderOptions>,
 ): Schema;
+*/
 
 // TODO more specific types than `any`
 export class Type {
@@ -242,6 +246,7 @@ export class Type {
   static isType(arg: any, ...prefix: string[]): boolean;
 }
 
+/*
 export class Service {
   constructor(name: any, messages: any, types: any, ptcl: any, server: any);
   createClient(options?: Partial<Service.ClientOptions>): Service.Client;
@@ -372,6 +377,7 @@ export namespace streams {
     constructor(schema: Schema, opts?: { batchSize?: number });
   }
 }
+*/
 
 export namespace types {
   class ArrayType extends Type {

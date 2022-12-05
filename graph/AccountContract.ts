@@ -42,16 +42,18 @@ export default class AccountContract {
     (window as any).accountGenerator = accountGenerator;
     (window as any).accountMessages = accountMessages;
 
-    const contract = this.ctx.get(GraphUtils).supplyContract(accountContract);
-    this.ctx.get(GraphUtils).supplyGenerator(contract, accountGenerator);
+    const contractHash = this.ctx.get(GraphUtils).supplyContract(
+      accountContract,
+    );
+    this.ctx.get(GraphUtils).supplyGenerator(contractHash, accountGenerator);
 
     this.ctx.get(QaDebugger).addDebugger(
       'AccountContract',
-      contract.hash,
+      contractHash,
       (params) => accountMessages.Params.decode(params),
       (answer) => accountMessages.Answer.decode(answer),
     );
 
-    return contract;
+    return contractHash;
   }
 }

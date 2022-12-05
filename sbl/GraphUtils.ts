@@ -1,12 +1,10 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
-import AnswerRegistry, { Answer } from './AnswerRegistry.ts';
-import { loadHash } from './constants.ts';
-import { SELF_CONNECTION } from './ConnectionService.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
 import RootContract from '~/graph/RootContract.ts';
-import { PublishMessage } from './messages.ts';
+import { Block, PublishMessage } from './messages.ts';
+import BlockService from './BlockService.ts';
 
 // Hacky
 (window as any).hex2bin = hex2bin;
@@ -14,19 +12,19 @@ import { PublishMessage } from './messages.ts';
 export default class GraphUtils {
   constructor(private ctx: Context) {}
 
-  public supplyRawAnswer(answer: Uint8Array) {
-    const hash = Hash.digest(answer);
+  public supplyRawAnswer(body: Uint8Array) {
+    const hash = Hash.digest(body);
 
-    return this.ctx.get(AnswerRegistry).getOrCreate({
-      question: {
-        contract_hash: this.ctx.get(RootContract).get().hash,
+    return this.ingestBlock({
+      claims: [],
+      incentives: [],
+      verifier: {
+        contract_hash: this.ctx.get(RootContract).get(),
         params: hash.toBytes(),
       },
-      inputs: [],
-      answer,
-      licenses: [],
+      body,
       timestamp: BigInt(Date.now()),
-    }, SELF_CONNECTION);
+    });
   }
 
   public supplyPubContract(
@@ -66,14 +64,14 @@ export default class GraphUtils {
     ) =>
       eval(
         new TextDecoder().decode(
-          request(this.ctx.get(RootContract).get().hash, params),
+          request(this.ctx.get(RootContract).get(), params),
         ),
       )(params, hint, new Uint8Array([]), request)
     );
   }
 
   public supplyGenerator(
-    contract: Answer,
+    contract_hash: Hash,
     generator:
       | Script
       | ((
@@ -84,13 +82,14 @@ export default class GraphUtils {
         notify: (contractHash: Hash, params: Uint8Array) => void,
       ) => Uint8Array | Promise<Uint8Array>),
   ) {
-    return this.ctx.get(AnswerRegistry).getOrCreate({
-      question: {
-        contract_hash: this.getGeneratorContract().hash,
-        params: contract.hash.toBytes(),
+    return this.ingestBlock({
+      verifier: {
+        contract_hash: this.getGeneratorContract(),
+        params: contract_hash.toBytes(),
       },
-      inputs: [],
-      answer: new TextEncoder().encode(
+      claims: [],
+      incentives: [],
+      body: new TextEncoder().encode(
         typeof generator === 'function'
           ? generator.toString()
           : `(${
@@ -101,8 +100,12 @@ export default class GraphUtils {
             ).replace(/"hex2bin\(([0-9a-f]*)\)"/g, 'hex2bin("$1")')
           })`,
       ),
-      licenses: [],
       timestamp: BigInt(Date.now()),
-    }, SELF_CONNECTION);
+    });
+  }
+
+  public ingestBlock(block: Block) {
+    this.ctx.get(BlockService).ingest(block);
+    return Hash.digest(Block.encode(block));
   }
 }

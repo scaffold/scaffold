@@ -12,12 +12,12 @@ export default class AccountService {
   constructor(private ctx: Context) {}
 
   public getNextAccountVerifier(): Verifier {
-    const contract = this.ctx.get(AccountContract).get();
+    const contractHash = this.ctx.get(AccountContract).get();
     const params = this.ctx.get(AccountContract).makeParams(
       this.nextAccountIdx,
     );
     return {
-      contract_hash: contract.hash,
+      contract_hash: contractHash,
       params,
     };
   }

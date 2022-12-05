@@ -1,0 +1,1 @@
+Branched from https://github.com/mtth/avsc, in order to eliminate the dependency on node modules and improve TS types.

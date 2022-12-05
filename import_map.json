@@ -1,12 +1,12 @@
 {
   "imports": {
     "~/": "./",
-    "react": "https://esm.sh/react@18.0.0?target=esnext&pin=v99",
-    "react-dom": "https://esm.sh/react-dom@18.0.0?target=esnext&pin=v99",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.3.0?target=esnext&pin=v99",
-    "secp256k1": "https://deno.land/x/secp256k1@1.5.5/mod.ts",
+    "react": "https://esm.sh/react@18.2.0?target=esnext&pin=v99",
+    "react-dom": "https://esm.sh/react-dom@18.2.0?target=esnext&pin=v99",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.4.4?target=esnext&pin=v99",
+    "secp256k1": "https://deno.land/x/secp256k1@1.7.0/mod.ts",
     "crypto": "./sbl/util/mock-crypto.ts",
-    "avro": "https://esm.sh/avsc@5.7.4?target=esnext&pin=v99",
+    "avro": "./avro/index.js",
     "threejs": "https://esm.sh/three@r139?target=esnext&pin=v99",
     "regl": "https://esm.sh/regl@2.1.0?target=esnext&pin=v99",
     "react-regl": "https://esm.sh/react-regl@4.3.5?target=esnext&pin=v99",
@@ -14,9 +14,9 @@
     "bunny": "https://esm.sh/bunny@1.0.1?target=esnext&pin=v99",
     "angle-normals": "https://esm.sh/angle-normals@1.0.0?target=esnext&pin=v99",
     "simplex-noise": "https://raw.githubusercontent.com/jwagner/simplex-noise.js/3.0.1/simplex-noise.ts",
-    "multiformats/": "https://cdn.skypack.dev/multiformats@9.6.4/",
-    "std-latest/": "https://deno.land/std@0.137.0/",
-    "std-fix-abortable/": "https://deno.land/std@0.128.0/",
+    "multiformats/": "https://cdn.skypack.dev/multiformats@10.0.2/",
+    "std-latest/": "https://deno.land/std@0.167.0/",
+    "std-fix-abortable/": "https://deno.land/std@0.167.0/",
     "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   },
   "scopes": {}

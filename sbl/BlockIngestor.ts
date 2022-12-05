@@ -2,7 +2,7 @@ import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import { Block, Claim, Incentive, Verifier } from './messages.ts';
 import { BlockRegistry, IncentiveRegistry } from './registries.ts';
-import { RBTree } from 'std-latest/collections/rb_tree.ts';
+import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
 import Counter from './util/Counter.ts';
 import { arrEquals } from './util/buffer.ts';
 import BlockFetcher from './BlockFetcher.ts';
@@ -34,6 +34,8 @@ export default class BlockIngestor {
         },
       );
     });
+
+    return block_hash;
   }
 
   private hashBlock(block: Block) {
@@ -62,8 +64,8 @@ export default class BlockIngestor {
   private async checkBlockMergability(block: Block) {
     const counts = new Counter<bigint>();
     const incentives = new Set<Incentive>();
-    const queue: RBTree<{ hash: Hash; block: Block; claimMask: bigint }> =
-      new RBTree((a, b) =>
+    const queue: RedBlackTree<{ hash: Hash; block: Block; claimMask: bigint }> =
+      new RedBlackTree((a, b) =>
         a.block.timestamp > b.block.timestamp
           ? 1
           : a.block.timestamp < b.block.timestamp

@@ -1,7 +1,9 @@
 import React from 'react';
 import SblClient from './SblClient.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import BlockService from '../sbl/BlockService.ts';
+// import BlockService from '~/sbl/BlockService.ts';
+// import IncentiveService from '~/sbl/IncentiveService.ts';
+import CollatzContract from '../graph/CollatzContract.ts';
 // import ThrustView from './ThrustView.tsx';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
@@ -32,19 +34,14 @@ export default () => {
       <a
         href='#'
         onClick={() => {
-          client.ctx.get(BlockService).ingest({
-            claims: [],
-            incentives: [],
-            verifier: {
-              contract_hash: Hash.random(),
-              params: new Uint8Array(),
-            },
-            body: new Uint8Array(),
-            timestamp: 123n,
-          });
+          const verifier = {
+            contract_hash: client.ctx.get(CollatzContract).get(),
+            params: client.ctx.get(CollatzContract).makeParams(10n),
+          };
+          // client.ctx.get(IncentiveService).incentivize(verifier, 10n);
         }}
       >
-        Ingest block
+        Collatz depth of 10
       </a>
 
       {gameHex && (

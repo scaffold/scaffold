@@ -1,6 +1,5 @@
-// @deno-types="../avsc_types.d.ts"
+// @deno-types="../avro/index.d.ts"
 import * as avro from 'avro';
-import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 import HashClass from './util/Hash.ts';
 
 declare global {
@@ -26,11 +25,11 @@ class HashLogicalType extends avro.types.LogicalType {
     return HashClass.fromBytes(bytes);
   }
 
-  protected _fromValue(buf: Buffer) {
+  protected _fromValue(buf: Uint8Array) {
     return this.fromBytes(buf);
   }
   protected _toValue(hash: HashClass) {
-    return Buffer.from(hash.toBytes());
+    return hash.toBytes();
   }
   protected _resolve(type: any) {
     if (avro.Type.isType(type, 'fixed') && type.getSize() === 32) {
@@ -48,11 +47,11 @@ class Uint8ArrayLogicalType extends avro.types.LogicalType {
     return bytes;
   }
 
-  protected _fromValue(buf: Buffer) {
+  protected _fromValue(buf: Uint8Array) {
     return this.fromBytes(buf);
   }
   protected _toValue(val: Uint8Array) {
-    return Buffer.from(val);
+    return val;
   }
   protected _resolve(type: any) {
     if (avro.Type.isType(type, 'bytes')) {
@@ -81,7 +80,8 @@ export type ObjectType<
   : S extends 'null' ? null
   : S extends 'boolean' ? boolean
   : S extends 'int' ? number
-  : S extends 'long' ? never
+  // : S extends 'long' ? never
+  : S extends 'long' ? bigint
   : S extends 'float' ? number
   : S extends 'double' ? number
   : S extends 'bytes' ? Uint8Array
@@ -109,10 +109,11 @@ interface Message<T> {
 }
 
 const long = avro.types.LongType.__with({
-  fromBuffer: (buf: Buffer) => buf.readBigInt64LE(),
+  fromBuffer: (buf: Uint8Array) =>
+    new DataView(buf.buffer).getBigInt64(0, true),
   toBuffer: (n: bigint) => {
-    const buf = Buffer.alloc(8);
-    buf.writeBigInt64LE(n);
+    const buf = new Uint8Array(8);
+    new DataView(buf.buffer).setBigInt64(0, n, true);
     return buf;
   },
   fromJSON: BigInt,
@@ -501,8 +502,7 @@ export const makeMsg = <
   return {
     // name,
     // type,
-    decode: (src: Uint8Array): ObjectType<Name, R> =>
-      type.decode(Buffer.from(src)).value,
+    decode: (src: Uint8Array): ObjectType<Name, R> => type.decode(src).value,
     encode: (
       msg: ObjectType<Name, R>,
       allocator: (size: number) => Uint8Array = (size: number) =>
@@ -516,6 +516,31 @@ export const makeMsg = <
     },
   };
 };
+
+/*
+export const makeMsg = <
+  R extends { [name: string]: avro.Schema },
+  Name extends avro.Schema & string & keyof R,
+>(
+  _registry: R,
+  _name: Name,
+): Message<ObjectType<Name, R>> => ({
+  // name,
+  // type,
+  decode: (src: Uint8Array): ObjectType<Name, R> => unpack(src),
+  encode: (
+    msg: ObjectType<Name, R>,
+    allocator: (size: number) => Uint8Array = (size: number) =>
+      new Uint8Array(size),
+  ) => {
+    // TODO: Eliminate copy; write directly into arr.
+    const buf = pack(msg);
+    const arr = allocator(buf.byteLength);
+    arr.set(buf);
+    return arr;
+  },
+});
+*/
 
 type MsgType<Name extends keyof typeof registry> = ObjectType<
   Name,

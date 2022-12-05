@@ -1,7 +1,6 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
-import { Buffer } from 'std-fix-abortable/node/buffer.ts';
 import QaDebugger from './QaDebugger.ts';
 
 export default class Logger {

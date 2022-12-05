@@ -63,18 +63,20 @@ export default class CollatzContract {
     (window as any).collatzGenerator = collatzGenerator;
     (window as any).collatzMessages = collatzMessages;
 
-    const contract = this.ctx.get(GraphUtils).supplyContract(collatzContract);
+    const contractHash = this.ctx.get(GraphUtils).supplyContract(
+      collatzContract,
+    );
     if (supplyGenerator) {
-      this.ctx.get(GraphUtils).supplyGenerator(contract, collatzGenerator);
+      this.ctx.get(GraphUtils).supplyGenerator(contractHash, collatzGenerator);
     }
 
     this.ctx.get(QaDebugger).addDebugger(
       'CollatzContract',
-      contract.hash,
+      contractHash,
       (params) => collatzMessages.Params.decode(params),
       (answer) => collatzMessages.Answer.decode(answer),
     );
 
-    return contract;
+    return contractHash;
   }
 }

@@ -1,15 +1,23 @@
-import { Sha256 } from 'std-latest/hash/sha256.ts';
-import { Sha3_256, Shake256 } from 'std-latest/hash/sha3.ts';
+// Uncaught RangeError: WebAssembly.Compile is disallowed on the main thread, if the buffer size is larger than 4KB. Use WebAssembly.compile, or compile on a worker thread.
+// import { crypto } from 'std-latest/crypto/mod.ts';
+
+import { Sha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
+import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, fromNumber } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 
 const hasher = {
+  // 'sha2': (data: Uint8Array) => {
+  //   return new Uint8Array(crypto.subtle.digestSync('SHA-256', data));
+  // },
+  // 'sha3': (data: Uint8Array) => {
+  //   return new Uint8Array(crypto.subtle.digestSync('SHA3-256', data));
+  // },
   'sha2': (data: Uint8Array) => {
     const algo = new Sha256();
     algo.update(data);
-    // const digest = await crypto.subtle.digest('SHA-256', data);
-    return new Uint8Array(algo.arrayBuffer());
+    return new Uint8Array(algo.digest());
   },
   'sha3': (data: Uint8Array) => {
     const algo = new Sha3_256();
