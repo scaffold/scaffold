@@ -12,6 +12,8 @@ import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import Logger from '~/sbl/Logger.ts';
 import BlockService from '../sbl/BlockService.ts';
 import Hash from '~/sbl/util/Hash.ts';
+import { BlockRegistry } from '../sbl/registries.ts';
+import CollatzContract from '../graph/CollatzContract.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -155,8 +157,19 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
     }`,
   )
 );
+// ctx.get(CollatzContract).get();
 
-self.addEventListener('unload', () => ctx.destruct());
+const itvl = setInterval(() => {
+  // const blocks = [...ctx.get(BlockRegistry).debugGetAll().entries()].map((
+  //   [hash, val],
+  // ) => ({ hash, ...val }));
+  // Deno.writeTextFile('./blocks.json', ctx.get(Logger).serialize(blocks));
+}, 1000);
+
+self.addEventListener('unload', () => {
+  clearInterval(itvl);
+  ctx.destruct();
+});
 
 // // Let's start listening to the epoch.
 // // We won't need this eventually because everyone will be requesting it.

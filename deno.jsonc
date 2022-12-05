@@ -14,7 +14,7 @@
   "lint": {},
   "fmt": {
     "files": {
-      "exclude": ["README.md", "build/"]
+      "exclude": ["README.md"]
     },
     "options": {
       "singleQuote": true

@@ -2,9 +2,11 @@ import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
-import RootContract from '~/graph/RootContract.ts';
-import { Block, PublishMessage } from './messages.ts';
+// import RootContract from '~/graph/RootContract.ts';
+import { rootHash } from '~/sbl/constants.ts';
+import { Block, PublishMessage, Verifier } from './messages.ts';
 import BlockService from './BlockService.ts';
+import { FulfillmentRegistry } from './registries.ts';
 
 // Hacky
 (window as any).hex2bin = hex2bin;
@@ -13,18 +15,17 @@ export default class GraphUtils {
   constructor(private ctx: Context) {}
 
   public supplyRawAnswer(body: Uint8Array) {
-    const hash = Hash.digest(body);
-
-    return this.ingestBlock({
+    const verifier = {
+      contract_hash: rootHash,
+      params: Hash.digest(body).toBytes(),
+    };
+    return this.maybeIngestBlock(verifier, () => ({
       claims: [],
       incentives: [],
-      verifier: {
-        contract_hash: this.ctx.get(RootContract).get(),
-        params: hash.toBytes(),
-      },
+      verifier,
       body,
       timestamp: BigInt(Date.now()),
-    });
+    }));
   }
 
   public supplyPubContract(
@@ -62,11 +63,12 @@ export default class GraphUtils {
       hint: Uint8Array, // This is the params we're evaluating at.
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
     ) =>
-      eval(
-        new TextDecoder().decode(
-          request(this.ctx.get(RootContract).get(), params),
-        ),
-      )(params, hint, new Uint8Array([]), request)
+      eval(new TextDecoder().decode(request(rootHash, params)))(
+        params,
+        hint,
+        new Uint8Array([]),
+        request,
+      )
     );
   }
 
@@ -82,11 +84,12 @@ export default class GraphUtils {
         notify: (contractHash: Hash, params: Uint8Array) => void,
       ) => Uint8Array | Promise<Uint8Array>),
   ) {
-    return this.ingestBlock({
-      verifier: {
-        contract_hash: this.getGeneratorContract(),
-        params: contract_hash.toBytes(),
-      },
+    const verifier = {
+      contract_hash: this.getGeneratorContract(),
+      params: contract_hash.toBytes(),
+    };
+    return this.maybeIngestBlock(verifier, () => ({
+      verifier,
       claims: [],
       incentives: [],
       body: new TextEncoder().encode(
@@ -101,11 +104,19 @@ export default class GraphUtils {
           })`,
       ),
       timestamp: BigInt(Date.now()),
-    });
+    }));
   }
 
-  public ingestBlock(block: Block) {
-    this.ctx.get(BlockService).ingest(block);
-    return Hash.digest(Block.encode(block));
+  private maybeIngestBlock(verifier: Verifier, blockFactory: () => Block) {
+    const verifierHash = Hash.digest(Verifier.encode(verifier));
+    const existingBlocks =
+      this.ctx.get(FulfillmentRegistry).get(verifierHash) || [];
+    if (existingBlocks.length) {
+      return Hash.digest(Block.encode(existingBlocks[0]));
+    } else {
+      const block = blockFactory();
+      this.ctx.get(BlockService).ingest(block);
+      return Hash.digest(Block.encode(block));
+    }
   }
 }

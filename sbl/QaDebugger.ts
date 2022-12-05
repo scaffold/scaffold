@@ -1,7 +1,6 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { Verifier } from './messages.ts';
-import Logger from './Logger.ts';
 
 export default class QaDebugger {
   private debuggers: Map<string, {
@@ -36,11 +35,11 @@ export default class QaDebugger {
   }
 
   public debugAnswer(
-    { question, answer }: { question: Verifier; answer: Uint8Array },
+    { verifier, body }: { verifier: Verifier; body: Uint8Array },
   ) {
-    const dbgr = this.debuggers.get(question.contract_hash.toHex());
+    const dbgr = this.debuggers.get(verifier.contract_hash.toHex());
     if (dbgr) {
-      return { dbgAnswer: dbgr.answerDebugger(answer) };
+      return { dbgAnswer: dbgr.answerDebugger(body) };
     }
   }
 }

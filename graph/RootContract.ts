@@ -24,7 +24,7 @@ export default class RootContract {
       claims: [],
       incentives: [],
       body: new TextEncoder().encode(rootContract.toString()),
-      timestamp: BigInt(Date.now()),
+      timestamp: 0n,
     });
 
     this.ctx.get(QaDebugger).addDebugger(

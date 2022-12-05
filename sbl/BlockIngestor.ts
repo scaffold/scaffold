@@ -1,39 +1,63 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import { Block, Claim, Incentive, Verifier } from './messages.ts';
-import { BlockRegistry, IncentiveRegistry } from './registries.ts';
+import {
+  BlockRegistry,
+  FulfillmentRegistry,
+  IncentiveRegistry,
+} from './registries.ts';
 import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
 import Counter from './util/Counter.ts';
 import { arrEquals } from './util/buffer.ts';
 import BlockFetcher from './BlockFetcher.ts';
+import AccountContract from '../graph/AccountContract.ts';
+import IncentiveCalculator from './IncentiveCalculator.ts';
 
 export default class BlockIngestor {
+  private ingesting: Set<string> = new Set();
+
   constructor(private ctx: Context) {}
 
   public async ingest(block: Block) {
-    this.checkZeroSum(block);
-    await Promise.all([
-      this.checkBlockTimestamp(block),
-      this.checkBlockMergability(block),
-    ]);
+    const verifier_hash = Hash.digest(Verifier.encode(block.verifier));
+    this.ctx.get(FulfillmentRegistry).getOrCreate(
+      verifier_hash,
+      () => [block],
+      (arr) => {
+        arr.push(block);
+        return arr;
+      },
+    );
 
     const block_hash = this.hashBlock(block);
-    this.ctx.get(BlockRegistry).getOrCreate(block_hash, () => block, () => {
-      throw new Error('ALREADY_EXISTS');
-    });
+    if (!this.ingesting.has(block_hash.toHex())) {
+      this.ingesting.add(block_hash.toHex());
 
-    block.incentives.forEach((incentive) => {
-      const verifier_hash = Hash.digest(Verifier.encode(incentive.verifier));
-      const claim = { block_hash, amount: incentive.amount };
-      this.ctx.get(IncentiveRegistry).getOrCreate(
-        verifier_hash,
-        () => [claim],
-        (arr) => {
-          arr.push(claim);
-          return arr;
-        },
-      );
-    });
+      this.checkZeroSum(block);
+      await Promise.all([
+        this.checkBlockTimestamp(block),
+        this.checkBlockMergability(block),
+      ]);
+
+      this.ctx.get(BlockRegistry).getOrCreate(block_hash, () => block, () => {
+        throw new Error('ALREADY_EXISTS');
+      });
+
+      block.incentives.forEach((incentive) => {
+        const verifier_hash = Hash.digest(Verifier.encode(incentive.verifier));
+        const claim = { block_hash, amount: incentive.amount };
+        this.ctx.get(IncentiveRegistry).getOrCreate(
+          verifier_hash,
+          () => [claim],
+          (arr) => {
+            arr.push(claim);
+            return arr;
+          },
+        );
+      });
+
+      this.ingesting.delete(block_hash.toHex());
+    }
 
     return block_hash;
   }
@@ -43,8 +67,8 @@ export default class BlockIngestor {
   }
 
   private checkZeroSum(block: Block) {
-    let sum = 0n;
-    block.claims.forEach(({ amount }) => sum += amount);
+    let sum = this.ctx.get(IncentiveCalculator)
+      .getAvailableIncentive(block.verifier, block.claims);
     block.incentives.forEach(({ amount }) => sum += amount);
     if (sum !== 0n) {
       throw new Error('INVALID_COIN_SUM');

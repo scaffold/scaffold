@@ -14,25 +14,7 @@ interface Entry {
 export default class IncentiveService {
   private pending: Map<string, Entry> = new Map();
 
-  constructor(private ctx: Context) {
-    const itv = setInterval(() => this.forceIncentives(), 100);
-    this.ctx.onDestruct(() => clearInterval(itv));
-  }
-
-  private forceIncentives() {
-    const now = Date.now();
-    const force: Incentive[] = [];
-    this.pending.forEach((entry, key) => {
-      if (entry.forceAfter < now) {
-        force.push(entry);
-        this.pending.delete(key);
-      }
-    });
-
-    if (force.length) {
-      this.ctx.get(AccountService).publishAnswer(force);
-    }
-  }
+  constructor(private ctx: Context) {}
 
   public incentivize(
     verifier: Verifier,
@@ -55,6 +37,7 @@ export default class IncentiveService {
   }
 
   public popIncentives(amount: bigint) {
+    const now = Date.now();
     const sorted = [...this.pending.entries()].sort((a, b) =>
       // Sort in order of increasing incentive
       // a[1].amount > b[1].amount ? 1 : a[1].amount < b[1].amount ? -1 : 0
@@ -93,6 +76,6 @@ export default class IncentiveService {
       }
     }
 
-    return res;
+    return res.map(({ verifier, amount }) => ({ verifier, amount: -amount }));
   }
 }

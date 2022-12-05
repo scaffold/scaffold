@@ -29,10 +29,14 @@ export default class Logger {
       ) {
         return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };
       } else if (
-        typeof val === 'object' && 'question' in val && 'answer' in val
+        typeof val === 'object' &&
+        'verifier' in val &&
+        'body' in val
       ) {
         return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
-      } else return val;
+      } else {
+        return val;
+      }
     }, 2);
   }
 }

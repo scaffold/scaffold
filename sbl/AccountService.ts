@@ -5,11 +5,15 @@ import { SELF_CONNECTION } from './ConnectionService.ts';
 import { Incentive, Verifier } from './messages.ts';
 import BlockService from './BlockService.ts';
 import BlockBuilder from './BlockBuilder.ts';
+import Hash from './util/Hash.ts';
 
 export default class AccountService {
   private nextAccountIdx = 0n;
 
-  constructor(private ctx: Context) {}
+  constructor(private ctx: Context) {
+    const itv = setInterval(() => this.publishAnswer(), 100);
+    this.ctx.onDestruct(() => clearInterval(itv));
+  }
 
   public getNextAccountVerifier(): Verifier {
     const contractHash = this.ctx.get(AccountContract).get();
@@ -22,14 +26,18 @@ export default class AccountService {
     };
   }
 
-  public publishAnswer(incentives: Incentive[]) {
+  private publishAnswer() {
     const verifier = this.getNextAccountVerifier();
-    const block = this.ctx.get(BlockBuilder).build(
-      verifier,
-      new Uint8Array([]),
-      incentives,
-    );
-    this.ctx.get(BlockService).ingest(block);
+    const block = this.ctx.get(BlockBuilder)
+      .build(verifier, new Uint8Array([]));
+    if (
+      block.incentives.some((incentive) =>
+        !Hash.equals(incentive.verifier.contract_hash, verifier.contract_hash)
+      )
+    ) {
+      this.ctx.get(BlockService).ingest(block);
+      this.nextAccountIdx++;
+    }
 
     // const answer = this.ctx.get(AnswerRegistry).getOrCreate({
     //   question: { contract_hash: contract.hash, params },
@@ -51,7 +59,5 @@ export default class AccountService {
     // this.ctx.get(NodeService).getAll().map((node) =>
     //   this.ctx.get(PublicationService).publish(node, answer)
     // );
-
-    this.nextAccountIdx++;
   }
 }

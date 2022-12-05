@@ -40,6 +40,10 @@ export default class Hash {
     return new Hash(hex2bin(hex));
   }
 
+  public static fromPrimitive(primitive: string) {
+    return Hash.fromHex(primitive);
+  }
+
   public static fromFraction(num: number, den: number) {
     // TODO: Make this more accurate
     if (num < den) {
@@ -114,6 +118,11 @@ export default class Hash {
       num |= BigInt(b);
     }
     return num;
+  }
+
+  public toPrimitive() {
+    return this.toHex();
+    // return this.toNum();
   }
 
   public countLeadingZeros() {
@@ -194,3 +203,7 @@ export default class Hash {
     return 0;
   }
 }
+
+export type HashPrimitive = ReturnType<
+  ReturnType<typeof Hash.random>['toPrimitive']
+>;

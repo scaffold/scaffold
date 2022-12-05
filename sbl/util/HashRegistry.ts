@@ -18,12 +18,16 @@ export default abstract class HashRegistry<V> {
   //   return this.map.values();
   // }
 
+  public debugGetAll() {
+    return this.map;
+  }
+
   public get(hash: Hash): V | undefined {
-    return this.map.get(hash.toHex());
+    return this.map.get(hash.toPrimitive());
   }
 
   public getOrWait(hash: Hash): V | Promise<V> {
-    const key = hash.toHex();
+    const key = hash.toPrimitive();
     const val = this.map.get(key);
     if (val) {
       return val;
@@ -44,7 +48,7 @@ export default abstract class HashRegistry<V> {
     creator: () => V,
     mutator?: (v: V) => V,
   ) {
-    const hex = hash.toHex();
+    const hex = hash.toPrimitive();
     let val = this.map.get(hex);
     if (!val) {
       val = creator();
@@ -62,7 +66,7 @@ export default abstract class HashRegistry<V> {
   }
 
   public pop(hash: Hash) {
-    const hex = hash.toHex();
+    const hex = hash.toPrimitive();
     const val = this.map.get(hex);
     if (val) {
       this.map.delete(hex);
