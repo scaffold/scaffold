@@ -21,9 +21,9 @@ export default class BlockIngestor {
   constructor(private ctx: Context) {}
 
   public async ingest(block: Block) {
-    const verifier_hash = Hash.digest(Verifier.encode(block.verifier));
+    const verifierHash = Hash.digest(Verifier.encode(block.verifier));
     this.ctx.get(FulfillmentRegistry).getOrCreate(
-      verifier_hash,
+      verifierHash,
       () => [block],
       (arr) => {
         arr.push(block);

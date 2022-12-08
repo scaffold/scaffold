@@ -3,6 +3,7 @@ import Hash from './util/Hash.ts';
 import { Incentive, Verifier } from './messages.ts';
 import AccountService from './AccountService.ts';
 import { getOrCreate } from './util/map.ts';
+import { PendingIncentiveRegistry } from './registries.ts';
 
 interface Entry {
   verifier: Verifier;
@@ -12,8 +13,6 @@ interface Entry {
 
 // Perhaps IncentiveProvider?
 export default class IncentiveService {
-  private pending: Map<string, Entry> = new Map();
-
   constructor(private ctx: Context) {}
 
   public incentivize(
@@ -22,10 +21,8 @@ export default class IncentiveService {
     forceAfter = Date.now() + 1000,
   ) {
     if (amount > 0n) {
-      const key = Hash.digest(Verifier.encode(verifier)).toHex();
-      getOrCreate(
-        this.pending,
-        key,
+      this.ctx.get(PendingIncentiveRegistry).getOrCreate(
+        Hash.digest(Verifier.encode(verifier)),
         () => ({ verifier, amount, forceAfter }),
         (entry) => {
           entry.amount += amount;
@@ -38,16 +35,17 @@ export default class IncentiveService {
 
   public popIncentives(amount: bigint) {
     const now = Date.now();
-    const sorted = [...this.pending.entries()].sort((a, b) =>
-      // Sort in order of increasing incentive
-      // a[1].amount > b[1].amount ? 1 : a[1].amount < b[1].amount ? -1 : 0
-      // Sort in order of force timestamp
-      a[1].forceAfter > b[1].forceAfter
-        ? 1
-        : a[1].forceAfter < b[1].forceAfter
-        ? -1
-        : 0
-    );
+    const sorted = this.ctx.get(PendingIncentiveRegistry).getAll()
+      .sort((a, b) =>
+        // Sort in order of increasing incentive
+        // a.val.amount > b.val.amount ? 1 : a.val.amount < b.val.amount ? -1 : 0
+        // Sort in order of force timestamp
+        a.val.forceAfter > b.val.forceAfter
+          ? 1
+          : a.val.forceAfter < b.val.forceAfter
+          ? -1
+          : 0
+      );
 
     const res: Incentive[] = [];
 
@@ -60,16 +58,15 @@ export default class IncentiveService {
         });
         break;
       }
-      const [key, entry] = head;
 
-      if (entry.amount <= amount) {
-        amount -= entry.amount;
-        this.pending.delete(key);
-        res.push(entry);
+      if (head.val.amount <= amount) {
+        amount -= head.val.amount;
+        this.ctx.get(PendingIncentiveRegistry).pop(head.key);
+        res.push(head.val);
       } else {
-        entry.amount -= amount;
+        head.val.amount -= amount;
         res.push({
-          verifier: entry.verifier,
+          verifier: head.val.verifier,
           amount,
         });
         break;

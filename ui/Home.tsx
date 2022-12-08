@@ -4,11 +4,15 @@ import Hash from '~/sbl/util/Hash.ts';
 // import BlockService from '~/sbl/BlockService.ts';
 import IncentiveService from '~/sbl/IncentiveService.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
+import WorkLoop from '../sbl/WorkLoop.ts';
+import { IncentiveRegistry } from '../sbl/registries.ts';
 // import ThrustView from './ThrustView.tsx';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
+
+client.ctx.get(WorkLoop);
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));

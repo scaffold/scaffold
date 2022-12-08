@@ -34,11 +34,13 @@ export class FulfillmentStore extends Store<Claim> {
   constructor(private ctx: Context) {
     super(
       ctx.get(BlockStore).map((hash, block, emit) => {
-        block.incentives.forEach(incentive => {
-        const verifier_hash = Hash.digest(Verifier.encode(incentive.verifier));
-        const claim = { block_hash:hash, amount: incentive.amount };
-        emit(verifier_hash, claim)
-      })
+        block.incentives.forEach((incentive) => {
+          const verifier_hash = Hash.digest(
+            Verifier.encode(incentive.verifier),
+          );
+          const claim = { block_hash: hash, amount: incentive.amount };
+          emit(verifier_hash, claim);
+        });
       }),
     );
   }
@@ -58,7 +60,7 @@ export class FulfillmentStore extends Store<Claim> {
 /*
 Pick a block to compute. This is based on:
   Predict expected timestamp (on the block)
-  
+
 
 Sample evenly from block distriubtion:
   Each peer sends summaries (BlockSets) of what it sees
@@ -84,9 +86,7 @@ Pay to (y = answer to question X with author Y; claim to question Z of answer y)
   This is complicated and kind of an exchange that only benefits 2 parties, so I don't think we need it.
 */
 
-
-
-
+/*
 interface BlockSubnetMeta {
   isIoZeroSum?: boolean;
 }
@@ -99,7 +99,7 @@ generator block -> verifier hash
 non-generator block -> null
 
 
-With a subset of blocks we have - 
+With a subset of blocks we have -
 
 
 
@@ -127,3 +127,5 @@ With a subset of blocks we have -
     }
 
     return block_hash;
+
+    */

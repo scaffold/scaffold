@@ -9,10 +9,8 @@ import {
   JobMessage,
   WorkerComm,
 } from './worker/workerTypes.ts';
-import { Question } from './messages.ts';
 import RootContract from '~/graph/RootContract.ts';
 import { Answer } from './AnswerRegistry.ts';
-import { error } from './util/functional.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging

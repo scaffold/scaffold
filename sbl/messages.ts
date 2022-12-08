@@ -216,6 +216,15 @@ export const registry = {
     ],
   },
 
+  BidMessage: {
+    name: 'BidMessage',
+    type: 'record',
+    fields: [
+      { name: 'verifier', type: 'Verifier' },
+      { name: 'output', type: 'Verifier' },
+      { name: 'bid', type: 'long' },
+    ],
+  },
   PublicationMessage: {
     name: 'PublicationMessage',
     type: 'record',
@@ -463,6 +472,7 @@ export const registry = {
       {
         name: 'message',
         type: [
+          'BidMessage',
           'PublicationMessage',
           'RequestBlockMessage',
           'InfoMessage',
@@ -576,6 +586,8 @@ export const Incentive = makeMsg(registry, 'Incentive');
 export type Incentive = MsgType<'Incentive'>;
 export const Block = makeMsg(registry, 'Block');
 export type Block = MsgType<'Block'>;
+export const BidMessage = makeMsg(registry, 'BidMessage');
+export type BidMessage = MsgType<'BidMessage'>;
 export const PublicationMessage = makeMsg(registry, 'PublicationMessage');
 export type PublicationMessage = MsgType<'PublicationMessage'>;
 export const RequestBlockMessage = makeMsg(registry, 'RequestBlockMessage');

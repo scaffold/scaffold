@@ -5,6 +5,11 @@ import { Block, Claim, Incentive, Verifier } from './messages.ts';
 // Hash<Block> -> Block
 export class BlockRegistry extends HashRegistry<Block> {}
 
+// Hash<Verifier> -> Things I want to incentivize that I haven't sent yet
+export class PendingIncentiveRegistry extends HashRegistry<
+  { verifier: Verifier; amount: bigint; forceAfter: number }
+> {}
+
 // Hash<Verifier> -> Things I can claim if I publish an answer
 export class IncentiveRegistry
   extends HashRegistry<{ verifier: Verifier; claims: Claim[] }> {}

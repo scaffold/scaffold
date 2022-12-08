@@ -14,6 +14,7 @@ import BlockService from '../sbl/BlockService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { BlockRegistry } from '../sbl/registries.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
+import WorkLoop from '../sbl/WorkLoop.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -165,6 +166,8 @@ const itvl = setInterval(() => {
   // ) => ({ hash, ...val }));
   // Deno.writeTextFile('./blocks.json', ctx.get(Logger).serialize(blocks));
 }, 1000);
+
+// ctx.get(WorkLoop);
 
 self.addEventListener('unload', () => {
   clearInterval(itvl);
