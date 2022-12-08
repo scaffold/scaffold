@@ -4,6 +4,7 @@ import { Block, Claim, Incentive, Verifier } from './messages.ts';
 import {
   BlockRegistry,
   FulfillmentRegistry,
+  GeneratorRegistry,
   IncentiveRegistry,
 } from './registries.ts';
 import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
@@ -12,6 +13,7 @@ import { arrEquals } from './util/buffer.ts';
 import BlockFetcher from './BlockFetcher.ts';
 import AccountContract from '../graph/AccountContract.ts';
 import IncentiveCalculator from './IncentiveCalculator.ts';
+import GraphUtils from './GraphUtils.ts';
 
 export default class BlockIngestor {
   private ingesting: Set<string> = new Set();
@@ -28,6 +30,22 @@ export default class BlockIngestor {
         return arr;
       },
     );
+
+    if (
+      Hash.equals(
+        block.verifier.contract_hash,
+        this.ctx.get(GraphUtils).getGeneratorContract(),
+      )
+    ) {
+      this.ctx.get(GeneratorRegistry).getOrCreate(
+        Hash.fromBytes(block.verifier.params),
+        () => [block],
+        (arr) => {
+          arr.push(block);
+          return arr;
+        },
+      );
+    }
 
     const block_hash = this.hashBlock(block);
     if (!this.ingesting.has(block_hash.toHex())) {
@@ -48,10 +66,10 @@ export default class BlockIngestor {
         const claim = { block_hash, amount: incentive.amount };
         this.ctx.get(IncentiveRegistry).getOrCreate(
           verifier_hash,
-          () => [claim],
-          (arr) => {
-            arr.push(claim);
-            return arr;
+          () => ({ verifier: incentive.verifier, claims: [claim] }),
+          (entry) => {
+            entry.claims.push(claim);
+            return entry;
           },
         );
       });

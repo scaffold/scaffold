@@ -10,7 +10,8 @@ export default class BlockBuilder {
 
   public build(verifier: Verifier, body: Uint8Array): Block {
     const verifier_hash = Hash.digest(Verifier.encode(verifier));
-    const claims = this.ctx.get(IncentiveRegistry).pop(verifier_hash) || [];
+    const claims = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.claims ||
+      [];
     const amount = this.ctx.get(IncentiveCalculator)
       .getAvailableIncentive(verifier, claims);
     const incentives = this.ctx.get(IncentiveService).popIncentives(amount);

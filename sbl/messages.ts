@@ -167,16 +167,18 @@ export const registry = {
     name: 'Claim',
     type: 'record',
     fields: [
-      { name: 'block_hash', type: 'Hash' },
       { name: 'amount', type: 'long' },
+      { name: 'block_hash', type: 'Hash' },
     ],
   },
   Incentive: {
     name: 'Incentive',
     type: 'record',
     fields: [
-      { name: 'verifier', type: 'Verifier' },
       { name: 'amount', type: 'long' },
+      { name: 'verifier', type: 'Verifier' },
+      // { name: 'verifier', type: ['null', 'Verifier'] },
+      // { name: 'author', type: ['null', 'bytes'] },
     ],
   },
   Block: {
@@ -196,6 +198,21 @@ export const registry = {
       // For questions with easy, rewarding answers (like epochs),
       //   the answer will be created as soon as possible after the required timestamp.
       { name: 'timestamp', type: 'long' },
+    ],
+  },
+  BlockSet: {
+    // BlockSets are only useful if a peer has all claims & frontier blocks
+    name: 'BlockSet',
+    type: 'record',
+    fields: [
+      { name: 'claims', type: { type: 'array', items: 'Claim' } },
+      { name: 'incentives', type: { type: 'array', items: 'Incentive' } },
+
+      // Allowing BlockSets to have verifiers allows for a lot of fun things
+      // { name: 'verifier', type: 'Verifier' },
+
+      // Set of block hashes to start enumeration from. Enumeration goes back in time, terminating at blocks included in claims.
+      { name: 'frontier', type: { type: 'array', items: 'Hash' } },
     ],
   },
 

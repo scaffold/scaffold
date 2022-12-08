@@ -10,8 +10,8 @@ export default class BlockService {
   constructor(private ctx: Context) {}
 
   public async ingest(block: Block) {
-    const blockHash = Hash.digest(Block.encode(block));
-    this.ctx.get(BlockStore).insert(blockHash, block);
+    // const blockHash = Hash.digest(Block.encode(block));
+    // this.ctx.get(BlockStore).insert(blockHash, block);
 
     try {
       await this.ctx.get(BlockIngestor).ingest(block);

@@ -1,9 +1,9 @@
 import Context from '../Context.ts';
-import Hash from './Hash.ts';
+import Hash, { HashPrimitive } from './Hash.ts';
 
 export default abstract class HashRegistry<V> {
-  private map: Map<string, V> = new Map();
-  private listeners: Map<string, ((value: V) => void)[]> = new Map();
+  private map: Map<HashPrimitive, V> = new Map();
+  private listeners: Map<HashPrimitive, ((value: V) => void)[]> = new Map();
 
   constructor(private ctx: Context) {
     // setInterval(() => {
@@ -11,12 +11,15 @@ export default abstract class HashRegistry<V> {
     // }, 60000);
   }
 
-  // public size() {
-  //   return this.map.size;
-  // }
-  // public getAll() {
-  //   return this.map.values();
-  // }
+  public size() {
+    return this.map.size;
+  }
+  public getAll() {
+    return Array.from(
+      this.map,
+      ([key, val]) => ({ key: Hash.fromPrimitive(key), val }),
+    );
+  }
 
   public debugGetAll() {
     return this.map;
