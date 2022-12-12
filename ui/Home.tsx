@@ -6,6 +6,7 @@ import IncentiveService from '~/sbl/IncentiveService.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
 import WorkLoop from '../sbl/WorkLoop.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
+import BlockTableView from './BlockTableView.tsx';
 // import ThrustView from './ThrustView.tsx';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
@@ -47,6 +48,7 @@ export default () => {
       >
         Collatz depth of 10
       </a>
+      <BlockTableView ctx={client.ctx} />
 
       {gameHex && (
         <>

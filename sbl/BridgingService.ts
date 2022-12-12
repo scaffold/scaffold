@@ -43,29 +43,9 @@ export default class BridgingService {
 
   public handleBridgeEndMessage(msgCtx: MessageCtx, msg: BridgeEndMessage) {
     const { protocol, data } = msg.connection_spec;
-
     const node = this.ctx.get(NodeService).lookup(msg.src_node_hash);
-    getOrCreate(
-      node.connections,
-      protocol,
-      () => {
-        const onListen = (spec: string) =>
-          this.ctx.get(BridgingService).sendConnSpec(
-            msgCtx.conn.node,
-            node.hash,
-            {
-              protocol,
-              data: spec,
-            },
-          );
-        const onNewConn = (provider: ConnectionProvider) =>
-          this.ctx.get(ConnectionService).initConnection(protocol, provider);
-
-        return this.ctx.config.networkProvider.protocols.get(protocol)!.create(
-          onListen,
-          onNewConn,
-        );
-      },
-    ).tryConnect(data);
+    this.ctx.get(NodeService)
+      .provideConnection(msgCtx.conn.node, node, protocol)
+      .tryConnect(data);
   }
 }

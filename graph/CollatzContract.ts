@@ -20,10 +20,6 @@ export default class CollatzContract {
       emitCorrect: boolean,
       request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
     ) => {
-      if (!emitCorrect) {
-        return new TextEncoder().encode('DUPE');
-      }
-
       const { num } = collatzMessages.Params.decode(params);
 
       let answer: collatzMessages.Answer;
@@ -39,7 +35,7 @@ export default class CollatzContract {
           ),
         );
         answer = {
-          stopping_time: prev.stopping_time + 1n,
+          stopping_time: prev.stopping_time + 1n + (emitCorrect ? 0n : 1n),
           maximum: num > prev.maximum ? num : prev.maximum,
         };
       }

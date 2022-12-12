@@ -10,22 +10,27 @@ import { InfoMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 import DhtService from './DhtService.ts';
 
-// TODO: Split into connected and unconnected nodes. This will help eliminate optionals.
+// TODO: Maybe split into connected and unconnected nodes. This will help eliminate optionals.
 export interface Node {
   hash: Hash;
 
-  // Map from protocols to connections.
-  connections: Map<
-    string,
-    { tryConnect(spec: string): void; conn?: Connection }
-  >;
+  // Map from protocols to currently active (but perhaps not yet ready) connections.
+  connections: Map<string, {
+    tryConnect(spec: string): void;
+
+    // If this is set, the connection is ready.
+    conn?: Connection;
+  }>;
 
   // This should be set to the fastest connection ready for sending.
   defaultConn?: Connection;
   // Connection promise?
 
   lastInfoTime: number;
+
+  // The set of protocols that the node itself has vouched for (not its neighbors)
   handledProtocols?: string[];
+
   neighbors: Set<Node>;
 
   // Number of network hops required to reach this node.
@@ -99,23 +104,24 @@ export default class NodeService {
     return node;
   }
 
-  public initConnectionViaBridge(bridge: Node, node: Node, protocol: string) {
-    getOrCreate(node.connections, protocol, () => {
-      const onListen = (spec: string) =>
-        // TODO: Don't require bridge, but calculate the path to the node
-        this.ctx.get(BridgingService).sendConnSpec(bridge, node.hash, {
-          protocol,
-          data: spec,
-        });
-      const onNewConn = (provider: ConnectionProvider) =>
-        this.ctx.get(ConnectionService).initConnection(protocol, provider);
+  // // Use this.connectViaBridge
+  // public initConnectionViaBridge(bridge: Node, node: Node, protocol: string) {
+  //   getOrCreate(node.connections, protocol, () => {
+  //     const onListen = (spec: string) =>
+  //       // TODO: Don't require bridge, but calculate the path to the node
+  //       this.ctx.get(BridgingService).sendConnSpec(bridge, node.hash, {
+  //         protocol,
+  //         data: spec,
+  //       });
+  //     const onNewConn = (provider: ConnectionProvider) =>
+  //       this.ctx.get(ConnectionService).initConnection(protocol, provider);
 
-      return this.ctx.config.networkProvider.protocols.get(protocol)!.create(
-        onListen,
-        onNewConn,
-      );
-    });
-  }
+  //     return this.ctx.config.networkProvider.protocols.get(protocol)!.create(
+  //       onListen,
+  //       onNewConn,
+  //     );
+  //   });
+  // }
 
   public addConnection(node: Node, protocol: string, conn: Connection) {
     const connObj = getOrCreate(
@@ -169,11 +175,14 @@ export default class NodeService {
   public handleInfoMessage(msgCtx: MessageCtx, msg: InfoMessage) {
     const node = msgCtx.conn.node;
 
+    node.handledProtocols = msg.handled_protocols;
     node.neighbors.clear();
     node.hops = Infinity;
     msg.neighbors.forEach((neighbor) => {
       const neighborNode = this.lookup(neighbor.node_hash);
-      neighborNode.handledProtocols = neighbor.handled_protocols;
+      if (!Hash.equals(neighbor.node_hash, this.selfHash)) {
+        this.connectViaBridge(node, neighborNode, neighbor.handled_protocols);
+      }
 
       neighborNode.neighbors.add(node);
       node.neighbors.add(neighborNode);
@@ -186,36 +195,63 @@ export default class NodeService {
     );
   }
 
-  public connectViaBridge(bridge: Node, toNode: Node) {
-    if (!toNode.handledProtocols) {
-      throw new Error(
-        `Cannot bridge to node ${toNode.hash.toHex()} because we don't know it's handled protocols`,
-      );
+  public connectViaBridge(bridge: Node, toNode: Node, protocols: string[]) {
+    if (Hash.equals(bridge.hash, this.selfHash)) {
+      throw new Error(`Cannot connect via self`);
     }
-    const sharedProtocols = toNode.handledProtocols.filter((protocol) =>
-      this.ctx.config.networkProvider.protocols.has(protocol)
+    if (Hash.equals(toNode.hash, this.selfHash)) {
+      throw new Error(`Cannot connect to self`);
+    }
+
+    const sharedProtocols = protocols.filter((protocol) =>
+      this.ctx.config.networkProvider.protocols.get(protocol)?.createClient
     );
     if (sharedProtocols.length === 0) {
       throw new Error(
         `No shared protocols for communicating with node ${toNode.hash.toHex()}; I have ${
-          Object.keys(this.ctx.config.networkProvider.protocols).join(',')
-        } and remote node has ${toNode.handledProtocols.join(',')}`,
+          [...this.ctx.config.networkProvider.protocols.keys()].join(',')
+        } and remote node has ${protocols.join(',')}`,
       );
     }
 
-    sharedProtocols.forEach((protocol) => {
-      const onListen = (spec: string) =>
-        this.ctx.get(BridgingService).sendConnSpec(bridge, toNode.hash, {
-          protocol,
-          data: spec,
-        });
-      const onNewConn = (provider: ConnectionProvider) =>
-        this.ctx.get(ConnectionService).initConnection(protocol, provider);
+    sharedProtocols.forEach((protocol) =>
+      this.provideConnection(bridge, toNode, protocol)
+    );
+  }
 
-      this.ctx.config.networkProvider.protocols.get(protocol)!.create(
-        onListen,
-        onNewConn,
-      );
-    });
+  public provideConnection(bridge: Node, toNode: Node, protocol: string) {
+    if (Hash.equals(bridge.hash, this.selfHash)) {
+      throw new Error(`Cannot connect via self`);
+    }
+    if (Hash.equals(toNode.hash, this.selfHash)) {
+      throw new Error(`Cannot connect to self`);
+    }
+
+    return getOrCreate(
+      toNode.connections,
+      protocol,
+      () => {
+        const provider = this.ctx.config.networkProvider.protocols.get(
+          protocol,
+        );
+        if (!provider) {
+          throw new Error(`Invalid protocol ${protocol}`);
+        }
+        if (!provider.createClient) {
+          throw new Error(`Provider isn't able to create clients`);
+        }
+
+        const onListen = (spec: string) =>
+          this.ctx.get(BridgingService).sendConnSpec(
+            bridge,
+            toNode.hash,
+            { protocol, data: spec },
+          );
+        const onNewConn = (provider: ConnectionProvider) =>
+          this.ctx.get(ConnectionService).initConnection(protocol, provider);
+
+        return provider.createClient(onListen, onNewConn);
+      },
+    );
   }
 }

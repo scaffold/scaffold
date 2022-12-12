@@ -1,3 +1,5 @@
+import Hash from './util/Hash.ts';
+
 export type ConnectionProvider = {
   // Does not need to maintain order between sends, but does need to make sure packet's aren't dropped or mangled.
   sendReliable(data: Uint8Array): void;
@@ -13,20 +15,21 @@ export type ConnectionProvider = {
 };
 
 export type ProtocolProvider = {
-  // Only call onNewConn once the connection is established and data is ready to be sent.
+  createServer?(
+    onListen: (spec: string) => void,
+    onNewConn: (conn: ConnectionProvider) => void,
+  ): void;
+
+  // Only call onNewConn once the connection is established and data can be sent.
   // You can call tryConnect as often as you'd like. Calls after the connection is established are no-ops.
   // Don't call onListen after onNewConn is called.
-  create(
+  createClient?(
+    // onListen events will be transmitted to the remote node via tryConnect
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ): {
     tryConnect(spec: string): void;
   };
-
-  serve?(
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ): void;
 };
 
 type NetworkProvider = {

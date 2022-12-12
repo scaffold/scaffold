@@ -55,7 +55,7 @@ export default class ConnectionService {
     const protocolProvider =
       this.ctx.config.networkProvider.protocols.get(protocol) ||
       error(`Protocol ${protocol} has no provider`);
-    protocolProvider.create(onListen, onNewConn).tryConnect(spec);
+    protocolProvider.createClient!(onListen, onNewConn).tryConnect(spec);
   }
 
   // public connect(protocol: string): { tryConnect(spec: string): void } {
@@ -202,7 +202,7 @@ export default class ConnectionService {
         const packet = Packet.decode(msgData);
 
         console.log(
-          `${this.ctx.config.debugName} received message`,
+          `${this.ctx.config.debugName} received message from ${protocol}`,
           this.ctx.get(Logger).serialize(packet.message),
         );
 
@@ -234,6 +234,8 @@ export default class ConnectionService {
               `Received InfoMessage but the signature doesn't verify`,
             );
           }
+
+          // TODO: Prevent replay attacks with a challenge/response thing here
 
           const hash = this.ctx
             .get(NodeService)

@@ -7,12 +7,18 @@ import { rootHash } from '~/sbl/constants.ts';
 import { Block, PublishMessage, Verifier } from './messages.ts';
 import BlockService from './BlockService.ts';
 import { FulfillmentRegistry } from './registries.ts';
+import QaDebugger from './QaDebugger.ts';
 
 // Hacky
 (window as any).hex2bin = hex2bin;
 
 export default class GraphUtils {
-  constructor(private ctx: Context) {}
+  constructor(private ctx: Context) {
+    this.ctx.get(QaDebugger).addDebugger(
+      'GeneratorContract',
+      this.getGeneratorContract(),
+    );
+  }
 
   public supplyRawAnswer(body: Uint8Array) {
     const verifier = {

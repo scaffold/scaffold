@@ -222,7 +222,7 @@ export const registry = {
     fields: [
       { name: 'verifier', type: 'Verifier' },
       { name: 'output', type: 'Verifier' },
-      { name: 'bid', type: 'long' },
+      // { name: 'bid', type: 'long' },
     ],
   },
   PublicationMessage: {
@@ -286,6 +286,7 @@ export const registry = {
       { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
     ],
   },
+  // TODO: Prevent replay attacks with a challenge/response thing here
   InfoMessage: {
     name: 'InfoMessage',
     type: 'record',
@@ -297,6 +298,7 @@ export const registry = {
       { name: 'client_name', type: 'string' },
       { name: 'protocol_version', type: 'string' },
       { name: 'age_ptr', type: 'string' },
+      { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
 
       { name: 'neighbors', type: { type: 'array', items: 'Neighbor' } },
     ],

@@ -70,6 +70,10 @@ type Config = {
   // requiredProfitPerComputeRatio: number;
 
   initialWorkerCount: number;
+
+  onlyBridge?: boolean;
+
+  computeContracts: Hash[];
 };
 
 export default Config;

@@ -33,12 +33,15 @@ export default class InfoService {
         client_name: '',
         protocol_version: '',
         age_ptr: '',
-        neighbors: this.ctx.get(NodeService).getAll().filter(
-          (node) => node.defaultConn,
-        ).map((node) => ({
-          node_hash: node.hash,
-          handled_protocols: node.handledProtocols || [],
-        })),
+        handled_protocols: [...this.ctx.config.networkProvider.protocols]
+          .filter(([_key, provider]) => provider.createClient)
+          .map(([key, _provider]) => key),
+        neighbors: this.ctx.get(NodeService).getAll()
+          .filter((node) => node.defaultConn)
+          .map((node) => ({
+            node_hash: node.hash,
+            handled_protocols: node.handledProtocols || [],
+          })),
       },
     };
   }

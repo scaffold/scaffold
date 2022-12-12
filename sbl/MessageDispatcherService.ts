@@ -66,6 +66,10 @@ export default class MessageDispatcherService {
       );
     }
 
+    if (this.ctx.config.onlyBridge) {
+      return;
+    }
+
     if ('PublicationMessage' in msg) {
       this.ctx.get(BlockService).ingest(msg.PublicationMessage.block);
     }

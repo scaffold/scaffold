@@ -12,7 +12,7 @@ import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 // window['Deno'] = {};
 
 const websocketProvider: ProtocolProvider = {
-  create: (
+  createClient: (
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
@@ -61,73 +61,123 @@ const iceServersPromise = Promise.all(
 );
 
 const webrtcProvider: ProtocolProvider = {
-  create: (
+  createClient: (
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
-    const connPromise = (async () => {
-      const config = { iceServers: await iceServersPromise };
-      const conn = new RTCPeerConnection(config);
+    const orderHash = Hash.random();
 
-      conn.ondatachannel = (e) => console.log('ondatachannel', e);
+    let reliableChannel: RTCDataChannel | undefined;
+    let fastChannel: RTCDataChannel | undefined;
+    const bufferedMsgs: Uint8Array[] = [];
+    const isOpen: { [key: string]: boolean } = { reliable: false, fast: false };
 
-      const reliableChannel = conn.createDataChannel('reliable', {
+    const dispatchNewConn = (conn: RTCPeerConnection) =>
+      onNewConn({
+        sendReliable: (data: Uint8Array) => reliableChannel!.send(data),
+        sendFast: (data: Uint8Array) => fastChannel!.send(data),
+        onRecv: (handler: (data: Uint8Array) => void) => {
+          bufferedMsgs.forEach(handler);
+          bufferedMsgs.length = 0;
+          const messageHandler = (e: MessageEvent<ArrayBuffer>) =>
+            handler(new Uint8Array(e.data));
+          reliableChannel!.onmessage = messageHandler;
+          fastChannel!.onmessage = messageHandler;
+        },
+        close: () => conn.close(),
+        onClose: (_handler: () => void) =>
+          conn.onconnectionstatechange = (e) =>
+            console.log(
+              'onconnectionstatechange',
+              e,
+              conn.connectionState,
+            ),
+      });
+    const createChannels = (conn: RTCPeerConnection) => {
+      reliableChannel = conn.createDataChannel('reliable', {
         ordered: true,
         maxRetransmits: undefined,
       });
-      reliableChannel.binaryType = 'arraybuffer';
-      reliableChannel.onopen = (e) => console.log('onopen', e);
-      reliableChannel.onmessage = (e) => console.log('onmessage', e.data);
-      reliableChannel.onclose = (e) => console.log('onclose', e);
+      setupChannel(conn, reliableChannel);
 
-      const fastChannel = conn.createDataChannel('fast', {
+      fastChannel = conn.createDataChannel('fast', {
         ordered: false,
         maxRetransmits: 0,
       });
-      fastChannel.binaryType = 'arraybuffer';
-      fastChannel.onopen = (e) => console.log('onopen', e);
-      fastChannel.onmessage = (e) => console.log('onmessage', e.data);
-      fastChannel.onclose = (e) => console.log('onclose', e);
+      setupChannel(conn, fastChannel);
+    };
+    const listenForChannels = (conn: RTCPeerConnection) => {
+      conn.ondatachannel = (e) => {
+        switch (e.channel.label) {
+          case 'reliable':
+            reliableChannel = e.channel;
+            setupChannel(conn, reliableChannel);
+            break;
+
+          case 'fast':
+            fastChannel = e.channel;
+            setupChannel(conn, fastChannel);
+            break;
+
+          default:
+            throw new Error(`Unexpected channel label ${e.channel.label}`);
+        }
+      };
+    };
+    const setupChannel = (conn: RTCPeerConnection, channel: RTCDataChannel) => {
+      console.log('READYSTATE', channel.readyState);
+      channel.binaryType = 'arraybuffer';
+      channel.onopen = (_e) => {
+        isOpen[channel.label] = true;
+        if (isOpen['reliable'] && isOpen['fast']) {
+          console.log('READY');
+          dispatchNewConn(conn);
+        }
+      };
+      channel.onmessage = (e) => bufferedMsgs.push(new Uint8Array(e.data));
+      channel.onclose = (_e) => {
+        isOpen[channel.label] = false;
+      };
+    };
+
+    const connPromise = (async () => {
+      onListen(JSON.stringify({ orderHex: orderHash.toHex() }));
+
+      const config = { iceServers: await iceServersPromise };
+      const conn = new RTCPeerConnection(config);
 
       conn.onicecandidate = (e) =>
         e.candidate && onListen(JSON.stringify({ iceCandidate: e.candidate }));
-
-      conn.createOffer().then((offer) => conn.setLocalDescription(offer)).then(
-        () => onListen(JSON.stringify({ offer: conn.localDescription })),
-      );
-
-      const onSomething = () =>
-        onNewConn({
-          sendReliable: (data: Uint8Array) => reliableChannel.send(data),
-          sendFast: (data: Uint8Array) => fastChannel.send(data),
-          onRecv: (handler: (data: Uint8Array) => void) => {
-            reliableChannel.onmessage = (e) => handler(new Uint8Array(e.data));
-            fastChannel.onmessage = (e) => handler(new Uint8Array(e.data));
-          },
-          close: () => conn.close(),
-          onClose: (handler: () => void) =>
-            conn.onconnectionstatechange = (e) =>
-              console.log('onconnectionstatechange', e, conn.connectionState),
-        });
 
       return conn;
     })();
 
     return {
       tryConnect: async (spec: string) => {
+        console.log(JSON.parse(spec));
+
+        const { orderHex, offer, answer, iceCandidate } = JSON.parse(spec);
         const conn = await connPromise;
 
-        const { offer, answer, iceCandidate } = JSON.parse(spec);
-
+        if (orderHex) {
+          const cmp = Hash.cmp(orderHash, Hash.fromHex(orderHex));
+          if (cmp < 0) {
+            await createChannels(conn);
+            const offer = await conn.createOffer();
+            await conn.setLocalDescription(offer);
+            onListen(JSON.stringify({ offer: conn.localDescription }));
+          } else {
+            listenForChannels(conn);
+          }
+        }
         if (offer) {
-          conn.setRemoteDescription(offer).then(() => conn.createAnswer())
-            .then((answer) => conn.setLocalDescription(answer))
-            .then(() =>
-              onListen(JSON.stringify({ answer: conn.localDescription }))
-            );
+          await conn.setRemoteDescription(offer);
+          const answer = await conn.createAnswer();
+          await conn.setLocalDescription(answer);
+          onListen(JSON.stringify({ answer: conn.localDescription }));
         }
         if (answer) {
-          conn.setRemoteDescription(answer);
+          await conn.setRemoteDescription(answer);
         }
         if (iceCandidate) {
           conn.addIceCandidate(iceCandidate);
@@ -142,12 +192,14 @@ export default class SblClient {
 
   constructor() {
     const getPrivateKey = () => {
-      const hex = localStorage.getItem('sbl_pk');
+      const pkid = new URLSearchParams(window.location.search).get('pkid') ||
+        '';
+      const hex = localStorage.getItem(`sbl_pk_${pkid}`);
       if (hex) {
         return hex2bin(hex);
       } else {
         const key = secp.utils.randomPrivateKey();
-        localStorage.setItem('sbl_pk', bin2hex(key));
+        localStorage.setItem(`sbl_pk_${pkid}`, bin2hex(key));
         return key;
       }
     };
@@ -185,11 +237,13 @@ export default class SblClient {
       trustedPeers: [],
 
       selfPrivateKey: getPrivateKey(),
-      nodeNonce: Hash.digest('browser_0').toBytes(),
+      nodeNonce: Hash.random().toBytes(),
 
       approxComputePricePerSecond: 1000n,
 
       initialWorkerCount: 1,
+
+      computeContracts: [],
     };
 
     this.ctx = new Context(config);

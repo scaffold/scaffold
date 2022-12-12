@@ -3,6 +3,7 @@ import Hash from './util/Hash.ts';
 import { Block, Verifier } from './messages.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import NodeService from './NodeService.ts';
+import IncentiveService from './IncentiveService.ts';
 
 class NeedsMoreDataError extends Error {
   constructor() {
@@ -24,14 +25,15 @@ const callWithSyncRequestHandler = async <T>(
     const startTime = Date.now();
     const out = await func((contractHash: Hash, params: Uint8Array) => {
       const innerVerifier = { contract_hash: contractHash, params };
-      const verifierHash = Hash.digest(Verifier.encode(verifier));
+      const verifierHash = Hash.digest(Verifier.encode(innerVerifier));
       const blocks = ctx.get(FulfillmentRegistry).getOrWait(verifierHash);
       if (blocks instanceof Promise) {
-        ctx.get(NodeService).getAll().forEach((node) =>
-          node.defaultConn?.sendReliable({
-            BidMessage: { verifier: innerVerifier, output: verifier, bid: 0n },
-          })
-        );
+        ctx.get(IncentiveService).incentivize(innerVerifier, 1n);
+        // ctx.get(NodeService).getAll().forEach((node) =>
+        //   node.defaultConn?.sendReliable({
+        //     BidMessage: { verifier: innerVerifier, output: verifier },
+        //   })
+        // );
 
         blocks.then(() =>
           callWithSyncRequestHandler(ctx, verifier, func, onDone)
@@ -47,11 +49,12 @@ const callWithSyncRequestHandler = async <T>(
       const verifierHash = Hash.digest(Verifier.encode(verifier));
       const blocks = ctx.get(FulfillmentRegistry).get(verifierHash);
       if (!blocks) {
-        ctx.get(NodeService).getAll().forEach((node) =>
-          node.defaultConn?.sendReliable({
-            BidMessage: { verifier: innerVerifier, output: verifier, bid: 0n },
-          })
-        );
+        ctx.get(IncentiveService).incentivize(innerVerifier, 1n);
+        // ctx.get(NodeService).getAll().forEach((node) =>
+        //   node.defaultConn?.sendReliable({
+        //     BidMessage: { verifier: innerVerifier, output: verifier },
+        //   })
+        // );
       }
     });
 

@@ -31,42 +31,7 @@ import WorkLoop from '../sbl/WorkLoop.ts';
 // import { arrEquals } from '~/sbl/util/buffer.ts';
 
 const websocketProvider: ProtocolProvider = {
-  create: (
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) => {
-    const sockets: WebSocket[] = [];
-
-    return {
-      tryConnect: (spec: string) => {
-        const socket = new WebSocket(spec);
-        socket.binaryType = 'arraybuffer';
-        sockets.push(socket);
-        socket.addEventListener(
-          'open',
-          () => {
-            // Close any other attempted sockets
-            sockets.forEach((s) => s !== socket && s.close());
-
-            onNewConn({
-              sendReliable: (data: Uint8Array) => socket.send(data),
-              sendFast: (data: Uint8Array) => socket.send(data),
-              onRecv: (handler: (data: Uint8Array) => void) =>
-                socket.addEventListener(
-                  'message',
-                  (e) => handler(new Uint8Array(e.data)),
-                ),
-              close: () => socket.close(),
-              onClose: (handler: () => void) =>
-                socket.addEventListener('close', () => handler()),
-            });
-          },
-        );
-      },
-    };
-  },
-
-  serve: (
+  createServer: (
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
@@ -106,6 +71,48 @@ const websocketProvider: ProtocolProvider = {
     ].forEach((host) =>
       Promise.resolve(host).then((host) => onListen(`ws://${host}:${port}`))
     );
+  },
+
+  createClient: (
+    onListen: (spec: string) => void,
+    onNewConn: (conn: ConnectionProvider) => void,
+  ) => {
+    let connected = false;
+    const clientAttempts: WebSocket[] = [];
+
+    return {
+      tryConnect: (spec: string) => {
+        const socket = new WebSocket(spec);
+        socket.binaryType = 'arraybuffer';
+        clientAttempts.push(socket);
+        socket.addEventListener(
+          'open',
+          () => {
+            if (connected) {
+              return;
+            } else {
+              connected = true;
+            }
+
+            // Close any other attempted clientAttempts
+            clientAttempts.forEach((s) => s.close());
+
+            onNewConn({
+              sendReliable: (data: Uint8Array) => socket.send(data),
+              sendFast: (data: Uint8Array) => socket.send(data),
+              onRecv: (handler: (data: Uint8Array) => void) =>
+                socket.addEventListener(
+                  'message',
+                  (e) => handler(new Uint8Array(e.data)),
+                ),
+              close: () => socket.close(),
+              onClose: (handler: () => void) =>
+                socket.addEventListener('close', () => handler()),
+            });
+          },
+        );
+      },
+    };
   },
 };
 
@@ -147,6 +154,10 @@ const config: Config = {
   approxComputePricePerSecond: 1000n,
 
   initialWorkerCount: 1,
+
+  onlyBridge: true,
+
+  computeContracts: [],
 };
 
 const ctx = new Context(config);
