@@ -576,8 +576,8 @@ type MsgType<Name extends keyof typeof registry> = ObjectType<
   typeof registry
 >;
 
-export const Hash = makeMsg(registry, 'Hash');
-export type Hash = MsgType<'Hash'>;
+// export const Hash = makeMsg(registry, 'Hash');
+// export type Hash = MsgType<'Hash'>;
 export const Amount = makeMsg(registry, 'Amount');
 export type Amount = MsgType<'Amount'>;
 export const Verifier = makeMsg(registry, 'Verifier');

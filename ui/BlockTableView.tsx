@@ -34,24 +34,13 @@ export default ({ ctx }: { ctx: Context }) => {
   const columns = React.useMemo<ColumnDef<{ key: Hash; val: Block }>[]>(
     () => [
       {
-        id: 'expander',
-        header: () => null,
-        cell: ({ row }) =>
-          row.getCanExpand()
-            ? (
-              <button
-                onClick={row.getToggleExpandedHandler()}
-                style={{ cursor: 'pointer' }}
-              >
-                {row.getIsExpanded() ? '👇' : '👉'}
-              </button>
-            )
-            : null,
-      },
-      {
         header: 'hash',
         accessorFn: ({ key }) => key.toHex(),
-        cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
+        cell: (props) => (
+          <a href='#' onClick={props.row.getToggleExpandedHandler()}>
+            <pre>{trunc(props.getValue<string>())}</pre>
+          </a>
+        ),
       },
       {
         header: 'verifier contract hash',
@@ -91,6 +80,7 @@ export default ({ ctx }: { ctx: Context }) => {
         header: 'timestamp',
         accessorFn: ({ val }) =>
           new Date(Number(val.timestamp)).toLocaleString(),
+        cell: (props) => <pre>{props.getValue<string>()}</pre>,
       },
     ],
     [],

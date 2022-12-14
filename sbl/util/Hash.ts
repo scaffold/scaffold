@@ -97,10 +97,12 @@ export default class Hash {
     return new Hash(data);
   }
 
+  private hex: string;
   private constructor(private digest: Uint8Array) {
     if (digest.length !== 32) {
       throw new Error(`Invalid digest length`);
     }
+    this.hex = bin2hex(this.digest);
   }
 
   public toBytes() {
@@ -108,7 +110,8 @@ export default class Hash {
   }
 
   public toHex() {
-    return bin2hex(this.digest);
+    return this.hex;
+    // return bin2hex(this.digest);
   }
 
   public toNum() {
@@ -120,6 +123,7 @@ export default class Hash {
     return num;
   }
 
+  // TODO: Use global Map + FinalizationRegistry to make the Hash object a unique primitive
   public toPrimitive() {
     return this.toHex();
     // return this.toNum();

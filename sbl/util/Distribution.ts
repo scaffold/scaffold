@@ -9,6 +9,12 @@ export default class Distribution {
     this.s_2 += x * x;
   }
 
+  public removeObservation(x: number) {
+    this.n--;
+    this.s_1 -= x;
+    this.s_2 -= x * x;
+  }
+
   public getMean() {
     return this.s_1 / this.n;
   }

@@ -7,13 +7,12 @@ import CollatzContract from '../graph/CollatzContract.ts';
 import WorkLoop from '../sbl/WorkLoop.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
+import AccountService from '../sbl/AccountService.ts';
 // import ThrustView from './ThrustView.tsx';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
-
-client.ctx.get(WorkLoop);
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
@@ -48,6 +47,15 @@ export default () => {
       >
         Collatz depth of 10
       </a>
+      <br />
+      <a href='#' onClick={() => client.ctx.get(WorkLoop)}>
+        Start work loop
+      </a>
+      <br />
+      <a href='#' onClick={() => client.ctx.get(AccountService)}>
+        Start account loop
+      </a>
+
       <BlockTableView ctx={client.ctx} />
 
       {gameHex && (

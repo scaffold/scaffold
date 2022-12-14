@@ -8,6 +8,7 @@ import {
   selfHash,
   timeHash,
 } from './constants.ts';
+import GraphUtils from './GraphUtils.ts';
 
 export default class QaDebugger {
   private debuggers: Map<string, {
@@ -17,11 +18,18 @@ export default class QaDebugger {
   }> = new Map();
 
   constructor(private ctx: Context) {
-    this.addDebugger('Root', rootHash);
-    this.addDebugger('Account', accountHash);
-    this.addDebugger('Load', loadHash);
-    this.addDebugger('Time', timeHash);
-    this.addDebugger('Self', selfHash);
+    setTimeout(() => {
+      this.addDebugger('Root', rootHash);
+      this.addDebugger('Account', accountHash);
+      this.addDebugger('Load', loadHash);
+      this.addDebugger('Time', timeHash);
+      this.addDebugger('Self', selfHash);
+
+      this.addDebugger(
+        'GeneratorContract',
+        this.ctx.get(GraphUtils).getGeneratorContract(),
+      );
+    }, 0);
   }
 
   public addDebugger(

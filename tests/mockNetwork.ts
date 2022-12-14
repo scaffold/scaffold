@@ -15,7 +15,7 @@ export const makeMockNetworkProvider = (opts: {
   sendFastLatencyMs: number;
   sendFastDropRatio: number;
 }): ProtocolProvider => ({
-  create: (
+  createClient: (
     _onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
@@ -52,7 +52,7 @@ export const makeMockNetworkProvider = (opts: {
     };
   },
 
-  serve: (
+  createServer: (
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
