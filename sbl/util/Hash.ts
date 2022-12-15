@@ -77,6 +77,7 @@ export default class Hash {
   }
 
   // TODO: Do we need this?
+  // It's slightly insecure because we don't lenght-prefix the parts
   public static digestParts(...parts: (Hash | Uint8Array | number)[]) {
     return Hash.digest(
       arrConcat(
@@ -185,6 +186,22 @@ export default class Hash {
       res[i] = h0.digest[i] ^ h1.digest[i];
     }
     return Hash.fromBytes(res);
+  }
+
+  public static add(h0: Hash, h1: Hash) {
+    const res = new Uint8Array(32);
+    let c = 0;
+    for (let i = 0; i < 32; i++) {
+      c += h0.digest[i] + h1.digest[i];
+      res[i] = c;
+      c >>>= 8;
+    }
+    return Hash.fromBytes(res);
+  }
+
+  public static combine(...hashes: Hash[]) {
+    // TODO: Maybe there's a faster way to do this? Addition?
+    return Hash.digest(arrConcat(...hashes.map((h) => h.toBytes())));
   }
 
   public static equals(h0: Hash, h1: Hash) {

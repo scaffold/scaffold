@@ -187,6 +187,10 @@ const webrtcProvider: ProtocolProvider = {
   },
 };
 
+const broadcastProvider: ProtocolProvider = {
+  // Use https://developer.mozilla.org/en-US/docs/Web/API/BroadcastChannel
+};
+
 export default class SblClient {
   public ctx: Context;
 

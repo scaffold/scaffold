@@ -8,15 +8,27 @@ import WorkLoop from '../sbl/WorkLoop.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
 import AccountService from '../sbl/AccountService.ts';
+import Store2 from '../sbl/util/Store2.ts';
+import { BlockStore, WorkableIncentivesStore } from '../sbl/stores.ts';
+import GenericTableView from './GenericTableView.tsx';
+import StoreSelector from './StoreSelector.tsx';
+import Context from '../sbl/Context.ts';
 // import ThrustView from './ThrustView.tsx';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
 
+(window as any).Store = Store2;
+client.ctx.get(WorkableIncentivesStore);
+
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
   const gameHex = url.searchParams.get('game');
+
+  const [shownStore, setShownStore] = React.useState<
+    { key: number; clz?: { new (context: Context): Store2<any> } }
+  >({ key: 0 });
 
   return (
     <div>
@@ -56,7 +68,19 @@ export default () => {
         Start account loop
       </a>
 
-      <BlockTableView ctx={client.ctx} />
+      <StoreSelector
+        ctx={client.ctx}
+        onSelectClass={(clz) => setShownStore({ key: Math.random(), clz })}
+      />
+
+      {/*<BlockTableView ctx={client.ctx} />*/}
+      {shownStore.clz && (
+        <GenericTableView
+          key={shownStore.key}
+          ctx={client.ctx}
+          Table={shownStore.clz}
+        />
+      )}
 
       {gameHex && (
         <>

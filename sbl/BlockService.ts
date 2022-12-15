@@ -1,4 +1,5 @@
 import BlockIngestor from './BlockIngestor.ts';
+import { BlockMeta } from './BlockMeta.ts';
 import BlockPublisher from './BlockPublisher.ts';
 import Context from './Context.ts';
 import Logger from './Logger.ts';
@@ -10,8 +11,13 @@ export default class BlockService {
   constructor(private ctx: Context) {}
 
   public async ingest(block: Block) {
-    // const blockHash = Hash.digest(Block.encode(block));
-    // this.ctx.get(BlockStore).insert(blockHash, block);
+    const meta: BlockMeta = {
+      x: 123,
+    };
+    const extBlock = Object.assign(block, meta);
+
+    const blockHash = Hash.digest(Block.encode(block));
+    this.ctx.get(BlockStore).insert(blockHash, extBlock);
 
     try {
       await this.ctx.get(BlockIngestor).ingest(block);

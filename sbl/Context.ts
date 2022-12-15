@@ -47,4 +47,8 @@ export default class Context {
   public onDestruct(cb: () => Promise<void> | void) {
     this.destructors.push(cb);
   }
+
+  public debugGetAll() {
+    return this.objs;
+  }
 }

@@ -1,0 +1,55 @@
+import React from 'react';
+import Context from '../sbl/Context.ts';
+import Logger from '../sbl/Logger.ts';
+import Hash from '../sbl/util/Hash.ts';
+import Store2 from '../sbl/util/Store2.ts';
+
+const trunc = (str: string, threshold = 16) =>
+  str.length > threshold
+    ? `${str.substr(0, threshold)}... [${str.length}]`
+    : str;
+
+const RowDetail = ({ name, val }: { name: string; val: string }) => (
+  <div>
+    {name}: <pre style={{ display: 'inline' }}>{val}</pre>
+  </div>
+);
+
+type ObjMap<T> = { [key: string]: T };
+
+export default ({ ctx, Table }: {
+  ctx: Context;
+  Table: { new (context: Context): Store2<any> };
+}) => {
+  const [selected, toggleSelected] = React.useReducer(
+    (state: ObjMap<boolean>, key: string): ObjMap<boolean> => ({
+      ...state,
+      [key]: !state[key],
+    }),
+    {},
+  );
+
+  const [state, dispatch] = React.useReducer(
+    (
+      state: ObjMap<any>,
+      { hash, value }: { hash: Hash; value: any },
+    ): ObjMap<any> => ({ ...state, [hash.toHex()]: value }),
+    {},
+  );
+  React.useEffect(() => {
+    ctx.get(Table).onMutate((hash, _, value) => dispatch({ hash, value }));
+  }, []);
+
+  return (
+    <ol>
+      {Object.entries(state).map(([key, val]) => (
+        <li
+          key={key}
+          onClick={() => toggleSelected(key)}
+        >
+          <pre>{selected[key] ? <strong>{key}</strong> : key}: {ctx.get(Logger).serialize(val, selected[key]?2:0,selected[key]?1024:64)}</pre>
+        </li>
+      ))}
+    </ol>
+  );
+};

@@ -3,6 +3,14 @@ import Hash from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import QaDebugger from './QaDebugger.ts';
 
+const sortKeys = (obj: { [key: string]: any }) =>
+  Object.fromEntries(
+    Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0])),
+  );
+
+const trim = (str: string, maxLen: number) =>
+  str.length > maxLen ? `${str.substring(0, maxLen)}... [${str.length}]` : str;
+
 export default class Logger {
   constructor(private ctx: Context) {}
 
@@ -16,15 +24,22 @@ export default class Logger {
     }
   }
 
-  public serialize(val: any, n = 2): string {
+  public serialize(val: any, n = 2, maxStrLen = 64): string {
+    // val = sortKeys(val);
     return JSON.stringify(val, (_key, val) => {
-      if (typeof val === 'bigint') return val.toString();
-      else if (val instanceof Hash) return `Sha256:${val.toHex()}`;
-      else if (val instanceof Uint8Array) return bin2hex(val);
-      else if (
+      if (typeof val === 'bigint') {
+        return trim(val.toString(), maxStrLen);
+      } else if (typeof val === 'string') {
+        return trim(val, maxStrLen);
+      } else if (val instanceof Hash) {
+        return trim(`Sha256:${val.toHex()}`, maxStrLen);
+      } else if (val instanceof Uint8Array) {
+        return trim(bin2hex(val), maxStrLen);
+      } else if (
         typeof val === 'object' && val !== null && val.type === 'Buffer'
-      ) return bin2hex(new Uint8Array(val.data));
-      else if (
+      ) {
+        return trim(bin2hex(new Uint8Array(val.data)), maxStrLen);
+      } else if (
         typeof val === 'object' &&
         'contract_hash' in val &&
         'params' in val

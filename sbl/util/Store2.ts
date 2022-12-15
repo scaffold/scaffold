@@ -5,6 +5,10 @@ import Hash, { HashPrimitive } from './Hash.ts';
 export default class Store2<Atom> {
   private entries: Map<HashPrimitive, Atom> = new Map();
 
+  // TODO: Maybe eliminate storing entries when we don't need it.
+  // Pass the removed value to .remove()
+  private needsEntries = false;
+
   private preInsertListeners: ((hash: Hash, atom: Atom) => void)[] = [];
   private postInsertListeners: ((hash: Hash, atom: Atom) => void)[] = [];
   private preMutateListeners:
@@ -16,14 +20,33 @@ export default class Store2<Atom> {
 
   constructor(src?: Store2<Atom>) {
     if (src) {
-      this.entries = src.entries;
-      this.preInsertListeners = src.preInsertListeners;
-      this.postInsertListeners = src.postInsertListeners;
-      this.preMutateListeners = src.preMutateListeners;
-      this.postMutateListeners = src.postMutateListeners;
-      this.preRemoveListeners = src.preRemoveListeners;
-      this.postRemoveListeners = src.postRemoveListeners;
+      this.swap(src);
     }
+  }
+
+  public swap(src: Store2<Atom>) {
+    this.entries = src.entries;
+    this.preInsertListeners = src.preInsertListeners;
+    this.postInsertListeners = src.postInsertListeners;
+    this.preMutateListeners = src.preMutateListeners;
+    this.postMutateListeners = src.postMutateListeners;
+    this.preRemoveListeners = src.preRemoveListeners;
+    this.postRemoveListeners = src.postRemoveListeners;
+  }
+
+  public onMutate(
+    cb: (
+      hash: Hash,
+      oldAtom: Atom | undefined,
+      newAtom: Atom | undefined,
+    ) => void,
+  ) {
+    this.postInsertListeners.push((hash, atom) => cb(hash, undefined, atom));
+    this.postMutateListeners.push(cb);
+    this.postRemoveListeners.push((hash, atom) => cb(hash, atom, undefined));
+    this.entries.forEach((atom, key) =>
+      cb(Hash.fromPrimitive(key), undefined, atom)
+    );
   }
 
   public insert(hash: Hash, atom: Atom) {
@@ -39,21 +62,12 @@ export default class Store2<Atom> {
 
   public mutate(
     hash: Hash,
-    mutator: (prevAtom: Atom) => Atom | undefined,
-    initialValue: Atom,
+    mutator: (prevAtom: Atom | undefined) => Atom | undefined,
   ) {
     const key = hash.toPrimitive();
-    const oldAtom = this.entries.get(key) || initialValue;
+    const oldAtom = this.entries.get(key);
     const newAtom = mutator(oldAtom);
-    if (newAtom !== undefined) {
-      this.preMutateListeners.forEach((fn) => fn(hash, oldAtom, newAtom));
-      this.entries.set(key, newAtom);
-      this.postMutateListeners.forEach((fn) => fn(hash, oldAtom, newAtom));
-    } else {
-      this.preRemoveListeners.forEach((fn) => fn(hash, oldAtom));
-      this.entries.delete(key);
-      this.postRemoveListeners.forEach((fn) => fn(hash, oldAtom));
-    }
+    this.update(key, hash, oldAtom, newAtom);
   }
 
   public remove(hash: Hash) {
@@ -71,6 +85,15 @@ export default class Store2<Atom> {
   public set(hash: Hash, newAtom?: Atom) {
     const key = hash.toPrimitive();
     const oldAtom = this.entries.get(key);
+    this.update(key, hash, oldAtom, newAtom);
+  }
+
+  private update(
+    key: HashPrimitive,
+    hash: Hash,
+    oldAtom: Atom | undefined,
+    newAtom: Atom | undefined,
+  ) {
     if (oldAtom !== newAtom) {
       if (oldAtom !== undefined) {
         if (newAtom !== undefined) {
@@ -94,142 +117,212 @@ export default class Store2<Atom> {
     }
   }
 
-  public map<ReturnAtom>(mapFn: (atom: Atom) => ReturnAtom | undefined) {
+  public map<ReturnAtom>(
+    mapFn: (hash: Hash, atom: Atom) => ReturnAtom | undefined,
+  ) {
     const res = new Store2<ReturnAtom>();
-    this.entries.forEach((atom, key) =>
-      res.set(Hash.fromPrimitive(key), mapFn(atom))
+    this.entries.forEach((atom, key) => {
+      const hash = Hash.fromPrimitive(key);
+      res.set(hash, mapFn(hash, atom));
+    });
+    this.postInsertListeners.push((hash, atom) =>
+      res.set(hash, mapFn(hash, atom))
     );
-    this.postInsertListeners.push((hash, atom) => res.set(hash, mapFn(atom)));
     this.postMutateListeners.push((hash, _oldAtom, newAtom) =>
-      res.set(hash, mapFn(newAtom))
+      res.set(hash, mapFn(hash, newAtom))
     );
-    this.postRemoveListeners.push((hash, atom) => res.set(hash, mapFn(atom)));
+    this.postRemoveListeners.push((hash, atom) =>
+      res.set(hash, mapFn(hash, atom))
+    );
     return res;
   }
 
-  public groupBy<ReturnAtom>(
-    keyFn: (atom: Atom) => Hash,
-    accumulator: (
-      aggregation: ReturnAtom,
+  public groupBy<EmitType, ReturnAtom = EmitType>(
+    emitFn: (
+      hash: Hash,
       atom: Atom,
+      emit: (key: Hash, value: EmitType) => void,
+    ) => void,
+    accumulator: (
+      hash: Hash,
+      aggregation: ReturnAtom | undefined,
+      emittedValue: EmitType,
     ) => ReturnAtom | undefined,
     decumulator: (
-      aggregation: ReturnAtom,
-      atom: Atom,
+      hash: Hash,
+      aggregation: ReturnAtom | undefined,
+      emittedValue: EmitType,
     ) => ReturnAtom | undefined,
-    initialValue: ReturnAtom,
   ) {
     const res = new Store2<ReturnAtom>();
-    this.entries.forEach((atom, _key) =>
-      res.mutate(
-        keyFn(atom),
-        (prevAtom) => accumulator(prevAtom, atom),
-        initialValue,
+    this.entries.forEach((atom, key) =>
+      emitFn(
+        Hash.fromPrimitive(key),
+        atom,
+        (key, val) =>
+          res.mutate(key, (prevAtom) => accumulator(key, prevAtom, val)),
       )
     );
-    this.postInsertListeners.push((_hash, atom) =>
-      res.mutate(
-        keyFn(atom),
-        (prevAtom) => accumulator(prevAtom, atom),
-        initialValue,
+    this.postInsertListeners.push((hash, atom) =>
+      emitFn(
+        hash,
+        atom,
+        (key, val) =>
+          res.mutate(key, (prevAtom) => accumulator(hash, prevAtom, val)),
       )
     );
-    this.postMutateListeners.push((_hash, oldAtom, newAtom) => {
-      const oldKey = keyFn(oldAtom);
-      const newKey = keyFn(newAtom);
-      if (oldKey === newKey) {
-        res.mutate(
-          oldKey,
-          (prevAtom) => {
-            const mid = decumulator(prevAtom, oldAtom);
-            return accumulator(mid !== undefined ? mid : initialValue, newAtom);
-          },
-          initialValue,
-        );
-      } else {
-        res.mutate(
-          oldKey,
-          (prevAtom) => decumulator(prevAtom, oldAtom),
-          initialValue,
-        );
-        res.mutate(
-          newKey,
-          (prevAtom) => accumulator(prevAtom, newAtom),
-          initialValue,
-        );
-      }
+    this.postMutateListeners.push((hash, oldAtom, newAtom) => {
+      // TODO: If keys are all the same, fast-path so descendants only get called once
+      // const kvs: [Hash, EmitType][] = [];
+      emitFn(
+        hash,
+        oldAtom,
+        (key, val) =>
+          res.mutate(key, (prevAtom) => decumulator(hash, prevAtom, val)),
+      );
+      emitFn(
+        hash,
+        newAtom,
+        (key, val) =>
+          res.mutate(key, (prevAtom) => accumulator(hash, prevAtom, val)),
+      );
     });
-    this.postRemoveListeners.push((_hash, atom) =>
-      res.mutate(
-        keyFn(atom),
-        (prevAtom) => decumulator(prevAtom, atom),
-        initialValue,
+    this.postRemoveListeners.push((hash, atom) =>
+      emitFn(
+        hash,
+        atom,
+        (key, val) =>
+          res.mutate(key, (prevAtom) => decumulator(hash, prevAtom, val)),
       )
     );
     return res;
   }
 
-  public innerJoin<RhsAtom, ReturnAtom>(
+  public static innerJoin<LhsAtom, RhsAtom, ReturnAtom>(
+    lhs: Store2<LhsAtom>,
     rhs: Store2<RhsAtom>,
-    transform: (lhs: Atom, rhs: RhsAtom) => ReturnAtom | undefined,
+    transform: (
+      hash: Hash,
+      lhs: LhsAtom,
+      rhs: RhsAtom,
+    ) => ReturnAtom | undefined,
   ) {
     const res = new Store2<ReturnAtom>();
-    this.entries.forEach((atom1, key) => {
+    lhs.entries.forEach((atom1, key) => {
       const atom2 = rhs.entries.get(key);
-      if (atom2) {
+      if (atom2 !== undefined) {
         const hash = Hash.fromPrimitive(key);
-        const val = transform(atom1, atom2);
+        const val = transform(hash, atom1, atom2);
         if (val !== undefined) {
           res.insert(hash, val);
         }
       }
     });
-    this.postInsertListeners.push((hash, atom1) => {
+    lhs.postInsertListeners.push((hash, atom1) => {
       const atom2 = rhs.entries.get(hash.toPrimitive());
-      if (atom2) {
-        const val = transform(atom1, atom2);
+      if (atom2 !== undefined) {
+        const val = transform(hash, atom1, atom2);
         if (val !== undefined) {
           res.insert(hash, val);
         }
       }
     });
     rhs.postInsertListeners.push((hash, atom2) => {
-      const atom1 = this.entries.get(hash.toPrimitive());
-      if (atom1) {
-        const val = transform(atom1, atom2);
+      const atom1 = lhs.entries.get(hash.toPrimitive());
+      if (atom1 !== undefined) {
+        const val = transform(hash, atom1, atom2);
         if (val !== undefined) {
           res.insert(hash, val);
         }
       }
     });
-    this.postMutateListeners.push((hash, _oldAtom1, newAtom1) => {
+    lhs.postMutateListeners.push((hash, _oldAtom1, newAtom1) => {
       const atom2 = rhs.entries.get(hash.toPrimitive());
-      if (atom2) {
-        res.set(hash, transform(newAtom1, atom2));
+      if (atom2 !== undefined) {
+        res.set(hash, transform(hash, newAtom1, atom2));
       }
     });
     rhs.postMutateListeners.push((hash, _oldAtom2, newAtom2) => {
-      const atom1 = this.entries.get(hash.toPrimitive());
-      if (atom1) {
-        res.set(hash, transform(atom1, newAtom2));
+      const atom1 = lhs.entries.get(hash.toPrimitive());
+      if (atom1 !== undefined) {
+        res.set(hash, transform(hash, atom1, newAtom2));
       }
     });
-    this.postRemoveListeners.push((hash, atom1) => {
+    lhs.postRemoveListeners.push((hash, atom1) => {
       const atom2 = rhs.entries.get(hash.toPrimitive());
-      if (atom2) {
-        const val = transform(atom1, atom2);
+      if (atom2 !== undefined) {
+        const val = transform(hash, atom1, atom2);
         if (val !== undefined) {
           res.remove(hash);
         }
       }
     });
     rhs.postRemoveListeners.push((hash, atom2) => {
-      const atom1 = this.entries.get(hash.toPrimitive());
-      if (atom1) {
-        const val = transform(atom1, atom2);
+      const atom1 = lhs.entries.get(hash.toPrimitive());
+      if (atom1 !== undefined) {
+        const val = transform(hash, atom1, atom2);
         if (val !== undefined) {
           res.remove(hash);
         }
+      }
+    });
+    return res;
+  }
+
+  public static leftJoin<LhsAtom, RhsAtom, ReturnAtom>(
+    lhs: Store2<LhsAtom>,
+    rhs: Store2<RhsAtom>,
+    transform: (
+      hash: Hash,
+      lhs: LhsAtom,
+      rhs: RhsAtom | undefined,
+    ) => ReturnAtom | undefined,
+  ) {
+    const res = new Store2<ReturnAtom>();
+    lhs.entries.forEach((atom1, key) => {
+      const atom2 = rhs.entries.get(key);
+      const hash = Hash.fromPrimitive(key);
+      const val = transform(hash, atom1, atom2);
+      if (val !== undefined) {
+        res.insert(hash, val);
+      }
+    });
+    lhs.postInsertListeners.push((hash, atom1) => {
+      const atom2 = rhs.entries.get(hash.toPrimitive());
+      const val = transform(hash, atom1, atom2);
+      if (val !== undefined) {
+        res.insert(hash, val);
+      }
+    });
+    rhs.postInsertListeners.push((hash, atom2) => {
+      const atom1 = lhs.entries.get(hash.toPrimitive());
+      if (atom1 !== undefined) {
+        res.set(hash, transform(hash, atom1, atom2));
+      }
+    });
+    lhs.postMutateListeners.push((hash, _oldAtom1, newAtom1) => {
+      const atom2 = rhs.entries.get(hash.toPrimitive());
+      res.set(hash, transform(hash, newAtom1, atom2));
+    });
+    rhs.postMutateListeners.push((hash, _oldAtom2, newAtom2) => {
+      const atom1 = lhs.entries.get(hash.toPrimitive());
+      if (atom1 !== undefined) {
+        res.set(hash, transform(hash, atom1, newAtom2));
+      }
+    });
+    lhs.postRemoveListeners.push((hash, atom1) => {
+      const atom2 = rhs.entries.get(hash.toPrimitive());
+      if (atom2 !== undefined) {
+        const val = transform(hash, atom1, atom2);
+        if (val !== undefined) {
+          res.remove(hash);
+        }
+      }
+    });
+    rhs.postRemoveListeners.push((hash, atom2) => {
+      const atom1 = lhs.entries.get(hash.toPrimitive());
+      if (atom1 !== undefined) {
+        res.set(hash, transform(hash, atom1, atom2));
       }
     });
     return res;
