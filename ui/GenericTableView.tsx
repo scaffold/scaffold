@@ -43,11 +43,8 @@ export default ({ ctx, Table }: {
   return (
     <ol>
       {Object.entries(state).map(([key, val]) => (
-        <li
-          key={key}
-          onClick={() => toggleSelected(key)}
-        >
-          <pre>{selected[key] ? <strong>{key}</strong> : key}: {ctx.get(Logger).serialize(val, selected[key]?2:0,selected[key]?1024:64)}</pre>
+        <li key={key}>
+          <pre><span onClick={() => toggleSelected(key)}>{selected[key] ? <strong>{key}</strong> : key}</span>: {ctx.get(Logger).serialize(val, selected[key]?2:0,selected[key]?1024:72)}</pre>
         </li>
       ))}
     </ol>

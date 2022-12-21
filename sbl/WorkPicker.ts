@@ -13,7 +13,7 @@ export default class WorkPicker {
     const candidates = this.ctx.get(IncentiveRegistry).getAll()
       .map(({ key, val }) => ({
         key,
-        amount: val.claims.reduce((acc, claim) => acc + claim.amount, 0n),
+        amount: val.inputs.reduce((acc, input) => acc + input.amount, 0n),
         generator: this.ctx.get(GeneratorRegistry).get(
           val.verifier.contract_hash,
         ),

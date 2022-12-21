@@ -2,7 +2,7 @@ import Context from './Context.ts';
 import AccountContract from '~/graph/AccountContract.ts';
 import NodeService from './NodeService.ts';
 import { SELF_CONNECTION } from './ConnectionService.ts';
-import { Incentive, Verifier } from './messages.ts';
+import { Verifier } from './messages.ts';
 import BlockService from './BlockService.ts';
 import BlockBuilder from './BlockBuilder.ts';
 import Hash from './util/Hash.ts';
@@ -31,8 +31,8 @@ export default class AccountService {
     const block = this.ctx.get(BlockBuilder)
       .build(verifier, new Uint8Array([]));
     if (
-      block.incentives.some((incentive) =>
-        !Hash.equals(incentive.verifier.contract_hash, verifier.contract_hash)
+      block.outputs.some((output) =>
+        !Hash.equals(output.verifier.contract_hash, verifier.contract_hash)
       )
     ) {
       this.ctx.get(BlockService).ingest(block);

@@ -1,6 +1,6 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
-import { Block, Claim, Incentive, Verifier } from './messages.ts';
+import { Block, BlockInput, BlockOutput, Verifier } from './messages.ts';
 import {
   BlockRegistry,
   FulfillmentRegistry,
@@ -61,14 +61,14 @@ export default class BlockIngestor {
         throw new Error('ALREADY_EXISTS');
       });
 
-      block.incentives.forEach((incentive) => {
-        const verifier_hash = Hash.digest(Verifier.encode(incentive.verifier));
-        const claim = { block_hash, amount: incentive.amount };
+      block.outputs.forEach((output) => {
+        const verifier_hash = Hash.digest(Verifier.encode(output.verifier));
+        const input = { block_hash, amount: output.amount };
         this.ctx.get(IncentiveRegistry).getOrCreate(
           verifier_hash,
-          () => ({ verifier: incentive.verifier, claims: [claim] }),
+          () => ({ verifier: output.verifier, inputs: [input] }),
           (entry) => {
-            entry.claims.push(claim);
+            entry.inputs.push(input);
             return entry;
           },
         );
@@ -86,15 +86,15 @@ export default class BlockIngestor {
 
   private checkZeroSum(block: Block) {
     let sum = this.ctx.get(IncentiveCalculator)
-      .getAvailableIncentive(block.verifier, block.claims);
-    block.incentives.forEach(({ amount }) => sum += amount);
+      .getAvailableIncentive(block.verifier, block.inputs);
+    block.outputs.forEach(({ amount }) => sum += amount);
     if (sum !== 0n) {
       throw new Error('INVALID_COIN_SUM');
     }
   }
 
   private async checkBlockTimestamp(block: Block) {
-    const verifications = block.claims.map(async (claim) => {
+    const verifications = block.inputs.map(async (claim) => {
       const parent = await this.ctx.get(BlockFetcher).get(claim.block_hash);
       if (block.timestamp <= parent.timestamp) {
         throw new Error('INVALID_TIMESTAMP');
@@ -105,7 +105,7 @@ export default class BlockIngestor {
 
   private async checkBlockMergability(block: Block) {
     const counts = new Counter<bigint>();
-    const incentives = new Set<Incentive>();
+    const outputs = new Set<BlockOutput>();
     const queue: RedBlackTree<{ hash: Hash; block: Block; claimMask: bigint }> =
       new RedBlackTree((a, b) =>
         a.block.timestamp > b.block.timestamp
@@ -115,23 +115,23 @@ export default class BlockIngestor {
           : Hash.cmp(a.hash, b.hash)
       );
     const addClaim = async (
-      { block_hash, amount }: Claim,
+      { block_hash, amount }: BlockInput,
       verifier: Verifier,
       claimMask: bigint,
     ) => {
       const block = await this.ctx.get(BlockFetcher).get(block_hash);
-      const incentive = block.incentives.find((incentive) =>
-        incentive.amount === amount &&
-        Hash.equals(incentive.verifier.contract_hash, verifier.contract_hash) &&
-        arrEquals(incentive.verifier.params, verifier.params)
+      const output = block.outputs.find((output) =>
+        output.amount === amount &&
+        Hash.equals(output.verifier.contract_hash, verifier.contract_hash) &&
+        arrEquals(output.verifier.params, verifier.params)
       );
-      if (!incentive) {
+      if (!output) {
         throw new Error('INVALID_CLAIM');
       }
-      if (incentives.has(incentive)) {
+      if (outputs.has(output)) {
         throw new Error('DOUBLE_SPEND');
       }
-      incentives.add(incentive);
+      outputs.add(output);
       const entry = { hash: block_hash, block, claimMask };
       if (queue.insert(entry)) {
         counts.inc(claimMask);
@@ -147,8 +147,8 @@ export default class BlockIngestor {
     };
 
     await Promise.all(
-      block.claims.map((claim, idx) =>
-        addClaim(claim, block.verifier, 1n << BigInt(idx))
+      block.inputs.map((input, idx) =>
+        addClaim(input, block.verifier, 1n << BigInt(idx))
       ),
     );
 
@@ -158,8 +158,8 @@ export default class BlockIngestor {
       counts.dec(entry.claimMask);
 
       await Promise.all(
-        entry.block.claims.map((claim) =>
-          addClaim(claim, entry.block.verifier, entry.claimMask)
+        entry.block.inputs.map((input) =>
+          addClaim(input, entry.block.verifier, entry.claimMask)
         ),
       );
     }

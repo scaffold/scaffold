@@ -21,8 +21,8 @@ export default class BlockFetcher {
       const b0 = hash.toBytes()[31] << 0;
       const epoch = b3 | b2 | b1 | b0;
       return {
-        claims: [{ block_hash: Hash.fromLiteral32(0), amount: 1n }],
-        incentives: [],
+        inputs: [{ block_hash: Hash.fromLiteral32(0), amount: 1n }],
+        outputs: [],
         verifier: {
           contract_hash: Hash.fromLiteral32(0),
           params: new Uint8Array(),

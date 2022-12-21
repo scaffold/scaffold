@@ -1,4 +1,5 @@
 import Hash, { HashPrimitive } from './Hash.ts';
+import { getOrCreate } from './map.ts';
 
 // type NonUndefined<T> = T extends undefined ? never : T;
 
@@ -32,6 +33,10 @@ export default class Store2<Atom> {
     this.postMutateListeners = src.postMutateListeners;
     this.preRemoveListeners = src.preRemoveListeners;
     this.postRemoveListeners = src.postRemoveListeners;
+  }
+
+  public get(hash: Hash) {
+    return this.entries.get(hash.toPrimitive());
   }
 
   public onMutate(

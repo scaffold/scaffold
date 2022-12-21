@@ -21,9 +21,9 @@ export default class GraphUtils {
       params: Hash.digest(body).toBytes(),
     };
     return this.maybeIngestBlock(verifier, () => ({
-      claims: [],
-      incentives: [],
       verifier,
+      inputs: [],
+      outputs: [],
       body,
       timestamp: BigInt(Date.now()),
     }));
@@ -91,8 +91,8 @@ export default class GraphUtils {
     };
     return this.maybeIngestBlock(verifier, () => ({
       verifier,
-      claims: [],
-      incentives: [],
+      inputs: [],
+      outputs: [],
       body: new TextEncoder().encode(
         typeof generator === 'function'
           ? generator.toString()

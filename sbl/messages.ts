@@ -163,22 +163,26 @@ export const registry = {
       { name: 'params', type: 'bytes' },
     ],
   },
-  Claim: {
-    name: 'Claim',
+  BlockInput: {
+    name: 'BlockInput',
     type: 'record',
     fields: [
       { name: 'amount', type: 'long' },
       { name: 'block_hash', type: 'Hash' },
     ],
   },
-  Incentive: {
-    name: 'Incentive',
+  BlockOutput: {
+    // TODO: Array of AND-filters joined with OR?
+    //   This allows timeouts: (verifier == X OR (timestamp > Y AND author == Z))
+    name: 'BlockOutput',
     type: 'record',
     fields: [
       { name: 'amount', type: 'long' },
       { name: 'verifier', type: 'Verifier' },
       // { name: 'verifier', type: ['null', 'Verifier'] },
       // { name: 'author', type: ['null', 'bytes'] },
+      // { name: 'timestamp_gt', type: ['null', 'long'] },
+      // { name: 'timestamp_lt', type: ['null', 'long'] },
     ],
   },
   Block: {
@@ -186,8 +190,8 @@ export const registry = {
     type: 'record',
     fields: [
       // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically claims with zero amount
-      { name: 'claims', type: { type: 'array', items: 'Claim' } },
-      { name: 'incentives', type: { type: 'array', items: 'Incentive' } },
+      { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
+      { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
 
       { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
@@ -201,12 +205,16 @@ export const registry = {
     ],
   },
   BlockSet: {
-    // BlockSets are only useful if a peer has all claims & frontier blocks
+    // BlockSets are only useful if a peer has all input & frontier blocks.
+    // When you sign a BlockSet, you are saying that you have all inner BlockSets or can provide signatures of someone who does.
     name: 'BlockSet',
     type: 'record',
     fields: [
-      { name: 'claims', type: { type: 'array', items: 'Claim' } },
-      { name: 'incentives', type: { type: 'array', items: 'Incentive' } },
+      // Must include ALL inputs.
+      { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
+      // Outputs with a negative amount (incentive) may be omitted.
+      // This allows efficient full-network BlockSets to not have to include the entire balance data.
+      { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
 
       // Allowing BlockSets to have verifiers allows for a lot of fun things
       // { name: 'verifier', type: 'Verifier' },
@@ -338,7 +346,7 @@ export const registry = {
     ],
   },
   SubscribeMessage: {
-    // This message is purely informational; publishing licenses with incentive, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
+    // This message is purely informational; publishing licenses with BlockOutput, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
     name: 'SubscribeMessage',
     type: 'record',
     fields: [
@@ -350,7 +358,7 @@ export const registry = {
     ],
   },
   UnsubscribeMessage: {
-    // This message is purely informational; publishing licenses with incentive, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
+    // This message is purely informational; publishing licenses with BlockOutput, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
     name: 'UnsubscribeMessage',
     type: 'record',
     fields: [
@@ -367,9 +375,9 @@ export const registry = {
     fields: [
       { name: 'question', type: 'Verifier' },
 
-      // Always positive; specifies incentive that a question is able to claim by using this answer in their inputs.
+      // Always positive; specifies BlockOutput that a question is able to BlockInput by using this answer in their inputs.
       // TODO: Make this Amount; not sure why it's not working yet.
-      { name: 'incentive', type: 'long' },
+      { name: 'BlockOutput', type: 'long' },
     ],
   },
   PublishMessage: {
@@ -582,12 +590,14 @@ export const Amount = makeMsg(registry, 'Amount');
 export type Amount = MsgType<'Amount'>;
 export const Verifier = makeMsg(registry, 'Verifier');
 export type Verifier = MsgType<'Verifier'>;
-export const Claim = makeMsg(registry, 'Claim');
-export type Claim = MsgType<'Claim'>;
-export const Incentive = makeMsg(registry, 'Incentive');
-export type Incentive = MsgType<'Incentive'>;
+export const BlockInput = makeMsg(registry, 'BlockInput');
+export type BlockInput = MsgType<'BlockInput'>;
+export const BlockOutput = makeMsg(registry, 'BlockOutput');
+export type BlockOutput = MsgType<'BlockOutput'>;
 export const Block = makeMsg(registry, 'Block');
 export type Block = MsgType<'Block'>;
+export const BlockSet = makeMsg(registry, 'BlockSet');
+export type BlockSet = MsgType<'BlockSet'>;
 export const BidMessage = makeMsg(registry, 'BidMessage');
 export type BidMessage = MsgType<'BidMessage'>;
 export const PublicationMessage = makeMsg(registry, 'PublicationMessage');

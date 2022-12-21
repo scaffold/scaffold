@@ -9,18 +9,25 @@ import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
 import AccountService from '../sbl/AccountService.ts';
 import Store2 from '../sbl/util/Store2.ts';
-import { BlockStore, WorkableIncentivesStore } from '../sbl/stores.ts';
+import {
+  BlocksByVerifierStore,
+  BlockStore,
+  WorkableIncentivesStore,
+} from '../sbl/stores.ts';
 import GenericTableView from './GenericTableView.tsx';
 import StoreSelector from './StoreSelector.tsx';
 import Context from '../sbl/Context.ts';
+import WorkQueue from '../sbl/WorkQueue.ts';
+import StoreObserver from '../sbl/util/StoreObserver.ts';
+import { Verifier } from '../sbl/messages.ts';
+import Logger from '../sbl/Logger.ts';
 // import ThrustView from './ThrustView.tsx';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
 
-(window as any).Store = Store2;
-client.ctx.get(WorkableIncentivesStore);
+client.ctx.get(WorkQueue);
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
@@ -55,6 +62,11 @@ export default () => {
             params: client.ctx.get(CollatzContract).makeParams(10n),
           };
           client.ctx.get(IncentiveService).incentivize(verifier, 10n);
+          StoreObserver.get(client.ctx.get(BlocksByVerifierStore)).observe(
+            Hash.digest(Verifier.encode(verifier)),
+            (block) =>
+              console.log('GOT BLOCK', client.ctx.get(Logger).serialize(block)),
+          );
         }}
       >
         Collatz depth of 10

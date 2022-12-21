@@ -1,20 +1,44 @@
-import { RBTree } from 'std-latest/collections/rb_tree.ts';
+import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
 import Hash from './Hash.ts';
 
+const STATE_QUEUED = 0 as const;
+const STATE_RUNNING = 1 as const;
+const STATE_FINISHED = 2 as const;
+type EntryState =
+  | typeof STATE_QUEUED
+  | typeof STATE_RUNNING
+  | typeof STATE_FINISHED;
+
 interface Entry {
+  hash: Hash;
   valuePerSecond: number;
-  key: Hash;
+  state: EntryState;
   work(): Promise<void>;
 }
 
+const wakeupEntry: Entry = {
+  hash: Hash.fromLiteral32(0),
+  valuePerSecond: 0,
+  state: STATE_QUEUED,
+  work: () => Promise.resolve(),
+};
+
+const setState = (entry: Entry, from: EntryState, to: EntryState) => {
+  if (entry.state !== from) {
+    throw new Error(`Incorrect state; ${entry.state}, but should be ${from}!`);
+  }
+  entry.state = to;
+};
+
 export default class WorkQueue {
-  private queue: RBTree<Entry> = new RBTree((a, b) =>
+  private queue: RedBlackTree<Entry> = new RedBlackTree((a, b) =>
     a.valuePerSecond !== b.valuePerSecond
       ? a.valuePerSecond - b.valuePerSecond
-      : Hash.cmp(a.key, b.key)
+      : Hash.cmp(a.hash, b.hash)
   );
+  // TODO: Cleanup map after some time
   private map: Map<string, Entry> = new Map();
-  private pausedWorkers: ((worker: () => Promise<void>) => void)[] = [];
+  private pausedWorkers: ((entry: Entry) => void)[] = [];
 
   private runningWorkerCount = 0;
   private targetWorkerCount = 0;
@@ -33,9 +57,7 @@ export default class WorkQueue {
     if (this.runningWorkerCount > this.targetWorkerCount) {
       // Wake paused workers up
       const stop = this.runningWorkerCount - this.targetWorkerCount;
-      this.pausedWorkers.splice(-stop).forEach((cb) =>
-        cb(() => Promise.resolve())
-      );
+      this.pausedWorkers.splice(-stop).forEach((cb) => cb(wakeupEntry));
 
       // Wait for workers to finish
       return new Promise<void>((resolve) => this.onWorkerCountEqual = resolve);
@@ -49,42 +71,45 @@ export default class WorkQueue {
     return this.targetWorkerCount;
   }
 
-  public set(key: Hash, valuePerSecond: number, work: () => Promise<void>) {
-    const entry = this.map.get(key.toHex());
+  public set(hash: Hash, valuePerSecond: number, work: () => Promise<void>) {
+    const key = hash.toHex();
+    const entry = this.map.get(key);
     if (entry) {
-      if (valuePerSecond !== entry.valuePerSecond) {
+      if (
+        entry.state === STATE_QUEUED && valuePerSecond !== entry.valuePerSecond
+      ) {
         this.queue.remove(entry);
-        entry.valuePerSecond = valuePerSecond;
-        entry.work = work;
-        this.queue.insert(entry);
+        if (valuePerSecond > 0) {
+          entry.valuePerSecond = valuePerSecond;
+          entry.work = work;
+          this.queue.insert(entry);
+        }
       }
     } else {
-      const entry = { valuePerSecond, key, work };
+      const entry = { hash, valuePerSecond, state: STATE_QUEUED, work };
 
       if (this.pausedWorkers.length) {
-        this.pausedWorkers.pop()!(entry.work);
+        this.pausedWorkers.pop()!(entry);
       } else {
-        this.map.set(key.toHex(), entry);
+        this.map.set(key, entry);
         this.queue.insert(entry);
       }
     }
   }
 
-  public remove(key: Hash) {
-    const entry = this.map.get(key.toHex());
+  public remove(hash: Hash) {
+    const entry = this.map.get(hash.toHex());
     if (entry) {
       this.queue.remove(entry);
-      this.map.delete(key.toHex());
+      this.map.delete(hash.toHex());
     }
   }
 
-  public cleanup() {
-    const maxSize = 1000;
-
+  public cleanup(maxSize = 1000) {
     while (this.queue.size > maxSize) {
       const entry = this.queue.min()!;
       this.queue.remove(entry);
-      this.map.delete(entry.key.toHex());
+      this.map.delete(entry.hash.toHex());
     }
   }
 
@@ -92,20 +117,19 @@ export default class WorkQueue {
     const entry = this.queue.max();
     if (entry) {
       this.queue.remove(entry);
-      this.map.delete(entry.key.toHex());
-      return entry.work;
+      return entry;
     } else {
-      return new Promise<() => Promise<void>>((resolve) =>
-        this.pausedWorkers.push(resolve)
-      );
+      return new Promise<Entry>((resolve) => this.pausedWorkers.push(resolve));
     }
   }
 
   private async worker() {
     this.runningWorkerCount++;
     while (this.runningWorkerCount <= this.targetWorkerCount) {
-      const work = await this.pop();
-      await work();
+      const entry = await this.pop();
+      setState(entry, STATE_QUEUED, STATE_RUNNING);
+      await entry.work();
+      setState(entry, STATE_RUNNING, STATE_FINISHED);
     }
     this.runningWorkerCount--;
     if (this.runningWorkerCount === this.targetWorkerCount) {

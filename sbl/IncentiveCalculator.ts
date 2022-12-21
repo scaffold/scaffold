@@ -1,14 +1,17 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
-import { Block, Claim, Incentive, Verifier } from './messages.ts';
+import { Block, BlockInput, Verifier } from './messages.ts';
 import AccountContract from '../graph/AccountContract.ts';
 import { arrEquals } from './util/buffer.ts';
 
 export default class IncentiveCalculator {
   constructor(private ctx: Context) {}
 
-  public getAvailableIncentive(verifier: Verifier, claims: Claim[]): bigint {
-    let amount = claims.reduce((acc, cur) => acc + cur.amount, 0n);
+  public getAvailableIncentive(
+    verifier: Verifier,
+    inputs: BlockInput[],
+  ): bigint {
+    let amount = inputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     // Hack to let accounts start off with some funds
     if (

@@ -1,7 +1,7 @@
 import { BlockMeta } from './BlockMeta.ts';
 import Context from './Context.ts';
 import GraphUtils from './GraphUtils.ts';
-import { Block, Claim, Incentive, Verifier } from './messages.ts';
+import { Block, BlockOutput, Verifier } from './messages.ts';
 import { arrConcat } from './util/buffer.ts';
 import Hash from './util/Hash.ts';
 import Store from './util/Store.ts';
@@ -11,34 +11,35 @@ import {
   bigintAccumulator,
 } from './accumulators.ts';
 
-export class BlockStore extends Store<Block & BlockMeta> {
+export class BlockStore extends Store<Block> {
   constructor(private ctx: Context) {
     super();
   }
 }
 
-export class GeneratorsByContractStore extends Store<Uint8Array[]> {
+export class GeneratorsByContractStore extends Store<Block[]> {
   constructor(private ctx: Context) {
     super(
-      ctx.get(BlockStore).groupBy<Uint8Array, Uint8Array[]>(
+      ctx.get(BlockStore).groupBy<Block, Block[]>(
         (_hash, block, emit) =>
+          // TODO: Match multiple contracts as generators - one for each type (wasm, js, oracle, human...)
           Hash.equals(
             block.verifier.contract_hash,
             ctx.get(GraphUtils).getGeneratorContract(),
           ) &&
-          emit(Hash.fromBytes(block.verifier.params), block.body),
+          emit(Hash.fromBytes(block.verifier.params), block),
         ...arrayAccumulator,
       ),
     );
   }
 }
 
-export class IncentivesByBlockHashAndVerifierStore extends Store<Incentive> {
+export class IncentivesByBlockHashAndVerifierStore extends Store<BlockOutput> {
   constructor(private ctx: Context) {
     super(
-      ctx.get(BlockStore).groupBy<Incentive>(
+      ctx.get(BlockStore).groupBy<BlockOutput>(
         (hash, block, emit) =>
-          block.incentives.forEach(({ verifier, amount }) =>
+          block.outputs.forEach(({ verifier, amount }) =>
             emit(Hash.digestParts(hash, Verifier.encode(verifier)), {
               verifier,
               amount,
@@ -55,7 +56,7 @@ export class ClaimsByBlockHashAndVerifierStore extends Store<bigint> {
     super(
       ctx.get(BlockStore).groupBy<bigint>(
         (_hash, block, emit) =>
-          block.claims.forEach(({ block_hash, amount }) =>
+          block.inputs.forEach(({ block_hash, amount }) =>
             emit(
               Hash.digestParts(block_hash, Verifier.encode(block.verifier)),
               amount,
@@ -67,7 +68,7 @@ export class ClaimsByBlockHashAndVerifierStore extends Store<bigint> {
   }
 }
 
-export class UnclaimedIncentivesByContractStore extends Store<Incentive[]> {
+export class UnclaimedIncentivesByContractStore extends Store<BlockOutput[]> {
   constructor(private ctx: Context) {
     super(
       Store.leftJoin(
@@ -80,9 +81,9 @@ export class UnclaimedIncentivesByContractStore extends Store<Incentive[]> {
               amount: incentive.amount - claims,
             }
             : incentive,
-      ).groupBy<Incentive, Incentive[]>(
+      ).groupBy<BlockOutput, BlockOutput[]>(
         (_hash, incentive, emit) =>
-          incentive.amount > 0n &&
+          incentive.amount < 0n &&
           emit(incentive.verifier.contract_hash, incentive),
         ...arrayAccumulator,
       ),
@@ -90,23 +91,27 @@ export class UnclaimedIncentivesByContractStore extends Store<Incentive[]> {
   }
 }
 
-export class WorkableIncentivesStore
-  extends Store<{ generator: Uint8Array; verifier: Verifier; amount: bigint }> {
+export class WorkableIncentivesStore extends Store<
+  { generator: Block; verifier: Verifier; amount: bigint }
+> {
   constructor(private ctx: Context) {
     super(
       Store.innerJoin(
         ctx.get(GeneratorsByContractStore),
         ctx.get(UnclaimedIncentivesByContractStore),
         (_hash, generators, incentives) => ({ generators, incentives }),
-      ).groupBy<{ generator: Uint8Array; verifier: Verifier; amount: bigint }>(
+      ).groupBy<{ generator: Block; verifier: Verifier; amount: bigint }>(
         (_hash, { generators, incentives }, emit) =>
           incentives.forEach(({ verifier, amount }) =>
             generators.forEach((generator) =>
-              emit(Hash.digestParts(generator, Verifier.encode(verifier)), {
-                generator,
-                verifier,
-                amount,
-              })
+              emit(
+                Hash.digestParts(
+                  generator.verifier.contract_hash,
+                  generator.body,
+                  Verifier.encode(verifier),
+                ),
+                { generator, verifier, amount },
+              )
             )
           ),
         ...amountAccumulator,
@@ -115,40 +120,17 @@ export class WorkableIncentivesStore
   }
 }
 
-// // Key is contract hash that generator fulfills
-// export class GeneratorStore extends Store<Uint8Array> {
-//   constructor(private ctx: Context) {
-//     super(
-//       ctx.get(BlockStore).map((_hash, block, emit) => {
-//         if (
-//           Hash.equals(
-//             block.verifier.contract_hash,
-//             ctx.get(GraphUtils).getGeneratorContract(),
-//           )
-//         ) {
-//           emit(Hash.fromBytes(block.verifier.params), block.body);
-//         }
-//       }),
-//     );
-//   }
-// }
-
-// // Key is verifier hash
-// export class FulfillmentStore extends Store<Claim> {
-//   constructor(private ctx: Context) {
-//     super(
-//       ctx.get(BlockStore).map((hash, block, emit) => {
-//         block.incentives.forEach((incentive) => {
-//           const verifier_hash = Hash.digest(
-//             Verifier.encode(incentive.verifier),
-//           );
-//           const claim = { block_hash: hash, amount: incentive.amount };
-//           emit(verifier_hash, claim);
-//         });
-//       }),
-//     );
-//   }
-// }
+export class BlocksByVerifierStore extends Store<Block[]> {
+  constructor(private ctx: Context) {
+    super(
+      ctx.get(BlockStore).groupBy<Block, Block[]>(
+        (_hash, block, emit) =>
+          emit(Hash.digest(Verifier.encode(block.verifier)), block),
+        ...arrayAccumulator,
+      ),
+    );
+  }
+}
 
 // Every property is one on a subnet or potential block?
 //   Also block CROSS generator(s)

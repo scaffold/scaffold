@@ -13,7 +13,7 @@ export default class CollatzContract {
     return collatzMessages.Params.encode({ num });
   }
 
-  public get(supplyGenerator = true) {
+  public get() {
     const collatzGenerator = (
       contractHash: Hash,
       params: Uint8Array,
@@ -62,7 +62,9 @@ export default class CollatzContract {
     const contractHash = this.ctx.get(GraphUtils).supplyContract(
       collatzContract,
     );
-    if (supplyGenerator) {
+    if (
+      !new URLSearchParams(window.location.search).get('no_collatz_generator')
+    ) {
       this.ctx.get(GraphUtils).supplyGenerator(contractHash, collatzGenerator);
     }
 

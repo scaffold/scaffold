@@ -1,9 +1,10 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
-import { Incentive, Verifier } from './messages.ts';
+import { Block, BlockOutput, Verifier } from './messages.ts';
 import AccountService from './AccountService.ts';
 import { getOrCreate } from './util/map.ts';
 import { PendingIncentiveRegistry } from './registries.ts';
+import { BlockStore } from './stores.ts';
 
 interface Entry {
   verifier: Verifier;
@@ -17,20 +18,32 @@ export default class IncentiveService {
 
   public incentivize(
     verifier: Verifier,
-    amount: bigint,
+    incentive: bigint,
     forceAfter = Date.now() + 1000,
   ) {
-    if (amount > 0n) {
-      this.ctx.get(PendingIncentiveRegistry).getOrCreate(
-        Hash.digest(Verifier.encode(verifier)),
-        () => ({ verifier, amount, forceAfter }),
-        (entry) => {
-          entry.amount += amount;
-          entry.forceAfter = Math.min(entry.forceAfter, forceAfter);
-          return entry;
-        },
-      );
-    }
+    const block: Block = {
+      verifier: {
+        contract_hash: Hash.fromLiteral32(0),
+        params: new Uint8Array(),
+      },
+      inputs: [],
+      outputs: [{ verifier, amount: -incentive }],
+      body: new Uint8Array(),
+      timestamp: BigInt(Date.now()),
+    };
+    this.ctx.get(BlockStore).insert(Hash.digest(Block.encode(block)), block);
+
+    // if (amount > 0n) {
+    //   this.ctx.get(PendingIncentiveRegistry).getOrCreate(
+    //     Hash.digest(Verifier.encode(verifier)),
+    //     () => ({ verifier, amount, forceAfter }),
+    //     (entry) => {
+    //       entry.amount += amount;
+    //       entry.forceAfter = Math.min(entry.forceAfter, forceAfter);
+    //       return entry;
+    //     },
+    //   );
+    // }
   }
 
   public popIncentives(amount: bigint) {
@@ -47,7 +60,7 @@ export default class IncentiveService {
           : 0
       );
 
-    const res: Incentive[] = [];
+    const res: BlockOutput[] = [];
 
     while (amount > 0n) {
       const head = sorted.pop();

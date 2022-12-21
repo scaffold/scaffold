@@ -1,6 +1,5 @@
-import Hash from './util/Hash.ts';
 import HashRegistry from './util/HashRegistry.ts';
-import { Block, Claim, Incentive, Verifier } from './messages.ts';
+import { Block, BlockInput, Verifier } from './messages.ts';
 
 // Hash<Block> -> Block
 export class BlockRegistry extends HashRegistry<Block> {}
@@ -12,7 +11,7 @@ export class PendingIncentiveRegistry extends HashRegistry<
 
 // Hash<Verifier> -> Things I can claim if I publish an answer
 export class IncentiveRegistry
-  extends HashRegistry<{ verifier: Verifier; claims: Claim[] }> {}
+  extends HashRegistry<{ verifier: Verifier; inputs: BlockInput[] }> {}
 
 // Hash<Verifier> -> Blocks that claim to fulfill this verifier; whether valid or not
 export class FulfillmentRegistry extends HashRegistry<Block[]> {}

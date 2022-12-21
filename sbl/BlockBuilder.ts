@@ -1,6 +1,6 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
-import { Block, Claim, Incentive, Verifier } from './messages.ts';
+import { Block, Verifier } from './messages.ts';
 import { BlockRegistry, IncentiveRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import IncentiveCalculator from './IncentiveCalculator.ts';
@@ -10,12 +10,20 @@ export default class BlockBuilder {
 
   public build(verifier: Verifier, body: Uint8Array): Block {
     const verifier_hash = Hash.digest(Verifier.encode(verifier));
-    const claims = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.claims ||
+    const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
       [];
     const amount = this.ctx.get(IncentiveCalculator)
-      .getAvailableIncentive(verifier, claims);
-    const incentives = this.ctx.get(IncentiveService).popIncentives(amount);
-    const timestamp = BigInt(Date.now());
-    return { claims, incentives, verifier, body, timestamp };
+      .getAvailableIncentive(verifier, inputs);
+    const outputs = this.ctx.get(IncentiveService).popIncentives(amount);
+    let timestamp = BigInt(Date.now());
+    inputs.forEach((input) => {
+      // TODO: No need to look these blocks up; just store them in IncentiveRegistry
+      const inputTs =
+        this.ctx.get(BlockRegistry).get(input.block_hash)!.timestamp;
+      if (inputTs >= timestamp) {
+        timestamp = inputTs + 1n;
+      }
+    });
+    return { inputs, outputs, verifier, body, timestamp };
   }
 }
