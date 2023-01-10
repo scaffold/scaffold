@@ -14,9 +14,9 @@ import { getOrCreate } from '~/sbl/util/map.ts';
 const noiseInstances: Map<string, SimplexNoise> = new Map();
 
 export default class ThrustMazeContract {
-  constructor(private ctx: Context) {}
+  private contract: Hash;
 
-  public get() {
+  constructor(private ctx: Context) {
     const thrustMazeGenerator = (
       contractHash: Hash,
       params: Uint8Array,
@@ -60,18 +60,23 @@ export default class ThrustMazeContract {
     // (window as any).noiseInstances=noiseInstances;
     // (window as any).SimplexNoise=SimplexNoise;
 
-    const contract = this.ctx.get(GraphUtils).supplyContract(
+    this.contract = this.ctx.get(GraphUtils).supplyContract(
       thrustMazeContract,
     );
-    this.ctx.get(GraphUtils).supplyGenerator(contract, thrustMazeGenerator);
+    this.ctx.get(GraphUtils).supplyGenerator(
+      this.contract,
+      thrustMazeGenerator,
+    );
 
     this.ctx.get(QaDebugger).addDebugger(
       'ThrustMazeContract',
-      contract.hash,
+      this.contract,
       (params) => thrustMessages.MazeParams.decode(params),
       (answer) => thrustMessages.MazeAnswer.decode(answer),
     );
+  }
 
-    return contract;
+  public get() {
+    return this.contract;
   }
 }

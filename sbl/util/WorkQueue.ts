@@ -3,17 +3,21 @@ import Hash from './Hash.ts';
 
 const STATE_QUEUED = 0 as const;
 const STATE_RUNNING = 1 as const;
-const STATE_FINISHED = 2 as const;
+const STATE_PAUSED = 2 as const;
+const STATE_FINISHED = 3 as const;
 type EntryState =
   | typeof STATE_QUEUED
   | typeof STATE_RUNNING
+  | typeof STATE_PAUSED
   | typeof STATE_FINISHED;
+
+export type WorkFn = (pause: () => void, resume: () => void) => Promise<void>;
 
 interface Entry {
   hash: Hash;
   valuePerSecond: number;
   state: EntryState;
-  work(): Promise<void>;
+  work: WorkFn;
 }
 
 const wakeupEntry: Entry = {
@@ -71,7 +75,7 @@ export default class WorkQueue {
     return this.targetWorkerCount;
   }
 
-  public set(hash: Hash, valuePerSecond: number, work: () => Promise<void>) {
+  public set(hash: Hash, valuePerSecond: number, work: WorkFn) {
     const key = hash.toHex();
     const entry = this.map.get(key);
     if (entry) {
@@ -87,11 +91,11 @@ export default class WorkQueue {
       }
     } else {
       const entry = { hash, valuePerSecond, state: STATE_QUEUED, work };
+      this.map.set(key, entry);
 
       if (this.pausedWorkers.length) {
         this.pausedWorkers.pop()!(entry);
       } else {
-        this.map.set(key, entry);
         this.queue.insert(entry);
       }
     }
@@ -128,7 +132,10 @@ export default class WorkQueue {
     while (this.runningWorkerCount <= this.targetWorkerCount) {
       const entry = await this.pop();
       setState(entry, STATE_QUEUED, STATE_RUNNING);
-      await entry.work();
+      await entry.work(
+        () => setState(entry, STATE_RUNNING, STATE_PAUSED),
+        () => setState(entry, STATE_PAUSED, STATE_RUNNING),
+      );
       setState(entry, STATE_RUNNING, STATE_FINISHED);
     }
     this.runningWorkerCount--;

@@ -10,31 +10,14 @@ import QaDebugger from '~/sbl/QaDebugger.ts';
 // http://jfd.github.io/wpilot/
 
 export default class ThrustInputContract {
+  private contract: Hash;
+
   private inputCallbacks: Map<
     string,
     (tick: bigint) => thrustMessages.InputEntry
   > = new Map();
 
-  constructor(private ctx: Context) {}
-
-  public makeParams(match: Hash, player: Hash, tick: bigint): Uint8Array {
-    return thrustMessages.InputParams.encode({ match, player, tick });
-  }
-
-  public setInputCallback(
-    match: Hash,
-    player: Hash,
-    cb?: (tick: bigint) => thrustMessages.InputEntry,
-  ) {
-    const key = match.toHex() + player.toHex();
-    if (cb) {
-      this.inputCallbacks.set(key, cb);
-    } else {
-      this.inputCallbacks.delete(key);
-    }
-  }
-
-  public get() {
+  constructor(private ctx: Context) {
     const thrustInputCallbacks = this.inputCallbacks;
 
     const thrustInputGenerator = (
@@ -75,18 +58,40 @@ export default class ThrustInputContract {
     (window as any).thrustInputCallbacks = thrustInputCallbacks;
     (window as any).thrustMessages = thrustMessages;
 
-    const contract = this.ctx.get(GraphUtils).supplyContract(
+    this.contract = this.ctx.get(GraphUtils).supplyContract(
       thrustInputContract,
     );
-    this.ctx.get(GraphUtils).supplyGenerator(contract, thrustInputGenerator);
+    this.ctx.get(GraphUtils).supplyGenerator(
+      this.contract,
+      thrustInputGenerator,
+    );
 
     this.ctx.get(QaDebugger).addDebugger(
       'ThrustInputContract',
-      contract.hash,
+      this.contract,
       (params) => thrustMessages.InputParams.decode(params),
       (answer) => thrustMessages.InputAnswer.decode(answer),
     );
+  }
 
-    return contract;
+  public makeParams(match: Hash, player: Hash, tick: bigint): Uint8Array {
+    return thrustMessages.InputParams.encode({ match, player, tick });
+  }
+
+  public setInputCallback(
+    match: Hash,
+    player: Hash,
+    cb?: (tick: bigint) => thrustMessages.InputEntry,
+  ) {
+    const key = match.toHex() + player.toHex();
+    if (cb) {
+      this.inputCallbacks.set(key, cb);
+    } else {
+      this.inputCallbacks.delete(key);
+    }
+  }
+
+  public get() {
+    return this.contract;
   }
 }

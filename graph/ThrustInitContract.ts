@@ -1,13 +1,42 @@
 import Context from '~/sbl/Context.ts';
 import Hash from '~/sbl/util/Hash.ts';
+import GraphUtils from '../sbl/GraphUtils.ts';
+import QaDebugger from '../sbl/QaDebugger.ts';
 import * as thrustMessages from './thrustMessages.ts';
-// import GraphUtils from '~/sbl/GraphUtils.ts';
 // import AnswerRegistry from '~/sbl/AnswerRegistry.ts';
 // import QaDebugger from '~/sbl/QaDebugger.ts';
 // import { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
 
 export default class ThrustInitContract {
-  constructor(private ctx: Context) {}
+  private contract: Hash;
+
+  constructor(private ctx: Context) {
+    const thrustGameContract = (
+      contractHash: Hash,
+      params: Uint8Array,
+      _hint: Uint8Array,
+      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
+      _notify: (contractHash: Hash, params: Uint8Array) => void,
+    ) =>
+      Hash.equals(
+        thrustMessages.InitParams.decode(params).match,
+        Hash.digest(request(contractHash, params)),
+      );
+
+    // This is a nasty hack until we get WASM working
+    (window as any).thrustMessages = thrustMessages;
+
+    this.contract = this.ctx.get(GraphUtils).supplyContract(
+      thrustGameContract,
+    );
+
+    this.ctx.get(QaDebugger).addDebugger(
+      'ThrustInitContract',
+      this.contract,
+      (params) => thrustMessages.InitParams.decode(params),
+      (answer) => thrustMessages.InitAnswer.decode(answer),
+    );
+  }
 
   public makeParams(match: Hash): Uint8Array {
     return thrustMessages.InitParams.encode({ match });
@@ -32,33 +61,7 @@ export default class ThrustInitContract {
     return match;
   }
 
-  // public get() {
-  //   const thrustGameContract = (
-  //     contractHash: Hash,
-  //     params: Uint8Array,
-  //     _hint: Uint8Array,
-  //     request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-  //     _notify: (contractHash: Hash, params: Uint8Array) => void,
-  //   ) =>
-  //     Hash.equals(
-  //       thrustMessages.InitParams.decode(params).match,
-  //       Hash.digest(request(contractHash, params)),
-  //     );
-
-  //   // This is a nasty hack until we get WASM working
-  //   (window as any).thrustMessages = thrustMessages;
-
-  //   const contract = this.ctx.get(GraphUtils).supplyContract(
-  //     thrustGameContract,
-  //   );
-
-  //   this.ctx.get(QaDebugger).addDebugger(
-  //     'ThrustInitContract',
-  //     contract.hash,
-  //     (params) => thrustMessages.InitParams.decode(params),
-  //     (answer) => thrustMessages.InitAnswer.decode(answer),
-  //   );
-
-  //   return contract;
-  // }
+  public get() {
+    return this.contract;
+  }
 }

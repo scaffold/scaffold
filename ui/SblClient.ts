@@ -7,6 +7,10 @@ import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import Logger from '~/sbl/Logger.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
+import IncentiveService from '../sbl/IncentiveService.ts';
+import { BlocksByVerifierStore } from '../sbl/stores.ts';
+import StoreObserver from '../sbl/util/StoreObserver.ts';
+import { Block, Verifier } from '../sbl/messages.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 // window['Deno'] = {};
@@ -245,7 +249,7 @@ export default class SblClient {
 
       approxComputePricePerSecond: 1000n,
 
-      initialWorkerCount: 1,
+      initialWorkerCount: 16,
 
       computeContracts: [],
     };
@@ -281,6 +285,21 @@ export default class SblClient {
   //     params: contractParams,
   //   }, onAnswer);
   // }
+
+  public fetch(
+    contract_hash: Hash,
+    params: Uint8Array,
+    incentive: bigint,
+    cb: (blocks: Block[] | undefined) => void,
+  ) {
+    const verifier = { contract_hash, params };
+    this.ctx.get(IncentiveService).incentivize(verifier, incentive);
+
+    StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
+      Hash.digest(Verifier.encode(verifier)),
+      cb,
+    );
+  }
 
   public close() {
     return this.ctx.destruct();

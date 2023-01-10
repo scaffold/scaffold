@@ -21,6 +21,10 @@ export default class IncentiveService {
     incentive: bigint,
     forceAfter = Date.now() + 1000,
   ) {
+    if (incentive <= 0n) {
+      return;
+    }
+
     const block: Block = {
       verifier: {
         contract_hash: Hash.fromLiteral32(0),
@@ -31,7 +35,7 @@ export default class IncentiveService {
       body: new Uint8Array(),
       timestamp: BigInt(Date.now()),
     };
-    this.ctx.get(BlockStore).insert(Hash.digest(Block.encode(block)), block);
+    this.ctx.get(BlockStore).insert(BlockStore.hash(block), block);
 
     // if (amount > 0n) {
     //   this.ctx.get(PendingIncentiveRegistry).getOrCreate(

@@ -1,15 +1,14 @@
-import React from 'react';
-import SblClient from './SblClient.ts';
-import { Answer } from '~/sbl/AnswerRegistry.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import Context from '~/sbl/Context.ts';
-import QuestionService from '~/sbl/QuestionService.ts';
-import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 import ThrustMazeContract from '~/graph/ThrustMazeContract.ts';
 import ThrustInputContract from '~/graph/ThrustInputContract.ts';
 import ThrustGameContract from '~/graph/ThrustGameContract.ts';
 import * as thrustMessages from '~/graph/thrustMessages.ts';
 import StateTracker from '~/sbl/StateTracker.ts';
+import IncentiveService from '../sbl/IncentiveService.ts';
+import { BlocksByVerifierStore } from '../sbl/stores.ts';
+import StoreObserver from '../sbl/util/StoreObserver.ts';
+import { Verifier } from '../sbl/messages.ts';
 
 const msPerTick = 100;
 
@@ -37,7 +36,7 @@ export default class ThrustProvider {
   private tracker: { release(): void };
 
   constructor(private ctx: Context, public match: Hash, public player: Hash) {
-    const contractHash = ctx.get(ThrustGameContract).get().hash;
+    const contractHash = ctx.get(ThrustGameContract).get();
 
     this.tracker = ctx.get(StateTracker).track(
       (idx) => ({
@@ -48,10 +47,13 @@ export default class ThrustProvider {
         }),
       }),
       (idx, state) => {
+        console.log('STATE', state);
         if (idx > this.latestStateIdx) {
           this.latestStateIdx = idx;
           this.latestStateTime = Date.now();
-          this.latestStateVal = thrustMessages.GameAnswer.decode(state.data);
+          this.latestStateVal = thrustMessages.GameAnswer.decode(
+            new Uint8Array([]),
+          );
           console.log('got', idx);
         }
       },
@@ -79,18 +81,29 @@ export default class ThrustProvider {
     let hasResolved = false;
 
     return new Promise<thrustMessages.MazeAnswer['cell']>((resolve) => {
-      const questionSub = this.ctx.get(QuestionService).getCanonical({
-        contract_hash: this.ctx.get(ThrustMazeContract).get().hash,
+      const verifier = {
+        contract_hash: this.ctx.get(ThrustMazeContract).get(),
         params: thrustMessages.MazeParams.encode({ match: this.match, x, y }),
-      });
-      questionSub.incentivize(100000n);
-      questionSub.onAnswer((answer) => {
-        if (hasResolved) {
-          throw new Error(`Cell resolved more than once!`);
-        }
-        hasResolved = true;
-        resolve(thrustMessages.MazeAnswer.decode(answer.data).cell);
-      });
+      };
+      this.ctx.get(IncentiveService).incentivize(verifier, 1000000n);
+
+      StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
+        Hash.digest(Verifier.encode(verifier)),
+        (blocks) => {
+          console.log('GOT', x, y);
+          if (hasResolved) {
+            throw new Error(`Cell resolved more than once!`);
+          }
+          if (!blocks) {
+            throw new Error(`Blocks is undefined!`);
+          }
+          if (blocks.length !== 1) {
+            throw new Error(`Not exactly one block!`);
+          }
+          hasResolved = true;
+          resolve(thrustMessages.MazeAnswer.decode(blocks[0].body).cell);
+        },
+      );
     });
   }
 

@@ -54,7 +54,7 @@ export default class TimeContract {
 
     this.ctx.get(QaDebugger).addDebugger(
       'TimeContract',
-      contract.hash,
+      contract,
       (params) => timeMessages.Params.decode(params),
       (answer) => timeMessages.Answer.decode(answer),
     );

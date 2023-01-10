@@ -18,8 +18,7 @@ export default class BlockService {
     };
     // const extBlock = Object.assign(block, meta);
 
-    const blockHash = Hash.digest(Block.encode(block));
-    this.ctx.get(BlockStore).insert(blockHash, block);
+    this.ctx.get(BlockStore).insert(BlockStore.hash(block), block);
 
     try {
       await this.ctx.get(BlockIngestor).ingest(block);

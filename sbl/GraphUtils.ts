@@ -3,7 +3,7 @@ import Hash from './util/Hash.ts';
 import { Contract, Script } from './scriptTypes.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
 // import RootContract from '~/graph/RootContract.ts';
-import { rootHash } from '~/sbl/constants.ts';
+import { generatorHash, rootHash } from '~/sbl/constants.ts';
 import { Block, PublishMessage, Verifier } from './messages.ts';
 import BlockService from './BlockService.ts';
 import { FulfillmentRegistry } from './registries.ts';
@@ -58,19 +58,7 @@ export default class GraphUtils {
 
   // TODO: Does this work? Depends on how answer consistency is handled in caller.
   public getGeneratorContract() {
-    return this.supplyContract((
-      _contractHash: Hash,
-      params: Uint8Array, // This is the contract hash we're generating for.
-      hint: Uint8Array, // This is the params we're evaluating at.
-      request: (contractHash: Hash, params: Uint8Array) => Uint8Array,
-    ) =>
-      eval(new TextDecoder().decode(request(rootHash, params)))(
-        params,
-        hint,
-        new Uint8Array([]),
-        request,
-      )
-    );
+    return generatorHash;
   }
 
   public supplyGenerator(

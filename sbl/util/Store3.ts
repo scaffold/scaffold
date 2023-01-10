@@ -1,64 +1,10 @@
 import Hash, { HashPrimitive } from './Hash.ts';
-import { getOrCreate } from './map.ts';
 
-// type NonUndefined<T> = T extends undefined ? never : T;
-
-export default class Store2<Atom> {
+export default abstract class Store3<Atom> {
   private entries: Map<HashPrimitive, Atom> = new Map();
-
-  private sources: Store2<any>[] = [];
-
-  // TODO: Maybe eliminate storing entries when we don't need it.
-  // Pass the removed value to .remove()
-  private needsEntries = false;
-
-  private preInsertListeners: ((hash: Hash, atom: Atom) => void)[] = [];
-  private postInsertListeners: ((hash: Hash, atom: Atom) => void)[] = [];
-  private preMutateListeners:
-    ((hash: Hash, oldAtom: Atom, newAtom: Atom) => void)[] = [];
-  private postMutateListeners:
-    ((hash: Hash, oldAtom: Atom, newAtom: Atom) => void)[] = [];
-  private preRemoveListeners: ((hash: Hash, atom: Atom) => void)[] = [];
-  private postRemoveListeners: ((hash: Hash, atom: Atom) => void)[] = [];
-
-  constructor(src?: Store2<Atom>) {
-    if (src) {
-      this.copy(src);
-    }
-  }
-
-  public copy(src: Store2<Atom>) {
-    this.entries = src.entries;
-    this.sources = src.sources;
-    this.preInsertListeners = src.preInsertListeners;
-    this.postInsertListeners = src.postInsertListeners;
-    this.preMutateListeners = src.preMutateListeners;
-    this.postMutateListeners = src.postMutateListeners;
-    this.preRemoveListeners = src.preRemoveListeners;
-    this.postRemoveListeners = src.postRemoveListeners;
-  }
-
-  public getSources() {
-    return this.sources;
-  }
 
   public get(hash: Hash) {
     return this.entries.get(hash.toPrimitive());
-  }
-
-  public onMutate(
-    cb: (
-      hash: Hash,
-      oldAtom: Atom | undefined,
-      newAtom: Atom | undefined,
-    ) => void,
-  ) {
-    this.postInsertListeners.push((hash, atom) => cb(hash, undefined, atom));
-    this.postMutateListeners.push(cb);
-    this.postRemoveListeners.push((hash, atom) => cb(hash, atom, undefined));
-    this.entries.forEach((atom, key) =>
-      cb(Hash.fromPrimitive(key), undefined, atom)
-    );
   }
 
   public insert(hash: Hash, atom: Atom) {
@@ -67,9 +13,7 @@ export default class Store2<Atom> {
       throw new Error(`Store already has key ${hash.toHex()}`);
     }
 
-    this.preInsertListeners.forEach((fn) => fn(hash, atom));
     this.entries.set(key, atom);
-    this.postInsertListeners.forEach((fn) => fn(hash, atom));
   }
 
   public mutate(
@@ -79,7 +23,7 @@ export default class Store2<Atom> {
     const key = hash.toPrimitive();
     const oldAtom = this.entries.get(key);
     const newAtom = mutator(oldAtom);
-    this._set(key, hash, oldAtom, newAtom);
+    this.update(key, hash, oldAtom, newAtom);
   }
 
   public remove(hash: Hash) {
@@ -89,18 +33,16 @@ export default class Store2<Atom> {
       throw new Error(`Store doesn't contain atom with key ${hash.toHex()}`);
     }
 
-    this.preRemoveListeners.forEach((fn) => fn(hash, atom));
     this.entries.delete(key);
-    this.postRemoveListeners.forEach((fn) => fn(hash, atom));
   }
 
   public set(hash: Hash, newAtom?: Atom) {
     const key = hash.toPrimitive();
     const oldAtom = this.entries.get(key);
-    this._set(key, hash, oldAtom, newAtom);
+    this.update(key, hash, oldAtom, newAtom);
   }
 
-  private _set(
+  private update(
     key: HashPrimitive,
     hash: Hash,
     oldAtom: Atom | undefined,
@@ -109,19 +51,13 @@ export default class Store2<Atom> {
     if (oldAtom !== newAtom) {
       if (oldAtom !== undefined) {
         if (newAtom !== undefined) {
-          this.preMutateListeners.forEach((fn) => fn(hash, oldAtom, newAtom));
           this.entries.set(key, newAtom);
-          this.postMutateListeners.forEach((fn) => fn(hash, oldAtom, newAtom));
         } else {
-          this.preRemoveListeners.forEach((fn) => fn(hash, oldAtom));
           this.entries.delete(key);
-          this.postRemoveListeners.forEach((fn) => fn(hash, oldAtom));
         }
       } else {
         if (newAtom !== undefined) {
-          this.preInsertListeners.forEach((fn) => fn(hash, newAtom));
           this.entries.set(key, newAtom);
-          this.postInsertListeners.forEach((fn) => fn(hash, newAtom));
         } else {
           throw new Error(`Shouldn't happen`);
         }
@@ -132,7 +68,7 @@ export default class Store2<Atom> {
   public map<ReturnAtom>(
     mapFn: (hash: Hash, atom: Atom) => ReturnAtom | undefined,
   ) {
-    const res = new Store2<ReturnAtom>();
+    const res = new Store3<ReturnAtom>();
     res.sources.push(this);
     this.entries.forEach((atom, key) => {
       const hash = Hash.fromPrimitive(key);
@@ -170,7 +106,7 @@ export default class Store2<Atom> {
       emittedValue: EmitType,
     ) => ReturnAtom | undefined,
   ) {
-    const res = new Store2<ReturnAtom>();
+    const res = new Store3<ReturnAtom>();
     res.sources.push(this);
     this.entries.forEach((atom, key) =>
       emitFn(
@@ -241,15 +177,15 @@ export default class Store2<Atom> {
   }
 
   public static innerJoin<LhsAtom, RhsAtom, ReturnAtom>(
-    lhs: Store2<LhsAtom>,
-    rhs: Store2<RhsAtom>,
+    lhs: Store3<LhsAtom>,
+    rhs: Store3<RhsAtom>,
     transform: (
       hash: Hash,
       lhs: LhsAtom,
       rhs: RhsAtom,
     ) => ReturnAtom | undefined,
   ) {
-    const res = new Store2<ReturnAtom>();
+    const res = new Store3<ReturnAtom>();
     res.sources.push(lhs);
     res.sources.push(rhs);
     lhs.entries.forEach((atom1, key) => {
@@ -314,15 +250,15 @@ export default class Store2<Atom> {
   }
 
   public static leftJoin<LhsAtom, RhsAtom, ReturnAtom>(
-    lhs: Store2<LhsAtom>,
-    rhs: Store2<RhsAtom>,
+    lhs: Store3<LhsAtom>,
+    rhs: Store3<RhsAtom>,
     transform: (
       hash: Hash,
       lhs: LhsAtom,
       rhs: RhsAtom | undefined,
     ) => ReturnAtom | undefined,
   ) {
-    const res = new Store2<ReturnAtom>();
+    const res = new Store3<ReturnAtom>();
     res.sources.push(lhs);
     res.sources.push(rhs);
     lhs.entries.forEach((atom1, key) => {
@@ -375,15 +311,15 @@ export default class Store2<Atom> {
   }
 
   public static outerJoin<LhsAtom, RhsAtom, ReturnAtom>(
-    lhs: Store2<LhsAtom>,
-    rhs: Store2<RhsAtom>,
+    lhs: Store3<LhsAtom>,
+    rhs: Store3<RhsAtom>,
     transform: (
       hash: Hash,
       lhs: LhsAtom | undefined,
       rhs: RhsAtom | undefined,
     ) => ReturnAtom | undefined,
   ) {
-    const res = new Store2<ReturnAtom>();
+    const res = new Store3<ReturnAtom>();
     res.sources.push(lhs);
     res.sources.push(rhs);
     lhs.entries.forEach((atom1, key) => {
@@ -432,14 +368,14 @@ export default class Store2<Atom> {
   }
 
   // public mapWithAccessor<RhsAtom, ReturnAtom>(
-  //   memory: Store2<RhsAtom>,
+  //   memory: Store3<RhsAtom>,
   //   mapFn: (
   //     hash: Hash,
   //     atom: Atom,
   //     fetch: (hash: Hash) => RhsAtom | undefined,
   //   ) => ReturnAtom | undefined,
   // ) {
-  //   const res = new Store2<ReturnAtom>();
+  //   const res = new Store3<ReturnAtom>();
   //   res.sources.push(this);
   //   res.sources.push(memory);
   //   const refs = new Map<HashPrimitive, Hash[]>();

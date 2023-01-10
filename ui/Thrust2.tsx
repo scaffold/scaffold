@@ -1,9 +1,7 @@
 import React from 'react';
 import SblClient from './SblClient.ts';
-import { Answer } from '~/sbl/AnswerRegistry.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import Context from '~/sbl/Context.ts';
-import QuestionService from '~/sbl/QuestionService.ts';
 import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 import ThrustGameContract from '~/graph/ThrustGameContract.ts';
 import * as thrustMessages from '~/graph/thrustMessages.ts';
@@ -19,7 +17,7 @@ export default ({ sbl, match }: { sbl: Context; match: Hash }) => {
   React.useEffect(() => {
     const match = sbl.get(ThrustInitContract).startGame(Hash.digest('abc'));
 
-    const contractHash = sbl.get(ThrustGameContract).get().hash;
+    const contractHash = sbl.get(ThrustGameContract).get();
 
     const tracker = sbl.get(StateTracker).track(
       (idx) => ({

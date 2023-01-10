@@ -4,7 +4,6 @@ import Hash from '~/sbl/util/Hash.ts';
 // import BlockService from '~/sbl/BlockService.ts';
 import IncentiveService from '~/sbl/IncentiveService.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
-import WorkLoop from '../sbl/WorkLoop.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
 import AccountService from '../sbl/AccountService.ts';
@@ -21,8 +20,8 @@ import WorkQueue from '../sbl/WorkQueue.ts';
 import StoreObserver from '../sbl/util/StoreObserver.ts';
 import { Verifier } from '../sbl/messages.ts';
 import Logger from '../sbl/Logger.ts';
-// import ThrustView from './ThrustView.tsx';
-// import ThrustInitContract from '~/graph/ThrustInitContract.ts';
+import ThrustInitContract from '../graph/ThrustInitContract.ts';
+import ThrustView from './ThrustView.tsx';
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
@@ -42,13 +41,13 @@ export default () => {
       <a
         href='#'
         onClick={() => {
-          // const newUrl = new URL(url);
-          // newUrl.searchParams.set(
-          //   'game',
-          //   client.ctx.get(ThrustInitContract).startGame(Hash.random()).toHex(),
-          // );
-          // window.history.pushState({}, '', newUrl);
-          // setUrl(newUrl);
+          const newUrl = new URL(url);
+          newUrl.searchParams.set(
+            'game',
+            client.ctx.get(ThrustInitContract).startGame(Hash.random()).toHex(),
+          );
+          window.history.pushState({}, '', newUrl);
+          setUrl(newUrl);
         }}
       >
         New Game
@@ -62,6 +61,7 @@ export default () => {
             params: client.ctx.get(CollatzContract).makeParams(10n),
           };
           client.ctx.get(IncentiveService).incentivize(verifier, 10n);
+
           StoreObserver.get(client.ctx.get(BlocksByVerifierStore)).observe(
             Hash.digest(Verifier.encode(verifier)),
             (block) =>
@@ -70,10 +70,6 @@ export default () => {
         }}
       >
         Collatz depth of 10
-      </a>
-      <br />
-      <a href='#' onClick={() => client.ctx.get(WorkLoop)}>
-        Start work loop
       </a>
       <br />
       <a href='#' onClick={() => client.ctx.get(AccountService)}>
@@ -98,13 +94,11 @@ export default () => {
         <>
           Game ID: <pre style={{ display: 'inline' }}>{gameHex}</pre>
           {
-            /*
             <ThrustView
               sbl={client.ctx}
               match={Hash.fromHex(gameHex)}
               player={player}
             />
-            */
           }
         </>
       )}

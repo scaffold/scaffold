@@ -14,17 +14,12 @@ import QaDebugger from '~/sbl/QaDebugger.ts';
 // http://jfd.github.io/wpilot/
 
 export default class ThrustGameContract {
-  constructor(private ctx: Context) {}
+  private contract: Hash;
 
-  // public makeParams(num: bigint): Uint8Array {
-  //   return thrustMessages.Params.encode({ num });
-  // }
-
-  public get() {
-    const thrustInitContractHash = this.ctx.get(ThrustInitContract).get().hash;
-    const thrustInputContractHash =
-      this.ctx.get(ThrustInputContract).get().hash;
-    const timeContractHash = this.ctx.get(TimeContract).get().hash;
+  constructor(private ctx: Context) {
+    const thrustInitContractHash = this.ctx.get(ThrustInitContract).get();
+    const thrustInputContractHash = this.ctx.get(ThrustInputContract).get();
+    const timeContractHash = this.ctx.get(TimeContract).get();
     const thrustPlayerHash = Hash.digest(this.ctx.config.selfPrivateKey);
 
     const thrustGameGenerator = (
@@ -183,18 +178,23 @@ export default class ThrustGameContract {
     (window as any).timeContractHash = timeContractHash;
     (window as any).thrustPlayerHash = thrustPlayerHash;
 
-    const contract = this.ctx.get(GraphUtils).supplyContract(
+    this.contract = this.ctx.get(GraphUtils).supplyContract(
       thrustGameContract,
     );
-    this.ctx.get(GraphUtils).supplyGenerator(contract, thrustGameGenerator);
+    this.ctx.get(GraphUtils).supplyGenerator(
+      this.contract,
+      thrustGameGenerator,
+    );
 
     this.ctx.get(QaDebugger).addDebugger(
       'ThrustGameContract',
-      contract.hash,
+      this.contract,
       (params) => thrustMessages.GameParams.decode(params),
       (answer) => thrustMessages.GameAnswer.decode(answer),
     );
+  }
 
-    return contract;
+  public get() {
+    return this.contract;
   }
 }

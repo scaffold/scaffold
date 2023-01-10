@@ -1,8 +1,9 @@
+/*
+
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { Block, Verifier } from './messages.ts';
 import { FulfillmentRegistry } from './registries.ts';
-import NodeService from './NodeService.ts';
 import IncentiveService from './IncentiveService.ts';
 
 class NeedsMoreDataError extends Error {
@@ -69,3 +70,5 @@ const callWithSyncRequestHandler = async <T>(
 };
 
 export default callWithSyncRequestHandler;
+
+*/

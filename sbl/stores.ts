@@ -15,6 +15,74 @@ export class BlockStore extends Store<Block> {
   constructor(private ctx: Context) {
     super();
   }
+
+  public static hash(block: Block) {
+    return Hash.digest(Block.encode(block));
+  }
+}
+
+export class RequestsByGenerationStore
+  extends Store<{ incentive: bigint; requests: Verifier[] }> {
+  constructor(private ctx: Context) {
+    super();
+  }
+
+  // Should 1-1 correspond with an execution of WorkQueue.callWithSyncRequestHandler
+  public static hash(verifier: Verifier, generator: Uint8Array) {
+    // TODO: This is kinda hacky
+    return Hash.digestParts(
+      Verifier.encode(verifier),
+      generator.byteLength,
+      generator,
+    );
+  }
+
+  public update(generationHash: Hash, incentive: bigint, requests: Verifier[]) {
+    this.mutate(generationHash, (prev) => {
+      // TODO: Don't update down-stream when not much changes
+
+      if (prev) {
+        const x = prev.incentive / BigInt(prev.requests.length);
+        prev.requests.forEach((req) =>
+          this.ctx.get(ExtraIncentiveByVerifierStore).mutate(
+            Hash.digest(Verifier.encode(req)),
+            (prev) => ({ verifier: req, amount: prev!.amount - x }),
+          )
+        );
+      }
+
+      if (requests.length) {
+        const x = incentive / BigInt(requests.length);
+        requests.forEach((req) =>
+          this.ctx.get(ExtraIncentiveByVerifierStore).mutate(
+            Hash.digest(Verifier.encode(req)),
+            (prev) => ({ verifier: req, amount: prev ? prev.amount + x : x }),
+          )
+        );
+
+        return { incentive, requests };
+      } else {
+        return undefined;
+      }
+    });
+  }
+}
+
+export class ExtraIncentiveByVerifierStore extends Store<BlockOutput> {
+  constructor(private ctx: Context) {
+    super(
+      ctx.get(RequestsByGenerationStore).groupBy<BlockOutput>(
+        (_hash, { incentive, requests }, emit) =>
+          requests.forEach((req) =>
+            emit(Hash.digest(Verifier.encode(req)), {
+              verifier: req,
+              amount: incentive / BigInt(requests.length),
+            })
+          ),
+        ...amountAccumulator,
+      ),
+    );
+  }
 }
 
 export class GeneratorsByContractStore extends Store<Block[]> {
@@ -37,15 +105,20 @@ export class GeneratorsByContractStore extends Store<Block[]> {
 export class IncentivesByBlockHashAndVerifierStore extends Store<BlockOutput> {
   constructor(private ctx: Context) {
     super(
-      ctx.get(BlockStore).groupBy<BlockOutput>(
-        (hash, block, emit) =>
-          block.outputs.forEach(({ verifier, amount }) =>
-            emit(Hash.digestParts(hash, Verifier.encode(verifier)), {
-              verifier,
-              amount,
-            })
-          ),
-        ...amountAccumulator,
+      // Hashes will never collide here
+      Store.outerJoin(
+        ctx.get(BlockStore).groupBy<BlockOutput>(
+          (hash, block, emit) =>
+            block.outputs.forEach(({ verifier, amount }) =>
+              emit(Hash.digestParts(hash, Verifier.encode(verifier)), {
+                verifier,
+                amount,
+              })
+            ),
+          ...amountAccumulator,
+        ),
+        ctx.get(ExtraIncentiveByVerifierStore),
+        (_hash, x, y) => x || y,
       ),
     );
   }
@@ -68,23 +141,43 @@ export class ClaimsByBlockHashAndVerifierStore extends Store<bigint> {
   }
 }
 
+export class UnclaimedIncentivesByBlockHashAndVerifierStore
+  extends Store<BlockOutput> {
+  constructor(private ctx: Context) {
+    super(Store.leftJoin(
+      ctx.get(IncentivesByBlockHashAndVerifierStore),
+      ctx.get(ClaimsByBlockHashAndVerifierStore),
+      (_hash, incentive, claims) =>
+        claims !== undefined
+          ? {
+            verifier: incentive.verifier,
+            amount: incentive.amount - claims,
+          }
+          : incentive,
+    ));
+  }
+}
+
 export class UnclaimedIncentivesByContractStore extends Store<BlockOutput[]> {
   constructor(private ctx: Context) {
     super(
-      Store.leftJoin(
-        ctx.get(IncentivesByBlockHashAndVerifierStore),
-        ctx.get(ClaimsByBlockHashAndVerifierStore),
-        (_hash, incentive, claims) =>
-          claims !== undefined
-            ? {
-              verifier: incentive.verifier,
-              amount: incentive.amount - claims,
-            }
-            : incentive,
-      ).groupBy<BlockOutput, BlockOutput[]>(
-        (_hash, incentive, emit) =>
-          incentive.amount < 0n &&
-          emit(incentive.verifier.contract_hash, incentive),
+      ctx.get(UnclaimedIncentivesByBlockHashAndVerifierStore)
+        .groupBy<BlockOutput, BlockOutput[]>(
+          (_hash, incentive, emit) =>
+            incentive.amount < 0n &&
+            emit(incentive.verifier.contract_hash, incentive),
+          ...arrayAccumulator,
+        ),
+    );
+  }
+}
+
+export class BlocksByVerifierStore extends Store<Block[]> {
+  constructor(private ctx: Context) {
+    super(
+      ctx.get(BlockStore).groupBy<Block, Block[]>(
+        (_hash, block, emit) =>
+          emit(Hash.digest(Verifier.encode(block.verifier)), block),
         ...arrayAccumulator,
       ),
     );
@@ -106,7 +199,7 @@ export class WorkableIncentivesStore extends Store<
             generators.forEach((generator) =>
               emit(
                 Hash.digestParts(
-                  generator.verifier.contract_hash,
+                  generator.verifier.contract_hash, // Small set of generator contracts
                   generator.body,
                   Verifier.encode(verifier),
                 ),
@@ -120,17 +213,13 @@ export class WorkableIncentivesStore extends Store<
   }
 }
 
-export class BlocksByVerifierStore extends Store<Block[]> {
-  constructor(private ctx: Context) {
-    super(
-      ctx.get(BlockStore).groupBy<Block, Block[]>(
-        (_hash, block, emit) =>
-          emit(Hash.digest(Verifier.encode(block.verifier)), block),
-        ...arrayAccumulator,
-      ),
-    );
-  }
-}
+// score = 0
+//   + published incentive
+//   - published claims
+
+// score += 0
+//   + Multiplicative cumulative probability of invalidity of existing blocks
+//     * unpublished incentive
 
 // Every property is one on a subnet or potential block?
 //   Also block CROSS generator(s)

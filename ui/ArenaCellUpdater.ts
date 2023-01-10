@@ -1,5 +1,5 @@
 import { assert } from '~/sbl/util/functional.ts';
-import { RBTree } from 'std-latest/collections/rb_tree.ts';
+import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
 
 interface CacheEntry {
   uses: number;
@@ -145,8 +145,8 @@ export default class ArenaCellUpdater {
     const enters: { ox: number; oy: number }[] = [];
     const exits: { ox: number; oy: number }[] = [];
 
-    const queue: RBTree<{ x: number; y: number; isEnter: boolean }> =
-      new RBTree((a, b) =>
+    const queue: RedBlackTree<{ x: number; y: number; isEnter: boolean }> =
+      new RedBlackTree((a, b) =>
         // Order first by euclidean distance
         a.x * a.x + a.y * a.y - b.x * b.x - b.y * b.y ||
         // Then by the X coordinate, so the same cell will be processed sequentially
