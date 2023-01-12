@@ -1,3 +1,5 @@
+import * as fs from 'std-latest/fs/mod.ts';
+import * as path from 'std-latest/path/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config from '~/sbl/Config.ts';
@@ -14,6 +16,8 @@ import BlockService from '../sbl/BlockService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { BlockRegistry } from '../sbl/registries.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
+import QaDebugger from '../sbl/QaDebugger.ts';
+import GraphUtils from '../sbl/GraphUtils.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -160,6 +164,17 @@ const config: Config = {
 };
 
 const ctx = new Context(config);
+
+const bootstrapPath = path.join(
+  path.dirname(path.fromFileUrl(import.meta.url)),
+  'bootstrap',
+);
+for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
+  const body = await Deno.readFile(entry.path);
+  ctx.get(GraphUtils).supplyRawAnswer(body);
+  ctx.get(QaDebugger).addDebugger(entry.name, Hash.digest(body));
+}
+
 // ctx.get(EpochContract).get();
 ctx.get(ServingService).serve((protocol: string, spec: string) =>
   console.log(

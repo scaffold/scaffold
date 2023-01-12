@@ -68,7 +68,7 @@ export default class WorkQueue extends WorkQueueUtil {
 
     console.warn(`Running ${this.ctx.get(Logger).serialize(verifier)}`);
 
-    const attemptCorrect = Hash.cmp(
+    const emitCorrect = Hash.cmp(
       Hash.digest(
         arrConcat(secret, verifier.contract_hash.toBytes(), verifier.params),
       ),
@@ -96,7 +96,7 @@ export default class WorkQueue extends WorkQueueUtil {
           script(
             verifier.contract_hash,
             verifier.params,
-            attemptCorrect,
+            emitCorrect,
             handler,
             notifier,
           ),
@@ -107,6 +107,7 @@ export default class WorkQueue extends WorkQueueUtil {
 
       console.log('RUN DONE', verifier.params);
     } else {
+      debugger;
       const emitCorrect = true;
       const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
         .run(verifier, generator, {

@@ -46,7 +46,10 @@ const multibaseMap = Object.fromEntries(
     (base) => [base.prefix, base],
   ),
 );
-const decodeMultibase = (enc: string): Uint8Array => {
+export const decodeMultibase = (enc: string): Uint8Array => {
+  if (enc === '') {
+    return new Uint8Array();
+  }
   const decoder = multibaseMap[enc[0]];
   if (!decoder) {
     throw new Error(

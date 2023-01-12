@@ -12,8 +12,8 @@ import { Block, Verifier } from './messages.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import { rootHash } from './constants.ts';
 import NodeService from './NodeService.ts';
-import QueryService from './QueryService.ts';
 import { error } from './util/functional.ts';
+import FetchService from './FetchService.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
@@ -84,7 +84,7 @@ export default class WorkerExecutor {
         file.block = file.verifier.then((verifier) =>
           new Promise((resolve) => {
             let resolved = false;
-            return ctx.get(QueryService).query(verifier, (b) => {
+            ctx.get(FetchService).fetch(verifier, {}, (b) => {
               if (resolved) {
                 hasDirtyInputs.resolve(true);
               } else {
@@ -167,7 +167,6 @@ export default class WorkerExecutor {
                 BidMessage: { input, output: verifier, amount },
               })
             );
-
             return input;
           }),
         });

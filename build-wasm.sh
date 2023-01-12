@@ -19,7 +19,7 @@ set -x
 	tar xvf wasi-sdk-17.0-macos.tar.gz && \
 	rm wasi-sdk-17.0-macos.tar.gz
 
-rm -f public/modules/*.wasm
+rm -f server/bootstrap/*.wasm
 
 for file in ./cpp/*.cpp; do
 	echo "$file"
@@ -51,22 +51,22 @@ for file in ./cpp/*.cpp; do
     `# -Wl,--initial-memory=4294967296` \
     -Wl,--max-memory=4294967296 \
 		`#-Wl,-error-limit=0` \
-		-o "public/modules/$(basename "$file" .cpp).wasm" # &
+		-o "server/bootstrap/$(basename "$file" .cpp).wasm" # &
 done
 
 wait
 
 echo "#include <string_view>" > cpp/hashes.h
-shasum --algorithm 256 --binary public/modules/*.wasm \
-	| sed -n 's/^\([0-9a-f]\{64\}\) \*public\/modules\/\(.*\)\.wasm$/constexpr std::string_view \2_hash = "\1";/p' \
+shasum --algorithm 256 --binary server/bootstrap/*.wasm \
+	| sed -n 's/^\([0-9a-f]\{64\}\) \*server\/bootstrap\/\(.*\)\.wasm$/constexpr std::string_view \2_hash = "\1";/p' \
 	>> cpp/hashes.h
 
-echo "import Hash from './sbl/util/Hash.ts';" > moduleHashes.ts
-echo >> moduleHashes.ts
-shasum --algorithm 256 --binary public/modules/*.wasm \
-	| sed -n 's/^\([0-9a-f]\{64\}\) \*public\/modules\/\(.*\)\.wasm$/export const \2 = Hash.fromHex("\1");/p' \
-	>> moduleHashes.ts
+echo "import Hash from '../sbl/util/Hash.ts';" > ui/moduleHashes.ts
+echo >> ui/moduleHashes.ts
+shasum --algorithm 256 --binary server/bootstrap/*.wasm \
+	| sed -n 's/^\([0-9a-f]\{64\}\) \*server\/bootstrap\/\(.*\)\.wasm$/export const \2_hash = Hash.fromHex("\1");/p' \
+	>> ui/moduleHashes.ts
 
-wc -c public/modules/*
+wc -c server/bootstrap/*
 
 # sh wasm.sh ;and env NODE_OPTIONS='--stack-trace-limit=100' npx ts-node-dev --experimental-wasm-threads --files src/entry/debug.ts

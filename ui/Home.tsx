@@ -22,6 +22,12 @@ import { Verifier } from '../sbl/messages.ts';
 import Logger from '../sbl/Logger.ts';
 import ThrustInitContract from '../graph/ThrustInitContract.ts';
 import ThrustView from './ThrustView.tsx';
+import * as moduleHashes from './moduleHashes.ts';
+import * as constants from '../sbl/constants.ts';
+import { decodeMultibase } from '../sbl/pathUtils.ts';
+import FetchService from '../sbl/FetchService.ts';
+
+const contractHashes = Object.entries({ ...constants, ...moduleHashes });
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
@@ -30,6 +36,8 @@ client.ctx.get(WorkQueue);
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
+  const [selectedContract, selectContract] = React.useState<string>();
+  const [params, setParams] = React.useState<string>('');
   const gameHex = url.searchParams.get('game');
 
   const [shownStore, setShownStore] = React.useState<
@@ -74,11 +82,47 @@ export default () => {
       >
         Collatz depth of 10
       </a>
-      <br />
-      <a href='#' onClick={() => client.ctx.get(AccountService)}>
-        Start account loop
-      </a>
 
+      <br />
+      <select
+        value={selectedContract}
+        onChange={(e) => selectContract(e.target.value)}
+      >
+        {contractHashes.map(([name, hash]) => (
+          <option value={hash.toHex()}>{name} ({hash.toHex()})</option>
+        ))}
+      </select>
+      <input
+        type='text'
+        value={params}
+        onChange={(e) => setParams(e.target.value)}
+      />
+      <button
+        onClick={() =>
+          client.ctx.get(FetchService).fetch(
+            {
+              contract_hash: Hash.fromHex(selectedContract!),
+              params: decodeMultibase(params),
+            },
+            // TODO: Why isn't this being picked up on the work queue?
+            // It's because there's no generators registered.
+            // Need to make a generatorHash and register them.
+            // Does the same WASM act as both a generator and a contract?
+            { internalIncentive: 1n, externalIncentive: 1n },
+            (block) => console.log(block),
+          )}
+      >
+        RUN
+      </button>
+
+      <br />
+      {
+        /*
+        <a href='#' onClick={() => client.ctx.get(AccountService)}>
+          Start account loop
+        </a>
+        */
+      }
       <StoreSelector
         ctx={client.ctx}
         onSelectClass={(clz) => setShownStore({ key: Math.random(), clz })}
