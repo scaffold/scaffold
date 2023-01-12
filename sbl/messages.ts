@@ -228,9 +228,9 @@ export const registry = {
     name: 'BidMessage',
     type: 'record',
     fields: [
-      { name: 'verifier', type: 'Verifier' },
+      { name: 'input', type: 'Verifier' },
       { name: 'output', type: 'Verifier' },
-      // { name: 'bid', type: 'long' },
+      { name: 'amount', type: 'long' },
     ],
   },
   PublicationMessage: {
@@ -351,7 +351,7 @@ export const registry = {
     type: 'record',
     fields: [
       // { name: 'question_hash', type: 'Hash' },
-      { name: 'question', type: 'Verifier' },
+      { name: 'verifier', type: 'Verifier' },
       // { name: 'child_question', type: 'Verifier' },
       // // { name: 'destination', type: 'Hash' },
       // { name: 'expected_reward', type: 'long' },

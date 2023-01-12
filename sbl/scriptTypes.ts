@@ -22,6 +22,10 @@ export type WasmExec = {
   stderrTo: Path;
 };
 
+export type JsExec = {
+  code: string;
+};
+
 /*
 export type GeneratorExec= {
   // This is a thing that provides easy testing for generators
@@ -42,7 +46,12 @@ export type ProvisionExec= {
 */
 
 export type Script = {
-  cmds: ({ mkdir: MkdirExec } | { link: LinkExec } | { wasm: WasmExec })[];
+  cmds: (
+    | { mkdir: MkdirExec }
+    | { link: LinkExec }
+    | { wasm: WasmExec }
+    | { js: JsExec }
+  )[];
   runtime: number;
 };
 

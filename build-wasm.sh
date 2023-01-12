@@ -1,0 +1,72 @@
+#!/bin/sh
+
+set -e
+set -x
+
+# rm -rf src/gen/ cpp/gen/
+# mkdir -p src/gen/ cpp/gen/
+
+[ ! -d "jsoncons" ] && \
+	git clone git@github.com:danielaparker/jsoncons.git
+
+# node src/schema/main.js ../sbl.schema.js cpp > src/gen/sbl.h
+# for file in ./cpp/*.schema.js; do
+# 	node src/schema/main.js "../modules/$(basename "$file" .schema.js).schema.js" cpp > "cpp/gen/$(basename "$file" .schema.js).h"
+# done
+
+[ ! -d "wasi-sdk-17.0" ] && \
+	curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-17/wasi-sdk-17.0-macos.tar.gz --output wasi-sdk-17.0-macos.tar.gz && \
+	tar xvf wasi-sdk-17.0-macos.tar.gz && \
+	rm wasi-sdk-17.0-macos.tar.gz
+
+rm -f public/modules/*.wasm
+
+for file in ./cpp/*.cpp; do
+	echo "$file"
+
+	./wasi-sdk-17.0/bin/clang++ \
+		"$file" \
+		-I./cpp/ \
+		-I./jsoncons/include/ \
+		-I./wasi-sdk-17.0/share/wasi-sysroot/include/ \
+		-std=c++17 \
+		`#-g` \
+    -O3 \
+		-fno-exceptions \
+		-fvisibility=hidden \
+    -flto \
+    -fno-rtti \
+		--target=wasm32-unknown-wasi \
+		--sysroot=./wasi-sdk-17.0/share/wasi-sysroot/ \
+		`#-Wl,--export-all` \
+		-Wl,--allow-undefined-file=syms.syms \
+		`#-Wl,--export=malloc,--export=free` \
+		`#-Wl,--growable-table` \
+		`#-Wl,--export-table` \
+		`#-Wl,--gc-sections` \
+    -Wl,--strip-all \
+		-Wl,--import-memory \
+    -Wl,--shared-memory \
+    -Wl,--no-check-features \
+    `# -Wl,--initial-memory=4294967296` \
+    -Wl,--max-memory=4294967296 \
+		`#-Wl,-error-limit=0` \
+		-o "public/modules/$(basename "$file" .cpp).wasm" # &
+done
+
+wait
+
+echo "#include <string_view>" > cpp/hashes.h
+shasum --algorithm 256 --binary public/modules/*.wasm \
+	| sed -n 's/^\([0-9a-f]\{64\}\) \*public\/modules\/\(.*\)\.wasm$/constexpr std::string_view \2_hash = "\1";/p' \
+	>> cpp/hashes.h
+
+echo "import Hash from './sbl/util/Hash.ts';" > moduleHashes.ts
+echo >> moduleHashes.ts
+shasum --algorithm 256 --binary public/modules/*.wasm \
+	| sed -n 's/^\([0-9a-f]\{64\}\) \*public\/modules\/\(.*\)\.wasm$/export const \2 = Hash.fromHex("\1");/p' \
+	>> moduleHashes.ts
+
+wc -c public/modules/*
+
+# sh wasm.sh ;and env NODE_OPTIONS='--stack-trace-limit=100' npx ts-node-dev --experimental-wasm-threads --files src/entry/debug.ts

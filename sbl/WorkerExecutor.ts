@@ -1,43 +1,49 @@
 import Context from './Context.ts';
 import ExposedPromise from './util/ExposedPromise.ts';
-import QuestionService from './QuestionService.ts';
 import { formatPath } from './pathUtils.ts';
-import { Contract, Script } from './scriptTypes.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import {
   InitialMessage,
   JobMessage,
   WorkerComm,
 } from './worker/workerTypes.ts';
-import RootContract from '~/graph/RootContract.ts';
-import { Answer } from './AnswerRegistry.ts';
+import Hash from './util/Hash.ts';
+import { Block, Verifier } from './messages.ts';
+import { FulfillmentRegistry } from './registries.ts';
+import { rootHash } from './constants.ts';
+import NodeService from './NodeService.ts';
+import QueryService from './QueryService.ts';
+import { error } from './util/functional.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
   path: Uint8Array[];
 
-  answer: Promise<Answer>;
+  verifier: Promise<Verifier>;
+  block?: Promise<Block>;
+
   // question: Question;
   // readerStream: Promise<IncentivizedStream<Uint8Array>>;
   // exposedData?: Promise<Uint8Array>;
 }
 
 export default class WorkerExecutor {
-  constructor(private context: Context) {}
+  constructor(private ctx: Context) {}
 
   // Note: This will transfer the input buffers, reducing their size to zero.
   public run<InputKeys extends string, OutputKeys extends string>(
-    script: Script,
+    verifier: Verifier,
+    code: Uint8Array,
     inputs: Record<InputKeys, Uint8Array>,
     outputSpec: Record<OutputKeys, null>,
   ): {
     cancel(): void;
     result: Promise<
-      { outputs: Record<OutputKeys, Uint8Array>; usedAnswers: Set<Answer> }
+      { outputs: Record<OutputKeys, Uint8Array>; usedBlocks: Set<Block> }
     >;
     hasDirtyInputs: Promise<true>;
   } {
-    const ctx = this.context;
+    const ctx = this.ctx;
 
     const worker = new Worker(
       new URL('./worker/worker.ts', import.meta.url).href,
@@ -66,21 +72,43 @@ export default class WorkerExecutor {
     const outputs: Record<string, { size: number; chunks: Uint8Array[] }> = {};
 
     const result = ExposedPromise.create<
-      { outputs: Record<OutputKeys, Uint8Array>; usedAnswers: Set<Answer> }
+      { outputs: Record<OutputKeys, Uint8Array>; usedBlocks: Set<Block> }
     >();
     const hasDirtyInputs = ExposedPromise.create<true>();
 
-    const rootLoaders: { [index: string]: Promise<Answer> } = {
-      ext: Promise.resolve(ctx.get(RootContract).get()),
+    const usedBlocks: Set<Block> = new Set();
+    let sentJob = false;
+
+    const getBlock = (file: OpenFile) => {
+      if (file.block === undefined) {
+        file.block = file.verifier.then((verifier) =>
+          new Promise((resolve) => {
+            let resolved = false;
+            return ctx.get(QueryService).query(verifier, (b) => {
+              if (resolved) {
+                hasDirtyInputs.resolve(true);
+              } else {
+                resolved = true;
+                resolve(b);
+              }
+            });
+          })
+        );
+      }
+      return file.block;
     };
 
-    const usedAnswers: Set<Answer> = new Set();
-    let sentJob = false;
+    const getBodyHash = (file: OpenFile) =>
+      file.verifier.then(({ contract_hash, params }) =>
+        Hash.equals(contract_hash, rootHash)
+          ? Hash.fromBytes(params)
+          : getBlock(file).then((block) => Hash.digest(block.body))
+      );
 
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
       ready(): undefined {
         if (!sentJob) {
-          const msg: JobMessage = { script, inputs, outputSpec };
+          const msg: JobMessage = { code, inputs, outputSpec };
           worker.postMessage(msg, {
             // transfer: Object.values(inputs).map((buf) =>
             //   (buf as Uint8Array).buffer
@@ -102,68 +130,65 @@ export default class WorkerExecutor {
               return [key, buf];
             }),
           ) as Record<OutputKeys, Uint8Array>,
-          usedAnswers,
+          usedBlocks,
         });
         return undefined;
       },
 
-      fsRoot(name: string, inode: number): undefined {
+      init(type: string, inode: number): undefined {
+        const hash = { ext: rootHash }[type] ||
+          error('Invalid init inode type');
         inodes.set(inode, {
           path: [],
-          answer: rootLoaders[name],
+          verifier: Promise.resolve({
+            contract_hash: rootHash,
+            params: hash.toBytes(),
+          }),
         });
-
         return undefined;
       },
 
-      fsOpen(baseInode: number, key: Uint8Array, subInode: number): undefined {
-        const path = [...inodes.get(baseInode)!.path, key];
+      open(
+        baseInode: number,
+        params: Uint8Array,
+        amount: bigint,
+        subInode: number,
+      ): undefined {
+        const path = [...inodes.get(baseInode)!.path, params];
         console.log(`Preopen ${formatPath(path)}`);
 
-        let resolved = false;
+        const baseFile = inodes.get(baseInode)!;
         inodes.set(subInode, {
           path,
-          answer: new Promise((resolve) => {
-            console.log(`Read ${formatPath(path)}...`);
-            inodes.get(baseInode)!.answer.then((parentAnswer) =>
-              ctx.get(QuestionService).getCanonical({
-                contract_hash: parentAnswer.hash,
-                params: key,
-              }).onAnswer((answer) => {
-                console.log(
-                  `Read ${formatPath(path)} -> ${
-                    formatPath([answer.data.slice(0, 128)])
-                  }`,
-                );
-
-                if (resolved) {
-                  hasDirtyInputs.resolve(true);
-                } else {
-                  resolved = true;
-                  resolve(answer);
-                }
+          verifier: getBodyHash(baseFile).then((contractHash) => {
+            const input = { contract_hash: contractHash, params };
+            ctx.get(NodeService).getAll().forEach((node) =>
+              node.defaultConn?.sendReliable({
+                BidMessage: { input, output: verifier, amount },
               })
             );
+
+            return input;
           }),
         });
 
         return undefined;
       },
 
-      async fsRead(
+      async read(
         inode: number,
         offset: number,
         dstBufs: Uint8Array[],
       ): Promise<number> {
-        const answer = await inodes.get(inode)!.answer;
-        usedAnswers.add(answer);
+        const block = await getBlock(inodes.get(inode)!);
+        usedBlocks.add(block);
 
         let it = offset;
         for (const buf of dstBufs) {
-          const limit = Math.min(it + buf.length, answer.data.length);
-          buf.set(answer.data.subarray(it, limit));
+          const limit = Math.min(it + buf.length, block.body.length);
+          buf.set(block.body.subarray(it, limit));
           it = limit;
-          if (it === answer.data.length) {
+          if (it === block.body.length) {
             break;
           }
         }
@@ -171,10 +196,10 @@ export default class WorkerExecutor {
         return it - offset;
       },
 
-      async fsGetSize(inode: number): Promise<number> {
-        const answer = await inodes.get(inode)!.answer;
-        usedAnswers.add(answer);
-        return answer.data.length;
+      async getSize(inode: number): Promise<number> {
+        const block = await getBlock(inodes.get(inode)!);
+        usedBlocks.add(block);
+        return block.body.length;
       },
 
       outputChunk(key: string, offset: number, data: Uint8Array): undefined {
@@ -192,6 +217,34 @@ export default class WorkerExecutor {
         output.size += data.length;
         output.chunks.push(data);
 
+        return undefined;
+      },
+
+      notify(contractHash: Uint8Array, params: Uint8Array): undefined {
+        return undefined;
+      },
+
+      async request(
+        contractHash: Uint8Array,
+        params: Uint8Array,
+        result: Uint8Array,
+      ): Promise<number> {
+        const verifier = {
+          contract_hash: Hash.fromBytes(contractHash),
+          params,
+        };
+        const verifierHash = Hash.digest(Verifier.encode(verifier));
+        const blocks = await ctx.get(FulfillmentRegistry).getOrWait(
+          verifierHash,
+        );
+        const body = blocks[0].body;
+        if (body.byteLength <= result.byteLength) {
+          result.set(body);
+        }
+        return body.byteLength;
+      },
+
+      result(data: Uint8Array): undefined {
         return undefined;
       },
     });

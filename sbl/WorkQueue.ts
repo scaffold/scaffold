@@ -13,9 +13,10 @@ import Hash from './util/Hash.ts';
 import WorkQueueUtil from './util/WorkQueue.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
+import WorkerExecutor from './WorkerExecutor.ts';
 
+const useLocalExecution = false;
 const secret = secp.utils.randomBytes(32);
-const wasmMagic = new Uint8Array([0, 0x61, 0x73, 0x6D]);
 const dummyWork = async () => {};
 
 class NeedsMoreDataError extends Error {
@@ -81,28 +82,14 @@ export default class WorkQueue extends WorkQueueUtil {
       //   this.ctx.config.approxComputePricePerSecond / 1000n;
     };
 
-    const script = eval(new TextDecoder().decode(generator));
-    if (typeof script === 'object') {
-      // const emitCorrect = true;
-      // const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
-      //   .run(script, {
-      //     contractHash: verifier.contract_hash.toBytes(),
-      //     params: verifier.params,
-      //     emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
-      //   }, { answer: null });
-      // result.then((out) => console.log('DONE', out));
-      // result.then(({ outputs: { answer: data }, usedAnswers }) => {
-      //   onDone(data, [...usedAnswers], 0);
-      //   hasDirtyInputs.then(() => {});
-      // });
-      throw new Error(`Unsupported script`);
-    } else if (typeof script === 'function') {
+    if (useLocalExecution) {
       // TODO: This is kinda hacky
       const generationHash = RequestsByGenerationStore.hash(
         verifier,
         generator,
       );
 
+      const script = eval(new TextDecoder().decode(generator));
       await this.callWithSyncRequestHandler<Uint8Array>(
         verifier,
         (handler, notifier) =>
@@ -120,7 +107,18 @@ export default class WorkQueue extends WorkQueueUtil {
 
       console.log('RUN DONE', verifier.params);
     } else {
-      throw new Error(`Invalid script type: ${typeof script}`);
+      const emitCorrect = true;
+      const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
+        .run(verifier, generator, {
+          contractHash: verifier.contract_hash.toBytes(),
+          params: verifier.params,
+          emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
+        }, { answer: null });
+      result.then((out) => console.log('DONE', out));
+      result.then(({ outputs: { answer: data }, usedBlocks }) => {
+        onDone(data, [...usedBlocks], 0);
+        hasDirtyInputs.then(() => console.error(`Dirty inputs!`));
+      });
     }
   }
 
@@ -195,7 +193,7 @@ export default class WorkQueue extends WorkQueueUtil {
       });
 
       onDone(out, inputs, Date.now() - startTime);
-      this.ctx.get(RequestsByGenerationStore).set(generationHash, undefined);
+      // this.ctx.get(RequestsByGenerationStore).set(generationHash, undefined);
       this.ctx.get(RequestsByGenerationStore).update(generationHash, 0n, []);
     } catch (err) {
       if (err instanceof NeedsMoreDataError) {

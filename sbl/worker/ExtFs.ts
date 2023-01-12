@@ -32,6 +32,7 @@ export default class ExtFs implements Fs {
   }
 
   private createNode(): ExtFsNode {
+    // deno-lint-ignore no-this-alias
     const fs = this;
     const inode = this.inodeSource.nextInode++;
 
@@ -79,8 +80,8 @@ export default class ExtFs implements Fs {
           // Gotta copy this buffer because we're not blocking, so the underlying buffer could change
           const informKey = key.slice();
           fs.client.inform(
-            'fsOpen',
-            [inode, informKey, node.getInode()],
+            'open',
+            [inode, informKey, 0n, node.getInode()],
             [informKey.buffer],
           );
         }
@@ -95,7 +96,7 @@ export default class ExtFs implements Fs {
       // FILE METHODS
 
       read(offset: number, dstBufs: Uint8Array[]) {
-        return fs.client.dispatch('fsRead', [inode, offset, dstBufs], []);
+        return fs.client.dispatch('read', [inode, offset, dstBufs], []);
       },
 
       write(offset: number, bufs: Uint8Array[]) {
@@ -103,7 +104,7 @@ export default class ExtFs implements Fs {
       },
 
       getSize() {
-        return fs.client.dispatch('fsGetSize', [inode], []);
+        return fs.client.dispatch('getSize', [inode], []);
       },
 
       resize(size: number) {

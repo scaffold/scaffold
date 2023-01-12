@@ -14,7 +14,7 @@
   "lint": {},
   "fmt": {
     "files": {
-      "exclude": ["README.md"]
+      "exclude": ["README.md", "jsoncons"]
     },
     "options": {
       "singleQuote": true

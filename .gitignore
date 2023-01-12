@@ -2,3 +2,5 @@
 Thumbs.db
 dist/
 build/
+jsoncons/
+wasi-sdk-17.0/

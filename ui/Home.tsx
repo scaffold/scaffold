@@ -64,8 +64,11 @@ export default () => {
 
           StoreObserver.get(client.ctx.get(BlocksByVerifierStore)).observe(
             Hash.digest(Verifier.encode(verifier)),
-            (block) =>
-              console.log('GOT BLOCK', client.ctx.get(Logger).serialize(block)),
+            (blocks) =>
+              console.log(
+                'GOT BLOCKS',
+                client.ctx.get(Logger).serialize(blocks),
+              ),
           );
         }}
       >

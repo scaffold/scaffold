@@ -25,7 +25,7 @@ const throwErr = (msg: string): never => {
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { script, inputs, outputSpec }: JobMessage,
+  { code, inputs, outputSpec }: JobMessage,
 ) => {
   const inodeSource = { nextInode: 1 };
 
@@ -41,7 +41,7 @@ export default async (
         capMask: FS_CAPABILITY_DIR_READ_ENTRY | FS_CAPABILITY_FILE_READ,
       },
   );
-  client.inform('fsRoot', ['ext', extRoot.getInode()], []);
+  client.inform('init', ['ext', extRoot.getInode()], []);
 
   const identityFs = new IdentityFs(inodeSource);
   const identityRoot = fsRoot.mutEntry(
