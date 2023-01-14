@@ -64,6 +64,7 @@ export default class GraphUtils {
   public supplyGenerator(
     contract_hash: Hash,
     generator:
+      | Uint8Array
       | Script
       | ((
         contractHash: Hash,
@@ -81,17 +82,19 @@ export default class GraphUtils {
       verifier,
       inputs: [],
       outputs: [],
-      body: new TextEncoder().encode(
-        typeof generator === 'function'
-          ? generator.toString()
-          : `(${
-            JSON.stringify(
-              generator,
-              (key, val) =>
-                val instanceof Uint8Array ? `hex2bin(${bin2hex(val)})` : val,
-            ).replace(/"hex2bin\(([0-9a-f]*)\)"/g, 'hex2bin("$1")')
-          })`,
-      ),
+      body: generator instanceof Uint8Array
+        ? generator
+        : new TextEncoder().encode(
+          typeof generator === 'function'
+            ? generator.toString()
+            : `(${
+              JSON.stringify(
+                generator,
+                (key, val) =>
+                  val instanceof Uint8Array ? `hex2bin(${bin2hex(val)})` : val,
+              ).replace(/"hex2bin\(([0-9a-f]*)\)"/g, 'hex2bin("$1")')
+            })`,
+        ),
       timestamp: BigInt(Date.now()),
     }));
   }

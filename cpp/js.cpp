@@ -6,6 +6,8 @@
 
 #include "io.h"
 
+// https://wapm.io/saghul/quickjs
+
 #ifdef __cplusplus
 extern "C" {
 #endif

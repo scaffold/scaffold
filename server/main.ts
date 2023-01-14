@@ -171,8 +171,16 @@ const bootstrapPath = path.join(
 );
 for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
   const body = await Deno.readFile(entry.path);
+  const contractHash = Hash.digest(body);
+
+  // Supply contract
   ctx.get(GraphUtils).supplyRawAnswer(body);
-  ctx.get(QaDebugger).addDebugger(entry.name, Hash.digest(body));
+
+  // Supply generator
+  // This shouldn't work in general but we can hack it for now
+  ctx.get(GraphUtils).supplyGenerator(contractHash, body);
+
+  ctx.get(QaDebugger).addDebugger(entry.name, contractHash);
 }
 
 // ctx.get(EpochContract).get();

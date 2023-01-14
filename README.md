@@ -1,33 +1,38 @@
-# The Sublime Cloud
-_The future of the web is sublime_
+# Scaffold.io
+_Cool tagline_
 
 ## What is it?
-Sublime is an alternative to AWS. It's a P2P network of browsers communicating over WebRTC, executing functions and generally helping each other out.
+Scaffold moves the cloud to the client. Scaffold connects browsers to each other via WebRTC, letting them respond to others' requests instead of GCP/AWS (saving $$$). It's fully trustless and verified; in fact peers are incentivized to try and deceive the network, in turn incentivizing verifiers.
 
 ## Usage
 ```ts
-sbl.get(QuestionService).getCanonical({
-  contract_answer_hash: '[your contract hash here]',
-  params: '[contract parameters here]',
-}, (answer: Answer) => console.log(answer.data))
+sbl.get(FetchService).fetch(
+  {
+    contract_hash: MyContract.hash,
+    params: MyContract.encodeParams({x: 5, y: 7}),
+  },
+  (block) => console.log(MyContract.decodeBody(block.body)), // 12
+);
 // TODO: Example that shows speed
 ```
 
 ## How?
-- Contracts and generators are written in WebAssembly and placed onto the network.
-- Executors compete to resolve requests first, and are rewarded for their effort.
-- Verifiers monitor the network and play a game with the executors; both try to dupe the other, and are rewarded when they succeed.
+- Contracts and generators are written in WebAssembly and placed onto the network. A contract verifies the work of a generator.
+- Executors (browsers & servers) compete to resolve requests first, and are rewarded for their effort.
+- Verifiers monitor the network and play a game with the executors; both try to pass incorrect solutions by the other, and are rewarded when they succeed.
 
 ## Design goals
 - It's very fast. Low latency is the #1 design goal. There is very little overhead between the computation of a result and its optimistic availability to be used in another calculation.
-- It's secure. Peers are incentivized to verify others’ results. Each result is signed with collateral, and consensus will progressively solidify trust in it. Incorrect results are flagged, voted on, penalized, and eventually eliminated from the graph.
-- It's immutable. Executions are baked into the global block graph, establishing consensus.
-- It's truly decentralized. Centralized APIs like Infura or Alchemy are not required to interact with the network, since browsers connect directly. Servers can help out with additional compute, but even they have to abide by the same rules.
+- It's secure. Peers are incentivized to verify others’ results. Each result is signed with collateral, and consensus will progressively solidify trust in its validity. Incorrect results are flagged, voted on, penalized, and eventually eliminated from the graph.
+- It's eventually immutable. Eventually, executions are baked into the global block graph, establishing consensus. We don't want this to happen too fast, because we want to give verifiers time to find, flag, and fix incorrect blocks. See non-goals below.
+
+## Non-goals
+- Fast immutability. This would come at the expense of repairability.
 
 ## Features
-- Write once, run everywhere. Sublime embraces WebAssembly as the future of computing.
-- Automatic load balancing. Lambdas are executed on the global Sublime network, composed of both browsers and servers, easily mitigating load spikes.
-- Microservices without the misery. Never worry about versioning again. Updates roll out atomically with zero downtime.
+- Write once, run everywhere. Scaffold embraces WebAssembly as the future of computing.
+- Global load balancing. Because functions are executed on the global Scaffold network instead of a limited cluster of servers, it easily scales up or down with load.
+- Pure, functional, lazy everything. Modules can do only one thing - output a result. No side-effects or mutation means reasoning about your code is easy and values are visible at every step.
 - Multilingual. Contracts can be written in Rust, C++, AssemblyScript, Ruby, or any language that compiles to WASM.
 
 ## Use cases
@@ -43,20 +48,20 @@ git clone git@github.com:SublimeNet/sublime.git
 cd sublime
 
 # Run formatter
-deno fmt --config=deno.jsonc --watch
+deno task fmt
 
 # Run linter
-deno lint --config=deno.jsonc --watch
+deno task lint
 
 # Run tests
-deno test --config=deno.jsonc --import-map=import_map.json --allow-all --seed=123 --trace-ops --watch tests/
+deno task test
 
 # Run websocket server (required for initial P2P connection)
-deno run --config=deno.jsonc --import-map=import_map.json --allow-all --watch server/main.ts
+deno task serve-ws
 
 # Bundle js
-deno bundle --config=deno.jsonc --import-map=import_map.json --watch app.tsx build/index.js
+deno task serve-ui
 
 # Open in browser
-open public/index.html
+open http://localhost:1234/
 ```

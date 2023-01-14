@@ -52,11 +52,11 @@ export interface WorkerComm {
   read(inode: number, offset: number, dstBufs: Uint8Array[]): Promise<number>;
   getSize(inode: number): Promise<number>;
 
-  notify(contractHash: Uint8Array, params: Uint8Array): undefined;
-  request(
-    contractHash: Uint8Array,
-    params: Uint8Array,
-    result: Uint8Array,
-  ): Promise<number>;
-  result(data: Uint8Array): undefined;
+  // notify(contractHash: Uint8Array, params: Uint8Array): undefined;
+  // request(
+  //   contractHash: Uint8Array,
+  //   params: Uint8Array,
+  //   result: Uint8Array,
+  // ): Promise<number>;
+  // result(data: Uint8Array): undefined;
 }

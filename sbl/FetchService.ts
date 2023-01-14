@@ -13,17 +13,27 @@ interface FetchOptions {
   internalIncentive?: bigint;
   externalIncentive?: bigint;
   bid?: { output: Verifier; amount: bigint };
+  blockSelector?: (blocks: Block[]) => Block;
+  verify?: true;
 }
+
+// TODO: Find canonical block
+// Rank by mergability probability
+//   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
+export const defaultBlockSelector = (blocks: Block[]) => blocks[0];
 
 export default class FetchService {
   constructor(private ctx: Context) {}
 
   public fetch(
     verifier: Verifier,
-    { internalIncentive, externalIncentive, bid }: FetchOptions,
+    { internalIncentive, externalIncentive, bid, blockSelector, verify }:
+      FetchOptions,
     cb: (block: Block) => void,
   ) {
     if (internalIncentive !== undefined) {
+      // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
+
       const verifierHash = Hash.digest(Verifier.encode(verifier));
       this.ctx.get(ExtraIncentiveByVerifierStore).mutate(
         verifierHash,
@@ -54,12 +64,12 @@ export default class FetchService {
     StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
       Hash.digest(Verifier.encode(verifier)),
       (blocks) => {
-        // TODO: Find canonical block
-        // Rank by mergability probability
-        //   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
-        if (blocks && blocks[0] !== prevBlock) {
-          prevBlock = blocks[0];
-          cb(prevBlock);
+        if (blocks && blocks.length) {
+          const newBlock = (blockSelector || defaultBlockSelector)(blocks);
+          if (newBlock !== prevBlock) {
+            prevBlock = newBlock;
+            cb(prevBlock);
+          }
         }
       },
     );

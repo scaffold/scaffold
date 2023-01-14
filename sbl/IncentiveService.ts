@@ -5,6 +5,7 @@ import AccountService from './AccountService.ts';
 import { getOrCreate } from './util/map.ts';
 import { PendingIncentiveRegistry } from './registries.ts';
 import { BlockStore } from './stores.ts';
+import BlockPublisher from './BlockPublisher.ts';
 
 interface Entry {
   verifier: Verifier;
@@ -36,6 +37,7 @@ export default class IncentiveService {
       timestamp: BigInt(Date.now()),
     };
     this.ctx.get(BlockStore).insert(BlockStore.hash(block), block);
+    this.ctx.get(BlockPublisher).publish(block);
 
     // if (amount > 0n) {
     //   this.ctx.get(PendingIncentiveRegistry).getOrCreate(

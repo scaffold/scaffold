@@ -1,0 +1,39 @@
+requiring TIME t is saying that timestamp > t
+
+Only allow UNIQUE <verifier, timestamp> pairs in the graph.
+
+The canonical answer to a verifier is the one with the earliest timestamp.
+  Tough to prevent something being generated and passed as something retrieved from storage.
+
+Although answers aren't unique per verifier, UTXOs are.
+  If a contract says that an input from verifier V MUST consume 1 coin, then any answer is unmergable with another answer.
+  If the input's verifier enforces a similar restriction, and this happens recursively, then only 1 chain is ever allowed.
+
+Older blocks are really just a cache, right? No need to keep them around. Just used for verifying resulting UTXO set.
+
+
+# Require 1 coin from this input (if recursive parents are included in the input set)
+/ext/:QmY7Yh4UquoXHLPFo2XbhXkhBvFoPwmQUSa92pxnxjQuPU:1
+
+# Require 1 coin from this input (if recursive parents are NOT included in the input set)
+/ext/:QmY7Yh4UquoXHLPFo2XbhXkhBvFoPwmQUSa92pxnxjQuPU?c=1
+
+
+Each A.input block must contain an output to A.verifier
+
+
+Requiring always ranks by mergability probability
+  Which is mostly the amount allocated to free-market verifiers from all terminal descendants
+
+
+Do we incentivize via incentives or bids?
+  I think we start with incentives since we'll always need that.
+  To use an input, it MUST output to your verifier.
+    Young blocks can be re-written to add the output, but older blocks will need to be wrapped.
+  We also need to get the block secret from the publishing peer.
+    Requiring secret from inputs means that stealing a block requires at least the time it takes to get the secret.
+      We want to slow down block robbers but not authentic authors.
+    What happens when I output to a verifier, but then refuse to provide the secret?
+      My block will never be mergable.
+
+The northman is really good

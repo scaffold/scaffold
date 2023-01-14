@@ -218,40 +218,42 @@ export default class WorkerExecutor {
 
         return undefined;
       },
+      // notify(contractHash: Uint8Array, params: Uint8Array): undefined {
+      //   return undefined;
+      // },
 
-      notify(contractHash: Uint8Array, params: Uint8Array): undefined {
-        return undefined;
-      },
+      // async request(
+      //   contractHash: Uint8Array,
+      //   params: Uint8Array,
+      //   result: Uint8Array,
+      // ): Promise<number> {
+      //   const verifier = {
+      //     contract_hash: Hash.fromBytes(contractHash),
+      //     params,
+      //   };
+      //   const verifierHash = Hash.digest(Verifier.encode(verifier));
+      //   const blocks = await ctx.get(FulfillmentRegistry).getOrWait(
+      //     verifierHash,
+      //   );
+      //   const body = blocks[0].body;
+      //   if (body.byteLength <= result.byteLength) {
+      //     result.set(body);
+      //   }
+      //   return body.byteLength;
+      // },
 
-      async request(
-        contractHash: Uint8Array,
-        params: Uint8Array,
-        result: Uint8Array,
-      ): Promise<number> {
-        const verifier = {
-          contract_hash: Hash.fromBytes(contractHash),
-          params,
-        };
-        const verifierHash = Hash.digest(Verifier.encode(verifier));
-        const blocks = await ctx.get(FulfillmentRegistry).getOrWait(
-          verifierHash,
-        );
-        const body = blocks[0].body;
-        if (body.byteLength <= result.byteLength) {
-          result.set(body);
-        }
-        return body.byteLength;
-      },
-
-      result(data: Uint8Array): undefined {
-        return undefined;
-      },
+      // result(data: Uint8Array): undefined {
+      //   return undefined;
+      // },
     });
 
     return {
       cancel() {
         console.log(`Terminating worker...`);
         result.reject(new Error(`Cancelled`));
+        // TODO: If we're waiting in Atomic.wait, we can wake the worker up and make it throw an exception.
+        // This way we won't have to re-start the worker.
+        // If the worker's just spinning in WASM, we have no alternative other than just terminating it.
         worker.terminate();
       },
       result,
