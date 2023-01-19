@@ -1,3 +1,5 @@
 #include <string_view>
-constexpr std::string_view js_hash = "c1edc93679b83320bd8ed0c9fa66223c2e3c16403806d941358a542f303216c9";
-constexpr std::string_view true_hash = "39be6ffd545dbb6d1206da3a4d6364ba21f8ab2ef796c7bddc0952954d691555";
+
+constexpr std::string_view interface_hash = "a4b7cedc8fc7e2c66be156a157733f16b998e1a2e92e5c53516458c11cdbe013";
+constexpr std::string_view js_hash = "93d62e0fed7ec6dba9a7d81e191269c91a9322acf74b75fdf5136b83c7db743d";
+constexpr std::string_view true_hash = "a4b7cedc8fc7e2c66be156a157733f16b998e1a2e92e5c53516458c11cdbe013";

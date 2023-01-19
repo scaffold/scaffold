@@ -26,14 +26,42 @@ Requiring always ranks by mergability probability
   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
 
 
+The typical sub-request flow is this:
+  Run generator; come up with a list of sub-requests needed.
+  Split N% of available incentive among them, send PUBs incentivizing them.
+  The sub-generators can request additional payment.
+To make an answer unique, make it require something that's unique.
+  For example, the epoch requires a token from the previous epoch.
+  A: {B: 10} -> {C: -10} // Claim 10 from B, pay 10 to C. Token example.
+  D: {E: -10} -> {F: 10} // Pay 10 to E, require 10 from F. Uncanonical.
+  MUST claim exactly what's output to this verifier, plus X. Can output to same verifier if desired.
+    X is subtracted from the unassigned output
+  No need to require some amount from input. Just require that input normally, and specify the output
+
 Do we incentivize via incentives or bids?
   I think we start with incentives since we'll always need that.
   To use an input, it MUST output to your verifier.
     Young blocks can be re-written to add the output, but older blocks will need to be wrapped.
+  For easy-to-verify contracts in general:
+    Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
+      The provider gives an initial claim of the validity of his commitment.
+      Requestor challenges with a claim containing his payment.
+      In order to not lose his collateral, he must provide the plaintext as a hint.
+      It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
   We also need to get the block secret from the publishing peer.
     Requiring secret from inputs means that stealing a block requires at least the time it takes to get the secret.
       We want to slow down block robbers but not authentic authors.
+      I think we need this for A->B->C:
+        1. Generate C, request B
     What happens when I output to a verifier, but then refuse to provide the secret?
       My block will never be mergable.
+
+For verifying a BlockSet of coin movement M, sample Poisson(M+1) points.
+  Add one so we can verify the set's claimed coin movement.
+  Each point is located "inside" a block of size S, where S is the coin movement of that block.
+  So we're sampling by coin movement.
+  If we can't access that block, fail the entire set.
+Accept a Block or BlockSet if it's positive collateral - negative collateral is 1000x it's coin movement.
+  This is separate from verification, which should be decided independently of acceptance.
 
 The northman is really good

@@ -139,11 +139,11 @@ export const registry = {
       {
         name: 'value',
         type: [
+          'null',
+          'boolean',
           'long',
           'double',
           'string',
-          'boolean',
-          'null',
           { type: 'array', items: 'Json' },
           { type: 'map', values: 'Json' },
         ],
@@ -179,7 +179,6 @@ export const registry = {
     fields: [
       { name: 'amount', type: 'long' },
       { name: 'verifier', type: 'Verifier' },
-      // { name: 'verifier', type: ['null', 'Verifier'] },
       // { name: 'author', type: ['null', 'bytes'] },
       // { name: 'timestamp_gt', type: ['null', 'long'] },
       // { name: 'timestamp_lt', type: ['null', 'long'] },
@@ -192,6 +191,7 @@ export const registry = {
       // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically claims with zero amount
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
+      // The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
 
       { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },

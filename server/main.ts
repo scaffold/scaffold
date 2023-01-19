@@ -18,6 +18,7 @@ import { BlockRegistry } from '../sbl/registries.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import GraphUtils from '../sbl/GraphUtils.ts';
+import WorkQueue from '../sbl/WorkQueue.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -158,7 +159,7 @@ const config: Config = {
 
   initialWorkerCount: 1,
 
-  onlyBridge: true,
+  onlyBridge: false,
 
   computeContracts: [],
 };
@@ -200,7 +201,7 @@ const itvl = setInterval(() => {
   // Deno.writeTextFile('./blocks.json', ctx.get(Logger).serialize(blocks));
 }, 1000);
 
-// ctx.get(WorkLoop);
+ctx.get(WorkQueue);
 
 self.addEventListener('unload', () => {
   clearInterval(itvl);

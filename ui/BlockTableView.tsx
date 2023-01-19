@@ -16,11 +16,7 @@ import { bin2hex } from '../sbl/pathUtils.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import { BlockRegistry } from '../sbl/registries.ts';
 import Hash from '../sbl/util/Hash.ts';
-
-const trunc = (str: string, threshold = 16) =>
-  str.length > threshold
-    ? `${str.substr(0, threshold)}... [${str.length}]`
-    : str;
+import { trunc } from '../sbl/util/string.ts';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
@@ -62,11 +58,11 @@ export default ({ ctx }: { ctx: Context }) => {
       },
       {
         header: 'claims',
-        accessorFn: ({ val }) => val.claims.length,
+        accessorFn: ({ val }) => val.inputs.length,
       },
       {
         header: 'incentives',
-        accessorFn: ({ val }) => val.incentives.length,
+        accessorFn: ({ val }) => val.outputs.length,
       },
       {
         header: 'body',
@@ -184,13 +180,13 @@ export default ({ ctx }: { ctx: Context }) => {
                       {/* 2nd row is a custom 1 cell row */}
                       <td colSpan={row.getVisibleCells().length}>
                         <RowDetail name='Hash' val={row.original.key.toHex()} />
-                        {row.original.val.claims.map((claim, idx) => (
+                        {row.original.val.inputs.map((claim, idx) => (
                           <RowDetail
                             name={`Claim ${idx}; $${claim.amount}`}
                             val={claim.block_hash.toHex()}
                           />
                         ))}
-                        {row.original.val.incentives.map((incentive, idx) => (
+                        {row.original.val.outputs.map((incentive, idx) => (
                           <>
                             <RowDetail
                               name={`Incentive ${idx}; $${incentive.amount}`}

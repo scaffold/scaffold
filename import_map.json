@@ -17,8 +17,8 @@
     "angle-normals": "https://esm.sh/angle-normals@1.0.0?target=esnext&pin=v99",
     "simplex-noise": "https://raw.githubusercontent.com/jwagner/simplex-noise.js/3.0.1/simplex-noise.ts",
     "multiformats/": "https://cdn.skypack.dev/multiformats@10.0.2/",
-    "std-latest/": "https://deno.land/std@0.171.0/",
-    "std-fix-abortable/": "https://deno.land/std@0.171.0/",
+    "std-latest/": "https://deno.land/std@0.173.0/",
+    "std-fix-abortable/": "https://deno.land/std@0.173.0/",
     "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   },
   "scopes": {}

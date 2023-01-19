@@ -5,6 +5,7 @@ import Context from './Context.ts';
 import Logger from './Logger.ts';
 import { Block, Verifier } from './messages.ts';
 import {
+  LaunchableIncentivesStore,
   RequestsByGenerationStore,
   WorkableIncentivesStore,
 } from './stores.ts';
@@ -14,6 +15,7 @@ import WorkQueueUtil from './util/WorkQueue.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
+import { generatorHash } from './constants.ts';
 
 const useLocalExecution = false;
 const secret = secp.utils.randomBytes(32);
@@ -39,7 +41,27 @@ export default class WorkQueue extends WorkQueueUtil {
 
     this.setWorkerCount(ctx.config.initialWorkerCount);
 
-    ctx.get(WorkableIncentivesStore).onMutate((hash, _, work) => {
+    // // Requires generators
+    // ctx.get(WorkableIncentivesStore).onMutate((hash, _, work) => {
+    //   console.log('RUN MUT', hash.toHex(), work?.verifier.params, work?.amount);
+
+    //   if (work !== undefined) {
+    //     if (work.amount > 0n) {
+    //       throw new Error(`Invalid amount`);
+    //     }
+
+    //     this.set(
+    //       hash,
+    //       -Number(work.amount),
+    //       () => this.run(work.generator.body, work.verifier, work.amount),
+    //     );
+    //   } else {
+    //     this.set(hash, 0, dummyWork);
+    //   }
+    // });
+
+    // Doesn't need generators
+    ctx.get(LaunchableIncentivesStore).onMutate((hash, _, work) => {
       console.log('RUN MUT', hash.toHex(), work?.verifier.params, work?.amount);
 
       if (work !== undefined) {
@@ -50,7 +72,7 @@ export default class WorkQueue extends WorkQueueUtil {
         this.set(
           hash,
           -Number(work.amount),
-          () => this.run(work.generator.body, work.verifier, work.amount),
+          () => this.run(work.verifier, work.amount),
         );
       } else {
         this.set(hash, 0, dummyWork);
@@ -58,13 +80,8 @@ export default class WorkQueue extends WorkQueueUtil {
     });
   }
 
-  private async run(
-    generator: Uint8Array,
-    verifier: Verifier,
-    incentive: bigint,
-  ) {
+  private async run(verifier: Verifier, incentive: bigint) {
     console.log('RUN START', verifier.params);
-    await new Promise((resolve) => {});
 
     console.warn(`Running ${this.ctx.get(Logger).serialize(verifier)}`);
 
@@ -83,34 +100,39 @@ export default class WorkQueue extends WorkQueueUtil {
     };
 
     if (useLocalExecution) {
-      // TODO: This is kinda hacky
-      const generationHash = RequestsByGenerationStore.hash(
-        verifier,
-        generator,
-      );
+      // // TODO: This is kinda hacky
+      // const generationHash = RequestsByGenerationStore.hash(
+      //   verifier,
+      //   generator,
+      // );
 
-      const script = eval(new TextDecoder().decode(generator));
-      await this.callWithSyncRequestHandler<Uint8Array>(
-        verifier,
-        (handler, notifier) =>
-          script(
-            verifier.contract_hash,
-            verifier.params,
-            emitCorrect,
-            handler,
-            notifier,
-          ),
-        incentive,
-        generationHash,
-        onDone,
-      );
+      // const script = eval(new TextDecoder().decode(generator));
+      // await this.callWithSyncRequestHandler<Uint8Array>(
+      //   verifier,
+      //   (handler, notifier) =>
+      //     script(
+      //       verifier.contract_hash,
+      //       verifier.params,
+      //       emitCorrect,
+      //       handler,
+      //       notifier,
+      //     ),
+      //   incentive,
+      //   generationHash,
+      //   onDone,
+      // );
 
-      console.log('RUN DONE', verifier.params);
+      // console.log('RUN DONE', verifier.params);
+
+      throw new Error('Not implemented');
     } else {
       debugger;
       const emitCorrect = true;
       const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
-        .run(verifier, generator, {
+        .run({
+          contract_hash: generatorHash,
+          params: verifier.contract_hash.toBytes(),
+        }, {
           contractHash: verifier.contract_hash.toBytes(),
           params: verifier.params,
           emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),

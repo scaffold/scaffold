@@ -100,15 +100,15 @@ export default class GraphUtils {
   }
 
   private maybeIngestBlock(verifier: Verifier, blockFactory: () => Block) {
-    const verifierHash = Hash.digest(Verifier.encode(verifier));
-    const existingBlocks =
-      this.ctx.get(FulfillmentRegistry).get(verifierHash) || [];
-    if (existingBlocks.length) {
-      return Hash.digest(Block.encode(existingBlocks[0]));
-    } else {
-      const block = blockFactory();
-      this.ctx.get(BlockService).ingest(block);
-      return Hash.digest(Block.encode(block));
-    }
+    // const verifierHash = Hash.digest(Verifier.encode(verifier));
+    // const existingBlocks =
+    //   this.ctx.get(FulfillmentRegistry).get(verifierHash) || [];
+    // if (existingBlocks.length) {
+    //   return Hash.digest(Block.encode(existingBlocks[0]));
+    // } else {
+    const block = blockFactory();
+    this.ctx.get(BlockService).ingest(block);
+    return Hash.digest(Block.encode(block));
+    // }
   }
 }

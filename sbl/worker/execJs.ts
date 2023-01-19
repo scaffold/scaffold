@@ -37,5 +37,5 @@ export default async (
     notifier,
   );
 
-  client.inform('result', [out], []);
+  client.inform('outputChunk', ['answer', 0, out], []);
 };

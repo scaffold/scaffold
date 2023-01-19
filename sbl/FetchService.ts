@@ -2,12 +2,14 @@ import Context from './Context.ts';
 import IncentiveService from './IncentiveService.ts';
 import { Block, Verifier } from './messages.ts';
 import NodeService from './NodeService.ts';
+import { bin2hex } from './pathUtils.ts';
 import {
   BlocksByVerifierStore,
   ExtraIncentiveByVerifierStore,
 } from './stores.ts';
 import Hash from './util/Hash.ts';
 import StoreObserver from './util/StoreObserver.ts';
+import { trunc } from './util/string.ts';
 
 interface FetchOptions {
   internalIncentive?: bigint;
@@ -29,8 +31,14 @@ export default class FetchService {
     verifier: Verifier,
     { internalIncentive, externalIncentive, bid, blockSelector, verify }:
       FetchOptions,
-    cb: (block: Block) => void,
+    cb?: (block: Block) => void,
   ) {
+    console.log(
+      `Fetching block ${verifier.contract_hash.toHex()} : ${
+        trunc(bin2hex(verifier.params), 100)
+      }`,
+    );
+
     if (internalIncentive !== undefined) {
       // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
 
@@ -60,18 +68,20 @@ export default class FetchService {
       );
     }
 
-    let prevBlock: Block | undefined;
-    StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
-      Hash.digest(Verifier.encode(verifier)),
-      (blocks) => {
-        if (blocks && blocks.length) {
-          const newBlock = (blockSelector || defaultBlockSelector)(blocks);
-          if (newBlock !== prevBlock) {
-            prevBlock = newBlock;
-            cb(prevBlock);
+    if (cb !== undefined) {
+      let prevBlock: Block | undefined;
+      StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
+        Hash.digest(Verifier.encode(verifier)),
+        (blocks) => {
+          if (blocks && blocks.length) {
+            const newBlock = (blockSelector || defaultBlockSelector)(blocks);
+            if (newBlock !== prevBlock) {
+              prevBlock = newBlock;
+              cb(prevBlock);
+            }
           }
-        }
-      },
-    );
+        },
+      );
+    }
   }
 }

@@ -29,7 +29,7 @@ const popMsg = <T>() => {
 
 const { sigBuf } = (await popMsg<InitialMessage>()).data;
 
-console.log('postMessage', self.postMessage.toString());
+// console.log('postMessage', self.postMessage.toString());
 const client = new WorkerChannelClient<WorkerComm>(self, sigBuf);
 
 while (true) {

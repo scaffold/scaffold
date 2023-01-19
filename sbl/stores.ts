@@ -11,6 +11,7 @@ import {
   bigintAccumulator,
 } from './accumulators.ts';
 
+// SELECT * FROM blocks;
 export class BlockStore extends Store<Block> {
   constructor(private ctx: Context) {
     super();
@@ -21,6 +22,7 @@ export class BlockStore extends Store<Block> {
   }
 }
 
+// SELECT inputs FROM blocks WHERE generating;
 export class RequestsByGenerationStore
   extends Store<{ incentive: bigint; requests: Verifier[] }> {
   constructor(private ctx: Context) {
@@ -68,6 +70,7 @@ export class RequestsByGenerationStore
   }
 }
 
+// SELECT inputs FROM blocks WHERE generating;
 export class ExtraIncentiveByVerifierStore extends Store<BlockOutput> {
   constructor(private ctx: Context) {
     super(
@@ -110,10 +113,10 @@ export class IncentivesByBlockHashAndVerifierStore extends Store<BlockOutput> {
         ctx.get(BlockStore).groupBy<BlockOutput>(
           (hash, block, emit) =>
             block.outputs.forEach(({ verifier, amount }) =>
-              emit(Hash.digestParts(hash, Verifier.encode(verifier)), {
-                verifier,
-                amount,
-              })
+              emit(
+                Hash.digestParts(hash, Verifier.encode(verifier)),
+                { verifier, amount },
+              )
             ),
           ...amountAccumulator,
         ),
@@ -184,6 +187,7 @@ export class BlocksByVerifierStore extends Store<Block[]> {
   }
 }
 
+// Things we can work on that have generators
 export class WorkableIncentivesStore extends Store<
   { generator: Block; verifier: Verifier; amount: bigint }
 > {
@@ -209,6 +213,23 @@ export class WorkableIncentivesStore extends Store<
           ),
         ...amountAccumulator,
       ),
+    );
+  }
+}
+
+// Things we can work on, regardless of whether we have generators or not
+export class LaunchableIncentivesStore
+  extends Store<{ verifier: Verifier; amount: bigint }> {
+  constructor(private ctx: Context) {
+    super(
+      ctx.get(UnclaimedIncentivesByContractStore)
+        .groupBy<{ verifier: Verifier; amount: bigint }>(
+          (_hash, incentives, emit) =>
+            incentives.forEach(({ verifier, amount }) =>
+              emit(Hash.digest(Verifier.encode(verifier)), { verifier, amount })
+            ),
+          ...amountAccumulator,
+        ),
     );
   }
 }

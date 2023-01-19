@@ -36,6 +36,7 @@ for file in ./cpp/*.cpp; do
 		-fvisibility=hidden \
     -flto \
     -fno-rtti \
+    -nostartfiles \
 		--target=wasm32-unknown-wasi \
 		--sysroot=./wasi-sdk-17.0/share/wasi-sysroot/ \
 		`#-Wl,--export-all` \
@@ -44,6 +45,7 @@ for file in ./cpp/*.cpp; do
 		`#-Wl,--growable-table` \
 		`#-Wl,--export-table` \
 		`#-Wl,--gc-sections` \
+		-Wl,--no-entry \
     -Wl,--strip-all \
 		-Wl,--import-memory \
     -Wl,--shared-memory \
@@ -56,16 +58,7 @@ done
 
 wait
 
-echo "#include <string_view>" > cpp/hashes.h
-shasum --algorithm 256 --binary server/bootstrap/*.wasm \
-	| sed -n 's/^\([0-9a-f]\{64\}\) \*server\/bootstrap\/\(.*\)\.wasm$/constexpr std::string_view \2_hash = "\1";/p' \
-	>> cpp/hashes.h
-
-echo "import Hash from '../sbl/util/Hash.ts';" > ui/moduleHashes.ts
-echo >> ui/moduleHashes.ts
-shasum --algorithm 256 --binary server/bootstrap/*.wasm \
-	| sed -n 's/^\([0-9a-f]\{64\}\) \*server\/bootstrap\/\(.*\)\.wasm$/export const \2_hash = Hash.fromHex("\1");/p' \
-	>> ui/moduleHashes.ts
+deno run --allow-read --allow-write generateHashes.ts
 
 wc -c server/bootstrap/*
 

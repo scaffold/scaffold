@@ -222,30 +222,42 @@ export default async (
     file.write(0, [data]);
   });
 
-  await script.cmds.reduce(
-    async (
-      wait: Promise<void>,
-      {
-        mkdir,
-        link,
-        wasm,
-      }: { mkdir?: MkdirExec; link?: LinkExec; wasm?: WasmExec },
-    ) => {
-      const count = [mkdir, link, wasm].filter(Boolean).length;
-      if (count !== 1) {
-        throwErr(
-          `Must specify exactly one ExecSpec for each command, actually specified ${count}`,
-        );
-      }
+  // await script.cmds.reduce(
+  //   async (
+  //     wait: Promise<void>,
+  //     {
+  //       mkdir,
+  //       link,
+  //       wasm,
+  //     }: { mkdir?: MkdirExec; link?: LinkExec; wasm?: WasmExec },
+  //   ) => {
+  //     const count = [mkdir, link, wasm].filter(Boolean).length;
+  //     if (count !== 1) {
+  //       throwErr(
+  //         `Must specify exactly one ExecSpec for each command, actually specified ${count}`,
+  //       );
+  //     }
 
-      await wait;
+  //     await wait;
 
-      mkdir && (await execMkdir(mkdir));
-      link && (await execLink(link));
-      wasm && (await execWasm(wasm));
-    },
-    Promise.resolve(),
-  );
+  //     mkdir && (await execMkdir(mkdir));
+  //     link && (await execLink(link));
+  //     wasm && (await execWasm(wasm));
+  //   },
+  //   Promise.resolve(),
+  // );
+
+  await execWasm({
+    execPath: [],
+    args: [],
+    env: {},
+
+    cwd: [],
+
+    stdinFrom: [],
+    stdoutTo: [],
+    stderrTo: [],
+  });
 
   Object.entries(outputSpec).forEach(([key, _]) => {
     const file = outDir

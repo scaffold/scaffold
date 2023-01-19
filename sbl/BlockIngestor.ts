@@ -51,7 +51,7 @@ export default class BlockIngestor {
     if (!this.ingesting.has(block_hash.toHex())) {
       this.ingesting.add(block_hash.toHex());
 
-      this.checkZeroSum(block);
+      // this.checkZeroSum(block);
       await Promise.all([
         this.checkBlockTimestamp(block),
         this.checkBlockMergability(block),

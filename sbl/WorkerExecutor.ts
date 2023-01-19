@@ -32,8 +32,7 @@ export default class WorkerExecutor {
 
   // Note: This will transfer the input buffers, reducing their size to zero.
   public run<InputKeys extends string, OutputKeys extends string>(
-    verifier: Verifier,
-    code: Uint8Array,
+    codeVerifier: Verifier,
     inputs: Record<InputKeys, Uint8Array>,
     outputSpec: Record<OutputKeys, null>,
   ): {
@@ -46,7 +45,9 @@ export default class WorkerExecutor {
     const ctx = this.ctx;
 
     const worker = new Worker(
-      new URL('./worker/worker.ts', import.meta.url).href,
+      typeof Deno !== 'undefined'
+        ? new URL('./worker/worker.ts', import.meta.url).href // Deno
+        : new URL('./worker.js', window.location.href).href, // Browser
       {
         type: 'module',
         // deno: {
@@ -108,12 +109,18 @@ export default class WorkerExecutor {
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
       ready(): undefined {
         if (!sentJob) {
-          const msg: JobMessage = { code, inputs, outputSpec };
-          worker.postMessage(msg, {
-            // transfer: Object.values(inputs).map((buf) =>
-            //   (buf as Uint8Array).buffer
-            // ),
-          });
+          ctx.get(FetchService).fetch(
+            codeVerifier,
+            { externalIncentive: 1n },
+            ({ body }) => {
+              const msg: JobMessage = { code: body, inputs, outputSpec };
+              worker.postMessage(msg, {
+                // transfer: Object.values(inputs).map((buf) =>
+                //   (buf as Uint8Array).buffer
+                // ),
+              });
+            },
+          );
           sentJob = true;
         }
         return undefined;
@@ -162,11 +169,12 @@ export default class WorkerExecutor {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
             const input = { contract_hash: contractHash, params };
-            ctx.get(NodeService).getAll().forEach((node) =>
-              node.defaultConn?.sendReliable({
-                BidMessage: { input, output: verifier, amount },
-              })
-            );
+            ctx.get(FetchService).fetch(input, { externalIncentive: 1n });
+            // ctx.get(NodeService).getAll().forEach((node) =>
+            //   node.defaultConn?.sendReliable({
+            //     BidMessage: { input, output: verifier, amount },
+            //   })
+            // );
             return input;
           }),
         });
