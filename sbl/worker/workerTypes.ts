@@ -6,7 +6,8 @@ export interface InitialMessage {
 }
 
 export interface JobMessage {
-  code: Uint8Array;
+  // code: Uint8Array;
+  codeVerifier: { contractHash: Uint8Array; params: Uint8Array }; // Can't just use Verifier since Hash isn't transferrable
   inputs: Record<string, Uint8Array>;
   outputSpec: Record<string, null>;
 }
@@ -14,7 +15,7 @@ export interface JobMessage {
 export interface JsMessage {
   type: 'js';
   script: string;
-  verifier: Verifier;
+  verifier: { contractHash: Uint8Array; params: Uint8Array }; // Can't just use Verifier since Hash isn't transferrable
   attemptCorrect: boolean;
 }
 

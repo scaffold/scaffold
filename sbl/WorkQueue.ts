@@ -9,17 +9,19 @@ import {
   RequestsByGenerationStore,
   WorkableIncentivesStore,
 } from './stores.ts';
-import { arrConcat } from './util/buffer.ts';
+import { arrConcat, arrEquals } from './util/buffer.ts';
 import Hash from './util/Hash.ts';
 import WorkQueueUtil from './util/WorkQueue.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
-import { generatorHash } from './constants.ts';
+import { generatorHash, rootHash } from './constants.ts';
 
 const useLocalExecution = false;
 const secret = secp.utils.randomBytes(32);
 const dummyWork = async () => {};
+
+const uncomputableContracts = [rootHash, generatorHash];
 
 class NeedsMoreDataError extends Error {
   constructor() {
@@ -62,7 +64,22 @@ export default class WorkQueue extends WorkQueueUtil {
 
     // Doesn't need generators
     ctx.get(LaunchableIncentivesStore).onMutate((hash, _, work) => {
-      console.log('RUN MUT', hash.toHex(), work?.verifier.params, work?.amount);
+      if (
+        work &&
+        uncomputableContracts.some((uc) =>
+          Hash.equals(work.verifier.contract_hash, uc)
+        )
+      ) {
+        return;
+      }
+
+      console.log(
+        'RUN MUT',
+        hash.toHex(),
+        work?.verifier.contract_hash.toHex(),
+        work?.verifier.params,
+        work?.amount,
+      );
 
       if (work !== undefined) {
         if (work.amount > 0n) {
@@ -81,7 +98,7 @@ export default class WorkQueue extends WorkQueueUtil {
   }
 
   private async run(verifier: Verifier, incentive: bigint) {
-    console.log('RUN START', verifier.params);
+    console.log('RUN START', verifier.contract_hash.toHex(), verifier.params);
 
     console.warn(`Running ${this.ctx.get(Logger).serialize(verifier)}`);
 
@@ -136,6 +153,7 @@ export default class WorkQueue extends WorkQueueUtil {
           contractHash: verifier.contract_hash.toBytes(),
           params: verifier.params,
           emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
+          stdin: new Uint8Array([]),
         }, { answer: null });
       result.then((out) => console.log('DONE', out));
       result.then(({ outputs: { answer: data }, usedBlocks }) => {

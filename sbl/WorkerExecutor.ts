@@ -109,18 +109,30 @@ export default class WorkerExecutor {
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
       ready(): undefined {
         if (!sentJob) {
-          ctx.get(FetchService).fetch(
-            codeVerifier,
-            { externalIncentive: 1n },
-            ({ body }) => {
-              const msg: JobMessage = { code: body, inputs, outputSpec };
-              worker.postMessage(msg, {
-                // transfer: Object.values(inputs).map((buf) =>
-                //   (buf as Uint8Array).buffer
-                // ),
-              });
+          // TODO: Use this when we switch from wasi to pure-wasm
+          // ctx.get(FetchService).fetch(
+          //   codeVerifier,
+          //   { externalIncentive: 1n },
+          //   ({ body }) => {
+          //     const msg: JobMessage = { code: body, inputs, outputSpec };
+          //     worker.postMessage(msg, {
+          //       // transfer: Object.values(inputs).map((buf) =>
+          //       //   (buf as Uint8Array).buffer
+          //       // ),
+          //     });
+          //   },
+          // );
+
+          const msg: JobMessage = {
+            codeVerifier: {
+              contractHash: codeVerifier.contract_hash.toBytes(),
+              params: codeVerifier.params,
             },
-          );
+            inputs,
+            outputSpec,
+          };
+          worker.postMessage(msg);
+
           sentJob = true;
         }
         return undefined;

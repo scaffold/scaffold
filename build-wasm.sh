@@ -21,6 +21,40 @@ set -x
 
 rm -f server/bootstrap/*.wasm
 
+for file in ./cpp/wasi/*.cpp; do
+	echo "$file"
+
+	./wasi-sdk-17.0/bin/clang++ \
+		"$file" \
+		-I./cpp/ \
+		-I./jsoncons/include/ \
+		-I./wasi-sdk-17.0/share/wasi-sysroot/include/ \
+		-std=c++17 \
+		`#-g` \
+    -O3 \
+		-fno-exceptions \
+		-fvisibility=hidden \
+    -flto \
+    -fno-rtti \
+		--target=wasm32-unknown-wasi \
+		--sysroot=./wasi-sdk-17.0/share/wasi-sysroot/ \
+		`#-Wl,--export-all` \
+		-Wl,--allow-undefined-file=syms.syms \
+		`#-Wl,--export=malloc,--export=free` \
+		`#-Wl,--growable-table` \
+		`#-Wl,--export-table` \
+		`#-Wl,--gc-sections` \
+		`#-Wl,--no-entry` \
+    -Wl,--strip-all \
+		-Wl,--import-memory \
+    -Wl,--shared-memory \
+    -Wl,--no-check-features \
+    `# -Wl,--initial-memory=4294967296` \
+    -Wl,--max-memory=4294967296 \
+		`#-Wl,-error-limit=0` \
+		-o "server/bootstrap/$(basename "$file" .cpp).wasm" # &
+done
+
 for file in ./cpp/*.cpp; do
 	echo "$file"
 
@@ -55,6 +89,8 @@ for file in ./cpp/*.cpp; do
 		`#-Wl,-error-limit=0` \
 		-o "server/bootstrap/$(basename "$file" .cpp).wasm" # &
 done
+
+curl 'https://registry-cdn.wapm.io/contents/saghul/quickjs/0.0.3/build/qjs.wasm' --continue-at - --output server/bootstrap/qjs.wasm &
 
 wait
 

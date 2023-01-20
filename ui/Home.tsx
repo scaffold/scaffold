@@ -24,8 +24,12 @@ import ThrustInitContract from '../graph/ThrustInitContract.ts';
 import ThrustView from './ThrustView.tsx';
 import * as moduleHashes from './moduleHashes.ts';
 import * as constants from '../sbl/constants.ts';
-import { decodeMultibase } from '../sbl/pathUtils.ts';
+import { decodeMultibase, str2bin } from '../sbl/pathUtils.ts';
 import FetchService from '../sbl/FetchService.ts';
+
+const initialContractHex =
+  '2699c934e05e42c7937c17bfa8d0f70cb8b65f47a5330e512df5f3b621a99709';
+const initialParams = `qjs --eval 'console.log(123);'`;
 
 const contractHashes = Object.entries({ ...constants, ...moduleHashes });
 
@@ -36,8 +40,10 @@ client.ctx.get(WorkQueue);
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
-  const [selectedContract, selectContract] = React.useState<string>();
-  const [params, setParams] = React.useState<string>('');
+  const [selectedContract, selectContract] = React.useState<string>(
+    initialContractHex,
+  );
+  const [params, setParams] = React.useState<string>(initialParams);
   const gameHex = url.searchParams.get('game');
 
   const [shownStore, setShownStore] = React.useState<
@@ -102,7 +108,7 @@ export default () => {
           client.ctx.get(FetchService).fetch(
             {
               contract_hash: Hash.fromHex(selectedContract!),
-              params: decodeMultibase(params),
+              params: str2bin(params),
             },
             // TODO: Why isn't this being picked up on the work queue?
             // It's because there's no generators registered.

@@ -42,17 +42,12 @@ import {
   FsNode,
 } from './fsTypes.ts';
 import * as wc from './WasiConstants.ts';
+import * as log from 'https://deno.land/std@0.173.0/log/mod.ts';
 
 const traceSyscalls = true;
 const exposeInodes = false;
 
 const has = (superset: number, subset: number) => (~superset & subset) === 0;
-
-export interface Logger {
-  info(data: Record<string, any>, msg: string): void;
-  warn(data: Record<string, any>, msg: string): void;
-  error(data: Record<string, any>, msg: string): void;
-}
 
 export interface FsNodeHandle {
   node: FsNode;
@@ -124,9 +119,9 @@ export default class WasiImpl {
     private argv: Uint8Array[],
     private env: { key: Uint8Array; val: Uint8Array }[],
     private cwd: Uint8Array[],
-    private logger: Logger,
+    private logger: log.Logger,
   ) {
-    this.logger.info({ argv, env, cwd }, 'WasiImpl constructor');
+    this.logger.info('WasiImpl constructor', { argv, env, cwd });
   }
 
   public makeHandle(node: FsNode, capMask: FsCapabilityMask): FsNodeHandle {
@@ -272,13 +267,13 @@ export default class WasiImpl {
             wrapWasi(
               traceSyscalls
                 ? (...args: any[]) => {
-                  console.log(`WASI: ${abiName}(${args.join(', ')})`);
+                  this.logger.info('WASI CALL', { abiName, args });
                   try {
                     const result = method(...args);
-                    console.log(` => ${result}\n`);
+                    this.logger.info('WASI RETURN', { result });
                     return result;
                   } catch (err) {
-                    console.log(` => ${err}\n`);
+                    this.logger.info('WASI ERROR', { err });
                     throw err;
                   }
                 }
@@ -290,23 +285,27 @@ export default class WasiImpl {
   }
 
   public run(inst: WebAssembly.Instance): number {
-    // console.log((inst.exports.memory as any).buffer);
-    this.logger.info({}, 'Running...');
+    if (inst.exports.memory instanceof WebAssembly.Memory) {
+      this.logger.info('Using exported memory...');
+      this.memory = inst.exports.memory;
+    }
+
+    this.logger.info('Running...', {});
     try {
       (inst.exports._start as CallableFunction)();
-      this.logger.info({}, 'Ended successfully');
+      this.logger.info('Ended successfully', {});
       return 0;
     } catch (err) {
       if (err instanceof WasiExit) {
         // If it's a normal WASI exit, we return it directly
-        this.logger.warn(
-          { err, code: err.code },
+        this.logger.warning(
           `Ended with code ${err.code}`,
+          { err, code: err.code },
         );
         return err.code;
       } else {
         // Otherwise we let the error bubble up
-        this.logger.error({ err }, `Ended with unhandlable error`);
+        this.logger.error(`Ended with unhandlable error`, { err });
         throw err;
       }
     }
@@ -334,6 +333,13 @@ export default class WasiImpl {
   }
 
   private getIovs(iovs: number, iovsLen: number) {
+    if (iovs + iovsLen * 8 > this.memory.buffer.byteLength) {
+      throw new Error(
+        `Trying to read up to ${iovs} but memory is only ${this.memory.buffer.byteLength} bytes`,
+      );
+    }
+    this.logger.info('max', { max: this.memory.buffer.byteLength });
+
     const view = new DataView(this.memory.buffer);
 
     return Array.from({ length: iovsLen }, (_, i) => {
@@ -346,7 +352,7 @@ export default class WasiImpl {
   }
 
   private wasi_args_get(dstPtrs: number, dstBuf: number) {
-    this.logger.info({ dstPtrs, dstBuf }, `wasi_args_get`);
+    this.logger.info(`wasi_args_get`, { dstPtrs, dstBuf });
     const view = new DataView(this.memory.buffer);
     const bytes = new Uint8Array(this.memory.buffer);
     this.argv.forEach((arg) => {
@@ -364,7 +370,7 @@ export default class WasiImpl {
   }
 
   private wasi_args_sizes_get(dstArgc: number, dstBufSize: number) {
-    this.logger.info({ dstArgc, dstBufSize }, `wasi_args_sizes_get`);
+    this.logger.info(`wasi_args_sizes_get`, { dstArgc, dstBufSize });
     const view = new DataView(this.memory.buffer);
     view.setUint32(dstArgc, this.argv.length, true);
     const size = this.argv.reduce((acc, arg) => acc + arg.length + 1, 0);
@@ -373,7 +379,7 @@ export default class WasiImpl {
   }
 
   private wasi_environ_get(dstPtrs: number, dstBuf: number) {
-    this.logger.info({ dstPtrs, dstBuf }, `wasi_environ_get`);
+    this.logger.info(`wasi_environ_get`, { dstPtrs, dstBuf });
     const view = new DataView(this.memory.buffer);
     const bytes = new Uint8Array(this.memory.buffer);
     this.env.forEach(({ key, val }) => {
@@ -397,7 +403,7 @@ export default class WasiImpl {
   }
 
   private wasi_environ_sizes_get(dstEnvCount: number, dstBufSize: number) {
-    this.logger.info({ dstEnvCount, dstBufSize }, `wasi_environ_sizes_get`);
+    this.logger.info(`wasi_environ_sizes_get`, { dstEnvCount, dstBufSize });
     const view = new DataView(this.memory.buffer);
     view.setUint32(dstEnvCount, this.env.length, true);
     const size = this.env.reduce(
@@ -409,16 +415,19 @@ export default class WasiImpl {
   }
 
   private wasi_clock_res_get(clockId: number, resolution: number) {
-    this.logger.info({ clockId, resolution }, `wasi_clock_res_get`);
+    this.logger.info(`wasi_clock_res_get`, { clockId, resolution });
     return wc.WASI_EINVAL;
   }
 
   private wasi_clock_time_get(
     clockId: number,
-    precision: number,
+    precision: bigint,
     time: number,
   ) {
-    this.logger.info({ clockId, precision, time }, `wasi_clock_time_get`);
+    this.logger.info(
+      `wasi_clock_time_get`,
+      { clockId, precision: Number(precision), time },
+    );
     return wc.WASI_EINVAL;
   }
 
@@ -428,32 +437,32 @@ export default class WasiImpl {
     len: number,
     advice: number,
   ) {
-    this.logger.info({ fd, offset, len, advice }, `wasi_fd_advise`);
+    this.logger.info(`wasi_fd_advise`, { fd, offset, len, advice });
     this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
   }
 
   private wasi_fd_allocate(fd: number, offset: number, len: number) {
-    this.logger.info({ fd, offset, len }, `wasi_fd_allocate`);
+    this.logger.info(`wasi_fd_allocate`, { fd, offset, len });
     this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
   }
 
   private wasi_fd_close(fd: number) {
-    this.logger.info({ fd }, `wasi_fd_close`);
+    this.logger.info(`wasi_fd_close`, { fd });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     this.handles.delete(fd);
     return wc.WASI_ESUCCESS;
   }
 
   private wasi_fd_datasync(fd: number) {
-    this.logger.info({ fd }, `wasi_fd_datasync`);
+    this.logger.info(`wasi_fd_datasync`, { fd });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ESUCCESS;
   }
 
   private wasi_fd_fdstat_get(fd: number, dstBuf: number) {
-    this.logger.info({ fd, dstBuf }, `wasi_fd_fdstat_get`);
+    this.logger.info(`wasi_fd_fdstat_get`, { fd, dstBuf });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const view = new DataView(this.memory.buffer);
     view.setUint8(
@@ -475,7 +484,7 @@ export default class WasiImpl {
   }
 
   private wasi_fd_fdstat_set_flags(fd: number, flags: number) {
-    this.logger.info({ fd, flags }, `wasi_fd_fdstat_set_flags`);
+    this.logger.info(`wasi_fd_fdstat_set_flags`, { fd, flags });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     hdl.fileOffset = has(flags, wc.WASI_FDFLAG_APPEND) ? hdl.fileGetSize() : 0;
     hdl.fileIsBlocking = !has(flags, wc.WASI_FDFLAG_NONBLOCK);
@@ -488,15 +497,15 @@ export default class WasiImpl {
     fsRightsInheriting: bigint,
   ) {
     this.logger.info(
-      { fd, fsRightsBase, fsRightsInheriting },
       `wasi_fd_fdstat_set_rights`,
+      { fd, fsRightsBase, fsRightsInheriting },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ESUCCESS;
   }
 
   private wasi_fd_filestat_get(fd: number, bufPtr: number) {
-    this.logger.info({ fd, bufPtr }, `wasi_fd_filestat_get`);
+    this.logger.info(`wasi_fd_filestat_get`, { fd, bufPtr });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
     /*
@@ -522,7 +531,7 @@ export default class WasiImpl {
   }
 
   private wasi_fd_filestat_set_size(fd: number, stSize: number) {
-    this.logger.info({ fd, stSize }, `wasi_fd_filestat_set_size`);
+    this.logger.info(`wasi_fd_filestat_set_size`, { fd, stSize });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
     /*
@@ -538,8 +547,8 @@ export default class WasiImpl {
     fstflags: number,
   ) {
     this.logger.info(
-      { fd, stAtim, stMtim, fstflags },
       `wasi_fd_filestat_set_times`,
+      { fd, stAtim, stMtim, fstflags },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
@@ -585,7 +594,7 @@ export default class WasiImpl {
   }
 
   private wasi_fd_prestat_get(fd: number, bufPtr: number) {
-    this.logger.info({ fd, bufPtr }, `wasi_fd_prestat_get`);
+    this.logger.info(`wasi_fd_prestat_get`, { fd, bufPtr });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     if (!hdl.preopenPath) {
       return wc.WASI_EINVAL;
@@ -601,7 +610,7 @@ export default class WasiImpl {
     pathPtr: number,
     pathLen: number,
   ) {
-    this.logger.info({ fd, pathPtr, pathLen }, `wasi_fd_prestat_dir_name`);
+    this.logger.info(`wasi_fd_prestat_dir_name`, { fd, pathPtr, pathLen });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     if (!hdl.preopenPath) {
       return wc.WASI_EINVAL;
@@ -620,8 +629,8 @@ export default class WasiImpl {
     dstSizeWritten: number,
   ) {
     this.logger.info(
-      { fd, iovs, iovsLen, offset, dstSizeWritten },
       `wasi_fd_pwrite`,
+      { fd, iovs, iovsLen, offset, dstSizeWritten },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const written = hdl.fileWrite(offset, this.getIovs(iovs, iovsLen));
@@ -636,10 +645,11 @@ export default class WasiImpl {
     iovsLen: number,
     dstSizeWritten: number,
   ) {
-    this.logger.info({ fd, iovs, iovsLen, dstSizeWritten }, `wasi_fd_write`);
+    this.logger.info(`wasi_fd_write`, { fd, iovs, iovsLen, dstSizeWritten });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    console.log('write', this.getIovs(iovs, iovsLen));
+    this.logger.info(`fd_write_iovs`, { iovs: this.getIovs(iovs, iovsLen) });
     const written = hdl.fileWrite(hdl.fileOffset, this.getIovs(iovs, iovsLen));
+    this.logger.info(`fd_write_wrote`, { written });
     hdl.fileOffset += written;
     const view = new DataView(this.memory.buffer);
     view.setUint32(dstSizeWritten, written, true);
@@ -654,8 +664,8 @@ export default class WasiImpl {
     dstSizeRead: number,
   ) {
     this.logger.info(
-      { fd, iovs, iovsLen, offset, dstSizeRead },
       `wasi_fd_pread`,
+      { fd, iovs, iovsLen, offset, dstSizeRead },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const read = hdl.fileRead(offset, this.getIovs(iovs, iovsLen));
@@ -670,7 +680,7 @@ export default class WasiImpl {
     iovsLen: number,
     dstSizeRead: number,
   ) {
-    this.logger.info({ fd, iovs, iovsLen, dstSizeRead }, `wasi_fd_read`);
+    this.logger.info(`wasi_fd_read`, { fd, iovs, iovsLen, dstSizeRead });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const read = hdl.fileRead(hdl.fileOffset, this.getIovs(iovs, iovsLen));
     hdl.fileOffset += read;
@@ -687,8 +697,8 @@ export default class WasiImpl {
     dstWrittenSize: number,
   ) {
     this.logger.info(
-      { fd, dstBufPtr, dstBufSize, cookie, dstWrittenSize },
       `wasi_fd_readdir`,
+      { fd, dstBufPtr, dstBufSize, cookie, dstWrittenSize },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const view = new DataView(this.memory.buffer);
@@ -751,7 +761,7 @@ export default class WasiImpl {
   }
 
   private wasi_fd_renumber(from: number, to: number) {
-    this.logger.info({ from, to }, `wasi_fd_renumber`);
+    this.logger.info(`wasi_fd_renumber`, { from, to });
     const fromHdl = this.handles.get(from) || throwWasiErr(wc.WASI_EBADF);
     const toHdl = this.handles.get(to) || throwWasiErr(wc.WASI_EBADF);
     this.handles.set(from, toHdl);
@@ -765,7 +775,7 @@ export default class WasiImpl {
     whence: number,
     dstNewOffset: number,
   ) {
-    this.logger.info({ fd, offset, whence, dstNewOffset }, `wasi_fd_seek`);
+    this.logger.info(`wasi_fd_seek`, { fd, offset, whence, dstNewOffset });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const view = new DataView(this.memory.buffer);
     switch (whence) {
@@ -784,7 +794,7 @@ export default class WasiImpl {
   }
 
   private wasi_fd_tell(fd: number, dstOffset: number) {
-    this.logger.info({ fd, dstOffset }, `wasi_fd_tell`);
+    this.logger.info(`wasi_fd_tell`, { fd, dstOffset });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const view = new DataView(this.memory.buffer);
     view.setBigUint64(dstOffset, BigInt(hdl.fileOffset), true);
@@ -792,7 +802,7 @@ export default class WasiImpl {
   }
 
   private wasi_fd_sync(fd: number) {
-    this.logger.info({ fd }, `wasi_fd_sync`);
+    this.logger.info(`wasi_fd_sync`, { fd });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ESUCCESS;
   }
@@ -802,7 +812,7 @@ export default class WasiImpl {
     pathPtr: number,
     pathLen: number,
   ) {
-    this.logger.info({ fd, pathPtr, pathLen }, `wasi_path_create_directory`);
+    this.logger.info(`wasi_path_create_directory`, { fd, pathPtr, pathLen });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const key = new Uint8Array(this.memory.buffer, pathPtr, pathLen);
     hdl.dirMutEntry(
@@ -821,8 +831,8 @@ export default class WasiImpl {
     bufPtr: number,
   ) {
     this.logger.info(
-      { fd, flags, pathPtr, pathLen, bufPtr },
       `wasi_path_filestat_get`,
+      { fd, flags, pathPtr, pathLen, bufPtr },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
@@ -869,8 +879,8 @@ export default class WasiImpl {
     fstflags: number,
   ) {
     this.logger.info(
-      { fd, dirflags, pathPtr, pathLen, stAtim, stMtim, fstflags },
       `wasi_path_filestat_set_times`,
+      { fd, dirflags, pathPtr, pathLen, stAtim, stMtim, fstflags },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
@@ -939,8 +949,8 @@ export default class WasiImpl {
     newPathLen: number,
   ) {
     this.logger.info(
-      { oldFd, oldFlags, oldPath, oldPathLen, newFd, newPath, newPathLen },
       `wasi_path_link`,
+      { oldFd, oldFlags, oldPath, oldPathLen, newFd, newPath, newPathLen },
     );
     const ostats = this.handles.get(oldFd) || throwWasiErr(wc.WASI_EBADF);
     const nstats = this.handles.get(newFd) || throwWasiErr(wc.WASI_EBADF);
@@ -980,6 +990,7 @@ export default class WasiImpl {
     fdDst: number,
   ) {
     this.logger.info(
+      `wasi_path_open`,
       {
         dirFd,
         dirflags,
@@ -991,7 +1002,6 @@ export default class WasiImpl {
         fdFlags,
         fdDst,
       },
-      `wasi_path_open`,
     );
     const hdl = this.handles.get(dirFd) || throwWasiErr(wc.WASI_EBADF);
     // TODO: Handle rights better here (map them to our rights)
@@ -1061,8 +1071,8 @@ export default class WasiImpl {
     bufused: number,
   ) {
     this.logger.info(
-      { fd, pathPtr, pathLen, buf, bufLen, bufused },
       `wasi_path_readlink`,
+      { fd, pathPtr, pathLen, buf, bufLen, bufused },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
@@ -1090,7 +1100,7 @@ export default class WasiImpl {
     pathPtr: number,
     pathLen: number,
   ) {
-    this.logger.info({ fd, pathPtr, pathLen }, `wasi_path_remove_directory`);
+    this.logger.info(`wasi_path_remove_directory`, { fd, pathPtr, pathLen });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
 
@@ -1118,8 +1128,8 @@ export default class WasiImpl {
     newPathLen: number,
   ) {
     this.logger.info(
-      { oldFd, oldPath, oldPathLen, newFd, newPath, newPathLen },
       `wasi_path_rename`,
+      { oldFd, oldPath, oldPathLen, newFd, newPath, newPathLen },
     );
     const ostats = this.handles.get(oldFd) || throwWasiErr(wc.WASI_EBADF);
     const nstats = this.handles.get(newFd) || throwWasiErr(wc.WASI_EBADF);
@@ -1156,8 +1166,8 @@ export default class WasiImpl {
     newPathLen: number,
   ) {
     this.logger.info(
-      { oldPath, oldPathLen, fd, newPath, newPathLen },
       `wasi_path_symlink`,
+      { oldPath, oldPathLen, fd, newPath, newPathLen },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
@@ -1183,7 +1193,7 @@ export default class WasiImpl {
   }
 
   private wasi_path_unlink_file(fd: number, pathPtr: number, pathLen: number) {
-    this.logger.info({ fd, pathPtr, pathLen }, `wasi_path_unlink_file`);
+    this.logger.info(`wasi_path_unlink_file`, { fd, pathPtr, pathLen });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ENOSYS;
 
@@ -1205,10 +1215,52 @@ export default class WasiImpl {
     nevents: number,
   ) {
     this.logger.info(
-      { sin, sout, nsubscriptions, nevents },
       `wasi_poll_oneoff`,
+      { sin, sout, nsubscriptions, nevents },
     );
-    return wc.WASI_ENOSYS;
+
+    const view = new DataView(this.memory.buffer);
+    for (let i = 0; i < nsubscriptions; i++) {
+      const userData0 = view.getUint32(sin, true);
+      sin += 4;
+      const userData1 = view.getUint32(sin, true);
+      sin += 4;
+      const eventType = view.getUint8(sin);
+      sin += 4;
+
+      view.setUint32(sout, userData0, true);
+      sout += 4;
+      view.setUint32(sout, userData1, true);
+      sout += 4;
+
+      let err = 0;
+      switch (eventType) {
+        case wc.WASI_EVENTTYPE_CLOCK:
+          break;
+        case wc.WASI_EVENTTYPE_FD_READ: {
+          const fd = view.getUint32(sin, true);
+          const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
+          const nBytesReady = hdl.fileGetSize() - hdl.fileOffset;
+          this.logger.info('poll_fd_read', { fd, nBytesReady });
+          view.setBigUint64(sout + 8, BigInt(nBytesReady), true);
+          view.setUint16(sout + 16, nBytesReady ? 0 : 1, true);
+          break;
+        }
+        case wc.WASI_EVENTTYPE_FD_WRITE:
+          err = wc.WASI_ENOSYS;
+          break;
+      }
+
+      sin += 36;
+
+      view.setUint16(sout, err, true);
+      sout += 2;
+      view.setUint8(sout, eventType);
+      sout += 22;
+    }
+
+    view.setUint32(nevents, nsubscriptions, true);
+    return wc.WASI_ESUCCESS;
 
     /*
     let eventc = 0;
@@ -1292,12 +1344,12 @@ export default class WasiImpl {
   }
 
   private wasi_proc_exit(rval: number) {
-    this.logger.info({ rval }, `wasi_proc_exit`);
+    this.logger.info(`wasi_proc_exit`, { rval });
     throw new WasiExit(rval);
   }
 
   private wasi_proc_raise(sig: number) {
-    this.logger.info({ sig }, `wasi_proc_raise`);
+    this.logger.info(`wasi_proc_raise`, { sig });
     return wc.WASI_ENOSYS;
 
     /*
@@ -1310,7 +1362,7 @@ export default class WasiImpl {
   }
 
   private wasi_random_get(bufPtr: number, bufLen: number) {
-    this.logger.info({ bufPtr, bufLen }, `wasi_random_get`);
+    this.logger.info(`wasi_random_get`, { bufPtr, bufLen });
     return wc.WASI_ENOSYS;
 
     /*
@@ -1325,22 +1377,22 @@ export default class WasiImpl {
   }
 
   private wasi_sched_yield() {
-    this.logger.info({}, `wasi_sched_yield`);
+    this.logger.info(`wasi_sched_yield`, {});
     return wc.WASI_ESUCCESS;
   }
 
   private wasi_sock_recv() {
-    this.logger.info({}, `wasi_sock_recv`);
+    this.logger.info(`wasi_sock_recv`, {});
     return wc.WASI_ENOSYS;
   }
 
   private wasi_sock_send() {
-    this.logger.info({}, `wasi_sock_send`);
+    this.logger.info(`wasi_sock_send`, {});
     return wc.WASI_ENOSYS;
   }
 
   private wasi_sock_shutdown() {
-    this.logger.info({}, `wasi_sock_shutdown`);
+    this.logger.info(`wasi_sock_shutdown`, {});
     return wc.WASI_ENOSYS;
   }
 

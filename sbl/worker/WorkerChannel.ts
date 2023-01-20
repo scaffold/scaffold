@@ -31,7 +31,10 @@ export class WorkerChannelClient<T> {
 
     Atomics.store(arr, 0, 0);
     this.port.postMessage({ func, args }, { transfer });
+    const x = Math.random();
+    console.log('WAIT...', func, args, x);
     Atomics.wait(arr, 0, 0);
+    console.log('CONTINUE...', func, args, x);
 
     return Atomics.load(arr, 1);
   }

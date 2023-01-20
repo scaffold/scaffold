@@ -1,7 +1,7 @@
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { InitialMessage, JobMessage, WorkerComm } from './workerTypes.ts';
 import execJob from './execJob.ts';
-import execJs from './execJs.ts';
+// import execJs from './execJs.ts';
 import { arrEquals } from '../util/buffer.ts';
 
 console.log('Worker starting...');
@@ -39,10 +39,10 @@ while (true) {
 
   if (msg.data) {
     console.log('Worker received job...');
-    if (arrEquals(msg.data.code.subarray(0, 4), wasmMagic)) {
+    if (/* arrEquals(msg.data.code.subarray(0, 4), wasmMagic) */ true) {
       await execJob(client, msg.data).catch((err) => console.error(err));
     } else {
-      await execJs(client, msg.data).catch((err) => console.error(err));
+      // await execJs(client, msg.data).catch((err) => console.error(err));
     }
   } else {
     break;

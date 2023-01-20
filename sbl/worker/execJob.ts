@@ -1,4 +1,4 @@
-import { bin2str, formatPath, str2bin } from '../pathUtils.ts';
+import { bin2hex, bin2str, formatPath, str2bin } from '../pathUtils.ts';
 import { LinkExec, MkdirExec, WasmExec } from '../scriptTypes.ts';
 import ExtFs from './ExtFs.ts';
 import {
@@ -18,6 +18,40 @@ import MemFs from './MemFs.ts';
 import WasiImpl, { FsNodeHandle } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
+import * as log from 'https://deno.land/std@0.173.0/log/mod.ts';
+
+// const logger: Logger = {
+//   info: (data, msg) => console.log(data, msg),
+//   warn: (data, msg) => console.warn(data, msg),
+//   error: (data, msg) => console.error(data, msg),
+// };
+const formatter: log.FormatterFunction = (logRecord) =>
+  `${logRecord.levelName} ${logRecord.msg} ${
+    logRecord.args.map((a) =>
+      JSON.stringify(a, (_key, value) =>
+        typeof value === 'bigint' ? value.toString() : value)
+    ).join(',')
+  }`;
+
+const consoleHandler = new log.handlers.ConsoleHandler('DEBUG', { formatter });
+const fileHandler = new log.handlers.FileHandler('DEBUG', {
+  filename: `/tmp/sbl_worker_${Date.now()}_${
+    Math.random().toString(36).slice(2)
+  }.log`,
+  formatter,
+});
+log.setup({
+  handlers: { console: consoleHandler, file: fileHandler },
+
+  loggers: {
+    worker: {
+      level: 'DEBUG',
+      handlers: ['console', 'file'],
+    },
+  },
+});
+const logger = log.getLogger('worker');
+setInterval(() => fileHandler.flush(), 1000);
 
 const throwErr = (msg: string): never => {
   throw new Error(msg);
@@ -25,7 +59,7 @@ const throwErr = (msg: string): never => {
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { code, inputs, outputSpec }: JobMessage,
+  { codeVerifier, inputs, outputSpec }: JobMessage,
 ) => {
   const inodeSource = { nextInode: 1 };
 
@@ -105,6 +139,7 @@ export default async (
   };
 
   const execWasm = async (spec: WasmExec) => {
+    // Note that if the WASM module exports its own memory, this won't be used
     const memory = new WebAssembly.Memory({
       // initial: 10, // Each page is 64KiB
       initial: 1 << 12, // Each page is 64KiB
@@ -120,11 +155,7 @@ export default async (
         val: str2bin(val),
       })),
       spec.cwd,
-      {
-        info: (data, msg) => console.log(data, msg),
-        warn: (data, msg) => console.warn(data, msg),
-        error: (data, msg) => console.error(data, msg),
-      },
+      logger,
     );
 
     const rootHandle = wasi.makeHandle(fsRoot, FS_CAPABILITY_ALL);
@@ -175,13 +206,16 @@ export default async (
       env: {
         memory,
         openatBinary: (fd: number, entry: number, ...rest: any[]) => {
-          console.log('openatBinary', fd, entry, ...rest);
+          logger.info({ fd, entry, rest }, 'openatBinary');
           return -1;
         },
       },
       wasi_snapshot_preview1: imports,
       wasi_unstable: imports,
     } as any);
+
+    logger.error(instance.exports, 'EXPORTS');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return wasi.run(instance);
   };
@@ -247,16 +281,30 @@ export default async (
   //   Promise.resolve(),
   // );
 
+  const args = [
+    ...bin2str(inputs.params).matchAll(/"([^"]+)"|'([^']+)'|(\S+)/g),
+  ].map((m) => m[1] || m[2] || m[3]);
+  logger.info('ARGS', args);
+
   await execWasm({
-    execPath: [],
-    args: [],
+    execPath: [
+      str2bin('ext'),
+      codeVerifier.contractHash,
+      codeVerifier.params,
+    ],
+    args,
+    // args: [
+    //   bin2hex(codeVerifier.contractHash) + '_' + bin2hex(codeVerifier.params),
+    //   '--eval',
+    //   'console.log(123*7)',
+    // ],
     env: {},
 
     cwd: [],
 
-    stdinFrom: [],
-    stdoutTo: [],
-    stderrTo: [],
+    stdinFrom: [str2bin('in'), str2bin('stdin')],
+    stdoutTo: [str2bin('out'), str2bin('stdout')],
+    stderrTo: [str2bin('out'), str2bin('stderr')],
   });
 
   Object.entries(outputSpec).forEach(([key, _]) => {
