@@ -15,6 +15,7 @@ export default class BlockBuilder {
     const amount = this.ctx.get(IncentiveCalculator)
       .getAvailableIncentive(verifier, inputs);
     const outputs = this.ctx.get(IncentiveService).popIncentives(amount);
+    const isFreeMarket = true;
     let timestamp = BigInt(Date.now());
     inputs.forEach((input) => {
       // TODO: No need to look these blocks up; just store them in IncentiveRegistry
@@ -24,6 +25,6 @@ export default class BlockBuilder {
         timestamp = inputTs + 1n;
       }
     });
-    return { inputs, outputs, verifier, body, timestamp };
+    return { inputs, outputs, verifier, body, isFreeMarket, timestamp };
   }
 }

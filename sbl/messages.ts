@@ -197,6 +197,9 @@ export const registry = {
       // { name: 'body', type: ['Publication', 'bytes'] },
       { name: 'body', type: 'bytes' },
 
+      // Maybe make this a hash of the remote generator, and optionally the RNG state?
+      { name: 'isFreeMarket', type: 'boolean' },
+
       // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
       // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
       // For questions with easy, rewarding answers (like epochs),

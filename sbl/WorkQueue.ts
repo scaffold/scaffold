@@ -15,7 +15,8 @@ import WorkQueueUtil from './util/WorkQueue.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
-import { generatorHash, rootHash } from './constants.ts';
+import { generatorHash, rootHash, timeHash } from './constants.ts';
+import { bin2str } from './pathUtils.ts';
 
 const useLocalExecution = false;
 const secret = secp.utils.randomBytes(32);
@@ -102,19 +103,24 @@ export default class WorkQueue extends WorkQueueUtil {
 
     console.warn(`Running ${this.ctx.get(Logger).serialize(verifier)}`);
 
-    const emitCorrect = Hash.cmp(
-      Hash.digest(
-        arrConcat(secret, verifier.contract_hash.toBytes(), verifier.params),
-      ),
-      this.attemptDupeFraction,
-    ) === 1;
-
     const onDone = (data: Uint8Array, inputs: Block[], durationMs: number) => {
       const block = this.ctx.get(BlockBuilder).build(verifier, data);
       this.ctx.get(BlockService).ingest(block);
       // answer.difficultyEstimate = BigInt(durationMs) *
       //   this.ctx.config.approxComputePricePerSecond / 1000n;
     };
+
+    // if (Hash.equals(verifier.contract_hash,timeHash)) {
+    //   const wait =
+    //   await new Promise(resolve=>setTimeout());
+    // }
+
+    const emitCorrect = Hash.cmp(
+      Hash.digest(
+        arrConcat(secret, verifier.contract_hash.toBytes(), verifier.params),
+      ),
+      this.attemptDupeFraction,
+    ) === 1;
 
     if (useLocalExecution) {
       // // TODO: This is kinda hacky
@@ -143,7 +149,7 @@ export default class WorkQueue extends WorkQueueUtil {
 
       throw new Error('Not implemented');
     } else {
-      debugger;
+      // debugger;
       const emitCorrect = true;
       const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
         .run({
@@ -154,12 +160,16 @@ export default class WorkQueue extends WorkQueueUtil {
           params: verifier.params,
           emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
           stdin: new Uint8Array([]),
-        }, { answer: null });
+        }, { stdout: null, stderr: null });
       result.then((out) => console.log('DONE', out));
-      result.then(({ outputs: { answer: data }, usedBlocks }) => {
-        onDone(data, [...usedBlocks], 0);
+      result.then(({ outputs: { stdout, stderr }, usedBlocks }) => {
+        console.log('STDOUT', bin2str(stdout));
+        console.log('STDERR', bin2str(stderr));
+
+        onDone(stdout, [...usedBlocks], 0);
         hasDirtyInputs.then(() => console.error(`Dirty inputs!`));
       });
+      await result;
     }
   }
 

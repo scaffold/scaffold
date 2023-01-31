@@ -19,6 +19,7 @@ import WasiImpl, { FsNodeHandle } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
 import * as log from 'https://deno.land/std@0.173.0/log/mod.ts';
+import secp from '../util/secp.ts';
 
 // const logger: Logger = {
 //   info: (data, msg) => console.log(data, msg),
@@ -177,13 +178,6 @@ export default async (
     };
 
     const execNode = lookupPath(spec.execPath, false);
-    wasi.resetFds(
-      lookupPath(spec.stdinFrom, false),
-      lookupPath(spec.stdoutTo, true),
-      lookupPath(spec.stderrTo, true),
-      [[]].map((path) => ({ path, handle: lookupPath(path, true) })),
-    );
-
     const CHUNK_SIZE = 65536;
     const sourceArr = [];
     let size = 0;
@@ -200,6 +194,13 @@ export default async (
     const source = new Uint8Array(size);
     sourceArr.forEach((s, i) => source.set(s, i * CHUNK_SIZE));
 
+    wasi.resetFds(
+      lookupPath(spec.stdinFrom, false),
+      lookupPath(spec.stdoutTo, true),
+      lookupPath(spec.stderrTo, true),
+      [[]].map((path) => ({ path, handle: lookupPath(path, true) })),
+    );
+
     const imports = wasi.getImports();
 
     const { module, instance } = await WebAssembly.instantiate(source, {
@@ -213,9 +214,6 @@ export default async (
       wasi_snapshot_preview1: imports,
       wasi_unstable: imports,
     } as any);
-
-    logger.error(instance.exports, 'EXPORTS');
-    await new Promise((resolve) => setTimeout(resolve, 1000));
 
     return wasi.run(instance);
   };
@@ -243,6 +241,27 @@ export default async (
           FS_CAPABILITY_FILE_WRITE,
       },
   );
+  const devDir = fsRoot.mutEntry(
+    str2bin('dev'),
+    (entry) =>
+      entry ? throwErr(`/dev already exists`) : {
+        val: memFs.createDirNode(),
+        capMask: FS_CAPABILITY_DIR_LIST_ENTRIES |
+          FS_CAPABILITY_DIR_READ_ENTRY |
+          FS_CAPABILITY_FILE_READ,
+      },
+  );
+
+  const randomBytes = new Uint8Array(1024);
+  crypto.getRandomValues(randomBytes);
+  devDir.mutEntry(
+    str2bin('urandom'),
+    (entry) =>
+      entry ? throwErr(`/dev/urandom already exists`) : {
+        val: memFs.createFileNode(),
+        capMask: FS_CAPABILITY_FILE_READ,
+      },
+  ).write(0, [randomBytes]);
 
   Object.entries(inputs).forEach(([key, data]) => {
     const file = inDir.mutEntry(

@@ -19,7 +19,7 @@ set -x
 	tar xvf wasi-sdk-17.0-macos.tar.gz && \
 	rm wasi-sdk-17.0-macos.tar.gz
 
-rm -f server/bootstrap/*.wasm
+rm -f server/bootstrap/*
 
 for file in ./cpp/wasi/*.cpp; do
 	echo "$file"
@@ -52,7 +52,7 @@ for file in ./cpp/wasi/*.cpp; do
     `# -Wl,--initial-memory=4294967296` \
     -Wl,--max-memory=4294967296 \
 		`#-Wl,-error-limit=0` \
-		-o "server/bootstrap/$(basename "$file" .cpp).wasm" # &
+		-o "server/bootstrap/$(basename "$file" .cpp).wasm" &
 done
 
 for file in ./cpp/*.cpp; do
@@ -87,10 +87,19 @@ for file in ./cpp/*.cpp; do
     `# -Wl,--initial-memory=4294967296` \
     -Wl,--max-memory=4294967296 \
 		`#-Wl,-error-limit=0` \
-		-o "server/bootstrap/$(basename "$file" .cpp).wasm" # &
+		-o "server/bootstrap/$(basename "$file" .cpp).wasm" &
+done
+
+for file in ./ts/*.generator.*.ts; do
+	echo "$file"
+	deno bundle "$file" | sed -r 's/export { ([_$a-zA-Z0-9\xA0-\uFFFF]+) as default };/return \1;/' > "server/bootstrap/$(basename "$file" .ts).js" &
 done
 
 curl 'https://registry-cdn.wapm.io/contents/saghul/quickjs/0.0.3/build/qjs.wasm' --continue-at - --output server/bootstrap/qjs.wasm &
+curl 'https://registry-cdn.wapm.io/contents/python/python/0.1.0/bin/python.wasm' --continue-at - --output server/bootstrap/python.wasm &
+
+cp js/* server/bootstrap/ &
+cp python/* server/bootstrap/ &
 
 wait
 

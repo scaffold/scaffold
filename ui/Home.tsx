@@ -20,16 +20,27 @@ import WorkQueue from '../sbl/WorkQueue.ts';
 import StoreObserver from '../sbl/util/StoreObserver.ts';
 import { Verifier } from '../sbl/messages.ts';
 import Logger from '../sbl/Logger.ts';
-import ThrustInitContract from '../graph/ThrustInitContract.ts';
 import ThrustView from './ThrustView.tsx';
 import * as moduleHashes from './moduleHashes.ts';
 import * as constants from '../sbl/constants.ts';
 import { decodeMultibase, str2bin } from '../sbl/pathUtils.ts';
 import FetchService from '../sbl/FetchService.ts';
+import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
+import * as thrustMessages from '../ts/thrustMessages.ts';
+import BlockService from '../sbl/BlockService.ts';
+import BlockBuilder from '../sbl/BlockBuilder.ts';
 
+// QJS
+// const initialContractHex =
+//   '2699c934e05e42c7937c17bfa8d0f70cb8b65f47a5330e512df5f3b621a99709';
+// const initialParams =
+//   `qjs /ext/:f53424c00000000000000000000000000000000000000000000000000726f6f74/:fea2d95c07417afcedd35a10a3308361949261518b0518e2d98af1fce61b3464b.js`;
+
+// Python
 const initialContractHex =
-  '2699c934e05e42c7937c17bfa8d0f70cb8b65f47a5330e512df5f3b621a99709';
-const initialParams = `qjs --eval 'console.log(123);'`;
+  'cacf09f92d88a091f3729059f389bc0ec59d82c4b2be83ab7d08ad3849d4a9cc';
+const initialParams =
+  `python /ext/:f53424c00000000000000000000000000000000000000000000000000726f6f74/:f9e7cf4f3dfd247d2fb32f150195cf10433cf8b9bd17e2c1b18eccaa41a38b3ef.py`;
 
 const contractHashes = Object.entries({ ...constants, ...moduleHashes });
 
@@ -37,6 +48,21 @@ const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
 
 client.ctx.get(WorkQueue);
+
+const startGame = () => {
+  const body = thrustMessages.InitAnswer.encode({
+    nonce: Hash.random(),
+    init_time: BigInt(Date.now()),
+  });
+  const match = Hash.digest(body);
+  const verifier = {
+    contract_hash: moduleHashes.thrust_init_wasm_hash,
+    params: match.toBytes(),
+  };
+  const block = client.ctx.get(BlockBuilder).build(verifier, body);
+  client.ctx.get(BlockService).ingest(block);
+  return match;
+};
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
@@ -56,10 +82,7 @@ export default () => {
         href='#'
         onClick={() => {
           const newUrl = new URL(url);
-          newUrl.searchParams.set(
-            'game',
-            client.ctx.get(ThrustInitContract).startGame(Hash.random()).toHex(),
-          );
+          newUrl.searchParams.set('game', startGame().toHex());
           window.history.pushState({}, '', newUrl);
           setUrl(newUrl);
         }}

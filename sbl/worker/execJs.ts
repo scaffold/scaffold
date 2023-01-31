@@ -2,11 +2,11 @@ import Hash from '../util/Hash.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
 
-let transferBuf = new Uint8Array(65536);
+let transferBuf = new Uint8Array(new SharedArrayBuffer(65536));
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { code, inputs }: JobMessage,
+  { codeVerifier, inputs, outputSpec }: JobMessage,
 ) => {
   client.inform('init', ['ext', 0], []);
 
@@ -15,7 +15,7 @@ export default async (
     client.inform('open', [1, params, 0n, 2], []);
     const len = client.dispatch('getSize', [2], []);
     if (len > transferBuf.byteLength) {
-      transferBuf = new Uint8Array(len);
+      transferBuf = new Uint8Array(new SharedArrayBuffer(len));
     }
     client.dispatch('read', [2, 0, [transferBuf]], []);
     return transferBuf.subarray(0, len);
@@ -25,6 +25,10 @@ export default async (
     client.inform('open', [1, params, 0n, 2], []);
   };
 
+  const code = handler(
+    Hash.fromBytes(codeVerifier.contractHash),
+    codeVerifier.params,
+  );
   const func = eval(new TextDecoder().decode(code));
   if (typeof func !== 'function') {
     throw new Error(`Script is not a function`);
@@ -37,5 +41,5 @@ export default async (
     notifier,
   );
 
-  client.inform('outputChunk', ['answer', 0, out], []);
+  client.inform('outputChunk', ['stdout', 0, out], []);
 };

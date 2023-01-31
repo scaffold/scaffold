@@ -133,6 +133,9 @@ export default class WorkerExecutor {
           };
           worker.postMessage(msg);
 
+          // Only send one job, then end worker.
+          worker.postMessage(undefined);
+
           sentJob = true;
         }
         return undefined;

@@ -50,6 +50,7 @@ export const decodeMultibase = (enc: string): Uint8Array => {
   if (enc === '') {
     return new Uint8Array();
   }
+  enc = enc.split('.', 1)[0]; // Remove extension
   const decoder = multibaseMap[enc[0]];
   if (!decoder) {
     throw new Error(

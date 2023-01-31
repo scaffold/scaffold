@@ -13,7 +13,7 @@ const bootstrapPath = path.join(
 for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
   const body = await Deno.readFile(entry.path);
   const hash = Hash.digest(body);
-  const name = entry.name.split('.')[0];
+  const name = entry.name.replace(/\W+/g, '_');
 
   cppLines.push(`constexpr std::string_view ${name}_hash = "${hash.toHex()}";`);
   tsLines.push(`export const ${name}_hash = Hash.fromHex("${hash.toHex()}");`);
@@ -21,3 +21,4 @@ for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
 
 await Deno.writeTextFile('cpp/hashes.h', cppLines.join('\n'));
 await Deno.writeTextFile('ui/moduleHashes.ts', tsLines.join('\n'));
+await Deno.writeTextFile('ts/moduleHashes.ts', tsLines.join('\n'));

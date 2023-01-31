@@ -26,7 +26,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 */
 
-import { decodePathEntry, formatPath, str2bin } from '../pathUtils.ts';
+import { bin2str, decodePathEntry, formatPath, str2bin } from '../pathUtils.ts';
 import {
   FS_CAPABILITY_ALL,
   FS_CAPABILITY_DIR_ENTRY_CREATE,
@@ -109,6 +109,62 @@ const wrapWasi =
       }
     }
   };
+
+// export const FS_CAPABILITY_DIR_LIST_ENTRIES: FsCapabilityMask = 1 << 0;
+// export const FS_CAPABILITY_DIR_READ_ENTRY: FsCapabilityMask = 1 << 1;
+// export const FS_CAPABILITY_DIR_ENTRY_CREATE: FsCapabilityMask = 1 << 2;
+// export const FS_CAPABILITY_DIR_ENTRY_REMOVE: FsCapabilityMask = 1 << 3;
+// export const FS_CAPABILITY_FILE_READ: FsCapabilityMask = 1 << 4;
+// export const FS_CAPABILITY_FILE_WRITE: FsCapabilityMask = 1 << 5;
+// export const FS_CAPABILITY_ALL: FsCapabilityMask = (1 << 6) - 1;
+
+const getBaseRights = (capMask: FsCapabilityMask) => {
+  let res = 0n;
+  if (capMask & FS_CAPABILITY_DIR_LIST_ENTRIES) {
+    res |= wc.WASI_RIGHT_PATH_LINK_SOURCE | wc.WASI_RIGHT_FD_READDIR |
+      wc.WASI_RIGHT_PATH_RENAME_SOURCE;
+  }
+  if (capMask & FS_CAPABILITY_DIR_READ_ENTRY) {
+    res |= wc.WASI_RIGHT_PATH_LINK_SOURCE | wc.WASI_RIGHT_PATH_OPEN |
+      wc.WASI_RIGHT_PATH_READLINK | wc.WASI_RIGHT_PATH_RENAME_SOURCE |
+      wc.WASI_RIGHT_PATH_FILESTAT_GET | wc.WASI_RIGHT_PATH_FILESTAT_SET_SIZE |
+      wc.WASI_RIGHT_PATH_FILESTAT_SET_TIMES;
+  }
+  if (capMask & FS_CAPABILITY_DIR_ENTRY_CREATE) {
+    res |= wc.WASI_RIGHT_PATH_CREATE_DIRECTORY |
+      wc.WASI_RIGHT_PATH_CREATE_FILE | wc.WASI_RIGHT_PATH_LINK_TARGET |
+      wc.WASI_RIGHT_PATH_RENAME_TARGET | wc.WASI_RIGHT_PATH_SYMLINK;
+  }
+  if (capMask & FS_CAPABILITY_DIR_ENTRY_REMOVE) {
+    res |= wc.WASI_RIGHT_PATH_REMOVE_DIRECTORY | wc.WASI_RIGHT_PATH_UNLINK_FILE;
+  }
+  if (capMask & FS_CAPABILITY_FILE_READ) {
+    res |= wc.WASI_RIGHT_FD_DATASYNC | wc.WASI_RIGHT_FD_READ |
+      wc.WASI_RIGHT_FD_SEEK | wc.WASI_RIGHT_FD_FDSTAT_SET_FLAGS |
+      wc.WASI_RIGHT_FD_SYNC | wc.WASI_RIGHT_FD_TELL | wc.WASI_RIGHT_FD_ADVISE |
+      wc.WASI_RIGHT_FD_FILESTAT_GET | wc.WASI_RIGHT_POLL_FD_READWRITE;
+  }
+  if (capMask & FS_CAPABILITY_FILE_WRITE) {
+    res |= wc.WASI_RIGHT_FD_DATASYNC | wc.WASI_RIGHT_FD_SEEK |
+      wc.WASI_RIGHT_FD_FDSTAT_SET_FLAGS | wc.WASI_RIGHT_FD_SYNC |
+      wc.WASI_RIGHT_FD_TELL | wc.WASI_RIGHT_FD_WRITE | wc.WASI_RIGHT_FD_ADVISE |
+      wc.WASI_RIGHT_FD_ALLOCATE | wc.WASI_RIGHT_FD_FILESTAT_SET_SIZE |
+      wc.WASI_RIGHT_FD_FILESTAT_SET_TIMES | wc.WASI_RIGHT_POLL_FD_READWRITE;
+  }
+  return res;
+};
+
+const getInheritingRights = (capMask: FsCapabilityMask) => {
+  if (
+    capMask &
+    (FS_CAPABILITY_DIR_LIST_ENTRIES | FS_CAPABILITY_DIR_READ_ENTRY |
+      FS_CAPABILITY_DIR_ENTRY_CREATE | FS_CAPABILITY_DIR_ENTRY_REMOVE)
+  ) {
+    return getBaseRights(FS_CAPABILITY_ALL);
+  } else {
+    return getBaseRights(capMask);
+  }
+};
 
 export default class WasiImpl {
   private handles: Map<number, FsNodeHandle> = new Map();
@@ -477,9 +533,8 @@ export default class WasiImpl {
       hdl.fileIsBlocking ? 0 : wc.WASI_FDFLAG_NONBLOCK,
       true,
     ); // fs_flags
-    view.setUint16(dstBuf + 4, 0, true); // zero
-    view.setBigUint64(dstBuf + 8, BigInt(0), true); // fs_rights_base
-    view.setBigUint64(dstBuf + 16, BigInt(0), true); // fs_rights_inheriting
+    view.setBigUint64(dstBuf + 8, getBaseRights(hdl.capMask), true); // fs_rights_base
+    view.setBigUint64(dstBuf + 16, getInheritingRights(hdl.capMask), true); // fs_rights_inheriting
     return wc.WASI_ESUCCESS;
   }
 
@@ -647,8 +702,9 @@ export default class WasiImpl {
   ) {
     this.logger.info(`wasi_fd_write`, { fd, iovs, iovsLen, dstSizeWritten });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    this.logger.info(`fd_write_iovs`, { iovs: this.getIovs(iovs, iovsLen) });
-    const written = hdl.fileWrite(hdl.fileOffset, this.getIovs(iovs, iovsLen));
+    const bufs = this.getIovs(iovs, iovsLen);
+    this.logger.info(`fd_write_iovs`, { bufs: bufs.map(bin2str).join('') });
+    const written = hdl.fileWrite(hdl.fileOffset, bufs);
     this.logger.info(`fd_write_wrote`, { written });
     hdl.fileOffset += written;
     const view = new DataView(this.memory.buffer);
@@ -779,16 +835,18 @@ export default class WasiImpl {
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const view = new DataView(this.memory.buffer);
     switch (whence) {
+      case wc.WASI_WHENCE_SET:
+        hdl.fileOffset = Number(offset);
+        break;
       case wc.WASI_WHENCE_CUR:
         hdl.fileOffset += Number(offset);
         break;
       case wc.WASI_WHENCE_END:
-        return wc.WASI_ENOSYS;
-      case wc.WASI_WHENCE_SET:
-        hdl.fileOffset = Number(offset);
+        hdl.fileOffset = hdl.fileGetSize() + Number(offset);
         break;
     }
     hdl.fileOffset = Math.max(0, hdl.fileOffset);
+    this.logger.info('fd_seek', { offset: hdl.fileOffset });
     view.setBigUint64(dstNewOffset, BigInt(hdl.fileOffset), true);
     return wc.WASI_ESUCCESS;
   }
@@ -803,7 +861,7 @@ export default class WasiImpl {
 
   private wasi_fd_sync(fd: number) {
     this.logger.info(`wasi_fd_sync`, { fd });
-    const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
+    const _hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     return wc.WASI_ESUCCESS;
   }
 
@@ -1007,6 +1065,8 @@ export default class WasiImpl {
     // TODO: Handle rights better here (map them to our rights)
 
     const path = new Uint8Array(this.memory.buffer, pathPtr, pathLen);
+    this.logger.info('path_open', { path: bin2str(path) });
+
     const keys: Uint8Array[] = [];
     for (let offset = 0; true;) {
       const split = path.indexOf('/'.charCodeAt(0), offset);
@@ -1018,6 +1078,7 @@ export default class WasiImpl {
         offset = split + 1;
       }
     }
+    this.logger.info('path_open', { keys: keys.map(bin2str) });
 
     const lastKey = keys.pop()!;
     const dirHdl = keys.reduce(

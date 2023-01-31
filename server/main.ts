@@ -19,6 +19,11 @@ import CollatzContract from '../graph/CollatzContract.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import GraphUtils from '../sbl/GraphUtils.ts';
 import WorkQueue from '../sbl/WorkQueue.ts';
+import { error } from '../sbl/util/functional.ts';
+import { bin2str } from '../sbl/pathUtils.ts';
+import LocalGeneratorService, {
+  LocalGenerator,
+} from '../sbl/LocalGeneratorService.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -170,19 +175,59 @@ const bootstrapPath = path.join(
   path.dirname(path.fromFileUrl(import.meta.url)),
   'bootstrap',
 );
+fs.walk(bootstrapPath, { includeDirs: false });
+
+const entries: {
+  filename: string;
+  contractName: string;
+  generator?: string;
+  ext: string;
+  body: Uint8Array;
+  hash: Hash;
+}[] = [];
 for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
   const body = await Deno.readFile(entry.path);
-  const contractHash = Hash.digest(body);
+  const hash = Hash.digest(body);
 
-  // Supply contract
-  ctx.get(GraphUtils).supplyRawAnswer(body);
+  const [_, contractName, generator, ext] = entry.name.match(
+    /^([\w-]+)\.(?:contract|generator\.([\w-]+))\.([\w-]+)$/,
+  ) || error(`Invalid filename ${entry.name}!`);
 
-  // Supply generator
-  // This shouldn't work in general but we can hack it for now
-  ctx.get(GraphUtils).supplyGenerator(contractHash, body);
-
-  ctx.get(QaDebugger).addDebugger(entry.name, contractHash);
+  entries.push({
+    filename: entry.name,
+    contractName,
+    generator,
+    ext,
+    body,
+    hash,
+  });
 }
+entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
+  if (generator) {
+    const contractHash = entries.find((e) =>
+      e.contractName === contractName && e.generator === undefined
+    )?.hash || error(`No contract with name ${contractName}!`);
+
+    // Supply generator
+    switch (ext) {
+      case 'js':
+        ctx.get(LocalGeneratorService).addGenerator(
+          contractHash,
+          new Function(bin2str(body)) as LocalGenerator,
+        );
+        break;
+
+      case 'wasm':
+        ctx.get(GraphUtils).supplyGenerator(contractHash, body);
+        break;
+    }
+  } else {
+    // Supply contract
+    ctx.get(GraphUtils).supplyRawAnswer(body);
+  }
+
+  ctx.get(QaDebugger).addDebugger(filename, hash);
+});
 
 // ctx.get(EpochContract).get();
 ctx.get(ServingService).serve((protocol: string, spec: string) =>

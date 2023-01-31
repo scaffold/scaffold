@@ -1,7 +1,7 @@
 import Hash from '~/sbl/util/Hash.ts';
 import Context from '~/sbl/Context.ts';
 import ThrustMazeContract from '~/graph/ThrustMazeContract.ts';
-import ThrustInputContract from '~/graph/ThrustInputContract.ts';
+import ThrustInputProvider from './ThrustInputProvider.tsx';
 import ThrustGameContract from '~/graph/ThrustGameContract.ts';
 import * as thrustMessages from '~/graph/thrustMessages.ts';
 import StateTracker from '~/sbl/StateTracker.ts';
@@ -65,7 +65,7 @@ export default class ThrustProvider {
       },
     );
 
-    ctx.get(ThrustInputContract).setInputCallback(
+    ctx.get(ThrustInputProvider).setInputCallback(
       match,
       player,
       (_tick) => this.curInputEntry,
@@ -73,7 +73,7 @@ export default class ThrustProvider {
   }
 
   public destruct() {
-    this.ctx.get(ThrustInputContract).setInputCallback(this.match, this.player);
+    this.ctx.get(ThrustInputProvider).setInputCallback(this.match, this.player);
     this.tracker.release();
   }
 
