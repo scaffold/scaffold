@@ -74,6 +74,12 @@ type Config = {
   onlyBridge?: boolean;
 
   computeContracts: Hash[];
+
+  timeProvider: () => number;
 };
+
+export const defaultConfig = {
+  timeProvider: Date.now,
+} satisfies Partial<Config>;
 
 export default Config;

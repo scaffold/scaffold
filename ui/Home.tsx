@@ -29,6 +29,8 @@ import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
 import * as thrustMessages from '../ts/thrustMessages.ts';
 import BlockService from '../sbl/BlockService.ts';
 import BlockBuilder from '../sbl/BlockBuilder.ts';
+import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
+import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 
 // QJS
 // const initialContractHex =
@@ -46,6 +48,16 @@ const contractHashes = Object.entries({ ...constants, ...moduleHashes });
 
 const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
+
+// If we comment either of these out, the server should pick up the slack
+client.ctx.get(LocalGeneratorService).addGenerator(
+  moduleHashes.thrust_game_wasm_hash,
+  thrustGameGenerator,
+);
+client.ctx.get(LocalGeneratorService).addGenerator(
+  moduleHashes.thrust_maze_wasm_hash,
+  thrustMazeGenerator,
+);
 
 client.ctx.get(WorkQueue);
 

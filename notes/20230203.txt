@@ -1,0 +1,68 @@
+Propagate derived work up to claims AND refs.
+Update derivedWork
+But your mergeableProbability comes from ALL claims
+  block.derivedWork ^ block.inputs.length / block.inputs.product(.claims.sum(.derivedWork))
+Foreach claim + ref:
+  Update mergeable probability of all competitors (blocks who have the same claims), including self
+  Update derivedWork of claimed block, divided by the number of claims+refs (or split up some other way)
+
+Is it possible to just compute the totalWork of a BlockSet from the IO?
+  I don't think this is possible, since the exchange of work will appear as a no-op
+  a/AccountX(t=2): {...} -> {AccountX(t=3): -1000}
+  b/AccountY(t=7): {...} -> {AccountY(t=8): -1999, WorkA: -1}
+  c/WorkA: {b: 1} -> {AccountX(t=3): 100, AccountX(t=4): -101}
+  d/AccountX(t=3): {a: 1000, c: -100} -> {AccountX(t=4): -900}
+  e/AccountX(t=4): {c: 101, d: 900} -> {AccountX(t=5): -1000, WorkB: -1}
+  f/WorkB: {e: 1} -> {AccountY(t=8): 100, AccountY(t=9): -101}
+  g/AccountY(t=8): {b: 1999, f: -100} -> {AccountY(t=9): -1899}
+  h/AccountY(t=9): {f: 101, g: 1899} -> {AccountY(t=10): -2000}
+
+  The work done is the negative of the sum of all output amounts (excluding free output)
+    This doesn't work for non-free-market blocks.
+    I don't know if this composes
+
+  A <- B <- D=5
+  A <- C <- D=5
+
+  IS IT A SAMPLING PROBLEM?
+    A BlockSet has (1) a total work, and (2) a commitment to an ordering of sub-blocks (by timestamp?).
+    Sample at random points, and require the proof
+  QuickSort
+    Select random pivot block
+    Partition blocks into LT and GT sets.
+    Recurse
+
+  Topologically sort the blocks by timestamp.
+
+  Decompose a DAG into a tree? Each tree node has an input and output?
+
+  Sample from the graph, weighted by Block/BlockSet work. Drill down, sampling until we have a single block.
+  Do this 32 times, and create a bitmask that says if a Block or BlockSet is an ancestor of the Nth sample.
+  Increment work on all iterated blocks.
+  We don't need to consider mergeableProbability when propagating - just at the end, we can use it to weigh outputs.
+
+  OR
+
+  In a BlockSet, all nodes are reachable from the fronteir via claims.
+  To compute reachability from A to B, recurse parents until the next parent would be the same.
+  ...???
+
+  OR
+
+  Just pathfind from A to B.
+    Priority queue, and choose the smallest timestamp.
+    Drop nodes with timestamp less than B.
+    Mark visited nodes so we don't re-iterate them on another path.
+
+
+Each Block/BlockSet has a parent BlockSet
+  Upon adding a block, add it to the BlockSet of one of its inputs (trying to keep the IO size minimal).
+  If a BlockSet ever exceeds N items, instead of adding the item, add it to a new BlockSet in the parent.
+
+
+Collateral:
+  a: {b: 10} -> {AccountX(t=5): 100, AccountX(t=6): -110}
+  Problem: If `a` isn't merged, AccountX(t=5) will also be unmergeable
+    Account contracts must be fine with multiple versions.
+    This is actually good. It means that account contracts aren't special.
+  If `a` is invalid, we just use the positive outputs (collateral) and override the negative ones (AccountX(t=6))

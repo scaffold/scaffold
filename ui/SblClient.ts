@@ -1,6 +1,6 @@
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
-import Config from '~/sbl/Config.ts';
+import Config, { defaultConfig } from '~/sbl/Config.ts';
 import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
 import Peer from '~/sbl/Peer.ts';
@@ -213,6 +213,8 @@ export default class SblClient {
     };
 
     const config: Config = {
+      ...defaultConfig,
+
       debugName: 'SblClient',
 
       log: {

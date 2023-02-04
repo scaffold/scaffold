@@ -64,41 +64,45 @@ export default class WorkQueue extends WorkQueueUtil {
     // });
 
     // Doesn't need generators
-    ctx.get(LaunchableIncentivesStore).onMutate((hash, _, work) => {
-      if (
-        work &&
-        uncomputableContracts.some((uc) =>
-          Hash.equals(work.verifier.contract_hash, uc)
-        )
-      ) {
-        return;
-      }
+    // ctx.get(LaunchableIncentivesStore).onMutate((hash, _, work) => {
+    //   if (
+    //     work &&
+    //     uncomputableContracts.some((uc) =>
+    //       Hash.equals(work.verifier.contract_hash, uc)
+    //     )
+    //   ) {
+    //     return;
+    //   }
 
-      console.log(
-        'RUN MUT',
-        hash.toHex(),
-        work?.verifier.contract_hash.toHex(),
-        work?.verifier.params,
-        work?.amount,
-      );
+    //   console.log(
+    //     'RUN MUT',
+    //     hash.toHex(),
+    //     work?.verifier.contract_hash.toHex(),
+    //     work?.verifier.params,
+    //     work?.amount,
+    //   );
 
-      if (work !== undefined) {
-        if (work.amount > 0n) {
-          throw new Error(`Invalid amount`);
-        }
+    //   if (work !== undefined) {
+    //     if (work.amount > 0n) {
+    //       throw new Error(`Invalid amount`);
+    //     }
 
-        this.set(
-          hash,
-          -Number(work.amount),
-          () => this.run(work.verifier, work.amount),
-        );
-      } else {
-        this.set(hash, 0, dummyWork);
-      }
-    });
+    //     this.set(
+    //       hash,
+    //       -Number(work.amount),
+    //       () => this.run(work.verifier, work.amount),
+    //     );
+    //   } else {
+    //     this.set(hash, 0, dummyWork);
+    //   }
+    // });
   }
 
-  private async run(verifier: Verifier, incentive: bigint) {
+  private async run(
+    generator: Uint8Array,
+    verifier: Verifier,
+    incentive: bigint,
+  ) {
     console.log('RUN START', verifier.contract_hash.toHex(), verifier.params);
 
     console.warn(`Running ${this.ctx.get(Logger).serialize(verifier)}`);
@@ -152,15 +156,20 @@ export default class WorkQueue extends WorkQueueUtil {
       // debugger;
       const emitCorrect = true;
       const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
-        .run({
-          contract_hash: generatorHash,
-          params: verifier.contract_hash.toBytes(),
-        }, {
-          contractHash: verifier.contract_hash.toBytes(),
-          params: verifier.params,
-          emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
-          stdin: new Uint8Array([]),
-        }, { stdout: null, stderr: null });
+        .run(
+          // {
+          //   contract_hash: generatorHash,
+          //   params: verifier.contract_hash.toBytes(),
+          // }
+          generator,
+          {
+            contractHash: verifier.contract_hash.toBytes(),
+            params: verifier.params,
+            emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
+            stdin: new Uint8Array([]),
+          },
+          { stdout: null, stderr: null },
+        );
       result.then((out) => console.log('DONE', out));
       result.then(({ outputs: { stdout, stderr }, usedBlocks }) => {
         console.log('STDOUT', bin2str(stdout));

@@ -28,6 +28,7 @@ export default class BlockFetcher {
           params: new Uint8Array(),
         },
         body: new Uint8Array(),
+        isFreeMarket: true,
         timestamp: 123n,
       };
     }

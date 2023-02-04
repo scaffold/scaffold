@@ -25,6 +25,7 @@ export default class GraphUtils {
       inputs: [],
       outputs: [],
       body,
+      isFreeMarket: true,
       timestamp: BigInt(Date.now()),
     }));
   }
@@ -95,6 +96,7 @@ export default class GraphUtils {
               ).replace(/"hex2bin\(([0-9a-f]*)\)"/g, 'hex2bin("$1")')
             })`,
         ),
+      isFreeMarket: true,
       timestamp: BigInt(Date.now()),
     }));
   }

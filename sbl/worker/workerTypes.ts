@@ -6,8 +6,8 @@ export interface InitialMessage {
 }
 
 export interface JobMessage {
-  // code: Uint8Array;
-  codeVerifier: { contractHash: Uint8Array; params: Uint8Array }; // Can't just use Verifier since Hash isn't transferrable
+  code: Uint8Array;
+  // codeVerifier: { contractHash: Uint8Array; params: Uint8Array }; // Can't just use Verifier since Hash isn't transferrable
   inputs: Record<string, Uint8Array>;
   outputSpec: Record<string, null>;
 }

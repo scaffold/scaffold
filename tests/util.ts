@@ -2,18 +2,29 @@ import { deadline } from 'std-fix-abortable/async/mod.ts';
 import { deepMerge } from 'std-latest/collections/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
-import Config from '~/sbl/Config.ts';
+import Config, { defaultConfig } from '~/sbl/Config.ts';
 import Peer from '~/sbl/Peer.ts';
 import WorkQueue from '~/sbl/WorkQueue.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
+
+let timestamp = 1000;
 
 const makeConfig = (
   ctxIdx: number,
   partialConfig: Partial<Config>,
 ): Config => ({
+  ...defaultConfig,
+
   debugName: `ctx_${ctxIdx}`,
 
-  log: undefined,
+  log: {
+    handler: (
+      ctx: Context,
+      className: string,
+      methodName: string,
+      params: Record<string, any>,
+    ) => {},
+  },
 
   location: { x: 1, y: 2, z: 3 },
 
@@ -32,22 +43,26 @@ const makeConfig = (
 
   approxComputePricePerSecond: 1000n,
 
-  initialWorkerCount: 1,
+  initialWorkerCount: 16,
+
+  computeContracts: [],
+
+  timeProvider: () => timestamp++,
 
   ...partialConfig,
 });
 
 export const makeTest = (
   partialConfig: Partial<Config>,
-  func: (...ctx: Context[]) => Promise<void> | void,
+  func: (testCtx: Deno.TestContext, ...ctx: Context[]) => Promise<void> | void,
 ) =>
-() => {
+(testCtx: Deno.TestContext) => {
   // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
   const ctxs = Array.from(
-    { length: func.length },
+    { length: func.length - 1 },
     (_, i) => new Context(makeConfig(i, partialConfig)),
   );
-  return deadline(Promise.resolve(func(...ctxs)), 1000).finally(() =>
+  return deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000).finally(() =>
     Promise.all(ctxs.map((ctx) => ctx.destruct()))
   );
 };

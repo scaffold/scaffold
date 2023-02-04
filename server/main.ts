@@ -2,7 +2,7 @@ import * as fs from 'std-latest/fs/mod.ts';
 import * as path from 'std-latest/path/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
-import Config from '~/sbl/Config.ts';
+import Config, { defaultConfig } from '~/sbl/Config.ts';
 import { serve } from 'std-fix-abortable/http/mod.ts';
 import {
   ConnectionProvider,
@@ -126,6 +126,8 @@ const websocketProvider: ProtocolProvider = {
 };
 
 const config: Config = {
+  ...defaultConfig,
+
   debugName: 'Server',
 
   log: {
@@ -190,7 +192,7 @@ for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
   const hash = Hash.digest(body);
 
   const [_, contractName, generator, ext] = entry.name.match(
-    /^([\w-]+)\.(?:contract|generator\.([\w-]+))\.([\w-]+)$/,
+    /^([\w-]+)\.(?:generator\.([\w-]+)\.)?([\w-]+)$/,
   ) || error(`Invalid filename ${entry.name}!`);
 
   entries.push({

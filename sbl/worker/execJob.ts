@@ -60,7 +60,7 @@ const throwErr = (msg: string): never => {
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { codeVerifier, inputs, outputSpec }: JobMessage,
+  { code, inputs, outputSpec }: JobMessage,
 ) => {
   const inodeSource = { nextInode: 1 };
 
@@ -306,11 +306,12 @@ export default async (
   logger.info('ARGS', args);
 
   await execWasm({
-    execPath: [
-      str2bin('ext'),
-      codeVerifier.contractHash,
-      codeVerifier.params,
-    ],
+    // execPath: [
+    //   str2bin('ext'),
+    //   codeVerifier.contractHash,
+    //   codeVerifier.params,
+    // ],
+    execPath: [str2bin('identity'), code],
     args,
     // args: [
     //   bin2hex(codeVerifier.contractHash) + '_' + bin2hex(codeVerifier.params),

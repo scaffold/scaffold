@@ -32,7 +32,8 @@ export default class WorkerExecutor {
 
   // Note: This will transfer the input buffers, reducing their size to zero.
   public run<InputKeys extends string, OutputKeys extends string>(
-    codeVerifier: Verifier,
+    // codeVerifier: Verifier,
+    generator: Uint8Array,
     inputs: Record<InputKeys, Uint8Array>,
     outputSpec: Record<OutputKeys, null>,
   ): {
@@ -124,10 +125,11 @@ export default class WorkerExecutor {
           // );
 
           const msg: JobMessage = {
-            codeVerifier: {
-              contractHash: codeVerifier.contract_hash.toBytes(),
-              params: codeVerifier.params,
-            },
+            // codeVerifier: {
+            //   contractHash: codeVerifier.contract_hash.toBytes(),
+            //   params: codeVerifier.params,
+            // },
+            code: generator,
             inputs,
             outputSpec,
           };

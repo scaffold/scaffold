@@ -1,0 +1,65 @@
+export const snapshot = {};
+
+snapshot[`ingest should add block to our registry 1`] = `
+{
+  blocksByHash: Map {
+    "5da18fe9de34325ac7d94f8626b0c76e7eed5070b8de66d70c3df18fb511ba1b" => {
+        body: Uint8Array(0) [
+        ],
+        derivedWork: 1,
+        flags: 0,
+        inputs: [
+        ],
+        isFreeMarket: true,
+        mergeableProbability: 0,
+        outputClaims: [
+        ],
+        outputs: [
+        ],
+        receivedTimestamp: 1000,
+        timestamp: 0n,
+        verifier: {
+          contract_hash: Hash {
+            digest: Uint8Array(32) [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+            ],
+            hex: "0000000000000000000000000000000000000000000000000000000000000000",
+          },
+          params: Uint8Array(0) [
+          ],
+        },
+      },
+  },
+}
+`;

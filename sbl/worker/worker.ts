@@ -32,16 +32,16 @@ const { sigBuf } = (await popMsg<InitialMessage>()).data;
 // console.log('postMessage', self.postMessage.toString());
 const client = new WorkerChannelClient<WorkerComm>(self, sigBuf);
 
-const readMagic = (verifier: JobMessage['codeVerifier']) => {
-  client.inform('init', ['ext', 0], []);
-  client.inform('open', [0, verifier.contractHash, 0n, 1], []);
-  client.inform('open', [1, verifier.params, 0n, 2], []);
-  const transferBuf = new Uint8Array(
-    new SharedArrayBuffer(wasmMagic.byteLength),
-  );
-  client.dispatch('read', [2, 0, [transferBuf]], []);
-  return transferBuf;
-};
+// const readMagic = (verifier: JobMessage['codeVerifier']) => {
+//   client.inform('init', ['ext', 0], []);
+//   client.inform('open', [0, verifier.contractHash, 0n, 1], []);
+//   client.inform('open', [1, verifier.params, 0n, 2], []);
+//   const transferBuf = new Uint8Array(
+//     new SharedArrayBuffer(wasmMagic.byteLength),
+//   );
+//   client.dispatch('read', [2, 0, [transferBuf]], []);
+//   return transferBuf;
+// };
 
 while (true) {
   console.log('Worker is ready...');
@@ -51,7 +51,13 @@ while (true) {
   if (msg.data) {
     console.log('Worker received job...');
 
-    if (arrEquals(readMagic(msg.data.codeVerifier), wasmMagic)) {
+    if (
+      arrEquals(
+        // readMagic(msg.data.codeVerifier)
+        msg.data.code.subarray(0, wasmMagic.byteLength),
+        wasmMagic,
+      )
+    ) {
       await execJob(client, msg.data).catch((err) => console.error(err));
     } else {
       await execJs(client, msg.data).catch((err) => console.error(err));

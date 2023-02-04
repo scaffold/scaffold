@@ -1,5 +1,8 @@
+import BlockBuilder from './BlockBuilder.ts';
+import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import IncentiveService from './IncentiveService.ts';
+import LocalGeneratorService from './LocalGeneratorService.ts';
 import { Block, Verifier } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { bin2hex } from './pathUtils.ts';
@@ -7,6 +10,7 @@ import {
   BlocksByVerifierStore,
   ExtraIncentiveByVerifierStore,
 } from './stores.ts';
+import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import StoreObserver from './util/StoreObserver.ts';
 import { trunc } from './util/string.ts';
@@ -41,6 +45,36 @@ export default class FetchService {
 
     if (internalIncentive !== undefined) {
       // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
+
+      const gen = this.ctx.get(LocalGeneratorService).getGenerator(
+        verifier.contract_hash,
+      );
+      if (gen) {
+        const res = gen({
+          ctx: this.ctx,
+          contractHash: verifier.contract_hash,
+          params: verifier.params,
+          emitCorrect: true,
+          setFreeMarket: () => error('Not implemented'),
+          request: (contractHash: Hash, params: Uint8Array) =>
+            new Promise((resolve) =>
+              this.fetch(
+                { contract_hash: contractHash, params },
+                {},
+                // TODO: Handle dirty inputs (repeated resolve calls)
+                (block) => resolve(block.body),
+              )
+            ),
+          notify: (contractHash: Hash, params: Uint8Array) =>
+            this.fetch({ contract_hash: contractHash, params }, {}),
+        });
+        if (res instanceof Promise) {
+          res.then((body) => {
+            const block = this.ctx.get(BlockBuilder).build(verifier, body);
+            this.ctx.get(BlockService).ingest(block);
+          });
+        }
+      }
 
       const verifierHash = Hash.digest(Verifier.encode(verifier));
       this.ctx.get(ExtraIncentiveByVerifierStore).mutate(

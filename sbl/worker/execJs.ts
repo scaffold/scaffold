@@ -6,7 +6,7 @@ let transferBuf = new Uint8Array(new SharedArrayBuffer(65536));
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { codeVerifier, inputs, outputSpec }: JobMessage,
+  { code, inputs, outputSpec }: JobMessage,
 ) => {
   client.inform('init', ['ext', 0], []);
 
@@ -25,10 +25,10 @@ export default async (
     client.inform('open', [1, params, 0n, 2], []);
   };
 
-  const code = handler(
-    Hash.fromBytes(codeVerifier.contractHash),
-    codeVerifier.params,
-  );
+  // const code = handler(
+  //   Hash.fromBytes(codeVerifier.contractHash),
+  //   codeVerifier.params,
+  // );
   const func = eval(new TextDecoder().decode(code));
   if (typeof func !== 'function') {
     throw new Error(`Script is not a function`);

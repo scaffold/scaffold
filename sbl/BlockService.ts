@@ -3,7 +3,7 @@ import { BlockExt, BlockMeta } from './BlockMeta.ts';
 import BlockPublisher from './BlockPublisher.ts';
 import Context from './Context.ts';
 import Logger from './Logger.ts';
-import { Block } from './messages.ts';
+import { Block, Verifier } from './messages.ts';
 import { bin2hex } from './pathUtils.ts';
 import { BlockStore } from './stores.ts';
 import { arrEquals } from './util/buffer.ts';
@@ -14,7 +14,7 @@ import StoreObserver from './util/StoreObserver.ts';
 import { trunc } from './util/string.ts';
 
 export default class BlockService {
-  private registry: Map<HashPrimitive, BlockExt> = new Map();
+  private blocksByHash: Map<HashPrimitive, BlockExt> = new Map();
 
   constructor(private ctx: Context) {}
 
@@ -28,16 +28,16 @@ export default class BlockService {
 
     const hash = BlockStore.hash(block);
     const blockExt = getOrCreate(
-      this.registry,
+      this.blocksByHash,
       hash.toPrimitive(),
       () => {
         const meta: BlockMeta = {
-          receivedTimestamp: Date.now(),
+          receivedTimestamp: this.ctx.config.timeProvider(),
           flags: 0,
           derivedWork: 1,
           mergeableProbability: 0,
           outputClaims: block.outputs.map(({ verifier, amount }) =>
-            [...this.registry.values()].filter((x) =>
+            [...this.blocksByHash.values()].filter((x) =>
               Hash.equals(x.verifier.contract_hash, verifier.contract_hash) &&
               arrEquals(x.verifier.params, verifier.params) &&
               x.inputs.some((i) =>
@@ -52,7 +52,7 @@ export default class BlockService {
     );
 
     blockExt.inputs.forEach(({ block_hash, amount }) => {
-      const inBlock = this.registry.get(block_hash.toPrimitive());
+      const inBlock = this.blocksByHash.get(block_hash.toPrimitive());
       if (inBlock) {
         const idx = inBlock.outputs.findIndex((o) =>
           Hash.equals(
@@ -72,30 +72,28 @@ export default class BlockService {
       }
     });
 
-    // return hash;
+    try {
+      this.ctx.get(BlockStore).insert(BlockStore.hash(block), block);
+      // await this.ctx.get(BlockIngestor).ingest(block);
+    } catch (err) {
+      console.error(
+        'Error ingesting block',
+        this.ctx.get(Logger).serialize(block),
+        ':',
+        err,
+      );
+      return;
+    }
 
-    // try {
-    //   this.ctx.get(BlockStore).insert(BlockStore.hash(block), block);
-    //   // await this.ctx.get(BlockIngestor).ingest(block);
-    // } catch (err) {
-    //   console.error(
-    //     'Error ingesting block',
-    //     this.ctx.get(Logger).serialize(block),
-    //     ':',
-    //     err,
-    //   );
-    //   return;
-    // }
+    console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
-    // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
-
-    // this.ctx.get(BlockPublisher).publish(block);
+    this.ctx.get(BlockPublisher).publish(block);
   }
 
   private calculateMergeableProbability(block: BlockExt) {
     let prob = 1;
     for (const { block_hash, amount } of block.inputs) {
-      const inBlock = this.registry.get(block_hash.toPrimitive());
+      const inBlock = this.blocksByHash.get(block_hash.toPrimitive());
       if (inBlock) {
         const idx = inBlock.outputs.findIndex((o) =>
           Hash.equals(
@@ -140,5 +138,9 @@ export default class BlockService {
       };
       observer.observe(hash, cb);
     });
+  }
+
+  public snapshot() {
+    return { blocksByHash: this.blocksByHash };
   }
 }

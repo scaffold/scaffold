@@ -9,7 +9,10 @@ export type LocalGenerator = (
     params: Uint8Array;
     emitCorrect: boolean;
     setFreeMarket: () => void; // TODO: Remove this when we have remote generators
-    request: (contractHash: Hash, params: Uint8Array) => Uint8Array;
+    request: (
+      contractHash: Hash,
+      params: Uint8Array,
+    ) => Uint8Array | Promise<Uint8Array>;
     notify: (contractHash: Hash, params: Uint8Array) => void;
   },
 ) => Uint8Array | Promise<Uint8Array>;

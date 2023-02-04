@@ -34,6 +34,7 @@ export default class IncentiveService {
       inputs: [],
       outputs: [{ verifier, amount: -incentive }],
       body: new Uint8Array(),
+      isFreeMarket: true,
       timestamp: BigInt(Date.now()),
     };
     this.ctx.get(BlockStore).insert(BlockStore.hash(block), block);
