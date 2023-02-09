@@ -15,6 +15,8 @@ enum BlockFlag {
 }
 
 export interface BlockMeta {
+  nonce: number;
+
   // block: Block;
   receivedTimestamp: number;
   flags: BlockFlag;
@@ -22,6 +24,13 @@ export interface BlockMeta {
   derivedWork: number;
   mergeableProbability: number;
   outputClaims: BlockExt[][];
+
+  propagationMask: number;
+
+  derivedWorkValue: number;
+  derivedWorkError: number;
+  mergeableLogProbabilityValue: number;
+  mergeableLogProbabilityError: number;
 }
 
 export type BlockExt = Block & BlockMeta;

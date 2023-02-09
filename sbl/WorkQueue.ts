@@ -10,13 +10,19 @@ import {
   WorkableIncentivesStore,
 } from './stores.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
-import Hash from './util/Hash.ts';
-import WorkQueueUtil from './util/WorkQueue.ts';
+import Hash, { HashPrimitive } from './util/Hash.ts';
+import WorkQueueUtil, { WorkFn } from './util/WorkQueue.ts';
 import { FulfillmentRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
 import { generatorHash, rootHash, timeHash } from './constants.ts';
 import { bin2str } from './pathUtils.ts';
+import LocalGeneratorService, {
+  LocalGenerator,
+} from './LocalGeneratorService.ts';
+import { getOrCreate } from './util/map.ts';
+import { error } from './util/functional.ts';
+import FetchService from './FetchService.ts';
 
 const useLocalExecution = false;
 const secret = secp.utils.randomBytes(32);
@@ -33,6 +39,8 @@ class NeedsMoreDataError extends Error {
 export default class WorkQueue extends WorkQueueUtil {
   // private attemptDupeFraction = Hash.fromFraction(1, 8);
   private attemptDupeFraction = Hash.fromFraction(0, 8);
+
+  private extraIncentive = new Map<HashPrimitive, number>();
 
   constructor(private ctx: Context) {
     super();
@@ -98,87 +106,132 @@ export default class WorkQueue extends WorkQueueUtil {
     // });
   }
 
-  private async run(
-    generator: Uint8Array,
-    verifier: Verifier,
-    incentive: bigint,
-  ) {
-    console.log('RUN START', verifier.contract_hash.toHex(), verifier.params);
+  private shouldEmitCorrect(verifier: Verifier) {
+    return Hash.cmp(
+      Hash.digest(
+        arrConcat(secret, verifier.contract_hash.toBytes(), verifier.params),
+      ),
+      this.attemptDupeFraction,
+    ) === 1;
+  }
 
-    console.warn(`Running ${this.ctx.get(Logger).serialize(verifier)}`);
-
+  private makeWorker(verifier: Verifier): WorkFn | undefined {
     const onDone = (data: Uint8Array, inputs: Block[], durationMs: number) => {
+      console.log('Completed generator', verifier, bin2str(data));
       const block = this.ctx.get(BlockBuilder).build(verifier, data);
       this.ctx.get(BlockService).ingest(block);
       // answer.difficultyEstimate = BigInt(durationMs) *
       //   this.ctx.config.approxComputePricePerSecond / 1000n;
     };
 
-    // if (Hash.equals(verifier.contract_hash,timeHash)) {
-    //   const wait =
-    //   await new Promise(resolve=>setTimeout());
-    // }
-
-    const emitCorrect = Hash.cmp(
-      Hash.digest(
-        arrConcat(secret, verifier.contract_hash.toBytes(), verifier.params),
-      ),
-      this.attemptDupeFraction,
-    ) === 1;
-
-    if (useLocalExecution) {
-      // // TODO: This is kinda hacky
-      // const generationHash = RequestsByGenerationStore.hash(
-      //   verifier,
-      //   generator,
-      // );
-
-      // const script = eval(new TextDecoder().decode(generator));
-      // await this.callWithSyncRequestHandler<Uint8Array>(
-      //   verifier,
-      //   (handler, notifier) =>
-      //     script(
-      //       verifier.contract_hash,
-      //       verifier.params,
-      //       emitCorrect,
-      //       handler,
-      //       notifier,
-      //     ),
-      //   incentive,
-      //   generationHash,
-      //   onDone,
-      // );
-
-      // console.log('RUN DONE', verifier.params);
-
-      throw new Error('Not implemented');
+    const localGenerator = this.ctx.get(LocalGeneratorService).getGenerator(
+      verifier.contract_hash,
+    );
+    if (localGenerator) {
+      return async (_pause, _resume) => {
+        const body = await localGenerator({
+          ctx: this.ctx,
+          contractHash: verifier.contract_hash,
+          params: verifier.params,
+          emitCorrect: this.shouldEmitCorrect(verifier),
+          setFreeMarket: () => error('Not implemented'),
+          request: (contractHash: Hash, params: Uint8Array) =>
+            new Promise((resolve) =>
+              // TODO: Call pause/resume when requesting?
+              this.ctx.get(FetchService).fetch(
+                { contract_hash: contractHash, params },
+                {},
+                // TODO: Handle dirty inputs (repeated resolve calls)
+                (block) => resolve(block.body),
+              )
+            ),
+          notify: (contractHash: Hash, params: Uint8Array) =>
+            this.ctx.get(FetchService).fetch({
+              contract_hash: contractHash,
+              params,
+            }, {}),
+        });
+        onDone(body, [], 0);
+      };
     } else {
-      // debugger;
-      const emitCorrect = true;
-      const { cancel, result, hasDirtyInputs } = this.ctx.get(WorkerExecutor)
-        .run(
-          // {
-          //   contract_hash: generatorHash,
-          //   params: verifier.contract_hash.toBytes(),
-          // }
-          generator,
-          {
-            contractHash: verifier.contract_hash.toBytes(),
-            params: verifier.params,
-            emitCorrect: new Uint8Array([emitCorrect ? 1 : 0]),
-            stdin: new Uint8Array([]),
-          },
-          { stdout: null, stderr: null },
-        );
-      result.then((out) => console.log('DONE', out));
-      result.then(({ outputs: { stdout, stderr }, usedBlocks }) => {
-        console.log('STDOUT', bin2str(stdout));
-        console.log('STDERR', bin2str(stderr));
-
-        onDone(stdout, [...usedBlocks], 0);
-        hasDirtyInputs.then(() => console.error(`Dirty inputs!`));
+      const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
+        contract_hash: generatorHash,
+        params: verifier.contract_hash.toBytes(),
       });
-      await result;
+      if (generatorBlocks.length) {
+        return async (_pause, _resume) => {
+          const generatorData = generatorBlocks[0].body;
+          const { cancel, result, hasDirtyInputs } = this.ctx.get(
+            WorkerExecutor,
+          ).run(
+            // {
+            //   contract_hash: generatorHash,
+            //   params: verifier.contract_hash.toBytes(),
+            // }
+            generatorData,
+            {
+              contractHash: verifier.contract_hash.toBytes(),
+              params: verifier.params,
+              emitCorrect: new Uint8Array([
+                this.shouldEmitCorrect(verifier) ? 1 : 0,
+              ]),
+              stdin: new Uint8Array([]),
+            },
+            { stdout: null, stderr: null },
+          );
+          result.then((out) => console.log('DONE', out));
+          result.then(({ outputs: { stdout, stderr }, usedBlocks }) => {
+            console.log('STDOUT', bin2str(stdout));
+            console.log('STDERR', bin2str(stderr));
+
+            onDone(stdout, [...usedBlocks], 0);
+            hasDirtyInputs.then(() => console.error(`Dirty inputs!`));
+          });
+          await result;
+        };
+      }
+    }
+  }
+
+  public addExtraIncentive(verifier: Verifier, inc: number) {
+    const hash = Hash.digest(Verifier.encode(verifier));
+    getOrCreate(
+      this.extraIncentive,
+      hash.toPrimitive(),
+      () => inc,
+      (x) => x + inc,
+    );
+
+    const entry = this.get(hash);
+    if (entry) {
+      this.set(hash, entry.valuePerSecond + inc, entry.work);
+    } else {
+      const worker = this.makeWorker(verifier);
+      if (worker) {
+        this.set(hash, inc, worker);
+      }
+    }
+  }
+
+  public update(verifier: Verifier) {
+    const worker = this.makeWorker(verifier);
+    if (worker) {
+      const hash = Hash.digest(Verifier.encode(verifier));
+      const score = this.ctx.get(BlockService).getBlocksByOutput(verifier)
+        .reduce((acc, block) => {
+          const idx = block.outputs.findIndex((o) =>
+            Hash.equals(o.verifier.contract_hash, verifier.contract_hash) &&
+            arrEquals(o.verifier.params, verifier.params)
+          );
+          if (idx === -1) {
+            throw new Error(`Internal error`);
+          }
+          const { amount } = block.outputs[idx];
+          const claims = block.outputClaims[idx];
+          return claims.length ? acc : acc +
+            Math.exp(block.mergeableLogProbabilityValue) * Number(amount);
+        }, this.extraIncentive.get(hash.toPrimitive()) || 0);
+      this.set(hash, score, worker);
     }
   }
 

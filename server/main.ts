@@ -215,7 +215,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
       case 'js':
         ctx.get(LocalGeneratorService).addGenerator(
           contractHash,
-          new Function(bin2str(body)) as LocalGenerator,
+          new Function(bin2str(body))() as LocalGenerator,
         );
         break;
 

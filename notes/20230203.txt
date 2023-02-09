@@ -31,10 +31,17 @@ Is it possible to just compute the totalWork of a BlockSet from the IO?
     Select random pivot block
     Partition blocks into LT and GT sets.
     Recurse
+    To compute the downstream sum of some value from block X:
+      ???
 
   Topologically sort the blocks by timestamp.
 
-  Decompose a DAG into a tree? Each tree node has an input and output?
+  Decompose a DAG into a tree?
+    Each tree node fulfills some condition:
+      Every leaf block is an ancestor of block X.
+      Every leaf block is a descendant of block X.
+    You can't search down the tree to find a node, because it's not a total order, but you can always search up.
+      This is useful for aggregating properties (derived work), or painting properties.
 
   Sample from the graph, weighted by Block/BlockSet work. Drill down, sampling until we have a single block.
   Do this 32 times, and create a bitmask that says if a Block or BlockSet is an ancestor of the Nth sample.
@@ -53,6 +60,14 @@ Is it possible to just compute the totalWork of a BlockSet from the IO?
     Priority queue, and choose the smallest timestamp.
     Drop nodes with timestamp less than B.
     Mark visited nodes so we don't re-iterate them on another path.
+
+
+
+  EITHER WAY:
+    Knowing the derived work allows us to calculate the mergeable probability for each split TXO.
+    We also need to do the same kind of unique propagation with mergeable probabilities.
+    For example: A->B->D + A->C->D shouldn't square the mergeable probability of A for D.
+    Once we can query the mergeable probability of a leaf, we can insert the highest expected incentives into our WorkQueue.
 
 
 Each Block/BlockSet has a parent BlockSet

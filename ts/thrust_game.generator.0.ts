@@ -18,7 +18,7 @@ const gen: LocalGenerator = async (
 
   const state = tick
     ? thrustMessages.GameAnswer.decode(
-      request(
+      await request(
         contractHash,
         thrustMessages.GameParams.encode({ match, tick: tick - 1n }),
       ),
@@ -51,7 +51,7 @@ const gen: LocalGenerator = async (
 
   // Get game parameters
   const { init_time } = thrustMessages.InitAnswer.decode(
-    request(
+    await request(
       moduleHashes.thrust_init_wasm_hash,
       thrustMessages.InitParams.encode({ match }),
     ),
@@ -69,11 +69,11 @@ const gen: LocalGenerator = async (
 
   let targCenterX = 0.0;
   let targCenterY = 0.0;
-  state.players.forEach((player) => {
+  const playerPromises = state.players.map(async (player) => {
     const { hash, position, velocity } = player;
 
     // Fetch player inputs
-    const inputAnswer = request(
+    const inputAnswer = await request(
       moduleHashes.thrust_input_wasm_hash,
       thrustMessages.InputParams.encode({ match, player: hash, tick }),
     );
@@ -119,6 +119,7 @@ const gen: LocalGenerator = async (
     targCenterX += position.x;
     targCenterY += position.y;
   });
+  await Promise.all(playerPromises);
 
   // Move boundaries
   const { center, velocity } = state.game_state;

@@ -23,12 +23,13 @@ import Logger from '../sbl/Logger.ts';
 import ThrustView from './ThrustView.tsx';
 import * as moduleHashes from './moduleHashes.ts';
 import * as constants from '../sbl/constants.ts';
-import { decodeMultibase, str2bin } from '../sbl/pathUtils.ts';
+import { bin2str, decodeMultibase, str2bin } from '../sbl/pathUtils.ts';
 import FetchService from '../sbl/FetchService.ts';
 import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
 import * as thrustMessages from '../ts/thrustMessages.ts';
 import BlockService from '../sbl/BlockService.ts';
 import BlockBuilder from '../sbl/BlockBuilder.ts';
+import helloGenerator from '../ts/hello.generator.0.ts';
 import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
 import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 
@@ -39,10 +40,15 @@ import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 //   `qjs /ext/:f53424c00000000000000000000000000000000000000000000000000726f6f74/:fea2d95c07417afcedd35a10a3308361949261518b0518e2d98af1fce61b3464b.js`;
 
 // Python
+// const initialContractHex =
+//   'cacf09f92d88a091f3729059f389bc0ec59d82c4b2be83ab7d08ad3849d4a9cc';
+// const initialParams =
+//   `python /ext/:f53424c00000000000000000000000000000000000000000000000000726f6f74/:f9e7cf4f3dfd247d2fb32f150195cf10433cf8b9bd17e2c1b18eccaa41a38b3ef.py`;
+
+// Hello
 const initialContractHex =
-  'cacf09f92d88a091f3729059f389bc0ec59d82c4b2be83ab7d08ad3849d4a9cc';
-const initialParams =
-  `python /ext/:f53424c00000000000000000000000000000000000000000000000000726f6f74/:f9e7cf4f3dfd247d2fb32f150195cf10433cf8b9bd17e2c1b18eccaa41a38b3ef.py`;
+  '0f82ceb6b057bbe5d9e66003c4b725c97c56e804764f3538d9251d4d80c6eb20';
+const initialParams = 'joel';
 
 const contractHashes = Object.entries({ ...constants, ...moduleHashes });
 
@@ -50,6 +56,10 @@ const client = new SblClient();
 const player = Hash.digest(client.ctx.config.selfPrivateKey);
 
 // If we comment either of these out, the server should pick up the slack
+client.ctx.get(LocalGeneratorService).addGenerator(
+  moduleHashes.hello_wasm_hash,
+  helloGenerator,
+);
 client.ctx.get(LocalGeneratorService).addGenerator(
   moduleHashes.thrust_game_wasm_hash,
   thrustGameGenerator,
@@ -150,7 +160,7 @@ export default () => {
             // Need to make a generatorHash and register them.
             // Does the same WASM act as both a generator and a contract?
             { internalIncentive: 1n, externalIncentive: 1n },
-            (block) => console.log(block),
+            (block) => console.log(bin2str(block.body), block),
           )}
       >
         RUN

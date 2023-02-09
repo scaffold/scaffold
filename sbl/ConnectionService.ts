@@ -258,7 +258,7 @@ export default class ConnectionService {
         });
       } catch (err) {
         console.error(err);
-        provider.close();
+        // provider.close();
       }
     });
 

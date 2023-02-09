@@ -1,5 +1,5 @@
 import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
-import Hash from './Hash.ts';
+import Hash, { HashPrimitive } from './Hash.ts';
 
 const STATE_QUEUED = 0 as const;
 const STATE_RUNNING = 1 as const;
@@ -41,7 +41,7 @@ export default class WorkQueue {
       : Hash.cmp(a.hash, b.hash)
   );
   // TODO: Cleanup map after some time
-  private map: Map<string, Entry> = new Map();
+  private map: Map<HashPrimitive, Entry> = new Map();
   private pausedWorkers: ((entry: Entry) => void)[] = [];
 
   private runningWorkerCount = 0;
@@ -75,8 +75,12 @@ export default class WorkQueue {
     return this.targetWorkerCount;
   }
 
+  public get(hash: Hash) {
+    return this.map.get(hash.toPrimitive());
+  }
+
   public set(hash: Hash, valuePerSecond: number, work: WorkFn) {
-    const key = hash.toHex();
+    const key = hash.toPrimitive();
     const entry = this.map.get(key);
     if (entry) {
       if (
@@ -102,10 +106,11 @@ export default class WorkQueue {
   }
 
   public remove(hash: Hash) {
-    const entry = this.map.get(hash.toHex());
+    const key = hash.toPrimitive();
+    const entry = this.map.get(key);
     if (entry) {
       this.queue.remove(entry);
-      this.map.delete(hash.toHex());
+      this.map.delete(key);
     }
   }
 
@@ -113,7 +118,7 @@ export default class WorkQueue {
     while (this.queue.size > maxSize) {
       const entry = this.queue.min()!;
       this.queue.remove(entry);
-      this.map.delete(entry.hash.toHex());
+      this.map.delete(entry.hash.toPrimitive());
     }
   }
 
