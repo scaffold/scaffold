@@ -283,6 +283,9 @@ const initView = (
       Math.round(state.game_state.center.y),
       Math.round(state.game_state.size),
     );
+    if (state.game_state.size !== 0) {
+      console.log('SET SIZE', state.game_state.size);
+    }
 
     if (state.players.length) {
       const players = state.players.map(

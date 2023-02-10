@@ -41,6 +41,7 @@ export default class WorkQueue extends WorkQueueUtil {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
 
   private extraIncentive = new Map<HashPrimitive, number>();
+  private localExecutingGenerators = new Set<HashPrimitive>();
 
   constructor(private ctx: Context) {
     super();
@@ -122,14 +123,18 @@ export default class WorkQueue extends WorkQueueUtil {
       this.ctx.get(BlockService).ingest(block);
       // answer.difficultyEstimate = BigInt(durationMs) *
       //   this.ctx.config.approxComputePricePerSecond / 1000n;
+      const hash = Hash.digest(Verifier.encode(verifier));
+      this.extraIncentive.delete(hash.toPrimitive());
     };
 
     const localGenerator = this.ctx.get(LocalGeneratorService).getGenerator(
       verifier.contract_hash,
     );
     if (localGenerator) {
-      return async (_pause, _resume) => {
-        const body = await localGenerator({
+      const hash = Hash.digest(Verifier.encode(verifier));
+      if (!this.localExecutingGenerators.has(hash.toPrimitive())) {
+        this.localExecutingGenerators.add(hash.toPrimitive());
+        const body = localGenerator({
           ctx: this.ctx,
           contractHash: verifier.contract_hash,
           params: verifier.params,
@@ -140,7 +145,7 @@ export default class WorkQueue extends WorkQueueUtil {
               // TODO: Call pause/resume when requesting?
               this.ctx.get(FetchService).fetch(
                 { contract_hash: contractHash, params },
-                {},
+                { internalIncentive: 1n },
                 // TODO: Handle dirty inputs (repeated resolve calls)
                 (block) => resolve(block.body),
               )
@@ -149,10 +154,14 @@ export default class WorkQueue extends WorkQueueUtil {
             this.ctx.get(FetchService).fetch({
               contract_hash: contractHash,
               params,
-            }, {}),
+            }, { internalIncentive: 1n }),
         });
-        onDone(body, [], 0);
-      };
+        if (body instanceof Promise) {
+          body.then((body) => onDone(body, [], 0));
+        } else {
+          onDone(body, [], 0);
+        }
+      }
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
         contract_hash: generatorHash,
@@ -211,6 +220,9 @@ export default class WorkQueue extends WorkQueueUtil {
         this.set(hash, inc, worker);
       }
     }
+
+    // TODO: Remove (debug)
+    Object.assign(this.get(hash) || {}, { verifier });
   }
 
   public update(verifier: Verifier) {
@@ -228,10 +240,12 @@ export default class WorkQueue extends WorkQueueUtil {
           }
           const { amount } = block.outputs[idx];
           const claims = block.outputClaims[idx];
-          return claims.length ? acc : acc +
+          return claims.length ? acc : acc -
             Math.exp(block.mergeableLogProbabilityValue) * Number(amount);
         }, this.extraIncentive.get(hash.toPrimitive()) || 0);
+
       this.set(hash, score, worker);
+      Object.assign(this.get(hash) || {}, { verifier });
     }
   }
 
@@ -324,5 +338,9 @@ export default class WorkQueue extends WorkQueueUtil {
         throw err;
       }
     }
+  }
+
+  public snapshot() {
+    return { ...super.snapshot(), extraIncentive: this.extraIncentive };
   }
 }

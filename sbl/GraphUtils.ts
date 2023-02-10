@@ -13,7 +13,9 @@ import QaDebugger from './QaDebugger.ts';
 (window as any).hex2bin = hex2bin;
 
 export default class GraphUtils {
-  constructor(private ctx: Context) {}
+  constructor(private ctx: Context) {
+    debugger;
+  }
 
   public supplyRawAnswer(body: Uint8Array) {
     const verifier = {

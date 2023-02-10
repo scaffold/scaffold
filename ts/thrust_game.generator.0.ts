@@ -15,6 +15,9 @@ const gen: LocalGenerator = async (
   }
 
   const { match, tick } = thrustMessages.GameParams.decode(params);
+  if (tick === 0n) {
+    debugger;
+  }
 
   const state = tick
     ? thrustMessages.GameAnswer.decode(

@@ -4,17 +4,6 @@ import Logger from '../sbl/Logger.ts';
 import Hash from '../sbl/util/Hash.ts';
 import Store2 from '../sbl/util/Store2.ts';
 
-const trunc = (str: string, threshold = 16) =>
-  str.length > threshold
-    ? `${str.substr(0, threshold)}... [${str.length}]`
-    : str;
-
-const RowDetail = ({ name, val }: { name: string; val: string }) => (
-  <div>
-    {name}: <pre style={{ display: 'inline' }}>{val}</pre>
-  </div>
-);
-
 type ObjMap<T> = { [key: string]: T };
 
 export default ({ ctx, Table }: {
@@ -44,7 +33,13 @@ export default ({ ctx, Table }: {
     <ol>
       {Object.entries(state).map(([key, val]) => (
         <li key={key}>
-          <pre><span onClick={() => toggleSelected(key)}>{selected[key] ? <strong>{key}</strong> : key}</span>: {ctx.get(Logger).serialize(val, selected[key]?2:0,selected[key]?1024:72)}</pre>
+          <pre>
+            <span onClick={() => toggleSelected(key)}>
+              {selected[key] ? <strong>{key}</strong> : key}
+            </span>: {
+              ctx.get(Logger).serialize(val, selected[key] ? 2 : 0, selected[key] ? 1024 : 72)
+            }
+          </pre>
         </li>
       ))}
     </ol>

@@ -1,14 +1,17 @@
 import Hash from '~/sbl/util/Hash.ts';
 import Context from '~/sbl/Context.ts';
-import ThrustMazeContract from '~/graph/ThrustMazeContract.ts';
 import ThrustInputProvider from './ThrustInputProvider.tsx';
-import ThrustGameContract from '~/graph/ThrustGameContract.ts';
-import * as thrustMessages from '~/graph/thrustMessages.ts';
+import * as thrustMessages from '../ts/thrustMessages.ts';
 import StateTracker from '~/sbl/StateTracker.ts';
 import IncentiveService from '../sbl/IncentiveService.ts';
 import { BlocksByVerifierStore } from '../sbl/stores.ts';
 import StoreObserver from '../sbl/util/StoreObserver.ts';
 import { Verifier } from '../sbl/messages.ts';
+import {
+  thrust_game_wasm_hash,
+  thrust_maze_wasm_hash,
+} from './moduleHashes.ts';
+import FetchService from '../sbl/FetchService.ts';
 
 const msPerTick = 100;
 
@@ -36,15 +39,10 @@ export default class ThrustProvider {
   private tracker: { release(): void };
 
   constructor(private ctx: Context, public match: Hash, public player: Hash) {
-    const contractHash = ctx.get(ThrustGameContract).get();
-
     this.tracker = ctx.get(StateTracker).track(
       (idx) => ({
-        contract_hash: contractHash,
-        params: thrustMessages.GameParams.encode({
-          match,
-          tick: idx,
-        }),
+        contract_hash: thrust_game_wasm_hash,
+        params: thrustMessages.GameParams.encode({ match, tick: idx }),
       }),
       (idx, state) => {
         console.log('STATE', state);
@@ -80,31 +78,28 @@ export default class ThrustProvider {
   public getCell(x: bigint, y: bigint) {
     let hasResolved = false;
 
-    return new Promise<thrustMessages.MazeAnswer['cell']>((resolve) => {
-      const verifier = {
-        contract_hash: this.ctx.get(ThrustMazeContract).get(),
-        params: thrustMessages.MazeParams.encode({ match: this.match, x, y }),
-      };
-      this.ctx.get(IncentiveService).incentivize(verifier, 1000000n);
-
-      StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
-        Hash.digest(Verifier.encode(verifier)),
-        (blocks) => {
-          console.log('GOT', x, y);
+    return new Promise<thrustMessages.MazeAnswer['cell']>((resolve) =>
+      this.ctx.get(FetchService).fetch(
+        {
+          contract_hash: thrust_maze_wasm_hash,
+          params: thrustMessages.MazeParams.encode({ match: this.match, x, y }),
+        },
+        { internalIncentive: 20n },
+        (block) => {
+          console.log(
+            'GOT',
+            x,
+            y,
+            thrustMessages.MazeAnswer.decode(block.body).cell,
+          );
           if (hasResolved) {
             throw new Error(`Cell resolved more than once!`);
           }
-          if (!blocks) {
-            throw new Error(`Blocks is undefined!`);
-          }
-          if (blocks.length !== 1) {
-            throw new Error(`Not exactly one block!`);
-          }
           hasResolved = true;
-          resolve(thrustMessages.MazeAnswer.decode(blocks[0].body).cell);
+          resolve(thrustMessages.MazeAnswer.decode(block.body).cell);
         },
-      );
-    });
+      )
+    );
   }
 
   public getRenderIdx() {

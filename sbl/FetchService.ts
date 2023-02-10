@@ -115,18 +115,28 @@ export default class FetchService {
 
     if (cb !== undefined) {
       let prevBlock: Block | undefined;
+      const onState = (blocks: Block[] | undefined) => {
+        if (blocks && blocks.length) {
+          const newBlock = (blockSelector || defaultBlockSelector)(blocks);
+          if (newBlock !== prevBlock) {
+            prevBlock = newBlock;
+            cb(prevBlock);
+          }
+        }
+      };
+
       StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
         Hash.digest(Verifier.encode(verifier)),
-        (blocks) => {
-          if (blocks && blocks.length) {
-            const newBlock = (blockSelector || defaultBlockSelector)(blocks);
-            if (newBlock !== prevBlock) {
-              prevBlock = newBlock;
-              cb(prevBlock);
-            }
-          }
-        },
+        onState,
       );
+
+      return {
+        release: () =>
+          StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).unobserve(
+            Hash.digest(Verifier.encode(verifier)),
+            onState,
+          ),
+      };
     }
   }
 }

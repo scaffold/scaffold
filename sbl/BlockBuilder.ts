@@ -4,14 +4,34 @@ import { Block, Verifier } from './messages.ts';
 import { BlockRegistry, IncentiveRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import IncentiveCalculator from './IncentiveCalculator.ts';
+import BlockService from './BlockService.ts';
+import { arrEquals } from './util/buffer.ts';
 
 export default class BlockBuilder {
   constructor(private ctx: Context) {}
 
   public build(verifier: Verifier, body: Uint8Array): Block {
     const verifier_hash = Hash.digest(Verifier.encode(verifier));
-    const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
-      [];
+    // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
+    //   [];
+    const inputs = this.ctx.get(BlockService).getBlocksByOutput(verifier)
+      .flatMap((block) => {
+        const idx = block.outputs.findIndex((y) =>
+          Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
+          arrEquals(y.verifier.params, verifier.params)
+        );
+        if (idx === -1) {
+          throw new Error(
+            `Invalid input Block doesn't output to this verifier with amount ${amount}`,
+          );
+        }
+        return block.outputClaims[idx].length === 0
+          ? [{
+            block_hash: Hash.digest(Block.encode(block)),
+            amount: block.outputs[idx].amount,
+          }]
+          : [];
+      });
     const amount = this.ctx.get(IncentiveCalculator)
       .getAvailableIncentive(verifier, inputs);
     const outputs = this.ctx.get(IncentiveService).popIncentives(amount);
@@ -20,7 +40,7 @@ export default class BlockBuilder {
     inputs.forEach((input) => {
       // TODO: No need to look these blocks up; just store them in IncentiveRegistry
       const inputTs =
-        this.ctx.get(BlockRegistry).get(input.block_hash)!.timestamp;
+        this.ctx.get(BlockService).get(input.block_hash)!.timestamp;
       if (inputTs >= timestamp) {
         timestamp = inputTs + 1n;
       }

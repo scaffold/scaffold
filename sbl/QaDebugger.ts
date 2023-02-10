@@ -1,14 +1,7 @@
 import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { Verifier } from './messages.ts';
-import {
-  accountHash,
-  loadHash,
-  rootHash,
-  selfHash,
-  timeHash,
-} from './constants.ts';
-import GraphUtils from './GraphUtils.ts';
+import * as hashes from './constants.ts';
 
 export default class QaDebugger {
   private debuggers: Map<string, {
@@ -19,15 +12,8 @@ export default class QaDebugger {
 
   constructor(private ctx: Context) {
     setTimeout(() => {
-      this.addDebugger('Root', rootHash);
-      this.addDebugger('Account', accountHash);
-      this.addDebugger('Load', loadHash);
-      this.addDebugger('Time', timeHash);
-      this.addDebugger('Self', selfHash);
-
-      this.addDebugger(
-        'GeneratorContract',
-        this.ctx.get(GraphUtils).getGeneratorContract(),
+      Object.entries(hashes).forEach(([name, hash]) =>
+        this.addDebugger(name, hash)
       );
     }, 0);
   }

@@ -3,17 +3,11 @@ import SblClient from './SblClient.ts';
 import Hash from '~/sbl/util/Hash.ts';
 // import BlockService from '~/sbl/BlockService.ts';
 import IncentiveService from '~/sbl/IncentiveService.ts';
-import CollatzContract from '../graph/CollatzContract.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
 import AccountService from '../sbl/AccountService.ts';
 import Store2 from '../sbl/util/Store2.ts';
-import {
-  BlocksByVerifierStore,
-  BlockStore,
-  WorkableIncentivesStore,
-} from '../sbl/stores.ts';
-import GenericTableView from './GenericTableView.tsx';
+import StoreView from './StoreView.tsx';
 import StoreSelector from './StoreSelector.tsx';
 import Context from '../sbl/Context.ts';
 import WorkQueue from '../sbl/WorkQueue.ts';
@@ -32,6 +26,7 @@ import BlockBuilder from '../sbl/BlockBuilder.ts';
 import helloGenerator from '../ts/hello.generator.0.ts';
 import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
 import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
+import TableView from './TableView.tsx';
 
 // QJS
 // const initialContractHex =
@@ -98,6 +93,12 @@ export default () => {
     { key: number; clz?: { new (context: Context): Store2<any> } }
   >({ key: 0 });
 
+  const [tableVersions, incTableVersion] = React.useReducer((x) => x + 1, 0);
+
+  const gameHash = React.useMemo(() => gameHex && Hash.fromHex(gameHex), [
+    gameHex,
+  ]);
+
   return (
     <div>
       <a
@@ -110,28 +111,6 @@ export default () => {
         }}
       >
         New Game
-      </a>
-      <br />
-      <a
-        href='#'
-        onClick={() => {
-          const verifier = {
-            contract_hash: client.ctx.get(CollatzContract).get(),
-            params: client.ctx.get(CollatzContract).makeParams(10n),
-          };
-          client.ctx.get(IncentiveService).incentivize(verifier, 10n);
-
-          StoreObserver.get(client.ctx.get(BlocksByVerifierStore)).observe(
-            Hash.digest(Verifier.encode(verifier)),
-            (blocks) =>
-              console.log(
-                'GOT BLOCKS',
-                client.ctx.get(Logger).serialize(blocks),
-              ),
-          );
-        }}
-      >
-        Collatz depth of 10
       </a>
 
       <br />
@@ -181,20 +160,24 @@ export default () => {
 
       {/*<BlockTableView ctx={client.ctx} />*/}
       {shownStore.clz && (
-        <GenericTableView
+        <StoreView
           key={shownStore.key}
           ctx={client.ctx}
           Table={shownStore.clz}
         />
       )}
 
-      {gameHex && (
+      <TableView name='BlockService' ctx={client.ctx} Table={BlockService} />
+      <TableView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />
+      <button onClick={incTableVersion}>Refresh</button>
+
+      {gameHash && (
         <>
           Game ID: <pre style={{ display: 'inline' }}>{gameHex}</pre>
           {
             <ThrustView
               sbl={client.ctx}
-              match={Hash.fromHex(gameHex)}
+              match={gameHash}
               player={player}
             />
           }

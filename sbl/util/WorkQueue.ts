@@ -120,6 +120,10 @@ export default class WorkQueue {
       this.queue.remove(entry);
       this.map.delete(entry.hash.toPrimitive());
     }
+
+    // this.map.forEach(({ state }, key) =>
+    //   state === STATE_FINISHED && this.map.delete(key)
+    // );
   }
 
   private pop() {
@@ -147,5 +151,9 @@ export default class WorkQueue {
     if (this.runningWorkerCount === this.targetWorkerCount) {
       this.onWorkerCountEqual();
     }
+  }
+
+  public snapshot() {
+    return { workEntries: this.map };
   }
 }

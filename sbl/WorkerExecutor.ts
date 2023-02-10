@@ -86,14 +86,18 @@ export default class WorkerExecutor {
         file.block = file.verifier.then((verifier) =>
           new Promise((resolve) => {
             let resolved = false;
-            ctx.get(FetchService).fetch(verifier, {}, (b) => {
-              if (resolved) {
-                hasDirtyInputs.resolve(true);
-              } else {
-                resolved = true;
-                resolve(b);
-              }
-            });
+            ctx.get(FetchService).fetch(
+              verifier,
+              { internalIncentive: 1n },
+              (b) => {
+                if (resolved) {
+                  hasDirtyInputs.resolve(true);
+                } else {
+                  resolved = true;
+                  resolve(b);
+                }
+              },
+            );
           })
         );
       }
@@ -186,7 +190,10 @@ export default class WorkerExecutor {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
             const input = { contract_hash: contractHash, params };
-            ctx.get(FetchService).fetch(input, { externalIncentive: 1n });
+            ctx.get(FetchService).fetch(input, {
+              internalIncentive: 1n,
+              externalIncentive: 1n,
+            });
             // ctx.get(NodeService).getAll().forEach((node) =>
             //   node.defaultConn?.sendReliable({
             //     BidMessage: { input, output: verifier, amount },

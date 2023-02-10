@@ -1,8 +1,8 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import { Block, BlockInput, Verifier } from './messages.ts';
-import AccountContract from '../graph/AccountContract.ts';
 import { arrEquals } from './util/buffer.ts';
+import { accountHash } from './constants.ts';
 
 export default class IncentiveCalculator {
   constructor(private ctx: Context) {}
@@ -15,10 +15,8 @@ export default class IncentiveCalculator {
 
     // Hack to let accounts start off with some funds
     if (
-      Hash.equals(
-        verifier.contract_hash,
-        this.ctx.get(AccountContract).get(),
-      ) && arrEquals(verifier.params, new Uint8Array([0x00]))
+      Hash.equals(verifier.contract_hash, accountHash) &&
+      arrEquals(verifier.params, new Uint8Array([0x00]))
     ) {
       amount += 1000000n;
     }
