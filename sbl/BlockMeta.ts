@@ -31,6 +31,8 @@ export interface BlockMeta {
   derivedWorkError: number;
   mergeableLogProbabilityValue: number;
   mergeableLogProbabilityError: number;
+
+  isCanonical: boolean;
 }
 
 export type BlockExt = Block & BlockMeta;

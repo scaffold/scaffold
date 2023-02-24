@@ -2,6 +2,8 @@ import Peer from './Peer.ts';
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import NetworkProvider from './NetworkProvider.ts';
+import { Verifier } from './messages.ts';
+import { Resource } from './ExecutorDriverService.ts';
 // import AppraisalProvider from './AppraisalProvider.ts';
 
 type Config = {
@@ -65,7 +67,10 @@ type Config = {
   selfPrivateKey: Uint8Array;
   nodeNonce: Uint8Array;
 
-  approxComputePricePerSecond: bigint;
+  approxComputePricePerSecond: bigint; // TODO: I don't think we need this, just getGenerationReward.
+
+  getGenerationReward(verifier: Verifier, computeTimeSeconds: number): bigint;
+  getDepositIncentive(verifier: Verifier): bigint;
 
   // requiredProfitPerComputeRatio: number;
 
@@ -75,11 +80,24 @@ type Config = {
 
   computeContracts: Hash[];
 
-  timeProvider: () => number;
+  timeProvider(): number;
+
+  resourceLimits: Record<Resource, number>;
+
+  workScoreThreshold: number; // TODO: Units?
 };
 
 export const defaultConfig = {
+  getGenerationReward: (_verifier, computeTimeSeconds) =>
+    BigInt(computeTimeSeconds * 1e6) + 1000n,
+  getDepositIncentive: (_verifier) => 1n,
   timeProvider: Date.now,
+  resourceLimits: {
+    webWorkerCount: 16,
+    cpuUsage: navigator.hardwareConcurrency,
+    memoryMb: 1024,
+  },
+  workScoreThreshold: 10,
 } satisfies Partial<Config>;
 
 export default Config;

@@ -4,7 +4,6 @@ import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
 import Peer from '~/sbl/Peer.ts';
-import WorkQueue from '~/sbl/WorkQueue.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 let timestamp = 1000;

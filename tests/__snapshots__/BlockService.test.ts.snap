@@ -12,6 +12,7 @@ snapshot[`ingest should add block to our registry 1`] = `
         flags: 0,
         inputs: [
         ],
+        isCanonical: true,
         isFreeMarket: true,
         mergeableLogProbabilityError: 0,
         mergeableLogProbabilityValue: 0,

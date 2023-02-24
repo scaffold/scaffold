@@ -1,0 +1,140 @@
+export const snapshot = {};
+
+snapshot[`ingest should add block to our registry 1`] = `
+{
+  blocksByHash: Map {
+    "cd6078cf91d8fe550274a111ce5f5790a018774775f986f343ade9f3d83e5818" => {
+        body: Uint8Array(0) [
+        ],
+        derivedWork: 0,
+        derivedWorkError: 0,
+        derivedWorkValue: 2,
+        flags: 0,
+        inputs: [
+        ],
+        isCanonical: true,
+        isFreeMarket: true,
+        mergeableLogProbabilityError: 0,
+        mergeableLogProbabilityValue: 0,
+        mergeableProbability: 0,
+        nonce: 0.0701684046878579,
+        outputClaims: [
+          [
+          ],
+        ],
+        outputs: [
+          {
+            amount: -1n,
+            verifier: {
+              contract_hash: Hash {
+                digest: Uint8Array(32) [
+                  148,
+                  251,
+                  14,
+                  6,
+                  69,
+                  221,
+                  167,
+                  165,
+                  255,
+                  83,
+                  255,
+                  205,
+                  133,
+                  242,
+                  88,
+                  253,
+                  138,
+                  101,
+                  126,
+                  164,
+                  213,
+                  81,
+                  105,
+                  72,
+                  28,
+                  164,
+                  247,
+                  253,
+                  157,
+                  66,
+                  42,
+                  36,
+                ],
+                hex: "94fb0e0645dda7a5ff53ffcd85f258fd8a657ea4d55169481ca4f7fd9d422a24",
+              },
+              params: Uint8Array(1) [
+                0,
+              ],
+            },
+          },
+        ],
+        propagationMask: 0,
+        receivedTimestamp: 1000,
+        timestamp: 1677196959614n,
+        verifier: {
+          contract_hash: Hash {
+            digest: Uint8Array(32) [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+            ],
+            hex: "0000000000000000000000000000000000000000000000000000000000000000",
+          },
+          params: Uint8Array(0) [
+          ],
+        },
+      },
+  },
+}
+`;
+
+snapshot[`ingest should add block to our registry 2`] = `
+{
+  extraContractIncentive: Map {
+  },
+  extraGeneratorIncentive: Map {
+  },
+}
+`;
+
+snapshot[`ingest should add block to our registry 3`] = `
+{
+  allocated: {
+    cpuUsage: 0,
+    memoryMb: 0,
+    webWorkerCount: 0,
+  },
+  workerQueue: [
+  ],
+}
+`;

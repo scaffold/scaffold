@@ -18,7 +18,6 @@ import { BlockRegistry } from '../sbl/registries.ts';
 import CollatzContract from '../graph/CollatzContract.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import GraphUtils from '../sbl/GraphUtils.ts';
-import WorkQueue from '../sbl/WorkQueue.ts';
 import { error } from '../sbl/util/functional.ts';
 import { bin2str } from '../sbl/pathUtils.ts';
 import LocalGeneratorService, {
@@ -247,8 +246,6 @@ const itvl = setInterval(() => {
   // ) => ({ hash, ...val }));
   // Deno.writeTextFile('./blocks.json', ctx.get(Logger).serialize(blocks));
 }, 1000);
-
-ctx.get(WorkQueue);
 
 self.addEventListener('unload', () => {
   clearInterval(itvl);

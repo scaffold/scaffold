@@ -130,6 +130,11 @@ export default class Hash {
     // return this.toNum();
   }
 
+  public static composePrimitives(a: HashPrimitive, b: HashPrimitive) {
+    return a + b;
+    // return (a << 1n) ^ b;
+  }
+
   public countLeadingZeros() {
     let count = 0;
     for (const b of this.digest) {

@@ -179,6 +179,7 @@ export const registry = {
     fields: [
       { name: 'amount', type: 'long' },
       { name: 'verifier', type: 'Verifier' },
+      // { name: 'bill_to', type: ['null', 'Verifier'] },
       // { name: 'author', type: ['null', 'bytes'] },
       // { name: 'timestamp_gt', type: ['null', 'long'] },
       // { name: 'timestamp_lt', type: ['null', 'long'] },

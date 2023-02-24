@@ -134,33 +134,62 @@ export default class WorkQueue extends WorkQueueUtil {
       const hash = Hash.digest(Verifier.encode(verifier));
       if (!this.localExecutingGenerators.has(hash.toPrimitive())) {
         this.localExecutingGenerators.add(hash.toPrimitive());
-        const body = localGenerator({
-          ctx: this.ctx,
-          contractHash: verifier.contract_hash,
-          params: verifier.params,
-          emitCorrect: this.shouldEmitCorrect(verifier),
-          setFreeMarket: () => error('Not implemented'),
-          request: (contractHash: Hash, params: Uint8Array) =>
-            new Promise((resolve) =>
-              // TODO: Call pause/resume when requesting?
-              this.ctx.get(FetchService).fetch(
-                { contract_hash: contractHash, params },
-                { internalIncentive: 1n },
-                // TODO: Handle dirty inputs (repeated resolve calls)
-                (block) => resolve(block.body),
-              )
-            ),
-          notify: (contractHash: Hash, params: Uint8Array) =>
-            this.ctx.get(FetchService).fetch({
-              contract_hash: contractHash,
-              params,
-            }, { internalIncentive: 1n }),
-        });
-        if (body instanceof Promise) {
-          body.then((body) => onDone(body, [], 0));
-        } else {
-          onDone(body, [], 0);
-        }
+        (async () => {
+          while (true) {
+            let isDirty = false;
+            let markDirty = (_?: unknown) => {};
+            try {
+              const body = await localGenerator({
+                ctx: this.ctx,
+                contractHash: verifier.contract_hash,
+                params: verifier.params,
+                emitCorrect: this.shouldEmitCorrect(verifier),
+                setFreeMarket: () => error('Not implemented'),
+                request: (contractHash: Hash, params: Uint8Array) =>
+                  new Promise((resolve, reject) => {
+                    if (isDirty) {
+                      reject('DIRTY');
+                      return;
+                    }
+                    markDirty = reject;
+
+                    // TODO: Call pause/resume when requesting?
+                    let didResolve = false;
+                    this.ctx.get(FetchService).fetch(
+                      { contract_hash: contractHash, params },
+                      { internalIncentive: 1n },
+                      // TODO: Handle dirty inputs (repeated resolve calls)
+                      (block) => {
+                        if (didResolve) {
+                          isDirty = true;
+                          markDirty('DIRTY');
+                        } else {
+                          didResolve = true;
+                          resolve(block.body);
+                        }
+                      },
+                    );
+                  }),
+                notify: (contractHash: Hash, params: Uint8Array) =>
+                  this.ctx.get(FetchService).fetch({
+                    contract_hash: contractHash,
+                    params,
+                  }, { internalIncentive: 1n }),
+              });
+
+              if (isDirty) {
+                throw new Error('DIRTY');
+              }
+              const looper = new Promise((resolve) => markDirty = resolve);
+
+              onDone(body, [], 0);
+
+              await looper;
+            } catch (err) {
+              console.error(err);
+            }
+          }
+        })();
       }
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
@@ -223,6 +252,11 @@ export default class WorkQueue extends WorkQueueUtil {
 
     // TODO: Remove (debug)
     Object.assign(this.get(hash) || {}, { verifier });
+  }
+
+  public getTotalIncentive(verifier: Verifier) {
+    const hash = Hash.digest(Verifier.encode(verifier));
+    return this.extraIncentive.get(hash.toPrimitive()) || 0;
   }
 
   public update(verifier: Verifier) {

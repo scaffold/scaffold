@@ -10,7 +10,6 @@ import Store2 from '../sbl/util/Store2.ts';
 import StoreView from './StoreView.tsx';
 import StoreSelector from './StoreSelector.tsx';
 import Context from '../sbl/Context.ts';
-import WorkQueue from '../sbl/WorkQueue.ts';
 import StoreObserver from '../sbl/util/StoreObserver.ts';
 import { Verifier } from '../sbl/messages.ts';
 import Logger from '../sbl/Logger.ts';
@@ -63,8 +62,6 @@ client.ctx.get(LocalGeneratorService).addGenerator(
   moduleHashes.thrust_maze_wasm_hash,
   thrustMazeGenerator,
 );
-
-client.ctx.get(WorkQueue);
 
 const startGame = () => {
   const body = thrustMessages.InitAnswer.encode({
@@ -168,7 +165,7 @@ export default () => {
       )}
 
       <TableView name='BlockService' ctx={client.ctx} Table={BlockService} />
-      <TableView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />
+      {/*<TableView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
       <button onClick={incTableVersion}>Refresh</button>
 
       {gameHash && (

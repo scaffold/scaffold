@@ -1,3 +1,9 @@
+export const INTERRUPT_FLAG = Symbol('WorkerChannel.Interrupt');
+
+const FLAG_WAIT = 0;
+const FLAG_CONTINUE = 1;
+const FLAG_THROW = 2;
+
 export class WorkerChannelClient<T> {
   constructor(
     private port: Window,
@@ -29,10 +35,13 @@ export class WorkerChannelClient<T> {
   ): number {
     const arr = new Int32Array(this.sigBuf);
 
-    Atomics.store(arr, 0, 0);
+    Atomics.store(arr, 0, FLAG_WAIT);
     this.port.postMessage({ func, args }, { transfer });
     console.log('WAIT...', func, args);
-    Atomics.wait(arr, 0, 0);
+    Atomics.wait(arr, 0, FLAG_WAIT);
+    if (Atomics.load(arr, 0) === FLAG_THROW) {
+      throw INTERRUPT_FLAG;
+    }
     console.log('CONTINUE...', func, args, Atomics.load(arr, 1));
 
     return Atomics.load(arr, 1);
@@ -60,10 +69,16 @@ export class WorkerChannelServer<T> {
       (impl[func] as any)(...args)?.then((res: number) => {
         const arr = new Int32Array(this.sigBuf);
         Atomics.store(arr, 1, res);
-        Atomics.store(arr, 0, 1);
+        Atomics.store(arr, 0, FLAG_CONTINUE);
         Atomics.notify(arr, 0, 1);
-      }).catch((err: Error) =>
-        console.error(`Error handling WorkerChannel request:`, err)
-      );
+      }, (err: Error | typeof INTERRUPT_FLAG) => {
+        if (err === INTERRUPT_FLAG) {
+          const arr = new Int32Array(this.sigBuf);
+          Atomics.store(arr, 0, FLAG_THROW);
+          Atomics.notify(arr, 0, 1);
+        } else {
+          console.error(`Error handling WorkerChannel request:`, err);
+        }
+      });
   }
 }

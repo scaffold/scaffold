@@ -1,4 +1,4 @@
-import { BlockMeta } from './BlockMeta.ts';
+import { BlockExt, BlockMeta } from './BlockMeta.ts';
 import Context from './Context.ts';
 import GraphUtils from './GraphUtils.ts';
 import { Block, BlockOutput, Verifier } from './messages.ts';
@@ -12,7 +12,7 @@ import {
 } from './accumulators.ts';
 
 // SELECT * FROM blocks;
-export class BlockStore extends Store<Block> {
+export class BlockStore extends Store<BlockExt> {
   constructor(private ctx: Context) {
     super();
   }
@@ -88,10 +88,10 @@ export class ExtraIncentiveByVerifierStore extends Store<BlockOutput> {
   }
 }
 
-export class GeneratorsByContractStore extends Store<Block[]> {
+export class GeneratorsByContractStore extends Store<BlockExt[]> {
   constructor(private ctx: Context) {
     super(
-      ctx.get(BlockStore).groupBy<Block, Block[]>(
+      ctx.get(BlockStore).groupBy<BlockExt, BlockExt[]>(
         (_hash, block, emit) =>
           // TODO: Match multiple contracts as generators - one for each type (wasm, js, oracle, human...)
           Hash.equals(
@@ -175,10 +175,10 @@ export class UnclaimedIncentivesByContractStore extends Store<BlockOutput[]> {
   }
 }
 
-export class BlocksByVerifierStore extends Store<Block[]> {
+export class BlocksByVerifierStore extends Store<BlockExt[]> {
   constructor(private ctx: Context) {
     super(
-      ctx.get(BlockStore).groupBy<Block, Block[]>(
+      ctx.get(BlockStore).groupBy<BlockExt, BlockExt[]>(
         (_hash, block, emit) =>
           emit(Hash.digest(Verifier.encode(block.verifier)), block),
         ...arrayAccumulator,
@@ -189,7 +189,7 @@ export class BlocksByVerifierStore extends Store<Block[]> {
 
 // Things we can work on that have generators
 export class WorkableIncentivesStore extends Store<
-  { generator: Block; verifier: Verifier; amount: bigint }
+  { generator: BlockExt; verifier: Verifier; amount: bigint }
 > {
   constructor(private ctx: Context) {
     super(
@@ -197,7 +197,7 @@ export class WorkableIncentivesStore extends Store<
         ctx.get(GeneratorsByContractStore),
         ctx.get(UnclaimedIncentivesByContractStore),
         (_hash, generators, incentives) => ({ generators, incentives }),
-      ).groupBy<{ generator: Block; verifier: Verifier; amount: bigint }>(
+      ).groupBy<{ generator: BlockExt; verifier: Verifier; amount: bigint }>(
         (_hash, { generators, incentives }, emit) =>
           incentives.forEach(({ verifier, amount }) =>
             generators.forEach((generator) =>

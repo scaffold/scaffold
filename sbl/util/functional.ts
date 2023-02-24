@@ -21,3 +21,11 @@ export const memoize = <ArgType extends Object, ReturnType>(
     return res!;
   };
 };
+
+export const mapEntries = <K extends string | number | symbol, V1, V2>(
+  obj: Record<K, V1>,
+  func: (k: K, v: V1) => V2,
+): Record<K, V2> =>
+  Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k, func(k as K, v as V1)]),
+  ) as Record<K, V2>;

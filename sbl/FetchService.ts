@@ -1,47 +1,54 @@
 import BlockBuilder from './BlockBuilder.ts';
+import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
+import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import IncentiveService from './IncentiveService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
 import { Block, Verifier } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { bin2hex } from './pathUtils.ts';
-import {
-  BlocksByVerifierStore,
-  ExtraIncentiveByVerifierStore,
-} from './stores.ts';
+import { BlocksByVerifierStore } from './stores.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import StoreObserver from './util/StoreObserver.ts';
 import { trunc } from './util/string.ts';
-import WorkQueue from './WorkQueue.ts';
 
 interface FetchOptions {
+  dedupKey?: Hash | unknown;
   internalIncentive?: bigint;
-  externalIncentive?: bigint;
+  externalIncentive?: bigint; // TODO: Remove this, since we calculate it via config. Maybe change to boolean, if there's cases when we don't want to incentivize.
   bid?: { output: Verifier; amount: bigint };
-  blockSelector?: (blocks: Block[]) => Block;
+  blockSelector?: (blocks: BlockExt[]) => BlockExt;
   verify?: true;
+  certaintyThreshold?: number;
 }
 
 // TODO: Find canonical block
 // Rank by mergability probability
 //   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
-export const defaultBlockSelector = (blocks: Block[]) => blocks[0];
+export const defaultBlockSelector = (blocks: BlockExt[]) => blocks[0];
 
 export default class FetchService {
+  private pendingKeyedFetches = new Set<unknown>();
+
   constructor(private ctx: Context) {}
+
+  // public listen(verifier:Verifier, {}?:FetchOptions, cb?: (body: Uint8Array) => void) {}
+  // public listenBlock(verifier:Verifier, {}?:FetchOptions, cb?: (block: BlockExt) => void) {}
+  // public fetch(verifier:Verifier, {}?:FetchOptions): Promise<Uint8Array> {}
 
   public fetch(
     verifier: Verifier,
     {
+      dedupKey,
       internalIncentive,
       externalIncentive,
       bid,
       blockSelector,
       verify,
     }: FetchOptions,
-    cb?: (block: Block) => void,
+    cb?: (block: BlockExt) => void,
   ) {
     console.log(
       `Fetching block ${verifier.contract_hash.toHex()} : ${
@@ -50,7 +57,7 @@ export default class FetchService {
     );
 
     if (internalIncentive !== undefined) {
-      this.ctx.get(WorkQueue).addExtraIncentive(
+      this.ctx.get(ExecutorLauncherService).updateGenerator(
         verifier,
         Number(internalIncentive),
       );
@@ -97,6 +104,7 @@ export default class FetchService {
       // );
     }
 
+    externalIncentive = this.ctx.config.getDepositIncentive(verifier);
     if (externalIncentive !== undefined) {
       this.ctx.get(IncentiveService).incentivize(verifier, externalIncentive);
     }
@@ -113,9 +121,10 @@ export default class FetchService {
       );
     }
 
+    let onState: (blocks: BlockExt[] | undefined) => void;
     if (cb !== undefined) {
-      let prevBlock: Block | undefined;
-      const onState = (blocks: Block[] | undefined) => {
+      let prevBlock: BlockExt | undefined;
+      onState = (blocks: BlockExt[] | undefined) => {
         if (blocks && blocks.length) {
           const newBlock = (blockSelector || defaultBlockSelector)(blocks);
           if (newBlock !== prevBlock) {
@@ -129,14 +138,51 @@ export default class FetchService {
         Hash.digest(Verifier.encode(verifier)),
         onState,
       );
+    }
 
-      return {
-        release: () =>
+    let released = false;
+    return {
+      release: () => {
+        if (released) {
+          throw new Error(`Cannot release multiple times`);
+        }
+        released = true;
+
+        if (internalIncentive !== undefined) {
+          this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0);
+        }
+
+        if (externalIncentive !== undefined) {
+          this.ctx.get(IncentiveService).incentivize(
+            verifier,
+            -externalIncentive,
+          );
+        }
+
+        if (cb !== undefined) {
           StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).unobserve(
             Hash.digest(Verifier.encode(verifier)),
             onState,
-          ),
-      };
-    }
+          );
+        }
+      },
+      // getTotalInternalIncentive: () =>
+      //   BigInt(this.ctx.get(WorkQueue).getTotalIncentive(verifier)),
+      // getTotalExternalIncentive: () => error('Not implemented'),
+      // setInternalIncentive: (incentive: bigint) => {
+      //   this.ctx.get(WorkQueue).addExtraIncentive(
+      //     verifier,
+      //     Number(incentive - (internalIncentive || 0n)),
+      //   );
+      //   internalIncentive = incentive;
+      // },
+      // setExternalIncentive: (incentive: bigint) => {
+      //   this.ctx.get(IncentiveService).incentivize(
+      //     verifier,
+      //     incentive - (externalIncentive || 0n),
+      //   );
+      //   externalIncentive = incentive;
+      // },
+    };
   }
 }

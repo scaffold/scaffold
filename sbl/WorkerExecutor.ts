@@ -1,7 +1,6 @@
 import Context from './Context.ts';
-import ExposedPromise from './util/ExposedPromise.ts';
 import { formatPath } from './pathUtils.ts';
-import { WorkerChannelServer } from './worker/WorkerChannel.ts';
+import { INTERRUPT_FLAG, WorkerChannelServer } from './worker/WorkerChannel.ts';
 import {
   InitialMessage,
   JobMessage,
@@ -9,18 +8,16 @@ import {
 } from './worker/workerTypes.ts';
 import Hash from './util/Hash.ts';
 import { Block, Verifier } from './messages.ts';
-import { FulfillmentRegistry } from './registries.ts';
 import { rootHash } from './constants.ts';
-import NodeService from './NodeService.ts';
 import { error } from './util/functional.ts';
-import FetchService from './FetchService.ts';
+import { ExecutorDriver } from './ExecutorDriverService.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
   path: Uint8Array[];
 
   verifier: Promise<Verifier>;
-  block?: Promise<Block>;
+  body?: Promise<Uint8Array>;
 
   // question: Question;
   // readerStream: Promise<IncentivizedStream<Uint8Array>>;
@@ -36,15 +33,9 @@ export default class WorkerExecutor {
     generator: Uint8Array,
     inputs: Record<InputKeys, Uint8Array>,
     outputSpec: Record<OutputKeys, null>,
-  ): {
-    cancel(): void;
-    result: Promise<
-      { outputs: Record<OutputKeys, Uint8Array>; usedBlocks: Set<Block> }
-    >;
-    hasDirtyInputs: Promise<true>;
-  } {
-    const ctx = this.ctx;
-
+    driver: ExecutorDriver,
+    cancel: Promise<typeof INTERRUPT_FLAG>,
+  ): Promise<Record<OutputKeys, Uint8Array>> {
     const worker = new Worker(
       typeof Deno !== 'undefined'
         ? new URL('./worker/worker.ts', import.meta.url).href // Deno
@@ -70,45 +61,50 @@ export default class WorkerExecutor {
     const msg: InitialMessage = { sigBuf };
     worker.postMessage(msg);
 
+    // TODO: If we're waiting in Atomic.wait, we can wake the worker up and make it throw an exception.
+    // This way we won't have to re-start the worker.
+    // If the worker's just spinning in WASM, we have no alternative other than just terminating it.
+    // To kill worker, wait 1 second until it blocks and throw, or else terminate.
+
+    const terminateFn = (_: typeof INTERRUPT_FLAG) => worker.terminate();
+    let cancelCb = terminateFn;
+    cancel.then((flag) => cancelCb(flag));
+
     const inodes = new Map<number, OpenFile>();
     const outputs: Record<string, { size: number; chunks: Uint8Array[] }> = {};
 
-    const result = ExposedPromise.create<
-      { outputs: Record<OutputKeys, Uint8Array>; usedBlocks: Set<Block> }
-    >();
-    const hasDirtyInputs = ExposedPromise.create<true>();
+    let sendResult: (outputs: Record<OutputKeys, Uint8Array>) => void;
+    const result = new Promise<Record<OutputKeys, Uint8Array>>(
+      (resolve, reject) => {
+        sendResult = resolve;
+        cancel.then(reject);
+      },
+    );
 
-    const usedBlocks: Set<Block> = new Set();
     let sentJob = false;
 
-    const getBlock = (file: OpenFile) => {
-      if (file.block === undefined) {
-        file.block = file.verifier.then((verifier) =>
-          new Promise((resolve) => {
-            let resolved = false;
-            ctx.get(FetchService).fetch(
-              verifier,
-              { internalIncentive: 1n },
-              (b) => {
-                if (resolved) {
-                  hasDirtyInputs.resolve(true);
-                } else {
-                  resolved = true;
-                  resolve(b);
-                }
-              },
-            );
+    const getBody = (file: OpenFile) => {
+      if (file.body === undefined) {
+        file.body = file.verifier.then((verifier) =>
+          new Promise((resolve, reject) => {
+            if (cancelCb !== terminateFn) throw new Error('Internal error');
+            cancelCb = reject;
+            driver.request(verifier).then((body) => {
+              if (cancelCb !== reject) throw new Error('Internal error');
+              cancelCb = terminateFn;
+              resolve(body);
+            });
           })
         );
       }
-      return file.block;
+      return file.body;
     };
 
     const getBodyHash = (file: OpenFile) =>
       file.verifier.then(({ contract_hash, params }) =>
         Hash.equals(contract_hash, rootHash)
           ? Hash.fromBytes(params)
-          : getBlock(file).then((block) => Hash.digest(block.body))
+          : getBody(file).then(Hash.digest)
       );
 
     new WorkerChannelServer<WorkerComm>(worker, sigBuf, {
@@ -147,19 +143,16 @@ export default class WorkerExecutor {
         return undefined;
       },
       exit(): undefined {
-        result.resolve({
-          outputs: Object.fromEntries(
-            Object.entries(outputs).map(([key, { size, chunks }]) => {
-              const buf = new Uint8Array(size);
-              chunks.reduce((offset, chunk) => {
-                buf.set(chunk, offset);
-                return offset + chunk.length;
-              }, 0);
-              return [key, buf];
-            }),
-          ) as Record<OutputKeys, Uint8Array>,
-          usedBlocks,
-        });
+        sendResult(Object.fromEntries(
+          Object.entries(outputs).map(([key, { size, chunks }]) => {
+            const buf = new Uint8Array(size);
+            chunks.reduce((offset, chunk) => {
+              buf.set(chunk, offset);
+              return offset + chunk.length;
+            }, 0);
+            return [key, buf];
+          }),
+        ) as Record<OutputKeys, Uint8Array>);
         return undefined;
       },
 
@@ -190,15 +183,7 @@ export default class WorkerExecutor {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
             const input = { contract_hash: contractHash, params };
-            ctx.get(FetchService).fetch(input, {
-              internalIncentive: 1n,
-              externalIncentive: 1n,
-            });
-            // ctx.get(NodeService).getAll().forEach((node) =>
-            //   node.defaultConn?.sendReliable({
-            //     BidMessage: { input, output: verifier, amount },
-            //   })
-            // );
+            driver.notify(input);
             return input;
           }),
         });
@@ -211,15 +196,15 @@ export default class WorkerExecutor {
         offset: number,
         dstBufs: Uint8Array[],
       ): Promise<number> {
-        const block = await getBlock(inodes.get(inode)!);
-        usedBlocks.add(block);
+        // The ONLY awaits in this function should be for getBody, since it handles cancels
+        const body = await getBody(inodes.get(inode)!);
 
         let it = offset;
         for (const buf of dstBufs) {
-          const limit = Math.min(it + buf.length, block.body.length);
-          buf.set(block.body.subarray(it, limit));
+          const limit = Math.min(it + buf.length, body.length);
+          buf.set(body.subarray(it, limit));
           it = limit;
-          if (it === block.body.length) {
+          if (it === body.length) {
             break;
           }
         }
@@ -228,9 +213,8 @@ export default class WorkerExecutor {
       },
 
       async getSize(inode: number): Promise<number> {
-        const block = await getBlock(inodes.get(inode)!);
-        usedBlocks.add(block);
-        return block.body.length;
+        // The ONLY awaits in this function should be for getBody, since it handles cancels
+        return (await getBody(inodes.get(inode)!)).byteLength;
       },
 
       outputChunk(key: string, offset: number, data: Uint8Array): undefined {
@@ -279,17 +263,6 @@ export default class WorkerExecutor {
       // },
     });
 
-    return {
-      cancel() {
-        console.log(`Terminating worker...`);
-        result.reject(new Error(`Cancelled`));
-        // TODO: If we're waiting in Atomic.wait, we can wake the worker up and make it throw an exception.
-        // This way we won't have to re-start the worker.
-        // If the worker's just spinning in WASM, we have no alternative other than just terminating it.
-        worker.terminate();
-      },
-      result,
-      hasDirtyInputs,
-    };
+    return result;
   }
 }
