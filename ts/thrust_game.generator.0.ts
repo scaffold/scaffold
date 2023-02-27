@@ -7,6 +7,8 @@ import * as thrustMessages from './thrustMessages.ts';
 // https://experiments.withgoogle.com/wpilot
 // http://jfd.github.io/wpilot/
 
+const tickInterval = 100n;
+
 const gen: LocalGenerator = async (
   { ctx, contractHash, params, emitCorrect, request, notify },
 ) => {
@@ -15,9 +17,21 @@ const gen: LocalGenerator = async (
   }
 
   const { match, tick } = thrustMessages.GameParams.decode(params);
-  if (tick === 0n) {
-    debugger;
-  }
+  // if (tick === 0n) {
+  //   debugger;
+  // }
+
+  // Get game parameters
+  const { init_time } = thrustMessages.InitAnswer.decode(
+    await request(
+      moduleHashes.thrust_init_wasm_hash,
+      thrustMessages.InitParams.encode({ match }),
+    ),
+  );
+
+  // Wait until time
+  const waitUntil = Number(init_time + tick * tickInterval);
+  await new Promise((resolve) => setTimeout(resolve, waitUntil - Date.now()));
 
   const state = tick
     ? thrustMessages.GameAnswer.decode(
@@ -51,18 +65,6 @@ const gen: LocalGenerator = async (
       thrustMessages.InputParams.encode({ match, player: hash, tick }),
     )
   );
-
-  // Get game parameters
-  const { init_time } = thrustMessages.InitAnswer.decode(
-    await request(
-      moduleHashes.thrust_init_wasm_hash,
-      thrustMessages.InitParams.encode({ match }),
-    ),
-  );
-
-  // Wait until time
-  const waitUntil = Number(init_time + tick * 100n);
-  await new Promise((resolve) => setTimeout(resolve, waitUntil - Date.now()));
 
   // TODO: Use time contract
   // request(

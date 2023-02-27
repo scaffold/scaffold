@@ -8,6 +8,7 @@ import LocalGeneratorService from './LocalGeneratorService.ts';
 import { Block, Verifier } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { bin2hex } from './pathUtils.ts';
+import QaDebugger from './QaDebugger.ts';
 import { BlocksByVerifierStore } from './stores.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
@@ -51,11 +52,11 @@ export default class FetchService {
     cb?: (block: BlockExt) => void,
   ) {
     console.log(
-      `Fetching block ${verifier.contract_hash.toHex()} : ${
-        trunc(bin2hex(verifier.params), 100)
-      }`,
+      `Fetching block`,
+      { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
     );
 
+    internalIncentive = 1n;
     if (internalIncentive !== undefined) {
       this.ctx.get(ExecutorLauncherService).updateGenerator(
         verifier,

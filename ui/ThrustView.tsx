@@ -283,9 +283,6 @@ const initView = (
       Math.round(state.game_state.center.y),
       Math.round(state.game_state.size),
     );
-    if (state.game_state.size !== 0) {
-      console.log('SET SIZE', state.game_state.size);
-    }
 
     if (state.players.length) {
       const players = state.players.map(
@@ -389,19 +386,19 @@ export default (
 
     const makeKeyHandler = (val: boolean) => (event: KeyboardEvent) => {
       switch (event.code) {
-        case 'ArrowUp':
+        case 'KeyI':
           provider?.setFwd(val);
           break;
-        case 'ArrowDown':
+        case 'KeyK':
           provider?.setBwd(val);
           break;
-        case 'ArrowLeft':
+        case 'KeyJ':
           provider?.setLeft(val);
           break;
-        case 'ArrowRight':
+        case 'KeyL':
           provider?.setRight(val);
           break;
-        case 'Space':
+        case 'KeyF':
           provider?.setFire(val);
           break;
       }

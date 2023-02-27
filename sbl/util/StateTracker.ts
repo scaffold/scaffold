@@ -25,6 +25,9 @@ export default class StateTracker<Key, State> {
 
       // The number of milliseconds to wait before unsubscribing from a tick.
       unsubWaitMs?: number;
+
+      // The maximum subscription, log2
+      maxSubLog2?: bigint;
     } = {},
   ) {
     const {
@@ -32,14 +35,16 @@ export default class StateTracker<Key, State> {
       futureSubCount,
       narrowingSubCount,
       unsubWaitMs,
+      maxSubLog2,
     } = Object.assign({
       initIdx: 0n,
       futureSubCount: 100n,
       narrowingSubCount: 16n,
       unsubWaitMs: 10000,
+      maxSubLog2: 63n,
     }, opts);
 
-    const subs: { idx: bigint; lastAnswerTime: number; release(): void }[] = [];
+    let subs: { idx: bigint; lastAnswerTime: number; release(): void }[] = [];
     const listeningIdxs: Set<bigint> = new Set();
 
     const addSub = (idx: bigint) => {
@@ -47,6 +52,8 @@ export default class StateTracker<Key, State> {
         return;
       }
       listeningIdxs.add(idx);
+
+      console.log('StateTracker LISTENING TO', idx, subs.map(({ idx }) => idx));
 
       const sub = { idx, lastAnswerTime: Infinity, release: NEVER };
       sub.release = this.getter(
@@ -76,21 +83,28 @@ export default class StateTracker<Key, State> {
           }
         },
       ).release;
+
+      const r = sub.release;
+      sub.release = () => {
+        console.log('StateTracker UNSUB FROM', idx);
+        r();
+      };
+
       subs.push(sub);
       return sub;
     };
 
-    const finalSub = addSub((1n << 63n) - 1n)!;
+    const finalSub = addSub((1n << maxSubLog2) - 1n)!;
 
-    for (let i = 63; i-- > 0;) {
-      const idx = initIdx + (1n << BigInt(i));
+    for (let i = maxSubLog2; i-- > 0n;) {
+      const idx = initIdx + (1n << i);
       if (idx >= 0n) {
         addSub(idx);
       }
     }
     addSub(initIdx);
-    for (let i = 0; i < 63; i++) {
-      const idx = initIdx - (1n << BigInt(i));
+    for (let i = 0n; i < maxSubLog2; i++) {
+      const idx = initIdx - (1n << i);
       if (idx >= 0n) {
         addSub(idx);
       }
@@ -98,20 +112,30 @@ export default class StateTracker<Key, State> {
 
     const itvl = setInterval(() => {
       const threshold = Date.now() - unsubWaitMs;
-      while (subs.length) {
-        const last = subs[subs.length - 1];
-        if (last.lastAnswerTime < threshold) {
-          const sub = subs.pop()!;
+      subs = subs.filter((sub) => {
+        if (sub.lastAnswerTime > threshold) {
+          return true;
+        } else {
           sub.release();
           listeningIdxs.delete(sub.idx);
-        } else {
-          break;
+          return false;
         }
-      }
+      });
+      // while (subs.length) {
+      //   const last = subs[subs.length - 1];
+      //   if (last.lastAnswerTime < threshold) {
+      //     const sub = subs.pop()!;
+      //     sub.release();
+      //     listeningIdxs.delete(sub.idx);
+      //   } else {
+      //     break;
+      //   }
+      // }
     }, 1000);
 
     return {
       release: () => {
+        console.log('StateTracker BIG RELEASE');
         clearInterval(itvl);
         subs.forEach((sub) => sub.release());
       },

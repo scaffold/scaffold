@@ -31,42 +31,40 @@ export default class BlockService {
 
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
   public ingest(block: Block) {
-    console.log(
-      `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
-        trunc(bin2hex(block.verifier.params), 100)
-      } -> ${trunc(bin2hex(block.body), 100)}`,
-    );
-    console.log(block);
+    // console.log(
+    //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
+    //     trunc(bin2hex(block.verifier.params), 100)
+    //   } -> ${trunc(bin2hex(block.body), 100)}`,
+    // );
+    // console.log(block);
 
     const blockHash = BlockStore.hash(block);
     const verifierHash = Hash.digest(Verifier.encode(block.verifier));
 
-    const blockExt = getOrCreate(
-      this.blocksByHash,
-      blockHash.toPrimitive(),
-      () => {
-        const meta: BlockMeta = {
-          nonce: Math.random(),
-          receivedTimestamp: this.ctx.config.timeProvider(),
-          flags: 0,
-          derivedWork: 0,
-          mergeableProbability: 0,
-          outputClaims: block.outputs.map(({ verifier }) =>
-            this.getClaims(blockHash, Hash.digest(Verifier.encode(verifier)))
-          ),
-          propagationMask: 0,
+    if (this.blocksByHash.has(blockHash.toPrimitive())) {
+      return;
+    }
 
-          derivedWorkValue: 0,
-          derivedWorkError: Infinity,
-          mergeableLogProbabilityValue: 0,
-          mergeableLogProbabilityError: 0,
+    const meta: BlockMeta = {
+      nonce: Math.random(),
+      receivedTimestamp: this.ctx.config.timeProvider(),
+      flags: 0,
+      derivedWork: 0,
+      mergeableProbability: 0,
+      outputClaims: block.outputs.map(({ verifier }) =>
+        this.getClaims(blockHash, Hash.digest(Verifier.encode(verifier)))
+      ),
+      propagationMask: 0,
 
-          isCanonical: true,
-        };
-        return Object.assign(block, meta);
-      },
-      () => error(`Duplicate block`),
-    );
+      derivedWorkValue: 0,
+      derivedWorkError: Infinity,
+      mergeableLogProbabilityValue: 0,
+      mergeableLogProbabilityError: 0,
+
+      isCanonical: true,
+    };
+    const blockExt = Object.assign(block, meta);
+    this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
 
     blockExt.inputs.forEach(({ block_hash }) =>
       this.getClaims(block_hash, verifierHash).push(blockExt)

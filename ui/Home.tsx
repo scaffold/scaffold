@@ -26,6 +26,7 @@ import helloGenerator from '../ts/hello.generator.0.ts';
 import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
 import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 import TableView from './TableView.tsx';
+import QaDebugger from '../sbl/QaDebugger.ts';
 
 // QJS
 // const initialContractHex =
@@ -61,6 +62,31 @@ client.ctx.get(LocalGeneratorService).addGenerator(
 client.ctx.get(LocalGeneratorService).addGenerator(
   moduleHashes.thrust_maze_wasm_hash,
   thrustMazeGenerator,
+);
+
+client.ctx.get(QaDebugger).addDebugger(
+  'ThrustInit',
+  moduleHashes.thrust_init_wasm_hash,
+  (params) => thrustMessages.InitParams.decode(params),
+  (answer) => thrustMessages.InitAnswer.decode(answer),
+);
+client.ctx.get(QaDebugger).addDebugger(
+  'ThrustInput',
+  moduleHashes.thrust_input_wasm_hash,
+  (params) => thrustMessages.InputParams.decode(params),
+  (answer) => thrustMessages.InputAnswer.decode(answer),
+);
+client.ctx.get(QaDebugger).addDebugger(
+  'ThrustGame',
+  moduleHashes.thrust_game_wasm_hash,
+  (params) => thrustMessages.GameParams.decode(params),
+  (answer) => thrustMessages.GameAnswer.decode(answer),
+);
+client.ctx.get(QaDebugger).addDebugger(
+  'ThrustMaze',
+  moduleHashes.thrust_maze_wasm_hash,
+  (params) => thrustMessages.MazeParams.decode(params),
+  (answer) => thrustMessages.MazeAnswer.decode(answer),
 );
 
 const startGame = () => {

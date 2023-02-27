@@ -13,6 +13,7 @@ import {
 } from './moduleHashes.ts';
 import FetchService from '../sbl/FetchService.ts';
 
+// Must match the tickInterval in generator
 const msPerTick = 100;
 
 export default class ThrustProvider {
@@ -49,17 +50,22 @@ export default class ThrustProvider {
         if (idx > this.latestStateIdx) {
           this.latestStateIdx = idx;
           this.latestStateTime = Date.now();
-          this.latestStateVal = thrustMessages.GameAnswer.decode(
-            new Uint8Array([]),
-          );
-          console.log('got', idx);
+          this.latestStateVal = thrustMessages.GameAnswer.decode(state.body);
+          console.log('got', idx, this.latestStateVal);
         }
       },
       {
+        // initIdx: 0n,
+        // futureSubCount: 100n,
+        // narrowingSubCount: 16n,
+        // unsubWaitMs: 10000,
+        // maxSubLog2: 63n,
+
         initIdx: 0n,
-        futureSubCount: 100n,
+        futureSubCount: 4n,
         narrowingSubCount: 16n,
-        unsubWaitMs: 10000,
+        unsubWaitMs: 1000,
+        maxSubLog2: 8n,
       },
     );
 
@@ -86,12 +92,6 @@ export default class ThrustProvider {
         },
         { internalIncentive: 20n },
         (block) => {
-          console.log(
-            'GOT',
-            x,
-            y,
-            thrustMessages.MazeAnswer.decode(block.body).cell,
-          );
           if (hasResolved) {
             throw new Error(`Cell resolved more than once!`);
           }
