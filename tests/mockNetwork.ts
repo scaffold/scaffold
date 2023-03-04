@@ -1,4 +1,5 @@
 import Hash from '~/sbl/util/Hash.ts';
+import { Packet } from '../sbl/messages.ts';
 import {
   ConnectionProvider,
   ProtocolProvider,
@@ -20,6 +21,8 @@ export const makeMockNetworkProvider = (opts: {
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
     let send: (data: Uint8Array) => void;
+    const onClose: (() => void)[] = [];
+    const timeouts: number[] = [];
 
     return {
       tryConnect: (spec: string) => {
@@ -29,25 +32,28 @@ export const makeMockNetworkProvider = (opts: {
           return;
         }
 
-        setTimeout(() =>
+        timeouts.push(setTimeout(() =>
           onNewConn({
             sendReliable: (data: Uint8Array) =>
-              setTimeout(
+              timeouts.push(setTimeout(
                 () => send(data),
                 (Math.random() + 0.5) * opts.sendReliableLatencyMs,
-              ),
+              )),
             sendFast: (data: Uint8Array) =>
               Math.random() > opts.sendFastDropRatio &&
-              setTimeout(
+              timeouts.push(setTimeout(
                 () => send(data),
                 (Math.random() + 0.5) * opts.sendFastLatencyMs,
-              ),
+              )),
             onRecv: (handler: (data: Uint8Array) => void) => {
               send = server.connect(handler);
             },
-            close: () => {},
-            onClose: (_handler: () => void) => {},
-          }), (Math.random() + 0.5) * opts.connectLatencyMs);
+            close: () => {
+              onClose.forEach((cb) => cb());
+              timeouts.forEach((t) => clearTimeout(t));
+            },
+            onClose: (handler: () => void) => onClose.push(handler),
+          }), (Math.random() + 0.5) * opts.connectLatencyMs));
       },
     };
   },
@@ -56,27 +62,37 @@ export const makeMockNetworkProvider = (opts: {
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
   ) => {
+    const onClose: (() => void)[] = [];
+    const timeouts: number[] = [];
+
     const addr = Hash.random().toHex();
     servers.set(addr, {
       connect: (send: (data: Uint8Array) => void) => {
         let recvHandler: (data: Uint8Array) => void;
         onNewConn({
           sendReliable: (data: Uint8Array) =>
-            setTimeout(
+            // console.log(
+            //   Packet.decode(data.subarray(64)),
+            timeouts.push(setTimeout(
               () => send(data),
               (Math.random() + 0.5) * opts.sendReliableLatencyMs,
-            ),
+            )),
+          // ),
           sendFast: (data: Uint8Array) =>
             Math.random() > opts.sendFastDropRatio &&
-            setTimeout(
+            timeouts.push(setTimeout(
               () => send(data),
               (Math.random() + 0.5) * opts.sendFastLatencyMs,
-            ),
+            )),
           onRecv: (handler: (data: Uint8Array) => void) => {
             recvHandler = handler;
           },
-          close: () => {},
-          onClose: (_handler: () => void) => {},
+          close: () => {
+            onClose.forEach((cb) => cb());
+            // console.log('CLOSE', timeouts);
+            timeouts.forEach((t) => clearTimeout(t));
+          },
+          onClose: (handler: () => void) => onClose.push(handler),
         });
         return recvHandler!;
       },

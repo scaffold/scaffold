@@ -3,10 +3,6 @@ import Context from '~/sbl/Context.ts';
 import ThrustInputProvider from './ThrustInputProvider.tsx';
 import * as thrustMessages from '../ts/thrustMessages.ts';
 import StateTracker from '~/sbl/StateTracker.ts';
-import IncentiveService from '../sbl/IncentiveService.ts';
-import { BlocksByVerifierStore } from '../sbl/stores.ts';
-import StoreObserver from '../sbl/util/StoreObserver.ts';
-import { Verifier } from '../sbl/messages.ts';
 import {
   thrust_game_wasm_hash,
   thrust_maze_wasm_hash,

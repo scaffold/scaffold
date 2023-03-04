@@ -5,11 +5,11 @@ import Store2 from '../sbl/util/Store2.ts';
 export default (
   { ctx, onSelectClass }: {
     ctx: Context;
-    onSelectClass: (clz: { new (context: Context): Store2<any> }) => void;
+    onSelectClass: (clz: { new (context: Context): Store2<unknown> }) => void;
   },
 ) => {
   const [classes, setClasses] = React.useState<
-    { new (context: Context): Store2<any> }[]
+    { new (context: Context): Store2<unknown> }[]
   >([]);
 
   return (
@@ -28,7 +28,9 @@ export default (
           setClasses(
             [...ctx.debugGetAll().entries()]
               .filter(([_constructor, instance]) => instance instanceof Store2)
-              .map(([constructor, _instance]) => constructor),
+              .map(([constructor, _instance]) =>
+                constructor as { new (context: Context): Store2<unknown> }
+              ),
           )}
       >
         Refresh

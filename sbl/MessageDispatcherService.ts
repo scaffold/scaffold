@@ -71,6 +71,7 @@ export default class MessageDispatcherService {
     }
 
     if ('PublicationMessage' in msg) {
+      msgCtx.conn.node.knownBlocks.add(msg.PublicationMessage.block);
       this.ctx.get(BlockService).ingest(msg.PublicationMessage.block);
     }
     if ('RequestBlockMessage' in msg) {

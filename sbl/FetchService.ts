@@ -51,10 +51,10 @@ export default class FetchService {
     }: FetchOptions,
     cb?: (block: BlockExt) => void,
   ) {
-    console.log(
-      `Fetching block`,
-      { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
-    );
+    // console.log(
+    //   `Fetching block`,
+    //   { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
+    // );
 
     internalIncentive = 1n;
     if (internalIncentive !== undefined) {

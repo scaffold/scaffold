@@ -53,8 +53,6 @@ export default class StateTracker<Key, State> {
       }
       listeningIdxs.add(idx);
 
-      console.log('StateTracker LISTENING TO', idx, subs.map(({ idx }) => idx));
-
       const sub = { idx, lastAnswerTime: Infinity, release: NEVER };
       sub.release = this.getter(
         questionFactory(idx),
@@ -83,12 +81,6 @@ export default class StateTracker<Key, State> {
           }
         },
       ).release;
-
-      const r = sub.release;
-      sub.release = () => {
-        console.log('StateTracker UNSUB FROM', idx);
-        r();
-      };
 
       subs.push(sub);
       return sub;
@@ -135,7 +127,6 @@ export default class StateTracker<Key, State> {
 
     return {
       release: () => {
-        console.log('StateTracker BIG RELEASE');
         clearInterval(itvl);
         subs.forEach((sub) => sub.release());
       },

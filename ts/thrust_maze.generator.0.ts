@@ -17,9 +17,9 @@ new Function(new TextDecoder().decode(Deno.readFileSync('./server/bootstrap/thru
 const noiseInstances: Map<string, SimplexNoise> = new Map();
 
 const gen: LocalGenerator = ({ params, emitCorrect }) => {
-  console.log(
-    thrustMessages.MazeParams.encode({ match: Hash.random(), x: 1n, y: 2n }),
-  );
+  // console.log(
+  //   thrustMessages.MazeParams.encode({ match: Hash.random(), x: 1n, y: 2n }),
+  // );
 
   if (!emitCorrect) {
     return new TextEncoder().encode('DUPE');

@@ -1,0 +1,137 @@
+When someone does work for cheaper, the more expensive work should NOT be included in the CITE set.
+  This is necessary so overpriced work doesn't influence the derived work.
+When an output is consumed twice, the work of each should be multiplied by their mergability probability???
+
+If multiple callers fetch a verifier with internalIncentive, it's added or max-ed?
+If multiple callers fetch a verifier with externalIncentive, it's added or max-ed?
+
+Problem:
+  It's easy to design a contract that I can solve efficiently, but no one else. So I can create high-work blocks without effort, and influence the derived work.
+  Example: Account contracts
+  Best solution (not great): imbue each client with a whitelist of fair contract hashes.
+  Idea: Only value whitelist or ones that we win
+  Idea: Allow generator publishers to profit from speedup?
+
+
+High-recursion contracts:
+  Kill the original contracts; resume them if inputs are satisfied
+
+Executions optionally consume N resources (workers)
+
+Fixed worker pool
+  To kill worker, wait 1 second until it blocks and throw, or else terminate.
+  Kill if we have a missing input, and subscribe to the input to re-enqueue if the input becomes available.
+
+Don't have a sharp cut-off on recursion distance, but:
+  Without any external incentive, represent its score as some factor of the requesting score. Note that the remaining_cpu_time and remaining_blocking_time should be increased to calculate the child as well.
+
+
+
+
+Non-canonical branches should be flagged
+  Any double-spends should propagate a canonical:false to all branches except the heaviest.
+  A block is canonical if ALL of its inputs are canonical.
+  Branches we've built on can be artificially made heavier, which may make them canonical even though peers don't think so. This is fine, and will resolve itself.
+  I don't think there's any case when we want to build on a non-canonical branch. We only keep them around in case they become canonical.
+    IS THIS TRUE???
+  Additionally, if a block only has canonical inputs, we know it's mergable (valid).
+  If a block has non-canonical inputs, it may still be mergeable (valid).
+
+
+
+
+Contracts request generators, so work can be reused. Tag blocks with multiple validators (generator and contract). Only need to send out the contract one.
+
+The contract execution could be a block too, with a body of 0 or 1, but it never needs to be broadcasted.
+
+Contracts specify the time within which validation should take. This includes requesting inputs. If the input is unavailable, the contract fails via timeout. Instead of time, complexity is specified, which is defined by RandomX runtime. Unavailability attestations need to be relatively free because availability can be reversed easily.
+
+Perhaps the block request message is unavailability collateral.
+
+Walk graph, weighted by flow. Verify.
+
+
+
+Given any block, there needs to be a way to query all "in", or "unfilled" outputs (positive).
+Or, alternatively, BlockSet outputs MUST be negative. If an output is positive, the sender must find a block that consumes/fulfills (pays) it and include it in the set.
+The problem is this though:
+  We can't consider just a single BlockSet, but must consider the entire
+
+
+
+Give generators + contracts a hash of the outputs?
+
+
+What blocks do I want?
+
+
+To determine canonicality, must sample?
+
+Root question:
+  How to determine if the collateral on a block is accurate?
+    c/WorkA: {b: 1} -> {AccountX(t=3): 100, AccountX(t=4): -101}
+    Recursively:
+      Any positive input or output needs to be added to the set. We gotta figure out where the money is coming from.
+      This will query blocks with verifier AccountX(t=3)
+      Add all blocks to set, and determine canonicality via derived work
+      If none are canonical, use one as an input so it starts getting derived work.
+      Sample from verifier space, then choose the canonical block.
+      Sample from blocks, but ignore if there's a cheaper block with same verifier.
+Root knowledge:
+  If we get a well-known block (we can ensure this property by broadcasting it),
+  And we verify it,
+  And it's free-market with verifier V,
+  And its reward (sum of outputs) is smaller than any other block with verifier V,
+  And sufficient time has passed to allow refutation:
+    Then its reward can be interpreted as work.
+Vouching for canonicality!!!:
+  Work derived from some block is a vouch for canonicality!!!
+  Alternative ideas:
+    is_canonical [block_hash] = 1
+    This has the same problem as vouching for validity - we still need to validate the collateral.
+    However, if the collateral posting is invalid, someone else should flag it or request it.
+      Maybe we shouldn't depend on this, because it's turtles all the way down.
+    Validate collateral by following it. If we can't get resolution, just abort.
+Data availability requests have their collateral multiplied, causing the data in question to be considered missing/invalid until it's provided.
+  Cap the multiplied value so we can't submit an unfulfillable request.
+    Cap it at 1% of the current total supply?
+  For easy-to-verify contracts in general:
+    Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
+    The provider gives an initial claim of the validity of his commitment (collateral=1000).
+    Requestor challenges with a claim containing his payment (collateral=1).
+    In order to not lose his collateral, he must provide the plaintext as a hint.
+    It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
+
+
+How can we make sure the blocks we're receiving are an accurate sample of the entire network's work?
+  Send work to equivalent work
+  Send work to everyone
+Sample from verifier space, not work space?
+  
+25, 25, 50
+
+
+What if we could assume that our peers are sampled from the work space, or at least have a work weight property?
+I think we just want a work weight property, because we want to choose peers based on ping.
+
+DHT:
+  Send blocks with verifier V to the nodes closest to hash(V | i) for i in 1..3
+
+
+
+Whenever a block hashes underneath a threshold:
+  The hash of all ancestor blocks, each one concatenated with "\0", is the RNG.
+
+
+Graph of trust?
+If all peers 
+
+
+Checkpoints
+
+Probe
+
+
+Collect 
+What does the signature of a block mean?
+  I think it only means something if it's used in verification (for example, account contracts)

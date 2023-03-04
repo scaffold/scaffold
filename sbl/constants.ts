@@ -6,6 +6,10 @@ export const rootHash = Hash.xor(SBL, Hash.fromLiteralStr('root'));
 
 export const generatorHash = Hash.xor(SBL, Hash.fromLiteralStr('gen'));
 
+export const dataHash = Hash.xor(SBL, Hash.fromLiteralStr('data'));
+
+export const collateralHash = Hash.xor(SBL, Hash.fromLiteralStr('collateral'));
+
 // Simply checks that it's been signed by a public key hashing to the param
 // Actually we should pass the public key of the signer to the generator/contract (like we do for the hint).
 // This will allow easy-to-verify blocks like hash inversions to be authenticated.

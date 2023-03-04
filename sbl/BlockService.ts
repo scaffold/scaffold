@@ -1,6 +1,7 @@
 import { BlockExt, BlockMeta } from './BlockMeta.ts';
 import BlockPublisher from './BlockPublisher.ts';
 import Context from './Context.ts';
+import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
 import { Block, BlockSet, Verifier } from './messages.ts';
 import { bin2hex } from './pathUtils.ts';
@@ -46,7 +47,9 @@ export default class BlockService {
     }
 
     const meta: BlockMeta = {
+      hash: blockHash,
       nonce: Math.random(),
+
       receivedTimestamp: this.ctx.config.timeProvider(),
       flags: 0,
       derivedWork: 0,
@@ -68,6 +71,10 @@ export default class BlockService {
 
     blockExt.inputs.forEach(({ block_hash }) =>
       this.getClaims(block_hash, verifierHash).push(blockExt)
+    );
+
+    block.outputs.forEach(({ verifier }) =>
+      this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0)
     );
 
     this.updateDerivedWork(blockExt);

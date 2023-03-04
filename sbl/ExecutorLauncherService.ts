@@ -2,7 +2,7 @@ import secp from './util/secp.ts';
 import BlockBuilder from './BlockBuilder.ts';
 import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
-import { generatorHash, rootHash } from './constants.ts';
+import { dataHash, generatorHash, rootHash } from './constants.ts';
 import Context from './Context.ts';
 import ExecutorDriverService, {
   ExecutorDriver,
@@ -10,12 +10,14 @@ import ExecutorDriverService, {
 import FetchService from './FetchService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
 import { Verifier } from './messages.ts';
-import { bin2str } from './pathUtils.ts';
+import { bin2str, str2bin } from './pathUtils.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
 import { error, mapEntries } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
 import { getOrCreate } from './util/map.ts';
+import DataContract from './DataContract.ts';
+import LitigationService from './LitigationService.ts';
 
 const secret = secp.utils.randomBytes(32);
 
@@ -27,17 +29,28 @@ export default class ExecutorLauncherService {
 
   constructor(private ctx: Context) {}
 
-  public updateContract(
-    verifier: Verifier,
-    body: Uint8Array,
-    extraIncentive: number,
-  ) {
+  public updateContract(block: BlockExt, extraIncentive: number) {
+    const { verifier, body } = block;
+
     const runHash = Hash.digestParts(Verifier.encode(verifier), body);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
       return;
     } else {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
+    }
+
+    if (Hash.equals(verifier.contract_hash, dataHash)) {
+      const hint = new Uint8Array([]);
+      const providerHash = Hash.digest('');
+      const verified = this.ctx.get(DataContract).verify(
+        verifier.params,
+        body,
+        hint,
+        providerHash,
+      );
+      this.ctx.get(LitigationService).litigateBlock(block, verified);
+      return;
     }
 
     const contractBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
@@ -73,6 +86,9 @@ export default class ExecutorLauncherService {
 
           console.log('STDOUT', bin2str(stdout));
           console.log('STDERR', bin2str(stderr));
+
+          const verified = arrEquals(stdout, str2bin('PASS'));
+          this.ctx.get(LitigationService).litigateBlock(block, verified);
         },
       );
     }
@@ -189,7 +205,7 @@ export default class ExecutorLauncherService {
     inputs: BlockExt[],
     durationMs: number,
   ) {
-    console.log('Completed generator', verifier, bin2str(data));
+    // console.log('Completed generator', verifier, bin2str(data));
     const block = this.ctx.get(BlockBuilder).build(verifier, data);
     this.ctx.get(BlockService).ingest(block);
     // answer.difficultyEstimate = BigInt(durationMs) *

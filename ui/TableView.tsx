@@ -6,7 +6,7 @@ import Store2 from '../sbl/util/Store2.ts';
 
 type ObjMap<T> = { [key: string]: T };
 
-export default ({ ctx, name, Table }: {
+export default ({ ctx, name, Table, filter }: {
   ctx: Context;
   name: string;
   Table: {
@@ -14,6 +14,7 @@ export default ({ ctx, name, Table }: {
       snapshot(): Record<string, Map<HashPrimitive, unknown>>;
     };
   };
+  filter?: string;
 }) => {
   const [selected, toggleSelected] = React.useReducer(
     (state: ObjMap<boolean>, key: string): ObjMap<boolean> => ({
@@ -29,7 +30,13 @@ export default ({ ctx, name, Table }: {
         <span key={`${name}.${key}`}>
           <strong>{name}.{key}:</strong>
           <ol>
-            {[...map.entries()].map(([key, val]) => (
+            {[...map.entries()].filter(
+              filter
+                ? ([key, val]) =>
+                  key.includes(filter) ||
+                  ctx.get(Logger).serialize(val, 0, 1024).includes(filter)
+                : () => true,
+            ).map(([key, val]) => (
               <li key={key}>
                 <pre>
                   <span onClick={() => toggleSelected(key)}>

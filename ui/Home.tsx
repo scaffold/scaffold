@@ -27,6 +27,7 @@ import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
 import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 import TableView from './TableView.tsx';
 import QaDebugger from '../sbl/QaDebugger.ts';
+import Input from './Input.tsx';
 
 // QJS
 // const initialContractHex =
@@ -110,6 +111,8 @@ export default () => {
     initialContractHex,
   );
   const [params, setParams] = React.useState<string>(initialParams);
+  const [body, setBody] = React.useState<string>('');
+  const [filter, setFilter] = React.useState<string>('');
   const gameHex = url.searchParams.get('game');
 
   const [shownStore, setShownStore] = React.useState<
@@ -145,11 +148,8 @@ export default () => {
           <option value={hash.toHex()}>{name} ({hash.toHex()})</option>
         ))}
       </select>
-      <input
-        type='text'
-        value={params}
-        onChange={(e) => setParams(e.target.value)}
-      />
+      <br />
+      <Input label='Params' value={params} setValue={setParams} />
       <button
         onClick={() =>
           client.ctx.get(FetchService).fetch(
@@ -165,7 +165,23 @@ export default () => {
             (block) => console.log(bin2str(block.body), block),
           )}
       >
-        RUN
+        REQUEST
+      </button>
+      <br />
+      <Input label='Body' value={body} setValue={setBody} />
+      <button
+        onClick={() =>
+          client.ctx.get(BlockService).ingest(
+            client.ctx.get(BlockBuilder).build(
+              {
+                contract_hash: Hash.fromHex(selectedContract!),
+                params: str2bin(params),
+              },
+              str2bin(body),
+            ),
+          )}
+      >
+        PROVIDE
       </button>
 
       <br />
@@ -176,12 +192,13 @@ export default () => {
         </a>
         */
       }
+
+      {
+        /*
       <StoreSelector
         ctx={client.ctx}
         onSelectClass={(clz) => setShownStore({ key: Math.random(), clz })}
       />
-
-      {/*<BlockTableView ctx={client.ctx} />*/}
       {shownStore.clz && (
         <StoreView
           key={shownStore.key}
@@ -189,7 +206,19 @@ export default () => {
           Table={shownStore.clz}
         />
       )}
+        */
+      }
 
+      <button onClick={() => client.close()}>STOP</button>
+      <br />
+
+      {'Filter: '}
+      <input
+        type='text'
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
+      <br />
       <TableView name='BlockService' ctx={client.ctx} Table={BlockService} />
       {/*<TableView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
       <button onClick={incTableVersion}>Refresh</button>

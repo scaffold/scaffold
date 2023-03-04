@@ -1,4 +1,5 @@
 import { Block } from './messages.ts';
+import Hash from './util/Hash.ts';
 
 enum BlockFlag {
   CheckedZeroSum = 1 << 0,
@@ -15,6 +16,7 @@ enum BlockFlag {
 }
 
 export interface BlockMeta {
+  hash: Hash;
   nonce: number;
 
   // block: Block;
@@ -33,6 +35,8 @@ export interface BlockMeta {
   mergeableLogProbabilityError: number;
 
   isCanonical: boolean;
+
+  passedVerification?: boolean;
 }
 
 export type BlockExt = Block & BlockMeta;

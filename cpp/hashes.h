@@ -2,15 +2,17 @@
 
 constexpr std::string_view interface_wasm_hash = "a4b7cedc8fc7e2c66be156a157733f16b998e1a2e92e5c53516458c11cdbe013";
 constexpr std::string_view python_wasm_hash = "cacf09f92d88a091f3729059f389bc0ec59d82c4b2be83ab7d08ad3849d4a9cc";
-constexpr std::string_view thrust_game_generator_0_js_hash = "97e4ddacc1366472606c67150eb0c4f7c316cff26f7ab3d156a6773ab77f121e";
+constexpr std::string_view thrust_game_generator_0_js_hash = "b6353b1786430d10e645b907b8d4734d656634896f09cb1bb16bbb68ff413ceb";
 constexpr std::string_view qjs_wasm_hash = "2699c934e05e42c7937c17bfa8d0f70cb8b65f47a5330e512df5f3b621a99709";
+constexpr std::string_view collatz_wasm_hash = "755d3d7829844777e1c848e245099305cf8f17c4d6fa79376ab55fac3e594824";
 constexpr std::string_view hello_wasm_hash = "0f82ceb6b057bbe5d9e66003c4b725c97c56e804764f3538d9251d4d80c6eb20";
 constexpr std::string_view thrust_maze_wasm_hash = "016bf52677bcab84be818c30a822c20aec24854d056ce0af025af387a64a9284";
 constexpr std::string_view hello_generator_0_js_hash = "66c9425fe4fcc90b4794000b85a386f51023aeb89163bef60b8fcf39f6427b61";
 constexpr std::string_view thrust_init_wasm_hash = "20f619a774a7c238d8d04dea224714e80147a215a1fa9ab38611dd91de390992";
 constexpr std::string_view test_py_hash = "9e7cf4f3dfd247d2fb32f150195cf10433cf8b9bd17e2c1b18eccaa41a38b3ef";
-constexpr std::string_view thrust_maze_generator_0_js_hash = "769b86ec4b4eb9f3a0eeb71ab5e121fcbd4d46832140a092bc3cc22cd494eb27";
+constexpr std::string_view thrust_maze_generator_0_js_hash = "d1b5493585bd5e7883e3dfbc3ecbd616899e5ddfe6ab84b068ed3ad662cf275c";
 constexpr std::string_view js_wasm_hash = "4be1985d553b32e84a63fc13aea681c15449f7df9f47ae2ed7f4ac566e21fd8f";
+constexpr std::string_view collatz_generator_0_js_hash = "43b2f497e1fbf784681dae3006092215e8cb959c3afa4bfca0b045be9cf8ba42";
 constexpr std::string_view test_generator_0_js_hash = "3eae0b02a89386b794d79a9babfa45704cc53a979a701965855f3f4edef3a9f1";
 constexpr std::string_view thrust_input_wasm_hash = "5a69c562c944d0a14ccbb3e76bebc5e843d98e59c13b8da94b57fa731f95d09f";
 constexpr std::string_view true_wasm_hash = "a4b7cedc8fc7e2c66be156a157733f16b998e1a2e92e5c53516458c11cdbe013";

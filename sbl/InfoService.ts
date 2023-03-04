@@ -4,8 +4,11 @@ import NodeService from './NodeService.ts';
 import ConnectionService from './ConnectionService.ts';
 
 export default class InfoService {
+  private tickItvl?: number;
+
   constructor(private ctx: Context) {
     this.tick();
+    ctx.onDestruct(() => clearTimeout(this.tickItvl));
   }
 
   public makeInitPacket() {
@@ -20,7 +23,7 @@ export default class InfoService {
       node.defaultConn?.sendReliable(packet)
     );
 
-    setTimeout(() => this.tick(), 60000 * (Math.random() + 1));
+    this.tickItvl = setTimeout(() => this.tick(), 60000 * (Math.random() + 1));
   }
 
   private makeInfoPacket(includeAuthentication: boolean) {

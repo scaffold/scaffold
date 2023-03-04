@@ -1,7 +1,7 @@
 import Config from './Config.ts';
 
 export default class Context {
-  private objs: Map<{ new (context: Context): any }, any> = new Map();
+  private objs: Map<{ new (context: Context): unknown }, unknown> = new Map();
   private destructors: (() => Promise<void> | void)[] = [];
 
   constructor(public config: Config) {
@@ -41,7 +41,7 @@ export default class Context {
       throw new Error(`Constructor for ${Type.name} is probably recursive`);
     }
 
-    return res;
+    return res as T;
   }
 
   public onDestruct(cb: () => Promise<void> | void) {

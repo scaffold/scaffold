@@ -14,7 +14,7 @@ const makeConfig = (
 ): Config => ({
   ...defaultConfig,
 
-  debugName: `ctx_${ctxIdx}`,
+  debugName: `ctx_${ctxIdx + 1}`,
 
   log: {
     handler: (

@@ -1,4 +1,4 @@
-import { assert, assertEquals } from 'std-latest/testing/asserts.ts';
+import { assertEquals } from 'std-latest/testing/asserts.ts';
 import { makeTest } from './util.ts';
 import StateTracker from '~/sbl/util/StateTracker.ts';
 

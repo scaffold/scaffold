@@ -190,6 +190,7 @@ export const registry = {
     type: 'record',
     fields: [
       // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically claims with zero amount
+      // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
       // The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
@@ -505,6 +506,16 @@ export const registry = {
       },
     ],
   },
+
+  DataContractParams: {
+    name: 'DataContractParams',
+    type: 'record',
+    fields: [
+      { name: 'hash', type: 'Hash' },
+      { name: 'secret', type: 'bytes' },
+    ],
+  },
+
   long,
 } as const;
 
@@ -644,6 +655,8 @@ export const FeedbackMessage = makeMsg(registry, 'FeedbackMessage');
 export type FeedbackMessage = MsgType<'FeedbackMessage'>;
 export const Packet = makeMsg(registry, 'Packet');
 export type Packet = MsgType<'Packet'>;
+export const DataContractParams = makeMsg(registry, 'DataContractParams');
+export type DataContractParams = MsgType<'DataContractParams'>;
 
 // const buf = Question.encode({
 //   contract: {

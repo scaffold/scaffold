@@ -165,10 +165,13 @@ export default class ConnectionService {
 
       const node = this.ctx.get(NodeService).lookup(hash);
       const onSendError = (err: unknown) => {
-        console.error(
-          `Caught error sending packet; closing connection: ${err}`,
-        );
-        provider.close();
+        if (conn) {
+          console.error(
+            `Caught error sending packet; closing connection: ${err}`,
+          );
+          provider.close();
+          conn = undefined;
+        }
       };
       conn = {
         node,
@@ -201,10 +204,10 @@ export default class ConnectionService {
         const msgHash = Hash.digest(msgData);
         const packet = Packet.decode(msgData);
 
-        console.log(
-          `${this.ctx.config.debugName} received message from ${protocol}`,
-          this.ctx.get(Logger).serialize(packet.message),
-        );
+        // console.log(
+        //   `${this.ctx.config.debugName} received message from ${protocol}`,
+        //   this.ctx.get(Logger).serialize(packet.message),
+        // );
 
         if (conn) {
           if (!secp.verify(signature, msgHash.toBytes(), conn.peer.publicKey)) {
@@ -270,10 +273,10 @@ export default class ConnectionService {
   }
 
   public async composePacket(message: Packet['message']) {
-    console.log(
-      `${this.ctx.config.debugName} sending message`,
-      this.ctx.get(Logger).serialize(message),
-    );
+    // console.log(
+    //   `${this.ctx.config.debugName} sending message`,
+    //   this.ctx.get(Logger).serialize(message),
+    // );
 
     let buf: Uint8Array;
     const msg = Packet.encode({ message }, (size) => {

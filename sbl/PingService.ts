@@ -14,10 +14,12 @@ const AVG_PING_INTERVAL_MS = 600000; // 10 minutes
 const PING_TIMEOUT_MS = 10000;
 
 export default class PingService {
+  private tickItvl?: number;
   private pingResolvers: Map<string, () => void> = new Map();
 
   constructor(private ctx: Context) {
     this.tick();
+    ctx.onDestruct(() => clearTimeout(this.tickItvl));
   }
 
   private tick() {
@@ -25,7 +27,10 @@ export default class PingService {
       node.connections.forEach(({ conn }) => conn && this.ping(conn))
     );
 
-    setTimeout(() => this.tick(), AVG_PING_INTERVAL_MS * (Math.random() + 0.5));
+    this.tickItvl = setTimeout(
+      () => this.tick(),
+      AVG_PING_INTERVAL_MS * (Math.random() + 0.5),
+    );
   }
 
   public async ping(conn: Connection) {
@@ -38,7 +43,7 @@ export default class PingService {
       this.pingResolvers.set(secret.toHex(), resolve);
 
       // TODO: What to do in this case?
-      setTimeout(reject, PING_TIMEOUT_MS);
+      // setTimeout(reject, PING_TIMEOUT_MS);
     });
     promise.finally(() => this.pingResolvers.delete(secret.toHex()));
     await promise;

@@ -6,8 +6,11 @@ export default class BlockPublisher {
   constructor(private ctx: Context) {}
 
   public publish(block: Block) {
-    this.ctx.get(NodeService).getAll().forEach((node) =>
-      node.defaultConn?.sendReliable({ PublicationMessage: { block } })
-    );
+    this.ctx.get(NodeService).getAll().forEach((node) => {
+      if (!node.knownBlocks.has(block)) {
+        node.knownBlocks.add(block);
+        node.defaultConn?.sendReliable({ PublicationMessage: { block } });
+      }
+    });
   }
 }

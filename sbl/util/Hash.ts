@@ -31,6 +31,8 @@ const hasher = {
   },
 }.sha3;
 
+export const HASH_SIZE = 32;
+
 export default class Hash {
   public static fromBytes(bytes: Uint8Array) {
     return new Hash(bytes);
@@ -100,7 +102,7 @@ export default class Hash {
 
   private hex: string;
   private constructor(private digest: Uint8Array) {
-    if (digest.length !== 32) {
+    if (digest.byteLength !== HASH_SIZE) {
       throw new Error(`Invalid digest length`);
     }
     this.hex = bin2hex(this.digest);
