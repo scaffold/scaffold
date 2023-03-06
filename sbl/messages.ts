@@ -208,6 +208,8 @@ export const registry = {
       //   the answer will be created as soon as possible after the required timestamp.
       { name: 'timestamp', type: 'long' },
     ],
+    // A block implicitly adds collateral to the data availability contracts of all input/output/verifier.contract_hash hashes
+    // Maybe put the verifier on the collateral claim?
   },
   BlockSet: {
     // BlockSets are only useful if a peer has all input & frontier blocks.
@@ -516,6 +518,22 @@ export const registry = {
     ],
   },
 
+  // CollateralContractParams: {
+  //   name: 'CollateralContractParams',
+  //   type: 'record',
+  //   fields: [
+  //     { name: 'block_hash', type: 'Hash' },
+  //   ],
+  // },
+  CollateralContractBody: {
+    name: 'CollateralContractBody',
+    type: 'record',
+    fields: [
+      { name: 'side', type: 'boolean' },
+      { name: 'hint', type: 'bytes' },
+    ],
+  },
+
   long,
 } as const;
 
@@ -551,6 +569,9 @@ export const makeMsg = <
   );
   const type = types[name];
 
+  // const encodingCache = new WeakMap<ObjectType<Name, R> & object, Uint8Array>();
+  // const encodingSymbol = Symbol('encoding');
+
   return {
     // name,
     // type,
@@ -560,8 +581,39 @@ export const makeMsg = <
       allocator: (size: number) => Uint8Array = (size: number) =>
         new Uint8Array(size),
     ) => {
-      // TODO: Eliminate copy; write directly into arr.
+      // Method 1
       const buf = type.toBuffer(msg);
+
+      // // Method 2
+      // let buf: Uint8Array | undefined;
+      // if (typeof msg === 'object' && msg !== null) {
+      //   buf = encodingCache.get(msg);
+      //   if (buf === undefined) {
+      //     buf = type.toBuffer(msg);
+      //     encodingCache.set(msg, buf);
+      //   }
+      // } else {
+      //   buf = type.toBuffer(msg);
+      // }
+
+      // // Method 3
+      // let buf: Uint8Array | undefined;
+      // if (typeof msg === 'object' && msg !== null) {
+      //   buf = (msg as unknown as Record<typeof encodingSymbol, Uint8Array>)[
+      //     encodingSymbol
+      //   ];
+      //   if (buf === undefined) {
+      //     buf = type.toBuffer(msg);
+      //     (msg as unknown as Record<typeof encodingSymbol, Uint8Array>)[
+      //       encodingSymbol
+      //     ] = buf;
+      //   }
+      // } else {
+      //   buf = type.toBuffer(msg);
+      // }
+
+      // All methods:
+      // TODO: Eliminate copy; write directly into arr.
       const arr = allocator(buf.byteLength);
       arr.set(buf);
       return arr;
@@ -657,6 +709,11 @@ export const Packet = makeMsg(registry, 'Packet');
 export type Packet = MsgType<'Packet'>;
 export const DataContractParams = makeMsg(registry, 'DataContractParams');
 export type DataContractParams = MsgType<'DataContractParams'>;
+export const CollateralContractBody = makeMsg(
+  registry,
+  'CollateralContractBody',
+);
+export type CollateralContractBody = MsgType<'CollateralContractBody'>;
 
 // const buf = Question.encode({
 //   contract: {

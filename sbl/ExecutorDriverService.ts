@@ -206,6 +206,10 @@ export default class ExecutorDriverService {
             verifier,
             {},
             (block) => {
+              // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
+              // If it's not, or maybe just in any case of not having a canonical input:
+              //   Any block can be made canonical by re-writing, and not claiming the disputed input(s).
+
               if (inputs.length === idx) {
                 inputs.push(block);
                 if (--blockedCount === 0) {

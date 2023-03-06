@@ -8,7 +8,9 @@ import ExecutorDriverService, {
   ExecutorDriver,
 } from './ExecutorDriverService.ts';
 import FetchService from './FetchService.ts';
-import LocalGeneratorService from './LocalGeneratorService.ts';
+import LocalGeneratorService, {
+  INGENERABLE_FLAG,
+} from './LocalGeneratorService.ts';
 import { Verifier } from './messages.ts';
 import { bin2str, str2bin } from './pathUtils.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
@@ -42,14 +44,12 @@ export default class ExecutorLauncherService {
 
     if (Hash.equals(verifier.contract_hash, dataHash)) {
       const hint = new Uint8Array([]);
-      const providerHash = Hash.digest('');
       const verified = this.ctx.get(DataContract).verify(
         verifier.params,
         body,
         hint,
-        providerHash,
       );
-      this.ctx.get(LitigationService).litigateBlock(block, verified);
+      this.ctx.get(LitigationService).litigateBlock(block, verified, hint);
       return;
     }
 
@@ -115,7 +115,7 @@ export default class ExecutorLauncherService {
           }
           const { amount } = block.outputs[idx];
           const claims = block.outputClaims[idx];
-          return claims.length === 0 && block.isCanonical
+          return claims.length === 0 && block.canonicality > 0
             ? acc - /* Math.exp(block.mergeableLogProbabilityValue) * */
               Number(amount)
             : acc;
@@ -144,7 +144,9 @@ export default class ExecutorLauncherService {
               driver.notify({ contract_hash, params }),
           });
 
-          this.createBlock(verifier, data, driver.getInputBlocks(), 0);
+          if (data !== INGENERABLE_FLAG) {
+            this.createBlock(verifier, data, driver.getInputBlocks(), 0);
+          }
         },
       );
     } else {

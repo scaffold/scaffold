@@ -6,7 +6,13 @@ import { Verifier } from './messages.ts';
 import { Resource } from './ExecutorDriverService.ts';
 // import AppraisalProvider from './AppraisalProvider.ts';
 
-type Config = {
+// TODO: Reorder, rename, reorganize config
+
+interface GraphParameters {
+  multiplyDataCollateral(x: bigint, time: number): bigint;
+}
+
+interface Config {
   debugName: string;
 
   // To disable logging, unset the entire "log" object.
@@ -85,7 +91,9 @@ type Config = {
   resourceLimits: Record<Resource, number>;
 
   workScoreThreshold: number; // TODO: Units?
-};
+
+  graphParameters: GraphParameters;
+}
 
 export const defaultConfig = {
   getGenerationReward: (_verifier, computeTimeSeconds) =>
@@ -98,6 +106,13 @@ export const defaultConfig = {
     memoryMb: 1024,
   },
   workScoreThreshold: 10,
+  graphParameters: {
+    multiplyDataCollateral: (x, _time) => {
+      // const totalSupply = 1n << 60n;
+      // TODO: Softmin with some fraction of the total supply
+      return x * 2n;
+    },
+  },
 } satisfies Partial<Config>;
 
 export default Config;

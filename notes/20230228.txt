@@ -85,7 +85,7 @@ Root knowledge:
   And sufficient time has passed to allow refutation:
     Then its reward can be interpreted as work.
 Vouching for canonicality!!!:
-  Work derived from some block is a vouch for canonicality!!!
+  Canonical (assuming block B is canonical) work derived from some block B is a vouch for canonicality of B!!!
   Alternative ideas:
     is_canonical [block_hash] = 1
     This has the same problem as vouching for validity - we still need to validate the collateral.
@@ -102,6 +102,10 @@ Data availability requests have their collateral multiplied, causing the data in
     In order to not lose his collateral, he must provide the plaintext as a hint.
     It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
+Canonicality: The local property of every ancestor payment having the most derived work, when compared to other payment claims.
+  Note that more than one block with verifier V can be canonical, if they don't both claim any single payment.
+
+Any block can be made canonical by re-writing, and not claiming the disputed input(s).
 
 How can we make sure the blocks we're receiving are an accurate sample of the entire network's work?
   Send work to equivalent work

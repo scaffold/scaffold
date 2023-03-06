@@ -34,7 +34,8 @@ export interface BlockMeta {
   mergeableLogProbabilityValue: number;
   mergeableLogProbabilityError: number;
 
-  isCanonical: boolean;
+  canonicality: number; // TODO: bigint?
+  collateral: number; // TODO: bigint?
 
   passedVerification?: boolean;
 }

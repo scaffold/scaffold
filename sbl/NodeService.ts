@@ -75,13 +75,7 @@ export default class NodeService {
   }
 
   public computeNodeHash(publicKey: Uint8Array, nonce: Uint8Array) {
-    return Hash.digest(
-      arrConcat(
-        new Uint8Array([publicKey.byteLength & 0xFF]),
-        publicKey,
-        nonce,
-      ),
-    );
+    return Hash.digestParts(publicKey, nonce);
   }
 
   public lookup(hash: Hash) {

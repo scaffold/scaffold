@@ -1,5 +1,12 @@
+import BlockService from './BlockService.ts';
+import { dataHash } from './constants.ts';
 import Context from './Context.ts';
-import { DataContractParams } from './messages.ts';
+import LocalGeneratorService, {
+  INGENERABLE_FLAG,
+  LocalGeneratorOpts,
+} from './LocalGeneratorService.ts';
+import { Block, DataContractParams } from './messages.ts';
+import NodeService from './NodeService.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 
 // For easy-to-verify contracts in general:
@@ -10,20 +17,40 @@ import Hash, { HASH_SIZE } from './util/Hash.ts';
 //   It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
 export default class DataContract {
-  constructor(private ctx: Context) {}
+  constructor(private ctx: Context) {
+    ctx.get(LocalGeneratorService).addGenerator(
+      dataHash,
+      DataContract.generate,
+    );
+  }
 
-  public verify(
-    params: Uint8Array,
-    body: Uint8Array,
-    hint: Uint8Array,
-    providerHash: Hash,
-  ) {
+  public verify(params: Uint8Array, body: Uint8Array, hint: Uint8Array) {
     const { hash, secret } = DataContractParams.decode(params);
     return body.byteLength === HASH_SIZE &&
       Hash.equals(Hash.digest(hint), hash) &&
       Hash.equals(
-        Hash.digestParts(hint, secret, providerHash),
+        Hash.digestParts(hint, secret, this.ctx.get(NodeService).getSelfHash()),
         Hash.fromBytes(body),
       );
+  }
+
+  public static generate({ ctx, params, emitCorrect }: LocalGeneratorOpts) {
+    const { hash, secret } = DataContractParams.decode(params);
+    const block = ctx.get(BlockService).get(hash);
+    if (block) {
+      if (emitCorrect) {
+        const data = Block.encode(block);
+        const commitment = Hash.digestParts(
+          data,
+          secret,
+          ctx.get(NodeService).getSelfHash(),
+        );
+        return commitment.toBytes();
+      } else {
+        return Hash.random().toBytes();
+      }
+    } else {
+      return INGENERABLE_FLAG;
+    }
   }
 }

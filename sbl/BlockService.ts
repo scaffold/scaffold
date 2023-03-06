@@ -64,7 +64,8 @@ export default class BlockService {
       mergeableLogProbabilityValue: 0,
       mergeableLogProbabilityError: 0,
 
-      isCanonical: true,
+      canonicality: 0,
+      collateral: 0,
     };
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
@@ -120,24 +121,22 @@ export default class BlockService {
 
     const verifierHash = Hash.digest(Verifier.encode(block.verifier));
 
-    const isCanonical = someInputCanonicality !== false &&
-      block.inputs.every(({ block_hash }) => {
-        const inputBlock = this.blocksByHash.get(block_hash.toPrimitive());
-        if (inputBlock === undefined) {
-          return true;
-        }
-        if (!inputBlock.isCanonical) {
-          return false;
-        }
+    const canonicality = block.inputs.reduce((acc, { block_hash }) => {
+      const claims = this.getClaims(block_hash, verifierHash);
+      const maxCompetitorWork = Math.max(
+        ...claims.map((c) => c === block ? 0 : c.derivedWorkValue),
+      );
+      const delta = block.derivedWorkValue - maxCompetitorWork;
+      const inputBlock = this.blocksByHash.get(block_hash.toPrimitive());
+      const inputCanonicality = inputBlock === undefined
+        ? delta
+        : Math.min(delta, inputBlock.canonicality);
+      return Math.min(acc, inputCanonicality);
+    }, Infinity);
 
-        const claims = this.getClaims(block_hash, verifierHash);
-        return Math.max(...claims.map((c) => c.derivedWorkValue)) ===
-          block.derivedWorkValue;
-      });
-
-    if (isCanonical !== block.isCanonical) {
-      block.isCanonical = isCanonical;
-      if (isCanonical) {
+    if (canonicality !== block.canonicality) {
+      block.canonicality = canonicality;
+      if (canonicality > 0) {
         // this.onCanonicalBlockListeners
       }
       for (const claims of block.outputClaims) {
@@ -151,6 +150,32 @@ export default class BlockService {
         }
       }
     }
+
+    for (const { block_hash } of block.inputs) {
+      const input = this.blocksByHash.get(block_hash.toPrimitive());
+      if (input !== undefined) {
+        this.updateCollateral(input);
+      }
+    }
+  }
+
+  public updateCollateral(block: BlockExt) {
+    block.collateral = block.outputs.reduce(
+      (acc, { amount }, idx) =>
+        amount > 0n
+          ? Math.max(
+            acc,
+            Math.min(
+              Number(amount),
+              block.outputClaims[idx].reduce(
+                (acc, claim) => Math.max(acc, claim.canonicality),
+                0,
+              ),
+            ),
+          )
+          : acc,
+      0,
+    );
   }
 
   public updateDerivedWork(block: BlockExt) {
@@ -158,10 +183,12 @@ export default class BlockService {
 
     for (const claims of block.outputClaims) {
       for (const outputBlock of claims) {
-        sum += outputBlock.derivedWorkValue /
-          outputBlock.inputs.filter(({ block_hash }) =>
-            this.blocksByHash.get(block_hash.toPrimitive())
-          ).length;
+        if (outputBlock.canonicality > 0) {
+          sum += outputBlock.derivedWorkValue /
+            outputBlock.inputs.filter(({ block_hash }) =>
+              this.blocksByHash.get(block_hash.toPrimitive())
+            ).length;
+        }
       }
     }
 

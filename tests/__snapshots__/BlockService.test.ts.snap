@@ -6,6 +6,8 @@ snapshot[`ingest should add block to our registry 1`] = `
     "5da18fe9de34325ac7d94f8626b0c76e7eed5070b8de66d70c3df18fb511ba1b" => {
         body: Uint8Array(0) [
         ],
+        canonicality: Infinity,
+        collateral: 0,
         derivedWork: 0,
         derivedWorkError: 0,
         derivedWorkValue: 1,
@@ -49,7 +51,6 @@ snapshot[`ingest should add block to our registry 1`] = `
         },
         inputs: [
         ],
-        isCanonical: true,
         isFreeMarket: true,
         mergeableLogProbabilityError: 0,
         mergeableLogProbabilityValue: 0,
