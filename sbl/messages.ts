@@ -199,6 +199,9 @@ export const registry = {
       // { name: 'body', type: ['Publication', 'bytes'] },
       { name: 'body', type: 'bytes' },
 
+      // Whether body satisfies the verifier or not
+      { name: 'side', type: 'boolean' },
+
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
       { name: 'isFreeMarket', type: 'boolean' },
 

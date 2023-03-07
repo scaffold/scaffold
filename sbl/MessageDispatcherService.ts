@@ -1,18 +1,13 @@
 import Context from './Context.ts';
-import { Node } from './NodeService.ts';
 import BridgingService from './BridgingService.ts';
 import NodeService from './NodeService.ts';
-import { InfoMessage, Packet } from './messages.ts';
-import { Connection } from './ConnectionService.ts';
 import PingService from './PingService.ts';
 import DhtService from './DhtService.ts';
 // import SubscriptionService from './SubscriptionService.ts';
 // import PublicationService from './PublicationService.ts';
 // import CollateralService from './CollateralService.ts';
 import MessageCtx from './MessageCtx.ts';
-import BlockIngestor from './BlockIngestor.ts';
 import BlockService from './BlockService.ts';
-import BlockFetcher from './BlockFetcher.ts';
 
 export class BadMessageError extends Error {
   constructor(msg: string, public trustDelta: number) {
@@ -74,14 +69,14 @@ export default class MessageDispatcherService {
       msgCtx.conn.node.knownBlocks.add(msg.PublicationMessage.block);
       this.ctx.get(BlockService).ingest(msg.PublicationMessage.block);
     }
-    if ('RequestBlockMessage' in msg) {
-      (async () => {
-        const block = await this.ctx.get(BlockFetcher).get(
-          msg.RequestBlockMessage.hash,
-        );
-        msgCtx.conn.sendReliable({ PublicationMessage: { block } });
-      })();
-    }
+    // if ('RequestBlockMessage' in msg) {
+    //   (async () => {
+    //     const block = await this.ctx.get(BlockFetcher).get(
+    //       msg.RequestBlockMessage.hash,
+    //     );
+    //     msgCtx.conn.sendReliable({ PublicationMessage: { block } });
+    //   })();
+    // }
 
     // if ('SubscribeMessage' in msg) {
     //   this.ctx.get(SubscriptionService).handleSubscribeMessage(

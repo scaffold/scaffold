@@ -17,7 +17,8 @@ std::uint8_t *getContractHash();
 Vector *getParams();
 Vector *getCandidate();
 Vector *getHint();
-Vector *getUserData();
+// Vector *getUserData();
+std::uint8_t *getBlockRngHash();
 bool getEmitCorrect();
 
 BlobHandle open(std::uint8_t *contractHash, std::uint8_t *params, std::size_t paramsLen);

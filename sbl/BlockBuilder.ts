@@ -1,7 +1,6 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import { Block, Verifier } from './messages.ts';
-import { BlockRegistry, IncentiveRegistry } from './registries.ts';
 import IncentiveService from './IncentiveService.ts';
 import IncentiveCalculator from './IncentiveCalculator.ts';
 import BlockService from './BlockService.ts';
@@ -35,6 +34,7 @@ export default class BlockBuilder {
     const amount = this.ctx.get(IncentiveCalculator)
       .getAvailableIncentive(verifier, inputs);
     const outputs = this.ctx.get(IncentiveService).popIncentives(amount);
+    const side = true;
     const isFreeMarket = true;
     let timestamp = BigInt(Date.now());
     inputs.forEach((input) => {
@@ -45,6 +45,6 @@ export default class BlockBuilder {
         timestamp = inputTs + 1n;
       }
     });
-    return { inputs, outputs, verifier, body, isFreeMarket, timestamp };
+    return { inputs, outputs, verifier, body, side, isFreeMarket, timestamp };
   }
 }

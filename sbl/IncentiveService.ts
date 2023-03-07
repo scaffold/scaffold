@@ -35,6 +35,7 @@ export default class IncentiveService {
       inputs: [],
       outputs: [{ verifier, amount: -incentive }],
       body: new Uint8Array(),
+      side: true,
       isFreeMarket: true,
       timestamp: BigInt(Date.now()),
     };

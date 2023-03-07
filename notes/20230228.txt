@@ -7,6 +7,7 @@ If multiple callers fetch a verifier with externalIncentive, it's added or max-e
 
 Problem:
   It's easy to design a contract that I can solve efficiently, but no one else. So I can create high-work blocks without effort, and influence the derived work.
+  Or, work shared with another generator
   Example: Account contracts
   Best solution (not great): imbue each client with a whitelist of fair contract hashes.
   Idea: Only value whitelist or ones that we win
@@ -86,6 +87,7 @@ Root knowledge:
     Then its reward can be interpreted as work.
 Vouching for canonicality!!!:
   Canonical (assuming block B is canonical) work derived from some block B is a vouch for canonicality of B!!!
+    This depends on a random sampling from new work
   Alternative ideas:
     is_canonical [block_hash] = 1
     This has the same problem as vouching for validity - we still need to validate the collateral.
@@ -111,6 +113,33 @@ How can we make sure the blocks we're receiving are an accurate sample of the en
   Send work to equivalent work
   Send work to everyone
 Sample from verifier space, not work space?
+
+Each peer can only create BlockSets containing their own blocks?
+
+Input tree and new block
+  How to merge them together?
+
+Block RNG, deterministic from IO
+Block RNG, including secret
+  I don't think we want this, since I don't want to force bodies to be derived from the RNG
+  But is this basically the same as emitCorrect?
+Requiring coins from an input
+Requiring coins to an output
+Block authentication (in addition to just body authentication)
+
+Should collateral consumption be delayed by 10 seconds or so?
+
+Output verifier changes based on claim time?
+
+Idea:
+  Output verifier checks the block, and usually delegates to a body checker?
+  Claim specifies an output index
+  Block doesn't have a verifier anymore
+  This is nice since a block without any inputs/claims is just a data block
+
+Honestly collateral can be sent to an input too.
+  As long as the block remains canonical, which should happen even if it's invalid, it will lock the input.
+
   
 25, 25, 50
 
