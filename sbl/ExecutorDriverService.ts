@@ -17,7 +17,7 @@ import { arrEquals } from './util/buffer.ts';
 import { mapEntries } from './util/functional.ts';
 import { INTERRUPT_FLAG } from './worker/WorkerChannel.ts';
 
-export enum Resource {
+export const enum Resource {
   WebWorkerCount = 'webWorkerCount',
   CpuUsage = 'cpuUsage',
   MemoryMb = 'memoryMb',

@@ -196,7 +196,8 @@ export const registry = {
       // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
-      // The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
+      // NO: The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
+      //   Actually, any balance needs to be spent in an output (can just be the true verifier)
 
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
@@ -524,13 +525,15 @@ export const registry = {
     ],
   },
 
-  // CollateralContractParams: {
-  //   name: 'CollateralContractParams',
-  //   type: 'record',
-  //   fields: [
-  //     { name: 'block_hash', type: 'Hash' },
-  //   ],
-  // },
+  CollateralContractParams: {
+    name: 'CollateralContractParams',
+    type: 'record',
+    fields: [
+      { name: 'public_key_hash', type: 'Hash' },
+      { name: 'free_after', type: 'long' },
+      { name: 'data_price', type: 'long' },
+    ],
+  },
   CollateralContractBody: {
     name: 'CollateralContractBody',
     type: 'record',
@@ -715,6 +718,11 @@ export const Packet = makeMsg(registry, 'Packet');
 export type Packet = MsgType<'Packet'>;
 export const DataContractParams = makeMsg(registry, 'DataContractParams');
 export type DataContractParams = MsgType<'DataContractParams'>;
+export const CollateralContractParams = makeMsg(
+  registry,
+  'CollateralContractParams',
+);
+export type CollateralContractParams = MsgType<'CollateralContractParams'>;
 export const CollateralContractBody = makeMsg(
   registry,
   'CollateralContractBody',

@@ -4,6 +4,9 @@ import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
 import Peer from '~/sbl/Peer.ts';
+import NodeService from '~/sbl/NodeService.ts';
+import BlockService from '../sbl/BlockService.ts';
+import { Block } from '../sbl/messages.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 let timestamp = 1000;
@@ -64,4 +67,22 @@ export const makeTest = (
   return deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000).finally(() =>
     Promise.all(ctxs.map((ctx) => ctx.destruct()))
   );
+};
+
+export const waitForBlock = async (
+  ctx: Context,
+  expectedBlock: Block,
+  intervalMs = 100,
+) => {
+  const expectedSigner = ctx.get(NodeService).getSelfHash();
+
+  while (true) {
+    const hash = ctx.get(BlockService).hash(expectedBlock, expectedSigner);
+    const block = ctx.get(BlockService).get(hash);
+    if (block !== undefined) {
+      return block;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
 };

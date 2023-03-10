@@ -53,6 +53,10 @@ export interface WorkerComm {
   read(inode: number, offset: number, dstBufs: Uint8Array[]): Promise<number>;
   getSize(inode: number): Promise<number>;
 
+  debugLog(msg: Uint8Array): undefined;
+  debugPtr(name: Uint8Array, mem: Uint8Array, ptr: number): undefined;
+  debugBreak(): Promise<void>;
+
   // notify(contractHash: Uint8Array, params: Uint8Array): undefined;
   // request(
   //   contractHash: Uint8Array,

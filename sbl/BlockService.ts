@@ -4,6 +4,7 @@ import Context from './Context.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
 import { Block, BlockInput, BlockSet, Verifier } from './messages.ts';
+import NodeService from './NodeService.ts';
 import { bin2hex } from './pathUtils.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error } from './util/functional.ts';
@@ -29,8 +30,16 @@ export default class BlockService {
 
   constructor(private ctx: Context) {}
 
+  public hash(block: Block, signer: Hash) {
+    return Hash.digestParts(signer, Block.encode(block));
+  }
+
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
-  public ingest(block: Block, immortalize = false) {
+  public ingest(
+    block: Block,
+    signer = this.ctx.get(NodeService).getSelfHash(),
+    immortalize = false,
+  ) {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
     // console.log(
@@ -40,14 +49,16 @@ export default class BlockService {
     // );
     // console.log(block);
 
-    const blockHash = Hash.digest(Block.encode(block));
+    const blockHash = this.hash(block, signer);
     if (this.blocksByHash.has(blockHash.toPrimitive())) {
-      return;
+      return blockHash;
     }
 
     const meta: BlockMeta = {
       hash: blockHash,
       nonce: Math.random(),
+
+      signer,
 
       verifiers: block.inputs.map(({ block_hash, output_idx }) =>
         this.get(block_hash)?.outputs[output_idx]?.verifier
@@ -125,6 +136,8 @@ export default class BlockService {
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
     this.ctx.get(BlockPublisher).publish(block);
+
+    return blockHash;
   }
 
   public updateCanonicality(block: BlockExt, someInputCanonicality?: boolean) {

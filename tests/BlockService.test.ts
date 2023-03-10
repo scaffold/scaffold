@@ -7,13 +7,10 @@ Deno.test(
   { name: `ingest should add block to our registry` },
   makeTest({}, async (testCtx, ctx) => {
     ctx.get(BlockService).ingest({
-      verifier: {
-        contract_hash: Hash.fromLiteral32(0),
-        params: new Uint8Array([]),
-      },
       inputs: [],
       outputs: [],
       body: new Uint8Array([]),
+      side: true,
       isFreeMarket: true,
       timestamp: 0n,
     });

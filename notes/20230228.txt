@@ -231,7 +231,7 @@ de67ab4eaad8e63acd2fb0896b9b104cfafbfbf8ab21e3dea0ccdcc9cabbefbb: {
     output_idx: 0,
   }],
   outputs: [{
-    amount: 25, // Rectification is always considered collateral AGAINST
+    amount: 25, // Rectification is always considered collateral FOR this block being valid
     verifier: {
       contract_hash: 'RECTIFICATION', // Rectification
       params: 'MATH(1+2)',
@@ -240,13 +240,13 @@ de67ab4eaad8e63acd2fb0896b9b104cfafbfbf8ab21e3dea0ccdcc9cabbefbb: {
     amount: 100,
     verifier: {
       contract_hash: 'COLLATERAL',
-      params: 'side: FOR, decacb1bd9700b9fcaa195dd2a39a62d31fe6d3d295a209dfe8bb8fc5daf6bf1',
+      params: 'side: AGAINST, decacb1bd9700b9fcaa195dd2a39a62d31fe6d3d295a209dfe8bb8fc5daf6bf1',
     }
   }, {
     amount: 25,
     verifier: {
       contract_hash: 'COLLATERAL',
-      params: 'side: AGAINST, 5558c5bab6e0f0fbfbbaf2c84ec9acdbeada654f6aaeadaeb3b589e9cefffeea',
+      params: 'side: FOR, 5558c5bab6e0f0fbfbbaf2c84ec9acdbeada654f6aaeadaeb3b589e9cefffeea',
       // Can be claimed by peer 'decacb1bd9700b9fcaa195dd2a39a62d31fe6d3d295a209dfe8bb8fc5daf6bf1' if 100 > 50 and 10 seconds have passed
     }
   }],

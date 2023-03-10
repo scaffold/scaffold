@@ -18,7 +18,7 @@ export default class BlockBuilder {
       .flatMap(({ block, idx }) =>
         block.outputClaims[idx].length === 0
           ? [{
-            block_hash: Hash.digest(Block.encode(block)),
+            block_hash: block.hash,
             output_idx: idx,
             amount: block.outputs[idx].amount,
           }]

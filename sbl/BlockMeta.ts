@@ -1,7 +1,7 @@
 import { Block, Verifier } from './messages.ts';
 import Hash from './util/Hash.ts';
 
-enum BlockFlag {
+const enum BlockFlag {
   CheckedZeroSum = 1 << 0,
   CheckedTimestamp = 1 << 1,
   CheckedMergability = 1 << 2,
@@ -18,6 +18,8 @@ enum BlockFlag {
 export interface BlockMeta {
   hash: Hash;
   nonce: number;
+
+  signer: Hash;
 
   verifiers: Verifier[];
 

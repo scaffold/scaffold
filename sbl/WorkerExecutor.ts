@@ -11,6 +11,9 @@ import { Block, Verifier } from './messages.ts';
 import { rootHash } from './constants.ts';
 import { error } from './util/functional.ts';
 import { ExecutorDriver } from './ExecutorDriverService.ts';
+import WorkerDebuggerManager, {
+  WorkerDebugger,
+} from './WorkerDebuggerManager.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
@@ -30,7 +33,7 @@ export default class WorkerExecutor {
   // Note: This will transfer the input buffers, reducing their size to zero.
   public run<InputKeys extends string, OutputKeys extends string>(
     // codeVerifier: Verifier,
-    generator: Uint8Array,
+    code: Uint8Array,
     inputs: Record<InputKeys, Uint8Array>,
     outputSpec: Record<OutputKeys, null>,
     driver: ExecutorDriver,
@@ -69,6 +72,19 @@ export default class WorkerExecutor {
     const terminateFn = (_: typeof INTERRUPT_FLAG) => worker.terminate();
     let cancelCb = terminateFn;
     cancel.then((flag) => cancelCb(flag));
+
+    let codeHash: Hash | undefined;
+    const getDebugger = (): WorkerDebugger => {
+      codeHash ??= Hash.digest(code);
+      const dbgr = this.ctx.get(WorkerDebuggerManager).getDebugger(codeHash);
+      if (dbgr === undefined) {
+        console.error(
+          `No debugger configured for code hash ${codeHash.toHex()}`,
+        );
+        throw INTERRUPT_FLAG;
+      }
+      return dbgr;
+    };
 
     const inodes = new Map<number, OpenFile>();
     const outputs: Record<string, { size: number; chunks: Uint8Array[] }> = {};
@@ -129,7 +145,7 @@ export default class WorkerExecutor {
             //   contractHash: codeVerifier.contract_hash.toBytes(),
             //   params: codeVerifier.params,
             // },
-            code: generator,
+            code,
             inputs,
             outputSpec,
           };
@@ -261,6 +277,18 @@ export default class WorkerExecutor {
       // result(data: Uint8Array): undefined {
       //   return undefined;
       // },
+
+      debugLog(msg: Uint8Array): undefined {
+        getDebugger().log(msg);
+        return undefined;
+      },
+      debugPtr(name: Uint8Array, mem: Uint8Array, ptr: number): undefined {
+        getDebugger().ptr(name, mem, ptr);
+        return undefined;
+      },
+      debugBreak(): Promise<void> {
+        return getDebugger().brk();
+      },
     });
 
     return result;

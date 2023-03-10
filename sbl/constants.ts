@@ -4,6 +4,9 @@ const SBL = Hash.fromLiteralStr('SBL'.padEnd(32, '\0'));
 
 export const rootHash = Hash.xor(SBL, Hash.fromLiteralStr('root'));
 
+export const trueHash = Hash.xor(SBL, Hash.fromLiteralStr('true'));
+export const falseHash = Hash.xor(SBL, Hash.fromLiteralStr('false'));
+
 export const generatorHash = Hash.xor(SBL, Hash.fromLiteralStr('gen'));
 
 export const dataHash = Hash.xor(SBL, Hash.fromLiteralStr('data'));
