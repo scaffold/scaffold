@@ -167,8 +167,11 @@ export const registry = {
     name: 'BlockInput',
     type: 'record',
     fields: [
-      { name: 'amount', type: 'long' },
+      // I don't think we necessarily need this
+      // { name: 'amount', type: 'long' },
+
       { name: 'block_hash', type: 'Hash' },
+      { name: 'output_idx', type: 'int' },
     ],
   },
   BlockOutput: {
@@ -195,7 +198,7 @@ export const registry = {
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
       // The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
 
-      { name: 'verifier', type: 'Verifier' },
+      // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
       { name: 'body', type: 'bytes' },
 

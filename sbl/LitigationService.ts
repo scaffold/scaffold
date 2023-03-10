@@ -36,7 +36,7 @@ export default class LitigationService {
     };
     const body = CollateralContractBody.encode({ side, hint });
 
-    const collateralBlock = this.ctx.get(BlockBuilder).build(verifier, body);
+    const collateralBlock = this.ctx.get(BlockBuilder).build([verifier], body);
     this.ctx.get(BlockService).ingest(collateralBlock);
   }
 }

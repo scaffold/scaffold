@@ -9,9 +9,9 @@ import {
   useReactTable,
 } from 'tanstack-table';
 import { useVirtual } from 'tanstack-virtual';
+import { BlockExt } from '../sbl/BlockMeta.ts';
 import Context from '../sbl/Context.ts';
 import Logger from '../sbl/Logger.ts';
-import { Block } from '../sbl/messages.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import { BlockRegistry } from '../sbl/registries.ts';
@@ -27,7 +27,7 @@ const RowDetail = ({ name, val }: { name: string; val: string }) => (
 export default ({ ctx }: { ctx: Context }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
-  const columns = React.useMemo<ColumnDef<{ key: Hash; val: Block }>[]>(
+  const columns = React.useMemo<ColumnDef<{ key: Hash; val: BlockExt }>[]>(
     () => [
       {
         header: 'hash',
@@ -38,24 +38,24 @@ export default ({ ctx }: { ctx: Context }) => {
           </a>
         ),
       },
-      {
-        header: 'verifier contract hash',
-        accessorFn: ({ val }) =>
-          ctx.get(QaDebugger).debugQuestion(val.verifier)?.dbgContract ||
-          val.verifier.contract_hash.toHex(),
-        cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
-      },
-      {
-        header: 'verifier params',
-        accessorFn: ({ val }) => {
-          const dbg = ctx.get(QaDebugger).debugQuestion(val.verifier)
-            ?.dbgParams;
-          return dbg
-            ? ctx.get(Logger).serialize(dbg, 0)
-            : bin2hex(val.verifier.params);
-        },
-        cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
-      },
+      // {
+      //   header: 'verifier contract hash',
+      //   accessorFn: ({ val }) =>
+      //     ctx.get(QaDebugger).debugQuestion(val.verifier)?.dbgContract ||
+      //     val.verifier.contract_hash.toHex(),
+      //   cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
+      // },
+      // {
+      //   header: 'verifier params',
+      //   accessorFn: ({ val }) => {
+      //     const dbg = ctx.get(QaDebugger).debugQuestion(val.verifier)
+      //       ?.dbgParams;
+      //     return dbg
+      //       ? ctx.get(Logger).serialize(dbg, 0)
+      //       : bin2hex(val.verifier.params);
+      //   },
+      //   cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
+      // },
       {
         header: 'claims',
         accessorFn: ({ val }) => val.inputs.length,
@@ -182,7 +182,7 @@ export default ({ ctx }: { ctx: Context }) => {
                         <RowDetail name='Hash' val={row.original.key.toHex()} />
                         {row.original.val.inputs.map((claim, idx) => (
                           <RowDetail
-                            name={`Claim ${idx}; $${claim.amount}`}
+                            name={`Claim ${idx}; output_idx=$${claim.output_idx}`}
                             val={claim.block_hash.toHex()}
                           />
                         ))}
@@ -198,6 +198,8 @@ export default ({ ctx }: { ctx: Context }) => {
                             />
                           </>
                         ))}
+                        {
+                          /*
                         <RowDetail
                           name='Verifier contract hash'
                           val={row.original.val.verifier.contract_hash.toHex()}
@@ -206,6 +208,8 @@ export default ({ ctx }: { ctx: Context }) => {
                           name='Verifier params'
                           val={bin2hex(row.original.val.verifier.params)}
                         />
+                        */
+                        }
                         <RowDetail
                           name='Body'
                           val={bin2hex(row.original.val.body)}

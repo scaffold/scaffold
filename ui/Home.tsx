@@ -100,7 +100,7 @@ const startGame = () => {
     contract_hash: moduleHashes.thrust_init_wasm_hash,
     params: match.toBytes(),
   };
-  const block = client.ctx.get(BlockBuilder).build(verifier, body);
+  const block = client.ctx.get(BlockBuilder).build([verifier], body);
   client.ctx.get(BlockService).ingest(block);
   return match;
 };
@@ -173,10 +173,10 @@ export default () => {
         onClick={() =>
           client.ctx.get(BlockService).ingest(
             client.ctx.get(BlockBuilder).build(
-              {
+              [{
                 contract_hash: Hash.fromHex(selectedContract!),
                 params: str2bin(params),
-              },
+              }],
               str2bin(body),
             ),
           )}

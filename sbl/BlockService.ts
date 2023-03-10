@@ -3,9 +3,8 @@ import BlockPublisher from './BlockPublisher.ts';
 import Context from './Context.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
-import { Block, BlockSet, Verifier } from './messages.ts';
+import { Block, BlockInput, BlockSet, Verifier } from './messages.ts';
 import { bin2hex } from './pathUtils.ts';
-import { BlocksByVerifierStore, BlockStore } from './stores.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
@@ -16,7 +15,7 @@ export default class BlockService {
   private blocksByHash = new Map<HashPrimitive, BlockExt>();
   private claimsByOutput = new Map<HashPrimitive, BlockExt[]>();
   private onNewBlockListeners = new Map<
-    HashPrimitive,
+    HashPrimitive, // Key is verifier hash
     ((block: BlockExt) => void)[]
   >();
   private onCanonicalBlockListeners = new Map<
@@ -31,7 +30,9 @@ export default class BlockService {
   constructor(private ctx: Context) {}
 
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
-  public ingest(block: Block) {
+  public ingest(block: Block, immortalize = false) {
+    // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
+
     // console.log(
     //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
     //     trunc(bin2hex(block.verifier.params), 100)
@@ -39,9 +40,7 @@ export default class BlockService {
     // );
     // console.log(block);
 
-    const blockHash = BlockStore.hash(block);
-    const verifierHash = Hash.digest(Verifier.encode(block.verifier));
-
+    const blockHash = Hash.digest(Block.encode(block));
     if (this.blocksByHash.has(blockHash.toPrimitive())) {
       return;
     }
@@ -50,12 +49,23 @@ export default class BlockService {
       hash: blockHash,
       nonce: Math.random(),
 
+      verifiers: block.inputs.map(({ block_hash, output_idx }) =>
+        this.get(block_hash)?.outputs[output_idx]?.verifier
+      ).filter((v1, idx, arr): v1 is Verifier =>
+        v1 !== undefined &&
+        arr.findIndex((v2) =>
+            v2 !== undefined &&
+            Hash.equals(v1.contract_hash, v2.contract_hash) &&
+            arrEquals(v1.params, v2.params)
+          ) === idx
+      ),
+
       receivedTimestamp: this.ctx.config.timeProvider(),
       flags: 0,
       derivedWork: 0,
       mergeableProbability: 0,
-      outputClaims: block.outputs.map(({ verifier }) =>
-        this.getClaims(blockHash, Hash.digest(Verifier.encode(verifier)))
+      outputClaims: block.outputs.map((_, idx) =>
+        this.getClaims({ block_hash: blockHash, output_idx: idx })
       ),
       propagationMask: 0,
 
@@ -70,9 +80,7 @@ export default class BlockService {
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
 
-    blockExt.inputs.forEach(({ block_hash }) =>
-      this.getClaims(block_hash, verifierHash).push(blockExt)
-    );
+    blockExt.inputs.forEach((input) => this.getClaims(input).push(blockExt));
 
     block.outputs.forEach(({ verifier }) =>
       this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0)
@@ -80,15 +88,19 @@ export default class BlockService {
 
     this.updateDerivedWork(blockExt);
 
-    this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
-      cb(blockExt)
-    );
+    blockExt.verifiers.forEach((verifier) => {
+      const verifierHash = Hash.digest(Verifier.encode(verifier));
 
-    // TODO: Use a simpler store; also update FetchService
-    this.ctx.get(BlocksByVerifierStore).mutate(
-      verifierHash,
-      (blocks) => blocks ? [...blocks, blockExt] : [blockExt],
-    );
+      this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
+        cb(blockExt)
+      );
+
+      // // TODO: Use a simpler store; also update FetchService
+      // this.ctx.get(BlocksByVerifierStore).mutate(
+      //   verifierHash,
+      //   (blocks) => blocks ? [...blocks, blockExt] : [blockExt],
+      // );
+    });
 
     // const samples = PoissonDistribution.sample(
     //   Number(this.getWork(blockExt)) * this.getSamplesPerWork(),
@@ -119,15 +131,13 @@ export default class BlockService {
     // Note that we consider missing inputs as canonical.
     // We also short-circuit if an input canonicality is false, which is a common case.
 
-    const verifierHash = Hash.digest(Verifier.encode(block.verifier));
-
-    const canonicality = block.inputs.reduce((acc, { block_hash }) => {
-      const claims = this.getClaims(block_hash, verifierHash);
+    const canonicality = block.inputs.reduce((acc, input) => {
+      const claims = this.getClaims(input);
       const maxCompetitorWork = Math.max(
         ...claims.map((c) => c === block ? 0 : c.derivedWorkValue),
       );
       const delta = block.derivedWorkValue - maxCompetitorWork;
-      const inputBlock = this.blocksByHash.get(block_hash.toPrimitive());
+      const inputBlock = this.blocksByHash.get(input.block_hash.toPrimitive());
       const inputCanonicality = inputBlock === undefined
         ? delta
         : Math.min(delta, inputBlock.canonicality);
@@ -287,12 +297,13 @@ export default class BlockService {
     */
   }
 
-  private getClaims(emitterHash: Hash, verifierHash: Hash) {
+  private getClaims({ block_hash, output_idx }: BlockInput) {
+    // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(
       this.claimsByOutput,
       Hash.composePrimitives(
-        emitterHash.toPrimitive(),
-        verifierHash.toPrimitive(),
+        block_hash.toPrimitive(),
+        Hash.fromLiteral32(output_idx).toPrimitive(),
       ),
       () => [],
     );
@@ -308,23 +319,10 @@ export default class BlockService {
 
   private calculateMergeableProbability(block: BlockExt) {
     let prob = 1;
-    for (const { block_hash, amount } of block.inputs) {
+    for (const { block_hash, output_idx } of block.inputs) {
       const inBlock = this.blocksByHash.get(block_hash.toPrimitive());
       if (inBlock) {
-        const idx = inBlock.outputs.findIndex((o) =>
-          Hash.equals(
-            o.verifier.contract_hash,
-            block.verifier.contract_hash,
-          ) && arrEquals(o.verifier.params, block.verifier.params) &&
-          o.amount === amount
-        );
-        if (idx === -1) {
-          throw new Error(
-            `Invalid input! Block doesn't output to this verifier with amount ${amount}`,
-          );
-        }
-
-        const claims = inBlock.outputClaims[idx];
+        const claims = inBlock.outputClaims[output_idx];
         const total = claims.reduce((acc, cur) => acc + cur.derivedWork, 0);
         prob *= block.derivedWork / total;
       }
@@ -360,16 +358,20 @@ export default class BlockService {
 
   public getBlocksByVerifier(verifier: Verifier) {
     return [...this.blocksByHash.values()].filter((x) =>
-      Hash.equals(x.verifier.contract_hash, verifier.contract_hash) &&
-      arrEquals(x.verifier.params, verifier.params)
+      x.verifiers.some((v) =>
+        Hash.equals(v.contract_hash, verifier.contract_hash) &&
+        arrEquals(v.params, verifier.params)
+      )
     );
   }
 
   public getBlocksByOutput(verifier: Verifier) {
-    return [...this.blocksByHash.values()].filter((x) =>
-      x.outputs.some((y) =>
+    return [...this.blocksByHash.values()].flatMap((block) =>
+      block.outputs.flatMap((y, idx) =>
         Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
-        arrEquals(y.verifier.params, verifier.params)
+          arrEquals(y.verifier.params, verifier.params)
+          ? [{ block, idx }]
+          : []
       )
     );
   }
@@ -378,6 +380,19 @@ export default class BlockService {
     const verifierHash = Hash.digest(Verifier.encode(verifier));
     getOrCreate(this.onNewBlockListeners, verifierHash.toPrimitive(), () => [])
       .push(cb);
+  }
+  public offNewBlock(verifier: Verifier, cb: (block: BlockExt) => void) {
+    const verifierHash = Hash.digest(Verifier.encode(verifier));
+    const listeners = getOrCreate(
+      this.onNewBlockListeners,
+      verifierHash.toPrimitive(),
+      () => [],
+    );
+    const idx = listeners.lastIndexOf(cb);
+    if (idx === -1) {
+      throw new Error(`Listener does not exist`);
+    }
+    listeners.splice(idx, 1);
   }
 
   public snapshot() {

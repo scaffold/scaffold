@@ -2,7 +2,6 @@ import Context from './Context.ts';
 import FetchService from './FetchService.ts';
 import IncentiveService from './IncentiveService.ts';
 import { Block, Verifier } from './messages.ts';
-import { BlocksByVerifierStore } from './stores.ts';
 import Hash from './util/Hash.ts';
 import StateTrackerUtil from './util/StateTracker.ts';
 import StoreObserver from './util/StoreObserver.ts';

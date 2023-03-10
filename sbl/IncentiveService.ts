@@ -4,7 +4,6 @@ import { Block, BlockOutput, Verifier } from './messages.ts';
 import AccountService from './AccountService.ts';
 import { getOrCreate } from './util/map.ts';
 import { PendingIncentiveRegistry } from './registries.ts';
-import { BlockStore } from './stores.ts';
 import BlockPublisher from './BlockPublisher.ts';
 import BlockService from './BlockService.ts';
 
@@ -28,10 +27,10 @@ export default class IncentiveService {
     }
 
     const block: Block = {
-      verifier: {
-        contract_hash: Hash.fromLiteral32(0),
-        params: new Uint8Array(),
-      },
+      // verifier: {
+      //   contract_hash: Hash.fromLiteral32(0),
+      //   params: new Uint8Array(),
+      // },
       inputs: [],
       outputs: [{ verifier, amount: -incentive }],
       body: new Uint8Array(),

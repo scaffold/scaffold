@@ -44,12 +44,16 @@ export default class QaDebugger {
   }
 
   public debugAnswer(
-    { verifier, body }: { verifier: Verifier; body: Uint8Array },
+    { verifiers, body }: { verifiers: Verifier[]; body: Uint8Array },
   ) {
-    const dbgr = this.debuggers.get(verifier.contract_hash.toHex());
-    if (dbgr) {
+    const dbgrs = verifiers.map((v) =>
+      this.debuggers.get(v.contract_hash.toHex())
+    ).filter(Boolean);
+    if (dbgrs.length) {
       return {
-        dbgAnswer: dbgr.answerDebugger ? dbgr.answerDebugger(body) : undefined,
+        dbgAnswer: dbgrs[0]!.answerDebugger
+          ? dbgrs[0]!.answerDebugger(body)
+          : undefined,
       };
     }
   }

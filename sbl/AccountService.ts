@@ -28,8 +28,10 @@ export default class AccountService {
 
   private publishAnswer() {
     const verifier = this.getNextAccountVerifier();
-    const block = this.ctx.get(BlockBuilder)
-      .build(verifier, new Uint8Array([]));
+    const block = this.ctx.get(BlockBuilder).build(
+      [verifier],
+      new Uint8Array([]),
+    );
     if (
       block.outputs.some((output) =>
         !Hash.equals(output.verifier.contract_hash, verifier.contract_hash)

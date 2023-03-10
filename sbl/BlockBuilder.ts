@@ -2,37 +2,29 @@ import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import { Block, Verifier } from './messages.ts';
 import IncentiveService from './IncentiveService.ts';
-import IncentiveCalculator from './IncentiveCalculator.ts';
+// import IncentiveCalculator from './IncentiveCalculator.ts';
 import BlockService from './BlockService.ts';
 import { arrEquals } from './util/buffer.ts';
 
 export default class BlockBuilder {
   constructor(private ctx: Context) {}
 
-  public build(verifier: Verifier, body: Uint8Array): Block {
-    const verifier_hash = Hash.digest(Verifier.encode(verifier));
+  public build(verifiers: Verifier[], body: Uint8Array): Block {
+    // const verifier_hash = Hash.digest(Verifier.encode(verifier));
     // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
     //   [];
-    const inputs = this.ctx.get(BlockService).getBlocksByOutput(verifier)
-      .flatMap((block) => {
-        const idx = block.outputs.findIndex((y) =>
-          Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
-          arrEquals(y.verifier.params, verifier.params)
-        );
-        if (idx === -1) {
-          throw new Error(
-            `Invalid input Block doesn't output to this verifier with amount ${amount}`,
-          );
-        }
-        return block.outputClaims[idx].length === 0
+    const inputs = verifiers
+      .flatMap((v) => this.ctx.get(BlockService).getBlocksByOutput(v))
+      .flatMap(({ block, idx }) =>
+        block.outputClaims[idx].length === 0
           ? [{
             block_hash: Hash.digest(Block.encode(block)),
+            output_idx: idx,
             amount: block.outputs[idx].amount,
           }]
-          : [];
-      });
-    const amount = this.ctx.get(IncentiveCalculator)
-      .getAvailableIncentive(verifier, inputs);
+          : []
+      );
+    const amount = inputs.reduce((acc, cur) => acc + cur.amount, 0n);
     const outputs = this.ctx.get(IncentiveService).popIncentives(amount);
     const side = true;
     const isFreeMarket = true;
@@ -45,6 +37,6 @@ export default class BlockBuilder {
         timestamp = inputTs + 1n;
       }
     });
-    return { inputs, outputs, verifier, body, side, isFreeMarket, timestamp };
+    return { inputs, outputs, body, side, isFreeMarket, timestamp };
   }
 }

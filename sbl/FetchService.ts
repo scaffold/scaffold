@@ -9,10 +9,8 @@ import { Block, Verifier } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { bin2hex } from './pathUtils.ts';
 import QaDebugger from './QaDebugger.ts';
-import { BlocksByVerifierStore } from './stores.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
-import StoreObserver from './util/StoreObserver.ts';
 import { trunc } from './util/string.ts';
 
 interface FetchOptions {
@@ -21,6 +19,7 @@ interface FetchOptions {
   externalIncentive?: bigint; // TODO: Remove this, since we calculate it via config. Maybe change to boolean, if there's cases when we don't want to incentivize.
   bid?: { output: Verifier; amount: bigint };
   blockSelector?: (blocks: BlockExt[]) => BlockExt;
+  blockComparator?: (a: BlockExt, b: BlockExt) => number;
   verify?: true;
   certaintyThreshold?: number;
 }
@@ -29,6 +28,7 @@ interface FetchOptions {
 // Rank by mergability probability
 //   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
 export const defaultBlockSelector = (blocks: BlockExt[]) => blocks[0];
+export const defaultBlockComparator = (a: BlockExt, b: BlockExt) => -1;
 
 export default class FetchService {
   private pendingKeyedFetches = new Set<unknown>();
@@ -47,6 +47,7 @@ export default class FetchService {
       externalIncentive,
       bid,
       blockSelector,
+      blockComparator,
       verify,
     }: FetchOptions,
     cb?: (block: BlockExt) => void,
@@ -122,23 +123,20 @@ export default class FetchService {
       );
     }
 
-    let onState: (blocks: BlockExt[] | undefined) => void;
+    let onState: (block: BlockExt) => void;
     if (cb !== undefined) {
       let prevBlock: BlockExt | undefined;
-      onState = (blocks: BlockExt[] | undefined) => {
-        if (blocks && blocks.length) {
-          const newBlock = (blockSelector || defaultBlockSelector)(blocks);
-          if (newBlock !== prevBlock) {
-            prevBlock = newBlock;
-            cb(prevBlock);
-          }
+      onState = (block: BlockExt) => {
+        if (
+          prevBlock === undefined ||
+          (blockComparator || defaultBlockComparator)(prevBlock, block)
+        ) {
+          prevBlock = block;
+          cb(block);
         }
       };
 
-      StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).observe(
-        Hash.digest(Verifier.encode(verifier)),
-        onState,
-      );
+      this.ctx.get(BlockService).onNewBlock(verifier, onState);
     }
 
     let released = false;
@@ -161,10 +159,7 @@ export default class FetchService {
         }
 
         if (cb !== undefined) {
-          StoreObserver.get(this.ctx.get(BlocksByVerifierStore)).unobserve(
-            Hash.digest(Verifier.encode(verifier)),
-            onState,
-          );
+          this.ctx.get(BlockService).offNewBlock(verifier, onState);
         }
       },
       // getTotalInternalIncentive: () =>

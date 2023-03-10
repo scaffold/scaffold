@@ -1,4 +1,4 @@
-import { Block } from './messages.ts';
+import { Block, Verifier } from './messages.ts';
 import Hash from './util/Hash.ts';
 
 enum BlockFlag {
@@ -18,6 +18,8 @@ enum BlockFlag {
 export interface BlockMeta {
   hash: Hash;
   nonce: number;
+
+  verifiers: Verifier[];
 
   // block: Block;
   receivedTimestamp: number;
