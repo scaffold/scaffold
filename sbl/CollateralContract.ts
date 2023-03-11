@@ -22,19 +22,19 @@ export const enum CollateralGeneratorModifier {
 
 export default class CollateralContract {
   constructor(private ctx: Context) {
-    ctx.get(LocalGeneratorService).addGenerator(
-      dataHash,
-      CollateralContract.generate,
-    );
+    // ctx.get(LocalGeneratorService).addGenerator(
+    //   dataHash,
+    //   CollateralContract.generate,
+    // );
   }
 
   public async verify(
     params: Uint8Array,
     block: BlockExt,
-    request: (
-      contractHash: Hash,
-      params: Uint8Array,
-    ) => MaybePromise<Uint8Array>,
+    // request: (
+    //   contractHash: Hash,
+    //   params: Uint8Array,
+    // ) => MaybePromise<Uint8Array>,
     invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
     const {
@@ -69,26 +69,26 @@ export default class CollateralContract {
     }
   }
 
-  public static generate(
-    { ctx, params, emitCorrect, request }: LocalGeneratorOpts,
-    modifier = CollateralGeneratorModifier.None,
-  ) {
-    const { hash, secret } = CollateralContractParams.decode(params);
-    const block = ctx.get(BlockService).get(hash);
-    if (block) {
-      if (emitCorrect) {
-        const data = Block.encode(block);
-        const commitment = Hash.digestParts(
-          data,
-          secret,
-          ctx.get(NodeService).getSelfHash(),
-        );
-        return commitment.toBytes();
-      } else {
-        return Hash.random().toBytes();
-      }
-    } else {
-      return INGENERABLE_FLAG;
-    }
-  }
+  // public static generate(
+  //   { ctx, params, emitCorrect, request }: LocalGeneratorOpts,
+  //   modifier = CollateralGeneratorModifier.None,
+  // ) {
+  //   const { hash, secret } = CollateralContractParams.decode(params);
+  //   const block = ctx.get(BlockService).get(hash);
+  //   if (block) {
+  //     if (emitCorrect) {
+  //       const data = Block.encode(block);
+  //       const commitment = Hash.digestParts(
+  //         data,
+  //         secret,
+  //         ctx.get(NodeService).getSelfHash(),
+  //       );
+  //       return commitment.toBytes();
+  //     } else {
+  //       return Hash.random().toBytes();
+  //     }
+  //   } else {
+  //     return INGENERABLE_FLAG;
+  //   }
+  // }
 }

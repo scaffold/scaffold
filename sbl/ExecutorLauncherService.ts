@@ -20,6 +20,7 @@ import WorkerExecutor from './WorkerExecutor.ts';
 import { getOrCreate } from './util/map.ts';
 import DataContract from './DataContract.ts';
 import LitigationService from './LitigationService.ts';
+import SpecialContractManager from './SpecialContractManager.ts';
 
 const secret = secp.utils.randomBytes(32);
 
@@ -31,68 +32,98 @@ export default class ExecutorLauncherService {
 
   constructor(private ctx: Context) {}
 
-  // public updateContract(block: BlockExt, extraIncentive: number) {
-  //   const { body } = block;
+  public updateContract(
+    block: BlockExt,
+    verifier: Verifier,
+    extraIncentive: number,
+  ) {
+    const runHash = Hash.digestParts(Verifier.encode(verifier), block.body);
+    if (this.extraContractIncentive.has(runHash.toPrimitive())) {
+      this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
+      return;
+    } else {
+      this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
+    }
 
-  //   const runHash = Hash.digestParts(Verifier.encode(verifier), body);
-  //   if (this.extraContractIncentive.has(runHash.toPrimitive())) {
-  //     this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
-  //     return;
-  //   } else {
-  //     this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
-  //   }
+    debugger;
 
-  //   if (Hash.equals(verifier.contract_hash, dataHash)) {
-  //     const hint = new Uint8Array([]);
-  //     const verified = this.ctx.get(DataContract).verify(
-  //       verifier.params,
-  //       body,
-  //       hint,
-  //     );
-  //     this.ctx.get(LitigationService).litigateBlock(block, verified, hint);
-  //     return;
-  //   }
+    const special = this.ctx.get(SpecialContractManager)
+      .getContract(verifier.contract_hash);
+    if (special) {
+      this.ctx.get(ExecutorDriverService).run(
+        verifier,
+        {},
+        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
+        async (driver, cancel) => {
+          await driver.setAllocation({});
 
-  //   const contractBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
-  //     contract_hash: rootHash,
-  //     params: verifier.contract_hash.toBytes(),
-  //   });
-  //   if (contractBlocks.length) {
-  //     const contractCode = contractBlocks[0].body;
+          const verified = await special.verify(
+            verifier.params,
+            block,
+            (hash) =>
+              driver.request({
+                contract_hash: rootHash,
+                params: hash.toBytes(),
+              }),
+          );
 
-  //     this.ctx.get(ExecutorDriverService).run(
-  //       verifier,
-  //       {},
-  //       () => this.extraContractIncentive.get(runHash.toPrimitive())!,
-  //       async (driver, cancel) => {
-  //         await driver.setAllocation({});
+          this.ctx.get(LitigationService).litigateBlock(block, verified);
+        },
+      );
+    }
 
-  //         const { stdout, stderr } = await this.ctx.get(WorkerExecutor).run(
-  //           // {
-  //           //   contract_hash: generatorHash,
-  //           //   params: verifier.contract_hash.toBytes(),
-  //           // }
-  //           contractCode,
-  //           {
-  //             contractHash: verifier.contract_hash.toBytes(),
-  //             params: verifier.params,
-  //             body,
-  //             stdin: new Uint8Array([]),
-  //           },
-  //           { stdout: null, stderr: null },
-  //           driver,
-  //           cancel,
-  //         );
+    // TODO: Move to SpecialContractManager
+    if (Hash.equals(verifier.contract_hash, dataHash)) {
+      const hint = new Uint8Array([]);
+      const verified = this.ctx.get(DataContract).verify(
+        verifier.params,
+        block.body,
+        hint,
+      );
+      this.ctx.get(LitigationService).litigateBlock(block, verified, hint);
+      return;
+    }
 
-  //         console.log('STDOUT', bin2str(stdout));
-  //         console.log('STDERR', bin2str(stderr));
+    const contractBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
+      contract_hash: rootHash,
+      params: verifier.contract_hash.toBytes(),
+    });
+    if (contractBlocks.length) {
+      const contractCode = contractBlocks[0].body;
 
-  //         const verified = arrEquals(stdout, str2bin('PASS'));
-  //         this.ctx.get(LitigationService).litigateBlock(block, verified);
-  //       },
-  //     );
-  //   }
-  // }
+      this.ctx.get(ExecutorDriverService).run(
+        verifier,
+        {},
+        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
+        async (driver, cancel) => {
+          await driver.setAllocation({});
+
+          const { stdout, stderr } = await this.ctx.get(WorkerExecutor).run(
+            // {
+            //   contract_hash: generatorHash,
+            //   params: verifier.contract_hash.toBytes(),
+            // }
+            contractCode,
+            {
+              contractHash: verifier.contract_hash.toBytes(),
+              params: verifier.params,
+              body: block.body,
+              stdin: new Uint8Array([]),
+            },
+            { stdout: null, stderr: null },
+            driver,
+            cancel,
+          );
+
+          console.log('STDOUT', bin2str(stdout));
+          console.log('STDERR', bin2str(stderr));
+
+          const verified = arrEquals(stdout, str2bin('PASS'));
+          this.ctx.get(LitigationService).litigateBlock(block, verified);
+        },
+      );
+    }
+  }
 
   public updateGenerator(verifier: Verifier, extraIncentive: number) {
     const runHash = Hash.digest(Verifier.encode(verifier));

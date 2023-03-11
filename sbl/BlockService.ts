@@ -102,6 +102,12 @@ export default class BlockService {
     blockExt.verifiers.forEach((verifier) => {
       const verifierHash = Hash.digest(Verifier.encode(verifier));
 
+      this.ctx.get(ExecutorLauncherService).updateContract(
+        blockExt,
+        verifier,
+        0,
+      );
+
       this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
         cb(blockExt)
       );
@@ -370,10 +376,19 @@ export default class BlockService {
   }
 
   public getBlocksByVerifier(verifier: Verifier) {
-    return [...this.blocksByHash.values()].filter((x) =>
-      x.verifiers.some((v) =>
+    return [...this.blocksByHash.values()].filter((block) =>
+      block.verifiers.some((v) =>
         Hash.equals(v.contract_hash, verifier.contract_hash) &&
         arrEquals(v.params, verifier.params)
+      )
+    );
+  }
+
+  public getBlocksByInput(input: BlockInput) {
+    return [...this.blocksByHash.values()].filter((block) =>
+      block.inputs.some((y) =>
+        Hash.equals(y.block_hash, input.block_hash) &&
+        y.output_idx === input.output_idx
       )
     );
   }

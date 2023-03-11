@@ -16,7 +16,7 @@ export default class BlockBuilder {
     const inputs = verifiers
       .flatMap((v) => this.ctx.get(BlockService).getBlocksByOutput(v))
       .flatMap(({ block, idx }) =>
-        block.outputClaims[idx].length === 0
+        block.outputClaims[idx].length === 0 && block.outputs[idx].amount <= 0n
           ? [{
             block_hash: block.hash,
             output_idx: idx,
@@ -24,8 +24,8 @@ export default class BlockBuilder {
           }]
           : []
       );
-    const amount = inputs.reduce((acc, cur) => acc + cur.amount, 0n);
-    const outputs = this.ctx.get(IncentiveService).popIncentives(amount);
+    const total = inputs.reduce((acc, cur) => acc + cur.amount, 0n);
+    const outputs = this.ctx.get(IncentiveService).popIncentives(total);
     const side = true;
     const isFreeMarket = true;
     let timestamp = BigInt(Date.now());
