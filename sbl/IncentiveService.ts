@@ -4,7 +4,6 @@ import { Block, BlockOutput, Verifier } from './messages.ts';
 import AccountService from './AccountService.ts';
 import { getOrCreate } from './util/map.ts';
 import { PendingIncentiveRegistry } from './registries.ts';
-import BlockPublisher from './BlockPublisher.ts';
 import BlockService from './BlockService.ts';
 
 interface Entry {
@@ -38,7 +37,7 @@ export default class IncentiveService {
       isFreeMarket: true,
       timestamp: BigInt(Date.now()),
     };
-    this.ctx.get(BlockService).ingest(block);
+    this.ctx.get(BlockService).create(block);
 
     // if (amount > 0n) {
     //   this.ctx.get(PendingIncentiveRegistry).getOrCreate(

@@ -67,11 +67,15 @@ export default class Hash {
   }
 
   public static fromLiteralStr(str: string) {
+    if (str.length > 32) {
+      throw new Error(`String ${str} is more than 32 characters`);
+    }
     return new Hash(new TextEncoder().encode(str.padStart(32, '\0')));
   }
 
   public static digest(data: Uint8Array | string) {
     if (typeof data === 'string') {
+      // TODO: Is it faster moving `new TextEncoder()` outside the class and reusing the instance?
       const encoder = new TextEncoder();
       data = encoder.encode(data);
     }

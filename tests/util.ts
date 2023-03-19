@@ -9,6 +9,7 @@ import BlockService from '../sbl/BlockService.ts';
 import { Block, BlockInput } from '../sbl/messages.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
+import { assertEquals, AssertionError } from 'std-latest/testing/asserts.ts';
 
 let timestamp = 1000;
 

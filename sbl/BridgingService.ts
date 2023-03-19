@@ -21,23 +21,23 @@ export default class BridgingService {
     farNodeHash: Hash,
     connSpec: ConnectionSpec,
   ) {
-    middle.defaultConn?.sendReliable({
-      BridgeStartMessage: {
-        dst_node_hash: farNodeHash,
-        connection_spec: connSpec,
-      },
-    });
+    // middle.defaultConn?.sendReliable({
+    //   BridgeStartMessage: {
+    //     dst_node_hash: farNodeHash,
+    //     connection_spec: connSpec,
+    //   },
+    // });
   }
 
   public handleBridgeStartMessage(msgCtx: MessageCtx, msg: BridgeStartMessage) {
     const node = this.ctx.get(NodeService).lookup(msg.dst_node_hash);
     if (node && node.defaultConn) {
-      node.defaultConn.sendReliable({
-        BridgeEndMessage: {
-          src_node_hash: msgCtx.conn.node.hash,
-          connection_spec: msg.connection_spec,
-        },
-      });
+      // node.defaultConn.sendReliable({
+      //   BridgeEndMessage: {
+      //     src_node_hash: msgCtx.conn.node.hash,
+      //     connection_spec: msg.connection_spec,
+      //   },
+      // });
     }
   }
 

@@ -37,7 +37,7 @@ export default class AccountService {
         !Hash.equals(output.verifier.contract_hash, verifier.contract_hash)
       )
     ) {
-      this.ctx.get(BlockService).ingest(block);
+      this.ctx.get(BlockService).create(block);
       this.nextAccountIdx++;
     }
 

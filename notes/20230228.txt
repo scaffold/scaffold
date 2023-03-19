@@ -195,30 +195,13 @@ faacf40bcbb561a8f0753bc2b5e5860ccac8cdce2e8f7c93921ac1c2faa9362c: {
     amount: 100,
     verifier: {
       contract_hash: 'COLLATERAL',
-      params: 'side: FOR, decacb1bd9700b9fcaa195dd2a39a62d31fe6d3d295a209dfe8bb8fc5daf6bf1',
+      params: 'side: FOR, public_key: dfd31be503ab0f79a449cdefbaa805509eaf4b6fbf67fecbbd3db7c0754df8b9',
     }
   }],
   body: '4', // Incorrect
 }
 
-// If the challenge multiplier is 10, the AGAINST collateral only needs to be 2 to equal a FOR collateral of 20.
-// Here, the challenge multiplier is simply 1.
-
-// How do we know what the multiplier is? If we're objecting to the body, it's 1. If we're objecting to a hash inversion, it's 1000.
-// The side is kind of like the multiplier. If it's -1000, we're asking for hash inversion.
-// Actually it should be claim: Claim, where Claim is an enum specifying what the collateral is claiming.
-enum Claim {
-  RefPreimage { idx: number },
-  InputPreimage { idx: number },
-  // OutputContractPreimage { idx: number },
-  BodyValidity {},
-}
-// If you specify too low a multiplier (basically, your set price on hash inversions is too high), people simply won't accept your block.
-// If you specify too low a collateral, people also won't accept your block.
-
-// Should rectification be as soon as possible or instantaneous?
-//   As soon as possible, since we don't want to wait 10 seconds
-//   Most of the time, clients will have enough coins on hand to double the collateral easily
+The output collateral send MUST include all input collateral ledgers, with the correct order, and may have some more entries appended
 
 de67ab4eaad8e63acd2fb0896b9b104cfafbfbf8ab21e3dea0ccdcc9cabbefbb: {
   inputs: [{
@@ -240,7 +223,7 @@ de67ab4eaad8e63acd2fb0896b9b104cfafbfbf8ab21e3dea0ccdcc9cabbefbb: {
     amount: 100,
     verifier: {
       contract_hash: 'COLLATERAL',
-      params: 'side: AGAINST, decacb1bd9700b9fcaa195dd2a39a62d31fe6d3d295a209dfe8bb8fc5daf6bf1',
+      params: 'side: AGAINST, public_key: dfd31be503ab0f79a449cdefbaa805509eaf4b6fbf67fecbbd3db7c0754df8b9',
     }
   }, {
     amount: 25,
@@ -254,7 +237,66 @@ de67ab4eaad8e63acd2fb0896b9b104cfafbfbf8ab21e3dea0ccdcc9cabbefbb: {
   timestamp: ..., // If timestamp is WITHIN 10 seconds of the collateralizing input's timestamp, the block is collateral with a hint. Otherwise, it's a claim on the finality of the voting.
 }
 
-// Flip for/against sides each time the chain reverses? This is so hash inversion requests are handled correctly.
+To corroborate a block, publish another block with the same body & collateral
+To refute a block, publish
+
+
+If the challenge multiplier is 10, the AGAINST collateral only needs to be 2 to equal a FOR collateral of 20.
+Here, the challenge multiplier is simply 1.
+
+How do we know what the multiplier is? If we're objecting to the body, it's 1. If we're objecting to a hash inversion, it's 1000.
+The side is kind of like the multiplier. If it's -1000, we're asking for hash inversion.
+Actually it should be claim: Claim, where Claim is an enum specifying what the collateral is claiming.
+enum Claim {
+  RefPreimage { idx: number },
+  InputPreimage { idx: number },
+  // OutputContractPreimage { idx: number },
+  BodyValidity {},
+}
+If you specify too low a multiplier (basically, your set price on hash inversions is too high), people simply won't accept your block.
+If you specify too low a collateral, people also won't accept your block.
+
+Should rectification be as soon as possible or instantaneous?
+  As soon as possible, since we don't want to wait 10 seconds
+  Most of the time, clients will have enough coins on hand to double the collateral easily
+
+
+Flip for/against sides each time the chain reverses? This is so hash inversion requests are handled correctly.
+
+1. Singly-linked collateral chain
+  - If only one depositor, can withdrawl immediately, but if more than one, we need an intermediate block
+  + Simplest
+  LET'S DO THIS ONE
+2. Doubly-linked collateral chain (one for FOR and one for AGAINST)
+  - If only one/two depositors, can withdrawl immediately, but if more, we need an intermediate block
+3. Pay-to-key-linked collateral chain (one for each public key we pay to)
+  + Allows immediate withdrawl without an intermediate block
+  - Requires logic enforcing collateral inputs (1) all being from the same block and (2) exactly the collateral outputs of that block.
+  - Need to pay to the current leader, and include the ledger somewhere else (in the body?)
+  - Hard to split up the for/against collateral correctly (we don't know how it's being split up until we know the winner, but we can assume that the current winner is the eventual winner)
+  - What happens if the collateral gets split up? Sure, we can invalidate each consumer, but they're still canonical.
+
+What about simulation contracts?
+  Contracts can only do hash inversions on inputs
+  Can they know the input that requested their verification?
+    They can always iterate the inputs and filter them (because there might be more than one)
+
+Peers should help routing blocks to peers who (1) are listening for one of the verifiers in the outputs, or (2) know how to route the block to the listeners (DHT entries).
+
+The source for collateral can be provided in many ways, but typically it's sending an output to any block signed by public key K.
+The block posts collateral, saying eventually, if I win, I get to claim the output with my public key K.
+
+For any block, you can ask for hash preimages
+For any block, you can contest one of the input verifiers
+What does contesting a collateral block do?
+  It simply says (1) I want a preimage, or (2) you're not a valid collateral block
+
+
+// Private key length: 32 bytes
+// Full public key length: 65 bytes
+// Compressed public key length: 33 bytes
+// Signature length: 64 bytes
+// Hash length: 32 bytes
 
 
 
@@ -295,3 +337,7 @@ Probe
 Collect 
 What does the signature of a block mean?
   I think it only means something if it's used in verification (for example, account contracts)
+
+
+
+Goal: 50KB script; <0.1s bootstrap

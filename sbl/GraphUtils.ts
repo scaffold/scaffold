@@ -113,7 +113,7 @@ export default class GraphUtils {
     //   return Hash.digest(Block.encode(existingBlocks[0]));
     // } else {
     const block = blockFactory();
-    this.ctx.get(BlockService).ingest(block);
+    this.ctx.get(BlockService).create(block);
     return Hash.digest(Block.encode(block));
     // }
   }

@@ -45,8 +45,6 @@ export default class ExecutorLauncherService {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
     }
 
-    debugger;
-
     const special = this.ctx.get(SpecialContractManager)
       .getContract(verifier.contract_hash);
     if (special) {
@@ -233,10 +231,10 @@ export default class ExecutorLauncherService {
   ) {
     // console.log('Completed generator', verifier, bin2str(data));
     const block = this.ctx.get(BlockBuilder).build([verifier], data);
-    this.ctx.get(BlockService).ingest(block);
+    this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
-    const hash = Hash.digest(Verifier.encode(verifier));
+    // const hash = Hash.digest(Verifier.encode(verifier));
   }
 
   public snapshot() {

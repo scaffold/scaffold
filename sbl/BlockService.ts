@@ -1,15 +1,24 @@
 import { BlockExt, BlockMeta } from './BlockMeta.ts';
-import BlockPublisher from './BlockPublisher.ts';
+import { MessageType } from './ConnectionService.ts';
+import { collateralHash } from './constants.ts';
 import Context from './Context.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
-import { Block, BlockInput, BlockSet, Verifier } from './messages.ts';
+import {
+  Block,
+  BlockInput,
+  BlockSet,
+  CollateralContractParams,
+  Verifier,
+} from './messages.ts';
 import NodeService from './NodeService.ts';
+import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
 import { bin2hex } from './pathUtils.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
+import secp from './util/secp.ts';
 import { trunc } from './util/string.ts';
 
 export default class BlockService {
@@ -34,13 +43,45 @@ export default class BlockService {
     return Hash.digestParts(signer, Block.encode(block));
   }
 
-  // TODO: Test that whatever order we ingest blocks, it all ends up the same
-  public ingest(
-    block: Block,
-    signer = this.ctx.get(NodeService).getSelfHash(),
-    immortalize = false,
-  ) {
+  public async create(block: Block, immortalize = false) {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
+
+    // Sign, publish, ingest, return hash
+
+    const data = await this.ctx.get(PacketCoder).encode(
+      block,
+      Block,
+      MessageType.Block,
+    );
+
+    // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
+    const hash = this.ingest(data);
+
+    this.ctx.get(NodeService).getAll().forEach((node) => {
+      if (!node.knownBlocks.has(hash.toPrimitive())) {
+        node.knownBlocks.add(hash.toPrimitive());
+        node.defaultConn?.sendReliable(data);
+      }
+    });
+
+    return hash;
+  }
+
+  // TODO: Test that whatever order we ingest blocks, it all ends up the same
+  public ingest(data: Uint8Array) {
+    const blockHash = Hash.digest(data);
+    if (this.blocksByHash.has(blockHash.toPrimitive())) {
+      return blockHash;
+    }
+
+    const signature = data.subarray(0, SIGNATURE_LENGTH);
+    if (signature.byteLength !== SIGNATURE_LENGTH) {
+      throw new Error(
+        `Signature length (${signature.byteLength}) is not exactly ${SIGNATURE_LENGTH}`,
+      );
+    }
+
+    const block = Block.decode(data.subarray(SIGNATURE_LENGTH + 1));
 
     // console.log(
     //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
@@ -49,16 +90,11 @@ export default class BlockService {
     // );
     // console.log(block);
 
-    const blockHash = this.hash(block, signer);
-    if (this.blocksByHash.has(blockHash.toPrimitive())) {
-      return blockHash;
-    }
-
     const meta: BlockMeta = {
       hash: blockHash,
       nonce: Math.random(),
 
-      signer,
+      signature,
 
       verifiers: block.inputs.map(({ block_hash, output_idx }) =>
         this.get(block_hash)?.outputs[output_idx]?.verifier
@@ -112,6 +148,12 @@ export default class BlockService {
         cb(blockExt)
       );
 
+      if (Hash.equals(verifier.contract_hash, collateralHash)) {
+        // ...
+        const { collateral_input_idx, side, public_key, free_after } =
+          CollateralContractParams.decode(verifier.params);
+      }
+
       // // TODO: Use a simpler store; also update FetchService
       // this.ctx.get(BlocksByVerifierStore).mutate(
       //   verifierHash,
@@ -140,8 +182,6 @@ export default class BlockService {
     // }
 
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
-
-    this.ctx.get(BlockPublisher).publish(block);
 
     return blockHash;
   }

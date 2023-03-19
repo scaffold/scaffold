@@ -3,8 +3,12 @@ import BlockService from '../sbl/BlockService.ts';
 import Hash from '../sbl/util/Hash.ts';
 import { collateralHash, rootHash, trueHash } from '../sbl/constants.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
-import { assertEquals } from 'std-latest/testing/asserts.ts';
-import { CollateralContractBody } from '../sbl/messages.ts';
+import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
+import {
+  CollateralContractBody,
+  CollateralContractParams,
+} from '../sbl/messages.ts';
+import NodeService from '../sbl/NodeService.ts';
 
 Deno.test(
   { name: `an invalid body should have collateral posted against` },
@@ -30,7 +34,14 @@ Deno.test(
     const b = ctx.get(BlockService).ingest({
       inputs: [{ block_hash: a, output_idx: 0 }],
       outputs: [{
-        verifier: { contract_hash: collateralHash, params: new Uint8Array([]) },
+        verifier: {
+          contract_hash: collateralHash,
+          params: CollateralContractParams.encode({
+            public_key_hash: ctx.get(NodeService).getSelfHash(),
+            free_after: 0n + 10000n,
+            data_price: 1n,
+          }),
+        },
         amount: -10n,
       }],
       body: str2bin('xyz'),
@@ -40,11 +51,13 @@ Deno.test(
     });
 
     const c = await waitForBlock(ctx, { block_hash: b, output_idx: 0 });
-    assertEquals(c.inputs.length, 1);
-    assertEquals(c.outputs.length, 1);
-    assertEquals(
-      c.body,
-      CollateralContractBody.encode({ side: true, hint: new Uint8Array([]) }),
-    );
+    assertObjectMatch(c, {
+      inputs: [{ block_hash: b, output_idx: 0 }],
+      outputs: [],
+    });
+    assertEquals(CollateralContractBody.decode(c.body), {
+      side: false,
+      hint: new Uint8Array([]),
+    });
   }),
 );

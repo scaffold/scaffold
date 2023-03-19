@@ -1,15 +1,21 @@
+import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import InfoService from './InfoService.ts';
-import Logger from './Logger.ts';
-import MessageDispatcherService from './MessageDispatcherService.ts';
 import { Packet } from './messages.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
 import NodeService, { Node } from './NodeService.ts';
+import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
 import Peer from './Peer.ts';
 import PeerService from './PeerService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import secp from './util/secp.ts';
+
+// Private key length: 32 bytes
+// Full public key length: 65 bytes
+// Compressed public key length: 33 bytes
+// Signature length: 64 bytes
+// Hash length: 32 bytes
 
 export const SELF_CONNECTION = Symbol('SELF_CONNECTION');
 export type SELF_CONNECTION = typeof SELF_CONNECTION;
@@ -19,8 +25,8 @@ export interface Connection {
   peer: Peer;
 
   provider: ConnectionProvider;
-  sendReliable(message: Packet['message']): void;
-  sendFast(message: Packet['message']): void;
+  sendReliable(data: Uint8Array): void;
+  sendFast(data: Uint8Array): void;
 
   lastMsgTimestamp: number;
 
@@ -33,7 +39,12 @@ export interface Connection {
   };
 }
 
-const SIGNATURE_LENGTH = 64;
+export enum MessageType {
+  Info,
+  Block,
+  BridgeStart,
+  BridgeEnd,
+}
 
 // AuthenticationService?
 export default class ConnectionService {
@@ -177,88 +188,114 @@ export default class ConnectionService {
         node,
         peer: this.ctx.get(PeerService).lookup(publicKey),
         provider,
-        sendReliable: (message: Packet['message']) =>
-          this.composePacket(message)
-            .then((packet) => provider.sendReliable(packet))
-            .catch(onSendError),
-        sendFast: (message: Packet['message']) =>
-          this.composePacket(message)
-            .then((packet) => provider.sendFast(packet))
-            .catch(onSendError),
+        sendReliable: (data: Uint8Array) => {
+          try {
+            provider.sendReliable(data);
+          } catch (err) {
+            onSendError(err);
+          }
+        },
+        sendFast: (data: Uint8Array) => {
+          try {
+            provider.sendFast(data);
+          } catch (err) {
+            onSendError(err);
+          }
+        },
         lastMsgTimestamp: Date.now(),
         ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       };
       this.ctx.get(NodeService).addConnection(node, protocol, conn);
     };
 
+    // TODO: Figure this out
+    const nodeHash = Hash.random();
+
     provider.onRecv((data) => {
       try {
-        const signature = data.subarray(0, SIGNATURE_LENGTH);
-        if (signature.byteLength !== SIGNATURE_LENGTH) {
-          throw new Error(
-            `Signature length (${signature.byteLength}) is not exactly ${SIGNATURE_LENGTH}`,
-          );
+        if (conn === undefined) {
+          onVerifyNodeHash(nodeHash, new Uint8Array([]));
         }
 
-        const msgData = data.subarray(SIGNATURE_LENGTH);
-        const msgHash = Hash.digest(msgData);
-        const packet = Packet.decode(msgData);
-
-        // console.log(
-        //   `${this.ctx.config.debugName} received message from ${protocol}`,
-        //   this.ctx.get(Logger).serialize(packet.message),
-        // );
-
-        if (conn) {
-          if (!secp.verify(signature, msgHash.toBytes(), conn.peer.publicKey)) {
-            throw new Error(
-              `Received message but the signature doesn't verify`,
-            );
-          }
-        } else {
-          if (!('InfoMessage' in packet.message)) {
-            // If the first message wasn't an InfoMessage, then either:
-            //   1. The remote peer is deviating from protocol, or
-            //   2. It was sent over the fast channel and happened to get here before the first reliable message.
-            // In both cases, it's safe to drop it.
-            console.error(`First message is not an InfoMessage; dropping`);
-            return;
-          }
-          const msg = packet.message.InfoMessage;
-
-          if (
-            !secp.verify(
-              signature,
-              Hash.digest(msgData).toBytes(),
-              msg.public_key,
-            )
-          ) {
-            throw new Error(
-              `Received InfoMessage but the signature doesn't verify`,
-            );
-          }
-
-          // TODO: Prevent replay attacks with a challenge/response thing here
-
-          const hash = this.ctx
-            .get(NodeService)
-            .computeNodeHash(msg.public_key, msg.node_nonce);
-
-          // if (expectedNodeHash && !Hash.equals(hash, expectedNodeHash)) {
-          //   throw new Error(`Node hash doesn't match what was expected`);
-          // }
-
-          onVerifyNodeHash(hash, msg.public_key);
+        const msgType = this.ctx.get(PacketCoder).getTypeIdx(data);
+        switch (msgType) {
+          case MessageType.Block:
+            this.ctx.get(BlockService).ingest(data);
+            break;
+          case MessageType.BridgeStart:
+            break;
+          case MessageType.BridgeEnd:
+            break;
+          default:
+            throw new Error(`Unhandled message type ${msgType}`);
         }
 
-        this.ctx.get(MessageDispatcherService).dispatch({
-          conn: conn!,
-          packet,
-          signature,
-          msgData,
-          msgHash,
-          packetData: data,
-        });
+        // const signature = data.subarray(0, SIGNATURE_LENGTH);
+        // if (signature.byteLength !== SIGNATURE_LENGTH) {
+        //   throw new Error(
+        //     `Signature length (${signature.byteLength}) is not exactly ${SIGNATURE_LENGTH}`,
+        //   );
+        // }
+
+        // const msgData = data.subarray(SIGNATURE_LENGTH);
+        // const msgHash = Hash.digest(msgData);
+        // const packet = Packet.decode(msgData);
+
+        // // console.log(
+        // //   `${this.ctx.config.debugName} received message from ${protocol}`,
+        // //   this.ctx.get(Logger).serialize(packet.message),
+        // // );
+
+        // if (conn) {
+        //   if (!secp.verify(signature, msgHash.toBytes(), conn.peer.publicKey)) {
+        //     throw new Error(
+        //       `Received message but the signature doesn't verify`,
+        //     );
+        //   }
+        // } else {
+        //   if (!('InfoMessage' in packet.message)) {
+        //     // If the first message wasn't an InfoMessage, then either:
+        //     //   1. The remote peer is deviating from protocol, or
+        //     //   2. It was sent over the fast channel and happened to get here before the first reliable message.
+        //     // In both cases, it's safe to drop it.
+        //     console.error(`First message is not an InfoMessage; dropping`);
+        //     return;
+        //   }
+        //   const msg = packet.message.InfoMessage;
+
+        //   if (
+        //     !secp.verify(
+        //       signature,
+        //       Hash.digest(msgData).toBytes(),
+        //       msg.public_key,
+        //     )
+        //   ) {
+        //     throw new Error(
+        //       `Received InfoMessage but the signature doesn't verify`,
+        //     );
+        //   }
+
+        //   // TODO: Prevent replay attacks with a challenge/response thing here
+
+        //   const hash = this.ctx
+        //     .get(NodeService)
+        //     .computeNodeHash(msg.public_key, msg.node_nonce);
+
+        //   // if (expectedNodeHash && !Hash.equals(hash, expectedNodeHash)) {
+        //   //   throw new Error(`Node hash doesn't match what was expected`);
+        //   // }
+
+        //   onVerifyNodeHash(hash, msg.public_key);
+        // }
+
+        // this.ctx.get(MessageDispatcherService).dispatch({
+        //   conn: conn!,
+        //   packet,
+        //   signature,
+        //   msgData,
+        //   msgHash,
+        //   packetData: data,
+        // });
       } catch (err) {
         console.error(err);
         // provider.close();

@@ -56,7 +56,7 @@ Deno.test(
       )
     );
 
-    const answer = Object.assign({}, collatzMessages.Answer.decode(block.body));
+    const answer = collatzMessages.Answer.decode(block.body);
     assertEquals(answer, { stopping_time: 6n, maximum: 16n });
   }),
 );

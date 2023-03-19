@@ -103,7 +103,7 @@ export type ObjectType<
   : S extends readonly avro.schema.DefinedType[] ? UnionType<S[number], R>
   : never;
 
-interface Message<T> {
+export interface Coder<T> {
   decode(src: Uint8Array): T;
   encode(msg: T, allocator?: (size: number) => Uint8Array): Uint8Array;
 }
@@ -171,7 +171,7 @@ export const registry = {
       // { name: 'amount', type: 'long' },
 
       { name: 'block_hash', type: 'Hash' },
-      { name: 'output_idx', type: 'int' },
+      { name: 'output_idx', type: 'int' }, // -1 if we're not claiming any output
     ],
   },
   BlockOutput: {
@@ -489,6 +489,8 @@ export const registry = {
     ],
   },
 
+  // TODO: What if everything is just a block and we can get rid of packets?
+  // This would allow signatures to be closer to blocks.
   Packet: {
     name: 'Packet',
     type: 'record',
@@ -516,6 +518,14 @@ export const registry = {
     ],
   },
 
+  AccountContractParams: {
+    name: 'AccountContractParams',
+    type: 'record',
+    fields: [
+      { name: 'public_key', type: 'bytes' }, // 33 bytes
+    ],
+  },
+
   DataContractParams: {
     name: 'DataContractParams',
     type: 'record',
@@ -529,17 +539,10 @@ export const registry = {
     name: 'CollateralContractParams',
     type: 'record',
     fields: [
-      { name: 'public_key_hash', type: 'Hash' },
-      { name: 'free_after', type: 'long' },
-      { name: 'data_price', type: 'long' },
-    ],
-  },
-  CollateralContractBody: {
-    name: 'CollateralContractBody',
-    type: 'record',
-    fields: [
+      { name: 'collateral_input_idx', type: 'int' }, // -1 if this is the initial posting; -2 if we're not appending a link but just sending collateral for someone else's link
       { name: 'side', type: 'boolean' },
-      { name: 'hint', type: 'bytes' },
+      { name: 'public_key', type: 'bytes' }, // 33 bytes
+      { name: 'free_after', type: 'long' },
     ],
   },
 
@@ -552,7 +555,7 @@ export const makeMsg = <
 >(
   registry: R,
   name: Name,
-): Message<ObjectType<Name, R>> => {
+): Coder<ObjectType<Name, R>> => {
   const types: { [key: string]: avro.Type } = {};
   Object.entries(registry).forEach(([key, schema]) =>
     Object.defineProperty(types, key, {
@@ -584,7 +587,8 @@ export const makeMsg = <
   return {
     // name,
     // type,
-    decode: (src: Uint8Array): ObjectType<Name, R> => type.decode(src).value,
+    decode: (src: Uint8Array): ObjectType<Name, R> =>
+      Object.assign({}, type.decode(src).value),
     encode: (
       msg: ObjectType<Name, R>,
       allocator: (size: number) => Uint8Array = (size: number) =>
@@ -716,6 +720,8 @@ export const FeedbackMessage = makeMsg(registry, 'FeedbackMessage');
 export type FeedbackMessage = MsgType<'FeedbackMessage'>;
 export const Packet = makeMsg(registry, 'Packet');
 export type Packet = MsgType<'Packet'>;
+export const AccountContractParams = makeMsg(registry, 'AccountContractParams');
+export type AccountContractParams = MsgType<'AccountContractParams'>;
 export const DataContractParams = makeMsg(registry, 'DataContractParams');
 export type DataContractParams = MsgType<'DataContractParams'>;
 export const CollateralContractParams = makeMsg(
@@ -723,11 +729,6 @@ export const CollateralContractParams = makeMsg(
   'CollateralContractParams',
 );
 export type CollateralContractParams = MsgType<'CollateralContractParams'>;
-export const CollateralContractBody = makeMsg(
-  registry,
-  'CollateralContractBody',
-);
-export type CollateralContractBody = MsgType<'CollateralContractBody'>;
 
 // const buf = Question.encode({
 //   contract: {

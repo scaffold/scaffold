@@ -111,17 +111,17 @@ export default class FetchService {
       this.ctx.get(IncentiveService).incentivize(verifier, externalIncentive);
     }
 
-    if (bid !== undefined) {
-      this.ctx.get(NodeService).getAll().forEach((node) =>
-        node.defaultConn?.sendReliable({
-          BidMessage: {
-            input: verifier,
-            output: bid.output,
-            amount: bid.amount,
-          },
-        })
-      );
-    }
+    // if (bid !== undefined) {
+    //   this.ctx.get(NodeService).getAll().forEach((node) =>
+    //     node.defaultConn?.sendReliable({
+    //       BidMessage: {
+    //         input: verifier,
+    //         output: bid.output,
+    //         amount: bid.amount,
+    //       },
+    //     })
+    //   );
+    // }
 
     let onState: (block: BlockExt) => void;
     if (cb !== undefined) {

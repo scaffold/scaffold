@@ -19,7 +19,7 @@ export interface BlockMeta {
   hash: Hash;
   nonce: number;
 
-  signer: Hash;
+  signature: Uint8Array;
 
   verifiers: Verifier[];
 
@@ -41,6 +41,8 @@ export interface BlockMeta {
   canonicality: number; // TODO: bigint?
   collateral: number; // TODO: bigint?
 
+  collateralChain: BlockExt[];
+  postedCollateral: BlockExt[];
   passedVerification?: boolean;
 }
 

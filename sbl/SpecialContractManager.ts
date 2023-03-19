@@ -1,6 +1,15 @@
+import AccountContract from './AccountContract.ts';
 import { BlockExt } from './BlockMeta.ts';
 import CollateralContract from './CollateralContract.ts';
-import { collateralHash, dataHash, rootHash } from './constants.ts';
+import {
+  accountHash,
+  collateralContestionHash,
+  collateralHash,
+  collateralInitHash,
+  collateralVoteHash,
+  dataHash,
+  rootHash,
+} from './constants.ts';
 import Context from './Context.ts';
 import DataContract from './DataContract.ts';
 import RootContract from './RootContract.ts';
@@ -22,6 +31,7 @@ export default class SpecialContractManager {
     this.addSpecial(rootHash, RootContract);
     // this.addSpecial(dataHash, DataContract);
     this.addSpecial(collateralHash, CollateralContract);
+    this.addSpecial(accountHash, AccountContract);
   }
 
   private addSpecial(

@@ -1,26 +1,34 @@
 import Context from './Context.ts';
+import { BlockInput, BlockOutput } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
 
+export const ANY_BODY_FLAG = Symbol('LocalGenerator.AnyBody');
 export const INGENERABLE_FLAG = Symbol('LocalGenerator.Ingenerable');
 
 export interface LocalGeneratorOpts {
   ctx: Context;
   contractHash: Hash;
   params: Uint8Array;
+  inputIdx: number;
   emitCorrect: boolean;
-  setFreeMarket: () => void; // TODO: Remove this when we have remote generators
-  request: (
+  setFreeMarket(): void; // TODO: Remove this when we have remote generators
+  setBody(body: Uint8Array): void;
+  // addInput(input: BlockInput): number; // TODO: I don't know if this makes sense
+  addOutput(output: BlockOutput): number;
+  sign(): void;
+  invert(hash: Hash): MaybePromise<Uint8Array>;
+  request(
     contractHash: Hash,
     params: Uint8Array,
-  ) => MaybePromise<Uint8Array>;
-  notify: (contractHash: Hash, params: Uint8Array) => void;
+  ): MaybePromise<Uint8Array>;
+  notify(contractHash: Hash, params: Uint8Array): void;
 }
 
 export type LocalGenerator = (
   opts: LocalGeneratorOpts,
-) => MaybePromise<typeof INGENERABLE_FLAG | Uint8Array>;
+) => MaybePromise<typeof ANY_BODY_FLAG | typeof INGENERABLE_FLAG | Uint8Array>;
 
 export default class LocalGeneratorService {
   private registry: Map<HashPrimitive, LocalGenerator> = new Map();

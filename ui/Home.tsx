@@ -101,7 +101,7 @@ const startGame = () => {
     params: match.toBytes(),
   };
   const block = client.ctx.get(BlockBuilder).build([verifier], body);
-  client.ctx.get(BlockService).ingest(block);
+  client.ctx.get(BlockService).create(block);
   return match;
 };
 
@@ -171,7 +171,7 @@ export default () => {
       <Input label='Body' value={body} setValue={setBody} />
       <button
         onClick={() =>
-          client.ctx.get(BlockService).ingest(
+          client.ctx.get(BlockService).create(
             client.ctx.get(BlockBuilder).build(
               [{
                 contract_hash: Hash.fromHex(selectedContract!),
