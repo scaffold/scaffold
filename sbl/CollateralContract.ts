@@ -21,6 +21,8 @@ export const enum CollateralGeneratorModifier {
   OmitAgainst,
 }
 
+export const COLLATERAL_INPUT_IDX_INITIAL=-1;
+
 export default class CollateralContract {
   constructor(private ctx: Context) {
     // ctx.get(LocalGeneratorService).addGenerator(

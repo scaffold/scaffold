@@ -9,11 +9,18 @@ import { arrEquals } from './util/buffer.ts';
 export default class BlockBuilder {
   constructor(private ctx: Context) {}
 
-  public build(verifiers: Verifier[], body: Uint8Array): Block {
+  public emit(
+    block: Partial<Block>,
+    satisfies: Verifier[],
+    timeout = 0,
+  ) {
+    // 1. Gather all satisfying inputs that someone else could claim (which doesn't include signature satisfaction).
+    // 2. For remaining output value, input to/from account balance.
+
     // const verifier_hash = Hash.digest(Verifier.encode(verifier));
     // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
     //   [];
-    const inputs = verifiers
+    const inputs = satisfies
       .flatMap((v) => this.ctx.get(BlockService).getBlocksByOutput(v))
       .flatMap(({ block, idx }) =>
         block.outputClaims[idx].length === 0 && block.outputs[idx].amount <= 0n

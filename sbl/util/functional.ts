@@ -29,3 +29,22 @@ export const mapEntries = <K extends string | number | symbol, V1, V2>(
   Object.fromEntries(
     Object.entries(obj).map(([k, v]) => [k, func(k as K, v as V1)]),
   ) as Record<K, V2>;
+
+export const mapOne = <T, R>(
+  arr: T[],
+  func: (el: T, idx: number, arr: T[]) => R | undefined,
+): R => {
+  let res: R | undefined;
+  for (const c of arr.map(func)) {
+    if (c !== undefined) {
+      if (res !== undefined) {
+        throw new Error(`More than one element mapped to a truthy value!`);
+      }
+      res = c;
+    }
+  }
+  if (res === undefined) {
+    throw new Error(`No elements mapped to a truthy value!`);
+  }
+  return res;
+};

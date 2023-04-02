@@ -540,7 +540,7 @@ export const registry = {
     type: 'record',
     fields: [
       { name: 'collateral_input_idx', type: 'int' }, // -1 if this is the initial posting; -2 if we're not appending a link but just sending collateral for someone else's link
-      { name: 'side', type: 'boolean' },
+      { name: 'side', type: 'boolean' }, // false=FOR, true=AGAINST
       { name: 'public_key', type: 'bytes' }, // 33 bytes
       { name: 'free_after', type: 'long' },
     ],

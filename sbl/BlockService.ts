@@ -1,4 +1,5 @@
 import { BlockExt, BlockMeta } from './BlockMeta.ts';
+import { COLLATERAL_INPUT_IDX_INITIAL } from './CollateralContract.ts';
 import { MessageType } from './ConnectionService.ts';
 import { collateralHash } from './constants.ts';
 import Context from './Context.ts';
@@ -7,6 +8,7 @@ import Logger from './Logger.ts';
 import {
   Block,
   BlockInput,
+  BlockOutput,
   BlockSet,
   CollateralContractParams,
   Verifier,
@@ -15,7 +17,7 @@ import NodeService from './NodeService.ts';
 import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
 import { bin2hex } from './pathUtils.ts';
 import { arrEquals } from './util/buffer.ts';
-import { error } from './util/functional.ts';
+import { error, mapOne } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import secp from './util/secp.ts';
@@ -184,6 +186,85 @@ export default class BlockService {
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
     return blockHash;
+  }
+
+  public linkNewAncestor(parent: BlockExt, child: BlockExt) {}
+
+  public linkNewDescendant(parent: BlockExt, child: BlockExt) {}
+
+  public getCollateral(block: BlockExt): {
+    totalAmountFor: bigint;
+    totalAmountAgainst: bigint;
+    resolver?: BlockExt;
+    ledger: {
+      block: BlockExt;
+      params: CollateralContractParams;
+      amountDelta: bigint;
+      outputIdx: number;
+    }[];
+  } {
+    let ancestorOutputIdx = COLLATERAL_INPUT_IDX_INITIAL;
+    let totalAmountFor = 0n;
+    let totalAmountAgainst = 0n;
+    const ledger: {
+      block: BlockExt;
+      params: CollateralContractParams;
+      amountDelta: bigint;
+      outputIdx: number;
+    }[] = [];
+
+    while (true) {
+      const params = mapOne(block.outputs, ({ verifier, amount }, idx) => {
+        if (Hash.equals(verifier.contract_hash, collateralHash)) {
+          const params = CollateralContractParams.decode(verifier.params);
+          const input = block.inputs[params.collateral_input_idx];
+          if (input.output_idx === ancestorOutputIdx) {
+            ancestorOutputIdx = idx;
+            const amountDelta = amount - totalAmountFor - totalAmountAgainst;
+            if (amountDelta <= 0n) {
+              throw new Error(`Did not increase collateral!`);
+            }
+            if (params.side) {
+              // Against
+              totalAmountAgainst = amount - totalAmountFor;
+            } else {
+              // For
+              totalAmountFor = amount - totalAmountAgainst;
+            }
+            return { block, params, amountDelta, outputIdx: idx };
+
+            // if (side) {
+            //   // Against
+            //   amountAgainst = amount - amountFor;
+            // } else {
+            //   // For
+            //   amountFor = amount - amountAgainst;
+            // }
+
+            // const canonicalClaim = block.outputClaims[idx].find((x) =>
+            //   x.canonicality > 0
+            // );
+            // if (canonicalClaim) {
+            //   return this.getFinalCollateral(
+            //     canonicalClaim,
+            //     idx,
+            //     amountFor,
+            //     amountAgainst,
+            //   );
+            // } else {
+            //   return { block, amountFor, amountAgainst };
+            // }
+          }
+        }
+      });
+    }
+
+    return {
+      totalAmountFor: 0n,
+      totalAmountAgainst: 0n,
+      resolver: undefined,
+      ledger,
+    };
   }
 
   public updateCanonicality(block: BlockExt, someInputCanonicality?: boolean) {

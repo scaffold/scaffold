@@ -16,49 +16,36 @@ export default class LitigationService {
   ) {
     block.passedVerification = verified;
 
-    block.outputs.map(({ amount, verifier }, idx) => {
-      if (!Hash.equals(verifier.contract_hash, collateralHash)) {
-        return;
-      }
-      const canonicalClaims = block.outputClaims[idx].filter((claim) =>
-        claim.canonicality > 0
-      );
-      if (canonicalClaims.length > 1) {
-        throw new Error(`More than one canonical claim!!!`);
-      }
-      if (canonicalClaims.length === 0) {
-        return;
-      }
-      canonicalClaims[0];
-    });
-
-    if (!block.postedCollateral.some(({ canonicality }) => canonicality > 0)) {
-      const head = block.collateralChain.length
-        ? block.collateralChain[block.collateralChain.length - 1]
-        : block;
+    const collateral = this.ctx.get(BlockService).getCollateral(block);
+    if (collateral.resolver!==undefined){
+      return;
+    }
+    if (collateral.ledger.length===0){
+      // No initial collateral posted
+      return;
     }
 
-    const collateralFor = 2n;
-    const collateralAgainst = 0n;
+    const needsCollateral=verified?collateral.totalAmountFor < collateral.totalAmountAgainst << 1n:collateral.totalAmountAgainst < collateral.totalAmountFor << 1n;
+    if (needsCollateral) {const last = collateral.ledger[collateral.ledger.length-1]
+      const lastVerifier=last.block.outputs[last.outputIdx].verifier;
 
-    if (verified) {
-      if (collateralFor < collateralAgainst << 1n) {
-        this.postCollateral(block, true, hint);
-      }
-    } else {
-      if (collateralAgainst < collateralFor << 1n) {
-        this.postCollateral(block, false, hint);
-      }
-    }
-  }
+    const outputAmount = collateral.totalAmountFor+collateral.totalAmountAgainst;
+    const outputParams = CollateralContractParams.encode({ 
+      collateral_input_idx:
 
-  private postCollateral(block: BlockExt, side: boolean, hint: Uint8Array) {
-    const verifiers = block.outputs.filter(({ verifier }) =>
-      Hash.equals(verifier.contract_hash, collateralHash)
-    ).map((x) => x.verifier);
-    const body = CollateralContractBody.encode({ side, hint });
+          { name: 'collateral_input_idx', type: 'int' }, // -1 if this is the initial posting; -2 if we're not appending a link but just sending collateral for someone else's link
+      { name: 'side', type: 'boolean' }, // false=FOR, true=AGAINST
+      { name: 'public_key', type: 'bytes' }, // 33 bytes
+      { name: 'free_after', type: 'long' },
 
-    const collateralBlock = this.ctx.get(BlockBuilder).build(verifiers, body);
+ });
+
+    this.ctx.get(BlockBuilder).emit({body:hint, outputs: []},[lastVerifier])
+
+    const collateralBlock = ;
     this.ctx.get(BlockService).create(collateralBlock);
+      this.postCollateral(block, verified, hint||new Uint8Array());
+    }
   }
+
 }
