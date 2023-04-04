@@ -6,7 +6,7 @@ import { assertSnapshot } from 'std-latest/testing/snapshot.ts';
 Deno.test(
   { name: `ingest should add block to our registry` },
   makeTest({}, async (testCtx, ctx) => {
-    ctx.get(BlockService).ingest({
+    ctx.get(BlockService).create({
       inputs: [],
       outputs: [],
       body: new Uint8Array([]),

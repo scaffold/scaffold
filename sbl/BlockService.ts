@@ -1,5 +1,8 @@
 import { BlockExt, BlockFlag, BlockMeta } from './BlockMeta.ts';
-import { COLLATERAL_INPUT_IDX_INITIAL } from './CollateralContract.ts';
+import {
+  COLLATERAL_INPUT_IDX_INITIAL,
+  COLLATERAL_INPUT_IDX_ISOLATED,
+} from './CollateralContract.ts';
 import { MessageType } from './ConnectionService.ts';
 import { collateralHash } from './constants.ts';
 import Context from './Context.ts';
@@ -109,7 +112,7 @@ export default class BlockService {
           ) === idx
       ),
 
-      receivedTimestamp: this.ctx.config.timeProvider(),
+      receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.Null,
       derivedWork: 0,
       mergeableProbability: 0,
@@ -159,9 +162,9 @@ export default class BlockService {
 
         if (collateral_input_idx >= 0) {
           const input = blockExt.inputs[collateral_input_idx];
-        } else if (collateral_input_idx === -1) {
+        } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL) {
           // Initial posting
-        } else if (collateral_input_idx === -2) {
+        } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_ISOLATED) {
           // Sending collateral for someone else to include in their link
           throw new Error(`Not implemented`);
         } else {

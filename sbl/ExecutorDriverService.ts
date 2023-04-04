@@ -100,7 +100,7 @@ export default class ExecutorDriverService {
     const inputs: BlockExt[] = [];
     const releases: (() => void)[] = [];
 
-    const startTime = this.ctx.config.timeProvider();
+    const startTime = this.ctx.config.timeProvider.now();
     let blockedTime = 0;
     let blockedCount = 0;
 
@@ -173,7 +173,7 @@ export default class ExecutorDriverService {
         } else {
           return new Promise((resolve) => {
             if (blockedCount++ === 0) {
-              blockedTime -= this.ctx.config.timeProvider();
+              blockedTime -= this.ctx.config.timeProvider.now();
             }
 
             this.workerQueue.push({
@@ -181,7 +181,7 @@ export default class ExecutorDriverService {
               getScore,
               continuation: () => {
                 if (--blockedCount === 0) {
-                  blockedTime += this.ctx.config.timeProvider();
+                  blockedTime += this.ctx.config.timeProvider.now();
                 }
 
                 resolve();
@@ -197,7 +197,7 @@ export default class ExecutorDriverService {
           }
 
           if (blockedCount++ === 0) {
-            blockedTime -= this.ctx.config.timeProvider();
+            blockedTime -= this.ctx.config.timeProvider.now();
           }
 
           // TODO: Call pause/resume when requesting?
@@ -213,7 +213,7 @@ export default class ExecutorDriverService {
               if (inputs.length === idx) {
                 inputs.push(block);
                 if (--blockedCount === 0) {
-                  blockedTime += this.ctx.config.timeProvider();
+                  blockedTime += this.ctx.config.timeProvider.now();
                 }
                 reply(block.body);
               } else if (arrEquals(inputs[idx].body, block.body)) {
@@ -230,11 +230,11 @@ export default class ExecutorDriverService {
         }),
       notify: (verifier) => this.ctx.get(FetchService).fetch(verifier, {}),
       getInputBlocks: () => inputs,
-      getTotalTime: () => this.ctx.config.timeProvider() - startTime,
+      getTotalTime: () => this.ctx.config.timeProvider.now() - startTime,
       getCpuTime: () =>
-        this.ctx.config.timeProvider() - startTime -
+        this.ctx.config.timeProvider.now() - startTime -
         (blockedCount
-          ? blockedTime + this.ctx.config.timeProvider()
+          ? blockedTime + this.ctx.config.timeProvider.now()
           : blockedTime),
     }, cancelPromise).then(
       () => stop(true),

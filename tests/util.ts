@@ -51,7 +51,14 @@ const makeConfig = (
 
   computeContracts: [],
 
-  timeProvider: () => timestamp++,
+  timeProvider: {
+    now: () => timestamp++,
+    // TODO: Instant time simulation
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+  },
 
   ...partialConfig,
 });

@@ -12,6 +12,14 @@ interface GraphParameters {
   multiplyDataCollateral(x: bigint, time: number): bigint;
 }
 
+interface TimeProvider {
+  now(): number;
+  setTimeout(cb: () => void, delay: number): number;
+  clearTimeout(idx: number): void;
+  setInterval(cb: () => void, delay: number): number;
+  clearInterval(idx: number): void;
+}
+
 interface Config {
   debugName: string;
 
@@ -86,7 +94,7 @@ interface Config {
 
   computeContracts: Hash[];
 
-  timeProvider(): number;
+  timeProvider: TimeProvider;
 
   resourceLimits: Record<Resource, number>;
 
@@ -99,7 +107,13 @@ export const defaultConfig = {
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
-  timeProvider: Date.now,
+  timeProvider: {
+    now: Date.now,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+  },
   resourceLimits: {
     webWorkerCount: 16,
     cpuUsage: navigator.hardwareConcurrency,

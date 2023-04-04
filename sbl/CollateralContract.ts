@@ -22,6 +22,7 @@ export const enum CollateralGeneratorModifier {
 }
 
 export const COLLATERAL_INPUT_IDX_INITIAL = -1;
+export const COLLATERAL_INPUT_IDX_ISOLATED = -2;
 
 export default class CollateralContract {
   constructor(private ctx: Context) {

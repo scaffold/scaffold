@@ -4,16 +4,16 @@ import Hash from '../sbl/util/Hash.ts';
 import { collateralHash, rootHash, trueHash } from '../sbl/constants.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
-import {
-  CollateralContractBody,
-  CollateralContractParams,
-} from '../sbl/messages.ts';
+import { CollateralContractParams } from '../sbl/messages.ts';
 import NodeService from '../sbl/NodeService.ts';
+import KeyService from '../sbl/KeyService.ts';
+import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
+import { mapOne } from '../sbl/util/functional.ts';
 
 Deno.test(
   { name: `an invalid body should have collateral posted against` },
   makeTest({}, async (testCtx, ctx) => {
-    const a = ctx.get(BlockService).ingest({
+    const a = await ctx.get(BlockService).create({
       inputs: [],
       outputs: [{
         verifier: {
@@ -31,15 +31,16 @@ Deno.test(
       timestamp: 0n,
     });
 
-    const b = ctx.get(BlockService).ingest({
+    const b = await ctx.get(BlockService).create({
       inputs: [{ block_hash: a, output_idx: 0 }],
       outputs: [{
         verifier: {
           contract_hash: collateralHash,
           params: CollateralContractParams.encode({
-            public_key_hash: ctx.get(NodeService).getSelfHash(),
+            collateral_input_idx: COLLATERAL_INPUT_IDX_INITIAL,
+            valid: true,
+            public_key: ctx.get(KeyService).getSelfPublicKey(),
             free_after: 0n + 10000n,
-            data_price: 1n,
           }),
         },
         amount: -10n,
@@ -51,13 +52,21 @@ Deno.test(
     });
 
     const c = await waitForBlock(ctx, { block_hash: b, output_idx: 0 });
-    assertObjectMatch(c, {
-      inputs: [{ block_hash: b, output_idx: 0 }],
-      outputs: [],
+
+    const params = mapOne(c.outputs, ({ verifier }, idx) => {
+      if (Hash.equals(verifier.contract_hash, collateralHash)) {
+        const params = CollateralContractParams.decode(verifier.params);
+        const input = c.inputs[params.collateral_input_idx];
+        if (Hash.equals(input.block_hash, b) && input.output_idx === 0) {
+          return params;
+        }
+      }
     });
-    assertEquals(CollateralContractBody.decode(c.body), {
-      side: false,
-      hint: new Uint8Array([]),
+
+    assertObjectMatch(params, {
+      valid: false,
+      public_key: ctx.get(KeyService).getSelfPublicKey(),
+      free_after: 0n + 10000n,
     });
   }),
 );

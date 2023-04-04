@@ -88,6 +88,7 @@ export default class BlockBuilder {
         timestamp = inputTs + 1n;
       }
     });
+
     return { inputs, outputs, body, side, isFreeMarket, timestamp };
   }
 }
