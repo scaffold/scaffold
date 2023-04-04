@@ -3,10 +3,7 @@ import { BlockExt } from './BlockMeta.ts';
 import CollateralContract from './CollateralContract.ts';
 import {
   accountHash,
-  collateralContestionHash,
   collateralHash,
-  collateralInitHash,
-  collateralVoteHash,
   dataHash,
   rootHash,
 } from './constants.ts';

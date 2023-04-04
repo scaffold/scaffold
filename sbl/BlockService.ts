@@ -1,4 +1,4 @@
-import { BlockExt, BlockMeta } from './BlockMeta.ts';
+import { BlockExt, BlockFlag, BlockMeta } from './BlockMeta.ts';
 import { COLLATERAL_INPUT_IDX_INITIAL } from './CollateralContract.ts';
 import { MessageType } from './ConnectionService.ts';
 import { collateralHash } from './constants.ts';
@@ -110,7 +110,7 @@ export default class BlockService {
       ),
 
       receivedTimestamp: this.ctx.config.timeProvider(),
-      flags: 0,
+      flags: BlockFlag.Null,
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map((_, idx) =>
@@ -125,6 +125,9 @@ export default class BlockService {
 
       canonicality: 0,
       collateral: 0,
+
+      collateralChain: [],
+      postedCollateral: [],
     };
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
@@ -151,9 +154,19 @@ export default class BlockService {
       );
 
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
-        // ...
-        const { collateral_input_idx, side, public_key, free_after } =
+        const { collateral_input_idx, valid, public_key, free_after } =
           CollateralContractParams.decode(verifier.params);
+
+        if (collateral_input_idx >= 0) {
+          const input = blockExt.inputs[collateral_input_idx];
+        } else if (collateral_input_idx === -1) {
+          // Initial posting
+        } else if (collateral_input_idx === -2) {
+          // Sending collateral for someone else to include in their link
+          throw new Error(`Not implemented`);
+        } else {
+          throw new Error(`Bad collateral input idx: ${collateral_input_idx}`);
+        }
       }
 
       // // TODO: Use a simpler store; also update FetchService
@@ -224,7 +237,7 @@ export default class BlockService {
             if (amountDelta <= 0n) {
               throw new Error(`Did not increase collateral!`);
             }
-            if (params.side) {
+            if (params.valid) {
               // Against
               totalAmountAgainst = amount - totalAmountFor;
             } else {
@@ -257,6 +270,8 @@ export default class BlockService {
           }
         }
       });
+
+      ledger.push(params);
     }
 
     return {

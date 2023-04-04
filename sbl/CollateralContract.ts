@@ -6,7 +6,7 @@ import LocalGeneratorService, {
   INGENERABLE_FLAG,
   LocalGeneratorOpts,
 } from './LocalGeneratorService.ts';
-import { Block,CollateralContractParams } from './messages.ts';
+import { Block, CollateralContractParams } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { arrEquals } from './util/buffer.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
@@ -21,7 +21,7 @@ export const enum CollateralGeneratorModifier {
   OmitAgainst,
 }
 
-export const COLLATERAL_INPUT_IDX_INITIAL=-1;
+export const COLLATERAL_INPUT_IDX_INITIAL = -1;
 
 export default class CollateralContract {
   constructor(private ctx: Context) {
@@ -40,12 +40,8 @@ export default class CollateralContract {
     // ) => MaybePromise<Uint8Array>,
     invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
-    const {collateral_input_idx,side,
-      public_key,
-      free_after,
-    } = CollateralContractParams.decode(params);
-
-
+    const { collateral_input_idx, valid, public_key, free_after } =
+      CollateralContractParams.decode(params);
 
     if (block.timestamp < free_after) {
       // Contestion
@@ -75,35 +71,35 @@ export default class CollateralContract {
   }
 
   public static generate(
-    { ctx, params, inputIdx, emitCorrect, addOutput, invert,request }: LocalGeneratorOpts,
+    { ctx, params, inputIdx, emitCorrect, addOutput, invert, request }:
+      LocalGeneratorOpts,
     modifier = CollateralGeneratorModifier.None,
   ) {
-    const {collateral_input_idx,side,
-      public_key,
-      free_after,
-    } = CollateralContractParams.decode(params);
+    //     const {collateral_input_idx,valid,
+    //       public_key,
+    //       free_after,
+    //     } = CollateralContractParams.decode(params);
 
-const availableCollateral=10n;
+    // const availableCollateral=10n;
 
-const inputCollateral=invert()
-    addOutput({amount:})
+    // const inputCollateral=invert()
+    //     addOutput({amount:})
 
-
-    const block = ctx.get(BlockService).get(hash);
-    if (block) {
-      if (emitCorrect) {
-        const data = Block.encode(block);
-        const commitment = Hash.digestParts(
-          data,
-          secret,
-          ctx.get(NodeService).getSelfHash(),
-        );
-        return commitment.toBytes();
-      } else {
-        return Hash.random().toBytes();
-      }
-    } else {
-      return INGENERABLE_FLAG;
-    }
+    //     const block = ctx.get(BlockService).get(hash);
+    //     if (block) {
+    //       if (emitCorrect) {
+    //         const data = Block.encode(block);
+    //         const commitment = Hash.digestParts(
+    //           data,
+    //           secret,
+    //           ctx.get(NodeService).getSelfHash(),
+    //         );
+    //         return commitment.toBytes();
+    //       } else {
+    //         return Hash.random().toBytes();
+    //       }
+    //     } else {
+    //       return INGENERABLE_FLAG;
+    //     }
   }
 }

@@ -2,11 +2,11 @@
 import * as avro from 'avro';
 import HashClass from './util/Hash.ts';
 
-declare global {
-  interface Crypto {
-    randomUUID: () => string;
-  }
-}
+// declare global {
+//   interface Crypto {
+//     randomUUID: () => string;
+//   }
+// }
 
 class HashLogicalType extends avro.types.LogicalType {
   // constructor(schema: avro.Schema, opts?: any) {
@@ -180,7 +180,10 @@ export const registry = {
     name: 'BlockOutput',
     type: 'record',
     fields: [
+      // A ppsitive amount means we're paying/incentivizing descendant blocks who claim this output.
+      // A negative amount means descendant blocks who claim this output must pay us (with another positive input or negative output to make their block sum zero).
       { name: 'amount', type: 'long' },
+
       { name: 'verifier', type: 'Verifier' },
       // { name: 'bill_to', type: ['null', 'Verifier'] },
       // { name: 'author', type: ['null', 'bytes'] },
@@ -535,12 +538,15 @@ export const registry = {
     ],
   },
 
+  // This is kinda ugly, but I can't think of a better way to do it.
+  // The nice thing about a chain like this is that only one claimant for the collateral output will be canonical,
+  // So we get a single chain without any extra work.
   CollateralContractParams: {
     name: 'CollateralContractParams',
     type: 'record',
     fields: [
       { name: 'collateral_input_idx', type: 'int' }, // -1 if this is the initial posting; -2 if we're not appending a link but just sending collateral for someone else's link
-      { name: 'side', type: 'boolean' }, // false=FOR, true=AGAINST
+      { name: 'valid', type: 'boolean' },
       { name: 'public_key', type: 'bytes' }, // 33 bytes
       { name: 'free_after', type: 'long' },
     ],

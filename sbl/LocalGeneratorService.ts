@@ -4,7 +4,7 @@ import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
 
-export const ANY_BODY_FLAG = Symbol('LocalGenerator.AnyBody');
+export const ANY_BODY_FLAG = Symbol('LocalGenerator.AnyBody'); // TODO: Make this just void?
 export const INGENERABLE_FLAG = Symbol('LocalGenerator.Ingenerable');
 
 export interface LocalGeneratorOpts {
@@ -29,6 +29,7 @@ export interface LocalGeneratorOpts {
 export type LocalGenerator = (
   opts: LocalGeneratorOpts,
 ) => MaybePromise<typeof ANY_BODY_FLAG | typeof INGENERABLE_FLAG | Uint8Array>;
+// TODO: Return a partial block that can be fed to BlockBuilder?
 
 export default class LocalGeneratorService {
   private registry: Map<HashPrimitive, LocalGenerator> = new Map();

@@ -9,6 +9,7 @@ import ExecutorDriverService, {
 } from './ExecutorDriverService.ts';
 import FetchService from './FetchService.ts';
 import LocalGeneratorService, {
+  ANY_BODY_FLAG,
   INGENERABLE_FLAG,
 } from './LocalGeneratorService.ts';
 import { Verifier } from './messages.ts';
@@ -158,8 +159,13 @@ export default class ExecutorLauncherService {
             ctx: this.ctx,
             contractHash: verifier.contract_hash,
             params: verifier.params,
+            inputIdx: -1000,
             emitCorrect: this.shouldEmitCorrect(verifier),
             setFreeMarket: () => error('Not implemented'),
+            setBody: (body) => error('Not implemented'),
+            addOutput: (output) => error('Not implemented'),
+            sign: () => error('Not implemented'),
+            invert: (hash) => error('Not implemented'),
             request: (contract_hash, params) =>
               driver.request({ contract_hash, params }),
             notify: (contract_hash, params) =>
@@ -167,7 +173,12 @@ export default class ExecutorLauncherService {
           });
 
           if (data !== INGENERABLE_FLAG) {
-            this.createBlock(verifier, data, driver.getInputBlocks(), 0);
+            this.createBlock(
+              verifier,
+              data !== ANY_BODY_FLAG ? data : undefined,
+              driver.getInputBlocks(),
+              0,
+            );
           }
         },
       );
@@ -225,12 +236,12 @@ export default class ExecutorLauncherService {
 
   private createBlock(
     verifier: Verifier,
-    data: Uint8Array,
+    data: Uint8Array | undefined,
     inputs: BlockExt[],
     durationMs: number,
   ) {
     // console.log('Completed generator', verifier, bin2str(data));
-    const block = this.ctx.get(BlockBuilder).build([verifier], data);
+    const block = this.ctx.get(BlockBuilder).emit({ body: data }, [verifier]);
     this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;

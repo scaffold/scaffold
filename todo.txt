@@ -1,0 +1,1 @@
+grep --recursive --fixed-strings '||' sbl/ # Possibly replace with `??`
