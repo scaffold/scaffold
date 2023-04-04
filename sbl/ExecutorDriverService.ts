@@ -265,12 +265,12 @@ export default class ExecutorDriverService {
       }
 
       if (bestScore < this.ctx.config.workScoreThreshold) {
-        setTimeout(this.resume, 100);
+        this.ctx.config.timeProvider.setTimeout(this.resume, 100);
         break;
       }
 
       const { continuation } = this.workerQueue[bestIdx];
-      setTimeout(continuation, 0);
+      this.ctx.config.timeProvider.setTimeout(continuation, 0);
 
       // Note that this works even if the queue only has one entry
       this.workerQueue[bestIdx] = this.workerQueue[this.workerQueue.length - 1];

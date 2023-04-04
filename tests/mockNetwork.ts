@@ -1,5 +1,5 @@
 import Hash from '~/sbl/util/Hash.ts';
-import { Packet } from '../sbl/messages.ts';
+import Context from '../sbl/Context.ts';
 import {
   ConnectionProvider,
   ProtocolProvider,
@@ -19,6 +19,7 @@ export const makeMockNetworkProvider = (opts: {
   createClient: (
     _onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
+    ctx: Context,
   ) => {
     let send: (data: Uint8Array) => void;
     const onClose: (() => void)[] = [];
@@ -32,16 +33,16 @@ export const makeMockNetworkProvider = (opts: {
           return;
         }
 
-        timeouts.push(setTimeout(() =>
+        timeouts.push(ctx.config.timeProvider.setTimeout(() =>
           onNewConn({
             sendReliable: (data: Uint8Array) =>
-              timeouts.push(setTimeout(
+              timeouts.push(ctx.config.timeProvider.setTimeout(
                 () => send(data),
                 (Math.random() + 0.5) * opts.sendReliableLatencyMs,
               )),
             sendFast: (data: Uint8Array) =>
               Math.random() > opts.sendFastDropRatio &&
-              timeouts.push(setTimeout(
+              timeouts.push(ctx.config.timeProvider.setTimeout(
                 () => send(data),
                 (Math.random() + 0.5) * opts.sendFastLatencyMs,
               )),
@@ -50,7 +51,7 @@ export const makeMockNetworkProvider = (opts: {
             },
             close: () => {
               onClose.forEach((cb) => cb());
-              timeouts.forEach((t) => clearTimeout(t));
+              timeouts.forEach((t) => ctx.config.timeProvider.clearTimeout(t));
             },
             onClose: (handler: () => void) => onClose.push(handler),
           }), (Math.random() + 0.5) * opts.connectLatencyMs));
@@ -61,6 +62,7 @@ export const makeMockNetworkProvider = (opts: {
   createServer: (
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
+    ctx: Context,
   ) => {
     const onClose: (() => void)[] = [];
     const timeouts: number[] = [];
@@ -73,14 +75,14 @@ export const makeMockNetworkProvider = (opts: {
           sendReliable: (data: Uint8Array) =>
             // console.log(
             //   Packet.decode(data.subarray(64)),
-            timeouts.push(setTimeout(
+            timeouts.push(ctx.config.timeProvider.setTimeout(
               () => send(data),
               (Math.random() + 0.5) * opts.sendReliableLatencyMs,
             )),
           // ),
           sendFast: (data: Uint8Array) =>
             Math.random() > opts.sendFastDropRatio &&
-            timeouts.push(setTimeout(
+            timeouts.push(ctx.config.timeProvider.setTimeout(
               () => send(data),
               (Math.random() + 0.5) * opts.sendFastLatencyMs,
             )),
@@ -90,7 +92,7 @@ export const makeMockNetworkProvider = (opts: {
           close: () => {
             onClose.forEach((cb) => cb());
             // console.log('CLOSE', timeouts);
-            timeouts.forEach((t) => clearTimeout(t));
+            timeouts.forEach((t) => ctx.config.timeProvider.clearTimeout(t));
           },
           onClose: (handler: () => void) => onClose.push(handler),
         });

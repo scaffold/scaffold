@@ -39,7 +39,7 @@ export interface Connection {
   };
 }
 
-export enum MessageType {
+export const enum MessageType {
   Info,
   Block,
   BridgeStart,
@@ -66,7 +66,8 @@ export default class ConnectionService {
     const protocolProvider =
       this.ctx.config.networkProvider.protocols.get(protocol) ||
       error(`Protocol ${protocol} has no provider`);
-    protocolProvider.createClient!(onListen, onNewConn).tryConnect(spec);
+    protocolProvider.createClient!(onListen, onNewConn, this.ctx)
+      .tryConnect(spec);
   }
 
   // public connect(protocol: string): { tryConnect(spec: string): void } {
@@ -219,12 +220,17 @@ export default class ConnectionService {
 
         const msgType = this.ctx.get(PacketCoder).getTypeIdx(data);
         switch (msgType) {
+          case MessageType.Info:
+            console.warn(`Got unhandled message type: Info`);
+            break;
           case MessageType.Block:
             this.ctx.get(BlockService).ingest(data);
             break;
           case MessageType.BridgeStart:
+            console.warn(`Got unhandled message type: BridgeStart`);
             break;
           case MessageType.BridgeEnd:
+            console.warn(`Got unhandled message type: BridgeEnd`);
             break;
           default:
             throw new Error(`Unhandled message type ${msgType}`);

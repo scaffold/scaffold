@@ -65,7 +65,7 @@ snapshot[`ingest should add block to our registry 1`] = `
         postedCollateral: [
         ],
         propagationMask: 0,
-        receivedTimestamp: 1000,
+        receivedTimestamp: 0,
         side: true,
         signature: Uint8Array(64) [
           80,

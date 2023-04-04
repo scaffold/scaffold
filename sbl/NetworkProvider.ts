@@ -1,4 +1,4 @@
-import Hash from './util/Hash.ts';
+import Context from './Context.ts';
 
 export type ConnectionProvider = {
   // Does not need to maintain order between sends, but does need to make sure packet's aren't dropped or mangled.
@@ -18,6 +18,7 @@ export type ProtocolProvider = {
   createServer?(
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
+    ctx: Context, // TODO: Maybe move this parameter first; we don't want it to be ignored?
   ): void;
 
   // Only call onNewConn once the connection is established and data can be sent.
@@ -27,6 +28,7 @@ export type ProtocolProvider = {
     // onListen events will be transmitted to the remote node via tryConnect
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
+    ctx: Context, // TODO: Maybe move this parameter first; we don't want it to be ignored?
   ): {
     tryConnect(spec: string): void;
   };

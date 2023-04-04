@@ -253,7 +253,7 @@ export default class NodeService {
         const onNewConn = (provider: ConnectionProvider) =>
           this.ctx.get(ConnectionService).initConnection(protocol, provider);
 
-        return provider.createClient(onListen, onNewConn);
+        return provider.createClient(onListen, onNewConn, this.ctx);
       },
     );
   }

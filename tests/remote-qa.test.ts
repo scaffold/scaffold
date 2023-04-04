@@ -43,7 +43,9 @@ Deno.test(
         idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
       )
     );
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise<void>((resolve) =>
+      ctx2.config.timeProvider.setTimeout(resolve, 100)
+    );
 
     const block = await new Promise<Block>((resolve) =>
       ctx2.get(FetchService).fetch(

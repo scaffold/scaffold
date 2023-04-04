@@ -10,13 +10,12 @@ import { Block, BlockInput } from '../sbl/messages.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 import { assertEquals, AssertionError } from 'std-latest/testing/asserts.ts';
-
-let timestamp = 1000;
+import MockTimeProvider from './MockTimeProvider.ts';
 
 const makeConfig = (
   ctxIdx: number,
-  partialConfig: Partial<Config>,
-): Config => ({
+  partialConfig: Partial<Config & { timeProvider: MockTimeProvider }>,
+) => ({
   ...defaultConfig,
 
   debugName: `ctx_${ctxIdx + 1}`,
@@ -51,27 +50,29 @@ const makeConfig = (
 
   computeContracts: [],
 
-  timeProvider: {
-    now: () => timestamp++,
-    // TODO: Instant time simulation
-    setTimeout,
-    clearTimeout,
-    setInterval,
-    clearInterval,
-  },
+  timeProvider: new MockTimeProvider(),
 
   ...partialConfig,
-});
+} satisfies Config);
 
 export const makeTest = (
-  partialConfig: Partial<Config>,
+  partialConfig: Partial<Config & { timeProvider: MockTimeProvider }>,
   func: (testCtx: Deno.TestContext, ...ctx: Context[]) => Promise<void> | void,
 ) =>
 (testCtx: Deno.TestContext) => {
   // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
   const ctxs = Array.from(
     { length: func.length - 1 },
-    (_, i) => new Context(makeConfig(i, partialConfig)),
+    (_, i) => {
+      const config = makeConfig(i, partialConfig);
+      const stepperIdx = setInterval(() => config.timeProvider.stepTime(), 0);
+      const ctx = new Context(config);
+      ctx.onDestruct(() => {
+        clearInterval(stepperIdx);
+        config.timeProvider.destruct();
+      });
+      return ctx;
+    },
   );
   return deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000).finally(() =>
     Promise.all(ctxs.map((ctx) => ctx.destruct()))
@@ -96,6 +97,8 @@ export const waitForBlock = async (
       return blocks[0];
     }
 
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await new Promise<void>((resolve) =>
+      ctx.config.timeProvider.setTimeout(resolve, intervalMs)
+    );
   }
 };

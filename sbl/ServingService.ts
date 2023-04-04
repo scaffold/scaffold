@@ -9,9 +9,15 @@ export default class ServingService {
     this.ctx.config.networkProvider.protocols.forEach(
       (provider, protocol) => {
         if (provider.createServer) {
-          const onNewConn = (provider: ConnectionProvider) =>
-            this.ctx.get(ConnectionService).initConnection(protocol, provider);
-          provider.createServer((spec) => onListen(protocol, spec), onNewConn);
+          provider.createServer(
+            (spec) => onListen(protocol, spec),
+            (provider) =>
+              this.ctx.get(ConnectionService).initConnection(
+                protocol,
+                provider,
+              ),
+            this.ctx,
+          );
         }
       },
     );

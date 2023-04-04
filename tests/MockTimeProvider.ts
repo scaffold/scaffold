@@ -1,0 +1,110 @@
+import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
+
+interface Entry {
+  timestamp: number;
+  idx: number;
+  cb(): void;
+  requeueInterval?: number;
+}
+
+export default class MockTimeProvider {
+  private queue: RedBlackTree<Entry> = new RedBlackTree((a, b) =>
+    a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.idx - b.idx
+  );
+  private entries: (Entry | undefined)[] = [undefined];
+
+  constructor(private curTimestamp = 0) {}
+
+  public destruct() {
+    if (!this.queue.isEmpty()) {
+      throw new Error(
+        `Trying to destruct a MockTimeProvider but there's still ${this.queue.size} entries!`,
+      );
+    }
+  }
+
+  public advanceTime(inc: number) {
+    const newTimestamp = this.curTimestamp + inc;
+
+    while (true) {
+      const entry = this.queue.min();
+      if (entry === null || entry.timestamp > newTimestamp) {
+        break;
+      }
+      this.executeEntry(entry);
+    }
+
+    this.curTimestamp = newTimestamp;
+  }
+
+  public stepTime() {
+    const entry = this.queue.min();
+    if (entry !== null) {
+      this.executeEntry(entry);
+    }
+  }
+
+  private executeEntry(entry: Entry) {
+    if (entry.timestamp > this.curTimestamp) {
+      this.curTimestamp = entry.timestamp;
+    }
+
+    entry.cb();
+
+    if (this.queue.remove(entry)) {
+      if (entry.requeueInterval !== undefined) {
+        entry.timestamp += entry.requeueInterval;
+        this.queue.insert(entry);
+      } else {
+        this.entries[entry.idx] = undefined;
+      }
+    }
+  }
+
+  public now() {
+    return this.curTimestamp;
+  }
+
+  public setTimeout(cb: () => void, delay: number) {
+    return this.enqueue(cb, delay);
+  }
+  public clearTimeout(idx: number) {
+    this.dequeue(idx, false);
+  }
+  public setInterval(cb: () => void, delay: number) {
+    return this.enqueue(cb, delay, delay);
+  }
+  public clearInterval(idx: number) {
+    this.dequeue(idx, true);
+  }
+
+  private enqueue(cb: () => void, delay: number, requeueInterval?: number) {
+    const entry = {
+      timestamp: this.curTimestamp + delay,
+      idx: this.entries.length,
+      cb,
+      requeueInterval,
+    };
+
+    this.queue.insert(entry);
+    this.entries.push(entry);
+
+    return entry.idx;
+  }
+
+  private dequeue(idx: number, expectedRequeue: boolean) {
+    const entry = this.entries[idx];
+    if (entry) {
+      if (expectedRequeue && entry.requeueInterval === undefined) {
+        throw new Error(`Called clearInterval on an entry set by setTimeout`);
+      } else if (!expectedRequeue && entry.requeueInterval !== undefined) {
+        throw new Error(`Called clearTimeout on an entry set by setInterval`);
+      }
+
+      this.entries[idx] = undefined;
+      this.queue.remove(entry);
+    } else {
+      throw new Error(`Invalid clear idx: ${idx}`);
+    }
+  }
+}
