@@ -2,11 +2,11 @@
 import * as avro from 'avro';
 import HashClass from './util/Hash.ts';
 
-declare global {
-  interface Crypto {
-    randomUUID: () => string;
-  }
-}
+// declare global {
+//   interface Crypto {
+//     randomUUID: () => string;
+//   }
+// }
 
 class HashLogicalType extends avro.types.LogicalType {
   // constructor(schema: avro.Schema, opts?: any) {

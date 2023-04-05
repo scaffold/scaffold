@@ -1,4 +1,4 @@
-import { BlockExt, BlockMeta } from './BlockMeta.ts';
+import { BlockExt, BlockFlag, BlockMeta } from './BlockMeta.ts';
 import BlockPublisher from './BlockPublisher.ts';
 import Context from './Context.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
@@ -51,7 +51,7 @@ export default class BlockService {
       nonce: Math.random(),
 
       receivedTimestamp: this.ctx.config.timeProvider(),
-      flags: 0,
+      flags: BlockFlag.Null,
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map(({ verifier }) =>

@@ -1,7 +1,9 @@
 import { Block } from './messages.ts';
 import Hash from './util/Hash.ts';
 
-enum BlockFlag {
+export const enum BlockFlag {
+  Null = 0,
+
   CheckedZeroSum = 1 << 0,
   CheckedTimestamp = 1 << 1,
   CheckedMergability = 1 << 2,
