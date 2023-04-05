@@ -89,10 +89,16 @@ export default class MockTimeProvider {
     this.queue.insert(entry);
     this.entries.push(entry);
 
+    // console.log(
+    //   `Enqueue ${entry.idx} with delay ${delay} and requeueInterval ${requeueInterval}`,
+    // );
+
     return entry.idx;
   }
 
   private dequeue(idx: number, expectedRequeue: boolean) {
+    // console.log(`Dequeue ${idx} with expectedRequeue ${expectedRequeue}`);
+
     const entry = this.entries[idx];
     if (entry) {
       if (expectedRequeue && entry.requeueInterval === undefined) {
@@ -104,6 +110,7 @@ export default class MockTimeProvider {
       this.entries[idx] = undefined;
       this.queue.remove(entry);
     } else {
+      console.log(idx);
       throw new Error(`Invalid clear idx: ${idx}`);
     }
   }

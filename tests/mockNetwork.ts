@@ -4,11 +4,30 @@ import {
   ConnectionProvider,
   ProtocolProvider,
 } from '../sbl/NetworkProvider.ts';
+import { TimeProvider } from '../sbl/Config.ts';
 
 const servers: Map<
   string,
   { connect: (send: (data: Uint8Array) => void) => (data: Uint8Array) => void }
 > = new Map();
+
+class TimerSet {
+  private timeouts = new Set<number>();
+
+  constructor(private timeProvider: TimeProvider) {}
+
+  public set(cb: () => void, delay: number) {
+    const idx = this.timeProvider.setTimeout(() => {
+      this.timeouts.delete(idx);
+      cb();
+    }, delay);
+    this.timeouts.add(idx);
+  }
+
+  public clearAll() {
+    this.timeouts.forEach((idx) => this.timeProvider.clearTimeout(idx));
+  }
+}
 
 export const makeMockNetworkProvider = (opts: {
   connectLatencyMs: number;
@@ -23,38 +42,38 @@ export const makeMockNetworkProvider = (opts: {
   ) => {
     let send: (data: Uint8Array) => void;
     const onClose: (() => void)[] = [];
-    const timeouts: number[] = [];
+    const timerSet = new TimerSet(ctx.config.timeProvider);
 
     return {
       tryConnect: (spec: string) => {
         const server = servers.get(spec);
-        if (!server) {
+        if (server === undefined) {
           console.error(`Tried connecting to a non-existent spec ${spec}`);
           return;
         }
 
-        timeouts.push(ctx.config.timeProvider.setTimeout(() =>
+        timerSet.set(() =>
           onNewConn({
             sendReliable: (data: Uint8Array) =>
-              timeouts.push(ctx.config.timeProvider.setTimeout(
+              timerSet.set(
                 () => send(data),
                 (Math.random() + 0.5) * opts.sendReliableLatencyMs,
-              )),
+              ),
             sendFast: (data: Uint8Array) =>
               Math.random() > opts.sendFastDropRatio &&
-              timeouts.push(ctx.config.timeProvider.setTimeout(
+              timerSet.set(
                 () => send(data),
                 (Math.random() + 0.5) * opts.sendFastLatencyMs,
-              )),
+              ),
             onRecv: (handler: (data: Uint8Array) => void) => {
               send = server.connect(handler);
             },
             close: () => {
               onClose.forEach((cb) => cb());
-              timeouts.forEach((t) => ctx.config.timeProvider.clearTimeout(t));
+              timerSet.clearAll();
             },
             onClose: (handler: () => void) => onClose.push(handler),
-          }), (Math.random() + 0.5) * opts.connectLatencyMs));
+          }), (Math.random() + 0.5) * opts.connectLatencyMs);
       },
     };
   },
@@ -65,7 +84,7 @@ export const makeMockNetworkProvider = (opts: {
     ctx: Context,
   ) => {
     const onClose: (() => void)[] = [];
-    const timeouts: number[] = [];
+    const timerSet = new TimerSet(ctx.config.timeProvider);
 
     const addr = Hash.random().toHex();
     servers.set(addr, {
@@ -75,24 +94,24 @@ export const makeMockNetworkProvider = (opts: {
           sendReliable: (data: Uint8Array) =>
             // console.log(
             //   Packet.decode(data.subarray(64)),
-            timeouts.push(ctx.config.timeProvider.setTimeout(
+            timerSet.set(
               () => send(data),
               (Math.random() + 0.5) * opts.sendReliableLatencyMs,
-            )),
+            ),
           // ),
           sendFast: (data: Uint8Array) =>
             Math.random() > opts.sendFastDropRatio &&
-            timeouts.push(ctx.config.timeProvider.setTimeout(
+            timerSet.set(
               () => send(data),
               (Math.random() + 0.5) * opts.sendFastLatencyMs,
-            )),
+            ),
           onRecv: (handler: (data: Uint8Array) => void) => {
             recvHandler = handler;
           },
           close: () => {
             onClose.forEach((cb) => cb());
             // console.log('CLOSE', timeouts);
-            timeouts.forEach((t) => ctx.config.timeProvider.clearTimeout(t));
+            timerSet.clearAll();
           },
           onClose: (handler: () => void) => onClose.push(handler),
         });

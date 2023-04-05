@@ -139,7 +139,7 @@ export default class ExecutorLauncherService {
           const { amount } = block.outputs[idx];
           const claims = block.outputClaims[idx];
           return claims.length === 0 && block.canonicality > 0
-            ? acc - /* Math.exp(block.mergeableLogProbabilityValue) * */
+            ? acc + /* Math.exp(block.mergeableLogProbabilityValue) * */
               Number(amount)
             : acc;
         }, this.extraGeneratorIncentive.get(runHash.toPrimitive())!);

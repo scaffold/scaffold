@@ -88,6 +88,13 @@ export default class BlockService {
 
     const block = Block.decode(data.subarray(SIGNATURE_LENGTH + 1));
 
+    console.log(
+      `Ingesting block on ctx ${this.ctx.config.debugName} with hash ${
+        blockHash.toHex().slice(0, 16)
+      } and signature ${bin2hex(signature).slice(0, 16)}: `,
+      block,
+    );
+
     // console.log(
     //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
     //     trunc(bin2hex(block.verifier.params), 100)
@@ -219,7 +226,7 @@ export default class BlockService {
       outputIdx: number;
     }[];
   } {
-    let ancestorOutputIdx = COLLATERAL_INPUT_IDX_INITIAL;
+    let ancestorOutputIdx: number | undefined;
     let totalAmountFor = 0n;
     let totalAmountAgainst = 0n;
     const ledger: {
@@ -233,8 +240,12 @@ export default class BlockService {
       const params = mapOne(block.outputs, ({ verifier, amount }, idx) => {
         if (Hash.equals(verifier.contract_hash, collateralHash)) {
           const params = CollateralContractParams.decode(verifier.params);
-          const input = block.inputs[params.collateral_input_idx];
-          if (input.output_idx === ancestorOutputIdx) {
+          if (
+            ancestorOutputIdx === undefined
+              ? params.collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL
+              : block.inputs[params.collateral_input_idx].output_idx ===
+                ancestorOutputIdx
+          ) {
             ancestorOutputIdx = idx;
             const amountDelta = amount - totalAmountFor - totalAmountAgainst;
             if (amountDelta <= 0n) {
@@ -275,6 +286,19 @@ export default class BlockService {
       });
 
       ledger.push(params);
+
+      const claims = block.outputClaims[params.outputIdx];
+      if (claims.length) {
+        let maxCanonicality = -Infinity;
+        for (const claim of claims) {
+          if (claim.canonicality > maxCanonicality) {
+            maxCanonicality = claim.canonicality;
+            block = claim;
+          }
+        }
+      } else {
+        break;
+      }
     }
 
     return {
@@ -468,7 +492,7 @@ export default class BlockService {
   }
 
   public getWork(block: Block | BlockSet) {
-    return block.outputs.reduce((acc, { amount }) => acc - amount, 1n);
+    return block.outputs.reduce((acc, { amount }) => acc + amount, 1n);
   }
 
   private getSamplesPerWork() {

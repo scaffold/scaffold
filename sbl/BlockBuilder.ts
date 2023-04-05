@@ -39,7 +39,7 @@ export default class BlockBuilder {
       ) {
         if (
           block.outputClaims[idx].length === 0 &&
-          block.outputs[idx].amount <= 0n
+          block.outputs[idx].amount >= 0n
         ) {
           inputs.push({
             block_hash: block.hash,

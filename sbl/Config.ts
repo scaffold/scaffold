@@ -8,11 +8,11 @@ import { Resource } from './ExecutorDriverService.ts';
 
 // TODO: Reorder, rename, reorganize config
 
-interface GraphParameters {
+export interface GraphParameters {
   multiplyDataCollateral(x: bigint, time: number): bigint;
 }
 
-interface TimeProvider {
+export interface TimeProvider {
   now(): number;
   setTimeout(cb: () => void, delay: number): number;
   clearTimeout(idx: number): void;

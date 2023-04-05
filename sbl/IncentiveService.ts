@@ -31,7 +31,7 @@ export default class IncentiveService {
       //   params: new Uint8Array(),
       // },
       inputs: [],
-      outputs: [{ verifier, amount: -incentive }],
+      outputs: [{ verifier, amount: incentive }],
       body: new Uint8Array(),
       side: true,
       isFreeMarket: true,
@@ -53,45 +53,49 @@ export default class IncentiveService {
   }
 
   public popIncentives(amount: bigint) {
-    const now = Date.now();
-    const sorted = this.ctx.get(PendingIncentiveRegistry).getAll()
-      .sort((a, b) =>
-        // Sort in order of increasing incentive
-        // a.val.amount > b.val.amount ? 1 : a.val.amount < b.val.amount ? -1 : 0
-        // Sort in order of force timestamp
-        a.val.forceAfter > b.val.forceAfter
-          ? 1
-          : a.val.forceAfter < b.val.forceAfter
-          ? -1
-          : 0
-      );
+    throw new Error(`Is this used?`);
 
-    const res: BlockOutput[] = [];
+    // const now = Date.now();
+    // const sorted = this.ctx.get(PendingIncentiveRegistry).getAll()
+    //   .sort((a, b) =>
+    //     // Sort in order of increasing incentive
+    //     // a.val.amount > b.val.amount ? 1 : a.val.amount < b.val.amount ? -1 : 0
+    //     // Sort in order of force timestamp
+    //     a.val.forceAfter > b.val.forceAfter
+    //       ? 1
+    //       : a.val.forceAfter < b.val.forceAfter
+    //       ? -1
+    //       : 0
+    //   );
 
-    while (amount > 0n) {
-      const head = sorted.pop();
-      if (!head) {
-        res.push({
-          verifier: this.ctx.get(AccountService).getNextAccountVerifier(),
-          amount,
-        });
-        break;
-      }
+    // const res: BlockOutput[] = [];
 
-      if (head.val.amount <= amount) {
-        amount -= head.val.amount;
-        this.ctx.get(PendingIncentiveRegistry).pop(head.key);
-        res.push(head.val);
-      } else {
-        head.val.amount -= amount;
-        res.push({
-          verifier: head.val.verifier,
-          amount,
-        });
-        break;
-      }
-    }
+    // while (amount > 0n) {
+    //   const head = sorted.pop();
+    //   if (!head) {
+    //     res.push({
+    //       verifier: this.ctx.get(AccountService).getNextAccountVerifier(),
+    //       amount,
+    //     });
+    //     break;
+    //   }
 
-    return res.map(({ verifier, amount }) => ({ verifier, amount: -amount }));
+    //   if (head.val.amount <= amount) {
+    //     amount -= head.val.amount;
+    //     this.ctx.get(PendingIncentiveRegistry).pop(head.key);
+    //     res.push(head.val);
+    //   } else {
+    //     head.val.amount -= amount;
+    //     res.push({
+    //       verifier: head.val.verifier,
+    //       amount,
+    //     });
+    //     break;
+    //   }
+    // }
+
+    // return res.map(({ verifier, amount }) => ({ verifier, amount: -amount }));
+
+    return [];
   }
 }
