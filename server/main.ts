@@ -129,18 +129,6 @@ const config: Config = {
 
   debugName: 'Server',
 
-  log: {
-    handler: (
-      ctx: Context,
-      className: string,
-      methodName: string,
-      params: Record<string, any>,
-    ) =>
-      console.log(
-        `${className}.${methodName}(${ctx.get(Logger).serialize(params)})`,
-      ),
-  },
-
   location: { x: 1, y: 2, z: 3 },
 
   shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,

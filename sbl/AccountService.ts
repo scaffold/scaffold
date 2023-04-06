@@ -11,8 +11,11 @@ export default class AccountService {
   private nextAccountIdx = 0n;
 
   constructor(private ctx: Context) {
-    const itv = setInterval(() => this.publishAnswer(), 100);
-    this.ctx.onDestruct(() => clearInterval(itv));
+    const itv = ctx.config.timeProvider.setInterval(
+      () => this.publishAnswer(),
+      100,
+    );
+    this.ctx.onDestruct(() => ctx.config.timeProvider.clearInterval(itv));
   }
 
   public getNextAccountVerifier(): Verifier {

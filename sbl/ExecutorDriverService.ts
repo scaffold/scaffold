@@ -12,6 +12,7 @@ Fixed worker pool
 import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
 import FetchService from './FetchService.ts';
+import Logger from './Logger.ts';
 import { Verifier } from './messages.ts';
 import { arrEquals } from './util/buffer.ts';
 import { mapEntries } from './util/functional.ts';
@@ -93,7 +94,7 @@ export default class ExecutorDriverService {
     //   } else if (rescoreInterval > 10000) {
     //     rescoreInterval = 10000;
     //   }
-    //   setTimeout(updateScore, rescoreInterval);
+    //   ctx.config.timeProvider.setTimeout(updateScore, rescoreInterval);
     // };
     // updateScore();
 
@@ -206,6 +207,8 @@ export default class ExecutorDriverService {
             verifier,
             {},
             (block) => {
+              this.ctx.get(Logger).info('got req', { verifier, block });
+
               // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
               // If it's not, or maybe just in any case of not having a canonical input:
               //   Any block can be made canonical by re-writing, and not claiming the disputed input(s).

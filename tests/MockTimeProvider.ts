@@ -5,6 +5,7 @@ interface Entry {
   idx: number;
   cb(): void;
   requeueInterval?: number;
+  stack: string;
 }
 
 export default class MockTimeProvider {
@@ -17,6 +18,7 @@ export default class MockTimeProvider {
 
   public destruct() {
     if (!this.queue.isEmpty()) {
+      console.error('Uncleared timeout set at:', this.queue.min()!.stack);
       throw new Error(
         `Trying to destruct a MockTimeProvider but there's still ${this.queue.size} entries!`,
       );
@@ -84,6 +86,7 @@ export default class MockTimeProvider {
       idx: this.entries.length,
       cb,
       requeueInterval,
+      stack: (new Error()).stack ?? '[none]',
     };
 
     this.queue.insert(entry);
@@ -109,9 +112,6 @@ export default class MockTimeProvider {
 
       this.entries[idx] = undefined;
       this.queue.remove(entry);
-    } else {
-      console.log(idx);
-      throw new Error(`Invalid clear idx: ${idx}`);
     }
   }
 }

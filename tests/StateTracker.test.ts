@@ -11,30 +11,34 @@ interface State {
 
 Deno.test(
   { name: `StateTracker test` },
-  makeTest({}, async () => {
-    const beginTime = Date.now();
+  makeTest({}, async (_testCtx, ctx) => {
+    const beginTime = ctx.config.timeProvider.now();
 
     const st = new StateTracker<Key, State>((
       key: Key,
       onState: (state: State) => void,
     ) => {
       // The system is able to produce answers after this value:
-      if (key.idx >= 10000) {
-        const triggerTime = beginTime + Number(key.idx - 20000n);
-        const waitTime = Math.max(0, triggerTime - Date.now());
-        const timeout = setTimeout(
+      if (key.idx >= 100) {
+        const triggerTime = beginTime + Number(key.idx - 200n);
+        const waitTime = Math.max(
+          0,
+          triggerTime - ctx.config.timeProvider.now(),
+        );
+        const timeout = ctx.config.timeProvider.setTimeout(
           () => onState({ value: Number(key.idx) }),
           Math.min(waitTime, 1e6),
         );
+
         return {
-          release: () => clearTimeout(timeout),
+          release: () => ctx.config.timeProvider.clearTimeout(timeout),
         };
       } else {
         return {
           release: () => {},
         };
       }
-    });
+    }, ctx.config.timeProvider);
 
     const onIdx: ((idx: bigint) => void)[] = [];
     const waitFor = (filter: (idx: bigint) => boolean) =>
@@ -51,13 +55,13 @@ Deno.test(
     );
 
     // Wait for state to sync
-    await waitFor((idx) => idx > 20100n);
+    await waitFor((idx) => idx > 300n);
 
     // Make sure we get some specific indices
-    await waitFor((idx) => idx === 20200n);
-    await waitFor((idx) => idx === 20207n);
-    await waitFor((idx) => idx === 20270n);
-    await waitFor((idx) => idx === 20277n);
+    await waitFor((idx) => idx === 310n);
+    await waitFor((idx) => idx === 317n);
+    await waitFor((idx) => idx === 324n);
+    await waitFor((idx) => idx === 350n);
 
     await tracker.release();
   }),

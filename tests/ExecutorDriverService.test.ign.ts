@@ -29,7 +29,7 @@ Deno.test(
       infiniteChainGenerator,
     );
 
-    await new Promise((resolve, reject) => {
+    await new Promise<void>((resolve, reject) => {
       ctx.get(FetchService).fetch(
         {
           contract_hash: infiniteChainContractHash,
@@ -39,7 +39,7 @@ Deno.test(
         (_block) => reject('Should not have resolved!'),
       );
 
-      setTimeout(resolve, 250);
+      ctx.config.timeProvider.setTimeout(resolve, 250);
     });
 
     await assertSnapshot(testCtx, ctx.get(BlockService).snapshot());

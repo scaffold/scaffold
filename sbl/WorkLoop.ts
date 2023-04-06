@@ -16,8 +16,8 @@
 //   private running: Hash[] = [];
 
 //   constructor(private ctx: Context) {
-//     const itv = setInterval(() => this.tick(), 100);
-//     this.ctx.onDestruct(() => clearInterval(itv));
+//     const itv = ctx.config.timeProvider.setInterval(() => this.tick(), 100);
+//     this.ctx.onDestruct(() => ctx.config.timeProvider.clearInterval(itv));
 //   }
 
 //   private async tick() {

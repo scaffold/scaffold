@@ -1,6 +1,6 @@
 import { assertEquals } from 'std-latest/testing/asserts.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import { makeTest } from './util.ts';
+import { connectCtxs, makeTest } from './util.ts';
 import ServingService from '~/sbl/ServingService.ts';
 import { makeMockNetworkProvider } from './mockNetwork.ts';
 import ConnectionService, { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
@@ -21,7 +21,7 @@ const mockNetworkProvider = makeMockNetworkProvider({
 
 Deno.test(
   {
-    name: `network request/reply test`,
+    name: `network single request/reply test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
   },
@@ -43,6 +43,49 @@ Deno.test(
         idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
       )
     );
+
+    // TODO: We shouldn't need this
+    await new Promise<void>((resolve) =>
+      ctx2.config.timeProvider.setTimeout(resolve, 100)
+    );
+
+    const block = await new Promise<Block>((resolve) =>
+      ctx2.get(FetchService).fetch(
+        {
+          contract_hash: moduleHashes.collatz_wasm_hash,
+          params: collatzMessages.Params.encode({ num: 1n }),
+        },
+        {},
+        resolve,
+      )
+    );
+
+    const answer = collatzMessages.Answer.decode(block.body);
+    assertEquals(answer, { stopping_time: 0n, maximum: 1n });
+  }),
+);
+
+Deno.test(
+  {
+    name: `network multi-req test`,
+    sanitizeOps: false, // TODO: Turn this on
+    sanitizeResources: false,
+  },
+  makeTest({
+    networkProvider: {
+      protocols: new Map(Object.entries({ mock: mockNetworkProvider })),
+    },
+    logLevel: 'DEBUG',
+  }, async (_testCtx, ctx1, ctx2) => {
+    // Only add the generator to one of the contexts
+    ctx1.get(LocalGeneratorService).addGenerator(
+      moduleHashes.collatz_wasm_hash,
+      collatzGenerator,
+    );
+
+    connectCtxs([ctx1, ctx2], 'chain');
+
+    // TODO: We shouldn't need this
     await new Promise<void>((resolve) =>
       ctx2.config.timeProvider.setTimeout(resolve, 100)
     );

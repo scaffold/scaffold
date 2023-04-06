@@ -21,6 +21,7 @@ export interface BlockMeta {
   hash: Hash;
   nonce: number;
 
+  data: Uint8Array;
   signature: Uint8Array;
 
   verifiers: Verifier[];

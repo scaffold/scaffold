@@ -94,7 +94,7 @@ export default class NodeService {
 
       // // TODO: Remove this, and build the DHT from actual provable work
       // if (hash !== this.selfHash) {
-      //   setTimeout(
+      //   this.ctx.config.timeProvider.setTimeout(
       //     () =>
       //       this.ctx.get(DhtService).hackyAddEntry({
       //         answer: hash,

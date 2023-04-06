@@ -48,8 +48,8 @@ export default class WorkQueue extends WorkQueueUtil {
 
     ctx.onDestruct(() => this.setWorkerCount(0));
 
-    const idx = setInterval(() => this.cleanup(), 1000);
-    ctx.onDestruct(() => clearInterval(idx));
+    const idx = ctx.config.timeProvider.setInterval(() => this.cleanup(), 1000);
+    ctx.onDestruct(() => ctx.config.timeProvider.clearInterval(idx));
 
     this.setWorkerCount(ctx.config.initialWorkerCount);
 

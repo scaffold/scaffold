@@ -13,7 +13,7 @@ export default class DiscoveryService {
   private connDiscovery: WeakMap<Connection, ConnDiscovery> = new WeakMap();
 
   constructor(private ctx: Context) {
-    setInterval(() => this.tick(), 1000);
+    ctx.config.timeProvider.setInterval(() => this.tick(), 1000);
   }
 
   private tick() {

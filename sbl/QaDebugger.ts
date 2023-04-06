@@ -11,11 +11,13 @@ export default class QaDebugger {
   }> = new Map();
 
   constructor(private ctx: Context) {
-    setTimeout(() => {
+    const timeout = ctx.config.timeProvider.setTimeout(() => {
       Object.entries(hashes).forEach(([name, hash]) =>
         this.addDebugger(name, hash)
       );
     }, 0);
+
+    ctx.onDestruct(() => ctx.config.timeProvider.clearTimeout(timeout));
   }
 
   public addDebugger(

@@ -2,6 +2,7 @@ import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import QaDebugger from './QaDebugger.ts';
+import * as log from 'std-latest/log/mod.ts';
 
 const sortKeys = (obj: { [key: string]: any }) =>
   Object.fromEntries(
@@ -11,17 +12,67 @@ const sortKeys = (obj: { [key: string]: any }) =>
 const trim = (str: string, maxLen: number) =>
   str.length > maxLen ? `${str.substring(0, maxLen)}... [${str.length}]` : str;
 
-export default class Logger {
-  constructor(private ctx: Context) {}
+const formatter: log.FormatterFunction = (logRecord) =>
+  `${logRecord.levelName} ${logRecord.loggerName} ${logRecord.msg} ${
+    logRecord.args[0]
+  }`;
 
-  public log(
-    className: string,
-    methodName: string,
-    params: Record<string, any>,
-  ) {
-    if (this.ctx.config.log) {
-      this.ctx.config.log.handler(this.ctx, className, methodName, params);
-    }
+const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } =
+  {
+    handlers: {
+      console: new log.handlers.ConsoleHandler('DEBUG', { formatter }),
+      // file: new log.handlers.FileHandler('DEBUG', {
+      //   filename: `/tmp/sbl_${Date.now()}_${
+      //     Math.random().toString(36).slice(2)
+      //   }.log`,
+      //   formatter,
+      // }),
+    },
+    loggers: {},
+  };
+
+export default class Logger {
+  private setupPromise: void; // Promise<void>;
+  constructor(private ctx: Context) {
+    logConfig.loggers[`sbl_${ctx.config.debugName}`] = {
+      level: ctx.config.logLevel,
+      handlers: [
+        'console',
+        // 'file',
+      ],
+    };
+
+    this.setupPromise = log.setup(logConfig);
+  }
+
+  private get() {
+    return log.getLogger(`sbl_${this.ctx.config.debugName}`);
+  }
+
+  public async debug(msg: string, params: { [key: string]: any }) {
+    const serializedParams = this.serialize(params);
+    await this.setupPromise;
+    return this.get().debug(msg, serializedParams);
+  }
+  public async info(msg: string, params: { [key: string]: any }) {
+    const serializedParams = this.serialize(params);
+    await this.setupPromise;
+    return this.get().info(msg, serializedParams);
+  }
+  public async warning(msg: string, params: { [key: string]: any }) {
+    const serializedParams = this.serialize(params);
+    await this.setupPromise;
+    return this.get().warning(msg, serializedParams);
+  }
+  public async error(msg: string, params: { [key: string]: any }) {
+    const serializedParams = this.serialize(params);
+    await this.setupPromise;
+    return this.get().error(msg, serializedParams);
+  }
+  public async critical(msg: string, params: { [key: string]: any }) {
+    const serializedParams = this.serialize(params);
+    await this.setupPromise;
+    return this.get().critical(msg, serializedParams);
   }
 
   public serialize(val: any, n = 2, maxStrLen = 64): string {
@@ -32,7 +83,7 @@ export default class Logger {
       } else if (typeof val === 'string') {
         return trim(val, maxStrLen);
       } else if (val instanceof Hash) {
-        return trim(`Sha256:${val.toHex()}`, maxStrLen);
+        return trim(val.toHex(), maxStrLen);
       } else if (val instanceof Uint8Array) {
         return trim(bin2hex(val), maxStrLen);
       } else if (

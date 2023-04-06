@@ -15,6 +15,7 @@ export default class StateTracker extends StateTrackerUtil<Verifier, Block> {
           { internalIncentive: 10n },
           onState,
         )!,
+      ctx.config.timeProvider,
     );
   }
 }

@@ -7,7 +7,7 @@ export default class DerivedWorkService {
   private samples: BlockExt[] = [];
 
   constructor(private ctx: Context) {
-    setInterval(() => {
+    ctx.config.timeProvider.setInterval(() => {
       if (this.samples.length) {
         this.propagate();
       }

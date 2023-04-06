@@ -31,7 +31,9 @@ const gen: LocalGenerator = async (
 
   // Wait until time
   const waitUntil = Number(init_time + tick * tickInterval);
-  await new Promise((resolve) => setTimeout(resolve, waitUntil - Date.now()));
+  await new Promise<void>((resolve) =>
+    ctx.config.timeProvider.setTimeout(resolve, waitUntil - Date.now())
+  );
 
   const state = tick
     ? thrustMessages.GameAnswer.decode(

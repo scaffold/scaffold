@@ -1,3 +1,5 @@
+import { TimeProvider } from '../Config.ts';
+
 const NEVER: () => void = () => {
   throw new Error(`This should never be called!`);
 };
@@ -8,6 +10,7 @@ export default class StateTracker<Key, State> {
       key: Key,
       onState: (state: State) => void,
     ) => { release(): void },
+    private timeProvider: TimeProvider,
   ) {}
 
   public track(
@@ -102,7 +105,7 @@ export default class StateTracker<Key, State> {
       }
     }
 
-    const itvl = setInterval(() => {
+    const itvl = this.timeProvider.setInterval(() => {
       const threshold = Date.now() - unsubWaitMs;
       subs = subs.filter((sub) => {
         if (sub.lastAnswerTime > threshold) {
@@ -127,7 +130,7 @@ export default class StateTracker<Key, State> {
 
     return {
       release: () => {
-        clearInterval(itvl);
+        this.timeProvider.clearInterval(itvl);
         subs.forEach((sub) => sub.release());
       },
     };

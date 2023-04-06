@@ -11,6 +11,8 @@ import { bin2hex } from '../sbl/pathUtils.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 import { assertEquals, AssertionError } from 'std-latest/testing/asserts.ts';
 import MockTimeProvider from './MockTimeProvider.ts';
+import ServingService from '../sbl/ServingService.ts';
+import ConnectionService from '../sbl/ConnectionService.ts';
 
 const makeConfig = (
   ctxIdx: number,
@@ -19,15 +21,6 @@ const makeConfig = (
   ...defaultConfig,
 
   debugName: `ctx_${ctxIdx + 1}`,
-
-  log: {
-    handler: (
-      ctx: Context,
-      className: string,
-      methodName: string,
-      params: Record<string, any>,
-    ) => {},
-  },
 
   location: { x: 1, y: 2, z: 3 },
 
@@ -57,7 +50,10 @@ const makeConfig = (
 
 export const makeTest = (
   partialConfig: Partial<Config & { timeProvider: MockTimeProvider }>,
-  func: (testCtx: Deno.TestContext, ...ctx: Context[]) => Promise<void> | void,
+  func: (
+    testCtx: Deno.TestContext,
+    ...ctx: Context[]
+  ) => Promise<void> | void,
 ) =>
 (testCtx: Deno.TestContext) => {
   // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
@@ -74,9 +70,30 @@ export const makeTest = (
       return ctx;
     },
   );
-  return deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000).finally(() =>
-    Promise.all(ctxs.map((ctx) => ctx.destruct()))
-  );
+  return deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000)
+    .finally(() => ctxs.forEach((ctx) => ctx.destruct()));
+};
+
+export const connectCtxs = (ctxs: Context[], topology: 'chain' | 'mesh') => {
+  switch (topology) {
+    case 'chain':
+      ctxs.forEach((ctx, idx) =>
+        ctx.get(ServingService).serve((protocol: string, spec: string) =>
+          idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
+        )
+      );
+      break;
+
+    case 'mesh':
+      ctxs.forEach((ctx1) =>
+        ctxs.forEach((ctx2) =>
+          ctx1.get(ServingService).serve((protocol: string, spec: string) =>
+            ctx2.get(ConnectionService).connect(protocol, spec)
+          )
+        )
+      );
+      break;
+  }
 };
 
 export const waitForBlock = async (

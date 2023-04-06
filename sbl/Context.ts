@@ -25,7 +25,7 @@ export default class Context {
   }
 
   public async destruct() {
-    await Promise.all(this.destructors.map((cb) => cb()));
+    await Promise.all(this.destructors.reverse().map((cb) => cb()));
     this.destructors = [];
   }
 

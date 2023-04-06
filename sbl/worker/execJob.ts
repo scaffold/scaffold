@@ -18,8 +18,7 @@ import MemFs from './MemFs.ts';
 import WasiImpl, { FsNodeHandle } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
-import * as log from 'https://deno.land/std@0.173.0/log/mod.ts';
-import secp from '../util/secp.ts';
+import * as log from 'std-latest/log/mod.ts';
 
 // const logger: Logger = {
 //   info: (data, msg) => console.log(data, msg),

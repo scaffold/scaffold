@@ -4,7 +4,7 @@ import Context from './Context.ts';
 import NetworkProvider from './NetworkProvider.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './ExecutorDriverService.ts';
-// import AppraisalProvider from './AppraisalProvider.ts';
+import * as log from 'std-latest/log/mod.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -23,15 +23,7 @@ export interface TimeProvider {
 interface Config {
   debugName: string;
 
-  // To disable logging, unset the entire "log" object.
-  log: undefined | {
-    handler: (
-      ctx: Context,
-      className: string,
-      methodName: string,
-      params: Record<string, any>,
-    ) => void;
-  };
+  logLevel: log.LevelName;
 
   location: { x: number; y: number; z: number };
 
@@ -104,6 +96,7 @@ interface Config {
 }
 
 export const defaultConfig = {
+  logLevel: 'WARNING',
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,

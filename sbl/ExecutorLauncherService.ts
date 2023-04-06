@@ -22,6 +22,7 @@ import { getOrCreate } from './util/map.ts';
 import DataContract from './DataContract.ts';
 import LitigationService from './LitigationService.ts';
 import SpecialContractManager from './SpecialContractManager.ts';
+import Logger from './Logger.ts';
 
 const secret = secp.utils.randomBytes(32);
 
@@ -153,6 +154,8 @@ export default class ExecutorLauncherService {
         {},
         getScore,
         async (driver, _cancel) => {
+          this.ctx.get(Logger).info('running', { verifier });
+
           await driver.setAllocation({});
 
           const data = await localGenerator({
@@ -171,6 +174,8 @@ export default class ExecutorLauncherService {
             notify: (contract_hash, params) =>
               driver.notify({ contract_hash, params }),
           });
+
+          this.ctx.get(Logger).info('done', { verifier, data });
 
           if (data !== INGENERABLE_FLAG) {
             this.createBlock(
@@ -240,7 +245,7 @@ export default class ExecutorLauncherService {
     inputs: BlockExt[],
     durationMs: number,
   ) {
-    // console.log('Completed generator', verifier, bin2str(data));
+    this.ctx.get(Logger).info('created_block', { verifier, data });
     const block = this.ctx.get(BlockBuilder).emit({ body: data }, [verifier]);
     this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *

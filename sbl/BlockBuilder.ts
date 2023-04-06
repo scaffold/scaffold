@@ -7,6 +7,7 @@ import BlockService from './BlockService.ts';
 import { arrEquals } from './util/buffer.ts';
 import { accountHash } from './constants.ts';
 import KeyService from './KeyService.ts';
+import Logger from './Logger.ts';
 
 export default class BlockBuilder {
   private selfAccountVerifier: Verifier;
@@ -34,6 +35,10 @@ export default class BlockBuilder {
     //   [];
     const inputs = block.inputs ?? [];
     for (const v of satisfies) {
+      this.ctx.get(Logger).info('bba', {
+        s: this.ctx.get(BlockService).snapshot().blocksByHash.size,
+      });
+
       for (
         const { block, idx } of this.ctx.get(BlockService).getBlocksByOutput(v)
       ) {
@@ -73,6 +78,8 @@ export default class BlockBuilder {
     if (difference > 0n) {
       outputs.push({ verifier: this.selfAccountVerifier, amount: difference });
     }
+
+    this.ctx.get(Logger).info('build_block', { inputs, outputs });
 
     // TODO: Can bundle multiple blocks without bodies
     const body = block.body ?? new Uint8Array([]);

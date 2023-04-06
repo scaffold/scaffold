@@ -8,8 +8,8 @@ export default class RelationMonitor {
   }[] = [];
 
   constructor(private ctx: Context) {
-    const itvl = setInterval(() => this.check(), 1000);
-    ctx.onDestruct(() => clearInterval(itvl));
+    const itvl = ctx.config.timeProvider.setInterval(() => this.check(), 1000);
+    ctx.onDestruct(() => ctx.config.timeProvider.clearInterval(itvl));
   }
 
   public monitor<T>(

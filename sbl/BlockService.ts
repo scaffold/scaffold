@@ -88,12 +88,11 @@ export default class BlockService {
 
     const block = Block.decode(data.subarray(SIGNATURE_LENGTH + 1));
 
-    console.log(
-      `Ingesting block on ctx ${this.ctx.config.debugName} with hash ${
-        blockHash.toHex().slice(0, 16)
-      } and signature ${bin2hex(signature).slice(0, 16)}: `,
+    this.ctx.get(Logger).info('ingesting_block', {
+      blockHash,
+      signature,
       block,
-    );
+    });
 
     // console.log(
     //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
@@ -106,6 +105,7 @@ export default class BlockService {
       hash: blockHash,
       nonce: Math.random(),
 
+      data,
       signature,
 
       verifiers: block.inputs.map(({ block_hash, output_idx }) =>
