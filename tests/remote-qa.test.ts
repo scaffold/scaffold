@@ -38,11 +38,7 @@ Deno.test(
       collatzGenerator,
     );
 
-    ctxs.forEach((ctx, idx) =>
-      ctx.get(ServingService).serve((protocol: string, spec: string) =>
-        idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
-      )
-    );
+    connectCtxs([ctx1, ctx2], 'chain');
 
     // TODO: We shouldn't need this
     await new Promise<void>((resolve) =>
@@ -75,7 +71,6 @@ Deno.test(
     networkProvider: {
       protocols: new Map(Object.entries({ mock: mockNetworkProvider })),
     },
-    logLevel: 'DEBUG',
   }, async (_testCtx, ctx1, ctx2) => {
     // Only add the generator to one of the contexts
     ctx1.get(LocalGeneratorService).addGenerator(

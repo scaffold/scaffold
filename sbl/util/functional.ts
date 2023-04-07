@@ -33,7 +33,7 @@ export const mapEntries = <K extends string | number | symbol, V1, V2>(
 export const mapOne = <T, R>(
   arr: T[],
   func: (el: T, idx: number, arr: T[]) => R | undefined,
-): R => {
+): R | undefined => {
   let res: R | undefined;
   for (const c of arr.map(func)) {
     if (c !== undefined) {
@@ -42,9 +42,6 @@ export const mapOne = <T, R>(
       }
       res = c;
     }
-  }
-  if (res === undefined) {
-    throw new Error(`No elements mapped to a truthy value!`);
   }
   return res;
 };

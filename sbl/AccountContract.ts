@@ -14,10 +14,10 @@ import { MaybePromise } from './util/types.ts';
 
 export default class AccountContract {
   constructor(private ctx: Context) {
-    ctx.get(LocalGeneratorService).addGenerator(
-      accountHash,
-      AccountContract.generate,
-    );
+    // ctx.get(LocalGeneratorService).addGenerator(
+    //   accountHash,
+    //   AccountContract.generate,
+    // );
   }
 
   public verify(
@@ -33,14 +33,14 @@ export default class AccountContract {
     return secp.verify(block.signature, block.hash.toBytes(), public_key);
   }
 
-  public static generate(
-    { ctx, params, emitCorrect, request }: LocalGeneratorOpts,
-  ) {
-    const { public_key } = AccountContractParams.decode(params);
-    if (arrEquals(public_key, ctx.get(KeyService).getSelfPublicKey())) {
-      return new Uint8Array([]);
-    } else {
-      return INGENERABLE_FLAG;
-    }
-  }
+  // public static generate(
+  //   { ctx, params, emitCorrect, request }: LocalGeneratorOpts,
+  // ) {
+  //   const { public_key } = AccountContractParams.decode(params);
+  //   if (arrEquals(public_key, ctx.get(KeyService).getSelfPublicKey())) {
+  //     return new Uint8Array([]);
+  //   } else {
+  //     return INGENERABLE_FLAG;
+  //   }
+  // }
 }

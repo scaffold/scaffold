@@ -1,5 +1,5 @@
 import { BlockExt, BlockFlag, BlockMeta } from './BlockMeta.ts';
-import {
+import CollateralContract, {
   COLLATERAL_INPUT_IDX_INITIAL,
   COLLATERAL_INPUT_IDX_ISOLATED,
 } from './CollateralContract.ts';
@@ -230,16 +230,46 @@ export default class BlockService {
 
   public linkNewDescendant(parent: BlockExt, child: BlockExt) {}
 
+  public getCollateralOutput(block: BlockExt, ancestorOutputIdx?: number) {
+    let res: { idx: number; params: CollateralContractParams } | undefined;
+
+    block.outputs.forEach(({ verifier }, idx) => {
+      if (Hash.equals(verifier.contract_hash, collateralHash)) {
+        const params = CollateralContractParams.decode(verifier.params);
+        if (
+          ancestorOutputIdx === undefined
+            ? params.collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL
+            : block.inputs[params.collateral_input_idx].output_idx ===
+              ancestorOutputIdx
+        ) {
+          if (res === undefined) {
+            res = { idx, params };
+          } else {
+            throw new Error(
+              `Multiple outputs consuming single collateral input (${res.idx} and ${idx})!`,
+            );
+          }
+        }
+      }
+    });
+
+    return res;
+  }
+
   public getCollateral(block: BlockExt): {
+    // 3 cases:
+    //   1. No collateral. Ledger is empty and resolver is block
+    //   2. Unresolved collateral. Ledger is non-empty and resolver is undefined
+    //   3. Resolved collateral. Ledger is non-empty and resolver is defined
     totalAmountFor: bigint;
     totalAmountAgainst: bigint;
-    resolver?: BlockExt;
     ledger: {
       block: BlockExt;
       params: CollateralContractParams;
       amountDelta: bigint;
       outputIdx: number;
     }[];
+    resolver?: BlockExt;
   } {
     let ancestorOutputIdx: number | undefined;
     let totalAmountFor = 0n;
@@ -250,59 +280,61 @@ export default class BlockService {
       amountDelta: bigint;
       outputIdx: number;
     }[] = [];
+    let resolver: BlockExt | undefined;
 
     while (true) {
-      const params = mapOne(block.outputs, ({ verifier, amount }, idx) => {
-        if (Hash.equals(verifier.contract_hash, collateralHash)) {
-          const params = CollateralContractParams.decode(verifier.params);
-          if (
-            ancestorOutputIdx === undefined
-              ? params.collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL
-              : block.inputs[params.collateral_input_idx].output_idx ===
-                ancestorOutputIdx
-          ) {
-            ancestorOutputIdx = idx;
-            const amountDelta = amount - totalAmountFor - totalAmountAgainst;
-            if (amountDelta <= 0n) {
-              throw new Error(`Did not increase collateral!`);
-            }
-            if (params.valid) {
-              // Against
-              totalAmountAgainst = amount - totalAmountFor;
-            } else {
-              // For
-              totalAmountFor = amount - totalAmountAgainst;
-            }
-            return { block, params, amountDelta, outputIdx: idx };
+      const output = this.getCollateralOutput(block, ancestorOutputIdx);
 
-            // if (side) {
-            //   // Against
-            //   amountAgainst = amount - amountFor;
-            // } else {
-            //   // For
-            //   amountFor = amount - amountAgainst;
-            // }
+      if (output === undefined) {
+        resolver = block;
+        break;
+      }
 
-            // const canonicalClaim = block.outputClaims[idx].find((x) =>
-            //   x.canonicality > 0
-            // );
-            // if (canonicalClaim) {
-            //   return this.getFinalCollateral(
-            //     canonicalClaim,
-            //     idx,
-            //     amountFor,
-            //     amountAgainst,
-            //   );
-            // } else {
-            //   return { block, amountFor, amountAgainst };
-            // }
-          }
-        }
+      const amount = block.outputs[output.idx].amount;
+      const amountDelta = amount - totalAmountFor - totalAmountAgainst;
+
+      if (amountDelta <= 0n) {
+        throw new Error(`Did not increase collateral!`);
+      }
+
+      if (output.params.valid) {
+        // For
+        totalAmountFor = amount - totalAmountAgainst;
+      } else {
+        // Against
+        totalAmountAgainst = amount - totalAmountFor;
+      }
+
+      // if (side) {
+      //   // Against
+      //   amountAgainst = amount - amountFor;
+      // } else {
+      //   // For
+      //   amountFor = amount - amountAgainst;
+      // }
+
+      // const canonicalClaim = block.outputClaims[idx].find((x) =>
+      //   x.canonicality > 0
+      // );
+      // if (canonicalClaim) {
+      //   return this.getFinalCollateral(
+      //     canonicalClaim,
+      //     idx,
+      //     amountFor,
+      //     amountAgainst,
+      //   );
+      // } else {
+      //   return { block, amountFor, amountAgainst };
+      // }
+
+      ledger.push({
+        block,
+        params: output.params,
+        amountDelta,
+        outputIdx: output.idx,
       });
 
-      ledger.push(params);
-
-      const claims = block.outputClaims[params.outputIdx];
+      const claims = block.outputClaims[output.idx];
       if (claims.length) {
         let maxCanonicality = -Infinity;
         for (const claim of claims) {
@@ -311,17 +343,18 @@ export default class BlockService {
             block = claim;
           }
         }
+
+        if (block.timestamp >= output.params.free_after) {
+          // TODO: Figure out how to enforce timestamp stuff
+        }
       } else {
         break;
       }
+
+      ancestorOutputIdx = output.idx;
     }
 
-    return {
-      totalAmountFor: 0n,
-      totalAmountAgainst: 0n,
-      resolver: undefined,
-      ledger,
-    };
+    return { totalAmountFor, totalAmountAgainst, ledger, resolver };
   }
 
   public updateCanonicality(block: BlockExt, someInputCanonicality?: boolean) {

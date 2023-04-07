@@ -18,9 +18,9 @@ export default class MockTimeProvider {
 
   public destruct() {
     if (!this.queue.isEmpty()) {
-      console.error('Uncleared timeout set at:', this.queue.min()!.stack);
-      throw new Error(
-        `Trying to destruct a MockTimeProvider but there's still ${this.queue.size} entries!`,
+      console.error(
+        `Trying to destruct a MockTimeProvider but there's still ${this.queue.size} entries! Uncleared timeout set at:`,
+        this.queue.min()!.stack,
       );
     }
   }

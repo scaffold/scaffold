@@ -1,11 +1,17 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
-import { Block, BlockInput, BlockOutput, Verifier } from './messages.ts';
+import {
+  AccountContractParams,
+  Block,
+  BlockInput,
+  BlockOutput,
+  Verifier,
+} from './messages.ts';
 import IncentiveService from './IncentiveService.ts';
 // import IncentiveCalculator from './IncentiveCalculator.ts';
 import BlockService from './BlockService.ts';
 import { arrEquals } from './util/buffer.ts';
-import { accountHash } from './constants.ts';
+import { accountHash, trueHash } from './constants.ts';
 import KeyService from './KeyService.ts';
 import Logger from './Logger.ts';
 
@@ -14,11 +20,13 @@ export default class BlockBuilder {
   constructor(private ctx: Context) {
     this.selfAccountVerifier = {
       contract_hash: accountHash,
-      params: this.ctx.get(KeyService).getSelfPublicKey(),
+      params: AccountContractParams.encode({
+        public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+      }),
     };
   }
 
-  public emit(
+  public async emit(
     block: {
       body?: Uint8Array;
       inputs?: (BlockInput & { amount: bigint })[];
@@ -26,7 +34,7 @@ export default class BlockBuilder {
     },
     satisfies: Verifier[],
     timeout = 0,
-  ): Block {
+  ): Promise<Block> {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -35,10 +43,7 @@ export default class BlockBuilder {
     //   [];
     const inputs = block.inputs ?? [];
     for (const v of satisfies) {
-      this.ctx.get(Logger).info('bba', {
-        s: this.ctx.get(BlockService).snapshot().blocksByHash.size,
-      });
-
+      let added = false;
       for (
         const { block, idx } of this.ctx.get(BlockService).getBlocksByOutput(v)
       ) {
@@ -51,7 +56,16 @@ export default class BlockBuilder {
             output_idx: idx,
             amount: block.outputs[idx].amount,
           });
+          added = true;
         }
+      }
+
+      if (!added) {
+        const block = await this.emit({
+          outputs: [{ verifier: v, amount: 0n }],
+        }, []);
+        const hash = await this.ctx.get(BlockService).create(block);
+        inputs.push({ block_hash: hash, output_idx: 0, amount: 0n });
       }
     }
 
@@ -77,9 +91,12 @@ export default class BlockBuilder {
 
     if (difference > 0n) {
       outputs.push({ verifier: this.selfAccountVerifier, amount: difference });
+    } else if (difference < 0n) {
+      outputs.push({
+        verifier: { contract_hash: trueHash, params: new Uint8Array([]) },
+        amount: difference,
+      });
     }
-
-    this.ctx.get(Logger).info('build_block', { inputs, outputs });
 
     // TODO: Can bundle multiple blocks without bodies
     const body = block.body ?? new Uint8Array([]);

@@ -13,7 +13,7 @@ import { mapOne } from '../sbl/util/functional.ts';
 Deno.test(
   { name: `an invalid body should have collateral posted against` },
   makeTest({}, async (testCtx, ctx) => {
-    const a = await ctx.get(BlockService).create({
+    const aHash = await ctx.get(BlockService).create({
       inputs: [],
       outputs: [{
         verifier: {
@@ -30,18 +30,20 @@ Deno.test(
       isFreeMarket: true,
       timestamp: 0n,
     });
+    const a = ctx.get(BlockService).get(aHash)!;
 
-    const b = await ctx.get(BlockService).create({
-      inputs: [{ block_hash: a, output_idx: 0 }],
+    const bColl = {
+      collateral_input_idx: COLLATERAL_INPUT_IDX_INITIAL,
+      valid: true,
+      public_key: ctx.get(KeyService).getSelfPublicKey(),
+      free_after: 0n + 10000n,
+    };
+    const bHash = await ctx.get(BlockService).create({
+      inputs: [{ block_hash: aHash, output_idx: 0 }],
       outputs: [{
         verifier: {
           contract_hash: collateralHash,
-          params: CollateralContractParams.encode({
-            collateral_input_idx: COLLATERAL_INPUT_IDX_INITIAL,
-            valid: true,
-            public_key: ctx.get(KeyService).getSelfPublicKey(),
-            free_after: 0n + 10000n,
-          }),
+          params: CollateralContractParams.encode(bColl),
         },
         amount: 10n,
       }],
@@ -50,23 +52,24 @@ Deno.test(
       isFreeMarket: true,
       timestamp: 0n,
     });
+    const b = ctx.get(BlockService).get(bHash)!;
 
-    const c = await waitForBlock(ctx, { block_hash: b, output_idx: 0 });
-
-    const params = mapOne(c.outputs, ({ verifier }, idx) => {
-      if (Hash.equals(verifier.contract_hash, collateralHash)) {
-        const params = CollateralContractParams.decode(verifier.params);
-        const input = c.inputs[params.collateral_input_idx];
-        if (Hash.equals(input.block_hash, b) && input.output_idx === 0) {
-          return params;
-        }
-      }
-    });
-
-    assertObjectMatch(params, {
+    const c = await waitForBlock(ctx, { block_hash: bHash, output_idx: 0 });
+    const cColl = {
+      collateral_input_idx: 0,
       valid: false,
-      public_key: ctx.get(KeyService).getSelfPublicKey(),
+      // public_key: ctx.get(KeyService).getSelfPublicKey(),
       free_after: 0n + 10000n,
+    };
+
+    assertObjectMatch(ctx.get(BlockService).getCollateral(b), {
+      totalAmountFor: 10n,
+      totalAmountAgainst: 20n,
+      ledger: [
+        { block: b, params: bColl, amountDelta: 10n, outputIdx: 0 },
+        { block: c, params: cColl, amountDelta: 20n, outputIdx: 0 },
+      ],
+      resolver: undefined,
     });
   }),
 );

@@ -154,8 +154,6 @@ export default class ExecutorLauncherService {
         {},
         getScore,
         async (driver, _cancel) => {
-          this.ctx.get(Logger).info('running', { verifier });
-
           await driver.setAllocation({});
 
           const data = await localGenerator({
@@ -175,10 +173,8 @@ export default class ExecutorLauncherService {
               driver.notify({ contract_hash, params }),
           });
 
-          this.ctx.get(Logger).info('done', { verifier, data });
-
           if (data !== INGENERABLE_FLAG) {
-            this.createBlock(
+            await this.createBlock(
               verifier,
               data !== ANY_BODY_FLAG ? data : undefined,
               driver.getInputBlocks(),
@@ -223,7 +219,12 @@ export default class ExecutorLauncherService {
 
             console.log('STDOUT', bin2str(stdout));
             console.log('STDERR', bin2str(stderr));
-            this.createBlock(verifier, stdout, driver.getInputBlocks(), 0);
+            await this.createBlock(
+              verifier,
+              stdout,
+              driver.getInputBlocks(),
+              0,
+            );
           },
         );
       }
@@ -239,14 +240,15 @@ export default class ExecutorLauncherService {
     ) === 1;
   }
 
-  private createBlock(
+  private async createBlock(
     verifier: Verifier,
     data: Uint8Array | undefined,
     inputs: BlockExt[],
     durationMs: number,
   ) {
-    this.ctx.get(Logger).info('created_block', { verifier, data });
-    const block = this.ctx.get(BlockBuilder).emit({ body: data }, [verifier]);
+    const block = await this.ctx.get(BlockBuilder).emit({
+      body: data,
+    }, [verifier]);
     this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;

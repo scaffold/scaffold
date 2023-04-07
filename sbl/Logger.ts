@@ -50,29 +50,34 @@ export default class Logger {
   }
 
   public async debug(msg: string, params: { [key: string]: any }) {
-    const serializedParams = this.serialize(params);
-    await this.setupPromise;
-    return this.get().debug(msg, serializedParams);
+    console.log('DEBUG', this.ctx.config.debugName, msg, params);
+    // const serializedParams = this.serialize(params);
+    // await this.setupPromise;
+    // return this.get().debug(msg, serializedParams);
   }
   public async info(msg: string, params: { [key: string]: any }) {
-    const serializedParams = this.serialize(params);
-    await this.setupPromise;
-    return this.get().info(msg, serializedParams);
+    console.log('INFO', this.ctx.config.debugName, msg, params);
+    // const serializedParams = this.serialize(params);
+    // await this.setupPromise;
+    // return this.get().info(msg, serializedParams);
   }
   public async warning(msg: string, params: { [key: string]: any }) {
-    const serializedParams = this.serialize(params);
-    await this.setupPromise;
-    return this.get().warning(msg, serializedParams);
+    console.log('WARNING', this.ctx.config.debugName, msg, params);
+    // const serializedParams = this.serialize(params);
+    // await this.setupPromise;
+    // return this.get().warning(msg, serializedParams);
   }
   public async error(msg: string, params: { [key: string]: any }) {
-    const serializedParams = this.serialize(params);
-    await this.setupPromise;
-    return this.get().error(msg, serializedParams);
+    console.log('ERROR', this.ctx.config.debugName, msg, params);
+    // const serializedParams = this.serialize(params);
+    // await this.setupPromise;
+    // return this.get().error(msg, serializedParams);
   }
   public async critical(msg: string, params: { [key: string]: any }) {
-    const serializedParams = this.serialize(params);
-    await this.setupPromise;
-    return this.get().critical(msg, serializedParams);
+    console.log('CRITICAL', this.ctx.config.debugName, msg, params);
+    // const serializedParams = this.serialize(params);
+    // await this.setupPromise;
+    // return this.get().critical(msg, serializedParams);
   }
 
   public serialize(val: any, n = 2, maxStrLen = 64): string {

@@ -27,10 +27,10 @@ export default class LitigationService {
       return;
     }
 
-    const needsCollateral = verified
-      ? collateral.totalAmountFor < collateral.totalAmountAgainst << 1n
-      : collateral.totalAmountAgainst < collateral.totalAmountFor << 1n;
-    if (needsCollateral) {
+    const additionalCollateral = verified
+      ? (collateral.totalAmountAgainst << 1n) - collateral.totalAmountFor
+      : (collateral.totalAmountFor << 1n) - collateral.totalAmountAgainst;
+    if (additionalCollateral > 0n) {
       const last = collateral.ledger[collateral.ledger.length - 1];
 
       const input = {
@@ -39,19 +39,20 @@ export default class LitigationService {
         amount: last.block.outputs[last.outputIdx].amount,
       };
       const output = {
-        amount: collateral.totalAmountFor + collateral.totalAmountAgainst,
+        amount: collateral.totalAmountFor + collateral.totalAmountAgainst +
+          additionalCollateral,
         verifier: {
           contract_hash: collateralHash,
           params: CollateralContractParams.encode({
             collateral_input_idx: 0,
             valid: verified,
             public_key: this.ctx.get(KeyService).getSelfPublicKey(),
-            free_after: 0n,
+            free_after: last.block.timestamp + 10000n,
           }),
         },
       };
 
-      const collateralBlock = this.ctx.get(BlockBuilder).emit({
+      const collateralBlock = await this.ctx.get(BlockBuilder).emit({
         body: hint,
         inputs: hint !== undefined
           ? [input, await this.makeHintInput(block)]
@@ -69,7 +70,7 @@ export default class LitigationService {
       verifier: { contract_hash: hintHash, params: new Uint8Array([]) },
     };
 
-    const collateralBlock = this.ctx.get(BlockBuilder).emit({
+    const collateralBlock = await this.ctx.get(BlockBuilder).emit({
       outputs: [hintOutput],
     }, []);
 

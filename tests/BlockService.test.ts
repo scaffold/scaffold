@@ -2,8 +2,11 @@ import Hash from '~/sbl/util/Hash.ts';
 import { makeTest } from './util.ts';
 import BlockService from '../sbl/BlockService.ts';
 import { assertSnapshot } from 'std-latest/testing/snapshot.ts';
-import { trueHash } from '../sbl/constants.ts';
-import { assertEquals } from 'https://deno.land/std@0.153.0/testing/asserts.ts';
+import { collateralHash, trueHash } from '../sbl/constants.ts';
+import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
+import { CollateralContractParams } from '../sbl/messages.ts';
+import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
+import KeyService from '../sbl/KeyService.ts';
 
 Deno.test(
   { name: `ingest should add block to our registry` },
