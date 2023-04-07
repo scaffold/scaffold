@@ -2420,11 +2420,12 @@ RecordType.prototype._createReader = function () {
   }
   var name = this._getConstructorName();
   var body = 'return function read' + name + '(t) {\n';
-  body += '  return new ' + name + '(\n    ';
+  // TODO: Remove Object.assign; just used to get rid of constructor for tests
+  body += '  return Object.assign({}, new ' + name + '(\n    ';
   body += names.map(function (s) {
     return s + '._read(t)';
   }).join(',\n    ');
-  body += '\n  );\n};';
+  body += '\n  ));\n};';
   names.unshift(name);
   // We can do this since the JS spec guarantees that function arguments are
   // evaluated from left to right.

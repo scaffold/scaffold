@@ -108,16 +108,7 @@ export default class BlockService {
       data,
       signature,
 
-      verifiers: block.inputs.map(({ block_hash, output_idx }) =>
-        this.get(block_hash)?.outputs[output_idx]?.verifier
-      ).filter((v1, idx, arr): v1 is Verifier =>
-        v1 !== undefined &&
-        arr.findIndex((v2) =>
-            v2 !== undefined &&
-            Hash.equals(v1.contract_hash, v2.contract_hash) &&
-            arrEquals(v1.params, v2.params)
-          ) === idx
-      ),
+      verifiers: [],
 
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.Null,
@@ -142,49 +133,25 @@ export default class BlockService {
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
 
-    blockExt.inputs.forEach((input) => this.getClaims(input).push(blockExt));
-
-    block.outputs.forEach(({ verifier }) =>
-      this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0)
-    );
-
-    this.updateDerivedWork(blockExt);
-
-    blockExt.verifiers.forEach((verifier) => {
-      const verifierHash = Hash.digest(Verifier.encode(verifier));
-
-      this.ctx.get(ExecutorLauncherService).updateContract(
-        blockExt,
-        verifier,
-        0,
-      );
-
-      this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
-        cb(blockExt)
-      );
-
-      if (Hash.equals(verifier.contract_hash, collateralHash)) {
-        const { collateral_input_idx, valid, public_key, free_after } =
-          CollateralContractParams.decode(verifier.params);
-
-        if (collateral_input_idx >= 0) {
-          const input = blockExt.inputs[collateral_input_idx];
-        } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL) {
-          // Initial posting
-        } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_ISOLATED) {
-          // Sending collateral for someone else to include in their link
-          throw new Error(`Not implemented`);
-        } else {
-          throw new Error(`Bad collateral input idx: ${collateral_input_idx}`);
-        }
+    blockExt.inputs.forEach((input) => {
+      const verifier = this.get(input.block_hash)?.outputs[input.output_idx]
+        ?.verifier;
+      if (verifier) {
+        this.addSatisfies(blockExt, verifier);
       }
 
-      // // TODO: Use a simpler store; also update FetchService
-      // this.ctx.get(BlocksByVerifierStore).mutate(
-      //   verifierHash,
-      //   (blocks) => blocks ? [...blocks, blockExt] : [blockExt],
-      // );
+      this.getClaims(input).push(blockExt);
     });
+
+    block.outputs.forEach(({ verifier }, output_idx) => {
+      this.getClaims({ block_hash: blockHash, output_idx }).forEach((block) =>
+        this.addSatisfies(block, verifier)
+      );
+
+      this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0);
+    });
+
+    this.updateDerivedWork(blockExt);
 
     // const samples = PoissonDistribution.sample(
     //   Number(this.getWork(blockExt)) * this.getSamplesPerWork(),
@@ -209,6 +176,54 @@ export default class BlockService {
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
     return blockHash;
+  }
+
+  // This is called whenever an input becomes available
+  public addSatisfies(block: BlockExt, verifier: Verifier) {
+    if (
+      block.verifiers.some((v2) =>
+        Hash.equals(verifier.contract_hash, v2.contract_hash) &&
+        arrEquals(verifier.params, v2.params)
+      )
+    ) {
+      return;
+    }
+
+    block.verifiers.push(verifier);
+
+    const verifierHash = Hash.digest(Verifier.encode(verifier));
+
+    this.ctx.get(ExecutorLauncherService).updateContract(
+      block,
+      verifier,
+      0,
+    );
+
+    this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
+      cb(block)
+    );
+
+    if (Hash.equals(verifier.contract_hash, collateralHash)) {
+      const { collateral_input_idx, valid, public_key, free_after } =
+        CollateralContractParams.decode(verifier.params);
+
+      if (collateral_input_idx >= 0) {
+        const input = block.inputs[collateral_input_idx];
+      } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL) {
+        // Initial posting
+      } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_ISOLATED) {
+        // Sending collateral for someone else to include in their link
+        throw new Error(`Not implemented`);
+      } else {
+        throw new Error(`Bad collateral input idx: ${collateral_input_idx}`);
+      }
+    }
+
+    // // TODO: Use a simpler store; also update FetchService
+    // this.ctx.get(BlocksByVerifierStore).mutate(
+    //   verifierHash,
+    //   (blocks) => blocks ? [...blocks, block] : [block],
+    // );
   }
 
   public linkNewAncestor(parent: BlockExt, child: BlockExt) {}

@@ -593,8 +593,7 @@ export const makeMsg = <
   return {
     // name,
     // type,
-    decode: (src: Uint8Array): ObjectType<Name, R> =>
-      Object.assign({}, type.decode(src).value),
+    decode: (src: Uint8Array): ObjectType<Name, R> => type.decode(src).value,
     encode: (
       msg: ObjectType<Name, R>,
       allocator: (size: number) => Uint8Array = (size: number) =>
