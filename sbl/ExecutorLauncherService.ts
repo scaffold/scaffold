@@ -24,7 +24,7 @@ import LitigationService from './LitigationService.ts';
 import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
 
-const secret = secp.utils.randomBytes(32);
+const secret = secp.etc.randomBytes(32);
 
 export default class ExecutorLauncherService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
@@ -174,7 +174,7 @@ export default class ExecutorLauncherService {
           });
 
           if (data !== INGENERABLE_FLAG) {
-            await this.createBlock(
+            this.createBlock(
               verifier,
               data !== ANY_BODY_FLAG ? data : undefined,
               driver.getInputBlocks(),
@@ -219,12 +219,7 @@ export default class ExecutorLauncherService {
 
             console.log('STDOUT', bin2str(stdout));
             console.log('STDERR', bin2str(stderr));
-            await this.createBlock(
-              verifier,
-              stdout,
-              driver.getInputBlocks(),
-              0,
-            );
+            this.createBlock(verifier, stdout, driver.getInputBlocks(), 0);
           },
         );
       }
@@ -240,13 +235,13 @@ export default class ExecutorLauncherService {
     ) === 1;
   }
 
-  private async createBlock(
+  private createBlock(
     verifier: Verifier,
     data: Uint8Array | undefined,
     inputs: BlockExt[],
     durationMs: number,
   ) {
-    const block = await this.ctx.get(BlockBuilder).emit({
+    const block = this.ctx.get(BlockBuilder).emit({
       body: data,
     }, [verifier]);
     this.ctx.get(BlockService).create(block);

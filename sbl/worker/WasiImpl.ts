@@ -42,7 +42,7 @@ import {
   FsNode,
 } from './fsTypes.ts';
 import * as wc from './WasiConstants.ts';
-import * as log from 'https://deno.land/std@0.173.0/log/mod.ts';
+import * as log from 'std-latest/log/mod.ts';
 
 const traceSyscalls = true;
 const exposeInodes = false;

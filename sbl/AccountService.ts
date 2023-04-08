@@ -29,9 +29,9 @@ export default class AccountService {
     };
   }
 
-  private async publishAnswer() {
+  private publishAnswer() {
     const verifier = this.getNextAccountVerifier();
-    const block = await this.ctx.get(BlockBuilder).emit({}, [verifier]);
+    const block = this.ctx.get(BlockBuilder).emit({}, [verifier]);
     if (
       block.outputs.some((output) =>
         !Hash.equals(output.verifier.contract_hash, verifier.contract_hash)

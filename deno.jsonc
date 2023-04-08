@@ -30,7 +30,7 @@
     "serve-build": "deno run --allow-net --allow-read https://deno.land/std@0.173.0/http/file_server.ts build/ --port 17542 --header 'Cross-Origin-Opener-Policy: same-origin' --header 'Cross-Origin-Embedder-Policy: credentialless'",
     "serve-ws": "deno run --check --allow-all --watch server/main.ts",
     "debug-ws": "deno run --check --allow-all --inspect server/main.ts",
-    "test": "deno test --config=deno.jsonc --allow-all --seed=123 --trace-ops --watch tests/",
+    "test": "deno test --config=deno.jsonc --allow-all --seed=123 --trace-ops tests/",
     "test-avro": "# mocha --ui tdd --reporter dot"
   }
 }

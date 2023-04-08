@@ -12,7 +12,7 @@ export const SIGNATURE_LENGTH = 64;
 export default class PacketCoder {
   constructor(private ctx: Context) {}
 
-  public async encode<MsgType>(
+  public encode<MsgType>(
     msg: MsgType,
     coder: Coder<MsgType>,
     typeIdx: MessageType,
@@ -25,11 +25,11 @@ export default class PacketCoder {
     const data = buf!;
     data[SIGNATURE_LENGTH] = typeIdx;
 
-    const sig = await secp.sign(
+    const sig = secp.sign(
       Hash.digest(data.subarray(SIGNATURE_LENGTH)).toBytes(),
       this.ctx.config.selfPrivateKey,
-      { canonical: true, der: false, extraEntropy: secp.utils.randomBytes(32) },
-    );
+      { lowS: true, extraEntropy: secp.etc.randomBytes(32) },
+    ).toCompactRawBytes();
     if (sig.byteLength !== SIGNATURE_LENGTH) {
       throw new Error(`Internal error: Unexpected signature length!`);
     }

@@ -48,12 +48,12 @@ export default class BlockService {
     return Hash.digestParts(signer, Block.encode(block));
   }
 
-  public async create(block: Block, immortalize = false) {
+  public create(block: Block, immortalize = false) {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
     // Sign, publish, ingest, return hash
 
-    const data = await this.ctx.get(PacketCoder).encode(
+    const data = this.ctx.get(PacketCoder).encode(
       block,
       Block,
       MessageType.Block,

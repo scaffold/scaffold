@@ -10,7 +10,7 @@ import Hash from './util/Hash.ts';
 export default class LitigationService {
   constructor(private ctx: Context) {}
 
-  public async litigateBlock(
+  public litigateBlock(
     block: BlockExt,
     verified: boolean,
     hint?: Uint8Array,
@@ -52,10 +52,10 @@ export default class LitigationService {
         },
       };
 
-      const collateralBlock = await this.ctx.get(BlockBuilder).emit({
+      const collateralBlock = this.ctx.get(BlockBuilder).emit({
         body: hint,
         inputs: hint !== undefined
-          ? [input, await this.makeHintInput(block)]
+          ? [input, this.makeHintInput(block)]
           : [input],
         outputs: [output],
       }, []);
@@ -64,18 +64,18 @@ export default class LitigationService {
     }
   }
 
-  public async makeHintInput(block: BlockExt) {
+  public makeHintInput(block: BlockExt) {
     const hintOutput = {
       amount: 1n,
       verifier: { contract_hash: hintHash, params: new Uint8Array([]) },
     };
 
-    const collateralBlock = await this.ctx.get(BlockBuilder).emit({
+    const collateralBlock = this.ctx.get(BlockBuilder).emit({
       outputs: [hintOutput],
     }, []);
 
     return {
-      block_hash: await this.ctx.get(BlockService).create(collateralBlock),
+      block_hash: this.ctx.get(BlockService).create(collateralBlock),
       output_idx: 0,
       amount: 1n,
     };

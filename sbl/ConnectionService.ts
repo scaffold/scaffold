@@ -9,7 +9,6 @@ import Peer from './Peer.ts';
 import PeerService from './PeerService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
-import secp from './util/secp.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -163,10 +162,7 @@ export default class ConnectionService {
       `Connection established via ${protocol}; sending init packet...`,
     );
 
-    this.ctx
-      .get(InfoService)
-      .makeInitPacket()
-      .then((packet) => provider.sendReliable(packet));
+    provider.sendReliable(this.ctx.get(InfoService).makeInitPacket());
 
     let conn: Connection | undefined;
 
@@ -315,27 +311,27 @@ export default class ConnectionService {
     });
   }
 
-  public async composePacket(message: Packet['message']) {
-    // console.log(
-    //   `${this.ctx.config.debugName} sending message`,
-    //   this.ctx.get(Logger).serialize(message),
-    // );
+  // public async composePacket(message: Packet['message']) {
+  //   // console.log(
+  //   //   `${this.ctx.config.debugName} sending message`,
+  //   //   this.ctx.get(Logger).serialize(message),
+  //   // );
 
-    let buf: Uint8Array;
-    const msg = Packet.encode({ message }, (size) => {
-      buf = new Uint8Array(SIGNATURE_LENGTH + size);
-      return buf.subarray(SIGNATURE_LENGTH);
-    });
+  //   let buf: Uint8Array;
+  //   const msg = Packet.encode({ message }, (size) => {
+  //     buf = new Uint8Array(SIGNATURE_LENGTH + size);
+  //     return buf.subarray(SIGNATURE_LENGTH);
+  //   });
 
-    const sig = await secp.sign(
-      Hash.digest(msg).toBytes(),
-      this.ctx.config.selfPrivateKey,
-      { canonical: true, der: false, extraEntropy: secp.utils.randomBytes(32) },
-    );
-    if (sig.byteLength !== SIGNATURE_LENGTH) {
-      throw new Error(`Internal error: Unexpected signature length!`);
-    }
-    buf!.set(sig);
-    return buf!;
-  }
+  //   const sig = await secp.sign(
+  //     Hash.digest(msg).toBytes(),
+  //     this.ctx.config.selfPrivateKey,
+  //     { canonical: true, der: false, extraEntropy: secp.utils.randomBytes(32) },
+  //   );
+  //   if (sig.byteLength !== SIGNATURE_LENGTH) {
+  //     throw new Error(`Internal error: Unexpected signature length!`);
+  //   }
+  //   buf!.set(sig);
+  //   return buf!;
+  // }
 }

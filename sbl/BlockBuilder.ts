@@ -26,7 +26,7 @@ export default class BlockBuilder {
     };
   }
 
-  public async emit(
+  public emit(
     block: {
       body?: Uint8Array;
       inputs?: (BlockInput & { amount: bigint })[];
@@ -34,7 +34,7 @@ export default class BlockBuilder {
     },
     satisfies: Verifier[],
     timeout = 0,
-  ): Promise<Block> {
+  ): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -61,10 +61,10 @@ export default class BlockBuilder {
       }
 
       if (!added) {
-        const block = await this.emit({
+        const block = this.emit({
           outputs: [{ verifier: v, amount: 0n }],
         }, []);
-        const hash = await this.ctx.get(BlockService).create(block);
+        const hash = this.ctx.get(BlockService).create(block);
         inputs.push({ block_hash: hash, output_idx: 0, amount: 0n });
       }
     }
