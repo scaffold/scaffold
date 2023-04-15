@@ -103,7 +103,7 @@ export default class BlockBuilder {
 
     const side = true;
     const isFreeMarket = true;
-    let timestamp = BigInt(Date.now());
+    let timestamp = BigInt(this.ctx.config.timeProvider.now());
     inputs.forEach((input) => {
       // TODO: No need to look these blocks up; just store them in IncentiveRegistry
       const inputTs =

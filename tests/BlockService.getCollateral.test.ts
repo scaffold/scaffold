@@ -10,8 +10,8 @@ import KeyService from '../sbl/KeyService.ts';
 
 Deno.test(
   { name: `getCollateral with no collateral` },
-  makeTest({}, async (_testCtx, ctx) => {
-    const aHash = await ctx.get(BlockService).create({
+  makeTest({}, (_testCtx, ctx) => {
+    const aHash = ctx.get(BlockService).create({
       inputs: [],
       outputs: [],
       body: new Uint8Array([]),
@@ -32,14 +32,14 @@ Deno.test(
 
 Deno.test(
   { name: `getCollateral with other collateral` },
-  makeTest({}, async (_testCtx, ctx) => {
+  makeTest({}, (_testCtx, ctx) => {
     const aColl = {
       collateral_input_idx: 0,
       valid: true,
       public_key: ctx.get(KeyService).getSelfPublicKey(),
       free_after: 0n + 10000n,
     };
-    const aHash = await ctx.get(BlockService).create({
+    const aHash = ctx.get(BlockService).create({
       inputs: [{ block_hash: Hash.random(), output_idx: 0 }],
       outputs: [{
         verifier: {
@@ -66,14 +66,14 @@ Deno.test(
 
 Deno.test(
   { name: `getCollateral with one unresolved` },
-  makeTest({}, async (_testCtx, ctx) => {
+  makeTest({}, (_testCtx, ctx) => {
     const aColl = {
       collateral_input_idx: COLLATERAL_INPUT_IDX_INITIAL,
       valid: true,
       public_key: ctx.get(KeyService).getSelfPublicKey(),
       free_after: 0n + 10000n,
     };
-    const aHash = await ctx.get(BlockService).create({
+    const aHash = ctx.get(BlockService).create({
       inputs: [{ block_hash: Hash.random(), output_idx: 0 }],
       outputs: [{
         verifier: {
@@ -100,14 +100,14 @@ Deno.test(
 
 Deno.test(
   { name: `getCollateral with two unresolved` },
-  makeTest({}, async (_testCtx, ctx1, ctx2) => {
+  makeTest({}, (_testCtx, ctx1, ctx2) => {
     const aColl = {
       collateral_input_idx: COLLATERAL_INPUT_IDX_INITIAL,
       valid: true,
       public_key: ctx1.get(KeyService).getSelfPublicKey(),
       free_after: 0n + 10000n,
     };
-    const aHash = await ctx1.get(BlockService).create({
+    const aHash = ctx1.get(BlockService).create({
       inputs: [{ block_hash: Hash.random(), output_idx: 0 }],
       outputs: [{
         verifier: {
@@ -129,7 +129,7 @@ Deno.test(
       public_key: ctx2.get(KeyService).getSelfPublicKey(),
       free_after: 1000n + 10000n,
     };
-    const bHash = await ctx1.get(BlockService).create({
+    const bHash = ctx1.get(BlockService).create({
       inputs: [
         { block_hash: Hash.random(), output_idx: 0 },
         { block_hash: aHash, output_idx: 0 },
@@ -169,14 +169,14 @@ Deno.test(
 
 Deno.test(
   { name: `getCollateral with one resolved correctly` },
-  makeTest({}, async (_testCtx, ctx1, ctx2) => {
+  makeTest({}, (_testCtx, ctx1, ctx2) => {
     const aColl = {
       collateral_input_idx: COLLATERAL_INPUT_IDX_INITIAL,
       valid: true,
       public_key: ctx1.get(KeyService).getSelfPublicKey(),
       free_after: 0n + 10000n,
     };
-    const aHash = await ctx1.get(BlockService).create({
+    const aHash = ctx1.get(BlockService).create({
       inputs: [{ block_hash: Hash.random(), output_idx: 0 }],
       outputs: [{
         verifier: {
@@ -192,7 +192,7 @@ Deno.test(
     });
     const a = ctx1.get(BlockService).get(aHash)!;
 
-    const bHash = await ctx1.get(BlockService).create({
+    const bHash = ctx1.get(BlockService).create({
       inputs: [
         { block_hash: Hash.random(), output_idx: 0 },
         { block_hash: aHash, output_idx: 0 },

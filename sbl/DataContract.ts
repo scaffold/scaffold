@@ -1,6 +1,6 @@
-import BlockService from './BlockService.ts';
 import { dataHash } from './constants.ts';
 import Context from './Context.ts';
+import HashInversionService from './HashInversionService.ts';
 import LocalGeneratorService, {
   INGENERABLE_FLAG,
   LocalGeneratorOpts,
@@ -36,10 +36,9 @@ export default class DataContract {
 
   public static generate({ ctx, params, emitCorrect }: LocalGeneratorOpts) {
     const { hash, secret } = DataContractParams.decode(params);
-    const block = ctx.get(BlockService).get(hash);
-    if (block) {
+    const data = ctx.get(HashInversionService).invert(hash);
+    if (data) {
       if (emitCorrect) {
-        const data = Block.encode(block);
         const commitment = Hash.digestParts(
           data,
           secret,

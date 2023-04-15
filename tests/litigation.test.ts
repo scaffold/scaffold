@@ -13,7 +13,7 @@ import { mapOne } from '../sbl/util/functional.ts';
 Deno.test(
   { name: `an invalid body should have collateral posted against` },
   makeTest({}, async (testCtx, ctx) => {
-    const aHash = await ctx.get(BlockService).create({
+    const aHash = ctx.get(BlockService).create({
       inputs: [],
       outputs: [{
         verifier: {
@@ -38,7 +38,7 @@ Deno.test(
       public_key: ctx.get(KeyService).getSelfPublicKey(),
       free_after: 0n + 10000n,
     };
-    const bHash = await ctx.get(BlockService).create({
+    const bHash = ctx.get(BlockService).create({
       inputs: [{ block_hash: aHash, output_idx: 0 }],
       outputs: [{
         verifier: {

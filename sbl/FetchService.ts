@@ -13,6 +13,11 @@ import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import { trunc } from './util/string.ts';
 
+export const enum FetchMode {
+  All,
+  Canonical,
+}
+
 interface FetchOptions {
   dedupKey?: Hash | unknown;
   internalIncentive?: bigint;
@@ -30,6 +35,7 @@ interface FetchOptions {
 export const defaultBlockSelector = (blocks: BlockExt[]) => blocks[0];
 export const defaultBlockComparator = (a: BlockExt, b: BlockExt) => -1;
 
+// TODO: Rename to RequestService?
 export default class FetchService {
   private pendingKeyedFetches = new Set<unknown>();
 
@@ -39,6 +45,7 @@ export default class FetchService {
   // public listenBlock(verifier:Verifier, {}?:FetchOptions, cb?: (block: BlockExt) => void) {}
   // public fetch(verifier:Verifier, {}?:FetchOptions): Promise<Uint8Array> {}
 
+  // TODO: Rename to query?
   public fetch(
     verifier: Verifier,
     {

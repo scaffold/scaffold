@@ -26,10 +26,10 @@ Deno.test(
 
 Deno.test(
   { name: `ingesting a parent should update verifiers` },
-  makeTest({}, async (_testCtx, ctx1, ctx2) => {
+  makeTest({}, (_testCtx, ctx1, ctx2) => {
     const verifier = { contract_hash: trueHash, params: new Uint8Array([123]) };
 
-    const a = await ctx1.get(BlockService).create({
+    const a = ctx1.get(BlockService).create({
       inputs: [],
       outputs: [{ verifier, amount: 1n }],
       body: new Uint8Array([]),
@@ -39,7 +39,7 @@ Deno.test(
     });
     const aData = ctx1.get(BlockService).get(a)!.data;
 
-    const b = await ctx2.get(BlockService).create({
+    const b = ctx2.get(BlockService).create({
       inputs: [{ block_hash: a, output_idx: 0 }],
       outputs: [],
       body: new Uint8Array([]),
