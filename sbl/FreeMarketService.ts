@@ -1,16 +1,26 @@
-import Hash from './util/Hash.ts';
+import Hash, { HashPrimitive } from './util/Hash.ts';
 import Context from './Context.ts';
-import { Block, BlockInput, Verifier } from './messages.ts';
 import { trueHash } from './constants.ts';
 
 export default class FreeMarketService {
-  constructor(private ctx: Context) {}
+  private freeMarketContractHashes = new Set<HashPrimitive>();
 
-  public isFreeMarket(verifier: Verifier) {
-    if (Hash.equals(verifier.contract_hash, trueHash)) {
-      return true;
-    } else {
-      return false;
-    }
+  constructor(private ctx: Context) {
+    this.addHash(trueHash);
+
+    [
+      '0000000000000000000000000000000000000000000000000000000000000000',
+      '0000000000000000000000000000000000000000000000000000000000000001',
+      '0000000000000000000000000000000000000000000000000000000000000002',
+      '0000000000000000000000000000000000000000000000000000000000000003',
+    ].map((hex) => this.addHash(Hash.fromHex(hex)));
+  }
+
+  private addHash(contractHash: Hash) {
+    this.freeMarketContractHashes.add(contractHash.toPrimitive());
+  }
+
+  public isFreeMarket(contractHash: Hash) {
+    return this.freeMarketContractHashes.has(contractHash.toPrimitive());
   }
 }

@@ -202,7 +202,7 @@ export default async (
 
     const imports = wasi.getImports();
 
-    const { module, instance } = await WebAssembly.instantiate(source, {
+    const { module: mod, instance } = await WebAssembly.instantiate(source, {
       env: {
         memory,
         openatBinary: (fd: number, entry: number, ...rest: any[]) => {
@@ -213,6 +213,24 @@ export default async (
       wasi_snapshot_preview1: imports,
       wasi_unstable: imports,
     } as any);
+
+    // https://github.com/xtuc/wasm-custom-section
+    // https://wapm.io/liftm/wasm-custom-section
+    // Maybe we use this to embed JS code in the QuickJS WASM binary? Or the other way around; a hash to the QuickJS binary?
+    // Maybe there's a syscall that reads from a custom section?
+    WebAssembly.Module.customSections(mod, 'name').forEach((section) =>
+      console.log(
+        `WASM contains a name section: ${bin2hex(new Uint8Array(section))}`,
+      )
+    );
+    WebAssembly.Module.customSections(mod, 'scaffold-call-v0')
+      .forEach((section) =>
+        console.log(
+          `WASM contains a scaffold-call-v0 section: ${
+            bin2hex(new Uint8Array(section))
+          }`,
+        )
+      );
 
     return wasi.run(instance);
   };

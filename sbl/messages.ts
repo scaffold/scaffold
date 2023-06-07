@@ -171,6 +171,7 @@ export const registry = {
       // { name: 'amount', type: 'long' },
 
       { name: 'block_hash', type: 'Hash' },
+      // TODO: Array?
       { name: 'output_idx', type: 'int' }, // -1 if we're not claiming any output
     ],
   },

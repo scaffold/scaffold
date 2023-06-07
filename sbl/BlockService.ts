@@ -18,35 +18,9 @@ import {
 } from './messages.ts';
 import NodeService from './NodeService.ts';
 import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
-import { bin2hex } from './pathUtils.ts';
 import { arrEquals } from './util/buffer.ts';
-import { error, mapOne } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
-import secp from './util/secp.ts';
-import { trunc } from './util/string.ts';
-
-// Hash inversions can be provided via 2 methods:
-//   Simple provisions, where the reward is paid only to the original hash poster
-//   The data protocol, where the reward can be paid to someone else
-// A hash inversion request CLAIMS the 500 and incentivizes the response (by either of the 2 methods).
-
-// It's always a chain, and the only question is at each point what the resolution would be
-
-// Parallel hash inversions?
-// Can claim at any point (even with another open claim), but the first unmet claim is the only one paid
-// If verification fails AND hash inversion fails, pay to the first claimer
-// To resolve a hash claim,
-
-// Multiple verification claims are resolved in order of placement on the chain
-
-// How to incentivize rectification for verifier V?
-//   - Output to V, which forces a new block to be created.
-//     But this doesn't incentivize the new block to be used.
-//   + Blocks derived from an invalid block have a penalty equal to the rectification amount. But if it's too far back, and all available blocks have the same penalty, it doesn't really do anything. If a new chain is created that doesn't include the invalid block, it will likely be chosen.
-//     This is also nice because it penalizes building on an invalid block - not a lot, but your work is at risk of being discarded. So make sure you trust ancestors.
-
-// Jackpot. Easy. ClaimFailingVerifier after timeout.
 
 interface CollateralSummary {
   // 3 cases:
