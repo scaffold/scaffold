@@ -27,8 +27,9 @@ interface CollateralSummary {
   //   1. No collateral. Ledger is empty and resolver is block
   //   2. Unresolved collateral. Ledger is non-empty and resolver is undefined
   //   3. Resolved collateral. Ledger is non-empty and resolver is defined
-  totalAmountFor: bigint;
-  totalAmountAgainst: bigint;
+  postedAmountFor: bigint;
+  postedAmountAgainst: bigint;
+  implicitAmountAgainst: bigint;
   ledger: {
     block: BlockExt;
     params: CollateralContractParams;
@@ -37,6 +38,8 @@ interface CollateralSummary {
   }[];
   resolver?: BlockExt;
 }
+
+export const CHALLENGE_PRICE = 10n;
 
 export default class BlockService {
   private blocksByHash = new Map<HashPrimitive, BlockExt>();
@@ -74,6 +77,10 @@ export default class BlockService {
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
     const hash = this.ingest(data);
 
+    if (hash === undefined) {
+      throw new Error(`Invalid block provided (maybe bad timestamp)?`);
+    }
+
     this.ctx.get(NodeService).getAll().forEach((node) => {
       if (!node.knownBlocks.has(hash.toPrimitive())) {
         node.knownBlocks.add(hash.toPrimitive());
@@ -105,6 +112,7 @@ export default class BlockService {
         blockHash,
         signature,
         block,
+        now: BigInt(this.ctx.config.timeProvider.now()),
       });
       return;
     }
@@ -320,8 +328,8 @@ export default class BlockService {
 
   public getCollateral(block: BlockExt): CollateralSummary {
     let ancestorOutputIdx: number | undefined;
-    let totalAmountFor = 0n;
-    let totalAmountAgainst = 0n;
+    let postedAmountFor = 0n;
+    let postedAmountAgainst = 0n;
     const ledger: {
       block: BlockExt;
       params: CollateralContractParams;
@@ -339,7 +347,7 @@ export default class BlockService {
       }
 
       const amount = block.outputs[output.idx].amount;
-      const amountDelta = amount - totalAmountFor - totalAmountAgainst;
+      const amountDelta = amount - postedAmountFor - postedAmountAgainst;
 
       if (amountDelta <= 0n) {
         throw new Error(`Did not increase collateral!`);
@@ -347,10 +355,10 @@ export default class BlockService {
 
       if (output.params.valid) {
         // For
-        totalAmountFor = amount - totalAmountAgainst;
+        postedAmountFor = amount - postedAmountAgainst;
       } else {
         // Against
-        totalAmountAgainst = amount - totalAmountFor;
+        postedAmountAgainst = amount - postedAmountFor;
       }
 
       // if (side) {
@@ -402,7 +410,20 @@ export default class BlockService {
       ancestorOutputIdx = output.idx;
     }
 
-    return { totalAmountFor, totalAmountAgainst, ledger, resolver };
+    if (ledger.length && !ledger[0].params.valid) {
+      throw new Error(`Initial collateral posting is against!`);
+    }
+    const implicitAmountAgainst = ledger.length
+      ? this.getImplicitClaimAgainst(ledger[0].amountDelta)
+      : 0n;
+
+    return {
+      postedAmountFor,
+      postedAmountAgainst,
+      implicitAmountAgainst,
+      ledger,
+      resolver,
+    };
   }
 
   public updateCanonicality(block: BlockExt, someInputCanonicality?: boolean) {
@@ -589,6 +610,12 @@ export default class BlockService {
 
   public getWork(block: Block | BlockSet) {
     return block.outputs.reduce((acc, { amount }) => acc + amount, 1n);
+  }
+
+  public getImplicitClaimAgainst(initialClaimFor: bigint) {
+    return initialClaimFor > CHALLENGE_PRICE
+      ? initialClaimFor - CHALLENGE_PRICE
+      : 0n;
   }
 
   private getSamplesPerWork() {

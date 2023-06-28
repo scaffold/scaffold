@@ -27,9 +27,13 @@ export default class LitigationService {
       return;
     }
 
+    const amountFor = collateral.postedAmountFor;
+    const amountAgainst = collateral.postedAmountAgainst +
+      collateral.implicitAmountAgainst;
+
     const additionalCollateral = verified
-      ? (collateral.totalAmountAgainst << 1n) - collateral.totalAmountFor
-      : (collateral.totalAmountFor << 1n) - collateral.totalAmountAgainst;
+      ? (amountAgainst << 1n) - amountFor
+      : (amountFor << 1n) - amountAgainst;
     if (additionalCollateral > 0n) {
       const last = collateral.ledger[collateral.ledger.length - 1];
 
@@ -39,8 +43,8 @@ export default class LitigationService {
         amount: last.block.outputs[last.outputIdx].amount,
       };
       const output = {
-        amount: collateral.totalAmountFor + collateral.totalAmountAgainst +
-          additionalCollateral,
+        amount: amountFor + amountAgainst + additionalCollateral -
+          collateral.implicitAmountAgainst,
         verifier: {
           contract_hash: collateralHash,
           params: CollateralContractParams.encode({

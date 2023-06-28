@@ -7,6 +7,9 @@ import { hex2bin } from './pathUtils.ts';
 // THIS IMPLEMENTATION IS REALLY BAD
 // IT WORKS FOR NOW BUT IT'S NOT SECURE AT ALL
 
+// https://arxiv.org/pdf/2109.04911.pdf
+// https://arxiv.org/pdf/2205.11878.pdf
+
 interface VrfOutput {
   random: Hash;
   proof: Uint8Array;
@@ -15,7 +18,7 @@ interface VrfOutput {
 export default class VerifiableRandomFunction {
   private entropy = hex2bin(
     // Just some random bytes
-    '8a2f2c1bae00e67edadd62e6cec2dac2f3ca1d6048ff3d9c6140416aa61663d9',
+    'fe972dbb977858fbabb4b08bead31e6cd0e2afbafb81bc3f64e1d4c45eae921a',
   );
 
   constructor(private ctx: Context) {}

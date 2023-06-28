@@ -35,7 +35,7 @@ export default class IncentiveService {
       body: new Uint8Array(),
       side: true,
       isFreeMarket: true,
-      timestamp: BigInt(Date.now()),
+      timestamp: BigInt(this.ctx.config.timeProvider.now()),
     };
     this.ctx.get(BlockService).create(block);
 

@@ -118,7 +118,11 @@ export default class ExecutorDriverService {
         this.allocated.webWorkerCount -= allocation.webWorkerCount;
         this.resume();
         if (!success) {
-          this.run(verifier, tags, getScore, launch);
+          throw new Error(
+            `ExecutorDriverService.run launch failed! Not restarting...`,
+          );
+          // TODO: Do we need to restart here?
+          // this.run(verifier, tags, getScore, launch);
         }
       }
     };
@@ -242,10 +246,10 @@ export default class ExecutorDriverService {
     }, cancelPromise).then(
       () => stop(true),
       (err) => {
-        stop(false);
         if (err !== INTERRUPT_FLAG) {
           console.error(err);
         }
+        stop(false);
       },
     );
   }

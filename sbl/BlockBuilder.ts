@@ -109,7 +109,8 @@ export default class BlockBuilder {
       const inputTs =
         this.ctx.get(BlockService).get(input.block_hash)!.timestamp;
       if (inputTs >= timestamp) {
-        timestamp = inputTs + 1n;
+        // timestamp = inputTs + 1n;
+        timestamp = inputTs;
       }
     });
 

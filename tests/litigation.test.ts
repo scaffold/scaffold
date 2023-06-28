@@ -20,10 +20,10 @@ Deno.test(
           contract_hash: rootHash,
           params: Hash.digest('abc').toBytes(),
         },
-        amount: 10n,
+        amount: 100n,
       }, {
         verifier: { contract_hash: trueHash, params: new Uint8Array([]) },
-        amount: -10n,
+        amount: -100n,
       }],
       body: new Uint8Array([]),
       side: true,
@@ -45,7 +45,7 @@ Deno.test(
           contract_hash: collateralHash,
           params: CollateralContractParams.encode(bColl),
         },
-        amount: 10n,
+        amount: 100n,
       }],
       body: str2bin('xyz'),
       side: true,
@@ -63,11 +63,12 @@ Deno.test(
     };
 
     assertObjectMatch(ctx.get(BlockService).getCollateral(b), {
-      totalAmountFor: 10n,
-      totalAmountAgainst: 20n,
+      postedAmountFor: 100n,
+      postedAmountAgainst: 110n,
+      implicitAmountAgainst: 90n,
       ledger: [
-        { block: b, params: bColl, amountDelta: 10n, outputIdx: 0 },
-        { block: c, params: cColl, amountDelta: 20n, outputIdx: 0 },
+        { block: b, params: bColl, amountDelta: 100n, outputIdx: 0 },
+        { block: c, params: cColl, amountDelta: 110n, outputIdx: 0 },
       ],
       resolver: undefined,
     });

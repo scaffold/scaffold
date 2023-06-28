@@ -237,7 +237,7 @@ export const registry = {
       // Allowing BlockSets to have verifiers allows for a lot of fun things
       // { name: 'verifier', type: 'Verifier' },
 
-      // Set of block hashes to start enumeration from. Enumeration goes back in time, terminating at blocks included in claims.
+      // Set of block hashes to start enumeration from. Enumeration goes back in time, terminating at blocks included in inputs.
       { name: 'frontier', type: { type: 'array', items: 'Hash' } },
     ],
   },
@@ -547,48 +547,50 @@ export const registry = {
     type: 'record',
     fields: [
       { name: 'collateral_input_idx', type: 'int' }, // -1 if this is the initial posting; -2 if we're not appending a link but just sending collateral for someone else's link
+      { name: 'valid', type: 'boolean' },
       { name: 'public_key', type: 'bytes' }, // 33 bytes
-      {
-        name: 'claim',
-        type: [
-          'ClaimInitial',
-          'ClaimFailingVerifier',
-          'ClaimMissingInputHash',
-          'ClaimMissingOutputContractHash',
-        ],
-      },
+      { name: 'free_after', type: 'long' },
+      // {
+      //   name: 'claim',
+      //   type: [
+      //     'ClaimInitial',
+      //     'ClaimValid',
+      //     'ClaimFailingVerifier',
+      //     'ClaimMissingInputHash',
+      //     'ClaimMissingOutputContractHash',
+      //   ],
+      // },
     ],
   },
-  ClaimInitial: {
-    name: 'ClaimInitial',
-    type: 'record',
-    fields: [
-      { name: 'verification_period', type: 'long' },
-      { name: 'inversion_period', type: 'long' },
-      { name: 'inversion_price', type: 'long' },
-    ],
-  },
-  ClaimFailingVerifier: {
-    name: 'ClaimFailingVerifier',
-    type: 'record',
-    fields: [{ name: 'input_idx', type: 'int' }],
-  },
-  ClaimMissingInputHash: {
-    name: 'ClaimMissingInputHash',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'secret', type: 'bytes' },
-    ],
-  },
-  ClaimMissingOutputContractHash: {
-    name: 'ClaimMissingOutputContractHash',
-    type: 'record',
-    fields: [
-      { name: 'output_idx', type: 'int' },
-      { name: 'secret', type: 'bytes' },
-    ],
-  },
+  // ClaimInitial: {
+  //   name: 'ClaimInitial',
+  //   type: 'record',
+  //   fields: [
+  //     { name: 'verification_period', type: 'long' },
+  //     { name: 'inversion_period', type: 'long' },
+  //     { name: 'inversion_price', type: 'long' },
+  //   ],
+  // },
+  // ClaimValid: {
+  //   name: 'ClaimValid',
+  //   type: 'record',
+  //   fields: [],
+  // },
+  // ClaimFailingVerifier: {
+  //   name: 'ClaimFailingVerifier',
+  //   type: 'record',
+  //   fields: [{ name: 'input_idx', type: 'int' }],
+  // },
+  // ClaimMissingInputHash: {
+  //   name: 'ClaimMissingInputHash',
+  //   type: 'record',
+  //   fields: [{ name: 'input_idx', type: 'int' }],
+  // },
+  // ClaimMissingOutputContractHash: {
+  //   name: 'ClaimMissingOutputContractHash',
+  //   type: 'record',
+  //   fields: [{ name: 'output_idx', type: 'int' }],
+  // },
 
   long,
 } as const;

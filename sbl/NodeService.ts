@@ -10,6 +10,8 @@ import { Block, InfoMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 import KeyService from './KeyService.ts';
 
+// Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
+
 // TODO: Maybe split into connected and unconnected nodes. This will help eliminate optionals.
 export interface Node {
   hash: Hash;
