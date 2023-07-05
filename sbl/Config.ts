@@ -101,11 +101,11 @@ export const defaultConfig = {
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
   timeProvider: {
-    now: Date.now,
-    setTimeout,
-    clearTimeout,
-    setInterval,
-    clearInterval,
+    now: Date.now.bind(Date),
+    setTimeout: setTimeout.bind(window),
+    clearTimeout: clearTimeout.bind(window),
+    setInterval: setInterval.bind(window),
+    clearInterval: clearInterval.bind(window),
   },
   resourceLimits: {
     webWorkerCount: 16,

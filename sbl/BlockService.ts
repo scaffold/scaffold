@@ -690,6 +690,20 @@ export default class BlockService {
     );
   }
 
+  public getBlocksByOutputFilter(
+    contractHash: Hash,
+    cond: (params: Uint8Array) => boolean,
+  ) {
+    return [...this.blocksByHash.values()].flatMap((block) =>
+      block.outputs.flatMap((y, idx) =>
+        Hash.equals(y.verifier.contract_hash, contractHash) &&
+          cond(y.verifier.params)
+          ? [{ block, idx }]
+          : []
+      )
+    );
+  }
+
   public onNewBlock(verifier: Verifier, cb: (block: BlockExt) => void) {
     const verifierHash = Hash.digest(Verifier.encode(verifier));
     getOrCreate(this.onNewBlockListeners, verifierHash.toPrimitive(), () => [])

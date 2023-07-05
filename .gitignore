@@ -5,3 +5,4 @@ build/
 jsoncons/
 wasi-sdk-17.0/
 server/bootstrap/
+wasm/
