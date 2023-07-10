@@ -35,36 +35,33 @@ export default class LitigationService {
       ? (amountAgainst << 1n) - amountFor
       : (amountFor << 1n) - amountAgainst;
     if (additionalCollateral > 0n) {
-      const last = collateral.ledger[collateral.ledger.length - 1];
-
-      const input = {
-        block_hash: last.block.hash,
-        output_idx: last.outputIdx,
-        amount: last.block.outputs[last.outputIdx].amount,
-      };
       const output = {
-        amount: amountFor + amountAgainst + additionalCollateral -
-          collateral.implicitAmountAgainst,
+        amount: additionalCollateral,
         verifier: {
           contract_hash: collateralHash,
           params: CollateralContractParams.encode({
-            collateral_input_idx: 0,
+            block_hash: block.hash,
             valid: verified,
             public_key: this.ctx.get(KeyService).getSelfPublicKey(),
-            free_after: last.block.timestamp + 10000n,
+            free_after: BigInt(this.ctx.config.timeProvider.now() + 10000),
           }),
         },
       };
-
       const collateralBlock = this.ctx.get(BlockBuilder).emit({
         body: hint,
-        inputs: hint !== undefined
-          ? [input, this.makeHintInput(block)]
-          : [input],
+        inputs: hint !== undefined ? [this.makeHintInput(block)] : [],
         outputs: [output],
       }, []);
 
       this.ctx.get(BlockService).create(collateralBlock);
+
+      // const last = collateral.ledger[collateral.ledger.length - 1];
+
+      // const input = {
+      //   block_hash: last.block.hash,
+      //   output_idx: last.outputIdx,
+      //   amount: last.block.outputs[last.outputIdx].amount,
+      // };
     }
   }
 

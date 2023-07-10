@@ -539,17 +539,43 @@ export const registry = {
     ],
   },
 
-  // This is kinda ugly, but I can't think of a better way to do it.
-  // The nice thing about a chain like this is that only one claimant for the collateral output will be canonical,
-  // So we get a single chain without any extra work.
+  EpochParams: {
+    name: 'EpochParams',
+    type: 'record',
+    fields: [
+      { name: 'height', type: 'long' },
+    ],
+  },
+  EpochInclusionParams: {
+    name: 'EpochInclusionParams',
+    type: 'record',
+    fields: [
+      { name: 'hash', type: 'Hash' },
+    ],
+  },
+  EpochBody: {
+    name: 'EpochBody',
+    type: 'record',
+    fields: [
+      // This is the hash of the epoch at `height - 1`.
+      { name: 'prior_hash', type: 'Hash' },
+
+      // This is the hash of the epoch at `height - LSB(height)`.
+      { name: 'skip_hash', type: 'Hash' },
+
+      { name: 'events', type: { type: 'array', items: 'Hash' } },
+    ],
+  },
+
   CollateralContractParams: {
     name: 'CollateralContractParams',
     type: 'record',
     fields: [
-      { name: 'collateral_input_idx', type: 'int' }, // -1 if this is the initial posting; -2 if we're not appending a link but just sending collateral for someone else's link
+      { name: 'block_hash', type: 'Hash' },
       { name: 'valid', type: 'boolean' },
       { name: 'public_key', type: 'bytes' }, // 33 bytes
       { name: 'free_after', type: 'long' },
+      { name: 'hint', type: 'bytes' },
       // {
       //   name: 'claim',
       //   type: [
@@ -769,6 +795,12 @@ export const AccountContractParams = makeMsg(registry, 'AccountContractParams');
 export type AccountContractParams = MsgType<'AccountContractParams'>;
 export const DataContractParams = makeMsg(registry, 'DataContractParams');
 export type DataContractParams = MsgType<'DataContractParams'>;
+export const EpochParams = makeMsg(registry, 'EpochParams');
+export type EpochParams = MsgType<'EpochParams'>;
+export const EpochInclusionParams = makeMsg(registry, 'EpochInclusionParams');
+export type EpochInclusionParams = MsgType<'EpochInclusionParams'>;
+export const EpochBody = makeMsg(registry, 'EpochBody');
+export type EpochBody = MsgType<'EpochBody'>;
 export const CollateralContractParams = makeMsg(
   registry,
   'CollateralContractParams',

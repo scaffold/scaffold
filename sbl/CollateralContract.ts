@@ -41,7 +41,7 @@ export default class CollateralContract {
     // ) => MaybePromise<Uint8Array>,
     invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
-    const { collateral_input_idx, valid, public_key, free_after } =
+    const { block_hash, valid, public_key, free_after } =
       CollateralContractParams.decode(params);
 
     if (block.timestamp < free_after) {

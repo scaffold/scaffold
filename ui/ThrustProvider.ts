@@ -89,7 +89,9 @@ export default class ThrustProvider {
         { internalIncentive: 20n },
         (block) => {
           if (hasResolved) {
-            throw new Error(`Cell resolved more than once!`);
+            // This is fine; as long as the data doesn't change
+            // throw new Error(`Cell resolved more than once!`);
+            return;
           }
           hasResolved = true;
           resolve(thrustMessages.MazeAnswer.decode(block.body).cell);

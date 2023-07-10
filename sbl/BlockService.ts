@@ -18,6 +18,7 @@ import {
 } from './messages.ts';
 import NodeService from './NodeService.ts';
 import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
+import QaDebugger from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
@@ -44,6 +45,13 @@ export const CHALLENGE_PRICE = 10n;
 export default class BlockService {
   private blocksByHash = new Map<HashPrimitive, BlockExt>();
   private claimsByOutput = new Map<HashPrimitive, BlockExt[]>();
+  private collateralByBlockHash = new Map<HashPrimitive, {
+    block: BlockExt;
+    params: CollateralContractParams;
+    amountDelta: bigint;
+    outputIdx: number;
+  }[]>();
+
   private onNewBlockListeners = new Map<
     HashPrimitive, // Key is verifier hash
     ((block: BlockExt) => void)[]
@@ -119,8 +127,15 @@ export default class BlockService {
 
     this.ctx.get(Logger).info('ingesting_block', {
       blockHash,
-      signature,
       block,
+      verifiers: block.inputs.map((input) => {
+        const inBlock = this.get(input.block_hash);
+        return inBlock
+          ? this.ctx.get(QaDebugger).debugQuestion(
+            inBlock.outputs[input.output_idx].verifier,
+          )
+          : null;
+      }),
     });
 
     // console.log(
@@ -172,12 +187,20 @@ export default class BlockService {
       this.getClaims(input).push(blockExt);
     });
 
-    block.outputs.forEach(({ verifier }, output_idx) => {
-      this.getClaims({ block_hash: blockHash, output_idx }).forEach((block) =>
-        this.addSatisfies(block, verifier)
-      );
+    block.outputs.forEach(({ verifier, amount }, outputIdx) => {
+      this.getClaims({ block_hash: blockHash, output_idx: outputIdx })
+        .forEach((block) => this.addSatisfies(block, verifier));
 
       this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0);
+
+      if (Hash.equals(verifier.contract_hash, collateralHash)) {
+        const params = CollateralContractParams.decode(verifier.params);
+        getOrCreate(
+          this.collateralByBlockHash,
+          params.block_hash.toPrimitive(),
+          () => [],
+        ).push({ block: blockExt, params, amountDelta: amount, outputIdx });
+      }
     });
 
     this.updateDerivedWork(blockExt);
@@ -251,21 +274,22 @@ export default class BlockService {
       cb(block)
     );
 
-    if (Hash.equals(verifier.contract_hash, collateralHash)) {
-      const { collateral_input_idx, valid, public_key, free_after } =
-        CollateralContractParams.decode(verifier.params);
+    // // Commented out because we're moving to out-of-block collateralizations
+    // if (Hash.equals(verifier.contract_hash, collateralHash)) {
+    //   const { collateral_input_idx, valid, public_key, free_after } =
+    //     CollateralContractParams.decode(verifier.params);
 
-      if (collateral_input_idx >= 0) {
-        const input = block.inputs[collateral_input_idx];
-      } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL) {
-        // Initial posting
-      } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_ISOLATED) {
-        // Sending collateral for someone else to include in their link
-        throw new Error(`Not implemented`);
-      } else {
-        throw new Error(`Bad collateral input idx: ${collateral_input_idx}`);
-      }
-    }
+    //   if (collateral_input_idx >= 0) {
+    //     const input = block.inputs[collateral_input_idx];
+    //   } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL) {
+    //     // Initial posting
+    //   } else if (collateral_input_idx === COLLATERAL_INPUT_IDX_ISOLATED) {
+    //     // Sending collateral for someone else to include in their link
+    //     throw new Error(`Not implemented`);
+    //   } else {
+    //     throw new Error(`Bad collateral input idx: ${collateral_input_idx}`);
+    //   }
+    // }
 
     // // TODO: Use a simpler store; also update FetchService
     // this.ctx.get(BlocksByVerifierStore).mutate(
@@ -278,31 +302,31 @@ export default class BlockService {
 
   public linkNewDescendant(parent: BlockExt, child: BlockExt) {}
 
-  public getCollateralOutput(block: BlockExt, ancestorOutputIdx?: number) {
-    let res: { idx: number; params: CollateralContractParams } | undefined;
+  // public getCollateralOutput(block: BlockExt, ancestorOutputIdx?: number) {
+  //   let res: { idx: number; params: CollateralContractParams } | undefined;
 
-    block.outputs.forEach(({ verifier }, idx) => {
-      if (Hash.equals(verifier.contract_hash, collateralHash)) {
-        const params = CollateralContractParams.decode(verifier.params);
-        if (
-          ancestorOutputIdx === undefined
-            ? params.collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL
-            : block.inputs[params.collateral_input_idx].output_idx ===
-              ancestorOutputIdx
-        ) {
-          if (res === undefined) {
-            res = { idx, params };
-          } else {
-            throw new Error(
-              `Multiple outputs consuming single collateral input (${res.idx} and ${idx})!`,
-            );
-          }
-        }
-      }
-    });
+  //   block.outputs.forEach(({ verifier }, idx) => {
+  //     if (Hash.equals(verifier.contract_hash, collateralHash)) {
+  //       const params = CollateralContractParams.decode(verifier.params);
+  //       if (
+  //         ancestorOutputIdx === undefined
+  //           ? params.collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL
+  //           : block.inputs[params.collateral_input_idx].output_idx ===
+  //             ancestorOutputIdx
+  //       ) {
+  //         if (res === undefined) {
+  //           res = { idx, params };
+  //         } else {
+  //           throw new Error(
+  //             `Multiple outputs consuming single collateral input (${res.idx} and ${idx})!`,
+  //           );
+  //         }
+  //       }
+  //     }
+  //   });
 
-    return res;
-  }
+  //   return res;
+  // }
 
   // Hash inversions can be provided via 2 methods:
   //   Simple provisions, where the reward is paid only to the original hash poster
@@ -326,89 +350,122 @@ export default class BlockService {
 
   // Jackpot. Easy. ClaimFailingVerifier after timeout.
 
+  // public getCollateral(block: BlockExt): CollateralSummary {
+  //   let ancestorOutputIdx: number | undefined;
+  //   let postedAmountFor = 0n;
+  //   let postedAmountAgainst = 0n;
+  //   const ledger: {
+  //     block: BlockExt;
+  //     params: CollateralContractParams;
+  //     amountDelta: bigint;
+  //     outputIdx: number;
+  //   }[] = [];
+  //   let resolver: BlockExt | undefined;
+
+  //   while (true) {
+  //     const output = this.getCollateralOutput(block, ancestorOutputIdx);
+
+  //     if (output === undefined) {
+  //       resolver = block;
+  //       break;
+  //     }
+
+  //     const amount = block.outputs[output.idx].amount;
+  //     const amountDelta = amount - postedAmountFor - postedAmountAgainst;
+
+  //     if (amountDelta <= 0n) {
+  //       throw new Error(`Did not increase collateral!`);
+  //     }
+
+  //     if (output.params.valid) {
+  //       // For
+  //       postedAmountFor = amount - postedAmountAgainst;
+  //     } else {
+  //       // Against
+  //       postedAmountAgainst = amount - postedAmountFor;
+  //     }
+
+  //     // if (side) {
+  //     //   // Against
+  //     //   amountAgainst = amount - amountFor;
+  //     // } else {
+  //     //   // For
+  //     //   amountFor = amount - amountAgainst;
+  //     // }
+
+  //     // const canonicalClaim = block.outputClaims[idx].find((x) =>
+  //     //   x.canonicality > 0
+  //     // );
+  //     // if (canonicalClaim) {
+  //     //   return this.getFinalCollateral(
+  //     //     canonicalClaim,
+  //     //     idx,
+  //     //     amountFor,
+  //     //     amountAgainst,
+  //     //   );
+  //     // } else {
+  //     //   return { block, amountFor, amountAgainst };
+  //     // }
+
+  //     ledger.push({
+  //       block,
+  //       params: output.params,
+  //       amountDelta,
+  //       outputIdx: output.idx,
+  //     });
+
+  //     const claims = block.outputClaims[output.idx];
+  //     if (claims.length) {
+  //       let maxCanonicality = -Infinity;
+  //       for (const claim of claims) {
+  //         if (claim.canonicality > maxCanonicality) {
+  //           maxCanonicality = claim.canonicality;
+  //           block = claim;
+  //         }
+  //       }
+
+  //       if (block.timestamp >= output.params.free_after) {
+  //         // TODO: Figure out how to enforce timestamp stuff
+  //       }
+  //     } else {
+  //       break;
+  //     }
+
+  //     ancestorOutputIdx = output.idx;
+  //   }
+
+  //   if (ledger.length && !ledger[0].params.valid) {
+  //     throw new Error(`Initial collateral posting is against!`);
+  //   }
+  //   const implicitAmountAgainst = ledger.length
+  //     ? this.getImplicitClaimAgainst(ledger[0].amountDelta)
+  //     : 0n;
+
+  //   return {
+  //     postedAmountFor,
+  //     postedAmountAgainst,
+  //     implicitAmountAgainst,
+  //     ledger,
+  //     resolver,
+  //   };
+  // }
+
   public getCollateral(block: BlockExt): CollateralSummary {
-    let ancestorOutputIdx: number | undefined;
+    const ledger =
+      (this.collateralByBlockHash.get(block.hash.toPrimitive()) || []).sort(
+        (a, b) => Number(a.block.timestamp - b.block.timestamp),
+      );
+
     let postedAmountFor = 0n;
     let postedAmountAgainst = 0n;
-    const ledger: {
-      block: BlockExt;
-      params: CollateralContractParams;
-      amountDelta: bigint;
-      outputIdx: number;
-    }[] = [];
+    ledger.forEach((x) => {
+      if (x.params.valid) {
+        postedAmountFor += x.amountDelta;
+      } else {
+        postedAmountAgainst += x.amountDelta;
+      }
+    });
     let resolver: BlockExt | undefined;
-
-    while (true) {
-      const output = this.getCollateralOutput(block, ancestorOutputIdx);
-
-      if (output === undefined) {
-        resolver = block;
-        break;
-      }
-
-      const amount = block.outputs[output.idx].amount;
-      const amountDelta = amount - postedAmountFor - postedAmountAgainst;
-
-      if (amountDelta <= 0n) {
-        throw new Error(`Did not increase collateral!`);
-      }
-
-      if (output.params.valid) {
-        // For
-        postedAmountFor = amount - postedAmountAgainst;
-      } else {
-        // Against
-        postedAmountAgainst = amount - postedAmountFor;
-      }
-
-      // if (side) {
-      //   // Against
-      //   amountAgainst = amount - amountFor;
-      // } else {
-      //   // For
-      //   amountFor = amount - amountAgainst;
-      // }
-
-      // const canonicalClaim = block.outputClaims[idx].find((x) =>
-      //   x.canonicality > 0
-      // );
-      // if (canonicalClaim) {
-      //   return this.getFinalCollateral(
-      //     canonicalClaim,
-      //     idx,
-      //     amountFor,
-      //     amountAgainst,
-      //   );
-      // } else {
-      //   return { block, amountFor, amountAgainst };
-      // }
-
-      ledger.push({
-        block,
-        params: output.params,
-        amountDelta,
-        outputIdx: output.idx,
-      });
-
-      const claims = block.outputClaims[output.idx];
-      if (claims.length) {
-        let maxCanonicality = -Infinity;
-        for (const claim of claims) {
-          if (claim.canonicality > maxCanonicality) {
-            maxCanonicality = claim.canonicality;
-            block = claim;
-          }
-        }
-
-        if (block.timestamp >= output.params.free_after) {
-          // TODO: Figure out how to enforce timestamp stuff
-        }
-      } else {
-        break;
-      }
-
-      ancestorOutputIdx = output.idx;
-    }
 
     if (ledger.length && !ledger[0].params.valid) {
       throw new Error(`Initial collateral posting is against!`);
@@ -425,7 +482,6 @@ export default class BlockService {
       resolver,
     };
   }
-
   public updateCanonicality(block: BlockExt, someInputCanonicality?: boolean) {
     // Note that we consider missing inputs as canonical.
     // We also short-circuit if an input canonicality is false, which is a common case.

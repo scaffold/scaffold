@@ -1,3 +1,4 @@
+import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
 import { BlockInput, BlockOutput } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
@@ -23,6 +24,9 @@ export interface LocalGeneratorOpts {
     contractHash: Hash,
     params: Uint8Array,
   ): MaybePromise<Uint8Array>;
+  // TODO: requestHash?
+  // TODO: requestBlock?
+  fulfills(block: BlockExt, outputIdx: number): void;
   notify(contractHash: Hash, params: Uint8Array): void;
 }
 

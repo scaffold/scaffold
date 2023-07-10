@@ -9,6 +9,11 @@ import { hex2bin } from './pathUtils.ts';
 
 // https://arxiv.org/pdf/2109.04911.pdf
 // https://arxiv.org/pdf/2205.11878.pdf
+// https://docs.sui.io/learn/cryptography/ecvrf
+// https://github.com/yoseplee/vrf
+// https://github.com/fcelda/nsec5-crypto
+// https://github.com/google/draft-irtf-cfrg-vrf
+// https://github.com/aergoio/secp256k1-vrf
 
 interface VrfOutput {
   random: Hash;

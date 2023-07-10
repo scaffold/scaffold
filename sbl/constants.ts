@@ -27,6 +27,11 @@ export const collateralHash = Hash.xor(SBL, Hash.fromLiteralStr('collateral'));
 
 export const hintHash = Hash.xor(SBL, Hash.fromLiteralStr('hint'));
 
+export const epochInclusionHash = Hash.xor(
+  SBL,
+  Hash.fromLiteralStr('epochInclusion'),
+);
+
 // Simply checks that it's been signed by a public key hashing to the param
 // Actually we should pass the public key of the signer to the generator/contract (like we do for the hint).
 // This will allow easy-to-verify blocks like hash inversions to be authenticated.
