@@ -1,4 +1,4 @@
-import { Block, Verifier } from './messages.ts';
+import { Block, CollateralContractParams, Verifier } from './messages.ts';
 import Hash from './util/Hash.ts';
 
 export const enum BlockFlag {
@@ -17,9 +17,24 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
+export const enum BlockSource {
+  Bootstrap,
+  Local,
+  Remote,
+}
+
+export interface BlockCollateralization {
+  block: BlockExt;
+  params: CollateralContractParams;
+  amountDelta: bigint;
+  outputIdx: number;
+}
+
 export interface BlockMeta {
   hash: Hash;
   nonce: number;
+
+  source: BlockSource;
 
   data: Uint8Array;
   signature: Uint8Array;
@@ -44,8 +59,9 @@ export interface BlockMeta {
   canonicality: number; // TODO: bigint?
   collateral: number; // TODO: bigint?
 
-  collateralChain: BlockExt[];
-  postedCollateral: BlockExt[];
+  collateralizations: BlockCollateralization[];
+  // collateralChain: BlockExt[];
+  // postedCollateral: BlockExt[];
   passedVerification?: boolean;
 }
 

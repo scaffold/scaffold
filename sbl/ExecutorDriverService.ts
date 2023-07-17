@@ -28,14 +28,15 @@ export interface ExecutorDriver {
   setAllocation(resources: Partial<Record<Resource, number>>): Promise<void>;
   request(verifier: Verifier): Promise<Uint8Array>;
   notify(verifier: Verifier): void;
-  getInputBlocks(): BlockExt[];
+  fulfills(block: BlockExt, outputIdx: number): void;
+  getInputs(): { block: BlockExt; outputIdx: number }[];
   getTotalTime(): number;
   getCpuTime(): number;
 }
 
 interface WorkEntry {
   // After a while of having a non-canonical input (or maybe some other weight-based threshold), remove from queue
-  inputs: BlockExt[];
+  inputs: { block: BlockExt; outputIdx: number }[];
   getScore(): number;
   continuation(): void;
 }
@@ -98,7 +99,7 @@ export default class ExecutorDriverService {
     // };
     // updateScore();
 
-    const inputs: BlockExt[] = [];
+    const inputs: { block: BlockExt; outputIdx: number }[] = [];
     const releases: (() => void)[] = [];
 
     const startTime = this.ctx.config.timeProvider.now();
@@ -218,13 +219,14 @@ export default class ExecutorDriverService {
               //   Any block can be made canonical by re-writing, and not claiming the disputed input(s).
 
               if (inputs.length === idx) {
-                inputs.push(block);
+                inputs.push({ block, outputIdx: -1 });
                 if (--blockedCount === 0) {
                   blockedTime += this.ctx.config.timeProvider.now();
                 }
                 reply(block.body);
-              } else if (arrEquals(inputs[idx].body, block.body)) {
-                inputs[idx] = block;
+              } else if (arrEquals(inputs[idx].block.body, block.body)) {
+                // TODO: What to do here?
+                inputs[idx].block = block;
               } else {
                 stop(false);
                 cancelResolver(INTERRUPT_FLAG);
@@ -236,7 +238,9 @@ export default class ExecutorDriverService {
           releases.push(release);
         }),
       notify: (verifier) => this.ctx.get(FetchService).fetch(verifier, {}),
-      getInputBlocks: () => inputs,
+      fulfills: (block: BlockExt, outputIdx: number) =>
+        inputs.push({ block, outputIdx }),
+      getInputs: () => inputs,
       getTotalTime: () => this.ctx.config.timeProvider.now() - startTime,
       getCpuTime: () =>
         this.ctx.config.timeProvider.now() - startTime -

@@ -80,9 +80,9 @@ export default class Logger {
     // return this.get().critical(msg, serializedParams);
   }
 
-  public serialize(val: any, n = 2, maxStrLen = 64): string {
+  public serialize(obj: any, n = 2, maxStrLen = 64): string {
     // val = sortKeys(val);
-    return JSON.stringify(val, (_key, val) => {
+    return JSON.stringify(obj, (_key, val) => {
       if (typeof val === 'bigint') {
         return trim(val.toString(), maxStrLen);
       } else if (typeof val === 'string') {
@@ -103,10 +103,14 @@ export default class Logger {
         return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };
       } else if (
         typeof val === 'object' &&
-        'verifier' in val &&
+        'verifiers' in val &&
         'body' in val
       ) {
-        return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
+        if (val !== obj && 'hash' in val && val.hash instanceof Hash) {
+          return { hash: trim(val.hash.toHex(), maxStrLen) };
+        } else {
+          return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
+        }
       } else {
         return val;
       }

@@ -16,4 +16,10 @@ export default class KeyService {
   public getSelfPublicKey() {
     return this.selfPublicKey;
   }
+
+  public static makeRandomPublicKey() {
+    const data = new Uint8Array(33);
+    crypto.getRandomValues(data);
+    return data;
+  }
 }

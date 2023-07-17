@@ -26,8 +26,8 @@ export interface LocalGeneratorOpts {
   ): MaybePromise<Uint8Array>;
   // TODO: requestHash?
   // TODO: requestBlock?
-  fulfills(block: BlockExt, outputIdx: number): void;
   notify(contractHash: Hash, params: Uint8Array): void;
+  fulfills(block: BlockExt, outputIdx: number): void;
 }
 
 export type LocalGenerator = (

@@ -12,4 +12,4 @@ npm install
 npm run build
 npm run asbuild
 npm run bootstrap
-cp build/assemblyscript.release.wasm wasm/
+cp build/assemblyscript.release.wasm ../wasm/assemblyscript.wasm

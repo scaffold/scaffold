@@ -171,13 +171,15 @@ export default class ExecutorLauncherService {
               driver.request({ contract_hash, params }),
             notify: (contract_hash, params) =>
               driver.notify({ contract_hash, params }),
+            fulfills: (block: BlockExt, outputIdx: number) =>
+              driver.fulfills(block, outputIdx),
           });
 
           if (data !== INGENERABLE_FLAG) {
             this.createBlock(
               verifier,
               data !== ANY_BODY_FLAG ? data : undefined,
-              driver.getInputBlocks(),
+              driver.getInputs(),
               0,
             );
           }
@@ -219,7 +221,7 @@ export default class ExecutorLauncherService {
 
             console.log('STDOUT', bin2str(stdout));
             console.log('STDERR', bin2str(stderr));
-            this.createBlock(verifier, stdout, driver.getInputBlocks(), 0);
+            this.createBlock(verifier, stdout, driver.getInputs(), 0);
           },
         );
       }
@@ -238,16 +240,27 @@ export default class ExecutorLauncherService {
   private createBlock(
     verifier: Verifier,
     data: Uint8Array | undefined,
-    inputs: BlockExt[],
+    inputs: { block: BlockExt; outputIdx: number }[],
     durationMs: number,
   ) {
     const block = this.ctx.get(BlockBuilder).emit({
+      inputs: inputs.map(({ block, outputIdx }) => ({
+        block_hash: block.hash,
+        output_idx: outputIdx,
+        amount: block.outputs[outputIdx].amount,
+      })),
       body: data,
     }, [verifier]);
-    this.ctx.get(BlockService).create(block);
+    const blockExt = this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
     // const hash = Hash.digest(Verifier.encode(verifier));
+
+    if (this.ctx.config.dbgVerifyGenerations) {
+      this.updateContract(blockExt, verifier, 0);
+    } else {
+      this.ctx.get(LitigationService).litigateBlock(blockExt, true);
+    }
   }
 
   public snapshot() {

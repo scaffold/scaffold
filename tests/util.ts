@@ -96,22 +96,27 @@ export const connectCtxs = (ctxs: Context[], topology: 'chain' | 'mesh') => {
   }
 };
 
-export const waitForBlock = async (
+export const blockConsuming = (ctx: Context, input: BlockInput) => {
+  const blocks = ctx.get(BlockService).getBlocksByInput(input);
+  if (blocks.length > 0) {
+    if (blocks.length !== 1) {
+      throw new Error(
+        `More than one block consuming ${bin2hex(BlockInput.encode(input))}`,
+      );
+    }
+    return blocks[0];
+  }
+};
+
+export const waitFor = async <T>(
   ctx: Context,
-  consuming: BlockInput,
+  filter: (ctx: Context) => T | undefined,
   intervalMs = 100,
 ) => {
   while (true) {
-    const blocks = ctx.get(BlockService).getBlocksByInput(consuming);
-    if (blocks.length > 0) {
-      if (blocks.length !== 1) {
-        throw new Error(
-          `More than one block consuming ${
-            bin2hex(BlockInput.encode(consuming))
-          }`,
-        );
-      }
-      return blocks[0];
+    const res = filter(ctx);
+    if (res !== undefined) {
+      return res;
     }
 
     await new Promise<void>((resolve) =>

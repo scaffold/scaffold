@@ -27,6 +27,8 @@ export const collateralHash = Hash.xor(SBL, Hash.fromLiteralStr('collateral'));
 
 export const hintHash = Hash.xor(SBL, Hash.fromLiteralStr('hint'));
 
+// export const voteHash = Hash.xor(SBL, Hash.fromLiteralStr('vote'));
+
 export const epochInclusionHash = Hash.xor(
   SBL,
   Hash.fromLiteralStr('epochInclusion'),

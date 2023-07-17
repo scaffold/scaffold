@@ -1,3 +1,4 @@
+import { BlockSource } from '~/sbl/BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import InfoService from './InfoService.ts';
@@ -220,7 +221,7 @@ export default class ConnectionService {
             console.warn(`Got unhandled message type: Info`);
             break;
           case MessageType.Block:
-            this.ctx.get(BlockService).ingest(data);
+            this.ctx.get(BlockService).ingest(data, BlockSource.Remote);
             break;
           case MessageType.BridgeStart:
             console.warn(`Got unhandled message type: BridgeStart`);

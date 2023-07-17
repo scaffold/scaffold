@@ -36,10 +36,15 @@ export const enum EpochGeneratorModifier {
 }
 
 export default class EpochContract {
-  private inclusionHashes = new Map<
-    number,
-    { block: BlockExt; outputIdx: number; hash: Hash }[]
-  >();
+  // private inclusionHashes = new Map<
+  //   number,
+  //   { block: BlockExt; outputIdx: number; hash: Hash }[]
+  // >();
+  private inclusionHashes: {
+    block: BlockExt;
+    outputIdx: number;
+    hash: Hash;
+  }[] = [];
 
   constructor(private ctx: Context) {
     // ctx.get(LocalGeneratorService).addGenerator(
@@ -48,14 +53,14 @@ export default class EpochContract {
     // );
   }
 
-  public addInclusionHash(
-    height: number,
-    block: BlockExt,
-    outputIdx: number,
-    hash: Hash,
-  ) {
-    getOrCreate(this.inclusionHashes, height, () => [])
-      .push({ block, outputIdx, hash });
+  public addInclusionHash(block: BlockExt, outputIdx: number, hash: Hash) {
+    this.inclusionHashes.push({ block, outputIdx, hash });
+  }
+  private getInclusionHashes() {
+    this.inclusionHashes = this.inclusionHashes.filter(({ block, outputIdx }) =>
+      block.outputClaims[outputIdx].length === 0
+    );
+    return this.inclusionHashes;
   }
 
   public async verify(
@@ -106,11 +111,12 @@ export default class EpochContract {
     //   }),
     // );
 
-    const inclusionHashes = this.inclusionHashes.get(Number(height)) ?? [];
-    const events = inclusionHashes.map(({ block, outputIdx, hash }) => {
-      fulfills(block, outputIdx);
-      return hash;
-    });
+    const events = this.getInclusionHashes().map(
+      ({ block, outputIdx, hash }) => {
+        fulfills(block, outputIdx);
+        return hash;
+      },
+    );
 
     return EpochBody.encode({
       prior_hash: priorHash,

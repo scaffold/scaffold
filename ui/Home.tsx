@@ -25,7 +25,7 @@ import BlockBuilder from '../sbl/BlockBuilder.ts';
 import helloGenerator from '../ts/hello.generator.0.ts';
 import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
 import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
-import TableView from './TableView.tsx';
+import JsonView from './JsonView.tsx';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
 
@@ -216,8 +216,9 @@ export default () => {
         onChange={(e) => setFilter(e.target.value)}
       />
       <br />
-      <TableView name='BlockService' ctx={client.ctx} Table={BlockService} />
-      {/*<TableView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
+      <JsonView name='BlockService' ctx={client.ctx} Table={BlockService} />
+      <BlockTableView ctx={client.ctx} />
+      {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
       <button onClick={incTableVersion}>Refresh</button>
 
       {gameHash && (

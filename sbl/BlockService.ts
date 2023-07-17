@@ -1,11 +1,18 @@
-import { BlockExt, BlockFlag, BlockMeta } from './BlockMeta.ts';
+import {
+  BlockCollateralization,
+  BlockExt,
+  BlockFlag,
+  BlockMeta,
+  BlockSource,
+} from './BlockMeta.ts';
 import CollateralContract, {
   COLLATERAL_INPUT_IDX_INITIAL,
   COLLATERAL_INPUT_IDX_ISOLATED,
 } from './CollateralContract.ts';
 import { MessageType } from './ConnectionService.ts';
-import { collateralHash } from './constants.ts';
+import { collateralHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
+import EpochContract from './EpochContract.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
 import {
@@ -14,6 +21,7 @@ import {
   BlockOutput,
   BlockSet,
   CollateralContractParams,
+  EpochInclusionParams,
   Verifier,
 } from './messages.ts';
 import NodeService from './NodeService.ts';
@@ -31,12 +39,7 @@ interface CollateralSummary {
   postedAmountFor: bigint;
   postedAmountAgainst: bigint;
   implicitAmountAgainst: bigint;
-  ledger: {
-    block: BlockExt;
-    params: CollateralContractParams;
-    amountDelta: bigint;
-    outputIdx: number;
-  }[];
+  ledger: BlockCollateralization[];
   resolver?: BlockExt;
 }
 
@@ -45,12 +48,10 @@ export const CHALLENGE_PRICE = 10n;
 export default class BlockService {
   private blocksByHash = new Map<HashPrimitive, BlockExt>();
   private claimsByOutput = new Map<HashPrimitive, BlockExt[]>();
-  private collateralByBlockHash = new Map<HashPrimitive, {
-    block: BlockExt;
-    params: CollateralContractParams;
-    amountDelta: bigint;
-    outputIdx: number;
-  }[]>();
+  private collateralByBlockHash = new Map<
+    HashPrimitive,
+    BlockCollateralization[]
+  >();
 
   private onNewBlockListeners = new Map<
     HashPrimitive, // Key is verifier hash
@@ -71,7 +72,12 @@ export default class BlockService {
     return Hash.digestParts(signer, Block.encode(block));
   }
 
-  public create(block: Block, immortalize = false) {
+  // Create block - (cfg: )
+  // Sign & create bytes
+  // Ingest
+  // Publish?
+
+  public create(block: Block, publish = true, immortalize = false): BlockExt {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
     // Sign, publish, ingest, return hash
@@ -83,27 +89,24 @@ export default class BlockService {
     );
 
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
-    const hash = this.ingest(data);
+    const blockExt = this.ingest(data, BlockSource.Local);
 
-    if (hash === undefined) {
+    if (blockExt === undefined) {
       throw new Error(`Invalid block provided (maybe bad timestamp)?`);
     }
 
-    this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (!node.knownBlocks.has(hash.toPrimitive())) {
-        node.knownBlocks.add(hash.toPrimitive());
-        node.defaultConn?.sendReliable(data);
-      }
-    });
+    if (publish) {
+      this.publish(blockExt);
+    }
 
-    return hash;
+    return blockExt;
   }
 
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
-  public ingest(data: Uint8Array) {
+  public ingest(data: Uint8Array, source: BlockSource): BlockExt | undefined {
     const blockHash = Hash.digest(data);
     if (this.blocksByHash.has(blockHash.toPrimitive())) {
-      return blockHash;
+      return this.blocksByHash.get(blockHash.toPrimitive());
     }
 
     const signature = data.subarray(0, SIGNATURE_LENGTH);
@@ -149,6 +152,8 @@ export default class BlockService {
       hash: blockHash,
       nonce: Math.random(),
 
+      source,
+
       data,
       signature,
 
@@ -171,8 +176,11 @@ export default class BlockService {
       canonicality: 0,
       collateral: 0,
 
-      collateralChain: [],
-      postedCollateral: [],
+      collateralizations: getOrCreate(
+        this.collateralByBlockHash,
+        blockHash.toPrimitive(),
+        () => [],
+      ),
     };
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
@@ -201,9 +209,14 @@ export default class BlockService {
           () => [],
         ).push({ block: blockExt, params, amountDelta: amount, outputIdx });
       }
+
+      if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
+        const { hash } = EpochInclusionParams.decode(verifier.params);
+        this.ctx.get(EpochContract).addInclusionHash(blockExt, outputIdx, hash);
+      }
     });
 
-    this.updateDerivedWork(blockExt);
+    // this.updateDerivedWork(blockExt);
 
     // const samples = PoissonDistribution.sample(
     //   Number(this.getWork(blockExt)) * this.getSamplesPerWork(),
@@ -227,7 +240,16 @@ export default class BlockService {
 
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
-    return blockHash;
+    return blockExt;
+  }
+
+  public publish(block: BlockExt) {
+    this.ctx.get(NodeService).getAll().forEach((node) => {
+      if (!node.knownBlocks.has(block.hash.toPrimitive())) {
+        node.knownBlocks.add(block.hash.toPrimitive());
+        node.defaultConn?.sendReliable(block.data);
+      }
+    });
   }
 
   // This is called whenever an input becomes available
@@ -652,7 +674,7 @@ export default class BlockService {
     */
   }
 
-  private getClaims({ block_hash, output_idx }: BlockInput) {
+  public getClaims({ block_hash, output_idx }: BlockInput) {
     // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(
       this.claimsByOutput,

@@ -13,18 +13,14 @@
   },
   "lint": {},
   "fmt": {
-    "files": {
-      "exclude": ["README.md", "jsoncons"]
-    },
-    "options": {
-      "singleQuote": true
-    }
+    "exclude": ["README.md", "jsoncons", "assemblyscript"],
+    "singleQuote": true
   },
   "tasks": {
     "fmt": "deno fmt --options-single-quote --watch",
     "lint": "deno lint --watch",
     "serve-ui": "deno run --allow-all https://deno.land/x/packup/cli.ts --static-dir build/ index.html --import-map=import_map.json",
-    "build-ui": "deno bundle --check --config=deno.jsonc app.tsx build/index.js && deno bundle --check --config=deno.jsonc sbl/worker/worker.ts build/worker.js",
+    "build-ui": "cp index.html build/index.html && deno bundle --check --config=deno.jsonc app.tsx build/index.js && deno bundle --check --config=deno.jsonc sbl/worker/worker.ts build/worker.js",
     "build-js": "deno bundle --check --watch --config=deno.jsonc app.tsx build/index.js",
     "build-worker": "deno bundle --check --watch --config=deno.jsonc sbl/worker/worker.ts build/worker.js",
     "serve-build": "deno run --allow-net --allow-read https://deno.land/std@0.173.0/http/file_server.ts build/ --port 17542 --header 'Cross-Origin-Opener-Policy: same-origin' --header 'Cross-Origin-Embedder-Policy: credentialless'",

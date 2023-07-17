@@ -64,7 +64,7 @@ export default class BlockBuilder {
         const block = this.emit({
           outputs: [{ verifier: v, amount: 0n }],
         }, []);
-        const hash = this.ctx.get(BlockService).create(block);
+        const hash = this.ctx.get(BlockService).create(block).hash;
         inputs.push({ block_hash: hash, output_idx: 0, amount: 0n });
       }
     }

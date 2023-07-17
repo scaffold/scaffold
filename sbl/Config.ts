@@ -93,6 +93,8 @@ interface Config {
   workScoreThreshold: number; // TODO: Units?
 
   graphParameters: GraphParameters;
+
+  dbgVerifyGenerations: boolean;
 }
 
 export const defaultConfig = {
@@ -120,6 +122,7 @@ export const defaultConfig = {
       return x * 2n;
     },
   },
+  dbgVerifyGenerations: false,
 } satisfies Partial<Config>;
 
 export default Config;
