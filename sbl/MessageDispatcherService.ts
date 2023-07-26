@@ -36,7 +36,10 @@ export default class MessageDispatcherService {
     const msg = msgCtx.packet.message;
 
     if ('InfoMessage' in msg) {
-      this.ctx.get(NodeService).handleInfoMessage(msgCtx, msg.InfoMessage);
+      this.ctx.get(NodeService).handleInfoMessage(
+        msgCtx.conn.node,
+        msg.InfoMessage,
+      );
     }
 
     if ('PingMessage' in msg) {

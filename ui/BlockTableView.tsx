@@ -23,16 +23,6 @@ import { trunc } from '../sbl/util/string.ts';
 import BlockService from '../sbl/BlockService.ts';
 import { BlockInput, BlockOutput } from '../sbl/messages.ts';
 
-const styles: { [key: string]: React.CSSProperties } = {
-  table: {
-    borderCollapse: 'collapse',
-  },
-  row: {
-    borderTop: '1px solid silver',
-    borderBottom: '1px solid silver',
-  },
-};
-
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
     {name}: <pre style={{ display: 'inline' }}>{val}</pre>
@@ -262,111 +252,102 @@ export default ({ ctx }: { ctx: Context }) => {
     debugTable: true,
   });
 
-  const tableContainerRef = React.useRef<HTMLDivElement>(null);
-
   const { rows } = table.getRowModel();
-  const rowVirtualizer = useVirtual({
-    parentRef: tableContainerRef,
-    size: rows.length,
-    overscan: 10,
-  });
-  const { virtualItems: virtualRows, totalSize } = rowVirtualizer;
-
-  const paddingTop = virtualRows.length > 0 ? virtualRows?.[0]?.start || 0 : 0;
-  const paddingBottom = virtualRows.length > 0
-    ? totalSize - (virtualRows?.[virtualRows.length - 1]?.end || 0)
-    : 0;
 
   return (
-    <div className='p-2'>
-      <div className='h-2' />
-      <div ref={tableContainerRef} className='container'>
-        <table style={styles.table}>
-          <thead>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <th
-                      key={header.id}
-                      colSpan={header.colSpan}
-                      style={{ width: header.getSize() }}
-                    >
-                      {header.isPlaceholder ? null : (
-                        <div
-                          {...{
-                            className: header.column.getCanSort()
-                              ? 'cursor-pointer select-none'
-                              : '',
-                            onClick: header.column.getToggleSortingHandler(),
-                          }}
-                        >
+    <div>
+      <table style={{ borderCollapse: 'collapse' }}>
+        <thead>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id}>
+              {headerGroup.headers.map((header) => {
+                return (
+                  <th
+                    key={header.id}
+                    colSpan={header.colSpan}
+                    style={{ width: header.getSize() }}
+                  >
+                    {header.isPlaceholder ? null : (
+                      <div
+                        {...{
+                          className: header.column.getCanSort()
+                            ? 'cursor-pointer select-none'
+                            : '',
+                          onClick: header.column.getToggleSortingHandler(),
+                        }}
+                      >
+                        <>
                           {flexRender(
                             header.column.columnDef.header,
                             header.getContext(),
                           )}
+                        </>
+                        <>
                           {{
                             asc: ' 🔼',
                             desc: ' 🔽',
                           }[header.column.getIsSorted() as string] ?? null}
-                        </div>
-                      )}
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
-          </thead>
-          <tbody>
-            {paddingTop > 0 && (
-              <tr>
-                <td style={{ height: `${paddingTop}px` }} />
-              </tr>
-            )}
-            {virtualRows.map((virtualRow) => {
-              const row = rows[virtualRow.index];
-              return (
-                <>
-                  <tr
-                    key={row.id}
-                    style={row.original.hash.toPrimitive() === selectedHash
-                      ? { ...styles.row, backgroundColor: '#DDD' }
-                      : styles.row}
-                  >
-                    {row.getVisibleCells().map((cell) => {
-                      return (
-                        <td key={cell.id}>
+                        </>
+                      </div>
+                    )}
+                  </th>
+                );
+              })}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const rowBorderStyle = {
+              borderTop: '1px solid silver',
+              borderBottom: row.getIsExpanded()
+                ? undefined
+                : '1px solid silver',
+            };
+            return (
+              <>
+                <tr
+                  key={row.id}
+                  style={row.original.hash.toPrimitive() === selectedHash
+                    ? { ...rowBorderStyle, backgroundColor: '#DDD' }
+                    : rowBorderStyle}
+                >
+                  {row.getVisibleCells().map((cell) => {
+                    return (
+                      <td key={cell.id} style={{ padding: '0 4px' }}>
+                        <>
                           {flexRender(
                             cell.column.columnDef.cell,
                             cell.getContext(),
                           )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                  {row.getIsExpanded() && (
-                    <tr>
-                      {/* 2nd row is a custom 1 cell row */}
-                      <td colSpan={row.getVisibleCells().length}>
-                        <pre>{ctx.get(Logger).serialize(row.original, 2, 72)}</pre>
+                        </>
                       </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
-            {paddingBottom > 0 && (
-              <tr>
-                <td style={{ height: `${paddingBottom}px` }} />
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-      <div>{table.getRowModel().rows.length} Rows</div>
-      <div>
-        <button onClick={() => refreshData()}>Refresh Data</button>
-      </div>
+                    );
+                  })}
+                </tr>
+                {row.getIsExpanded() && (
+                  <tr
+                    style={row.original.hash.toPrimitive() === selectedHash
+                      ? { backgroundColor: '#DDD' }
+                      : { borderBottom: '1px solid silver' }}
+                  >
+                    {/* 2nd row is a custom 1 cell row */}
+                    <td
+                      colSpan={row.getVisibleCells().length}
+                      style={{ padding: '0 4px' }}
+                    >
+                      <pre>{ctx.get(Logger).serialize(row.original, 2, 72)}</pre>
+                      <pre>Backtrace: {row.original.backtrace}</pre>
+                    </td>
+                  </tr>
+                )}
+              </>
+            );
+          })}
+        </tbody>
+      </table>
+      <div>{rows.length} Rows</div>
+      <button onClick={() => refreshData()}>Refresh Data</button>
     </div>
   );
 };

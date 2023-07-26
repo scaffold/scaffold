@@ -66,7 +66,7 @@ export default class FetchService {
 
     internalIncentive = 1n;
     if (internalIncentive !== undefined) {
-      this.ctx.get(ExecutorLauncherService).updateGenerator(
+      this.ctx.get(ExecutorLauncherService).enqueueGeneration(
         verifier,
         Number(internalIncentive),
       );
@@ -155,7 +155,7 @@ export default class FetchService {
         released = true;
 
         if (internalIncentive !== undefined) {
-          this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0);
+          this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
         }
 
         if (externalIncentive !== undefined) {

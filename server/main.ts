@@ -23,6 +23,8 @@ import { bin2str } from '../sbl/pathUtils.ts';
 import LocalGeneratorService, {
   LocalGenerator,
 } from '../sbl/LocalGeneratorService.ts';
+import { epochStartTime } from '~/server/epochStartTime.ts';
+import EpochService from '~/sbl/EpochService.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -128,6 +130,7 @@ const config: Config = {
   ...defaultConfig,
 
   debugName: 'Server',
+  userdata: JSON.stringify({ epochStartTime }),
 
   location: { x: 1, y: 2, z: 3 },
 
@@ -227,6 +230,8 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
   )
 );
 // ctx.get(CollatzContract).get();
+
+// ctx.get(EpochService);
 
 const itvl = setInterval(() => {
   // const blocks = [...ctx.get(BlockRegistry).debugGetAll().entries()].map((

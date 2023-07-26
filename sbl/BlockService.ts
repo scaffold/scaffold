@@ -10,7 +10,7 @@ import CollateralContract, {
   COLLATERAL_INPUT_IDX_ISOLATED,
 } from './CollateralContract.ts';
 import { MessageType } from './ConnectionService.ts';
-import { collateralHash, epochInclusionHash } from './constants.ts';
+import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
@@ -181,6 +181,8 @@ export default class BlockService {
         blockHash.toPrimitive(),
         () => [],
       ),
+
+      backtrace: new Error().stack,
     };
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
@@ -199,7 +201,7 @@ export default class BlockService {
       this.getClaims({ block_hash: blockHash, output_idx: outputIdx })
         .forEach((block) => this.addSatisfies(block, verifier));
 
-      this.ctx.get(ExecutorLauncherService).updateGenerator(verifier, 0);
+      this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
 
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
         const params = CollateralContractParams.decode(verifier.params);
@@ -257,7 +259,7 @@ export default class BlockService {
     if (
       block.inputs.every(({ block_hash }) => this.get(block_hash) !== undefined)
     ) {
-      const inputSum = block.inputs.reduce(
+      let inputSum = block.inputs.reduce(
         (acc, { block_hash, output_idx }) =>
           acc + this.get(block_hash)!.outputs[output_idx].amount,
         0n,
@@ -266,6 +268,16 @@ export default class BlockService {
         (acc, { amount }) => acc + amount,
         0n,
       );
+      if (
+        block.inputs.some(({ block_hash, output_idx }) =>
+          Hash.equals(
+            this.get(block_hash)!.outputs[output_idx].verifier.contract_hash,
+            epochHash,
+          )
+        )
+      ) {
+        inputSum += 1000000n;
+      }
       if (inputSum !== outputSum) {
         throw new Error(
           `Input sum (${inputSum}) does not equal the output sum (${outputSum}) for block ${block.hash.toHex()}`,
@@ -286,7 +298,7 @@ export default class BlockService {
 
     const verifierHash = Hash.digest(Verifier.encode(verifier));
 
-    this.ctx.get(ExecutorLauncherService).updateContract(
+    this.ctx.get(ExecutorLauncherService).enqueueVerification(
       block,
       verifier,
       0,

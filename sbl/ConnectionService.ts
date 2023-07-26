@@ -2,7 +2,7 @@ import { BlockSource } from '~/sbl/BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import InfoService from './InfoService.ts';
-import { Packet } from './messages.ts';
+import { InfoMessage, Packet } from './messages.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
 import NodeService, { Node } from './NodeService.ts';
 import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
@@ -218,7 +218,10 @@ export default class ConnectionService {
         const msgType = this.ctx.get(PacketCoder).getTypeIdx(data);
         switch (msgType) {
           case MessageType.Info:
-            console.warn(`Got unhandled message type: Info`);
+            this.ctx.get(NodeService).handleInfoMessage(
+              conn!.node,
+              InfoMessage.decode(data.subarray(SIGNATURE_LENGTH + 1)),
+            );
             break;
           case MessageType.Block:
             this.ctx.get(BlockService).ingest(data, BlockSource.Remote);

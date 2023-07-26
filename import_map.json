@@ -5,7 +5,7 @@
     "react-dom": "https://esm.sh/react-dom@18.2.0?target=esnext&pin=v99",
     "react-router-dom": "https://esm.sh/react-router-dom@6.4.4?target=esnext&pin=v99",
     "tanstack-virtual": "https://esm.sh/@tanstack/react-virtual@3.0.0-alpha.0?target=esnext&pin=v99",
-    "tanstack-table": "https://esm.sh/@tanstack/react-table@8.7.0?target=esnext&pin=v99",
+    "tanstack-table": "https://esm.sh/@tanstack/react-table@8.9.3?target=esnext&pin=v99",
     "secp256k1": "https://deno.land/x/secp256k1@2.0.0/index.ts",
     "crypto": "./sbl/util/mock-crypto.ts",
     "avro": "./avro/index.js",

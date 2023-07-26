@@ -35,6 +35,7 @@ export default class InfoService {
       name: '',
       client_name: '',
       protocol_version: '',
+      userdata: this.ctx.config.userdata ?? '',
       age_ptr: '',
       handled_protocols: [...this.ctx.config.networkProvider.protocols]
         .filter(([_key, provider]) => provider.createClient)

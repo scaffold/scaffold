@@ -29,6 +29,8 @@ export const hintHash = Hash.xor(SBL, Hash.fromLiteralStr('hint'));
 
 // export const voteHash = Hash.xor(SBL, Hash.fromLiteralStr('vote'));
 
+export const epochHash = Hash.xor(SBL, Hash.fromLiteralStr('epoch'));
+
 export const epochInclusionHash = Hash.xor(
   SBL,
   Hash.fromLiteralStr('epochInclusion'),

@@ -28,6 +28,7 @@ import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 import JsonView from './JsonView.tsx';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
+import EpochService from '~/sbl/EpochService.ts';
 
 // QJS
 // const initialContractHex =
@@ -89,6 +90,8 @@ client.ctx.get(QaDebugger).addDebugger(
   (params) => thrustMessages.MazeParams.decode(params),
   (answer) => thrustMessages.MazeAnswer.decode(answer),
 );
+
+client.ctx.get(EpochService);
 
 const startGame = () => {
   const body = thrustMessages.InitAnswer.encode({

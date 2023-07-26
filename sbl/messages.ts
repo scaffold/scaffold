@@ -323,6 +323,7 @@ export const registry = {
       { name: 'name', type: 'string' },
       { name: 'client_name', type: 'string' },
       { name: 'protocol_version', type: 'string' },
+      { name: 'userdata', type: 'string' },
       { name: 'age_ptr', type: 'string' },
       { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
 
@@ -618,6 +619,14 @@ export const registry = {
   //   fields: [{ name: 'output_idx', type: 'int' }],
   // },
 
+  TimeParams: {
+    name: 'TimeParams',
+    type: 'record',
+    fields: [
+      { name: 'time', type: 'long' },
+    ],
+  },
+
   long,
 } as const;
 
@@ -806,6 +815,8 @@ export const CollateralContractParams = makeMsg(
   'CollateralContractParams',
 );
 export type CollateralContractParams = MsgType<'CollateralContractParams'>;
+export const TimeParams = makeMsg(registry, 'TimeParams');
+export type TimeParams = MsgType<'TimeParams'>;
 
 // const buf = Question.encode({
 //   contract: {

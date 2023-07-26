@@ -11,7 +11,7 @@ import IncentiveService from './IncentiveService.ts';
 // import IncentiveCalculator from './IncentiveCalculator.ts';
 import BlockService from './BlockService.ts';
 import { arrEquals } from './util/buffer.ts';
-import { accountHash, trueHash } from './constants.ts';
+import { accountHash, epochHash, trueHash } from './constants.ts';
 import KeyService from './KeyService.ts';
 import Logger from './Logger.ts';
 
@@ -38,6 +38,8 @@ export default class BlockBuilder {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
+    let difference = 0n;
+
     // const verifier_hash = Hash.digest(Verifier.encode(verifier));
     // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
     //   [];
@@ -57,6 +59,12 @@ export default class BlockBuilder {
             amount: block.outputs[idx].amount,
           });
           added = true;
+
+          if (
+            Hash.equals(block.outputs[idx].verifier.contract_hash, epochHash)
+          ) {
+            difference += 1000000n;
+          }
         }
       }
 
@@ -70,8 +78,8 @@ export default class BlockBuilder {
     }
 
     const outputs = block.outputs ?? [];
-    let difference = inputs.reduce((acc, cur) => acc + cur.amount, 0n) -
-      outputs.reduce((acc, cur) => acc + cur.amount, 0n);
+    difference += inputs.reduce((acc, cur) => acc + cur.amount, 0n);
+    difference -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     if (difference < 0n) {
       const accountInputs = this.ctx.get(BlockService).getBlocksByOutput(

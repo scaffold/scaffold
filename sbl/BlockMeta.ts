@@ -56,6 +56,9 @@ export interface BlockMeta {
   mergeableLogProbabilityValue: number;
   mergeableLogProbabilityError: number;
 
+  // internalCanonicalityProb: number;
+  // externalCanonicalityProb: number;
+
   canonicality: number; // TODO: bigint?
   collateral: number; // TODO: bigint?
 
@@ -63,6 +66,8 @@ export interface BlockMeta {
   // collateralChain: BlockExt[];
   // postedCollateral: BlockExt[];
   passedVerification?: boolean;
+
+  backtrace?: string;
 }
 
 export type BlockExt = Block & BlockMeta;

@@ -9,6 +9,7 @@ import { getOrCreate } from './util/map.ts';
 import { Block, InfoMessage } from './messages.ts';
 import MessageCtx from './MessageCtx.ts';
 import KeyService from './KeyService.ts';
+import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
 
 // Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
 
@@ -177,8 +178,13 @@ export default class NodeService {
     }
   }
 
-  public handleInfoMessage(msgCtx: MessageCtx, msg: InfoMessage) {
-    const node = msgCtx.conn.node;
+  public handleInfoMessage(node: Node, msg: InfoMessage) {
+    if (msg.userdata) {
+      const { epochStartTime } = JSON.parse(msg.userdata);
+      if (epochStartTime) {
+        debugSetEpochBaseTime(epochStartTime);
+      }
+    }
 
     node.handledProtocols = msg.handled_protocols;
     node.neighbors.clear();

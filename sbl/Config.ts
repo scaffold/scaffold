@@ -22,6 +22,7 @@ export interface TimeProvider {
 
 interface Config {
   debugName: string;
+  userdata?: string;
 
   logLevel: log.LevelName;
 

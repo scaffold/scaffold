@@ -34,7 +34,7 @@ export default class ExecutorLauncherService {
 
   constructor(private ctx: Context) {}
 
-  public updateContract(
+  public enqueueVerification(
     block: BlockExt,
     verifier: Verifier,
     extraIncentive: number,
@@ -125,7 +125,7 @@ export default class ExecutorLauncherService {
     }
   }
 
-  public updateGenerator(verifier: Verifier, extraIncentive: number) {
+  public enqueueGeneration(verifier: Verifier, extraIncentive: number) {
     const runHash = Hash.digest(Verifier.encode(verifier));
     if (this.extraGeneratorIncentive.has(runHash.toPrimitive())) {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -257,7 +257,7 @@ export default class ExecutorLauncherService {
     // const hash = Hash.digest(Verifier.encode(verifier));
 
     if (this.ctx.config.dbgVerifyGenerations) {
-      this.updateContract(blockExt, verifier, 0);
+      this.enqueueVerification(blockExt, verifier, 0);
     } else {
       this.ctx.get(LitigationService).litigateBlock(blockExt, true);
     }

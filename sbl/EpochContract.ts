@@ -1,7 +1,10 @@
 import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
-import { LocalGeneratorOpts } from './LocalGeneratorService.ts';
-import { EpochBody, EpochParams } from './messages.ts';
+import LocalGeneratorService, {
+  LocalGeneratorOpts,
+} from './LocalGeneratorService.ts';
+import { epochHash, timeHash } from '~/sbl/constants.ts';
+import { EpochBody, EpochParams, TimeParams } from './messages.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
@@ -11,15 +14,29 @@ import { MaybePromise } from './util/types.ts';
 // );
 const epochIv = Hash.fromLiteral32(0);
 
-const epochBaseTime = BigInt((() => {
-  // This is temporary, for easy development.
-  // Eventually the base time will be fixed.
-  const hour = 1000 * 60 * 60;
-  return Math.floor(Date.now() / hour) * hour;
-})());
-// const epochBaseTime = BigInt(new Date('2022-04-22T18:40:00-0700').getTime());
+let epochBaseTime = 0n;
+// let epochBaseTime = BigInt((() => {
+//   // This is temporary, for easy development.
+//   // Eventually the base time will be fixed.
+//   const hour = 1000 * 60 * 60;
+//   return Math.floor(Date.now() / hour) * hour;
+// })());
+// let epochBaseTime = BigInt(new Date('2050-01-01T00:00:00-0000').getTime());
+export const debugSetEpochBaseTime = (baseTime: number) => {
+  console.log(
+    `Setting the epoch base time to ${baseTime}, which was ${
+      Date.now() - baseTime
+    } ms ago`,
+  );
+  epochBaseTime = BigInt(baseTime);
+};
+
 const epochIntervalMs = 1000n;
 const timeToHeight = (time: number) => {
+  if (epochBaseTime === 0n) {
+    throw new Error(`Epoch base time hasn't been set yet!`);
+  }
+
   if (time > epochBaseTime) {
     return (BigInt(time) - epochBaseTime) / epochIntervalMs;
   } else {
@@ -47,10 +64,10 @@ export default class EpochContract {
   }[] = [];
 
   constructor(private ctx: Context) {
-    // ctx.get(LocalGeneratorService).addGenerator(
-    //   dataHash,
-    //   EpochContract.generate,
-    // );
+    ctx.get(LocalGeneratorService).addGenerator(
+      epochHash,
+      (opts) => this.generate(opts),
+    );
   }
 
   public addInclusionHash(block: BlockExt, outputIdx: number, hash: Hash) {
@@ -72,6 +89,7 @@ export default class EpochContract {
     // ) => MaybePromise<Uint8Array>,
     invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
+    return true;
   }
 
   public async generate(
@@ -104,12 +122,15 @@ export default class EpochContract {
     }
 
     // Wait for time
-    // request(
-    //   timeContractHash,
-    //   timeMessages.Params.encode({
-    //     time: epochBaseTime + height * epochIntervalMs,
-    //   }),
-    // );
+    if (epochBaseTime === 0n) {
+      throw new Error(`Epoch base time hasn't been set yet!`);
+    }
+    request(
+      timeHash,
+      TimeParams.encode({
+        time: epochBaseTime + height * epochIntervalMs,
+      }),
+    );
 
     const events = this.getInclusionHashes().map(
       ({ block, outputIdx, hash }) => {
