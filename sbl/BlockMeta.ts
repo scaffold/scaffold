@@ -1,5 +1,11 @@
-import { Block, CollateralContractParams, Verifier } from './messages.ts';
+import {
+  Block,
+  CollateralContractParams,
+  EpochInclusionProof,
+  Verifier,
+} from './messages.ts';
 import Hash from './util/Hash.ts';
+import { Node } from './NodeService.ts';
 
 export const enum BlockFlag {
   Null = 0,
@@ -41,6 +47,8 @@ export interface BlockMeta {
 
   verifiers: Verifier[];
 
+  from: Node[];
+
   // block: Block;
   receivedTimestamp: number;
   flags: BlockFlag;
@@ -66,6 +74,8 @@ export interface BlockMeta {
   // collateralChain: BlockExt[];
   // postedCollateral: BlockExt[];
   passedVerification?: boolean;
+
+  epochInclusionProofs: EpochInclusionProof[];
 
   backtrace?: string;
 }

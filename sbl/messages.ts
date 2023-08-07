@@ -192,6 +192,15 @@ export const registry = {
       // { name: 'timestamp_lt', type: ['null', 'long'] },
     ],
   },
+  EpochInclusionProof: {
+    name: 'EpochInclusionProof',
+    type: 'record',
+    fields: [
+      { name: 'block_hash', type: 'Hash' },
+      { name: 'epoch_hash', type: 'Hash' },
+      { name: 'input_indices', type: { type: 'array', items: 'int' } },
+    ],
+  },
   Block: {
     name: 'Block',
     type: 'record',
@@ -207,11 +216,13 @@ export const registry = {
       // { name: 'body', type: ['Publication', 'bytes'] },
       { name: 'body', type: 'bytes' },
 
+      { name: 'iceberg_depth', type: 'int' },
+
       // Whether body satisfies the verifier or not
       { name: 'side', type: 'boolean' },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
-      { name: 'isFreeMarket', type: 'boolean' },
+      { name: 'is_free_market', type: 'boolean' },
 
       // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
       // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
@@ -754,6 +765,8 @@ export const BlockInput = makeMsg(registry, 'BlockInput');
 export type BlockInput = MsgType<'BlockInput'>;
 export const BlockOutput = makeMsg(registry, 'BlockOutput');
 export type BlockOutput = MsgType<'BlockOutput'>;
+export const EpochInclusionProof = makeMsg(registry, 'EpochInclusionProof');
+export type EpochInclusionProof = MsgType<'EpochInclusionProof'>;
 export const Block = makeMsg(registry, 'Block');
 export type Block = MsgType<'Block'>;
 export const BlockSet = makeMsg(registry, 'BlockSet');

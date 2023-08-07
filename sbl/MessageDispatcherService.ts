@@ -70,10 +70,13 @@ export default class MessageDispatcherService {
 
     if ('PublicationMessage' in msg) {
       msgCtx.conn.node.knownBlocks.add(msg.PublicationMessage.block);
-      this.ctx.get(BlockService).ingest(
+      const block = this.ctx.get(BlockService).ingest(
         msg.PublicationMessage.block,
         msgCtx.conn.node.hash,
       );
+      if (block) {
+        block.from.push(msgCtx.conn.node);
+      }
     }
     // if ('RequestBlockMessage' in msg) {
     //   (async () => {

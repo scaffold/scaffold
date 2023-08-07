@@ -2,7 +2,7 @@ import secp from './util/secp.ts';
 import BlockBuilder from './BlockBuilder.ts';
 import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
-import { dataHash, generatorHash, rootHash } from './constants.ts';
+import { dataHash, epochHash, generatorHash, rootHash } from './constants.ts';
 import Context from './Context.ts';
 import ExecutorDriverService, {
   ExecutorDriver,
@@ -12,7 +12,7 @@ import LocalGeneratorService, {
   ANY_BODY_FLAG,
   INGENERABLE_FLAG,
 } from './LocalGeneratorService.ts';
-import { Verifier } from './messages.ts';
+import { EpochInclusionProof, Verifier } from './messages.ts';
 import { bin2str, str2bin } from './pathUtils.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
 import { error, mapEntries } from './util/functional.ts';
@@ -23,6 +23,8 @@ import DataContract from './DataContract.ts';
 import LitigationService from './LitigationService.ts';
 import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
+import PacketCoder from '~/sbl/PacketCoder.ts';
+import { MessageType } from '~/sbl/ConnectionService.ts';
 
 const secret = secp.etc.randomBytes(32);
 
@@ -248,6 +250,7 @@ export default class ExecutorLauncherService {
         block_hash: block.hash,
         output_idx: outputIdx,
         amount: block.outputs[outputIdx].amount,
+        icebergDepth: block.iceberg_depth,
       })),
       body: data,
     }, [verifier]);
@@ -255,6 +258,21 @@ export default class ExecutorLauncherService {
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
     // const hash = Hash.digest(Verifier.encode(verifier));
+
+    // Special case for epoch blocks; we need to send the epoch inclusion proof to all inputs
+    if (Hash.equals(verifier.contract_hash, epochHash)) {
+      block.inputs.forEach(({ block_hash }, idx) =>
+        this.ctx.get(BlockService).get(block_hash)?.from.forEach((node) =>
+          node.defaultConn?.sendReliable(
+            this.ctx.get(PacketCoder).encode(
+              { block_hash, epoch_hash: blockExt.hash, input_indices: [idx] },
+              EpochInclusionProof,
+              MessageType.EpochInclusionProof,
+            ),
+          )
+        )
+      );
+    }
 
     if (this.ctx.config.dbgVerifyGenerations) {
       this.enqueueVerification(blockExt, verifier, 0);

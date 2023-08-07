@@ -10,6 +10,7 @@ import Peer from './Peer.ts';
 import PeerService from './PeerService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
+import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -42,6 +43,7 @@ export interface Connection {
 export const enum MessageType {
   Info,
   Block,
+  EpochInclusionProof,
   BridgeStart,
   BridgeEnd,
 }
@@ -224,7 +226,18 @@ export default class ConnectionService {
             );
             break;
           case MessageType.Block:
-            this.ctx.get(BlockService).ingest(data, BlockSource.Remote);
+            {
+              const block = this.ctx.get(BlockService).ingest(
+                data,
+                BlockSource.Remote,
+              );
+              if (block) {
+                block.from.push(conn!.node);
+              }
+            }
+            break;
+          case MessageType.EpochInclusionProof:
+            this.ctx.get(EpochInclusionProofService).ingest(data);
             break;
           case MessageType.BridgeStart:
             console.warn(`Got unhandled message type: BridgeStart`);

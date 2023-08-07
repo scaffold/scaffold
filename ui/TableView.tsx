@@ -3,6 +3,7 @@ import Context from '../sbl/Context.ts';
 import Logger from '../sbl/Logger.ts';
 import Hash, { HashPrimitive } from '../sbl/util/Hash.ts';
 import Store2 from '../sbl/util/Store2.ts';
+import BlockService from '../sbl/BlockService.ts';
 
 type ObjMap<T> = { [key: string]: T };
 
@@ -26,14 +27,25 @@ export default ({ ctx, name, Table, filter }: {
 
   return (
     <>
-      {Object.entries(ctx.get(Table).snapshot()).map(([key, map]) => (
+      {Object.entries(ctx.get(BlockService).snapshot()).map(([key, map]) => (
         <span key={`${name}.${key}`}>
           <strong>{name}.{key}:</strong>
           <table>
             <thead>
               <tr>
                 <th>Hash</th>
-                # of inputs # of outputs Throughput
+                <th># of inputs</th>
+                <th># of outputs</th>
+                <th>Inputs</th>
+                <th>Outputs</th>
+                <th>Timestamp</th>
+                <th>Throughput</th>
+                <th>Body size</th>
+                <th>Body parsed</th>
+                <th>Block size</th>
+                <th>Collateral for</th>
+                <th>Collateral against</th>
+                <th>Collateralizations</th>
               </tr>
             </thead>
             <tbody>

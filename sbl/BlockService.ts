@@ -5,20 +5,16 @@ import {
   BlockMeta,
   BlockSource,
 } from './BlockMeta.ts';
-import CollateralContract, {
-  COLLATERAL_INPUT_IDX_INITIAL,
-  COLLATERAL_INPUT_IDX_ISOLATED,
-} from './CollateralContract.ts';
 import { MessageType } from './ConnectionService.ts';
 import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
+import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
 import {
   Block,
   BlockInput,
-  BlockOutput,
   BlockSet,
   CollateralContractParams,
   EpochInclusionParams,
@@ -47,7 +43,10 @@ export const CHALLENGE_PRICE = 10n;
 
 export default class BlockService {
   private blocksByHash = new Map<HashPrimitive, BlockExt>();
-  private claimsByOutput = new Map<HashPrimitive, BlockExt[]>();
+  private claimsByOutput = new Map<
+    HashPrimitive,
+    { block: BlockExt; inputIdx: number }[]
+  >();
   private collateralByBlockHash = new Map<
     HashPrimitive,
     BlockCollateralization[]
@@ -116,6 +115,12 @@ export default class BlockService {
       );
     }
 
+    if (data[SIGNATURE_LENGTH] !== MessageType.Block) {
+      throw new Error(
+        `Cannot ingest non-block (${data[SIGNATURE_LENGTH]}) as a block`,
+      );
+    }
+
     const block = Block.decode(data.subarray(SIGNATURE_LENGTH + 1));
 
     if (block.timestamp > BigInt(this.ctx.config.timeProvider.now())) {
@@ -159,12 +164,16 @@ export default class BlockService {
 
       verifiers: [],
 
+      from: [],
+
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.Null,
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map((_, idx) =>
-        this.getClaims({ block_hash: blockHash, output_idx: idx })
+        this.getClaims({ block_hash: blockHash, output_idx: idx }).map((x) =>
+          x.block
+        )
       ),
       propagationMask: 0,
 
@@ -182,24 +191,29 @@ export default class BlockService {
         () => [],
       ),
 
+      epochInclusionProofs: this.ctx.get(EpochInclusionProofService).popEips(
+        blockHash,
+      ),
+
       backtrace: new Error().stack,
     };
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
 
-    blockExt.inputs.forEach((input) => {
-      const verifier = this.get(input.block_hash)?.outputs[input.output_idx]
-        ?.verifier;
-      if (verifier) {
-        this.addSatisfies(blockExt, verifier);
+    blockExt.inputs.forEach((input, idx) => {
+      const parent = this.get(input.block_hash);
+      if (parent) {
+        this.linkBlocks(parent, blockExt, input.output_idx, idx);
       }
 
-      this.getClaims(input).push(blockExt);
+      this.getClaims(input).push({ block: blockExt, inputIdx: idx });
     });
 
     block.outputs.forEach(({ verifier, amount }, outputIdx) => {
       this.getClaims({ block_hash: blockHash, output_idx: outputIdx })
-        .forEach((block) => this.addSatisfies(block, verifier));
+        .forEach(({ block, inputIdx }) =>
+          this.linkBlocks(blockExt, block, outputIdx, inputIdx)
+        );
 
       this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
 
@@ -217,6 +231,10 @@ export default class BlockService {
         this.ctx.get(EpochContract).addInclusionHash(blockExt, outputIdx, hash);
       }
     });
+
+    blockExt.epochInclusionProofs.forEach((eip) =>
+      this.ctx.get(EpochInclusionProofService).propagate(blockExt, eip)
+    );
 
     // this.updateDerivedWork(blockExt);
 
@@ -255,21 +273,28 @@ export default class BlockService {
   }
 
   // This is called whenever an input becomes available
-  public addSatisfies(block: BlockExt, verifier: Verifier) {
+  private linkBlocks(
+    parent: BlockExt,
+    child: BlockExt,
+    parentOutputIdx: number,
+    childInputIdx: number,
+  ) {
+    const verifier = parent.outputs[parentOutputIdx].verifier;
+
     if (
-      block.inputs.every(({ block_hash }) => this.get(block_hash) !== undefined)
+      child.inputs.every(({ block_hash }) => this.get(block_hash) !== undefined)
     ) {
-      let inputSum = block.inputs.reduce(
+      let inputSum = child.inputs.reduce(
         (acc, { block_hash, output_idx }) =>
           acc + this.get(block_hash)!.outputs[output_idx].amount,
         0n,
       );
-      const outputSum = block.outputs.reduce(
+      const outputSum = child.outputs.reduce(
         (acc, { amount }) => acc + amount,
         0n,
       );
       if (
-        block.inputs.some(({ block_hash, output_idx }) =>
+        child.inputs.some(({ block_hash, output_idx }) =>
           Hash.equals(
             this.get(block_hash)!.outputs[output_idx].verifier.contract_hash,
             epochHash,
@@ -280,13 +305,13 @@ export default class BlockService {
       }
       if (inputSum !== outputSum) {
         throw new Error(
-          `Input sum (${inputSum}) does not equal the output sum (${outputSum}) for block ${block.hash.toHex()}`,
+          `Input sum (${inputSum}) does not equal the output sum (${outputSum}) for block ${child.hash.toHex()}`,
         );
       }
     }
 
     if (
-      block.verifiers.some((v2) =>
+      child.verifiers.some((v2) =>
         Hash.equals(verifier.contract_hash, v2.contract_hash) &&
         arrEquals(verifier.params, v2.params)
       )
@@ -294,18 +319,18 @@ export default class BlockService {
       return;
     }
 
-    block.verifiers.push(verifier);
+    child.verifiers.push(verifier);
 
     const verifierHash = Hash.digest(Verifier.encode(verifier));
 
     this.ctx.get(ExecutorLauncherService).enqueueVerification(
-      block,
+      child,
       verifier,
       0,
     );
 
     this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
-      cb(block)
+      cb(child)
     );
 
     // // Commented out because we're moving to out-of-block collateralizations
@@ -523,7 +548,7 @@ export default class BlockService {
     const canonicality = block.inputs.reduce((acc, input) => {
       const claims = this.getClaims(input);
       const maxCompetitorWork = Math.max(
-        ...claims.map((c) => c === block ? 0 : c.derivedWorkValue),
+        ...claims.map((c) => c.block === block ? 0 : c.block.derivedWorkValue),
       );
       const delta = block.derivedWorkValue - maxCompetitorWork;
       const inputBlock = this.blocksByHash.get(input.block_hash.toPrimitive());

@@ -27,8 +27,10 @@ export default class GraphUtils {
       inputs: [],
       outputs: [],
       body,
+      iceberg_depth: 0,
+      epoch_inclusion_proof: null,
       side: true,
-      isFreeMarket: true,
+      is_free_market: true,
       timestamp: BigInt(Date.now()),
     }));
   }
@@ -99,8 +101,10 @@ export default class GraphUtils {
               ).replace(/"hex2bin\(([0-9a-f]*)\)"/g, 'hex2bin("$1")')
             })`,
         ),
+      iceberg_depth: 0,
+      epoch_inclusion_proof: null,
       side: true,
-      isFreeMarket: true,
+      is_free_market: true,
       timestamp: BigInt(Date.now()),
     }));
   }

@@ -33,8 +33,10 @@ export default class IncentiveService {
       inputs: [],
       outputs: [{ verifier, amount: incentive }],
       body: new Uint8Array(),
+      iceberg_depth: 0,
+      epoch_inclusion_proof: null,
       side: true,
-      isFreeMarket: true,
+      is_free_market: true,
       timestamp: BigInt(this.ctx.config.timeProvider.now()),
     };
     this.ctx.get(BlockService).create(block);
