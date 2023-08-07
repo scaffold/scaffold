@@ -1,11 +1,12 @@
 import { MessageType } from '~/sbl/ConnectionService.ts';
 import Context from './Context.ts';
 import PacketCoder, { SIGNATURE_LENGTH } from '~/sbl/PacketCoder.ts';
-import { EpochInclusionProof } from '~/sbl/messages.ts';
+import { Block, EpochInclusionProof } from '~/sbl/messages.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import { BlockExt } from '~/sbl/BlockMeta.ts';
+import { Node } from './NodeService.ts';
 
 export default class EpochInclusionProofService {
   private pendingProofs = new Map<
@@ -15,17 +16,18 @@ export default class EpochInclusionProofService {
 
   constructor(private ctx: Context) {}
 
-  public popEips(blockHash: Hash) {
-    const eips = this.pendingProofs.get(blockHash.toPrimitive());
+  public popEips(block: BlockExt) {
+    const eips = this.pendingProofs.get(block.hash.toPrimitive());
     if (eips) {
-      this.pendingProofs.delete(blockHash.toPrimitive());
-      return eips;
-    } else {
-      return new Map();
+      this.pendingProofs.delete(block.hash.toPrimitive());
+      block.epochInclusionProofs = eips;
+      eips.forEach((proof) => this.propagate(block, proof));
     }
   }
 
-  public ingest(data: Uint8Array) {
+  public ingest(data: Uint8Array, fromNode: Node) {
+    // TODO: Save EIP signature so if we re-broadcast it, an incorrect proof doesn't count against us
+
     const signature = data.subarray(0, SIGNATURE_LENGTH);
     if (signature.byteLength !== SIGNATURE_LENGTH) {
       throw new Error(
@@ -42,6 +44,7 @@ export default class EpochInclusionProofService {
     const proof = EpochInclusionProof.decode(
       data.subarray(SIGNATURE_LENGTH + 1),
     );
+    fromNode.knownObjects.add(proof);
     this.addProof(proof);
   }
 
@@ -79,14 +82,23 @@ export default class EpochInclusionProofService {
   }
 
   public propagate(block: BlockExt, proof: EpochInclusionProof) {
+    if (block.iceberg_depth <= proof.input_indices.length) {
+      // No proof needed
+      return;
+    }
+
     const packet = this.ctx.get(PacketCoder).encode(
       proof,
       EpochInclusionProof,
       MessageType.EpochInclusionProof,
     );
 
-    block.fromNodes.forEach((node) => node.defaultConn?.sendReliable(packet));
-    block.toNodes.forEach((node) => node.defaultConn?.sendReliable(packet));
+    [...block.fromNodes, ...block.toNodes].forEach((node) => {
+      if (!node.knownObjects.has(proof)) {
+        node.knownObjects.add(proof);
+        node.defaultConn?.sendReliable(packet);
+      }
+    });
 
     block.inputs.forEach(({ block_hash }, idx) =>
       this.addProof({

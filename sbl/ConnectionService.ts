@@ -232,12 +232,13 @@ export default class ConnectionService {
                 BlockSource.Remote,
               );
               if (block) {
+                conn!.node.knownObjects.add(block);
                 block.fromNodes.push(conn!.node);
               }
             }
             break;
           case MessageType.EpochInclusionProof:
-            this.ctx.get(EpochInclusionProofService).ingest(data);
+            this.ctx.get(EpochInclusionProofService).ingest(data, conn!.node);
             break;
           case MessageType.BridgeStart:
             console.warn(`Got unhandled message type: BridgeStart`);

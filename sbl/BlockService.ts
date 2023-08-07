@@ -168,6 +168,8 @@ export default class BlockService {
       fromNodes: [],
       toNodes: [],
 
+      isEpoch: false,
+
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.Null,
       derivedWork: 0,
@@ -193,14 +195,14 @@ export default class BlockService {
         () => [],
       ),
 
-      epochInclusionProofs: this.ctx.get(EpochInclusionProofService).popEips(
-        blockHash,
-      ),
+      epochInclusionProofs: new Map(),
 
       backtrace: new Error().stack,
     };
     const blockExt = Object.assign(block, meta);
     this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
+
+    this.ctx.get(EpochInclusionProofService).popEips(blockExt);
 
     blockExt.inputs.forEach((input, idx) => {
       const parent = this.get(input.block_hash);
@@ -267,7 +269,8 @@ export default class BlockService {
 
   public publish(block: BlockExt) {
     this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (!block.fromNodes.includes(node) && !block.toNodes.includes(node)) {
+      if (!node.knownObjects.has(block)) {
+        node.knownObjects.add(block);
         block.toNodes.push(node);
         node.defaultConn?.sendReliable(block.data);
       }

@@ -50,7 +50,8 @@ export interface BlockMeta {
   fromNodes: Node[];
   toNodes: Node[];
 
-  // block: Block;
+  isEpoch: boolean;
+
   receivedTimestamp: number;
   flags: BlockFlag;
   // derivedWork: bigint;

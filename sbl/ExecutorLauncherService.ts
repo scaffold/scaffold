@@ -263,6 +263,8 @@ export default class ExecutorLauncherService {
 
     // Special case for epoch blocks; we need to send the epoch inclusion proof to all inputs
     if (Hash.equals(verifier.contract_hash, epochHash)) {
+      blockExt.isEpoch = true;
+
       this.ctx.get(EpochInclusionProofService).updateProof(
         blockExt.epochInclusionProofs,
         {
