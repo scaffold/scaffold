@@ -1,5 +1,7 @@
 import Hash from './util/Hash.ts';
 
+export const zeroHash = Hash.fromLiteral32(0);
+
 const SBL = Hash.fromLiteralStr('SBL'.padEnd(32, '\0'));
 
 export const rootHash = Hash.xor(SBL, Hash.fromLiteralStr('root'));

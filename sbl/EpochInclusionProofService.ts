@@ -1,6 +1,6 @@
 import { MessageType } from '~/sbl/ConnectionService.ts';
 import Context from './Context.ts';
-import { SIGNATURE_LENGTH } from '~/sbl/PacketCoder.ts';
+import PacketCoder, { SIGNATURE_LENGTH } from '~/sbl/PacketCoder.ts';
 import { EpochInclusionProof } from '~/sbl/messages.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
@@ -8,7 +8,10 @@ import { getOrCreate } from '~/sbl/util/map.ts';
 import { BlockExt } from '~/sbl/BlockMeta.ts';
 
 export default class EpochInclusionProofService {
-  private pendingProofs = new Map<HashPrimitive, EpochInclusionProof[]>();
+  private pendingProofs = new Map<
+    HashPrimitive,
+    Map<HashPrimitive, EpochInclusionProof>
+  >();
 
   constructor(private ctx: Context) {}
 
@@ -18,7 +21,7 @@ export default class EpochInclusionProofService {
       this.pendingProofs.delete(blockHash.toPrimitive());
       return eips;
     } else {
-      return [];
+      return new Map();
     }
   }
 
@@ -36,26 +39,61 @@ export default class EpochInclusionProofService {
       );
     }
 
-    const eip = EpochInclusionProof.decode(data.subarray(SIGNATURE_LENGTH + 1));
-    const block = this.ctx.get(BlockService).get(eip.block_hash);
+    const proof = EpochInclusionProof.decode(
+      data.subarray(SIGNATURE_LENGTH + 1),
+    );
+    this.addProof(proof);
+  }
+
+  public addProof(proof: EpochInclusionProof) {
+    const block = this.ctx.get(BlockService).get(proof.block_hash);
     if (block) {
-      block.epochInclusionProofs.push(eip);
-      this.propagate(block, eip);
+      this.updateProof(block.epochInclusionProofs, proof, block);
     } else {
-      getOrCreate(this.pendingProofs, eip.block_hash.toPrimitive(), () => [])
-        .push(eip);
+      this.updateProof(
+        getOrCreate(
+          this.pendingProofs,
+          proof.block_hash.toPrimitive(),
+          () => new Map(),
+        ),
+        proof,
+      );
     }
   }
 
-  public propagate(block: BlockExt, eip: EpochInclusionProof) {
+  public updateProof(
+    map: Map<HashPrimitive, EpochInclusionProof>,
+    proof: EpochInclusionProof,
+    block?: BlockExt,
+  ) {
+    const prev = map.get(proof.epoch_hash.toPrimitive());
     if (
-      block.epochInclusionProofs.some((candidate) =>
-        Hash.equals(candidate.epoch_hash, eip.epoch_hash) &&
-        candidate.input_indices.length < eip.input_indices.length
-      )
+      prev === undefined ||
+      proof.input_indices.length < prev.input_indices.length
     ) {
-      return;
+      map.set(proof.epoch_hash.toPrimitive(), proof);
+      if (block) {
+        this.propagate(block, proof);
+      }
     }
-    block.inputs.forEach();
+  }
+
+  public propagate(block: BlockExt, proof: EpochInclusionProof) {
+    const packet = this.ctx.get(PacketCoder).encode(
+      proof,
+      EpochInclusionProof,
+      MessageType.EpochInclusionProof,
+    );
+
+    block.fromNodes.forEach((node) => node.defaultConn?.sendReliable(packet));
+    block.toNodes.forEach((node) => node.defaultConn?.sendReliable(packet));
+
+    block.inputs.forEach(({ block_hash }, idx) =>
+      this.addProof({
+        block_hash,
+        epoch_hash: proof.epoch_hash,
+        input_indices: [...proof.input_indices, idx],
+      })
+    );
   }
 }

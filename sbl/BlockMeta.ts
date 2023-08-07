@@ -4,7 +4,7 @@ import {
   EpochInclusionProof,
   Verifier,
 } from './messages.ts';
-import Hash from './util/Hash.ts';
+import Hash, { HashPrimitive } from './util/Hash.ts';
 import { Node } from './NodeService.ts';
 
 export const enum BlockFlag {
@@ -47,7 +47,8 @@ export interface BlockMeta {
 
   verifiers: Verifier[];
 
-  from: Node[];
+  fromNodes: Node[];
+  toNodes: Node[];
 
   // block: Block;
   receivedTimestamp: number;
@@ -75,7 +76,8 @@ export interface BlockMeta {
   // postedCollateral: BlockExt[];
   passedVerification?: boolean;
 
-  epochInclusionProofs: EpochInclusionProof[];
+  // Map from an epoch hash to the best proof from it
+  epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
 
   backtrace?: string;
 }

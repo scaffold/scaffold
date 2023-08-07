@@ -232,7 +232,7 @@ export default class ConnectionService {
                 BlockSource.Remote,
               );
               if (block) {
-                block.from.push(conn!.node);
+                block.fromNodes.push(conn!.node);
               }
             }
             break;

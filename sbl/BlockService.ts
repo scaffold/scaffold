@@ -18,6 +18,7 @@ import {
   BlockSet,
   CollateralContractParams,
   EpochInclusionParams,
+  EpochInclusionProof,
   Verifier,
 } from './messages.ts';
 import NodeService from './NodeService.ts';
@@ -164,7 +165,8 @@ export default class BlockService {
 
       verifiers: [],
 
-      from: [],
+      fromNodes: [],
+      toNodes: [],
 
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.Null,
@@ -265,8 +267,8 @@ export default class BlockService {
 
   public publish(block: BlockExt) {
     this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (!node.knownBlocks.has(block.hash.toPrimitive())) {
-        node.knownBlocks.add(block.hash.toPrimitive());
+      if (!block.fromNodes.includes(node) && !block.toNodes.includes(node)) {
+        block.toNodes.push(node);
         node.defaultConn?.sendReliable(block.data);
       }
     });

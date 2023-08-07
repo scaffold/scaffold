@@ -25,6 +25,7 @@ import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
 import PacketCoder from '~/sbl/PacketCoder.ts';
 import { MessageType } from '~/sbl/ConnectionService.ts';
+import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 
 const secret = secp.etc.randomBytes(32);
 
@@ -254,6 +255,7 @@ export default class ExecutorLauncherService {
       })),
       body: data,
     }, [verifier]);
+
     const blockExt = this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
@@ -261,16 +263,14 @@ export default class ExecutorLauncherService {
 
     // Special case for epoch blocks; we need to send the epoch inclusion proof to all inputs
     if (Hash.equals(verifier.contract_hash, epochHash)) {
-      block.inputs.forEach(({ block_hash }, idx) =>
-        this.ctx.get(BlockService).get(block_hash)?.from.forEach((node) =>
-          node.defaultConn?.sendReliable(
-            this.ctx.get(PacketCoder).encode(
-              { block_hash, epoch_hash: blockExt.hash, input_indices: [idx] },
-              EpochInclusionProof,
-              MessageType.EpochInclusionProof,
-            ),
-          )
-        )
+      this.ctx.get(EpochInclusionProofService).updateProof(
+        blockExt.epochInclusionProofs,
+        {
+          block_hash: blockExt.hash,
+          epoch_hash: blockExt.hash,
+          input_indices: [],
+        },
+        blockExt,
       );
     }
 
