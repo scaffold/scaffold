@@ -3,7 +3,7 @@ import * as path from 'std-latest/path/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
-import { serve } from 'std-fix-abortable/http/mod.ts';
+import { serve } from 'std-latest/http/mod.ts';
 import {
   ConnectionProvider,
   ProtocolProvider,
