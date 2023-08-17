@@ -29,6 +29,7 @@ import JsonView from './JsonView.tsx';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
 import EpochService from '~/sbl/EpochService.ts';
+import LitigationService from '~/sbl/LitigationService.ts';
 
 // QJS
 // const initialContractHex =
@@ -141,6 +142,21 @@ export default () => {
       >
         New Game
       </a>
+      <br />
+
+      <button
+        onClick={() => {
+          const badBlock = client.ctx.get(BlockService).create(
+            client.ctx.get(BlockBuilder).emit({ body: str2bin('abc') }, [{
+              contract_hash: constants.rootHash,
+              params: Hash.random().toBytes(),
+            }]),
+          );
+          client.ctx.get(LitigationService).litigateBlock(badBlock, true);
+        }}
+      >
+        Publish bad block
+      </button>
 
       <br />
       <select

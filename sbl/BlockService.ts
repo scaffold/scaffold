@@ -1,11 +1,4 @@
-import {
-  BlockCollateralization,
-  BlockExt,
-  BlockFlag,
-  BlockMeta,
-  BlockSource,
-} from './BlockMeta.ts';
-import { MessageType } from './ConnectionService.ts';
+import { BlockCollateralization, BlockFlag, BlockMeta } from './BlockMeta.ts';
 import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
@@ -27,6 +20,14 @@ import QaDebugger from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
+import {
+  BlockFact,
+  Fact,
+  FactBase,
+  FactSource,
+  FactType,
+} from '~/sbl/FactMeta.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -37,16 +38,15 @@ interface CollateralSummary {
   postedAmountAgainst: bigint;
   implicitAmountAgainst: bigint;
   ledger: BlockCollateralization[];
-  resolver?: BlockExt;
+  resolver?: BlockFact;
 }
 
 export const CHALLENGE_PRICE = 10n;
 
 export default class BlockService {
-  private blocksByHash = new Map<HashPrimitive, BlockExt>();
   private claimsByOutput = new Map<
     HashPrimitive,
-    { block: BlockExt; inputIdx: number }[]
+    { block: BlockFact; inputIdx: number }[]
   >();
   private collateralByBlockHash = new Map<
     HashPrimitive,
@@ -55,11 +55,11 @@ export default class BlockService {
 
   private onNewBlockListeners = new Map<
     HashPrimitive, // Key is verifier hash
-    ((block: BlockExt) => void)[]
+    ((block: BlockFact) => void)[]
   >();
   private onCanonicalBlockListeners = new Map<
     HashPrimitive,
-    ((block: BlockExt) => void)[]
+    ((block: BlockFact) => void)[]
   >();
   private onCanonicalBodyListeners = new Map<
     HashPrimitive,
@@ -77,65 +77,45 @@ export default class BlockService {
   // Ingest
   // Publish?
 
-  public create(block: Block, publish = true, immortalize = false): BlockExt {
+  public create(block: Block, publish = true, immortalize = false): BlockFact {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
     // Sign, publish, ingest, return hash
 
-    const data = this.ctx.get(PacketCoder).encode(
-      block,
-      Block,
-      MessageType.Block,
-    );
+    const data = this.ctx.get(PacketCoder).encode(block, Block, FactType.Block);
 
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
-    const blockExt = this.ingest(data, BlockSource.Local);
-
-    if (blockExt === undefined) {
-      throw new Error(`Invalid block provided (maybe bad timestamp)?`);
+    const fact = this.ctx.get(IngestionService).ingest(
+      data,
+      FactSource.Local,
+      this.ctx.get(NodeService).getSelfNode(),
+    );
+    if (fact.type !== FactType.Block) {
+      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
     }
 
     if (publish) {
-      this.publish(blockExt);
+      this.publish(fact);
     }
 
-    return blockExt;
+    return fact;
   }
 
-  // TODO: Test that whatever order we ingest blocks, it all ends up the same
-  public ingest(data: Uint8Array, source: BlockSource): BlockExt | undefined {
-    const blockHash = Hash.digest(data);
-    if (this.blocksByHash.has(blockHash.toPrimitive())) {
-      return this.blocksByHash.get(blockHash.toPrimitive());
-    }
-
-    const signature = data.subarray(0, SIGNATURE_LENGTH);
-    if (signature.byteLength !== SIGNATURE_LENGTH) {
-      throw new Error(
-        `Signature length (${signature.byteLength}) is not exactly ${SIGNATURE_LENGTH}`,
-      );
-    }
-
-    if (data[SIGNATURE_LENGTH] !== MessageType.Block) {
-      throw new Error(
-        `Cannot ingest non-block (${data[SIGNATURE_LENGTH]}) as a block`,
-      );
-    }
-
-    const block = Block.decode(data.subarray(SIGNATURE_LENGTH + 1));
+  public createFact(base: FactBase): BlockFact {
+    const block = Block.decode(base.data.subarray(SIGNATURE_LENGTH + 1));
 
     if (block.timestamp > BigInt(this.ctx.config.timeProvider.now())) {
       this.ctx.get(Logger).info('discarding_block', {
-        blockHash,
-        signature,
+        hash: base.hash,
+        signature: base.signature,
         block,
         now: BigInt(this.ctx.config.timeProvider.now()),
       });
-      return;
+      throw new Error(`Discarding block because the timestamp is too late`);
     }
 
     this.ctx.get(Logger).info('ingesting_block', {
-      blockHash,
+      hash: base.hash,
       block,
       verifiers: block.inputs.map((input) => {
         const inBlock = this.get(input.block_hash);
@@ -155,18 +135,7 @@ export default class BlockService {
     // console.log(block);
 
     const meta: BlockMeta = {
-      hash: blockHash,
-      nonce: Math.random(),
-
-      source,
-
-      data,
-      signature,
-
       verifiers: [],
-
-      fromNodes: [],
-      toNodes: [],
 
       isEpoch: false,
 
@@ -175,7 +144,7 @@ export default class BlockService {
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map((_, idx) =>
-        this.getClaims({ block_hash: blockHash, output_idx: idx }).map((x) =>
+        this.getClaims({ block_hash: base.hash, output_idx: idx }).map((x) =>
           x.block
         )
       ),
@@ -191,32 +160,31 @@ export default class BlockService {
 
       collateralizations: getOrCreate(
         this.collateralByBlockHash,
-        blockHash.toPrimitive(),
+        base.hash.toPrimitive(),
         () => [],
       ),
 
       epochInclusionProofs: new Map(),
-
-      backtrace: new Error().stack,
     };
-    const blockExt = Object.assign(block, meta);
-    this.blocksByHash.set(blockHash.toPrimitive(), blockExt);
+    const fact: BlockFact = Object.assign(base, block, meta, {
+      type: FactType.Block as const,
+    });
 
-    this.ctx.get(EpochInclusionProofService).popEips(blockExt);
+    this.ctx.get(EpochInclusionProofService).popEips(fact);
 
-    blockExt.inputs.forEach((input, idx) => {
+    fact.inputs.forEach((input, idx) => {
       const parent = this.get(input.block_hash);
       if (parent) {
-        this.linkBlocks(parent, blockExt, input.output_idx, idx);
+        this.linkBlocks(parent, fact, input.output_idx, idx);
       }
 
-      this.getClaims(input).push({ block: blockExt, inputIdx: idx });
+      this.getClaims(input).push({ block: fact, inputIdx: idx });
     });
 
     block.outputs.forEach(({ verifier, amount }, outputIdx) => {
-      this.getClaims({ block_hash: blockHash, output_idx: outputIdx })
+      this.getClaims({ block_hash: base.hash, output_idx: outputIdx })
         .forEach(({ block, inputIdx }) =>
-          this.linkBlocks(blockExt, block, outputIdx, inputIdx)
+          this.linkBlocks(fact, block, outputIdx, inputIdx)
         );
 
       this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
@@ -227,26 +195,26 @@ export default class BlockService {
           this.collateralByBlockHash,
           params.block_hash.toPrimitive(),
           () => [],
-        ).push({ block: blockExt, params, amountDelta: amount, outputIdx });
+        ).push({ block: fact, params, amountDelta: amount, outputIdx });
       }
 
       if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
         const { hash } = EpochInclusionParams.decode(verifier.params);
-        this.ctx.get(EpochContract).addInclusionHash(blockExt, outputIdx, hash);
+        this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
       }
     });
 
-    blockExt.epochInclusionProofs.forEach((eip) =>
-      this.ctx.get(EpochInclusionProofService).propagate(blockExt, eip)
+    fact.epochInclusionProofs.forEach((eip) =>
+      this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
     );
 
-    // this.updateDerivedWork(blockExt);
+    // this.updateDerivedWork(fact);
 
     // const samples = PoissonDistribution.sample(
-    //   Number(this.getWork(blockExt)) * this.getSamplesPerWork(),
+    //   Number(this.getWork(fact)) * this.getSamplesPerWork(),
     // );
     // if (samples > 0) {
-    //   this.ctx.get(DerivedWorkService).addSample(blockExt);
+    //   this.ctx.get(DerivedWorkService).addSample(fact);
     // }
 
     // try {
@@ -264,10 +232,10 @@ export default class BlockService {
 
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
-    return blockExt;
+    return fact;
   }
 
-  public publish(block: BlockExt) {
+  public publish(block: BlockFact) {
     this.ctx.get(NodeService).getAll().forEach((node) => {
       if (!node.knownObjects.has(block)) {
         node.knownObjects.add(block);
@@ -279,8 +247,8 @@ export default class BlockService {
 
   // This is called whenever an input becomes available
   private linkBlocks(
-    parent: BlockExt,
-    child: BlockExt,
+    parent: BlockFact,
+    child: BlockFact,
     parentOutputIdx: number,
     childInputIdx: number,
   ) {
@@ -362,11 +330,11 @@ export default class BlockService {
     // );
   }
 
-  public linkNewAncestor(parent: BlockExt, child: BlockExt) {}
+  public linkNewAncestor(parent: BlockFact, child: BlockFact) {}
 
-  public linkNewDescendant(parent: BlockExt, child: BlockExt) {}
+  public linkNewDescendant(parent: BlockFact, child: BlockFact) {}
 
-  // public getCollateralOutput(block: BlockExt, ancestorOutputIdx?: number) {
+  // public getCollateralOutput(block: BlockFact, ancestorOutputIdx?: number) {
   //   let res: { idx: number; params: CollateralContractParams } | undefined;
 
   //   block.outputs.forEach(({ verifier }, idx) => {
@@ -414,17 +382,17 @@ export default class BlockService {
 
   // Jackpot. Easy. ClaimFailingVerifier after timeout.
 
-  // public getCollateral(block: BlockExt): CollateralSummary {
+  // public getCollateral(block: BlockFact): CollateralSummary {
   //   let ancestorOutputIdx: number | undefined;
   //   let postedAmountFor = 0n;
   //   let postedAmountAgainst = 0n;
   //   const ledger: {
-  //     block: BlockExt;
+  //     block: BlockFact;
   //     params: CollateralContractParams;
   //     amountDelta: bigint;
   //     outputIdx: number;
   //   }[] = [];
-  //   let resolver: BlockExt | undefined;
+  //   let resolver: BlockFact | undefined;
 
   //   while (true) {
   //     const output = this.getCollateralOutput(block, ancestorOutputIdx);
@@ -514,7 +482,7 @@ export default class BlockService {
   //   };
   // }
 
-  public getCollateral(block: BlockExt): CollateralSummary {
+  public getCollateral(block: BlockFact): CollateralSummary {
     const ledger =
       (this.collateralByBlockHash.get(block.hash.toPrimitive()) || []).sort(
         (a, b) => Number(a.block.timestamp - b.block.timestamp),
@@ -529,7 +497,7 @@ export default class BlockService {
         postedAmountAgainst += x.amountDelta;
       }
     });
-    let resolver: BlockExt | undefined;
+    let resolver: BlockFact | undefined;
 
     if (ledger.length && !ledger[0].params.valid) {
       throw new Error(`Initial collateral posting is against!`);
@@ -546,7 +514,7 @@ export default class BlockService {
       resolver,
     };
   }
-  public updateCanonicality(block: BlockExt, someInputCanonicality?: boolean) {
+  public updateCanonicality(block: BlockFact, someInputCanonicality?: boolean) {
     // Note that we consider missing inputs as canonical.
     // We also short-circuit if an input canonicality is false, which is a common case.
 
@@ -556,7 +524,7 @@ export default class BlockService {
         ...claims.map((c) => c.block === block ? 0 : c.block.derivedWorkValue),
       );
       const delta = block.derivedWorkValue - maxCompetitorWork;
-      const inputBlock = this.blocksByHash.get(input.block_hash.toPrimitive());
+      const inputBlock = this.get(input.block_hash);
       const inputCanonicality = inputBlock === undefined
         ? delta
         : Math.min(delta, inputBlock.canonicality);
@@ -581,14 +549,14 @@ export default class BlockService {
     }
 
     for (const { block_hash } of block.inputs) {
-      const input = this.blocksByHash.get(block_hash.toPrimitive());
+      const input = this.get(block_hash);
       if (input !== undefined) {
         this.updateCollateral(input);
       }
     }
   }
 
-  public updateCollateral(block: BlockExt) {
+  public updateCollateral(block: BlockFact) {
     block.collateral = block.outputs.reduce(
       (acc, { amount }, idx) =>
         amount > 0n
@@ -607,16 +575,15 @@ export default class BlockService {
     );
   }
 
-  public updateDerivedWork(block: BlockExt) {
+  public updateDerivedWork(block: BlockFact) {
     let sum = Number(this.getWork(block));
 
     for (const claims of block.outputClaims) {
       for (const outputBlock of claims) {
         if (outputBlock.canonicality > 0) {
           sum += outputBlock.derivedWorkValue /
-            outputBlock.inputs.filter(({ block_hash }) =>
-              this.blocksByHash.get(block_hash.toPrimitive())
-            ).length;
+            outputBlock.inputs.filter(({ block_hash }) => this.get(block_hash))
+              .length;
         }
       }
     }
@@ -632,7 +599,7 @@ export default class BlockService {
     block.derivedWorkError = 0;
 
     const knownInputs = block.inputs
-      .map(({ block_hash }) => this.blocksByHash.get(block_hash.toPrimitive()))
+      .map(({ block_hash }) => this.get(block_hash))
       .filter(Boolean);
     const errInc = err / knownInputs.length;
     for (const input of knownInputs) {
@@ -652,13 +619,13 @@ export default class BlockService {
     this.updateLogMergeableProbability(block);
   }
 
-  public updateLogMergeableProbability(block: BlockExt) {
+  public updateLogMergeableProbability(block: BlockFact) {
     // Commented out because I think a canonicality bool is fine
 
     /*
     let sum = 0;
     for (const { block_hash, amount } of block.inputs) {
-      const inBlock = this.blocksByHash.get(block_hash.toPrimitive());
+      const inBlock = this.get(block_hash);
       if (inBlock) {
         const idx = inBlock.outputs.findIndex((o) =>
           Hash.equals(
@@ -728,7 +695,7 @@ export default class BlockService {
     );
   }
 
-  public getWork(block: Block | BlockSet) {
+  public getWork(block: Block) {
     return block.outputs.reduce((acc, { amount }) => acc + amount, 1n);
   }
 
@@ -742,10 +709,10 @@ export default class BlockService {
     return 0.1;
   }
 
-  private calculateMergeableProbability(block: BlockExt) {
+  private calculateMergeableProbability(block: BlockFact) {
     let prob = 1;
     for (const { block_hash, output_idx } of block.inputs) {
-      const inBlock = this.blocksByHash.get(block_hash.toPrimitive());
+      const inBlock = this.get(block_hash);
       if (inBlock) {
         const claims = inBlock.outputClaims[output_idx];
         const total = claims.reduce((acc, cur) => acc + cur.derivedWork, 0);
@@ -755,7 +722,7 @@ export default class BlockService {
     return prob;
   }
 
-  private calculateDerivedWork(block: BlockExt) {
+  private calculateDerivedWork(block: BlockFact) {
     let res = 0;
     for (const output of block.outputClaims) {
       for (const claim of output) {
@@ -766,10 +733,14 @@ export default class BlockService {
     // return BigInt(res) - BigInt(block.receivedTimestamp);
   }
 
-  public get(hash: Hash) {
+  public get(hash: Hash): BlockFact | undefined {
+    // TODO: Instead of calling this, call into IngestionService
     // TODO: Incentivize network as well
 
-    return this.blocksByHash.get(hash.toPrimitive());
+    const fact = this.ctx.get(IngestionService).get(hash);
+    if (fact?.type === FactType.Block) {
+      return fact;
+    }
 
     // return new Promise<Block>((resolve) => {
     //   const observer = StoreObserver.get(this.ctx.get(BlockStore));
@@ -824,12 +795,12 @@ export default class BlockService {
     );
   }
 
-  public onNewBlock(verifier: Verifier, cb: (block: BlockExt) => void) {
+  public onNewBlock(verifier: Verifier, cb: (block: BlockFact) => void) {
     const verifierHash = Hash.digest(Verifier.encode(verifier));
     getOrCreate(this.onNewBlockListeners, verifierHash.toPrimitive(), () => [])
       .push(cb);
   }
-  public offNewBlock(verifier: Verifier, cb: (block: BlockExt) => void) {
+  public offNewBlock(verifier: Verifier, cb: (block: BlockFact) => void) {
     const verifierHash = Hash.digest(Verifier.encode(verifier));
     const listeners = getOrCreate(
       this.onNewBlockListeners,

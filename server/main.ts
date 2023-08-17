@@ -19,12 +19,17 @@ import CollatzContract from '../graph/CollatzContract.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import GraphUtils from '../sbl/GraphUtils.ts';
 import { error } from '../sbl/util/functional.ts';
-import { bin2str } from '../sbl/pathUtils.ts';
+import { bin2str, str2bin } from '../sbl/pathUtils.ts';
 import LocalGeneratorService, {
   LocalGenerator,
 } from '../sbl/LocalGeneratorService.ts';
 import { epochStartTime } from '~/server/epochStartTime.ts';
 import EpochService from '~/sbl/EpochService.ts';
+import BlockBuilder from '~/sbl/BlockBuilder.ts';
+import { accountHash, rootHash } from '~/sbl/constants.ts';
+import LitigationService from '~/sbl/LitigationService.ts';
+import { AccountContractParams } from '~/sbl/messages.ts';
+import KeyService from '~/sbl/KeyService.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -232,6 +237,24 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
 // ctx.get(CollatzContract).get();
 
 // ctx.get(EpochService);
+
+[
+  ctx.get(KeyService).getSelfPublicKey(),
+  hex2bin('02c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c679'),
+].forEach((publicKey) =>
+  ctx.get(BlockService).create(
+    ctx.get(BlockBuilder).emit({
+      outputs: [{
+        verifier: {
+          contract_hash: accountHash,
+          params: AccountContractParams.encode({ public_key: publicKey }),
+        },
+        amount: 1000000n,
+      }],
+      body: new Uint8Array([]),
+    }, []),
+  )
+);
 
 const itvl = setInterval(() => {
   // const blocks = [...ctx.get(BlockRegistry).debugGetAll().entries()].map((

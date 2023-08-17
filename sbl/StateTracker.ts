@@ -1,3 +1,4 @@
+import { BlockExt } from '~/sbl/BlockMeta.ts';
 import Context from './Context.ts';
 import FetchService from './FetchService.ts';
 import IncentiveService from './IncentiveService.ts';
@@ -6,10 +7,10 @@ import Hash from './util/Hash.ts';
 import StateTrackerUtil from './util/StateTracker.ts';
 import StoreObserver from './util/StoreObserver.ts';
 
-export default class StateTracker extends StateTrackerUtil<Verifier, Block> {
+export default class StateTracker extends StateTrackerUtil<Verifier, BlockExt> {
   constructor(private ctx: Context) {
     super(
-      (verifier: Verifier, onState: (state: Block) => void) =>
+      (verifier: Verifier, onState: (state: BlockExt) => void) =>
         this.ctx.get(FetchService).fetch(
           verifier,
           { internalIncentive: 10n },

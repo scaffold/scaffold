@@ -29,7 +29,7 @@ export default class SpecialContractManager {
   private entries = new Map<HashPrimitive, SpecialContract>();
 
   constructor(private ctx: Context) {
-    // this.addSpecial(rootHash, RootContract);
+    this.addSpecial(rootHash, RootContract);
     // this.addSpecial(dataHash, DataContract);
     // this.addSpecial(collateralHash, CollateralContract);
     // this.addSpecial(accountHash, AccountContract);

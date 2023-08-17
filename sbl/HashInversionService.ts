@@ -12,14 +12,14 @@ export default class HashInversionService {
   }
 
   public invert(hash: Hash) {
-    const block = this.ctx.get(BlockService).get(hash);
-    if (block) {
-      return block.data;
-    }
-
     const data = this.datas.get(hash.toPrimitive());
     if (data) {
       return data;
+    }
+
+    const block = this.ctx.get(BlockService).get(hash);
+    if (block) {
+      return block.data;
     }
   }
 }

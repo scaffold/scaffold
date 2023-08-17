@@ -17,6 +17,7 @@ import Logger from './Logger.ts';
 
 export default class BlockBuilder {
   private selfAccountVerifier: Verifier;
+
   constructor(private ctx: Context) {
     this.selfAccountVerifier = {
       contract_hash: accountHash,
@@ -111,10 +112,8 @@ export default class BlockBuilder {
     if (difference > 0n) {
       outputs.push({ verifier: this.selfAccountVerifier, amount: difference });
     } else if (difference < 0n) {
-      outputs.push({
-        verifier: { contract_hash: trueHash, params: new Uint8Array([]) },
-        amount: difference,
-      });
+      // TODO: Only output what we actually have
+      throw new Error('INSUFFICIENT_COINS');
     }
 
     // TODO: Can bundle multiple blocks without bodies

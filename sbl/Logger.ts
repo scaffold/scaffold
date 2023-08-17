@@ -82,7 +82,11 @@ export default class Logger {
 
   public serialize(obj: any, n = 2, maxStrLen = 64): string {
     // val = sortKeys(val);
-    return JSON.stringify(obj, (_key, val) => {
+    return JSON.stringify(obj, (key, val) => {
+      if (key === 'defaultConn') {
+        return;
+      }
+
       if (typeof val === 'bigint') {
         return trim(val.toString(), maxStrLen);
       } else if (typeof val === 'string') {

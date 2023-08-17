@@ -6,6 +6,7 @@ import {
 } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { Node } from './NodeService.ts';
+import { BlockMessage } from '~/sbl/MessageMeta.ts';
 
 export const enum BlockFlag {
   Null = 0,
@@ -23,33 +24,17 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
-export const enum BlockSource {
-  Bootstrap,
-  Local,
-  Remote,
-}
-
 export interface BlockCollateralization {
-  block: BlockExt;
+  block: BlockMessage;
   params: CollateralContractParams;
   amountDelta: bigint;
   outputIdx: number;
 }
 
 export interface BlockMeta {
-  hash: Hash;
-  nonce: number;
-
-  source: BlockSource;
-
-  data: Uint8Array;
-  signature: Uint8Array;
-
   verifiers: Verifier[];
 
-  fromNodes: Node[];
-  toNodes: Node[];
-
+  // TODO: Store epoch idx and/or canonicality?
   isEpoch: boolean;
 
   receivedTimestamp: number;
@@ -57,7 +42,7 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
-  outputClaims: BlockExt[][];
+  outputClaims: BlockMessage[][];
 
   propagationMask: number;
 
@@ -73,14 +58,10 @@ export interface BlockMeta {
   collateral: number; // TODO: bigint?
 
   collateralizations: BlockCollateralization[];
-  // collateralChain: BlockExt[];
-  // postedCollateral: BlockExt[];
+  // collateralChain: BlockMessage[];
+  // postedCollateral: BlockMessage[];
   passedVerification?: boolean;
 
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
-
-  backtrace?: string;
 }
-
-export type BlockExt = Block & BlockMeta;

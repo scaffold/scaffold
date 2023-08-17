@@ -1,5 +1,5 @@
-import { MessageType } from './ConnectionService.ts';
 import Context from './Context.ts';
+import { MessageType } from '~/sbl/MessageMeta.ts';
 import { Coder } from './messages.ts';
 import Hash from './util/Hash.ts';
 import secp from './util/secp.ts';
@@ -36,9 +36,5 @@ export default class PacketCoder {
     data.set(sig, 0);
 
     return data;
-  }
-
-  public getTypeIdx(data: Uint8Array) {
-    return data[SIGNATURE_LENGTH] as MessageType;
   }
 }

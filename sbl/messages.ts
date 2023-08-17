@@ -171,7 +171,7 @@ export const registry = {
       // { name: 'amount', type: 'long' },
 
       { name: 'block_hash', type: 'Hash' },
-      // TODO: Array?
+      // TODO: Array? Or add a refs array to the block?
       { name: 'output_idx', type: 'int' }, // -1 if we're not claiming any output
     ],
   },
@@ -205,7 +205,7 @@ export const registry = {
     name: 'Block',
     type: 'record',
     fields: [
-      // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically claims with zero amount
+      // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically inputs with zero amount
       // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
@@ -214,6 +214,7 @@ export const registry = {
 
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
+      // TODO: Move this to BlockInput?
       { name: 'body', type: 'bytes' },
 
       { name: 'iceberg_depth', type: 'int' },
@@ -233,23 +234,65 @@ export const registry = {
     // A block implicitly adds collateral to the data availability contracts of all input/output/verifier.contract_hash hashes
     // Maybe put the verifier on the collateral claim?
   },
+  BlockSetTreeEmpty: {
+    name: 'BlockSetTreeEmpty',
+    type: 'record',
+    fields: [],
+  },
+  BlockSetTreeBranch: {
+    name: 'BlockSetTreeBranch',
+    type: 'record',
+    fields: [
+      { name: 'left_child', type: ['null', 'Hash'] },
+      { name: 'right_child', type: ['null', 'Hash'] },
+    ],
+  },
+  BlockSetTreeIo: {
+    name: 'BlockSetTreeIo',
+    type: 'record',
+    fields: [
+      { name: 'block_hash', type: 'Hash' },
+      { name: 'output_idx', type: 'int' },
+      { name: 'amount', type: 'long' },
+    ],
+  },
+  BlockSetTreeLeaf: {
+    name: 'BlockSetTreeLeaf',
+    type: 'record',
+    fields: [
+      { name: 'verifier_hash', type: 'Hash' },
+      { name: 'ios', type: { type: 'array', items: 'BlockSetTreeIo' } },
+    ],
+  },
+  BlockSetTreeNode: {
+    name: 'BlockSetTreeNode',
+    type: 'record',
+    fields: [
+      // TODO: Use Verkle trees
+      // https://vitalik.ca/general/2021/06/18/verkle.html
+      {
+        name: 'node',
+        type: [
+          'BlockSetTreeEmpty',
+          'BlockSetTreeBranch',
+          'BlockSetTreeLeaf',
+        ],
+      },
+    ],
+  },
   BlockSet: {
-    // BlockSets are only useful if a peer has all input & frontier blocks.
-    // When you sign a BlockSet, you are saying that you have all inner BlockSets or can provide signatures of someone who does.
     name: 'BlockSet',
     type: 'record',
     fields: [
-      // Must include ALL inputs.
-      { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
-      // Outputs with a negative amount (incentive) may be omitted.
-      // This allows efficient full-network BlockSets to not have to include the entire balance data.
-      { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
+      { name: 'left_child', type: 'Hash' },
+      { name: 'right_child', type: 'Hash' },
 
-      // Allowing BlockSets to have verifiers allows for a lot of fun things
-      // { name: 'verifier', type: 'Verifier' },
+      { name: 'input_tree_root', type: 'Hash' },
+      { name: 'output_tree_root', type: 'Hash' },
 
-      // Set of block hashes to start enumeration from. Enumeration goes back in time, terminating at blocks included in inputs.
-      { name: 'frontier', type: { type: 'array', items: 'Hash' } },
+      { name: 'level', type: 'int' },
+      { name: 'loss', type: 'long' },
+      { name: 'timestamp', type: 'long' },
     ],
   },
 
@@ -769,6 +812,14 @@ export const EpochInclusionProof = makeMsg(registry, 'EpochInclusionProof');
 export type EpochInclusionProof = MsgType<'EpochInclusionProof'>;
 export const Block = makeMsg(registry, 'Block');
 export type Block = MsgType<'Block'>;
+export const BlockSetTreeBranch = makeMsg(registry, 'BlockSetTreeBranch');
+export type BlockSetTreeBranch = MsgType<'BlockSetTreeBranch'>;
+export const BlockSetTreeIo = makeMsg(registry, 'BlockSetTreeIo');
+export type BlockSetTreeIo = MsgType<'BlockSetTreeIo'>;
+export const BlockSetTreeLeaf = makeMsg(registry, 'BlockSetTreeLeaf');
+export type BlockSetTreeLeaf = MsgType<'BlockSetTreeLeaf'>;
+export const BlockSetTreeNode = makeMsg(registry, 'BlockSetTreeNode');
+export type BlockSetTreeNode = MsgType<'BlockSetTreeNode'>;
 export const BlockSet = makeMsg(registry, 'BlockSet');
 export type BlockSet = MsgType<'BlockSet'>;
 export const BidMessage = makeMsg(registry, 'BidMessage');

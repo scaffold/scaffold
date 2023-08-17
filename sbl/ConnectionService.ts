@@ -1,4 +1,3 @@
-import { BlockSource } from '~/sbl/BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import InfoService from './InfoService.ts';
@@ -11,6 +10,9 @@ import PeerService from './PeerService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
+import BlockSetService from '~/sbl/BlockSetService.ts';
+import { MessageSource, MessageType } from '~/sbl/MessageMeta.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -38,14 +40,6 @@ export interface Connection {
     sqSum: number;
     count: number;
   };
-}
-
-export const enum MessageType {
-  Info,
-  Block,
-  EpochInclusionProof,
-  BridgeStart,
-  BridgeEnd,
 }
 
 // AuthenticationService?
@@ -217,38 +211,11 @@ export default class ConnectionService {
           onVerifyNodeHash(nodeHash, new Uint8Array([]));
         }
 
-        const msgType = this.ctx.get(PacketCoder).getTypeIdx(data);
-        switch (msgType) {
-          case MessageType.Info:
-            this.ctx.get(NodeService).handleInfoMessage(
-              conn!.node,
-              InfoMessage.decode(data.subarray(SIGNATURE_LENGTH + 1)),
-            );
-            break;
-          case MessageType.Block:
-            {
-              const block = this.ctx.get(BlockService).ingest(
-                data,
-                BlockSource.Remote,
-              );
-              if (block) {
-                conn!.node.knownObjects.add(block);
-                block.fromNodes.push(conn!.node);
-              }
-            }
-            break;
-          case MessageType.EpochInclusionProof:
-            this.ctx.get(EpochInclusionProofService).ingest(data, conn!.node);
-            break;
-          case MessageType.BridgeStart:
-            console.warn(`Got unhandled message type: BridgeStart`);
-            break;
-          case MessageType.BridgeEnd:
-            console.warn(`Got unhandled message type: BridgeEnd`);
-            break;
-          default:
-            throw new Error(`Unhandled message type ${msgType}`);
-        }
+        this.ctx.get(IngestionService).ingest(
+          data,
+          MessageSource.Remote,
+          conn!.node,
+        );
 
         // const signature = data.subarray(0, SIGNATURE_LENGTH);
         // if (signature.byteLength !== SIGNATURE_LENGTH) {
