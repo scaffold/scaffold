@@ -1,16 +1,25 @@
 import Context from '~/sbl/Context.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
-import { Fact, FactBase, FactSource, FactType } from '~/sbl/FactMeta.ts';
+import {
+  BlockFact,
+  Fact,
+  FactBase,
+  FactSource,
+  FactType,
+} from '~/sbl/FactMeta.ts';
 import BlockService from '~/sbl/BlockService.ts';
-import { SIGNATURE_LENGTH } from '~/sbl/PacketCoder.ts';
 import NodeService, { Node } from '~/sbl/NodeService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
+import { Coder } from './messages.ts';
+import secp from './util/secp.ts';
 
 const errorFactory = () => {
   throw new Error(`Invalid message type!`);
 };
 
 type FactFactory = (base: FactBase, node: Node) => Fact;
+
+const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
 
 export default class IngestionService {
   private factories: FactFactory[] = [];
@@ -29,24 +38,66 @@ export default class IngestionService {
       FactType.BlockSet,
       (base) => this.ctx.get(BlockSetService).createFact(base),
     );
+    this.addFactory(
+      FactType.BlockSetTreeNode,
+      (base) => this.ctx.get(BlockSetService).createTreeNodeFact(base),
+    );
   }
 
   public get(hash: Hash) {
     return this.facts.get(hash.toPrimitive());
   }
 
-  public compose() {
-    // TODO: Use this instead of PacketCoder
+  public hackyGetBlocksMatching(
+    filter: (block: BlockFact) => boolean = () => true,
+  ): BlockFact[] {
+    return [...this.facts.values()].flatMap((fact) =>
+      fact.type === FactType.Block && filter(fact) ? [fact] : []
+    );
+  }
+
+  public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
+    let buf: Uint8Array;
+    coder.encode(msg, (size) => {
+      buf = new Uint8Array(size + SIGNATURE_LENGTH + 1);
+      return buf.subarray(1);
+    });
+    const data = buf!;
+
+    data[0] = type;
+
+    const size = data.byteLength - SIGNATURE_LENGTH;
+    const sig = secp.sign(
+      Hash.digest(data.subarray(0, size)).toBytes(),
+      this.ctx.config.selfPrivateKey,
+      { lowS: true, extraEntropy: secp.etc.randomBytes(32) },
+    ).toCompactRawBytes();
+    if (sig.byteLength !== SIGNATURE_LENGTH) {
+      throw new Error(`Internal error: Unexpected signature length!`);
+    }
+    data.set(sig, size);
+
+    return data;
   }
 
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
   public ingest(data: Uint8Array, source: FactSource, fromNode: Node) {
     const fact = this.create(data, source, fromNode);
 
-    fromNode.knownObjects.add(fact);
+    fromNode.knownFacts.add(fact);
     fact.fromNodes.push(fromNode);
 
     return fact;
+  }
+
+  public publish(fact: Fact) {
+    this.ctx.get(NodeService).getAll().forEach((node) => {
+      if (!node.knownFacts.has(fact)) {
+        node.knownFacts.add(fact);
+        fact.toNodes.push(node);
+        node.defaultConn?.sendReliable(fact.data);
+      }
+    });
   }
 
   private addFactory(type: FactType, factory: FactFactory) {
@@ -71,28 +122,34 @@ export default class IngestionService {
       );
     }
 
-    const signature = data.subarray(0, SIGNATURE_LENGTH);
-    const type: FactType = data[SIGNATURE_LENGTH];
-
     const base: FactBase = {
       hash,
-      source,
+
       data,
-      signature,
+      type: data[0],
+      message: data.subarray(1, -SIGNATURE_LENGTH),
+      signature: data.subarray(-SIGNATURE_LENGTH),
+
+      source,
       fromNodes: [],
       toNodes: [],
+
       backtrace: new Error().stack,
     };
 
-    const res = (this.factories[type] ?? errorFactory)(base, fromNode);
-    if (res.type !== type) {
+    const res = (this.factories[base.type] ?? errorFactory)(base, fromNode);
+    if (res.type !== base.type) {
       throw new Error(
-        `Factory ${type} returned incorrect message type ${res.type}!`,
+        `Factory ${base.type} returned incorrect message type ${res.type}!`,
       );
     }
 
     this.facts.set(hash.toPrimitive(), res);
 
     return res;
+  }
+
+  public snapshot() {
+    return { facts: this.facts };
   }
 }

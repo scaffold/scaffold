@@ -1,10 +1,10 @@
 import secp from './util/secp.ts';
 import Context from './Context.ts';
 import NodeService from './NodeService.ts';
-import ConnectionService, { MessageType } from './ConnectionService.ts';
 import KeyService from './KeyService.ts';
-import PacketCoder from './PacketCoder.ts';
 import { InfoMessage } from './messages.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
+import { FactType } from '~/sbl/FactMeta.ts';
 
 export default class InfoService {
   private tickItvl?: number;
@@ -48,10 +48,10 @@ export default class InfoService {
         })),
     };
 
-    return this.ctx.get(PacketCoder).encode(
+    return this.ctx.get(IngestionService).compose(
       info,
       InfoMessage,
-      MessageType.Info,
+      FactType.Info,
     );
   }
 }

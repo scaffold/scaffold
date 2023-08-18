@@ -1,5 +1,5 @@
-import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import { ANY_BODY_FLAG, LocalGeneratorOpts } from './LocalGeneratorService.ts';
 import { TimeParams } from './messages.ts';
 import Hash from './util/Hash.ts';
@@ -21,7 +21,7 @@ export default class TimeContract {
 
   public async verify(
     params: Uint8Array,
-    block: BlockExt,
+    block: BlockFact,
     // request: (
     //   contractHash: Hash,
     //   params: Uint8Array,

@@ -1,12 +1,11 @@
-import { MessageType } from '~/sbl/ConnectionService.ts';
 import Context from './Context.ts';
-import PacketCoder, { SIGNATURE_LENGTH } from '~/sbl/PacketCoder.ts';
 import { Block, EpochInclusionProof } from '~/sbl/messages.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
-import { BlockExt } from '~/sbl/BlockMeta.ts';
 import { Node } from './NodeService.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 
 export default class EpochInclusionProofService {
   private pendingProofs = new Map<
@@ -16,7 +15,7 @@ export default class EpochInclusionProofService {
 
   constructor(private ctx: Context) {}
 
-  public popEips(block: BlockExt) {
+  public popEips(block: BlockFact) {
     const eips = this.pendingProofs.get(block.hash.toPrimitive());
     if (eips) {
       this.pendingProofs.delete(block.hash.toPrimitive());
@@ -87,7 +86,7 @@ export default class EpochInclusionProofService {
       return;
     }
 
-    const packet = this.ctx.get(PacketCoder).encode(
+    const packet = this.ctx.get(IngestionService).compose(
       proof,
       EpochInclusionProof,
       MessageType.EpochInclusionProof,

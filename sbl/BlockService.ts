@@ -2,7 +2,7 @@ import { BlockCollateralization, BlockFlag, BlockMeta } from './BlockMeta.ts';
 import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
-import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
+// import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
 import {
@@ -15,7 +15,6 @@ import {
   Verifier,
 } from './messages.ts';
 import NodeService from './NodeService.ts';
-import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
 import QaDebugger from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
@@ -72,17 +71,13 @@ export default class BlockService {
     return Hash.digestParts(signer, Block.encode(block));
   }
 
-  // Create block - (cfg: )
-  // Sign & create bytes
-  // Ingest
-  // Publish?
-
   public create(block: Block, publish = true, immortalize = false): BlockFact {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
     // Sign, publish, ingest, return hash
 
-    const data = this.ctx.get(PacketCoder).encode(block, Block, FactType.Block);
+    const data = this.ctx.get(IngestionService)
+      .compose(block, Block, FactType.Block);
 
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
     const fact = this.ctx.get(IngestionService).ingest(
@@ -95,14 +90,14 @@ export default class BlockService {
     }
 
     if (publish) {
-      this.publish(fact);
+      this.ctx.get(IngestionService).publish(fact);
     }
 
     return fact;
   }
 
   public createFact(base: FactBase): BlockFact {
-    const block = Block.decode(base.data.subarray(SIGNATURE_LENGTH + 1));
+    const block = Block.decode(base.message);
 
     if (block.timestamp > BigInt(this.ctx.config.timeProvider.now())) {
       this.ctx.get(Logger).info('discarding_block', {
@@ -170,7 +165,7 @@ export default class BlockService {
       type: FactType.Block as const,
     });
 
-    this.ctx.get(EpochInclusionProofService).popEips(fact);
+    // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
     fact.inputs.forEach((input, idx) => {
       const parent = this.get(input.block_hash);
@@ -204,9 +199,9 @@ export default class BlockService {
       }
     });
 
-    fact.epochInclusionProofs.forEach((eip) =>
-      this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
-    );
+    // fact.epochInclusionProofs.forEach((eip) =>
+    //   this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
+    // );
 
     // this.updateDerivedWork(fact);
 
@@ -233,16 +228,6 @@ export default class BlockService {
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
     return fact;
-  }
-
-  public publish(block: BlockFact) {
-    this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (!node.knownObjects.has(block)) {
-        node.knownObjects.add(block);
-        block.toNodes.push(node);
-        node.defaultConn?.sendReliable(block.data);
-      }
-    });
   }
 
   // This is called whenever an input becomes available
@@ -753,7 +738,7 @@ export default class BlockService {
   }
 
   public getBlocksByVerifier(verifier: Verifier) {
-    return [...this.blocksByHash.values()].filter((block) =>
+    return this.ctx.get(IngestionService).hackyGetBlocksMatching((block) =>
       block.verifiers.some((v) =>
         Hash.equals(v.contract_hash, verifier.contract_hash) &&
         arrEquals(v.params, verifier.params)
@@ -762,7 +747,7 @@ export default class BlockService {
   }
 
   public getBlocksByInput(input: BlockInput) {
-    return [...this.blocksByHash.values()].filter((block) =>
+    return this.ctx.get(IngestionService).hackyGetBlocksMatching((block) =>
       block.inputs.some((y) =>
         Hash.equals(y.block_hash, input.block_hash) &&
         y.output_idx === input.output_idx
@@ -771,7 +756,9 @@ export default class BlockService {
   }
 
   public getBlocksByOutput(verifier: Verifier) {
-    return [...this.blocksByHash.values()].flatMap((block) =>
+    return this.ctx.get(IngestionService).hackyGetBlocksMatching().flatMap((
+      block,
+    ) =>
       block.outputs.flatMap((y, idx) =>
         Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
           arrEquals(y.verifier.params, verifier.params)
@@ -785,7 +772,9 @@ export default class BlockService {
     contractHash: Hash,
     cond: (params: Uint8Array) => boolean,
   ) {
-    return [...this.blocksByHash.values()].flatMap((block) =>
+    return this.ctx.get(IngestionService).hackyGetBlocksMatching().flatMap((
+      block,
+    ) =>
       block.outputs.flatMap((y, idx) =>
         Hash.equals(y.verifier.contract_hash, contractHash) &&
           cond(y.verifier.params)
@@ -812,9 +801,5 @@ export default class BlockService {
       throw new Error(`Listener does not exist`);
     }
     listeners.splice(idx, 1);
-  }
-
-  public snapshot() {
-    return { blocksByHash: this.blocksByHash };
   }
 }

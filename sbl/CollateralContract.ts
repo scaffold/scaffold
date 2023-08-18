@@ -1,7 +1,7 @@
-import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import { collateralHash, dataHash } from './constants.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import LocalGeneratorService, {
   INGENERABLE_FLAG,
   LocalGeneratorOpts,
@@ -34,7 +34,7 @@ export default class CollateralContract {
 
   public async verify(
     params: Uint8Array,
-    block: BlockExt,
+    block: BlockFact,
     // request: (
     //   contractHash: Hash,
     //   params: Uint8Array,

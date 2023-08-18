@@ -108,6 +108,17 @@ export interface Coder<T> {
   encode(msg: T, allocator?: (size: number) => Uint8Array): Uint8Array;
 }
 
+export const rawCoder: Coder<Uint8Array> = {
+  decode(src) {
+    return src;
+  },
+  encode(msg, allocator = (size: number) => new Uint8Array(size)) {
+    const arr = allocator(msg.byteLength);
+    arr.set(msg);
+    return arr;
+  },
+};
+
 const long = avro.types.LongType.__with({
   fromBuffer: (buf: Uint8Array) =>
     new DataView(buf.buffer).getBigInt64(0, true),

@@ -1,7 +1,6 @@
 import React from 'react';
 import SblClient from './SblClient.ts';
 import Hash from '~/sbl/util/Hash.ts';
-// import BlockService from '~/sbl/BlockService.ts';
 import IncentiveService from '~/sbl/IncentiveService.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
@@ -30,6 +29,7 @@ import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
 import EpochService from '~/sbl/EpochService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
 
 // QJS
 // const initialContractHex =
@@ -235,7 +235,11 @@ export default () => {
         onChange={(e) => setFilter(e.target.value)}
       />
       <br />
-      <JsonView name='BlockService' ctx={client.ctx} Table={BlockService} />
+      <JsonView
+        name='IngestionService'
+        ctx={client.ctx}
+        Table={IngestionService}
+      />
       <BlockTableView ctx={client.ctx} />
       {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
       <button onClick={incTableVersion}>Refresh</button>

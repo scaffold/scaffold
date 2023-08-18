@@ -1,5 +1,5 @@
-import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import { BlockInput, BlockOutput } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
@@ -27,7 +27,7 @@ export interface LocalGeneratorOpts {
   // TODO: requestHash?
   // TODO: requestBlock?
   notify(contractHash: Hash, params: Uint8Array): void;
-  fulfills(block: BlockExt, outputIdx: number): void;
+  fulfills(block: BlockFact, outputIdx: number): void;
 }
 
 export type LocalGenerator = (

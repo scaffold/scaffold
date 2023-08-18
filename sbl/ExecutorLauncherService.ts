@@ -1,13 +1,11 @@
 import secp from './util/secp.ts';
 import BlockBuilder from './BlockBuilder.ts';
-import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import { dataHash, epochHash, generatorHash, rootHash } from './constants.ts';
 import Context from './Context.ts';
 import ExecutorDriverService, {
   ExecutorDriver,
 } from './ExecutorDriverService.ts';
-import FetchService from './FetchService.ts';
 import LocalGeneratorService, {
   ANY_BODY_FLAG,
   INGENERABLE_FLAG,
@@ -23,9 +21,7 @@ import DataContract from './DataContract.ts';
 import LitigationService from './LitigationService.ts';
 import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
-import PacketCoder from '~/sbl/PacketCoder.ts';
-import { MessageType } from '~/sbl/ConnectionService.ts';
-import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 
 const secret = secp.etc.randomBytes(32);
 
@@ -38,7 +34,7 @@ export default class ExecutorLauncherService {
   constructor(private ctx: Context) {}
 
   public enqueueVerification(
-    block: BlockExt,
+    block: BlockFact,
     verifier: Verifier,
     extraIncentive: number,
   ) {
@@ -174,7 +170,7 @@ export default class ExecutorLauncherService {
               driver.request({ contract_hash, params }),
             notify: (contract_hash, params) =>
               driver.notify({ contract_hash, params }),
-            fulfills: (block: BlockExt, outputIdx: number) =>
+            fulfills: (block: BlockFact, outputIdx: number) =>
               driver.fulfills(block, outputIdx),
           });
 
@@ -243,7 +239,7 @@ export default class ExecutorLauncherService {
   private createBlock(
     verifier: Verifier,
     data: Uint8Array | undefined,
-    inputs: { block: BlockExt; outputIdx: number }[],
+    inputs: { block: BlockFact; outputIdx: number }[],
     durationMs: number,
   ) {
     const block = this.ctx.get(BlockBuilder).emit({
@@ -261,20 +257,20 @@ export default class ExecutorLauncherService {
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
     // const hash = Hash.digest(Verifier.encode(verifier));
 
-    // Special case for epoch blocks; we need to send the epoch inclusion proof to all inputs
-    if (Hash.equals(verifier.contract_hash, epochHash)) {
-      blockExt.isEpoch = true;
+    // // Special case for epoch blocks; we need to send the epoch inclusion proof to all inputs
+    // if (Hash.equals(verifier.contract_hash, epochHash)) {
+    //   blockExt.isEpoch = true;
 
-      this.ctx.get(EpochInclusionProofService).updateProof(
-        blockExt.epochInclusionProofs,
-        {
-          block_hash: blockExt.hash,
-          epoch_hash: blockExt.hash,
-          input_indices: [],
-        },
-        blockExt,
-      );
-    }
+    //   this.ctx.get(EpochInclusionProofService).updateProof(
+    //     blockExt.epochInclusionProofs,
+    //     {
+    //       block_hash: blockExt.hash,
+    //       epoch_hash: blockExt.hash,
+    //       input_indices: [],
+    //     },
+    //     blockExt,
+    //   );
+    // }
 
     if (this.ctx.config.dbgVerifyGenerations) {
       this.enqueueVerification(blockExt, verifier, 0);

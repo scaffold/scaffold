@@ -9,19 +9,17 @@ import {
   useReactTable,
 } from 'tanstack-table';
 import { useVirtual } from 'tanstack-virtual';
-import {
-  BlockCollateralization,
-  BlockExt,
-  BlockSource,
-} from '../sbl/BlockMeta.ts';
+import { BlockCollateralization } from '../sbl/BlockMeta.ts';
 import Context from '../sbl/Context.ts';
 import Logger from '../sbl/Logger.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Hash, { HashPrimitive } from '../sbl/util/Hash.ts';
 import { trunc } from '../sbl/util/string.ts';
-import BlockService from '../sbl/BlockService.ts';
 import { BlockInput, BlockOutput } from '../sbl/messages.ts';
+import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
+import BlockService from '~/sbl/BlockService.ts';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
@@ -44,15 +42,14 @@ const HashView = ({ hash, setSelectedHash }: {
   </span>
 );
 
-const getBlocks = (
-  ctx: Context,
-) => [...ctx.get(BlockService).snapshot().blocksByHash.values()];
+const getBlocks = (ctx: Context) =>
+  ctx.get(IngestionService).hackyGetBlocksMatching();
 
 export default ({ ctx }: { ctx: Context }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [selectedHash, setSelectedHash] = React.useState<HashPrimitive>();
 
-  const columns = React.useMemo<ColumnDef<BlockExt>[]>(
+  const columns = React.useMemo<ColumnDef<BlockFact>[]>(
     () => [
       {
         header: 'hash',
@@ -76,10 +73,10 @@ export default ({ ctx }: { ctx: Context }) => {
         header: 'source',
         accessorFn: (block) => block.source,
         cell: (props) => ({
-          [BlockSource.Bootstrap]: 'bootstrap',
-          [BlockSource.Local]: 'local',
-          [BlockSource.Remote]: 'remote',
-        }[props.getValue<BlockSource>()]),
+          [FactSource.Bootstrap]: 'bootstrap',
+          [FactSource.Local]: 'local',
+          [FactSource.Remote]: 'remote',
+        }[props.getValue<FactSource>()]),
       },
       // {
       //   header: 'verifier contract hash',
@@ -147,8 +144,9 @@ export default ({ ctx }: { ctx: Context }) => {
         accessorFn: (block) => block,
         cell: (props) => (
           <ol>
-            {props.getValue<BlockExt>().outputs.map((output, outputIdx) => {
-              const claims = props.getValue<BlockExt>().outputClaims[outputIdx];
+            {props.getValue<BlockFact>().outputs.map((output, outputIdx) => {
+              const claims =
+                props.getValue<BlockFact>().outputClaims[outputIdx];
 
               return (
                 <li>

@@ -1,14 +1,9 @@
 import Context from '~/sbl/Context.ts';
 import Hash, { HASH_SIZE, HashPrimitive } from '~/sbl/util/Hash.ts';
-import {
-  BlockSet,
-  BlockSetTreeIo,
-  BlockSetTreeLeaf,
-  BlockSetTreeNode,
-} from '~/sbl/messages.ts';
-import { SIGNATURE_LENGTH } from '~/sbl/PacketCoder.ts';
+import { BlockSet, BlockSetTreeIo, BlockSetTreeNode } from '~/sbl/messages.ts';
 import {
   BlockSetFact,
+  BlockSetTreeNodeFact,
   FactBase,
   FactSource,
   FactType,
@@ -37,8 +32,6 @@ export interface BlockSetMeta {
 
   provedInputs: Set<HashPrimitive>;
   provedOutputs: Set<HashPrimitive>;
-
-  hashInversions: Map<HashPrimitive, BlockSetTreeNode['node']>;
 }
 
 type TreeNode = null | [TreeNode, TreeNode] | HashPrimitive;
@@ -52,8 +45,8 @@ export default class BlockSetService {
     }
   }
 
-  public createFact(base: FactBase) {
-    const blockSet = BlockSet.decode(base.data.subarray(SIGNATURE_LENGTH + 1));
+  public createFact(base: FactBase): BlockSetFact {
+    const blockSet = BlockSet.decode(base.message);
 
     const meta: BlockSetMeta = {
       hasAllInputs: false,
@@ -61,8 +54,6 @@ export default class BlockSetService {
 
       provedInputs: new Set(),
       provedOutputs: new Set(),
-
-      hashInversions: new Map(),
     };
 
     const fact: BlockSetFact = Object.assign(base, blockSet, meta, {
@@ -79,6 +70,14 @@ export default class BlockSetService {
     });
 
     return fact;
+  }
+
+  public createTreeNodeFact(base: FactBase): BlockSetTreeNodeFact {
+    return Object.assign(
+      base,
+      BlockSetTreeNode.decode(base.message).node,
+      { type: FactType.BlockSetTreeNode as const },
+    );
   }
 
   private maybeMerge(level: number, left: BlockSetFact, right: BlockSetFact) {
@@ -129,17 +128,14 @@ export default class BlockSetService {
 
     this.walkTree(
       left.input_tree_root,
-      left.hashInversions,
       (verifierHash, ios) => inputs.set(verifierHash.toPrimitive(), ios),
     );
     this.walkTree(
       right.output_tree_root,
-      right.hashInversions,
       (verifierHash, ios) => outputs.set(verifierHash.toPrimitive(), ios),
     );
     this.walkTree(
       right.input_tree_root,
-      right.hashInversions,
       (verifierHash, ios) => {
         ios = ios.filter((io) => !left.provedOutputs.has(this.hashTreeIo(io)));
         if (ios.length > 0) {
@@ -154,7 +150,6 @@ export default class BlockSetService {
     );
     this.walkTree(
       left.output_tree_root,
-      left.hashInversions,
       (verifierHash, ios) => {
         ios = ios.filter((io) => !right.provedInputs.has(this.hashTreeIo(io)));
         if (ios.length > 0) {
@@ -168,15 +163,12 @@ export default class BlockSetService {
       },
     );
 
-    const hashInversions = new Map<HashPrimitive, BlockSetTreeNode['node']>();
     const set: BlockSet = {
       left_child: left.hash,
       right_child: right.hash,
 
-      input_tree_root:
-        this.hashTree(this.createTree(inputs), inputs, hashInversions)!.Hash,
-      output_tree_root:
-        this.hashTree(this.createTree(outputs), outputs, hashInversions)!.Hash,
+      input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
+      output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
       level: level + 1,
       loss: 0n,
@@ -191,27 +183,24 @@ export default class BlockSetService {
     if (fact.type !== FactType.BlockSet) {
       throw new Error(`Internal error! Invalid fact type ${fact.type}`);
     }
-
-    fact.hashInversions = hashInversions;
   }
 
   private walkTree(
     root: Hash,
-    hashInversions: Map<HashPrimitive, BlockSetTreeNode['node']>,
     cb: (verifierHash: Hash, ios: BlockSetTreeIo[]) => void,
   ) {
-    const node = hashInversions.get(root.toPrimitive());
-    if (node === undefined) {
-      throw new Error(`Hash ${root.toHex()} is not in the inversion table!`);
+    const node = this.ctx.get(IngestionService).get(root);
+    if (node?.type !== FactType.BlockSetTreeNode) {
+      throw new Error(`Invalid fact type ${node?.type}`);
     }
 
     if ('BlockSetTreeBranch' in node) {
       const { left_child, right_child } = node.BlockSetTreeBranch;
       if (left_child !== null) {
-        this.walkTree(left_child.Hash, hashInversions, cb);
+        this.walkTree(left_child.Hash, cb);
       }
       if (right_child !== null) {
-        this.walkTree(right_child.Hash, hashInversions, cb);
+        this.walkTree(right_child.Hash, cb);
       }
     }
     if ('BlockSetTreeLeaf' in node) {
@@ -247,7 +236,6 @@ export default class BlockSetService {
   private hashTree(
     tree: TreeNode,
     leaves: Map<HashPrimitive, BlockSetTreeIo[]>,
-    hashInversions: Map<HashPrimitive, BlockSetTreeNode['node']>,
   ): null | { Hash: Hash } {
     let node: BlockSetTreeNode['node'];
     if (tree === null) {
@@ -255,8 +243,8 @@ export default class BlockSetService {
     } else if (Array.isArray(tree)) {
       node = {
         BlockSetTreeBranch: {
-          left_child: this.hashTree(tree[0], leaves, hashInversions),
-          right_child: this.hashTree(tree[0], leaves, hashInversions),
+          left_child: this.hashTree(tree[0], leaves),
+          right_child: this.hashTree(tree[0], leaves),
         },
       };
     } else {
@@ -268,9 +256,19 @@ export default class BlockSetService {
         BlockSetTreeLeaf: { verifier_hash: Hash.fromPrimitive(tree), ios: val },
       };
     }
-    const hash = Hash.digest(BlockSetTreeNode.encode({ node }));
-    hashInversions.set(hash.toPrimitive(), node);
-    return { Hash: hash };
+
+    const data = this.ctx.get(IngestionService)
+      .compose({ node }, BlockSetTreeNode, FactType.BlockSetTreeNode);
+    const fact = this.ctx.get(IngestionService).ingest(
+      data,
+      FactSource.Local,
+      this.ctx.get(NodeService).getSelfNode(),
+    );
+    if (fact.type !== FactType.BlockSetTreeNode) {
+      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
+    }
+
+    return { Hash: fact.hash };
   }
 
   private hashTreeIo(io: BlockSetTreeIo) {

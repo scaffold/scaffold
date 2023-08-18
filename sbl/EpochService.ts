@@ -1,13 +1,13 @@
-import { BlockExt } from '~/sbl/BlockMeta.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import StateTracker from './StateTracker.ts';
 import { epochHash } from '~/sbl/constants.ts';
 import { EpochParams } from '~/sbl/messages.ts';
 
 export default class EpochService {
   private tracker: StateTracker;
-  private canonicalEpochMap = new Map<bigint, BlockExt>();
-  private canonicalEpochSet = new Set<BlockExt>();
+  private canonicalEpochMap = new Map<bigint, BlockFact>();
+  private canonicalEpochSet = new Set<BlockFact>();
 
   constructor(private ctx: Context) {
     this.tracker = new StateTracker(ctx);
@@ -30,7 +30,7 @@ export default class EpochService {
     // );
   }
 
-  public isCanonical(block: BlockExt) {
+  public isCanonical(block: BlockFact) {
     return block.isEpoch && this.canonicalEpochSet.has(block);
   }
 }

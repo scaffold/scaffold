@@ -1,4 +1,3 @@
-import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
 import LocalGeneratorService, {
   LocalGeneratorOpts,
@@ -8,6 +7,7 @@ import { EpochBody, EpochParams, TimeParams } from './messages.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 
 // const epochIv = Hash.fromHex(
 //   'd2e66375ccb9e7c2ccdf5ef538a78f010d34aa3b4c7802837da358e833441c7e',
@@ -55,10 +55,10 @@ export const enum EpochGeneratorModifier {
 export default class EpochContract {
   // private inclusionHashes = new Map<
   //   number,
-  //   { block: BlockExt; outputIdx: number; hash: Hash }[]
+  //   { block: BlockFact; outputIdx: number; hash: Hash }[]
   // >();
   private inclusionHashes: {
-    block: BlockExt;
+    block: BlockFact;
     outputIdx: number;
     hash: Hash;
   }[] = [];
@@ -70,7 +70,7 @@ export default class EpochContract {
     );
   }
 
-  public addInclusionHash(block: BlockExt, outputIdx: number, hash: Hash) {
+  public addInclusionHash(block: BlockFact, outputIdx: number, hash: Hash) {
     this.inclusionHashes.push({ block, outputIdx, hash });
   }
   private getInclusionHashes() {
@@ -82,7 +82,7 @@ export default class EpochContract {
 
   public async verify(
     params: Uint8Array,
-    block: BlockExt,
+    block: BlockFact,
     // request: (
     //   contractHash: Hash,
     //   params: Uint8Array,

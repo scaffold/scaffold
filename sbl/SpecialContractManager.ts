@@ -1,5 +1,4 @@
 import AccountContract from './AccountContract.ts';
-import { BlockExt } from './BlockMeta.ts';
 import CollateralContract from './CollateralContract.ts';
 import {
   accountHash,
@@ -16,11 +15,12 @@ import TimeContract from '~/sbl/TimeContract.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
 import EpochContract from '~/sbl/EpochContract.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 
 interface SpecialContract {
   verify(
     params: Uint8Array,
-    block: BlockExt,
+    block: BlockFact,
     invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ): MaybePromise<boolean>;
 }

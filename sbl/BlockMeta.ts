@@ -6,7 +6,7 @@ import {
 } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { Node } from './NodeService.ts';
-import { BlockMessage } from '~/sbl/MessageMeta.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 
 export const enum BlockFlag {
   Null = 0,
@@ -25,7 +25,7 @@ export const enum BlockFlag {
 }
 
 export interface BlockCollateralization {
-  block: BlockMessage;
+  block: BlockFact;
   params: CollateralContractParams;
   amountDelta: bigint;
   outputIdx: number;
@@ -42,7 +42,7 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
-  outputClaims: BlockMessage[][];
+  outputClaims: BlockFact[][];
 
   propagationMask: number;
 
@@ -58,8 +58,8 @@ export interface BlockMeta {
   collateral: number; // TODO: bigint?
 
   collateralizations: BlockCollateralization[];
-  // collateralChain: BlockMessage[];
-  // postedCollateral: BlockMessage[];
+  // collateralChain: BlockFact[];
+  // postedCollateral: BlockFact[];
   passedVerification?: boolean;
 
   // Map from an epoch hash to the best proof from it

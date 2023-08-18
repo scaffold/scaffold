@@ -9,8 +9,8 @@ Fixed worker pool
   Kill if we have a missing input, and subscribe to the input to re-enqueue if the input becomes available.
 */
 
-import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import FetchService from './FetchService.ts';
 import Logger from './Logger.ts';
 import { Verifier } from './messages.ts';
@@ -28,15 +28,15 @@ export interface ExecutorDriver {
   setAllocation(resources: Partial<Record<Resource, number>>): Promise<void>;
   request(verifier: Verifier): Promise<Uint8Array>;
   notify(verifier: Verifier): void;
-  fulfills(block: BlockExt, outputIdx: number): void;
-  getInputs(): { block: BlockExt; outputIdx: number }[];
+  fulfills(block: BlockFact, outputIdx: number): void;
+  getInputs(): { block: BlockFact; outputIdx: number }[];
   getTotalTime(): number;
   getCpuTime(): number;
 }
 
 interface WorkEntry {
   // After a while of having a non-canonical input (or maybe some other weight-based threshold), remove from queue
-  inputs: { block: BlockExt; outputIdx: number }[];
+  inputs: { block: BlockFact; outputIdx: number }[];
   getScore(): number;
   continuation(): void;
 }
@@ -99,7 +99,7 @@ export default class ExecutorDriverService {
     // };
     // updateScore();
 
-    const inputs: { block: BlockExt; outputIdx: number }[] = [];
+    const inputs: { block: BlockFact; outputIdx: number }[] = [];
     const releases: (() => void)[] = [];
 
     const startTime = this.ctx.config.timeProvider.now();
@@ -238,7 +238,7 @@ export default class ExecutorDriverService {
           releases.push(release);
         }),
       notify: (verifier) => this.ctx.get(FetchService).fetch(verifier, {}),
-      fulfills: (block: BlockExt, outputIdx: number) =>
+      fulfills: (block: BlockFact, outputIdx: number) =>
         inputs.push({ block, outputIdx }),
       getInputs: () => inputs,
       getTotalTime: () => this.ctx.config.timeProvider.now() - startTime,

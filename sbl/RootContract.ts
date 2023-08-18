@@ -1,5 +1,5 @@
-import { BlockExt } from './BlockMeta.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
 
@@ -8,7 +8,7 @@ export default class RootContract {
 
   public verify(
     params: Uint8Array,
-    block: BlockExt,
+    block: BlockFact,
     _invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
     return params.byteLength === HASH_SIZE &&

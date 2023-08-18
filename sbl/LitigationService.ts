@@ -1,11 +1,12 @@
 import BlockBuilder from './BlockBuilder.ts';
-import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import { collateralHash, epochInclusionHash, hintHash } from './constants.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import KeyService from './KeyService.ts';
 import { CollateralContractParams, EpochInclusionParams } from './messages.ts';
 import Hash from './util/Hash.ts';
+import IngestionService from '~/sbl/IngestionService.ts';
 
 const publicationDelay = 2000;
 
@@ -23,7 +24,7 @@ export default class LitigationService {
   }
 
   public litigateBlock(
-    block: BlockExt,
+    block: BlockFact,
     verified: boolean,
     hint?: Uint8Array,
   ) {
@@ -75,13 +76,13 @@ export default class LitigationService {
     this.ctx.get(BlockService).create(incentiveBlock);
 
     const timeout = this.ctx.config.timeProvider.setTimeout(() => {
-      this.ctx.get(BlockService).publish(voteExt);
+      this.ctx.get(IngestionService).publish(voteExt);
       this.timeouts.delete(timeout);
     }, publicationDelay);
     this.timeouts.add(timeout);
   }
 
-  // public makeHintInput(block: BlockExt) {
+  // public makeHintInput(block: BlockFact) {
   //   const hintOutput = {
   //     amount: 1n,
   //     verifier: { contract_hash: hintHash, params: new Uint8Array([]) },

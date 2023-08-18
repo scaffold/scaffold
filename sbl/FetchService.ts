@@ -1,8 +1,7 @@
-import BlockBuilder from './BlockBuilder.ts';
-import { BlockExt } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import IncentiveService from './IncentiveService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
 import { Block, Verifier } from './messages.ts';
@@ -23,8 +22,8 @@ interface FetchOptions {
   internalIncentive?: bigint;
   externalIncentive?: bigint; // TODO: Remove this, since we calculate it via config. Maybe change to boolean, if there's cases when we don't want to incentivize.
   bid?: { output: Verifier; amount: bigint };
-  blockSelector?: (blocks: BlockExt[]) => BlockExt;
-  blockComparator?: (a: BlockExt, b: BlockExt) => number;
+  blockSelector?: (blocks: BlockFact[]) => BlockFact;
+  blockComparator?: (a: BlockFact, b: BlockFact) => number;
   verify?: true;
   certaintyThreshold?: number;
 }
@@ -32,8 +31,8 @@ interface FetchOptions {
 // TODO: Find canonical block
 // Rank by mergability probability
 //   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
-export const defaultBlockSelector = (blocks: BlockExt[]) => blocks[0];
-export const defaultBlockComparator = (a: BlockExt, b: BlockExt) => -1;
+export const defaultBlockSelector = (blocks: BlockFact[]) => blocks[0];
+export const defaultBlockComparator = (a: BlockFact, b: BlockFact) => -1;
 
 // TODO: Rename to RequestService?
 export default class FetchService {
@@ -42,7 +41,7 @@ export default class FetchService {
   constructor(private ctx: Context) {}
 
   // public listen(verifier:Verifier, {}?:FetchOptions, cb?: (body: Uint8Array) => void) {}
-  // public listenBlock(verifier:Verifier, {}?:FetchOptions, cb?: (block: BlockExt) => void) {}
+  // public listenBlock(verifier:Verifier, {}?:FetchOptions, cb?: (block: BlockFact) => void) {}
   // public fetch(verifier:Verifier, {}?:FetchOptions): Promise<Uint8Array> {}
 
   // TODO: Rename to query?
@@ -57,7 +56,7 @@ export default class FetchService {
       blockComparator,
       verify,
     }: FetchOptions,
-    cb?: (block: BlockExt) => void,
+    cb?: (block: BlockFact) => void,
   ) {
     console.log(
       `Fetching block`,
@@ -130,10 +129,10 @@ export default class FetchService {
     //   );
     // }
 
-    let onState: (block: BlockExt) => void;
+    let onState: (block: BlockFact) => void;
     if (cb !== undefined) {
-      let prevBlock: BlockExt | undefined;
-      onState = (block: BlockExt) => {
+      let prevBlock: BlockFact | undefined;
+      onState = (block: BlockFact) => {
         if (
           prevBlock === undefined ||
           (blockComparator || defaultBlockComparator)(prevBlock, block)

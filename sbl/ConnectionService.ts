@@ -4,15 +4,13 @@ import InfoService from './InfoService.ts';
 import { InfoMessage, Packet } from './messages.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
 import NodeService, { Node } from './NodeService.ts';
-import PacketCoder, { SIGNATURE_LENGTH } from './PacketCoder.ts';
 import Peer from './Peer.ts';
 import PeerService from './PeerService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
-import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
-import { MessageSource, MessageType } from '~/sbl/MessageMeta.ts';
 import IngestionService from '~/sbl/IngestionService.ts';
+import { FactSource } from '~/sbl/FactMeta.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -213,7 +211,7 @@ export default class ConnectionService {
 
         this.ctx.get(IngestionService).ingest(
           data,
-          MessageSource.Remote,
+          FactSource.Remote,
           conn!.node,
         );
 
