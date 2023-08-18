@@ -9,7 +9,7 @@ export const enum FactType {
   Info,
   Block,
   BlockSet, // TODO: Rename to bag or something
-  BlockSetTreeNode,
+  BlockSetTreeNode, // TODO: We don't need to sign this one
   EpochInclusionProof,
   BridgeStart,
   BridgeEnd,

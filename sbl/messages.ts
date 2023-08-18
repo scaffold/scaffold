@@ -178,12 +178,11 @@ export const registry = {
     name: 'BlockInput',
     type: 'record',
     fields: [
-      // I don't think we necessarily need this
-      // { name: 'amount', type: 'long' },
-
       { name: 'block_hash', type: 'Hash' },
       // TODO: Array? Or add a refs array to the block?
       { name: 'output_idx', type: 'int' }, // -1 if we're not claiming any output
+      // I don't think we necessarily need this
+      // { name: 'amount', type: 'long' },
     ],
   },
   BlockOutput: {
@@ -264,6 +263,8 @@ export const registry = {
     fields: [
       { name: 'block_hash', type: 'Hash' },
       { name: 'output_idx', type: 'int' },
+
+      // For input trees, this must be -1
       { name: 'amount', type: 'long' },
     ],
   },
@@ -271,7 +272,9 @@ export const registry = {
     name: 'BlockSetTreeLeaf',
     type: 'record',
     fields: [
-      { name: 'verifier_hash', type: 'Hash' },
+      // For the input tree, this is keyed by ???
+      // For the output tree, this is keyed by verifier
+      { name: 'key', type: 'Hash' },
       { name: 'ios', type: { type: 'array', items: 'BlockSetTreeIo' } },
     ],
   },

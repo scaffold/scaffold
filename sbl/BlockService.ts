@@ -1,4 +1,5 @@
 import { BlockCollateralization, BlockFlag, BlockMeta } from './BlockMeta.ts';
+import BlockSetService from '~/sbl/BlockSetService.ts';
 import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
@@ -198,6 +199,8 @@ export default class BlockService {
         this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
       }
     });
+
+    this.ctx.get(BlockSetService).ingestBlock(fact);
 
     // fact.epochInclusionProofs.forEach((eip) =>
     //   this.ctx.get(EpochInclusionProofService).propagate(fact, eip)

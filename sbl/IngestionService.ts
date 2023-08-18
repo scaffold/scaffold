@@ -13,10 +13,6 @@ import BlockSetService from '~/sbl/BlockSetService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
 
-const errorFactory = () => {
-  throw new Error(`Invalid message type!`);
-};
-
 type FactFactory = (base: FactBase, node: Node) => Fact;
 
 const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
@@ -26,26 +22,34 @@ export default class IngestionService {
   private facts = new Map<HashPrimitive, Fact>();
 
   constructor(private ctx: Context) {
-    this.addFactory(
-      FactType.Info,
-      (base, node) => this.ctx.get(NodeService).createFact(base, node),
-    );
-    this.addFactory(
-      FactType.Block,
-      (base) => this.ctx.get(BlockService).createFact(base),
-    );
-    this.addFactory(
-      FactType.BlockSet,
-      (base) => this.ctx.get(BlockSetService).createFact(base),
-    );
-    this.addFactory(
-      FactType.BlockSetTreeNode,
-      (base) => this.ctx.get(BlockSetService).createTreeNodeFact(base),
-    );
+    for (let i = 0; i < 256; i++) {
+      this.factories.push(() => {
+        throw new Error(`Invalid message type ${i}!`);
+      });
+    }
+
+    this.factories[FactType.Info] = (base, node) =>
+      this.ctx.get(NodeService).createFact(base, node);
+    this.factories[FactType.Block] = (base) =>
+      this.ctx.get(BlockService).createFact(base);
+    this.factories[FactType.BlockSet] = (base) =>
+      this.ctx.get(BlockSetService).createFact(base);
+    this.factories[FactType.BlockSetTreeNode] = (base) =>
+      this.ctx.get(BlockSetService).createTreeNodeFact(base);
   }
 
   public get(hash: Hash) {
     return this.facts.get(hash.toPrimitive());
+  }
+  public getAs<Type extends FactType>(
+    hash: Hash,
+    type: Type,
+  ): Fact & { type: Type } {
+    const fact = this.get(hash);
+    if (fact?.type !== type) {
+      throw new Error(`Invalid type ${fact?.type}`);
+    }
+    return fact as (Fact & { type: Type });
   }
 
   public hackyGetBlocksMatching(
@@ -100,13 +104,6 @@ export default class IngestionService {
     });
   }
 
-  private addFactory(type: FactType, factory: FactFactory) {
-    while (this.factories.length <= type) {
-      this.factories.push(errorFactory);
-    }
-    this.factories[type] = factory;
-  }
-
   private create(data: Uint8Array, source: FactSource, fromNode: Node): Fact {
     const hash = Hash.digest(data);
     const existing = this.facts.get(hash.toPrimitive());
@@ -137,7 +134,7 @@ export default class IngestionService {
       backtrace: new Error().stack,
     };
 
-    const res = (this.factories[base.type] ?? errorFactory)(base, fromNode);
+    const res = this.factories[base.type](base, fromNode);
     if (res.type !== base.type) {
       throw new Error(
         `Factory ${base.type} returned incorrect message type ${res.type}!`,
@@ -145,6 +142,7 @@ export default class IngestionService {
     }
 
     this.facts.set(hash.toPrimitive(), res);
+    console.log(`Created fact:`, res);
 
     return res;
   }
