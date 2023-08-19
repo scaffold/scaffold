@@ -9,7 +9,7 @@ import PeerService from './PeerService.ts';
 import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 import { FactSource } from '~/sbl/FactMeta.ts';
 
 // Private key length: 32 bytes
@@ -209,7 +209,7 @@ export default class ConnectionService {
           onVerifyNodeHash(nodeHash, new Uint8Array([]));
         }
 
-        this.ctx.get(IngestionService).ingest(
+        this.ctx.get(FactService).ingest(
           data,
           FactSource.Remote,
           conn!.node,

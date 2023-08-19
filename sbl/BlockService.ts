@@ -27,7 +27,7 @@ import {
   FactSource,
   FactType,
 } from '~/sbl/FactMeta.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -77,11 +77,11 @@ export default class BlockService {
 
     // Sign, publish, ingest, return hash
 
-    const data = this.ctx.get(IngestionService)
+    const data = this.ctx.get(FactService)
       .compose(block, Block, FactType.Block);
 
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
-    const fact = this.ctx.get(IngestionService).ingest(
+    const fact = this.ctx.get(FactService).ingest(
       data,
       FactSource.Local,
       this.ctx.get(NodeService).getSelfNode(),
@@ -91,7 +91,7 @@ export default class BlockService {
     }
 
     if (publish) {
-      this.ctx.get(IngestionService).publish(fact);
+      this.ctx.get(FactService).publish(fact);
     }
 
     return fact;
@@ -200,7 +200,10 @@ export default class BlockService {
       }
     });
 
-    this.ctx.get(BlockSetService).ingestBlock(fact);
+    // TODO: Remove this timeout; only added to make debugging easier
+    setTimeout(() => {
+      this.ctx.get(BlockSetService).ingestBlock(fact);
+    }, 0);
 
     // fact.epochInclusionProofs.forEach((eip) =>
     //   this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
@@ -722,10 +725,10 @@ export default class BlockService {
   }
 
   public get(hash: Hash): BlockFact | undefined {
-    // TODO: Instead of calling this, call into IngestionService
+    // TODO: Instead of calling this, call into FactService
     // TODO: Incentivize network as well
 
-    const fact = this.ctx.get(IngestionService).get(hash);
+    const fact = this.ctx.get(FactService).get(hash);
     if (fact?.type === FactType.Block) {
       return fact;
     }
@@ -741,7 +744,7 @@ export default class BlockService {
   }
 
   public getBlocksByVerifier(verifier: Verifier) {
-    return this.ctx.get(IngestionService).hackyGetBlocksMatching((block) =>
+    return this.ctx.get(FactService).hackyGetBlocksMatching((block) =>
       block.verifiers.some((v) =>
         Hash.equals(v.contract_hash, verifier.contract_hash) &&
         arrEquals(v.params, verifier.params)
@@ -750,7 +753,7 @@ export default class BlockService {
   }
 
   public getBlocksByInput(input: BlockInput) {
-    return this.ctx.get(IngestionService).hackyGetBlocksMatching((block) =>
+    return this.ctx.get(FactService).hackyGetBlocksMatching((block) =>
       block.inputs.some((y) =>
         Hash.equals(y.block_hash, input.block_hash) &&
         y.output_idx === input.output_idx
@@ -759,7 +762,7 @@ export default class BlockService {
   }
 
   public getBlocksByOutput(verifier: Verifier) {
-    return this.ctx.get(IngestionService).hackyGetBlocksMatching().flatMap((
+    return this.ctx.get(FactService).hackyGetBlocksMatching().flatMap((
       block,
     ) =>
       block.outputs.flatMap((y, idx) =>
@@ -775,7 +778,7 @@ export default class BlockService {
     contractHash: Hash,
     cond: (params: Uint8Array) => boolean,
   ) {
-    return this.ctx.get(IngestionService).hackyGetBlocksMatching().flatMap((
+    return this.ctx.get(FactService).hackyGetBlocksMatching().flatMap((
       block,
     ) =>
       block.outputs.flatMap((y, idx) =>

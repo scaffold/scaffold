@@ -1,6 +1,6 @@
 import { dataHash } from './constants.ts';
 import Context from './Context.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 import LocalGeneratorService, {
   INGENERABLE_FLAG,
   LocalGeneratorOpts,
@@ -36,7 +36,7 @@ export default class DataContract {
 
   public static generate({ ctx, params, emitCorrect }: LocalGeneratorOpts) {
     const { hash, secret } = DataContractParams.decode(params);
-    const fact = ctx.get(IngestionService).get(hash);
+    const fact = ctx.get(FactService).get(hash);
     if (fact) {
       if (emitCorrect) {
         const commitment = Hash.digestParts(

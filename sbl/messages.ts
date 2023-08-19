@@ -227,6 +227,7 @@ export const registry = {
       // TODO: Move this to BlockInput?
       { name: 'body', type: 'bytes' },
 
+      // TODO: Remove
       { name: 'iceberg_depth', type: 'int' },
 
       // Whether body satisfies the verifier or not
@@ -304,8 +305,11 @@ export const registry = {
       { name: 'input_tree_root', type: 'Hash' },
       { name: 'output_tree_root', type: 'Hash' },
 
+      { name: 'input_count', type: 'int' },
+      { name: 'output_count', type: 'int' },
+
       { name: 'level', type: 'int' },
-      { name: 'loss', type: 'long' },
+      { name: 'score', type: 'int' },
       { name: 'timestamp', type: 'long' },
     ],
   },

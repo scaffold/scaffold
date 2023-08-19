@@ -29,7 +29,7 @@ import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
 import EpochService from '~/sbl/EpochService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 
 // QJS
 // const initialContractHex =
@@ -236,9 +236,9 @@ export default () => {
       />
       <br />
       <JsonView
-        name='IngestionService'
+        name='FactService'
         ctx={client.ctx}
-        Table={IngestionService}
+        Table={FactService}
       />
       <BlockTableView ctx={client.ctx} />
       {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}

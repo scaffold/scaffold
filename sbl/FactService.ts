@@ -17,7 +17,7 @@ type FactFactory = (base: FactBase, node: Node) => Fact;
 
 const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
 
-export default class IngestionService {
+export default class FactService {
   private factories: FactFactory[] = [];
   private facts = new Map<HashPrimitive, Fact>();
 
@@ -142,7 +142,7 @@ export default class IngestionService {
     }
 
     this.facts.set(hash.toPrimitive(), res);
-    console.log(`Created fact:`, res);
+    console.log(`Created fact:`, res.hash.toHex(), res);
 
     return res;
   }

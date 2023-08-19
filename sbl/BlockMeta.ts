@@ -6,7 +6,7 @@ import {
 } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { Node } from './NodeService.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
+import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 
 export const enum BlockFlag {
   Null = 0,
@@ -64,4 +64,6 @@ export interface BlockMeta {
 
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
+
+  myParentBlockSet?: BlockSetFact;
 }

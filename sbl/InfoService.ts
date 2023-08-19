@@ -3,7 +3,7 @@ import Context from './Context.ts';
 import NodeService from './NodeService.ts';
 import KeyService from './KeyService.ts';
 import { InfoMessage } from './messages.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 import { FactType } from '~/sbl/FactMeta.ts';
 
 export default class InfoService {
@@ -48,7 +48,7 @@ export default class InfoService {
         })),
     };
 
-    return this.ctx.get(IngestionService).compose(
+    return this.ctx.get(FactService).compose(
       info,
       InfoMessage,
       FactType.Info,

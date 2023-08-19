@@ -4,7 +4,7 @@ import BlockService from '~/sbl/BlockService.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import { Node } from './NodeService.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 
 export default class EpochInclusionProofService {
@@ -86,7 +86,7 @@ export default class EpochInclusionProofService {
       return;
     }
 
-    const packet = this.ctx.get(IngestionService).compose(
+    const packet = this.ctx.get(FactService).compose(
       proof,
       EpochInclusionProof,
       MessageType.EpochInclusionProof,

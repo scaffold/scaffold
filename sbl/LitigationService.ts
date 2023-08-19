@@ -6,7 +6,7 @@ import { BlockFact } from '~/sbl/FactMeta.ts';
 import KeyService from './KeyService.ts';
 import { CollateralContractParams, EpochInclusionParams } from './messages.ts';
 import Hash from './util/Hash.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 
 const publicationDelay = 2000;
 
@@ -76,7 +76,7 @@ export default class LitigationService {
     this.ctx.get(BlockService).create(incentiveBlock);
 
     const timeout = this.ctx.config.timeProvider.setTimeout(() => {
-      this.ctx.get(IngestionService).publish(voteExt);
+      this.ctx.get(FactService).publish(voteExt);
       this.timeouts.delete(timeout);
     }, publicationDelay);
     this.timeouts.add(timeout);

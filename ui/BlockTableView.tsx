@@ -18,7 +18,7 @@ import Hash, { HashPrimitive } from '../sbl/util/Hash.ts';
 import { trunc } from '../sbl/util/string.ts';
 import { BlockInput, BlockOutput } from '../sbl/messages.ts';
 import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
-import IngestionService from '~/sbl/IngestionService.ts';
+import FactService from '~/sbl/FactService.ts';
 import BlockService from '~/sbl/BlockService.ts';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
@@ -43,7 +43,7 @@ const HashView = ({ hash, setSelectedHash }: {
 );
 
 const getBlocks = (ctx: Context) =>
-  ctx.get(IngestionService).hackyGetBlocksMatching();
+  ctx.get(FactService).hackyGetBlocksMatching();
 
 export default ({ ctx }: { ctx: Context }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);

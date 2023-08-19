@@ -41,6 +41,17 @@ export interface Node {
   hops: number;
 
   knownFacts: Set<Fact>;
+
+  // Trust increases by 1/day
+  // Trust decreases when nodes do suspicious things
+  // If trust is less than -1, disconnect
+  // Only connect to peers where trust is greater than 0
+  trust: number;
+
+  // Benevolence increases when we recieve helpful facts from the node
+  // Benevolence decreases when we send (hopefully helpful) facts to the node
+  // We publish to positively benevolent nodes
+  benevolence: number;
 }
 
 export default class NodeService {
@@ -81,7 +92,7 @@ export default class NodeService {
     return Hash.digestParts(publicKey, nonce);
   }
 
-  public lookup(hash: Hash) {
+  public lookup(hash: Hash): Node {
     const key = hash.toHex();
     let node = this.nodes.get(key);
     if (!node) {
@@ -92,6 +103,8 @@ export default class NodeService {
         neighbors: new Set(),
         hops: Infinity,
         knownFacts: new Set(),
+        trust: 0,
+        benevolence: 0,
       };
       this.nodes.set(key, node);
 
