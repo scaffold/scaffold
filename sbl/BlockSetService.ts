@@ -38,6 +38,7 @@ export const NUM_BLOCKSET_LEVELS = 64;
 // The left block NEEDS to have all input blocks so we know which verifiers
 
 export interface BlockSetMeta {
+  parentBlockSets: BlockSetFact[];
   myParentBlockSet?: BlockSetFact;
   active: boolean;
 
@@ -57,12 +58,61 @@ const tryCatchLog = (cb: () => void) => {
 
 export default class BlockSetService {
   private nextBlock?: BlockFact;
-  private nextSets: (BlockSetFact | undefined)[] = [];
+  private sets: BlockSetFact[][] = [];
+  private mySets: (BlockSetFact | undefined)[] = [];
+
+  private parents = new Map<HashPrimitive, BlockSetFact[]>();
 
   constructor(private ctx: Context) {
     for (let i = 0; i < NUM_BLOCKSET_LEVELS; i++) {
-      this.nextSets.push(undefined);
+      this.sets.push([]);
+      this.mySets.push(undefined);
     }
+  }
+
+  public getParents(hash: Hash) {
+    return getOrCreate(this.parents, hash.toPrimitive(), () => []);
+  }
+
+  public createFact(base: FactBase): BlockSetFact {
+    const blockSet = BlockSet.decode(base.message);
+
+    const meta: BlockSetMeta = {
+      parentBlockSets: this.getParents(base.hash),
+      active: true,
+
+      provedInputs: new Set(),
+      provedOutputs: new Set(),
+    };
+
+    const fact: BlockSetFact = Object.assign(
+      base,
+      blockSet,
+      meta,
+      { type: FactType.BlockSet as const },
+    );
+
+    this.getParents(blockSet.left_child).push(fact);
+    this.getParents(blockSet.right_child).push(fact);
+
+    const level = this.sets[blockSet.level];
+    if (level === undefined) {
+      throw new Error(`Invalid level ${blockSet.level}`);
+    }
+    level.push(fact);
+
+    // TODO: SetTimeout so provedInputs/provedOutputs can be populated?
+    this.ingestBlockSet(fact);
+
+    return fact;
+  }
+
+  public createTreeNodeFact(base: FactBase): BlockSetTreeNodeFact {
+    return Object.assign(
+      base,
+      BlockSetTreeNode.decode(base.message).node,
+      { type: FactType.BlockSetTreeNode as const },
+    );
   }
 
   public ingestBlock(block: BlockFact) {
@@ -133,6 +183,7 @@ export default class BlockSetService {
       const orphanedBlock = this.getOtherChild(
         bestSibling.myParentBlockSet,
         bestSibling.hash,
+        FactType.Block,
       );
       this.forgetBlockSet(bestSibling.myParentBlockSet);
 
@@ -149,50 +200,67 @@ export default class BlockSetService {
     }
   }
 
-  public createFact(base: FactBase): BlockSetFact {
-    const blockSet = BlockSet.decode(base.message);
+  private ingestBlockSet(blockSet: BlockSetFact) {
+    const scores = new Map<BlockSetFact, number>();
+    const myCandidate = this.mySets[blockSet.level];
+    if (myCandidate !== undefined) {
+      // Prefer to join with my candidate block
+      scores.set(myCandidate, 0.5);
+    }
+    this.sets[blockSet.level].forEach((candidate) => {
+      if (candidate !== blockSet) {
+        getOrCreate(
+          scores,
+          candidate,
+          () => this.getUnbindScore(candidate) + 1,
+          (n) => n + 1,
+        );
+      }
+    });
 
-    const meta: BlockSetMeta = {
-      active: true,
+    let bestScore = -Infinity;
+    let bestSibling: BlockSetFact | undefined;
+    scores.forEach((score, blockSet) => {
+      if (score > bestScore) {
+        bestScore = score;
+        bestSibling = blockSet;
+      }
+    });
 
-      provedInputs: new Set(),
-      provedOutputs: new Set(),
-    };
-
-    const fact: BlockSetFact = Object.assign(
-      base,
-      blockSet,
-      meta,
-      { type: FactType.BlockSet as const },
-    );
-
-    const level = this.sets[blockSet.level];
-    if (level === undefined) {
-      throw new Error(`Invalid level ${blockSet.level}`);
+    if (bestSibling === undefined) {
+      this.mySets[blockSet.level] = blockSet;
+      return;
     }
 
-    // Wait so provedInputs/provedOutputs can be populated
-    setTimeout(() => {
-      for (const candidate of level) {
-        if (candidate === fact) {
-          break;
-        }
-
-        this.maybeMergeSets(blockSet.level, candidate, fact);
+    if (bestSibling.myParentBlockSet === undefined) {
+      const { left, right } = this.orderBlocks(blockSet, bestSibling);
+      tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
+      if (bestSibling === myCandidate) {
+        this.mySets[blockSet.level] = undefined;
       }
-    }, 0);
+    } else {
+      if (bestSibling === myCandidate) {
+        throw new Error(`Unexpected internal state`);
+      }
 
-    level.push(fact);
+      const orphanedBlock = this.getOtherChild(
+        bestSibling.myParentBlockSet,
+        bestSibling.hash,
+        FactType.BlockSet,
+      );
+      this.forgetBlockSet(bestSibling.myParentBlockSet);
 
-    return fact;
-  }
+      const { left, right } = this.orderBlocks(blockSet, bestSibling);
+      tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
 
-  public createTreeNodeFact(base: FactBase): BlockSetTreeNodeFact {
-    return Object.assign(
-      base,
-      BlockSetTreeNode.decode(base.message).node,
-      { type: FactType.BlockSetTreeNode as const },
-    );
+      if (myCandidate !== undefined) {
+        const { left, right } = this.orderBlocks(myCandidate, orphanedBlock);
+        tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
+        this.mySets[blockSet.level] = undefined;
+      } else {
+        this.mySets[blockSet.level] = orphanedBlock;
+      }
+    }
   }
 
   private orderBlocks<Type extends { timestamp: bigint }>(
@@ -211,7 +279,7 @@ export default class BlockSetService {
     return { left, right };
   }
 
-  private getUnbindScore(block: BlockFact) {
+  private getUnbindScore(block: BlockFact | BlockSetFact) {
     if (block.myParentBlockSet === undefined) {
       // The block isn't bound, so no unbind penalty
       return 0;
@@ -220,13 +288,18 @@ export default class BlockSetService {
       return -block.myParentBlockSet.score;
     } else {
       // Unbind and re-bind the sibling with this.nextBlock
-      const sibling = this.getOtherChild(block.myParentBlockSet, block.hash);
-      return this.getBlockPairScore(sibling, this.nextBlock) -
-        block.myParentBlockSet.score;
+      // const sibling = this.getOtherChild(block.myParentBlockSet, block.hash);
+      // return this.getBlockPairScore(sibling, this.nextBlock) -
+      //   block.myParentBlockSet.score;
+      return -block.myParentBlockSet.score;
     }
   }
 
-  private getOtherChild(set: BlockSetFact, hash: Hash) {
+  private getOtherChild<Type extends FactType>(
+    set: BlockSetFact,
+    hash: Hash,
+    type: Type,
+  ) {
     if (
       !Hash.equals(set.left_child, hash) &&
       !Hash.equals(set.right_child, hash)
@@ -235,7 +308,7 @@ export default class BlockSetService {
     }
     return this.ctx.get(FactService).getAs(
       Hash.equals(set.left_child, hash) ? set.right_child : set.left_child,
-      FactType.Block,
+      type,
     );
   }
 

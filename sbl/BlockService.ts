@@ -161,10 +161,15 @@ export default class BlockService {
       ),
 
       epochInclusionProofs: new Map(),
+
+      parentBlockSets: this.ctx.get(BlockSetService).getParents(base.hash),
     };
-    const fact: BlockFact = Object.assign(base, block, meta, {
-      type: FactType.Block as const,
-    });
+    const fact: BlockFact = Object.assign(
+      base,
+      block,
+      meta,
+      { type: FactType.Block as const },
+    );
 
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 

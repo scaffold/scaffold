@@ -65,5 +65,6 @@ export interface BlockMeta {
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
 
+  parentBlockSets: BlockSetFact[];
   myParentBlockSet?: BlockSetFact;
 }
