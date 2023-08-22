@@ -67,7 +67,8 @@ export default class CollateralContract {
       );
     } else {
       // Free collateral
-      return secp.verify(block.signature, block.hash.toBytes(), public_key);
+      return block.signature !== undefined &&
+        secp.verify(block.signature, block.hash.toBytes(), public_key);
     }
   }
 

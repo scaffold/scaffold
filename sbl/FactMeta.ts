@@ -34,7 +34,7 @@ export type FactBase = {
   data: Uint8Array;
   type: FactType;
   message: Uint8Array;
-  signature: Uint8Array;
+  signature?: Uint8Array;
 
   source: FactSource;
   fromNodes: Node[];

@@ -396,9 +396,9 @@ export default class BlockSetService {
     if ('BlockSetTreeBranch' in node) {
       const { left_child, right_child } = node.BlockSetTreeBranch;
       const hasLeft = left_child === null ||
-        this.requestAll(left_child.Hash, node);
+        this.requestAll(left_child.Hash, signedFact);
       const hasRight = right_child === null ||
-        this.requestAll(right_child.Hash, node);
+        this.requestAll(right_child.Hash, signedFact);
       return hasLeft && hasRight;
     } else {
       return true;

@@ -12,11 +12,16 @@ import NodeService, { Node } from '~/sbl/NodeService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
-import GenesisService from '~/sbl/GenesisService.ts';
 
 type FactFactory = (base: FactBase, node: Node) => Fact;
 
 const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
+
+const typeHasSignature: boolean[] = [];
+typeHasSignature[FactType.Info] = true;
+typeHasSignature[FactType.Block] = true;
+typeHasSignature[FactType.BlockSet] = true;
+typeHasSignature[FactType.BlockSetTreeNode] = false;
 
 export default class FactService {
   private factories: FactFactory[] = [];
@@ -62,25 +67,29 @@ export default class FactService {
   }
 
   public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
+    const sign = typeHasSignature[type];
+
     let buf: Uint8Array;
     coder.encode(msg, (size) => {
-      buf = new Uint8Array(size + SIGNATURE_LENGTH + 1);
+      buf = new Uint8Array(size + (sign ? SIGNATURE_LENGTH + 1 : 1));
       return buf.subarray(1);
     });
     const data = buf!;
 
     data[0] = type;
 
-    const size = data.byteLength - SIGNATURE_LENGTH;
-    const sig = secp.sign(
-      Hash.digest(data.subarray(0, size)).toBytes(),
-      this.ctx.config.selfPrivateKey,
-      { lowS: true, extraEntropy: secp.etc.randomBytes(32) },
-    ).toCompactRawBytes();
-    if (sig.byteLength !== SIGNATURE_LENGTH) {
-      throw new Error(`Internal error: Unexpected signature length!`);
+    if (sign) {
+      const size = data.byteLength - SIGNATURE_LENGTH;
+      const sig = secp.sign(
+        Hash.digest(data.subarray(0, size)).toBytes(),
+        this.ctx.config.selfPrivateKey,
+        { lowS: true, extraEntropy: secp.etc.randomBytes(32) },
+      ).toCompactRawBytes();
+      if (sig.byteLength !== SIGNATURE_LENGTH) {
+        throw new Error(`Internal error: Unexpected signature length!`);
+      }
+      data.set(sig, size);
     }
-    data.set(sig, size);
 
     return data;
   }
@@ -114,21 +123,20 @@ export default class FactService {
       return existing;
     }
 
-    if (data.byteLength < SIGNATURE_LENGTH + 1) {
-      throw new Error(
-        `Message length (${data.byteLength}) is not at least ${
-          SIGNATURE_LENGTH + 1
-        }`,
-      );
+    const type: FactType = data[0];
+    const signed = typeHasSignature[data[0]];
+
+    if (data.byteLength < (signed ? SIGNATURE_LENGTH + 1 : 1)) {
+      throw new Error(`Message length (${data.byteLength}) is too short!`);
     }
 
     const base: FactBase = {
       hash,
 
       data,
-      type: data[0],
-      message: data.subarray(1, -SIGNATURE_LENGTH),
-      signature: data.subarray(-SIGNATURE_LENGTH),
+      type,
+      message: data.subarray(1, signed ? -SIGNATURE_LENGTH : undefined),
+      signature: signed ? data.subarray(-SIGNATURE_LENGTH) : undefined,
 
       source,
       fromNodes: [],

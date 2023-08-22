@@ -30,7 +30,8 @@ export default class AccountContract {
     _invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
     const { public_key } = AccountContractParams.decode(params);
-    return secp.verify(block.signature, block.hash.toBytes(), public_key);
+    return block.signature !== undefined &&
+      secp.verify(block.signature, block.hash.toBytes(), public_key);
   }
 
   // public static generate(
