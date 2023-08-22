@@ -1,6 +1,3 @@
-import Peer from './Peer.ts';
-import Hash from './util/Hash.ts';
-import Context from './Context.ts';
 import NetworkProvider from './NetworkProvider.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './ExecutorDriverService.ts';
@@ -21,12 +18,14 @@ export interface TimeProvider {
 }
 
 interface Config {
+  network: string;
+
   debugName: string;
   userdata?: string;
+  selfPrivateKey: Uint8Array;
+  nodeNonce: Uint8Array;
 
   logLevel: log.LevelName;
-
-  location: { x: number; y: number; z: number };
 
   // initialPublicMetadata: {
   //   name: string;
@@ -39,8 +38,6 @@ interface Config {
 
   // forwardingFee: number;
   // peerJudgementCollateral: number;
-
-  shouldVerify(ctx: Context, fromPeer: Peer, pub: any): boolean;
 
   // contracts: {
   //   hash: Hash;
@@ -69,11 +66,6 @@ interface Config {
 
   // appraisalProvider: AppraisalProvider;
 
-  trustedPeers: Peer[];
-
-  selfPrivateKey: Uint8Array;
-  nodeNonce: Uint8Array;
-
   approxComputePricePerSecond: bigint; // TODO: I don't think we need this, just getGenerationReward.
 
   getGenerationReward(verifier: Verifier, computeTimeSeconds: number): bigint;
@@ -84,8 +76,6 @@ interface Config {
   initialWorkerCount: number;
 
   onlyBridge?: boolean;
-
-  computeContracts: Hash[];
 
   timeProvider: TimeProvider;
 
@@ -99,10 +89,13 @@ interface Config {
 }
 
 export const defaultConfig = {
+  network: 'main',
   logLevel: 'WARNING',
+  approxComputePricePerSecond: 1000n,
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
+  initialWorkerCount: 16,
   timeProvider: {
     now: Date.now.bind(Date),
     setTimeout: setTimeout.bind(window),

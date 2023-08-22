@@ -212,10 +212,8 @@ export default class SblClient {
       ...defaultConfig,
 
       debugName: 'SblClient',
-
-      location: { x: 1, y: 2, z: 3 },
-
-      shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
+      selfPrivateKey: getPrivateKey(),
+      nodeNonce: Hash.random().toBytes(),
 
       networkProvider: {
         protocols: new Map(Object.entries({
@@ -223,19 +221,6 @@ export default class SblClient {
           webrtc: webrtcProvider,
         })),
       },
-
-      // appraisalProvider: new DefaultAppraisalProvider(),
-
-      trustedPeers: [],
-
-      selfPrivateKey: getPrivateKey(),
-      nodeNonce: Hash.random().toBytes(),
-
-      approxComputePricePerSecond: 1000n,
-
-      initialWorkerCount: 16,
-
-      computeContracts: [],
     };
 
     this.ctx = new Context(config);

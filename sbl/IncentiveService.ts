@@ -1,10 +1,7 @@
 import Context from './Context.ts';
-import Hash from './util/Hash.ts';
 import { Block, BlockOutput, Verifier } from './messages.ts';
-import AccountService from './AccountService.ts';
-import { getOrCreate } from './util/map.ts';
-import { PendingIncentiveRegistry } from './registries.ts';
 import BlockService from './BlockService.ts';
+import BlockBuilder from '~/sbl/BlockBuilder.ts';
 
 interface Entry {
   verifier: Verifier;
@@ -21,23 +18,15 @@ export default class IncentiveService {
     incentive: bigint,
     forceAfter = Date.now() + 1000,
   ) {
+    throw new Error(`Is this used?`);
+
     if (incentive <= 0n) {
       return;
     }
 
-    const block: Block = {
-      // verifier: {
-      //   contract_hash: Hash.fromLiteral32(0),
-      //   params: new Uint8Array(),
-      // },
-      inputs: [],
+    const block = this.ctx.get(BlockBuilder).emit({
       outputs: [{ verifier, amount: incentive }],
-      body: new Uint8Array(),
-      iceberg_depth: 0,
-      side: true,
-      is_free_market: true,
-      timestamp: BigInt(this.ctx.config.timeProvider.now()),
-    };
+    }, []);
     this.ctx.get(BlockService).create(block);
 
     // if (amount > 0n) {

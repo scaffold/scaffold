@@ -73,6 +73,7 @@ export default ({ ctx }: { ctx: Context }) => {
         header: 'source',
         accessorFn: (block) => block.source,
         cell: (props) => ({
+          [FactSource.Genesis]: 'genesis',
           [FactSource.Bootstrap]: 'bootstrap',
           [FactSource.Local]: 'local',
           [FactSource.Remote]: 'remote',

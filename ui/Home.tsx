@@ -30,6 +30,8 @@ import Input from './Input.tsx';
 import EpochService from '~/sbl/EpochService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
 import FactService from '~/sbl/FactService.ts';
+import secp from '~/sbl/util/secp.ts';
+import GenesisService from '~/sbl/GenesisService.ts';
 
 // QJS
 // const initialContractHex =
@@ -93,6 +95,7 @@ client.ctx.get(QaDebugger).addDebugger(
 );
 
 client.ctx.get(EpochService);
+client.ctx.get(GenesisService);
 
 const startGame = () => {
   const body = thrustMessages.InitAnswer.encode({
@@ -144,6 +147,18 @@ export default () => {
       </a>
       <br />
 
+      <button
+        onClick={() => {
+          const block = client.ctx.get(BlockService).create(
+            client.ctx.get(BlockBuilder).emit({ body: str2bin('abc') }, [{
+              contract_hash: constants.rootHash,
+              params: Hash.digest('abc').toBytes(),
+            }]),
+          );
+        }}
+      >
+        Publish normal block
+      </button>
       <button
         onClick={() => {
           const badBlock = client.ctx.get(BlockService).create(

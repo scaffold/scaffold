@@ -1,4 +1,4 @@
-import { deadline } from 'std-fix-abortable/async/mod.ts';
+import { deadline } from 'std-latest/async/mod.ts';
 import { deepMerge } from 'std-latest/collections/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
@@ -9,7 +9,6 @@ import BlockService from '../sbl/BlockService.ts';
 import { Block, BlockInput } from '../sbl/messages.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
-import { assertEquals, AssertionError } from 'std-latest/testing/asserts.ts';
 import MockTimeProvider from './MockTimeProvider.ts';
 import ServingService from '../sbl/ServingService.ts';
 import ConnectionService from '../sbl/ConnectionService.ts';
@@ -21,28 +20,10 @@ const makeConfig = (
   ...defaultConfig,
 
   debugName: `ctx_${ctxIdx + 1}`,
-
-  location: { x: 1, y: 2, z: 3 },
-
-  shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
-
-  networkProvider: {
-    protocols: new Map(Object.entries({})),
-  },
-
-  // appraisalProvider: new DefaultAppraisalProvider(),
-
-  trustedPeers: [],
-
   selfPrivateKey: secp.utils.randomPrivateKey(),
   nodeNonce: (new TextEncoder()).encode('test_0'),
 
-  approxComputePricePerSecond: 1000n,
-
-  initialWorkerCount: 16,
-
-  computeContracts: [],
-
+  networkProvider: { protocols: new Map(Object.entries({})) },
   timeProvider: new MockTimeProvider(),
 
   ...partialConfig,

@@ -1,0 +1,29 @@
+<html>
+<head>
+<style>
+  table { border-collapse: collapse; user-select: none; }
+  td { border: 1px solid black; min-width: 22px; height: 22px; }
+  td.highlighted { background-color: #F88379; }
+</style>
+</head>
+<body>
+  <table>
+    <script type="text/javascript">
+      window.dragVal = undefined;
+      document.body.onmouseup = () => { window.dragVal = undefined; };
+
+      const ROWS = 7;
+      let out = '';
+      for (let i = 0; i < ROWS; i++) {
+        const cs = 1 << (ROWS - i);
+        out += '<tr>';
+        for (let j = 0; j < (1 << i); j++) {
+          out += `<td colspan="${cs}" onmousedown="window.dragVal = !this.classList.contains('highlighted'); this.classList.toggle('highlighted', window.dragVal);" onmouseover="window.dragVal !== undefined && this.classList.toggle('highlighted', window.dragVal);">&nbsp;</td>`;
+        }
+        out += '</tr>';
+      }
+      document.write(out);
+    </script>
+  </table>
+</body>
+</html>

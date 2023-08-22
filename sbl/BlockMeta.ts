@@ -67,4 +67,5 @@ export interface BlockMeta {
 
   parentBlockSets: BlockSetFact[];
   myParentBlockSet?: BlockSetFact;
+  highestParentChain: BlockSetFact[];
 }

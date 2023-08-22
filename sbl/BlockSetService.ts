@@ -19,6 +19,7 @@ import { getOrCreate } from '~/sbl/util/map.ts';
 import FactService from '~/sbl/FactService.ts';
 import NodeService from '~/sbl/NodeService.ts';
 import HashRequestService from '~/sbl/HashRequestService.ts';
+import BlockService from '~/sbl/BlockService.ts';
 
 /*
 BlockSets specify their position?
@@ -92,12 +93,17 @@ export default class BlockSetService {
       { type: FactType.BlockSet as const },
     );
 
-    this.getParents(blockSet.left_child).push(fact);
-    this.getParents(blockSet.right_child).push(fact);
+    this.addParent(blockSet.left_child, fact);
+    this.addParent(blockSet.right_child, fact);
 
-    const level = this.sets[blockSet.level];
+    const chain = [];
+    chain[fact.level] = fact;
+    this.updateBlockChains(blockSet.left_child, chain);
+    this.updateBlockChains(blockSet.right_child, chain);
+
+    const level = this.sets[fact.level];
     if (level === undefined) {
-      throw new Error(`Invalid level ${blockSet.level}`);
+      throw new Error(`Invalid level ${fact.level}`);
     }
     level.push(fact);
 
@@ -324,6 +330,34 @@ export default class BlockSetService {
     return score;
   }
 
+  private addParent(childHash: Hash, parent: BlockSetFact) {
+    this.getParents(childHash).push(parent);
+
+    const child = this.ctx.get(FactService).get(childHash);
+    if (child !== undefined) {
+      child.fromNodes.slice(0, 4).forEach((node) =>
+        this.ctx.get(FactService).sendTo(parent, node)
+      );
+    }
+  }
+
+  private updateBlockChains(hash: Hash, chain: BlockSetFact[]) {
+    const fact = this.ctx.get(FactService).get(hash);
+    if (fact !== undefined) {
+      if (fact.type === FactType.Block) {
+        if (chain.length > fact.highestParentChain.length) {
+          fact.highestParentChain = [...chain];
+        }
+      } else if (fact.type === FactType.BlockSet) {
+        chain[fact.level] = fact;
+        this.updateBlockChains(fact.left_child, chain);
+        this.updateBlockChains(fact.right_child, chain);
+      } else {
+        throw new Error(`Invalid type ${fact.type}!`);
+      }
+    }
+  }
+
   private forgetBlockSet(blockSet: BlockSetFact) {
     if (!blockSet.active) {
       throw new Error(`Cannot deactivate an inactive blockset`);
@@ -389,6 +423,10 @@ export default class BlockSetService {
   // }
 
   private mergeBlocks(left: BlockFact, right: BlockFact) {
+    if (left.timestamp >= right.timestamp) {
+      throw new Error(`Blocks are not ordered!`);
+    }
+
     const inputs = new Map<HashPrimitive, BlockSetTreeIo[]>();
     const outputs = new Map<HashPrimitive, BlockSetTreeIo[]>();
 
@@ -438,12 +476,16 @@ export default class BlockSetService {
       input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
       output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
+      vote: this.getVote(left, right),
+
       input_count: inputCount,
       output_count: outputCount,
 
       level: 0,
       score: skipIdxs.size,
-      timestamp: BigInt(this.ctx.config.timeProvider.now()),
+      work: this.ctx.get(BlockService).getWork(left) +
+        this.ctx.get(BlockService).getWork(right),
+      timestamp: right.timestamp + 1n,
     };
 
     const data = this.ctx.get(FactService)
@@ -593,12 +635,17 @@ export default class BlockSetService {
       input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
       output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
+      vote: this.getVote(left, right),
+
       input_count: inputCount,
       output_count: outputCount,
 
       level: level + 1,
       score,
-      timestamp: BigInt(this.ctx.config.timeProvider.now()),
+      work: left.work + right.work,
+      timestamp:
+        (left.timestamp > right.timestamp ? left.timestamp : right.timestamp) +
+        1n,
     };
 
     const data = this.ctx.get(FactService)
@@ -704,5 +751,33 @@ export default class BlockSetService {
   private hashTreeIo(io: BlockSetTreeIo) {
     // Don't compare amount because input amounts will be -1
     return Hash.digestParts(io.block_hash, io.output_idx).toPrimitive();
+  }
+
+  private getVote(
+    left: BlockFact | BlockSetFact,
+    right: BlockFact | BlockSetFact,
+  ) {
+    if (Hash.equals(left.hash, right.vote)) {
+      return left.vote;
+    } else if (Hash.equals(left.vote, right.vote)) {
+      return left.vote;
+    } else {
+      let leftVote = this.ctx.get(FactService)
+        .getAs(left.vote, FactType.BlockSet);
+      let rightVote = this.ctx.get(FactService)
+        .getAs(right.vote, FactType.BlockSet);
+
+      if (leftVote.level < rightVote.level) {
+        while (true) {
+          const nextVote = this.ctx.get(FactService)
+            .getAs(leftVote.vote, FactType.BlockSet);
+        }
+      } else if (leftVote.level > rightVote.level) {
+      } else {
+        throw new Error(`Votes are different; unmergeable!`);
+      }
+    }
+
+    return Hash.fromLiteral32(0);
   }
 }

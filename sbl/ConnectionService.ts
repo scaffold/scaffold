@@ -11,6 +11,7 @@ import Hash from './util/Hash.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import FactService from '~/sbl/FactService.ts';
 import { FactSource } from '~/sbl/FactMeta.ts';
+import FronteirService from '~/sbl/FronteirService.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -156,6 +157,10 @@ export default class ConnectionService {
     console.log(
       `Connection established via ${protocol}; sending init packet...`,
     );
+
+    // TODO: Refactor all this; we have to encrypt a shared secret if we want this to be secure against forwarding attacks.
+    // I don't think we need authentication at all though, since each fact is signed.
+    // Or ask a public key for a signed message telling us how to connect, so we know we're connecting directly to the node.
 
     provider.sendReliable(this.ctx.get(InfoService).makeInitPacket());
 

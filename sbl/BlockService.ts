@@ -163,6 +163,7 @@ export default class BlockService {
       epochInclusionProofs: new Map(),
 
       parentBlockSets: this.ctx.get(BlockSetService).getParents(base.hash),
+      highestParentChain: [], // TODO: Literal empty array
     };
     const fact: BlockFact = Object.assign(
       base,

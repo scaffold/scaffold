@@ -12,6 +12,7 @@ import NodeService, { Node } from '~/sbl/NodeService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
+import GenesisService from '~/sbl/GenesisService.ts';
 
 type FactFactory = (base: FactBase, node: Node) => Fact;
 
@@ -29,13 +30,13 @@ export default class FactService {
     }
 
     this.factories[FactType.Info] = (base, node) =>
-      this.ctx.get(NodeService).createFact(base, node);
+      ctx.get(NodeService).createFact(base, node);
     this.factories[FactType.Block] = (base) =>
-      this.ctx.get(BlockService).createFact(base);
+      ctx.get(BlockService).createFact(base);
     this.factories[FactType.BlockSet] = (base) =>
-      this.ctx.get(BlockSetService).createFact(base);
+      ctx.get(BlockSetService).createFact(base);
     this.factories[FactType.BlockSetTreeNode] = (base) =>
-      this.ctx.get(BlockSetService).createTreeNodeFact(base);
+      ctx.get(BlockSetService).createTreeNodeFact(base);
   }
 
   public get(hash: Hash) {
@@ -95,13 +96,15 @@ export default class FactService {
   }
 
   public publish(fact: Fact) {
-    this.ctx.get(NodeService).getAll().forEach((node) => {
-      if (!node.knownFacts.has(fact)) {
-        node.knownFacts.add(fact);
-        fact.toNodes.push(node);
-        node.defaultConn?.sendReliable(fact.data);
-      }
-    });
+    this.ctx.get(NodeService).getAll()
+      .forEach((node) => this.sendTo(fact, node));
+  }
+  public sendTo(fact: Fact, node: Node) {
+    if (!node.knownFacts.has(fact)) {
+      node.knownFacts.add(fact);
+      fact.toNodes.push(node);
+      node.defaultConn?.sendReliable(fact.data);
+    }
   }
 
   private create(data: Uint8Array, source: FactSource, fromNode: Node): Fact {

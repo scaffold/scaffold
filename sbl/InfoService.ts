@@ -29,7 +29,8 @@ export default class InfoService {
 
   private makeInfoPacket(includeAuthentication: boolean) {
     const publicKey = this.ctx.get(KeyService).getSelfPublicKey();
-    const info = {
+    const info: InfoMessage = {
+      network: this.ctx.config.network,
       public_key: publicKey,
       node_nonce: this.ctx.config.nodeNonce,
       name: '',

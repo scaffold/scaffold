@@ -222,6 +222,8 @@ export const registry = {
       // NO: The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
       //   Actually, any balance needs to be spent in an output (can just be the true verifier)
 
+      { name: 'vote', type: 'Hash' },
+
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
       // TODO: Move this to BlockInput?
@@ -305,11 +307,14 @@ export const registry = {
       { name: 'input_tree_root', type: 'Hash' },
       { name: 'output_tree_root', type: 'Hash' },
 
+      { name: 'vote', type: 'Hash' },
+
       { name: 'input_count', type: 'int' },
       { name: 'output_count', type: 'int' },
 
       { name: 'level', type: 'int' },
       { name: 'score', type: 'int' },
+      { name: 'work', type: 'long' },
       { name: 'timestamp', type: 'long' },
     ],
   },
@@ -384,11 +389,13 @@ export const registry = {
       { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
     ],
   },
-  // TODO: Prevent replay attacks with a challenge/response thing here
+  // TODO: Prevent replay/forwarding attacks with a challenge/response thing here
   InfoMessage: {
     name: 'InfoMessage',
     type: 'record',
     fields: [
+      { name: 'network', type: 'string' },
+
       { name: 'public_key', type: 'bytes' },
       { name: 'node_nonce', type: 'bytes' },
 

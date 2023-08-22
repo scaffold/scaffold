@@ -10,6 +10,7 @@ import { Block, EpochInclusionProof, InfoMessage } from './messages.ts';
 import KeyService from './KeyService.ts';
 import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
 import { Fact, FactBase, FactType, InfoFact } from '~/sbl/FactMeta.ts';
+import FronteirService from '~/sbl/FronteirService.ts';
 
 // Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
 
@@ -159,6 +160,8 @@ export default class NodeService {
     }
     connObj.conn = conn;
 
+    this.ctx.get(FronteirService).sendTo(conn);
+
     if (node.defaultConn) {
       this.updateDefaultConn(node);
     } else {
@@ -220,7 +223,7 @@ export default class NodeService {
       neighborNode.hops = Math.min(neighborNode.hops, node.hops + 1)
     );
 
-    return Object.assign(base, { type: FactType.Info as const });
+    return Object.assign(base, msg, { type: FactType.Info as const });
   }
 
   public connectViaBridge(bridge: Node, toNode: Node, protocols: string[]) {

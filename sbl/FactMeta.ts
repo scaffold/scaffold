@@ -1,11 +1,17 @@
 import { BlockMeta } from '~/sbl/BlockMeta.ts';
-import { Block, BlockSet, BlockSetTreeNode } from '~/sbl/messages.ts';
+import {
+  Block,
+  BlockSet,
+  BlockSetTreeNode,
+  InfoMessage,
+} from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { BlockSetMeta } from '~/sbl/BlockSetService.ts';
 
 export const enum FactType {
   // Raw,
+  Null,
   Info,
   Block,
   BlockSet, // TODO: Rename to bag or something
@@ -16,6 +22,7 @@ export const enum FactType {
 }
 
 export const enum FactSource {
+  Genesis,
   Bootstrap,
   Local,
   Remote,
@@ -36,7 +43,7 @@ export type FactBase = {
   backtrace?: string;
 };
 
-export type InfoFact = FactBase & { type: FactType.Info };
+export type InfoFact = FactBase & { type: FactType.Info } & InfoMessage;
 export type BlockFact =
   & FactBase
   & { type: FactType.Block }

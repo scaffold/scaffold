@@ -1,6 +1,5 @@
 import * as fs from 'std-latest/fs/mod.ts';
 import * as path from 'std-latest/path/mod.ts';
-import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
 import { serve } from 'std-latest/http/mod.ts';
@@ -11,25 +10,20 @@ import {
 import Peer from '~/sbl/Peer.ts';
 import ServingService from '~/sbl/ServingService.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
-import Logger from '~/sbl/Logger.ts';
 import BlockService from '../sbl/BlockService.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import { BlockRegistry } from '../sbl/registries.ts';
-import CollatzContract from '../graph/CollatzContract.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
-import GraphUtils from '../sbl/GraphUtils.ts';
 import { error } from '../sbl/util/functional.ts';
 import { bin2str, str2bin } from '../sbl/pathUtils.ts';
 import LocalGeneratorService, {
   LocalGenerator,
 } from '../sbl/LocalGeneratorService.ts';
 import { epochStartTime } from '~/server/epochStartTime.ts';
-import EpochService from '~/sbl/EpochService.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { accountHash, rootHash } from '~/sbl/constants.ts';
-import LitigationService from '~/sbl/LitigationService.ts';
+import { accountHash, generatorHash, rootHash } from '~/sbl/constants.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';
 import KeyService from '~/sbl/KeyService.ts';
+import GenesisService from '~/sbl/GenesisService.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -136,10 +130,11 @@ const config: Config = {
 
   debugName: 'Server',
   userdata: JSON.stringify({ epochStartTime }),
-
-  location: { x: 1, y: 2, z: 3 },
-
-  shouldVerify: (ctx: Context, fromPeer: Peer, pub: any) => true,
+  // selfPrivateKey: secp.utils.randomPrivateKey(),
+  selfPrivateKey: hex2bin(
+    '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
+  ),
+  nodeNonce: (new TextEncoder()).encode('server_0'),
 
   networkProvider: {
     protocols: new Map(Object.entries({
@@ -147,23 +142,8 @@ const config: Config = {
     })),
   },
 
-  // appraisalProvider: new DefaultAppraisalProvider(),
-
-  trustedPeers: [],
-
-  // selfPrivateKey: secp.utils.randomPrivateKey(),
-  selfPrivateKey: hex2bin(
-    '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
-  ),
-  nodeNonce: (new TextEncoder()).encode('server_0'),
-
-  approxComputePricePerSecond: 1000n,
-
   initialWorkerCount: 1,
-
   onlyBridge: false,
-
-  computeContracts: [],
 };
 
 const ctx = new Context(config);
@@ -200,6 +180,7 @@ for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
   });
 }
 entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
+  return;
   if (generator) {
     const contractHash = entries.find((e) =>
       e.contractName === contractName && e.generator === undefined
@@ -215,12 +196,22 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
         break;
 
       case 'wasm':
-        ctx.get(GraphUtils).supplyGenerator(contractHash, body);
+        ctx.get(BlockService).create(
+          ctx.get(BlockBuilder).emit({ body }, [{
+            contract_hash: generatorHash,
+            params: contractHash.toBytes(),
+          }]),
+        );
         break;
     }
   } else {
     // Supply contract
-    ctx.get(GraphUtils).supplyRawAnswer(body);
+    ctx.get(BlockService).create(
+      ctx.get(BlockBuilder).emit({ body }, [{
+        contract_hash: rootHash,
+        params: Hash.digest(body).toBytes(),
+      }]),
+    );
   }
 
   ctx.get(QaDebugger).addDebugger(filename, hash);
@@ -236,25 +227,7 @@ ctx.get(ServingService).serve((protocol: string, spec: string) =>
 );
 // ctx.get(CollatzContract).get();
 
-// ctx.get(EpochService);
-
-[
-  ctx.get(KeyService).getSelfPublicKey(),
-  hex2bin('02c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c679'),
-].forEach((publicKey) =>
-  ctx.get(BlockService).create(
-    ctx.get(BlockBuilder).emit({
-      outputs: [{
-        verifier: {
-          contract_hash: accountHash,
-          params: AccountContractParams.encode({ public_key: publicKey }),
-        },
-        amount: 1000000n,
-      }],
-      body: new Uint8Array([]),
-    }, []),
-  )
-);
+ctx.get(GenesisService);
 
 const itvl = setInterval(() => {
   // const blocks = [...ctx.get(BlockRegistry).debugGetAll().entries()].map((
