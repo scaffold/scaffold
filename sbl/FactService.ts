@@ -16,7 +16,19 @@ import FrontierService from '~/sbl/FrontierService.ts';
 import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 
+// TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (base: FactBase, node: Node) => Fact;
+
+// const enum A {
+//   B,
+//   C,
+// }
+// type X = { [x in A]: (y: x) => void } & any[];
+// const a: X = [
+//   (x) => x,
+//   (x) => x,
+// ];
+// a.push(() => {});
 
 const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
 

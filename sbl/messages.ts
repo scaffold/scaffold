@@ -319,6 +319,7 @@ export const registry = {
     ],
   },
 
+  // TODO: Remove this; blocks do the voting
   FrontierMessage: {
     name: 'FrontierMessage',
     type: 'record',

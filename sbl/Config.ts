@@ -75,6 +75,8 @@ interface Config {
 
   initialWorkerCount: number;
 
+  maxShutdownTimeMs: number;
+
   onlyBridge?: boolean;
 
   timeProvider: TimeProvider;
@@ -98,6 +100,7 @@ export const defaultConfig = {
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
   initialWorkerCount: 16,
+  maxShutdownTimeMs: 10000,
   timeProvider: {
     now: Date.now.bind(Date),
     setTimeout: setTimeout.bind(window),

@@ -30,6 +30,7 @@ import {
 import FactService from '~/sbl/FactService.ts';
 import FreeMarketService from '~/sbl/FreeMarketService.ts';
 import { assert } from '~/sbl/util/functional.ts';
+import FrontierService from '~/sbl/FrontierService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -44,6 +45,8 @@ interface CollateralSummary {
 }
 
 export const CHALLENGE_PRICE = 10n;
+
+const BASE_WORK = 10n;
 
 export default class BlockService {
   private claimsByOutput = new Map<
@@ -215,6 +218,7 @@ export default class BlockService {
     // TODO: Remove this timeout; only added to make debugging easier
     setTimeout(() => {
       this.ctx.get(BlockSetService).ingestBlock(fact);
+      this.ctx.get(FrontierService).ingestBlock(fact);
     }, 0);
 
     // fact.epochInclusionProofs.forEach((eip) =>
@@ -356,7 +360,7 @@ export default class BlockService {
 
   private checkInputAvailability(block: BlockFact) {
     let inputSum = 0n;
-    let inputFreeMarketSum = 0n;
+    let inputFreeMarketSum = BASE_WORK;
     if (
       block.inputs.every(({ block_hash, output_idx }) => {
         const block = this.get(block_hash);
