@@ -1,5 +1,5 @@
 import Context from '~/sbl/Context.ts';
-import Hash, { HASH_SIZE, HashPrimitive } from '~/sbl/util/Hash.ts';
+import Hash, { HASH_SIZE, HashPrimitive, ZERO_HASH } from '~/sbl/util/Hash.ts';
 import {
   BlockSet,
   BlockSetTreeIo,
@@ -423,6 +423,9 @@ export default class BlockSetService {
   // }
 
   private mergeBlocks(left: BlockFact, right: BlockFact) {
+    if (left.work === undefined || right.work === undefined) {
+      throw new Error(`Blocks do not have work set!`);
+    }
     if (left.timestamp >= right.timestamp) {
       throw new Error(`Blocks are not ordered!`);
     }
@@ -476,15 +479,14 @@ export default class BlockSetService {
       input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
       output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
-      vote: this.getVote(left, right),
+      frontier: this.getVote(left, right),
 
       input_count: inputCount,
       output_count: outputCount,
 
       level: 0,
       score: skipIdxs.size,
-      work: this.ctx.get(BlockService).getWork(left) +
-        this.ctx.get(BlockService).getWork(right),
+      work: left.work + right.work,
       timestamp: right.timestamp + 1n,
     };
 
@@ -635,7 +637,7 @@ export default class BlockSetService {
       input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
       output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
-      vote: this.getVote(left, right),
+      frontier: this.getVote(left, right),
 
       input_count: inputCount,
       output_count: outputCount,
@@ -757,20 +759,20 @@ export default class BlockSetService {
     left: BlockFact | BlockSetFact,
     right: BlockFact | BlockSetFact,
   ) {
-    if (Hash.equals(left.hash, right.vote)) {
-      return left.vote;
-    } else if (Hash.equals(left.vote, right.vote)) {
-      return left.vote;
+    if (Hash.equals(left.hash, right.frontier)) {
+      return left.frontier;
+    } else if (Hash.equals(left.frontier, right.frontier)) {
+      return left.frontier;
     } else {
       let leftVote = this.ctx.get(FactService)
-        .getAs(left.vote, FactType.BlockSet);
+        .getAs(left.frontier, FactType.BlockSet);
       let rightVote = this.ctx.get(FactService)
-        .getAs(right.vote, FactType.BlockSet);
+        .getAs(right.frontier, FactType.BlockSet);
 
       if (leftVote.level < rightVote.level) {
         while (true) {
           const nextVote = this.ctx.get(FactService)
-            .getAs(leftVote.vote, FactType.BlockSet);
+            .getAs(leftVote.frontier, FactType.BlockSet);
         }
       } else if (leftVote.level > rightVote.level) {
       } else {
@@ -778,6 +780,6 @@ export default class BlockSetService {
       }
     }
 
-    return Hash.fromLiteral32(0);
+    return ZERO_HASH;
   }
 }

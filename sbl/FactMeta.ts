@@ -3,22 +3,26 @@ import {
   Block,
   BlockSet,
   BlockSetTreeNode,
+  FrontierMessage,
   InfoMessage,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { BlockSetMeta } from '~/sbl/BlockSetService.ts';
+import { FrontierMeta } from '~/sbl/FrontierService.ts';
 
 export const enum FactType {
   // Raw,
-  Null,
+  _Null = 0, // This is reserved, also it's the first wasm magic byte
   Info,
   Block,
   BlockSet, // TODO: Rename to bag or something
   BlockSetTreeNode, // TODO: We don't need to sign this one
+  Frontier,
   EpochInclusionProof,
   BridgeStart,
   BridgeEnd,
+  _ReservedForZstd = 40, // This is the first zstd magic byte, so it's reserved
 }
 
 export const enum FactSource {
@@ -58,5 +62,15 @@ export type BlockSetTreeNodeFact =
   & FactBase
   & { type: FactType.BlockSetTreeNode }
   & BlockSetTreeNode['node'];
+export type FrontierFact =
+  & FactBase
+  & { type: FactType.Frontier }
+  & FrontierMessage
+  & FrontierMeta;
 
-export type Fact = InfoFact | BlockFact | BlockSetFact | BlockSetTreeNodeFact;
+export type Fact =
+  | InfoFact
+  | BlockFact
+  | BlockSetFact
+  | BlockSetTreeNodeFact
+  | FrontierFact;

@@ -12,6 +12,9 @@ import NodeService, { Node } from '~/sbl/NodeService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
+import FrontierService from '~/sbl/FrontierService.ts';
+import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
 
 type FactFactory = (base: FactBase, node: Node) => Fact;
 
@@ -22,6 +25,12 @@ typeHasSignature[FactType.Info] = true;
 typeHasSignature[FactType.Block] = true;
 typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
+typeHasSignature[FactType.Frontier] = false;
+
+const useZstd = false;
+const zstdMagic = new Uint8Array([40, 181, 47, 253]);
+
+(window as any).zstd = zstd;
 
 export default class FactService {
   private factories: FactFactory[] = [];
@@ -42,7 +51,15 @@ export default class FactService {
       ctx.get(BlockSetService).createFact(base);
     this.factories[FactType.BlockSetTreeNode] = (base) =>
       ctx.get(BlockSetService).createTreeNodeFact(base);
+    this.factories[FactType.Frontier] = (base) =>
+      ctx.get(FrontierService).createFact(base);
   }
+
+  // public async init() {
+  //   if (useZstd) {
+  //     await zstd.init();
+  //   }
+  // }
 
   public get(hash: Hash) {
     return this.facts.get(hash.toPrimitive());
@@ -91,7 +108,7 @@ export default class FactService {
       data.set(sig, size);
     }
 
-    return data;
+    return useZstd ? zstd.compress(data, 10) : data;
   }
 
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
@@ -117,6 +134,10 @@ export default class FactService {
   }
 
   private create(data: Uint8Array, source: FactSource, fromNode: Node): Fact {
+    if (arrEquals(data.subarray(0, 4), zstdMagic)) {
+      data = new Uint8Array(zstd.decompress(data));
+    }
+
     const hash = Hash.digest(data);
     const existing = this.facts.get(hash.toPrimitive());
     if (existing) {

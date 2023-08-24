@@ -1,5 +1,5 @@
 import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
-import Hash, { HashPrimitive } from './Hash.ts';
+import Hash, { HashPrimitive, ZERO_HASH } from './Hash.ts';
 
 const STATE_QUEUED = 0 as const;
 const STATE_RUNNING = 1 as const;
@@ -21,7 +21,7 @@ interface Entry {
 }
 
 const wakeupEntry: Entry = {
-  hash: Hash.fromLiteral32(0),
+  hash: ZERO_HASH,
   valuePerSecond: 0,
   state: STATE_QUEUED,
   work: () => Promise.resolve(),

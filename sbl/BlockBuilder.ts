@@ -15,7 +15,7 @@ import { accountHash, epochHash, trueHash } from './constants.ts';
 import KeyService from './KeyService.ts';
 import Logger from './Logger.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
-import FronteirService from '~/sbl/FronteirService.ts';
+import FrontierService from '~/sbl/FrontierService.ts';
 
 export default class BlockBuilder {
   private selfAccountVerifier: Verifier;
@@ -118,7 +118,7 @@ export default class BlockBuilder {
       throw new Error('INSUFFICIENT_COINS');
     }
 
-    const vote = this.ctx.get(FronteirService).getBlockVote();
+    const frontier = this.ctx.get(FrontierService).getBlockVote();
 
     // TODO: Can bundle multiple blocks without bodies
     const body = block.body ?? new Uint8Array([]);
@@ -143,7 +143,7 @@ export default class BlockBuilder {
     return {
       inputs,
       outputs,
-      vote,
+      frontier,
       body,
       iceberg_depth: icebergDepth,
       side,

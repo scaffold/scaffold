@@ -222,7 +222,7 @@ export const registry = {
       // NO: The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
       //   Actually, any balance needs to be spent in an output (can just be the true verifier)
 
-      { name: 'vote', type: 'Hash' },
+      { name: 'frontier', type: 'Hash' },
 
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
@@ -307,7 +307,7 @@ export const registry = {
       { name: 'input_tree_root', type: 'Hash' },
       { name: 'output_tree_root', type: 'Hash' },
 
-      { name: 'vote', type: 'Hash' },
+      { name: 'frontier', type: 'Hash' },
 
       { name: 'input_count', type: 'int' },
       { name: 'output_count', type: 'int' },
@@ -316,6 +316,16 @@ export const registry = {
       { name: 'score', type: 'int' },
       { name: 'work', type: 'long' },
       { name: 'timestamp', type: 'long' },
+    ],
+  },
+
+  FrontierMessage: {
+    name: 'FrontierMessage',
+    type: 'record',
+    fields: [
+      { name: 'public_key', type: 'bytes' },
+      { name: 'idx', type: 'int' },
+      { name: 'frontier', type: 'Hash' },
     ],
   },
 
@@ -390,6 +400,7 @@ export const registry = {
     ],
   },
   // TODO: Prevent replay/forwarding attacks with a challenge/response thing here
+  // TODO: Make a way for small updates (appending/dropping a neighbor, updating the bandwidth, updating userdata, etc.)
   InfoMessage: {
     name: 'InfoMessage',
     type: 'record',
@@ -403,10 +414,12 @@ export const registry = {
       { name: 'client_name', type: 'string' },
       { name: 'protocol_version', type: 'string' },
       { name: 'userdata', type: 'string' },
-      { name: 'age_ptr', type: 'string' },
+      { name: 'age_ptr', type: 'Hash' },
       { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
 
       { name: 'neighbors', type: { type: 'array', items: 'Neighbor' } },
+
+      { name: 'bandwidth', type: 'int' }, // In bytes per second
     ],
   },
   PingMessage: {
@@ -847,6 +860,8 @@ export const BlockSetTreeNode = makeMsg(registry, 'BlockSetTreeNode');
 export type BlockSetTreeNode = MsgType<'BlockSetTreeNode'>;
 export const BlockSet = makeMsg(registry, 'BlockSet');
 export type BlockSet = MsgType<'BlockSet'>;
+export const FrontierMessage = makeMsg(registry, 'FrontierMessage');
+export type FrontierMessage = MsgType<'FrontierMessage'>;
 export const BidMessage = makeMsg(registry, 'BidMessage');
 export type BidMessage = MsgType<'BidMessage'>;
 export const PublicationMessage = makeMsg(registry, 'PublicationMessage');

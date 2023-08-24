@@ -28,6 +28,8 @@ import {
   FactType,
 } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
+import FreeMarketService from '~/sbl/FreeMarketService.ts';
+import { assert } from '~/sbl/util/functional.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -183,7 +185,7 @@ export default class BlockService {
       this.getClaims(input).push({ block: fact, inputIdx: idx });
     });
 
-    block.outputs.forEach(({ verifier, amount }, outputIdx) => {
+    fact.outputs.forEach(({ verifier, amount }, outputIdx) => {
       this.getClaims({ block_hash: base.hash, output_idx: outputIdx })
         .forEach(({ block, inputIdx }) =>
           this.linkBlocks(fact, block, outputIdx, inputIdx)
@@ -205,6 +207,10 @@ export default class BlockService {
         this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
       }
     });
+
+    if (fact.inputs.length === 0) {
+      this.checkInputAvailability(fact);
+    }
 
     // TODO: Remove this timeout; only added to make debugging easier
     setTimeout(() => {
@@ -242,6 +248,54 @@ export default class BlockService {
     return fact;
   }
 
+  public compare(a: BlockFact, b: BlockFact) {
+    if (a === b) {
+      return 0;
+    }
+
+    const aHeight = a.highestParentChain.length;
+    const bHeight = b.highestParentChain.length;
+
+    const aWork = aHeight ? a.highestParentChain[aHeight - 1].work : a.work;
+    const bWork = bHeight ? b.highestParentChain[bHeight - 1].work : b.work;
+    if (aWork === undefined || bWork === undefined) {
+      return 0;
+    }
+    if (aWork !== bWork) {
+      // Unmerged chains but we can still order them by placing the higher work one first
+      return bWork - aWork;
+    }
+
+    if (aHeight !== bHeight) {
+      // Unmerged chains but we can still order them by placing the higher one first
+      return bHeight - aHeight;
+    }
+
+    for (let i = 0; i < aHeight; i++) {
+      if (a.highestParentChain[i] === b.highestParentChain[i]) {
+        const aHash = i ? a.highestParentChain[i - 1].hash : a.hash;
+        const bHash = i ? b.highestParentChain[i - 1].hash : b.hash;
+        const merge = a.highestParentChain[i];
+        if (
+          Hash.equals(aHash, merge.left_child) &&
+          Hash.equals(bHash, merge.right_child)
+        ) {
+          return -1;
+        } else if (
+          Hash.equals(aHash, merge.right_child) &&
+          Hash.equals(bHash, merge.left_child)
+        ) {
+          return 1;
+        } else {
+          throw new Error(`Unexpected merge children`);
+        }
+      }
+    }
+
+    console.warn(`Chains aren't merged yet!`);
+    return 0;
+  }
+
   // This is called whenever an input becomes available
   private linkBlocks(
     parent: BlockFact,
@@ -251,34 +305,7 @@ export default class BlockService {
   ) {
     const verifier = parent.outputs[parentOutputIdx].verifier;
 
-    if (
-      child.inputs.every(({ block_hash }) => this.get(block_hash) !== undefined)
-    ) {
-      let inputSum = child.inputs.reduce(
-        (acc, { block_hash, output_idx }) =>
-          acc + this.get(block_hash)!.outputs[output_idx].amount,
-        0n,
-      );
-      const outputSum = child.outputs.reduce(
-        (acc, { amount }) => acc + amount,
-        0n,
-      );
-      if (
-        child.inputs.some(({ block_hash, output_idx }) =>
-          Hash.equals(
-            this.get(block_hash)!.outputs[output_idx].verifier.contract_hash,
-            epochHash,
-          )
-        )
-      ) {
-        inputSum += 1000000n;
-      }
-      if (inputSum !== outputSum) {
-        throw new Error(
-          `Input sum (${inputSum}) does not equal the output sum (${outputSum}) for block ${child.hash.toHex()}`,
-        );
-      }
-    }
+    this.checkInputAvailability(child);
 
     if (
       child.verifiers.some((v2) =>
@@ -325,6 +352,54 @@ export default class BlockService {
     //   verifierHash,
     //   (blocks) => blocks ? [...blocks, block] : [block],
     // );
+  }
+
+  private checkInputAvailability(block: BlockFact) {
+    let inputSum = 0n;
+    let inputFreeMarketSum = 0n;
+    if (
+      block.inputs.every(({ block_hash, output_idx }) => {
+        const block = this.get(block_hash);
+        if (block !== undefined) {
+          const { amount, verifier } = block.outputs[output_idx];
+          inputSum += amount;
+          if (this.ctx.get(FreeMarketService).isFreeMarket(verifier)) {
+            inputFreeMarketSum += amount;
+          }
+          return true;
+        } else {
+          return false;
+        }
+      })
+    ) {
+      const outputSum = block.outputs.reduce(
+        (acc, { amount }) => acc + amount,
+        0n,
+      );
+      if (
+        this.ctx.config.enableValidation &&
+        block.source !== FactSource.Genesis &&
+        inputSum !== outputSum
+      ) {
+        throw new Error(
+          `Input sum (${inputSum}) does not equal the output sum (${outputSum}) for block ${block.hash.toHex()}`,
+        );
+      }
+
+      const outputFreeMarketSum = block.outputs.reduce(
+        (acc, { amount, verifier }) =>
+          this.ctx.get(FreeMarketService).isFreeMarket(verifier)
+            ? acc + amount
+            : acc,
+        0n,
+      );
+
+      // Work = MAX(0, non-free-market outputs - non-free-market inputs)
+      // Work = MAX(0, free-market inputs - free-market outputs)
+      block.work = inputFreeMarketSum > outputFreeMarketSum
+        ? inputFreeMarketSum - outputFreeMarketSum
+        : 0n;
+    }
   }
 
   public linkNewAncestor(parent: BlockFact, child: BlockFact) {}
@@ -520,6 +595,7 @@ export default class BlockService {
       const maxCompetitorWork = Math.max(
         ...claims.map((c) => c.block === block ? 0 : c.block.derivedWorkValue),
       );
+      assert(maxCompetitorWork !== -Infinity);
       const delta = block.derivedWorkValue - maxCompetitorWork;
       const inputBlock = this.get(input.block_hash);
       const inputCanonicality = inputBlock === undefined
@@ -573,7 +649,7 @@ export default class BlockService {
   }
 
   public updateDerivedWork(block: BlockFact) {
-    let sum = Number(this.getWork(block));
+    let sum = Number(block.work);
 
     for (const claims of block.outputClaims) {
       for (const outputBlock of claims) {
@@ -690,10 +766,6 @@ export default class BlockService {
       ),
       () => [],
     );
-  }
-
-  public getWork(block: Block) {
-    return block.outputs.reduce((acc, { amount }) => acc + amount, 1n);
   }
 
   public getImplicitClaimAgainst(initialClaimFor: bigint) {

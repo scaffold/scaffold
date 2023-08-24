@@ -5,6 +5,7 @@ import KeyService from './KeyService.ts';
 import { InfoMessage } from './messages.ts';
 import FactService from '~/sbl/FactService.ts';
 import { FactType } from '~/sbl/FactMeta.ts';
+import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 
 export default class InfoService {
   private tickItvl?: number;
@@ -37,7 +38,7 @@ export default class InfoService {
       client_name: '',
       protocol_version: '',
       userdata: this.ctx.config.userdata ?? '',
-      age_ptr: '',
+      age_ptr: ZERO_HASH,
       handled_protocols: [...this.ctx.config.networkProvider.protocols]
         .filter(([_key, provider]) => provider.createClient)
         .map(([key, _provider]) => key),
@@ -47,6 +48,7 @@ export default class InfoService {
           node_hash: node.hash,
           handled_protocols: node.handledProtocols || [],
         })),
+      bandwidth: Math.floor(40000 / this.ctx.get(NodeService).getAll().length),
     };
 
     return this.ctx.get(FactService).compose(

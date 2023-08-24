@@ -39,6 +39,7 @@ export interface BlockMeta {
 
   receivedTimestamp: number;
   flags: BlockFlag;
+  work?: bigint;
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;

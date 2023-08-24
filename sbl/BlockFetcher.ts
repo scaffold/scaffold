@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import Hash from './util/Hash.ts';
+import Hash, { ZERO_HASH } from './util/Hash.ts';
 import { Block, RequestBlockMessage, Verifier } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { BlockRegistry } from './registries.ts';
@@ -21,10 +21,10 @@ export default class BlockFetcher {
   //     const b0 = hash.toBytes()[31] << 0;
   //     const epoch = b3 | b2 | b1 | b0;
   //     return {
-  //       inputs: [{ block_hash: Hash.fromLiteral32(0), amount: 1n }],
+  //       inputs: [{ block_hash: ZERO_HASH, amount: 1n }],
   //       outputs: [],
   //       verifier: {
-  //         contract_hash: Hash.fromLiteral32(0),
+  //         contract_hash: ZERO_HASH,
   //         params: new Uint8Array(),
   //       },
   //       body: new Uint8Array(),

@@ -86,6 +86,8 @@ interface Config {
   graphParameters: GraphParameters;
 
   dbgVerifyGenerations: boolean;
+
+  enableValidation: boolean;
 }
 
 export const defaultConfig = {
@@ -117,6 +119,7 @@ export const defaultConfig = {
     },
   },
   dbgVerifyGenerations: false,
+  enableValidation: true,
 } satisfies Partial<Config>;
 
 export default Config;

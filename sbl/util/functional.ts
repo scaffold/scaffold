@@ -4,9 +4,10 @@ export const error = (msg: string): never => {
 
 export const assert = (cond: boolean, msg?: string) => {
   if (!cond) {
-    throw new Error(msg);
+    throw new Error(msg ?? 'Assertion failed!');
   }
 };
+// export const assert = (_cond: boolean, _msg?: string) => {};
 
 export const memoize = <ArgType extends Object, ReturnType>(
   func: (arg: ArgType) => ReturnType,

@@ -32,6 +32,8 @@ const createGenesisBlock = () => {
     nodeNonce: Hash.digest(genesisPrivateKey).toBytes(),
 
     networkProvider: { protocols: new Map() },
+
+    enableValidation: false,
   });
 
   const block = ctx.get(BlockBuilder).emit({

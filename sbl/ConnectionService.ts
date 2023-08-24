@@ -11,7 +11,6 @@ import Hash from './util/Hash.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import FactService from '~/sbl/FactService.ts';
 import { FactSource } from '~/sbl/FactMeta.ts';
-import FronteirService from '~/sbl/FronteirService.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes

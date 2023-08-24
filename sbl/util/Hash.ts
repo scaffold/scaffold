@@ -239,3 +239,5 @@ export default class Hash {
 export type HashPrimitive = ReturnType<
   ReturnType<typeof Hash.random>['toPrimitive']
 >;
+
+export const ZERO_HASH = Hash.fromLiteral32(0);

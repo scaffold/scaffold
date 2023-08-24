@@ -4,7 +4,7 @@ import LocalGeneratorService, {
 } from './LocalGeneratorService.ts';
 import { epochHash, timeHash } from '~/sbl/constants.ts';
 import { EpochBody, EpochParams, TimeParams } from './messages.ts';
-import Hash, { HASH_SIZE } from './util/Hash.ts';
+import Hash, { HASH_SIZE, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
@@ -12,7 +12,7 @@ import { BlockFact } from '~/sbl/FactMeta.ts';
 // const epochIv = Hash.fromHex(
 //   'd2e66375ccb9e7c2ccdf5ef538a78f010d34aa3b4c7802837da358e833441c7e',
 // );
-const epochIv = Hash.fromLiteral32(0);
+const epochIv = ZERO_HASH;
 
 let epochBaseTime = 0n;
 // let epochBaseTime = BigInt((() => {
