@@ -226,14 +226,8 @@ export const registry = {
 
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
-      // TODO: Move this to BlockInput?
+      // TODO: Move this to BlockInput? No, I don't think so.
       { name: 'body', type: 'bytes' },
-
-      // TODO: Remove
-      { name: 'iceberg_depth', type: 'int' },
-
-      // Whether body satisfies the verifier or not
-      { name: 'side', type: 'boolean' },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
       { name: 'is_free_market', type: 'boolean' },

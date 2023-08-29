@@ -32,12 +32,11 @@ export default class BlockBuilder {
   public emit(
     block: {
       body?: Uint8Array;
-      inputs?: (BlockInput & { amount: bigint; icebergDepth: number })[];
+      inputs?: (BlockInput & { amount: bigint })[];
       outputs?: BlockOutput[];
     },
     satisfies: Verifier[],
     timeout = 0,
-    epochInclusionProof?: Uint8Array[],
   ): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
@@ -61,7 +60,6 @@ export default class BlockBuilder {
             block_hash: block.hash,
             output_idx: idx,
             amount: block.outputs[idx].amount,
-            icebergDepth: block.iceberg_depth,
           });
           added = true;
 
@@ -81,7 +79,6 @@ export default class BlockBuilder {
           block_hash: this.ctx.get(BlockService).create(block).hash,
           output_idx: 0,
           amount: 0n,
-          icebergDepth: block.iceberg_depth,
         });
       }
     }
@@ -101,7 +98,6 @@ export default class BlockBuilder {
             block_hash: block.hash,
             output_idx: idx,
             amount,
-            icebergDepth: block.iceberg_depth,
           });
           difference += amount;
           if (difference >= 0n) {
@@ -118,16 +114,11 @@ export default class BlockBuilder {
       throw new Error('INSUFFICIENT_COINS');
     }
 
-    const frontier = this.ctx.get(FrontierService).getBlockVote();
+    const frontier = this.ctx.get(FrontierService).getBlockVote(inputs);
 
     // TODO: Can bundle multiple blocks without bodies
     const body = block.body ?? new Uint8Array([]);
 
-    const icebergDepth = epochInclusionProof
-      ? 0
-      : Math.max(-1, ...inputs.map((input) => input.icebergDepth)) + 1;
-
-    const side = true;
     const isFreeMarket = true;
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
     inputs.forEach((input) => {
@@ -145,8 +136,6 @@ export default class BlockBuilder {
       outputs,
       frontier,
       body,
-      iceberg_depth: icebergDepth,
-      side,
       is_free_market: isFreeMarket,
       timestamp,
     };

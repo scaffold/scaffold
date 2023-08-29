@@ -42,8 +42,19 @@ export default class Hash {
     return new Hash(hex2bin(hex));
   }
 
-  public static fromPrimitive(primitive: string) {
+  public static fromBigint(num: bigint) {
+    const arr = new Uint8Array(32);
+    const view = new DataView(arr.buffer);
+    view.setBigUint64(0, (num >> 192n) & 0xFFFFFFFFFFFFFFFFn);
+    view.setBigUint64(8, (num >> 128n) & 0xFFFFFFFFFFFFFFFFn);
+    view.setBigUint64(16, (num >> 64n) & 0xFFFFFFFFFFFFFFFFn);
+    view.setBigUint64(24, num & 0xFFFFFFFFFFFFFFFFn);
+    return new Hash(arr);
+  }
+
+  public static fromPrimitive(primitive: HashPrimitive) {
     return Hash.fromHex(primitive);
+    // return Hash.fromBigint(primitive);
   }
 
   public static fromFraction(num: number, den: number) {
@@ -121,19 +132,16 @@ export default class Hash {
     // return bin2hex(this.digest);
   }
 
-  public toNum() {
-    let num = 0n;
-    for (const b of this.digest) {
-      num <<= 8n;
-      num |= BigInt(b);
-    }
-    return num;
+  public toBigint() {
+    const view = new DataView(this.digest.buffer);
+    return (view.getBigUint64(0) << 192n) | (view.getBigUint64(8) << 128n) |
+      (view.getBigUint64(16) << 64n) | view.getBigUint64(24);
   }
 
   // TODO: Use global Map + FinalizationRegistry to make the Hash object a unique primitive
   public toPrimitive() {
     return this.toHex();
-    // return this.toNum();
+    // return this.toBigint();
   }
 
   public static composePrimitives(a: HashPrimitive, b: HashPrimitive) {

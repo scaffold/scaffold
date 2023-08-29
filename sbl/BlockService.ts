@@ -760,6 +760,11 @@ export default class BlockService {
     */
   }
 
+  public getBlockIndex(block: BlockFact): bigint {
+    // Walk up towards frontier; computing the unique index that this block is aiming to be included at
+    throw new Error(`Not implemented`);
+  }
+
   public getClaims({ block_hash, output_idx }: BlockInput) {
     // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(

@@ -30,6 +30,9 @@ type FactFactory = (base: FactBase, node: Node) => Fact;
 // ];
 // a.push(() => {});
 
+const factMagic = new Uint8Array([83, 66, 76]); // SBL
+const headerSize = factMagic.byteLength + 1;
+
 const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
 
 const typeHasSignature: boolean[] = [];
@@ -41,8 +44,9 @@ typeHasSignature[FactType.Frontier] = false;
 
 const useZstd = false;
 const zstdMagic = new Uint8Array([40, 181, 47, 253]);
-
 (window as any).zstd = zstd;
+
+const sortKeys = true;
 
 export default class FactService {
   private factories: FactFactory[] = [];
@@ -100,12 +104,15 @@ export default class FactService {
 
     let buf: Uint8Array;
     coder.encode(msg, (size) => {
-      buf = new Uint8Array(size + (sign ? SIGNATURE_LENGTH + 1 : 1));
-      return buf.subarray(1);
+      buf = new Uint8Array(
+        size + (sign ? SIGNATURE_LENGTH + headerSize : headerSize),
+      );
+      return buf.subarray(headerSize);
     });
     const data = buf!;
 
-    data[0] = type;
+    data.set(factMagic, 0);
+    data[factMagic.byteLength] = type;
 
     if (sign) {
       const size = data.byteLength - SIGNATURE_LENGTH;
@@ -156,10 +163,16 @@ export default class FactService {
       return existing;
     }
 
-    const type: FactType = data[0];
-    const signed = typeHasSignature[data[0]];
+    if (data.byteLength < headerSize) {
+      throw new Error(`Message length (${data.byteLength}) is too short!`);
+    }
+    if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
+      throw new Error(`Fact doesn't start with the magic bytes!`);
+    }
 
-    if (data.byteLength < (signed ? SIGNATURE_LENGTH + 1 : 1)) {
+    const type: FactType = data[factMagic.byteLength];
+    const signed = typeHasSignature[type];
+    if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
       throw new Error(`Message length (${data.byteLength}) is too short!`);
     }
 
@@ -168,7 +181,10 @@ export default class FactService {
 
       data,
       type,
-      message: data.subarray(1, signed ? -SIGNATURE_LENGTH : undefined),
+      message: data.subarray(
+        headerSize,
+        signed ? -SIGNATURE_LENGTH : undefined,
+      ),
       signature: signed ? data.subarray(-SIGNATURE_LENGTH) : undefined,
 
       source,
@@ -183,6 +199,16 @@ export default class FactService {
       throw new Error(
         `Factory ${base.type} returned incorrect message type ${res.type}!`,
       );
+    }
+
+    if (sortKeys) {
+      Object.keys(res).sort().forEach((key) => {
+        if (key !== 'type') {
+          const val = (res as Record<string, unknown>)[key];
+          delete (res as Record<string, unknown>)[key];
+          (res as Record<string, unknown>)[key] = val;
+        }
+      });
     }
 
     this.facts.set(hash.toPrimitive(), res);

@@ -247,7 +247,6 @@ export default class ExecutorLauncherService {
         block_hash: block.hash,
         output_idx: outputIdx,
         amount: block.outputs[outputIdx].amount,
-        icebergDepth: block.iceberg_depth,
       })),
       body: data,
     }, [verifier]);

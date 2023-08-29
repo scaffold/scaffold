@@ -6,7 +6,7 @@ import Hash from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
 
 // Only used in tests,
-// Used to make sure that generating epoch contracts "out-of-spec" never wins.
+// Used to make sure that generating time contracts "out-of-spec" never wins.
 export const enum TimeGeneratorModifier {
   None,
 }
@@ -14,8 +14,8 @@ export const enum TimeGeneratorModifier {
 export default class TimeContract {
   constructor(private ctx: Context) {
     // ctx.get(LocalGeneratorService).addGenerator(
-    //   dataHash,
-    //   EpochContract.generate,
+    //   timeHash,
+    //   TimeContract.generate,
     // );
   }
 
@@ -29,12 +29,11 @@ export default class TimeContract {
     _invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
     const { time } = TimeParams.decode(params);
-    return block.timestamp >= time;
+    return block.timestamp >= time; // TODO: ===
   }
 
   public async generate(
-    { ctx, contractHash, params, emitCorrect, request, fulfills }:
-      LocalGeneratorOpts,
+    { params, emitCorrect }: LocalGeneratorOpts,
     modifier = TimeGeneratorModifier.None,
   ) {
     const { time } = TimeParams.decode(params);
