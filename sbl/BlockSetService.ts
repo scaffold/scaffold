@@ -791,11 +791,11 @@ export default class BlockSetService {
 
   public hashTreeIo(io: BlockInput) {
     // Don't compare amount because input amounts will be -1
-    console.log(
-      io.block_hash.toHex(),
-      io.output_idx,
-      Hash.digestParts(io.block_hash, io.output_idx).toHex(),
-    );
+    // console.log(
+    //   io.block_hash.toHex(),
+    //   io.output_idx,
+    //   Hash.digestParts(io.block_hash, io.output_idx).toHex(),
+    // );
     return Hash.digestParts(io.block_hash, io.output_idx).toPrimitive();
   }
 

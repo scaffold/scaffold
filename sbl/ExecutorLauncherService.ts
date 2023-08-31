@@ -23,15 +23,17 @@ import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 
-const secret = secp.etc.randomBytes(32);
-
 export default class ExecutorLauncherService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
 
   private extraContractIncentive: Map<HashPrimitive, number> = new Map();
   private extraGeneratorIncentive: Map<HashPrimitive, number> = new Map();
 
-  constructor(private ctx: Context) {}
+  private secret: Uint8Array;
+
+  constructor(private ctx: Context) {
+    this.secret = ctx.config.entropyProvider.randomBytes(32);
+  }
 
   public enqueueVerification(
     block: BlockFact,
@@ -229,9 +231,11 @@ export default class ExecutorLauncherService {
 
   private shouldEmitCorrect(verifier: Verifier) {
     return Hash.cmp(
-      Hash.digest(
-        arrConcat(secret, verifier.contract_hash.toBytes(), verifier.params),
-      ),
+      Hash.digest(arrConcat(
+        this.secret,
+        verifier.contract_hash.toBytes(),
+        verifier.params,
+      )),
       this.attemptDupeFraction,
     ) === 1;
   }

@@ -144,7 +144,7 @@ export default class FactService {
     });
     const data = buf!;
 
-    data.set(factMagic, 0);
+    data.set(factMagic);
     data[factMagic.byteLength] = type;
 
     if (sign) {
@@ -152,7 +152,10 @@ export default class FactService {
       const sig = secp.sign(
         Hash.digest(data.subarray(0, size)).toBytes(),
         this.ctx.config.selfPrivateKey,
-        { lowS: true, extraEntropy: secp.etc.randomBytes(32) },
+        {
+          lowS: true,
+          extraEntropy: this.ctx.config.entropyProvider.randomBytes(32),
+        },
       ).toCompactRawBytes();
       if (sig.byteLength !== SIGNATURE_LENGTH) {
         throw new Error(`Internal error: Unexpected signature length!`);

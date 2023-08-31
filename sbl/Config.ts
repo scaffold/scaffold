@@ -2,6 +2,7 @@ import NetworkProvider from './NetworkProvider.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './ExecutorDriverService.ts';
 import * as log from 'std-latest/log/mod.ts';
+import secp from './util/secp.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -15,6 +16,11 @@ export interface TimeProvider {
   clearTimeout(idx: number): void;
   setInterval(cb: () => void, delay: number): number;
   clearInterval(idx: number): void;
+}
+
+export interface EntropyProvider {
+  randomNumber(): number;
+  randomBytes(size: number): Uint8Array;
 }
 
 interface Config {
@@ -80,6 +86,7 @@ interface Config {
   onlyBridge?: boolean;
 
   timeProvider: TimeProvider;
+  entropyProvider: EntropyProvider;
 
   resourceLimits: Record<Resource, number>;
 
@@ -107,6 +114,10 @@ export const defaultConfig = {
     clearTimeout: clearTimeout.bind(window),
     setInterval: setInterval.bind(window),
     clearInterval: clearInterval.bind(window),
+  },
+  entropyProvider: {
+    randomNumber: Math.random.bind(Math),
+    randomBytes: secp.etc.randomBytes,
   },
   resourceLimits: {
     webWorkerCount: 16,

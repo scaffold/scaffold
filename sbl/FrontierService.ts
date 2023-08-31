@@ -103,7 +103,7 @@ export default class FrontierService {
     // TODO: Weight by level minus previous level; a frontier with level 10 and level 1 should almost always choose 10 since it covers 9 levels.
     if (this.frontierSets.length !== 0) {
       const idx = Math.floor(
-        Math.random() *
+        this.ctx.config.entropyProvider.randomNumber() *
           (this.frontierSets.length +
             (this.frontierBlock !== undefined ? 1 : 0)),
       );
@@ -299,7 +299,7 @@ export default class FrontierService {
   //     return ZERO_HASH;
   //   }
   //   let idx = MIN_VOTE_LEVEL +
-  //     Math.floor(Math.random() * (this.frontierSize - MIN_VOTE_LEVEL));
+  //     Math.floor(this.ctx.config.entropyProvider.randomNumber() * (this.frontierSize - MIN_VOTE_LEVEL));
   //   while (true) {
   //     const fact = this.frontierSets[idx];
   //     if (fact !== undefined) {
