@@ -10,49 +10,49 @@ export const python_wasm_hash = Hash.fromHex(
   'cacf09f92d88a091f3729059f389bc0ec59d82c4b2be83ab7d08ad3849d4a9cc',
 );
 export const thrust_game_generator_0_js_hash = Hash.fromHex(
-  'cd9e8f1ab625bb07f55da17f125a01514c698899d72ffea380f0a09d705e226c',
+  '64d78f9f6abda47d8fa865900690b80fce81bd987199af7191a426b507dc9e4b',
 );
 export const qjs_wasm_hash = Hash.fromHex(
   '2699c934e05e42c7937c17bfa8d0f70cb8b65f47a5330e512df5f3b621a99709',
 );
 export const collatz_wasm_hash = Hash.fromHex(
-  '755d3d7829844777e1c848e245099305cf8f17c4d6fa79376ab55fac3e594824',
+  'c8ef20189cf971dc473c03b7bbe9eb0888194b4b2c18c57a661179be56f2f2b1',
 );
 export const hello_wasm_hash = Hash.fromHex(
-  '0f82ceb6b057bbe5d9e66003c4b725c97c56e804764f3538d9251d4d80c6eb20',
+  '432d6f144b9d4efaf4397e00327e298935f518a21a868acd73ae358056f5eac6',
 );
 export const thrust_maze_wasm_hash = Hash.fromHex(
-  '016bf52677bcab84be818c30a822c20aec24854d056ce0af025af387a64a9284',
+  'f016d8b84213e6cc279077f07df3191fde0844de57a1c063ab76e4bb846bb041',
 );
 export const hello_generator_0_js_hash = Hash.fromHex(
-  '052be3ab2757f0d5b4402395d55f067d1d6bd27fe993e11959809baa1ad77538',
+  '2ad9ba19a620f1bcdddd35f236f01ffb8f16014ded8c337acffd517d2351d4ab',
 );
 export const thrust_init_wasm_hash = Hash.fromHex(
-  '20f619a774a7c238d8d04dea224714e80147a215a1fa9ab38611dd91de390992',
+  '7c7594daca3fcd3650c15cfc8796bd46cc9b3b5a8b76bfd04098ce598565a406',
 );
 export const test_py_hash = Hash.fromHex(
   '9e7cf4f3dfd247d2fb32f150195cf10433cf8b9bd17e2c1b18eccaa41a38b3ef',
 );
 export const thrust_maze_generator_0_js_hash = Hash.fromHex(
-  'e44c7d9d4b2702f3848e4d723c432712aa2a58410e722b3c8e48a3f1c34562a2',
+  '0e590325b89c9bdd14994eaa210b8437e8e2b6c86c8daa9f4e7e97140dc6e7c9',
 );
 export const js_wasm_hash = Hash.fromHex(
-  '4be1985d553b32e84a63fc13aea681c15449f7df9f47ae2ed7f4ac566e21fd8f',
+  '06ba2a61b474ef99ff1e0dfededb79af64d407a8d71d7e2efefe47caa249ce80',
 );
 export const assemblyscript_wasm_hash = Hash.fromHex(
-  '7432928ceebd5ebdf26aa04169c5513669e91b8298f1edc1438a0622ad853b25',
+  '36c2a573504301066bd4bd5c3481797926bf03c71043494c1bfbd4937738b871',
 );
 export const collatz_generator_0_js_hash = Hash.fromHex(
-  '7da6ef22ec1f4c25e4d7225aad9f88a6c6c8279bbbbc7d7b157917bd0fdb71dc',
+  '47235644433200dd351fd16276fb31e485425769f4dad694247049b250360de0',
 );
 export const test_generator_0_js_hash = Hash.fromHex(
-  '3eae0b02a89386b794d79a9babfa45704cc53a979a701965855f3f4edef3a9f1',
+  'c6331b70a5641d9dde5f69a3b4f69b37dab99107e1412c2074198c67b661ba7a',
 );
 export const test_wasm_hash = Hash.fromHex(
   'aaf88a345426eb42658c65bc266606b975c49699c3663ac53b080b3234cf145e',
 );
 export const thrust_input_wasm_hash = Hash.fromHex(
-  '5a69c562c944d0a14ccbb3e76bebc5e843d98e59c13b8da94b57fa731f95d09f',
+  '6e427b2413556ed485befd32813c2dbd18e065d197128814f5148aed2b264c12',
 );
 export const true_wasm_hash = Hash.fromHex(
   'a4b7cedc8fc7e2c66be156a157733f16b998e1a2e92e5c53516458c11cdbe013',
@@ -61,5 +61,5 @@ export const true_generator_0_js_hash = Hash.fromHex(
   'ec3d7706f948229a7b443bd6bc8db85d3dba561e57521f04dcb9662d36d6c735',
 );
 export const thrust_game_wasm_hash = Hash.fromHex(
-  '78f1b905b8042695c1fac29560b1346b6bf57b6814c9f51334e9d6bf2ab8b410',
+  'a162f615c4f74270c4df5da41dceae4d234ab9be9a30e48f10df2bab9c6f0a17',
 );

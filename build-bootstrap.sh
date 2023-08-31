@@ -14,21 +14,21 @@ set -x
 # 	node src/schema/main.js "../modules/$(basename "$file" .schema.js).schema.js" cpp > "cpp/gen/$(basename "$file" .schema.js).h"
 # done
 
-[ ! -d "wasi-sdk-17.0" ] && \
-	curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-17/wasi-sdk-17.0-macos.tar.gz --output wasi-sdk-17.0-macos.tar.gz && \
-	tar xvf wasi-sdk-17.0-macos.tar.gz && \
-	rm wasi-sdk-17.0-macos.tar.gz
+[ ! -d "wasi-sdk-20.0" ] && \
+	curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-20/wasi-sdk-20.0-macos.tar.gz --output wasi-sdk-20.0-macos.tar.gz && \
+	tar xvf wasi-sdk-20.0-macos.tar.gz && \
+	rm wasi-sdk-20.0-macos.tar.gz
 
 rm -f server/bootstrap/*
 
 for file in ./cpp/wasi/*.cpp; do
 	echo "$file"
 
-	./wasi-sdk-17.0/bin/clang++ \
+	./wasi-sdk-20.0/bin/clang++ \
 		"$file" \
 		-I./cpp/ \
 		-I./jsoncons/include/ \
-		-I./wasi-sdk-17.0/share/wasi-sysroot/include/ \
+		-I./wasi-sdk-20.0/share/wasi-sysroot/include/ \
 		-std=c++17 \
 		`#-g` \
     -O3 \
@@ -36,8 +36,8 @@ for file in ./cpp/wasi/*.cpp; do
 		-fvisibility=hidden \
     -flto \
     -fno-rtti \
-		--target=wasm32-unknown-wasi \
-		--sysroot=./wasi-sdk-17.0/share/wasi-sysroot/ \
+		--target=wasm32-wasi \
+		--sysroot=./wasi-sdk-20.0/share/wasi-sysroot/ \
 		`#-Wl,--export-all` \
 		-Wl,--allow-undefined-file=syms.syms \
 		`#-Wl,--export=malloc,--export=free` \
@@ -58,11 +58,11 @@ done
 for file in ./cpp/*.cpp; do
 	echo "$file"
 
-	./wasi-sdk-17.0/bin/clang++ \
+	./wasi-sdk-20.0/bin/clang++ \
 		"$file" \
 		-I./cpp/ \
 		-I./jsoncons/include/ \
-		-I./wasi-sdk-17.0/share/wasi-sysroot/include/ \
+		-I./wasi-sdk-20.0/share/wasi-sysroot/include/ \
 		-std=c++17 \
 		`#-g` \
     -O3 \
@@ -71,8 +71,8 @@ for file in ./cpp/*.cpp; do
     -flto \
     -fno-rtti \
     -nostartfiles \
-		--target=wasm32-unknown-wasi \
-		--sysroot=./wasi-sdk-17.0/share/wasi-sysroot/ \
+		--target=wasm32-wasi \
+		--sysroot=./wasi-sdk-20.0/share/wasi-sysroot/ \
 		`#-Wl,--export-all` \
 		-Wl,--allow-undefined-file=syms.syms \
 		`#-Wl,--export=malloc,--export=free` \

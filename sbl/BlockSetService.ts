@@ -54,6 +54,11 @@ export interface BlockSetMeta {
   votes: bigint;
 }
 
+interface TreeNodeListener {
+  blockSet: BlockSetFact;
+  addToSet: 'includedInputs' | 'includedOutputs';
+}
+
 type TreeNode = null | [TreeNode, TreeNode] | HashPrimitive;
 
 export default class BlockSetService {
@@ -65,7 +70,7 @@ export default class BlockSetService {
 
   private voters = new Map<HashPrimitive, (BlockFact | BlockSetFact)[]>();
 
-  private treeNodeListeners = new Map<HashPrimitive, Set<HashPrimitive>[]>();
+  private treeNodeListeners = new Map<HashPrimitive, TreeNodeListener[]>();
 
   constructor(private ctx: Context) {
     for (let i = 0; i < NUM_BLOCKSET_LEVELS; i++) {
@@ -88,7 +93,7 @@ export default class BlockSetService {
     return getOrCreate(this.voters, hash.toPrimitive(), () => []);
   }
 
-  public addTreeNodeListener(treeNodeHash: Hash, listener: Set<HashPrimitive>) {
+  public addTreeNodeListener(treeNodeHash: Hash, listener: TreeNodeListener) {
     const fact = this.ctx.get(FactService).get(treeNodeHash);
     if (fact !== undefined) {
       if (fact.type !== FactType.BlockSetTreeNode) {
@@ -105,7 +110,7 @@ export default class BlockSetService {
         }
       } else if ('BlockSetTreeLeaf' in fact) {
         for (const io of fact.BlockSetTreeLeaf.ios) {
-          listener.add(this.hashTreeIo(io));
+          this.addIncludedIo(listener, this.hashTreeIo(io));
         }
       }
     } else {
@@ -154,8 +159,14 @@ export default class BlockSetService {
 
     this.getVoters(blockSet.frontier_vote, blockSet.level).push(fact);
 
-    this.addTreeNodeListener(blockSet.input_tree_root, fact.includedInputs);
-    this.addTreeNodeListener(blockSet.output_tree_root, fact.includedOutputs);
+    this.addTreeNodeListener(
+      blockSet.input_tree_root,
+      { blockSet: fact, addToSet: 'includedInputs' },
+    );
+    this.addTreeNodeListener(
+      blockSet.output_tree_root,
+      { blockSet: fact, addToSet: 'includedOutputs' },
+    );
 
     // const level = this.sets[fact.level];
     // if (level === undefined) {
@@ -199,13 +210,23 @@ export default class BlockSetService {
         for (const io of fact.BlockSetTreeLeaf.ios) {
           const prim = this.hashTreeIo(io);
           for (const listener of listeners) {
-            listener.add(prim);
+            this.addIncludedIo(listener, prim);
           }
         }
       }
     }
 
     return fact;
+  }
+
+  private addIncludedIo(
+    { blockSet, addToSet }: TreeNodeListener,
+    prim: HashPrimitive,
+  ) {
+    blockSet[addToSet].add(prim);
+    for (const parent of blockSet.parentBlockSets) {
+      this.addIncludedIo({ blockSet: parent, addToSet }, prim);
+    }
   }
 
   // public ingestBlock(block: BlockFact) {

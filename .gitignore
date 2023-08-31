@@ -3,6 +3,6 @@ Thumbs.db
 dist/
 build/
 jsoncons/
-wasi-sdk-17.0/
+wasi-sdk-20.0/
 server/bootstrap/
 wasm/
