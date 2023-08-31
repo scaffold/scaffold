@@ -5,7 +5,6 @@ import {
   BlockSet,
   BlockSetTreeIo,
   BlockSetTreeNode,
-  FrontierMessage,
   Verifier,
 } from '~/sbl/messages.ts';
 import {

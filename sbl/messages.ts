@@ -314,15 +314,15 @@ export const registry = {
   },
 
   // TODO: Remove this; blocks do the voting
-  FrontierMessage: {
-    name: 'FrontierMessage',
-    type: 'record',
-    fields: [
-      { name: 'public_key', type: 'bytes' },
-      { name: 'idx', type: 'int' },
-      { name: 'frontier', type: 'Hash' },
-    ],
-  },
+  // FrontierMessage: {
+  //   name: 'FrontierMessage',
+  //   type: 'record',
+  //   fields: [
+  //     { name: 'public_key', type: 'bytes' },
+  //     { name: 'idx', type: 'int' },
+  //     { name: 'frontier', type: 'Hash' },
+  //   ],
+  // },
 
   BidMessage: {
     name: 'BidMessage',
@@ -855,8 +855,8 @@ export const BlockSetTreeNode = makeMsg(registry, 'BlockSetTreeNode');
 export type BlockSetTreeNode = MsgType<'BlockSetTreeNode'>;
 export const BlockSet = makeMsg(registry, 'BlockSet');
 export type BlockSet = MsgType<'BlockSet'>;
-export const FrontierMessage = makeMsg(registry, 'FrontierMessage');
-export type FrontierMessage = MsgType<'FrontierMessage'>;
+// export const FrontierMessage = makeMsg(registry, 'FrontierMessage');
+// export type FrontierMessage = MsgType<'FrontierMessage'>;
 export const BidMessage = makeMsg(registry, 'BidMessage');
 export type BidMessage = MsgType<'BidMessage'>;
 export const PublicationMessage = makeMsg(registry, 'PublicationMessage');

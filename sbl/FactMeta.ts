@@ -4,7 +4,6 @@ import {
   BlockSet,
   BlockSetTreeNode,
   CollateralContractParams,
-  FrontierMessage,
   InfoMessage,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';

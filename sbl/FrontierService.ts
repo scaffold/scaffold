@@ -9,7 +9,7 @@ import Context from '~/sbl/Context.ts';
 import BlockSetService, { NUM_BLOCKSET_LEVELS } from '~/sbl/BlockSetService.ts';
 import Hash, { HashPrimitive, ZERO_HASH } from '~/sbl/util/Hash.ts';
 import { Connection } from '~/sbl/ConnectionService.ts';
-import { BlockInput, FrontierMessage } from '~/sbl/messages.ts';
+import { BlockInput } from '~/sbl/messages.ts';
 import secp from '~/sbl/util/secp.ts';
 import FactService from '~/sbl/FactService.ts';
 import { assert } from '~/sbl/util/functional.ts';

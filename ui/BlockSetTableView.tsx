@@ -19,6 +19,7 @@ import { BlockInput, BlockOutput } from '../sbl/messages.ts';
 import { BlockSetFact, Collateralization, FactSource } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import BlockService from '~/sbl/BlockService.ts';
+import HashView from '~/ui/HashView.tsx';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
@@ -26,27 +27,17 @@ const RowDetail = ({ name, val }: { name: string; val: string }) => (
   </div>
 );
 
-const HashView = ({ hash, setSelectedHash }: {
-  hash: Hash;
-  setSelectedHash: (primitive: HashPrimitive | undefined) => void;
-}) => (
-  <span style={{ fontFamily: 'monospace' }}>
-    <a
-      href='#'
-      onMouseOver={() => setSelectedHash(hash.toPrimitive())}
-      onMouseOut={() => setSelectedHash(undefined)}
-    >
-      {hash.toHex().slice(0, 10)}
-    </a>
-  </span>
-);
-
 const getBlocks = (ctx: Context) =>
   ctx.get(FactService).hackyGetBlockSetsMatching();
 
-export default ({ ctx }: { ctx: Context }) => {
+export default (
+  { ctx, selectedHash, setSelectedHash }: {
+    ctx: Context;
+    selectedHash?: HashPrimitive;
+    setSelectedHash(primitive?: HashPrimitive): void;
+  },
+) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
-  const [selectedHash, setSelectedHash] = React.useState<HashPrimitive>();
 
   const columns = React.useMemo<ColumnDef<BlockSetFact>[]>(
     () => [

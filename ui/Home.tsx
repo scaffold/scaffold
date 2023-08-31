@@ -1,6 +1,6 @@
 import React from 'react';
 import SblClient from './SblClient.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import IncentiveService from '~/sbl/IncentiveService.ts';
 import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
@@ -129,6 +129,8 @@ export default () => {
 
   const [tableVersions, incTableVersion] = React.useReducer((x) => x + 1, 0);
 
+  const [selectedHash, setSelectedHash] = React.useState<HashPrimitive>();
+
   const gameHash = React.useMemo(() => gameHex && Hash.fromHex(gameHex), [
     gameHex,
   ]);
@@ -256,8 +258,16 @@ export default () => {
         ctx={client.ctx}
         Table={FactService}
       />
-      <BlockTableView ctx={client.ctx} />
-      <BlockSetTableView ctx={client.ctx} />
+      <BlockTableView
+        ctx={client.ctx}
+        selectedHash={selectedHash}
+        setSelectedHash={setSelectedHash}
+      />
+      <BlockSetTableView
+        ctx={client.ctx}
+        selectedHash={selectedHash}
+        setSelectedHash={setSelectedHash}
+      />
       {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
       <button onClick={incTableVersion}>Refresh</button>
 
