@@ -62,24 +62,24 @@ export default class LitigationService {
         amount: additionalCollateral,
       }],
     }, []);
-    const voteExt = this.ctx.get(BlockService).create(voteBlock, false);
+    const voteExt = this.ctx.get(BlockService).create(voteBlock);
 
-    const incentiveBlock = this.ctx.get(BlockBuilder).emit({
-      outputs: [{
-        verifier: {
-          contract_hash: epochInclusionHash,
-          params: EpochInclusionParams.encode({ hash: voteExt.hash }),
-        },
-        amount: 10n,
-      }],
-    }, []);
-    this.ctx.get(BlockService).create(incentiveBlock);
+    // const incentiveBlock = this.ctx.get(BlockBuilder).emit({
+    //   outputs: [{
+    //     verifier: {
+    //       contract_hash: epochInclusionHash,
+    //       params: EpochInclusionParams.encode({ hash: voteExt.hash }),
+    //     },
+    //     amount: 10n,
+    //   }],
+    // }, []);
+    // this.ctx.get(BlockService).create(incentiveBlock);
 
-    const timeout = this.ctx.config.timeProvider.setTimeout(() => {
-      this.ctx.get(FactService).publish(voteExt);
-      this.timeouts.delete(timeout);
-    }, publicationDelay);
-    this.timeouts.add(timeout);
+    // const timeout = this.ctx.config.timeProvider.setTimeout(() => {
+    //   this.ctx.get(FactService).publish(voteExt);
+    //   this.timeouts.delete(timeout);
+    // }, publicationDelay);
+    // this.timeouts.add(timeout);
   }
 
   // public makeHintInput(block: BlockFact) {

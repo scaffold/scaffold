@@ -32,6 +32,7 @@ import LitigationService from '~/sbl/LitigationService.ts';
 import FactService from '~/sbl/FactService.ts';
 import secp from '~/sbl/util/secp.ts';
 import GenesisService from '~/sbl/GenesisService.ts';
+import BlockSetTableView from '~/ui/BlockSetTableView.tsx';
 
 // QJS
 // const initialContractHex =
@@ -256,6 +257,7 @@ export default () => {
         Table={FactService}
       />
       <BlockTableView ctx={client.ctx} />
+      <BlockSetTableView ctx={client.ctx} />
       {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
       <button onClick={incTableVersion}>Refresh</button>
 

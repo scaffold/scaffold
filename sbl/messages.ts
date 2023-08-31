@@ -222,7 +222,7 @@ export const registry = {
       // NO: The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
       //   Actually, any balance needs to be spent in an output (can just be the true verifier)
 
-      { name: 'frontier', type: 'Hash' },
+      { name: 'frontier_vote', type: 'Hash' },
 
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
@@ -301,14 +301,14 @@ export const registry = {
       { name: 'input_tree_root', type: 'Hash' },
       { name: 'output_tree_root', type: 'Hash' },
 
-      { name: 'frontier', type: 'Hash' },
+      { name: 'frontier_vote', type: 'Hash' },
 
       { name: 'input_count', type: 'int' },
       { name: 'output_count', type: 'int' },
 
       { name: 'level', type: 'int' },
       { name: 'score', type: 'int' },
-      { name: 'work', type: 'long' },
+      { name: 'claimed_work', type: 'long' },
       { name: 'timestamp', type: 'long' },
     ],
   },

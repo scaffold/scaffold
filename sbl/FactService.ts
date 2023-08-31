@@ -2,6 +2,8 @@ import Context from '~/sbl/Context.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import {
   BlockFact,
+  BlockSetFact,
+  Collateralization,
   Fact,
   FactBase,
   FactSource,
@@ -15,9 +17,15 @@ import secp from './util/secp.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import { error } from '~/sbl/util/functional.ts';
+import { getOrCreate } from '~/sbl/util/map.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
-type FactFactory = (base: FactBase, node: Node) => Fact;
+type FactFactory = (
+  base: FactBase,
+  node: Node,
+  mutator?: (fact: Fact) => void,
+) => Fact;
 
 // const enum A {
 //   B,
@@ -52,6 +60,8 @@ export default class FactService {
   private factories: FactFactory[] = [];
   private facts = new Map<HashPrimitive, Fact>();
 
+  private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
+
   constructor(private ctx: Context) {
     for (let i = 0; i < 256; i++) {
       this.factories.push(() => {
@@ -59,16 +69,24 @@ export default class FactService {
       });
     }
 
-    this.factories[FactType.Info] = (base, node) =>
-      ctx.get(NodeService).createFact(base, node);
-    this.factories[FactType.Block] = (base) =>
-      ctx.get(BlockService).createFact(base);
-    this.factories[FactType.BlockSet] = (base) =>
-      ctx.get(BlockSetService).createFact(base);
-    this.factories[FactType.BlockSetTreeNode] = (base) =>
-      ctx.get(BlockSetService).createTreeNodeFact(base);
-    this.factories[FactType.Frontier] = (base) =>
-      ctx.get(FrontierService).createFact(base);
+    this.factories[FactType.Info] = (base, node, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(NodeService).createFact(base, node);
+    this.factories[FactType.Block] = (base, _, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(BlockService).createFact(base);
+    this.factories[FactType.BlockSet] = (base, _, mutator) =>
+      ctx.get(BlockSetService).createFact(base, mutator);
+    this.factories[FactType.BlockSetTreeNode] = (base, _, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(BlockSetService).createTreeNodeFact(base);
+    // this.factories[FactType.Frontier] = (base, _, mutator) =>
+    //   mutator !== undefined
+    //     ? error(`Unexpected mutator`)
+    //     : ctx.get(FrontierService).createFact(base);
   }
 
   // public async init() {
@@ -97,6 +115,21 @@ export default class FactService {
     return [...this.facts.values()].flatMap((fact) =>
       fact.type === FactType.Block && filter(fact) ? [fact] : []
     );
+  }
+  public hackyGetBlockSetsMatching(
+    filter: (block: BlockSetFact) => boolean = () => true,
+  ): BlockSetFact[] {
+    return [...this.facts.values()].flatMap((fact) =>
+      fact.type === FactType.BlockSet && filter(fact) ? [fact] : []
+    );
+  }
+
+  public addCollateral(collateralization: Collateralization) {
+    getOrCreate(
+      this.collateralByHash,
+      collateralization.params.block_hash.toPrimitive(),
+      () => [],
+    ).push(collateralization);
   }
 
   public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
@@ -131,8 +164,13 @@ export default class FactService {
   }
 
   // TODO: Test that whatever order we ingest blocks, it all ends up the same
-  public ingest(data: Uint8Array, source: FactSource, fromNode: Node) {
-    const fact = this.create(data, source, fromNode);
+  public ingest(
+    data: Uint8Array,
+    source: FactSource,
+    fromNode: Node,
+    mutator?: (fact: Fact) => void,
+  ) {
+    const fact = this.create(data, source, fromNode, mutator);
 
     fromNode.knownFacts.add(fact);
     fact.fromNodes.push(fromNode);
@@ -152,7 +190,12 @@ export default class FactService {
     }
   }
 
-  private create(data: Uint8Array, source: FactSource, fromNode: Node): Fact {
+  private create(
+    data: Uint8Array,
+    source: FactSource,
+    fromNode: Node,
+    mutator?: (fact: Fact) => void,
+  ): Fact {
     if (arrEquals(data.subarray(0, 4), zstdMagic)) {
       data = new Uint8Array(zstd.decompress(data));
     }
@@ -191,10 +234,16 @@ export default class FactService {
       fromNodes: [],
       toNodes: [],
 
+      collateralizations: getOrCreate(
+        this.collateralByHash,
+        hash.toPrimitive(),
+        () => [],
+      ),
+
       backtrace: new Error().stack,
     };
 
-    const res = this.factories[base.type](base, fromNode);
+    const res = this.factories[base.type](base, fromNode, mutator);
     if (res.type !== base.type) {
       throw new Error(
         `Factory ${base.type} returned incorrect message type ${res.type}!`,

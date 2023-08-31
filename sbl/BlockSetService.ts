@@ -1,9 +1,11 @@
 import Context from '~/sbl/Context.ts';
 import Hash, { HASH_SIZE, HashPrimitive, ZERO_HASH } from '~/sbl/util/Hash.ts';
 import {
+  BlockInput,
   BlockSet,
   BlockSetTreeIo,
   BlockSetTreeNode,
+  FrontierMessage,
   Verifier,
 } from '~/sbl/messages.ts';
 import {
@@ -20,6 +22,7 @@ import FactService from '~/sbl/FactService.ts';
 import NodeService from '~/sbl/NodeService.ts';
 import HashRequestService from '~/sbl/HashRequestService.ts';
 import { assert } from '~/sbl/util/functional.ts';
+import FrontierService from '~/sbl/FrontierService.ts';
 
 /*
 BlockSets specify their position?
@@ -47,6 +50,9 @@ export interface BlockSetMeta {
   includedOutputs: Set<HashPrimitive>;
   excludedInputs: Set<HashPrimitive>;
   excludedOutputs: Set<HashPrimitive>;
+
+  // voters: (BlockFact | BlockSetFact)[];
+  votes: bigint;
 }
 
 type TreeNode = null | [TreeNode, TreeNode] | HashPrimitive;
@@ -60,16 +66,18 @@ const tryCatchLog = (cb: () => void) => {
 };
 
 export default class BlockSetService {
-  private nextBlock?: BlockFact;
-  private sets: BlockSetFact[][] = [];
-  private mySets: (BlockSetFact | undefined)[] = [];
+  // private nextBlock?: BlockFact;
+  // private sets: BlockSetFact[][] = [];
+  // private mySets: (BlockSetFact | undefined)[] = [];
 
   private parents = new Map<HashPrimitive, BlockSetFact[]>();
 
+  private voters = new Map<HashPrimitive, (BlockFact | BlockSetFact)[]>();
+
   constructor(private ctx: Context) {
     for (let i = 0; i < NUM_BLOCKSET_LEVELS; i++) {
-      this.sets.push([]);
-      this.mySets.push(undefined);
+      // this.sets.push([]);
+      // this.mySets.push(undefined);
     }
   }
 
@@ -77,11 +85,24 @@ export default class BlockSetService {
     return getOrCreate(this.parents, hash.toPrimitive(), () => []);
   }
 
-  public getMySets() {
-    return this.mySets;
+  public getVoters(hash: Hash, level?: number) {
+    if (Hash.equals(hash, ZERO_HASH)) {
+      if (level === undefined) {
+        throw new Error(`Must specify a level for the zero hash!`);
+      }
+      hash = Hash.fromLiteral32(level);
+    }
+    return getOrCreate(this.voters, hash.toPrimitive(), () => []);
   }
 
-  public createFact(base: FactBase): BlockSetFact {
+  // public getMySets() {
+  //   return this.mySets;
+  // }
+
+  public createFact(
+    base: FactBase,
+    mutator?: (fact: BlockSetFact) => void,
+  ): BlockSetFact {
     const blockSet = BlockSet.decode(base.message);
 
     const meta: BlockSetMeta = {
@@ -92,6 +113,9 @@ export default class BlockSetService {
       includedOutputs: new Set(),
       excludedInputs: new Set(),
       excludedOutputs: new Set(),
+
+      // voters: this.getVoters(base.hash),
+      votes: 0n,
     };
 
     const fact: BlockSetFact = Object.assign(
@@ -109,14 +133,19 @@ export default class BlockSetService {
     this.updateBlockChains(blockSet.left_child, chain);
     this.updateBlockChains(blockSet.right_child, chain);
 
-    const level = this.sets[fact.level];
-    if (level === undefined) {
-      throw new Error(`Invalid level ${fact.level}`);
-    }
-    level.push(fact);
+    this.getVoters(blockSet.frontier_vote, blockSet.level).push(fact);
 
-    // TODO: SetTimeout so provedInputs/provedOutputs can be populated?
-    this.ingestBlockSet(fact);
+    // const level = this.sets[fact.level];
+    // if (level === undefined) {
+    //   throw new Error(`Invalid level ${fact.level}`);
+    // }
+    // level.push(fact);
+
+    if (mutator !== undefined) {
+      mutator(fact);
+    }
+
+    this.ctx.get(FrontierService).ingestBlockSet(fact);
 
     return fact;
   }
@@ -129,214 +158,214 @@ export default class BlockSetService {
     );
   }
 
-  public ingestBlock(block: BlockFact) {
-    const scores = new Map<BlockFact, number>();
-    if (this.nextBlock !== undefined) {
-      // Prefer to join with the unjoined block
-      scores.set(this.nextBlock, 0.5);
-    }
-    block.inputs.forEach((input) => {
-      const inputFact = this.ctx.get(FactService).get(input.block_hash);
-      if (inputFact !== undefined) {
-        if (inputFact.type !== FactType.Block) {
-          throw new Error(
-            `Internal error! Invalid fact type ${inputFact.type}`,
-          );
-        }
-        if (inputFact.timestamp >= block.timestamp) {
-          throw new Error(`Blocks are not ordered!`);
-        }
-        getOrCreate(
-          scores,
-          inputFact,
-          () => this.getUnbindScore(inputFact) + 1,
-          (n) => n + 1,
-        );
-      }
-    });
-    block.outputClaims.forEach((claims) =>
-      claims.forEach((claim) => {
-        if (claim.timestamp <= block.timestamp) {
-          throw new Error(`Blocks are not ordered!`);
-        }
-        getOrCreate(
-          scores,
-          claim,
-          () => this.getUnbindScore(claim) + 1,
-          (n) => n + 1,
-        );
-      })
-    );
+  // public ingestBlock(block: BlockFact) {
+  //   const scores = new Map<BlockFact, number>();
+  //   if (this.nextBlock !== undefined) {
+  //     // Prefer to join with the unjoined block
+  //     scores.set(this.nextBlock, 0.5);
+  //   }
+  //   block.inputs.forEach((input) => {
+  //     const inputFact = this.ctx.get(FactService).get(input.block_hash);
+  //     if (inputFact !== undefined) {
+  //       if (inputFact.type !== FactType.Block) {
+  //         throw new Error(
+  //           `Internal error! Invalid fact type ${inputFact.type}`,
+  //         );
+  //       }
+  //       if (inputFact.timestamp >= block.timestamp) {
+  //         throw new Error(`Blocks are not ordered!`);
+  //       }
+  //       getOrCreate(
+  //         scores,
+  //         inputFact,
+  //         () => this.getUnbindScore(inputFact) + 1,
+  //         (n) => n + 1,
+  //       );
+  //     }
+  //   });
+  //   block.outputClaims.forEach((claims) =>
+  //     claims.forEach((claim) => {
+  //       if (claim.timestamp <= block.timestamp) {
+  //         throw new Error(`Blocks are not ordered!`);
+  //       }
+  //       getOrCreate(
+  //         scores,
+  //         claim,
+  //         () => this.getUnbindScore(claim) + 1,
+  //         (n) => n + 1,
+  //       );
+  //     })
+  //   );
 
-    let bestScore = -Infinity;
-    let bestSibling: BlockFact | undefined;
-    scores.forEach((score, block) => {
-      if (score > bestScore) {
-        bestScore = score;
-        bestSibling = block;
-      }
-    });
+  //   let bestScore = -Infinity;
+  //   let bestSibling: BlockFact | undefined;
+  //   scores.forEach((score, block) => {
+  //     if (score > bestScore) {
+  //       bestScore = score;
+  //       bestSibling = block;
+  //     }
+  //   });
 
-    if (bestSibling === undefined) {
-      this.nextBlock = block;
-      return;
-    }
+  //   if (bestSibling === undefined) {
+  //     this.nextBlock = block;
+  //     return;
+  //   }
 
-    if (bestSibling.myParentBlockSet === undefined) {
-      if (bestSibling !== this.nextBlock) {
-        throw new Error(`Unexpected internal state`);
-      }
-      const { left, right } = this.orderBlocks(block, bestSibling);
-      tryCatchLog(() => this.mergeBlocks(left, right));
-      this.nextBlock = undefined;
-    } else {
-      if (bestSibling === this.nextBlock) {
-        throw new Error(`Unexpected internal state`);
-      }
+  //   if (bestSibling.myParentBlockSet === undefined) {
+  //     if (bestSibling !== this.nextBlock) {
+  //       throw new Error(`Unexpected internal state`);
+  //     }
+  //     const { left, right } = this.orderBlocks(block, bestSibling);
+  //     tryCatchLog(() => this.mergeBlocks(left, right));
+  //     this.nextBlock = undefined;
+  //   } else {
+  //     if (bestSibling === this.nextBlock) {
+  //       throw new Error(`Unexpected internal state`);
+  //     }
 
-      const orphanedBlock = this.getOtherChild(
-        bestSibling.myParentBlockSet,
-        bestSibling.hash,
-        FactType.Block,
-      );
-      this.forgetBlockSet(bestSibling.myParentBlockSet);
+  //     const orphanedBlock = this.getOtherChild(
+  //       bestSibling.myParentBlockSet,
+  //       bestSibling.hash,
+  //       FactType.Block,
+  //     );
+  //     this.forgetBlockSet(bestSibling.myParentBlockSet);
 
-      const { left, right } = this.orderBlocks(block, bestSibling);
-      tryCatchLog(() => this.mergeBlocks(left, right));
+  //     const { left, right } = this.orderBlocks(block, bestSibling);
+  //     tryCatchLog(() => this.mergeBlocks(left, right));
 
-      if (this.nextBlock !== undefined) {
-        const { left, right } = this.orderBlocks(this.nextBlock, orphanedBlock);
-        tryCatchLog(() => this.mergeBlocks(left, right));
-        this.nextBlock = undefined;
-      } else {
-        this.nextBlock = orphanedBlock;
-      }
-    }
-  }
+  //     if (this.nextBlock !== undefined) {
+  //       const { left, right } = this.orderBlocks(this.nextBlock, orphanedBlock);
+  //       tryCatchLog(() => this.mergeBlocks(left, right));
+  //       this.nextBlock = undefined;
+  //     } else {
+  //       this.nextBlock = orphanedBlock;
+  //     }
+  //   }
+  // }
 
-  private ingestBlockSet(blockSet: BlockSetFact) {
-    const scores = new Map<BlockSetFact, number>();
-    const myCandidate = this.mySets[blockSet.level];
-    if (myCandidate !== undefined) {
-      // Prefer to join with my candidate block
-      scores.set(myCandidate, 0.5);
-    }
-    this.sets[blockSet.level].forEach((candidate) => {
-      if (candidate !== blockSet) {
-        getOrCreate(
-          scores,
-          candidate,
-          () => this.getUnbindScore(candidate) + 1,
-          (n) => n + 1,
-        );
-      }
-    });
+  // private ingestBlockSet(blockSet: BlockSetFact) {
+  //   const scores = new Map<BlockSetFact, number>();
+  //   const myCandidate = this.mySets[blockSet.level];
+  //   if (myCandidate !== undefined) {
+  //     // Prefer to join with my candidate block
+  //     scores.set(myCandidate, 0.5);
+  //   }
+  //   this.sets[blockSet.level].forEach((candidate) => {
+  //     if (candidate !== blockSet) {
+  //       getOrCreate(
+  //         scores,
+  //         candidate,
+  //         () => this.getUnbindScore(candidate) + 1,
+  //         (n) => n + 1,
+  //       );
+  //     }
+  //   });
 
-    let bestScore = -Infinity;
-    let bestSibling: BlockSetFact | undefined;
-    scores.forEach((score, blockSet) => {
-      if (score > bestScore) {
-        bestScore = score;
-        bestSibling = blockSet;
-      }
-    });
+  //   let bestScore = -Infinity;
+  //   let bestSibling: BlockSetFact | undefined;
+  //   scores.forEach((score, blockSet) => {
+  //     if (score > bestScore) {
+  //       bestScore = score;
+  //       bestSibling = blockSet;
+  //     }
+  //   });
 
-    if (bestSibling === undefined) {
-      this.mySets[blockSet.level] = blockSet;
-      return;
-    }
+  //   if (bestSibling === undefined) {
+  //     this.mySets[blockSet.level] = blockSet;
+  //     return;
+  //   }
 
-    if (bestSibling.myParentBlockSet === undefined) {
-      const { left, right } = this.orderBlocks(blockSet, bestSibling);
-      tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
-      if (bestSibling === myCandidate) {
-        this.mySets[blockSet.level] = undefined;
-      }
-    } else {
-      if (bestSibling === myCandidate) {
-        throw new Error(`Unexpected internal state`);
-      }
+  //   if (bestSibling.myParentBlockSet === undefined) {
+  //     const { left, right } = this.orderBlocks(blockSet, bestSibling);
+  //     tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
+  //     if (bestSibling === myCandidate) {
+  //       this.mySets[blockSet.level] = undefined;
+  //     }
+  //   } else {
+  //     if (bestSibling === myCandidate) {
+  //       throw new Error(`Unexpected internal state`);
+  //     }
 
-      const orphanedBlock = this.getOtherChild(
-        bestSibling.myParentBlockSet,
-        bestSibling.hash,
-        FactType.BlockSet,
-      );
-      this.forgetBlockSet(bestSibling.myParentBlockSet);
+  //     const orphanedBlock = this.getOtherChild(
+  //       bestSibling.myParentBlockSet,
+  //       bestSibling.hash,
+  //       FactType.BlockSet,
+  //     );
+  //     this.forgetBlockSet(bestSibling.myParentBlockSet);
 
-      const { left, right } = this.orderBlocks(blockSet, bestSibling);
-      tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
+  //     const { left, right } = this.orderBlocks(blockSet, bestSibling);
+  //     tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
 
-      if (myCandidate !== undefined) {
-        const { left, right } = this.orderBlocks(myCandidate, orphanedBlock);
-        tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
-        this.mySets[blockSet.level] = undefined;
-      } else {
-        this.mySets[blockSet.level] = orphanedBlock;
-      }
-    }
-  }
+  //     if (myCandidate !== undefined) {
+  //       const { left, right } = this.orderBlocks(myCandidate, orphanedBlock);
+  //       tryCatchLog(() => this.mergeSets(blockSet.level, left, right));
+  //       this.mySets[blockSet.level] = undefined;
+  //     } else {
+  //       this.mySets[blockSet.level] = orphanedBlock;
+  //     }
+  //   }
+  // }
 
-  private orderBlocks<Type extends { timestamp: bigint }>(
-    left: Type,
-    right: Type,
-  ) {
-    if (left.timestamp === right.timestamp) {
-      throw new Error(`Timestamps are the same!`);
-    }
-    if (left.timestamp > right.timestamp) {
-      const t = left;
-      left = right;
-      right = t;
-    }
+  // private orderBlocks<Type extends { timestamp: bigint }>(
+  //   left: Type,
+  //   right: Type,
+  // ) {
+  //   if (left.timestamp === right.timestamp) {
+  //     throw new Error(`Timestamps are the same!`);
+  //   }
+  //   if (left.timestamp > right.timestamp) {
+  //     const t = left;
+  //     left = right;
+  //     right = t;
+  //   }
 
-    return { left, right };
-  }
+  //   return { left, right };
+  // }
 
-  private getUnbindScore(block: BlockFact | BlockSetFact) {
-    if (block.myParentBlockSet === undefined) {
-      // The block isn't bound, so no unbind penalty
-      return 0;
-    } else if (this.nextBlock === undefined) {
-      // There's no block to bind with, so just a simple unbind penalty
-      return -block.myParentBlockSet.score;
-    } else {
-      // Unbind and re-bind the sibling with this.nextBlock
-      // const sibling = this.getOtherChild(block.myParentBlockSet, block.hash);
-      // return this.getBlockPairScore(sibling, this.nextBlock) -
-      //   block.myParentBlockSet.score;
-      return -block.myParentBlockSet.score;
-    }
-  }
+  // private getUnbindScore(block: BlockFact | BlockSetFact) {
+  //   if (block.myParentBlockSet === undefined) {
+  //     // The block isn't bound, so no unbind penalty
+  //     return 0;
+  //   } else if (this.nextBlock === undefined) {
+  //     // There's no block to bind with, so just a simple unbind penalty
+  //     return -block.myParentBlockSet.score;
+  //   } else {
+  //     // Unbind and re-bind the sibling with this.nextBlock
+  //     // const sibling = this.getOtherChild(block.myParentBlockSet, block.hash);
+  //     // return this.getBlockPairScore(sibling, this.nextBlock) -
+  //     //   block.myParentBlockSet.score;
+  //     return -block.myParentBlockSet.score;
+  //   }
+  // }
 
-  private getOtherChild<Type extends FactType>(
-    set: BlockSetFact,
-    hash: Hash,
-    type: Type,
-  ) {
-    if (
-      !Hash.equals(set.left_child, hash) &&
-      !Hash.equals(set.right_child, hash)
-    ) {
-      throw new Error(`Hash isn't in the set!`);
-    }
-    return this.ctx.get(FactService).getAs(
-      Hash.equals(set.left_child, hash) ? set.right_child : set.left_child,
-      type,
-    );
-  }
+  // private getOtherChild<Type extends FactType>(
+  //   set: BlockSetFact,
+  //   hash: Hash,
+  //   type: Type,
+  // ) {
+  //   if (
+  //     !Hash.equals(set.left_child, hash) &&
+  //     !Hash.equals(set.right_child, hash)
+  //   ) {
+  //     throw new Error(`Hash isn't in the set!`);
+  //   }
+  //   return this.ctx.get(FactService).getAs(
+  //     Hash.equals(set.left_child, hash) ? set.right_child : set.left_child,
+  //     type,
+  //   );
+  // }
 
-  private getBlockPairScore(a: BlockFact, b: BlockFact) {
-    const { left, right } = this.orderBlocks(a, b);
+  // private getBlockPairScore(a: BlockFact, b: BlockFact) {
+  //   const { left, right } = this.orderBlocks(a, b);
 
-    let score = 0;
-    right.inputs.forEach((input) => {
-      if (Hash.equals(input.block_hash, left.hash)) {
-        score++;
-      }
-    });
-    return score;
-  }
+  //   let score = 0;
+  //   right.inputs.forEach((input) => {
+  //     if (Hash.equals(input.block_hash, left.hash)) {
+  //       score++;
+  //     }
+  //   });
+  //   return score;
+  // }
 
   private addParent(childHash: Hash, parent: BlockSetFact) {
     this.getParents(childHash).push(parent);
@@ -366,29 +395,29 @@ export default class BlockSetService {
     }
   }
 
-  private forgetBlockSet(blockSet: BlockSetFact) {
-    if (!blockSet.active) {
-      throw new Error(`Cannot deactivate an inactive blockset`);
-    }
-    blockSet.active = false;
+  // private forgetBlockSet(blockSet: BlockSetFact) {
+  //   if (!blockSet.active) {
+  //     throw new Error(`Cannot deactivate an inactive blockset`);
+  //   }
+  //   blockSet.active = false;
 
-    const left = this.ctx.get(FactService).get(blockSet.left_child);
-    const right = this.ctx.get(FactService).get(blockSet.right_child);
-    if (left === undefined || !('myParentBlockSet' in left)) {
-      throw new Error(`Invalid left child fact ${left}`);
-    }
-    if (right === undefined || !('myParentBlockSet' in right)) {
-      throw new Error(`Invalid right child fact ${right}`);
-    }
-    if (
-      left.myParentBlockSet !== blockSet || right.myParentBlockSet !== blockSet
-    ) {
-      throw new Error(`BlockSet children aren't linked correctly!`);
-    }
+  //   const left = this.ctx.get(FactService).get(blockSet.left_child);
+  //   const right = this.ctx.get(FactService).get(blockSet.right_child);
+  //   if (left === undefined || !('myParentBlockSet' in left)) {
+  //     throw new Error(`Invalid left child fact ${left}`);
+  //   }
+  //   if (right === undefined || !('myParentBlockSet' in right)) {
+  //     throw new Error(`Invalid right child fact ${right}`);
+  //   }
+  //   if (
+  //     left.myParentBlockSet !== blockSet || right.myParentBlockSet !== blockSet
+  //   ) {
+  //     throw new Error(`BlockSet children aren't linked correctly!`);
+  //   }
 
-    left.myParentBlockSet = undefined;
-    right.myParentBlockSet = undefined;
-  }
+  //   left.myParentBlockSet = undefined;
+  //   right.myParentBlockSet = undefined;
+  // }
 
   private requestAll(root: Hash, signedFact: Fact): boolean {
     const node = this.ctx.get(FactService).get(root);
@@ -431,8 +460,8 @@ export default class BlockSetService {
   // }
 
   public mergeBlocks(left: BlockFact, right: BlockFact) {
-    if (left.work === undefined || right.work === undefined) {
-      throw new Error(`Blocks do not have work set!`);
+    if (left.claimedWork === undefined || right.claimedWork === undefined) {
+      throw new Error(`Blocks do not have claimedWork set!`);
     }
     if (left.timestamp >= right.timestamp) {
       throw new Error(`Blocks are not ordered!`);
@@ -487,14 +516,14 @@ export default class BlockSetService {
       input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
       output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
-      frontier: this.getVote(left, right),
+      frontier_vote: this.getVote(left, right),
 
       input_count: inputCount,
       output_count: outputCount,
 
       level: 0,
       score: skipIdxs.size,
-      work: left.work + right.work,
+      claimed_work: left.claimedWork + right.claimedWork,
       timestamp: right.timestamp + 1n,
     };
 
@@ -556,9 +585,10 @@ export default class BlockSetService {
   //   }
   // }
 
-  public mergeSets(level: number, left: BlockSetFact, right: BlockSetFact) {
-    assert(left.level === level);
-    assert(right.level === level);
+  public mergeSets(left: BlockSetFact, right: BlockSetFact) {
+    if (left.level !== right.level) {
+      throw new Error(`Cannot merge blocksets at different levels!`);
+    }
 
     const inputs = new Map<HashPrimitive, BlockSetTreeIo[]>();
     const outputs = new Map<HashPrimitive, BlockSetTreeIo[]>();
@@ -633,14 +663,14 @@ export default class BlockSetService {
       input_tree_root: this.hashTree(this.createTree(inputs), inputs)!.Hash,
       output_tree_root: this.hashTree(this.createTree(outputs), outputs)!.Hash,
 
-      frontier: this.getVote(left, right),
+      frontier_vote: this.getVote(left, right),
 
       input_count: inputCount,
       output_count: outputCount,
 
-      level: level + 1,
+      level: left.level + 1,
       score,
-      work: left.work + right.work,
+      claimed_work: left.claimed_work + right.claimed_work,
       timestamp:
         (left.timestamp > right.timestamp ? left.timestamp : right.timestamp) +
         1n,
@@ -658,23 +688,27 @@ export default class BlockSetService {
   ) {
     const data = this.ctx.get(FactService)
       .compose(set, BlockSet, FactType.BlockSet);
-    const fact = this.ctx.get(FactService).ingest(
+    this.ctx.get(FactService).ingest(
       data,
       FactSource.Local,
       this.ctx.get(NodeService).getSelfNode(),
-    );
-    if (fact.type !== FactType.BlockSet) {
-      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
-    }
+      (fact) => {
+        if (fact.type !== FactType.BlockSet) {
+          throw new Error(`Internal error! Invalid fact type ${fact.type}`);
+        }
 
-    left.myParentBlockSet = fact;
-    right.myParentBlockSet = fact;
+        left.myParentBlockSet = fact;
+        right.myParentBlockSet = fact;
 
-    inputs.forEach((ios) =>
-      ios.forEach((io) => fact.includedInputs.add(this.hashTreeIo(io)))
-    );
-    outputs.forEach((ios) =>
-      ios.forEach((io) => fact.includedOutputs.add(this.hashTreeIo(io)))
+        inputs.forEach((ios) =>
+          ios.forEach((io) => fact.includedInputs.add(this.hashTreeIo(io)))
+        );
+        outputs.forEach((ios) =>
+          ios.forEach((io) => fact.includedOutputs.add(this.hashTreeIo(io)))
+        );
+
+        // fact.votes
+      },
     );
   }
 
@@ -756,8 +790,13 @@ export default class BlockSetService {
     return { Hash: fact.hash };
   }
 
-  private hashTreeIo(io: BlockSetTreeIo) {
+  public hashTreeIo(io: BlockInput) {
     // Don't compare amount because input amounts will be -1
+    console.log(
+      io.block_hash.toHex(),
+      io.output_idx,
+      Hash.digestParts(io.block_hash, io.output_idx).toHex(),
+    );
     return Hash.digestParts(io.block_hash, io.output_idx).toPrimitive();
   }
 
@@ -765,20 +804,20 @@ export default class BlockSetService {
     left: BlockFact | BlockSetFact,
     right: BlockFact | BlockSetFact,
   ) {
-    if (Hash.equals(left.hash, right.frontier)) {
-      return left.frontier;
-    } else if (Hash.equals(left.frontier, right.frontier)) {
-      return left.frontier;
+    if (Hash.equals(left.hash, right.frontier_vote)) {
+      return left.frontier_vote;
+    } else if (Hash.equals(left.frontier_vote, right.frontier_vote)) {
+      return left.frontier_vote;
     } else {
       let leftVote = this.ctx.get(FactService)
-        .getAs(left.frontier, FactType.BlockSet);
+        .getAs(left.frontier_vote, FactType.BlockSet);
       let rightVote = this.ctx.get(FactService)
-        .getAs(right.frontier, FactType.BlockSet);
+        .getAs(right.frontier_vote, FactType.BlockSet);
 
       if (leftVote.level < rightVote.level) {
         while (true) {
           const nextVote = this.ctx.get(FactService)
-            .getAs(leftVote.frontier, FactType.BlockSet);
+            .getAs(leftVote.frontier_vote, FactType.BlockSet);
         }
       } else if (leftVote.level > rightVote.level) {
       } else {

@@ -16,7 +16,7 @@ import QaDebugger from '../sbl/QaDebugger.ts';
 import Hash, { HashPrimitive } from '../sbl/util/Hash.ts';
 import { trunc } from '../sbl/util/string.ts';
 import { BlockInput, BlockOutput } from '../sbl/messages.ts';
-import { BlockFact, Collateralization, FactSource } from '~/sbl/FactMeta.ts';
+import { BlockSetFact, Collateralization, FactSource } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import BlockService from '~/sbl/BlockService.ts';
 
@@ -42,17 +42,17 @@ const HashView = ({ hash, setSelectedHash }: {
 );
 
 const getBlocks = (ctx: Context) =>
-  ctx.get(FactService).hackyGetBlocksMatching();
+  ctx.get(FactService).hackyGetBlockSetsMatching();
 
 export default ({ ctx }: { ctx: Context }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [selectedHash, setSelectedHash] = React.useState<HashPrimitive>();
 
-  const columns = React.useMemo<ColumnDef<BlockFact>[]>(
+  const columns = React.useMemo<ColumnDef<BlockSetFact>[]>(
     () => [
       {
         header: 'hash',
-        accessorFn: (block) => block.hash.toHex(),
+        accessorFn: (blockSet) => blockSet.hash.toHex(),
         cell: (props) => (
           <a href='#' onClick={props.row.getToggleExpandedHandler()}>
             <span style={{ fontFamily: 'monospace' }}>
@@ -63,14 +63,14 @@ export default ({ ctx }: { ctx: Context }) => {
       },
       {
         header: 'timestamp',
-        accessorFn: (block) =>
-          // new Date(Number(block.timestamp)).toLocaleString(),
-          new Date(Number(block.timestamp)).toISOString(),
+        accessorFn: (blockSet) =>
+          // new Date(Number(blockSet.timestamp)).toLocaleString(),
+          new Date(Number(blockSet.timestamp)).toISOString(),
         cell: (props) => <pre>{props.getValue<string>()}</pre>,
       },
       {
         header: 'source',
-        accessorFn: (block) => block.source,
+        accessorFn: (blockSet) => blockSet.source,
         cell: (props) => ({
           [FactSource.Genesis]: 'genesis',
           [FactSource.Bootstrap]: 'bootstrap',
@@ -101,124 +101,89 @@ export default ({ ctx }: { ctx: Context }) => {
       // $50: 7786d3c1b2.0: accountHash/78c87b2352
 
       {
-        header: 'inputs',
-        accessorFn: (block) => block.inputs,
-        cell: (props) => (
-          <ol>
-            {props.getValue<BlockInput[]>().map((input) => {
-              const output = ctx.get(BlockService).get(input.block_hash)
-                ?.outputs[input.output_idx];
-              return (
-                <li>
-                  <span
-                    style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}
-                  >
-                    ${output ? Number(output.amount) : '?'}
-                    {': '}
-                    <HashView
-                      hash={input.block_hash}
-                      setSelectedHash={setSelectedHash}
-                    />.{input.output_idx}
-                    {output
-                      ? `: ${
-                        ctx.get(QaDebugger).debugQuestion(output.verifier)
-                          ?.dbgContract ??
-                          output.verifier.contract_hash.toHex().slice(0, 10)
-                      }/${
-                        Hash.digest(output.verifier.params).toHex().slice(0, 10)
-                      }`
-                      : null}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        ),
+        header: 'input_count',
+        accessorFn: (blockSet) => blockSet.input_count,
+      },
+      {
+        header: 'included_input_size',
+        accessorFn: (blockSet) => blockSet.includedInputs.size,
+      },
+      {
+        header: 'excluded_input_size',
+        accessorFn: (blockSet) => blockSet.excludedInputs.size,
+      },
+      {
+        header: 'output_count',
+        accessorFn: (blockSet) => blockSet.output_count,
+      },
+      {
+        header: 'included_output_size',
+        accessorFn: (blockSet) => blockSet.includedOutputs.size,
+      },
+      {
+        header: 'excluded_output_size',
+        accessorFn: (blockSet) => blockSet.excludedOutputs.size,
       },
 
-      // output:
-      // $50: accountHash/78c87b2352: 7786d3c1b2.0; 7786d3c1b2.1
-
       {
-        header: 'outputs',
-        accessorFn: (block) => block,
+        header: 'left_child',
+        accessorFn: (blockSet) => blockSet.left_child,
         cell: (props) => (
-          <ol>
-            {props.getValue<BlockFact>().outputs.map((output, outputIdx) => {
-              const claims =
-                props.getValue<BlockFact>().outputClaims[outputIdx];
-
-              return (
-                <li>
-                  <span
-                    style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}
-                  >
-                    ${Number(output.amount)}
-                    {': '}
-                    {ctx.get(QaDebugger).debugQuestion(output.verifier)
-                      ?.dbgContract ??
-                      output.verifier.contract_hash.toHex().slice(0, 10)}/{Hash
-                      .digest(output.verifier.params).toHex().slice(0, 10)}
-                    {claims.length
-                      ? (
-                        <>
-                          {claims.flatMap((claim, idx) => [
-                            idx ? '; ' : ': ',
-                            <HashView
-                              hash={claim.hash}
-                              setSelectedHash={setSelectedHash}
-                            />,
-                          ])}
-                        </>
-                      )
-                      : null}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
+          <HashView
+            hash={props.getValue<Hash>()}
+            setSelectedHash={setSelectedHash}
+          />
         ),
       },
       {
-        header: 'throughput',
-        accessorFn: (block) =>
-          block.outputs.reduce((acc, output) => acc + output.amount, 0n),
+        header: 'right_child',
+        accessorFn: (blockSet) => blockSet.right_child,
+        cell: (props) => (
+          <HashView
+            hash={props.getValue<Hash>()}
+            setSelectedHash={setSelectedHash}
+          />
+        ),
       },
       {
-        header: 'body size',
-        accessorFn: (block) => block.body.byteLength,
+        header: 'frontier_vote',
+        accessorFn: (blockSet) => blockSet.frontier_vote,
+        cell: (props) => (
+          <HashView
+            hash={props.getValue<Hash>()}
+            setSelectedHash={setSelectedHash}
+          />
+        ),
       },
+
       {
-        header: 'body',
-        accessorFn: (block) => {
-          const dbg = ctx.get(QaDebugger).debugAnswer(block)?.dbgAnswer;
-          return dbg ? ctx.get(Logger).serialize(dbg, 0) : bin2hex(block.body);
-        },
-        cell: (props) => <pre>{trunc(props.getValue<string>(), 16)}</pre>,
+        header: 'votes',
+        accessorFn: (blockSet) => blockSet.votes,
       },
+
       {
         header: 'block size',
-        accessorFn: (block) => block.data.byteLength,
+        accessorFn: (blockSet) => blockSet.data.byteLength,
       },
       {
         header: 'collateral for',
-        accessorFn: (block) =>
-          block.collateralizations.reduce(
+        accessorFn: (blockSet) =>
+          blockSet.collateralizations.reduce(
             (acc, cur) => cur.params.valid ? acc + cur.amountDelta : acc,
             0n,
           ),
       },
       {
         header: 'collateral against',
-        accessorFn: (block) =>
-          block.collateralizations.reduce(
+        accessorFn: (blockSet) =>
+          blockSet.collateralizations.reduce(
             (acc, cur) => cur.params.valid ? acc : acc + cur.amountDelta,
             0n,
           ),
       },
       {
         header: 'collateralizations',
-        accessorFn: (block) => block.collateralizations,
+        accessorFn: (blockSet) => blockSet.collateralizations,
         cell: (props) => (
           <ol>
             {props.getValue<Collateralization[]>().map((ctz) => (

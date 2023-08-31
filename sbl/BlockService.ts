@@ -1,4 +1,4 @@
-import { BlockCollateralization, BlockFlag, BlockMeta } from './BlockMeta.ts';
+import { BlockFlag, BlockMeta } from './BlockMeta.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
 import Context from './Context.ts';
@@ -22,6 +22,7 @@ import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import {
   BlockFact,
+  Collateralization,
   Fact,
   FactBase,
   FactSource,
@@ -40,7 +41,7 @@ interface CollateralSummary {
   postedAmountFor: bigint;
   postedAmountAgainst: bigint;
   implicitAmountAgainst: bigint;
-  ledger: BlockCollateralization[];
+  ledger: Collateralization[];
   resolver?: BlockFact;
 }
 
@@ -52,10 +53,6 @@ export default class BlockService {
   private claimsByOutput = new Map<
     HashPrimitive,
     { block: BlockFact; inputIdx: number }[]
-  >();
-  private collateralByBlockHash = new Map<
-    HashPrimitive,
-    BlockCollateralization[]
   >();
 
   private onNewBlockListeners = new Map<
@@ -142,6 +139,7 @@ export default class BlockService {
 
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.Null,
+      votes: 0n,
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map((_, idx) =>
@@ -158,12 +156,6 @@ export default class BlockService {
 
       canonicality: 0,
       collateral: 0,
-
-      collateralizations: getOrCreate(
-        this.collateralByBlockHash,
-        base.hash.toPrimitive(),
-        () => [],
-      ),
 
       epochInclusionProofs: new Map(),
 
@@ -198,11 +190,12 @@ export default class BlockService {
 
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
         const params = CollateralContractParams.decode(verifier.params);
-        getOrCreate(
-          this.collateralByBlockHash,
-          params.block_hash.toPrimitive(),
-          () => [],
-        ).push({ block: fact, params, amountDelta: amount, outputIdx });
+        this.ctx.get(FactService).addCollateral({
+          block: fact,
+          params,
+          amountDelta: amount,
+          outputIdx,
+        });
       }
 
       if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
@@ -215,11 +208,10 @@ export default class BlockService {
       this.checkInputAvailability(fact);
     }
 
-    // TODO: Remove this timeout; only added to make debugging easier
-    setTimeout(() => {
-      this.ctx.get(BlockSetService).ingestBlock(fact);
-      this.ctx.get(FrontierService).ingestBlock(fact);
-    }, 0);
+    this.ctx.get(BlockSetService).getVoters(block.frontier_vote, -1).push(fact);
+
+    // this.ctx.get(BlockSetService).ingestBlock(fact);
+    this.ctx.get(FrontierService).ingestBlock(fact);
 
     // fact.epochInclusionProofs.forEach((eip) =>
     //   this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
@@ -260,8 +252,8 @@ export default class BlockService {
     const aHeight = a.highestParentChain.length;
     const bHeight = b.highestParentChain.length;
 
-    const aWork = aHeight ? a.highestParentChain[aHeight - 1].work : a.work;
-    const bWork = bHeight ? b.highestParentChain[bHeight - 1].work : b.work;
+    const aWork = aHeight ? a.highestParentChain[aHeight - 1].votes : a.votes;
+    const bWork = bHeight ? b.highestParentChain[bHeight - 1].votes : b.votes;
     if (aWork === undefined || bWork === undefined) {
       return 0;
     }
@@ -400,9 +392,11 @@ export default class BlockService {
 
       // Work = MAX(0, non-free-market outputs - non-free-market inputs)
       // Work = MAX(0, free-market inputs - free-market outputs)
-      block.work = inputFreeMarketSum > outputFreeMarketSum
+      block.claimedWork = inputFreeMarketSum > outputFreeMarketSum
         ? inputFreeMarketSum - outputFreeMarketSum
         : 0n;
+      const delta = block.claimedWork - block.votes;
+      this.ctx.get(FrontierService).updateBlockVotes(block, delta);
     }
   }
 
@@ -559,10 +553,9 @@ export default class BlockService {
   // }
 
   public getCollateral(block: BlockFact): CollateralSummary {
-    const ledger =
-      (this.collateralByBlockHash.get(block.hash.toPrimitive()) || []).sort(
-        (a, b) => Number(a.block.timestamp - b.block.timestamp),
-      );
+    const ledger = block.collateralizations.sort((a, b) =>
+      Number(a.block.timestamp - b.block.timestamp)
+    );
 
     let postedAmountFor = 0n;
     let postedAmountAgainst = 0n;
@@ -653,7 +646,7 @@ export default class BlockService {
   }
 
   public updateDerivedWork(block: BlockFact) {
-    let sum = Number(block.work);
+    let sum = Number(block.votes);
 
     for (const claims of block.outputClaims) {
       for (const outputBlock of claims) {

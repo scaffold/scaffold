@@ -114,7 +114,7 @@ export default class BlockBuilder {
       throw new Error('INSUFFICIENT_COINS');
     }
 
-    const frontier = this.ctx.get(FrontierService).getBlockVote(inputs);
+    const frontier_vote = this.ctx.get(FrontierService).getBlockVote(inputs);
 
     // TODO: Can bundle multiple blocks without bodies
     const body = block.body ?? new Uint8Array([]);
@@ -134,7 +134,7 @@ export default class BlockBuilder {
     return {
       inputs,
       outputs,
-      frontier,
+      frontier_vote,
       body,
       is_free_market: isFreeMarket,
       timestamp,

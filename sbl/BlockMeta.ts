@@ -24,13 +24,6 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
-export interface BlockCollateralization {
-  block: BlockFact;
-  params: CollateralContractParams;
-  amountDelta: bigint;
-  outputIdx: number;
-}
-
 export interface BlockMeta {
   verifiers: Verifier[];
 
@@ -39,7 +32,8 @@ export interface BlockMeta {
 
   receivedTimestamp: number;
   flags: BlockFlag;
-  work?: bigint;
+  claimedWork?: bigint;
+  votes: bigint;
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
@@ -58,7 +52,6 @@ export interface BlockMeta {
   canonicality: number; // TODO: bigint?
   collateral: number; // TODO: bigint?
 
-  collateralizations: BlockCollateralization[];
   // collateralChain: BlockFact[];
   // postedCollateral: BlockFact[];
   passedVerification?: boolean;
