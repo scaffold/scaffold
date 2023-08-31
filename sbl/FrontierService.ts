@@ -97,6 +97,7 @@ export default class FrontierService {
         console.error(
           `Inputs don't match with the frontier output; we really should throw an error here!`,
         );
+        return ZERO_HASH;
       }
     }
 

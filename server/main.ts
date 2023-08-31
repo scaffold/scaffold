@@ -24,6 +24,7 @@ import { accountHash, generatorHash, rootHash } from '~/sbl/constants.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import GenesisService from '~/sbl/GenesisService.ts';
+import * as log from 'std-latest/log/mod.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -135,6 +136,8 @@ const config: Config = {
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
   ),
   nodeNonce: (new TextEncoder()).encode('server_0'),
+
+  logLevel: log.LogLevels.INFO,
 
   networkProvider: {
     protocols: new Map(Object.entries({

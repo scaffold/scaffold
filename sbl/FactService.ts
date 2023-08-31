@@ -14,11 +14,11 @@ import NodeService, { Node } from '~/sbl/NodeService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
-import FrontierService from '~/sbl/FrontierService.ts';
 import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
+import * as log from 'std-latest/log/mod.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -276,7 +276,14 @@ export default class FactService {
     }
 
     this.facts.set(hash.toPrimitive(), res);
-    console.log(`Created fact:`, res.hash.toHex(), res);
+    if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
+      console.log(`Created fact:`, res.hash.toHex(), res);
+    } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
+      console.log(
+        `Created ${res.type} fact from ${res.source}:`,
+        res.hash.toHex(),
+      );
+    }
 
     return res;
   }

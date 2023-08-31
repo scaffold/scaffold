@@ -120,14 +120,7 @@ export default () => {
   );
   const [params, setParams] = React.useState<string>(initialParams);
   const [body, setBody] = React.useState<string>('');
-  const [filter, setFilter] = React.useState<string>('');
   const gameHex = url.searchParams.get('game');
-
-  const [shownStore, setShownStore] = React.useState<
-    { key: number; clz?: { new (context: Context): Store2<any> } }
-  >({ key: 0 });
-
-  const [tableVersions, incTableVersion] = React.useReducer((x) => x + 1, 0);
 
   const [selectedHash, setSelectedHash] = React.useState<HashPrimitive>();
 
@@ -246,18 +239,6 @@ export default () => {
       <button onClick={() => client.close()}>STOP</button>
       <br />
 
-      {'Filter: '}
-      <input
-        type='text'
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-      />
-      <br />
-      <JsonView
-        name='FactService'
-        ctx={client.ctx}
-        Table={FactService}
-      />
       <BlockTableView
         ctx={client.ctx}
         selectedHash={selectedHash}
@@ -269,7 +250,6 @@ export default () => {
         setSelectedHash={setSelectedHash}
       />
       {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
-      <button onClick={incTableVersion}>Refresh</button>
 
       {gameHash && (
         <>

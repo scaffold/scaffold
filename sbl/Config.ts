@@ -31,7 +31,7 @@ interface Config {
   selfPrivateKey: Uint8Array;
   nodeNonce: Uint8Array;
 
-  logLevel: log.LevelName;
+  logLevel: log.LogLevels;
 
   // initialPublicMetadata: {
   //   name: string;
@@ -100,7 +100,7 @@ interface Config {
 
 export const defaultConfig = {
   network: 'main',
-  logLevel: 'WARNING',
+  logLevel: log.LogLevels.WARNING,
   timeProvider: {
     now: Date.now.bind(Date),
     setTimeout: setTimeout.bind(window),

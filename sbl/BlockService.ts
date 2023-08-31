@@ -103,27 +103,8 @@ export default class BlockService {
     const block = Block.decode(base.message);
 
     if (block.timestamp > BigInt(this.ctx.config.timeProvider.now())) {
-      this.ctx.get(Logger).info('discarding_block', {
-        hash: base.hash,
-        signature: base.signature,
-        block,
-        now: BigInt(this.ctx.config.timeProvider.now()),
-      });
       throw new Error(`Discarding block because the timestamp is too late`);
     }
-
-    this.ctx.get(Logger).info('ingesting_block', {
-      hash: base.hash,
-      block,
-      verifiers: block.inputs.map((input) => {
-        const inBlock = this.get(input.block_hash);
-        return inBlock
-          ? this.ctx.get(QaDebugger).debugQuestion(
-            inBlock.outputs[input.output_idx].verifier,
-          )
-          : null;
-      }),
-    });
 
     // console.log(
     //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${

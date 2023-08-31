@@ -56,14 +56,6 @@ export interface BlockSetMeta {
 
 type TreeNode = null | [TreeNode, TreeNode] | HashPrimitive;
 
-const tryCatchLog = (cb: () => void) => {
-  try {
-    cb();
-  } catch (err) {
-    console.error(err);
-  }
-};
-
 export default class BlockSetService {
   // private nextBlock?: BlockFact;
   // private sets: BlockSetFact[][] = [];
@@ -72,6 +64,8 @@ export default class BlockSetService {
   private parents = new Map<HashPrimitive, BlockSetFact[]>();
 
   private voters = new Map<HashPrimitive, (BlockFact | BlockSetFact)[]>();
+
+  private treeNodeListeners = new Map<HashPrimitive, Set<HashPrimitive>[]>();
 
   constructor(private ctx: Context) {
     for (let i = 0; i < NUM_BLOCKSET_LEVELS; i++) {
@@ -92,6 +86,32 @@ export default class BlockSetService {
       hash = Hash.fromLiteral32(level);
     }
     return getOrCreate(this.voters, hash.toPrimitive(), () => []);
+  }
+
+  public addTreeNodeListener(treeNodeHash: Hash, listener: Set<HashPrimitive>) {
+    const fact = this.ctx.get(FactService).get(treeNodeHash);
+    if (fact !== undefined) {
+      if (fact.type !== FactType.BlockSetTreeNode) {
+        throw new Error(`Invalid type`);
+      }
+
+      if ('BlockSetTreeBranch' in fact) {
+        const { left_child, right_child } = fact.BlockSetTreeBranch;
+        if (left_child !== null) {
+          this.addTreeNodeListener(left_child.Hash, listener);
+        }
+        if (right_child !== null) {
+          this.addTreeNodeListener(right_child.Hash, listener);
+        }
+      } else if ('BlockSetTreeLeaf' in fact) {
+        for (const io of fact.BlockSetTreeLeaf.ios) {
+          listener.add(this.hashTreeIo(io));
+        }
+      }
+    } else {
+      getOrCreate(this.treeNodeListeners, treeNodeHash.toPrimitive(), () => [])
+        .push(listener);
+    }
   }
 
   // public getMySets() {
@@ -134,6 +154,9 @@ export default class BlockSetService {
 
     this.getVoters(blockSet.frontier_vote, blockSet.level).push(fact);
 
+    this.addTreeNodeListener(blockSet.input_tree_root, fact.includedInputs);
+    this.addTreeNodeListener(blockSet.output_tree_root, fact.includedOutputs);
+
     // const level = this.sets[fact.level];
     // if (level === undefined) {
     //   throw new Error(`Invalid level ${fact.level}`);
@@ -150,11 +173,39 @@ export default class BlockSetService {
   }
 
   public createTreeNodeFact(base: FactBase): BlockSetTreeNodeFact {
-    return Object.assign(
+    const fact: BlockSetTreeNodeFact = Object.assign(
       base,
       BlockSetTreeNode.decode(base.message).node,
       { type: FactType.BlockSetTreeNode as const },
     );
+
+    const listeners = this.treeNodeListeners.get(fact.hash.toPrimitive());
+    if (listeners !== undefined) {
+      this.treeNodeListeners.delete(fact.hash.toPrimitive());
+
+      if ('BlockSetTreeBranch' in fact) {
+        const { left_child, right_child } = fact.BlockSetTreeBranch;
+        if (left_child !== null) {
+          for (const listener of listeners) {
+            this.addTreeNodeListener(left_child.Hash, listener);
+          }
+        }
+        if (right_child !== null) {
+          for (const listener of listeners) {
+            this.addTreeNodeListener(right_child.Hash, listener);
+          }
+        }
+      } else if ('BlockSetTreeLeaf' in fact) {
+        for (const io of fact.BlockSetTreeLeaf.ios) {
+          const prim = this.hashTreeIo(io);
+          for (const listener of listeners) {
+            listener.add(prim);
+          }
+        }
+      }
+    }
+
+    return fact;
   }
 
   // public ingestBlock(block: BlockFact) {

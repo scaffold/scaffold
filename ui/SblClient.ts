@@ -7,6 +7,7 @@ import Peer from '~/sbl/Peer.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import Logger from '~/sbl/Logger.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
+import * as log from 'std-latest/log/mod.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 // window['Deno'] = {};
@@ -214,6 +215,8 @@ export default class SblClient {
       debugName: 'SblClient',
       selfPrivateKey: getPrivateKey(),
       nodeNonce: Hash.random().toBytes(),
+
+      logLevel: log.LogLevels.DEBUG,
 
       networkProvider: {
         protocols: new Map(Object.entries({
