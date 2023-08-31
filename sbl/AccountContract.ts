@@ -11,6 +11,7 @@ import { arrEquals } from './util/buffer.ts';
 import Hash from './util/Hash.ts';
 import secp from './util/secp.ts';
 import { MaybePromise } from './util/types.ts';
+import FactService from '~/sbl/FactService.ts';
 
 export default class AccountContract {
   constructor(private ctx: Context) {
@@ -30,8 +31,7 @@ export default class AccountContract {
     _invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
     const { public_key } = AccountContractParams.decode(params);
-    return block.signature !== undefined &&
-      secp.verify(block.signature, block.hash.toBytes(), public_key);
+    return this.ctx.get(FactService).verify(block, public_key);
   }
 
   // public static generate(

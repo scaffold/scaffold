@@ -12,6 +12,7 @@ import { arrEquals } from './util/buffer.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 import secp from './util/secp.ts';
 import { MaybePromise } from './util/types.ts';
+import FactService from '~/sbl/FactService.ts';
 
 // Only used in tests,
 // Used to make sure that generating collateral contracts "out-of-spec" never wins.
@@ -67,8 +68,7 @@ export default class CollateralContract {
       );
     } else {
       // Free collateral
-      return block.signature !== undefined &&
-        secp.verify(block.signature, block.hash.toBytes(), public_key);
+      return this.ctx.get(FactService).verify(block, public_key);
     }
   }
 

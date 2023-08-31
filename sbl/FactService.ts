@@ -193,6 +193,18 @@ export default class FactService {
     }
   }
 
+  public verify(fact: Fact, publicKey: Uint8Array) {
+    return fact.signature !== undefined &&
+      secp.verify(fact.signature, fact.hash.toBytes(), publicKey);
+  }
+  public getPublicKey(fact: Fact) {
+    if (fact.signature === undefined) {
+      throw new Error(`No signature on fact!`);
+    }
+    return secp.Signature.fromCompact(fact.signature)
+      .recoverPublicKey(fact.hash.toBytes()).toRawBytes();
+  }
+
   private create(
     data: Uint8Array,
     source: FactSource,

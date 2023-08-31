@@ -136,6 +136,7 @@ export default (
           />
         ),
       },
+
       {
         header: 'frontier_vote',
         accessorFn: (blockSet) => blockSet.frontier_vote,
@@ -146,7 +147,6 @@ export default (
           />
         ),
       },
-
       {
         header: 'votes',
         accessorFn: (blockSet) => blockSet.votes,

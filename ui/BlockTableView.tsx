@@ -188,6 +188,20 @@ export default (
         cell: (props) => <pre>{trunc(props.getValue<string>(), 16)}</pre>,
       },
       {
+        header: 'frontier_vote',
+        accessorFn: (blockSet) => blockSet.frontier_vote,
+        cell: (props) => (
+          <HashView
+            hash={props.getValue<Hash>()}
+            setSelectedHash={setSelectedHash}
+          />
+        ),
+      },
+      {
+        header: 'votes',
+        accessorFn: (blockSet) => blockSet.votes,
+      },
+      {
         header: 'block size',
         accessorFn: (block) => block.data.byteLength,
       },
