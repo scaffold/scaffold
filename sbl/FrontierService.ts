@@ -120,8 +120,6 @@ export default class FrontierService {
   }
 
   public ingestBlock(block: BlockFact) {
-    // debugger;
-
     this.blocks.push(block);
 
     const keys: HashPrimitive[] = [];
@@ -157,10 +155,35 @@ export default class FrontierService {
   }
 
   public updateBlockVotes(fact: BlockFact | BlockSetFact, voteDelta: bigint) {
-    // debugger;
     const chain: BlockSetFact[] = [];
 
     while (true) {
+      if (fact.type === FactType.BlockSet) {
+        const idx = this.frontierSets.lastIndexOf(fact);
+        if (idx !== -1) {
+          const replaceAt = idx + 1;
+          for (let i = 0; i < replaceAt; i++) {
+            this.frontierSets[i].votes += voteDelta;
+          }
+          const prevCmp = this.frontierSets[replaceAt];
+          if (
+            fact.type === FactType.BlockSet &&
+            (prevCmp === undefined || fact.votes > prevCmp.votes)
+          ) {
+            this.frontierSets.splice(replaceAt, Infinity, ...chain.reverse());
+            chain.reduce((prevSet, curSet) => {
+              if (prevSet.level === curSet.level) {
+                this.ctx.get(BlockSetService).mergeSets(prevSet, curSet);
+              }
+              return curSet;
+            }, fact);
+          }
+          break;
+        }
+
+        chain.push(fact);
+      }
+
       fact.votes += voteDelta;
 
       for (const parent of fact.parentBlockSets) {
@@ -189,24 +212,7 @@ export default class FrontierService {
         break;
       }
 
-      if (next.type === FactType.BlockSet) {
-        const idx = this.frontierSets.lastIndexOf(next);
-        if (idx !== -1) {
-          for (let i = 0; i <= idx; i++) {
-            this.frontierSets[i].votes += voteDelta;
-          }
-          const prevCmp = this.frontierSets[idx + 1];
-          if (
-            fact.type === FactType.BlockSet &&
-            (prevCmp === undefined || fact.votes > prevCmp.votes)
-          ) {
-            this.frontierSets.splice(idx + 1, Infinity, ...chain.reverse());
-          }
-          break;
-        }
-
-        chain.push(next);
-      } else if (next.type !== FactType.Block) {
+      if (next.type !== FactType.Block && next.type !== FactType.BlockSet) {
         throw new Error(`Frontier vote doesn't refer to a block or blockset!`);
       }
 

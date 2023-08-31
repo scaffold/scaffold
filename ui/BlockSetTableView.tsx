@@ -69,38 +69,20 @@ export default (
           [FactSource.Remote]: 'remote',
         }[props.getValue<FactSource>()]),
       },
-      // {
-      //   header: 'verifier contract hash',
-      //   accessorFn: ({ val }) =>
-      //     ctx.get(QaDebugger).debugQuestion(val.verifier)?.dbgContract ||
-      //     val.verifier.contract_hash.toHex(),
-      //   cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
-      // },
-      // {
-      //   header: 'verifier params',
-      //   accessorFn: ({ val }) => {
-      //     const dbg = ctx.get(QaDebugger).debugQuestion(val.verifier)
-      //       ?.dbgParams;
-      //     return dbg
-      //       ? ctx.get(Logger).serialize(dbg, 0)
-      //       : bin2hex(val.verifier.params);
-      //   },
-      //   cell: (props) => <pre>{trunc(props.getValue<string>())}</pre>,
-      // },
-
-      // input:
-      // $50: 7786d3c1b2.0: accountHash/78c87b2352
-
+      {
+        header: 'level',
+        accessorFn: (blockSet) => blockSet.level,
+      },
       {
         header: 'input_count',
         accessorFn: (blockSet) => blockSet.input_count,
       },
       {
-        header: 'included_input_size',
+        header: 'incl_input_size',
         accessorFn: (blockSet) => blockSet.includedInputs.size,
       },
       {
-        header: 'excluded_input_size',
+        header: 'excl_input_size',
         accessorFn: (blockSet) => blockSet.excludedInputs.size,
       },
       {
@@ -108,11 +90,11 @@ export default (
         accessorFn: (blockSet) => blockSet.output_count,
       },
       {
-        header: 'included_output_size',
+        header: 'incl_output_size',
         accessorFn: (blockSet) => blockSet.includedOutputs.size,
       },
       {
-        header: 'excluded_output_size',
+        header: 'excl_output_size',
         accessorFn: (blockSet) => blockSet.excludedOutputs.size,
       },
 

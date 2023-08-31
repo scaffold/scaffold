@@ -69,6 +69,8 @@ interface Config {
   // }[];
 
   networkProvider: NetworkProvider;
+  timeProvider: TimeProvider;
+  entropyProvider: EntropyProvider;
 
   // appraisalProvider: AppraisalProvider;
 
@@ -85,9 +87,6 @@ interface Config {
 
   onlyBridge?: boolean;
 
-  timeProvider: TimeProvider;
-  entropyProvider: EntropyProvider;
-
   resourceLimits: Record<Resource, number>;
 
   workScoreThreshold: number; // TODO: Units?
@@ -102,12 +101,6 @@ interface Config {
 export const defaultConfig = {
   network: 'main',
   logLevel: 'WARNING',
-  approxComputePricePerSecond: 1000n,
-  getGenerationReward: (_verifier, computeTimeSeconds) =>
-    BigInt(computeTimeSeconds * 1e6) + 1000n,
-  getDepositIncentive: (_verifier) => 1n,
-  initialWorkerCount: 16,
-  maxShutdownTimeMs: 10000,
   timeProvider: {
     now: Date.now.bind(Date),
     setTimeout: setTimeout.bind(window),
@@ -119,6 +112,12 @@ export const defaultConfig = {
     randomNumber: Math.random.bind(Math),
     randomBytes: secp.etc.randomBytes,
   },
+  approxComputePricePerSecond: 1000n,
+  getGenerationReward: (_verifier, computeTimeSeconds) =>
+    BigInt(computeTimeSeconds * 1e6) + 1000n,
+  getDepositIncentive: (_verifier) => 1n,
+  initialWorkerCount: 16,
+  maxShutdownTimeMs: 10000,
   resourceLimits: {
     webWorkerCount: 16,
     cpuUsage: navigator.hardwareConcurrency,
