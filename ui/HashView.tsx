@@ -1,4 +1,5 @@
-import React from 'react';import Hash, { HashPrimitive } from "~/sbl/util/Hash.ts";
+import React from 'react';
+import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 
 export default ({ hash, setSelectedHash }: {
   hash: Hash;

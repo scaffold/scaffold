@@ -1,5 +1,4 @@
-import { Script } from '../scriptTypes.ts';
-import { Verifier } from '../messages.ts';
+import Hash from '~/sbl/util/Hash.ts';
 
 export interface InitialMessage {
   sigBuf: SharedArrayBuffer;
@@ -7,9 +6,10 @@ export interface InitialMessage {
 
 export interface JobMessage {
   code: Uint8Array;
-  // codeVerifier: { contractHash: Uint8Array; params: Uint8Array }; // Can't just use Verifier since Hash isn't transferrable
-  inputs: Record<string, Uint8Array>;
-  outputSpec: Record<string, null>;
+  contractHash: Uint8Array;
+  params: Uint8Array;
+  body?: Uint8Array; // If this is set, we're running a contract/verifier. If not, it's a generator.
+  emitCorrect: boolean;
 }
 
 export interface JsMessage {

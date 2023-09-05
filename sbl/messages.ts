@@ -714,6 +714,36 @@ export const registry = {
     ],
   },
 
+  JsWasiEnvEntry: {
+    name: 'JsWasiEnvEntry',
+    type: 'record',
+    fields: [
+      { name: 'key', type: 'bytes' },
+      { name: 'val', type: 'bytes' },
+    ],
+  },
+  JsWasiFileEntry: {
+    name: 'JsWasiFileEntry',
+    type: 'record',
+    fields: [
+      { name: 'path', type: 'string' },
+      { name: 'contents', type: 'bytes' },
+    ],
+  },
+  JsWasiParams: {
+    name: 'JsWasiParams',
+    type: 'record',
+    fields: [
+      { name: 'argv', type: { type: 'array', items: 'bytes' } },
+      { name: 'env', type: { type: 'array', items: 'JsWasiEnvEntry' } },
+      { name: 'cwd', type: { type: 'array', items: 'bytes' } },
+      { name: 'files', type: { type: 'array', items: 'JsWasiFileEntry' } },
+      { name: 'stdinFrom', type: { type: 'array', items: 'bytes' } },
+      { name: 'stdoutTo', type: { type: 'array', items: 'bytes' } },
+      { name: 'stderrTo', type: { type: 'array', items: 'bytes' } },
+    ],
+  },
+
   long,
 } as const;
 
@@ -916,6 +946,8 @@ export const CollateralContractParams = makeMsg(
 export type CollateralContractParams = MsgType<'CollateralContractParams'>;
 export const TimeParams = makeMsg(registry, 'TimeParams');
 export type TimeParams = MsgType<'TimeParams'>;
+export const JsWasiParams = makeMsg(registry, 'JsWasiParams');
+export type JsWasiParams = MsgType<'JsWasiParams'>;
 
 // const buf = Question.encode({
 //   contract: {

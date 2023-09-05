@@ -1,10 +1,7 @@
-
 import { BlockInput } from '~/sbl/messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
-import {
-  BlockFact,
-} from '~/sbl/FactMeta.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 
 export default class IoService {
   private claimsByOutput = new Map<

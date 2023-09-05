@@ -47,3 +47,5 @@ export const timeHash = Hash.xor(SBL, Hash.fromLiteralStr('time'));
 
 export const selfHash = Hash.xor(SBL, Hash.fromLiteralStr('self'));
 // Used for: timestamp, duration, inputs, licenses
+
+export const jsWasiHash = Hash.xor(SBL, Hash.fromLiteralStr('js_wasi'));

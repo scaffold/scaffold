@@ -100,18 +100,13 @@ export default class ExecutorLauncherService {
           await driver.setAllocation({});
 
           const { stdout, stderr } = await this.ctx.get(WorkerExecutor).run(
-            // {
-            //   contract_hash: generatorHash,
-            //   params: verifier.contract_hash.toBytes(),
-            // }
-            contractCode,
             {
+              code: contractCode,
               contractHash: verifier.contract_hash.toBytes(),
               params: verifier.params,
               body: block.body,
-              stdin: new Uint8Array([]),
+              emitCorrect: true,
             },
-            { stdout: null, stderr: null },
             driver,
             cancel,
           );
@@ -202,20 +197,12 @@ export default class ExecutorLauncherService {
             await driver.setAllocation({ webWorkerCount: 1 });
 
             const { stdout, stderr } = await this.ctx.get(WorkerExecutor).run(
-              // {
-              //   contract_hash: generatorHash,
-              //   params: verifier.contract_hash.toBytes(),
-              // }
-              generatorCode,
               {
+                code: generatorCode,
                 contractHash: verifier.contract_hash.toBytes(),
                 params: verifier.params,
-                emitCorrect: new Uint8Array([
-                  this.shouldEmitCorrect(verifier) ? 1 : 0,
-                ]),
-                stdin: new Uint8Array([]),
+                emitCorrect: this.shouldEmitCorrect(verifier),
               },
-              { stdout: null, stderr: null },
               driver,
               cancel,
             );

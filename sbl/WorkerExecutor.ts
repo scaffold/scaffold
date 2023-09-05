@@ -32,10 +32,7 @@ export default class WorkerExecutor {
 
   // Note: This will transfer the input buffers, reducing their size to zero.
   public run<InputKeys extends string, OutputKeys extends string>(
-    // codeVerifier: Verifier,
-    code: Uint8Array,
-    inputs: Record<InputKeys, Uint8Array>,
-    outputSpec: Record<OutputKeys, null>,
+    job: JobMessage,
     driver: ExecutorDriver,
     cancel: Promise<typeof INTERRUPT_FLAG>,
   ): Promise<Record<OutputKeys, Uint8Array>> {
@@ -75,7 +72,7 @@ export default class WorkerExecutor {
 
     let codeHash: Hash | undefined;
     const getDebugger = (): WorkerDebugger => {
-      codeHash ??= Hash.digest(code);
+      codeHash ??= Hash.digest(job.code);
       const dbgr = this.ctx.get(WorkerDebuggerManager).getDebugger(codeHash);
       if (dbgr === undefined) {
         console.error(
@@ -140,16 +137,7 @@ export default class WorkerExecutor {
           //   },
           // );
 
-          const msg: JobMessage = {
-            // codeVerifier: {
-            //   contractHash: codeVerifier.contract_hash.toBytes(),
-            //   params: codeVerifier.params,
-            // },
-            code,
-            inputs,
-            outputSpec,
-          };
-          worker.postMessage(msg);
+          worker.postMessage(job);
 
           // Only send one job, then end worker.
           worker.postMessage(undefined);
