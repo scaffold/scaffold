@@ -46,6 +46,7 @@ import * as log from 'std-latest/log/mod.ts';
 
 const traceSyscalls = true;
 const exposeInodes = false;
+const enableRandom = true;
 
 const has = (superset: number, subset: number) => (~superset & subset) === 0;
 
@@ -349,8 +350,6 @@ export default class WasiImpl {
     this.logger.info('Running...', {});
     try {
       (inst.exports._start as CallableFunction)();
-      this.logger.info('Ended successfully', {});
-      return 0;
     } catch (err) {
       if (err instanceof WasiExit) {
         // If it's a normal WASI exit, we return it directly
@@ -365,6 +364,9 @@ export default class WasiImpl {
         throw err;
       }
     }
+
+    this.logger.info('Ended successfully', {});
+    return 0;
   }
 
   private advanceFdIt(): number {
@@ -1424,17 +1426,14 @@ export default class WasiImpl {
 
   private wasi_random_get(bufPtr: number, bufLen: number) {
     this.logger.info(`wasi_random_get`, { bufPtr, bufLen });
-    return wc.WASI_ENOSYS;
-
-    /*
-    const view = new DataView(this.memory.buffer);
-    bindings.randomFillSync(
-      new Uint8Array(this.memory.buffer),
-      bufPtr,
-      bufLen,
-    );
-    return wc.WASI_ESUCCESS;
-    */
+    if (enableRandom) {
+      crypto.getRandomValues(
+        new Uint8Array(this.memory.buffer, bufPtr, bufLen),
+      );
+      return wc.WASI_ESUCCESS;
+    } else {
+      return wc.WASI_ENOSYS;
+    }
   }
 
   private wasi_sched_yield() {

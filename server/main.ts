@@ -11,7 +11,7 @@ import Peer from '~/sbl/Peer.ts';
 import ServingService from '~/sbl/ServingService.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import BlockService from '../sbl/BlockService.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import { error } from '../sbl/util/functional.ts';
 import { bin2str, str2bin } from '../sbl/pathUtils.ts';
@@ -21,10 +21,12 @@ import LocalGeneratorService, {
 import { epochStartTime } from '~/server/epochStartTime.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { accountHash, generatorHash, rootHash } from '~/sbl/constants.ts';
-import { AccountContractParams } from '~/sbl/messages.ts';
+import { AccountContractParams, JsWasiParams } from '~/sbl/messages.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import GenesisService from '~/sbl/GenesisService.ts';
 import * as log from 'std-latest/log/mod.ts';
+import ExecutorDriverService from '~/sbl/ExecutorDriverService.ts';
+import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -219,6 +221,93 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
 
   ctx.get(QaDebugger).addDebugger(filename, hash);
 });
+
+(() => {
+  ctx.get(BlockService).create({
+    inputs: [{ block_hash: Hash.random(), output_idx: 0 }],
+    outputs: [{
+      amount: 100000000n,
+      verifier: {
+        contract_hash: accountHash,
+        params: AccountContractParams.encode({
+          public_key: ctx.get(KeyService).getSelfPublicKey(),
+        }),
+      },
+    }],
+    frontier_vote: ZERO_HASH,
+    body: new Uint8Array(),
+    is_free_market: true,
+    timestamp: BigInt(ctx.config.timeProvider.now()),
+  });
+
+  // const entry = entries.find((x) => x.filename === 'wasm-custom-section.wasm')!;
+
+  // console.log(bin2hex(JsWasiParams.encode({
+  //   argv: [str2bin('wasm-custom-section'), str2bin('help')],
+  //   env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
+  //   cwd: [],
+  //   files: [],
+  //   stdinFrom: [str2bin('identity'), str2bin('')],
+  //   stdoutTo: [str2bin('out'), str2bin('stdout')],
+  //   stderrTo: [str2bin('out'), str2bin('stderr')],
+  // })));
+
+  // ctx.get(ExecutorDriverService).run(
+  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   {},
+  //   () => 1,
+  //   async (driver, cancel) => {
+  //     await driver.setAllocation({});
+
+  //     const { stdout } = await ctx.get(WorkerExecutor).run(
+  //       {
+  //         code: entry.body,
+  //         contractHash: entry.hash.toBytes(),
+  //         params: new Uint8Array(),
+  //         emitCorrect: true,
+  //       },
+  //       driver,
+  //       cancel,
+  //     );
+
+  //     console.log('stdout', new TextDecoder().decode(stdout));
+  //   },
+  // );
+
+  // const entry = entries.find((x) => x.filename === 'qjs.wasm')!;
+
+  // console.log(bin2hex(JsWasiParams.encode({
+  //   argv: [str2bin('quickjs'), str2bin('--help')],
+  //   env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
+  //   cwd: [],
+  //   files: [],
+  //   stdinFrom: [str2bin('identity'), str2bin('')],
+  //   stdoutTo: [str2bin('out'), str2bin('stdout')],
+  //   stderrTo: [str2bin('out'), str2bin('stderr')],
+  // })));
+
+  // ctx.get(ExecutorDriverService).run(
+  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   {},
+  //   () => 1,
+  //   async (driver, cancel) => {
+  //     await driver.setAllocation({});
+
+  //     const { stdout } = await ctx.get(WorkerExecutor).run(
+  //       {
+  //         code: entry.body,
+  //         contractHash: entry.hash.toBytes(),
+  //         params: new Uint8Array(),
+  //         emitCorrect: true,
+  //       },
+  //       driver,
+  //       cancel,
+  //     );
+
+  //     console.log('stdout', new TextDecoder().decode(stdout));
+  //   },
+  // );
+})();
 
 // ctx.get(EpochContract).get();
 ctx.get(ServingService).serve((protocol: string, spec: string) =>

@@ -24,12 +24,13 @@ import Hash from '~/sbl/util/Hash.ts';
 import { jsWasiHash } from '~/sbl/constants.ts';
 import { JsWasiParams } from '~/sbl/messages.ts';
 import logger from './logger.ts';
+import { BaseImports } from '~/sbl/worker/execJob.ts';
 
 export const makeWasiImports = (
   client: WorkerChannelClient<WorkerComm>,
-  memory: WebAssembly.Memory,
   wasiParamBytes: Uint8Array,
   job: JobMessage,
+  baseImports: BaseImports,
 ) => {
   const wasiParams = JsWasiParams.decode(wasiParamBytes);
 
@@ -176,6 +177,69 @@ export const makeWasiImports = (
       },
   ).write(0, [job.params]);
 
+  const createResultNode = () => {
+    const inode = inodeSource.nextInode++;
+    let contents = new Uint8Array();
+
+    return {
+      getFs() {
+        return memFs;
+      },
+      getInode() {
+        return inode;
+      },
+
+      dispatch<T>(
+        { file }: { file?: (file: FsFileNode) => T },
+        defaultHandler?: (node: FsNode) => T,
+      ): T {
+        return (file || defaultHandler)!(this);
+      },
+
+      read(offset: number, dstBufs: Uint8Array[]) {
+        throw new Error(`ResultFs does not support file reading`);
+      },
+
+      write(offset: number, bufs: Uint8Array[]) {
+        const end = bufs.reduce((acc, buf) => acc + buf.byteLength, offset);
+
+        if (end > contents.byteLength) {
+          const newContents = new Uint8Array(end);
+          newContents.set(contents);
+          contents = newContents;
+        }
+
+        const begin = offset;
+        for (const buf of bufs) {
+          contents.set(buf, offset);
+          offset += buf.byteLength;
+        }
+
+        client.inform('outputChunk', ['stdout', 0, contents], []);
+        return offset - begin;
+      },
+
+      getSize() {
+        throw new Error(`ResultFs does not support file reading`);
+      },
+
+      resize(size: number) {
+        const newContents = new Uint8Array(size);
+        newContents.set(contents);
+        contents = newContents;
+        client.inform('outputChunk', ['stdout', 0, contents], []);
+      },
+    };
+  };
+  outDir.mutEntry(
+    str2bin('stdout'),
+    (entry) =>
+      entry ? error(`/out/stdout already exists`) : {
+        val: createResultNode(),
+        capMask: FS_CAPABILITY_FILE_WRITE,
+      },
+  );
+
   // await script.cmds.reduce(
   //   async (
   //     wait: Promise<void>,
@@ -207,7 +271,7 @@ export const makeWasiImports = (
   // logger.info('ARGS', args);
 
   const wasi = new WasiImpl(
-    memory,
+    baseImports.env.memory,
     wasiParams.argv,
     wasiParams.env,
     wasiParams.cwd,
@@ -242,7 +306,13 @@ export const makeWasiImports = (
     [[]].map((path) => ({ path, handle: lookupWasiPath(path, true) })),
   );
 
-  return wasi.getImports();
+  const wasiImports = wasi.getImports();
+
+  return {
+    env: { memory: baseImports.env.memory },
+    wasi_snapshot_preview1: wasiImports,
+    wasi_unstable: wasiImports,
+  };
 
   // Object.entries(outputSpec).forEach(([key, _]) => {
   //   const file = outDir

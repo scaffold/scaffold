@@ -109,6 +109,14 @@ cp wasm/* server/bootstrap/ &
 
 wait
 
+for file in ./server/bootstrap/*.wasm; do
+	echo "$file"
+	echo '53424c000000000000000000000000000000000000000000006a735f77617369' | xxd -r -p | wasm-custom-section "$file" add scaffold_v0_wrapper_hash
+	mv "$file".out "$file"
+	echo '' | xxd -r -p | wasm-custom-section "$file" add scaffold_v0_wrapper_params
+	mv "$file".out "$file"
+done
+
 deno run --allow-read --allow-write generateHashes.ts
 
 wc -c server/bootstrap/*

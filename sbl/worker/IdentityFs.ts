@@ -82,10 +82,10 @@ export default class IdentityFs implements Fs {
       read(offset: number, dstBufs: Uint8Array[]) {
         const begin = offset;
         for (const buf of dstBufs) {
-          const limit = Math.min(offset + buf.length, value.length);
+          const limit = Math.min(offset + buf.byteLength, value.byteLength);
           buf.set(value.subarray(offset, limit));
           offset = limit;
-          if (offset === value.length) {
+          if (offset === value.byteLength) {
             break;
           }
         }
