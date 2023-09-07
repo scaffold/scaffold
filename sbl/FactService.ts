@@ -19,6 +19,7 @@ import { arrEquals } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import * as log from 'std-latest/log/mod.ts';
+import PublicKeyService from '~/sbl/PublicKeyService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -41,7 +42,8 @@ type FactFactory = (
 const factMagic = new Uint8Array([83, 66, 76]); // SBL
 const headerSize = factMagic.byteLength + 1;
 
-const SIGNATURE_LENGTH = 64; // We really shouldn't export this, since it's an implementation detail
+const SIGNATURE_LENGTH = 64 + 1; // We really shouldn't export this, since it's an implementation detail
+const SIGNATURE_RECOVERY_BIT = 64;
 
 const typeHasSignature: boolean[] = [];
 typeHasSignature[FactType.Info] = true;
@@ -156,11 +158,20 @@ export default class FactService {
           lowS: true,
           extraEntropy: this.ctx.config.entropyProvider.randomBytes(32),
         },
-      ).toCompactRawBytes();
-      if (sig.byteLength !== SIGNATURE_LENGTH) {
+      );
+      const sigBytes = sig.toCompactRawBytes();
+      if (sigBytes.byteLength !== SIGNATURE_LENGTH - 1) {
         throw new Error(`Internal error: Unexpected signature length!`);
       }
-      data.set(sig, size);
+      data.set(sigBytes, size);
+
+      if (
+        sig.recovery !== 0 && sig.recovery !== 1 &&
+        sig.recovery !== 2 && sig.recovery !== 3
+      ) {
+        throw new Error(`Invalid signature recovery bit ${sig.recovery}!`);
+      }
+      data[data.byteLength - 1] = sig.recovery;
     }
 
     return useZstd ? zstd.compress(data, 10) : data;
@@ -201,8 +212,14 @@ export default class FactService {
     if (fact.signature === undefined) {
       throw new Error(`No signature on fact!`);
     }
-    return secp.Signature.fromCompact(fact.signature)
-      .recoverPublicKey(fact.hash.toBytes()).toRawBytes();
+    const hash = Hash.digest(
+      fact.data.subarray(0, fact.data.byteLength - SIGNATURE_LENGTH),
+    );
+    return secp.Signature.fromCompact(
+      fact.signature.subarray(0, SIGNATURE_LENGTH - 1),
+    )
+      .addRecoveryBit(fact.signature[SIGNATURE_LENGTH - 1])
+      .recoverPublicKey(hash.toBytes()).toRawBytes();
   }
 
   private create(

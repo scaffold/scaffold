@@ -33,7 +33,6 @@ export default class InfoService {
     const info: InfoMessage = {
       network: this.ctx.config.network,
       public_key: publicKey,
-      node_nonce: this.ctx.config.nodeNonce,
       name: '',
       client_name: '',
       protocol_version: '',

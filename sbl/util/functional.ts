@@ -9,6 +9,18 @@ export const assert = (cond: boolean, msg?: string) => {
 };
 // export const assert = (_cond: boolean, _msg?: string) => {};
 
+export const match = <T, R>(
+  val: T | undefined,
+  ifTruthy: (val: T) => R,
+  ifUndef: () => R,
+) => {
+  if (val !== undefined) {
+    return ifTruthy(val);
+  } else {
+    return ifUndef();
+  }
+};
+
 export const memoize = <ArgType extends Object, ReturnType>(
   func: (arg: ArgType) => ReturnType,
 ) => {

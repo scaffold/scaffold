@@ -403,7 +403,6 @@ export const registry = {
       { name: 'network', type: 'string' },
 
       { name: 'public_key', type: 'bytes' },
-      { name: 'node_nonce', type: 'bytes' },
 
       { name: 'name', type: 'string' },
       { name: 'client_name', type: 'string' },

@@ -1,8 +1,9 @@
 import Config from './Config.ts';
 
 export default class Context {
-  private objs: Map<{ new (context: Context): unknown }, unknown> = new Map();
+  private objs = new Map<{ new (context: Context): unknown }, unknown>();
   private destructors: (() => Promise<void> | void)[] = [];
+  private isDestructed = false;
 
   constructor(public config: Config) {
     // This is for debugging
@@ -25,12 +26,21 @@ export default class Context {
   }
 
   public async destruct() {
+    if (this.isDestructed) {
+      throw new Error(`Cannot destruct a context twice!`);
+    }
     await Promise.all(this.destructors.reverse().map((cb) => cb()));
+    this.objs = new Map();
     this.destructors = [];
+    this.isDestructed = true;
   }
 
   public get<T>(Type: { new (context: Context): T }): T {
     if (!this.objs.has(Type)) {
+      if (this.isDestructed) {
+        throw new Error(`Cannot use a context after it's been destructed!`);
+      }
+
       this.objs.set(Type, null);
       // First set it to null, so if the constructor recursively calls itself inside the following line, we'll know.
       this.objs.set(Type, new Type(this));

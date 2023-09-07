@@ -33,6 +33,7 @@ import FactService from '~/sbl/FactService.ts';
 import secp from '~/sbl/util/secp.ts';
 import GenesisService from '~/sbl/GenesisService.ts';
 import BlockSetTableView from '~/ui/BlockSetTableView.tsx';
+import FactView from '~/ui/FactView.tsx';
 
 // QJS
 // const initialContractHex =
@@ -123,6 +124,7 @@ export default () => {
   const gameHex = url.searchParams.get('game');
 
   const [selectedHash, setSelectedHash] = React.useState<HashPrimitive>();
+  const [hoveredHash, setHoveredHash] = React.useState<HashPrimitive>();
 
   const gameHash = React.useMemo(() => gameHex && Hash.fromHex(gameHex), [
     gameHex,
@@ -239,15 +241,27 @@ export default () => {
       <button onClick={() => client.close()}>STOP</button>
       <br />
 
+      <FactView
+        ctx={client.ctx}
+        selectedHash={selectedHash}
+        setSelectedHash={setSelectedHash}
+        hoveredHash={hoveredHash}
+        setHoveredHash={setHoveredHash}
+      />
+
       <BlockTableView
         ctx={client.ctx}
         selectedHash={selectedHash}
         setSelectedHash={setSelectedHash}
+        hoveredHash={hoveredHash}
+        setHoveredHash={setHoveredHash}
       />
       <BlockSetTableView
         ctx={client.ctx}
         selectedHash={selectedHash}
         setSelectedHash={setSelectedHash}
+        hoveredHash={hoveredHash}
+        setHoveredHash={setHoveredHash}
       />
       {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
 

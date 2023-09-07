@@ -1,12 +1,18 @@
 import { BlockFlag, BlockMeta } from './BlockMeta.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
-import { collateralHash, epochHash, epochInclusionHash } from './constants.ts';
+import {
+  accountHash,
+  collateralHash,
+  epochHash,
+  epochInclusionHash,
+} from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
 // import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 import ExecutorLauncherService from './ExecutorLauncherService.ts';
 import Logger from './Logger.ts';
 import {
+  AccountContractParams,
   Block,
   BlockInput,
   BlockSet,
@@ -32,6 +38,7 @@ import FactService from '~/sbl/FactService.ts';
 import FreeMarketService from '~/sbl/FreeMarketService.ts';
 import { assert } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
+import PublicKeyService from '~/sbl/PublicKeyService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -169,8 +176,14 @@ export default class BlockService {
 
       this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
 
+      if (Hash.equals(verifier.contract_hash, accountHash)) {
+        const params = AccountContractParams.decode(verifier.params);
+        this.ctx.get(PublicKeyService).addPublicKey(params.public_key);
+      }
+
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
         const params = CollateralContractParams.decode(verifier.params);
+        this.ctx.get(PublicKeyService).addPublicKey(params.public_key);
         this.ctx.get(FactService).addCollateral({
           block: fact,
           params,

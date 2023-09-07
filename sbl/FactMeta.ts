@@ -10,7 +10,7 @@ import { Node } from '~/sbl/NodeService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { BlockSetMeta } from '~/sbl/BlockSetService.ts';
 
-export const enum FactType {
+export enum FactType {
   Null = 0, // Reserved
   Info,
   Block,
@@ -22,7 +22,7 @@ export const enum FactType {
   BridgeEnd,
 }
 
-export const enum FactSource {
+export enum FactSource {
   Genesis,
   Bootstrap,
   Local,

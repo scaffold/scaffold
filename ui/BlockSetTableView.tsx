@@ -31,10 +31,12 @@ const getBlocks = (ctx: Context) =>
   ctx.get(FactService).hackyGetBlockSetsMatching();
 
 export default (
-  { ctx, selectedHash, setSelectedHash }: {
+  { ctx, selectedHash, setSelectedHash, hoveredHash, setHoveredHash }: {
     ctx: Context;
     selectedHash?: HashPrimitive;
     setSelectedHash(primitive?: HashPrimitive): void;
+    hoveredHash?: HashPrimitive;
+    setHoveredHash(primitive?: HashPrimitive): void;
   },
 ) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
@@ -45,7 +47,14 @@ export default (
         header: 'hash',
         accessorFn: (blockSet) => blockSet.hash.toHex(),
         cell: (props) => (
-          <a href='#' onClick={props.row.getToggleExpandedHandler()}>
+          <a
+            href='#'
+            onClick={() => {
+              !props.row.getIsExpanded() &&
+                setSelectedHash(props.row.original.hash.toPrimitive());
+              props.row.toggleExpanded();
+            }}
+          >
             <span style={{ fontFamily: 'monospace' }}>
               {props.getValue<string>().slice(0, 10)}
             </span>
@@ -104,6 +113,7 @@ export default (
         cell: (props) => (
           <HashView
             hash={props.getValue<Hash>()}
+            setHoveredHash={setHoveredHash}
             setSelectedHash={setSelectedHash}
           />
         ),
@@ -114,6 +124,7 @@ export default (
         cell: (props) => (
           <HashView
             hash={props.getValue<Hash>()}
+            setHoveredHash={setHoveredHash}
             setSelectedHash={setSelectedHash}
           />
         ),
@@ -125,6 +136,7 @@ export default (
         cell: (props) => (
           <HashView
             hash={props.getValue<Hash>()}
+            setHoveredHash={setHoveredHash}
             setSelectedHash={setSelectedHash}
           />
         ),
@@ -163,6 +175,7 @@ export default (
               <li>
                 <HashView
                   hash={ctz.block.hash}
+                  setHoveredHash={setHoveredHash}
                   setSelectedHash={setSelectedHash}
                 />
               </li>
@@ -244,7 +257,7 @@ export default (
               <>
                 <tr
                   key={row.id}
-                  style={row.original.hash.toPrimitive() === selectedHash
+                  style={row.original.hash.toPrimitive() === hoveredHash
                     ? { ...rowBorderStyle, backgroundColor: '#DDD' }
                     : rowBorderStyle}
                 >
@@ -263,7 +276,7 @@ export default (
                 </tr>
                 {row.getIsExpanded() && (
                   <tr
-                    style={row.original.hash.toPrimitive() === selectedHash
+                    style={row.original.hash.toPrimitive() === hoveredHash
                       ? { backgroundColor: '#DDD' }
                       : { borderBottom: '1px solid silver' }}
                   >

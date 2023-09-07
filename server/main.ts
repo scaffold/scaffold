@@ -2,12 +2,6 @@ import * as fs from 'std-latest/fs/mod.ts';
 import * as path from 'std-latest/path/mod.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
-import { serve } from 'std-latest/http/mod.ts';
-import {
-  ConnectionProvider,
-  ProtocolProvider,
-} from '../sbl/NetworkProvider.ts';
-import Peer from '~/sbl/Peer.ts';
 import ServingService from '~/sbl/ServingService.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import BlockService from '../sbl/BlockService.ts';
@@ -27,6 +21,7 @@ import GenesisService from '~/sbl/GenesisService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import ExecutorDriverService from '~/sbl/ExecutorDriverService.ts';
 import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
+import websocketServerProvider from '~/plugins/websocketServerProvider.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -42,92 +37,6 @@ import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 // import AnyContract from '~/graph/AnyContract.ts';
 // import { arrEquals } from '~/sbl/util/buffer.ts';
 
-const websocketProvider: ProtocolProvider = {
-  createServer: (
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) => {
-    const port = 8314;
-
-    // Don't await here; I think serve only resolves once the server closes.
-    serve(
-      (req: Request) => {
-        if (req.headers.get('upgrade') !== 'websocket') {
-          return new Response(null, { status: 501 });
-        }
-        const { socket, response } = Deno.upgradeWebSocket(req);
-        socket.binaryType = 'arraybuffer';
-
-        socket.addEventListener('open', () =>
-          onNewConn({
-            sendReliable: (data: Uint8Array) => socket.send(data),
-            sendFast: (data: Uint8Array) => socket.send(data),
-            onRecv: (handler: (data: Uint8Array) => void) =>
-              socket.addEventListener('message', (e) =>
-                handler(new Uint8Array(e.data))),
-            close: () =>
-              socket.close(),
-            onClose: (handler: () => void) =>
-              socket.addEventListener('close', () => handler()),
-          }));
-
-        return response;
-      },
-      { port },
-    );
-
-    [
-      '127.0.0.1',
-      fetch('https://api.ipify.org/?format=json').then((resp) => resp.json())
-        .then((body) => body.ip),
-    ].forEach((host) =>
-      Promise.resolve(host).then((host) => onListen(`ws://${host}:${port}`))
-    );
-  },
-
-  createClient: (
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) => {
-    let connected = false;
-    const clientAttempts: WebSocket[] = [];
-
-    return {
-      tryConnect: (spec: string) => {
-        const socket = new WebSocket(spec);
-        socket.binaryType = 'arraybuffer';
-        clientAttempts.push(socket);
-        socket.addEventListener(
-          'open',
-          () => {
-            if (connected) {
-              return;
-            } else {
-              connected = true;
-            }
-
-            // Close any other attempted clientAttempts
-            clientAttempts.forEach((s) => s.close());
-
-            onNewConn({
-              sendReliable: (data: Uint8Array) => socket.send(data),
-              sendFast: (data: Uint8Array) => socket.send(data),
-              onRecv: (handler: (data: Uint8Array) => void) =>
-                socket.addEventListener(
-                  'message',
-                  (e) => handler(new Uint8Array(e.data)),
-                ),
-              close: () => socket.close(),
-              onClose: (handler: () => void) =>
-                socket.addEventListener('close', () => handler()),
-            });
-          },
-        );
-      },
-    };
-  },
-};
-
 const config: Config = {
   ...defaultConfig,
 
@@ -137,13 +46,12 @@ const config: Config = {
   selfPrivateKey: hex2bin(
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
   ),
-  nodeNonce: (new TextEncoder()).encode('server_0'),
 
   logLevel: log.LogLevels.INFO,
 
   networkProvider: {
     protocols: new Map(Object.entries({
-      websocket: websocketProvider,
+      websocket: websocketServerProvider(),
     })),
   },
 

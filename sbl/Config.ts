@@ -29,7 +29,6 @@ interface Config {
   debugName: string;
   userdata?: string;
   selfPrivateKey: Uint8Array;
-  nodeNonce: Uint8Array;
 
   logLevel: log.LogLevels;
 
@@ -100,6 +99,7 @@ interface Config {
 
 export const defaultConfig = {
   network: 'main',
+  debugName: '',
   logLevel: log.LogLevels.WARNING,
   timeProvider: {
     now: Date.now.bind(Date),

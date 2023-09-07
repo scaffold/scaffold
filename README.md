@@ -2,11 +2,11 @@
 _Cool tagline_
 
 ## What is it?
-Scaffold moves the cloud to the client. Scaffold connects browsers to each other via WebRTC, letting them respond to others' requests instead of GCP/AWS (saving $$$). It's fully trustless and verified; in fact peers are incentivized to try and deceive the network, in turn incentivizing verifiers.
+Scaffold moves the cloud to the client. Scaffold connects browsers to each other via WebRTC, letting them respond to others' requests instead of GCP/AWS (saving $$$). It's fully trustless and verified; in fact to incentivize verification, publishing invalid blocks is incentivized.
 
 ## Usage
 ```ts
-sbl.get(FetchService).fetch(
+ctx.get(FetchService).fetch(
   {
     contract_hash: MyContract.hash,
     params: MyContract.encodeParams({x: 5, y: 7}),
@@ -40,6 +40,45 @@ sbl.get(FetchService).fetch(
 - Content distribution
 - Multiplayer gaming
 - Image/video processing
+
+## Getting started
+```ts
+const config: Config = {
+  ...defaultConfig,
+
+  selfPrivateKey: secp.utils.randomPrivateKey(),
+
+  networkProvider: {
+    protocols: new Map(Object.entries({
+      websocket: websocketClientProvider(),
+      webrtc: webrtcProvider(),
+    })),
+  },
+};
+
+const ctx = new Context(config);
+ctx.get(ConnectionService).connect('websocket', 'ws://127.0.0.1:8314');
+
+const codeBlock = ctx.get(PutService).put(str2bin(`
+  import { params } from 'scaffold/module';
+  const name = new TextDecoder().decode(params);
+  return 'Hello ' + name + '!';
+`));
+
+const interpBlock = await ctx.get(FetchService).fetch({
+  contractHash: quickJsHash,
+  params: codeBlock.hash.toBytes(),
+});
+
+const responseBlock = await ctx.get(FetchService).fetch({
+  contractHash: interpBlock.hash,
+  params: new TextDecoder().encode('world'),
+});
+
+console.log(responseBlock.body);
+
+ctx.destruct();
+```
 
 ## Development
 ```sh

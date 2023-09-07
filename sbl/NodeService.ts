@@ -11,6 +11,7 @@ import KeyService from './KeyService.ts';
 import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
 import { Fact, FactBase, FactType, InfoFact } from '~/sbl/FactMeta.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
+import PublicKeyService from '~/sbl/PublicKeyService.ts';
 
 // Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
 
@@ -62,11 +63,7 @@ export default class NodeService {
   private selfNode: Node;
 
   constructor(private ctx: Context) {
-    this.selfHash = this.computeNodeHash(
-      this.ctx.get(KeyService).getSelfPublicKey(),
-      ctx.config.nodeNonce,
-    );
-
+    this.selfHash = Hash.digest(this.ctx.get(KeyService).getSelfPublicKey());
     this.selfNode = this.lookup(this.selfHash);
     this.selfNode.hops = 0;
 
@@ -87,10 +84,6 @@ export default class NodeService {
 
   public getAll() {
     return [...this.nodes.values()];
-  }
-
-  public computeNodeHash(publicKey: Uint8Array, nonce: Uint8Array) {
-    return Hash.digestParts(publicKey, nonce);
   }
 
   public lookup(hash: Hash): Node {
@@ -203,6 +196,8 @@ export default class NodeService {
         debugSetEpochBaseTime(epochStartTime);
       }
     }
+
+    this.ctx.get(PublicKeyService).addPublicKey(msg.public_key);
 
     node.handledProtocols = msg.handled_protocols;
     node.neighbors.clear();
