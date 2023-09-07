@@ -1,5 +1,3 @@
-import Hash from '~/sbl/util/Hash.ts';
-
 export interface InitialMessage {
   sigBuf: SharedArrayBuffer;
 }

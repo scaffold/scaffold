@@ -100,8 +100,9 @@ for file in ./asm/*.asm.ts; do
 	./assemblyscript/bin/asc.js "$file" --outFile "server/bootstrap/$(basename "$file" .asm.ts).wasm" &
 done
 
-curl 'https://registry-cdn.wapm.io/contents/saghul/quickjs/0.0.3/build/qjs.wasm' --continue-at - --output server/bootstrap/qjs.wasm &
 curl 'https://registry-cdn.wapm.io/contents/python/python/0.1.0/bin/python.wasm' --continue-at - --output server/bootstrap/python.wasm &
+
+sh build-qjs.sh
 
 cp js/* server/bootstrap/ &
 cp python/* server/bootstrap/ &

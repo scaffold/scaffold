@@ -23,6 +23,7 @@ import ExecutorDriverService from '~/sbl/ExecutorDriverService.ts';
 import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
 import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';
+import Logger, { FilterAction, LogLevel } from '~/sbl/Logger2.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -63,6 +64,49 @@ const config: Config = {
 };
 
 const ctx = new Context(config);
+
+ctx.get(Logger).registerAttribute('worker', {
+  preposition: 'on',
+  filterAction: FilterAction.EQ,
+});
+ctx.get(Logger).registerAttribute('job', {
+  prefix: 'job',
+  preposition: 'in',
+  filterAction: FilterAction.EQ,
+});
+ctx.get(Logger).registerAttribute('contract', {
+  prefix: 'contract',
+  preposition: 'for',
+  filterAction: FilterAction.EQ,
+});
+ctx.get(Logger).registerAttribute('params', {
+  prefix: 'params',
+  preposition: 'for',
+  filterAction: FilterAction.EQ,
+});
+ctx.get(Logger).registerAttribute('body', {
+  prefix: 'body',
+  preposition: 'forf',
+  filterAction: FilterAction.EQ,
+});
+// INFO Running generation on Worker_1 in job 5e2bcfb7 for contract fa1ff0c1, params a8af5d5b, and body 26bdafde
+
+const arr: string[] = [];
+ctx.get(Logger).parseLog(
+  arr,
+  (key, val) => arr.push(val as string),
+  LogLevel.INFO,
+  'Running generation',
+  {
+    worker: 'worker_1',
+    job: '5e2bcfb7',
+    contract: 'fa1ff0c1',
+    params: 'a8af5d5b',
+    body: '26bdafde',
+  },
+);
+
+// throw new Error();
 
 const bootstrapPath = path.join(
   path.dirname(path.fromFileUrl(import.meta.url)),
@@ -185,39 +229,39 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   //   },
   // );
 
-  // const entry = entries.find((x) => x.filename === 'qjs.wasm')!;
+  const entry = entries.find((x) => x.filename === 'qjs.wasm')!;
 
-  // console.log(bin2hex(JsWasiParams.encode({
-  //   argv: [str2bin('quickjs'), str2bin('--help')],
-  //   env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
-  //   cwd: [],
-  //   files: [],
-  //   stdinFrom: [str2bin('identity'), str2bin('')],
-  //   stdoutTo: [str2bin('out'), str2bin('stdout')],
-  //   stderrTo: [str2bin('out'), str2bin('stderr')],
-  // })));
+  console.log(bin2hex(JsWasiParams.encode({
+    argv: [str2bin('quickjs'), str2bin('/in/params')],
+    env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
+    cwd: [],
+    files: [],
+    stdinFrom: [str2bin('identity'), str2bin('')],
+    stdoutTo: [str2bin('out'), str2bin('stdout')],
+    stderrTo: [str2bin('out'), str2bin('stderr')],
+  })));
 
-  // ctx.get(ExecutorDriverService).run(
-  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
-  //   {},
-  //   () => 1,
-  //   async (driver, cancel) => {
-  //     await driver.setAllocation({});
+  ctx.get(ExecutorDriverService).run(
+    { contract_hash: ZERO_HASH, params: new Uint8Array() },
+    {},
+    () => 1,
+    async (driver, cancel) => {
+      await driver.setAllocation({});
 
-  //     const { stdout } = await ctx.get(WorkerExecutor).run(
-  //       {
-  //         code: entry.body,
-  //         contractHash: entry.hash.toBytes(),
-  //         params: new Uint8Array(),
-  //         emitCorrect: true,
-  //       },
-  //       driver,
-  //       cancel,
-  //     );
+      const { stdout } = await ctx.get(WorkerExecutor).run(
+        {
+          code: entry.body,
+          contractHash: entry.hash.toBytes(),
+          params: str2bin('console.log(1+2);\n'),
+          emitCorrect: true,
+        },
+        driver,
+        cancel,
+      );
 
-  //     console.log('stdout', new TextDecoder().decode(stdout));
-  //   },
-  // );
+      console.log('stdout', new TextDecoder().decode(stdout));
+    },
+  );
 })();
 
 // ctx.get(EpochContract).get();

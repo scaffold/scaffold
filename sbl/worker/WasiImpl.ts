@@ -168,17 +168,21 @@ const getInheritingRights = (capMask: FsCapabilityMask) => {
 };
 
 export default class WasiImpl {
+  private memory?: WebAssembly.Memory;
   private handles: Map<number, FsNodeHandle> = new Map();
   private fdIt: number = 1;
 
   constructor(
-    private memory: { buffer: ArrayBuffer | SharedArrayBuffer },
     private argv: Uint8Array[],
     private env: { key: Uint8Array; val: Uint8Array }[],
     private cwd: Uint8Array[],
     private logger: log.Logger,
   ) {
     this.logger.info('WasiImpl constructor', { argv, env, cwd });
+  }
+
+  public setMemory(memory: WebAssembly.Memory) {
+    this.memory = memory;
   }
 
   public makeHandle(node: FsNode, capMask: FsCapabilityMask): FsNodeHandle {
@@ -341,33 +345,28 @@ export default class WasiImpl {
     );
   }
 
-  public run(inst: WebAssembly.Instance): number {
-    if (inst.exports.memory instanceof WebAssembly.Memory) {
-      this.logger.info('Using exported memory...');
-      this.memory = inst.exports.memory;
-    }
+  // public run(inst: WebAssembly.Instance): number {
+  //   this.logger.info('Running...', {});
+  //   try {
+  //     (inst.exports._start as CallableFunction)();
+  //   } catch (err) {
+  //     if (err instanceof WasiExit) {
+  //       // If it's a normal WASI exit, we return it directly
+  //       this.logger.warning(
+  //         `Ended with code ${err.code}`,
+  //         { err, code: err.code },
+  //       );
+  //       return err.code;
+  //     } else {
+  //       // Otherwise we let the error bubble up
+  //       this.logger.error(`Ended with unhandlable error`, { err });
+  //       throw err;
+  //     }
+  //   }
 
-    this.logger.info('Running...', {});
-    try {
-      (inst.exports._start as CallableFunction)();
-    } catch (err) {
-      if (err instanceof WasiExit) {
-        // If it's a normal WASI exit, we return it directly
-        this.logger.warning(
-          `Ended with code ${err.code}`,
-          { err, code: err.code },
-        );
-        return err.code;
-      } else {
-        // Otherwise we let the error bubble up
-        this.logger.error(`Ended with unhandlable error`, { err });
-        throw err;
-      }
-    }
-
-    this.logger.info('Ended successfully', {});
-    return 0;
-  }
+  //   this.logger.info('Ended successfully', {});
+  //   return 0;
+  // }
 
   private advanceFdIt(): number {
     // LFSR
@@ -391,28 +390,30 @@ export default class WasiImpl {
   }
 
   private getIovs(iovs: number, iovsLen: number) {
-    if (iovs + iovsLen * 8 > this.memory.buffer.byteLength) {
+    if (iovs + iovsLen * 8 > this.memory!.buffer.byteLength) {
       throw new Error(
-        `Trying to read up to ${iovs} but memory is only ${this.memory.buffer.byteLength} bytes`,
+        `Trying to read up to ${iovs} but memory is only ${
+          this.memory!.buffer.byteLength
+        } bytes`,
       );
     }
-    this.logger.info('max', { max: this.memory.buffer.byteLength });
+    this.logger.info('max', { max: this.memory!.buffer.byteLength });
 
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
 
     return Array.from({ length: iovsLen }, (_, i) => {
       const offset = view.getUint32(iovs, true);
       iovs += 4;
       const size = view.getUint32(iovs, true);
       iovs += 4;
-      return new Uint8Array(this.memory.buffer, offset, size);
+      return new Uint8Array(this.memory!.buffer, offset, size);
     });
   }
 
   private wasi_args_get(dstPtrs: number, dstBuf: number) {
     this.logger.info(`wasi_args_get`, { dstPtrs, dstBuf });
-    const view = new DataView(this.memory.buffer);
-    const bytes = new Uint8Array(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
+    const bytes = new Uint8Array(this.memory!.buffer);
     this.argv.forEach((arg) => {
       // Write ptr to arg
       view.setUint32(dstPtrs, dstBuf, true);
@@ -429,7 +430,7 @@ export default class WasiImpl {
 
   private wasi_args_sizes_get(dstArgc: number, dstBufSize: number) {
     this.logger.info(`wasi_args_sizes_get`, { dstArgc, dstBufSize });
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(dstArgc, this.argv.length, true);
     const size = this.argv.reduce((acc, arg) => acc + arg.length + 1, 0);
     view.setUint32(dstBufSize, size, true);
@@ -438,8 +439,8 @@ export default class WasiImpl {
 
   private wasi_environ_get(dstPtrs: number, dstBuf: number) {
     this.logger.info(`wasi_environ_get`, { dstPtrs, dstBuf });
-    const view = new DataView(this.memory.buffer);
-    const bytes = new Uint8Array(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
+    const bytes = new Uint8Array(this.memory!.buffer);
     this.env.forEach(({ key, val }) => {
       // Write ptr to arg
       view.setUint32(dstPtrs, dstBuf, true);
@@ -462,7 +463,7 @@ export default class WasiImpl {
 
   private wasi_environ_sizes_get(dstEnvCount: number, dstBufSize: number) {
     this.logger.info(`wasi_environ_sizes_get`, { dstEnvCount, dstBufSize });
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(dstEnvCount, this.env.length, true);
     const size = this.env.reduce(
       (acc, { key, val }) => acc + key.length + val.length + 2,
@@ -522,7 +523,7 @@ export default class WasiImpl {
   private wasi_fd_fdstat_get(fd: number, dstBuf: number) {
     this.logger.info(`wasi_fd_fdstat_get`, { fd, dstBuf });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint8(
       dstBuf,
       hdl.node.dispatch({
@@ -567,7 +568,7 @@ export default class WasiImpl {
     return wc.WASI_ENOSYS;
     /*
     const rstats = fs.fstatSync(stats.real);
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setBigUint64(bufPtr, BigInt(rstats.dev), true);
     bufPtr += 8;
     view.setBigUint64(bufPtr, BigInt(rstats.ino), true);
@@ -656,7 +657,7 @@ export default class WasiImpl {
     if (!hdl.preopenPath) {
       return wc.WASI_EINVAL;
     }
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint8(bufPtr, wc.WASI_PREOPENTYPE_DIR);
     view.setUint32(bufPtr + 4, hdl.preopenPath.byteLength, true);
     return wc.WASI_ESUCCESS;
@@ -672,7 +673,7 @@ export default class WasiImpl {
     if (!hdl.preopenPath) {
       return wc.WASI_EINVAL;
     }
-    new Uint8Array(this.memory.buffer, pathPtr, pathLen).set(
+    new Uint8Array(this.memory!.buffer, pathPtr, pathLen).set(
       hdl.preopenPath.subarray(0, pathLen), // TODO: Why is this subarray necessary???
     );
     return wc.WASI_ESUCCESS;
@@ -691,7 +692,7 @@ export default class WasiImpl {
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const written = hdl.fileWrite(offset, this.getIovs(iovs, iovsLen));
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(dstSizeWritten, written, true);
     return wc.WASI_ESUCCESS;
   }
@@ -709,7 +710,7 @@ export default class WasiImpl {
     const written = hdl.fileWrite(hdl.fileOffset, bufs);
     this.logger.info(`fd_write_wrote`, { written });
     hdl.fileOffset += written;
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(dstSizeWritten, written, true);
     return wc.WASI_ESUCCESS;
   }
@@ -727,7 +728,7 @@ export default class WasiImpl {
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const read = hdl.fileRead(offset, this.getIovs(iovs, iovsLen));
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(dstSizeRead, read, true);
     return wc.WASI_ESUCCESS;
   }
@@ -742,7 +743,7 @@ export default class WasiImpl {
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
     const read = hdl.fileRead(hdl.fileOffset, this.getIovs(iovs, iovsLen));
     hdl.fileOffset += read;
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(dstSizeRead, read, true);
     return wc.WASI_ESUCCESS;
   }
@@ -759,8 +760,8 @@ export default class WasiImpl {
       { fd, dstBufPtr, dstBufSize, cookie, dstWrittenSize },
     );
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    const view = new DataView(this.memory.buffer);
-    const bytes = new Uint8Array(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
+    const bytes = new Uint8Array(this.memory!.buffer);
     const dstBufEnd = dstBufPtr + dstBufSize;
     const entries = hdl.dirListEntries();
     for (let i = cookie; i < entries.length; i++) {
@@ -835,7 +836,7 @@ export default class WasiImpl {
   ) {
     this.logger.info(`wasi_fd_seek`, { fd, offset, whence, dstNewOffset });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     switch (whence) {
       case wc.WASI_WHENCE_SET:
         hdl.fileOffset = Number(offset);
@@ -856,7 +857,7 @@ export default class WasiImpl {
   private wasi_fd_tell(fd: number, dstOffset: number) {
     this.logger.info(`wasi_fd_tell`, { fd, dstOffset });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setBigUint64(dstOffset, BigInt(hdl.fileOffset), true);
     return wc.WASI_ESUCCESS;
   }
@@ -874,7 +875,7 @@ export default class WasiImpl {
   ) {
     this.logger.info(`wasi_path_create_directory`, { fd, pathPtr, pathLen });
     const hdl = this.handles.get(fd) || throwWasiErr(wc.WASI_EBADF);
-    const key = new Uint8Array(this.memory.buffer, pathPtr, pathLen);
+    const key = new Uint8Array(this.memory!.buffer, pathPtr, pathLen);
     hdl.dirMutEntry(
       key,
       (node) =>
@@ -900,9 +901,9 @@ export default class WasiImpl {
       if (!stats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const p = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         pathPtr,
         pathLen,
       ).toString();
@@ -948,7 +949,7 @@ export default class WasiImpl {
       if (!stats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const rstats = fs.fstatSync(stats.real);
       let atim = rstats.atime;
       let mtim = rstats.mtime;
@@ -986,7 +987,7 @@ export default class WasiImpl {
         mtim = n;
       }
       const p = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         pathPtr,
         pathLen,
       ).toString();
@@ -1019,14 +1020,14 @@ export default class WasiImpl {
       if (!ostats.path || !nstats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const op = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         oldPath,
         oldPathLen,
       ).toString();
       const np = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         newPath,
         newPathLen,
       ).toString();
@@ -1066,7 +1067,7 @@ export default class WasiImpl {
     const hdl = this.handles.get(dirFd) || throwWasiErr(wc.WASI_EBADF);
     // TODO: Handle rights better here (map them to our rights)
 
-    const path = new Uint8Array(this.memory.buffer, pathPtr, pathLen);
+    const path = new Uint8Array(this.memory!.buffer, pathPtr, pathLen);
     this.logger.info('path_open', { path: bin2str(path) });
 
     const keys: Uint8Array[] = [];
@@ -1119,7 +1120,7 @@ export default class WasiImpl {
 
     const childFd = this.allocFd(childHdl);
 
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     view.setUint32(fdDst, childFd, true);
 
     return wc.WASI_ESUCCESS;
@@ -1144,15 +1145,15 @@ export default class WasiImpl {
       if (!stats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const p = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         pathPtr,
         pathLen,
       ).toString();
       const full = path.resolve(stats.path, p);
       const r = fs.readlinkSync(full);
-      const used = Buffer.from(this.memory.buffer).write(r, buf, bufLen);
+      const used = Buffer.from(this.memory!.buffer).write(r, buf, bufLen);
       view.setUint32(bufused, used, true);
       return wc.WASI_ESUCCESS;
       */
@@ -1171,9 +1172,9 @@ export default class WasiImpl {
       if (!stats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const p = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         pathPtr,
         pathLen,
       ).toString();
@@ -1202,14 +1203,14 @@ export default class WasiImpl {
       if (!ostats.path || !nstats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const op = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         oldPath,
         oldPathLen,
       ).toString();
       const np = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         newPath,
         newPathLen,
       ).toString();
@@ -1239,14 +1240,14 @@ export default class WasiImpl {
       if (!stats.path) {
         return wc.WASI_EINVAL;
       }
-      const view = new DataView(this.memory.buffer);
+      const view = new DataView(this.memory!.buffer);
       const op = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         oldPath,
         oldPathLen,
       ).toString();
       const np = Buffer.from(
-        this.memory.buffer,
+        this.memory!.buffer,
         newPath,
         newPathLen,
       ).toString();
@@ -1264,8 +1265,8 @@ export default class WasiImpl {
     if (!stats.path) {
       return wc.WASI_EINVAL;
     }
-    const view = new DataView(this.memory.buffer);
-    const p = Buffer.from(this.memory.buffer, pathPtr, pathLen).toString();
+    const view = new DataView(this.memory!.buffer);
+    const p = Buffer.from(this.memory!.buffer, pathPtr, pathLen).toString();
     fs.unlinkSync(path.resolve(stats.path, p));
     return wc.WASI_ESUCCESS;
     */
@@ -1282,7 +1283,7 @@ export default class WasiImpl {
       { sin, sout, nsubscriptions, nevents },
     );
 
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     for (let i = 0; i < nsubscriptions; i++) {
       const userData0 = view.getUint32(sin, true);
       sin += 4;
@@ -1328,7 +1329,7 @@ export default class WasiImpl {
     /*
     let eventc = 0;
     let waitEnd = 0;
-    const view = new DataView(this.memory.buffer);
+    const view = new DataView(this.memory!.buffer);
     for (let i = 0; i < nsubscriptions; i += 1) {
       const userdata = view.getBigUint64(sin, true);
       sin += 8;
@@ -1428,7 +1429,7 @@ export default class WasiImpl {
     this.logger.info(`wasi_random_get`, { bufPtr, bufLen });
     if (enableRandom) {
       crypto.getRandomValues(
-        new Uint8Array(this.memory.buffer, bufPtr, bufLen),
+        new Uint8Array(this.memory!.buffer, bufPtr, bufLen),
       );
       return wc.WASI_ESUCCESS;
     } else {

@@ -3,13 +3,12 @@ import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { makeClientUtils } from '~/sbl/worker/clientUtils.ts';
-import { makeWasiImports } from '~/sbl/worker/jsWasiUtils.ts';
+import { makeWasi } from '~/sbl/worker/jsWasiUtils.ts';
 import { jsWasiHash, rootHash } from '~/sbl/constants.ts';
 import logger from '~/sbl/worker/logger.ts';
 import { WasiExit } from '~/sbl/worker/WasiImpl.ts';
 
 export interface BaseImports extends WebAssembly.Imports {
-  env: { memory: WebAssembly.Memory };
   scaffold: {
     writeContractHash(dst: number): void;
     getParamSize(): number;
@@ -40,25 +39,19 @@ export default async (
 ) => {
   const clientUtils = makeClientUtils(client);
 
-  const memory = new WebAssembly.Memory({
-    // initial: 10, // Each page is 64KiB
-    initial: 1 << 12, // Each page is 64KiB
-    maximum: 1 << 12, // Each page is 64KiB
-    shared: true,
-  });
+  let memory: WebAssembly.Memory | undefined;
 
   const baseImports: BaseImports = {
-    env: { memory },
     scaffold: {
       writeContractHash: (dst: number) =>
-        new Uint8Array(memory.buffer, dst).set(job.contractHash),
+        new Uint8Array(memory!.buffer, dst).set(job.contractHash),
       getParamSize: () => job.params.byteLength,
       writeParams: (dst: number) =>
-        new Uint8Array(memory.buffer, dst).set(job.params),
+        new Uint8Array(memory!.buffer, dst).set(job.params),
       emitCorrect: () => job.emitCorrect ? 1 : 0,
 
       setBody: (ptr, size) =>
-        clientUtils.returnResult(new Uint8Array(memory.buffer, ptr, size)),
+        clientUtils.returnResult(new Uint8Array(memory!.buffer, ptr, size)),
 
       exit: () => error(`Unimplemented`),
     },
@@ -71,10 +64,32 @@ export default async (
     const mod = await WebAssembly.compile(code);
 
     const imports = await getImports(mod);
+
+    const willExportMemory = WebAssembly.Module.exports(mod)
+      .some((exp) => exp.name === 'memory' && exp.kind === 'memory');
+    if (!willExportMemory) {
+      memory = new WebAssembly.Memory({
+        // initial: 10, // Each page is 64KiB
+        initial: 1 << 12, // Each page is 64KiB
+        maximum: 1 << 12, // Each page is 64KiB
+        shared: true,
+      });
+      imports.env = { memory };
+    }
+
     const instance = await WebAssembly.instantiate(mod, imports);
 
     if (instance.exports.memory instanceof WebAssembly.Memory) {
-      throw new Error('WASM modules must import their memory!');
+      if (!(instance.exports.memory.buffer instanceof SharedArrayBuffer)) {
+        // throw new Error(`Exported memory is not shared!`);
+        console.warn(
+          `Exported memory is not shared! This may or may not be a problem...`,
+        );
+      }
+      if (memory !== undefined) {
+        throw new Error(`Cannot export multiple memories!`);
+      }
+      memory = instance.exports.memory;
     }
 
     const entryFuncs = WebAssembly.Module.customSections(
@@ -102,7 +117,15 @@ export default async (
       new Uint8Array();
 
     if (Hash.equals(wrapperHash, jsWasiHash)) {
-      return makeWasiImports(client, wrapperParams, job, baseImports);
+      const wasi = makeWasi(client, wrapperParams, job, baseImports);
+
+      runQueue.push(() => wasi.setMemory(memory!));
+
+      const wasiImports = wasi.getImports();
+      return {
+        wasi_snapshot_preview1: wasiImports,
+        wasi_unstable: wasiImports,
+      };
     }
 
     const wrapperCode = clientUtils.request(rootHash, wrapperHash.toBytes());
@@ -118,11 +141,10 @@ export default async (
     );
 
     const imports: WebAssembly.Imports = {
-      env: { memory },
       scaffold: {
         getParamSize: () => wrapperParams.byteLength,
         writeParams: (dst: number) =>
-          new Uint8Array(memory.buffer, dst).set(wrapperParams),
+          new Uint8Array(memory!.buffer, dst).set(wrapperParams),
       },
     };
     for (const buf of linkExports) {
@@ -133,12 +155,15 @@ export default async (
       }
       imports[entries[0]][entries[1]] = wrapperInstance.exports[entries[1]];
     }
-
     return imports;
   };
 
   const out = await instantiate(job.code);
-  // TODO: Cache
+  // TODO: Cache if it's used as a wrapper
+
+  if (memory === undefined) {
+    throw new Error(`No memory exported or imported!`);
+  }
 
   runQueue.forEach((fn) => {
     logger.info('Running...', {});

@@ -26,7 +26,7 @@ import { JsWasiParams } from '~/sbl/messages.ts';
 import logger from './logger.ts';
 import { BaseImports } from '~/sbl/worker/execJob.ts';
 
-export const makeWasiImports = (
+export const makeWasi = (
   client: WorkerChannelClient<WorkerComm>,
   wasiParamBytes: Uint8Array,
   job: JobMessage,
@@ -271,7 +271,6 @@ export const makeWasiImports = (
   // logger.info('ARGS', args);
 
   const wasi = new WasiImpl(
-    baseImports.env.memory,
     wasiParams.argv,
     wasiParams.env,
     wasiParams.cwd,
@@ -306,13 +305,7 @@ export const makeWasiImports = (
     [[]].map((path) => ({ path, handle: lookupWasiPath(path, true) })),
   );
 
-  const wasiImports = wasi.getImports();
-
-  return {
-    env: { memory: baseImports.env.memory },
-    wasi_snapshot_preview1: wasiImports,
-    wasi_unstable: wasiImports,
-  };
+  return wasi;
 
   // Object.entries(outputSpec).forEach(([key, _]) => {
   //   const file = outDir
