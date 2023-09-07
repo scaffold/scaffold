@@ -45,7 +45,7 @@ export interface Node {
   knownFacts: Set<Fact>;
 
   // Trust increases by 1/day
-  // Trust decreases when nodes do suspicious things
+  // Trust decreases when nodes do suspicious things (we should also publish the suspicious things to our peers)
   // If trust is less than -1, disconnect
   // Only connect to peers where trust is greater than 0
   trust: number;

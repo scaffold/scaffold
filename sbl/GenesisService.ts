@@ -11,6 +11,7 @@ import { bin2hex } from '~/sbl/util/hex.ts';
 import { BlockFact, FactSource, FactType } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import NodeService from '~/sbl/NodeService.ts';
+import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
 
 // bin2hex(secp.utils.randomPrivateKey())
 const genesisPrivateKey = hex2bin(
@@ -31,6 +32,8 @@ const createGenesisBlock = () => {
     selfPrivateKey: genesisPrivateKey,
 
     networkProvider: { protocols: new Map() },
+
+    storageProvider: new NullStorageProvider(),
 
     enableValidation: false,
   });

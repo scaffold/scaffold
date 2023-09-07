@@ -2,11 +2,11 @@ import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
-import Hash from '~/sbl/util/Hash.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import * as log from 'std-latest/log/mod.ts';
-import webrtcProvider from '~/plugins/webrtcProvider.ts';
-import websocketClientProvider from '~/plugins/websocketClientProvider.ts';
+import WebsocketClientProvider from '~/plugins/WebsocketClientProvider.ts';
+import WebrtcProvider from '~/plugins/WebrtcProvider.ts';
+import LocalStorageProvider from '~/plugins/LocalStorageProvider.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 // window['Deno'] = {};
@@ -38,10 +38,12 @@ export default class SblClient {
 
       networkProvider: {
         protocols: new Map(Object.entries({
-          websocket: websocketClientProvider(),
-          webrtc: webrtcProvider(),
+          websocket: new WebsocketClientProvider(),
+          webrtc: new WebrtcProvider(),
         })),
       },
+
+      storageProvider: new LocalStorageProvider(),
     };
 
     this.ctx = new Context(config);

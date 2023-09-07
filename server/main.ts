@@ -21,7 +21,8 @@ import GenesisService from '~/sbl/GenesisService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import ExecutorDriverService from '~/sbl/ExecutorDriverService.ts';
 import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
-import websocketServerProvider from '~/plugins/websocketServerProvider.ts';
+import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
+import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -51,9 +52,11 @@ const config: Config = {
 
   networkProvider: {
     protocols: new Map(Object.entries({
-      websocket: websocketServerProvider(),
+      websocket: new WebsocketServerProvider(),
     })),
   },
+
+  storageProvider: new DenoKvStorageProvider(),
 
   initialWorkerCount: 1,
   onlyBridge: false,

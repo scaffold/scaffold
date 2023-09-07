@@ -30,6 +30,7 @@ export default class Context {
       throw new Error(`Cannot destruct a context twice!`);
     }
     await Promise.all(this.destructors.reverse().map((cb) => cb()));
+    await this.config.storageProvider.close();
     this.objs = new Map();
     this.destructors = [];
     this.isDestructed = true;

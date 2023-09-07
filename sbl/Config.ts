@@ -3,6 +3,8 @@ import { Verifier } from './messages.ts';
 import { Resource } from './ExecutorDriverService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import secp from './util/secp.ts';
+import Hash from '~/sbl/util/Hash.ts';
+import { MaybePromise } from '~/sbl/util/types.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -21,6 +23,13 @@ export interface TimeProvider {
 export interface EntropyProvider {
   randomNumber(): number;
   randomBytes(size: number): Uint8Array;
+}
+
+export interface StorageProvider {
+  set(namespace: number, key: Hash, value?: Uint8Array): void;
+  get(namespace: number, key: Hash): MaybePromise<Uint8Array | undefined>;
+  list(namespace: number): AsyncIterator<{ key: Hash; value: Uint8Array }>;
+  close(): MaybePromise<void>;
 }
 
 interface Config {
@@ -70,6 +79,7 @@ interface Config {
   networkProvider: NetworkProvider;
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
+  storageProvider: StorageProvider;
 
   // appraisalProvider: AppraisalProvider;
 
