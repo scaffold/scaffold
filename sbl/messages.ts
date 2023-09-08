@@ -743,6 +743,25 @@ export const registry = {
     ],
   },
 
+  LockWrapperEntry: {
+    name: 'LockWrapperEntry',
+    type: 'record',
+    fields: [
+      { name: 'from', type: 'bytes' },
+      { name: 'to', type: { type: 'array', items: 'bytes' } },
+    ],
+  },
+  LockWrapperParams: {
+    name: 'LockWrapperParams',
+    type: 'record',
+    fields: [
+      { name: 'development', type: 'boolean' },
+      { name: 'host', type: 'string' },
+      { name: 'mapping', type: { type: 'array', items: 'LockWrapperEntry' } },
+      { name: 'wasi_params', type: 'JsWasiParams' },
+    ],
+  },
+
   long,
 } as const;
 
@@ -947,6 +966,8 @@ export const TimeParams = makeMsg(registry, 'TimeParams');
 export type TimeParams = MsgType<'TimeParams'>;
 export const JsWasiParams = makeMsg(registry, 'JsWasiParams');
 export type JsWasiParams = MsgType<'JsWasiParams'>;
+export const LockWrapperParams = makeMsg(registry, 'LockWrapperParams');
+export type LockWrapperParams = MsgType<'LockWrapperParams'>;
 
 // const buf = Question.encode({
 //   contract: {

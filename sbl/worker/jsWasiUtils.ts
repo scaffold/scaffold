@@ -28,12 +28,10 @@ import { BaseImports } from '~/sbl/worker/execJob.ts';
 
 export const makeWasi = (
   client: WorkerChannelClient<WorkerComm>,
-  wasiParamBytes: Uint8Array,
+  wasiParams: JsWasiParams,
   job: JobMessage,
   baseImports: BaseImports,
 ) => {
-  const wasiParams = JsWasiParams.decode(wasiParamBytes);
-
   const inodeSource = { nextInode: 1 };
 
   const memFs = new MemFs(inodeSource);

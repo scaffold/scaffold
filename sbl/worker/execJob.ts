@@ -4,9 +4,11 @@ import { JobMessage, WorkerComm } from './workerTypes.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { makeClientUtils } from '~/sbl/worker/clientUtils.ts';
 import { makeWasi } from '~/sbl/worker/jsWasiUtils.ts';
-import { jsWasiHash, rootHash } from '~/sbl/constants.ts';
+import { jsLockHash, jsWasiHash, rootHash } from '~/sbl/constants.ts';
 import logger from '~/sbl/worker/logger.ts';
 import { WasiExit } from '~/sbl/worker/WasiImpl.ts';
+import { JsWasiParams } from '~/sbl/messages.ts';
+// import binaryen from 'binaryen';
 
 export interface BaseImports extends WebAssembly.Imports {
   scaffold: {
@@ -41,7 +43,40 @@ export default async (
 
   let memory: WebAssembly.Memory | undefined;
 
+  // const __liftString = (pointer: number) => {
+  //   if (!pointer) return null;
+  //   const end = pointer + new Uint32Array(memory!.buffer)[pointer - 4 >>> 2] >>>
+  //       1,
+  //     memoryU16 = new Uint16Array(memory!.buffer);
+  //   let start = pointer >>> 1,
+  //     string = '';
+  //   while (end - start > 1024) {
+  //     string += String.fromCharCode(
+  //       ...memoryU16.subarray(start, start += 1024),
+  //     );
+  //   }
+  //   return string + String.fromCharCode(...memoryU16.subarray(start, end));
+  // };
+
   const baseImports: BaseImports = {
+    env: {
+      // abort(
+      //   message: number,
+      //   fileName: number,
+      //   lineNumber: number,
+      //   columnNumber: number,
+      // ) {
+      //   const msgStr = __liftString(message >>> 0);
+      //   const fileStr = __liftString(fileName >>> 0);
+      //   lineNumber = lineNumber >>> 0;
+      //   columnNumber = columnNumber >>> 0;
+      //   (() => {
+      //     // @external.js
+      //     throw Error(`${msgStr} in ${fileStr}:${lineNumber}:${columnNumber}`);
+      //   })();
+      // },
+    },
+
     scaffold: {
       writeContractHash: (dst: number) =>
         new Uint8Array(memory!.buffer, dst).set(job.contractHash),
@@ -55,9 +90,13 @@ export default async (
 
       exit: () => error(`Unimplemented`),
     },
+    // binaryen: Object.fromEntries(
+    //   Object.entries(binaryen).filter(([key, val]) => key[0] === '_'),
+    // ) as any,
   };
 
   const runQueue: CallableFunction[] = [];
+  const cleanupQueue: CallableFunction[] = [];
 
   const instantiate = async (code: Uint8Array) => {
     // TODO: Cache this step?
@@ -65,16 +104,22 @@ export default async (
 
     const imports = await getImports(mod);
 
+    if (imports.env === undefined) {
+      imports.env = {};
+    }
+
     const willExportMemory = WebAssembly.Module.exports(mod)
       .some((exp) => exp.name === 'memory' && exp.kind === 'memory');
     if (!willExportMemory) {
-      memory = new WebAssembly.Memory({
-        // initial: 10, // Each page is 64KiB
-        initial: 1 << 12, // Each page is 64KiB
-        maximum: 1 << 12, // Each page is 64KiB
-        shared: true,
-      });
-      imports.env = { memory };
+      if (memory === undefined) {
+        memory = new WebAssembly.Memory({
+          // initial: 10, // Each page is 64KiB
+          initial: 1 << 12, // Each page is 64KiB
+          maximum: 1 << 12, // Each page is 64KiB
+          shared: true,
+        });
+      }
+      imports.env.memory = memory;
     }
 
     const instance = await WebAssembly.instantiate(mod, imports);
@@ -117,15 +162,22 @@ export default async (
       new Uint8Array();
 
     if (Hash.equals(wrapperHash, jsWasiHash)) {
-      const wasi = makeWasi(client, wrapperParams, job, baseImports);
+      const wasiParams = JsWasiParams.decode(wrapperParams);
+      const wasi = makeWasi(client, wasiParams, job, baseImports);
 
       runQueue.push(() => wasi.setMemory(memory!));
 
       const wasiImports = wasi.getImports();
-      return {
-        wasi_snapshot_preview1: wasiImports,
-        wasi_unstable: wasiImports,
-      };
+      return { wasi_snapshot_preview1: wasiImports };
+    } else if (Hash.equals(wrapperHash, jsLockHash)) {
+      throw new Error(`Not implemented yet`);
+      // const lockWrapperParams=LockWrapperParams.decode(wrapperParams);
+      // const wasi =
+      // const wrapper = makeLockWrapper(client, wrapperParams, job, baseImports, wasi);
+
+      // cleanupQueue.push(() => wrapper.cleanup());
+
+      // return wrapper.imports;
     }
 
     const wrapperCode = clientUtils.request(rootHash, wrapperHash.toBytes());
@@ -187,6 +239,8 @@ export default async (
 
     logger.info('Ended successfully', {});
   });
+
+  cleanupQueue.toReversed().forEach((fn) => fn());
 
   // To continue using the current WASM instance, simply wrap with an additional WASM.
   // This involves caching the result of `await instantiate(job.code);` and reusing it if it's requested as a wrapper.

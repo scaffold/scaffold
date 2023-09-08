@@ -49,3 +49,4 @@ export const selfHash = Hash.xor(SBL, Hash.fromLiteralStr('self'));
 // Used for: timestamp, duration, inputs, licenses
 
 export const jsWasiHash = Hash.xor(SBL, Hash.fromLiteralStr('js_wasi'));
+export const jsLockHash = Hash.xor(SBL, Hash.fromLiteralStr('js_lock'));

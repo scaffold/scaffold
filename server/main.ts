@@ -229,39 +229,97 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   //   },
   // );
 
-  const entry = entries.find((x) => x.filename === 'qjs.wasm')!;
+  // const entry = entries.find((x) => x.filename === 'qjs.wasm')!;
 
-  console.log(bin2hex(JsWasiParams.encode({
-    argv: [str2bin('quickjs'), str2bin('/in/params')],
-    env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
-    cwd: [],
-    files: [],
-    stdinFrom: [str2bin('identity'), str2bin('')],
-    stdoutTo: [str2bin('out'), str2bin('stdout')],
-    stderrTo: [str2bin('out'), str2bin('stderr')],
-  })));
+  // console.log(bin2hex(JsWasiParams.encode({
+  //   argv: [str2bin('quickjs'), str2bin('--module'), str2bin('/in/params')],
+  //   env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
+  //   cwd: [],
+  //   files: [],
+  //   stdinFrom: [str2bin('identity'), str2bin('')],
+  //   stdoutTo: [str2bin('out'), str2bin('stdout')],
+  //   stderrTo: [str2bin('out'), str2bin('stderr')],
+  // })));
 
-  ctx.get(ExecutorDriverService).run(
-    { contract_hash: ZERO_HASH, params: new Uint8Array() },
-    {},
-    () => 1,
-    async (driver, cancel) => {
-      await driver.setAllocation({});
+  // ctx.get(ExecutorDriverService).run(
+  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   {},
+  //   () => 1,
+  //   async (driver, cancel) => {
+  //     await driver.setAllocation({});
 
-      const { stdout } = await ctx.get(WorkerExecutor).run(
-        {
-          code: entry.body,
-          contractHash: entry.hash.toBytes(),
-          params: str2bin('console.log(1+2);\n'),
-          emitCorrect: true,
-        },
-        driver,
-        cancel,
-      );
+  //     const { stdout } = await ctx.get(WorkerExecutor).run(
+  //       {
+  //         code: entry.body,
+  //         contractHash: entry.hash.toBytes(),
+  //         params: str2bin(`
+  //           import * as std from 'std';
+  //           const f = std.open('/import_map.json', 'w');
+  //           f.puts(JSON.stringify({
+  //             'https://esm.sh/unique-username-generator@1.2.0?target=esnext&pin=v132': '/ext/bla',
+  //           }));
+  //           f.close();
+  //           const { generateUsername } = import("https://esm.sh/unique-username-generator@1.2.0?target=esnext&pin=v132");
 
-      console.log('stdout', new TextDecoder().decode(stdout));
-    },
-  );
+  //         `),
+  //         emitCorrect: true,
+  //       },
+  //       driver,
+  //       cancel,
+  //     );
+
+  //     console.log('stdout', new TextDecoder().decode(stdout));
+  //   },
+  // );
+
+  // const entry = entries.find((x) => x.filename === 'assemblyscript.wasm')!;
+
+  // console.log(bin2hex(JsWasiParams.encode({
+  //   argv: [
+  //     'asc',
+  //     '/in/params',
+  //     '--outFile',
+  //     '/out/bla',
+  //     // '--runtime',
+  //     // 'stub',
+  //     // '--importMemory',
+  //     // '--sharedMemory',
+  //     // '--maximumMemory',
+  //     // '10',
+  //   ].map(str2bin),
+  //   env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
+  //   cwd: [],
+  //   files: [],
+  //   stdinFrom: [str2bin('identity'), str2bin('')],
+  //   stdoutTo: [str2bin('out'), str2bin('stdout')],
+  //   stderrTo: [str2bin('out'), str2bin('stderr')],
+  // })));
+
+  // ctx.get(ExecutorDriverService).run(
+  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   {},
+  //   () => 1,
+  //   async (driver, cancel) => {
+  //     await driver.setAllocation({});
+
+  //     const { stdout } = await ctx.get(WorkerExecutor).run(
+  //       {
+  //         code: entry.body,
+  //         contractHash: entry.hash.toBytes(),
+  //         params: str2bin(`
+  //           export function add(a: i32, b: i32): i32 {
+  //             return a + b
+  //           }
+  //         `),
+  //         emitCorrect: true,
+  //       },
+  //       driver,
+  //       cancel,
+  //     );
+
+  //     console.log('stdout', new TextDecoder().decode(stdout));
+  //   },
+  // );
 })();
 
 // ctx.get(EpochContract).get();
