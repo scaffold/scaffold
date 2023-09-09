@@ -661,7 +661,6 @@ export const registry = {
       { name: 'block_hash', type: 'Hash' },
       { name: 'valid', type: 'boolean' },
       { name: 'public_key', type: 'bytes' }, // 33 bytes
-      { name: 'free_after', type: 'long' },
       { name: 'hint', type: 'bytes' },
       // {
       //   name: 'claim',

@@ -31,9 +31,9 @@ export enum FactSource {
 
 export interface Collateralization {
   block: BlockFact;
-  params: CollateralContractParams;
-  amountDelta: bigint;
   outputIdx: number;
+  params: CollateralContractParams;
+  amount: bigint;
 }
 
 export type FactBase = {
@@ -47,6 +47,8 @@ export type FactBase = {
   source: FactSource;
   fromNodes: Node[];
   toNodes: Node[];
+
+  publishAt?: number;
 
   collateralizations: Collateralization[];
 

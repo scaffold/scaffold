@@ -19,8 +19,6 @@ import {
 import { getOrCreate } from '~/sbl/util/map.ts';
 import FactService from '~/sbl/FactService.ts';
 import NodeService from '~/sbl/NodeService.ts';
-import HashRequestService from '~/sbl/HashRequestService.ts';
-import { assert } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 
 /*
@@ -149,6 +147,10 @@ export default class BlockSetService {
       { type: FactType.BlockSet as const },
     );
 
+    if (mutator !== undefined) {
+      mutator(fact);
+    }
+
     this.addParent(blockSet.left_child, fact);
     this.addParent(blockSet.right_child, fact);
 
@@ -173,10 +175,6 @@ export default class BlockSetService {
     //   throw new Error(`Invalid level ${fact.level}`);
     // }
     // level.push(fact);
-
-    if (mutator !== undefined) {
-      mutator(fact);
-    }
 
     this.ctx.get(FrontierService).ingestBlockSet(fact);
 
@@ -493,7 +491,7 @@ export default class BlockSetService {
   private requestAll(root: Hash, signedFact: Fact): boolean {
     const node = this.ctx.get(FactService).get(root);
     if (node === undefined) {
-      this.ctx.get(HashRequestService).requestHash(root, signedFact);
+      // FactService.get automatically requests the hash if it doesn't have it
       return false;
     }
 

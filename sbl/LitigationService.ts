@@ -4,31 +4,42 @@ import { collateralHash, epochInclusionHash, hintHash } from './constants.ts';
 import Context from './Context.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import KeyService from './KeyService.ts';
-import { CollateralContractParams, EpochInclusionParams } from './messages.ts';
+import {
+  BlockInput,
+  CollateralContractParams,
+  EpochInclusionParams,
+} from './messages.ts';
 import Hash from './util/Hash.ts';
 import FactService from '~/sbl/FactService.ts';
-
-const publicationDelay = 2000;
+import FrontierMonitorService from '~/sbl/FrontierMonitorService.ts';
 
 const max = (a: bigint, b: bigint) => a > b ? a : b;
 
 export default class LitigationService {
-  private timeouts = new Set<number>();
-
-  constructor(private ctx: Context) {
-    ctx.onDestruct(() =>
-      this.timeouts.forEach((timeout) =>
-        ctx.config.timeProvider.clearTimeout(timeout)
-      )
-    );
-  }
+  constructor(private ctx: Context) {}
 
   public litigateBlock(
     block: BlockFact,
     verified: boolean,
     hint?: Uint8Array,
   ) {
+    if (block.passedVerification === verified) {
+      return;
+    } else if (block.passedVerification === !verified) {
+      throw new Error(
+        `Cannot change the verified status of a block from ${block.passedVerification} to ${verified}!`,
+      );
+    }
+
     block.passedVerification = verified;
+
+    const outputs: BlockInput[] = [];
+    this.ctx.get(FrontierMonitorService).monitorOutput(
+      collateralHash,
+      block.hash.toBytes(),
+      () => {},
+      () => {},
+    );
 
     const collateral = this.ctx.get(BlockService).getCollateral(block);
     if (collateral.resolver !== undefined) {
@@ -47,7 +58,7 @@ export default class LitigationService {
       return;
     }
 
-    const voteBlock = this.ctx.get(BlockBuilder).emit({
+    this.ctx.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
           contract_hash: collateralHash,
@@ -55,31 +66,30 @@ export default class LitigationService {
             block_hash: block.hash,
             valid: verified,
             public_key: this.ctx.get(KeyService).getSelfPublicKey(),
-            free_after: BigInt(this.ctx.config.timeProvider.now() + 10000),
+            // free_after: BigInt(this.ctx.config.timeProvider.now() + 10000),
             hint: hint ?? new Uint8Array([]),
           }),
         },
         amount: additionalCollateral,
       }],
-    }, []);
-    const voteExt = this.ctx.get(BlockService).create(voteBlock);
+    });
+  }
 
-    // const incentiveBlock = this.ctx.get(BlockBuilder).emit({
-    //   outputs: [{
-    //     verifier: {
-    //       contract_hash: epochInclusionHash,
-    //       params: EpochInclusionParams.encode({ hash: voteExt.hash }),
-    //     },
-    //     amount: 10n,
-    //   }],
-    // }, []);
-    // this.ctx.get(BlockService).create(incentiveBlock);
+  private publishResolution(block: BlockFact) {
+    block.collateralizations;
 
-    // const timeout = this.ctx.config.timeProvider.setTimeout(() => {
-    //   this.ctx.get(FactService).publish(voteExt);
-    //   this.timeouts.delete(timeout);
-    // }, publicationDelay);
-    // this.timeouts.add(timeout);
+    const inputs: BlockInput[] = [];
+    this.ctx.get(FrontierMonitorService).monitorOutput(
+      collateralHash,
+      block.hash.toBytes(),
+      (blockHash, outputIdx) =>
+        inputs.push({ block_hash: blockHash, output_idx: outputIdx }),
+      () => {
+        throw new Error(`Shouldn't be called`);
+      },
+    ).releaseMonitor();
+
+    // this.ctx.get(BlockBuilder).publish();
   }
 
   // public makeHintInput(block: BlockFact) {

@@ -125,11 +125,11 @@ export default (
       ? Number(fact.outputs.reduce((acc, cur) => acc + cur.amount, 0n))
       : undefined,
     'COLL FOR': Number(fact.collateralizations.reduce(
-      (acc, cur) => cur.params.valid ? acc + cur.amountDelta : acc,
+      (acc, cur) => cur.params.valid ? acc + cur.amount : acc,
       0n,
     )),
     'COLL AGAINST': Number(fact.collateralizations.reduce(
-      (acc, cur) => cur.params.valid ? acc : acc + cur.amountDelta,
+      (acc, cur) => cur.params.valid ? acc : acc + cur.amount,
       0n,
     )),
     'FRONTIER VOTE':

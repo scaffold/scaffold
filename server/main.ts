@@ -156,22 +156,24 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
         break;
 
       case 'wasm':
-        ctx.get(BlockService).create(
-          ctx.get(BlockBuilder).emit({ body }, [{
+        ctx.get(BlockBuilder).publish({
+          body,
+          satisfies: [{
             contract_hash: generatorHash,
             params: contractHash.toBytes(),
-          }]),
-        );
+          }],
+        });
         break;
     }
   } else {
     // Supply contract
-    ctx.get(BlockService).create(
-      ctx.get(BlockBuilder).emit({ body }, [{
+    ctx.get(BlockBuilder).publish({
+      body,
+      satisfies: [{
         contract_hash: rootHash,
         params: Hash.digest(body).toBytes(),
-      }]),
-    );
+      }],
+    });
   }
 
   ctx.get(QaDebugger).addDebugger(filename, hash);

@@ -16,9 +16,30 @@ import KeyService from './KeyService.ts';
 import Logger from './Logger.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
+import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
+import { MaybePromise } from '~/sbl/util/types.ts';
+
+const defaultTimeout = 100;
+
+interface BlockSpec {
+  body?: Uint8Array;
+  inputs?: { block: BlockFact; outputIdx: number; amount: bigint }[];
+  refs?: BlockFact[];
+  satisfies?: Verifier[];
+  outputs?: BlockOutput[];
+  frontierVote?: BlockSetFact;
+}
 
 export default class BlockBuilder {
   private selfAccountVerifier: Verifier;
+
+  private pubsPerMs = 0;
+
+  // We can do this because adding more inputs, outputs, or a body should never remove validity
+  private buildingBlock?: BlockSpec;
+  private emitAt = Infinity;
+  private emitTimeout = -1;
+  private resolvers: ((block: BlockFact) => void)[] = [];
 
   constructor(private ctx: Context) {
     this.selfAccountVerifier = {
@@ -29,15 +50,7 @@ export default class BlockBuilder {
     };
   }
 
-  public emit(
-    block: {
-      body?: Uint8Array;
-      inputs?: (BlockInput & { amount: bigint })[];
-      outputs?: BlockOutput[];
-    },
-    satisfies: Verifier[],
-    timeout = 0,
-  ): Block {
+  public buildBlock(spec: BlockSpec): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -46,8 +59,11 @@ export default class BlockBuilder {
     // const verifier_hash = Hash.digest(Verifier.encode(verifier));
     // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
     //   [];
-    const inputs = block.inputs ?? [];
-    for (const v of satisfies) {
+
+    const inputBlocks = spec.inputs ?? [];
+    const outputs = spec.outputs ?? [];
+
+    for (const v of spec.satisfies ?? []) {
       let added = false;
       for (
         const { block, idx } of this.ctx.get(BlockService).getBlocksByOutput(v)
@@ -56,9 +72,9 @@ export default class BlockBuilder {
           block.outputClaims[idx].length === 0 &&
           block.outputs[idx].amount >= 0n
         ) {
-          inputs.push({
-            block_hash: block.hash,
-            output_idx: idx,
+          inputBlocks.push({
+            block,
+            outputIdx: idx,
             amount: block.outputs[idx].amount,
           });
           added = true;
@@ -72,19 +88,15 @@ export default class BlockBuilder {
       }
 
       if (!added) {
-        const block = this.emit({
-          outputs: [{ verifier: v, amount: 0n }],
-        }, []);
-        inputs.push({
-          block_hash: this.ctx.get(BlockService).create(block).hash,
-          output_idx: 0,
-          amount: 0n,
-        });
+        const block = this.publish(
+          { outputs: [{ verifier: v, amount: 0n }] },
+          0,
+        );
+        inputBlocks.push({ block, outputIdx: 0, amount: 0n });
       }
     }
 
-    const outputs = block.outputs ?? [];
-    difference += inputs.reduce((acc, cur) => acc + cur.amount, 0n);
+    difference += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
     difference -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     if (difference < 0n) {
@@ -94,11 +106,7 @@ export default class BlockBuilder {
       for (const { block, idx } of accountInputs) {
         const amount = block.outputs[idx].amount;
         if (amount > 0n) {
-          inputs.push({
-            block_hash: block.hash,
-            output_idx: idx,
-            amount,
-          });
+          inputBlocks.push({ block, outputIdx: idx, amount });
           difference += amount;
           if (difference >= 0n) {
             break;
@@ -114,17 +122,21 @@ export default class BlockBuilder {
       throw new Error('INSUFFICIENT_COINS');
     }
 
+    const inputs = inputBlocks.map((input) => ({
+      block_hash: input.block.hash,
+      output_idx: input.outputIdx,
+    }));
+
     const frontier_vote = this.ctx.get(FrontierService).getBlockVote(inputs);
 
     // TODO: Can bundle multiple blocks without bodies
-    const body = block.body ?? new Uint8Array([]);
+    const body = spec.body ?? new Uint8Array();
 
     const isFreeMarket = true;
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
-    inputs.forEach((input) => {
+    inputBlocks.forEach((input) => {
       // TODO: No need to look these blocks up; just store them in IncentiveRegistry
-      const inputTs =
-        this.ctx.get(BlockService).get(input.block_hash)!.timestamp;
+      const inputTs = input.block.timestamp;
       if (inputTs >= timestamp) {
         // timestamp = inputTs + 1n;
         timestamp = inputTs;
@@ -139,5 +151,145 @@ export default class BlockBuilder {
       is_free_market: isFreeMarket,
       timestamp,
     };
+  }
+
+  private doEmit = () => {
+    const bb = this.buildingBlock;
+    if (bb === undefined) {
+      throw new Error(`Can't emit an undefined block!`);
+    }
+    this.buildingBlock = undefined;
+    const resolvers = this.resolvers;
+    this.resolvers = [];
+    const fact = this.ctx.get(BlockService).create(this.buildBlock(bb));
+    resolvers.forEach((fn) => fn(fact));
+  };
+
+  public publish(spec: BlockSpec, timeout: 0): BlockFact;
+  public publish(spec: BlockSpec, timeout?: number): MaybePromise<BlockFact>;
+  public publish(spec: BlockSpec, timeout?: number) {
+    timeout ??= defaultTimeout;
+    if (timeout < 0) {
+      throw new Error(`Block publish timeout cannot be negative!`);
+    }
+
+    this.pubsPerMs++;
+
+    if (this.buildingBlock === undefined) {
+      if (timeout === 0) {
+        return this.ctx.get(BlockService).create(this.buildBlock(spec));
+      } else {
+        this.buildingBlock = spec;
+        this.emitAt = this.ctx.config.timeProvider.now() + timeout;
+        this.emitTimeout = this.ctx.config.timeProvider.setTimeout(
+          this.doEmit,
+          timeout,
+        );
+        if (this.resolvers.length !== 0) {
+          throw new Error(
+            `Resolvers should be empty if building block isn't set!`,
+          );
+        }
+        return new Promise((resolve) => this.resolvers.push(resolve));
+      }
+    }
+
+    const bb = this.buildingBlock;
+
+    let mergeable = spec.body === undefined ||
+      bb.body === undefined;
+
+    if (
+      mergeable && spec.frontierVote !== undefined &&
+      bb.frontierVote !== undefined
+    ) {
+      const mergedVote = this.ctx.get(FrontierService).mergeFrontierVotes(
+        spec.frontierVote,
+        bb.frontierVote,
+      );
+      if (mergedVote !== undefined) {
+        bb.frontierVote = mergedVote;
+      } else {
+        // Frontier votes are not mergeable
+        mergeable = false;
+      }
+    }
+
+    if (mergeable) {
+      bb.body ??= spec.body;
+      if (spec.inputs !== undefined) {
+        bb.inputs = bb.inputs !== undefined
+          ? bb.inputs.concat(spec.inputs)
+          : spec.inputs;
+      }
+      if (spec.refs !== undefined) {
+        bb.refs = bb.refs !== undefined ? bb.refs.concat(spec.refs) : spec.refs;
+      }
+      if (spec.satisfies !== undefined) {
+        bb.satisfies = bb.satisfies !== undefined
+          ? bb.satisfies.concat(spec.satisfies)
+          : spec.satisfies;
+      }
+      if (spec.outputs !== undefined) {
+        bb.outputs = bb.outputs !== undefined
+          ? bb.outputs.concat(spec.outputs)
+          : spec.outputs;
+      }
+      bb.frontierVote ??= spec.frontierVote;
+
+      if (timeout === 0) {
+        // Mergeable and we need to emit immediately:
+        // Merge and emit; clear building block.
+        this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
+        this.buildingBlock = undefined;
+        const resolvers = this.resolvers;
+        this.resolvers = [];
+        const fact = this.ctx.get(BlockService).create(this.buildBlock(bb));
+        resolvers.forEach((fn) => fn(fact));
+        return fact;
+      } else {
+        // Mergeable and we can wait to emit:
+        // Merge and re-schedule the emit if we're reducing it.
+        const emitAt = this.ctx.config.timeProvider.now() + timeout;
+        if (emitAt < this.emitAt) {
+          this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
+          this.emitAt = emitAt;
+          this.emitTimeout = this.ctx.config.timeProvider.setTimeout(
+            this.doEmit,
+            timeout,
+          );
+        }
+        return new Promise((resolve) => this.resolvers.push(resolve));
+      }
+    } else {
+      if (timeout === 0) {
+        // Not mergeable and we need to emit immediately:
+        // Just emit the current block now and leave the other one to emit later.
+        return this.ctx.get(BlockService).create(this.buildBlock(spec));
+      } else {
+        // Not mergeable and we can wait to emit:
+        // Emit the block that should be emitted first; leave the other one for later.
+        const emitAt = this.ctx.config.timeProvider.now() + timeout;
+        if (emitAt < this.emitAt) {
+          // Emit the current block now and leave the building one for later.
+          return this.ctx.get(BlockService).create(this.buildBlock(spec));
+        } else {
+          // Emit the building block now and leave the current one for later.
+          this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
+          this.buildingBlock = spec;
+          this.emitAt = emitAt;
+          this.emitTimeout = this.ctx.config.timeProvider.setTimeout(
+            this.doEmit,
+            timeout,
+          );
+          const bbResolvers = this.resolvers;
+          return new Promise((resolve) => {
+            this.resolvers = [resolve];
+            const fact = this.ctx.get(BlockService).create(this.buildBlock(bb));
+            bbResolvers.forEach((fn) => fn(fact));
+          });
+        }
+      }
+    }
   }
 }

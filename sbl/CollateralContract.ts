@@ -42,34 +42,36 @@ export default class CollateralContract {
     // ) => MaybePromise<Uint8Array>,
     invert: (hash: Hash) => MaybePromise<Uint8Array>,
   ) {
-    const { block_hash, valid, public_key, free_after } =
-      CollateralContractParams.decode(params);
+    throw new Error(`TODO: Implement`);
 
-    if (block.timestamp < free_after) {
-      // Contestion
-      // Flip for/against; extend free_after timestamps
-      // TODO: Check that the collateral inputs are (1) all from the same block and (2) exactly the collateral outputs of that block.
-      const outputs = await Promise.all(
-        block.inputs.map(async ({ block_hash, output_idx }) =>
-          Block.decode(await invert(block_hash)).outputs[output_idx]
-        ),
-      );
-      const collaterals = outputs.filter(({ verifier }) =>
-        Hash.equals(verifier.contract_hash, collateralHash)
-      );
-      return collaterals.every((find) =>
-        block.outputs.some((candidate) =>
-          candidate.amount === find.amount &&
-          Hash.equals(
-            candidate.verifier.contract_hash,
-            find.verifier.contract_hash,
-          ) && arrEquals(candidate.verifier.params, find.verifier.params)
-        )
-      );
-    } else {
-      // Free collateral
-      return this.ctx.get(FactService).verify(block, public_key);
-    }
+    // const { block_hash, valid, public_key, free_after } =
+    //   CollateralContractParams.decode(params);
+
+    // if (block.timestamp < free_after) {
+    //   // Contestion
+    //   // Flip for/against; extend free_after timestamps
+    //   // TODO: Check that the collateral inputs are (1) all from the same block and (2) exactly the collateral outputs of that block.
+    //   const outputs = await Promise.all(
+    //     block.inputs.map(async ({ block_hash, output_idx }) =>
+    //       Block.decode(await invert(block_hash)).outputs[output_idx]
+    //     ),
+    //   );
+    //   const collaterals = outputs.filter(({ verifier }) =>
+    //     Hash.equals(verifier.contract_hash, collateralHash)
+    //   );
+    //   return collaterals.every((find) =>
+    //     block.outputs.some((candidate) =>
+    //       candidate.amount === find.amount &&
+    //       Hash.equals(
+    //         candidate.verifier.contract_hash,
+    //         find.verifier.contract_hash,
+    //       ) && arrEquals(candidate.verifier.params, find.verifier.params)
+    //     )
+    //   );
+    // } else {
+    //   // Free collateral
+    //   return this.ctx.get(FactService).verify(block, public_key);
+    // }
   }
 
   public static generate(

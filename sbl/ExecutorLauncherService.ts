@@ -10,7 +10,7 @@ import LocalGeneratorService, {
   ANY_BODY_FLAG,
   INGENERABLE_FLAG,
 } from './LocalGeneratorService.ts';
-import { EpochInclusionProof, Verifier } from './messages.ts';
+import { Block, EpochInclusionProof, Verifier } from './messages.ts';
 import { bin2str, str2bin } from './pathUtils.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
 import { error, mapEntries } from './util/functional.ts';
@@ -21,7 +21,10 @@ import DataContract from './DataContract.ts';
 import LitigationService from './LitigationService.ts';
 import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
+import { BlockFact, FactSource, FactType } from '~/sbl/FactMeta.ts';
+import FactService from '~/sbl/FactService.ts';
+import NodeService from '~/sbl/NodeService.ts';
+import ClockService from '~/sbl/ClockService.ts';
 
 export default class ExecutorLauncherService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
@@ -227,22 +230,66 @@ export default class ExecutorLauncherService {
     ) === 1;
   }
 
-  private createBlock(
+  private async createBlock(
     verifier: Verifier,
     data: Uint8Array | undefined,
     inputs: { block: BlockFact; outputIdx: number }[],
     durationMs: number,
   ) {
-    const block = this.ctx.get(BlockBuilder).emit({
+    if (Hash.equals(verifier.contract_hash, rootHash)) {
+      // Special case for root contracts - don't publish the plaintext immediately.
+      // This prevents others from stealing it and re-publishing it in their own block.
+      // Instead, wait for a time.
+      // TODO: Wait for our block to become canonical in the blockset.
+
+      const block = this.ctx.get(BlockBuilder).buildBlock({
+        inputs: inputs.map(({ block, outputIdx }) => ({
+          block,
+          outputIdx,
+          amount: block.outputs[outputIdx].amount,
+        })),
+        body: data,
+        satisfies: [verifier],
+      });
+
+      const publishDelay = 500 + Math.random() * 500;
+      const publishAt = Date.now() + publishDelay;
+
+      const fact = this.ctx.get(FactService).ingest(
+        this.ctx.get(FactService).compose(block, Block, FactType.Block),
+        FactSource.Local,
+        this.ctx.get(NodeService).getSelfNode(),
+        (fact) => {
+          if (fact.type !== FactType.Block) {
+            throw new Error(`Internal error! Invalid fact type ${fact.type}`);
+          }
+
+          fact.publishAt = publishAt;
+        },
+      );
+      if (fact.type !== FactType.Block) {
+        throw new Error(`Internal error! Invalid fact type ${fact.type}`);
+      }
+
+      // TODO: Instead of just waiting for a timeout, wait until the block has been included in a canonical N-level blockset tree.
+      this.ctx.get(ClockService).setTimeout(
+        () => this.ctx.get(FactService).publish(fact),
+        publishDelay,
+      );
+
+      return;
+    }
+
+    const block = await this.ctx.get(BlockBuilder).publish({
       inputs: inputs.map(({ block, outputIdx }) => ({
-        block_hash: block.hash,
-        output_idx: outputIdx,
+        block,
+        outputIdx,
         amount: block.outputs[outputIdx].amount,
       })),
       body: data,
-    }, [verifier]);
+      satisfies: [verifier],
+    });
 
-    const blockExt = this.ctx.get(BlockService).create(block);
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
     // const hash = Hash.digest(Verifier.encode(verifier));
@@ -263,9 +310,9 @@ export default class ExecutorLauncherService {
     // }
 
     if (this.ctx.config.dbgVerifyGenerations) {
-      this.enqueueVerification(blockExt, verifier, 0);
+      this.enqueueVerification(block, verifier, 0);
     } else {
-      this.ctx.get(LitigationService).litigateBlock(blockExt, true);
+      this.ctx.get(LitigationService).litigateBlock(block, true);
     }
   }
 

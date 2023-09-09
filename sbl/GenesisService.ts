@@ -38,9 +38,7 @@ const createGenesisBlock = () => {
     enableValidation: false,
   });
 
-  const block = ctx.get(BlockBuilder).emit({
-    body: genesisPublicKey,
-  }, []);
+  const block = ctx.get(BlockBuilder).buildBlock({ body: genesisPublicKey });
   initAccounts.forEach((publicKey) =>
     block.outputs.push({
       verifier: {

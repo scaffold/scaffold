@@ -331,6 +331,30 @@ export default class FrontierService {
     });
   }
 
+  public mergeFrontierVotes(a: BlockSetFact, b: BlockSetFact) {
+    if (a.level > b.level) {
+      const t = a;
+      a = b;
+      b = t;
+    }
+
+    let it = a;
+    while (it.level < b.level) {
+      const vote = this.ctx.get(FactService).get(it.frontier_vote);
+      if (vote === undefined) {
+        return;
+      }
+      if (vote.type !== FactType.BlockSet) {
+        throw new Error(`Invalid type!`);
+      }
+      it = vote;
+    }
+
+    if (it === b) {
+      return a;
+    }
+  }
+
   // public updateFrontierOld() {
   //   // this.updateEnqueued = false;
 

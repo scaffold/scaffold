@@ -24,10 +24,9 @@ export default class IncentiveService {
       return;
     }
 
-    const block = this.ctx.get(BlockBuilder).emit({
+    this.ctx.get(BlockBuilder).publish({
       outputs: [{ verifier, amount: incentive }],
-    }, []);
-    this.ctx.get(BlockService).create(block);
+    });
 
     // if (amount > 0n) {
     //   this.ctx.get(PendingIncentiveRegistry).getOrCreate(

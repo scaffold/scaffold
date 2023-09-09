@@ -20,6 +20,7 @@ import { error } from '~/sbl/util/functional.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import * as log from 'std-latest/log/mod.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
+import DataService from '~/sbl/DataService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -76,9 +77,7 @@ export default class FactService {
         ? error(`Unexpected mutator`)
         : ctx.get(NodeService).createFact(base, node);
     this.factories[FactType.Block] = (base, _, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(BlockService).createFact(base);
+      ctx.get(BlockService).createFact(base, mutator);
     this.factories[FactType.BlockSet] = (base, _, mutator) =>
       ctx.get(BlockSetService).createFact(base, mutator);
     this.factories[FactType.BlockSetTreeNode] = (base, _, mutator) =>
@@ -98,7 +97,11 @@ export default class FactService {
   // }
 
   public get(hash: Hash) {
-    return this.facts.get(hash.toPrimitive());
+    const fact = this.facts.get(hash.toPrimitive());
+    if (fact === undefined) {
+      this.ctx.get(DataService).request(hash);
+    }
+    return fact;
   }
   public getAs<Type extends FactType>(
     hash: Hash,
@@ -193,10 +196,18 @@ export default class FactService {
   }
 
   public publish(fact: Fact) {
+    if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
+      throw new Error(`Trying to publish before publish time!`);
+    }
+
     this.ctx.get(NodeService).getAll()
       .forEach((node) => this.sendTo(fact, node));
   }
   public sendTo(fact: Fact, node: Node) {
+    if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
+      throw new Error(`Trying to publish before publish time!`);
+    }
+
     if (!node.knownFacts.has(fact)) {
       node.knownFacts.add(fact);
       fact.toNodes.push(node);

@@ -109,8 +109,7 @@ const startGame = () => {
     contract_hash: moduleHashes.thrust_init_wasm_hash,
     params: match.toBytes(),
   };
-  const block = client.ctx.get(BlockBuilder).emit({ body }, [verifier]);
-  client.ctx.get(BlockService).create(block);
+  client.ctx.get(BlockBuilder).publish({ body, satisfies: [verifier] });
   return match;
 };
 
@@ -147,24 +146,26 @@ export default () => {
 
       <button
         onClick={() => {
-          const block = client.ctx.get(BlockService).create(
-            client.ctx.get(BlockBuilder).emit({ body: str2bin('abc') }, [{
+          client.ctx.get(BlockBuilder).publish({
+            body: str2bin('abc'),
+            satisfies: [{
               contract_hash: constants.rootHash,
               params: Hash.digest('abc').toBytes(),
-            }]),
-          );
+            }],
+          });
         }}
       >
         Publish normal block
       </button>
       <button
-        onClick={() => {
-          const badBlock = client.ctx.get(BlockService).create(
-            client.ctx.get(BlockBuilder).emit({ body: str2bin('abc') }, [{
+        onClick={async () => {
+          const badBlock = await client.ctx.get(BlockBuilder).publish({
+            body: str2bin('abc'),
+            satisfies: [{
               contract_hash: constants.rootHash,
               params: Hash.random().toBytes(),
-            }]),
-          );
+            }],
+          });
           client.ctx.get(LitigationService).litigateBlock(badBlock, true);
         }}
       >
@@ -203,12 +204,13 @@ export default () => {
       <Input label='Body' value={body} setValue={setBody} />
       <button
         onClick={() =>
-          client.ctx.get(BlockService).create(
-            client.ctx.get(BlockBuilder).emit({ body: str2bin(body) }, [{
+          client.ctx.get(BlockBuilder).publish({
+            body: str2bin(body),
+            satisfies: [{
               contract_hash: Hash.fromHex(selectedContract!),
               params: str2bin(params),
-            }]),
-          )}
+            }],
+          })}
       >
         PROVIDE
       </button>

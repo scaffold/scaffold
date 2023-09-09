@@ -81,10 +81,8 @@ export default class BlockService {
     return Hash.digestParts(signer, Block.encode(block));
   }
 
-  public create(block: Block, publish = true, immortalize = false): BlockFact {
+  public create(block: Block): BlockFact {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
-
-    // Sign, publish, ingest, return hash
 
     const data = this.ctx.get(FactService)
       .compose(block, Block, FactType.Block);
@@ -99,14 +97,15 @@ export default class BlockService {
       throw new Error(`Internal error! Invalid fact type ${fact.type}`);
     }
 
-    if (publish) {
-      this.ctx.get(FactService).publish(fact);
-    }
+    this.ctx.get(FactService).publish(fact);
 
     return fact;
   }
 
-  public createFact(base: FactBase): BlockFact {
+  public createFact(
+    base: FactBase,
+    mutator?: (fact: BlockFact) => void,
+  ): BlockFact {
     const block = Block.decode(base.message);
 
     if (block.timestamp > BigInt(this.ctx.config.timeProvider.now())) {
@@ -157,6 +156,10 @@ export default class BlockService {
       { type: FactType.Block as const },
     );
 
+    if (mutator !== undefined) {
+      mutator(fact);
+    }
+
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
     fact.inputs.forEach((input, idx) => {
@@ -187,7 +190,7 @@ export default class BlockService {
         this.ctx.get(FactService).addCollateral({
           block: fact,
           params,
-          amountDelta: amount,
+          amount,
           outputIdx,
         });
       }
@@ -555,9 +558,9 @@ export default class BlockService {
     let postedAmountAgainst = 0n;
     ledger.forEach((x) => {
       if (x.params.valid) {
-        postedAmountFor += x.amountDelta;
+        postedAmountFor += x.amount;
       } else {
-        postedAmountAgainst += x.amountDelta;
+        postedAmountAgainst += x.amount;
       }
     });
     let resolver: BlockFact | undefined;
@@ -566,7 +569,7 @@ export default class BlockService {
       throw new Error(`Initial collateral posting is against!`);
     }
     const implicitAmountAgainst = ledger.length
-      ? this.getImplicitClaimAgainst(ledger[0].amountDelta)
+      ? this.getImplicitClaimAgainst(ledger[0].amount)
       : 0n;
 
     return {
