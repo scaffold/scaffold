@@ -249,3 +249,4 @@ export type HashPrimitive = ReturnType<
 >;
 
 export const ZERO_HASH = Hash.fromLiteral32(0);
+export const EMPTY_HASH = Hash.digest(new Uint8Array());

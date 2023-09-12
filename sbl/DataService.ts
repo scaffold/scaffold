@@ -15,8 +15,9 @@ export default class DataService {
 
     this.ctx.get(BlockBuilder).publish({
       outputs: [{
-        amount: 1n,
         verifier: { contract_hash: rootHash, params: hash.toBytes() },
+        amount: 1n,
+        detail: new Uint8Array(),
       }],
     });
   }

@@ -183,13 +183,14 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   ctx.get(BlockService).create({
     inputs: [{ block_hash: Hash.random(), output_idx: 0 }],
     outputs: [{
-      amount: 100000000n,
       verifier: {
         contract_hash: accountHash,
         params: AccountContractParams.encode({
           public_key: ctx.get(KeyService).getSelfPublicKey(),
         }),
       },
+      amount: 100000000n,
+      detail: new Uint8Array(),
     }],
     frontier_vote: ZERO_HASH,
     body: new Uint8Array(),

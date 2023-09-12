@@ -1,9 +1,9 @@
 import Context from '~/sbl/Context.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
-import { BlockSetFact } from '~/sbl/FactMeta.ts';
+import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { Verifier } from '~/sbl/messages.ts';
 
-export type MonitorCb = (blockHash: Hash, outputIdx: number) => void;
+export type MonitorCb = (block: BlockFact, outputIdx: number) => void;
 
 export default class FrontierMonitorService {
   // private monitors;
@@ -12,7 +12,7 @@ export default class FrontierMonitorService {
 
   public monitorOutput(
     contractHash: Hash,
-    paramsStartWith: Uint8Array,
+    params: Uint8Array,
     onEnter: MonitorCb,
     onExit: MonitorCb,
   ) {

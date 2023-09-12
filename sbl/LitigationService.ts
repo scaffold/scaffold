@@ -1,17 +1,30 @@
 import BlockBuilder from './BlockBuilder.ts';
 import BlockService from './BlockService.ts';
-import { collateralHash, epochInclusionHash, hintHash } from './constants.ts';
+import {
+  accountHash,
+  collateralHash,
+  epochInclusionHash,
+  hintHash,
+} from './constants.ts';
 import Context from './Context.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
+import { BlockFact, Collateralization } from '~/sbl/FactMeta.ts';
 import KeyService from './KeyService.ts';
 import {
+  AccountContractParams,
   BlockInput,
+  BlockOutput,
+  CollateralContractDetail,
   CollateralContractParams,
   EpochInclusionParams,
 } from './messages.ts';
-import Hash from './util/Hash.ts';
+import Hash, { EMPTY_HASH, HashPrimitive } from './util/Hash.ts';
 import FactService from '~/sbl/FactService.ts';
 import FrontierMonitorService from '~/sbl/FrontierMonitorService.ts';
+import CollateralContract from '~/sbl/CollateralContract.ts';
+import { getOrCreate } from '~/sbl/util/map.ts';
+import FrontierService from '~/sbl/FrontierService.ts';
+import { bin2hex } from '~/sbl/pathUtils.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
 
 const max = (a: bigint, b: bigint) => a > b ? a : b;
 
@@ -20,41 +33,117 @@ export default class LitigationService {
 
   public litigateBlock(
     block: BlockFact,
-    verified: boolean,
-    hint?: Uint8Array,
+    claim: CollateralContractDetail['claim'],
   ) {
-    if (block.passedVerification === verified) {
-      return;
-    } else if (block.passedVerification === !verified) {
-      throw new Error(
-        `Cannot change the verified status of a block from ${block.passedVerification} to ${verified}!`,
+    let amount: bigint;
+
+    if ('ClaimValid' in claim) {
+      if (block.claimedWork === undefined) {
+        throw new Error(`Cannot claim a block is valid without all inputs!`);
+      }
+
+      amount = this.ctx.config.graphParameters.minimumCollateral(
+        block.claimedWork,
+        this.ctx.config.timeProvider.now(),
       );
+    } else if ('ClaimMissingInputHash' in claim) {
+      const { input_idx } = claim.ClaimMissingInputHash;
+
+      let pro = 0n;
+      let con = 0n;
+      for (const coll of block.collateralizations) {
+        if (
+          'ClaimMissingInputHash' in coll.detail.claim &&
+          coll.detail.claim.ClaimMissingInputHash.input_idx === input_idx
+        ) {
+          con += coll.amount;
+        } else if (
+          'ClaimHasInputHash' in coll.detail.claim &&
+          coll.detail.claim.ClaimHasInputHash.input_idx === input_idx
+        ) {
+          pro += coll.amount;
+        }
+      }
+
+      // Post AGAINST
+      amount = (pro << 1n) - con;
+    } else if ('ClaimHasInputHash' in claim) {
+      const { input_idx, hint } = claim.ClaimHasInputHash;
+
+      const hintHash = Hash.digest(hint);
+      if (!Hash.equals(hintHash, block.inputs[input_idx].block_hash)) {
+        console.error(`You're voting for an incorrect input hash!`);
+      }
+
+      let pro = 0n;
+      let con = 0n;
+      for (const coll of block.collateralizations) {
+        if (
+          'ClaimMissingInputHash' in coll.detail.claim &&
+          coll.detail.claim.ClaimMissingInputHash.input_idx === input_idx
+        ) {
+          con += coll.amount;
+        } else if (
+          'ClaimHasInputHash' in coll.detail.claim &&
+          coll.detail.claim.ClaimHasInputHash.input_idx === input_idx
+        ) {
+          pro += coll.amount;
+        }
+      }
+
+      // Post FOR
+      amount = (con << 1n) - pro;
+    } else if ('ClaimVerificationFailed' in claim) {
+      const { input_idx, hint } = claim.ClaimVerificationFailed;
+
+      let pro = 0n;
+      let con = 0n;
+      for (const coll of block.collateralizations) {
+        if (
+          'ClaimVerificationFailed' in coll.detail.claim &&
+          coll.detail.claim.ClaimVerificationFailed.input_idx === input_idx &&
+          arrEquals(coll.detail.claim.ClaimVerificationFailed.hint, hint)
+        ) {
+          con += coll.amount;
+        } else if (
+          'ClaimVerificationPassed' in coll.detail.claim &&
+          coll.detail.claim.ClaimVerificationPassed.input_idx === input_idx &&
+          arrEquals(coll.detail.claim.ClaimVerificationPassed.hint, hint)
+        ) {
+          pro += coll.amount;
+        }
+      }
+
+      // Post AGAINST
+      amount = (pro << 1n) - con;
+    } else if ('ClaimVerificationPassed' in claim) {
+      const { input_idx, hint } = claim.ClaimVerificationPassed;
+
+      let pro = 0n;
+      let con = 0n;
+      for (const coll of block.collateralizations) {
+        if (
+          'ClaimVerificationFailed' in coll.detail.claim &&
+          coll.detail.claim.ClaimVerificationFailed.input_idx === input_idx &&
+          arrEquals(coll.detail.claim.ClaimVerificationFailed.hint, hint)
+        ) {
+          con += coll.amount;
+        } else if (
+          'ClaimVerificationPassed' in coll.detail.claim &&
+          coll.detail.claim.ClaimVerificationPassed.input_idx === input_idx &&
+          arrEquals(coll.detail.claim.ClaimVerificationPassed.hint, hint)
+        ) {
+          pro += coll.amount;
+        }
+      }
+
+      // Post FOR
+      amount = (con << 1n) - pro;
+    } else {
+      throw new Error(`Invalid claim`);
     }
 
-    block.passedVerification = verified;
-
-    const outputs: BlockInput[] = [];
-    this.ctx.get(FrontierMonitorService).monitorOutput(
-      collateralHash,
-      block.hash.toBytes(),
-      () => {},
-      () => {},
-    );
-
-    const collateral = this.ctx.get(BlockService).getCollateral(block);
-    if (collateral.resolver !== undefined) {
-      // Already resolved; too late
-      return;
-    }
-
-    const amountFor = collateral.postedAmountFor;
-    const amountAgainst = collateral.postedAmountAgainst;
-    // + collateral.implicitAmountAgainst;
-
-    const additionalCollateral = verified
-      ? max(1000n, amountAgainst << 1n) - amountFor
-      : max(1000n, amountFor << 1n) - amountAgainst;
-    if (additionalCollateral <= 0n) {
+    if (amount <= 0n) {
       return;
     }
 
@@ -62,34 +151,188 @@ export default class LitigationService {
       outputs: [{
         verifier: {
           contract_hash: collateralHash,
-          params: CollateralContractParams.encode({
-            block_hash: block.hash,
-            valid: verified,
-            public_key: this.ctx.get(KeyService).getSelfPublicKey(),
-            // free_after: BigInt(this.ctx.config.timeProvider.now() + 10000),
-            hint: hint ?? new Uint8Array([]),
-          }),
+          params: CollateralContractParams.encode({ block_hash: block.hash }),
         },
-        amount: additionalCollateral,
+        amount,
+        detail: CollateralContractDetail.encode({
+          public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+          claim,
+        }),
       }],
     });
   }
 
   private publishResolution(block: BlockFact) {
-    block.collateralizations;
+    const frontierVote = this.ctx.get(FrontierService)
+      .getBlockVote(block.collateralizations);
+    if (frontierVote === undefined) {
+      console.warn(
+        `Can't create a litigation resolution because we don't have a frontier!`,
+      );
+      return;
+    }
 
-    const inputs: BlockInput[] = [];
-    this.ctx.get(FrontierMonitorService).monitorOutput(
-      collateralHash,
-      block.hash.toBytes(),
-      (blockHash, outputIdx) =>
-        inputs.push({ block_hash: blockHash, output_idx: outputIdx }),
-      () => {
-        throw new Error(`Shouldn't be called`);
-      },
-    ).releaseMonitor();
+    this.ctx.get(BlockService).sort(block.collateralizations, frontierVote);
 
-    // this.ctx.get(BlockBuilder).publish();
+    interface Stack {
+      totalPros: bigint;
+      totalCons: bigint;
+      pros: Collateralization[];
+      cons: Collateralization[];
+    }
+
+    let validScore = 0n;
+    const allValids: Collateralization[] = [];
+    const hashScores = new Map<number, Stack>();
+    const verificationScores = new Map<HashPrimitive, Stack>();
+
+    // Distribute coins amongst each hint stack. Distribute all valid coins amongst winners of first invalidator
+
+    for (const coll of block.collateralizations) {
+      const { detail, amount } = coll;
+
+      const addPro = <Key>(map: Map<Key, Stack>, key: Key) =>
+        getOrCreate(
+          map,
+          key,
+          () => ({ totalPros: amount, totalCons: 0n, pros: [coll], cons: [] }),
+          (stack) => {
+            stack.totalPros += amount;
+            stack.pros.push(coll);
+            return stack;
+          },
+        );
+      const addCon = <Key>(map: Map<Key, Stack>, key: Key) =>
+        getOrCreate(
+          map,
+          key,
+          () => ({ totalPros: 0n, totalCons: amount, pros: [], cons: [coll] }),
+          (stack) => {
+            stack.totalCons += amount;
+            stack.cons.push(coll);
+            return stack;
+          },
+        );
+
+      if ('ClaimValid' in detail.claim) {
+        validScore += amount;
+        allValids.push(coll);
+      } else if ('ClaimMissingInputHash' in detail.claim) {
+        const { input_idx } = detail.claim.ClaimMissingInputHash;
+        addCon(hashScores, input_idx);
+      } else if ('ClaimHasInputHash' in detail.claim) {
+        const { input_idx, hint } = detail.claim.ClaimHasInputHash;
+        const hintHash = Hash.digest(hint);
+        if (!Hash.equals(hintHash, block.inputs[input_idx].block_hash)) {
+          console.error(`Someone's voting for an incorrect input hash!`);
+        }
+        addPro(hashScores, input_idx);
+      } else if ('ClaimVerificationFailed' in detail.claim) {
+        const { input_idx, hint } = detail.claim.ClaimVerificationFailed;
+        const pt = Hash.digestParts(input_idx, hint);
+        addCon(verificationScores, pt.toPrimitive());
+      } else if ('ClaimVerificationPassed' in detail.claim) {
+        const { input_idx, hint } = detail.claim.ClaimVerificationPassed;
+        const pt = Hash.digestParts(input_idx, hint);
+        addPro(verificationScores, pt.toPrimitive());
+      } else {
+        throw new Error(`Invalid claim`);
+      }
+    }
+
+    const outputs: BlockOutput[] = [];
+    let firstInvalid: Stack | undefined;
+
+    const distributeCoins = (stack: Stack) => {
+      if (stack.totalCons > stack.totalPros) {
+        // Invalid
+
+        let src = firstInvalid === undefined
+          ? stack.totalPros + validScore
+          : stack.totalPros;
+        let dst = stack.totalCons;
+
+        for (const coll of stack.cons) {
+          const amount = coll.amount * src / dst;
+          src -= amount;
+          dst -= coll.amount;
+          outputs.push({
+            verifier: {
+              contract_hash: accountHash,
+              params: AccountContractParams.encode({
+                public_key: coll.detail.public_key,
+              }),
+            },
+            amount,
+            detail: new Uint8Array(),
+          });
+        }
+
+        firstInvalid = stack;
+      } else {
+        // Valid
+
+        let src = stack.totalCons;
+        let dst = stack.totalPros;
+
+        for (const coll of stack.pros) {
+          const amount = coll.amount * src / dst;
+          src -= amount;
+          dst -= coll.amount;
+          outputs.push({
+            verifier: {
+              contract_hash: accountHash,
+              params: AccountContractParams.encode({
+                public_key: coll.detail.public_key,
+              }),
+            },
+            amount,
+            detail: new Uint8Array(),
+          });
+        }
+      }
+    };
+
+    for (const [_, stack] of hashScores) {
+      distributeCoins(stack);
+    }
+    for (const [_, stack] of verificationScores) {
+      distributeCoins(stack);
+    }
+
+    if (firstInvalid === undefined) {
+      // Valid
+
+      for (const coll of allValids) {
+        outputs.push({
+          verifier: {
+            contract_hash: accountHash,
+            params: AccountContractParams.encode({
+              public_key: coll.detail.public_key,
+            }),
+          },
+          amount: coll.amount,
+          detail: new Uint8Array(),
+        });
+      }
+    }
+
+    const inputTotal = block.collateralizations.reduce(
+      (acc, cur) => acc + cur.amount,
+      0n,
+    );
+    const outputTotal = outputs.reduce((acc, cur) => acc + cur.amount, 0n);
+    if (inputTotal !== outputTotal) {
+      throw new Error(
+        `Trying to publish a resolution but the input total ${inputTotal} does not match the output total ${outputTotal}`,
+      );
+    }
+
+    this.ctx.get(BlockBuilder).publish({
+      inputs: block.collateralizations,
+      outputs,
+      frontierVote,
+    });
   }
 
   // public makeHintInput(block: BlockFact) {

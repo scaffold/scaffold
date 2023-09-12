@@ -71,7 +71,7 @@ export default class ExecutorLauncherService {
               }),
           );
 
-          this.ctx.get(LitigationService).litigateBlock(block, verified);
+          this.litigateBlockVerifier(block, verifier, verified);
         },
       );
     }
@@ -84,7 +84,7 @@ export default class ExecutorLauncherService {
         block.body,
         hint,
       );
-      this.ctx.get(LitigationService).litigateBlock(block, verified, hint);
+      this.litigateBlockVerifier(block, verifier, verified, hint);
       return;
     }
 
@@ -118,7 +118,7 @@ export default class ExecutorLauncherService {
           console.log('STDERR', bin2str(stderr));
 
           const verified = arrEquals(stdout, str2bin('PASS'));
-          this.ctx.get(LitigationService).litigateBlock(block, verified);
+          this.litigateBlockVerifier(block, verifier, verified);
         },
       );
     }
@@ -312,7 +312,40 @@ export default class ExecutorLauncherService {
     if (this.ctx.config.dbgVerifyGenerations) {
       this.enqueueVerification(block, verifier, 0);
     } else {
-      this.ctx.get(LitigationService).litigateBlock(block, true);
+      this.ctx.get(LitigationService).litigateBlock(block, {
+        ClaimAllValid: {},
+      });
+    }
+  }
+
+  private litigateBlockVerifier(
+    block: BlockFact,
+    verifier: Verifier,
+    isValid: boolean,
+    hint: Uint8Array = new Uint8Array(),
+  ) {
+    const idx = block.inputs.findIndex((input) => {
+      const fact = this.ctx.get(FactService).get(input.block_hash);
+      if (fact !== undefined && fact.type === FactType.Block) {
+        const v2 = fact.outputs[input.output_idx].verifier;
+        return Hash.equals(v2.contract_hash, verifier.contract_hash) &&
+          arrEquals(v2.params, verifier.params);
+      }
+    });
+    if (idx === -1) {
+      throw new Error(
+        `Cannot find block input with correct verifier for litigation!`,
+      );
+    }
+
+    if (isValid) {
+      this.ctx.get(LitigationService).litigateBlock(block, {
+        ClaimVerificationPassed: { input_idx: idx, hint },
+      });
+    } else {
+      this.ctx.get(LitigationService).litigateBlock(block, {
+        ClaimVerificationFailed: { input_idx: idx, hint },
+      });
     }
   }
 

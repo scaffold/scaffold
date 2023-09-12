@@ -3,7 +3,7 @@ import {
   Block,
   BlockSet,
   BlockSetTreeNode,
-  CollateralContractParams,
+  CollateralContractDetail,
   InfoMessage,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
@@ -16,10 +16,11 @@ export enum FactType {
   Block,
   BlockSet, // TODO: Rename to bag or something
   BlockSetTreeNode,
-  Frontier,
-  EpochInclusionProof,
-  BridgeStart,
-  BridgeEnd,
+  Invalid,
+  // Frontier,
+  // EpochInclusionProof,
+  // BridgeStart,
+  // BridgeEnd,
 }
 
 export enum FactSource {
@@ -32,7 +33,8 @@ export enum FactSource {
 export interface Collateralization {
   block: BlockFact;
   outputIdx: number;
-  params: CollateralContractParams;
+  detail: CollateralContractDetail;
+  valid: boolean;
   amount: bigint;
 }
 
@@ -70,6 +72,9 @@ export type BlockSetTreeNodeFact =
   & FactBase
   & { type: FactType.BlockSetTreeNode }
   & BlockSetTreeNode['node'];
+export type InvalidFact =
+  & FactBase
+  & { type: FactType.Invalid };
 // export type FrontierFact =
 //   & FactBase
 //   & { type: FactType.Frontier }
@@ -80,5 +85,6 @@ export type Fact =
   | InfoFact
   | BlockFact
   | BlockSetFact
-  | BlockSetTreeNodeFact;
+  | BlockSetTreeNodeFact
+  | InvalidFact;
 // | FrontierFact;

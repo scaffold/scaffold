@@ -166,7 +166,9 @@ export default () => {
               params: Hash.random().toBytes(),
             }],
           });
-          client.ctx.get(LitigationService).litigateBlock(badBlock, true);
+          client.ctx.get(LitigationService).litigateBlock(badBlock, {
+            ClaimAllValid: {},
+          });
         }}
       >
         Publish bad block

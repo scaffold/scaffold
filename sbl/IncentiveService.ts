@@ -16,6 +16,7 @@ export default class IncentiveService {
   public incentivize(
     verifier: Verifier,
     incentive: bigint,
+    detail = new Uint8Array(),
     forceAfter = Date.now() + 1000,
   ) {
     throw new Error(`Is this used?`);
@@ -25,7 +26,7 @@ export default class IncentiveService {
     }
 
     this.ctx.get(BlockBuilder).publish({
-      outputs: [{ verifier, amount: incentive }],
+      outputs: [{ verifier, amount: incentive, detail }],
     });
 
     // if (amount > 0n) {

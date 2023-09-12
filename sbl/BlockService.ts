@@ -16,6 +16,7 @@ import {
   Block,
   BlockInput,
   BlockSet,
+  CollateralContractDetail,
   CollateralContractParams,
   EpochInclusionParams,
   EpochInclusionProof,
@@ -28,6 +29,7 @@ import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import {
   BlockFact,
+  BlockSetFact,
   Collateralization,
   Fact,
   FactBase,
@@ -171,7 +173,7 @@ export default class BlockService {
       this.getClaims(input).push({ block: fact, inputIdx: idx });
     });
 
-    fact.outputs.forEach(({ verifier, amount }, outputIdx) => {
+    fact.outputs.forEach(({ verifier, amount, detail }, outputIdx) => {
       this.getClaims({ block_hash: base.hash, output_idx: outputIdx })
         .forEach(({ block, inputIdx }) =>
           this.linkBlocks(fact, block, outputIdx, inputIdx)
@@ -186,12 +188,17 @@ export default class BlockService {
 
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
         const params = CollateralContractParams.decode(verifier.params);
-        this.ctx.get(PublicKeyService).addPublicKey(params.public_key);
-        this.ctx.get(FactService).addCollateral({
+        const detailDec = CollateralContractDetail.decode(detail);
+        this.ctx.get(PublicKeyService).addPublicKey(detailDec.public_key);
+        const valid = 'ClaimAllValid' in detailDec.claim ||
+          'ClaimVerificationPassed' in detailDec.claim ||
+          'ClaimHasInputHash' in detailDec.claim;
+        this.ctx.get(FactService).addCollateral(params.block_hash, {
           block: fact,
-          params,
-          amount,
           outputIdx,
+          detail: detailDec,
+          valid,
+          amount,
         });
       }
 
@@ -242,6 +249,8 @@ export default class BlockService {
   }
 
   public compare(a: BlockFact, b: BlockFact) {
+    // TODO: Use a frontier block
+
     if (a === b) {
       return 0;
     }
@@ -287,6 +296,10 @@ export default class BlockService {
 
     console.warn(`Chains aren't merged yet!`);
     return 0;
+  }
+
+  public sort(items: { block: BlockFact }[], frontier: BlockSetFact) {
+    throw new Error(`Unimplemented`);
   }
 
   // This is called whenever an input becomes available
@@ -549,37 +562,38 @@ export default class BlockService {
   //   };
   // }
 
-  public getCollateral(block: BlockFact): CollateralSummary {
-    const ledger = block.collateralizations.sort((a, b) =>
-      Number(a.block.timestamp - b.block.timestamp)
-    );
+  // public getCollateral(block: BlockFact): CollateralSummary {
+  //   // We need to order by frontier inclusion here
+  //   const ledger = block.collateralizations.sort((a, b) =>
+  //     Number(a.block.timestamp - b.block.timestamp)
+  //   );
 
-    let postedAmountFor = 0n;
-    let postedAmountAgainst = 0n;
-    ledger.forEach((x) => {
-      if (x.params.valid) {
-        postedAmountFor += x.amount;
-      } else {
-        postedAmountAgainst += x.amount;
-      }
-    });
-    let resolver: BlockFact | undefined;
+  //   let postedAmountFor = 0n;
+  //   let postedAmountAgainst = 0n;
+  //   ledger.forEach((x) => {
+  //     if (x.detail.valid) {
+  //       postedAmountFor += x.amount;
+  //     } else {
+  //       postedAmountAgainst += x.amount;
+  //     }
+  //   });
+  //   let resolver: BlockFact | undefined;
 
-    if (ledger.length && !ledger[0].params.valid) {
-      throw new Error(`Initial collateral posting is against!`);
-    }
-    const implicitAmountAgainst = ledger.length
-      ? this.getImplicitClaimAgainst(ledger[0].amount)
-      : 0n;
+  //   if (ledger.length && !ledger[0].detail.valid) {
+  //     throw new Error(`Initial collateral posting is against!`);
+  //   }
+  //   const implicitAmountAgainst = ledger.length
+  //     ? this.getImplicitClaimAgainst(ledger[0].amount)
+  //     : 0n;
 
-    return {
-      postedAmountFor,
-      postedAmountAgainst,
-      implicitAmountAgainst,
-      ledger,
-      resolver,
-    };
-  }
+  //   return {
+  //     postedAmountFor,
+  //     postedAmountAgainst,
+  //     implicitAmountAgainst,
+  //     ledger,
+  //     resolver,
+  //   };
+  // }
   public updateCanonicality(block: BlockFact, someInputCanonicality?: boolean) {
     // Note that we consider missing inputs as canonical.
     // We also short-circuit if an input canonicality is false, which is a common case.

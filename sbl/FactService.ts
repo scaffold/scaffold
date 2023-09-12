@@ -51,7 +51,7 @@ typeHasSignature[FactType.Info] = true;
 typeHasSignature[FactType.Block] = true;
 typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
-typeHasSignature[FactType.Frontier] = false;
+typeHasSignature[FactType.Invalid] = true;
 
 const useZstd = false;
 const zstdMagic = new Uint8Array([40, 181, 47, 253]);
@@ -84,6 +84,10 @@ export default class FactService {
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(BlockSetService).createTreeNodeFact(base);
+    this.factories[FactType.Invalid] = (base, _, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : Object.assign(base, { type: FactType.Invalid as const });
     // this.factories[FactType.Frontier] = (base, _, mutator) =>
     //   mutator !== undefined
     //     ? error(`Unexpected mutator`)
@@ -129,12 +133,9 @@ export default class FactService {
     );
   }
 
-  public addCollateral(collateralization: Collateralization) {
-    getOrCreate(
-      this.collateralByHash,
-      collateralization.params.block_hash.toPrimitive(),
-      () => [],
-    ).push(collateralization);
+  public addCollateral(blockHash: Hash, collateralization: Collateralization) {
+    getOrCreate(this.collateralByHash, blockHash.toPrimitive(), () => [])
+      .push(collateralization);
   }
 
   public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {

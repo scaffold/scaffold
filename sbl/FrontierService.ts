@@ -87,9 +87,12 @@ export default class FrontierService {
     }
   }
 
-  public getBlockVote(inputs: BlockInput[]) {
+  public getBlockVote(inputs: { block: BlockFact; outputIdx: number }[]) {
     for (const input of inputs) {
-      const key = this.ctx.get(BlockSetService).hashTreeIo(input);
+      const key = this.ctx.get(BlockSetService).hashTreeIo({
+        block_hash: input.block.hash,
+        output_idx: input.outputIdx,
+      });
       const level = this.outputs.get(key);
       if (level === undefined) {
         // throw new Error(`Inputs don't match with the frontier output`);
@@ -97,7 +100,7 @@ export default class FrontierService {
         console.error(
           `Inputs don't match with the frontier output; we really should throw an error here!`,
         );
-        return ZERO_HASH;
+        return;
       }
     }
 
@@ -105,18 +108,9 @@ export default class FrontierService {
     if (this.frontierSets.length !== 0) {
       const idx = Math.floor(
         this.ctx.config.entropyProvider.randomNumber() *
-          (this.frontierSets.length +
-            (this.frontierBlock !== undefined ? 1 : 0)),
+          this.frontierSets.length,
       );
-      if (idx === this.frontierSets.length) {
-        return this.frontierBlock!.hash;
-      } else {
-        return this.frontierSets[idx].hash;
-      }
-    } else {
-      return this.frontierBlock !== undefined
-        ? this.frontierBlock.hash
-        : ZERO_HASH;
+      return this.frontierSets[idx];
     }
   }
 

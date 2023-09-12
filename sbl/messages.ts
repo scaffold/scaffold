@@ -191,15 +191,17 @@ export const registry = {
     name: 'BlockOutput',
     type: 'record',
     fields: [
-      // A ppsitive amount means we're paying/incentivizing descendant blocks who claim this output.
-      // A negative amount means descendant blocks who claim this output must pay us (with another positive input or negative output to make their block sum zero).
-      { name: 'amount', type: 'long' },
-
       { name: 'verifier', type: 'Verifier' },
       // { name: 'bill_to', type: ['null', 'Verifier'] },
       // { name: 'author', type: ['null', 'bytes'] },
       // { name: 'timestamp_gt', type: ['null', 'long'] },
       // { name: 'timestamp_lt', type: ['null', 'long'] },
+
+      // A ppsitive amount means we're paying/incentivizing descendant blocks who claim this output.
+      // A negative amount means descendant blocks who claim this output must pay us (with another positive input or negative output to make their block sum zero).
+      { name: 'amount', type: 'long' },
+
+      { name: 'detail', type: 'bytes' },
     ],
   },
   EpochInclusionProof: {
@@ -654,24 +656,62 @@ export const registry = {
     ],
   },
 
+  ClaimAllValid: {
+    name: 'ClaimAllValid',
+    type: 'record',
+    fields: [],
+  },
+  ClaimMissingInputHash: {
+    name: 'ClaimMissingInputHash',
+    type: 'record',
+    fields: [
+      { name: 'input_idx', type: 'int' },
+    ],
+  },
+  ClaimHasInputHash: {
+    name: 'ClaimHasInputHash',
+    type: 'record',
+    fields: [
+      { name: 'input_idx', type: 'int' },
+      { name: 'hint', type: 'bytes' },
+    ],
+  },
+  ClaimVerificationFailed: {
+    name: 'ClaimVerificationFailed',
+    type: 'record',
+    fields: [
+      { name: 'input_idx', type: 'int' },
+      { name: 'hint', type: 'bytes' },
+    ],
+  },
+  ClaimVerificationPassed: {
+    name: 'ClaimVerificationPassed',
+    type: 'record',
+    fields: [
+      { name: 'input_idx', type: 'int' },
+      { name: 'hint', type: 'bytes' },
+    ],
+  },
   CollateralContractParams: {
     name: 'CollateralContractParams',
     type: 'record',
+    fields: [{ name: 'block_hash', type: 'Hash' }],
+  },
+  CollateralContractDetail: {
+    name: 'CollateralContractDetail',
+    type: 'record',
     fields: [
-      { name: 'block_hash', type: 'Hash' },
-      { name: 'valid', type: 'boolean' },
       { name: 'public_key', type: 'bytes' }, // 33 bytes
-      { name: 'hint', type: 'bytes' },
-      // {
-      //   name: 'claim',
-      //   type: [
-      //     'ClaimInitial',
-      //     'ClaimValid',
-      //     'ClaimFailingVerifier',
-      //     'ClaimMissingInputHash',
-      //     'ClaimMissingOutputContractHash',
-      //   ],
-      // },
+      {
+        name: 'claim',
+        type: [
+          'ClaimAllValid',
+          'ClaimMissingInputHash',
+          'ClaimHasInputHash',
+          'ClaimVerificationFailed',
+          'ClaimVerificationPassed',
+        ],
+      },
     ],
   },
   // ClaimInitial: {
@@ -961,6 +1001,11 @@ export const CollateralContractParams = makeMsg(
   'CollateralContractParams',
 );
 export type CollateralContractParams = MsgType<'CollateralContractParams'>;
+export const CollateralContractDetail = makeMsg(
+  registry,
+  'CollateralContractDetail',
+);
+export type CollateralContractDetail = MsgType<'CollateralContractDetail'>;
 export const TimeParams = makeMsg(registry, 'TimeParams');
 export type TimeParams = MsgType<'TimeParams'>;
 export const JsWasiParams = makeMsg(registry, 'JsWasiParams');

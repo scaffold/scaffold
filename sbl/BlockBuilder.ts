@@ -1,4 +1,4 @@
-import Hash from './util/Hash.ts';
+import Hash, { ZERO_HASH } from './util/Hash.ts';
 import Context from './Context.ts';
 import {
   AccountContractParams,
@@ -63,10 +63,15 @@ export default class BlockBuilder {
     const inputBlocks = spec.inputs ?? [];
     const outputs = spec.outputs ?? [];
 
-    for (const v of spec.satisfies ?? []) {
+    for (const block of spec.refs ?? []) {
+      inputBlocks.push({ block, outputIdx: -1, amount: 0n });
+    }
+
+    for (const verifier of spec.satisfies ?? []) {
       let added = false;
       for (
-        const { block, idx } of this.ctx.get(BlockService).getBlocksByOutput(v)
+        const { block, idx } of this.ctx.get(BlockService)
+          .getBlocksByOutput(verifier)
       ) {
         if (
           block.outputClaims[idx].length === 0 &&
@@ -88,10 +93,9 @@ export default class BlockBuilder {
       }
 
       if (!added) {
-        const block = this.publish(
-          { outputs: [{ verifier: v, amount: 0n }] },
-          0,
-        );
+        const block = this.publish({
+          outputs: [{ verifier, amount: 0n, detail: new Uint8Array() }],
+        }, 0);
         inputBlocks.push({ block, outputIdx: 0, amount: 0n });
       }
     }
@@ -116,7 +120,11 @@ export default class BlockBuilder {
     }
 
     if (difference > 0n) {
-      outputs.push({ verifier: this.selfAccountVerifier, amount: difference });
+      outputs.push({
+        verifier: this.selfAccountVerifier,
+        amount: difference,
+        detail: new Uint8Array(),
+      });
     } else if (difference < 0n) {
       // TODO: Only output what we actually have
       throw new Error('INSUFFICIENT_COINS');
@@ -127,7 +135,9 @@ export default class BlockBuilder {
       output_idx: input.outputIdx,
     }));
 
-    const frontier_vote = this.ctx.get(FrontierService).getBlockVote(inputs);
+    const frontierVote = spec.frontierVote
+      ? spec.frontierVote
+      : this.ctx.get(FrontierService).getBlockVote(inputBlocks);
 
     // TODO: Can bundle multiple blocks without bodies
     const body = spec.body ?? new Uint8Array();
@@ -146,7 +156,7 @@ export default class BlockBuilder {
     return {
       inputs,
       outputs,
-      frontier_vote,
+      frontier_vote: frontierVote ? frontierVote.hash : ZERO_HASH,
       body,
       is_free_market: isFreeMarket,
       timestamp,

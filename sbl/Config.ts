@@ -9,7 +9,7 @@ import { MaybePromise } from '~/sbl/util/types.ts';
 // TODO: Reorder, rename, reorganize config
 
 export interface GraphParameters {
-  multiplyDataCollateral(x: bigint, time: number): bigint;
+  minimumCollateral(work: bigint, time: number): bigint;
 }
 
 export interface TimeProvider {
@@ -135,11 +135,7 @@ export const defaultConfig = {
   },
   workScoreThreshold: 10,
   graphParameters: {
-    multiplyDataCollateral: (x, _time) => {
-      // const totalSupply = 1n << 60n;
-      // TODO: Softmin with some fraction of the total supply
-      return x * 2n;
-    },
+    minimumCollateral: (work, _time) => work * 1000n,
   },
   dbgVerifyGenerations: false,
   enableValidation: true,

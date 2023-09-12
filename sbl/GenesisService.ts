@@ -46,6 +46,7 @@ const createGenesisBlock = () => {
         params: AccountContractParams.encode({ public_key: publicKey }),
       },
       amount: 1000000n,
+      detail: new Uint8Array(),
     })
   );
   return ctx.get(BlockService).create(block);
@@ -53,16 +54,21 @@ const createGenesisBlock = () => {
 
 console.log('Genesis block hex:', bin2hex(createGenesisBlock().data));
 const genesisData = hex2bin(
-  '53424c02000480897a53424c000000000000000000000000000000000000000000006163636f756e7442404b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a578480897a53424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c6790000000000000000000000000000000000000000000000000000000000000000004203709e4ca7819f7e53b578454d5da4eb791fb3dc05f3bfa532af407ac14f055ff201b2b89cd4cd62441d850ef49f8d6cf4639cd923f9d50e303d3e842d12e2981e24e6a822c62392584b9b400c6fa8e6cbae2761e56f7b2e3af9cb3d2728866e64acd0337efa5f5900',
+  '53424c02000453424c000000000000000000000000000000000000000000006163636f756e7442404b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a578480897a0053424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c67980897a000000000000000000000000000000000000000000000000000000000000000000004203709e4ca7819f7e53b578454d5da4eb791fb3dc05f3bfa532af407ac14f055ff201d69ee9acd16230177196a512918276381b81e817fed058a81e93fae76319d52b58a80ef75b4f206e53f4b474f4bdd26f0b326765ec909850ae33a65ff7bc4fce30ffd4ea0b7801',
 );
 
 export default class GenesisService {
   constructor(private ctx: Context) {
-    ctx.get(FactService).ingest(
-      genesisData,
-      FactSource.Genesis,
-      ctx.get(NodeService).getSelfNode(),
-    );
+    try {
+      ctx.get(FactService).ingest(
+        genesisData,
+        FactSource.Genesis,
+        ctx.get(NodeService).getSelfNode(),
+      );
+    } catch (err) {
+      console.error(err);
+      console.error(`You probably need to update the genesis block data!`);
+    }
   }
 
   public getTotalCoins() {

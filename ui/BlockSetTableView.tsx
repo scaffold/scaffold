@@ -154,7 +154,7 @@ export default (
         header: 'collateral for',
         accessorFn: (blockSet) =>
           blockSet.collateralizations.reduce(
-            (acc, cur) => cur.params.valid ? acc + cur.amount : acc,
+            (acc, cur) => cur.valid ? acc + cur.amount : acc,
             0n,
           ),
       },
@@ -162,7 +162,7 @@ export default (
         header: 'collateral against',
         accessorFn: (blockSet) =>
           blockSet.collateralizations.reduce(
-            (acc, cur) => cur.params.valid ? acc : acc + cur.amount,
+            (acc, cur) => cur.valid ? acc : acc + cur.amount,
             0n,
           ),
       },
