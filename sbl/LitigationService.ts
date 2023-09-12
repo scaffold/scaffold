@@ -37,7 +37,7 @@ export default class LitigationService {
   ) {
     let amount: bigint;
 
-    if ('ClaimValid' in claim) {
+    if ('ClaimAllValid' in claim) {
       if (block.claimedWork === undefined) {
         throw new Error(`Cannot claim a block is valid without all inputs!`);
       }
@@ -214,7 +214,7 @@ export default class LitigationService {
           },
         );
 
-      if ('ClaimValid' in detail.claim) {
+      if ('ClaimAllValid' in detail.claim) {
         validScore += amount;
         allValids.push(coll);
       } else if ('ClaimMissingInputHash' in detail.claim) {

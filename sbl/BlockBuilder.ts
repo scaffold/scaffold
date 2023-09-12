@@ -19,7 +19,8 @@ import FrontierService from '~/sbl/FrontierService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 
-const defaultTimeout = 100;
+// const defaultTimeout = 100; // Enable block chunking
+const defaultTimeout = 0; // Disable block chunking
 
 interface BlockSpec {
   body?: Uint8Array;

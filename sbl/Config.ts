@@ -14,6 +14,7 @@ export interface GraphParameters {
 
 export interface TimeProvider {
   now(): number;
+  setImmediate(cb: () => void): void;
   setTimeout(cb: () => void, delay: number): number;
   clearTimeout(idx: number): void;
   setInterval(cb: () => void, delay: number): number;
@@ -113,6 +114,7 @@ export const defaultConfig = {
   logLevel: log.LogLevels.WARNING,
   timeProvider: {
     now: Date.now.bind(Date),
+    setImmediate: (cb) => setTimeout(cb, 0),
     setTimeout: setTimeout.bind(window),
     clearTimeout: clearTimeout.bind(window),
     setInterval: setInterval.bind(window),

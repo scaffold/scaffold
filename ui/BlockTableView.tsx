@@ -125,9 +125,7 @@ export default (
                         ctx.get(QaDebugger).debugQuestion(output.verifier)
                           ?.dbgContract ??
                           output.verifier.contract_hash.toHex().slice(0, 10)
-                      }/${
-                        Hash.digest(output.verifier.params).toHex().slice(0, 10)
-                      }`
+                      }/${bin2hex(output.verifier.params).slice(0, 10)}`
                       : null}
                   </span>
                 </li>

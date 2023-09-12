@@ -154,10 +154,13 @@ export default class BlockSetService {
     this.addParent(blockSet.left_child, fact);
     this.addParent(blockSet.right_child, fact);
 
-    const chain = [];
-    chain[fact.level] = fact;
-    this.updateBlockChains(blockSet.left_child, chain);
-    this.updateBlockChains(blockSet.right_child, chain);
+    // We have to delay this because this may be called from inside the child ingestion
+    this.ctx.config.timeProvider.setImmediate(() => {
+      const chain = [];
+      chain[fact.level] = fact;
+      this.updateBlockChains(blockSet.left_child, chain);
+      this.updateBlockChains(blockSet.right_child, chain);
+    });
 
     this.getVoters(blockSet.frontier_vote, blockSet.level).push(fact);
 
@@ -439,12 +442,15 @@ export default class BlockSetService {
   private addParent(childHash: Hash, parent: BlockSetFact) {
     this.getParents(childHash).push(parent);
 
-    const child = this.ctx.get(FactService).get(childHash);
-    if (child !== undefined) {
-      child.fromNodes.slice(0, 4).forEach((node) =>
-        this.ctx.get(FactService).sendTo(parent, node)
-      );
-    }
+    // We have to delay this because this may be called from inside the child ingestion
+    this.ctx.config.timeProvider.setImmediate(() => {
+      const child = this.ctx.get(FactService).get(childHash);
+      if (child !== undefined) {
+        child.fromNodes.slice(0, 4).forEach((node) =>
+          this.ctx.get(FactService).sendTo(parent, node)
+        );
+      }
+    });
   }
 
   private updateBlockChains(hash: Hash, chain: BlockSetFact[]) {

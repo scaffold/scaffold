@@ -40,7 +40,7 @@ type FactFactory = (
 // ];
 // a.push(() => {});
 
-const factMagic = new Uint8Array([83, 66, 76]); // SBL
+const factMagic = new Uint8Array([83, 66, 76]); // SBL == 0x53424c
 const headerSize = factMagic.byteLength + 1;
 
 const SIGNATURE_LENGTH = 64 + 1; // We really shouldn't export this, since it's an implementation detail
@@ -59,9 +59,11 @@ const zstdMagic = new Uint8Array([40, 181, 47, 253]);
 
 const sortKeys = true;
 
+const ingestingFact: unique symbol = Symbol('ingestingFact');
+
 export default class FactService {
   private factories: FactFactory[] = [];
-  private facts = new Map<HashPrimitive, Fact>();
+  private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
 
@@ -100,10 +102,12 @@ export default class FactService {
   //   }
   // }
 
-  public get(hash: Hash) {
+  public get(hash: Hash): Fact | undefined {
     const fact = this.facts.get(hash.toPrimitive());
     if (fact === undefined) {
       this.ctx.get(DataService).request(hash);
+    } else if (fact === ingestingFact) {
+      throw new Error(`Cannot get a currently ingesting fact!`);
     }
     return fact;
   }
@@ -122,14 +126,18 @@ export default class FactService {
     filter: (block: BlockFact) => boolean = () => true,
   ): BlockFact[] {
     return [...this.facts.values()].flatMap((fact) =>
-      fact.type === FactType.Block && filter(fact) ? [fact] : []
+      fact !== ingestingFact && fact.type === FactType.Block && filter(fact)
+        ? [fact]
+        : []
     );
   }
   public hackyGetBlockSetsMatching(
     filter: (block: BlockSetFact) => boolean = () => true,
   ): BlockSetFact[] {
     return [...this.facts.values()].flatMap((fact) =>
-      fact.type === FactType.BlockSet && filter(fact) ? [fact] : []
+      fact !== ingestingFact && fact.type === FactType.BlockSet && filter(fact)
+        ? [fact]
+        : []
     );
   }
 
@@ -246,9 +254,13 @@ export default class FactService {
 
     const hash = Hash.digest(data);
     const existing = this.facts.get(hash.toPrimitive());
-    if (existing) {
+    if (existing !== undefined) {
+      if (existing === ingestingFact) {
+        throw new Error(`Cannot re-ingest a currently ingesting fact!`);
+      }
       return existing;
     }
+    this.facts.set(hash.toPrimitive(), ingestingFact);
 
     if (data.byteLength < headerSize) {
       throw new Error(`Message length (${data.byteLength}) is too short!`);
