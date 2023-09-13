@@ -47,7 +47,11 @@ export default class SblClient {
     };
 
     this.ctx = new Context(config);
-    this.ctx.get(ConnectionService).connect('websocket', 'ws://127.0.0.1:8314');
+
+    const url = new URL(window.location.href);
+    url.protocol = {'http:': 'ws:', 'https:': 'wss:'}[url.protocol]!;
+    url.port = '8314';
+    this.ctx.get(ConnectionService).connect('websocket', url.origin);
 
     let height = 0n;
     setInterval(() => {
