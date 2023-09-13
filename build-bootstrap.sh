@@ -102,6 +102,8 @@ done
 
 curl 'https://registry-cdn.wapm.io/contents/python/python/0.1.0/bin/python.wasm' --continue-at - --output server/bootstrap/python.wasm &
 
+curl 'https://registry-cdn.wapm.io/contents/mozilla/spidermonkey/0.0.1/build/spidermonkey.wasm' --continue-at - --output server/bootstrap/spidermonkey.wasm &
+
 sh build-qjs.sh
 
 cp js/* server/bootstrap/ &

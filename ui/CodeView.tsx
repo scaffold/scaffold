@@ -4,6 +4,7 @@ export default ({ children }: { children?: React.ReactNode }) => (
   <>
     <div
       style={{
+        // https://mycolor.space/gradient
         background: `linear-gradient(225deg, #69EACB, #EACCF8, #6654F1)`,
         padding: 100,
         // pointerEvents: 'none',

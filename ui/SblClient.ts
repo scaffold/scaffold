@@ -49,7 +49,7 @@ export default class SblClient {
     this.ctx = new Context(config);
 
     const url = new URL(window.location.href);
-    url.protocol = {'http:': 'ws:', 'https:': 'wss:'}[url.protocol]!;
+    url.protocol = { 'http:': 'ws:', 'https:': 'wss:' }[url.protocol]!;
     url.port = '8314';
     this.ctx.get(ConnectionService).connect('websocket', url.origin);
 

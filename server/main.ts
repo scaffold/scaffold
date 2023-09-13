@@ -323,6 +323,53 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   //     console.log('stdout', new TextDecoder().decode(stdout));
   //   },
   // );
+
+  const entry = entries.find((x) => x.filename === 'spidermonkey.wasm')!;
+
+  console.log(bin2hex(JsWasiParams.encode({
+    argv: [
+      'spidermonkey',
+      // '/in/params',
+      // '--outFile',
+      // '/out/bla',
+      // '--runtime',
+      // 'stub',
+      // '--importMemory',
+      // '--sharedMemory',
+      // '--maximumMemory',
+      // '10',
+    ].map(str2bin),
+    env: [{ key: str2bin('RUST_BACKTRACE'), val: str2bin('1') }],
+    cwd: [],
+    files: [],
+    stdinFrom: [str2bin('in'), str2bin('params')],
+    stdoutTo: [str2bin('out'), str2bin('stdout')],
+    stderrTo: [str2bin('out'), str2bin('stderr')],
+  })));
+
+  ctx.get(ExecutorDriverService).run(
+    { contract_hash: ZERO_HASH, params: new Uint8Array() },
+    {},
+    () => 1,
+    async (driver, cancel) => {
+      await driver.setAllocation({});
+
+      const { stdout } = await ctx.get(WorkerExecutor).run(
+        {
+          code: entry.body,
+          contractHash: entry.hash.toBytes(),
+          params: str2bin(`
+            console.log(1 + 2);
+          `),
+          emitCorrect: true,
+        },
+        driver,
+        cancel,
+      );
+
+      console.log('stdout', new TextDecoder().decode(stdout));
+    },
+  );
 })();
 
 // ctx.get(EpochContract).get();

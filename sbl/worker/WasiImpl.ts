@@ -47,6 +47,7 @@ import * as log from 'std-latest/log/mod.ts';
 const traceSyscalls = true;
 const exposeInodes = false;
 const enableRandom = true;
+const enableTime = true;
 
 const has = (superset: number, subset: number) => (~superset & subset) === 0;
 
@@ -479,7 +480,24 @@ export default class WasiImpl {
 
   private wasi_clock_res_get(clockId: number, resolution: number) {
     this.logger.info(`wasi_clock_res_get`, { clockId, resolution });
-    return wc.WASI_EINVAL;
+    const view = new DataView(this.memory!.buffer);
+    switch (clockId) {
+      case wc.WASI_CLOCK_REALTIME: {
+        view.setBigUint64(resolution, 1000000n, true);
+        break;
+      }
+
+      case wc.WASI_CLOCK_MONOTONIC:
+      case wc.WASI_CLOCK_PROCESS_CPUTIME_ID:
+      case wc.WASI_CLOCK_THREAD_CPUTIME_ID: {
+        view.setBigUint64(resolution, 1000n, true);
+        break;
+      }
+
+      default:
+        return wc.WASI_EINVAL;
+    }
+    return wc.WASI_ESUCCESS;
   }
 
   private wasi_clock_time_get(
@@ -491,7 +509,28 @@ export default class WasiImpl {
       `wasi_clock_time_get`,
       { clockId, precision: Number(precision), time },
     );
-    return wc.WASI_EINVAL;
+    const view = new DataView(this.memory!.buffer);
+    switch (clockId) {
+      case wc.WASI_CLOCK_REALTIME: {
+        const val = enableTime ? BigInt(Date.now()) * 1000000n : 0n;
+        view.setBigUint64(time, val, true);
+        break;
+      }
+
+      case wc.WASI_CLOCK_MONOTONIC:
+      case wc.WASI_CLOCK_PROCESS_CPUTIME_ID:
+      case wc.WASI_CLOCK_THREAD_CPUTIME_ID: {
+        const val = enableTime
+          ? BigInt(Math.round(performance.now() * 1e9))
+          : 0n;
+        view.setBigUint64(time, val, true);
+        break;
+      }
+
+      default:
+        return wc.WASI_EINVAL;
+    }
+    return wc.WASI_ESUCCESS;
   }
 
   private wasi_fd_advise(

@@ -401,9 +401,9 @@ export default class BlockService {
         );
       }
 
-      const outputFreeMarketSum = block.outputs.reduce(
+      const outputCharitySum = block.outputs.reduce(
         (acc, { amount, verifier }) =>
-          this.ctx.get(FreeMarketService).isFreeMarket(verifier)
+          this.ctx.get(FreeMarketService).isCharity(verifier)
             ? acc + amount
             : acc,
         0n,
@@ -411,8 +411,8 @@ export default class BlockService {
 
       // Work = MAX(0, non-free-market outputs - non-free-market inputs)
       // Work = MAX(0, free-market inputs - free-market outputs)
-      block.claimedWork = inputFreeMarketSum > outputFreeMarketSum
-        ? inputFreeMarketSum - outputFreeMarketSum
+      block.claimedWork = inputFreeMarketSum > outputCharitySum
+        ? inputFreeMarketSum - outputCharitySum
         : 0n;
       const delta = block.claimedWork - block.votes;
       this.ctx.get(FrontierService).updateBlockVotes(block, delta);

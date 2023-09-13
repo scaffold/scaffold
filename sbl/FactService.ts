@@ -102,6 +102,14 @@ export default class FactService {
   //   }
   // }
 
+  public has(hash: Hash) {
+    const fact = this.facts.get(hash.toPrimitive());
+    if (fact === ingestingFact) {
+      throw new Error(`Testing for existence of a currently ingesting fact!`);
+    }
+    return fact !== undefined;
+  }
+
   public get(hash: Hash): Fact | undefined {
     const fact = this.facts.get(hash.toPrimitive());
     if (fact === undefined) {

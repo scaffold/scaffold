@@ -3,7 +3,7 @@ import { Fact } from '~/sbl/FactMeta.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { rootHash } from '~/sbl/constants.ts';
-import BlockService from '~/sbl/BlockService.ts';
+import FactService from '~/sbl/FactService.ts';
 
 export default class DataService {
   private requesting = new Set<HashPrimitive>();
@@ -11,14 +11,16 @@ export default class DataService {
   constructor(private ctx: Context) {}
 
   public request(hash: Hash) {
-    // Note this doesn't check FactService
-
-    this.ctx.get(BlockBuilder).publish({
-      outputs: [{
-        verifier: { contract_hash: rootHash, params: hash.toBytes() },
-        amount: 1n,
-        detail: new Uint8Array(),
-      }],
+    this.ctx.config.timeProvider.setImmediate(() => {
+      if (!this.ctx.get(FactService).has(hash)) {
+        this.ctx.get(BlockBuilder).publish({
+          outputs: [{
+            verifier: { contract_hash: rootHash, params: hash.toBytes() },
+            amount: 0n,
+            detail: new Uint8Array(),
+          }],
+        });
+      }
     });
   }
 

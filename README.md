@@ -2,7 +2,11 @@
 _Cool tagline_
 
 ## What is it?
-Scaffold moves the cloud to the client. Scaffold connects browsers to each other via WebRTC, letting them respond to others' requests instead of GCP/AWS (saving $$$). It's fully trustless and verified; in fact to incentivize verification, publishing invalid blocks is incentivized.
+Scaffold moves the cloud to the client. Scaffold connects browsers to each other via WebRTC, replacing GCP/AWS (saving $$$). Its #1 design goal is speed. Scaffold is fully trustless and verified; in fact invalid blocks are incentivized and quickly replaced.
+
+## What is it not?
+Scaffold is not a blockchain. It is not designed for fast consensus; in fact the opposite is desirable in many cases - in order to use blocks optimistically, before we've been able to verify them, we need to be able to easily re-write the graph if they're incorrect.
+Scaffold is not a cryptocurrency. While it does use coins, due to the slow consensus, they aren't useful for large transactions. The small transactions used for incentivizing computation are the perfect use case.
 
 ## Usage
 ```ts

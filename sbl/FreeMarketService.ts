@@ -1,6 +1,6 @@
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import Context from './Context.ts';
-import { trueHash } from './constants.ts';
+import { burnHash, jackpotHash, trueHash } from './constants.ts';
 import { Verifier } from '~/sbl/messages.ts';
 
 export default class FreeMarketService {
@@ -24,5 +24,11 @@ export default class FreeMarketService {
 
   public isFreeMarket({ contract_hash }: Verifier) {
     return this.freeMarketContractHashes.has(contract_hash.toPrimitive());
+  }
+
+  public isCharity({ contract_hash }: Verifier) {
+    // TODO: Also return true if we're sending the funds back to an input signer, up to the input amount
+    return Hash.equals(contract_hash, burnHash) ||
+      Hash.equals(contract_hash, jackpotHash);
   }
 }
