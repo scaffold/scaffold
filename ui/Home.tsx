@@ -34,6 +34,7 @@ import secp from '~/sbl/util/secp.ts';
 import GenesisService from '~/sbl/GenesisService.ts';
 import BlockSetTableView from '~/ui/BlockSetTableView.tsx';
 import FactView from '~/ui/FactView.tsx';
+import CodeView from '~/ui/CodeView.tsx';
 
 // QJS
 // const initialContractHex =
@@ -131,6 +132,8 @@ export default () => {
 
   return (
     <div>
+      <CodeView>Hello world!</CodeView>
+
       <a
         href='#'
         onClick={() => {

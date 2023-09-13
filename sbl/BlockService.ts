@@ -41,6 +41,7 @@ import FreeMarketService from '~/sbl/FreeMarketService.ts';
 import { assert } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
+import LitigationService from '~/sbl/LitigationService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -200,6 +201,14 @@ export default class BlockService {
           valid,
           amount,
         });
+
+        const contestedBlock = this.ctx.get(FactService).get(params.block_hash);
+        if (contestedBlock !== undefined) {
+          if (contestedBlock.type !== FactType.Block) {
+            throw new Error(`Cannot contest a non-block`);
+          }
+          this.ctx.get(LitigationService).scheduleResolution(contestedBlock);
+        }
       }
 
       if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {

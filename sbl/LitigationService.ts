@@ -25,10 +25,13 @@ import { getOrCreate } from '~/sbl/util/map.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import { bin2hex } from '~/sbl/pathUtils.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
+import { assert } from '~/sbl/util/functional.ts';
 
-const max = (a: bigint, b: bigint) => a > b ? a : b;
+const resolutionDelay = 1000;
 
 export default class LitigationService {
+  private resolutionSchedules = new Map<HashPrimitive, number>();
+
   constructor(private ctx: Context) {}
 
   public litigateBlock(
@@ -160,6 +163,22 @@ export default class LitigationService {
         }),
       }],
     });
+  }
+
+  public scheduleResolution(block: BlockFact) {
+    const pub = () => {
+      assert(this.resolutionSchedules.delete(block.hash.toPrimitive()));
+      this.publishResolution(block);
+    };
+    getOrCreate(
+      this.resolutionSchedules,
+      block.hash.toPrimitive(),
+      () => this.ctx.config.timeProvider.setTimeout(pub, resolutionDelay),
+      (timeout) => {
+        this.ctx.config.timeProvider.clearTimeout(timeout);
+        return this.ctx.config.timeProvider.setTimeout(pub, resolutionDelay);
+      },
+    );
   }
 
   private publishResolution(block: BlockFact) {

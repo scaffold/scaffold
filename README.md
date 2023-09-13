@@ -50,8 +50,8 @@ const config: Config = {
 
   networkProvider: {
     protocols: new Map(Object.entries({
-      websocket: websocketClientProvider(),
-      webrtc: webrtcProvider(),
+      websocket: new WebsocketClientProvider(),
+      webrtc: new WebrtcProvider(),
     })),
   },
 };
