@@ -1,7 +1,9 @@
-import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
 import Hash from '~/sbl/util/Hash.ts';
 
-export default class WebrtcProvider implements ProtocolProvider {
+export default class WebrtcProvider implements NetworkProvider {
+  public protocolName = 'webrtc';
+
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 
   constructor() {

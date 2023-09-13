@@ -1,7 +1,9 @@
 import { serve } from 'std-latest/http/mod.ts';
-import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
 
-export default class WebsocketServerProvider implements ProtocolProvider {
+export default class WebsocketServerProvider implements NetworkProvider {
+  public protocolName = 'websocket';
+
   public createServer(
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,

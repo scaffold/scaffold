@@ -1,10 +1,11 @@
-import NetworkProvider from './NetworkProvider.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './ExecutorDriverService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import secp from './util/secp.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
+import NetworkProvider from '~/sbl/NetworkProvider.ts';
+import ExecutionProvider from '~/sbl/ExecutionProvider.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -77,10 +78,11 @@ interface Config {
   //   ) => Uint8Array;
   // }[];
 
-  networkProvider: NetworkProvider;
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
   storageProvider: StorageProvider;
+  networkProviders: NetworkProvider[];
+  executionProviders: ExecutionProvider[];
 
   // appraisalProvider: AppraisalProvider;
 
@@ -124,6 +126,7 @@ export const defaultConfig = {
     randomNumber: Math.random.bind(Math),
     randomBytes: secp.etc.randomBytes,
   },
+  executionProviders: [],
   approxComputePricePerSecond: 1000n,
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,

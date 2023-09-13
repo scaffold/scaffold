@@ -11,6 +11,7 @@ import Hash from './util/Hash.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import FactService from '~/sbl/FactService.ts';
 import { FactSource } from '~/sbl/FactMeta.ts';
+import NetworkService from '~/sbl/NetworkService.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -58,8 +59,8 @@ export default class ConnectionService {
     const onNewConn = (provider: ConnectionProvider) =>
       this.initConnection(protocol, provider);
     const protocolProvider =
-      this.ctx.config.networkProvider.protocols.get(protocol) ||
-      error(`Protocol ${protocol} has no provider`);
+      this.ctx.get(NetworkService).getProvider(protocol) ??
+        error(`Protocol ${protocol} has no provider`);
     protocolProvider.createClient!(onListen, onNewConn, this.ctx)
       .tryConnect(spec);
   }

@@ -1,6 +1,8 @@
-import { ConnectionProvider, ProtocolProvider } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
 
-export default class WebsocketClientProvider implements ProtocolProvider {
+export default class WebsocketClientProvider implements NetworkProvider {
+  public protocolName = 'websocket';
+
   public createClient(
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,

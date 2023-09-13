@@ -31,7 +31,7 @@ const createGenesisBlock = () => {
     debugName: 'SblClient',
     selfPrivateKey: genesisPrivateKey,
 
-    networkProvider: { protocols: new Map() },
+    networkProviders: [],
 
     storageProvider: new NullStorageProvider(),
 

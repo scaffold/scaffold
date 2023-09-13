@@ -25,6 +25,5 @@ export default class FrontierService2 {
 
   // private updateEnqueued = false;
 
-  constructor(private ctx: Context) {
-  }
+  constructor(private ctx: Context) {}
 }

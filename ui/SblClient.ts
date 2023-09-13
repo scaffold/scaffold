@@ -36,12 +36,7 @@ export default class SblClient {
 
       logLevel: log.LogLevels.DEBUG,
 
-      networkProvider: {
-        protocols: new Map(Object.entries({
-          websocket: new WebsocketClientProvider(),
-          webrtc: new WebrtcProvider(),
-        })),
-      },
+      networkProviders: [new WebsocketClientProvider(), new WebrtcProvider()],
 
       storageProvider: new LocalStorageProvider(),
     };

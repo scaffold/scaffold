@@ -2,7 +2,6 @@ import * as fs from 'std-latest/fs/mod.ts';
 import * as path from 'std-latest/path/mod.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
-import ServingService from '~/sbl/ServingService.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import BlockService from '../sbl/BlockService.ts';
 import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
@@ -24,6 +23,7 @@ import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
 import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';
 import Logger, { FilterAction, LogLevel } from '~/sbl/Logger2.ts';
+import NetworkService from '~/sbl/NetworkService.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -51,11 +51,7 @@ const config: Config = {
 
   logLevel: log.LogLevels.INFO,
 
-  networkProvider: {
-    protocols: new Map(Object.entries({
-      websocket: new WebsocketServerProvider(),
-    })),
-  },
+  networkProviders: [new WebsocketServerProvider()],
 
   storageProvider: new DenoKvStorageProvider(),
 
@@ -373,7 +369,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
 })();
 
 // ctx.get(EpochContract).get();
-ctx.get(ServingService).serve((protocol: string, spec: string) =>
+ctx.get(NetworkService).serve((protocol: string, spec: string) =>
   console.log(
     `ProtocolProvider ${protocol} is listening with spec ${
       JSON.stringify(spec)

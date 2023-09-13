@@ -1,6 +1,6 @@
 import Context from './Context.ts';
 
-export type ConnectionProvider = {
+export interface ConnectionProvider {
   // Does not need to maintain order between sends, but does need to make sure packet's aren't dropped or mangled.
   sendReliable(data: Uint8Array): void;
 
@@ -12,9 +12,11 @@ export type ConnectionProvider = {
   // After close() is called, the provider must call the method passed to onClose().
   close(): void;
   onClose(handler: () => void): void;
-};
+}
 
-export type ProtocolProvider = {
+export default interface NetworkProvider {
+  readonly protocolName: string;
+
   createServer?(
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
@@ -32,10 +34,4 @@ export type ProtocolProvider = {
   ): {
     tryConnect(spec: string): void;
   };
-};
-
-type NetworkProvider = {
-  protocols: Map<string, ProtocolProvider>;
-};
-
-export default NetworkProvider;
+}

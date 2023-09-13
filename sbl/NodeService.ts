@@ -12,6 +12,7 @@ import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
 import { Fact, FactBase, FactType, InfoFact } from '~/sbl/FactMeta.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
+import NetworkService from '~/sbl/NetworkService.ts';
 
 // Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
 
@@ -230,12 +231,12 @@ export default class NodeService {
     }
 
     const sharedProtocols = protocols.filter((protocol) =>
-      this.ctx.config.networkProvider.protocols.get(protocol)?.createClient
+      this.ctx.get(NetworkService).getProvider(protocol)?.createClient
     );
     if (sharedProtocols.length === 0) {
       throw new Error(
         `No shared protocols for communicating with node ${toNode.hash.toHex()}; I have ${
-          [...this.ctx.config.networkProvider.protocols.keys()].join(',')
+          this.ctx.get(NetworkService).getClientProtocols().join(',')
         } and remote node has ${protocols.join(',')}`,
       );
     }
@@ -257,9 +258,7 @@ export default class NodeService {
       toNode.connections,
       protocol,
       () => {
-        const provider = this.ctx.config.networkProvider.protocols.get(
-          protocol,
-        );
+        const provider = this.ctx.get(NetworkService).getProvider(protocol);
         if (!provider) {
           throw new Error(`Invalid protocol ${protocol}`);
         }
