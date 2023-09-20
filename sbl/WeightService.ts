@@ -1,0 +1,66 @@
+import Context from '~/sbl/Context.ts';
+import { BlockFact, BlockSetFact, FactType } from '~/sbl/FactMeta.ts';
+import FrontierService from '~/sbl/FrontierService.ts';
+import BlockSetService from '~/sbl/BlockSetService.ts';
+
+// When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
+
+// Block/BlockSet .frontier -1> BlockSet .frontier -2> ... -3> BlockSet .left_child/.right_child -4> ... 5> Block
+
+// Probe blocksets S that we receive.
+//   If S becomes uncanonical, don't use it.
+//   Track the percentage P of the work that we have blocks for.
+//   The self work is S.work*P.
+//   The derived work is the self+derived work of a single blockset V who voted for S or a parent of S, by maximizing derived-self work.
+//   If we find an uncanonical block, tell everyone.
+
+// A block's derived work is the sum over all outputs of D+S of the smallest claim by D-S.
+//   How do we merge this with parents?
+
+export default class WeightService {
+  constructor(private ctx: Context) {}
+
+  public getAncestorWeight(fact: BlockFact | BlockSetFact): bigint {
+    throw new Error(`Not implemented`);
+  }
+
+  public getSelfWeight(fact: BlockFact | BlockSetFact): bigint {
+    if (fact.type === FactType.Block) {
+      return fact.claimed_work;
+    } else {
+      return fact.knownWork;
+    }
+  }
+
+  public getDescendantWeight(fact: BlockFact | BlockSetFact): bigint {
+    const parents = this.ctx.get(BlockSetService).getParents(fact.hash);
+    for (const parent of parents) {
+      const selfWeight = this.getSelfWeight(parent);
+      const descendantWeight = this.getDescendantWeight(parent);
+      const score = descendantWeight - selfWeight;
+      if (score > best.score) {
+        best = { voter, score, weight: selfWeight + descendantWeight };
+      }
+    }
+
+    if (fact.type === FactType.BlockSet) {
+      let best: {
+        voter?: BlockFact | BlockSetFact;
+        score: number | bigint;
+        weight: bigint;
+      } = {
+        score: -Infinity,
+        weight: 0n,
+      };
+      const voters = this.ctx.get(FrontierService).getVotersFor(fact.hash);
+      for (const voter of voters) {
+        const selfWeight = this.getSelfWeight(voter);
+        const descendantWeight = this.getDescendantWeight(voter);
+        const score = descendantWeight - selfWeight;
+        if (score > best.score) {
+          best = { voter, score, weight: selfWeight + descendantWeight };
+        }
+      }
+    }
+  }
+}

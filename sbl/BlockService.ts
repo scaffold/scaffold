@@ -57,7 +57,7 @@ interface CollateralSummary {
 
 export const CHALLENGE_PRICE = 10n;
 
-const BASE_WORK = 10n;
+export const BASE_WORK = 10n;
 
 export default class BlockService {
   private claimsByOutput = new Map<

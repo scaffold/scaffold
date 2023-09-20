@@ -54,5 +54,7 @@ export const burnHash = Hash.xor(SBL, Hash.fromLiteralStr('burn'));
 
 export const jackpotHash = Hash.xor(SBL, Hash.fromLiteralStr('jackpot'));
 
+export const frontierHash = Hash.xor(SBL, Hash.fromLiteralStr('frontier'));
+
 export const jsWasiHash = Hash.xor(SBL, Hash.fromLiteralStr('js_wasi'));
 export const jsLockHash = Hash.xor(SBL, Hash.fromLiteralStr('js_lock'));

@@ -5,19 +5,19 @@ import {
   Block,
   BlockInput,
   BlockOutput,
+  FrontierTreeDetail,
+  FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-import IncentiveService from './IncentiveService.ts';
 // import IncentiveCalculator from './IncentiveCalculator.ts';
-import BlockService from './BlockService.ts';
+import BlockService, { BASE_WORK } from './BlockService.ts';
 import { arrEquals } from './util/buffer.ts';
-import { accountHash, epochHash, trueHash } from './constants.ts';
+import { accountHash, epochHash, frontierHash, trueHash } from './constants.ts';
 import KeyService from './KeyService.ts';
-import Logger from './Logger.ts';
-import BlockSetService from '~/sbl/BlockSetService.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
+import FreeMarketService from '~/sbl/FreeMarketService.ts';
 
 // const defaultTimeout = 100; // Enable block chunking
 const defaultTimeout = 0; // Disable block chunking
@@ -101,6 +101,38 @@ export default class BlockBuilder {
       }
     }
 
+    if (
+      !outputs.some((output) =>
+        Hash.equals(output.verifier.contract_hash, frontierHash)
+      )
+    ) {
+      outputs.push({
+        verifier: {
+          contract_hash: frontierHash,
+          params: FrontierTreeParams.encode({ level: 0 }),
+        },
+        amount: 10n,
+        detail: FrontierTreeDetail.encode({
+          input_tree_root: ZERO_HASH,
+          output_tree_root: ZERO_HASH,
+
+          input_count: 0,
+          output_count: 0,
+
+          block_count: 1,
+          claimed_work: this.computeWork(inputBlocks, outputs),
+          // { name: 'input_tree_root', type: 'Hash' },
+          // { name: 'output_tree_root', type: 'Hash' },
+
+          // { name: 'input_count', type: 'int' }, // TODO: long
+          // { name: 'output_count', type: 'int' }, // TODO: long
+
+          // { name: 'block_count', type: 'int' }, // TODO: long
+          // { name: 'claimed_work', type: 'long' },
+        }),
+      });
+    }
+
     difference += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
     difference -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
@@ -159,9 +191,36 @@ export default class BlockBuilder {
       outputs,
       frontier_vote: frontierVote ? frontierVote.hash : ZERO_HASH,
       body,
+      // claimed_work: claimedWork,
       is_free_market: isFreeMarket,
       timestamp,
     };
+  }
+
+  private computeWork(
+    inputs: { block: BlockFact; outputIdx: number; amount: bigint }[],
+    outputs: BlockOutput[],
+  ) {
+    const inputFreeMarketSum = inputs.reduce((acc, cur) => {
+      const { verifier } = cur.block.outputs[cur.outputIdx];
+      if (this.ctx.get(FreeMarketService).isFreeMarket(verifier)) {
+        return acc + cur.amount;
+      } else {
+        return acc;
+      }
+    }, BASE_WORK);
+
+    const outputCharitySum = outputs.reduce(
+      (acc, { amount, verifier }) =>
+        this.ctx.get(FreeMarketService).isCharity(verifier)
+          ? acc + amount
+          : acc,
+      0n,
+    );
+
+    return inputFreeMarketSum > outputCharitySum
+      ? inputFreeMarketSum - outputCharitySum
+      : 0n;
   }
 
   private doEmit = () => {

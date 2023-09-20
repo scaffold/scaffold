@@ -63,6 +63,7 @@ const ingestingFact: unique symbol = Symbol('ingestingFact');
 
 export default class FactService {
   private factories: FactFactory[] = [];
+  private ingestors: ((fact: FactBase) => void)[][] = [];
   private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
@@ -72,6 +73,7 @@ export default class FactService {
       this.factories.push(() => {
         throw new Error(`Invalid message type ${i}!`);
       });
+      this.ingestors.push([]);
     }
 
     this.factories[FactType.Info] = (base, node, mutator) =>
@@ -96,6 +98,13 @@ export default class FactService {
     //     : ctx.get(FrontierService).createFact(base);
   }
 
+  public registerIngestor<Type extends FactType>(
+    type: Type,
+    cb: (fact: FactBase & { type: Type }) => void,
+  ) {
+    this.ingestors[type].push(cb as (fact: FactBase) => void);
+  }
+
   // public async init() {
   //   if (useZstd) {
   //     await zstd.init();
@@ -110,12 +119,13 @@ export default class FactService {
     return fact !== undefined;
   }
 
-  public get(hash: Hash): Fact | undefined {
+  public get(hash: Hash, request = true): Fact | undefined {
     const fact = this.facts.get(hash.toPrimitive());
-    if (fact === undefined) {
-      this.ctx.get(DataService).request(hash);
-    } else if (fact === ingestingFact) {
+    if (fact === ingestingFact) {
       throw new Error(`Cannot get a currently ingesting fact!`);
+    }
+    if (fact === undefined && request) {
+      this.ctx.get(DataService).request(hash);
     }
     return fact;
   }
@@ -332,6 +342,10 @@ export default class FactService {
         `Created ${res.type} fact from ${res.source}:`,
         res.hash.toHex(),
       );
+    }
+
+    for (const cb of this.ingestors[base.type]) {
+      cb(res);
     }
 
     return res;

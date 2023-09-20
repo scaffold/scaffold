@@ -12,6 +12,7 @@ export interface LocalGeneratorOpts {
   ctx: Context;
   contractHash: Hash;
   params: Uint8Array;
+  details: Uint8Array[];
   inputIdx: number;
   emitCorrect: boolean;
   setFreeMarket(): void; // TODO: Remove this when we have remote generators

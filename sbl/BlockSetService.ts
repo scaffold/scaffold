@@ -32,6 +32,7 @@ The only thing they maybe can specify is a further-back and further-up block
 */
 
 export const NUM_BLOCKSET_LEVELS = 64;
+export const LEAF_BLOCKSET_LEVEL = 0;
 
 // Index/sort tree by verifier hash? This allows efficient queries
 
@@ -42,6 +43,8 @@ export interface BlockSetMeta {
   parentBlockSets: BlockSetFact[];
   myParentBlockSet?: BlockSetFact;
   active: boolean;
+
+  knownWork: bigint;
 
   includedInputs: Set<HashPrimitive>;
   includedOutputs: Set<HashPrimitive>;
@@ -596,7 +599,7 @@ export default class BlockSetService {
       input_count: inputCount,
       output_count: outputCount,
 
-      level: 0,
+      level: LEAF_BLOCKSET_LEVEL,
       score: skipIdxs.size,
       claimed_work: left.claimedWork + right.claimedWork,
       timestamp: right.timestamp + 1n,

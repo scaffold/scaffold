@@ -135,6 +135,8 @@ const long = avro.types.LongType.__with({
   },
 });
 
+// noUnpack
+
 export const registry = {
   Hash: {
     name: 'Hash',
@@ -162,9 +164,18 @@ export const registry = {
     ],
   },
 
-  Amount: { name: 'Amount', type: 'long' },
-
-  // BEGIN Nov 30
+  // TODO: We want more than 64 bits (preferably 128) for account balances
+  // Use a packed long: amount = ((encoding >> 7n) + 1n) << (encoding & ((1n << 7n) - 1n))
+  // Small negatives are zero here so maybe something better
+  // Or just use this structure:
+  Amount: {
+    name: 'Amount',
+    type: 'record',
+    fields: [
+      { name: 'significand', type: 'long' },
+      { name: 'exponent', type: 'long' },
+    ],
+  },
 
   Verifier: {
     name: 'Verifier',
@@ -229,10 +240,13 @@ export const registry = {
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
       // TODO: Move this to BlockInput? No, I don't think so.
+      // TODO: Move this to BlockOutput detail? Maybe! We should be able to fetch the detail of an output without claiming it.
       { name: 'body', type: 'bytes' },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
       { name: 'is_free_market', type: 'boolean' },
+
+      // { name: 'claimed_work', type: 'long' },
 
       // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
       // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
@@ -656,94 +670,6 @@ export const registry = {
     ],
   },
 
-  ClaimAllValid: {
-    name: 'ClaimAllValid',
-    type: 'record',
-    fields: [],
-  },
-  ClaimMissingInputHash: {
-    name: 'ClaimMissingInputHash',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-    ],
-  },
-  ClaimHasInputHash: {
-    name: 'ClaimHasInputHash',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  ClaimVerificationFailed: {
-    name: 'ClaimVerificationFailed',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  ClaimVerificationPassed: {
-    name: 'ClaimVerificationPassed',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  CollateralContractParams: {
-    name: 'CollateralContractParams',
-    type: 'record',
-    fields: [{ name: 'block_hash', type: 'Hash' }],
-  },
-  CollateralContractDetail: {
-    name: 'CollateralContractDetail',
-    type: 'record',
-    fields: [
-      { name: 'public_key', type: 'bytes' }, // 33 bytes
-      {
-        name: 'claim',
-        type: [
-          'ClaimAllValid',
-          'ClaimMissingInputHash',
-          'ClaimHasInputHash',
-          'ClaimVerificationFailed',
-          'ClaimVerificationPassed',
-        ],
-      },
-    ],
-  },
-  // ClaimInitial: {
-  //   name: 'ClaimInitial',
-  //   type: 'record',
-  //   fields: [
-  //     { name: 'verification_period', type: 'long' },
-  //     { name: 'inversion_period', type: 'long' },
-  //     { name: 'inversion_price', type: 'long' },
-  //   ],
-  // },
-  // ClaimValid: {
-  //   name: 'ClaimValid',
-  //   type: 'record',
-  //   fields: [],
-  // },
-  // ClaimFailingVerifier: {
-  //   name: 'ClaimFailingVerifier',
-  //   type: 'record',
-  //   fields: [{ name: 'input_idx', type: 'int' }],
-  // },
-  // ClaimMissingInputHash: {
-  //   name: 'ClaimMissingInputHash',
-  //   type: 'record',
-  //   fields: [{ name: 'input_idx', type: 'int' }],
-  // },
-  // ClaimMissingOutputContractHash: {
-  //   name: 'ClaimMissingOutputContractHash',
-  //   type: 'record',
-  //   fields: [{ name: 'output_idx', type: 'int' }],
-  // },
-
   TimeParams: {
     name: 'TimeParams',
     type: 'record',
@@ -798,6 +724,29 @@ export const registry = {
       { name: 'host', type: 'string' },
       { name: 'mapping', type: { type: 'array', items: 'LockWrapperEntry' } },
       { name: 'wasi_params', type: 'JsWasiParams' },
+    ],
+  },
+
+  FrontierTreeParams: {
+    name: 'FrontierTreeParams',
+    type: 'record',
+    fields: [
+      { name: 'level', type: 'int' },
+    ],
+  },
+  FrontierTreeDetail: {
+    name: 'FrontierTreeDetail',
+    type: 'record',
+    fields: [
+      { name: 'input_tree_root', type: 'Hash' },
+      { name: 'output_tree_root', type: 'Hash' },
+
+      { name: 'input_count', type: 'int' }, // TODO: long
+      { name: 'output_count', type: 'int' }, // TODO: long
+
+      { name: 'block_count', type: 'int' }, // TODO: long
+      { name: 'claimed_work', type: 'long' },
+      // { name: 'score', type: 'int' },
     ],
   },
 
@@ -996,22 +945,16 @@ export const EpochInclusionParams = makeMsg(registry, 'EpochInclusionParams');
 export type EpochInclusionParams = MsgType<'EpochInclusionParams'>;
 export const EpochBody = makeMsg(registry, 'EpochBody');
 export type EpochBody = MsgType<'EpochBody'>;
-export const CollateralContractParams = makeMsg(
-  registry,
-  'CollateralContractParams',
-);
-export type CollateralContractParams = MsgType<'CollateralContractParams'>;
-export const CollateralContractDetail = makeMsg(
-  registry,
-  'CollateralContractDetail',
-);
-export type CollateralContractDetail = MsgType<'CollateralContractDetail'>;
 export const TimeParams = makeMsg(registry, 'TimeParams');
 export type TimeParams = MsgType<'TimeParams'>;
 export const JsWasiParams = makeMsg(registry, 'JsWasiParams');
 export type JsWasiParams = MsgType<'JsWasiParams'>;
 export const LockWrapperParams = makeMsg(registry, 'LockWrapperParams');
 export type LockWrapperParams = MsgType<'LockWrapperParams'>;
+export const FrontierTreeParams = makeMsg(registry, 'FrontierTreeParams');
+export type FrontierTreeParams = MsgType<'FrontierTreeParams'>;
+export const FrontierTreeDetail = makeMsg(registry, 'FrontierTreeDetail');
+export type FrontierTreeDetail = MsgType<'FrontierTreeDetail'>;
 
 // const buf = Question.encode({
 //   contract: {

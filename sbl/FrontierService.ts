@@ -39,6 +39,8 @@ export default class FrontierService {
 
   private outputs = new Map<HashPrimitive, number>();
 
+  private votersFor = new Map<HashPrimitive, (BlockFact | BlockSetFact)[]>();
+
   // private updateEnqueued = false;
 
   constructor(private ctx: Context) {
@@ -59,6 +61,10 @@ export default class FrontierService {
     ctx.onDestruct(() =>
       ctx.config.timeProvider.clearInterval(cleanupInterval)
     );
+  }
+
+  public getVotersFor(blockSetHash: Hash) {
+    return getOrCreate(this.votersFor, blockSetHash.toPrimitive(), () => []);
   }
 
   private cleanup() {
@@ -116,6 +122,7 @@ export default class FrontierService {
 
   public ingestBlock(block: BlockFact) {
     this.blocks.push(block);
+    this.getVotersFor(block.frontier_vote).push(block);
 
     const keys: HashPrimitive[] = [];
     for (const input of block.inputs) {
@@ -216,6 +223,8 @@ export default class FrontierService {
   }
 
   public ingestBlockSet(blockSet: BlockSetFact) {
+    this.getVotersFor(blockSet.frontier_vote).push(blockSet);
+
     let totalVotes = this.ctx.get(BlockSetService).getVoters(blockSet.hash)
       .reduce((acc, cur) => acc + cur.votes, 0n);
 
