@@ -1,29 +1,32 @@
-import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import Context from '~/sbl/Context.ts';
-import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
+import Hash from '~/sbl/util/Hash.ts';
+import BlockService from '~/sbl/BlockService.ts';
+import { frontierHash } from '~/sbl/constants.ts';
+import { FrontierTreeParams } from '~/sbl/messages.ts';
 
-interface EmptyFrontier {
-  type: undefined;
-  hash: Hash;
-  level: number;
-  votes: bigint;
-}
+/*
+Propagate derived work towards frontier_vote and frontier inputs. Choose and propagate canonicality forwards.
+When we get a block or increment the work, propagate it towards frontier_vote.
+To get the derived work, fetch the descendant work property of our block, and that of all recursive parent (frontier output claim) blocks.
+When we have multiple claimants of an output, simply choose the highest-scoring by D-S and set all other works to zero or the minimum.
+*/
 
 export default class FrontierService2 {
-  private blocks: BlockFact[] = [];
-
-  // This is the canonical (to our best knowledge) frontier.
-  // Unmerged blocks or left?/right? merged blocks that ...
-  private frontierSets: BlockSetFact[] = [];
-  private frontierBlock?: BlockFact;
-
-  private emptyFrontiers: EmptyFrontier[] = [];
-  // private bestEmptyFrontier: EmptyFrontier;
-  private emptyIdx = 0;
-
-  private outputs = new Map<HashPrimitive, number>();
-
-  // private updateEnqueued = false;
-
   constructor(private ctx: Context) {}
+
+  public getBlockVote(inputs: { block: BlockFact; outputIdx: number }[]) {
+    // this.ctx.get(BlockService).getBlocksByVerifier({
+    //   contract_hash: frontierHash,
+    //   params: FrontierTreeParams.encode({ level: 0 }),
+    // });
+
+    // if (this.frontierSets.length !== 0) {
+    //   const idx = Math.floor(
+    //     this.ctx.config.entropyProvider.randomNumber() *
+    //       this.frontierSets.length,
+    //   );
+    //   return this.frontierSets[idx];
+    // }
+  }
 }

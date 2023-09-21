@@ -18,6 +18,7 @@ import FrontierService from '~/sbl/FrontierService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import FreeMarketService from '~/sbl/FreeMarketService.ts';
+import FrontierService2 from '~/sbl/FrontierService2.ts';
 
 // const defaultTimeout = 100; // Enable block chunking
 const defaultTimeout = 0; // Disable block chunking
@@ -166,7 +167,7 @@ export default class BlockBuilder {
 
     const frontierVote = spec.frontierVote
       ? spec.frontierVote
-      : this.ctx.get(FrontierService).getBlockVote(inputBlocks);
+      : this.ctx.get(FrontierService2).getBlockVote(inputBlocks);
 
     // TODO: Can bundle multiple blocks without bodies
     const body = spec.body ?? new Uint8Array();
@@ -190,32 +191,6 @@ export default class BlockBuilder {
       // is_free_market: true,
       timestamp,
     };
-  }
-
-  private computeWork(
-    inputs: { block: BlockFact; outputIdx: number; amount: bigint }[],
-    outputs: BlockOutput[],
-  ) {
-    const inputFreeMarketSum = inputs.reduce((acc, cur) => {
-      const { verifier } = cur.block.outputs[cur.outputIdx];
-      if (this.ctx.get(FreeMarketService).isFreeMarket(verifier)) {
-        return acc + cur.amount;
-      } else {
-        return acc;
-      }
-    }, BASE_WORK);
-
-    const outputCharitySum = outputs.reduce(
-      (acc, { amount, verifier }) =>
-        this.ctx.get(FreeMarketService).isCharity(verifier)
-          ? acc + amount
-          : acc,
-      0n,
-    );
-
-    return inputFreeMarketSum > outputCharitySum
-      ? inputFreeMarketSum - outputCharitySum
-      : 0n;
   }
 
   private doEmit = () => {

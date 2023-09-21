@@ -1,7 +1,10 @@
 import Context from '~/sbl/Context.ts';
-import { BlockFact, BlockSetFact, FactType } from '~/sbl/FactMeta.ts';
+import { BlockFact, FactType } from '~/sbl/FactMeta.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
+import FreeMarketService from '~/sbl/FreeMarketService.ts';
+import FactService from '~/sbl/FactService.ts';
+import { BASE_WORK } from '~/sbl/BlockService.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -20,19 +23,47 @@ import BlockSetService from '~/sbl/BlockSetService.ts';
 export default class WeightService {
   constructor(private ctx: Context) {}
 
-  public getAncestorWeight(fact: BlockFact | BlockSetFact): bigint {
+  public getAncestorWeight(fact: BlockFact): bigint {
     throw new Error(`Not implemented`);
   }
 
-  public getSelfWeight(fact: BlockFact | BlockSetFact): bigint {
-    if (fact.type === FactType.Block) {
-      return fact.claimed_work;
-    } else {
-      return fact.knownWork;
+  public computeSelfWeight(fact: BlockFact) {
+    let inputFreeMarketSum = BASE_WORK;
+    let isExact = true;
+    for (const input of fact.inputs) {
+      const block = this.ctx.get(FactService).get(input.block_hash);
+      if (block !== undefined) {
+        if (block.type !== FactType.Block) {
+          throw new Error(`Invalid fact type!`);
+        }
+        const { verifier, amount } = block.outputs[input.output_idx];
+        if (this.ctx.get(FreeMarketService).isFreeMarket(verifier)) {
+          inputFreeMarketSum += amount;
+        }
+      } else {
+        isExact = false;
+      }
     }
+
+    let outputCharitySum = 0n;
+    for (const output of fact.outputs) {
+      if (this.ctx.get(FreeMarketService).isCharity(output.verifier)) {
+        outputCharitySum += output.amount;
+      }
+    }
+
+    const minWeight = inputFreeMarketSum > outputCharitySum
+      ? inputFreeMarketSum - outputCharitySum
+      : 0n;
+
+    return { minWeight, isExact };
   }
 
-  public getDescendantWeight(fact: BlockFact | BlockSetFact): bigint {
+  public getSelfWeight(fact: BlockFact) {
+    return this.computeSelfWeight(fact);
+  }
+
+  public getDescendantWeight(fact: BlockFact): bigint {
     const parents = this.ctx.get(BlockSetService).getParents(fact.hash);
     for (const parent of parents) {
       const selfWeight = this.getSelfWeight(parent);
@@ -45,7 +76,7 @@ export default class WeightService {
 
     if (fact.type === FactType.BlockSet) {
       let best: {
-        voter?: BlockFact | BlockSetFact;
+        voter?: BlockFact;
         score: number | bigint;
         weight: bigint;
       } = {
