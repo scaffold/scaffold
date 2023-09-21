@@ -19,6 +19,7 @@ export interface LocalGeneratorOpts {
   setBody(body: Uint8Array): void;
   // addInput(input: BlockInput): number; // TODO: I don't know if this makes sense
   addOutput(output: BlockOutput): number;
+  setFrontierLevel(level: number): void;
   sign(): void;
   invert(hash: Hash): MaybePromise<Uint8Array>;
   request(

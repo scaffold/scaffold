@@ -44,6 +44,8 @@ export default class FrontierService {
   // private updateEnqueued = false;
 
   constructor(private ctx: Context) {
+    throw new Error(`Don't construct me`);
+
     for (let i = 0; i < NUM_BLOCKSET_LEVELS; i++) {
       this.emptyFrontiers.push({
         type: undefined,

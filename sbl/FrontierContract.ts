@@ -2,10 +2,43 @@ import { frontierHash } from './constants.ts';
 import Context from './Context.ts';
 import LocalGeneratorService, {
   ANY_BODY_FLAG,
+  INGENERABLE_FLAG,
   LocalGeneratorOpts,
 } from './LocalGeneratorService.ts';
 import { FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
-import { ZERO_HASH } from '~/sbl/util/Hash.ts';
+import { HashPrimitive } from '~/sbl/util/Hash.ts';
+
+// export interface FrontierMeta {
+//   // { name: 'left_child', type: 'Hash' },
+//   // { name: 'right_child', type: 'Hash' },
+
+//   // { name: 'input_tree_root', type: 'Hash' },
+//   // { name: 'output_tree_root', type: 'Hash' },
+
+//   // { name: 'frontier_vote', type: 'Hash' },
+
+//   // { name: 'input_count', type: 'int' },
+//   // { name: 'output_count', type: 'int' },
+
+//   // { name: 'level', type: 'int' },
+//   // { name: 'score', type: 'int' },
+//   // { name: 'claimed_work', type: 'long' },
+//   // { name: 'timestamp', type: 'long' },
+
+//   parentBlockSets: BlockSetFact[];
+//   myParentBlockSet?: BlockSetFact;
+//   active: boolean;
+
+//   knownWork: bigint;
+
+//   includedInputs: Set<HashPrimitive>;
+//   includedOutputs: Set<HashPrimitive>;
+//   excludedInputs: Set<HashPrimitive>;
+//   excludedOutputs: Set<HashPrimitive>;
+
+//   // voters: (BlockFact | BlockSetFact)[];
+//   votes: bigint;
+// }
 
 export default class FrontierContract {
   constructor(private ctx: Context) {
@@ -22,34 +55,13 @@ export default class FrontierContract {
   }
 
   public static generate(
-    { ctx, params, details, emitCorrect, addOutput }: LocalGeneratorOpts,
-  ): typeof ANY_BODY_FLAG {
+    { ctx, params, details, setFrontierLevel }: LocalGeneratorOpts,
+  ): typeof ANY_BODY_FLAG | typeof INGENERABLE_FLAG {
+    if (details.length < 2) {
+      return INGENERABLE_FLAG;
+    }
     const { level } = FrontierTreeParams.decode(params);
-    addOutput({
-      verifier: {
-        contract_hash: frontierHash,
-        params: FrontierTreeParams.encode({ level: level + 1 }),
-      },
-      amount: 10n,
-      detail: FrontierTreeDetail.encode({
-        input_tree_root: ZERO_HASH,
-        output_tree_root: ZERO_HASH,
-
-        input_count: 0,
-        output_count: 0,
-
-        block_count: 1,
-        claimed_work: 100n,
-        // { name: 'input_tree_root', type: 'Hash' },
-        // { name: 'output_tree_root', type: 'Hash' },
-
-        // { name: 'input_count', type: 'int' }, // TODO: long
-        // { name: 'output_count', type: 'int' }, // TODO: long
-
-        // { name: 'block_count', type: 'int' }, // TODO: long
-        // { name: 'claimed_work', type: 'long' },
-      }),
-    });
+    setFrontierLevel(level + 1);
     return ANY_BODY_FLAG;
   }
 }

@@ -1,4 +1,9 @@
-import { EpochInclusionProof, Verifier } from './messages.ts';
+import {
+  EpochInclusionProof,
+  FrontierTreeDetail,
+  FrontierTreeParams,
+  Verifier,
+} from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { Node } from './NodeService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
@@ -57,4 +62,8 @@ export interface BlockMeta {
   parentBlockSets: BlockSetFact[];
   myParentBlockSet?: BlockSetFact;
   highestParentChain: BlockSetFact[];
+
+  frontierOutputIdx: number;
+  frontierParams: FrontierTreeParams;
+  frontierDetail: FrontierTreeDetail;
 }

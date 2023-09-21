@@ -34,15 +34,20 @@ export default class LitigationService {
 
   constructor(private ctx: Context) {}
 
-  public litigate(
-    fact: BlockFact | BlockSetFact,
+  public litigateBlock(
+    fact: BlockFact,
     claim: CollateralContractDetail['claim'],
   ) {
     let amount: bigint;
 
     if ('ClaimAllValid' in claim) {
+      if (fact.claimedWork === undefined) {
+        throw new Error(
+          `Cannot claim all valid without full knowledge of block!`,
+        );
+      }
       amount = this.ctx.config.graphParameters.minimumCollateral(
-        fact.claimed_work,
+        fact.claimedWork,
         this.ctx.config.timeProvider.now(),
       );
     } else if (
@@ -156,7 +161,7 @@ export default class LitigationService {
       outputs: [{
         verifier: {
           contract_hash: collateralHash,
-          params: CollateralContractParams.encode({ fact_hash: fact.hash }),
+          params: CollateralContractParams.encode({ block_hash: fact.hash }),
         },
         amount,
         detail: CollateralContractDetail.encode({

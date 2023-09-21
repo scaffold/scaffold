@@ -190,7 +190,6 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
     }],
     frontier_vote: ZERO_HASH,
     body: new Uint8Array(),
-    is_free_market: true,
     timestamp: BigInt(ctx.config.timeProvider.now()),
   });
 

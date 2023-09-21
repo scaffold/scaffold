@@ -18,6 +18,7 @@ export const enum FetchMode {
 }
 
 interface FetchOptions {
+  detail?: Uint8Array;
   dedupKey?: Hash | unknown;
   internalIncentive?: bigint;
   externalIncentive?: bigint; // TODO: Remove this, since we calculate it via config. Maybe change to boolean, if there's cases when we don't want to incentivize.
@@ -48,6 +49,7 @@ export default class FetchService {
   public fetch(
     verifier: Verifier,
     {
+      detail,
       dedupKey,
       internalIncentive,
       externalIncentive,
@@ -67,6 +69,7 @@ export default class FetchService {
     if (internalIncentive !== undefined) {
       this.ctx.get(ExecutorLauncherService).enqueueGeneration(
         verifier,
+        detail,
         Number(internalIncentive),
       );
 
@@ -154,7 +157,11 @@ export default class FetchService {
         released = true;
 
         if (internalIncentive !== undefined) {
-          this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
+          this.ctx.get(ExecutorLauncherService).enqueueGeneration(
+            verifier,
+            detail,
+            0,
+          );
         }
 
         if (externalIncentive !== undefined) {

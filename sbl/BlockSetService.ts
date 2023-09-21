@@ -74,6 +74,8 @@ export default class BlockSetService {
   private treeNodeListeners = new Map<HashPrimitive, TreeNodeListener[]>();
 
   constructor(private ctx: Context) {
+    throw new Error(`Don't construct me`);
+
     for (let i = 0; i < NUM_BLOCKSET_LEVELS; i++) {
       // this.sets.push([]);
       // this.mySets.push(undefined);
@@ -133,6 +135,8 @@ export default class BlockSetService {
     const meta: BlockSetMeta = {
       parentBlockSets: this.getParents(base.hash),
       active: true,
+
+      knownWork: 0n,
 
       includedInputs: new Set(),
       includedOutputs: new Set(),

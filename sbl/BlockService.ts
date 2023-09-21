@@ -5,6 +5,7 @@ import {
   collateralHash,
   epochHash,
   epochInclusionHash,
+  frontierHash,
 } from './constants.ts';
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
@@ -15,11 +16,12 @@ import {
   AccountContractParams,
   Block,
   BlockInput,
+  BlockOutput,
   BlockSet,
-  CollateralContractDetail,
-  CollateralContractParams,
   EpochInclusionParams,
   EpochInclusionProof,
+  FrontierTreeDetail,
+  FrontierTreeParams,
   Verifier,
 } from './messages.ts';
 import NodeService from './NodeService.ts';
@@ -42,6 +44,11 @@ import { assert } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
+import {
+  CollateralContractDetail,
+  CollateralContractParams,
+} from '~/sbl/collateralMessages.ts';
+import FrontierService2 from '~/sbl/FrontierService2.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -151,6 +158,8 @@ export default class BlockService {
 
       parentBlockSets: this.ctx.get(BlockSetService).getParents(base.hash),
       highestParentChain: [], // TODO: Literal empty array
+
+      ...this.getFrontierMeta(block),
     };
     const fact: BlockFact = Object.assign(
       base,
@@ -180,7 +189,11 @@ export default class BlockService {
           this.linkBlocks(fact, block, outputIdx, inputIdx)
         );
 
-      this.ctx.get(ExecutorLauncherService).enqueueGeneration(verifier, 0);
+      this.ctx.get(ExecutorLauncherService).enqueueGeneration(
+        verifier,
+        detail,
+        0,
+      );
 
       if (Hash.equals(verifier.contract_hash, accountHash)) {
         const params = AccountContractParams.decode(verifier.params);
@@ -255,6 +268,21 @@ export default class BlockService {
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
     return fact;
+  }
+
+  private getFrontierMeta(block: Block) {
+    const cb = (output: BlockOutput) =>
+      Hash.equals(output.verifier.contract_hash, frontierHash);
+    const idx = block.outputs.findIndex(cb);
+    if (idx === -1 || block.outputs.findLastIndex(cb) !== idx) {
+      throw new Error(`Not exactly one frontier output!`);
+    }
+    const output = block.outputs[idx];
+    return {
+      frontierOutputIdx: idx,
+      frontierParams: FrontierTreeParams.decode(output.verifier.params),
+      frontierDetail: FrontierTreeDetail.decode(output.detail),
+    };
   }
 
   public compare(a: BlockFact, b: BlockFact) {

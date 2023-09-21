@@ -3,12 +3,12 @@ import {
   Block,
   BlockSet,
   BlockSetTreeNode,
-  CollateralContractDetail,
   InfoMessage,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { BlockSetMeta } from '~/sbl/BlockSetService.ts';
+import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 
 export enum FactType {
   Null = 0, // Reserved

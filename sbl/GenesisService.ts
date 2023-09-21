@@ -38,18 +38,17 @@ const createGenesisBlock = () => {
     enableValidation: false,
   });
 
-  const block = ctx.get(BlockBuilder).buildBlock({ body: genesisPublicKey });
-  initAccounts.forEach((publicKey) =>
-    block.outputs.push({
+  return ctx.get(BlockBuilder).publish({
+    body: genesisPublicKey,
+    outputs: initAccounts.map((publicKey) => ({
       verifier: {
         contract_hash: accountHash,
         params: AccountContractParams.encode({ public_key: publicKey }),
       },
       amount: 1000000n,
       detail: new Uint8Array(),
-    })
-  );
-  return ctx.get(BlockService).create(block);
+    })),
+  }, 0);
 };
 
 console.log('Genesis block hex:', bin2hex(createGenesisBlock().data));

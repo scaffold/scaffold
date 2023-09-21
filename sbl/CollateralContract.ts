@@ -6,7 +6,7 @@ import LocalGeneratorService, {
   INGENERABLE_FLAG,
   LocalGeneratorOpts,
 } from './LocalGeneratorService.ts';
-import { Block, CollateralContractParams } from './messages.ts';
+import { Block } from './messages.ts';
 import NodeService from './NodeService.ts';
 import { arrEquals } from './util/buffer.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';

@@ -124,7 +124,11 @@ export default class ExecutorLauncherService {
     }
   }
 
-  public enqueueGeneration(verifier: Verifier, extraIncentive: number) {
+  public enqueueGeneration(
+    verifier: Verifier,
+    detail: Uint8Array | undefined,
+    extraIncentive: number,
+  ) {
     const runHash = Hash.digest(Verifier.encode(verifier));
     if (this.extraGeneratorIncentive.has(runHash.toPrimitive())) {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -155,15 +159,24 @@ export default class ExecutorLauncherService {
         async (driver, _cancel) => {
           await driver.setAllocation({});
 
+          let frontierLevel: number | undefined;
+
           const data = await localGenerator({
             ctx: this.ctx,
             contractHash: verifier.contract_hash,
             params: verifier.params,
+            details: [detail ?? new Uint8Array()],
             inputIdx: -1000,
             emitCorrect: this.shouldEmitCorrect(verifier),
             setFreeMarket: () => error('Not implemented'),
             setBody: (body) => error('Not implemented'),
             addOutput: (output) => error('Not implemented'),
+            setFrontierLevel: (level) => {
+              if (frontierLevel !== undefined && frontierLevel !== level) {
+                throw new Error(`Cannot set the frontier level twice!`);
+              }
+              frontierLevel = level;
+            },
             sign: () => error('Not implemented'),
             invert: (hash) => error('Not implemented'),
             request: (contract_hash, params) =>
@@ -179,6 +192,7 @@ export default class ExecutorLauncherService {
               verifier,
               data !== ANY_BODY_FLAG ? data : undefined,
               driver.getInputs(),
+              frontierLevel,
               0,
             );
           }
@@ -212,7 +226,13 @@ export default class ExecutorLauncherService {
 
             console.log('STDOUT', bin2str(stdout));
             console.log('STDERR', bin2str(stderr));
-            this.createBlock(verifier, stdout, driver.getInputs(), 0);
+            this.createBlock(
+              verifier,
+              stdout,
+              driver.getInputs(),
+              undefined,
+              0,
+            );
           },
         );
       }
@@ -234,6 +254,7 @@ export default class ExecutorLauncherService {
     verifier: Verifier,
     data: Uint8Array | undefined,
     inputs: { block: BlockFact; outputIdx: number }[],
+    frontierLevel: number | undefined,
     durationMs: number,
   ) {
     if (Hash.equals(verifier.contract_hash, rootHash)) {
@@ -288,6 +309,7 @@ export default class ExecutorLauncherService {
       })),
       body: data,
       satisfies: [verifier],
+      frontierLevel,
     });
 
     // answer.difficultyEstimate = BigInt(durationMs) *

@@ -29,6 +29,7 @@ interface BlockSpec {
   satisfies?: Verifier[];
   outputs?: BlockOutput[];
   frontierVote?: BlockSetFact;
+  frontierLevel?: number;
 }
 
 export default class BlockBuilder {
@@ -102,36 +103,29 @@ export default class BlockBuilder {
     }
 
     if (
-      !outputs.some((output) =>
+      outputs.some((output) =>
         Hash.equals(output.verifier.contract_hash, frontierHash)
       )
     ) {
-      outputs.push({
-        verifier: {
-          contract_hash: frontierHash,
-          params: FrontierTreeParams.encode({ level: 0 }),
-        },
-        amount: 10n,
-        detail: FrontierTreeDetail.encode({
-          input_tree_root: ZERO_HASH,
-          output_tree_root: ZERO_HASH,
-
-          input_count: 0,
-          output_count: 0,
-
-          block_count: 1,
-          claimed_work: this.computeWork(inputBlocks, outputs),
-          // { name: 'input_tree_root', type: 'Hash' },
-          // { name: 'output_tree_root', type: 'Hash' },
-
-          // { name: 'input_count', type: 'int' }, // TODO: long
-          // { name: 'output_count', type: 'int' }, // TODO: long
-
-          // { name: 'block_count', type: 'int' }, // TODO: long
-          // { name: 'claimed_work', type: 'long' },
-        }),
-      });
+      throw new Error(`Unexpected frontier output on an unfinished block!`);
     }
+    outputs.push({
+      verifier: {
+        contract_hash: frontierHash,
+        params: FrontierTreeParams.encode({ level: spec.frontierLevel ?? 0 }),
+      },
+      amount: 10n,
+      detail: FrontierTreeDetail.encode({
+        // input_tree_root: ZERO_HASH,
+        // output_tree_root: ZERO_HASH,
+
+        // input_count: 0,
+        // output_count: 0,
+
+        // block_count: 1,
+        // claimed_work: this.computeWork(inputBlocks, outputs),
+      }),
+    });
 
     difference += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
     difference -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
@@ -160,7 +154,9 @@ export default class BlockBuilder {
       });
     } else if (difference < 0n) {
       // TODO: Only output what we actually have
-      throw new Error('INSUFFICIENT_COINS');
+      if (this.ctx.config.enableValidation) {
+        throw new Error('INSUFFICIENT_COINS');
+      }
     }
 
     const inputs = inputBlocks.map((input) => ({
@@ -175,7 +171,6 @@ export default class BlockBuilder {
     // TODO: Can bundle multiple blocks without bodies
     const body = spec.body ?? new Uint8Array();
 
-    const isFreeMarket = true;
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
     inputBlocks.forEach((input) => {
       // TODO: No need to look these blocks up; just store them in IncentiveRegistry
@@ -192,7 +187,7 @@ export default class BlockBuilder {
       frontier_vote: frontierVote ? frontierVote.hash : ZERO_HASH,
       body,
       // claimed_work: claimedWork,
-      is_free_market: isFreeMarket,
+      // is_free_market: true,
       timestamp,
     };
   }
@@ -266,8 +261,8 @@ export default class BlockBuilder {
 
     const bb = this.buildingBlock;
 
-    let mergeable = spec.body === undefined ||
-      bb.body === undefined;
+    let mergeable = (spec.body === undefined || bb.body === undefined) &&
+      (spec.frontierLevel === undefined || bb.frontierLevel === undefined);
 
     if (
       mergeable && spec.frontierVote !== undefined &&
@@ -306,6 +301,7 @@ export default class BlockBuilder {
           : spec.outputs;
       }
       bb.frontierVote ??= spec.frontierVote;
+      bb.frontierLevel ??= spec.frontierLevel;
 
       if (timeout === 0) {
         // Mergeable and we need to emit immediately:

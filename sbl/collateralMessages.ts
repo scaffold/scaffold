@@ -98,7 +98,7 @@ const registry = {
   CollateralContractParams: {
     name: 'CollateralContractParams',
     type: 'record',
-    fields: [{ name: 'fact_hash', type: 'Hash' }],
+    fields: [{ name: 'block_hash', type: 'Hash' }],
   },
   CollateralContractDetail: {
     name: 'CollateralContractDetail',

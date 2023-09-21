@@ -244,7 +244,7 @@ export const registry = {
       { name: 'body', type: 'bytes' },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
-      { name: 'is_free_market', type: 'boolean' },
+      // { name: 'is_free_market', type: 'boolean' },
 
       // { name: 'claimed_work', type: 'long' },
 
@@ -738,15 +738,14 @@ export const registry = {
     name: 'FrontierTreeDetail',
     type: 'record',
     fields: [
-      { name: 'input_tree_root', type: 'Hash' },
-      { name: 'output_tree_root', type: 'Hash' },
+      // { name: 'input_tree_root', type: 'Hash' },
+      // { name: 'output_tree_root', type: 'Hash' },
 
-      { name: 'input_count', type: 'int' }, // TODO: long
-      { name: 'output_count', type: 'int' }, // TODO: long
+      // { name: 'input_count', type: 'int' }, // TODO: long
+      // { name: 'output_count', type: 'int' }, // TODO: long
 
-      { name: 'block_count', type: 'int' }, // TODO: long
-      { name: 'claimed_work', type: 'long' },
-      // { name: 'score', type: 'int' },
+      // { name: 'block_count', type: 'int' }, // TODO: long
+      // { name: 'claimed_work', type: 'long' },
     ],
   },
 
