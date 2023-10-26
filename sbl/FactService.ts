@@ -19,7 +19,6 @@ import { arrEquals } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import * as log from 'std-latest/log/mod.ts';
-import PublicKeyService from '~/sbl/PublicKeyService.ts';
 import DataService from '~/sbl/DataService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
@@ -42,6 +41,8 @@ type FactFactory = (
 
 const factMagic = new Uint8Array([83, 66, 76]); // SBL == 0x53424c
 const headerSize = factMagic.byteLength + 1;
+
+// Version by incrementing factMagic or creating a new FactType
 
 const SIGNATURE_LENGTH = 64 + 1; // We really shouldn't export this, since it's an implementation detail
 const SIGNATURE_RECOVERY_BIT = 64;

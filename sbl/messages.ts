@@ -191,7 +191,8 @@ export const registry = {
     fields: [
       { name: 'block_hash', type: 'Hash' },
       // TODO: Array? Or add a refs array to the block?
-      { name: 'output_idx', type: 'int' }, // -1 if we're not claiming any output
+      // TODO: -1 if we're not claiming any output?
+      { name: 'output_idx', type: 'int' },
       // I don't think we necessarily need this
       // { name: 'amount', type: 'long' },
     ],
@@ -228,7 +229,9 @@ export const registry = {
     name: 'Block',
     type: 'record',
     fields: [
-      // { name: 'refs', type: { type: 'array', items: 'Hash' } }, // Basically inputs with zero amount
+      // Blocks we depend upon but aren't inputting anything from
+      { name: 'refs', type: { type: 'array', items: 'Hash' } },
+
       // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },

@@ -11,12 +11,14 @@ Fixed worker pool
 
 import Context from './Context.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
+import BlockBuilder, { BlockSpec, InputSpec } from '~/sbl/BlockBuilder.ts';
 import FetchService from './FetchService.ts';
 import Logger from './Logger.ts';
 import { Verifier } from './messages.ts';
 import { arrEquals } from './util/buffer.ts';
 import { mapEntries } from './util/functional.ts';
 import { INTERRUPT_FLAG } from './worker/WorkerChannel.ts';
+import { MaybePromise } from '~/sbl/util/types.ts';
 
 export const enum Resource {
   WebWorkerCount = 'webWorkerCount',
@@ -25,18 +27,29 @@ export const enum Resource {
 }
 
 export interface ExecutorDriver {
+  // Used by the executor
   setAllocation(resources: Partial<Record<Resource, number>>): Promise<void>;
-  request(verifier: Verifier): Promise<Uint8Array>;
+
+  request(verifier: Verifier): Promise<Uint8Array>; // TODO: fetch?
   notify(verifier: Verifier): void;
   fulfills(block: BlockFact, outputIdx: number): void;
-  getInputs(): { block: BlockFact; outputIdx: number }[];
+
+  getInputCount(): number; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
+  getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
+
+  // invalidate(): void;
+  // validate(): void;
+  // setValid(valid: boolean): void;
+
+  // Used by the driver service
+  getBlockSpec(): BlockSpec;
   getTotalTime(): number;
   getCpuTime(): number;
 }
 
 interface WorkEntry {
   // After a while of having a non-canonical input (or maybe some other weight-based threshold), remove from queue
-  inputs: { block: BlockFact; outputIdx: number }[];
+  // inputs: InputSpec[];
   getScore(): number;
   continuation(): void;
 }
@@ -99,7 +112,10 @@ export default class ExecutorDriverService {
     // };
     // updateScore();
 
-    const inputs: { block: BlockFact; outputIdx: number }[] = [];
+    const refs: BlockFact[] = [];
+    const verifierInputs: InputSpec[] = [];
+    const otherInputs: InputSpec[] = [];
+    let inputsAreFixed = false;
     const releases: (() => void)[] = [];
 
     const startTime = this.ctx.config.timeProvider.now();
@@ -183,7 +199,7 @@ export default class ExecutorDriverService {
             }
 
             this.workerQueue.push({
-              inputs,
+              // inputs,
               getScore,
               continuation: () => {
                 if (--blockedCount === 0) {
@@ -196,6 +212,7 @@ export default class ExecutorDriverService {
           });
         }
       },
+
       request: (verifier) =>
         new Promise((reply) => {
           if (!running) {
@@ -207,7 +224,7 @@ export default class ExecutorDriverService {
           }
 
           // TODO: Call pause/resume when requesting?
-          const idx = inputs.length;
+          const idx = refs.length;
           const { release } = this.ctx.get(FetchService).fetch(
             verifier,
             {},
@@ -218,15 +235,15 @@ export default class ExecutorDriverService {
               // If it's not, or maybe just in any case of not having a canonical input:
               //   Any block can be made canonical by re-writing, and not claiming the disputed input(s).
 
-              if (inputs.length === idx) {
-                inputs.push({ block, outputIdx: -1 });
+              if (refs.length === idx) {
+                refs.push(block);
                 if (--blockedCount === 0) {
                   blockedTime += this.ctx.config.timeProvider.now();
                 }
                 reply(block.body);
-              } else if (arrEquals(inputs[idx].block.body, block.body)) {
+              } else if (arrEquals(refs[idx].body, block.body)) {
                 // TODO: What to do here?
-                inputs[idx].block = block;
+                refs[idx] = block;
               } else {
                 stop(false);
                 cancelResolver(INTERRUPT_FLAG);
@@ -239,8 +256,41 @@ export default class ExecutorDriverService {
         }),
       notify: (verifier) => this.ctx.get(FetchService).fetch(verifier, {}),
       fulfills: (block: BlockFact, outputIdx: number) =>
-        inputs.push({ block, outputIdx }),
-      getInputs: () => inputs,
+        otherInputs.push({
+          block,
+          outputIdx,
+          amount: block.outputs[outputIdx].amount,
+        }),
+
+      getInputCount: () => {
+        if (!inputsAreFixed) {
+          this.ctx.get(BlockBuilder).collectInputs(
+            verifierInputs,
+            verifier,
+            false,
+          );
+          inputsAreFixed = true;
+        }
+        return verifierInputs.length;
+      },
+      getInputDetail: (idx: number) => {
+        if (inputsAreFixed) {
+          const input = verifierInputs[idx];
+          if (input === undefined) {
+            throw new Error(`Invalid index!`);
+          }
+          return input.block.outputs[input.outputIdx].detail;
+        } else {
+          throw new Error(`TODO: Wait for another input`);
+        }
+      },
+
+      getBlockSpec: () => ({
+        refs,
+        inputs: [...verifierInputs, ...otherInputs],
+        satisfies: inputsAreFixed ? undefined : [verifier],
+      }),
+
       getTotalTime: () => this.ctx.config.timeProvider.now() - startTime,
       getCpuTime: () =>
         this.ctx.config.timeProvider.now() - startTime -

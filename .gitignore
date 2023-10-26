@@ -7,3 +7,4 @@ jsoncons/
 wasi-sdk-20.0/
 server/bootstrap/
 wasm/
+npm/

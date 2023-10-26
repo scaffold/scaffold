@@ -25,6 +25,7 @@ import { BlockFact, FactSource, FactType } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import NodeService from '~/sbl/NodeService.ts';
 import ClockService from '~/sbl/ClockService.ts';
+import { InputSpec } from '~/sbl/BlockBuilder.ts';
 
 export default class ExecutorLauncherService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
@@ -191,7 +192,7 @@ export default class ExecutorLauncherService {
             this.createBlock(
               verifier,
               data !== ANY_BODY_FLAG ? data : undefined,
-              driver.getInputs(),
+              driver,
               frontierLevel,
               0,
             );
@@ -226,13 +227,7 @@ export default class ExecutorLauncherService {
 
             console.log('STDOUT', bin2str(stdout));
             console.log('STDERR', bin2str(stderr));
-            this.createBlock(
-              verifier,
-              stdout,
-              driver.getInputs(),
-              undefined,
-              0,
-            );
+            this.createBlock(verifier, stdout, driver, undefined, 0);
           },
         );
       }
@@ -253,25 +248,19 @@ export default class ExecutorLauncherService {
   private async createBlock(
     verifier: Verifier,
     data: Uint8Array | undefined,
-    inputs: { block: BlockFact; outputIdx: number }[],
+    driver: ExecutorDriver,
     frontierLevel: number | undefined,
     durationMs: number,
   ) {
+    const spec = { ...driver.getBlockSpec(), body: data, frontierLevel };
+
     if (Hash.equals(verifier.contract_hash, rootHash)) {
       // Special case for root contracts - don't publish the plaintext immediately.
       // This prevents others from stealing it and re-publishing it in their own block.
       // Instead, wait for a time.
       // TODO: Wait for our block to become canonical in the blockset.
 
-      const block = this.ctx.get(BlockBuilder).buildBlock({
-        inputs: inputs.map(({ block, outputIdx }) => ({
-          block,
-          outputIdx,
-          amount: block.outputs[outputIdx].amount,
-        })),
-        body: data,
-        satisfies: [verifier],
-      });
+      const block = this.ctx.get(BlockBuilder).buildBlock(spec);
 
       const publishDelay = 500 + Math.random() * 500;
       const publishAt = Date.now() + publishDelay;
@@ -301,16 +290,7 @@ export default class ExecutorLauncherService {
       return;
     }
 
-    const block = await this.ctx.get(BlockBuilder).publish({
-      inputs: inputs.map(({ block, outputIdx }) => ({
-        block,
-        outputIdx,
-        amount: block.outputs[outputIdx].amount,
-      })),
-      body: data,
-      satisfies: [verifier],
-      frontierLevel,
-    });
+    const block = await this.ctx.get(BlockBuilder).publish(spec);
 
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;

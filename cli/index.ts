@@ -75,5 +75,5 @@ switch (action) {
 // cat contract.wasm | npx scaffold pub
 // echo ef2b26a3ba27a3b2a116eebd775ddd62ebbbbc462c5a0caaa83c354ec8d3e5e4 | npx scaffold fetch --params '{a: 123, b: 456}'
 
-// deno bundle --check --config=deno.jsonc cli/index.ts /tmp/cli.js ;and node /tmp/cli.js --params 123 --contract-hash 456 abc
+// deno bundle --check --config=deno.json cli/index.ts /tmp/cli.js ;and node /tmp/cli.js --params 123 --contract-hash 456 abc
 // deno run --check cli/index.ts --params 123 --contract-hash 3

@@ -5,6 +5,7 @@ import { Sha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
 import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, fromNumber } from './buffer.ts';
+import { str2bin } from '~/sbl/pathUtils.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 
 const hasher = {
@@ -78,17 +79,16 @@ export default class Hash {
   }
 
   public static fromLiteralStr(str: string) {
-    if (str.length > 32) {
-      throw new Error(`String ${str} is more than 32 characters`);
+    if (str.length > HASH_SIZE) {
+      throw new Error(`String ${str} is more than ${HASH_SIZE} characters`);
     }
-    return new Hash(new TextEncoder().encode(str.padStart(32, '\0')));
+    return new Hash(new TextEncoder().encode(str.padStart(HASH_SIZE, '\0')));
   }
 
   public static digest(data: Uint8Array | string) {
     if (typeof data === 'string') {
       // TODO: Is it faster moving `new TextEncoder()` outside the class and reusing the instance?
-      const encoder = new TextEncoder();
-      data = encoder.encode(data);
+      data = str2bin(data);
     }
     return new Hash(hasher(data));
   }
@@ -110,7 +110,7 @@ export default class Hash {
   }
 
   public static random() {
-    const data = new Uint8Array(32);
+    const data = new Uint8Array(HASH_SIZE);
     crypto.getRandomValues(data);
     return new Hash(data);
   }
@@ -144,7 +144,10 @@ export default class Hash {
     // return this.toBigint();
   }
 
-  public static composePrimitives(a: HashPrimitive, b: HashPrimitive) {
+  public static composePrimitives(
+    a: HashPrimitive & (string | bigint),
+    b: HashPrimitive & (string | bigint),
+  ) {
     return a + b;
     // return (a << 1n) ^ b;
   }
@@ -186,7 +189,7 @@ export default class Hash {
 
   public increment() {
     const b = new Uint8Array(this.digest);
-    for (let i = 32; i-- > 0;) {
+    for (let i = HASH_SIZE; i-- > 0;) {
       b[i]++;
       if (b[i] !== 0) {
         break;
@@ -200,17 +203,17 @@ export default class Hash {
   }
 
   public static xor(h0: Hash, h1: Hash) {
-    const res = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
+    const res = new Uint8Array(HASH_SIZE);
+    for (let i = 0; i < HASH_SIZE; i++) {
       res[i] = h0.digest[i] ^ h1.digest[i];
     }
     return Hash.fromBytes(res);
   }
 
   public static add(h0: Hash, h1: Hash) {
-    const res = new Uint8Array(32);
+    const res = new Uint8Array(HASH_SIZE);
     let c = 0;
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < HASH_SIZE; i++) {
       c += h0.digest[i] + h1.digest[i];
       res[i] = c;
       c >>>= 8;
@@ -224,7 +227,7 @@ export default class Hash {
   }
 
   public static equals(h0: Hash, h1: Hash) {
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < HASH_SIZE; i++) {
       if (h0.digest[i] !== h1.digest[i]) {
         return false;
       }
@@ -233,7 +236,7 @@ export default class Hash {
   }
 
   public static cmp(h0: Hash, h1: Hash) {
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < HASH_SIZE; i++) {
       if (h0.digest[i] < h1.digest[i]) {
         return -1;
       } else if (h0.digest[i] > h1.digest[i]) {
@@ -244,9 +247,7 @@ export default class Hash {
   }
 }
 
-export type HashPrimitive = ReturnType<
-  ReturnType<typeof Hash.random>['toPrimitive']
->;
+export type HashPrimitive = ReturnType<Hash['toPrimitive']>;
 
 export const ZERO_HASH = Hash.fromLiteral32(0);
 export const EMPTY_HASH = Hash.digest(new Uint8Array());

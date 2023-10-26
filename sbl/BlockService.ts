@@ -156,7 +156,8 @@ export default class BlockService {
 
       epochInclusionProofs: new Map(),
 
-      parentBlockSets: this.ctx.get(BlockSetService).getParents(base.hash),
+      // parentBlockSets: this.ctx.get(BlockSetService).getParents(base.hash),
+      parentBlockSets: [],
       highestParentChain: [], // TODO: Literal empty array
 
       ...this.getFrontierMeta(block),
@@ -234,10 +235,8 @@ export default class BlockService {
       this.checkInputAvailability(fact);
     }
 
-    this.ctx.get(BlockSetService).getVoters(block.frontier_vote, -1).push(fact);
-
-    // this.ctx.get(BlockSetService).ingestBlock(fact);
-    this.ctx.get(FrontierService).ingestBlock(fact);
+    // this.ctx.get(BlockSetService).getVoters(block.frontier_vote, -1).push(fact);
+    // this.ctx.get(FrontierService).ingestBlock(fact);
 
     // fact.epochInclusionProofs.forEach((eip) =>
     //   this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
@@ -443,7 +442,7 @@ export default class BlockService {
         ? inputFreeMarketSum - outputCharitySum
         : 0n;
       const delta = block.claimedWork - block.votes;
-      this.ctx.get(FrontierService).updateBlockVotes(block, delta);
+      // this.ctx.get(FrontierService).updateBlockVotes(block, delta);
     }
   }
 

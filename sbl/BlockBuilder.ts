@@ -17,15 +17,19 @@ import KeyService from './KeyService.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
-import FreeMarketService from '~/sbl/FreeMarketService.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 
 // const defaultTimeout = 100; // Enable block chunking
 const defaultTimeout = 0; // Disable block chunking
 
-interface BlockSpec {
+export interface InputSpec {
+  block: BlockFact;
+  outputIdx: number;
+  amount: bigint;
+}
+export interface BlockSpec {
   body?: Uint8Array;
-  inputs?: { block: BlockFact; outputIdx: number; amount: bigint }[];
+  inputs?: InputSpec[];
   refs?: BlockFact[];
   satisfies?: Verifier[];
   outputs?: BlockOutput[];
@@ -33,6 +37,7 @@ interface BlockSpec {
   frontierLevel?: number;
 }
 
+// TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
 export default class BlockBuilder {
   private selfAccountVerifier: Verifier;
 
@@ -53,54 +58,20 @@ export default class BlockBuilder {
     };
   }
 
-  public buildBlock(spec: BlockSpec): Block {
+  public buildBlock(spec: BlockSpec, ioDelta = 0n): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
-
-    let difference = 0n;
 
     // const verifier_hash = Hash.digest(Verifier.encode(verifier));
     // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
     //   [];
 
+    const refBlocks = spec.refs ?? [];
     const inputBlocks = spec.inputs ?? [];
     const outputs = spec.outputs ?? [];
 
-    for (const block of spec.refs ?? []) {
-      inputBlocks.push({ block, outputIdx: -1, amount: 0n });
-    }
-
     for (const verifier of spec.satisfies ?? []) {
-      let added = false;
-      for (
-        const { block, idx } of this.ctx.get(BlockService)
-          .getBlocksByOutput(verifier)
-      ) {
-        if (
-          block.outputClaims[idx].length === 0 &&
-          block.outputs[idx].amount >= 0n
-        ) {
-          inputBlocks.push({
-            block,
-            outputIdx: idx,
-            amount: block.outputs[idx].amount,
-          });
-          added = true;
-
-          if (
-            Hash.equals(block.outputs[idx].verifier.contract_hash, epochHash)
-          ) {
-            difference += 1000000n;
-          }
-        }
-      }
-
-      if (!added) {
-        const block = this.publish({
-          outputs: [{ verifier, amount: 0n, detail: new Uint8Array() }],
-        }, 0);
-        inputBlocks.push({ block, outputIdx: 0, amount: 0n });
-      }
+      this.collectInputs(inputBlocks, verifier, true);
     }
 
     if (
@@ -128,10 +99,10 @@ export default class BlockBuilder {
       }),
     });
 
-    difference += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
-    difference -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
+    ioDelta += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
+    ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
-    if (difference < 0n) {
+    if (ioDelta < 0n) {
       const accountInputs = this.ctx.get(BlockService).getBlocksByOutput(
         this.selfAccountVerifier,
       );
@@ -139,27 +110,28 @@ export default class BlockBuilder {
         const amount = block.outputs[idx].amount;
         if (amount > 0n) {
           inputBlocks.push({ block, outputIdx: idx, amount });
-          difference += amount;
-          if (difference >= 0n) {
+          ioDelta += amount;
+          if (ioDelta >= 0n) {
             break;
           }
         }
       }
     }
 
-    if (difference > 0n) {
+    if (ioDelta > 0n) {
       outputs.push({
         verifier: this.selfAccountVerifier,
-        amount: difference,
+        amount: ioDelta,
         detail: new Uint8Array(),
       });
-    } else if (difference < 0n) {
+    } else if (ioDelta < 0n) {
       // TODO: Only output what we actually have
       if (this.ctx.config.enableValidation) {
         throw new Error('INSUFFICIENT_COINS');
       }
     }
 
+    const refs = refBlocks.map((block) => block.hash);
     const inputs = inputBlocks.map((input) => ({
       block_hash: input.block.hash,
       output_idx: input.outputIdx,
@@ -173,16 +145,23 @@ export default class BlockBuilder {
     const body = spec.body ?? new Uint8Array();
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
-    inputBlocks.forEach((input) => {
-      // TODO: No need to look these blocks up; just store them in IncentiveRegistry
-      const inputTs = input.block.timestamp;
+    for (const block of refBlocks) {
+      const inputTs = block.timestamp;
       if (inputTs >= timestamp) {
         // timestamp = inputTs + 1n;
         timestamp = inputTs;
       }
-    });
+    }
+    for (const { block } of inputBlocks) {
+      const inputTs = block.timestamp;
+      if (inputTs >= timestamp) {
+        // timestamp = inputTs + 1n;
+        timestamp = inputTs;
+      }
+    }
 
     return {
+      refs,
       inputs,
       outputs,
       frontier_vote: frontierVote ? frontierVote.hash : ZERO_HASH,
@@ -191,6 +170,36 @@ export default class BlockBuilder {
       // is_free_market: true,
       timestamp,
     };
+  }
+
+  public collectInputs(
+    inputBlocks: InputSpec[],
+    verifier: Verifier,
+    publishStub: boolean,
+  ) {
+    for (
+      const { block, idx } of this.ctx.get(BlockService)
+        .getBlocksByOutput(verifier)
+    ) {
+      if (
+        block.outputClaims[idx].length === 0 &&
+        block.outputs[idx].amount >= 0n
+      ) {
+        inputBlocks.push({
+          block,
+          outputIdx: idx,
+          amount: block.outputs[idx].amount,
+        });
+        publishStub = false;
+      }
+    }
+
+    if (publishStub) {
+      const block = this.publish({
+        outputs: [{ verifier, amount: 0n, detail: new Uint8Array() }],
+      }, 0);
+      inputBlocks.push({ block, outputIdx: 0, amount: 0n });
+    }
   }
 
   private doEmit = () => {
