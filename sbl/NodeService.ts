@@ -154,7 +154,7 @@ export default class NodeService {
     }
     connObj.conn = conn;
 
-    this.ctx.get(FrontierService).sendTo(conn);
+    // this.ctx.get(FrontierService).sendTo(conn);
 
     if (node.defaultConn) {
       this.updateDefaultConn(node);

@@ -14,11 +14,13 @@ import { BlockFact } from '~/sbl/FactMeta.ts';
 import BlockBuilder, { BlockSpec, InputSpec } from '~/sbl/BlockBuilder.ts';
 import FetchService from './FetchService.ts';
 import Logger from './Logger.ts';
-import { Verifier } from './messages.ts';
+import { BlockOutput, Verifier } from './messages.ts';
 import { arrEquals } from './util/buffer.ts';
 import { mapEntries } from './util/functional.ts';
 import { INTERRUPT_FLAG } from './worker/WorkerChannel.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
+import BlockService from './BlockService.ts';
+import Hash from '~/sbl/util/Hash.ts';
 
 export const enum Resource {
   WebWorkerCount = 'webWorkerCount',
@@ -26,23 +28,14 @@ export const enum Resource {
   MemoryMb = 'memoryMb',
 }
 
-export interface ExecutorDriver {
-  // Used by the executor
+export interface WorkerDriver {
   setAllocation(resources: Partial<Record<Resource, number>>): Promise<void>;
 
-  request(verifier: Verifier): Promise<Uint8Array>; // TODO: fetch?
-  notify(verifier: Verifier): void;
-  fulfills(block: BlockFact, outputIdx: number): void;
+  done: AbortController;
 
-  getInputCount(): number; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
-  getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
+  pauseTimer(): void;
+  resumeTimer(): void;
 
-  // invalidate(): void;
-  // validate(): void;
-  // setValid(valid: boolean): void;
-
-  // Used by the driver service
-  getBlockSpec(): BlockSpec;
   getTotalTime(): number;
   getCpuTime(): number;
 }
@@ -62,7 +55,7 @@ interface WorkEntry {
 
 const logScoreAccuracy = 0.1;
 
-export default class ExecutorDriverService {
+export default class WorkerDriverService {
   private allocated: Record<Resource, number>;
 
   private workerQueue: WorkEntry[] = [];
@@ -83,10 +76,7 @@ export default class ExecutorDriverService {
     verifier: Verifier,
     tags: Record<string, Uint8Array>,
     getScore: () => number, // Distribution, or uncertainty, or variance/time?
-    launch: (
-      driver: ExecutorDriver,
-      cancel: Promise<typeof INTERRUPT_FLAG>, // If cancel fulfills, reject the outer promise
-    ) => Promise<void>,
+    launch: (driver: WorkerDriver) => Promise<void>,
   ) /* TODO: Return a setScore(score: number) method so we can update from block update? Probably need to start implementing the launcher to determine this. */ {
     const allocation = mapEntries(
       this.ctx.config.resourceLimits,
@@ -112,36 +102,15 @@ export default class ExecutorDriverService {
     // };
     // updateScore();
 
-    const refs: BlockFact[] = [];
-    const verifierInputs: InputSpec[] = [];
-    const otherInputs: InputSpec[] = [];
-    let inputsAreFixed = false;
-    const releases: (() => void)[] = [];
+    const done = new AbortController();
 
     const startTime = this.ctx.config.timeProvider.now();
     let blockedTime = 0;
-    let blockedCount = 0;
-
-    let cancelResolver: (_: typeof INTERRUPT_FLAG) => void;
-    const cancelPromise = new Promise<typeof INTERRUPT_FLAG>((resolve) =>
-      cancelResolver = resolve
-    );
-
-    let running = true;
-    const stop = (success: boolean) => {
-      if (running) {
-        running = false;
-        releases.forEach((cb) => cb());
-        this.allocated.webWorkerCount -= allocation.webWorkerCount;
-        this.resume();
-        if (!success) {
-          throw new Error(
-            `ExecutorDriverService.run launch failed! Not restarting...`,
-          );
-          // TODO: Do we need to restart here?
-          // this.run(verifier, tags, getScore, launch);
-        }
-      }
+    const pauseTimer = () => {
+      blockedTime -= this.ctx.config.timeProvider.now();
+    };
+    const resumeTimer = () => {
+      blockedTime += this.ctx.config.timeProvider.now();
     };
 
     // TODO: Maybe:
@@ -194,18 +163,13 @@ export default class ExecutorDriverService {
           return Promise.resolve();
         } else {
           return new Promise((resolve) => {
-            if (blockedCount++ === 0) {
-              blockedTime -= this.ctx.config.timeProvider.now();
-            }
+            pauseTimer();
 
             this.workerQueue.push({
               // inputs,
               getScore,
               continuation: () => {
-                if (--blockedCount === 0) {
-                  blockedTime += this.ctx.config.timeProvider.now();
-                }
-
+                resumeTimer();
                 resolve();
               },
             });
@@ -213,97 +177,32 @@ export default class ExecutorDriverService {
         }
       },
 
-      request: (verifier) =>
-        new Promise((reply) => {
-          if (!running) {
-            return;
-          }
+      done,
 
-          if (blockedCount++ === 0) {
-            blockedTime -= this.ctx.config.timeProvider.now();
-          }
-
-          // TODO: Call pause/resume when requesting?
-          const idx = refs.length;
-          const { release } = this.ctx.get(FetchService).fetch(
-            verifier,
-            {},
-            (block) => {
-              this.ctx.get(Logger).info('got req', { verifier, block });
-
-              // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
-              // If it's not, or maybe just in any case of not having a canonical input:
-              //   Any block can be made canonical by re-writing, and not claiming the disputed input(s).
-
-              if (refs.length === idx) {
-                refs.push(block);
-                if (--blockedCount === 0) {
-                  blockedTime += this.ctx.config.timeProvider.now();
-                }
-                reply(block.body);
-              } else if (arrEquals(refs[idx].body, block.body)) {
-                // TODO: What to do here?
-                refs[idx] = block;
-              } else {
-                stop(false);
-                cancelResolver(INTERRUPT_FLAG);
-
-                // TODO: Remove our entries from workerQueue, which will make them never resolve
-              }
-            },
-          );
-          releases.push(release);
-        }),
-      notify: (verifier) => this.ctx.get(FetchService).fetch(verifier, {}),
-      fulfills: (block: BlockFact, outputIdx: number) =>
-        otherInputs.push({
-          block,
-          outputIdx,
-          amount: block.outputs[outputIdx].amount,
-        }),
-
-      getInputCount: () => {
-        if (!inputsAreFixed) {
-          this.ctx.get(BlockBuilder).collectInputs(
-            verifierInputs,
-            verifier,
-            false,
-          );
-          inputsAreFixed = true;
-        }
-        return verifierInputs.length;
-      },
-      getInputDetail: (idx: number) => {
-        if (inputsAreFixed) {
-          const input = verifierInputs[idx];
-          if (input === undefined) {
-            throw new Error(`Invalid index!`);
-          }
-          return input.block.outputs[input.outputIdx].detail;
-        } else {
-          throw new Error(`TODO: Wait for another input`);
-        }
-      },
-
-      getBlockSpec: () => ({
-        refs,
-        inputs: [...verifierInputs, ...otherInputs],
-        satisfies: inputsAreFixed ? undefined : [verifier],
-      }),
+      pauseTimer,
+      resumeTimer,
 
       getTotalTime: () => this.ctx.config.timeProvider.now() - startTime,
       getCpuTime: () =>
-        this.ctx.config.timeProvider.now() - startTime -
-        (blockedCount
-          ? blockedTime + this.ctx.config.timeProvider.now()
-          : blockedTime),
-    }, cancelPromise).then(
-      () => stop(true),
+        this.ctx.config.timeProvider.now() - startTime - blockedTime,
+    }).then(
+      () => {
+        this.allocated.webWorkerCount -= allocation.webWorkerCount;
+        this.resume();
+      },
       (err) => {
         if (err !== INTERRUPT_FLAG) {
           console.error(err);
         }
-        stop(false);
+
+        console.error(
+          `WorkerDriverService.run launch failed! Not restarting...`,
+        );
+        // TODO: Do we need to restart here?
+        // this.run(verifier, tags, getScore, launch);
+
+        this.allocated.webWorkerCount -= allocation.webWorkerCount;
+        this.resume();
       },
     );
   }

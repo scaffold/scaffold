@@ -145,7 +145,7 @@ export default class FetchService {
         }
       };
 
-      this.ctx.get(BlockService).onNewBlock(verifier, onState);
+      this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
     }
 
     let released = false;
@@ -172,7 +172,7 @@ export default class FetchService {
         }
 
         if (cb !== undefined) {
-          this.ctx.get(BlockService).offNewBlock(verifier, onState);
+          this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
         }
       },
       // getTotalInternalIncentive: () =>

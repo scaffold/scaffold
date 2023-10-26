@@ -4,12 +4,14 @@ import { BlockInput, BlockOutput } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
+import { ExecutorDriver } from './ExecutorDriverService.ts';
 
 export const ANY_BODY_FLAG = Symbol('LocalGenerator.AnyBody'); // TODO: Make this just void?
 export const INGENERABLE_FLAG = Symbol('LocalGenerator.Ingenerable');
 
 export interface LocalGeneratorOpts {
   ctx: Context;
+  driver: ExecutorDriver;
   contractHash: Hash;
   params: Uint8Array;
   details: Uint8Array[];

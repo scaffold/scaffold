@@ -19,7 +19,7 @@ export interface JsMessage {
 
 export interface WorkerComm {
   ready(): undefined;
-  exit(): undefined;
+  exit(err?: any): undefined;
 
   // fsRoot(name: string, inode: number): undefined;
   // fsOpen(baseInode: number, key: Uint8Array, subInode: number): undefined;

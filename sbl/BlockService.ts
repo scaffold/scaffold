@@ -49,6 +49,7 @@ import {
   CollateralContractParams,
 } from '~/sbl/collateralMessages.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
+import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -72,18 +73,14 @@ export default class BlockService {
     { block: BlockFact; inputIdx: number }[]
   >();
 
-  private onNewBlockListeners = new Map<
-    HashPrimitive, // Key is verifier hash
-    ((block: BlockFact) => void)[]
-  >();
-  private onCanonicalBlockListeners = new Map<
-    HashPrimitive,
-    ((block: BlockFact) => void)[]
-  >();
-  private onCanonicalBodyListeners = new Map<
-    HashPrimitive,
-    ((body: Uint8Array) => void)[]
-  >();
+  public blockMonitor = new ResolvingMonitor<BlockFact, Hash>((h) => h); // Key is block hash
+  public satisfactionMonitor = new WatchingMonitor<BlockFact, Verifier>((v) =>
+    Hash.digest(Verifier.encode(v))
+  ); // Key is input verifier
+  public unclaimedOutputMonitor = new ResolvingMonitor<
+    { block: BlockFact; outputIdx: number; amount: bigint },
+    Verifier
+  >((v) => Hash.digest(Verifier.encode(v))); // Key is output verifier
 
   constructor(private ctx: Context) {}
 
@@ -173,6 +170,8 @@ export default class BlockService {
       mutator(fact);
     }
 
+    this.blockMonitor.resolveAll(fact.hash.toPrimitive(), fact);
+
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
     fact.inputs.forEach((input, idx) => {
@@ -185,10 +184,21 @@ export default class BlockService {
     });
 
     fact.outputs.forEach(({ verifier, amount, detail }, outputIdx) => {
-      this.getClaims({ block_hash: base.hash, output_idx: outputIdx })
-        .forEach(({ block, inputIdx }) =>
+      const claims = this.getClaims({
+        block_hash: base.hash,
+        output_idx: outputIdx,
+      });
+      if (claims.length) {
+        claims.forEach(({ block, inputIdx }) =>
           this.linkBlocks(fact, block, outputIdx, inputIdx)
         );
+      } else {
+        this.unclaimedOutputMonitor.resolveOne(verifier, {
+          block: fact,
+          outputIdx,
+          amount,
+        });
+      }
 
       this.ctx.get(ExecutorLauncherService).enqueueGeneration(
         verifier,
@@ -360,17 +370,13 @@ export default class BlockService {
 
     child.verifiers.push(verifier);
 
-    const verifierHash = Hash.digest(Verifier.encode(verifier));
-
     this.ctx.get(ExecutorLauncherService).enqueueVerification(
       child,
       verifier,
       0,
     );
 
-    this.onNewBlockListeners.get(verifierHash.toPrimitive())?.forEach((cb) =>
-      cb(child)
-    );
+    this.satisfactionMonitor.callAll(verifier, child);
 
     // // Commented out because we're moving to out-of-block collateralizations
     // if (Hash.equals(verifier.contract_hash, collateralHash)) {
@@ -917,22 +923,26 @@ export default class BlockService {
     );
   }
 
-  public onNewBlock(verifier: Verifier, cb: (block: BlockFact) => void) {
-    const verifierHash = Hash.digest(Verifier.encode(verifier));
-    getOrCreate(this.onNewBlockListeners, verifierHash.toPrimitive(), () => [])
-      .push(cb);
-  }
-  public offNewBlock(verifier: Verifier, cb: (block: BlockFact) => void) {
-    const verifierHash = Hash.digest(Verifier.encode(verifier));
-    const listeners = getOrCreate(
-      this.onNewBlockListeners,
-      verifierHash.toPrimitive(),
-      () => [],
-    );
-    const idx = listeners.lastIndexOf(cb);
-    if (idx === -1) {
-      throw new Error(`Listener does not exist`);
+  public waitForBlock(
+    hash: Hash,
+    registerCancel: (cancel: () => void) => void,
+  ) {
+    const got = this.get(hash);
+    if (got) {
+      return got;
     }
-    listeners.splice(idx, 1);
+    return this.blockMonitor.waitFor(hash, registerCancel);
+  }
+
+  public waitForUnclaimedOutput(
+    verifier: Verifier,
+    registerCancel: (cancel: () => void) => void,
+  ) {
+    for (const { block, idx } of this.getBlocksByOutput(verifier)) {
+      if (block.outputClaims[idx].length === 0) {
+        return { block, outputIdx: idx, amount: block.outputs[idx].amount };
+      }
+    }
+    return this.unclaimedOutputMonitor.waitFor(verifier, registerCancel);
   }
 }

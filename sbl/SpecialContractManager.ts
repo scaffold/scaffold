@@ -5,6 +5,7 @@ import {
   collateralHash,
   dataHash,
   epochHash,
+  frontierHash,
   rootHash,
   timeHash,
 } from './constants.ts';
@@ -16,6 +17,7 @@ import Hash, { HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
 import EpochContract from '~/sbl/EpochContract.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
+import FrontierContract from './FrontierContract.ts';
 
 interface SpecialContract {
   verify(
@@ -35,6 +37,7 @@ export default class SpecialContractManager {
     // this.addSpecial(accountHash, AccountContract);
     this.addSpecial(timeHash, TimeContract);
     this.addSpecial(epochHash, EpochContract);
+    this.addSpecial(frontierHash, FrontierContract);
   }
 
   private addSpecial(

@@ -1,12 +1,14 @@
 import { frontierHash } from './constants.ts';
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import LocalGeneratorService, {
   ANY_BODY_FLAG,
   INGENERABLE_FLAG,
   LocalGeneratorOpts,
 } from './LocalGeneratorService.ts';
 import { FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
-import { HashPrimitive } from '~/sbl/util/Hash.ts';
+import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
+import { MaybePromise } from '~/sbl/util/types.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -48,18 +50,22 @@ export default class FrontierContract {
     );
   }
 
-  public verify(params: Uint8Array, body: Uint8Array, hint: Uint8Array) {
+  public verify(
+    params: Uint8Array,
+    block: BlockFact,
+    invert: (hash: Hash) => MaybePromise<Uint8Array>,
+  ) {
     const { level } = FrontierTreeParams.decode(params);
     // TODO: Verify
+    throw new Error(`TODO: Verify`);
     return true;
   }
 
-  public static generate(
-    { ctx, params, details, setFrontierLevel }: LocalGeneratorOpts,
-  ): typeof ANY_BODY_FLAG | typeof INGENERABLE_FLAG {
-    if (details.length < 2) {
-      return INGENERABLE_FLAG;
-    }
+  public static async generate(
+    { ctx, driver, params, setFrontierLevel }: LocalGeneratorOpts,
+  ): Promise<typeof ANY_BODY_FLAG> {
+    await driver.getInputDetail(0);
+    await driver.getInputDetail(1);
     const { level } = FrontierTreeParams.decode(params);
     setFrontierLevel(level + 1);
     return ANY_BODY_FLAG;
