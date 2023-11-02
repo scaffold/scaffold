@@ -1,5 +1,5 @@
 import { Verifier } from './messages.ts';
-import { Resource } from './ExecutorDriverService.ts';
+import { Resource } from './WorkerDriverService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import secp from './util/secp.ts';
 import Hash from '~/sbl/util/Hash.ts';

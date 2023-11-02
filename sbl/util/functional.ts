@@ -9,6 +9,10 @@ export const assert = (cond: boolean, msg?: string) => {
 };
 // export const assert = (_cond: boolean, _msg?: string) => {};
 
+export const todo = () => {
+  throw new Error(`Unimplemented!`);
+};
+
 export const match = <T, R>(
   val: T | undefined,
   ifTruthy: (val: T) => R,

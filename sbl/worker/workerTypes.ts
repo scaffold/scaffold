@@ -4,10 +4,20 @@ export interface InitialMessage {
 
 export interface JobMessage {
   code: Uint8Array;
-  contractHash: Uint8Array;
-  params: Uint8Array;
-  body?: Uint8Array; // If this is set, we're running a contract/verifier. If not, it's a generator.
-  emitCorrect: boolean;
+
+  // TODO: Send getter values as optimizations
+  // // These are just sent as optimizations; they're the same as what the driver would return if asked.
+  // contractHash: Uint8Array;
+  // params: Uint8Array;
+  // body?: Uint8Array; // If this is set, we're running a contract/verifier. If not, it's a generator.
+  // emitCorrect: boolean;
+
+  // getterCache: {
+  //   getContractHash?: Uint8Array;
+  //   getParams?: Uint8Array;
+  //   getBody?: Uint8Array;
+  //   emitCorrect?: boolean;
+  // };
 }
 
 export interface JsMessage {
@@ -20,6 +30,12 @@ export interface JsMessage {
 export interface WorkerComm {
   ready(): undefined;
   exit(err?: any): undefined;
+
+  getContractHash(offset: number, dstBufs: Uint8Array[]): Promise<number>;
+  getParams(offset: number, dstBufs: Uint8Array[]): Promise<number>;
+  getHint(offset: number, dstBufs: Uint8Array[]): Promise<number>;
+  getBody(offset: number, dstBufs: Uint8Array[]): Promise<number>;
+  emitCorrect(): Promise<number>;
 
   // fsRoot(name: string, inode: number): undefined;
   // fsOpen(baseInode: number, key: Uint8Array, subInode: number): undefined;

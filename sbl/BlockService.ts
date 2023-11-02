@@ -10,7 +10,7 @@ import {
 import Context from './Context.ts';
 import EpochContract from './EpochContract.ts';
 // import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
-import ExecutorLauncherService from './ExecutorLauncherService.ts';
+import WorkerLauncherService from './WorkerLauncherService.ts';
 import Logger from './Logger.ts';
 import {
   AccountContractParams,
@@ -200,7 +200,7 @@ export default class BlockService {
         });
       }
 
-      this.ctx.get(ExecutorLauncherService).enqueueGeneration(
+      this.ctx.get(WorkerLauncherService).enqueueGeneration(
         verifier,
         detail,
         0,
@@ -370,7 +370,7 @@ export default class BlockService {
 
     child.verifiers.push(verifier);
 
-    this.ctx.get(ExecutorLauncherService).enqueueVerification(
+    this.ctx.get(WorkerLauncherService).enqueueVerification(
       child,
       verifier,
       0,
@@ -923,26 +923,20 @@ export default class BlockService {
     );
   }
 
-  public waitForBlock(
-    hash: Hash,
-    registerCancel: (cancel: () => void) => void,
-  ) {
+  public waitForBlock(hash: Hash, cancelSignal: AbortSignal) {
     const got = this.get(hash);
     if (got) {
       return got;
     }
-    return this.blockMonitor.waitFor(hash, registerCancel);
+    return this.blockMonitor.waitFor(hash, cancelSignal);
   }
 
-  public waitForUnclaimedOutput(
-    verifier: Verifier,
-    registerCancel: (cancel: () => void) => void,
-  ) {
+  public waitForUnclaimedOutput(verifier: Verifier, cancelSignal: AbortSignal) {
     for (const { block, idx } of this.getBlocksByOutput(verifier)) {
       if (block.outputClaims[idx].length === 0) {
         return { block, outputIdx: idx, amount: block.outputs[idx].amount };
       }
     }
-    return this.unclaimedOutputMonitor.waitFor(verifier, registerCancel);
+    return this.unclaimedOutputMonitor.waitFor(verifier, cancelSignal);
   }
 }

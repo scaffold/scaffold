@@ -18,13 +18,10 @@ import { MaybePromise } from './util/types.ts';
 import EpochContract from '~/sbl/EpochContract.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import FrontierContract from './FrontierContract.ts';
+import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 
 interface SpecialContract {
-  verify(
-    params: Uint8Array,
-    block: BlockFact,
-    invert: (hash: Hash) => MaybePromise<Uint8Array>,
-  ): MaybePromise<boolean>;
+  compute(driver: ComputationDriver): Promise<void>;
 }
 
 export default class SpecialContractManager {

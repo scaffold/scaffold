@@ -10,11 +10,10 @@ import Hash from './util/Hash.ts';
 import { Block, Verifier } from './messages.ts';
 import { rootHash } from './constants.ts';
 import { error } from './util/functional.ts';
-import { WorkerDriver } from './WorkerDriverService.ts';
 import WorkerDebuggerManager, {
   WorkerDebugger,
 } from './WorkerDebuggerManager.ts';
-import { ComputationDriver } from './ExecutorLauncherService.ts';
+import { ComputationDriver } from './WorkerLauncherService.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 
 interface OpenFile {
@@ -29,16 +28,24 @@ interface OpenFile {
   // exposedData?: Promise<Uint8Array>;
 }
 
+const writeData = (offset: number, dstBufs: Uint8Array[], src: Uint8Array) => {
+  let it = offset;
+  for (const buf of dstBufs) {
+    const limit = Math.min(it + buf.length, src.length);
+    buf.set(src.subarray(it, limit));
+    it = limit;
+    if (it === src.length) {
+      break;
+    }
+  }
+  return it - offset;
+};
+
 export default class WorkerExecutor {
   constructor(private ctx: Context) {}
 
-  // Note: This will transfer the input buffers, reducing their size to zero.
-  public run(
-    job: JobMessage,
-    workerDriver: WorkerDriver,
-    computationDriver: ComputationDriver,
-  ): MaybePromise<void> {
-    if (workerDriver.done.signal.aborted) {
+  public run(job: JobMessage, driver: ComputationDriver): MaybePromise<void> {
+    if (driver.done.signal.aborted) {
       return;
     }
 
@@ -74,7 +81,7 @@ export default class WorkerExecutor {
 
     const terminateFn = (_: typeof INTERRUPT_FLAG) => worker.terminate();
     let cancelCb = terminateFn;
-    workerDriver.done.signal.addEventListener(
+    driver.done.signal.addEventListener(
       'abort',
       () => cancelCb(INTERRUPT_FLAG),
     );
@@ -108,7 +115,7 @@ export default class WorkerExecutor {
           new Promise((resolve, reject) => {
             if (cancelCb !== terminateFn) throw new Error('Internal error');
             cancelCb = reject;
-            computationDriver.request(verifier).then((body) => {
+            driver.request(verifier).then((body) => {
               if (cancelCb !== reject) throw new Error('Internal error');
               cancelCb = terminateFn;
               resolve(body);
@@ -157,7 +164,7 @@ export default class WorkerExecutor {
           console.error(err);
         }
 
-        // Hacky solution to pass/fail based on output; eventually WASM should call our computationDriver methods directly
+        // Hacky solution to pass/fail based on output; eventually WASM should call our driver methods directly
         const outputBufs = Object.fromEntries(
           Object.entries(outputs).map(([key, { size, chunks }]) => {
             const buf = new Uint8Array(size);
@@ -170,15 +177,38 @@ export default class WorkerExecutor {
         );
         console.log('Outputs:', outputBufs);
         if ('stdout' in outputBufs) {
-          computationDriver.requireBody(outputBufs.stdout);
+          driver.requireBody(outputBufs.stdout);
         }
         if ('fail' in outputBufs) {
-          computationDriver.invalidate();
+          driver.invalidate();
         }
 
-        workerDriver.done.abort(err);
-
         exitResolver();
+      },
+
+      // We need async here to catch errors
+      // deno-lint-ignore require-await
+      async getContractHash(
+        offset: number,
+        dstBufs: Uint8Array[],
+      ): Promise<number> {
+        return writeData(offset, dstBufs, driver.getContractHash().toBytes());
+      },
+      // deno-lint-ignore require-await
+      async getParams(offset: number, dstBufs: Uint8Array[]): Promise<number> {
+        return writeData(offset, dstBufs, driver.getParams());
+      },
+      // deno-lint-ignore require-await
+      async getHint(offset: number, dstBufs: Uint8Array[]): Promise<number> {
+        return writeData(offset, dstBufs, driver.getHint());
+      },
+      // deno-lint-ignore require-await
+      async getBody(offset: number, dstBufs: Uint8Array[]): Promise<number> {
+        return writeData(offset, dstBufs, driver.getBody());
+      },
+      // deno-lint-ignore require-await
+      async emitCorrect(): Promise<number> {
+        return driver.emitCorrect() ? 1 : 0;
       },
 
       init(type: string, inode: number): undefined {
@@ -208,7 +238,7 @@ export default class WorkerExecutor {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
             const input = { contract_hash: contractHash, params };
-            computationDriver.notify(input);
+            driver.notify(input);
             return input;
           }),
         });
@@ -222,28 +252,17 @@ export default class WorkerExecutor {
         dstBufs: Uint8Array[],
       ): Promise<number> {
         // The ONLY awaits in this function should be for getBody, since it handles cancels
-        workerDriver.pauseTimer();
+        driver.pauseTimer();
         const body = await getBody(inodes.get(inode)!);
-        workerDriver.resumeTimer();
-
-        let it = offset;
-        for (const buf of dstBufs) {
-          const limit = Math.min(it + buf.length, body.length);
-          buf.set(body.subarray(it, limit));
-          it = limit;
-          if (it === body.length) {
-            break;
-          }
-        }
-
-        return it - offset;
+        driver.resumeTimer();
+        return writeData(offset, dstBufs, body);
       },
 
       async getSize(inode: number): Promise<number> {
         // The ONLY awaits in this function should be for getBody, since it handles cancels
-        workerDriver.pauseTimer();
+        driver.pauseTimer();
         const body = await getBody(inodes.get(inode)!);
-        workerDriver.resumeTimer();
+        driver.resumeTimer();
         return body.byteLength;
       },
 

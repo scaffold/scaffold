@@ -1,6 +1,5 @@
 {
   "lock": false,
-  "importMap": "import_map.json",
   "compilerOptions": {
     "allowJs": true,
     "strict": true,

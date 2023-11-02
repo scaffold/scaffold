@@ -187,6 +187,7 @@ export default class WorkerDriverService {
         this.ctx.config.timeProvider.now() - startTime - blockedTime,
     }).then(
       () => {
+        done.abort();
         this.allocated.webWorkerCount -= allocation.webWorkerCount;
         this.resume();
       },
@@ -201,6 +202,7 @@ export default class WorkerDriverService {
         // TODO: Do we need to restart here?
         // this.run(verifier, tags, getScore, launch);
 
+        done.abort(err);
         this.allocated.webWorkerCount -= allocation.webWorkerCount;
         this.resume();
       },

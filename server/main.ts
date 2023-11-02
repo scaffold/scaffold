@@ -18,7 +18,6 @@ import { AccountContractParams, JsWasiParams } from '~/sbl/messages.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import GenesisService from '~/sbl/GenesisService.ts';
 import * as log from 'std-latest/log/mod.ts';
-import ExecutorDriverService from '~/sbl/ExecutorDriverService.ts';
 import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
 import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';

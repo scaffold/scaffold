@@ -1,6 +1,6 @@
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
-import ExecutorLauncherService from './ExecutorLauncherService.ts';
+import WorkerLauncherService from './WorkerLauncherService.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import IncentiveService from './IncentiveService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
@@ -67,7 +67,7 @@ export default class FetchService {
 
     internalIncentive = 1n;
     if (internalIncentive !== undefined) {
-      this.ctx.get(ExecutorLauncherService).enqueueGeneration(
+      this.ctx.get(WorkerLauncherService).enqueueGeneration(
         verifier,
         detail,
         Number(internalIncentive),
@@ -157,7 +157,7 @@ export default class FetchService {
         released = true;
 
         if (internalIncentive !== undefined) {
-          this.ctx.get(ExecutorLauncherService).enqueueGeneration(
+          this.ctx.get(WorkerLauncherService).enqueueGeneration(
             verifier,
             detail,
             0,

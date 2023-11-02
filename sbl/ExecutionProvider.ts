@@ -1,6 +1,6 @@
 import { JobMessage } from '~/sbl/worker/workerTypes.ts';
-import { ExecutorDriver } from '~/sbl/ExecutorDriverService.ts';
-import { INTERRUPT_FLAG } from '~/sbl/worker/WorkerChannel.ts';
+import { MaybePromise } from '~/sbl/util/types.ts';
+import { ComputationDriver } from './WorkerLauncherService.ts';
 
 // TODO: Hold off on using this.
 // We need to figure out how to combine it with local generators, which are keyed off contract hash.
@@ -10,9 +10,5 @@ export default interface ExecutionProvider {
   readonly name: string;
   readonly magicBytes: Uint8Array;
 
-  execute(
-    job: JobMessage,
-    driver: ExecutorDriver,
-    cancel: Promise<typeof INTERRUPT_FLAG>,
-  ): Promise<void>;
+  execute(job: JobMessage, driver: ComputationDriver): MaybePromise<void>;
 }

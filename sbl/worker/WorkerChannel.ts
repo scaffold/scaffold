@@ -4,6 +4,7 @@ const FLAG_WAIT = 0;
 const FLAG_CONTINUE = 1;
 const FLAG_THROW = 2;
 
+// Runs in the worker
 export class WorkerChannelClient<T> {
   constructor(
     private port: Window,
@@ -48,6 +49,7 @@ export class WorkerChannelClient<T> {
   }
 }
 
+// Runs in the main task
 export class WorkerChannelServer<T> {
   constructor(
     private port: Worker,

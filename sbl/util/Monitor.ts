@@ -57,24 +57,19 @@ class Monitor<Value, Key> {
 }
 
 export class ResolvingMonitor<Value, Key> extends Monitor<Value, Key> {
-  // public waitFor(key: Key, registerCancel: (cancel: () => void) => void) {
-  //   return new Promise<Value>((resolve) => {
-  //     super.on(key, resolve);
-  //     registerCancel(() => super.off(key, resolve));
-  //   });
-  // }
-
   public waitFor(key: Key, until: AbortSignal) {
     return new Promise<Value>((resolve) => {
-      let needsCancel = true;
-      super.on(key, (val) => {
-        needsCancel = false;
-        resolve(val);
-      });
-      until.addEventListener(
-        'abort',
-        () => needsCancel && super.off(key, resolve),
-      );
+      if (!until.aborted) {
+        let needsCancel = true;
+        super.on(key, (val) => {
+          needsCancel = false;
+          resolve(val);
+        });
+        until.addEventListener(
+          'abort',
+          () => needsCancel && super.off(key, resolve),
+        );
+      }
     });
   }
 
