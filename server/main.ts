@@ -16,7 +16,7 @@ import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { accountHash, generatorHash, rootHash } from '~/sbl/constants.ts';
 import { AccountContractParams, JsWasiParams } from '~/sbl/messages.ts';
 import KeyService from '~/sbl/KeyService.ts';
-import GenesisService from '~/sbl/GenesisService.ts';
+import GenesisService, { sharedGenesisData } from '~/sbl/GenesisService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
@@ -363,7 +363,7 @@ ctx.get(NetworkService).serve((protocol: string, spec: string) =>
 );
 // ctx.get(CollatzContract).get();
 
-ctx.get(GenesisService);
+ctx.get(GenesisService).ingestGenesis(sharedGenesisData);
 
 const itvl = setInterval(() => {
   // const blocks = [...ctx.get(BlockRegistry).debugGetAll().entries()].map((

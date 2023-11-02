@@ -1,10 +1,5 @@
-import { frontierHash } from './constants.ts';
 import Context from './Context.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
-import LocalGeneratorService from './LocalGeneratorService.ts';
-import { FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
-import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
-import { MaybePromise } from '~/sbl/util/types.ts';
+import { FrontierTreeParams } from './messages.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 
 // export interface FrontierMeta {
@@ -43,9 +38,14 @@ export default class FrontierContract {
   constructor(private ctx: Context) {}
 
   public async compute(driver: ComputationDriver) {
+    console.log('A');
     await driver.getInputDetail(0);
+    console.log('B');
     await driver.getInputDetail(1);
+    console.log('C');
     const { level } = FrontierTreeParams.decode(driver.getParams());
-    // driver.setFrontierLevel(level + 1);
+    console.log('D');
+    driver.setFrontierLevel(level + 1);
+    console.log('E');
   }
 }

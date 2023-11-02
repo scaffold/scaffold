@@ -1,4 +1,5 @@
 import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
+import { TimeProvider } from '~/sbl/Config.ts';
 
 interface Entry {
   timestamp: number;
@@ -8,7 +9,7 @@ interface Entry {
   stack: string;
 }
 
-export default class MockTimeProvider {
+export default class MockTimeProvider implements TimeProvider {
   private queue: RedBlackTree<Entry> = new RedBlackTree((a, b) =>
     a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.idx - b.idx
   );
@@ -66,7 +67,9 @@ export default class MockTimeProvider {
   public now() {
     return this.curTimestamp;
   }
-
+  public setImmediate(cb: () => void) {
+    this.enqueue(cb, 0);
+  }
   public setTimeout(cb: () => void, delay: number) {
     return this.enqueue(cb, delay);
   }

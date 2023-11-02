@@ -1,17 +1,20 @@
 import { deadline } from 'std-latest/async/mod.ts';
-import { deepMerge } from 'std-latest/collections/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
-import Peer from '~/sbl/Peer.ts';
-import NodeService from '~/sbl/NodeService.ts';
 import BlockService from '../sbl/BlockService.ts';
-import { Block, BlockInput } from '../sbl/messages.ts';
+import { BlockInput } from '../sbl/messages.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 import MockTimeProvider from './MockTimeProvider.ts';
-import ServingService from '../sbl/ServingService.ts';
 import ConnectionService from '../sbl/ConnectionService.ts';
+import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
+import NetworkService from '~/sbl/NetworkService.ts';
+import KeyService from '~/sbl/KeyService.ts';
+import { createGenesisBlock } from '~/sbl/GenesisService.ts';
+import FactService from '~/sbl/FactService.ts';
+import { FactSource } from '~/sbl/FactMeta.ts';
+import NodeService from '~/sbl/NodeService.ts';
 
 const makeConfig = (
   ctxIdx: number,
@@ -21,10 +24,10 @@ const makeConfig = (
 
   debugName: `ctx_${ctxIdx + 1}`,
   selfPrivateKey: secp.utils.randomPrivateKey(),
-  nodeNonce: (new TextEncoder()).encode('test_0'),
 
-  networkProvider: { protocols: new Map(Object.entries({})) },
   timeProvider: new MockTimeProvider(),
+  storageProvider: new NullStorageProvider(),
+  networkProviders: [],
 
   ...partialConfig,
 } satisfies Config);
@@ -55,11 +58,30 @@ export const makeTest = (
     .finally(() => ctxs.forEach((ctx) => ctx.destruct()));
 };
 
+export const provideInitialBalance = (...ctxs: Context[]) => {
+  const genesis = createGenesisBlock(
+    ctxs.map((ctx) => ({
+      publicKey: ctx.get(KeyService).getSelfPublicKey(),
+      amount: 1000000n,
+    })),
+  );
+
+  for (const ctx of ctxs) {
+    ctx.get(FactService).ingest(
+      genesis.data,
+      FactSource.Genesis,
+      ctx.get(NodeService).getSelfNode(),
+    );
+  }
+
+  return genesis.hash;
+};
+
 export const connectCtxs = (ctxs: Context[], topology: 'chain' | 'mesh') => {
   switch (topology) {
     case 'chain':
       ctxs.forEach((ctx, idx) =>
-        ctx.get(ServingService).serve((protocol: string, spec: string) =>
+        ctx.get(NetworkService).serve((protocol: string, spec: string) =>
           idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
         )
       );
@@ -68,7 +90,7 @@ export const connectCtxs = (ctxs: Context[], topology: 'chain' | 'mesh') => {
     case 'mesh':
       ctxs.forEach((ctx1) =>
         ctxs.forEach((ctx2) =>
-          ctx1.get(ServingService).serve((protocol: string, spec: string) =>
+          ctx1.get(NetworkService).serve((protocol: string, spec: string) =>
             ctx2.get(ConnectionService).connect(protocol, spec)
           )
         )

@@ -1,23 +1,22 @@
 import { assertEquals } from 'std-latest/testing/asserts.ts';
-import Hash from '~/sbl/util/Hash.ts';
 import { connectCtxs, makeTest } from './util.ts';
-import ServingService from '~/sbl/ServingService.ts';
-import { makeMockNetworkProvider } from './mockNetwork.ts';
-import ConnectionService, { SELF_CONNECTION } from '~/sbl/ConnectionService.ts';
-import CollatzContract from '~/graph/CollatzContract.ts';
-import * as collatzMessages from '~/graph/collatzMessages.ts';
+import * as collatzMessages from '~/ts/collatzMessages.ts';
 import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
 import * as moduleHashes from '../ts/moduleHashes.ts';
 import collatzGenerator from '../ts/collatz.generator.0.ts';
 import FetchService from '../sbl/FetchService.ts';
 import { Block } from '../sbl/messages.ts';
+import MockNetworkProvider from '~/plugins/MockNetworkProvider.ts';
+import MockTimeProvider from '~/tests/MockTimeProvider.ts';
 
-const mockNetworkProvider = makeMockNetworkProvider({
+const timeProvider = new MockTimeProvider();
+const mockNetworkOptions = {
+  timeProvider,
   connectLatencyMs: 25,
   sendReliableLatencyMs: 10,
   sendFastLatencyMs: 5,
   sendFastDropRatio: 0.1,
-});
+};
 
 Deno.test(
   {
@@ -26,9 +25,8 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    networkProvider: {
-      protocols: new Map(Object.entries({ mock: mockNetworkProvider })),
-    },
+    timeProvider,
+    networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
   }, async (_testCtx, ctx1, ctx2) => {
     const ctxs = [ctx1, ctx2];
 
@@ -68,9 +66,8 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    networkProvider: {
-      protocols: new Map(Object.entries({ mock: mockNetworkProvider })),
-    },
+    timeProvider,
+    networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
   }, async (_testCtx, ctx1, ctx2) => {
     // Only add the generator to one of the contexts
     ctx1.get(LocalGeneratorService).addGenerator(

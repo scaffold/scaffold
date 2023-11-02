@@ -1,7 +1,13 @@
 import secp from './util/secp.ts';
 import BlockBuilder, { BlockSpec, InputSpec } from '~/sbl/BlockBuilder.ts';
 import BlockService from './BlockService.ts';
-import { dataHash, epochHash, generatorHash, rootHash } from './constants.ts';
+import {
+  dataHash,
+  epochHash,
+  frontierHash,
+  generatorHash,
+  rootHash,
+} from './constants.ts';
 import Context from './Context.ts';
 import WorkerDriverService, { WorkerDriver } from './WorkerDriverService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
@@ -9,6 +15,7 @@ import {
   Block,
   BlockOutput,
   EpochInclusionProof,
+  FrontierTreeParams,
   Verifier,
 } from './messages.ts';
 import { bin2str, str2bin } from './pathUtils.ts';
@@ -62,6 +69,8 @@ export interface ComputationDriver extends WorkerDriver {
   getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
   getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
 
+  setFrontierLevel(level: number): void;
+
   compareOrder(blockA: Hash, blockB: Hash): number; // Clamps the frontier vote
 
   setBurdenOfProof(on: BurdenOfProof): void;
@@ -71,7 +80,6 @@ export interface ComputationDriver extends WorkerDriver {
   ingenerable(): void; // TODO: Maybe just throw an exception instead?
 
   // Do we need these?
-  // setFrontierLevel(level: number): void;
   // sign(): void;
 }
 
@@ -383,6 +391,24 @@ export default class WorkerLauncherService {
         return fail();
       },
 
+      setFrontierLevel(level) {
+        const frontierOutputs = block.outputs.filter((output) =>
+          Hash.equals(output.verifier.contract_hash, frontierHash)
+        );
+        if (frontierOutputs.length !== 1) {
+          console.error(
+            `Invalid number of frontier outputs ${frontierOutputs.length}!`,
+          );
+          fail();
+        }
+        const params = FrontierTreeParams.decode(
+          frontierOutputs[0].verifier.params,
+        );
+        if (params.level !== level) {
+          fail();
+        }
+      },
+
       compareOrder(blockA: Hash, blockB: Hash) {
         return todo();
       },
@@ -566,6 +592,20 @@ export default class WorkerLauncherService {
                 ),
               );
             }
+          }
+        }
+      },
+
+      setFrontierLevel(level) {
+        if (workerDriver.done.signal.aborted) {
+          return;
+        }
+        if (frontierLevel === undefined) {
+          frontierLevel = level;
+        } else {
+          if (frontierLevel !== level) {
+            // Ingenerable
+            throw INTERRUPT_FLAG;
           }
         }
       },

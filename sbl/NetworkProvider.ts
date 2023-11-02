@@ -2,6 +2,7 @@ import Context from './Context.ts';
 
 export interface ConnectionProvider {
   // Does not need to maintain order between sends, but does need to make sure packet's aren't dropped or mangled.
+  // TODO: Should we require ordering?
   sendReliable(data: Uint8Array): void;
 
   // Just send it fast. No worries if it drops.

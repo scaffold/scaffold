@@ -31,7 +31,7 @@ import EpochService from '~/sbl/EpochService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
 import FactService from '~/sbl/FactService.ts';
 import secp from '~/sbl/util/secp.ts';
-import GenesisService from '~/sbl/GenesisService.ts';
+import GenesisService, { sharedGenesisData } from '~/sbl/GenesisService.ts';
 import BlockSetTableView from '~/ui/BlockSetTableView.tsx';
 import FactView from '~/ui/FactView.tsx';
 import CodeView from '~/ui/CodeView.tsx';
@@ -98,7 +98,7 @@ client.ctx.get(QaDebugger).addDebugger(
 );
 
 client.ctx.get(EpochService);
-client.ctx.get(GenesisService);
+client.ctx.get(GenesisService).ingestGenesis(sharedGenesisData);
 
 const startGame = () => {
   const body = thrustMessages.InitAnswer.encode({

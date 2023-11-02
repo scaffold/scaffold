@@ -6,6 +6,7 @@ import Hash from '~/sbl/util/Hash.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import NetworkProvider from '~/sbl/NetworkProvider.ts';
 import ExecutionProvider from '~/sbl/ExecutionProvider.ts';
+import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
 
 // TODO: Reorder, rename, reorganize config
 
