@@ -9,27 +9,27 @@ import * as thrustMessages from './thrustMessages.ts';
 
 const tickInterval = 100n;
 
-const gen: LocalGenerator = async (
-  { ctx, contractHash, params, emitCorrect, request, notify },
-) => {
-  if (!emitCorrect) {
-    return new TextEncoder().encode('DUPE');
+const gen: LocalGenerator = async (driver, ctx) => {
+  if (!driver.emitCorrect()) {
+    driver.requireBody(new TextEncoder().encode('DUPE'));
+    return;
   }
 
-  const { match, tick } = thrustMessages.GameParams.decode(params);
+  const { match, tick } = thrustMessages.GameParams.decode(driver.getParams());
   // if (tick === 0n) {
   //   debugger;
   // }
 
   // Get game parameters
   const { init_time } = thrustMessages.InitAnswer.decode(
-    await request(
+    await driver.request(
       moduleHashes.thrust_init_wasm_hash,
       thrustMessages.InitParams.encode({ match }),
     ),
   );
 
   // Wait until time
+  // TODO: Use driver wait
   const waitUntil = Number(init_time + tick * tickInterval);
   await new Promise<void>((resolve) =>
     ctx.config.timeProvider.setTimeout(resolve, waitUntil - Date.now())
@@ -37,8 +37,8 @@ const gen: LocalGenerator = async (
 
   const state = tick
     ? thrustMessages.GameAnswer.decode(
-      await request(
-        contractHash,
+      await driver.request(
+        driver.getContractHash(),
         thrustMessages.GameParams.encode({ match, tick: tick - 1n }),
       ),
     )
@@ -62,7 +62,7 @@ const gen: LocalGenerator = async (
   // Basically, it lets the following request() calls happen in parallel instead of serially.
   // This corresponds to the open(2) system call, while the below request() corresponds to read(2).
   state.players.forEach(({ hash }) =>
-    notify(
+    driver.notify(
       moduleHashes.thrust_input_wasm_hash,
       thrustMessages.InputParams.encode({ match, player: hash, tick }),
     )
@@ -80,7 +80,7 @@ const gen: LocalGenerator = async (
     const { hash, position, velocity } = player;
 
     // Fetch player inputs
-    const inputAnswer = await request(
+    const inputAnswer = await driver.request(
       moduleHashes.thrust_input_wasm_hash,
       thrustMessages.InputParams.encode({ match, player: hash, tick }),
     );
@@ -147,7 +147,7 @@ const gen: LocalGenerator = async (
   state.game_state.size = state.game_state.size * 0.9999 +
     targSize * 0.0001;
 
-  return thrustMessages.GameAnswer.encode(state);
+  driver.requireBody(thrustMessages.GameAnswer.encode(state));
 };
 
 export default gen;

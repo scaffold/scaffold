@@ -54,8 +54,8 @@ export interface ComputationDriver extends WorkerDriver {
   requireTimestampGte(timestamp: bigint): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
-  notify(verifier: Verifier): void;
-  request(verifier: Verifier): Promise<Uint8Array>; // TODO: fetch?
+  notify(contractHash: Hash, params: Uint8Array): void;
+  request(contractHash: Hash, params: Uint8Array): Promise<Uint8Array>; // TODO: fetch?
   // invert(hash: Hash): MaybePromise<Uint8Array>;
   fulfills(block: BlockFact, outputIdx: number): void;
 
@@ -308,12 +308,13 @@ export default class WorkerLauncherService {
         throw new Error(`Cannot call emitCorrect() from a contract!`);
       },
 
-      notify: (_verifier) => {},
-      request: async (verifier) => {
+      notify: (_contractHash, _params) => {},
+      request: async (contractHash, params) => {
         if (workerDriver.done.signal.aborted) {
           // Should have already interrupted earlier
           throw INTERRUPT_FLAG;
         }
+        const verifier = { contract_hash: contractHash, params };
         for (const hash of block.refs) {
           const ref = await this.ctx.get(BlockService).waitForBlock(
             hash,
@@ -493,15 +494,18 @@ export default class WorkerLauncherService {
         return emitCorrect;
       },
 
-      notify: (verifier) =>
-        this.ctx.get(FetchService).fetch(verifier, {
-          abortSignal: workerDriver.done.signal,
-        }),
-      request: (verifier) =>
+      notify: (contractHash, params) =>
+        this.ctx.get(FetchService).fetch(
+          { contract_hash: contractHash, params },
+          { abortSignal: workerDriver.done.signal },
+        ),
+      request: (contractHash, params) =>
         new Promise((reply) => {
           if (workerDriver.done.signal.aborted) {
             return;
           }
+
+          const verifier = { contract_hash: contractHash, params };
 
           // TODO: Call pause/resume when requesting?
           this.ctx.get(FetchService).fetch(

@@ -16,16 +16,17 @@ new Function(new TextDecoder().decode(Deno.readFileSync('./server/bootstrap/thru
 
 const noiseInstances: Map<string, SimplexNoise> = new Map();
 
-const gen: LocalGenerator = ({ params, emitCorrect }) => {
+const gen: LocalGenerator = (driver, ctx) => {
   // console.log(
   //   thrustMessages.MazeParams.encode({ match: Hash.random(), x: 1n, y: 2n }),
   // );
 
-  if (!emitCorrect) {
-    return new TextEncoder().encode('DUPE');
+  if (!driver.emitCorrect()) {
+    driver.requireBody(new TextEncoder().encode('DUPE'));
+    return;
   }
 
-  const { match, x, y } = thrustMessages.MazeParams.decode(params);
+  const { match, x, y } = thrustMessages.MazeParams.decode(driver.getParams());
   const noise = getOrCreate(
     noiseInstances,
     match.toHex(),
@@ -35,7 +36,7 @@ const gen: LocalGenerator = ({ params, emitCorrect }) => {
   const isWall = noise.noise2D(Number(x) / 10, Number(y) / 10) > 0;
 
   const cell = isWall ? { MazeCellWall: {} } : { MazeCellEmpty: {} };
-  return thrustMessages.MazeAnswer.encode({ cell });
+  driver.requireBody(thrustMessages.MazeAnswer.encode({ cell }));
 };
 
 export default gen;

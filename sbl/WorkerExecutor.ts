@@ -115,11 +115,13 @@ export default class WorkerExecutor {
           new Promise((resolve, reject) => {
             if (cancelCb !== terminateFn) throw new Error('Internal error');
             cancelCb = reject;
-            driver.request(verifier).then((body) => {
-              if (cancelCb !== reject) throw new Error('Internal error');
-              cancelCb = terminateFn;
-              resolve(body);
-            });
+            driver.request(verifier.contract_hash, verifier.params).then(
+              (body) => {
+                if (cancelCb !== reject) throw new Error('Internal error');
+                cancelCb = terminateFn;
+                resolve(body);
+              },
+            );
           })
         );
       }
@@ -237,9 +239,8 @@ export default class WorkerExecutor {
         inodes.set(subInode, {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
-            const input = { contract_hash: contractHash, params };
-            driver.notify(input);
-            return input;
+            driver.notify(contractHash, params);
+            return { contract_hash: contractHash, params };
           }),
         });
 

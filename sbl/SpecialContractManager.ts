@@ -5,9 +5,9 @@ import RootContract from './RootContract.ts';
 import TimeContract from '~/sbl/TimeContract.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
 import FrontierContract from './FrontierContract.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
+import { getOrCreate } from '~/sbl/util/map.ts';
 
 interface SpecialContract {
   compute(driver: ComputationDriver): MaybePromise<void>;
@@ -30,7 +30,16 @@ export default class SpecialContractManager {
     contractHash: Hash,
     Type: new (ctx: Context) => SpecialContract,
   ) {
-    this.entries.set(contractHash.toPrimitive(), this.ctx.get(Type));
+    getOrCreate(
+      this.entries,
+      contractHash.toPrimitive(),
+      () => this.ctx.get(Type),
+      (_) => {
+        throw new Error(
+          `Cannot add multiple local generators for contract ${contractHash.toHex()}`,
+        );
+      },
+    );
   }
 
   public getContract(contractHash: Hash) {

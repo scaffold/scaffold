@@ -13,23 +13,20 @@ export default class ThrustInputProvider {
   constructor(private ctx: Context) {
     ctx.get(LocalGeneratorService).addGenerator(
       moduleHashes.thrust_input_wasm_hash,
-      ({ params, emitCorrect }) => {
-        if (!emitCorrect) {
-          return new TextEncoder().encode('DUPE');
+      (driver, _ctx) => {
+        if (!driver.emitCorrect()) {
+          driver.requireBody(new TextEncoder().encode('DUPE'));
+          return;
         }
 
         const { match, player, tick } = thrustMessages.InputParams.decode(
-          params,
+          driver.getParams(),
         );
 
         const cb = this.inputCallbacks.get(match.toHex() + player.toHex());
-        if (cb) {
-          return thrustMessages.InputAnswer.encode({
-            entry: { InputEntry: cb(tick) },
-          });
-        } else {
-          return thrustMessages.InputAnswer.encode({ entry: null });
-        }
+        driver.requireBody(thrustMessages.InputAnswer.encode({
+          entry: cb ? { InputEntry: cb(tick) } : null,
+        }));
       },
     );
   }
