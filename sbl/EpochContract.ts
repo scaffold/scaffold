@@ -1,7 +1,5 @@
 import Context from './Context.ts';
-import LocalGeneratorService, {
-  LocalGeneratorOpts,
-} from './LocalGeneratorService.ts';
+import LocalGeneratorService from './LocalGeneratorService.ts';
 import { epochHash, timeHash } from '~/sbl/constants.ts';
 import { EpochBody, EpochParams, TimeParams } from './messages.ts';
 import Hash, { HASH_SIZE, ZERO_HASH } from './util/Hash.ts';

@@ -11,7 +11,7 @@ import { bin2str, str2bin } from '../sbl/pathUtils.ts';
 import LocalGeneratorService, {
   LocalGenerator,
 } from '../sbl/LocalGeneratorService.ts';
-import { epochStartTime } from '~/server/epochStartTime.ts';
+// import { epochStartTime } from '~/server/epochStartTime.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { accountHash, generatorHash, rootHash } from '~/sbl/constants.ts';
 import { AccountContractParams, JsWasiParams } from '~/sbl/messages.ts';
@@ -42,7 +42,7 @@ const config: Config = {
   ...defaultConfig,
 
   debugName: 'Server',
-  userdata: JSON.stringify({ epochStartTime }),
+  // userdata: JSON.stringify({ epochStartTime }),
   // selfPrivateKey: secp.utils.randomPrivateKey(),
   selfPrivateKey: hex2bin(
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',

@@ -4,9 +4,7 @@ import BlockService from './BlockService.ts';
 import { dataHash, epochHash, generatorHash, rootHash } from './constants.ts';
 import Context from './Context.ts';
 import WorkerDriverService, { WorkerDriver } from './WorkerDriverService.ts';
-import LocalGeneratorService, {
-  INGENERABLE_FLAG,
-} from './LocalGeneratorService.ts';
+import LocalGeneratorService from './LocalGeneratorService.ts';
 import {
   Block,
   BlockOutput,
@@ -15,7 +13,7 @@ import {
 } from './messages.ts';
 import { bin2str, str2bin } from './pathUtils.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
-import { error, mapEntries, todo } from './util/functional.ts';
+import { error, mapEntries, neverPromise, todo } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
 import { getOrCreate } from './util/map.ts';
@@ -30,6 +28,10 @@ import ClockService from '~/sbl/ClockService.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import { INTERRUPT_FLAG } from '~/sbl/worker/WorkerChannel.ts';
 import FetchService from '~/sbl/FetchService.ts';
+import {
+  CollateralContractDetail,
+  CollateralContractParams,
+} from '~/sbl/collateralMessages.ts';
 
 export const enum ComputationType {
   Contract,
@@ -48,7 +50,8 @@ export interface ComputationDriver extends WorkerDriver {
   getHint(): Uint8Array;
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
-  requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody
+  requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
+  requireTimestampGte(timestamp: bigint): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
   notify(verifier: Verifier): void;
@@ -56,7 +59,7 @@ export interface ComputationDriver extends WorkerDriver {
   // invert(hash: Hash): MaybePromise<Uint8Array>;
   fulfills(block: BlockFact, outputIdx: number): void;
 
-  getInputCount(): number; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
+  getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
   getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
 
   compareOrder(blockA: Hash, blockB: Hash): number; // Clamps the frontier vote
@@ -108,7 +111,6 @@ export default class WorkerLauncherService {
         () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-
           const driver = this.makeVerificationDriver(
             block,
             inputIdx,
@@ -120,17 +122,6 @@ export default class WorkerLauncherService {
           await driver.finalize();
         },
       );
-    }
-
-    // TODO: Move to SpecialContractManager
-    if (Hash.equals(verifier.contract_hash, dataHash)) {
-      const hint = new Uint8Array([]);
-      const verified = this.ctx.get(DataContract).verify(
-        verifier.params,
-        block.body,
-        hint,
-      );
-      this.litigateBlockVerifier(block, verifier, verified, hint);
       return;
     }
 
@@ -147,7 +138,6 @@ export default class WorkerLauncherService {
         () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-
           const driver = this.makeVerificationDriver(
             block,
             inputIdx,
@@ -184,6 +174,23 @@ export default class WorkerLauncherService {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
     }
 
+    const special = this.ctx.get(SpecialContractManager)
+      .getContract(verifier.contract_hash);
+    if (special) {
+      this.ctx.get(WorkerDriverService).run(
+        verifier,
+        {},
+        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
+        async (workerDriver) => {
+          await workerDriver.setAllocation({});
+          const driver = this.makeGenerationDriver(verifier, workerDriver);
+          await special.compute(driver);
+          await driver.finalize();
+        },
+      );
+      return;
+    }
+
     const getScore = () =>
       this.ctx.get(BlockService).getBlocksByOutput(verifier)
         .reduce((acc, { block, idx }) => {
@@ -205,16 +212,9 @@ export default class WorkerLauncherService {
         getScore,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-
           const driver = this.makeGenerationDriver(verifier, workerDriver);
-          try {
-            await localGenerator(driver, this.ctx);
-            await driver.finalize();
-          } catch (err) {
-            if (err !== INGENERABLE_FLAG) {
-              throw err;
-            }
-          }
+          await localGenerator(driver, this.ctx);
+          await driver.finalize();
         },
       );
     } else {
@@ -231,24 +231,17 @@ export default class WorkerLauncherService {
           getScore,
           async (workerDriver) => {
             await workerDriver.setAllocation({ webWorkerCount: 1 });
-
             const driver = this.makeGenerationDriver(verifier, workerDriver);
-            try {
-              await this.ctx.get(WorkerExecutor).run(
-                {
-                  code: generatorCode,
-                  // contractHash: verifier.contract_hash.toBytes(),
-                  // params: verifier.params,
-                  // emitCorrect: this.shouldEmitCorrect(verifier),
-                },
-                driver,
-              );
-              await driver.finalize();
-            } catch (err) {
-              if (err !== INGENERABLE_FLAG) {
-                throw err;
-              }
-            }
+            await this.ctx.get(WorkerExecutor).run(
+              {
+                code: generatorCode,
+                // contractHash: verifier.contract_hash.toBytes(),
+                // params: verifier.params,
+                // emitCorrect: this.shouldEmitCorrect(verifier),
+              },
+              driver,
+            );
+            await driver.finalize();
           },
         );
       }
@@ -264,8 +257,16 @@ export default class WorkerLauncherService {
   ): ComputationDriver & { finalize(): MaybePromise<void> } {
     let burdenOfProof = BurdenOfProof.Invalidation;
 
-    let nextRefIdx = 0;
+    let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
+
+    const fail = () => {
+      const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
+      this.ctx.get(LitigationService).litigateBlock(block, claim);
+      block.passedVerification = false;
+      workerDriver.done.abort();
+      throw INTERRUPT_FLAG;
+    };
 
     // Do litigation in here
 
@@ -283,11 +284,7 @@ export default class WorkerLauncherService {
           return;
         }
         if (!arrEquals(block.body, data)) {
-          this.ctx.get(LitigationService).litigateBlock(block, {
-            ClaimVerificationFailed: { input_idx: inputIdx, hint },
-          });
-          block.passedVerification = false;
-          workerDriver.done.abort();
+          fail();
         }
       },
       requireOutput: (output: BlockOutput) => {
@@ -300,97 +297,137 @@ export default class WorkerLauncherService {
             return;
           }
         }
-        this.ctx.get(LitigationService).litigateBlock(block, {
-          ClaimVerificationFailed: { input_idx: inputIdx, hint },
-        });
-        block.passedVerification = false;
-        workerDriver.done.abort();
+        fail();
       },
-      emitCorrect: () => true,
+      requireTimestampGte: (timestamp: bigint) => {
+        if (block.timestamp < timestamp) {
+          fail();
+        }
+      },
+      emitCorrect: () => {
+        throw new Error(`Cannot call emitCorrect() from a contract!`);
+      },
 
       notify: (_verifier) => {},
       request: async (verifier) => {
-        // Check all refs asynchronously; if we match on one, cancel the others
-        while (nextRefIdx !== block.refs.length) {
-          const candidate = block.refs[nextRefIdx++];
+        if (workerDriver.done.signal.aborted) {
+          // Should have already interrupted earlier
+          throw INTERRUPT_FLAG;
+        }
+        for (const hash of block.refs) {
           const ref = await this.ctx.get(BlockService).waitForBlock(
-            candidate,
+            hash,
             workerDriver.done.signal,
           );
+
+          if (
+            await this.ctx.get(BlockService).doesBlockSatisfy(
+              ref,
+              verifier,
+              workerDriver.done.signal,
+            )
+          ) {
+            return ref.body;
+          }
         }
+        return fail();
       },
 
-      fulfills: (block: BlockFact, outputIdx: number) =>
-        otherInputs.push({
-          block,
-          outputIdx,
-          amount: block.outputs[outputIdx].amount,
-        }),
+      fulfills: (_block: BlockFact, _outputIdx: number) => {
+        // Do nothing here; the way to tell if this block A indeed fulfills B's output is to input the output then verify.
+      },
 
-      getInputCount: () => {
-        if (!inputsAreFixed) {
-          this.ctx.get(BlockBuilder).collectInputs(
-            verifierInputs,
-            verifier,
-            false,
+      getInputCount: async () => {
+        let count = 0;
+        for (const input of block.inputs) {
+          const block = await this.ctx.get(BlockService).waitForBlock(
+            input.block_hash,
+            workerDriver.done.signal,
           );
-          inputsAreFixed = true;
+
+          const output = block.outputs[input.output_idx];
+          if (
+            this.ctx.get(BlockService).areVerifiersEqual(
+              output.verifier,
+              verifier,
+            )
+          ) {
+            count++;
+          }
         }
-        return verifierInputs.length;
+        return count;
       },
       getInputDetail: async (idx: number) => {
-        if (inputsAreFixed) {
-          const input = verifierInputs[idx];
-          if (input === undefined) {
-            throw new Error(`Invalid index!`);
-          }
-          return input.block.outputs[input.outputIdx].detail;
-        } else {
-          while (true) {
-            const input = verifierInputs[idx];
-            if (input !== undefined) {
-              return input.block.outputs[input.outputIdx].detail;
-            } else {
-              verifierInputs.push(
-                await this.ctx.get(BlockService).claimOutput(verifier),
-              );
-            }
+        if (requireInputCount === undefined || requireInputCount <= idx) {
+          requireInputCount = idx + 1;
+        }
+
+        for (const input of block.inputs) {
+          const block = await this.ctx.get(BlockService).waitForBlock(
+            input.block_hash,
+            workerDriver.done.signal,
+          );
+
+          const output = block.outputs[input.output_idx];
+          if (
+            this.ctx.get(BlockService).areVerifiersEqual(
+              output.verifier,
+              verifier,
+            ) && idx-- === 0
+          ) {
+            return output.detail;
           }
         }
+
+        return fail();
+      },
+
+      compareOrder(blockA: Hash, blockB: Hash) {
+        return todo();
+      },
+
+      setBurdenOfProof(on: BurdenOfProof) {
+        return todo();
+      },
+      invalidate() {
+        return fail();
+      },
+      offsetCanonicality(offset: bigint) {
+        return todo();
       },
 
       ingenerable: () => {
         throw new Error(`Cannot call ingenerable() from a contract!`);
       },
 
-      finalize: () => {
+      finalize: async () => {
+        if (requireInputCount !== undefined) {
+          let count = 0;
+          for (const input of block.inputs) {
+            const block = await this.ctx.get(BlockService).waitForBlock(
+              input.block_hash,
+              workerDriver.done.signal,
+            );
+
+            const output = block.outputs[input.output_idx];
+            if (
+              this.ctx.get(BlockService).areVerifiersEqual(
+                output.verifier,
+                verifier,
+              ) && ++count > requireInputCount
+            ) {
+              fail();
+            }
+          }
+
+          if (count !== requireInputCount) {
+            fail();
+          }
+        }
+
         todo();
       },
     };
-
-    // getContractHash(): Hash;
-    // getParams(): Uint8Array;
-    // getBody(): Uint8Array; // Only valid if this is a contract
-    // requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
-    // requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody
-    // emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
-
-    // request(verifier: Verifier): Promise<Uint8Array>; // TODO: fetch?
-    // notify(verifier: Verifier): void;
-    // fulfills(block: BlockFact, outputIdx: number): void;
-
-    // getInputCount(): number; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
-    // getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
-
-    // compareOrder(blockA: Hash, blockB: Hash): number; // Clamps the frontier vote
-
-    // setBurdenOfProof(on: BurdenOfProof): void;
-    // invalidate(): void;
-    // offsetCanonicality(offset: bigint): void;
-
-    // // Used by the driver service
-    // getBlockSpec(): BlockSpec;
-    // finalize(): MaybePromise<void>;
   }
 
   private makeGenerationDriver(
@@ -410,6 +447,7 @@ export default class WorkerLauncherService {
     const outputs: BlockOutput[] = [];
     // let frontierVote
     let frontierLevel: number | undefined;
+    let timestampGte: bigint | undefined;
 
     return {
       ...workerDriver,
@@ -432,7 +470,8 @@ export default class WorkerLauncherService {
           body = data;
         } else {
           if (!arrEquals(body, data)) {
-            throw INGENERABLE_FLAG;
+            // Ingenerable
+            throw INTERRUPT_FLAG;
           }
         }
       },
@@ -442,6 +481,11 @@ export default class WorkerLauncherService {
         }
         outputs.push(output);
       },
+      requireTimestampGte: (timestamp: bigint) => {
+        if (timestampGte === undefined || timestamp < timestampGte) {
+          timestampGte = timestamp;
+        }
+      },
       emitCorrect: () => {
         if (emitCorrect === undefined) {
           emitCorrect = this.shouldEmitCorrect(verifier);
@@ -449,7 +493,10 @@ export default class WorkerLauncherService {
         return emitCorrect;
       },
 
-      notify: (verifier) => this.ctx.get(FetchService).fetch(verifier, {}),
+      notify: (verifier) =>
+        this.ctx.get(FetchService).fetch(verifier, {
+          abortSignal: workerDriver.done.signal,
+        }),
       request: (verifier) =>
         new Promise((reply) => {
           if (workerDriver.done.signal.aborted) {
@@ -457,10 +504,9 @@ export default class WorkerLauncherService {
           }
 
           // TODO: Call pause/resume when requesting?
-          const idx = refs.length;
-          const { release } = this.ctx.get(FetchService).fetch(
+          this.ctx.get(FetchService).fetch(
             verifier,
-            {},
+            { abortSignal: workerDriver.done.signal },
             (block) => {
               this.ctx.get(Logger).info('got req', { verifier, block });
 
@@ -468,20 +514,14 @@ export default class WorkerLauncherService {
               // If it's not, or maybe just in any case of not having a canonical input:
               //   Any block can be made canonical by re-writing, and not claiming the disputed input(s).
 
-              if (refs.length === idx) {
-                refs.push(block);
-                reply(block.body);
-              } else if (arrEquals(refs[idx].body, block.body)) {
-                // TODO: What to do here?
-                refs[idx] = block;
-              } else {
-                workerDriver.cancel(INTERRUPT_FLAG);
+              // TODO: Handle multiple resolutions, with blocks with the same and varying bodies.
+              // TODO: Handle case when we already have a ref fulfilling the verifier.
+              // TODO: Handle case when that ref gets replaced and no longer fulfills the verifier.
 
-                // TODO: Remove our entries from workerQueue, which will make them never resolve
-              }
+              refs.push(block);
+              reply(block.body);
             },
           );
-          workerDriver.onCleanup(release);
         }),
 
       fulfills: (block: BlockFact, outputIdx: number) =>
@@ -526,11 +566,34 @@ export default class WorkerLauncherService {
         }
       },
 
-      ingenerable: () => {
-        throw INGENERABLE_FLAG;
+      compareOrder(blockA: Hash, blockB: Hash) {
+        return todo();
       },
 
-      finalize: () => {
+      setBurdenOfProof(on: BurdenOfProof) {
+        return todo();
+      },
+      invalidate() {
+        throw new Error(`Cannot call invalidate() inside a generator!`);
+      },
+      offsetCanonicality(offset: bigint) {
+        return todo();
+      },
+
+      ingenerable: () => {
+        // Ingenerable
+        throw INTERRUPT_FLAG;
+      },
+
+      finalize: async () => {
+        if (timestampGte !== undefined) {
+          // TODO: There might be a better way to do this?
+          const wait = Number(timestampGte) - Date.now();
+          if (wait > 0) {
+            await new Promise((resolve) => setTimeout(resolve, wait));
+          }
+        }
+
         // If this property was never retrieved, we can assume the generator created a correct block.
         const isCorrect = emitCorrect ?? true;
 
@@ -541,6 +604,7 @@ export default class WorkerLauncherService {
           outputs,
           body,
           frontierLevel,
+          // timestampGte,
         };
 
         return this.createBlock(verifier, blockSpec, 0);
@@ -653,7 +717,7 @@ export default class WorkerLauncherService {
     // }
 
     if (this.ctx.config.dbgVerifyGenerations) {
-      this.enqueueVerification(block, verifier, 0);
+      // this.enqueueVerification(block, inputIdx, verifier, new Uint8Array(), 0);
     } else {
       this.ctx.get(LitigationService).litigateBlock(block, {
         ClaimAllValid: {},

@@ -8,8 +8,6 @@ import {
   frontierHash,
 } from './constants.ts';
 import Context from './Context.ts';
-import EpochContract from './EpochContract.ts';
-// import EpochInclusionProofService from '~/sbl/EpochInclusionProofService.ts';
 import WorkerLauncherService from './WorkerLauncherService.ts';
 import Logger from './Logger.ts';
 import {
@@ -40,7 +38,7 @@ import {
 } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import FreeMarketService from '~/sbl/FreeMarketService.ts';
-import { assert } from '~/sbl/util/functional.ts';
+import { assert, neverPromise } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
@@ -50,6 +48,7 @@ import {
 } from '~/sbl/collateralMessages.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
+import { MaybePromise } from '~/sbl/util/types.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -170,7 +169,7 @@ export default class BlockService {
       mutator(fact);
     }
 
-    this.blockMonitor.resolveAll(fact.hash.toPrimitive(), fact);
+    this.blockMonitor.resolveAll(fact.hash, fact);
 
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
@@ -235,10 +234,10 @@ export default class BlockService {
         }
       }
 
-      if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
-        const { hash } = EpochInclusionParams.decode(verifier.params);
-        this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
-      }
+      // if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
+      //   const { hash } = EpochInclusionParams.decode(verifier.params);
+      //   this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
+      // }
     });
 
     if (fact.inputs.length === 0) {
@@ -372,7 +371,9 @@ export default class BlockService {
 
     this.ctx.get(WorkerLauncherService).enqueueVerification(
       child,
+      childInputIdx,
       verifier,
+      new Uint8Array([]),
       0,
     );
 
@@ -857,6 +858,11 @@ export default class BlockService {
     // return BigInt(res) - BigInt(block.receivedTimestamp);
   }
 
+  public areVerifiersEqual(a: Verifier, b: Verifier) {
+    return Hash.equals(a.contract_hash, b.contract_hash) &&
+      arrEquals(a.params, b.params);
+  }
+
   public get(hash: Hash): BlockFact | undefined {
     // TODO: Instead of calling this, call into FactService
     // TODO: Incentivize network as well
@@ -938,5 +944,55 @@ export default class BlockService {
       }
     }
     return this.unclaimedOutputMonitor.waitFor(verifier, cancelSignal);
+  }
+
+  public doesBlockSatisfy(
+    block: BlockFact,
+    verifier: Verifier,
+    cancelSignal: AbortSignal,
+  ) {
+    if (cancelSignal.aborted) {
+      return neverPromise;
+    }
+
+    // TODO: Cache unused abort controllers
+    const controller = new AbortController();
+    const promises: { inputPromise: Promise<BlockFact>; outputIdx: number }[] =
+      [];
+    for (const input of block.inputs) {
+      const inputPromise = this.ctx.get(BlockService).waitForBlock(
+        input.block_hash,
+        controller.signal,
+      );
+      if (inputPromise instanceof Promise) {
+        cancelSignal.addEventListener('abort', () => controller.abort());
+        promises.push({ inputPromise, outputIdx: input.output_idx });
+      } else {
+        const test = inputPromise.outputs[input.output_idx].verifier;
+        if (this.areVerifiersEqual(test, verifier)) {
+          controller.abort();
+          return true;
+        }
+      }
+    }
+
+    let remaining = promises.length;
+    if (remaining === 0) {
+      return Promise.resolve(false);
+    }
+
+    return new Promise<boolean>((resolve) => {
+      promises.forEach(async ({ inputPromise, outputIdx }) => {
+        const test = (await inputPromise).outputs[outputIdx].verifier;
+        if (this.areVerifiersEqual(test, verifier)) {
+          controller.abort();
+          resolve(true);
+        } else {
+          if (--remaining === 0) {
+            resolve(false);
+          }
+        }
+      });
+    });
   }
 }

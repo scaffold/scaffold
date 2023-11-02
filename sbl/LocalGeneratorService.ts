@@ -6,9 +6,6 @@ import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 
-// export const ANY_BODY_FLAG = Symbol('LocalGenerator.AnyBody'); // TODO: Make this just void?
-export const INGENERABLE_FLAG = Symbol('LocalGenerator.Ingenerable');
-
 // export interface LocalGeneratorOpts {
 //   ctx: Context;
 //   driver: ExecutorDriver;

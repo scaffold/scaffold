@@ -8,7 +8,7 @@ import { arrConcat } from './util/buffer.ts';
 import { getOrCreate } from './util/map.ts';
 import { Block, EpochInclusionProof, InfoMessage } from './messages.ts';
 import KeyService from './KeyService.ts';
-import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
+// import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
 import { Fact, FactBase, FactType, InfoFact } from '~/sbl/FactMeta.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
@@ -192,10 +192,10 @@ export default class NodeService {
     const msg = InfoMessage.decode(base.message);
 
     if (msg.userdata) {
-      const { epochStartTime } = JSON.parse(msg.userdata);
-      if (epochStartTime) {
-        debugSetEpochBaseTime(epochStartTime);
-      }
+      // const { epochStartTime } = JSON.parse(msg.userdata);
+      // if (epochStartTime) {
+      //   debugSetEpochBaseTime(epochStartTime);
+      // }
     }
 
     this.ctx.get(PublicKeyService).addPublicKey(msg.public_key);

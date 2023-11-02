@@ -2,37 +2,30 @@ import Context from './Context.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
-import LocalGeneratorService, {
-  INGENERABLE_FLAG,
-  LocalGeneratorOpts,
-} from '~/sbl/LocalGeneratorService.ts';
 import { rootHash } from '~/sbl/constants.ts';
 import FactService from '~/sbl/FactService.ts';
+import {
+  ComputationDriver,
+  ComputationType,
+} from '~/sbl/WorkerLauncherService.ts';
 
 export default class RootContract {
-  constructor(private ctx: Context) {
-    ctx.get(LocalGeneratorService).addGenerator(
-      rootHash,
-      RootContract.generate,
-    );
-  }
+  constructor(private ctx: Context) {}
 
-  public verify(
-    params: Uint8Array,
-    block: BlockFact,
-    _invert: (hash: Hash) => MaybePromise<Uint8Array>,
-  ) {
-    return params.byteLength === HASH_SIZE &&
-      Hash.equals(Hash.digest(block.body), Hash.fromBytes(params));
-  }
-
-  public static generate({ ctx, params }: LocalGeneratorOpts) {
-    const hash = Hash.fromBytes(params);
-    const fact = ctx.get(FactService).get(hash);
-    if (fact) {
-      return fact.data;
-    } else {
-      return INGENERABLE_FLAG;
+  public compute(driver: ComputationDriver) {
+    const hash = Hash.fromBytes(driver.getParams());
+    if (driver.type === ComputationType.Generator) {
+      const fact = this.ctx.get(FactService).get(hash);
+      if (fact) {
+        driver.requireBody(fact.data);
+      } else {
+        driver.ingenerable();
+      }
+    } else if (driver.type === ComputationType.Contract) {
+      const valid = Hash.equals(Hash.digest(driver.getBody()), hash);
+      if (!valid) {
+        driver.invalidate();
+      }
     }
   }
 }

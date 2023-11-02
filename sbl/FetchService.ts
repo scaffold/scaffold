@@ -27,6 +27,7 @@ interface FetchOptions {
   blockComparator?: (a: BlockFact, b: BlockFact) => number;
   verify?: true;
   certaintyThreshold?: number;
+  abortSignal?: AbortSignal;
 }
 
 // TODO: Find canonical block
@@ -57,9 +58,14 @@ export default class FetchService {
       blockSelector,
       blockComparator,
       verify,
+      abortSignal,
     }: FetchOptions,
     cb?: (block: BlockFact) => void,
   ) {
+    if (abortSignal?.aborted) {
+      return;
+    }
+
     console.log(
       `Fetching block`,
       { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
@@ -149,33 +155,36 @@ export default class FetchService {
     }
 
     let released = false;
+    const release = () => {
+      if (released) {
+        throw new Error(`Cannot release multiple times`);
+      }
+      released = true;
+
+      if (internalIncentive !== undefined) {
+        this.ctx.get(WorkerLauncherService).enqueueGeneration(
+          verifier,
+          detail,
+          0,
+        );
+      }
+
+      if (externalIncentive !== undefined) {
+        this.ctx.get(IncentiveService).incentivize(
+          verifier,
+          -externalIncentive,
+        );
+      }
+
+      if (cb !== undefined) {
+        this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
+      }
+    };
+
+    abortSignal?.addEventListener('abort', release);
+
     return {
-      release: () => {
-        if (released) {
-          throw new Error(`Cannot release multiple times`);
-        }
-        released = true;
-
-        if (internalIncentive !== undefined) {
-          this.ctx.get(WorkerLauncherService).enqueueGeneration(
-            verifier,
-            detail,
-            0,
-          );
-        }
-
-        if (externalIncentive !== undefined) {
-          this.ctx.get(IncentiveService).incentivize(
-            verifier,
-            -externalIncentive,
-          );
-        }
-
-        if (cb !== undefined) {
-          this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
-        }
-      },
-      // getTotalInternalIncentive: () =>
+      release, // getTotalInternalIncentive: () =>
       //   BigInt(this.ctx.get(WorkQueue).getTotalIncentive(verifier)),
       // getTotalExternalIncentive: () => error('Not implemented'),
       // setInternalIncentive: (incentive: bigint) => {

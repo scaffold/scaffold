@@ -13,6 +13,8 @@ export const todo = () => {
   throw new Error(`Unimplemented!`);
 };
 
+export const neverPromise = new Promise<never>(() => {});
+
 export const match = <T, R>(
   val: T | undefined,
   ifTruthy: (val: T) => R,

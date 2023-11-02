@@ -22,6 +22,9 @@ import { MaybePromise } from '~/sbl/util/types.ts';
 import BlockService from './BlockService.ts';
 import Hash from '~/sbl/util/Hash.ts';
 
+export const WORKER_FAIL_FLAG = Symbol('WorkerDriver.Fail');
+export const WORKER_RETRY_FLAG = Symbol('WorkerDriver.Retry');
+
 export const enum Resource {
   WebWorkerCount = 'webWorkerCount',
   CpuUsage = 'cpuUsage',
@@ -192,15 +195,17 @@ export default class WorkerDriverService {
         this.resume();
       },
       (err) => {
-        if (err !== INTERRUPT_FLAG) {
+        if (err === WORKER_FAIL_FLAG) {
+          console.error(
+            `WorkerDriverService.run launch failed! Not restarting...`,
+          );
+        } else if (err === WORKER_RETRY_FLAG) {
+          console.error(`WorkerDriverService.run needs to restart...`);
+          // TODO: Restart here
+          // this.run(verifier, tags, getScore, launch);
+        } else {
           console.error(err);
         }
-
-        console.error(
-          `WorkerDriverService.run launch failed! Not restarting...`,
-        );
-        // TODO: Do we need to restart here?
-        // this.run(verifier, tags, getScore, launch);
 
         done.abort(err);
         this.allocated.webWorkerCount -= allocation.webWorkerCount;

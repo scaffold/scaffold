@@ -35,6 +35,7 @@ export interface BlockSpec {
   outputs?: BlockOutput[];
   frontierVote?: BlockSetFact;
   frontierLevel?: number;
+  // timestampGte?: bigint;
 }
 
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.

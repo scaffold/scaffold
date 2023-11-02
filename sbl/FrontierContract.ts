@@ -1,14 +1,11 @@
 import { frontierHash } from './constants.ts';
 import Context from './Context.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
-import LocalGeneratorService, {
-  ANY_BODY_FLAG,
-  INGENERABLE_FLAG,
-  LocalGeneratorOpts,
-} from './LocalGeneratorService.ts';
+import LocalGeneratorService from './LocalGeneratorService.ts';
 import { FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
+import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -43,31 +40,12 @@ import { MaybePromise } from '~/sbl/util/types.ts';
 // }
 
 export default class FrontierContract {
-  constructor(private ctx: Context) {
-    ctx.get(LocalGeneratorService).addGenerator(
-      frontierHash,
-      FrontierContract.generate,
-    );
-  }
+  constructor(private ctx: Context) {}
 
-  public verify(
-    params: Uint8Array,
-    block: BlockFact,
-    invert: (hash: Hash) => MaybePromise<Uint8Array>,
-  ) {
-    const { level } = FrontierTreeParams.decode(params);
-    // TODO: Verify
-    throw new Error(`TODO: Verify`);
-    return true;
-  }
-
-  public static async generate(
-    { ctx, driver, params, setFrontierLevel }: LocalGeneratorOpts,
-  ): Promise<typeof ANY_BODY_FLAG> {
+  public async compute(driver: ComputationDriver) {
     await driver.getInputDetail(0);
     await driver.getInputDetail(1);
-    const { level } = FrontierTreeParams.decode(params);
-    setFrontierLevel(level + 1);
-    return ANY_BODY_FLAG;
+    const { level } = FrontierTreeParams.decode(driver.getParams());
+    // driver.setFrontierLevel(level + 1);
   }
 }
