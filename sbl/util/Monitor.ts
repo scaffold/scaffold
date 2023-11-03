@@ -31,6 +31,9 @@ class Monitor<Value, Key> {
       } else {
         listeners.shift()!(value);
       }
+      return true;
+    } else {
+      return false;
     }
   }
 
@@ -74,7 +77,7 @@ export class ResolvingMonitor<Value, Key> extends Monitor<Value, Key> {
   }
 
   public resolveOne(key: Key, value: Value) {
-    super.resolveOne(key, value);
+    return super.resolveOne(key, value);
   }
   public resolveAll(key: Key, value: Value) {
     super.resolveAll(key, value);

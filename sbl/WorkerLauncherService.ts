@@ -39,6 +39,7 @@ import {
   CollateralContractDetail,
   CollateralContractParams,
 } from '~/sbl/collateralMessages.ts';
+import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 
 export const enum ComputationType {
   Contract,
@@ -586,7 +587,7 @@ export default class WorkerLauncherService {
               return input.block.outputs[input.outputIdx].detail;
             } else {
               verifierInputs.push(
-                await this.ctx.get(BlockService).waitForUnclaimedOutput(
+                await this.ctx.get(UnclaimedOutputService).claim(
                   verifier,
                   workerDriver.done.signal,
                 ),

@@ -26,8 +26,6 @@ Deno.test(
     assertNotEquals(aFrontierIdx, -1);
     assertEquals(a.outputClaims[aFrontierIdx].length, 0);
 
-    return;
-
     const b = ctx.get(BlockBuilder).publish({}, 0);
     const bFrontierIdx = findFrontierIdx(b);
     assertNotEquals(bFrontierIdx, -1);

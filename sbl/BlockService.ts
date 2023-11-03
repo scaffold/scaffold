@@ -49,6 +49,7 @@ import {
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
+import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -76,10 +77,6 @@ export default class BlockService {
   public satisfactionMonitor = new WatchingMonitor<BlockFact, Verifier>((v) =>
     Hash.digest(Verifier.encode(v))
   ); // Key is input verifier
-  public unclaimedOutputMonitor = new ResolvingMonitor<
-    { block: BlockFact; outputIdx: number; amount: bigint },
-    Verifier
-  >((v) => Hash.digest(Verifier.encode(v))); // Key is output verifier
 
   constructor(private ctx: Context) {}
 
@@ -104,6 +101,13 @@ export default class BlockService {
     }
 
     this.ctx.get(FactService).publish(fact);
+
+    console.log(
+      'create',
+      fact.outputs.find((output) =>
+        Hash.equals(output.verifier.contract_hash, frontierHash)
+      ),
+    );
 
     return fact;
   }
@@ -174,12 +178,20 @@ export default class BlockService {
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
     fact.inputs.forEach((input, idx) => {
+      const claims = this.getClaims(input);
+      claims.push({ block: fact, inputIdx: idx });
+
       const parent = this.get(input.block_hash);
       if (parent) {
         this.linkBlocks(parent, fact, input.output_idx, idx);
-      }
 
-      this.getClaims(input).push({ block: fact, inputIdx: idx });
+        if (claims.length === 0) {
+          this.ctx.get(UnclaimedOutputService).removeUnclaimed(
+            parent,
+            input.output_idx,
+          );
+        }
+      }
     });
 
     fact.outputs.forEach(({ verifier, amount, detail }, outputIdx) => {
@@ -192,11 +204,7 @@ export default class BlockService {
           this.linkBlocks(fact, block, outputIdx, inputIdx)
         );
       } else {
-        this.unclaimedOutputMonitor.resolveOne(verifier, {
-          block: fact,
-          outputIdx,
-          amount,
-        });
+        this.ctx.get(UnclaimedOutputService).addUnclaimed(fact, outputIdx);
       }
 
       this.ctx.get(WorkerLauncherService).enqueueGeneration(
@@ -935,15 +943,6 @@ export default class BlockService {
       return got;
     }
     return this.blockMonitor.waitFor(hash, cancelSignal);
-  }
-
-  public waitForUnclaimedOutput(verifier: Verifier, cancelSignal: AbortSignal) {
-    for (const { block, idx } of this.getBlocksByOutput(verifier)) {
-      if (block.outputClaims[idx].length === 0) {
-        return { block, outputIdx: idx, amount: block.outputs[idx].amount };
-      }
-    }
-    return this.unclaimedOutputMonitor.waitFor(verifier, cancelSignal);
   }
 
   public doesBlockSatisfy(
