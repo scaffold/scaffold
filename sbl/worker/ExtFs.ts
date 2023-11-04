@@ -96,7 +96,7 @@ export default class ExtFs implements Fs {
       // FILE METHODS
 
       read(offset: number, dstBufs: Uint8Array[]) {
-        return fs.client.dispatch('read', [inode, offset, dstBufs], []);
+        return fs.client.dispatch('read', [inode, dstBufs, offset], []);
       },
 
       write(offset: number, bufs: Uint8Array[]) {

@@ -149,6 +149,13 @@ export default () => {
 
       <button
         onClick={() => {
+          client.ctx.get(BlockBuilder).publish({});
+        }}
+      >
+        Publish empty block
+      </button>
+      <button
+        onClick={() => {
           client.ctx.get(BlockBuilder).publish({
             body: str2bin('abc'),
             satisfies: [{

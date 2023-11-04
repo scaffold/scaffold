@@ -31,11 +31,14 @@ export interface WorkerComm {
   ready(): undefined;
   exit(err?: any): undefined;
 
-  getContractHash(offset: number, dstBufs: Uint8Array[]): Promise<number>;
-  getParams(offset: number, dstBufs: Uint8Array[]): Promise<number>;
-  getHint(offset: number, dstBufs: Uint8Array[]): Promise<number>;
-  getBody(offset: number, dstBufs: Uint8Array[]): Promise<number>;
+  // Each of these returns the TOTAL size of the source buffer; irrespective of the dstBuf size or offset.
+  readContractHash(dstBuf: Uint8Array, offset: number): Promise<number>;
+  readParams(dstBuf: Uint8Array, offset: number): Promise<number>;
+  readHint(dstBuf: Uint8Array, offset: number): Promise<number>;
+  readBody(dstBuf: Uint8Array, offset: number): Promise<number>;
   emitCorrect(): Promise<number>;
+
+  requireBody(body: Uint8Array): undefined;
 
   // fsRoot(name: string, inode: number): undefined;
   // fsOpen(baseInode: number, key: Uint8Array, subInode: number): undefined;
@@ -64,8 +67,11 @@ export interface WorkerComm {
     amount: bigint,
     subInode: number,
   ): undefined;
-  read(inode: number, offset: number, dstBufs: Uint8Array[]): Promise<number>;
+
+  // TODO: Convert all the `dstBufs: Uint8Array[]` to `dstBuf: Uint8Array` if most of the time it's just one element.
+  // We could also remove the getSize() method and make read() method return the TOTAL size, not just the written size.
   getSize(inode: number): Promise<number>;
+  read(inode: number, dstBufs: Uint8Array[], offset: number): Promise<number>;
 
   debugLog(msg: Uint8Array): undefined;
   debugPtr(name: Uint8Array, mem: Uint8Array, ptr: number): undefined;

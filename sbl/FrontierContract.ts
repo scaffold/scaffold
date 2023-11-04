@@ -38,14 +38,9 @@ export default class FrontierContract {
   constructor(private ctx: Context) {}
 
   public async compute(driver: ComputationDriver) {
-    console.log('A');
     await driver.getInputDetail(0);
-    console.log('B');
     await driver.getInputDetail(1);
-    console.log('C');
     const { level } = FrontierTreeParams.decode(driver.getParams());
-    console.log('D');
     driver.setFrontierLevel(level + 1);
-    console.log('E');
   }
 }

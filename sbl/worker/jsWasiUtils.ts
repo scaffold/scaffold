@@ -25,6 +25,7 @@ import { jsWasiHash } from '~/sbl/constants.ts';
 import { JsWasiParams } from '~/sbl/messages.ts';
 import logger from './logger.ts';
 import { BaseImports } from '~/sbl/worker/execJob.ts';
+import { makeClientUtils } from '~/sbl/worker/clientUtils.ts';
 
 export const makeWasi = (
   client: WorkerChannelClient<WorkerComm>,
@@ -173,7 +174,7 @@ export const makeWasi = (
         val: memFs.createFileNode(),
         capMask: FS_CAPABILITY_FILE_READ,
       },
-  ).write(0, [job.params]);
+  ).write(0, [makeClientUtils(client).callReader('readParams')]);
 
   const createResultNode = () => {
     const inode = inodeSource.nextInode++;

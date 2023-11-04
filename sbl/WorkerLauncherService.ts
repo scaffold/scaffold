@@ -103,6 +103,10 @@ export default class WorkerLauncherService {
     hint: Uint8Array,
     extraIncentive: number,
   ) {
+    if (Math.random() < 2) {
+      return;
+    }
+
     const runHash = Hash.digestParts(Verifier.encode(verifier), block.body);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -645,7 +649,7 @@ export default class WorkerLauncherService {
         const blockSpec: BlockSpec = {
           refs,
           inputs: [...verifierInputs, ...otherInputs],
-          satisfies: inputsAreFixed ? undefined : [verifier],
+          satisfies: verifierInputs.length ? undefined : [verifier],
           outputs,
           body,
           frontierLevel,

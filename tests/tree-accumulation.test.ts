@@ -24,11 +24,13 @@ Deno.test(
     const a = ctx.get(BlockService).get(aHash)!;
     const aFrontierIdx = findFrontierIdx(a);
     assertNotEquals(aFrontierIdx, -1);
+    assertEquals(a.outputs[aFrontierIdx].verifier.params, new Uint8Array([0]));
     assertEquals(a.outputClaims[aFrontierIdx].length, 0);
 
     const b = ctx.get(BlockBuilder).publish({}, 0);
     const bFrontierIdx = findFrontierIdx(b);
     assertNotEquals(bFrontierIdx, -1);
+    assertEquals(b.outputs[bFrontierIdx].verifier.params, new Uint8Array([0]));
 
     // TODO: We shouldn't need this
     await new Promise<void>((resolve) =>

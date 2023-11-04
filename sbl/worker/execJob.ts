@@ -12,12 +12,14 @@ import { JsWasiParams } from '~/sbl/messages.ts';
 
 export interface BaseImports extends WebAssembly.Imports {
   scaffold: {
-    writeContractHash(dst: number): void;
-    getParamSize(): number;
-    writeParams(dst: number): void;
+    readContractHash(dstPtr: number, dstSize: number, offset: number): number;
+    readParams(dstPtr: number, dstSize: number, offset: number): number;
+    readHint(dstPtr: number, dstSize: number, offset: number): number;
+    readBody(dstPtr: number, dstSize: number, offset: number): number;
+
     emitCorrect(): number;
 
-    setBody(ptr: number, size: number): void;
+    requireBody(ptr: number, size: number): void;
 
     exit(): void;
   };
@@ -78,15 +80,33 @@ export default async (
     },
 
     scaffold: {
-      writeContractHash: (dst: number) =>
-        new Uint8Array(memory!.buffer, dst).set(job.contractHash),
-      getParamSize: () => job.params.byteLength,
-      writeParams: (dst: number) =>
-        new Uint8Array(memory!.buffer, dst).set(job.params),
-      emitCorrect: () => job.emitCorrect ? 1 : 0,
+      readContractHash: (dstPtr, dstSize, offset) =>
+        client.dispatch('readContractHash', [
+          new Uint8Array(memory!.buffer, dstPtr, dstSize),
+          offset,
+        ], []),
+      readParams: (dstPtr, dstSize, offset) =>
+        client.dispatch('readParams', [
+          new Uint8Array(memory!.buffer, dstPtr, dstSize),
+          offset,
+        ], []),
+      readHint: (dstPtr, dstSize, offset) =>
+        client.dispatch('readHint', [
+          new Uint8Array(memory!.buffer, dstPtr, dstSize),
+          offset,
+        ], []),
+      readBody: (dstPtr, dstSize, offset) =>
+        client.dispatch('readBody', [
+          new Uint8Array(memory!.buffer, dstPtr, dstSize),
+          offset,
+        ], []),
 
-      setBody: (ptr, size) =>
-        clientUtils.returnResult(new Uint8Array(memory!.buffer, ptr, size)),
+      emitCorrect: () => client.dispatch('emitCorrect', [], []),
+
+      requireBody: (ptr, size) =>
+        client.inform('requireBody', [
+          new Uint8Array(memory!.buffer, ptr, size),
+        ], []),
 
       exit: () => error(`Unimplemented`),
     },

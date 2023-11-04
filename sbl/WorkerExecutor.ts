@@ -28,7 +28,11 @@ interface OpenFile {
   // exposedData?: Promise<Uint8Array>;
 }
 
-const writeData = (offset: number, dstBufs: Uint8Array[], src: Uint8Array) => {
+const writeBuf = (dstBuf: Uint8Array, src: Uint8Array, offset: number) => {
+  dstBuf.set(src.subarray(offset, offset + dstBuf.byteLength));
+  return src.byteLength;
+};
+const writeIovs = (dstBufs: Uint8Array[], src: Uint8Array, offset: number) => {
   let it = offset;
   for (const buf of dstBufs) {
     const limit = Math.min(it + buf.length, src.length);
@@ -188,29 +192,35 @@ export default class WorkerExecutor {
         exitResolver();
       },
 
+      // Each of these returns the TOTAL size of the source buffer; irrespective of the dstBuf size or offset.
+
       // We need async here to catch errors
       // deno-lint-ignore require-await
-      async getContractHash(
+      async readContractHash(
+        dstBuf: Uint8Array,
         offset: number,
-        dstBufs: Uint8Array[],
       ): Promise<number> {
-        return writeData(offset, dstBufs, driver.getContractHash().toBytes());
+        return writeBuf(dstBuf, driver.getContractHash().toBytes(), offset);
       },
       // deno-lint-ignore require-await
-      async getParams(offset: number, dstBufs: Uint8Array[]): Promise<number> {
-        return writeData(offset, dstBufs, driver.getParams());
+      async readParams(dstBuf: Uint8Array, offset: number): Promise<number> {
+        return writeBuf(dstBuf, driver.getParams(), offset);
       },
       // deno-lint-ignore require-await
-      async getHint(offset: number, dstBufs: Uint8Array[]): Promise<number> {
-        return writeData(offset, dstBufs, driver.getHint());
+      async readHint(dstBuf: Uint8Array, offset: number): Promise<number> {
+        return writeBuf(dstBuf, driver.getHint(), offset);
       },
       // deno-lint-ignore require-await
-      async getBody(offset: number, dstBufs: Uint8Array[]): Promise<number> {
-        return writeData(offset, dstBufs, driver.getBody());
+      async readBody(dstBuf: Uint8Array, offset: number): Promise<number> {
+        return writeBuf(dstBuf, driver.getBody(), offset);
       },
       // deno-lint-ignore require-await
       async emitCorrect(): Promise<number> {
         return driver.emitCorrect() ? 1 : 0;
+      },
+
+      requireBody(body: Uint8Array): undefined {
+        driver.requireBody(body);
       },
 
       init(type: string, inode: number): undefined {
@@ -223,7 +233,6 @@ export default class WorkerExecutor {
             params: hash.toBytes(),
           }),
         });
-        return undefined;
       },
 
       open(
@@ -243,20 +252,6 @@ export default class WorkerExecutor {
             return { contract_hash: contractHash, params };
           }),
         });
-
-        return undefined;
-      },
-
-      async read(
-        inode: number,
-        offset: number,
-        dstBufs: Uint8Array[],
-      ): Promise<number> {
-        // The ONLY awaits in this function should be for getBody, since it handles cancels
-        driver.pauseTimer();
-        const body = await getBody(inodes.get(inode)!);
-        driver.resumeTimer();
-        return writeData(offset, dstBufs, body);
       },
 
       async getSize(inode: number): Promise<number> {
@@ -265,6 +260,18 @@ export default class WorkerExecutor {
         const body = await getBody(inodes.get(inode)!);
         driver.resumeTimer();
         return body.byteLength;
+      },
+
+      async read(
+        inode: number,
+        dstBufs: Uint8Array[],
+        offset: number,
+      ): Promise<number> {
+        // The ONLY awaits in this function should be for getBody, since it handles cancels
+        driver.pauseTimer();
+        const body = await getBody(inodes.get(inode)!);
+        driver.resumeTimer();
+        return writeIovs(dstBufs, body, offset);
       },
 
       outputChunk(key: string, offset: number, data: Uint8Array): undefined {

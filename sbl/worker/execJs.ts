@@ -4,9 +4,13 @@ import { JobMessage, WorkerComm } from './workerTypes.ts';
 
 export default async (
   client: WorkerChannelClient<WorkerComm>,
-  { code, contractHash, params, emitCorrect }: JobMessage,
+  { code }: JobMessage,
 ) => {
   const clientUtils = makeClientUtils(client);
+
+  const contractHash = clientUtils.callReader('readContractHash');
+  const params = clientUtils.callReader('readParams');
+  const emitCorrect = !!client.dispatch('emitCorrect', [], []);
 
   // const code = handler(
   //   Hash.fromBytes(codeVerifier.contractHash),

@@ -38,6 +38,8 @@ export interface BlockSpec {
   // timestampGte?: bigint;
 }
 
+const enableBlockMerging = false;
+
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
 export default class BlockBuilder {
   private selfAccountVerifier: Verifier;
@@ -218,6 +220,10 @@ export default class BlockBuilder {
   public publish(spec: BlockSpec, timeout: 0): BlockFact;
   public publish(spec: BlockSpec, timeout?: number): MaybePromise<BlockFact>;
   public publish(spec: BlockSpec, timeout?: number) {
+    if (!enableBlockMerging) {
+      return this.ctx.get(BlockService).create(this.buildBlock(spec));
+    }
+
     timeout ??= defaultTimeout;
     if (timeout < 0) {
       throw new Error(`Block publish timeout cannot be negative!`);
