@@ -35,17 +35,16 @@ import ClockService from '~/sbl/ClockService.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import { INTERRUPT_FLAG } from '~/sbl/worker/WorkerChannel.ts';
 import FetchService from '~/sbl/FetchService.ts';
-import {
-  CollateralContractDetail,
-  CollateralContractParams,
-} from '~/sbl/collateralMessages.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
+import KeyService from '~/sbl/KeyService.ts';
+import { true_generator_0_js_hash } from '~/ts/moduleHashes.ts';
 
 export const enum ComputationType {
   Contract,
   Generator,
 }
 export const enum BurdenOfProof {
+  Fair,
   Invalidation, // Used for most things; one hint proving invalidation makes the contract invalid
   Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid
 }
@@ -60,6 +59,7 @@ export interface ComputationDriver extends WorkerDriver {
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
   requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: bigint): void;
+  requireSignature(publicKey: Uint8Array): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
   notify(contractHash: Hash, params: Uint8Array): void;
@@ -75,13 +75,11 @@ export interface ComputationDriver extends WorkerDriver {
   compareOrder(blockA: Hash, blockB: Hash): number; // Clamps the frontier vote
 
   setBurdenOfProof(on: BurdenOfProof): void;
+  validate(): void;
   invalidate(): void;
   offsetCanonicality(offset: bigint): void;
 
   ingenerable(): void; // TODO: Maybe just throw an exception instead?
-
-  // Do we need these?
-  // sign(): void;
 }
 
 export default class WorkerLauncherService {
@@ -273,10 +271,19 @@ export default class WorkerLauncherService {
     let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
 
-    const fail = () => {
-      const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
-      this.ctx.get(LitigationService).litigateBlock(block, claim);
-      block.passedVerification = false;
+    const litigate = (valid: boolean) => {
+      if (valid) {
+        if (burdenOfProof !== BurdenOfProof.Invalidation) {
+          throw INTERRUPT_FLAG;
+        }
+      } else {
+        if (burdenOfProof !== BurdenOfProof.Validation) {
+          throw INTERRUPT_FLAG;
+        }
+      }
+
+      this.ctx.get(LitigationService)
+        .litigateInput(block, inputIdx, hint, valid);
       workerDriver.done.abort();
       throw INTERRUPT_FLAG;
     };
@@ -297,7 +304,7 @@ export default class WorkerLauncherService {
           return;
         }
         if (!arrEquals(block.body, data)) {
-          fail();
+          litigate(false);
         }
       },
       requireOutput: (output: BlockOutput) => {
@@ -310,11 +317,16 @@ export default class WorkerLauncherService {
             return;
           }
         }
-        fail();
+        litigate(false);
       },
       requireTimestampGte: (timestamp: bigint) => {
         if (block.timestamp < timestamp) {
-          fail();
+          litigate(false);
+        }
+      },
+      requireSignature: (publicKey) => {
+        if (!this.ctx.get(FactService).verify(block, publicKey)) {
+          litigate(false);
         }
       },
       emitCorrect: () => {
@@ -344,7 +356,7 @@ export default class WorkerLauncherService {
             return ref.body;
           }
         }
-        return fail();
+        return litigate(false);
       },
 
       fulfills: (_block: BlockFact, _outputIdx: number) => {
@@ -393,7 +405,7 @@ export default class WorkerLauncherService {
           }
         }
 
-        return fail();
+        return litigate(false);
       },
 
       setFrontierLevel(level) {
@@ -404,13 +416,13 @@ export default class WorkerLauncherService {
           console.error(
             `Invalid number of frontier outputs ${frontierOutputs.length}!`,
           );
-          fail();
+          litigate(false);
         }
         const params = FrontierTreeParams.decode(
           frontierOutputs[0].verifier.params,
         );
         if (params.level !== level) {
-          fail();
+          litigate(false);
         }
       },
 
@@ -419,10 +431,23 @@ export default class WorkerLauncherService {
       },
 
       setBurdenOfProof(on: BurdenOfProof) {
-        return todo();
+        burdenOfProof = on;
+      },
+      validate() {
+        if (burdenOfProof === BurdenOfProof.Invalidation) {
+          throw new Error(
+            `Cannot call validate() when the burden of proof is on invalidation!`,
+          );
+        }
+        litigate(true);
       },
       invalidate() {
-        return fail();
+        if (burdenOfProof === BurdenOfProof.Validation) {
+          throw new Error(
+            `Cannot call invalidate() when the burden of proof is on validation!`,
+          );
+        }
+        litigate(false);
       },
       offsetCanonicality(offset: bigint) {
         return todo();
@@ -448,12 +473,12 @@ export default class WorkerLauncherService {
                 verifier,
               ) && ++count > requireInputCount
             ) {
-              fail();
+              litigate(false);
             }
           }
 
           if (count !== requireInputCount) {
-            fail();
+            litigate(false);
           }
         }
 
@@ -466,8 +491,6 @@ export default class WorkerLauncherService {
     verifier: Verifier,
     workerDriver: WorkerDriver,
   ): ComputationDriver & { finalize(): MaybePromise<void> } {
-    let burdenOfProof = BurdenOfProof.Invalidation;
-
     let emitCorrect: boolean | undefined;
 
     let body: Uint8Array | undefined;
@@ -516,6 +539,16 @@ export default class WorkerLauncherService {
       requireTimestampGte: (timestamp: bigint) => {
         if (timestampGte === undefined || timestamp < timestampGte) {
           timestampGte = timestamp;
+        }
+      },
+      requireSignature: (publicKey) => {
+        if (
+          !arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey())
+        ) {
+          console.warn(
+            `Ingenerable: Cannot sign using another peer's public key`,
+          );
+          throw INTERRUPT_FLAG;
         }
       },
       emitCorrect: () => {
@@ -622,6 +655,9 @@ export default class WorkerLauncherService {
       setBurdenOfProof(on: BurdenOfProof) {
         return todo();
       },
+      validate() {
+        throw new Error(`Cannot call validate() inside a generator!`);
+      },
       invalidate() {
         throw new Error(`Cannot call invalidate() inside a generator!`);
       },
@@ -659,30 +695,6 @@ export default class WorkerLauncherService {
         return this.createBlock(verifier, blockSpec, 0);
       },
     };
-
-    // getContractHash(): Hash;
-    // getParams(): Uint8Array;
-    // getBody(): Uint8Array; // Only valid if this is a contract
-    // requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
-    // requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody
-    // emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
-
-    // request(verifier: Verifier): Promise<Uint8Array>; // TODO: fetch?
-    // notify(verifier: Verifier): void;
-    // fulfills(block: BlockFact, outputIdx: number): void;
-
-    // getInputCount(): number; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
-    // getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
-
-    // compareOrder(blockA: Hash, blockB: Hash): number; // Clamps the frontier vote
-
-    // setBurdenOfProof(on: BurdenOfProof): void;
-    // invalidate(): void;
-    // offsetCanonicality(offset: bigint): void;
-
-    // // Used by the driver service
-    // getBlockSpec(): BlockSpec;
-    // finalize(): MaybePromise<void>;
   }
 
   private areOutputsEqual(a: BlockOutput, b: BlockOutput) {
@@ -766,12 +778,20 @@ export default class WorkerLauncherService {
     // }
 
     if (this.ctx.config.dbgVerifyGenerations) {
-      // this.enqueueVerification(block, inputIdx, verifier, new Uint8Array(), 0);
-    } else {
-      this.ctx.get(LitigationService).litigateBlock(block, {
-        ClaimAllValid: {},
-      });
+      for (let i = 0; i < block.inputs.length; i++) {
+        const input = block.inputs[i];
+        const inputBlock = this.ctx.get(BlockService).get(input.block_hash);
+        if (inputBlock !== undefined) {
+          const verifier = inputBlock.outputs[input.output_idx].verifier;
+          this.ctx.get(WorkerLauncherService)
+            .enqueueVerification(block, i, verifier, new Uint8Array(), 0);
+        }
+      }
     }
+
+    this.ctx.get(LitigationService).litigateBlock(block, {
+      ClaimAllValid: {},
+    });
   }
 
   private litigateBlockVerifier(

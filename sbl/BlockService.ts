@@ -3,9 +3,12 @@ import BlockSetService from '~/sbl/BlockSetService.ts';
 import {
   accountHash,
   collateralHash,
+  dataHash,
   epochHash,
   epochInclusionHash,
   frontierHash,
+  rootHash,
+  timeHash,
 } from './constants.ts';
 import Context from './Context.ts';
 import WorkerLauncherService from './WorkerLauncherService.ts';
@@ -37,7 +40,7 @@ import {
   FactType,
 } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
-import FreeMarketService from '~/sbl/FreeMarketService.ts';
+import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
 import { assert, neverPromise } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
@@ -153,6 +156,9 @@ export default class BlockService {
 
       canonicality: 0,
       collateral: 0,
+
+      validatedInputs: 0n,
+      invalidatedInputs: 0n,
 
       epochInclusionProofs: new Map(),
 
@@ -420,7 +426,7 @@ export default class BlockService {
         if (block !== undefined) {
           const { amount, verifier } = block.outputs[output_idx];
           inputSum += amount;
-          if (this.ctx.get(FreeMarketService).isFreeMarket(verifier)) {
+          if (this.ctx.get(ContractClassifierService).isFreeMarket(verifier)) {
             inputFreeMarketSum += amount;
           }
           return true;
@@ -445,7 +451,7 @@ export default class BlockService {
 
       const outputCharitySum = block.outputs.reduce(
         (acc, { amount, verifier }) =>
-          this.ctx.get(FreeMarketService).isCharity(verifier)
+          this.ctx.get(ContractClassifierService).isCharity(verifier)
             ? acc + amount
             : acc,
         0n,

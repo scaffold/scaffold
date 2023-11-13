@@ -10,7 +10,7 @@ import {
 } from '~/sbl/FactMeta.ts';
 import KeyService from './KeyService.ts';
 import { AccountContractParams, BlockOutput } from './messages.ts';
-import Hash, { EMPTY_HASH, HashPrimitive } from './util/Hash.ts';
+import Hash, { EMPTY_HASH, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
@@ -33,6 +33,42 @@ export default class LitigationService {
   private resolutionSchedules = new Map<HashPrimitive, number>();
 
   constructor(private ctx: Context) {}
+
+  public litigateInput(
+    fact: BlockFact,
+    inputIdx: number,
+    hint: Uint8Array,
+    valid: boolean,
+  ) {
+    const mask = 1n << BigInt(inputIdx);
+    if (valid) {
+      if (fact.validatedInputs & mask) {
+        return;
+      }
+      fact.validatedInputs |= mask;
+    } else {
+      if (fact.invalidatedInputs & mask) {
+        return;
+      }
+      fact.invalidatedInputs |= mask;
+    }
+
+    this.processInputValidity(fact);
+  }
+
+  public processInputValidity(fact: BlockFact) {
+    if (fact.validatedInputs & fact.invalidatedInputs) {
+      throw new Error(`An input is both validated and invalidated!`);
+    }
+
+    if (fact.validatedInputs === (1n << BigInt(fact.inputs.length)) - 1n) {
+      const claim = { ClaimAllValid: {} };
+      this.litigateBlock(fact, claim);
+    } else if (fact.invalidatedInputs !== 0n) {
+      // const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
+      // this.litigateBlock(fact, claim);
+    }
+  }
 
   public litigateBlock(
     fact: BlockFact,
@@ -189,16 +225,17 @@ export default class LitigationService {
   }
 
   private publishResolution(fact: BlockFact | BlockSetFact) {
-    const frontierVote = this.ctx.get(FrontierService)
-      .getBlockVote(fact.collateralizations);
-    if (frontierVote === undefined) {
-      console.warn(
-        `Can't create a litigation resolution because we don't have a frontier!`,
-      );
-      return;
-    }
+    // const frontierVote = this.ctx.get(FrontierService)
+    //   .getBlockVote(fact.collateralizations);
+    // if (frontierVote === undefined) {
+    //   console.warn(
+    //     `Can't create a litigation resolution because we don't have a frontier!`,
+    //   );
+    //   return;
+    // }
+    const frontierVote = undefined;
 
-    this.ctx.get(BlockService).sort(fact.collateralizations, frontierVote);
+    // this.ctx.get(BlockService).sort(fact.collateralizations, frontierVote);
 
     interface Stack {
       totalPros: bigint;

@@ -1,8 +1,6 @@
-import { dataHash } from './constants.ts';
 import Context from './Context.ts';
 import FactService from '~/sbl/FactService.ts';
-import LocalGeneratorService from './LocalGeneratorService.ts';
-import { Block, DataContractParams } from './messages.ts';
+import { DataContractParams } from './messages.ts';
 import NodeService from './NodeService.ts';
 import Hash, { HASH_SIZE } from './util/Hash.ts';
 import {
@@ -54,6 +52,8 @@ export default class DataContract {
       if (!valid) {
         driver.invalidate();
       }
+    } else {
+      throw new Error(`Invalid driver type!`);
     }
   }
 }

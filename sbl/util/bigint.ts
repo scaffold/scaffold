@@ -1,5 +1,18 @@
 import { assert } from '~/sbl/util/functional.ts';
 
+export const countTrailingZeros = (num: bigint) => {
+  if (num <= 0n) {
+    throw new Error(`Must be positive: ${num}!`);
+  }
+  // TODO: Optimize
+  const str = num.toString(2);
+  return str.length - 1 - str.lastIndexOf('1');
+};
+
+assert(countTrailingZeros(5n) === 0);
+assert(countTrailingZeros(6n) === 1);
+assert(countTrailingZeros(8n) === 3);
+
 export const bin2bigint = (arr: Uint8Array) => {
   let res = 0n;
   for (let i = 0; i < arr.byteLength; i++) {

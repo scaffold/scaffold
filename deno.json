@@ -51,7 +51,7 @@
     "simplex-noise": "https://raw.githubusercontent.com/jwagner/simplex-noise.js/3.0.1/simplex-noise.ts",
     "multiformats/": "https://cdn.skypack.dev/multiformats@10.0.2/",
     "dnt": "https://deno.land/x/dnt@0.38.1/mod.ts",
-    "std-latest/": "https://deno.land/std@0.205.0/",
+    "std-latest/": "https://deno.land/std@0.206.0/",
     "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   }
 }

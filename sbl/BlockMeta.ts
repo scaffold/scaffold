@@ -7,6 +7,7 @@ import {
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { Node } from './NodeService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
+import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 
 export const enum BlockFlag {
   Null = 0,
@@ -54,7 +55,12 @@ export interface BlockMeta {
 
   // collateralChain: BlockFact[];
   // postedCollateral: BlockFact[];
-  passedVerification?: boolean;
+  validatedInputs: bigint; // All inputs claims that have called validate() (which covers ALL hints)
+  invalidatedInputs: bigint; // All inputs claims that have called invalidate() (which covers ALL hints)
+  // verificationResult?: CollateralContractDetail['claim'];
+
+  // How are hints stored?
+  //
 
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
