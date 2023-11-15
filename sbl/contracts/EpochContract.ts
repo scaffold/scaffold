@@ -1,10 +1,10 @@
-import Context from './Context.ts';
-import LocalGeneratorService from './LocalGeneratorService.ts';
+import Context from '../Context.ts';
+import LocalGeneratorService from '../LocalGeneratorService.ts';
 import { epochHash, timeHash } from '~/sbl/constants.ts';
-import { EpochBody, EpochParams, TimeParams } from './messages.ts';
-import Hash, { HASH_SIZE, ZERO_HASH } from './util/Hash.ts';
-import { getOrCreate } from './util/map.ts';
-import { MaybePromise } from './util/types.ts';
+import { EpochBody, EpochParams, TimeParams } from '../messages.ts';
+import Hash, { HASH_SIZE, ZERO_HASH } from '../util/Hash.ts';
+import { getOrCreate } from '../util/map.ts';
+import { MaybePromise } from '../util/types.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 
 // const epochIv = Hash.fromHex(

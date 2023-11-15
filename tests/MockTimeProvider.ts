@@ -65,7 +65,7 @@ export default class MockTimeProvider implements TimeProvider {
   }
 
   public now() {
-    return this.curTimestamp;
+    return Math.round(this.curTimestamp);
   }
   public setImmediate(cb: () => void) {
     this.enqueue(cb, 0);

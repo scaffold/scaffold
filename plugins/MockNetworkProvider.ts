@@ -69,7 +69,7 @@ export default class MockNetworkProvider implements NetworkProvider {
           onRecv: (handler: (data: Uint8Array) => void) => {
             recvHandler = handler;
           },
-          close: () => {
+          shutdown: () => {
             onClose.forEach((cb) => cb());
             // console.log('CLOSE', timeouts);
             timerSet.clearAll();
@@ -114,7 +114,7 @@ export default class MockNetworkProvider implements NetworkProvider {
             onRecv: (handler: (data: Uint8Array) => void) => {
               send = server.connect(handler);
             },
-            close: () => {
+            shutdown: () => {
               onClose.forEach((cb) => cb());
               timerSet.clearAll();
             },

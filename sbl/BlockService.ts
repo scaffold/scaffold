@@ -105,12 +105,12 @@ export default class BlockService {
 
     this.ctx.get(FactService).publish(fact);
 
-    console.log(
-      'create',
-      fact.outputs.find((output) =>
-        Hash.equals(output.verifier.contract_hash, frontierHash)
-      ),
-    );
+    // console.log(
+    //   'create',
+    //   fact.outputs.find((output) =>
+    //     Hash.equals(output.verifier.contract_hash, frontierHash)
+    //   ),
+    // );
 
     return fact;
   }
@@ -949,6 +949,17 @@ export default class BlockService {
       return got;
     }
     return this.blockMonitor.waitFor(hash, cancelSignal);
+  }
+
+  public async waitForVerification(block: BlockFact) {
+    while (
+      (block.validatedInputs | block.invalidatedInputs) !==
+        (1n << BigInt(block.inputs.length)) - 1n
+    ) {
+      await new Promise<void>((resolve) =>
+        this.ctx.config.timeProvider.setTimeout(resolve, 100)
+      );
+    }
   }
 
   public doesBlockSatisfy(

@@ -6,15 +6,15 @@ import {
   timeHash,
 } from './constants.ts';
 import Context from './Context.ts';
-import DataContract from './DataContract.ts';
-import RootContract from './RootContract.ts';
-import TimeContract from '~/sbl/TimeContract.ts';
+import DataContract from './contracts/DataContract.ts';
+import RootContract from './contracts/RootContract.ts';
+import TimeContract from '~/sbl/contracts/TimeContract.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
-import FrontierContract from './FrontierContract.ts';
+import FrontierContract from './contracts/FrontierContract.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
-import AccountContract from '~/sbl/AccountContract.ts';
+import AccountContract from '~/sbl/contracts/AccountContract.ts';
 
 interface SpecialContract {
   compute(driver: ComputationDriver): MaybePromise<void>;

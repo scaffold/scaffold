@@ -6,9 +6,11 @@ import Hash from '~/sbl/util/Hash.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import NetworkProvider from '~/sbl/NetworkProvider.ts';
 import ExecutionProvider from '~/sbl/ExecutionProvider.ts';
-import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
 
 // TODO: Reorder, rename, reorganize config
+
+export interface TestParameters {
+}
 
 export interface GraphParameters {
   minimumCollateral(work: bigint, time: number): bigint;
@@ -105,6 +107,7 @@ interface Config {
   workScoreThreshold: number; // TODO: Units?
 
   graphParameters: GraphParameters;
+  testParameters: TestParameters;
 
   dbgVerifyGenerations: boolean;
 
@@ -143,6 +146,7 @@ export const defaultConfig = {
   graphParameters: {
     minimumCollateral: (work, _time) => work * 1000n,
   },
+  testParameters: {},
   dbgVerifyGenerations: false,
   enableValidation: true,
 } satisfies Partial<Config>;

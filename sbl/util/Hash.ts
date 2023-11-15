@@ -8,6 +8,8 @@ import { arrConcat, fromNumber } from './buffer.ts';
 import { str2bin } from '~/sbl/pathUtils.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 
+// TODO: Try blake?
+
 const hasher = {
   // 'sha2': (data: Uint8Array) => {
   //   return new Uint8Array(crypto.subtle.digestSync('SHA-256', data));

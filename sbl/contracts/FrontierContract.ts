@@ -1,5 +1,5 @@
-import Context from './Context.ts';
-import { FrontierTreeParams } from './messages.ts';
+import Context from '../Context.ts';
+import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 
 // export interface FrontierMeta {
@@ -41,6 +41,6 @@ export default class FrontierContract {
     await driver.getInputDetail(0);
     await driver.getInputDetail(1);
     const { level } = FrontierTreeParams.decode(driver.getParams());
-    driver.setFrontierLevel(level + 1);
+    driver.requireFrontierLevel(level + 1);
   }
 }

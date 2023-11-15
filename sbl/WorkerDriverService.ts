@@ -10,17 +10,8 @@ Fixed worker pool
 */
 
 import Context from './Context.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
-import BlockBuilder, { BlockSpec, InputSpec } from '~/sbl/BlockBuilder.ts';
-import FetchService from './FetchService.ts';
-import Logger from './Logger.ts';
 import { BlockOutput, Verifier } from './messages.ts';
-import { arrEquals } from './util/buffer.ts';
 import { mapEntries } from './util/functional.ts';
-import { INTERRUPT_FLAG } from './worker/WorkerChannel.ts';
-import { MaybePromise } from '~/sbl/util/types.ts';
-import BlockService from './BlockService.ts';
-import Hash from '~/sbl/util/Hash.ts';
 
 export const WORKER_FAIL_FLAG = Symbol('WorkerDriver.Fail');
 export const WORKER_RETRY_FLAG = Symbol('WorkerDriver.Retry');

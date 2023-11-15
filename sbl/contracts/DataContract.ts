@@ -1,9 +1,10 @@
-import Context from './Context.ts';
+import Context from '../Context.ts';
 import FactService from '~/sbl/FactService.ts';
-import { DataContractParams } from './messages.ts';
-import NodeService from './NodeService.ts';
-import Hash, { HASH_SIZE } from './util/Hash.ts';
+import { DataContractParams } from '../messages.ts';
+import NodeService from '../NodeService.ts';
+import Hash, { HASH_SIZE } from '../util/Hash.ts';
 import {
+  BurdenOfProof,
   ComputationDriver,
   ComputationType,
 } from '~/sbl/WorkerLauncherService.ts';
@@ -19,6 +20,8 @@ export default class DataContract {
   constructor(private ctx: Context) {}
 
   public compute(driver: ComputationDriver) {
+    driver.setBurdenOfProof(BurdenOfProof.Validation);
+
     const { hash, secret } = DataContractParams.decode(driver.getParams());
     if (driver.type === ComputationType.Generator) {
       const fact = this.ctx.get(FactService).get(hash);
@@ -49,9 +52,7 @@ export default class DataContract {
           ),
           Hash.fromBytes(body),
         );
-      if (!valid) {
-        driver.invalidate();
-      }
+      driver.setResult(valid);
     } else {
       throw new Error(`Invalid driver type!`);
     }

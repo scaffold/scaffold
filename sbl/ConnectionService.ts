@@ -166,6 +166,17 @@ export default class ConnectionService {
 
     let conn: Connection | undefined;
 
+    const doShutdown = () => {
+      if (conn) {
+        const localConn = conn;
+        conn = undefined;
+
+        provider.shutdown();
+        this.ctx.get(NodeService)
+          .removeConnection(localConn.node, protocol, localConn);
+      }
+    };
+
     const onVerifyNodeHash = (hash: Hash, publicKey: Uint8Array) => {
       console.log(
         `Node hash verified via ${protocol}; connection successfully established.`,
@@ -177,8 +188,7 @@ export default class ConnectionService {
           console.error(
             `Caught error sending packet; closing connection: ${err}`,
           );
-          provider.close();
-          conn = undefined;
+          doShutdown();
         }
       };
       conn = {
@@ -292,11 +302,8 @@ export default class ConnectionService {
       }
     });
 
-    provider.onClose(() => {
-      if (conn) {
-        this.ctx.get(NodeService).removeConnection(conn.node, protocol, conn);
-      }
-    });
+    provider.onClose(doShutdown);
+    this.ctx.onDestruct(doShutdown);
   }
 
   // public async composePacket(message: Packet['message']) {

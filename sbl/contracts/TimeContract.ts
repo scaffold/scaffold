@@ -1,8 +1,8 @@
-import Context from './Context.ts';
+import Context from '../Context.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
-import { TimeParams } from './messages.ts';
-import Hash from './util/Hash.ts';
-import { MaybePromise } from './util/types.ts';
+import { TimeParams } from '../messages.ts';
+import Hash from '../util/Hash.ts';
+import { MaybePromise } from '../util/types.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 
 // Only used in tests,

@@ -19,15 +19,13 @@ export default class IncentiveService {
     detail = new Uint8Array(),
     forceAfter = Date.now() + 1000,
   ) {
-    throw new Error(`Is this used?`);
-
     if (incentive <= 0n) {
       return;
     }
 
     this.ctx.get(BlockBuilder).publish({
       outputs: [{ verifier, amount: incentive, detail }],
-    });
+    }, 0);
 
     // if (amount > 0n) {
     //   this.ctx.get(PendingIncentiveRegistry).getOrCreate(

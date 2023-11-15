@@ -20,6 +20,7 @@ import { error } from '~/sbl/util/functional.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import * as log from 'std-latest/log/mod.ts';
 import DataService from '~/sbl/DataService.ts';
+import KeyService from '~/sbl/KeyService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -244,21 +245,26 @@ export default class FactService {
   }
 
   public verify(fact: Fact, publicKey: Uint8Array) {
-    return fact.signature !== undefined &&
-      secp.verify(fact.signature, fact.hash.toBytes(), publicKey);
-  }
-  public getPublicKey(fact: Fact) {
-    if (fact.signature === undefined) {
-      throw new Error(`No signature on fact!`);
-    }
     const hash = Hash.digest(
       fact.data.subarray(0, fact.data.byteLength - SIGNATURE_LENGTH),
     );
+    return fact.signature !== undefined &&
+      secp.verify(this.getSignature(fact), hash.toBytes(), publicKey);
+  }
+  public getPublicKey(fact: Fact) {
+    const hash = Hash.digest(
+      fact.data.subarray(0, fact.data.byteLength - SIGNATURE_LENGTH),
+    );
+    return this.getSignature(fact)
+      .recoverPublicKey(hash.toBytes()).toRawBytes();
+  }
+  private getSignature(fact: Fact) {
+    if (fact.signature === undefined) {
+      throw new Error(`No signature on fact!`);
+    }
     return secp.Signature.fromCompact(
       fact.signature.subarray(0, SIGNATURE_LENGTH - 1),
-    )
-      .addRecoveryBit(fact.signature[SIGNATURE_LENGTH - 1])
-      .recoverPublicKey(hash.toBytes()).toRawBytes();
+    ).addRecoveryBit(fact.signature[SIGNATURE_LENGTH - 1]);
   }
 
   private create(

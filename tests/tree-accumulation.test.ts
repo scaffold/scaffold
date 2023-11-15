@@ -6,6 +6,7 @@ import { assertNotEquals } from 'std-latest/assert/assert_not_equals.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { assertEquals } from 'std-latest/assert/assert_equals.ts';
 import BlockService from '~/sbl/BlockService.ts';
+import FactService from '~/sbl/FactService.ts';
 
 Deno.test(
   {
@@ -31,6 +32,8 @@ Deno.test(
     const bFrontierIdx = findFrontierIdx(b);
     assertNotEquals(bFrontierIdx, -1);
     assertEquals(b.outputs[bFrontierIdx].verifier.params, new Uint8Array([0]));
+
+    assertEquals(ctx.get(FactService).hackyGetBlocksMatching().length, 2);
 
     // TODO: We shouldn't need this
     await new Promise<void>((resolve) =>

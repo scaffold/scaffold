@@ -1,18 +1,8 @@
-import BlockService from './BlockService.ts';
-import { collateralHash, dataHash } from './constants.ts';
-import Context from './Context.ts';
+import Context from '../Context.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
-import LocalGeneratorService, {
-  INGENERABLE_FLAG,
-  LocalGeneratorOpts,
-} from './LocalGeneratorService.ts';
-import { Block } from './messages.ts';
-import NodeService from './NodeService.ts';
-import { arrEquals } from './util/buffer.ts';
-import Hash, { HASH_SIZE } from './util/Hash.ts';
-import secp from './util/secp.ts';
-import { MaybePromise } from './util/types.ts';
-import FactService from '~/sbl/FactService.ts';
+import { LocalGeneratorOpts } from '../LocalGeneratorService.ts';
+import Hash, { HASH_SIZE } from '../util/Hash.ts';
+import { MaybePromise } from '../util/types.ts';
 
 // Only used in tests,
 // Used to make sure that generating collateral contracts "out-of-spec" never wins.

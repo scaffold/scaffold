@@ -1,6 +1,6 @@
 import Context from './Context.ts';
 import { formatPath } from './pathUtils.ts';
-import { INTERRUPT_FLAG, WorkerChannelServer } from './worker/WorkerChannel.ts';
+import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import {
   InitialMessage,
   JobMessage,
@@ -83,12 +83,9 @@ export default class WorkerExecutor {
     // If the worker's just spinning in WASM, we have no alternative other than just terminating it.
     // To kill worker, wait 1 second until it blocks and throw, or else terminate.
 
-    const terminateFn = (_: typeof INTERRUPT_FLAG) => worker.terminate();
+    const terminateFn = (_err?: unknown) => worker.terminate();
     let cancelCb = terminateFn;
-    driver.done.signal.addEventListener(
-      'abort',
-      () => cancelCb(INTERRUPT_FLAG),
-    );
+    driver.done.signal.addEventListener('abort', () => cancelCb());
 
     let codeHash: Hash | undefined;
     const getDebugger = (): WorkerDebugger => {
@@ -98,7 +95,9 @@ export default class WorkerExecutor {
         console.error(
           `No debugger configured for code hash ${codeHash.toHex()}`,
         );
-        throw INTERRUPT_FLAG;
+        throw new Error(
+          `No debugger configured for code hash ${codeHash.toHex()}`,
+        );
       }
       return dbgr;
     };
@@ -186,7 +185,7 @@ export default class WorkerExecutor {
           driver.requireBody(outputBufs.stdout);
         }
         if ('fail' in outputBufs) {
-          driver.invalidate();
+          driver.fail();
         }
 
         exitResolver();

@@ -37,8 +37,8 @@ export default class LitigationService {
   public litigateInput(
     fact: BlockFact,
     inputIdx: number,
-    hint: Uint8Array,
     valid: boolean,
+    hint?: Uint8Array,
   ) {
     const mask = 1n << BigInt(inputIdx);
     if (valid) {

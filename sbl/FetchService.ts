@@ -66,10 +66,10 @@ export default class FetchService {
       return;
     }
 
-    console.log(
-      `Fetching block`,
-      { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
-    );
+    // console.log(
+    //   `Fetching block`,
+    //   { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
+    // );
 
     internalIncentive = 1n;
     if (internalIncentive !== undefined) {

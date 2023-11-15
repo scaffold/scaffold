@@ -10,8 +10,9 @@ export interface ConnectionProvider {
 
   onRecv(handler: (data: Uint8Array) => void): void;
 
-  // After close() is called, the provider must call the method passed to onClose().
-  close(): void;
+  shutdown(): void;
+
+  // Call this handler when the transport closes
   onClose(handler: () => void): void;
 }
 

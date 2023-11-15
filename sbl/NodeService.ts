@@ -67,12 +67,6 @@ export default class NodeService {
     this.selfHash = Hash.digest(this.ctx.get(KeyService).getSelfPublicKey());
     this.selfNode = this.lookup(this.selfHash);
     this.selfNode.hops = 0;
-
-    ctx.onDestruct(() =>
-      this.nodes.forEach((node) =>
-        node.connections.forEach(({ conn }) => conn?.provider.close())
-      )
-    );
   }
 
   public getSelfHash() {

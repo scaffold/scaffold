@@ -1,3 +1,6 @@
+// deno-lint-ignore ban-types
+export type NotUndefined = {} | null;
+
 export const error = (msg: string): never => {
   throw new Error(msg);
 };

@@ -59,9 +59,6 @@ export interface BlockMeta {
   invalidatedInputs: bigint; // All inputs claims that have called invalidate() (which covers ALL hints)
   // verificationResult?: CollateralContractDetail['claim'];
 
-  // How are hints stored?
-  //
-
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
 

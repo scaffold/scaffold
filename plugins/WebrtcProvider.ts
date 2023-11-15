@@ -46,7 +46,7 @@ export default class WebrtcProvider implements NetworkProvider {
           reliableChannel!.onmessage = messageHandler;
           fastChannel!.onmessage = messageHandler;
         },
-        close: () => conn.close(),
+        shutdown: () => conn.close(),
         onClose: (_handler: () => void) =>
           conn.onconnectionstatechange = (e) =>
             console.log(

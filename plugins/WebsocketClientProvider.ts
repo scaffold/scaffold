@@ -28,7 +28,7 @@ export default class WebsocketClientProvider implements NetworkProvider {
                   'message',
                   (e) => handler(new Uint8Array(e.data)),
                 ),
-              close: () => socket.close(),
+              shutdown: () => socket.close(),
               onClose: (handler: () => void) =>
                 socket.addEventListener('close', () => handler()),
             });

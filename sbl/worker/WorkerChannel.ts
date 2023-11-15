@@ -73,14 +73,11 @@ export class WorkerChannelServer<T> {
         Atomics.store(arr, 1, res);
         Atomics.store(arr, 0, FLAG_CONTINUE);
         Atomics.notify(arr, 0, 1);
-      }, (err: Error | typeof INTERRUPT_FLAG) => {
-        if (err === INTERRUPT_FLAG) {
-          const arr = new Int32Array(this.sigBuf);
-          Atomics.store(arr, 0, FLAG_THROW);
-          Atomics.notify(arr, 0, 1);
-        } else {
-          console.error(`Error handling WorkerChannel request:`, err);
-        }
+      }, (err: unknown) => {
+        console.error(`Error handling WorkerChannel request:`, err);
+        const arr = new Int32Array(this.sigBuf);
+        Atomics.store(arr, 0, FLAG_THROW);
+        Atomics.notify(arr, 0, 1);
       });
   }
 }

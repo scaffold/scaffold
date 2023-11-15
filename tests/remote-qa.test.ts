@@ -1,5 +1,5 @@
 import { assertEquals } from 'std-latest/testing/asserts.ts';
-import { connectCtxs, makeTest } from './util.ts';
+import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
 import * as collatzMessages from '~/ts/collatzMessages.ts';
 import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
 import * as moduleHashes from '../ts/moduleHashes.ts';
@@ -28,7 +28,7 @@ Deno.test(
     timeProvider,
     networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
   }, async (_testCtx, ctx1, ctx2) => {
-    const ctxs = [ctx1, ctx2];
+    provideInitialBalance(ctx1, ctx2);
 
     // Only add the generator to one of the contexts
     ctx1.get(LocalGeneratorService).addGenerator(
@@ -69,6 +69,8 @@ Deno.test(
     timeProvider,
     networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
   }, async (_testCtx, ctx1, ctx2) => {
+    provideInitialBalance(ctx1, ctx2);
+
     // Only add the generator to one of the contexts
     ctx1.get(LocalGeneratorService).addGenerator(
       moduleHashes.collatz_wasm_hash,

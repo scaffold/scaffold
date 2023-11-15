@@ -15,6 +15,7 @@ import { createGenesisBlock } from '~/sbl/GenesisService.ts';
 import FactService from '~/sbl/FactService.ts';
 import { FactSource } from '~/sbl/FactMeta.ts';
 import NodeService from '~/sbl/NodeService.ts';
+import { NotUndefined } from '~/sbl/util/functional.ts';
 
 const makeConfig = (
   ctxIdx: number,
@@ -111,7 +112,7 @@ export const blockConsuming = (ctx: Context, input: BlockInput) => {
   }
 };
 
-export const waitFor = async <T>(
+export const waitFor = async <T extends NotUndefined>(
   ctx: Context,
   filter: (ctx: Context) => T | undefined,
   intervalMs = 100,
