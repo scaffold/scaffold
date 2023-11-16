@@ -2,99 +2,41 @@ import * as base from '~/sbl/messages.ts';
 
 const registry = {
   ...base.registry,
-  ClaimAllValid: {
-    name: 'ClaimAllValid',
+
+  CollateralTargetAllValid: {
+    name: 'CollateralTargetAllValid',
     type: 'record',
     fields: [],
   },
-  ClaimRequestInputHash: {
-    name: 'ClaimRequestInputHash',
+  CollateralTargetInputHash: {
+    name: 'CollateralTargetInputHash',
+    type: 'record',
+    fields: [{ name: 'input_idx', type: 'int' }],
+  },
+  CollateralTargetVerifier: {
+    name: 'CollateralTargetVerifier',
+    type: 'record',
+    fields: [{ name: 'input_idx', type: 'int' }],
+  },
+
+  CollateralContest: {
+    name: 'CollateralContest',
     type: 'record',
     fields: [
-      { name: 'input_idx', type: 'int' },
+      {
+        name: 'target',
+        type: [
+          'CollateralTargetAllValid',
+          'CollateralTargetInputHash',
+          'CollateralTargetVerifier',
+        ],
+      },
+
+      // If this is null, we're contesting ALL hints
+      { name: 'hint', type: ['null', 'bytes'] },
     ],
   },
-  ClaimReplyInputHash: {
-    name: 'ClaimReplyInputHash',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  ClaimRequestChildHash: {
-    name: 'ClaimRequestChildHash',
-    type: 'record',
-    fields: [
-      { name: 'child_idx', type: 'int' },
-    ],
-  },
-  ClaimReplyChildHash: {
-    name: 'ClaimReplyChildHash',
-    type: 'record',
-    fields: [
-      { name: 'child_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  ClaimVerificationFailed: {
-    name: 'ClaimVerificationFailed',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  ClaimVerificationPassed: {
-    name: 'ClaimVerificationPassed',
-    type: 'record',
-    fields: [
-      { name: 'input_idx', type: 'int' },
-      { name: 'hint', type: 'bytes' },
-    ],
-  },
-  ClaimRequestWorkProbe: {
-    name: 'ClaimRequestWorkProbe',
-    type: 'record',
-    fields: [
-      { name: 'position', type: 'bytes' },
-    ],
-  },
-  ClaimReplyWorkProbe: {
-    name: 'ClaimReplyWorkProbe',
-    type: 'record',
-    fields: [
-      { name: 'facts', type: { type: 'array', items: 'bytes' } },
-    ],
-  },
-  ClaimRequestInputProbe: {
-    name: 'ClaimRequestInputProbe',
-    type: 'record',
-    fields: [
-      // { name: 'position', type: 'bytes' },
-    ],
-  },
-  ClaimReplyInputProbe: {
-    name: 'ClaimReplyInputProbe',
-    type: 'record',
-    fields: [
-      { name: 'facts', type: { type: 'array', items: 'bytes' } },
-    ],
-  },
-  ClaimRequestOutputProbe: {
-    name: 'ClaimRequestOutputProbe',
-    type: 'record',
-    fields: [
-      // { name: 'position', type: 'bytes' },
-    ],
-  },
-  ClaimReplyOutputProbe: {
-    name: 'ClaimReplyOutputProbe',
-    type: 'record',
-    fields: [
-      { name: 'facts', type: { type: 'array', items: 'bytes' } },
-    ],
-  },
+
   CollateralContractParams: {
     name: 'CollateralContractParams',
     type: 'record',
@@ -105,23 +47,14 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'public_key', type: 'bytes' }, // 33 bytes
+      { name: 'contest', type: 'CollateralContest' },
       {
-        name: 'claim',
-        type: [
-          'ClaimAllValid',
-          'ClaimRequestInputHash',
-          'ClaimReplyInputHash',
-          'ClaimRequestChildHash',
-          'ClaimReplyChildHash',
-          'ClaimVerificationFailed',
-          'ClaimVerificationPassed',
-          'ClaimRequestWorkProbe',
-          'ClaimReplyWorkProbe',
-          'ClaimRequestInputProbe',
-          'ClaimReplyInputProbe',
-          'ClaimRequestOutputProbe',
-          'ClaimReplyOutputProbe',
-        ],
+        name: 'result',
+        type: {
+          name: 'Result',
+          type: 'enum',
+          symbols: ['VALID', 'INVALID', 'INCONCLUSIVE'],
+        },
       },
     ],
   },
@@ -132,6 +65,8 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
+export const CollateralContest = base.makeMsg(registry, 'CollateralContest');
+export type CollateralContest = MsgType<'CollateralContest'>;
 export const CollateralContractParams = base.makeMsg(
   registry,
   'CollateralContractParams',

@@ -11,7 +11,7 @@ import {
 import { useVirtual } from 'tanstack-virtual';
 import Context from '../sbl/Context.ts';
 import Logger from '../sbl/Logger.ts';
-import { bin2hex } from '../sbl/pathUtils.ts';
+import { bin2hex } from '../sbl/util/hex.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Hash, { HashPrimitive } from '../sbl/util/Hash.ts';
 import { trunc } from '../sbl/util/string.ts';
@@ -106,7 +106,7 @@ export default (
         cell: (props) => (
           <ol>
             {props.getValue<BlockInput[]>().map((input) => {
-              const output = ctx.get(BlockService).get(input.block_hash)
+              const output = ctx.get(BlockService).get(input.block_hash, false)
                 ?.outputs[input.output_idx];
               return (
                 <li>

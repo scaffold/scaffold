@@ -138,7 +138,7 @@ export default class BlockService {
       isEpoch: false,
 
       receivedTimestamp: this.ctx.config.timeProvider.now(),
-      flags: BlockFlag.Null,
+      flags: BlockFlag.None,
       votes: 0n,
       derivedWork: 0,
       mergeableProbability: 0,
@@ -228,24 +228,24 @@ export default class BlockService {
         const params = CollateralContractParams.decode(verifier.params);
         const detailDec = CollateralContractDetail.decode(detail);
         this.ctx.get(PublicKeyService).addPublicKey(detailDec.public_key);
-        const valid = 'ClaimAllValid' in detailDec.claim ||
-          'ClaimVerificationPassed' in detailDec.claim ||
-          'ClaimHasInputHash' in detailDec.claim;
-        this.ctx.get(FactService).addCollateral(params.block_hash, {
-          block: fact,
-          outputIdx,
-          detail: detailDec,
-          valid,
-          amount,
-        });
+        // const valid = 'ClaimAllValid' in detailDec.claim ||
+        //   'ClaimVerificationPassed' in detailDec.claim ||
+        //   'ClaimHasInputHash' in detailDec.claim;
+        // this.ctx.get(FactService).addCollateral(params.block_hash, {
+        //   block: fact,
+        //   outputIdx,
+        //   detail: detailDec,
+        //   valid,
+        //   amount,
+        // });
 
-        const contestedBlock = this.ctx.get(FactService).get(params.block_hash);
-        if (contestedBlock !== undefined) {
-          if (contestedBlock.type !== FactType.Block) {
-            throw new Error(`Cannot contest a non-block`);
-          }
-          this.ctx.get(LitigationService).scheduleResolution(contestedBlock);
-        }
+        // const contestedBlock = this.ctx.get(FactService).get(params.block_hash);
+        // if (contestedBlock !== undefined) {
+        //   if (contestedBlock.type !== FactType.Block) {
+        //     throw new Error(`Cannot contest a non-block`);
+        //   }
+        //   this.ctx.get(LitigationService).scheduleResolution(contestedBlock);
+        // }
       }
 
       // if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
@@ -877,11 +877,11 @@ export default class BlockService {
       arrEquals(a.params, b.params);
   }
 
-  public get(hash: Hash): BlockFact | undefined {
+  public get(hash: Hash, request = true): BlockFact | undefined {
     // TODO: Instead of calling this, call into FactService
     // TODO: Incentivize network as well
 
-    const fact = this.ctx.get(FactService).get(hash);
+    const fact = this.ctx.get(FactService).get(hash, request);
     if (fact?.type === FactType.Block) {
       return fact;
     }

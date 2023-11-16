@@ -4,42 +4,12 @@ import { base32, base32hex } from 'multiformats/bases/base32';
 import { base36 } from 'multiformats/bases/base36';
 import { base58btc } from 'multiformats/bases/base58';
 import { base64url } from 'multiformats/bases/base64';
-import { memoize } from './util/functional.ts';
+import { memoize } from '../util/functional.ts';
+import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
 
 const MULTIBASE_PREFIX = ':';
 // const MULTIBASE_ENCODER = base58btc;
 const MULTIBASE_ENCODER = base16;
-
-export const bin2str = memoize((bin: Uint8Array): string =>
-  new TextDecoder().decode(bin)
-);
-export const str2bin = (str: string): Uint8Array =>
-  new TextEncoder().encode(str);
-
-const bin2hexLut = Array.from(
-  { length: 256 },
-  (_, i) => i.toString(16).padStart(2, '0'),
-);
-export const bin2hex = memoize((buf: Uint8Array): string => {
-  // return Array.from(this.digest).map((b) => b.toString(16).padStart(2, '0')).join('');
-  let out = '';
-  for (let i = 0; i < buf.length; i++) {
-    out += bin2hexLut[buf[i]];
-  }
-  return out;
-});
-
-export const hex2bin = (hex: string): Uint8Array => {
-  if (hex.length & 1) {
-    throw new Error(`Invalid hex string; not an even length`);
-  }
-  // return new Uint8Array((hex.match(/.{1,2}/g) || []).map((byte) => parseInt(byte, 16)));
-  const res = new Uint8Array(hex.length >>> 1);
-  for (let i = 0; i < res.length; i++) {
-    res[i] = parseInt(hex.substr(i << 1, 2), 16);
-  }
-  return res;
-};
 
 const multibaseMap = Object.fromEntries(
   [base10, base16, base32, base32hex, base36, base58btc, base64url].map(

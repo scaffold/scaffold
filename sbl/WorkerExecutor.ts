@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import { formatPath } from './pathUtils.ts';
+import { formatPath } from './worker/pathUtils.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import {
   InitialMessage,

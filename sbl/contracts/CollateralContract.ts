@@ -1,8 +1,20 @@
 import Context from '../Context.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
-import { LocalGeneratorOpts } from '../LocalGeneratorService.ts';
-import Hash, { HASH_SIZE } from '../util/Hash.ts';
-import { MaybePromise } from '../util/types.ts';
+import { Collateralization } from '~/sbl/FactMeta.ts';
+import Hash, { HashPrimitive } from '../util/Hash.ts';
+import {
+  ComputationDriver,
+  ComputationType,
+} from '~/sbl/WorkerLauncherService.ts';
+import {
+  CollateralContest,
+  CollateralContractDetail,
+  CollateralContractParams,
+} from '~/sbl/collateralMessages.ts';
+import { getOrCreate } from '~/sbl/util/map.ts';
+import { AccountContractParams, BlockOutput } from '~/sbl/messages.ts';
+import { bin2hex } from '~/sbl/util/hex.ts';
+import { accountHash } from '~/sbl/constants.ts';
+import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 
 // Only used in tests,
 // Used to make sure that generating collateral contracts "out-of-spec" never wins.
@@ -12,88 +24,204 @@ export const enum CollateralGeneratorModifier {
   OmitAgainst,
 }
 
-export const COLLATERAL_INPUT_IDX_INITIAL = -1;
-export const COLLATERAL_INPUT_IDX_ISOLATED = -2;
+const DEBUG = true;
+const resolutionDelay = 5000n;
 
 export default class CollateralContract {
-  constructor(private ctx: Context) {
-    // ctx.get(LocalGeneratorService).addGenerator(
-    //   dataHash,
-    //   CollateralContract.generate,
-    // );
-  }
+  constructor(private ctx: Context) {}
 
-  public async verify(
-    params: Uint8Array,
-    block: BlockFact,
-    // request: (
-    //   contractHash: Hash,
-    //   params: Uint8Array,
-    // ) => MaybePromise<Uint8Array>,
-    invert: (hash: Hash) => MaybePromise<Uint8Array>,
-  ) {
-    throw new Error(`TODO: Implement`);
+  public async compute(driver: ComputationDriver) {
+    console.log(driver);
 
-    // const { block_hash, valid, public_key, free_after } =
-    //   CollateralContractParams.decode(params);
+    // const blockHash =
+    //   CollateralContractParams.decode(driver.getParams()).block_hash;
 
-    // if (block.timestamp < free_after) {
-    //   // Contestion
-    //   // Flip for/against; extend free_after timestamps
-    //   // TODO: Check that the collateral inputs are (1) all from the same block and (2) exactly the collateral outputs of that block.
-    //   const outputs = await Promise.all(
-    //     block.inputs.map(async ({ block_hash, output_idx }) =>
-    //       Block.decode(await invert(block_hash)).outputs[output_idx]
-    //     ),
-    //   );
-    //   const collaterals = outputs.filter(({ verifier }) =>
-    //     Hash.equals(verifier.contract_hash, collateralHash)
-    //   );
-    //   return collaterals.every((find) =>
-    //     block.outputs.some((candidate) =>
-    //       candidate.amount === find.amount &&
-    //       Hash.equals(
-    //         candidate.verifier.contract_hash,
-    //         find.verifier.contract_hash,
-    //       ) && arrEquals(candidate.verifier.params, find.verifier.params)
-    //     )
-    //   );
-    // } else {
-    //   // Free collateral
-    //   return this.ctx.get(FactService).verify(block, public_key);
+    interface Posting {
+      blockHash: Hash;
+      key?: Hash;
+      detail: CollateralContractDetail;
+      amount: bigint;
+    }
+    const postings: Posting[] = [];
+
+    const inputCount = await driver.getInputCount();
+    for (let i = 0; i < inputCount; i++) {
+      const source = await driver.getInputSource(i);
+      await driver.requireTimestampGte(source.blockTimestamp + resolutionDelay);
+      postings.push({
+        blockHash: source.blockHash,
+        detail: CollateralContractDetail.decode(source.detail),
+        amount: source.amount,
+      });
+    }
+
+    if (driver.type === ComputationType.Generator) {
+      // Sort
+      postings.sort((a, b) =>
+        driver.compareBlockOrder(a.blockHash, b.blockHash)
+      );
+    } else if (driver.type === ComputationType.Contract) {
+      // Assert sorted
+      for (let i = 1; i < postings.length; i++) {
+        if (
+          driver.compareBlockOrder(
+            postings[i - 1].blockHash,
+            postings[i].blockHash,
+          ) !== -1
+        ) {
+          driver.fail();
+        }
+      }
+    }
+
+    interface Contest {
+      spec: CollateralContest;
+      postings: Posting[];
+      winner?: CollateralContractDetail['result'];
+      VALID: bigint;
+      INVALID: bigint;
+      INCONCLUSIVE: bigint;
+    }
+    const contests = new Map<HashPrimitive, Contest>();
+    for (const posting of postings) {
+      // posting.detail.contest.hint === null;
+
+      posting.key = Hash.digest(
+        CollateralContest.encode(posting.detail.contest),
+      );
+      getOrCreate(
+        contests,
+        posting.key.toPrimitive(),
+        () => ({
+          spec: posting.detail.contest,
+          postings: [posting],
+          VALID: 0n,
+          INVALID: 0n,
+          INCONCLUSIVE: 0n,
+          [posting.detail.result]: posting.amount,
+        }),
+        (group) => {
+          group.postings.push(posting);
+          group[posting.detail.result] += posting.amount;
+          return group;
+        },
+      );
+    }
+
+    let valid = true;
+    for (const contest of contests.values()) {
+      if (
+        contest.INVALID > contest.VALID &&
+        contest.INVALID > contest.INCONCLUSIVE
+      ) {
+        valid = false;
+      }
+    }
+
+    const getWinner = (contest: Contest) => {
+      if (contest.VALID >= contest.INVALID) {
+        if (contest.VALID >= contest.INCONCLUSIVE) {
+          return 'VALID';
+        } else {
+          return 'INCONCLUSIVE';
+        }
+      } else {
+        if (contest.INVALID > contest.INCONCLUSIVE) {
+          return 'INVALID';
+        } else {
+          return 'INCONCLUSIVE';
+        }
+      }
+    };
+
+    // for (const contest of contests.values()) {
+    //   if (contest.spec.hint !== null) {
+    //     contest.winner = getWinner(contest);
+    //   }
     // }
-  }
 
-  public static generate(
-    { ctx, params, inputIdx, emitCorrect, addOutput, invert, request }:
-      LocalGeneratorOpts,
-    modifier = CollateralGeneratorModifier.None,
-  ) {
-    //     const {collateral_input_idx,valid,
-    //       public_key,
-    //       free_after,
-    //     } = CollateralContractParams.decode(params);
+    const outputKeys = new Map<string, BlockOutput>();
+    for (const contest of contests.values()) {
+      contest.winner ??= getWinner(contest);
 
-    // const availableCollateral=10n;
+      const totalAmt = contest.VALID + contest.INVALID + contest.INCONCLUSIVE;
+      const winAmt = contest[contest.winner];
+      const lossAmt = totalAmt - winAmt;
 
-    // const inputCollateral=invert()
-    //     addOutput({amount:})
+      const maxWinAmt = lossAmt << 1n;
+      const effectiveWinAmt = winAmt < maxWinAmt ? winAmt : maxWinAmt;
 
-    //     const block = ctx.get(BlockService).get(hash);
-    //     if (block) {
-    //       if (emitCorrect) {
-    //         const data = Block.encode(block);
-    //         const commitment = Hash.digestParts(
-    //           data,
-    //           secret,
-    //           ctx.get(NodeService).getSelfHash(),
-    //         );
-    //         return commitment.toBytes();
-    //       } else {
-    //         return Hash.random().toBytes();
-    //       }
-    //     } else {
-    //       return INGENERABLE_FLAG;
-    //     }
+      let src = lossAmt;
+      let dst = effectiveWinAmt;
+
+      for (const posting of contest.postings) {
+        if (posting.detail.result === contest.winner) {
+          const effectiveAmt = dst < posting.amount ? dst : posting.amount;
+          if (effectiveAmt === 0n) {
+            break;
+          }
+
+          let amount = effectiveAmt * src / dst;
+          src -= amount;
+          dst -= effectiveAmt;
+
+          amount += posting.amount;
+
+          getOrCreate(outputKeys, bin2hex(posting.detail.public_key), () => ({
+            verifier: {
+              contract_hash: accountHash,
+              params: AccountContractParams.encode({
+                public_key: posting.detail.public_key,
+              }),
+            },
+            amount,
+            detail: EMPTY_ARR,
+          }), (output) => {
+            output.amount += amount;
+            return output;
+          });
+        }
+      }
+    }
+
+    if (DEBUG) {
+      const totalIn = postings.reduce((acc, cur) => acc + cur.amount, 0n);
+      let totalOut = 0n;
+      for (const output of outputKeys.values()) {
+        totalOut += output.amount;
+      }
+      if (totalIn !== totalOut) {
+        throw new Error(`Invalid throughput; ${totalIn} !== ${totalOut}!`);
+      }
+    }
+
+    for (const output of outputKeys.values()) {
+      driver.requireOutput(output);
+    }
+
+    // let remainingAllValid = contests.get(
+    //   Hash.digest(
+    //     CollateralContest.encode({
+    //       target: { CollateralTargetAllValid: {} },
+    //       hint: null,
+    //     }),
+    //   ).toPrimitive(),
+    // );
+    // for (const posting of postings) {
+    //   contests.get(posting.key!.toPrimitive())!;
+    // }
+
+    /*
+    AllValid {}
+    InputHash {index: 0}
+    InputHash {index: 0, hint: }
+
+
+    For fair verifiers, just
+    Distribute N allValid coins amongst first N coins placed in groups eventually invalidating the block.
+
+    */
+
+    // this.ctx.get(BlockService).sort(fact.collateralizations, frontierVote);
   }
 }

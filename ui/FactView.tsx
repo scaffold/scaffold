@@ -12,7 +12,7 @@ import FactService from '~/sbl/FactService.ts';
 import HashView from '~/ui/HashView.tsx';
 import Hash, { HashPrimitive, ZERO_HASH } from '~/sbl/util/Hash.ts';
 import { Fact, FactSource, FactType } from '~/sbl/FactMeta.ts';
-import { bin2hex } from '~/sbl/pathUtils.ts';
+import { bin2hex } from '~/sbl/util/hex.ts';
 import { match } from '~/sbl/util/functional.ts';
 import { BlockInput } from '~/sbl/messages.ts';
 

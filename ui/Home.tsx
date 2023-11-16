@@ -15,7 +15,7 @@ import Logger from '../sbl/Logger.ts';
 import ThrustView from './ThrustView.tsx';
 import * as moduleHashes from './moduleHashes.ts';
 import * as constants from '../sbl/constants.ts';
-import { bin2str, decodeMultibase, str2bin } from '../sbl/pathUtils.ts';
+import { bin2str, str2bin } from '../sbl/util/buffer.ts';
 import FetchService from '../sbl/FetchService.ts';
 import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
 import * as thrustMessages from '../ts/thrustMessages.ts';
@@ -177,8 +177,9 @@ export default () => {
             }],
           });
           client.ctx.get(LitigationService).litigateBlock(badBlock, {
-            ClaimAllValid: {},
-          });
+            target: { CollateralTargetAllValid: {} },
+            hint: null,
+          }, 'VALID');
         }}
       >
         Publish bad block

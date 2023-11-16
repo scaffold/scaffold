@@ -1,6 +1,6 @@
 import Context from '~/sbl/Context.ts';
 import secp from '~/sbl/util/secp.ts';
-import { hex2bin } from '~/sbl/pathUtils.ts';
+import { hex2bin } from '~/sbl/util/hex.ts';
 import { defaultConfig } from '~/sbl/Config.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';

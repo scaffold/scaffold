@@ -1,3 +1,13 @@
+import { memoize } from '~/sbl/util/functional.ts';
+
+export const EMPTY_ARR = new Uint8Array();
+
+export const bin2str = memoize((bin: Uint8Array): string =>
+  new TextDecoder().decode(bin)
+);
+export const str2bin = (str: string): Uint8Array =>
+  new TextEncoder().encode(str);
+
 export const arrEquals = (a: Uint8Array, b: Uint8Array) => {
   if (a === b) return true;
   if (a.length !== b.length) return false;
@@ -40,7 +50,7 @@ export const arrConcat = (...arrs: Uint8Array[]) => {
   return arr;
 };
 
-export const fromNumber = (num: number, bytes: number) => {
+export const arrFromNumber = (num: number, bytes: number) => {
   const arr = [];
   for (let i = 0; i < bytes; i++) {
     arr.push(num & 0xFF);

@@ -1,5 +1,4 @@
-import { bin2hex, bin2str, formatPath, str2bin } from '../pathUtils.ts';
-import { LinkExec, MkdirExec, WasmExec } from '../scriptTypes.ts';
+import { LinkExec, MkdirExec } from '../scriptTypes.ts';
 import { error } from '~/sbl/util/functional.ts';
 import ExtFs from './ExtFs.ts';
 import {
@@ -19,13 +18,12 @@ import MemFs from './MemFs.ts';
 import WasiImpl, { FsNodeHandle } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
-import * as log from 'std-latest/log/mod.ts';
-import Hash from '~/sbl/util/Hash.ts';
-import { jsWasiHash } from '~/sbl/constants.ts';
 import { JsWasiParams } from '~/sbl/messages.ts';
 import logger from './logger.ts';
 import { BaseImports } from '~/sbl/worker/execJob.ts';
 import { makeClientUtils } from '~/sbl/worker/clientUtils.ts';
+import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
+import { formatPath } from './pathUtils.ts';
 
 export const makeWasi = (
   client: WorkerChannelClient<WorkerComm>,

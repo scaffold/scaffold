@@ -126,7 +126,7 @@ export default class WebrtcProvider implements NetworkProvider {
         const conn = await connPromise;
 
         if (orderHex) {
-          const cmp = Hash.cmp(orderHash, Hash.fromHex(orderHex));
+          const cmp = Hash.compare(orderHash, Hash.fromHex(orderHex));
           if (cmp < 0) {
             await createChannels(conn);
             const offer = await conn.createOffer();

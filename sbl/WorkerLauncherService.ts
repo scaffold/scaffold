@@ -7,13 +7,11 @@ import LocalGeneratorService from './LocalGeneratorService.ts';
 import {
   Block,
   BlockOutput,
-  EpochInclusionProof,
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-import { bin2str, str2bin } from './pathUtils.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
-import { error, mapEntries, neverPromise, todo } from './util/functional.ts';
+import { todo } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
 import LitigationService from './LitigationService.ts';
@@ -27,15 +25,23 @@ import { MaybePromise } from '~/sbl/util/types.ts';
 import FetchService from '~/sbl/FetchService.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import KeyService from '~/sbl/KeyService.ts';
+import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 
 export const enum ComputationType {
   Contract,
   Generator,
 }
+
+// https://docs.google.com/spreadsheets/d/1y3f2oqYwDaLRqoLnz4Jr1Ws7oO_muBPrv4ro9DQaIYw/edit
 export const enum BurdenOfProof {
   Fair,
   Invalidation, // Used for most things; one hint proving invalidation makes the contract invalid
   Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid
+}
+
+interface InputSource extends BlockOutput {
+  blockHash: Hash;
+  blockTimestamp: bigint;
 }
 
 export interface ComputationDriver extends WorkerDriver {
@@ -47,7 +53,7 @@ export interface ComputationDriver extends WorkerDriver {
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
   requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
-  requireTimestampGte(timestamp: bigint): void;
+  requireTimestampGte(timestamp: bigint): MaybePromise<void>;
   requireSignature(publicKey: Uint8Array): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
@@ -56,18 +62,19 @@ export interface ComputationDriver extends WorkerDriver {
   // invert(hash: Hash): MaybePromise<Uint8Array>;
   fulfills(block: BlockFact, outputIdx: number): void;
 
-  getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputDetail() should be fixed.
-  getInputDetail(idx: number): MaybePromise<Uint8Array>; // Returns an input detail at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
+  getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
+  getInputSource(idx: number): MaybePromise<InputSource>; // Returns the input source at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
+  // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
   requireFrontierLevel(level: number): void;
 
-  compareOrder(blockA: Hash, blockB: Hash): number; // Clamps the frontier vote
+  compareBlockOrder(hashA: Hash, hashB: Hash): number; // Clamps the frontier vote
 
   // validate(): never;
   // invalidate(): never;
   // setValid(valid: boolean): never;
 
-  setBurdenOfProof(on: BurdenOfProof): void;
+  setBurdenOfProof(on: BurdenOfProof): void; // You can't call this after getting the hint, because we want it to be the same for ALL hints for any given verifier.
   pass(): never;
   fail(): never;
   setResult(pass: boolean): never;
@@ -98,6 +105,7 @@ export default class WorkerLauncherService {
 
   public enqueueVerification(
     block: BlockFact,
+    // TODO: Parameterize by claim
     inputIdx: number,
     verifier: Verifier,
     hint: Uint8Array,
@@ -187,6 +195,12 @@ export default class WorkerLauncherService {
     detail: Uint8Array | undefined,
     extraIncentive: number,
   ) {
+    // TODO: Working here
+    /*
+    You always want to be building the most canonical block.
+    If a new detail comes in that increases the canonicality, kill the old generator and start a new one.
+    */
+
     const runHash = Hash.digest(Verifier.encode(verifier));
     if (this.extraGeneratorIncentive.has(runHash.toPrimitive())) {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -207,7 +221,7 @@ export default class WorkerLauncherService {
           const driver = this.makeGenerationDriver(verifier, workerDriver);
           try {
             await special.compute(driver);
-            await driver.finalize(COMPUTE_PASS_FLAG);
+            await driver.finalize(COMPUTE_GENERABLE_FLAG);
           } catch (err) {
             await driver.finalize(err);
           }
@@ -240,7 +254,7 @@ export default class WorkerLauncherService {
           const driver = this.makeGenerationDriver(verifier, workerDriver);
           try {
             await localGenerator(driver, this.ctx);
-            await driver.finalize(COMPUTE_PASS_FLAG);
+            await driver.finalize(COMPUTE_GENERABLE_FLAG);
           } catch (err) {
             await driver.finalize(err);
           }
@@ -271,7 +285,7 @@ export default class WorkerLauncherService {
                 },
                 driver,
               );
-              await driver.finalize(COMPUTE_PASS_FLAG);
+              await driver.finalize(COMPUTE_GENERABLE_FLAG);
             } catch (err) {
               await driver.finalize(err);
             }
@@ -287,9 +301,9 @@ export default class WorkerLauncherService {
     verifier: Verifier,
     hint: Uint8Array,
     workerDriver: WorkerDriver,
-  ): ComputationDriver & { finalize(result: unknown): MaybePromise<void> } {
+  ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
     let burdenOfProof = BurdenOfProof.Fair;
-
+    let gotHint = false;
     let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
 
@@ -308,6 +322,7 @@ export default class WorkerLauncherService {
             `You can't call getHint() with a fair burden of proof!`,
           );
         }
+        gotHint = true;
         return hint;
       },
       getBody: () => block.body,
@@ -395,7 +410,7 @@ export default class WorkerLauncherService {
         }
         return count;
       },
-      getInputDetail: async (idx: number) => {
+      getInputSource: async (idx: number) => {
         if (requireInputCount === undefined || requireInputCount <= idx) {
           requireInputCount = idx + 1;
         }
@@ -413,7 +428,11 @@ export default class WorkerLauncherService {
               verifier,
             ) && idx-- === 0
           ) {
-            return output.detail;
+            return {
+              blockHash: block.hash,
+              blockTimestamp: block.timestamp,
+              ...output,
+            };
           }
         }
 
@@ -438,8 +457,9 @@ export default class WorkerLauncherService {
         }
       },
 
-      compareOrder(blockA: Hash, blockB: Hash) {
-        return todo();
+      compareBlockOrder(hashA: Hash, hashB: Hash) {
+        // TODO: Lock frontier hash and return an ordering wrt. the frontier
+        return Hash.compare(hashA, hashB);
       },
 
       // validate() {
@@ -455,6 +475,11 @@ export default class WorkerLauncherService {
       // },
 
       setBurdenOfProof(on: BurdenOfProof) {
+        if (gotHint) {
+          throw new Error(
+            `Cannot change the burden of proof after getting the hint!`,
+          );
+        }
         burdenOfProof = on;
       },
       pass() {
@@ -479,8 +504,10 @@ export default class WorkerLauncherService {
         throw new Error(`Cannot call ingenerable() from a contract!`);
       },
 
-      finalize: async (result: unknown) => {
-        if (result === COMPUTE_PASS_FLAG) {
+      finalize: async (err: unknown) => {
+        let result: CollateralContractDetail['result'];
+
+        if (err === COMPUTE_PASS_FLAG) {
           if (requireInputCount !== undefined) {
             let count = 0;
             for (const input of block.inputs) {
@@ -505,18 +532,18 @@ export default class WorkerLauncherService {
             }
           }
 
-          if (burdenOfProof !== BurdenOfProof.Invalidation) {
-            this.ctx.get(LitigationService)
-              .litigateInput(block, inputIdx, true, hint);
-          }
-          workerDriver.done.abort();
+          result = burdenOfProof === BurdenOfProof.Invalidation
+            ? 'VALID'
+            : 'INCONCLUSIVE';
         } else {
-          if (burdenOfProof !== BurdenOfProof.Validation) {
-            this.ctx.get(LitigationService)
-              .litigateInput(block, inputIdx, false, hint);
-          }
-          workerDriver.done.abort(result);
+          result = burdenOfProof === BurdenOfProof.Validation
+            ? 'INVALID'
+            : 'INCONCLUSIVE';
         }
+
+        this.ctx.get(LitigationService)
+          .litigateInput(block, inputIdx, result, hint);
+        workerDriver.done.abort();
       },
     };
   }
@@ -524,7 +551,7 @@ export default class WorkerLauncherService {
   private makeGenerationDriver(
     verifier: Verifier,
     workerDriver: WorkerDriver,
-  ): ComputationDriver & { finalize(result: unknown): MaybePromise<void> } {
+  ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
     let emitCorrect: boolean | undefined;
 
     let body: Uint8Array | undefined;
@@ -571,7 +598,7 @@ export default class WorkerLauncherService {
         outputs.push(output);
       },
       requireTimestampGte: (timestamp: bigint) => {
-        if (timestampGte === undefined || timestamp < timestampGte) {
+        if (timestampGte === undefined || timestamp > timestampGte) {
           timestampGte = timestamp;
         }
       },
@@ -641,18 +668,18 @@ export default class WorkerLauncherService {
         }
         return verifierInputs.length;
       },
-      getInputDetail: async (idx: number) => {
+      getInputSource: async (idx: number) => {
+        let input: InputSpec;
         if (inputsAreFixed) {
-          const input = verifierInputs[idx];
+          input = verifierInputs[idx];
           if (input === undefined) {
             throw new Error(`Invalid index!`);
           }
-          return input.block.outputs[input.outputIdx].detail;
         } else {
           while (true) {
-            const input = verifierInputs[idx];
+            input = verifierInputs[idx];
             if (input !== undefined) {
-              return input.block.outputs[input.outputIdx].detail;
+              break;
             } else {
               verifierInputs.push(
                 await this.ctx.get(UnclaimedOutputService).claim(
@@ -663,6 +690,11 @@ export default class WorkerLauncherService {
             }
           }
         }
+        return {
+          blockHash: input.block.hash,
+          blockTimestamp: input.block.timestamp,
+          ...input.block.outputs[input.outputIdx],
+        };
       },
 
       requireFrontierLevel(level) {
@@ -679,8 +711,9 @@ export default class WorkerLauncherService {
         }
       },
 
-      compareOrder(blockA: Hash, blockB: Hash) {
-        return todo();
+      compareBlockOrder(hashA: Hash, hashB: Hash) {
+        // TODO: Lock frontier hash and return an ordering wrt. the frontier
+        return Hash.compare(hashA, hashB);
       },
 
       // validate() {
@@ -719,9 +752,19 @@ export default class WorkerLauncherService {
         throw COMPUTE_INGENERABLE_FLAG;
       },
 
-      finalize: async (result: unknown) => {
-        if (result !== COMPUTE_GENERABLE_FLAG) {
-          console.error(`Cannot generate: `, result);
+      finalize: async (err: unknown) => {
+        if (err !== COMPUTE_GENERABLE_FLAG) {
+          console.error(`Cannot generate: `, err);
+          return;
+        }
+
+        if (
+          refs.length === 0 && verifierInputs.length === 0 &&
+          otherInputs.length === 0 && outputs.length === 0 &&
+          body === undefined && frontierLevel === undefined &&
+          timestampGte === undefined
+        ) {
+          console.warn(`Skipping generation of empty block`);
           return;
         }
 
@@ -759,7 +802,7 @@ export default class WorkerLauncherService {
   }
 
   private shouldEmitCorrect(verifier: Verifier) {
-    return Hash.cmp(
+    return Hash.compare(
       Hash.digest(arrConcat(
         this.secret,
         verifier.contract_hash.toBytes(),
@@ -844,40 +887,41 @@ export default class WorkerLauncherService {
     }
 
     this.ctx.get(LitigationService).litigateBlock(block, {
-      ClaimAllValid: {},
-    });
+      target: { CollateralTargetAllValid: {} },
+      hint: null,
+    }, 'VALID');
   }
 
-  private litigateBlockVerifier(
-    block: BlockFact,
-    verifier: Verifier,
-    isValid: boolean,
-    hint: Uint8Array = new Uint8Array(),
-  ) {
-    const idx = block.inputs.findIndex((input) => {
-      const fact = this.ctx.get(FactService).get(input.block_hash);
-      if (fact !== undefined && fact.type === FactType.Block) {
-        const v2 = fact.outputs[input.output_idx].verifier;
-        return Hash.equals(v2.contract_hash, verifier.contract_hash) &&
-          arrEquals(v2.params, verifier.params);
-      }
-    });
-    if (idx === -1) {
-      throw new Error(
-        `Cannot find block input with correct verifier for litigation!`,
-      );
-    }
+  // private litigateBlockVerifier(
+  //   block: BlockFact,
+  //   verifier: Verifier,
+  //   isValid: boolean,
+  //   hint: Uint8Array = new Uint8Array(),
+  // ) {
+  //   const idx = block.inputs.findIndex((input) => {
+  //     const fact = this.ctx.get(FactService).get(input.block_hash);
+  //     if (fact !== undefined && fact.type === FactType.Block) {
+  //       const v2 = fact.outputs[input.output_idx].verifier;
+  //       return Hash.equals(v2.contract_hash, verifier.contract_hash) &&
+  //         arrEquals(v2.params, verifier.params);
+  //     }
+  //   });
+  //   if (idx === -1) {
+  //     throw new Error(
+  //       `Cannot find block input with correct verifier for litigation!`,
+  //     );
+  //   }
 
-    if (isValid) {
-      this.ctx.get(LitigationService).litigateBlock(block, {
-        ClaimVerificationPassed: { input_idx: idx, hint },
-      });
-    } else {
-      this.ctx.get(LitigationService).litigateBlock(block, {
-        ClaimVerificationFailed: { input_idx: idx, hint },
-      });
-    }
-  }
+  //   if (isValid) {
+  //     this.ctx.get(LitigationService).litigateBlock(block, {
+  //       ClaimVerificationPassed: { input_idx: idx, hint },
+  //     });
+  //   } else {
+  //     this.ctx.get(LitigationService).litigateBlock(block, {
+  //       ClaimVerificationFailed: { input_idx: idx, hint },
+  //     });
+  //   }
+  // }
 
   public snapshot() {
     return {

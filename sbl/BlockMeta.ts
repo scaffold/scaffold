@@ -5,12 +5,11 @@ import {
   Verifier,
 } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
-import { Node } from './NodeService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 
 export const enum BlockFlag {
-  Null = 0,
+  None = 0,
 
   CheckedZeroSum = 1 << 0,
   CheckedTimestamp = 1 << 1,
@@ -23,6 +22,19 @@ export const enum BlockFlag {
   PassedVerification = 1 << 11,
 
   IsPublic = 1 << 16,
+}
+
+export const enum ValidationFlag {
+  None = 0,
+
+  Validating = 1 << 0,
+  IsValid = 1 << 1,
+  IsInvalid = 1 << 2,
+}
+
+export interface InputMeta {
+  block?: BlockFact;
+  validation: ValidationFlag;
 }
 
 export interface BlockMeta {
@@ -57,7 +69,7 @@ export interface BlockMeta {
   // postedCollateral: BlockFact[];
   validatedInputs: bigint; // All inputs claims that have called validate() (which covers ALL hints)
   invalidatedInputs: bigint; // All inputs claims that have called invalidate() (which covers ALL hints)
-  // verificationResult?: CollateralContractDetail['claim'];
+  // verificationResult?: CollateralClaim;
 
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;

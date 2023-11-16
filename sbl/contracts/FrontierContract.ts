@@ -38,8 +38,8 @@ export default class FrontierContract {
   constructor(private ctx: Context) {}
 
   public async compute(driver: ComputationDriver) {
-    await driver.getInputDetail(0);
-    await driver.getInputDetail(1);
+    await driver.getInputSource(0);
+    await driver.getInputSource(1);
     const { level } = FrontierTreeParams.decode(driver.getParams());
     driver.requireFrontierLevel(level + 1);
   }

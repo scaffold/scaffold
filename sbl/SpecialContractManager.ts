@@ -1,5 +1,6 @@
 import {
   accountHash,
+  collateralHash,
   dataHash,
   frontierHash,
   rootHash,
@@ -15,6 +16,7 @@ import FrontierContract from './contracts/FrontierContract.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
 import AccountContract from '~/sbl/contracts/AccountContract.ts';
+import CollateralContract from '~/sbl/contracts/CollateralContract.ts';
 
 interface SpecialContract {
   compute(driver: ComputationDriver): MaybePromise<void>;
@@ -26,11 +28,10 @@ export default class SpecialContractManager {
   constructor(private ctx: Context) {
     this.addSpecial(rootHash, RootContract);
     this.addSpecial(dataHash, DataContract);
-    // this.addSpecial(collateralHash, CollateralContract);
     this.addSpecial(accountHash, AccountContract);
     this.addSpecial(timeHash, TimeContract);
-    // this.addSpecial(epochHash, EpochContract);
     this.addSpecial(frontierHash, FrontierContract);
+    this.addSpecial(collateralHash, CollateralContract);
   }
 
   private addSpecial(

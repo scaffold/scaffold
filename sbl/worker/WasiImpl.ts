@@ -26,7 +26,6 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 */
 
-import { bin2str, decodePathEntry, formatPath, str2bin } from '../pathUtils.ts';
 import {
   FS_CAPABILITY_ALL,
   FS_CAPABILITY_DIR_ENTRY_CREATE,
@@ -43,6 +42,8 @@ import {
 } from './fsTypes.ts';
 import * as wc from './WasiConstants.ts';
 import * as log from 'std-latest/log/mod.ts';
+import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
+import { decodePathEntry, formatPath } from './pathUtils.ts';
 
 const traceSyscalls = true;
 const exposeInodes = false;

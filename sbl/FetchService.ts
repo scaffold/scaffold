@@ -3,14 +3,8 @@ import Context from './Context.ts';
 import WorkerLauncherService from './WorkerLauncherService.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import IncentiveService from './IncentiveService.ts';
-import LocalGeneratorService from './LocalGeneratorService.ts';
 import { Block, Verifier } from './messages.ts';
-import NodeService from './NodeService.ts';
-import { bin2hex } from './pathUtils.ts';
-import QaDebugger from './QaDebugger.ts';
-import { error } from './util/functional.ts';
 import Hash from './util/Hash.ts';
-import { trunc } from './util/string.ts';
 
 export const enum FetchMode {
   All,

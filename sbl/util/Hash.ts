@@ -4,8 +4,7 @@
 import { Sha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
 import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
-import { arrConcat, fromNumber } from './buffer.ts';
-import { str2bin } from '~/sbl/pathUtils.ts';
+import { arrConcat, arrFromNumber, str2bin } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 
 // TODO: Try blake?
@@ -105,7 +104,7 @@ export default class Hash {
             ? p.toBytes()
             : p instanceof Uint8Array
             ? Hash.digest(p).toBytes()
-            : fromNumber(p, 8)
+            : arrFromNumber(p, 8)
         ),
       ),
     );
@@ -237,7 +236,7 @@ export default class Hash {
     return true;
   }
 
-  public static cmp(h0: Hash, h1: Hash) {
+  public static compare(h0: Hash, h1: Hash) {
     for (let i = 0; i < HASH_SIZE; i++) {
       if (h0.digest[i] < h1.digest[i]) {
         return -1;

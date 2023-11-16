@@ -1,5 +1,4 @@
 import BlockBuilder from './BlockBuilder.ts';
-import BlockService from './BlockService.ts';
 import { accountHash, collateralHash } from './constants.ts';
 import Context from './Context.ts';
 import {
@@ -12,13 +11,14 @@ import KeyService from './KeyService.ts';
 import { AccountContractParams, BlockOutput } from './messages.ts';
 import Hash, { EMPTY_HASH, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
-import FrontierService from '~/sbl/FrontierService.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import { assert } from '~/sbl/util/functional.ts';
 import {
+  CollateralContest,
   CollateralContractDetail,
   CollateralContractParams,
 } from '~/sbl/collateralMessages.ts';
+import BlockService from '~/sbl/BlockService.ts';
 
 const resolutionDelay = 1000;
 
@@ -35,45 +35,57 @@ export default class LitigationService {
   constructor(private ctx: Context) {}
 
   public litigateInput(
-    fact: BlockFact,
+    block: BlockFact,
     inputIdx: number,
-    valid: boolean,
+    result: CollateralContractDetail['result'],
     hint?: Uint8Array,
   ) {
-    const mask = 1n << BigInt(inputIdx);
-    if (valid) {
-      if (fact.validatedInputs & mask) {
-        return;
-      }
-      fact.validatedInputs |= mask;
-    } else {
-      if (fact.invalidatedInputs & mask) {
-        return;
-      }
-      fact.invalidatedInputs |= mask;
-    }
+    // const mask = 1n << BigInt(inputIdx);
+    // if (valid) {
+    //   if (block.validatedInputs & mask) {
+    //     return;
+    //   }
+    //   block.validatedInputs |= mask;
+    // } else {
+    //   if (block.invalidatedInputs & mask) {
+    //     return;
+    //   }
+    //   block.invalidatedInputs |= mask;
+    // }
 
-    this.processInputValidity(fact);
+    this.processInputValidity(block);
   }
 
-  public processInputValidity(fact: BlockFact) {
-    if (fact.validatedInputs & fact.invalidatedInputs) {
+  public processInputValidity(block: BlockFact) {
+    if (block.validatedInputs & block.invalidatedInputs) {
       throw new Error(`An input is both validated and invalidated!`);
     }
 
-    if (fact.validatedInputs === (1n << BigInt(fact.inputs.length)) - 1n) {
+    if (block.validatedInputs === (1n << BigInt(block.inputs.length)) - 1n) {
       const claim = { ClaimAllValid: {} };
-      this.litigateBlock(fact, claim);
-    } else if (fact.invalidatedInputs !== 0n) {
+      // this.litigateBlock(block, claim);
+    } else if (block.invalidatedInputs !== 0n) {
       // const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
-      // this.litigateBlock(fact, claim);
+      // this.litigateBlock(block, claim);
     }
+  }
+
+  private makeCollateralVerifier(blockHash: Hash) {
+    return {
+      contract_hash: collateralHash,
+      params: CollateralContractParams.encode({ block_hash: blockHash }),
+    };
   }
 
   public litigateBlock(
     fact: BlockFact,
-    claim: CollateralContractDetail['claim'],
+    claim: CollateralContest,
+    result: CollateralContractDetail['result'],
   ) {
+  }
+
+  /*
+  public litigateBlock(fact: BlockFact, claim: CollateralContest) {
     let amount: bigint;
 
     if ('ClaimAllValid' in claim) {
@@ -195,10 +207,7 @@ export default class LitigationService {
 
     this.ctx.get(BlockBuilder).publish({
       outputs: [{
-        verifier: {
-          contract_hash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: fact.hash }),
-        },
+        verifier: this.makeCollateralVerifier(fact.hash),
         amount,
         detail: CollateralContractDetail.encode({
           public_key: this.ctx.get(KeyService).getSelfPublicKey(),
@@ -209,6 +218,8 @@ export default class LitigationService {
   }
 
   public scheduleResolution(block: BlockFact) {
+    // TODO: Make sure scheduling works the same using CollateralContract
+
     const pub = () => {
       assert(this.resolutionSchedules.delete(block.hash.toPrimitive()));
       this.publishResolution(block);
@@ -407,6 +418,7 @@ export default class LitigationService {
       frontierVote,
     });
   }
+  */
 
   // public makeHintInput(block: BlockFact) {
   //   const hintOutput = {

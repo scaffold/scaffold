@@ -7,7 +7,6 @@ import BlockService from '../sbl/BlockService.ts';
 import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import { error } from '../sbl/util/functional.ts';
-import { bin2str, str2bin } from '../sbl/pathUtils.ts';
 import LocalGeneratorService, {
   LocalGenerator,
 } from '../sbl/LocalGeneratorService.ts';
@@ -23,6 +22,7 @@ import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
 import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';
 import Logger, { FilterAction, LogLevel } from '~/sbl/Logger2.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
+import { bin2str } from '~/sbl/util/buffer.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
