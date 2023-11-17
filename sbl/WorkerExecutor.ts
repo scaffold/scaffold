@@ -255,9 +255,7 @@ export default class WorkerExecutor {
 
       async getSize(inode: number): Promise<number> {
         // The ONLY awaits in this function should be for getBody, since it handles cancels
-        driver.pauseTimer();
         const body = await getBody(inodes.get(inode)!);
-        driver.resumeTimer();
         return body.byteLength;
       },
 
@@ -267,9 +265,7 @@ export default class WorkerExecutor {
         offset: number,
       ): Promise<number> {
         // The ONLY awaits in this function should be for getBody, since it handles cancels
-        driver.pauseTimer();
         const body = await getBody(inodes.get(inode)!);
-        driver.resumeTimer();
         return writeIovs(dstBufs, body, offset);
       },
 

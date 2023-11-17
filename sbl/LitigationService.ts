@@ -40,6 +40,23 @@ export default class LitigationService {
     result: CollateralContractDetail['result'],
     hint?: Uint8Array,
   ) {
+    const amount = 1000n;
+
+    this.ctx.get(BlockBuilder).publish({
+      outputs: [{
+        verifier: this.makeCollateralVerifier(block.hash),
+        amount,
+        detail: CollateralContractDetail.encode({
+          public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+          contest: {
+            target: { CollateralTargetVerifier: { input_idx: inputIdx } },
+            hint: hint ? { bytes: hint } : null,
+          },
+          result,
+        }),
+      }],
+    });
+
     // const mask = 1n << BigInt(inputIdx);
     // if (valid) {
     //   if (block.validatedInputs & mask) {
@@ -53,7 +70,7 @@ export default class LitigationService {
     //   block.invalidatedInputs |= mask;
     // }
 
-    this.processInputValidity(block);
+    // this.processInputValidity(block);
   }
 
   public processInputValidity(block: BlockFact) {

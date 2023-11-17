@@ -10,9 +10,8 @@ import {
   Verifier,
 } from './messages.ts';
 // import IncentiveCalculator from './IncentiveCalculator.ts';
-import BlockService, { BASE_WORK } from './BlockService.ts';
-import { arrEquals } from './util/buffer.ts';
-import { accountHash, epochHash, frontierHash, trueHash } from './constants.ts';
+import BlockService from './BlockService.ts';
+import { accountHash, frontierHash } from './constants.ts';
 import KeyService from './KeyService.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
@@ -38,7 +37,7 @@ export interface BlockSpec {
   // timestampGte?: bigint;
 }
 
-const enableBlockMerging = false;
+const enableBlockMerging = true;
 
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
 export default class BlockBuilder {

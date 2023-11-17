@@ -31,8 +31,6 @@ export default class CollateralContract {
   constructor(private ctx: Context) {}
 
   public async compute(driver: ComputationDriver) {
-    console.log(driver);
-
     // const blockHash =
     //   CollateralContractParams.decode(driver.getParams()).block_hash;
 
@@ -156,16 +154,18 @@ export default class CollateralContract {
 
       for (const posting of contest.postings) {
         if (posting.detail.result === contest.winner) {
-          const effectiveAmt = dst < posting.amount ? dst : posting.amount;
-          if (effectiveAmt === 0n) {
-            break;
+          let amount: bigint;
+          if (dst > 0n) {
+            const effectiveAmt = dst < posting.amount ? dst : posting.amount;
+
+            amount = effectiveAmt * src / dst;
+            src -= amount;
+            dst -= effectiveAmt;
+
+            amount += posting.amount;
+          } else {
+            amount = posting.amount;
           }
-
-          let amount = effectiveAmt * src / dst;
-          src -= amount;
-          dst -= effectiveAmt;
-
-          amount += posting.amount;
 
           getOrCreate(outputKeys, bin2hex(posting.detail.public_key), () => ({
             verifier: {

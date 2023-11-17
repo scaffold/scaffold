@@ -26,6 +26,7 @@ import FetchService from '~/sbl/FetchService.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
+import { bin2hex } from '~/sbl/util/hex.ts';
 
 export const enum ComputationType {
   Contract,
@@ -84,6 +85,9 @@ export interface ComputationDriver extends WorkerDriver {
   ingenerable(): void; // TODO: Maybe just throw an exception instead?
 }
 
+// A contract CANNOT require inputting a specific block hash. It can request the block data, but this won't make it dependent on that block.
+// Note that a contract/generator can only read input IO addressed to its contractHash & params.
+
 // export const COMPUTE_VALIDATE_FLAG = Symbol('ComputeLauncher.Validate');
 // export const COMPUTE_INVALIDATE_FLAG = Symbol('ComputeLauncher.Invalidate');
 export const COMPUTE_PASS_FLAG = Symbol('ComputeLauncher.Pass');
@@ -127,8 +131,6 @@ export default class WorkerLauncherService {
       .getContract(verifier.contract_hash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
-        verifier,
-        {},
         () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
@@ -139,6 +141,13 @@ export default class WorkerLauncherService {
             hint,
             workerDriver,
           );
+          workerDriver.log?.push({
+            timestamp: this.ctx.config.timeProvider.now(),
+            message:
+              `Starting special verifier for ${verifier.contract_hash.toHex()}:${
+                bin2hex(verifier.params)
+              }`,
+          });
           try {
             await special.compute(driver);
             await driver.finalize(COMPUTE_PASS_FLAG);
@@ -146,7 +155,7 @@ export default class WorkerLauncherService {
             await driver.finalize(err);
           }
         },
-      );
+      ).then(() => this.extraContractIncentive.delete(runHash.toPrimitive()));
       return;
     }
 
@@ -158,8 +167,6 @@ export default class WorkerLauncherService {
       const contractCode = contractBlocks[0].body;
 
       this.ctx.get(WorkerDriverService).run(
-        verifier,
-        {},
         () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
@@ -170,6 +177,13 @@ export default class WorkerLauncherService {
             hint,
             workerDriver,
           );
+          workerDriver.log?.push({
+            timestamp: this.ctx.config.timeProvider.now(),
+            message:
+              `Starting worker verifier for ${verifier.contract_hash.toHex()}:${
+                bin2hex(verifier.params)
+              }`,
+          });
           try {
             await this.ctx.get(WorkerExecutor).run(
               {
@@ -186,7 +200,7 @@ export default class WorkerLauncherService {
             await driver.finalize(err);
           }
         },
-      );
+      ).then(() => this.extraContractIncentive.delete(runHash.toPrimitive()));
     }
   }
 
@@ -195,12 +209,6 @@ export default class WorkerLauncherService {
     detail: Uint8Array | undefined,
     extraIncentive: number,
   ) {
-    // TODO: Working here
-    /*
-    You always want to be building the most canonical block.
-    If a new detail comes in that increases the canonicality, kill the old generator and start a new one.
-    */
-
     const runHash = Hash.digest(Verifier.encode(verifier));
     if (this.extraGeneratorIncentive.has(runHash.toPrimitive())) {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -213,12 +221,17 @@ export default class WorkerLauncherService {
       .getContract(verifier.contract_hash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
-        verifier,
-        {},
-        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
+        () => this.extraGeneratorIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
           const driver = this.makeGenerationDriver(verifier, workerDriver);
+          workerDriver.log?.push({
+            timestamp: this.ctx.config.timeProvider.now(),
+            message:
+              `Starting special generator for ${verifier.contract_hash.toHex()}:${
+                bin2hex(verifier.params)
+              }`,
+          });
           try {
             await special.compute(driver);
             await driver.finalize(COMPUTE_GENERABLE_FLAG);
@@ -226,7 +239,7 @@ export default class WorkerLauncherService {
             await driver.finalize(err);
           }
         },
-      );
+      ).then(() => this.extraGeneratorIncentive.delete(runHash.toPrimitive()));
       return;
     }
 
@@ -246,12 +259,17 @@ export default class WorkerLauncherService {
     );
     if (localGenerator) {
       this.ctx.get(WorkerDriverService).run(
-        verifier,
-        {},
         getScore,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
           const driver = this.makeGenerationDriver(verifier, workerDriver);
+          workerDriver.log?.push({
+            timestamp: this.ctx.config.timeProvider.now(),
+            message:
+              `Starting local generator for ${verifier.contract_hash.toHex()}:${
+                bin2hex(verifier.params)
+              }`,
+          });
           try {
             await localGenerator(driver, this.ctx);
             await driver.finalize(COMPUTE_GENERABLE_FLAG);
@@ -259,7 +277,7 @@ export default class WorkerLauncherService {
             await driver.finalize(err);
           }
         },
-      );
+      ).then(() => this.extraGeneratorIncentive.delete(runHash.toPrimitive()));
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
         contract_hash: generatorHash,
@@ -269,12 +287,17 @@ export default class WorkerLauncherService {
         const generatorCode = generatorBlocks[0].body;
 
         this.ctx.get(WorkerDriverService).run(
-          verifier,
-          {},
           getScore,
           async (workerDriver) => {
             await workerDriver.setAllocation({ webWorkerCount: 1 });
             const driver = this.makeGenerationDriver(verifier, workerDriver);
+            workerDriver.log?.push({
+              timestamp: this.ctx.config.timeProvider.now(),
+              message:
+                `Starting worker generator for ${verifier.contract_hash.toHex()}:${
+                  bin2hex(verifier.params)
+                }`,
+            });
             try {
               await this.ctx.get(WorkerExecutor).run(
                 {
@@ -290,6 +313,8 @@ export default class WorkerLauncherService {
               await driver.finalize(err);
             }
           },
+        ).then(() =>
+          this.extraGeneratorIncentive.delete(runHash.toPrimitive())
         );
       }
     }
@@ -366,6 +391,11 @@ export default class WorkerLauncherService {
           // Should have already interrupted earlier
           throw new Error(`Internal error`);
         }
+
+        workerDriver.pauseTimer(
+          `request(${contractHash.toHex()}, ${bin2hex(params)})`,
+        );
+
         const verifier = { contract_hash: contractHash, params };
         for (const hash of block.refs) {
           const ref = await this.ctx.get(BlockService).waitForBlock(
@@ -380,6 +410,7 @@ export default class WorkerLauncherService {
               workerDriver.done.signal,
             )
           ) {
+            workerDriver.resumeTimer();
             return ref.body;
           }
         }
@@ -391,6 +422,8 @@ export default class WorkerLauncherService {
       },
 
       getInputCount: async () => {
+        workerDriver.pauseTimer(`getInputCount()`);
+
         let count = 0;
         for (const input of block.inputs) {
           const block = await this.ctx.get(BlockService).waitForBlock(
@@ -408,9 +441,13 @@ export default class WorkerLauncherService {
             count++;
           }
         }
+
+        workerDriver.resumeTimer();
         return count;
       },
       getInputSource: async (idx: number) => {
+        workerDriver.pauseTimer(`getInputSource(${idx})`);
+
         if (requireInputCount === undefined || requireInputCount <= idx) {
           requireInputCount = idx + 1;
         }
@@ -428,6 +465,7 @@ export default class WorkerLauncherService {
               verifier,
             ) && idx-- === 0
           ) {
+            workerDriver.resumeTimer();
             return {
               blockHash: block.hash,
               blockTimestamp: block.timestamp,
@@ -505,8 +543,9 @@ export default class WorkerLauncherService {
       },
 
       finalize: async (err: unknown) => {
-        let result: CollateralContractDetail['result'];
+        workerDriver.pauseTimer(`finalize()`);
 
+        let result: CollateralContractDetail['result'];
         if (err === COMPUTE_PASS_FLAG) {
           if (requireInputCount !== undefined) {
             let count = 0;
@@ -544,6 +583,8 @@ export default class WorkerLauncherService {
         this.ctx.get(LitigationService)
           .litigateInput(block, inputIdx, result, hint);
         workerDriver.done.abort();
+
+        workerDriver.resumeTimer();
       },
     };
   }
@@ -616,16 +657,21 @@ export default class WorkerLauncherService {
         return emitCorrect;
       },
 
-      notify: (contractHash, params) =>
+      notify: (contractHash, params) => {
         this.ctx.get(FetchService).fetch(
           { contract_hash: contractHash, params },
           { abortSignal: workerDriver.done.signal },
-        ),
+        );
+      },
       request: (contractHash, params) =>
         new Promise((reply) => {
           if (workerDriver.done.signal.aborted) {
             return;
           }
+
+          workerDriver.pauseTimer(
+            `request(${contractHash.toHex()}, ${bin2hex(params)})`,
+          );
 
           const verifier = { contract_hash: contractHash, params };
 
@@ -645,6 +691,7 @@ export default class WorkerLauncherService {
               // TODO: Handle case when that ref gets replaced and no longer fulfills the verifier.
 
               refs.push(block);
+              workerDriver.resumeTimer();
               reply(block.body);
             },
           );
@@ -669,6 +716,8 @@ export default class WorkerLauncherService {
         return verifierInputs.length;
       },
       getInputSource: async (idx: number) => {
+        workerDriver.pauseTimer(`getInputSource(${idx})`);
+
         let input: InputSpec;
         if (inputsAreFixed) {
           input = verifierInputs[idx];
@@ -690,6 +739,8 @@ export default class WorkerLauncherService {
             }
           }
         }
+
+        workerDriver.resumeTimer();
         return {
           blockHash: input.block.hash,
           blockTimestamp: input.block.timestamp,
@@ -758,15 +809,17 @@ export default class WorkerLauncherService {
           return;
         }
 
-        if (
-          refs.length === 0 && verifierInputs.length === 0 &&
-          otherInputs.length === 0 && outputs.length === 0 &&
-          body === undefined && frontierLevel === undefined &&
-          timestampGte === undefined
-        ) {
-          console.warn(`Skipping generation of empty block`);
-          return;
-        }
+        // if (
+        //   refs.length === 0 && verifierInputs.length === 0 &&
+        //   otherInputs.length === 0 && outputs.length === 0 &&
+        //   body === undefined && frontierLevel === undefined &&
+        //   timestampGte === undefined
+        // ) {
+        //   console.warn(`Skipping generation of empty block`);
+        //   return;
+        // }
+
+        workerDriver.pauseTimer(`finalize()`);
 
         if (timestampGte !== undefined) {
           // TODO: There might be a better way to do this?
@@ -789,7 +842,13 @@ export default class WorkerLauncherService {
           // timestampGte,
         };
 
-        return this.createBlock(verifier, blockSpec, 0);
+        workerDriver.log?.push({
+          timestamp: this.ctx.config.timeProvider.now(),
+          message: `Creating block...`,
+        });
+        await this.createBlock(verifier, blockSpec, 0);
+        workerDriver.resumeTimer();
+        console.log(workerDriver.log);
       },
     };
   }

@@ -3,6 +3,7 @@ _Cool tagline_
 
 ## What is it?
 Scaffold moves the cloud to the client. Scaffold connects browsers to each other via WebRTC, replacing GCP/AWS (saving $$$). Its #1 design goal is speed. Scaffold is fully trustless and verified; in fact invalid blocks are incentivized and quickly replaced.
+Scaffold is fetch() over P2P. It moves the cloud to the client. Servers (running in users browsers) are fully dynamic and persist state. Its #1 design goal is speed. Scaffold connects browsers to each other via WebRTC, and is fully decentralized, trustless, and verified.
 
 ## What is it not?
 Scaffold is not a blockchain. It is not designed for fast consensus; in fact the opposite is desirable in many cases - in order to use blocks optimistically, before we've been able to verify them, we need to be able to easily re-write the graph if they're incorrect.

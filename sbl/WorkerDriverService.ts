@@ -10,7 +10,6 @@ Fixed worker pool
 */
 
 import Context from './Context.ts';
-import { BlockOutput, Verifier } from './messages.ts';
 import { mapEntries } from './util/functional.ts';
 
 export const WORKER_FAIL_FLAG = Symbol('WorkerDriver.Fail');
@@ -22,12 +21,19 @@ export const enum Resource {
   MemoryMb = 'memoryMb',
 }
 
+export interface LogEntry {
+  timestamp: number;
+  message: string;
+}
+
 export interface WorkerDriver {
   setAllocation(resources: Partial<Record<Resource, number>>): Promise<void>;
 
+  log?: LogEntry[];
+
   done: AbortController;
 
-  pauseTimer(): void;
+  pauseTimer(why: string): void;
   resumeTimer(): void;
 
   getTotalTime(): number;
@@ -67,11 +73,16 @@ export default class WorkerDriverService {
   }
 
   public run(
-    verifier: Verifier,
-    tags: Record<string, Uint8Array>,
-    getScore: () => number, // Distribution, or uncertainty, or variance/time?
+    getScore: () => number, // Expected profit/ms
     launch: (driver: WorkerDriver) => Promise<void>,
   ) /* TODO: Return a setScore(score: number) method so we can update from block update? Probably need to start implementing the launcher to determine this. */ {
+    const log = this.ctx.config.enableWorkerLogging
+      ? [{
+        timestamp: this.ctx.config.timeProvider.now(),
+        message: 'Started worker',
+      }]
+      : undefined;
+
     const allocation = mapEntries(
       this.ctx.config.resourceLimits,
       (_k, _v) => 0,
@@ -99,12 +110,25 @@ export default class WorkerDriverService {
     const done = new AbortController();
 
     const startTime = this.ctx.config.timeProvider.now();
-    let blockedTime = 0;
-    const pauseTimer = () => {
-      blockedTime -= this.ctx.config.timeProvider.now();
+    let totalBlockedTime = 0;
+    let pauseTime: undefined | number;
+    const pauseTimer = (why: string) => {
+      log?.push({
+        timestamp: this.ctx.config.timeProvider.now(),
+        message: `Blocking due to ${why}...`,
+      });
+      pauseTime ??= this.ctx.config.timeProvider.now();
     };
     const resumeTimer = () => {
-      blockedTime += this.ctx.config.timeProvider.now();
+      log?.push({
+        timestamp: this.ctx.config.timeProvider.now(),
+        message: `Resuming...`,
+      });
+      if (pauseTime === undefined) {
+        throw new Error(`Cannot resume without pausing!`);
+      }
+      totalBlockedTime += this.ctx.config.timeProvider.now() - pauseTime;
+      pauseTime = undefined;
     };
 
     // TODO: Maybe:
@@ -128,7 +152,7 @@ export default class WorkerDriverService {
             Re-write using canonical_block as input (no need to re-generate)
     */
 
-    launch({
+    return launch({
       setAllocation: (resources) => {
         // TODO: On cancel, kill this promise (never resolve or reject)
         // Right now we just deal with worker count
@@ -157,7 +181,7 @@ export default class WorkerDriverService {
           return Promise.resolve();
         } else {
           return new Promise((resolve) => {
-            pauseTimer();
+            pauseTimer('setAllocation()');
 
             this.workerQueue.push({
               // inputs,
@@ -171,6 +195,8 @@ export default class WorkerDriverService {
         }
       },
 
+      log,
+
       done,
 
       pauseTimer,
@@ -178,7 +204,8 @@ export default class WorkerDriverService {
 
       getTotalTime: () => this.ctx.config.timeProvider.now() - startTime,
       getCpuTime: () =>
-        this.ctx.config.timeProvider.now() - startTime - blockedTime,
+        (pauseTime ?? this.ctx.config.timeProvider.now()) -
+        startTime - totalBlockedTime,
     }).then(
       () => {
         done.abort();

@@ -112,6 +112,8 @@ interface Config {
   dbgVerifyGenerations: boolean;
 
   enableValidation: boolean;
+
+  enableWorkerLogging: boolean;
 }
 
 export const defaultConfig = {
@@ -149,6 +151,7 @@ export const defaultConfig = {
   testParameters: {},
   dbgVerifyGenerations: false,
   enableValidation: true,
+  enableWorkerLogging: true,
 } satisfies Partial<Config>;
 
 export default Config;

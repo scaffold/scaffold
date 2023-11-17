@@ -4,7 +4,7 @@ import Context from '~/sbl/Context.ts';
 import Config, { defaultConfig } from '~/sbl/Config.ts';
 import BlockService from '../sbl/BlockService.ts';
 import { BlockInput } from '../sbl/messages.ts';
-import { bin2hex } from '../sbl/pathUtils.ts';
+import { bin2hex } from '../sbl/util/hex.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 import MockTimeProvider from './MockTimeProvider.ts';
 import ConnectionService from '../sbl/ConnectionService.ts';
