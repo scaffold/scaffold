@@ -6,6 +6,8 @@ import Hash from '~/sbl/util/Hash.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import NetworkProvider from '~/sbl/NetworkProvider.ts';
 import ExecutionProvider from '~/sbl/ExecutionProvider.ts';
+import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
+import { defaultContractProviders } from '~/sbl/contracts/defaultContractProviders.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -37,6 +39,7 @@ export interface StorageProvider {
   close(): MaybePromise<void>;
 }
 
+// You can modify the Config by mutating ctx.config
 interface Config {
   network: string;
 
@@ -86,6 +89,7 @@ interface Config {
   storageProvider: StorageProvider;
   networkProviders: NetworkProvider[];
   executionProviders: ExecutionProvider[];
+  contractProviders: ContractProvider[];
 
   // appraisalProvider: AppraisalProvider;
 
@@ -116,7 +120,7 @@ interface Config {
   enableWorkerLogging: boolean;
 }
 
-export const defaultConfig = {
+export const makeDefaultConfig = () => ({
   network: 'main',
   debugName: '',
   logLevel: log.LogLevels.WARNING,
@@ -133,6 +137,7 @@ export const defaultConfig = {
     randomBytes: secp.etc.randomBytes,
   },
   executionProviders: [],
+  contractProviders: defaultContractProviders,
   approxComputePricePerSecond: 1000n,
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
@@ -152,6 +157,6 @@ export const defaultConfig = {
   dbgVerifyGenerations: false,
   enableValidation: true,
   enableWorkerLogging: true,
-} satisfies Partial<Config>;
+} satisfies Partial<Config>);
 
 export default Config;

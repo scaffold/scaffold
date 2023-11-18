@@ -1,7 +1,7 @@
 import * as fs from 'std-latest/fs/mod.ts';
 import * as path from 'std-latest/path/mod.ts';
 import Context from '~/sbl/Context.ts';
-import Config, { defaultConfig } from '~/sbl/Config.ts';
+import Config, { makeDefaultConfig } from '~/sbl/Config.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import BlockService from '../sbl/BlockService.ts';
 import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
@@ -39,7 +39,7 @@ import { bin2str } from '~/sbl/util/buffer.ts';
 // import { arrEquals } from '~/sbl/util/buffer.ts';
 
 const config: Config = {
-  ...defaultConfig,
+  ...makeDefaultConfig(),
 
   debugName: 'Server',
   // userdata: JSON.stringify({ epochStartTime }),

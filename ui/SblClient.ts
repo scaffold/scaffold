@@ -1,6 +1,6 @@
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
-import Config, { defaultConfig } from '~/sbl/Config.ts';
+import Config, { makeDefaultConfig } from '~/sbl/Config.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import * as log from 'std-latest/log/mod.ts';
@@ -29,7 +29,7 @@ export default class SblClient {
     };
 
     const config: Config = {
-      ...defaultConfig,
+      ...makeDefaultConfig(),
 
       debugName: 'SblClient',
       selfPrivateKey: getPrivateKey(),

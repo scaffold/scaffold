@@ -1,4 +1,3 @@
-import Context from '../Context.ts';
 import { Collateralization } from '~/sbl/FactMeta.ts';
 import Hash, { HashPrimitive } from '../util/Hash.ts';
 import {
@@ -13,8 +12,9 @@ import {
 import { getOrCreate } from '~/sbl/util/map.ts';
 import { AccountContractParams, BlockOutput } from '~/sbl/messages.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
-import { accountHash } from '~/sbl/constants.ts';
+import { accountHash, collateralHash } from '~/sbl/constants.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 
 // Only used in tests,
 // Used to make sure that generating collateral contracts "out-of-spec" never wins.
@@ -27,8 +27,8 @@ export const enum CollateralGeneratorModifier {
 const DEBUG = true;
 const resolutionDelay = 5000n;
 
-export default class CollateralContract {
-  constructor(private ctx: Context) {}
+export default class CollateralContract implements ContractProvider {
+  public contractHash = collateralHash;
 
   public async compute(driver: ComputationDriver) {
     // const blockHash =

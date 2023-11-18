@@ -1,3 +1,5 @@
+import { equals } from 'std-latest/bytes/equals.ts';
+import { concat } from 'std-latest/bytes/concat.ts';
 import { memoize } from '~/sbl/util/functional.ts';
 
 export const EMPTY_ARR = new Uint8Array();
@@ -8,18 +10,8 @@ export const bin2str = memoize((bin: Uint8Array): string =>
 export const str2bin = (str: string): Uint8Array =>
   new TextEncoder().encode(str);
 
-export const arrEquals = (a: Uint8Array, b: Uint8Array) => {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) {
-      return false;
-    }
-  }
-
-  return true;
-};
+export const arrEquals = (a: Uint8Array, b: Uint8Array) =>
+  a === b || equals(a, b);
 
 export const arrCompare = (a: Uint8Array, b: Uint8Array) => {
   const len = Math.min(a.length, b.length);
@@ -40,15 +32,7 @@ export const arrCompare = (a: Uint8Array, b: Uint8Array) => {
   }
 };
 
-export const arrConcat = (...arrs: Uint8Array[]) => {
-  const lengthSum = arrs.reduce((acc, cur) => acc + cur.length, 0);
-  const arr = new Uint8Array(lengthSum);
-  arrs.reduce((acc, cur) => {
-    arr.set(cur, acc);
-    return acc + cur.length;
-  }, 0);
-  return arr;
-};
+export const arrConcat = (...arrs: Uint8Array[]) => concat(arrs);
 
 export const arrFromNumber = (num: number, bytes: number) => {
   const arr = [];

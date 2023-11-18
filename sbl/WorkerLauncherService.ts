@@ -15,7 +15,6 @@ import { todo } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
 import LitigationService from './LitigationService.ts';
-import SpecialContractManager from './SpecialContractManager.ts';
 import Logger from './Logger.ts';
 import { BlockFact, FactSource, FactType } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
@@ -127,8 +126,7 @@ export default class WorkerLauncherService {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
     }
 
-    const special = this.ctx.get(SpecialContractManager)
-      .getContract(verifier.contract_hash);
+    const special = this.getSpecial(verifier.contract_hash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
         () => this.extraContractIncentive.get(runHash.toPrimitive())!,
@@ -149,7 +147,7 @@ export default class WorkerLauncherService {
               }`,
           });
           try {
-            await special.compute(driver);
+            await special.compute(driver, this.ctx);
             await driver.finalize(COMPUTE_PASS_FLAG);
           } catch (err) {
             await driver.finalize(err);
@@ -217,8 +215,7 @@ export default class WorkerLauncherService {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
     }
 
-    const special = this.ctx.get(SpecialContractManager)
-      .getContract(verifier.contract_hash);
+    const special = this.getSpecial(verifier.contract_hash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
         () => this.extraGeneratorIncentive.get(runHash.toPrimitive())!,
@@ -233,7 +230,7 @@ export default class WorkerLauncherService {
               }`,
           });
           try {
-            await special.compute(driver);
+            await special.compute(driver, this.ctx);
             await driver.finalize(COMPUTE_GENERABLE_FLAG);
           } catch (err) {
             await driver.finalize(err);
@@ -316,6 +313,14 @@ export default class WorkerLauncherService {
         ).then(() =>
           this.extraGeneratorIncentive.delete(runHash.toPrimitive())
         );
+      }
+    }
+  }
+
+  private getSpecial(contractHash: Hash) {
+    for (const provider of this.ctx.config.contractProviders) {
+      if (Hash.equals(provider.contractHash, contractHash)) {
+        return provider;
       }
     }
   }

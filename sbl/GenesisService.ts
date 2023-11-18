@@ -1,7 +1,7 @@
 import Context from '~/sbl/Context.ts';
 import secp from '~/sbl/util/secp.ts';
 import { hex2bin } from '~/sbl/util/hex.ts';
-import { defaultConfig } from '~/sbl/Config.ts';
+import { makeDefaultConfig } from '~/sbl/Config.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
@@ -32,7 +32,7 @@ export const createGenesisBlock = (
   accounts: { publicKey: Uint8Array; amount: bigint }[],
 ) => {
   const ctx = new Context({
-    ...defaultConfig,
+    ...makeDefaultConfig(),
 
     debugName: 'SblClient',
     selfPrivateKey: genesisPrivateKey,

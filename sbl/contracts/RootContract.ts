@@ -1,23 +1,21 @@
 import Context from '../Context.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
 import Hash, { HASH_SIZE } from '../util/Hash.ts';
-import { MaybePromise } from '../util/types.ts';
-import { rootHash } from '~/sbl/constants.ts';
 import FactService from '~/sbl/FactService.ts';
 import {
-  BurdenOfProof,
   ComputationDriver,
   ComputationType,
 } from '~/sbl/WorkerLauncherService.ts';
+import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
+import { rootHash } from '~/sbl/constants.ts';
 
-export default class RootContract {
-  constructor(private ctx: Context) {}
+export default class RootContract implements ContractProvider {
+  public contractHash = rootHash;
 
-  public compute(driver: ComputationDriver) {
+  public compute(driver: ComputationDriver, ctx: Context) {
     // TODO: How are errors handled here?
     const hash = Hash.fromBytes(driver.getParams());
     if (driver.type === ComputationType.Generator) {
-      const fact = this.ctx.get(FactService).get(hash);
+      const fact = ctx.get(FactService).get(hash);
       if (fact) {
         driver.requireBody(fact.data);
       } else {

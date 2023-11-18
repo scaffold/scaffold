@@ -1,6 +1,7 @@
-import Context from '../Context.ts';
 import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
+import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
+import { frontierHash } from '~/sbl/constants.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -34,8 +35,8 @@ import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
 //   votes: bigint;
 // }
 
-export default class FrontierContract {
-  constructor(private ctx: Context) {}
+export default class FrontierContract implements ContractProvider {
+  public contractHash = frontierHash;
 
   public async compute(driver: ComputationDriver) {
     await driver.getInputSource(0);

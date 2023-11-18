@@ -1,7 +1,7 @@
 import { deadline } from 'std-latest/async/mod.ts';
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
-import Config, { defaultConfig } from '~/sbl/Config.ts';
+import Config, { makeDefaultConfig } from '~/sbl/Config.ts';
 import BlockService from '../sbl/BlockService.ts';
 import { BlockInput } from '../sbl/messages.ts';
 import { bin2hex } from '../sbl/util/hex.ts';
@@ -21,7 +21,7 @@ const makeConfig = (
   ctxIdx: number,
   partialConfig: Partial<Config & { timeProvider: MockTimeProvider }>,
 ) => ({
-  ...defaultConfig,
+  ...makeDefaultConfig(),
 
   debugName: `ctx_${ctxIdx + 1}`,
   selfPrivateKey: secp.utils.randomPrivateKey(),

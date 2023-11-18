@@ -8,6 +8,8 @@ import {
   ComputationDriver,
   ComputationType,
 } from '~/sbl/WorkerLauncherService.ts';
+import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
+import { dataHash } from '~/sbl/constants.ts';
 
 // For easy-to-verify contracts in general:
 //   Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
@@ -16,21 +18,21 @@ import {
 //   In order to not lose his collateral, he must provide the plaintext as a hint.
 //   It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
-export default class DataContract {
-  constructor(private ctx: Context) {}
+export default class DataContract implements ContractProvider {
+  public contractHash = dataHash;
 
-  public compute(driver: ComputationDriver) {
+  public compute(driver: ComputationDriver, ctx: Context) {
     driver.setBurdenOfProof(BurdenOfProof.Validation);
 
     const { hash, secret } = DataContractParams.decode(driver.getParams());
     if (driver.type === ComputationType.Generator) {
-      const fact = this.ctx.get(FactService).get(hash);
+      const fact = ctx.get(FactService).get(hash);
       if (fact) {
         if (driver.emitCorrect()) {
           const commitment = Hash.digestParts(
             fact.data,
             secret,
-            this.ctx.get(NodeService).getSelfHash(),
+            ctx.get(NodeService).getSelfHash(),
           );
           driver.requireBody(commitment.toBytes());
         } else {
@@ -48,7 +50,7 @@ export default class DataContract {
           Hash.digestParts(
             hint,
             secret,
-            this.ctx.get(NodeService).getSelfHash(),
+            ctx.get(NodeService).getSelfHash(),
           ),
           Hash.fromBytes(body),
         );
