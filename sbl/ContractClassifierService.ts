@@ -3,6 +3,7 @@ import Context from './Context.ts';
 import {
   accountHash,
   burnHash,
+  collateralHash,
   dataHash,
   frontierHash,
   jackpotHash,
@@ -17,7 +18,8 @@ const toHashPrim = (x: string | Hash) =>
 
 export default class ContractClassifierService {
   private immediatelyVerifiableContractHashes = new Set<HashPrimitive>(
-    [rootHash, dataHash, accountHash, timeHash, frontierHash].map(toHashPrim),
+    [accountHash, collateralHash, dataHash, frontierHash, rootHash, timeHash]
+      .map(toHashPrim),
   );
 
   private freeMarketContractHashes = new Set<HashPrimitive>(

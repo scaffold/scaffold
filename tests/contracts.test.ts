@@ -25,7 +25,9 @@ Deno.test(
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
   },
-  makeTest({}, async (_testCtx, ctx1, ctx2) => {
+  makeTest({
+    contractProviders: [],
+  }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
     const validBlock = ctx1.get(BlockBuilder).publish({

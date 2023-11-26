@@ -26,6 +26,8 @@ import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
+import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
+import { ValidationResult } from '~/sbl/BlockMeta.ts';
 
 export const enum ComputationType {
   Contract,
@@ -39,7 +41,7 @@ export const enum BurdenOfProof {
   Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid
 }
 
-interface InputSource extends BlockOutput {
+export interface InputSource extends BlockOutput {
   blockHash: Hash;
   blockTimestamp: bigint;
 }
@@ -60,6 +62,7 @@ export interface ComputationDriver extends WorkerDriver {
   notify(contractHash: Hash, params: Uint8Array): void;
   request(contractHash: Hash, params: Uint8Array): Promise<Uint8Array>; // TODO: fetch?
   // invert(hash: Hash): MaybePromise<Uint8Array>;
+  // fulfills(verifier: Verifier): void; // Something like this would allow bodies that fulfill multiple contracts. We'd still need a way to get the inputs/details. Although, perhaps this can be accomplished better with output details.
   fulfills(block: BlockFact, outputIdx: number): void;
 
   getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
@@ -114,9 +117,13 @@ export default class WorkerLauncherService {
     hint: Uint8Array,
     extraIncentive: number,
   ) {
-    if (!this.ctx.config.enableValidation) {
+    if (
+      !this.ctx.config.enableValidation ||
+      block.inputValidationResults[inputIdx] !== ValidationResult.Pending
+    ) {
       return;
     }
+    block.inputValidationResults[inputIdx] = ValidationResult.Validating;
 
     const runHash = Hash.digestParts(Verifier.encode(verifier), block.body);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
@@ -950,10 +957,9 @@ export default class WorkerLauncherService {
       }
     }
 
-    this.ctx.get(LitigationService).litigateBlock(block, {
-      target: { CollateralTargetAllValid: {} },
-      hint: null,
-    }, 'VALID');
+    if (this.isImmediatelyVerifiable(block) !== true) {
+      this.ctx.get(LitigationService).litigateBlock(block, null, 'VALID');
+    }
   }
 
   // private litigateBlockVerifier(
@@ -986,6 +992,23 @@ export default class WorkerLauncherService {
   //     });
   //   }
   // }
+
+  private isImmediatelyVerifiable(block: BlockFact) {
+    for (const input of block.inputs) {
+      const inputBlock = this.ctx.get(BlockService).get(input.block_hash);
+      if (inputBlock === undefined) {
+        return undefined;
+      }
+      const { verifier } = inputBlock.outputs[input.output_idx];
+      if (
+        !this.ctx.get(ContractClassifierService)
+          .isImmediatelyVerifiable(verifier)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   public snapshot() {
     return {

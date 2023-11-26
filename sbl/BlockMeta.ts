@@ -24,17 +24,17 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
-export const enum ValidationFlag {
-  None = 0,
-
-  Validating = 1 << 0,
-  IsValid = 1 << 1,
-  IsInvalid = 1 << 2,
+export const enum ValidationResult {
+  Pending,
+  Validating,
+  IsValid,
+  IsInvalid,
+  IsInconclusive,
 }
 
 export interface InputMeta {
   block?: BlockFact;
-  validation: ValidationFlag;
+  validation: ValidationResult;
 }
 
 export interface BlockMeta {
@@ -50,6 +50,7 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
+  inputValidationResults: ValidationResult[];
   outputClaims: BlockFact[][];
 
   propagationMask: number;
@@ -67,8 +68,8 @@ export interface BlockMeta {
 
   // collateralChain: BlockFact[];
   // postedCollateral: BlockFact[];
-  validatedInputs: bigint; // All inputs claims that have called validate() (which covers ALL hints)
-  invalidatedInputs: bigint; // All inputs claims that have called invalidate() (which covers ALL hints)
+  // validatedInputs: bigint; // All inputs claims that have called validate() (which covers ALL hints)
+  // invalidatedInputs: bigint; // All inputs claims that have called invalidate() (which covers ALL hints)
   // verificationResult?: CollateralClaim;
 
   // Map from an epoch hash to the best proof from it

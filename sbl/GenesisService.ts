@@ -41,6 +41,7 @@ export const createGenesisBlock = (
 
     timeProvider: new MockTimeProvider(),
     storageProvider: new NullStorageProvider(),
+    contractProviders: [],
 
     enableValidation: false,
   });

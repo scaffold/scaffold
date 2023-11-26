@@ -3,11 +3,6 @@ import * as base from '~/sbl/messages.ts';
 const registry = {
   ...base.registry,
 
-  CollateralTargetAllValid: {
-    name: 'CollateralTargetAllValid',
-    type: 'record',
-    fields: [],
-  },
   CollateralTargetInputHash: {
     name: 'CollateralTargetInputHash',
     type: 'record',
@@ -26,7 +21,6 @@ const registry = {
       {
         name: 'target',
         type: [
-          'CollateralTargetAllValid',
           'CollateralTargetInputHash',
           'CollateralTargetVerifier',
         ],
@@ -47,13 +41,17 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'public_key', type: 'bytes' }, // 33 bytes
-      { name: 'contest', type: 'CollateralContest' },
+      { name: 'contest', type: ['null', 'CollateralContest'] },
       {
         name: 'result',
         type: {
           name: 'Result',
           type: 'enum',
-          symbols: ['VALID', 'INVALID', 'INCONCLUSIVE'],
+          symbols: [
+            'VALID', // This contest makes the parent contest valid
+            'INVALID', // This contest makes the parent contest invalid
+            'INCONCLUSIVE', // This contest has no effect on the parent contest
+          ],
         },
       },
     ],

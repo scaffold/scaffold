@@ -244,21 +244,17 @@ export default class FactService {
     }
   }
 
-  public verify(fact: Fact, publicKey: Uint8Array) {
-    const hash = Hash.digest(
-      fact.data.subarray(0, fact.data.byteLength - SIGNATURE_LENGTH),
-    );
+  public verify(fact: Pick<Fact, 'data' | 'signature'>, publicKey: Uint8Array) {
+    const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
     return fact.signature !== undefined &&
       secp.verify(this.getSignature(fact), hash.toBytes(), publicKey);
   }
-  public getPublicKey(fact: Fact) {
-    const hash = Hash.digest(
-      fact.data.subarray(0, fact.data.byteLength - SIGNATURE_LENGTH),
-    );
+  public getPublicKey(fact: Pick<Fact, 'data' | 'signature'>) {
+    const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
     return this.getSignature(fact)
       .recoverPublicKey(hash.toBytes()).toRawBytes();
   }
-  private getSignature(fact: Fact) {
+  private getSignature(fact: Pick<Fact, 'signature'>) {
     if (fact.signature === undefined) {
       throw new Error(`No signature on fact!`);
     }
@@ -299,6 +295,12 @@ export default class FactService {
     if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
       throw new Error(`Message length (${data.byteLength}) is too short!`);
     }
+    const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
+
+    const isSignedByMe = this.verify(
+      { data, signature },
+      this.ctx.get(KeyService).getSelfPublicKey(),
+    );
 
     const base: FactBase = {
       hash,
@@ -309,9 +311,10 @@ export default class FactService {
         headerSize,
         signed ? -SIGNATURE_LENGTH : undefined,
       ),
-      signature: signed ? data.subarray(-SIGNATURE_LENGTH) : undefined,
+      signature,
 
       source,
+      isSignedByMe,
       fromNodes: [],
       toNodes: [],
 

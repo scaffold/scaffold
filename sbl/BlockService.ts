@@ -1,4 +1,4 @@
-import { BlockFlag, BlockMeta } from './BlockMeta.ts';
+import { BlockFlag, BlockMeta, ValidationResult } from './BlockMeta.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import {
   accountHash,
@@ -142,6 +142,7 @@ export default class BlockService {
       votes: 0n,
       derivedWork: 0,
       mergeableProbability: 0,
+      inputValidationResults: block.inputs.map(() => ValidationResult.Pending),
       outputClaims: block.outputs.map((_, idx) =>
         this.getClaims({ block_hash: base.hash, output_idx: idx }).map((x) =>
           x.block
@@ -156,9 +157,6 @@ export default class BlockService {
 
       canonicality: 0,
       collateral: 0,
-
-      validatedInputs: 0n,
-      invalidatedInputs: 0n,
 
       epochInclusionProofs: new Map(),
 
@@ -228,6 +226,9 @@ export default class BlockService {
         const params = CollateralContractParams.decode(verifier.params);
         const detailDec = CollateralContractDetail.decode(detail);
         this.ctx.get(PublicKeyService).addPublicKey(detailDec.public_key);
+        if (fact.isSignedByMe) {
+          // TODO: Set validation results on block params.block_hash
+        }
         // const valid = 'ClaimAllValid' in detailDec.claim ||
         //   'ClaimVerificationPassed' in detailDec.claim ||
         //   'ClaimHasInputHash' in detailDec.claim;
@@ -951,15 +952,26 @@ export default class BlockService {
     return this.blockMonitor.waitFor(hash, cancelSignal);
   }
 
+  public async getSelfVerification(block: BlockFact) {
+    const myCollateral = this.getBlocksByOutput({
+      contract_hash: collateralHash,
+      params: CollateralContractParams.encode({ block_hash: block.hash }),
+    }).filter(({ block }) => block.source === FactSource.Local); // TODO: Filter by signature so we get our blocks even if someone else sent them to us
+
+    // myCollateral
+  }
+
   public async waitForVerification(block: BlockFact) {
-    while (
-      (block.validatedInputs | block.invalidatedInputs) !==
-        (1n << BigInt(block.inputs.length)) - 1n
-    ) {
-      await new Promise<void>((resolve) =>
-        this.ctx.config.timeProvider.setTimeout(resolve, 100)
-      );
-    }
+    throw new Error(`TODO: Unimplemented`);
+
+    // while (
+    //   (block.validatedInputs | block.invalidatedInputs) !==
+    //     (1n << BigInt(block.inputs.length)) - 1n
+    // ) {
+    //   await new Promise<void>((resolve) =>
+    //     this.ctx.config.timeProvider.setTimeout(resolve, 100)
+    //   );
+    // }
   }
 
   public doesBlockSatisfy(

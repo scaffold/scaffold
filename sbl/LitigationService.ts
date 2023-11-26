@@ -14,11 +14,12 @@ import { getOrCreate } from '~/sbl/util/map.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import { assert } from '~/sbl/util/functional.ts';
 import {
-  CollateralContest,
   CollateralContractDetail,
   CollateralContractParams,
 } from '~/sbl/collateralMessages.ts';
 import BlockService from '~/sbl/BlockService.ts';
+import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
+import { ValidationResult } from '~/sbl/BlockMeta.ts';
 
 const resolutionDelay = 1000;
 
@@ -40,8 +41,36 @@ export default class LitigationService {
     result: CollateralContractDetail['result'],
     hint?: Uint8Array,
   ) {
+    if (
+      block.inputValidationResults[inputIdx] !== ValidationResult.Validating
+    ) {
+      throw new Error(
+        `Unexpected validation result ${
+          block.inputValidationResults[inputIdx]
+        }`,
+      );
+    }
+
+    switch (result) {
+      case 'VALID':
+        block.inputValidationResults[inputIdx] = ValidationResult.IsValid;
+        break;
+      case 'INVALID':
+        block.inputValidationResults[inputIdx] = ValidationResult.IsInvalid;
+        break;
+      case 'INCONCLUSIVE':
+        block.inputValidationResults[inputIdx] =
+          ValidationResult.IsInconclusive;
+        break;
+      default:
+        throw new Error(`Internal error`);
+    }
+
     const amount = 1000n;
 
+    if (amount <= 0n) {
+      return;
+    }
     this.ctx.get(BlockBuilder).publish({
       outputs: [{
         verifier: this.makeCollateralVerifier(block.hash),
@@ -49,8 +78,10 @@ export default class LitigationService {
         detail: CollateralContractDetail.encode({
           public_key: this.ctx.get(KeyService).getSelfPublicKey(),
           contest: {
-            target: { CollateralTargetVerifier: { input_idx: inputIdx } },
-            hint: hint ? { bytes: hint } : null,
+            CollateralContest: {
+              target: { CollateralTargetVerifier: { input_idx: inputIdx } },
+              hint: hint ? { bytes: hint } : null,
+            },
           },
           result,
         }),
@@ -74,17 +105,17 @@ export default class LitigationService {
   }
 
   public processInputValidity(block: BlockFact) {
-    if (block.validatedInputs & block.invalidatedInputs) {
-      throw new Error(`An input is both validated and invalidated!`);
-    }
+    // if (block.validatedInputs & block.invalidatedInputs) {
+    //   throw new Error(`An input is both validated and invalidated!`);
+    // }
 
-    if (block.validatedInputs === (1n << BigInt(block.inputs.length)) - 1n) {
-      const claim = { ClaimAllValid: {} };
-      // this.litigateBlock(block, claim);
-    } else if (block.invalidatedInputs !== 0n) {
-      // const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
-      // this.litigateBlock(block, claim);
-    }
+    // if (block.validatedInputs === (1n << BigInt(block.inputs.length)) - 1n) {
+    //   const claim = { ClaimAllValid: {} };
+    //   this.litigateBlock(block, claim);
+    // } else if (block.invalidatedInputs !== 0n) {
+    //   const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
+    //   this.litigateBlock(block, claim);
+    // }
   }
 
   private makeCollateralVerifier(blockHash: Hash) {
@@ -96,7 +127,7 @@ export default class LitigationService {
 
   public litigateBlock(
     fact: BlockFact,
-    claim: CollateralContest,
+    claim: CollateralContractDetail['contest'],
     result: CollateralContractDetail['result'],
   ) {
   }

@@ -47,6 +47,7 @@ export type FactBase = {
   signature?: Uint8Array;
 
   source: FactSource;
+  isSignedByMe: boolean;
   fromNodes: Node[];
   toNodes: Node[];
 
