@@ -16,6 +16,7 @@ export interface TestParameters {
 
 export interface GraphParameters {
   minimumCollateral(work: bigint, time: number): bigint;
+  resolutionReward(collateral: bigint): bigint;
 }
 
 export interface TimeProvider {
@@ -152,6 +153,7 @@ export const makeDefaultConfig = () => ({
   workScoreThreshold: 10,
   graphParameters: {
     minimumCollateral: (work, _time) => work * 1000n,
+    resolutionReward: (collateral) => collateral,
   },
   testParameters: {},
   dbgVerifyGenerations: false,

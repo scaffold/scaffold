@@ -3,31 +3,28 @@ import * as base from '~/sbl/messages.ts';
 const registry = {
   ...base.registry,
 
-  CollateralTargetInputHash: {
-    name: 'CollateralTargetInputHash',
+  CollateralHintInputHash: {
+    name: 'CollateralHintInputHash',
     type: 'record',
     fields: [{ name: 'input_idx', type: 'int' }],
   },
-  CollateralTargetVerifier: {
-    name: 'CollateralTargetVerifier',
+  CollateralHintVerifier: {
+    name: 'CollateralHintVerifier',
     type: 'record',
     fields: [{ name: 'input_idx', type: 'int' }],
   },
 
-  CollateralContest: {
-    name: 'CollateralContest',
+  CollateralHint: {
+    name: 'CollateralHint',
     type: 'record',
     fields: [
       {
-        name: 'target',
+        name: 'hint',
         type: [
-          'CollateralTargetInputHash',
-          'CollateralTargetVerifier',
+          'CollateralHintInputHash',
+          'CollateralHintVerifier',
         ],
       },
-
-      // If this is null, we're contesting ALL hints
-      { name: 'hint', type: ['null', 'bytes'] },
     ],
   },
 
@@ -41,19 +38,20 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'public_key', type: 'bytes' }, // 33 bytes
-      { name: 'contest', type: ['null', 'CollateralContest'] },
+      { name: 'hints', type: { type: 'array', items: 'bytes' } },
       {
-        name: 'result',
+        name: 'contest_type',
         type: {
-          name: 'Result',
+          name: 'contest_type',
           type: 'enum',
           symbols: [
-            'VALID', // This contest makes the parent contest valid
-            'INVALID', // This contest makes the parent contest invalid
-            'INCONCLUSIVE', // This contest has no effect on the parent contest
+            'INVALIDATION',
+            'VALIDATION',
+            'FINAL',
           ],
         },
       },
+      { name: 'passed', type: 'boolean' },
     ],
   },
 } as const;
@@ -63,8 +61,8 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
   typeof registry
 >;
 
-export const CollateralContest = base.makeMsg(registry, 'CollateralContest');
-export type CollateralContest = MsgType<'CollateralContest'>;
+export const CollateralHint = base.makeMsg(registry, 'CollateralHint');
+export type CollateralHint = MsgType<'CollateralHint'>;
 export const CollateralContractParams = base.makeMsg(
   registry,
   'CollateralContractParams',

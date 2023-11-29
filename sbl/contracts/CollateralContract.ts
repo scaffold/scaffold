@@ -59,8 +59,8 @@ export default class CollateralContract implements ContractProvider {
     }
 
     const contests = CollateralUtil.getContests(postings);
-    const isValid = CollateralUtil.isValid(contests.values());
-    const outputMap = CollateralUtil.getOutputMap(contests.values());
+    const rootWinner = CollateralUtil.getRootWinner(contests);
+    const outputMap = CollateralUtil.getOutputMap(postings, contests);
 
     if (DEBUG) {
       const totalIn = postings.reduce((acc, cur) => acc + cur.amount, 0n);

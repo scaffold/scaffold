@@ -20,6 +20,8 @@ import {
 import BlockService from '~/sbl/BlockService.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
 import { ValidationResult } from '~/sbl/BlockMeta.ts';
+import { BurdenOfProof } from '~/sbl/WorkerLauncherService.ts';
+import { bigint2bin } from '~/sbl/util/bigint.ts';
 
 const resolutionDelay = 1000;
 
@@ -34,6 +36,36 @@ export default class LitigationService {
   private resolutionSchedules = new Map<HashPrimitive, number>();
 
   constructor(private ctx: Context) {}
+
+  public litigate(
+    block: BlockFact,
+    hints: Uint8Array[],
+    bops: BurdenOfProof[],
+    result: boolean,
+  ) {
+    const amount = 1000n;
+
+    if (amount <= 0n) {
+      return;
+    }
+
+    this.ctx.get(BlockBuilder).publish({
+      outputs: [{
+        verifier: this.makeCollateralVerifier(block.hash),
+        amount,
+        detail: CollateralContractDetail.encode({
+          public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+          hints,
+          bop_bitmask: bigint2bin(bops.reduce(
+            (acc, cur, idx) =>
+              cur === BurdenOfProof.Validation ? (acc << 1n) | 1n : acc << 1n,
+            0n,
+          )),
+          result,
+        }),
+      }],
+    });
+  }
 
   public litigateInput(
     block: BlockFact,

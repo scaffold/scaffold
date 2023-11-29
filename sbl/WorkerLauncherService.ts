@@ -36,9 +36,8 @@ export const enum ComputationType {
 
 // https://docs.google.com/spreadsheets/d/1y3f2oqYwDaLRqoLnz4Jr1Ws7oO_muBPrv4ro9DQaIYw/edit
 export const enum BurdenOfProof {
-  Fair,
-  Invalidation, // Used for most things; one hint proving invalidation makes the contract invalid
-  Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid
+  Invalidation, // Used for most things; one hint proving invalidation makes the contract invalid. Self-votes are VALID, and a single INVALID child vote invalidates.
+  Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid. Self-votes are INVALID, and a single VALID child vote validates.
 }
 
 export interface InputSource extends BlockOutput {
@@ -51,7 +50,7 @@ export interface ComputationDriver extends WorkerDriver {
 
   getContractHash(): Hash;
   getParams(): Uint8Array;
-  getHint(): Uint8Array;
+  getHint(idx: number, bop: BurdenOfProof): Uint8Array;
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
   requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
@@ -77,7 +76,7 @@ export interface ComputationDriver extends WorkerDriver {
   // invalidate(): never;
   // setValid(valid: boolean): never;
 
-  setBurdenOfProof(on: BurdenOfProof): void; // You can't call this after getting the hint, because we want it to be the same for ALL hints for any given verifier.
+  // setBurdenOfProof(on: BurdenOfProof): void; // You can't call this after getting the hint, because we want it to be the same for ALL hints for any given verifier.
   pass(): never;
   fail(): never;
   setResult(pass: boolean): never;
@@ -336,11 +335,10 @@ export default class WorkerLauncherService {
     block: BlockFact,
     inputIdx: number,
     verifier: Verifier,
-    hint: Uint8Array,
+    hints: Uint8Array[],
     workerDriver: WorkerDriver,
   ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
-    let burdenOfProof = BurdenOfProof.Fair;
-    let gotHint = false;
+    const bops = [BurdenOfProof.Invalidation];
     let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
 
@@ -353,13 +351,26 @@ export default class WorkerLauncherService {
 
       getContractHash: () => verifier.contract_hash,
       getParams: () => verifier.params,
-      getHint: () => {
-        if (burdenOfProof === BurdenOfProof.Fair) {
-          throw new Error(
-            `You can't call getHint() with a fair burden of proof!`,
-          );
+      getHint: (idx, bop) => {
+        idx++;
+
+        const hint = hints[idx];
+        if (hint === undefined) {
+          throw new Error(`We don't have a hint at index ${idx}!`);
         }
-        gotHint = true;
+
+        if (idx < bops.length) {
+          if (bop !== bops[idx]) {
+            throw new Error(
+              `Cannot change the burden of proof for hint ${idx}!`,
+            );
+          }
+        } else if (idx > bops.length) {
+          throw new Error(`Must get hints in order at index ${idx}!`);
+        } else {
+          bops.push(bop);
+        }
+
         return hint;
       },
       getBody: () => block.body,
@@ -524,14 +535,6 @@ export default class WorkerLauncherService {
       //   } else throw COMPUTE_INVALIDATE_FLAG;
       // },
 
-      setBurdenOfProof(on: BurdenOfProof) {
-        if (gotHint) {
-          throw new Error(
-            `Cannot change the burden of proof after getting the hint!`,
-          );
-        }
-        burdenOfProof = on;
-      },
       pass() {
         throw COMPUTE_PASS_FLAG;
       },
@@ -557,43 +560,36 @@ export default class WorkerLauncherService {
       finalize: async (err: unknown) => {
         workerDriver.pauseTimer(`finalize()`);
 
-        let result: CollateralContractDetail['result'];
-        if (err === COMPUTE_PASS_FLAG) {
-          if (requireInputCount !== undefined) {
-            let count = 0;
-            for (const input of block.inputs) {
-              const block = await this.ctx.get(BlockService).waitForBlock(
-                input.block_hash,
-                workerDriver.done.signal,
-              );
+        const result = err === COMPUTE_PASS_FLAG;
+        if (result) {
+          if (bops.length + 1) {
+            if (requireInputCount !== undefined) {
+              let count = 0;
+              for (const input of block.inputs) {
+                const block = await this.ctx.get(BlockService).waitForBlock(
+                  input.block_hash,
+                  workerDriver.done.signal,
+                );
 
-              const output = block.outputs[input.output_idx];
-              if (
-                this.ctx.get(BlockService).areVerifiersEqual(
-                  output.verifier,
-                  verifier,
-                ) && ++count > requireInputCount
-              ) {
+                const output = block.outputs[input.output_idx];
+                if (
+                  this.ctx.get(BlockService).areVerifiersEqual(
+                    output.verifier,
+                    verifier,
+                  ) && ++count > requireInputCount
+                ) {
+                  throw COMPUTE_FAIL_FLAG;
+                }
+              }
+
+              if (count !== requireInputCount) {
                 throw COMPUTE_FAIL_FLAG;
               }
             }
-
-            if (count !== requireInputCount) {
-              throw COMPUTE_FAIL_FLAG;
-            }
           }
-
-          result = burdenOfProof === BurdenOfProof.Invalidation
-            ? 'VALID'
-            : 'INCONCLUSIVE';
-        } else {
-          result = burdenOfProof === BurdenOfProof.Validation
-            ? 'INVALID'
-            : 'INCONCLUSIVE';
         }
 
-        this.ctx.get(LitigationService)
-          .litigateInput(block, inputIdx, result, hint);
+        this.ctx.get(LitigationService).litigate(block, hints, bops, result);
         workerDriver.done.abort();
 
         workerDriver.resumeTimer();
@@ -791,7 +787,6 @@ export default class WorkerLauncherService {
       //   } else throw COMPUTE_INVALIDATE_FLAG;
       // },
 
-      setBurdenOfProof(_on: BurdenOfProof) {},
       pass() {
         throw COMPUTE_GENERABLE_FLAG;
       },

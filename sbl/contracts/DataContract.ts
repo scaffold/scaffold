@@ -22,8 +22,6 @@ export default class DataContract implements ContractProvider {
   public contractHash = dataHash;
 
   public compute(driver: ComputationDriver, ctx: Context) {
-    driver.setBurdenOfProof(BurdenOfProof.Validation);
-
     const { hash, secret } = DataContractParams.decode(driver.getParams());
     if (driver.type === ComputationType.Generator) {
       const fact = ctx.get(FactService).get(hash);
@@ -43,7 +41,7 @@ export default class DataContract implements ContractProvider {
       }
     } else if (driver.type === ComputationType.Contract) {
       const body = driver.getBody();
-      const hint = driver.getHint();
+      const hint = driver.getHint(0, BurdenOfProof.Validation);
       const valid = body.byteLength === HASH_SIZE &&
         Hash.equals(Hash.digest(hint), hash) &&
         Hash.equals(
