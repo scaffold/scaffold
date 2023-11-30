@@ -388,7 +388,7 @@ export default class BlockService {
       child,
       childInputIdx,
       verifier,
-      new Uint8Array([]),
+      [],
       0,
     );
 

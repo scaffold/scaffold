@@ -113,7 +113,7 @@ export default class WorkerLauncherService {
     // TODO: Parameterize by claim
     inputIdx: number,
     verifier: Verifier,
-    hint: Uint8Array,
+    hints: Uint8Array[],
     extraIncentive: number,
   ) {
     if (
@@ -142,7 +142,7 @@ export default class WorkerLauncherService {
             block,
             inputIdx,
             verifier,
-            hint,
+            hints,
             workerDriver,
           );
           workerDriver.log?.push({
@@ -178,7 +178,7 @@ export default class WorkerLauncherService {
             block,
             inputIdx,
             verifier,
-            hint,
+            hints,
             workerDriver,
           );
           workerDriver.log?.push({
@@ -947,13 +947,13 @@ export default class WorkerLauncherService {
         if (inputBlock !== undefined) {
           const verifier = inputBlock.outputs[input.output_idx].verifier;
           this.ctx.get(WorkerLauncherService)
-            .enqueueVerification(block, i, verifier, new Uint8Array(), 0);
+            .enqueueVerification(block, i, verifier, [], 0);
         }
       }
     }
 
     if (this.isImmediatelyVerifiable(block) !== true) {
-      this.ctx.get(LitigationService).litigateBlock(block, null, 'VALID');
+      this.ctx.get(LitigationService).litigate(block, [], [], true);
     }
   }
 

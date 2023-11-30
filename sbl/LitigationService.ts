@@ -56,99 +56,94 @@ export default class LitigationService {
         detail: CollateralContractDetail.encode({
           public_key: this.ctx.get(KeyService).getSelfPublicKey(),
           hints,
-          bop_bitmask: bigint2bin(bops.reduce(
-            (acc, cur, idx) =>
-              cur === BurdenOfProof.Validation ? (acc << 1n) | 1n : acc << 1n,
-            0n,
-          )),
-          result,
+          vote: result ? 'FINAL_PASS' : 'FINAL_FAIL', // TODO: Fix this logic
         }),
       }],
     });
   }
 
-  public litigateInput(
-    block: BlockFact,
-    inputIdx: number,
-    result: CollateralContractDetail['result'],
-    hint?: Uint8Array,
-  ) {
-    if (
-      block.inputValidationResults[inputIdx] !== ValidationResult.Validating
-    ) {
-      throw new Error(
-        `Unexpected validation result ${
-          block.inputValidationResults[inputIdx]
-        }`,
-      );
-    }
+  // public litigateInput(
+  //   block: BlockFact,
+  //   inputIdx: number,
+  //   result: CollateralContractDetail['result'],
+  //   hint?: Uint8Array,
+  // ) {
+  //   if (
+  //     block.inputValidationResults[inputIdx] !== ValidationResult.Validating
+  //   ) {
+  //     throw new Error(
+  //       `Unexpected validation result ${
+  //         block.inputValidationResults[inputIdx]
+  //       }`,
+  //     );
+  //   }
 
-    switch (result) {
-      case 'VALID':
-        block.inputValidationResults[inputIdx] = ValidationResult.IsValid;
-        break;
-      case 'INVALID':
-        block.inputValidationResults[inputIdx] = ValidationResult.IsInvalid;
-        break;
-      case 'INCONCLUSIVE':
-        block.inputValidationResults[inputIdx] =
-          ValidationResult.IsInconclusive;
-        break;
-      default:
-        throw new Error(`Internal error`);
-    }
+  //   switch (result) {
+  //     case 'VALID':
+  //       block.inputValidationResults[inputIdx] = ValidationResult.IsValid;
+  //       break;
+  //     case 'INVALID':
+  //       block.inputValidationResults[inputIdx] = ValidationResult.IsInvalid;
+  //       break;
+  //     case 'INCONCLUSIVE':
+  //       block.inputValidationResults[inputIdx] =
+  //         ValidationResult.IsInconclusive;
+  //       break;
+  //     default:
+  //       throw new Error(`Internal error`);
+  //   }
 
-    const amount = 1000n;
+  //   const amount = 1000n;
 
-    if (amount <= 0n) {
-      return;
-    }
-    this.ctx.get(BlockBuilder).publish({
-      outputs: [{
-        verifier: this.makeCollateralVerifier(block.hash),
-        amount,
-        detail: CollateralContractDetail.encode({
-          public_key: this.ctx.get(KeyService).getSelfPublicKey(),
-          contest: {
-            CollateralContest: {
-              target: { CollateralTargetVerifier: { input_idx: inputIdx } },
-              hint: hint ? { bytes: hint } : null,
-            },
-          },
-          result,
-        }),
-      }],
-    });
+  //   if (amount <= 0n) {
+  //     return;
+  //   }
+  //   this.ctx.get(BlockBuilder).publish({
+  //     outputs: [{
+  //       verifier: this.makeCollateralVerifier(block.hash),
+  //       amount,
+  //       detail: CollateralContractDetail.encode({
+  //         public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+  //         contest: {
+  //           CollateralContest: {
+  //             target: { CollateralTargetVerifier: { input_idx: inputIdx } },
+  //             hint: hint ? { bytes: hint } : null,
+  //           },
+  //         },
+  //         result,
+  //       }),
+  //     }],
+  //   });
 
-    // const mask = 1n << BigInt(inputIdx);
-    // if (valid) {
-    //   if (block.validatedInputs & mask) {
-    //     return;
-    //   }
-    //   block.validatedInputs |= mask;
-    // } else {
-    //   if (block.invalidatedInputs & mask) {
-    //     return;
-    //   }
-    //   block.invalidatedInputs |= mask;
-    // }
+  //   // const mask = 1n << BigInt(inputIdx);
+  //   // if (valid) {
+  //   //   if (block.validatedInputs & mask) {
+  //   //     return;
+  //   //   }
+  //   //   block.validatedInputs |= mask;
+  //   // } else {
+  //   //   if (block.invalidatedInputs & mask) {
+  //   //     return;
+  //   //   }
+  //   //   block.invalidatedInputs |= mask;
+  //   // }
 
-    // this.processInputValidity(block);
-  }
+  //   // this.processInputValidity(block);
+  // }
 
-  public processInputValidity(block: BlockFact) {
-    // if (block.validatedInputs & block.invalidatedInputs) {
-    //   throw new Error(`An input is both validated and invalidated!`);
-    // }
+  // public processInputValidity(block: BlockFact) {
+  //   // if (block.validatedInputs & block.invalidatedInputs) {
+  //   //   throw new Error(`An input is both validated and invalidated!`);
+  //   // }
 
-    // if (block.validatedInputs === (1n << BigInt(block.inputs.length)) - 1n) {
-    //   const claim = { ClaimAllValid: {} };
-    //   this.litigateBlock(block, claim);
-    // } else if (block.invalidatedInputs !== 0n) {
-    //   const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
-    //   this.litigateBlock(block, claim);
-    // }
-  }
+  //   // if (block.validatedInputs === (1n << BigInt(block.inputs.length)) - 1n) {
+  //   //   const claim = { ClaimAllValid: {} };
+  //   //   this.litigateBlock(block, claim);
+  //   // } else if (block.invalidatedInputs !== 0n) {
+  //   //   const claim = { ClaimVerificationFailed: { input_idx: inputIdx, hint } };
+  //   //   this.litigateBlock(block, claim);
+  //   // }
+  // }
 
   private makeCollateralVerifier(blockHash: Hash) {
     return {
@@ -159,8 +154,8 @@ export default class LitigationService {
 
   public litigateBlock(
     fact: BlockFact,
-    claim: CollateralContractDetail['contest'],
-    result: CollateralContractDetail['result'],
+    // claim: CollateralContractDetail['contest'],
+    // result: CollateralContractDetail['result'],
   ) {
   }
 

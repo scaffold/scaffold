@@ -40,18 +40,21 @@ const registry = {
       { name: 'public_key', type: 'bytes' }, // 33 bytes
       { name: 'hints', type: { type: 'array', items: 'bytes' } },
       {
-        name: 'contest_type',
+        name: 'vote',
         type: {
-          name: 'contest_type',
+          name: 'vote',
           type: 'enum',
           symbols: [
-            'INVALIDATION',
-            'VALIDATION',
-            'FINAL',
+            'VALID_CHALLENGE', // Place collateral on an invalidation contest type AND validity
+            'ALL_VALID_CONTEST', // Place collateral on an invalidation contest type
+            'INVALID_CHALLENGE', // Place collateral on a validation contest type AND invalidity
+            'ONE_VALID_CONTEST', // Place collateral on a validation contest type
+            'FINAL_PASS', // Place collateral on a final contest type AND validity
+            'FINAL_FAIL', // Place collateral on a final contest type AND invalidity
+            'FINAL_CONTEST', // Place collateral on a final contest type
           ],
         },
       },
-      { name: 'passed', type: 'boolean' },
     ],
   },
 } as const;

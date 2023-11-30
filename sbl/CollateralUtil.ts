@@ -1,10 +1,11 @@
 import Hash, { EMPTY_HASH, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
-import { getOrCreate } from '~/sbl/util/map.ts';
+import { getOrCreate, mapPop } from '~/sbl/util/map.ts';
 import { AccountContractParams, BlockOutput } from '~/sbl/messages.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
-import { accountHash } from '~/sbl/constants.ts';
+import { accountHash, burnHash } from '~/sbl/constants.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import { error } from '~/sbl/util/functional.ts';
 
 const challengeThreshold = 10n;
 
@@ -19,36 +20,46 @@ export interface Contest {
   parent?: Contest;
   children: Map<string, Contest>;
 
-  invalidationPass: bigint;
-  invalidationFail: bigint;
-  validationPass: bigint;
-  validationFail: bigint;
+  validChallenge: bigint;
+  allValidContest: bigint;
+  invalidChallenge: bigint;
+  oneValidContest: bigint;
   finalPass: bigint;
   finalFail: bigint;
+  finalContest: bigint;
 
   typeWinner?: boolean | typeof CONTEST_TYPE_FINAL;
   resultWinner?: boolean;
+  paymentSrcs?: Posting[];
 }
+export interface CollateralDescriptor {
+  postings: Iterable<Posting>;
+  root: Contest;
+  contestMap: Map<Posting, Contest>;
+}
+type DetailVote = CollateralContractDetail['vote'];
 
 export default class CollateralUtil {
-  private static makeContest(parent?: Contest) {
+  private static makeContest(parent?: Contest): Contest {
     return {
       postings: [],
 
       parent,
       children: new Map(),
 
-      invalidationPass: 0n,
-      invalidationFail: 0n,
-      validationPass: 0n,
-      validationFail: 0n,
+      validChallenge: 0n,
+      allValidContest: 0n,
+      invalidChallenge: 0n,
+      oneValidContest: 0n,
       finalPass: 0n,
       finalFail: 0n,
+      finalContest: 0n,
     };
   }
 
-  public static buildTree(postings: Iterable<Posting>) {
+  public static buildTree(postings: Iterable<Posting>): CollateralDescriptor {
     const root: Contest = this.makeContest();
+    const contestMap = new Map<Posting, Contest>();
     for (const posting of postings) {
       let ptr = root;
       for (const hint of posting.detail.hints) {
@@ -60,50 +71,52 @@ export default class CollateralUtil {
       }
       ptr.postings.push(posting);
 
-      switch (posting.detail.contest_type) {
-        case 'INVALIDATION':
-          if (posting.detail.passed) {
-            ptr.invalidationPass += posting.amount;
-          } else {
-            ptr.invalidationFail += posting.amount;
-          }
+      switch (posting.detail.vote) {
+        case 'VALID_CHALLENGE':
+          ptr.validChallenge += posting.amount;
           break;
-
-        case 'VALIDATION':
-          if (posting.detail.passed) {
-            ptr.validationPass += posting.amount;
-          } else {
-            ptr.validationFail += posting.amount;
-          }
+        case 'ALL_VALID_CONTEST':
+          ptr.allValidContest += posting.amount;
           break;
-
-        case 'FINAL':
-          if (posting.detail.passed) {
-            ptr.finalPass += posting.amount;
-          } else {
-            ptr.finalFail += posting.amount;
-          }
+        case 'INVALID_CHALLENGE':
+          ptr.invalidChallenge += posting.amount;
+          break;
+        case 'ONE_VALID_CONTEST':
+          ptr.oneValidContest += posting.amount;
+          break;
+        case 'FINAL_PASS':
+          ptr.finalPass += posting.amount;
+          break;
+        case 'FINAL_FAIL':
+          ptr.finalFail += posting.amount;
+          break;
+        case 'FINAL_CONTEST':
+          ptr.finalContest += posting.amount;
           break;
       }
+
+      getOrCreate(contestMap, posting, () => ptr, () => {
+        throw new Error(`Duplicate postings!`);
+      });
     }
-    return root;
+    return { postings, root, contestMap };
   }
 
   private static getContestTypeWinner(contest: Contest) {
     if (contest.typeWinner === undefined) {
-      const invalidationSum = contest.invalidationPass +
-        contest.invalidationFail;
-      const validationSum = contest.validationPass + contest.validationFail;
-      const finalSum = contest.finalPass + contest.finalFail;
+      const allValidSum = contest.validChallenge + contest.allValidContest;
+      const oneValidSum = contest.oneValidContest + contest.invalidChallenge;
+      const finalSum = contest.finalPass + contest.finalFail +
+        contest.finalContest;
 
-      if (invalidationSum > validationSum) {
-        if (invalidationSum > finalSum) {
+      if (allValidSum >= oneValidSum) {
+        if (allValidSum >= finalSum) {
           contest.typeWinner = false;
         } else {
           contest.typeWinner = CONTEST_TYPE_FINAL;
         }
       } else {
-        if (validationSum > finalSum) {
+        if (oneValidSum >= finalSum) {
           contest.typeWinner = true;
         } else {
           contest.typeWinner = CONTEST_TYPE_FINAL;
@@ -117,188 +130,358 @@ export default class CollateralUtil {
     if (contest.resultWinner === undefined) {
       const type = this.getContestTypeWinner(contest);
       if (type === CONTEST_TYPE_FINAL) {
-        // Here, we just need to cross a threshold
+        // Here, payments come from the final votes of the other side
         contest.resultWinner = contest.finalPass >= contest.finalFail;
       } else {
         for (const child of contest.children.values()) {
           const childResult = this.getResultWinner(child);
           if (childResult === type) {
+            // If valid (true), payments go to the child and come from INVALID_CHALLENGE votes
+            // If invalid (false), payments go to the child and come from VALID_CHALLENGE votes
             contest.resultWinner = type;
+            break;
           }
         }
 
         if (contest.resultWinner === undefined) {
-          // Here, we just need to cross a threshold
+          // If the type is valid (true), payments come from INVALID_CHALLENGE if lt the threshold, or [] if gte
+          // If the type is invalid (false), payments are []
           contest.resultWinner = type
-            ? contest.validationFail >= challengeThreshold
-            : contest.invalidationPass >= challengeThreshold;
+            ? contest.invalidChallenge < challengeThreshold
+            : true;
         }
       }
     }
     return contest.resultWinner;
   }
 
-  private static hashContest(contest: DetailContest) {
-    return contest === null
-      ? EMPTY_HASH
-      : Hash.digest(CollateralContest.encode(contest.CollateralContest));
+  // private static getPayments(
+  //   contest: Contest,
+  // ): { paymentSrcs: Posting[]; paymentDsts: Posting[] } {
+  //   if (
+  //     contest.paymentSrcs === undefined || contest.paymentDsts === undefined
+  //   ) {
+  //     const type = this.getContestTypeWinner(contest);
+  //     if (type === CONTEST_TYPE_FINAL) {
+  //       const winner = contest.finalPass >= contest.finalFail;
+  //       const passes = contest.postings.filter((x) =>
+  //         x.detail.vote === 'FINAL_PASS'
+  //       );
+  //       const fails = contest.postings.filter((x) =>
+  //         x.detail.vote === 'FINAL_FAIL'
+  //       );
+  //       contest.paymentSrcs = winner ? fails : passes;
+  //       contest.paymentDsts = winner ? passes : fails;
+  //     } else {
+  //       for (const child of contest.children.values()) {
+  //         const childResult = this.getResultWinner(child);
+  //         if (childResult === type) {
+  //           const childPayments = this.getPayments(child);
+  //           childPayments;
+  //           contest.resultWhy = type;
+  //           break;
+  //         }
+  //       }
+
+  //       if (contest.resultWhy === undefined) {
+  //         // Here, we just need to cross a threshold
+  //         contest.resultWhy = type
+  //           ? contest.invalidChallenge < challengeThreshold
+  //           : true;
+  //       }
+  //     }
+  //   }
+  //   return contest;
+  // }
+
+  private static didWinContestType(vote: DetailVote, contest: Contest) {
+    const contestType = this.getContestTypeWinner(contest);
+    switch (vote) {
+      case 'VALID_CHALLENGE':
+        return contestType === false;
+      case 'ALL_VALID_CONTEST':
+        return contestType === false;
+      case 'INVALID_CHALLENGE':
+        return contestType === true;
+      case 'ONE_VALID_CONTEST':
+        return contestType === true;
+      case 'FINAL_PASS':
+        return contestType === CONTEST_TYPE_FINAL;
+      case 'FINAL_FAIL':
+        return contestType === CONTEST_TYPE_FINAL;
+      case 'FINAL_CONTEST':
+        return contestType === CONTEST_TYPE_FINAL;
+    }
   }
-  private static getParentContest(contest: DetailContest): DetailContest {
-    if (contest === null) {
-      throw new Error(`No parent!`);
-    } else if (contest.CollateralContest.hint === null) {
-      return null;
-    } else {
-      return {
-        CollateralContest: {
-          target: contest.CollateralContest.target,
-          hint: null,
+
+  private static didWinResult(vote: DetailVote, contest: Contest) {
+    const result = this.getResultWinner(contest);
+    switch (vote) {
+      case 'VALID_CHALLENGE':
+        return result === true;
+      case 'ALL_VALID_CONTEST':
+        return undefined;
+      case 'INVALID_CHALLENGE':
+        return result === false;
+      case 'ONE_VALID_CONTEST':
+        return undefined;
+      case 'FINAL_PASS':
+        return result === true;
+      case 'FINAL_FAIL':
+        return result === false;
+      case 'FINAL_CONTEST':
+        return undefined;
+    }
+  }
+
+  public static getOutputMap(descriptor: CollateralDescriptor) {
+    // Foreach contest:
+    //   Distribute contest type collateralizations to correct postings
+    //   Distribute correct contest type but incorrect result collateralizations to correct postings (just final postings)
+    // Foreach posting, in order:
+    //   If it's correct, then while we have incorrect parents, suck their collateral, recursively iterating parents until we get a correct one.
+
+    const outputKeys = new Map<string, BlockOutput>();
+    const addOutput = (dst: Uint8Array, amount: bigint) =>
+      amount > 0n &&
+      getOrCreate(outputKeys, bin2hex(dst), () => ({
+        verifier: {
+          contract_hash: accountHash,
+          params: AccountContractParams.encode({ public_key: dst }),
         },
-      };
-    }
-  }
+        amount,
+        detail: EMPTY_ARR,
+      }), (output) => {
+        output.amount += amount;
+        return output;
+      });
+    const addBurn = (amount: bigint) =>
+      amount > 0n &&
+      getOrCreate(outputKeys, 'x', () => ({
+        verifier: { contract_hash: burnHash, params: EMPTY_ARR },
+        amount,
+        detail: EMPTY_ARR,
+      }), (output) => {
+        output.amount += amount;
+        return output;
+      }) && console.log(`Burning ${amount}`);
 
-  private static isVoteAllowed(contest: DetailContest, vote: DetailResult) {
-    if (contest === null) {
-      return ['VALID'].includes(vote);
-    } else if (
-      'CollateralTargetInputHash' in contest.CollateralContest.target
-    ) {
-      if (contest.CollateralContest.hint === null) {
-        return ['INVALID'].includes(vote);
-      } else {
-        return ['VALID', 'INCONCLUSIVE'].includes(vote);
+    const remainingRewards = new Map<Contest, bigint>();
+
+    const distributeContest = (contest: Contest) => {
+      let ctWinAmt: bigint;
+      let remainingResultReward: bigint;
+      switch (this.getContestTypeWinner(contest)) {
+        case false:
+          ctWinAmt = contest.validChallenge + contest.allValidContest;
+          remainingResultReward = this.getResultWinner(contest)
+            ? 0n
+            : contest.validChallenge;
+          break;
+        case true:
+          ctWinAmt = contest.oneValidContest + contest.invalidChallenge;
+          remainingResultReward = this.getResultWinner(contest)
+            ? contest.invalidChallenge
+            : 0n;
+          break;
+        case CONTEST_TYPE_FINAL:
+          ctWinAmt = contest.finalPass + contest.finalFail +
+            contest.finalContest;
+          remainingResultReward = this.getResultWinner(contest)
+            ? contest.finalFail
+            : contest.finalPass;
+          break;
       }
-    } else if ('CollateralTargetVerifier' in contest.CollateralContest.target) {
-      if (contest.CollateralContest.hint === null) {
-        return ['VALID', 'INVALID'].includes(vote);
-      } else {
-        return true;
-      }
-    }
-  }
-  private static getChildVoteInfluence(
-    parentContest: DetailContest,
-    vote: DetailResult,
-  ) {
-    if (parentContest === null) {
-      return vote === 'INVALID';
-    } else if (
-      'CollateralTargetInputHash' in parentContest.CollateralContest.target
-    ) {
-      if (parentContest.CollateralContest.hint === null) {
-        return vote === 'VALID';
-      } else {
-        throw new Error('Internal error');
-      }
-    } else if (
-      'CollateralTargetVerifier' in parentContest.CollateralContest.target
-    ) {
-      if (parentContest.CollateralContest.hint === null) {
-        return true;
-      } else {
-        throw new Error('Internal error');
-      }
-    }
-  }
 
-  private static findContest(
-    contests: Map<HashPrimitive, Contest>,
-    spec: DetailContest,
-  ) {
-    const key = this.hashContest(spec).toPrimitive();
-    let res = contests.get(key);
-    if (res === undefined) {
-      res = {
-        spec,
-        postings: [],
-        children: [],
-        VALID: 0n,
-        INVALID: 0n,
-        INCONCLUSIVE: 0n,
-      };
-      contests.set(key, res);
+      const totalAmt = contest.validChallenge + contest.allValidContest +
+        contest.oneValidContest + contest.invalidChallenge +
+        contest.finalPass + contest.finalFail + contest.finalContest;
 
-      if (spec !== null) {
-        res.parent = this.findContest(contests, this.getParentContest(spec));
-        res.parent.children.push(res);
-      }
-    }
+      let remainingCtReward = totalAmt - ctWinAmt;
+      for (const posting of contest.postings) {
+        if (this.didWinContestType(posting.detail.vote, contest)) {
+          const d = posting.amount < remainingCtReward
+            ? posting.amount
+            : remainingCtReward;
 
-    return res;
-  }
+          let amount = d;
+          remainingCtReward -= d;
 
-  // NOTE: Postings must be sorted by order of canonicality!
-  public static getContests(postings: Iterable<Posting>) {
-    const contests = new Map<HashPrimitive, Contest>();
-    for (const posting of postings) {
-      const contest = this.findContest(contests, posting.detail.contest);
-      contest.postings.push(posting);
-      contest[posting.detail.result] += posting.amount;
-    }
-    return contests;
-  }
+          const wonResult = this.didWinResult(posting.detail.vote, contest);
+          if (wonResult === undefined) {
+            amount += posting.amount; // Just get back our posting
+          } else if (wonResult) {
+            const d = posting.amount < remainingResultReward
+              ? posting.amount
+              : remainingResultReward;
 
-  public static getWinner(contest: Contest): DetailResult {
-    if (contest.winner === undefined) {
-      let hasChildValid = false;
-      let hasChildInvalid = false;
-      for (const child of contest.children) {
-        const winner = this.getWinner(child);
-        if (winner === 'VALID') {
-          hasChildValid = true;
-        } else if (winner === 'INVALID') {
-          hasChildInvalid = true;
+            amount += posting.amount + d;
+            remainingResultReward -= d;
+          }
+
+          addOutput(posting.detail.public_key, amount);
         }
       }
 
-      if (
-        hasChildValid && !hasChildInvalid &&
-        this.getChildVoteInfluence(contest.spec, 'VALID')
-      ) {
-        contest.winner = 'VALID';
-      } else if (
-        hasChildInvalid && !hasChildValid &&
-        this.getChildVoteInfluence(contest.spec, 'INVALID')
-      ) {
-        contest.winner = 'INVALID';
-      } else {
-        const valid = contest.VALID &&
-            this.isVoteAllowed(contest.spec, 'VALID')
-          ? contest.VALID
-          : 0n;
-        const invalid = contest.INVALID &&
-            this.isVoteAllowed(contest.spec, 'INVALID')
-          ? contest.INVALID
-          : 0n;
-        const inconclusive = contest.INCONCLUSIVE &&
-            this.isVoteAllowed(contest.spec, 'INCONCLUSIVE')
-          ? contest.INCONCLUSIVE
-          : 0n;
+      addBurn(remainingCtReward);
 
-        if (valid >= invalid) {
-          if (valid >= inconclusive) {
-            contest.winner = 'VALID';
+      if (remainingResultReward > 0n) {
+        getOrCreate(
+          remainingRewards,
+          contest,
+          () => remainingResultReward,
+          () => error(`Duplicate contests!`),
+        );
+      }
+
+      for (const child of contest.children.values()) {
+        distributeContest(child);
+      }
+    };
+
+    distributeContest(descriptor.root);
+
+    for (const posting of descriptor.postings) {
+      const contest = descriptor.contestMap.get(posting) ??
+        error(`Posting doesn't have a contest!`);
+
+      // Note: Solely contestType votes, when this.didWinResult returns undefined, aren't elegible for parent collateral
+      if (
+        this.didWinContestType(posting.detail.vote, contest) &&
+        this.didWinResult(posting.detail.vote, contest)
+      ) {
+        let amount = 0n;
+
+        let parent = contest.parent;
+        while (parent !== undefined) {
+          amount += mapPop(remainingRewards, parent) ?? 0n;
+          if (this.getContestTypeWinner(parent) === true) {
+            break;
+          }
+          parent = parent.parent;
+        }
+
+        addOutput(posting.detail.public_key, amount);
+      }
+    }
+
+    for (const amount of remainingRewards.values()) {
+      addBurn(amount);
+    }
+
+    return outputKeys;
+  }
+
+  public static getOutputMapOld(descriptor: CollateralDescriptor) {
+    interface PostingMeta {
+      total: bigint;
+      rewardFromContestType: bigint;
+      rewardFromResult: bigint;
+    }
+    const postingMeta = new Map<Posting, PostingMeta>();
+    const getMeta = (posting: Posting) =>
+      getOrCreate(postingMeta, posting, () => {
+        const contest = descriptor.contestMap.get(posting) ??
+          error(`Posting doesn't have a contest!`);
+
+        const wonContestType = this.didWinContestType(
+          posting.detail.vote,
+          contest,
+        );
+        let rewardFromContestType: bigint;
+        let rewardFromResult: bigint;
+        if (wonContestType) {
+          rewardFromContestType = posting.amount;
+
+          const wonResult = this.didWinResult(posting.detail.vote, contest);
+          if (wonResult === undefined) {
+            rewardFromResult = 0n;
+          } else if (wonResult) {
+            // rewardFromResult = 1n << 64n;
+            rewardFromResult = 1000000000n;
           } else {
-            contest.winner = 'INCONCLUSIVE';
+            rewardFromResult = -posting.amount;
           }
         } else {
-          if (invalid > inconclusive) {
-            contest.winner = 'INVALID';
+          rewardFromContestType = -posting.amount;
+          rewardFromResult = 0n;
+        }
+        const total = posting.amount + rewardFromContestType + rewardFromResult;
+
+        return { total, rewardFromContestType, rewardFromResult };
+      });
+
+    const distribute = <Key extends string>(
+      key: Key,
+      a: { [x in Key]: bigint },
+      b: { [x in Key]: bigint },
+    ) => {
+      if (a[key] > 0n) {
+        if (b[key] < 0n) {
+          if (b[key] > -a[key]) {
+            a[key] += b[key];
+            b[key] = 0n;
           } else {
-            contest.winner = 'INCONCLUSIVE';
+            b[key] += a[key];
+            a[key] = 0n;
+          }
+        }
+      } else {
+        if (b[key] > 0n) {
+          if (b[key] > -a[key]) {
+            b[key] += a[key];
+            a[key] = 0n;
+          } else {
+            a[key] += b[key];
+            b[key] = 0n;
+          }
+        }
+      }
+    };
+
+    for (const posting of descriptor.postings) {
+      const contest = descriptor.contestMap.get(posting) ??
+        error(`Posting doesn't have a contest!`);
+      const meta = getMeta(posting);
+
+      if (meta.rewardFromContestType !== 0n) {
+        for (const siblingPosting of contest.postings) {
+          distribute('rewardFromContestType', meta, getMeta(siblingPosting));
+          if (meta.rewardFromContestType === 0n) {
+            break;
+          }
+        }
+      }
+
+      distributed_reward: {
+        console.log('ABC');
+        if (meta.rewardFromResult === 0n) {
+          break distributed_reward;
+        }
+
+        let parent = contest.parent;
+        while (parent !== undefined) {
+          for (const parentPosting of parent.postings) {
+            console.log(posting.detail.vote, parentPosting.detail.vote);
+            console.log(meta, getMeta(parentPosting));
+            distribute('rewardFromResult', meta, getMeta(parentPosting));
+            console.log(meta, getMeta(parentPosting));
+            if (meta.rewardFromResult === 0n) {
+              break distributed_reward;
+            }
+          }
+          parent = parent.parent;
+        }
+
+        for (const siblingPosting of contest.postings) {
+          distribute('rewardFromResult', meta, getMeta(siblingPosting));
+          if (meta.rewardFromResult === 0n) {
+            break distributed_reward;
           }
         }
       }
     }
 
-    return contest.winner;
-  }
-
-  public static getOutputMap(
-    postings: Iterable<Posting>,
-    contests: Map<HashPrimitive, Contest>,
-  ) {
     const outputKeys = new Map<string, BlockOutput>();
     const addOutput = (dst: Uint8Array, amount: bigint) =>
       getOrCreate(outputKeys, bin2hex(dst), () => ({
@@ -313,114 +496,79 @@ export default class CollateralUtil {
         return output;
       });
 
-    for (const posting of postings) {
-      const key = this.hashContest(posting.detail.contest).toPrimitive();
-      const contest = contests.get(key);
-      if (contest === undefined) {
-        throw new Error(`No contest for posting!`);
+    for (const [posting, meta] of postingMeta) {
+      const amount = meta.total - meta.rewardFromContestType -
+        meta.rewardFromResult;
+      if (amount > 0n) {
+        addOutput(posting.detail.public_key, amount);
+      } else if (amount < 0n) {
+        throw new Error(`Negative output!`);
       }
-
-      const isCorrect = posting.detail.result === this.getWinner(contest);
-      // Positive, reward, correct: claim an extra x * collateral. first look towards parents, then self, then add onto rewardRemaining
-      // Negative, penalty, incorrect:
-      let claimTotal: bigint;
-      let rewardRemaining: bigint;
-
-      if (isCorrect) {
-        claimTotal = posting.amount;
-        rewardRemaining = (posting.amount * 1n) >> 0n;
-      } else {
-        claimTotal = posting.amount;
-        rewardRemaining = -(posting.amount * 1n) >> 0n;
-      }
-
-      let parent = contest.parent;
-      while (parent !== undefined) {
-        if (
-          rewardRemaining < 0n &&
-          parent.rewardRemaining > -rewardRemaining
-        ) {
-          parent.rewardRemaining += rewardRemaining;
-          claimTotal += rewardRemaining;
-          rewardRemaining = 0n;
-          break;
-        } else if (
-          parent.rewardRemaining < 0n &&
-          rewardRemaining > -parent.rewardRemaining
-        ) {
-          rewardRemaining += parent.rewardRemaining;
-          claimTotal -= parent.rewardRemaining;
-          parent.rewardRemaining = 0n;
-        }
-        parent = parent.parent;
-      }
-
-      contest.rewardRemaining += rewardRemaining;
-
-      addOutput(posting.detail.public_key, claimTotal);
-    }
-
-    for (const contest of lostContests) {
-      addOutput(EMPTY_ARR, contest.lostCoins);
     }
 
     return outputKeys;
   }
 
-  public static getOutputMapOld(contests: Iterable<Contest>) {
-    const outputKeys = new Map<string, BlockOutput>();
-    for (const contest of contests) {
-      const totalAmt = contest.VALID + contest.INVALID + contest.INCONCLUSIVE;
-      const winAmt = contest[this.getWinner(contest)];
-      const lossAmt = totalAmt - winAmt;
-
-      const maxWinAmt = lossAmt << 1n;
-      const effectiveWinAmt = winAmt < maxWinAmt ? winAmt : maxWinAmt;
-
-      let src = lossAmt;
-      let dst = effectiveWinAmt;
-
-      for (const posting of contest.postings) {
-        if (posting.detail.result === contest.winner) {
-          let amount: bigint;
-          if (dst > 0n) {
-            const effectiveAmt = dst < posting.amount ? dst : posting.amount;
-
-            amount = effectiveAmt * src / dst;
-            src -= amount;
-            dst -= effectiveAmt;
-
-            amount += posting.amount;
-          } else {
-            amount = posting.amount;
-          }
-
-          getOrCreate(outputKeys, bin2hex(posting.detail.public_key), () => ({
-            verifier: {
-              contract_hash: accountHash,
-              params: AccountContractParams.encode({
-                public_key: posting.detail.public_key,
-              }),
-            },
-            amount,
-            detail: EMPTY_ARR,
-          }), (output) => {
-            output.amount += amount;
-            return output;
-          });
-        }
-      }
-
-      if (src !== 0n || dst !== 0n) {
-        throw new Error(
-          `Error distributing collateral: src=${src}; dst=${dst}`,
-        );
-      }
-    }
-    return outputKeys;
+  public static getEqualizingPostings(
+    descriptor: CollateralDescriptor,
+    publicKey: Uint8Array,
+  ) {
   }
 
-  public static getRootWinner(contests: Map<HashPrimitive, Contest>) {
-    return this.getWinner(this.findContest(contests, null));
+  // private static getOutputMapOld(contests: Iterable<Contest>) {
+  //   const outputKeys = new Map<string, BlockOutput>();
+  //   for (const contest of contests) {
+  //     const totalAmt = contest.VALID + contest.INVALID + contest.INCONCLUSIVE;
+  //     const winAmt = contest[this.getWinner(contest)];
+  //     const lossAmt = totalAmt - winAmt;
+
+  //     const maxWinAmt = lossAmt << 1n;
+  //     const effectiveWinAmt = winAmt < maxWinAmt ? winAmt : maxWinAmt;
+
+  //     let src = lossAmt;
+  //     let dst = effectiveWinAmt;
+
+  //     for (const posting of contest.postings) {
+  //       if (posting.detail.result === contest.winner) {
+  //         let amount: bigint;
+  //         if (dst > 0n) {
+  //           const effectiveAmt = dst < posting.amount ? dst : posting.amount;
+
+  //           amount = effectiveAmt * src / dst;
+  //           src -= amount;
+  //           dst -= effectiveAmt;
+
+  //           amount += posting.amount;
+  //         } else {
+  //           amount = posting.amount;
+  //         }
+
+  //         getOrCreate(outputKeys, bin2hex(posting.detail.public_key), () => ({
+  //           verifier: {
+  //             contract_hash: accountHash,
+  //             params: AccountContractParams.encode({
+  //               public_key: posting.detail.public_key,
+  //             }),
+  //           },
+  //           amount,
+  //           detail: EMPTY_ARR,
+  //         }), (output) => {
+  //           output.amount += amount;
+  //           return output;
+  //         });
+  //       }
+  //     }
+
+  //     if (src !== 0n || dst !== 0n) {
+  //       throw new Error(
+  //         `Error distributing collateral: src=${src}; dst=${dst}`,
+  //       );
+  //     }
+  //   }
+  //   return outputKeys;
+  // }
+
+  public static isValid(descriptor: CollateralDescriptor) {
+    return this.getResultWinner(descriptor.root);
   }
 }

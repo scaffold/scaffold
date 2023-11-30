@@ -13,7 +13,7 @@ import { error } from './util/functional.ts';
 import WorkerDebuggerManager, {
   WorkerDebugger,
 } from './WorkerDebuggerManager.ts';
-import { ComputationDriver } from './WorkerLauncherService.ts';
+import { BurdenOfProof, ComputationDriver } from './WorkerLauncherService.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 
 interface OpenFile {
@@ -207,7 +207,11 @@ export default class WorkerExecutor {
       },
       // deno-lint-ignore require-await
       async readHint(dstBuf: Uint8Array, offset: number): Promise<number> {
-        return writeBuf(dstBuf, driver.getHint(), offset);
+        return writeBuf(
+          dstBuf,
+          driver.getHint(0, BurdenOfProof.Invalidation),
+          offset,
+        );
       },
       // deno-lint-ignore require-await
       async readBody(dstBuf: Uint8Array, offset: number): Promise<number> {
