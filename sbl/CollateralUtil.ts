@@ -1,4 +1,3 @@
-import Hash, { EMPTY_HASH, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { getOrCreate, mapPop } from '~/sbl/util/map.ts';
 import { AccountContractParams, BlockOutput } from '~/sbl/messages.ts';
@@ -8,6 +7,33 @@ import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
 
 const challengeThreshold = 10n;
+
+/*
+https://edotor.net/
+digraph G {
+    rankdir="RL";
+
+  root [label="AllColl []"];
+
+  hash0 [label="OneColl [hash0]"];
+  hash0 -> root;
+
+  hash0_textA [label="FinalPass [hash0, textA]"];
+  hash0_textA -> hash0;
+
+  hash0_textB [label="FinalFail [hash0, textB]"];
+  hash0_textB -> hash0;
+
+  vf0 [label="AllContest [vf0]"];
+  vf0 -> root;
+
+  vf0_hintA [label="FinalPass [vf0, hintA]"];
+  vf0_hintA -> vf0;
+
+  vf1_hintA [label="FinalFail [vf1, hintA]"];
+  vf1_hintA -> vf0;
+}
+*/
 
 const CONTEST_TYPE_FINAL = Symbol('CollateralUtil.ContestTypeFinal');
 export interface Posting {

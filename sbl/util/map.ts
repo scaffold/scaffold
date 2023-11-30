@@ -1,4 +1,4 @@
-export const getOrCreate = <K, V>(
+export const mapPut = <K, V>(
   map: Map<K, V> | (K extends object ? WeakMap<K, V> : never),
   key: K,
   creator: () => V,
@@ -25,3 +25,5 @@ export const mapPop = <K, V>(
   }
   return val;
 };
+
+export const getOrCreate = mapPut;
