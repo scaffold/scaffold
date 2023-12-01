@@ -2,9 +2,8 @@ import { makeTest, provideInitialBalance } from './util.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import { frontierHash } from '~/sbl/constants.ts';
-import { assertNotEquals } from 'std-latest/assert/assert_not_equals.ts';
+import { assertEquals, assertNotEquals } from 'std-latest/assert/mod.ts';
 import Hash from '~/sbl/util/Hash.ts';
-import { assertEquals } from 'std-latest/assert/assert_equals.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import FactService from '~/sbl/FactService.ts';
 

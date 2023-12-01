@@ -1,4 +1,4 @@
-import { assertEquals } from 'std-latest/testing/asserts.ts';
+import { assertEquals } from 'std-latest/assert/mod.ts';
 import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
 import * as collatzMessages from '~/ts/collatzMessages.ts';
 import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';

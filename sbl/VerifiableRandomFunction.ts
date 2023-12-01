@@ -1,7 +1,7 @@
 import Hash from './util/Hash.ts';
 import Context from './Context.ts';
 import secp from './util/secp.ts';
-import { hex2bin } from './pathUtils.ts';
+import { hex2bin } from '~/sbl/util/hex.ts';
 
 // NOTE THAT THIS IS NOT A VRF
 // THIS IMPLEMENTATION IS REALLY BAD

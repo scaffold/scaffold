@@ -1,4 +1,4 @@
-import { assertEquals } from 'std-latest/testing/asserts.ts';
+import { assertEquals } from 'std-latest/assert/mod.ts';
 import CollateralUtil, { Posting } from '~/sbl/CollateralUtil.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { bin2str, str2bin } from '~/sbl/util/buffer.ts';

@@ -20,6 +20,7 @@ import { BlockSetFact, Collateralization, FactSource } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import HashView from '~/ui/HashView.tsx';
+import CollateralUtil from '~/sbl/CollateralUtil.ts';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
@@ -151,20 +152,13 @@ export default (
         accessorFn: (blockSet) => blockSet.data.byteLength,
       },
       {
-        header: 'collateral for',
+        header: 'is valid',
         accessorFn: (blockSet) =>
-          blockSet.collateralizations.reduce(
-            (acc, cur) => cur.valid ? acc + cur.amount : acc,
-            0n,
-          ),
-      },
-      {
-        header: 'collateral against',
-        accessorFn: (blockSet) =>
-          blockSet.collateralizations.reduce(
-            (acc, cur) => cur.valid ? acc : acc + cur.amount,
-            0n,
-          ),
+          CollateralUtil.isValid(
+              CollateralUtil.buildTree(blockSet.collateralizations),
+            )
+            ? 'yes'
+            : 'no',
       },
       {
         header: 'collateralizations',
@@ -174,7 +168,7 @@ export default (
             {props.getValue<Collateralization[]>().map((ctz) => (
               <li>
                 <HashView
-                  hash={ctz.block.hash}
+                  hash={ctz.collateralBlock.hash}
                   setHoveredHash={setHoveredHash}
                   setSelectedHash={setSelectedHash}
                 />

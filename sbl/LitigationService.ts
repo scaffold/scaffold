@@ -49,7 +49,8 @@ export default class LitigationService {
     vote = this.ctx.get(FactService).updateValidity(block.hash, hints, vote);
 
     const parentType = CollateralUtil.getContestType(
-      this.ctx.get(FactService).getValidity(block.hash, hints.slice(0, -1)),
+      this.ctx.get(FactService).getValidity(block.hash, hints.slice(0, -1)) ??
+        'ALL_VALID_CONTEST',
     );
 
     let amount: bigint;

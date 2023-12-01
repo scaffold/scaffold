@@ -172,9 +172,12 @@ export default class FactService {
     mapPut(this.collateralByHash, blockHash.toPrimitive(), () => [])
       .push(collateralization);
   }
-  public getValidity(blockHash: Hash, hints: Uint8Array[]): DetailVote {
+  public getValidity(
+    blockHash: Hash,
+    hints: Uint8Array[],
+  ): DetailVote | undefined {
     return this.validitiesByHash.get(blockHash.toPrimitive())
-      ?.get(Hash.digestParts(...hints).toPrimitive()) ?? 'ALL_VALID_CONTEST';
+      ?.get(Hash.digestParts(...hints).toPrimitive());
   }
   public updateValidity(
     blockHash: Hash,

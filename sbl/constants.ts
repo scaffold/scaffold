@@ -58,3 +58,5 @@ export const frontierHash = Hash.xor(SBL, Hash.fromLiteralStr('frontier'));
 
 export const jsWasiHash = Hash.xor(SBL, Hash.fromLiteralStr('js_wasi'));
 export const jsLockHash = Hash.xor(SBL, Hash.fromLiteralStr('js_lock'));
+
+export const collatzHash = Hash.xor(SBL, Hash.fromLiteralStr('collatz'));

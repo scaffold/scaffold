@@ -76,30 +76,5 @@ export default class CollateralContract implements ContractProvider {
     for (const output of outputMap.values()) {
       driver.requireOutput(output);
     }
-
-    // let remainingAllValid = contests.get(
-    //   Hash.digest(
-    //     CollateralContest.encode({
-    //       target: { CollateralTargetAllValid: {} },
-    //       hint: null,
-    //     }),
-    //   ).toPrimitive(),
-    // );
-    // for (const posting of postings) {
-    //   contests.get(posting.key!.toPrimitive())!;
-    // }
-
-    /*
-    AllValid {}
-    InputHash {index: 0}
-    InputHash {index: 0, hint: }
-
-
-    For fair verifiers, just
-    Distribute N allValid coins amongst first N coins placed in groups eventually invalidating the block.
-
-    */
-
-    // this.ctx.get(BlockService).sort(fact.collateralizations, frontierVote);
   }
 }

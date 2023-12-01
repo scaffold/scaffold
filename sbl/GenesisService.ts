@@ -34,7 +34,7 @@ export const createGenesisBlock = (
   const ctx = new Context({
     ...makeDefaultConfig(),
 
-    debugName: 'SblClient',
+    debugName: 'GenesisFactory',
     selfPrivateKey: genesisPrivateKey,
 
     networkProviders: [],
@@ -60,11 +60,12 @@ export const createGenesisBlock = (
 };
 
 const generatedGenesisData = createGenesisBlock(initAccounts).data;
-console.log('Genesis block hex:', bin2hex(generatedGenesisData));
+// console.log('Genesis block hex:', bin2hex(generatedGenesisData));
 export const sharedGenesisData = hex2bin(
   '53424c0200000653424c000000000000000000000000000000000000000000006163636f756e7442404b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a578480897a0053424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c67980897a0053424c00000000000000000000000000000000000000000066726f6e74696572020014000000000000000000000000000000000000000000000000000000000000000000004203709e4ca7819f7e53b578454d5da4eb791fb3dc05f3bfa532af407ac14f055ff200d2b9927f939593d59a097593e25c19d48e9cbe457e44de314b90db2a4b23daf04912d2607c92c76b24f9a4438ca75ed256361fbc077d35ab6bd06a73af3e6c3e01',
 );
 if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
+  console.log('Genesis block hex:', bin2hex(generatedGenesisData));
   throw new Error(
     `Shared genesis data isn't the right length! Please update it.`,
   );
@@ -83,6 +84,8 @@ export default class GenesisService {
     } catch (err) {
       console.error(err);
       console.error(`You probably need to update the genesis block data!`);
+      console.log('Genesis block hex:', bin2hex(generatedGenesisData));
+      throw err;
     }
   }
 

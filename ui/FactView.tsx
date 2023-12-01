@@ -15,6 +15,7 @@ import { Fact, FactSource, FactType } from '~/sbl/FactMeta.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
 import { match } from '~/sbl/util/functional.ts';
 import { BlockInput } from '~/sbl/messages.ts';
+import CollateralUtil from '~/sbl/CollateralUtil.ts';
 
 const makeTypeIcon = (type: FactType) => {
   switch (type) {
@@ -124,14 +125,10 @@ export default (
     'THROUGHPUT': 'outputs' in fact
       ? Number(fact.outputs.reduce((acc, cur) => acc + cur.amount, 0n))
       : undefined,
-    'COLL FOR': Number(fact.collateralizations.reduce(
-      (acc, cur) => cur.valid ? acc + cur.amount : acc,
-      0n,
-    )),
-    'COLL AGAINST': Number(fact.collateralizations.reduce(
-      (acc, cur) => cur.valid ? acc : acc + cur.amount,
-      0n,
-    )),
+    'IS VALID':
+      CollateralUtil.isValid(CollateralUtil.buildTree(fact.collateralizations))
+        ? 'yes'
+        : 'no',
     'FRONTIER VOTE':
       'frontier_vote' in fact && !Hash.equals(fact.frontier_vote, ZERO_HASH)
         ? (

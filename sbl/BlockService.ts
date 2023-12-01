@@ -54,6 +54,7 @@ import FrontierService2 from '~/sbl/FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
+import CollateralUtil, { CONTEST_TYPE_FINAL } from '~/sbl/CollateralUtil.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -962,17 +963,25 @@ export default class BlockService {
     // myCollateral
   }
 
+  // Note that contestations still may be in progress
   public async waitForVerification(block: BlockFact) {
-    throw new Error(`TODO: Unimplemented`);
+    for (let i = 0; i < block.inputs.length; i++) {
+      const hint = CollateralHint.encode({
+        hint: { CollateralHintVerifier: { input_idx: i } },
+      });
 
-    // while (
-    //   (block.validatedInputs | block.invalidatedInputs) !==
-    //     (1n << BigInt(block.inputs.length)) - 1n
-    // ) {
-    //   await new Promise<void>((resolve) =>
-    //     this.ctx.config.timeProvider.setTimeout(resolve, 100)
-    //   );
-    // }
+      while (
+        this.ctx.get(FactService).getValidity(block.hash, [hint]) === undefined
+      ) {
+        await new Promise<void>((resolve) =>
+          this.ctx.config.timeProvider.setTimeout(resolve, 100)
+        );
+      }
+    }
+
+    return CollateralUtil.isValid(
+      CollateralUtil.buildTree(block.collateralizations),
+    );
   }
 
   public doesBlockSatisfy(

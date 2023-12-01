@@ -176,10 +176,8 @@ export default () => {
               params: Hash.random().toBytes(),
             }],
           });
-          client.ctx.get(LitigationService).litigateBlock(badBlock, {
-            target: { CollateralTargetAllValid: {} },
-            hint: null,
-          }, 'VALID');
+          client.ctx.get(LitigationService)
+            .litigate(badBlock, [], 'VALID_CHALLENGE');
         }}
       >
         Publish bad block
