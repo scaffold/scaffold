@@ -48,7 +48,7 @@ const tests: {
     name: 'challenge verifier hint correct',
     posting: makePosting('pk5', 12n, 'FINAL_PASS', ['verifier0', 'hintA']),
     isValid: true,
-    outputs: [['pk1', 1000n], ['pk3', 20n], ['pk5', 22n]],
+    outputs: [['', 4n], ['pk1', 1000n], ['pk3', 20n], ['pk5', 18n]],
   },
 ];
 
@@ -65,9 +65,9 @@ Deno.test({ name: `distribution test` }, () => {
     );
     const outputMap = CollateralUtil.getOutputMap(desc);
     assertEquals(
-      [...outputMap.entries()].map(
-        ([pkHex, output]) => [bin2str(hex2bin(pkHex)), output.amount],
-      ),
+      [...outputMap.entries()].map(([pkHex, output]) =>
+        [bin2str(hex2bin(pkHex)), output.amount] as const
+      ).sort((a, b) => a[0].localeCompare(b[0])),
       test.outputs,
       `Unexpected output after ${test.name}`,
     );

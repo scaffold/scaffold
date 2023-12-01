@@ -1,6 +1,9 @@
 import { assert } from '~/sbl/util/functional.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 
+export const bigintMin = (a: bigint, b: bigint) => a < b ? a : b;
+export const bigintMax = (a: bigint, b: bigint) => a > b ? a : b;
+
 export const countTrailingZeros = (num: bigint) => {
   if (num <= 0n) {
     throw new Error(`Must be positive: ${num}!`);
@@ -43,14 +46,14 @@ export const bigint2bin = (num: bigint, size?: number) => {
 assert(bin2bigint(new Uint8Array([])) === 0n);
 assert(bin2bigint(new Uint8Array([7])) === 7n);
 assert(bin2bigint(new Uint8Array([255])) === 255n);
-assert(bin2bigint(new Uint8Array([1, 0])) === 256n);
-assert(bin2bigint(new Uint8Array([1, 7])) === 263n);
+assert(bin2bigint(new Uint8Array([0, 1])) === 256n);
+assert(bin2bigint(new Uint8Array([7, 1])) === 263n);
 
 assert(arrEquals(bigint2bin(0n), new Uint8Array([])));
 assert(arrEquals(bigint2bin(7n), new Uint8Array([7])));
 assert(arrEquals(bigint2bin(255n), new Uint8Array([255])));
-assert(arrEquals(bigint2bin(256n), new Uint8Array([1, 0])));
-assert(arrEquals(bigint2bin(263n), new Uint8Array([1, 7])));
+assert(arrEquals(bigint2bin(256n), new Uint8Array([0, 1])));
+assert(arrEquals(bigint2bin(263n), new Uint8Array([7, 1])));
 
 const t = 13473837727108541341n;
 assert(bin2bigint(bigint2bin(t, 8)) === t);

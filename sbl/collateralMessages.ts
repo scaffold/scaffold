@@ -39,6 +39,14 @@ const registry = {
     fields: [
       { name: 'public_key', type: 'bytes' }, // 33 bytes
       { name: 'hints', type: { type: 'array', items: 'bytes' } },
+
+      // When running a contract, hints are requested via getHint().
+      // After getHint() calls returning this sequence of hints, this vote signifies the next getHint() or finalize() call.
+      // VALID_CHALLENGE and ALL_VALID_CONTEST signify getHint(..., BurdenOfProof.Invalidation) being the next call.
+      // INVALID_CHALLENGE and ONE_VALID_CONTEST signify getHint(..., BurdenOfProof.Validation) being the next call.
+      // FINAL_PASS signifies finalize(COMPUTE_PASS_FLAG) being the next call, meaning the contract passed.
+      // FINAL_FAIL signifies finalize([someErr]) being the next call, meaning the contract failed.
+      // FINAL_CONTEST isn't used at the moment, but it would signify us knowing finalize() being the next call, as opposed to getHint(), but not knowing if the contract passed or failed.
       {
         name: 'vote',
         type: {

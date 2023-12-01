@@ -1,17 +1,18 @@
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { mapPop, mapPut } from '~/sbl/util/map.ts';
 import { AccountContractParams, BlockOutput } from '~/sbl/messages.ts';
-import { bin2hex } from '~/sbl/util/hex.ts';
+import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import { accountHash, burnHash } from '~/sbl/constants.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
+import { bigintMax, bigintMin } from '~/sbl/util/bigint.ts';
 
 export const challengeThreshold = 10n;
 
 /*
 https://edotor.net/
 digraph G {
-    rankdir="RL";
+  rankdir="RL";
 
   root [label="AllColl []"];
 
@@ -30,8 +31,8 @@ digraph G {
   vf0_hintA [label="FinalPass [vf0, hintA]"];
   vf0_hintA -> vf0;
 
-  vf1_hintA [label="FinalFail [vf1, hintA]"];
-  vf1_hintA -> vf0;
+  vf0_hintB [label="FinalFail [vf0, hintB]"];
+  vf0_hintB -> vf0;
 }
 */
 
@@ -177,6 +178,76 @@ export default class CollateralUtil {
     return contest.resultWinner;
   }
 
+  public static applyBelief(contest: Contest, vote: DetailVote) {
+    const newType = this.getContestType(vote);
+    const oldResult = contest.resultWinner;
+    if (newType !== contest.typeWinner) {
+      contest.typeWinner = newType;
+      contest.resultWinner = undefined;
+    }
+
+    switch (vote) {
+      case 'VALID_CHALLENGE':
+        contest.resultWinner = true;
+        break;
+      case 'ALL_VALID_CONTEST':
+        break;
+      case 'INVALID_CHALLENGE':
+        contest.resultWinner = false;
+        break;
+      case 'ONE_VALID_CONTEST':
+        break;
+      case 'FINAL_PASS':
+        contest.resultWinner = true;
+        break;
+      case 'FINAL_FAIL':
+        contest.resultWinner = false;
+        break;
+      case 'FINAL_CONTEST':
+        break;
+    }
+
+    if (contest.resultWinner !== oldResult) {
+      // Recompute parents
+      let parent = contest.parent;
+      while (parent !== undefined && parent.resultWinner !== undefined) {
+        parent.resultWinner = undefined;
+        parent = parent.parent;
+      }
+    }
+  }
+
+  public static applyAllBeliefs(
+    descriptor: CollateralDescriptor,
+    evaluator: (hints: Uint8Array[]) => DetailVote | undefined,
+    rectifier?: (hints: Uint8Array[], vote: DetailVote, amount: bigint) => void,
+  ) {
+    const apply = (contest: Contest, hints: Uint8Array[]) => {
+      for (const [key, child] of contest.children) {
+        hints.push(hex2bin(key));
+        apply(child, hints);
+        hints.pop();
+      }
+
+      const vote = evaluator(hints);
+      if (vote !== undefined) {
+        this.applyBelief(contest, vote);
+
+        if (rectifier) {
+          const { ctWinAmt, ctLossAmt, resultWinAmt, resultLossAmt } = this
+            .getContestAmounts(contest);
+          let amount = bigintMax(0n, (ctLossAmt << 1n) - ctWinAmt);
+          if (!vote.endsWith('_CONTEST')) {
+            amount += bigintMax(0n, (resultLossAmt << 1n) - resultWinAmt);
+          }
+          rectifier(hints, vote, amount);
+        }
+      }
+    };
+
+    apply(descriptor.root, []);
+  }
+
   // private static getPayments(
   //   contest: Contest,
   // ): { paymentSrcs: Posting[]; paymentDsts: Posting[] } {
@@ -259,6 +330,49 @@ export default class CollateralUtil {
     }
   }
 
+  private static getContestAmounts(contest: Contest) {
+    let ctWinAmt: bigint;
+    let resultWinAmt: bigint;
+    let resultLossAmt: bigint;
+    switch (this.getContestTypeWinner(contest)) {
+      case false:
+        ctWinAmt = contest.validChallenge + contest.allValidContest;
+        resultWinAmt = this.getResultWinner(contest)
+          ? contest.validChallenge
+          : 0n;
+        resultLossAmt = this.getResultWinner(contest)
+          ? 0n
+          : contest.validChallenge;
+        break;
+      case true:
+        ctWinAmt = contest.oneValidContest + contest.invalidChallenge;
+        resultWinAmt = this.getResultWinner(contest)
+          ? 0n
+          : contest.invalidChallenge;
+        resultLossAmt = this.getResultWinner(contest)
+          ? contest.invalidChallenge
+          : 0n;
+        break;
+      case CONTEST_TYPE_FINAL:
+        ctWinAmt = contest.finalPass + contest.finalFail + contest.finalContest;
+        resultWinAmt = this.getResultWinner(contest)
+          ? contest.finalPass
+          : contest.finalFail;
+        resultLossAmt = this.getResultWinner(contest)
+          ? contest.finalFail
+          : contest.finalPass;
+        break;
+    }
+
+    const totalAmt = contest.validChallenge + contest.allValidContest +
+      contest.oneValidContest + contest.invalidChallenge +
+      contest.finalPass + contest.finalFail + contest.finalContest;
+
+    const ctLossAmt = totalAmt - ctWinAmt;
+
+    return { totalAmt, ctWinAmt, ctLossAmt, resultWinAmt, resultLossAmt };
+  }
+
   public static getOutputMap(descriptor: CollateralDescriptor) {
     // Foreach contest:
     //   Distribute contest type collateralizations to correct postings
@@ -267,73 +381,49 @@ export default class CollateralUtil {
     //   If it's correct, then while we have incorrect parents, suck their collateral, recursively iterating parents until we get a correct one.
 
     const outputKeys = new Map<string, BlockOutput>();
-    const addOutput = (dst: Uint8Array, amount: bigint) =>
-      amount > 0n &&
-      mapPut(outputKeys, bin2hex(dst), () => ({
-        verifier: {
-          contract_hash: accountHash,
-          params: AccountContractParams.encode({ public_key: dst }),
-        },
-        amount,
-        detail: EMPTY_ARR,
-      }), (output) => {
-        output.amount += amount;
-        return output;
-      });
-    const addBurn = (amount: bigint) =>
-      amount > 0n &&
-      mapPut(
-        outputKeys,
-        'x',
-        () => ({
+    const addOutput = (dst: Uint8Array, amount: bigint) => {
+      if (dst.byteLength === 0) {
+        throw new Error(`Empty output dst!`);
+      }
+      if (amount > 0n) {
+        mapPut(outputKeys, bin2hex(dst), () => ({
+          verifier: {
+            contract_hash: accountHash,
+            params: AccountContractParams.encode({ public_key: dst }),
+          },
+          amount,
+          detail: EMPTY_ARR,
+        }), (output) => {
+          output.amount += amount;
+          return output;
+        });
+      }
+    };
+    const addBurn = (amount: bigint) => {
+      if (amount > 0n) {
+        mapPut(outputKeys, '', () => ({
           verifier: { contract_hash: burnHash, params: EMPTY_ARR },
           amount,
           detail: EMPTY_ARR,
-        }),
-        (output) => {
+        }), (output) => {
           output.amount += amount;
           return output;
-        },
-      ) && console.log(`Burning ${amount}`);
+        });
+      }
+    };
 
     const remainingRewards = new Map<Contest, bigint>();
 
     const distributeContest = (contest: Contest) => {
-      let ctWinAmt: bigint;
-      let remainingResultReward: bigint;
-      switch (this.getContestTypeWinner(contest)) {
-        case false:
-          ctWinAmt = contest.validChallenge + contest.allValidContest;
-          remainingResultReward = this.getResultWinner(contest)
-            ? 0n
-            : contest.validChallenge;
-          break;
-        case true:
-          ctWinAmt = contest.oneValidContest + contest.invalidChallenge;
-          remainingResultReward = this.getResultWinner(contest)
-            ? contest.invalidChallenge
-            : 0n;
-          break;
-        case CONTEST_TYPE_FINAL:
-          ctWinAmt = contest.finalPass + contest.finalFail +
-            contest.finalContest;
-          remainingResultReward = this.getResultWinner(contest)
-            ? contest.finalFail
-            : contest.finalPass;
-          break;
-      }
+      const { ctLossAmt, resultLossAmt } = this.getContestAmounts(contest);
 
-      const totalAmt = contest.validChallenge + contest.allValidContest +
-        contest.oneValidContest + contest.invalidChallenge +
-        contest.finalPass + contest.finalFail + contest.finalContest;
-
-      let remainingCtReward = totalAmt - ctWinAmt;
+      let remainingCtReward = ctLossAmt;
+      let remainingResultReward = resultLossAmt;
       for (const posting of contest.postings) {
         if (this.didWinContestType(posting.detail.vote, contest)) {
-          const d = posting.amount < remainingCtReward
-            ? posting.amount
-            : remainingCtReward;
+          const eligibleReward = posting.amount >> 1n;
 
+          const d = bigintMin(eligibleReward, remainingCtReward);
           let amount = d;
           remainingCtReward -= d;
 
@@ -341,10 +431,7 @@ export default class CollateralUtil {
           if (wonResult === undefined) {
             amount += posting.amount; // Just get back our posting
           } else if (wonResult) {
-            const d = posting.amount < remainingResultReward
-              ? posting.amount
-              : remainingResultReward;
-
+            const d = bigintMin(eligibleReward, remainingResultReward);
             amount += posting.amount + d;
             remainingResultReward -= d;
           }

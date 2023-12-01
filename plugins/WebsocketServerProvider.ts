@@ -40,9 +40,13 @@ export default class WebsocketServerProvider implements NetworkProvider {
     [
       '127.0.0.1',
       fetch('https://api.ipify.org/?format=json').then((resp) => resp.json())
-        .then((body) => body.ip),
+        .then((body) => body.ip, (err) => {
+          console.error(`Could not lookup ip:`, err);
+        }),
     ].forEach((host) =>
-      Promise.resolve(host).then((host) => onListen(`ws://${host}:${port}`))
+      Promise.resolve(host).then((host) =>
+        host && onListen(`ws://${host}:${port}`)
+      )
     );
   }
 
