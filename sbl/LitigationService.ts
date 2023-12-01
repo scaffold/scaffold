@@ -56,23 +56,23 @@ export default class LitigationService {
     let amount: bigint;
     switch (vote) {
       case 'VALID_CHALLENGE': // Place collateral on an invalidation contest type AND validity
-        amount = todo();
+        amount = 123n;
         break;
       case 'ALL_VALID_CONTEST': // Place collateral on an invalidation contest type
-        amount = todo();
+        amount = 123n;
         break;
       case 'INVALID_CHALLENGE': // Place collateral on a validation contest type AND invalidity
         amount = challengeThreshold;
         break;
       case 'ONE_VALID_CONTEST': // Place collateral on a validation contest type
-        amount = todo();
+        amount = 123n;
         break;
       case 'FINAL_PASS': // Place collateral on a final contest type AND validity
         // TODO: This posting might be inconsequential because of the parent, but we might still have to emit it to contest an incorrect posting
         // if (parentType === false) {
         //   return;
         // }
-        amount = todo();
+        amount = 123n;
 
         break;
       case 'FINAL_FAIL': // Place collateral on a final contest type AND invalidity
@@ -80,10 +80,10 @@ export default class LitigationService {
         // if (parentType === true) {
         //   return;
         // }
-        amount = todo();
+        amount = 123n;
         break;
       case 'FINAL_CONTEST': // Place collateral on a final contest type
-        amount = todo();
+        amount = 123n;
         break;
     }
 

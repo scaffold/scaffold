@@ -204,7 +204,9 @@ export default class FactService {
         } else if (vote.endsWith('_CONTEST')) {
           return priorVote;
         } else if (vote !== priorVote) {
-          throw new Error(`Cannot change a leaf result!`);
+          throw new Error(
+            `Cannot change a leaf result from ${priorVote} to ${vote}!`,
+          );
         } else {
           return vote;
         }

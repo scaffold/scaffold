@@ -349,7 +349,7 @@ export default class WorkerLauncherService {
     return {
       ...workerDriver,
 
-      type: ComputationType.Generator,
+      type: ComputationType.Contract,
 
       getContractHash: () => verifier.contract_hash,
       getParams: () => verifier.params,
@@ -603,7 +603,11 @@ export default class WorkerLauncherService {
         }
 
         const vote = isValid ? 'FINAL_PASS' : 'FINAL_FAIL';
-        this.ctx.get(LitigationService).litigate(block, hints, vote);
+        try {
+          this.ctx.get(LitigationService).litigate(block, hints, vote);
+        } catch (err) {
+          console.error(`Litigation failed:`, err);
+        }
         workerDriver.done.abort();
 
         workerDriver.resumeTimer();

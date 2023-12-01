@@ -5,6 +5,7 @@ import { accountHash } from '~/sbl/constants.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';
+import AccountContract from '~/sbl/contracts/AccountContract.ts';
 
 Deno.test(
   {
@@ -13,7 +14,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [],
+    contractProviders: [new AccountContract()],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
