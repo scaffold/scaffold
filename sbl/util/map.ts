@@ -1,5 +1,11 @@
+export interface MapSpec<K, V> {
+  get(k: K): V | undefined;
+  set(k: K, v: V): void;
+  delete(k: K): boolean;
+}
+
 export const mapPut = <K, V>(
-  map: Map<K, V> | (K extends object ? WeakMap<K, V> : never),
+  map: MapSpec<K, V>,
   key: K,
   creator: () => V,
   mutator?: (v: V) => V,
@@ -15,10 +21,7 @@ export const mapPut = <K, V>(
   return val;
 };
 
-export const mapPop = <K, V>(
-  map: Map<K, V> | (K extends object ? WeakMap<K, V> : never),
-  key: K,
-) => {
+export const mapPop = <K, V>(map: MapSpec<K, V>, key: K) => {
   const val = map.get(key);
   if (val !== undefined) {
     map.delete(key);

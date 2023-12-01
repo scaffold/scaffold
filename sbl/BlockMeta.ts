@@ -24,19 +24,6 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
-export const enum ValidationResult {
-  Pending,
-  Validating,
-  IsValid,
-  IsInvalid,
-  IsInconclusive,
-}
-
-export interface InputMeta {
-  block?: BlockFact;
-  validation: ValidationResult;
-}
-
 export interface BlockMeta {
   verifiers: Verifier[];
 
@@ -50,7 +37,6 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
-  inputValidationResults: ValidationResult[];
   outputClaims: BlockFact[][];
 
   propagationMask: number;

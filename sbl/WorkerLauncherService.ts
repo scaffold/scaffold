@@ -1,6 +1,11 @@
 import BlockBuilder, { BlockSpec, InputSpec } from '~/sbl/BlockBuilder.ts';
 import BlockService from './BlockService.ts';
-import { frontierHash, generatorHash, rootHash } from './constants.ts';
+import {
+  accountHash,
+  frontierHash,
+  generatorHash,
+  rootHash,
+} from './constants.ts';
 import Context from './Context.ts';
 import WorkerDriverService, { WorkerDriver } from './WorkerDriverService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
@@ -24,10 +29,8 @@ import { MaybePromise } from '~/sbl/util/types.ts';
 import FetchService from '~/sbl/FetchService.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import KeyService from '~/sbl/KeyService.ts';
-import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
-import { ValidationResult } from '~/sbl/BlockMeta.ts';
 import { DetailVote } from '~/sbl/CollateralUtil.ts';
 import HintSuggestionService from '~/sbl/HintSuggestionService.ts';
 
@@ -101,8 +104,8 @@ export const COMPUTE_INGENERABLE_FLAG = Symbol('ComputeLauncher.Ingenerable');
 export default class WorkerLauncherService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
 
-  private extraContractIncentive: Map<HashPrimitive, number> = new Map();
-  private extraGeneratorIncentive: Map<HashPrimitive, number> = new Map();
+  private extraContractIncentive = new Map<HashPrimitive, number>();
+  private extraGeneratorIncentive = new Map<HashPrimitive, number>();
 
   private secret: Uint8Array;
 
@@ -118,15 +121,11 @@ export default class WorkerLauncherService {
     hintPrefix: Uint8Array[],
     extraIncentive: number,
   ) {
-    if (
-      !this.ctx.config.enableValidation ||
-      block.inputValidationResults[inputIdx] !== ValidationResult.Pending
-    ) {
+    if (!this.ctx.config.enableValidation) {
       return;
     }
-    block.inputValidationResults[inputIdx] = ValidationResult.Validating;
 
-    const runHash = Hash.digestParts(Verifier.encode(verifier), block.body);
+    const runHash = Hash.digestParts(block.hash, inputIdx, ...hintPrefix);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
       return;
@@ -215,6 +214,11 @@ export default class WorkerLauncherService {
     detail: Uint8Array | undefined,
     extraIncentive: number,
   ) {
+    // Fast-path exit for some common cases here:
+    if (Hash.equals(verifier.contract_hash, accountHash)) {
+      return;
+    }
+
     const runHash = Hash.digest(Verifier.encode(verifier));
     if (this.extraGeneratorIncentive.has(runHash.toPrimitive())) {
       this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);

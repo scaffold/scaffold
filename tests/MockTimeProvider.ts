@@ -1,6 +1,8 @@
 import { RedBlackTree } from 'std-latest/collections/red_black_tree.ts';
 import { TimeProvider } from '~/sbl/Config.ts';
 
+// TODO: Use this instead? https://deno.land/std@0.208.0/testing/time.ts?s=FakeTime
+
 interface Entry {
   timestamp: number;
   idx: number;

@@ -1,4 +1,4 @@
-import { BlockFlag, BlockMeta, ValidationResult } from './BlockMeta.ts';
+import { BlockFlag, BlockMeta } from './BlockMeta.ts';
 import BlockSetService from '~/sbl/BlockSetService.ts';
 import {
   accountHash,
@@ -144,7 +144,6 @@ export default class BlockService {
       votes: 0n,
       derivedWork: 0,
       mergeableProbability: 0,
-      inputValidationResults: block.inputs.map(() => ValidationResult.Pending),
       outputClaims: block.outputs.map((_, idx) =>
         this.getClaims({ block_hash: base.hash, output_idx: idx }).map((x) =>
           x.block

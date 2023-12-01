@@ -1,27 +1,14 @@
 import BlockBuilder from './BlockBuilder.ts';
 import { accountHash, collateralHash } from './constants.ts';
 import Context from './Context.ts';
-import {
-  BlockFact,
-  BlockSetFact,
-  Collateralization,
-  FactType,
-} from '~/sbl/FactMeta.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import KeyService from './KeyService.ts';
-import { AccountContractParams, BlockOutput } from './messages.ts';
 import Hash, { EMPTY_HASH, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
-import { getOrCreate } from '~/sbl/util/map.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
-import { assert, error, todo } from '~/sbl/util/functional.ts';
 import {
   CollateralContractDetail,
   CollateralContractParams,
 } from '~/sbl/collateralMessages.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
-import { ValidationResult } from '~/sbl/BlockMeta.ts';
-import { BurdenOfProof } from '~/sbl/WorkerLauncherService.ts';
-import { bigint2bin } from '~/sbl/util/bigint.ts';
 import FactService from '~/sbl/FactService.ts';
 import CollateralUtil, {
   challengeThreshold,
@@ -72,7 +59,7 @@ export default class LitigationService {
         // if (parentType === false) {
         //   return;
         // }
-        amount = 123n;
+        amount = 0n;
 
         break;
       case 'FINAL_FAIL': // Place collateral on a final contest type AND invalidity
