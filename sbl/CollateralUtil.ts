@@ -8,7 +8,7 @@ import { error } from '~/sbl/util/functional.ts';
 import { bigintMax, bigintMin } from '~/sbl/util/bigint.ts';
 
 export const challengeThreshold = 10n;
-
+export const finalVoteAmount = 100n;
 /*
 https://edotor.net/
 digraph G {
@@ -223,24 +223,61 @@ export default class CollateralUtil {
     rectifier?: (hints: Uint8Array[], vote: DetailVote, amount: bigint) => void,
   ) {
     const apply = (contest: Contest, hints: Uint8Array[]) => {
+      const vote = evaluator(hints);
+      if (vote !== undefined) {
+        // It's hacky doing this twice, but we need to do it here to have the parent contest type for children determining their threshold
+        this.applyBelief(contest, vote);
+      }
+
       for (const [key, child] of contest.children) {
         hints.push(hex2bin(key));
         apply(child, hints);
         hints.pop();
       }
 
-      const vote = evaluator(hints);
       if (vote !== undefined) {
         this.applyBelief(contest, vote);
 
         if (rectifier) {
+          let amount = 0n;
+
           const { ctWinAmt, ctLossAmt, resultWinAmt, resultLossAmt } = this
             .getContestAmounts(contest);
-          let amount = bigintMax(0n, (ctLossAmt << 1n) - ctWinAmt);
+          amount = bigintMax(amount, (ctLossAmt << 1n) - ctWinAmt);
+
           if (!vote.endsWith('_CONTEST')) {
-            amount += bigintMax(0n, (resultLossAmt << 1n) - resultWinAmt);
+            let threshold: bigint;
+            switch (vote) {
+              case 'VALID_CHALLENGE':
+                threshold = 0n;
+                break;
+              case 'INVALID_CHALLENGE':
+                threshold = challengeThreshold;
+                break;
+              case 'FINAL_PASS':
+                threshold = contest.parent === undefined ||
+                    this.getContestTypeWinner(contest.parent) === true
+                  ? finalVoteAmount
+                  : 0n;
+                break;
+              case 'FINAL_FAIL':
+                threshold = contest.parent === undefined ||
+                    this.getContestTypeWinner(contest.parent) === false
+                  ? finalVoteAmount
+                  : 0n;
+                break;
+              default:
+                throw new Error(`Internal error`);
+            }
+            amount = bigintMax(
+              amount,
+              bigintMax(threshold, resultLossAmt << 1n) - resultWinAmt,
+            );
           }
-          rectifier(hints, vote, amount);
+
+          if (amount > 0n) {
+            rectifier(hints, vote, amount);
+          }
         }
       }
     };
@@ -337,7 +374,7 @@ export default class CollateralUtil {
   public static getOutputMap(descriptor: CollateralDescriptor) {
     // Foreach contest:
     //   Distribute contest type collateralizations to correct postings
-    //   Distribute correct contest type but incorrect result collateralizations to correct postings (just final postings)
+    //   Distribute correct contest type but incorrect result collateralizations to correct postings (only applies to final postings)
     // Foreach posting, in order:
     //   If it's correct, then while we have incorrect parents, suck their collateral, recursively iterating parents until we get a correct one.
 

@@ -1,8 +1,10 @@
-import { assertEquals } from 'std-latest/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import CollateralUtil, { Posting } from '~/sbl/CollateralUtil.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
+import { HashPrimitive } from '~/sbl/util/Hash.ts';
+import { BlockOutput } from '~/sbl/messages.ts';
 
 const makePosting = (
   publicKey: string,
@@ -14,62 +16,131 @@ const makePosting = (
   detail: { public_key: str2bin(publicKey), hints: hints.map(str2bin), vote },
 });
 
-const tests: {
-  name: string;
-  posting: Posting;
-  isValid: boolean;
-  outputs: [string, bigint][];
-}[] = [
-  {
-    name: 'initial',
-    posting: makePosting('pk1', 1000n, 'VALID_CHALLENGE', []),
-    isValid: true,
-    outputs: [['pk1', 1000n]],
-  },
-  {
-    name: 'challenge hash',
-    posting: makePosting('pk2', 10n, 'INVALID_CHALLENGE', ['hash0']),
-    isValid: false,
-    outputs: [['pk2', 1010n]],
-  },
-  {
-    name: 'provide hash inversion',
-    posting: makePosting('pk3', 10n, 'FINAL_PASS', ['hash0', 'textA']),
-    isValid: true,
-    outputs: [['pk1', 1000n], ['pk3', 20n]],
-  },
-  {
-    name: 'challenge verifier hint',
-    posting: makePosting('pk4', 10n, 'FINAL_FAIL', ['verifier0', 'hintA']),
-    isValid: false,
-    outputs: [['pk3', 20n], ['pk4', 1010n]],
-  },
-  {
-    name: 'challenge verifier hint correct',
-    posting: makePosting('pk5', 12n, 'FINAL_PASS', ['verifier0', 'hintA']),
-    isValid: true,
-    outputs: [['', 4n], ['pk1', 1000n], ['pk3', 20n], ['pk5', 18n]],
-  },
-];
+const processOutputs = (outputMap: Map<HashPrimitive, BlockOutput>) =>
+  [...outputMap.entries()].map(([pkHex, output]) =>
+    [bin2str(hex2bin(pkHex)), output.amount] as const
+  ).sort((a, b) => a[0].localeCompare(b[0]));
 
-Deno.test({ name: `distribution test` }, () => {
-  const postings: Posting[] = [];
-  for (const test of tests) {
-    postings.push(test.posting);
-    const desc = CollateralUtil.buildTree(postings);
-    const isValid = CollateralUtil.isValid(desc);
-    assertEquals(
-      isValid,
-      test.isValid,
-      `Unexpected isValid after ${test.name}`,
-    );
-    const outputMap = CollateralUtil.getOutputMap(desc);
-    assertEquals(
-      [...outputMap.entries()].map(([pkHex, output]) =>
-        [bin2str(hex2bin(pkHex)), output.amount] as const
-      ).sort((a, b) => a[0].localeCompare(b[0])),
-      test.outputs,
-      `Unexpected output after ${test.name}`,
-    );
-  }
+const initialPosting = makePosting('pk1', 1000n, 'VALID_CHALLENGE', []);
+
+Deno.test({ name: `initial state test` }, () => {
+  const desc = CollateralUtil.buildTree([initialPosting]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk1', 1000n]],
+  );
+});
+
+Deno.test({ name: `input challenge test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'INVALID_CHALLENGE', ['hash0']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), false);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk2', 1010n]],
+  );
+});
+
+Deno.test({ name: `input response test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'INVALID_CHALLENGE', ['hash0']),
+    makePosting('pk3', 10n, 'FINAL_PASS', ['hash0', 'textA']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk1', 1000n], ['pk3', 20n]],
+  );
+});
+
+Deno.test({ name: `verifier challenge test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'FINAL_FAIL', ['verifier0', 'hintA']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), false);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk2', 1010n]],
+  );
+});
+
+Deno.test({ name: `verifier battle test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'FINAL_FAIL', ['verifier0', 'hintA']),
+    makePosting('pk3', 12n, 'FINAL_PASS', ['verifier0', 'hintA']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['', 4n], ['pk1', 1000n], ['pk3', 18n]],
+  );
+});
+
+Deno.test({ name: `reclaim burn test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'FINAL_FAIL', ['verifier0', 'hintA']),
+    makePosting('pk3', 20n, 'FINAL_PASS', ['verifier0', 'hintA']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk1', 1000n], ['pk3', 30n]],
+  );
+});
+
+Deno.test({ name: `verifier burden of proof test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'ONE_VALID_CONTEST', ['verifier0']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk1', 1000n], ['pk2', 10n]],
+  );
+});
+
+Deno.test({ name: `verifier burden of proof challenge test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'INVALID_CHALLENGE', ['verifier0']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), false);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk2', 1010n]],
+  );
+});
+
+Deno.test({ name: `verifier burden of proof response test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'INVALID_CHALLENGE', ['verifier0']),
+    makePosting('pk3', 20n, 'FINAL_PASS', ['verifier0', 'hintA']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk1', 1000n], ['pk3', 30n]],
+  );
+});
+
+Deno.test({ name: `verifier claim no hint test` }, () => {
+  const desc = CollateralUtil.buildTree([
+    initialPosting,
+    makePosting('pk2', 10n, 'INVALID_CHALLENGE', ['verifier0']),
+    makePosting('pk4', 20n, 'FINAL_CONTEST', ['verifier0']),
+  ]);
+  assertEquals(CollateralUtil.isValid(desc), true);
+  assertEquals(
+    processOutputs(CollateralUtil.getOutputMap(desc)),
+    [['pk1', 1000n], ['pk4', 30n]],
+  );
 });

@@ -13,6 +13,7 @@ import FactService from '~/sbl/FactService.ts';
 import CollateralUtil, {
   challengeThreshold,
   DetailVote,
+  Posting,
 } from '~/sbl/CollateralUtil.ts';
 
 const resolutionDelay = 1000;
@@ -24,9 +25,6 @@ This block is INVALID (very strong, unless uncanonical)
   Must be specific
 */
 
-const arr2dEquals = (a: Uint8Array[], b: Uint8Array[]) =>
-  a.length === b.length && a.every((x, i) => arrEquals(x, b[i]));
-
 export default class LitigationService {
   private resolutionSchedules = new Map<HashPrimitive, number>();
 
@@ -34,71 +32,37 @@ export default class LitigationService {
 
   public litigate(block: BlockFact, hints: Uint8Array[], vote: DetailVote) {
     vote = this.ctx.get(FactService).updateValidity(block.hash, hints, vote);
+    this.rectify(block, [{
+      detail: {
+        public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+        hints,
+        vote,
+      },
+      amount: 0n,
+    }]);
+  }
 
-    const parentType = CollateralUtil.getContestType(
-      this.ctx.get(FactService).getValidity(block.hash, hints.slice(0, -1)) ??
-        'ALL_VALID_CONTEST',
+  public rectify(block: BlockFact, extraPostings?: Posting[]) {
+    CollateralUtil.applyAllBeliefs(
+      CollateralUtil.buildTree(
+        extraPostings
+          ? [...block.collateralizations, ...extraPostings]
+          : block.collateralizations,
+      ),
+      (hints) => this.ctx.get(FactService).getValidity(block.hash, hints),
+      (hints, vote, amount) =>
+        this.ctx.get(BlockBuilder).publish({
+          outputs: [{
+            verifier: this.makeCollateralVerifier(block.hash),
+            amount,
+            detail: CollateralContractDetail.encode({
+              public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+              hints,
+              vote,
+            }),
+          }],
+        }, 0),
     );
-
-    let amount: bigint;
-    switch (vote) {
-      case 'VALID_CHALLENGE': // Place collateral on an invalidation contest type AND validity
-        amount = 123n;
-        break;
-      case 'ALL_VALID_CONTEST': // Place collateral on an invalidation contest type
-        amount = 123n;
-        break;
-      case 'INVALID_CHALLENGE': // Place collateral on a validation contest type AND invalidity
-        amount = challengeThreshold;
-        break;
-      case 'ONE_VALID_CONTEST': // Place collateral on a validation contest type
-        amount = 123n;
-        break;
-      case 'FINAL_PASS': // Place collateral on a final contest type AND validity
-        // TODO: This posting might be inconsequential because of the parent, but we might still have to emit it to contest an incorrect posting
-        // if (parentType === false) {
-        //   return;
-        // }
-        amount = 0n;
-
-        break;
-      case 'FINAL_FAIL': // Place collateral on a final contest type AND invalidity
-        // TODO: This posting might be inconsequential because of the parent, but we might still have to emit it to contest an incorrect posting
-        // if (parentType === true) {
-        //   return;
-        // }
-        amount = 123n;
-        break;
-      case 'FINAL_CONTEST': // Place collateral on a final contest type
-        amount = 123n;
-        break;
-    }
-
-    for (const coll of block.collateralizations) {
-      if (
-        coll.collateralBlock.isSignedByMe &&
-        coll.detail.vote === vote &&
-        arr2dEquals(coll.detail.hints, hints)
-      ) {
-        amount -= coll.amount;
-      }
-    }
-
-    if (amount <= 0n) {
-      return;
-    }
-
-    this.ctx.get(BlockBuilder).publish({
-      outputs: [{
-        verifier: this.makeCollateralVerifier(block.hash),
-        amount,
-        detail: CollateralContractDetail.encode({
-          public_key: this.ctx.get(KeyService).getSelfPublicKey(),
-          hints,
-          vote,
-        }),
-      }],
-    });
   }
 
   // public litigateInput(
