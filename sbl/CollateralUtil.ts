@@ -1,12 +1,12 @@
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
-import { getOrCreate, mapPop } from '~/sbl/util/map.ts';
+import { mapPop, mapPut } from '~/sbl/util/map.ts';
 import { AccountContractParams, BlockOutput } from '~/sbl/messages.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
 import { accountHash, burnHash } from '~/sbl/constants.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
 
-const challengeThreshold = 10n;
+export const challengeThreshold = 10n;
 
 /*
 https://edotor.net/
@@ -35,7 +35,7 @@ digraph G {
 }
 */
 
-const CONTEST_TYPE_FINAL = Symbol('CollateralUtil.ContestTypeFinal');
+export const CONTEST_TYPE_FINAL = Symbol('CollateralUtil.ContestTypeFinal');
 export interface Posting {
   detail: CollateralContractDetail;
   amount: bigint;
@@ -63,7 +63,7 @@ export interface CollateralDescriptor {
   root: Contest;
   contestMap: Map<Posting, Contest>;
 }
-type DetailVote = CollateralContractDetail['vote'];
+export type DetailVote = CollateralContractDetail['vote'];
 
 export default class CollateralUtil {
   private static makeContest(parent?: Contest): Contest {
@@ -89,11 +89,7 @@ export default class CollateralUtil {
     for (const posting of postings) {
       let ptr = root;
       for (const hint of posting.detail.hints) {
-        ptr = getOrCreate(
-          ptr.children,
-          bin2hex(hint),
-          () => this.makeContest(ptr),
-        );
+        ptr = mapPut(ptr.children, bin2hex(hint), () => this.makeContest(ptr));
       }
       ptr.postings.push(posting);
 
@@ -121,7 +117,7 @@ export default class CollateralUtil {
           break;
       }
 
-      getOrCreate(contestMap, posting, () => ptr, () => {
+      mapPut(contestMap, posting, () => ptr, () => {
         throw new Error(`Duplicate postings!`);
       });
     }
@@ -220,24 +216,27 @@ export default class CollateralUtil {
   //   return contest;
   // }
 
-  private static didWinContestType(vote: DetailVote, contest: Contest) {
-    const contestType = this.getContestTypeWinner(contest);
+  public static getContestType(vote: DetailVote) {
     switch (vote) {
       case 'VALID_CHALLENGE':
-        return contestType === false;
+        return false;
       case 'ALL_VALID_CONTEST':
-        return contestType === false;
+        return false;
       case 'INVALID_CHALLENGE':
-        return contestType === true;
+        return true;
       case 'ONE_VALID_CONTEST':
-        return contestType === true;
+        return true;
       case 'FINAL_PASS':
-        return contestType === CONTEST_TYPE_FINAL;
+        return CONTEST_TYPE_FINAL;
       case 'FINAL_FAIL':
-        return contestType === CONTEST_TYPE_FINAL;
+        return CONTEST_TYPE_FINAL;
       case 'FINAL_CONTEST':
-        return contestType === CONTEST_TYPE_FINAL;
+        return CONTEST_TYPE_FINAL;
     }
+  }
+
+  private static didWinContestType(vote: DetailVote, contest: Contest) {
+    return this.getContestTypeWinner(contest) === this.getContestType(vote);
   }
 
   private static didWinResult(vote: DetailVote, contest: Contest) {
@@ -270,7 +269,7 @@ export default class CollateralUtil {
     const outputKeys = new Map<string, BlockOutput>();
     const addOutput = (dst: Uint8Array, amount: bigint) =>
       amount > 0n &&
-      getOrCreate(outputKeys, bin2hex(dst), () => ({
+      mapPut(outputKeys, bin2hex(dst), () => ({
         verifier: {
           contract_hash: accountHash,
           params: AccountContractParams.encode({ public_key: dst }),
@@ -283,14 +282,19 @@ export default class CollateralUtil {
       });
     const addBurn = (amount: bigint) =>
       amount > 0n &&
-      getOrCreate(outputKeys, 'x', () => ({
-        verifier: { contract_hash: burnHash, params: EMPTY_ARR },
-        amount,
-        detail: EMPTY_ARR,
-      }), (output) => {
-        output.amount += amount;
-        return output;
-      }) && console.log(`Burning ${amount}`);
+      mapPut(
+        outputKeys,
+        'x',
+        () => ({
+          verifier: { contract_hash: burnHash, params: EMPTY_ARR },
+          amount,
+          detail: EMPTY_ARR,
+        }),
+        (output) => {
+          output.amount += amount;
+          return output;
+        },
+      ) && console.log(`Burning ${amount}`);
 
     const remainingRewards = new Map<Contest, bigint>();
 
@@ -352,7 +356,7 @@ export default class CollateralUtil {
       addBurn(remainingCtReward);
 
       if (remainingResultReward > 0n) {
-        getOrCreate(
+        mapPut(
           remainingRewards,
           contest,
           () => remainingResultReward,
@@ -378,12 +382,13 @@ export default class CollateralUtil {
       ) {
         let amount = 0n;
 
+        const requireContestType = this.getResultWinner(contest);
         let parent = contest.parent;
-        while (parent !== undefined) {
+        while (
+          parent !== undefined &&
+          this.getContestTypeWinner(parent) === requireContestType
+        ) {
           amount += mapPop(remainingRewards, parent) ?? 0n;
-          if (this.getContestTypeWinner(parent) === true) {
-            break;
-          }
           parent = parent.parent;
         }
 
@@ -406,7 +411,7 @@ export default class CollateralUtil {
     }
     const postingMeta = new Map<Posting, PostingMeta>();
     const getMeta = (posting: Posting) =>
-      getOrCreate(postingMeta, posting, () => {
+      mapPut(postingMeta, posting, () => {
         const contest = descriptor.contestMap.get(posting) ??
           error(`Posting doesn't have a contest!`);
 
@@ -510,7 +515,7 @@ export default class CollateralUtil {
 
     const outputKeys = new Map<string, BlockOutput>();
     const addOutput = (dst: Uint8Array, amount: bigint) =>
-      getOrCreate(outputKeys, bin2hex(dst), () => ({
+      mapPut(outputKeys, bin2hex(dst), () => ({
         verifier: {
           contract_hash: accountHash,
           params: AccountContractParams.encode({ public_key: dst }),
@@ -569,8 +574,7 @@ export default class CollateralUtil {
   //           amount = posting.amount;
   //         }
 
-  //         getOrCreate(outputKeys, bin2hex(posting.detail.public_key), () => ({
-  //           verifier: {
+  //         mapPut(outputKeys, bin2hex(posting.detail.public_key), () => ({  //           verifier: {
   //             contract_hash: accountHash,
   //             params: AccountContractParams.encode({
   //               public_key: posting.detail.public_key,

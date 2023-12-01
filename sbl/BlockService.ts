@@ -48,6 +48,7 @@ import LitigationService from '~/sbl/LitigationService.ts';
 import {
   CollateralContractDetail,
   CollateralContractParams,
+  CollateralHint,
 } from '~/sbl/collateralMessages.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
@@ -227,18 +228,16 @@ export default class BlockService {
         const detailDec = CollateralContractDetail.decode(detail);
         this.ctx.get(PublicKeyService).addPublicKey(detailDec.public_key);
         if (fact.isSignedByMe) {
-          // TODO: Set validation results on block params.block_hash
+          this.ctx.get(FactService)
+            .updateValidity(params.block_hash, detailDec.hints, detailDec.vote);
         }
-        // const valid = 'ClaimAllValid' in detailDec.claim ||
-        //   'ClaimVerificationPassed' in detailDec.claim ||
-        //   'ClaimHasInputHash' in detailDec.claim;
-        // this.ctx.get(FactService).addCollateral(params.block_hash, {
-        //   block: fact,
-        //   outputIdx,
-        //   detail: detailDec,
-        //   valid,
-        //   amount,
-        // });
+
+        this.ctx.get(FactService).addCollateral(params.block_hash, {
+          collateralBlock: fact,
+          collateralOutputIdx: outputIdx,
+          detail: detailDec,
+          amount,
+        });
 
         // const contestedBlock = this.ctx.get(FactService).get(params.block_hash);
         // if (contestedBlock !== undefined) {
@@ -388,7 +387,9 @@ export default class BlockService {
       child,
       childInputIdx,
       verifier,
-      [],
+      [CollateralHint.encode({
+        hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
+      })],
       0,
     );
 

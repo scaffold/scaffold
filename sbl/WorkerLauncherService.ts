@@ -28,6 +28,8 @@ import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
 import { ValidationResult } from '~/sbl/BlockMeta.ts';
+import { DetailVote } from '~/sbl/CollateralUtil.ts';
+import HintSuggestionService from '~/sbl/HintSuggestionService.ts';
 
 export const enum ComputationType {
   Contract,
@@ -113,7 +115,7 @@ export default class WorkerLauncherService {
     // TODO: Parameterize by claim
     inputIdx: number,
     verifier: Verifier,
-    hints: Uint8Array[],
+    hintPrefix: Uint8Array[],
     extraIncentive: number,
   ) {
     if (
@@ -142,7 +144,7 @@ export default class WorkerLauncherService {
             block,
             inputIdx,
             verifier,
-            hints,
+            hintPrefix,
             workerDriver,
           );
           workerDriver.log?.push({
@@ -178,7 +180,7 @@ export default class WorkerLauncherService {
             block,
             inputIdx,
             verifier,
-            hints,
+            hintPrefix,
             workerDriver,
           );
           workerDriver.log?.push({
@@ -335,10 +337,10 @@ export default class WorkerLauncherService {
     block: BlockFact,
     inputIdx: number,
     verifier: Verifier,
-    hints: Uint8Array[],
+    hintPrefix: Uint8Array[],
     workerDriver: WorkerDriver,
   ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
-    const bops = [BurdenOfProof.Invalidation];
+    const hints = hintPrefix.slice(0, 1);
     let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
 
@@ -354,24 +356,40 @@ export default class WorkerLauncherService {
       getHint: (idx, bop) => {
         idx++;
 
-        const hint = hints[idx];
-        if (hint === undefined) {
-          throw new Error(`We don't have a hint at index ${idx}!`);
+        let vote: DetailVote;
+        switch (bop) {
+          case BurdenOfProof.Invalidation:
+            vote = 'ALL_VALID_CONTEST';
+            break;
+          case BurdenOfProof.Validation:
+            vote = 'ONE_VALID_CONTEST';
+            break;
         }
 
-        if (idx < bops.length) {
-          if (bop !== bops[idx]) {
-            throw new Error(
-              `Cannot change the burden of proof for hint ${idx}!`,
-            );
-          }
-        } else if (idx > bops.length) {
+        if (idx > hints.length) {
           throw new Error(`Must get hints in order at index ${idx}!`);
+        } else if (idx === hints.length) {
+          this.ctx.get(LitigationService).litigate(block, hints, vote);
+          if (idx < hintPrefix.length) {
+            hints.push(hintPrefix[idx]);
+          } else {
+            const suggestions = this.ctx.get(HintSuggestionService)
+              .suggest(block, hints);
+            if (suggestions.length === 0) {
+              throw new Error(
+                `Hint required but we don't have any suggestions!`,
+              );
+            }
+            // TODO: Make this crypto random
+            const random = this.ctx.config.entropyProvider.randomNumber();
+            hints.push(suggestions[Math.floor(random * suggestions.length)]);
+          }
         } else {
-          bops.push(bop);
+          this.ctx.get(LitigationService)
+            .litigate(block, hints.slice(0, idx), vote);
         }
 
-        return hint;
+        return hints[idx];
       },
       getBody: () => block.body,
       requireBody: (data) => {
@@ -560,36 +578,32 @@ export default class WorkerLauncherService {
       finalize: async (err: unknown) => {
         workerDriver.pauseTimer(`finalize()`);
 
-        const result = err === COMPUTE_PASS_FLAG;
-        if (result) {
-          if (bops.length + 1) {
-            if (requireInputCount !== undefined) {
-              let count = 0;
-              for (const input of block.inputs) {
-                const block = await this.ctx.get(BlockService).waitForBlock(
-                  input.block_hash,
-                  workerDriver.done.signal,
-                );
+        const isValid = err === COMPUTE_PASS_FLAG;
+        if (isValid) {
+          if (requireInputCount !== undefined) {
+            let count = 0;
+            for (const input of block.inputs) {
+              const block = await this.ctx.get(BlockService)
+                .waitForBlock(input.block_hash, workerDriver.done.signal);
 
-                const output = block.outputs[input.output_idx];
-                if (
-                  this.ctx.get(BlockService).areVerifiersEqual(
-                    output.verifier,
-                    verifier,
-                  ) && ++count > requireInputCount
-                ) {
-                  throw COMPUTE_FAIL_FLAG;
-                }
-              }
-
-              if (count !== requireInputCount) {
+              const output = block.outputs[input.output_idx];
+              if (
+                this.ctx.get(BlockService)
+                  .areVerifiersEqual(output.verifier, verifier) &&
+                ++count > requireInputCount
+              ) {
                 throw COMPUTE_FAIL_FLAG;
               }
+            }
+
+            if (count !== requireInputCount) {
+              throw COMPUTE_FAIL_FLAG;
             }
           }
         }
 
-        this.ctx.get(LitigationService).litigate(block, hints, bops, result);
+        const vote = isValid ? 'FINAL_PASS' : 'FINAL_FAIL';
+        this.ctx.get(LitigationService).litigate(block, hints, vote);
         workerDriver.done.abort();
 
         workerDriver.resumeTimer();
@@ -953,7 +967,7 @@ export default class WorkerLauncherService {
     }
 
     if (this.isImmediatelyVerifiable(block) !== true) {
-      this.ctx.get(LitigationService).litigate(block, [], [], true);
+      this.ctx.get(LitigationService).litigate(block, [], 'VALID_CHALLENGE');
     }
   }
 

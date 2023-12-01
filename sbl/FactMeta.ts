@@ -6,9 +6,10 @@ import {
   InfoMessage,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { BlockSetMeta } from '~/sbl/BlockSetService.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
+import { DetailVote } from '~/sbl/CollateralUtil.ts';
 
 export enum FactType {
   Null = 0, // Reserved
@@ -31,10 +32,9 @@ export enum FactSource {
 }
 
 export interface Collateralization {
-  block: BlockFact;
-  outputIdx: number;
+  collateralBlock: BlockFact;
+  collateralOutputIdx: number;
   detail: CollateralContractDetail;
-  valid: boolean;
   amount: bigint;
 }
 
@@ -54,6 +54,7 @@ export type FactBase = {
   publishAt?: number;
 
   collateralizations: Collateralization[];
+  validities: Map<HashPrimitive, DetailVote>;
 
   backtrace?: string;
 };

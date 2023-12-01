@@ -17,10 +17,13 @@ import secp from './util/secp.ts';
 import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import { error } from '~/sbl/util/functional.ts';
-import { getOrCreate } from '~/sbl/util/map.ts';
+import { mapPut } from '~/sbl/util/map.ts';
 import * as log from 'std-latest/log/mod.ts';
 import DataService from '~/sbl/DataService.ts';
 import KeyService from '~/sbl/KeyService.ts';
+import WorkerLauncherService from '~/sbl/WorkerLauncherService.ts';
+import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
+import CollateralUtil, { DetailVote } from '~/sbl/CollateralUtil.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -69,6 +72,10 @@ export default class FactService {
   private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
+  private validitiesByHash = new Map<
+    HashPrimitive,
+    Map<HashPrimitive, DetailVote>
+  >();
 
   constructor(private ctx: Context) {
     for (let i = 0; i < 256; i++) {
@@ -162,8 +169,44 @@ export default class FactService {
   }
 
   public addCollateral(blockHash: Hash, collateralization: Collateralization) {
-    getOrCreate(this.collateralByHash, blockHash.toPrimitive(), () => [])
+    mapPut(this.collateralByHash, blockHash.toPrimitive(), () => [])
       .push(collateralization);
+  }
+  public getValidity(blockHash: Hash, hints: Uint8Array[]): DetailVote {
+    return this.validitiesByHash.get(blockHash.toPrimitive())
+      ?.get(Hash.digestParts(...hints).toPrimitive()) ?? 'ALL_VALID_CONTEST';
+  }
+  public updateValidity(
+    blockHash: Hash,
+    hints: Uint8Array[],
+    vote: DetailVote,
+  ): DetailVote {
+    return mapPut(
+      mapPut(
+        this.validitiesByHash,
+        blockHash.toPrimitive(),
+        () => new Map<HashPrimitive, DetailVote>(),
+      ),
+      Hash.digestParts(...hints).toPrimitive(),
+      () => vote,
+      (priorVote) => {
+        const priorType = CollateralUtil.getContestType(priorVote);
+        const newType = CollateralUtil.getContestType(vote);
+        if (priorType !== newType) {
+          throw new Error(`Cannot change the contest type!`);
+        }
+
+        if (priorVote.endsWith('_CONTEST')) {
+          return vote;
+        } else if (vote.endsWith('_CONTEST')) {
+          return priorVote;
+        } else if (vote !== priorVote) {
+          throw new Error(`Cannot change a leaf result!`);
+        } else {
+          return vote;
+        }
+      },
+    );
   }
 
   public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
@@ -318,10 +361,15 @@ export default class FactService {
       fromNodes: [],
       toNodes: [],
 
-      collateralizations: getOrCreate(
+      collateralizations: mapPut(
         this.collateralByHash,
         hash.toPrimitive(),
         () => [],
+      ),
+      validities: mapPut(
+        this.validitiesByHash,
+        hash.toPrimitive(),
+        () => new Map(),
       ),
 
       backtrace: new Error().stack,

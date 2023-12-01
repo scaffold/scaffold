@@ -3,7 +3,6 @@ import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { BlockFact, FactType } from '~/sbl/FactMeta.ts';
 import { CollateralHint } from '~/sbl/collateralMessages.ts';
 import FactService from '~/sbl/FactService.ts';
-import { Verifier } from '~/sbl/messages.ts';
 import { mapPut } from '~/sbl/util/map.ts';
 
 export interface HintProvider {
@@ -36,7 +35,6 @@ export default class HintSuggestionService {
 
     const [first, ...rest] = hints;
 
-    let verifier: Verifier;
     const { hint } = CollateralHint.decode(first);
     if ('CollateralHintInputHash' in hint) {
       if (rest.length === 0) {
@@ -55,12 +53,11 @@ export default class HintSuggestionService {
       if (inBlock.type !== FactType.Block) {
         throw new Error(`Invalid fact type!`);
       }
-      verifier = inBlock.outputs[input.output_idx].verifier;
+      const verifier = inBlock.outputs[input.output_idx].verifier;
+      return (this.providers.get(verifier.contract_hash.toPrimitive()) ?? [])
+        .flatMap((provider) => provider.suggestNext(verifier.params, rest));
     } else {
-      throw new Error(`Decoding error!`);
+      throw new Error(`Invalid top-level hint!`);
     }
-
-    return (this.providers.get(verifier.contract_hash.toPrimitive()) ?? [])
-      .flatMap((provider) => provider.suggestNext(verifier.params, rest));
   }
 }
