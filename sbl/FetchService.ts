@@ -1,6 +1,6 @@
 import BlockService from './BlockService.ts';
 import Context from './Context.ts';
-import WorkerLauncherService from './WorkerLauncherService.ts';
+import GenerationService from './GenerationService.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import IncentiveService from './IncentiveService.ts';
 import { Block, Verifier } from './messages.ts';
@@ -67,7 +67,7 @@ export default class FetchService {
 
     internalIncentive = 1n;
     if (internalIncentive !== undefined) {
-      this.ctx.get(WorkerLauncherService).enqueueGeneration(
+      this.ctx.get(GenerationService).enqueueGeneration(
         verifier,
         detail,
         Number(internalIncentive),
@@ -75,7 +75,7 @@ export default class FetchService {
 
       // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
 
-      // const gen = this.ctx.get(LocalGeneratorService).getGenerator(
+      // const gen = this.ctx.get(LocalGenerationService).getGenerator(
       //   verifier.contract_hash,
       // );
       // if (gen) {
@@ -156,7 +156,7 @@ export default class FetchService {
       released = true;
 
       if (internalIncentive !== undefined) {
-        this.ctx.get(WorkerLauncherService).enqueueGeneration(
+        this.ctx.get(GenerationService).enqueueGeneration(
           verifier,
           detail,
           0,

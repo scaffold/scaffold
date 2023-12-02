@@ -7,7 +7,7 @@ import {
   BurdenOfProof,
   ComputationDriver,
   ComputationType,
-} from '~/sbl/WorkerLauncherService.ts';
+} from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { dataHash } from '~/sbl/constants.ts';
 

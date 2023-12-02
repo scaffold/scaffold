@@ -1,10 +1,7 @@
 import Context from '../Context.ts';
 import Hash, { HASH_SIZE } from '../util/Hash.ts';
 import FactService from '~/sbl/FactService.ts';
-import {
-  ComputationDriver,
-  ComputationType,
-} from '~/sbl/WorkerLauncherService.ts';
+import { ComputationDriver, ComputationType } from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { rootHash } from '~/sbl/constants.ts';
 

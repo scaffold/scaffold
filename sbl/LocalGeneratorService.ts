@@ -1,10 +1,8 @@
 import Context from './Context.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
-import { BlockInput, BlockOutput } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
-import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
+import { ComputationDriver } from '~/sbl/ComputationMeta.ts';
 
 // export interface LocalGeneratorOpts {
 //   ctx: Context;

@@ -1,5 +1,5 @@
 import { TimeParams } from '../messages.ts';
-import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
+import { ComputationDriver } from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { timeHash } from '~/sbl/constants.ts';
 

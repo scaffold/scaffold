@@ -12,6 +12,9 @@ Fixed worker pool
 import Context from './Context.ts';
 import { mapEntries } from './util/functional.ts';
 
+// TODO: Use input monitoring to prevent blocking the main thread?
+// https://developer.mozilla.org/en-US/docs/Web/API/Scheduling/isInputPending
+
 export const WORKER_FAIL_FLAG = Symbol('WorkerDriver.Fail');
 export const WORKER_RETRY_FLAG = Symbol('WorkerDriver.Retry');
 

@@ -1,8 +1,7 @@
 import Context from './Context.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
-import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
-import { getOrCreate } from '~/sbl/util/map.ts';
+import { ComputationDriver } from '~/sbl/ComputationMeta.ts';
 
 export interface ContractProvider {
   readonly contractHash: Hash;

@@ -1,4 +1,4 @@
-import { ComputationDriver } from '~/sbl/WorkerLauncherService.ts';
+import { ComputationDriver } from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { collatzHash } from '~/sbl/constants.ts';
 import * as collatzMessages from './collatzMessages.ts';

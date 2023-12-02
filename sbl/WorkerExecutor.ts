@@ -13,7 +13,7 @@ import { error } from './util/functional.ts';
 import WorkerDebuggerManager, {
   WorkerDebugger,
 } from './WorkerDebuggerManager.ts';
-import { BurdenOfProof, ComputationDriver } from './WorkerLauncherService.ts';
+import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 
 interface OpenFile {

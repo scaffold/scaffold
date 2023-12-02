@@ -17,6 +17,7 @@ export enum FactType {
   Block,
   BlockSet, // TODO: Rename to bag or something
   BlockSetTreeNode,
+  MerkleTreeNode,
   Invalid,
   // Frontier,
   // EpochInclusionProof,

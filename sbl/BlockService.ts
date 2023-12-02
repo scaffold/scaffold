@@ -11,7 +11,7 @@ import {
   timeHash,
 } from './constants.ts';
 import Context from './Context.ts';
-import WorkerLauncherService from './WorkerLauncherService.ts';
+import VerificationService from './VerificationService.ts';
 import Logger from './Logger.ts';
 import {
   AccountContractParams,
@@ -55,6 +55,7 @@ import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import CollateralUtil, { CONTEST_TYPE_FINAL } from '~/sbl/CollateralUtil.ts';
+import GenerationService from '~/sbl/GenerationService.ts';
 
 interface CollateralSummary {
   // 3 cases:
@@ -214,7 +215,7 @@ export default class BlockService {
         this.ctx.get(UnclaimedOutputService).addUnclaimed(fact, outputIdx);
       }
 
-      this.ctx.get(WorkerLauncherService).enqueueGeneration(
+      this.ctx.get(GenerationService).enqueueGeneration(
         verifier,
         detail,
         0,
@@ -385,7 +386,7 @@ export default class BlockService {
 
     child.verifiers.push(verifier);
 
-    this.ctx.get(WorkerLauncherService).enqueueVerification(
+    this.ctx.get(VerificationService).enqueueVerification(
       child,
       verifier,
       [CollateralHint.encode({

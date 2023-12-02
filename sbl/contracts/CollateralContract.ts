@@ -2,7 +2,7 @@ import {
   ComputationDriver,
   ComputationType,
   InputSource,
-} from '~/sbl/WorkerLauncherService.ts';
+} from '~/sbl/ComputationMeta.ts';
 import {
   CollateralContractDetail,
   CollateralContractParams,

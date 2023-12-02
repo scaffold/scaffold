@@ -16,13 +16,11 @@ import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
 import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
-import { error } from '~/sbl/util/functional.ts';
+import { error, todo } from '~/sbl/util/functional.ts';
 import { mapPut } from '~/sbl/util/map.ts';
 import * as log from 'std-latest/log/mod.ts';
 import DataService from '~/sbl/DataService.ts';
 import KeyService from '~/sbl/KeyService.ts';
-import WorkerLauncherService from '~/sbl/WorkerLauncherService.ts';
-import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import CollateralUtil, { DetailVote } from '~/sbl/CollateralUtil.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
@@ -56,6 +54,7 @@ typeHasSignature[FactType.Info] = true;
 typeHasSignature[FactType.Block] = true;
 typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
+typeHasSignature[FactType.MerkleTreeNode] = true;
 typeHasSignature[FactType.Invalid] = true;
 
 const useZstd = false;
@@ -97,6 +96,7 @@ export default class FactService {
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(BlockSetService).createTreeNodeFact(base);
+    this.factories[FactType.MerkleTreeNode] = todo;
     this.factories[FactType.Invalid] = (base, _, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)

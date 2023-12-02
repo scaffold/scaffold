@@ -1,7 +1,4 @@
-import {
-  ComputationDriver,
-  ComputationType,
-} from '~/sbl/WorkerLauncherService.ts';
+import { ComputationDriver, ComputationType } from '~/sbl/ComputationMeta.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { accountHash } from '~/sbl/constants.ts';

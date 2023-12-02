@@ -2,6 +2,10 @@ import Hash, { HASH_SIZE } from '~/sbl/util/Hash.ts';
 import { StorageProvider } from '~/sbl/Config.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 
+// TODO: Do these help/
+// https://developer.mozilla.org/en-US/docs/Web/API/StorageEvent
+// https://developer.mozilla.org/en-US/docs/Web/API/StorageManager
+
 export default class LocalStorageProvider implements StorageProvider {
   public set(namespace: number, key: Hash, value?: Uint8Array) {
     if (value !== undefined) {
