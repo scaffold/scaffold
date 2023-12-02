@@ -30,6 +30,8 @@ const makeConfig = (
   storageProvider: new NullStorageProvider(),
   networkProviders: [],
 
+  limitFactCount: 10,
+
   ...partialConfig,
 } satisfies Config);
 

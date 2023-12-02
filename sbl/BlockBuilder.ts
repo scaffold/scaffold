@@ -81,25 +81,30 @@ export default class BlockBuilder {
         Hash.equals(output.verifier.contract_hash, frontierHash)
       )
     ) {
-      throw new Error(`Unexpected frontier output on an unfinished block!`);
+      if (this.ctx.config.allowSpecifiedFrontierOutputs) {
+        console.warn(`Unexpected frontier output on an unfinished block!`);
+      } else {
+        throw new Error(`Unexpected frontier output on an unfinished block!`);
+      }
+    } else {
+      outputs.push({
+        verifier: {
+          contract_hash: frontierHash,
+          params: FrontierTreeParams.encode({ level: spec.frontierLevel ?? 0 }),
+        },
+        amount: 10n,
+        detail: FrontierTreeDetail.encode({
+          // input_tree_root: ZERO_HASH,
+          // output_tree_root: ZERO_HASH,
+
+          // input_count: 0,
+          // output_count: 0,
+
+          // block_count: 1,
+          // claimed_work: this.computeWork(inputBlocks, outputs),
+        }),
+      });
     }
-    outputs.push({
-      verifier: {
-        contract_hash: frontierHash,
-        params: FrontierTreeParams.encode({ level: spec.frontierLevel ?? 0 }),
-      },
-      amount: 10n,
-      detail: FrontierTreeDetail.encode({
-        // input_tree_root: ZERO_HASH,
-        // output_tree_root: ZERO_HASH,
-
-        // input_count: 0,
-        // output_count: 0,
-
-        // block_count: 1,
-        // claimed_work: this.computeWork(inputBlocks, outputs),
-      }),
-    });
 
     ioDelta += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);

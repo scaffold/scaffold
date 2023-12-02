@@ -1,0 +1,48 @@
+import AccountContract from '~/sbl/contracts/AccountContract.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
+import Hash from '~/sbl/util/Hash.ts';
+import Context from '~/sbl/Context.ts';
+import {
+  assert,
+  assertEquals,
+  assertNotEquals,
+} from 'std-latest/assert/mod.ts';
+import BlockService from '~/sbl/BlockService.ts';
+
+export const baseContractProviders = [new AccountContract()];
+
+export const waitForVerifiedOutput = async (
+  ctx: Context,
+  block: BlockFact,
+  outputContractHash: Hash,
+  shouldExist = true,
+) => {
+  const outputIdx = block.outputs.findIndex((x) =>
+    Hash.equals(x.verifier.contract_hash, outputContractHash)
+  );
+  assertNotEquals(outputIdx, -1);
+
+  const controller = new AbortController();
+  const consumerPromise = ctx.get(BlockService).waitForConsumption(
+    { block_hash: block.hash, output_idx: outputIdx },
+    controller.signal,
+  );
+
+  const consumer = await Promise.race([
+    consumerPromise,
+    new Promise<undefined>((resolve) =>
+      setTimeout(() => {
+        controller.abort();
+        resolve(undefined);
+      }, 1000)
+    ),
+  ]);
+
+  if (shouldExist) {
+    assertNotEquals(consumer, undefined);
+    assert(await ctx.get(BlockService).waitForVerification(consumer!));
+    return consumer!;
+  } else {
+    assertEquals(consumer, undefined);
+  }
+};

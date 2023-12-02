@@ -107,6 +107,10 @@ export default class FactService {
     //     : ctx.get(FrontierService).createFact(base);
   }
 
+  public getSize() {
+    return this.facts.size;
+  }
+
   public registerIngestor<Type extends FactType>(
     type: Type,
     cb: (fact: FactBase & { type: Type }) => void,
@@ -328,6 +332,12 @@ export default class FactService {
         throw new Error(`Cannot re-ingest a currently ingesting fact!`);
       }
       return existing;
+    }
+
+    if (this.facts.size >= this.ctx.config.limitFactCount) {
+      throw new Error(
+        `Hit the fact count limit of ${this.ctx.config.limitFactCount}!`,
+      );
     }
     this.facts.set(hash.toPrimitive(), ingestingFact);
 

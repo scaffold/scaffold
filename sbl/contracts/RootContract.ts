@@ -15,7 +15,7 @@ export default class RootContract implements ContractProvider {
     // TODO: How are errors handled here?
     const hash = Hash.fromBytes(driver.getParams());
     if (driver.type === ComputationType.Generator) {
-      const fact = ctx.get(FactService).get(hash);
+      const fact = ctx.get(FactService).get(hash, false);
       if (fact) {
         driver.requireBody(fact.data);
       } else {

@@ -100,6 +100,12 @@ interface Config {
 
   // requiredProfitPerComputeRatio: number;
 
+  // Only use this for tests; it'll simply throw an error when we try to ingest one too many facts.
+  limitFactCount: number;
+
+  // Only use this for tests; it allows frontier outputs to be specified on block specs. This can easily make emitted blocks invalid.
+  allowSpecifiedFrontierOutputs: boolean;
+
   initialWorkerCount: number;
 
   maxShutdownTimeMs: number;
@@ -142,6 +148,8 @@ export const makeDefaultConfig = () => ({
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
+  limitFactCount: Infinity,
+  allowSpecifiedFrontierOutputs: false,
   initialWorkerCount: 16,
   maxShutdownTimeMs: 10000,
   resourceLimits: {

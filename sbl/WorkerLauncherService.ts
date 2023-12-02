@@ -33,6 +33,9 @@ import { bin2hex } from '~/sbl/util/hex.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
 import { DetailVote } from '~/sbl/CollateralUtil.ts';
 import HintSuggestionService from '~/sbl/HintSuggestionService.ts';
+import { CollateralHint } from '~/sbl/collateralMessages.ts';
+
+// TODO: Split this file into ComputationMeta.ts, VerificationService.ts, and GenerationService.ts
 
 export const enum ComputationType {
   Contract,
@@ -115,8 +118,6 @@ export default class WorkerLauncherService {
 
   public enqueueVerification(
     block: BlockFact,
-    // TODO: Parameterize by claim
-    inputIdx: number,
     verifier: Verifier,
     hintPrefix: Uint8Array[],
     extraIncentive: number,
@@ -125,7 +126,9 @@ export default class WorkerLauncherService {
       return;
     }
 
-    const runHash = Hash.digestParts(block.hash, inputIdx, ...hintPrefix);
+    console.log('A', verifier.contract_hash.toHex());
+
+    const runHash = Hash.digestParts(block.hash, ...hintPrefix);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
       return;
@@ -138,14 +141,15 @@ export default class WorkerLauncherService {
       this.ctx.get(WorkerDriverService).run(
         () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
+          console.log('B', verifier.contract_hash.toHex());
           await workerDriver.setAllocation({});
           const driver = this.makeVerificationDriver(
             block,
-            inputIdx,
             verifier,
             hintPrefix,
             workerDriver,
           );
+          console.log('C', verifier.contract_hash.toHex());
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
@@ -154,8 +158,11 @@ export default class WorkerLauncherService {
               }`,
           });
           try {
+            console.log('D', verifier.contract_hash.toHex());
             await special.compute(driver, this.ctx);
+            console.log('E', verifier.contract_hash.toHex());
             await driver.finalize(COMPUTE_PASS_FLAG);
+            console.log('F', verifier.contract_hash.toHex());
           } catch (err) {
             await driver.finalize(err);
           }
@@ -177,7 +184,6 @@ export default class WorkerLauncherService {
           await workerDriver.setAllocation({});
           const driver = this.makeVerificationDriver(
             block,
-            inputIdx,
             verifier,
             hintPrefix,
             workerDriver,
@@ -339,7 +345,6 @@ export default class WorkerLauncherService {
 
   private makeVerificationDriver(
     block: BlockFact,
-    inputIdx: number,
     verifier: Verifier,
     hintPrefix: Uint8Array[],
     workerDriver: WorkerDriver,
@@ -583,6 +588,7 @@ export default class WorkerLauncherService {
         workerDriver.pauseTimer(`finalize()`);
 
         const isValid = err === COMPUTE_PASS_FLAG;
+        console.log('X', verifier.contract_hash.toHex(), isValid);
         if (isValid) {
           if (requireInputCount !== undefined) {
             let count = 0;
@@ -969,7 +975,9 @@ export default class WorkerLauncherService {
         if (inputBlock !== undefined) {
           const verifier = inputBlock.outputs[input.output_idx].verifier;
           this.ctx.get(WorkerLauncherService)
-            .enqueueVerification(block, i, verifier, [], 0);
+            .enqueueVerification(block, verifier, [CollateralHint.encode({
+              hint: { CollateralHintVerifier: { input_idx: i } },
+            })], 0);
         }
       }
     }

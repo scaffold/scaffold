@@ -72,6 +72,8 @@ export const CHALLENGE_PRICE = 10n;
 
 export const BASE_WORK = 10n;
 
+export const neverAbort = new AbortController().signal;
+
 export default class BlockService {
   private claimsByOutput = new Map<
     HashPrimitive,
@@ -385,7 +387,6 @@ export default class BlockService {
 
     this.ctx.get(WorkerLauncherService).enqueueVerification(
       child,
-      childInputIdx,
       verifier,
       [CollateralHint.encode({
         hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
@@ -963,24 +964,64 @@ export default class BlockService {
   }
 
   // Note that contestations still may be in progress
-  public async waitForVerification(block: BlockFact) {
+  public async waitForVerification(
+    block: BlockFact,
+    cancelSignal = neverAbort,
+  ) {
     for (let i = 0; i < block.inputs.length; i++) {
       const hint = CollateralHint.encode({
         hint: { CollateralHintVerifier: { input_idx: i } },
       });
 
+      console.log('Z', [hint]);
+
       while (
         this.ctx.get(FactService).getValidity(block.hash, [hint]) === undefined
       ) {
-        await new Promise<void>((resolve) =>
-          this.ctx.config.timeProvider.setTimeout(resolve, 100)
-        );
+        if (cancelSignal.aborted) {
+          return neverPromise;
+        }
+        await new Promise<void>((resolve) => {
+          const listener = () => this.ctx.config.timeProvider.clearTimeout(hdl);
+          const hdl = this.ctx.config.timeProvider.setTimeout(() => {
+            cancelSignal.removeEventListener('abort', listener);
+            resolve();
+          }, 100);
+          cancelSignal.addEventListener('abort', listener);
+        });
       }
     }
 
     return CollateralUtil.isValid(
       CollateralUtil.buildTree(block.collateralizations),
     );
+  }
+
+  public async waitForConsumption(
+    input: BlockInput,
+    cancelSignal = neverAbort,
+  ) {
+    while (true) {
+      const blocks = this.getBlocksByInput(input);
+      if (blocks.length > 0) {
+        if (blocks.length > 1) {
+          console.warn(`Multiple blocks consuming; simply choosing first!`);
+        }
+        return blocks[0];
+      }
+
+      if (cancelSignal.aborted) {
+        return neverPromise;
+      }
+      await new Promise<void>((resolve) => {
+        const listener = () => this.ctx.config.timeProvider.clearTimeout(hdl);
+        const hdl = this.ctx.config.timeProvider.setTimeout(() => {
+          cancelSignal.removeEventListener('abort', listener);
+          resolve();
+        }, 100);
+        cancelSignal.addEventListener('abort', listener);
+      });
+    }
   }
 
   public doesBlockSatisfy(
