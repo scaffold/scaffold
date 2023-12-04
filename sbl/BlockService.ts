@@ -375,6 +375,16 @@ export default class BlockService {
 
     this.checkInputAvailability(child);
 
+    // TODO: Only do this once per unique verifier foreach block
+    this.ctx.get(VerificationService).enqueueVerification(
+      child,
+      verifier,
+      [CollateralHint.encode({
+        hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
+      })],
+      0,
+    );
+
     if (
       child.verifiers.some((v2) =>
         Hash.equals(verifier.contract_hash, v2.contract_hash) &&
@@ -385,15 +395,6 @@ export default class BlockService {
     }
 
     child.verifiers.push(verifier);
-
-    this.ctx.get(VerificationService).enqueueVerification(
-      child,
-      verifier,
-      [CollateralHint.encode({
-        hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
-      })],
-      0,
-    );
 
     this.satisfactionMonitor.callAll(verifier, child);
 
@@ -973,8 +974,6 @@ export default class BlockService {
       const hint = CollateralHint.encode({
         hint: { CollateralHintVerifier: { input_idx: i } },
       });
-
-      console.log('Z', [hint]);
 
       while (
         this.ctx.get(FactService).getValidity(block.hash, [hint]) === undefined

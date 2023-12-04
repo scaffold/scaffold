@@ -5,7 +5,10 @@ import { collatzHash } from '~/sbl/constants.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import CollatzContract from '~/sbl/contracts/CollatzContract.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
-import { baseContractProviders } from '~/tests/contracts/util.ts';
+import {
+  baseContractProviders,
+  waitForVerifiedOutput,
+} from '~/tests/contracts/util.ts';
 import * as collatzMessages from '~/sbl/contracts/collatzMessages.ts';
 
 const params: collatzMessages.Params = { num: 1n };
@@ -43,11 +46,13 @@ Deno.test(
       }],
     }, 0);
 
-    assertEquals(incentiveBlock.outputs[0].verifier.contract_hash, collatzHash);
-    const consumer = await ctx1.get(BlockService)
-      .waitForConsumption({ block_hash: incentiveBlock.hash, output_idx: 0 });
-    assert(await ctx1.get(BlockService).waitForVerification(consumer));
-    assertEquals(collatzMessages.Answer.decode(consumer.body), goodAnswer);
+    const consumer = await waitForVerifiedOutput(
+      ctx1,
+      incentiveBlock,
+      collatzHash,
+      true,
+    );
+    assertEquals(collatzMessages.Answer.decode(consumer!.body), goodAnswer);
   }),
 );
 

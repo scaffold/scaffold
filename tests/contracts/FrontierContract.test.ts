@@ -16,7 +16,6 @@ import {
   waitForVerifiedOutput,
 } from '~/tests/contracts/util.ts';
 import { FrontierTreeParams } from '~/sbl/messages.ts';
-import Hash from '~/sbl/util/Hash.ts';
 import FactService from '~/sbl/FactService.ts';
 
 Deno.test(
@@ -42,7 +41,6 @@ Deno.test(
     name: `frontier contract generation test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
-    only: true,
   },
   makeTest({
     contractProviders: [...baseContractProviders, new FrontierContract()],
@@ -76,6 +74,45 @@ Deno.test(
     );
     assertStrictEquals(consumer1, consumer2);
     assertEquals(ctx1.get(FactService).getSize(), 3);
+  }),
+);
+
+Deno.test(
+  {
+    name: `frontier contract 3-block generation test`,
+    sanitizeOps: false, // TODO: Turn this on
+    sanitizeResources: false,
+  },
+  makeTest({
+    contractProviders: [...baseContractProviders, new FrontierContract()],
+    allowSpecifiedFrontierOutputs: true,
+  }, async (_testCtx, ctx1) => {
+    provideInitialBalance(ctx1);
+
+    ctx1.get(BlockBuilder).publish({
+      outputs: [{
+        verifier: {
+          contract_hash: frontierHash,
+          params: FrontierTreeParams.encode({ level: 0 }),
+        },
+        amount: 10n,
+        detail: EMPTY_ARR,
+      }],
+    }, 0);
+
+    const incentiveBlock = ctx1.get(BlockBuilder).publish({
+      outputs: [{
+        verifier: {
+          contract_hash: frontierHash,
+          params: FrontierTreeParams.encode({ level: 0 }),
+        },
+        amount: 10n,
+        detail: EMPTY_ARR,
+      }],
+    }, 0);
+
+    await waitForVerifiedOutput(ctx1, incentiveBlock, frontierHash, false);
+    assertEquals(ctx1.get(FactService).getSize(), 4);
   }),
 );
 

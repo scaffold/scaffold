@@ -37,8 +37,6 @@ export default class VerificationService {
       return;
     }
 
-    console.log('A', verifier.contract_hash.toHex());
-
     const runHash = Hash.digestParts(block.hash, ...hintPrefix);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -50,9 +48,7 @@ export default class VerificationService {
     const special = this.getVerifier(verifier.contract_hash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
-        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
-          console.log('B', verifier.contract_hash.toHex());
           await workerDriver.setAllocation({});
           const driver = this.makeVerificationDriver(
             block,
@@ -60,7 +56,6 @@ export default class VerificationService {
             hintPrefix,
             workerDriver,
           );
-          console.log('C', verifier.contract_hash.toHex());
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
@@ -69,15 +64,13 @@ export default class VerificationService {
               }`,
           });
           try {
-            console.log('D', verifier.contract_hash.toHex());
             await special.compute(driver, this.ctx);
-            console.log('E', verifier.contract_hash.toHex());
             await driver.finalize(COMPUTE_PASS_FLAG);
-            console.log('F', verifier.contract_hash.toHex());
           } catch (err) {
             await driver.finalize(err);
           }
         },
+        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
       ).then(() => this.extraContractIncentive.delete(runHash.toPrimitive()));
       return;
     }
@@ -90,7 +83,6 @@ export default class VerificationService {
       const contractCode = contractBlocks[0].body;
 
       this.ctx.get(WorkerDriverService).run(
-        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
           const driver = this.makeVerificationDriver(
@@ -122,6 +114,7 @@ export default class VerificationService {
             await driver.finalize(err);
           }
         },
+        () => this.extraContractIncentive.get(runHash.toPrimitive())!,
       ).then(() => this.extraContractIncentive.delete(runHash.toPrimitive()));
     }
   }
@@ -294,12 +287,12 @@ export default class VerificationService {
         }
 
         for (const input of block.inputs) {
-          const block = await this.ctx.get(BlockService).waitForBlock(
+          const inputBlock = await this.ctx.get(BlockService).waitForBlock(
             input.block_hash,
             workerDriver.done.signal,
           );
 
-          const output = block.outputs[input.output_idx];
+          const output = inputBlock.outputs[input.output_idx];
           if (
             this.ctx.get(BlockService).areVerifiersEqual(
               output.verifier,
@@ -308,8 +301,8 @@ export default class VerificationService {
           ) {
             workerDriver.resumeTimer();
             return {
-              blockHash: block.hash,
-              blockTimestamp: block.timestamp,
+              blockHash: inputBlock.hash,
+              blockTimestamp: inputBlock.timestamp,
               ...output,
             };
           }
@@ -379,7 +372,6 @@ export default class VerificationService {
         workerDriver.pauseTimer(`finalize()`);
 
         const isValid = err === COMPUTE_PASS_FLAG;
-        console.log('X', verifier.contract_hash.toHex(), isValid);
         if (isValid) {
           if (requireInputCount !== undefined) {
             let count = 0;

@@ -15,6 +15,7 @@ import WorkerDebuggerManager, {
 } from './WorkerDebuggerManager.ts';
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
+import { deferred } from 'std-latest/async/mod.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
@@ -105,10 +106,7 @@ export default class WorkerExecutor {
     const inodes = new Map<number, OpenFile>();
     const outputs: Record<string, { size: number; chunks: Uint8Array[] }> = {};
 
-    let exitResolver: () => void;
-    const exitPromise = new Promise<void>((resolve) => {
-      exitResolver = resolve;
-    });
+    const exitPromise = deferred<void>();
 
     let sentJob = false;
 
@@ -188,7 +186,7 @@ export default class WorkerExecutor {
           driver.fail();
         }
 
-        exitResolver();
+        exitPromise.resolve();
       },
 
       // Each of these returns the TOTAL size of the source buffer; irrespective of the dstBuf size or offset.

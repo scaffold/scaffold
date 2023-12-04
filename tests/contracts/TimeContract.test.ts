@@ -1,57 +1,57 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { dataHash } from '~/sbl/constants.ts';
+import { timeHash } from '~/sbl/constants.ts';
 import BlockService from '~/sbl/BlockService.ts';
-import DataContract from '~/sbl/contracts/DataContract.ts';
+import { TimeParams } from '~/sbl/messages.ts';
+import TimeContract from '~/sbl/contracts/TimeContract.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
-import { baseContractProviders } from '~/tests/contracts/util.ts';
-import { DataContractParams } from '~/sbl/messages.ts';
+import {
+  baseContractProviders,
+  waitForVerifiedOutput,
+} from '~/tests/contracts/util.ts';
 
 Deno.test(
   {
-    name: `data contract generation test`,
+    name: `time contract generation test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new DataContract()],
-    limitFactCount: 100,
+    contractProviders: [...baseContractProviders, new TimeContract()],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: dataHash,
-          params: DataContractParams.encode(params),
+          contract_hash: timeHash,
+          params: TimeParams.encode({ time: 123n }),
         },
         amount: 10n,
         detail: EMPTY_ARR,
       }],
     }, 0);
 
-    await waitForVerifiedOutput(ctx1, incentiveBlock, dataHash, true);
+    await waitForVerifiedOutput(ctx1, incentiveBlock, timeHash, true);
   }),
 );
 
 Deno.test(
   {
-    name: `data contract validation test`,
+    name: `time contract validation test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new DataContract()],
-    limitFactCount: 100,
+    contractProviders: [...baseContractProviders, new TimeContract()],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const validBlock = ctx1.get(BlockBuilder).publish({
-      body: collatzMessages.Answer.encode(goodAnswer),
       satisfies: [{
-        contract_hash: dataHash,
-        params: DataContractParams.encode(params),
+        contract_hash: timeHash,
+        params: TimeParams.encode({ time: 0n }),
       }],
     }, 0);
 
@@ -61,21 +61,19 @@ Deno.test(
 
 Deno.test(
   {
-    name: `data contract invalidation test`,
+    name: `time contract invalidation test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new DataContract()],
-    limitFactCount: 100,
-  }, async (_testCtx, ctx1) => {
-    provideInitialBalance(ctx1);
+    contractProviders: [...baseContractProviders, new TimeContract()],
+  }, async (_testCtx, ctx1, ctx2) => {
+    provideInitialBalance(ctx1, ctx2);
 
     const invalidBlock = ctx1.get(BlockBuilder).publish({
-      body: collatzMessages.Answer.encode(badAnswer),
       satisfies: [{
-        contract_hash: dataHash,
-        params: DataContractParams.encode(params),
+        contract_hash: timeHash,
+        params: TimeParams.encode({ time: 123n }),
       }],
     }, 0);
 

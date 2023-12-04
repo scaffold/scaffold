@@ -5,7 +5,10 @@ import { trueHash } from '~/sbl/constants.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import TrueContract from '~/sbl/contracts/TrueContract.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
-import { baseContractProviders } from '~/tests/contracts/util.ts';
+import {
+  baseContractProviders,
+  waitForVerifiedOutput,
+} from '~/tests/contracts/util.ts';
 
 Deno.test(
   {
@@ -26,10 +29,7 @@ Deno.test(
       }],
     }, 0);
 
-    assertEquals(incentiveBlock.outputs[0].verifier.contract_hash, trueHash);
-    const consumer = await ctx1.get(BlockService)
-      .waitForConsumption({ block_hash: incentiveBlock.hash, output_idx: 0 });
-    assert(await ctx1.get(BlockService).waitForVerification(consumer));
+    await waitForVerifiedOutput(ctx1, incentiveBlock, trueHash, true);
   }),
 );
 

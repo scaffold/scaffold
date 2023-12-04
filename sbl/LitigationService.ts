@@ -14,9 +14,7 @@ export default class LitigationService {
   constructor(private ctx: Context) {}
 
   public litigate(block: BlockFact, hints: Uint8Array[], vote: DetailVote) {
-    console.log('Y', hints, vote);
     vote = this.ctx.get(FactService).updateValidity(block.hash, hints, vote);
-    console.log('Y', hints, vote);
     this.rectify(block, [{
       detail: {
         public_key: this.ctx.get(KeyService).getSelfPublicKey(),

@@ -76,8 +76,8 @@ export default class WorkerDriverService {
   }
 
   public run(
-    getScore: () => number, // Expected profit/ms
     launch: (driver: WorkerDriver) => Promise<void>,
+    getScore: () => number, // Expected profit/ms
   ) /* TODO: Return a setScore(score: number) method so we can update from block update? Probably need to start implementing the launcher to determine this. */ {
     const log = this.ctx.config.enableWorkerLogging
       ? [{

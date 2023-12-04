@@ -5,14 +5,16 @@ import { burnHash } from '~/sbl/constants.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import BurnContract from '~/sbl/contracts/BurnContract.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
-import { baseContractProviders } from '~/tests/contracts/util.ts';
+import {
+  baseContractProviders,
+  waitForVerifiedOutput,
+} from '~/tests/contracts/util.ts';
 
 Deno.test(
   {
     name: `burn contract generation test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
-    ignore: true, // Ignoring because burned outputs cannot be consumed; ideally we will want to assert this is the case
   },
   makeTest({
     contractProviders: [...baseContractProviders, new BurnContract()],
@@ -27,10 +29,7 @@ Deno.test(
       }],
     }, 0);
 
-    assertEquals(incentiveBlock.outputs[0].verifier.contract_hash, burnHash);
-    const consumer = await ctx1.get(BlockService)
-      .waitForConsumption({ block_hash: incentiveBlock.hash, output_idx: 0 });
-    assert(await ctx1.get(BlockService).waitForVerification(consumer));
+    await waitForVerifiedOutput(ctx1, incentiveBlock, burnHash, false);
   }),
 );
 

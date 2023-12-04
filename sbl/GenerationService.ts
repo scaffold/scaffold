@@ -62,7 +62,6 @@ export default class GenerationService {
     const special = this.getGenerator(verifier.contract_hash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
-        () => this.extraGeneratorIncentive.get(runHash.toPrimitive())!,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
           const driver = this.makeGenerationDriver(verifier, workerDriver);
@@ -80,6 +79,7 @@ export default class GenerationService {
             await driver.finalize(err);
           }
         },
+        () => this.extraGeneratorIncentive.get(runHash.toPrimitive())!,
       ).then(() => this.extraGeneratorIncentive.delete(runHash.toPrimitive()));
       return;
     }
@@ -100,7 +100,6 @@ export default class GenerationService {
     );
     if (localGenerator) {
       this.ctx.get(WorkerDriverService).run(
-        getScore,
         async (workerDriver) => {
           await workerDriver.setAllocation({});
           const driver = this.makeGenerationDriver(verifier, workerDriver);
@@ -118,6 +117,7 @@ export default class GenerationService {
             await driver.finalize(err);
           }
         },
+        getScore,
       ).then(() => this.extraGeneratorIncentive.delete(runHash.toPrimitive()));
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
@@ -128,7 +128,6 @@ export default class GenerationService {
         const generatorCode = generatorBlocks[0].body;
 
         this.ctx.get(WorkerDriverService).run(
-          getScore,
           async (workerDriver) => {
             await workerDriver.setAllocation({ webWorkerCount: 1 });
             const driver = this.makeGenerationDriver(verifier, workerDriver);
@@ -154,6 +153,7 @@ export default class GenerationService {
               await driver.finalize(err);
             }
           },
+          getScore,
         ).then(() =>
           this.extraGeneratorIncentive.delete(runHash.toPrimitive())
         );
@@ -402,9 +402,12 @@ export default class GenerationService {
 
         if (timestampGte !== undefined) {
           // TODO: There might be a better way to do this?
-          const wait = Number(timestampGte) - Date.now();
+          const wait = Number(timestampGte) -
+            this.ctx.config.timeProvider.now();
           if (wait > 0) {
-            await new Promise((resolve) => setTimeout(resolve, wait));
+            await new Promise<void>((resolve) =>
+              this.ctx.config.timeProvider.setTimeout(resolve, wait)
+            );
           }
         }
 
