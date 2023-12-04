@@ -8,6 +8,8 @@ import FetchService from '../sbl/FetchService.ts';
 import { Block } from '../sbl/messages.ts';
 import MockNetworkProvider from '~/plugins/MockNetworkProvider.ts';
 import MockTimeProvider from '~/tests/MockTimeProvider.ts';
+import AccountContract from '~/sbl/contracts/AccountContract.ts';
+import DataContract from '~/sbl/contracts/DataContract.ts';
 
 const timeProvider = new MockTimeProvider();
 const mockNetworkOptions = {
@@ -27,6 +29,7 @@ Deno.test(
   makeTest({
     timeProvider,
     networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
+    contractProviders: [new AccountContract(), new DataContract()],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
@@ -68,6 +71,8 @@ Deno.test(
   makeTest({
     timeProvider,
     networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
+    contractProviders: [new AccountContract(), new DataContract()],
+    limitFactCount: 100,
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
