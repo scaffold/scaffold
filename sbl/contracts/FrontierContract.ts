@@ -35,12 +35,15 @@ import { frontierHash } from '~/sbl/constants.ts';
 //   votes: bigint;
 // }
 
+export const frontierInputCount = 4;
+
 export default class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
   public async compute(driver: ComputationDriver) {
-    await driver.getInputSource(0);
-    await driver.getInputSource(1);
+    for (let i = 0; i < frontierInputCount; i++) {
+      await driver.getInputSource(i);
+    }
     const { level } = FrontierTreeParams.decode(driver.getParams());
     driver.requireFrontierLevel(level + 1);
   }

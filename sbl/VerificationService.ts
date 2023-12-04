@@ -37,6 +37,7 @@ export default class VerificationService {
       return;
     }
 
+    // Key by: block.hash, verifier, hintPrefix.slice(1)
     const runHash = Hash.digestParts(block.hash, ...hintPrefix);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
@@ -303,6 +304,7 @@ export default class VerificationService {
             return {
               blockHash: inputBlock.hash,
               blockTimestamp: inputBlock.timestamp,
+              outputIdx: input.output_idx,
               ...output,
             };
           }
@@ -393,6 +395,8 @@ export default class VerificationService {
               throw COMPUTE_FAIL_FLAG;
             }
           }
+        } else {
+          console.error(`Verification failed:`, err);
         }
 
         const vote = isValid ? 'FINAL_PASS' : 'FINAL_FAIL';

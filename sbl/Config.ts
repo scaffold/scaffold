@@ -148,7 +148,8 @@ export const makeDefaultConfig = () => ({
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
-  limitFactCount: Infinity,
+  // limitFactCount: Infinity,
+  limitFactCount: 100,
   allowSpecifiedFrontierOutputs: false,
   initialWorkerCount: 16,
   maxShutdownTimeMs: 10000,

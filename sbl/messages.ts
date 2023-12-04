@@ -628,6 +628,7 @@ export const registry = {
     ],
   },
 
+  // TODO: Remove this; just use the raw public key bytes
   AccountContractParams: {
     name: 'AccountContractParams',
     type: 'record',

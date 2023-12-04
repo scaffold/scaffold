@@ -63,12 +63,12 @@ const zstdMagic = new Uint8Array([40, 181, 47, 253]);
 
 const sortKeys = true;
 
-const ingestingFact: unique symbol = Symbol('ingestingFact');
+const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
 export default class FactService {
   private factories: FactFactory[] = [];
   private ingestors: ((fact: FactBase) => void)[][] = [];
-  private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
+  private facts = new Map<HashPrimitive, Fact | typeof invalidFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
   private validitiesByHash = new Map<
@@ -126,16 +126,16 @@ export default class FactService {
 
   public has(hash: Hash) {
     const fact = this.facts.get(hash.toPrimitive());
-    if (fact === ingestingFact) {
-      throw new Error(`Testing for existence of a currently ingesting fact!`);
+    if (fact === invalidFact) {
+      throw new Error(`Testing for existence of an ingesting or invalid fact!`);
     }
     return fact !== undefined;
   }
 
   public get(hash: Hash, request = true): Fact | undefined {
     const fact = this.facts.get(hash.toPrimitive());
-    if (fact === ingestingFact) {
-      throw new Error(`Cannot get a currently ingesting fact!`);
+    if (fact === invalidFact) {
+      throw new Error(`Cannot get an ingesting or invalid fact!`);
     }
     if (fact === undefined && request) {
       this.ctx.get(DataService).request(hash);
@@ -157,7 +157,7 @@ export default class FactService {
     filter: (block: BlockFact) => boolean = () => true,
   ): BlockFact[] {
     return [...this.facts.values()].flatMap((fact) =>
-      fact !== ingestingFact && fact.type === FactType.Block && filter(fact)
+      fact !== invalidFact && fact.type === FactType.Block && filter(fact)
         ? [fact]
         : []
     );
@@ -166,7 +166,7 @@ export default class FactService {
     filter: (block: BlockSetFact) => boolean = () => true,
   ): BlockSetFact[] {
     return [...this.facts.values()].flatMap((fact) =>
-      fact !== ingestingFact && fact.type === FactType.BlockSet && filter(fact)
+      fact !== invalidFact && fact.type === FactType.BlockSet && filter(fact)
         ? [fact]
         : []
     );
@@ -328,8 +328,8 @@ export default class FactService {
     const hash = Hash.digest(data);
     const existing = this.facts.get(hash.toPrimitive());
     if (existing !== undefined) {
-      if (existing === ingestingFact) {
-        throw new Error(`Cannot re-ingest a currently ingesting fact!`);
+      if (existing === invalidFact) {
+        throw new Error(`Cannot re-ingest an ingesting or invalid fact!`);
       }
       return existing;
     }
@@ -339,89 +339,94 @@ export default class FactService {
         `Hit the fact count limit of ${this.ctx.config.limitFactCount}!`,
       );
     }
-    this.facts.set(hash.toPrimitive(), ingestingFact);
+    this.facts.set(hash.toPrimitive(), invalidFact);
 
-    if (data.byteLength < headerSize) {
-      throw new Error(`Message length (${data.byteLength}) is too short!`);
-    }
-    if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
-      throw new Error(`Fact doesn't start with the magic bytes!`);
-    }
+    try {
+      if (data.byteLength < headerSize) {
+        throw new Error(`Message length (${data.byteLength}) is too short!`);
+      }
+      if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
+        throw new Error(`Fact doesn't start with the magic bytes!`);
+      }
 
-    const type: FactType = data[factMagic.byteLength];
-    const signed = typeHasSignature[type];
-    if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
-      throw new Error(`Message length (${data.byteLength}) is too short!`);
-    }
-    const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
+      const type: FactType = data[factMagic.byteLength];
+      const signed = typeHasSignature[type];
+      if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
+        throw new Error(`Message length (${data.byteLength}) is too short!`);
+      }
+      const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
 
-    const isSignedByMe = this.verify(
-      { data, signature },
-      this.ctx.get(KeyService).getSelfPublicKey(),
-    );
-
-    const base: FactBase = {
-      hash,
-
-      data,
-      type,
-      message: data.subarray(
-        headerSize,
-        signed ? -SIGNATURE_LENGTH : undefined,
-      ),
-      signature,
-
-      source,
-      isSignedByMe,
-      fromNodes: [],
-      toNodes: [],
-
-      collateralizations: mapPut(
-        this.collateralByHash,
-        hash.toPrimitive(),
-        () => [],
-      ),
-      validities: mapPut(
-        this.validitiesByHash,
-        hash.toPrimitive(),
-        () => new Map(),
-      ),
-
-      backtrace: new Error().stack,
-    };
-
-    const res = this.factories[base.type](base, fromNode, mutator);
-    if (res.type !== base.type) {
-      throw new Error(
-        `Factory ${base.type} returned incorrect message type ${res.type}!`,
+      const isSignedByMe = this.verify(
+        { data, signature },
+        this.ctx.get(KeyService).getSelfPublicKey(),
       );
-    }
 
-    if (sortKeys) {
-      Object.keys(res).sort().forEach((key) => {
-        if (key !== 'type') {
-          const val = (res as Record<string, unknown>)[key];
-          delete (res as Record<string, unknown>)[key];
-          (res as Record<string, unknown>)[key] = val;
-        }
-      });
-    }
+      const base: FactBase = {
+        hash,
 
-    this.facts.set(hash.toPrimitive(), res);
-    if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
-      console.log(`Created fact:`, res.hash.toHex(), res);
-    } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
-      console.log(
-        `Created ${res.type} fact from ${res.source}:`,
-        res.hash.toHex(),
-      );
-    }
+        data,
+        type,
+        message: data.subarray(
+          headerSize,
+          signed ? -SIGNATURE_LENGTH : undefined,
+        ),
+        signature,
 
-    for (const cb of this.ingestors[base.type]) {
-      cb(res);
-    }
+        source,
+        isSignedByMe,
+        fromNodes: [],
+        toNodes: [],
 
-    return res;
+        collateralizations: mapPut(
+          this.collateralByHash,
+          hash.toPrimitive(),
+          () => [],
+        ),
+        validities: mapPut(
+          this.validitiesByHash,
+          hash.toPrimitive(),
+          () => new Map(),
+        ),
+
+        backtrace: new Error().stack,
+      };
+
+      const res = this.factories[base.type](base, fromNode, mutator);
+      if (res.type !== base.type) {
+        throw new Error(
+          `Factory ${base.type} returned incorrect message type ${res.type}!`,
+        );
+      }
+
+      if (sortKeys) {
+        Object.keys(res).sort().forEach((key) => {
+          if (key !== 'type') {
+            const val = (res as Record<string, unknown>)[key];
+            delete (res as Record<string, unknown>)[key];
+            (res as Record<string, unknown>)[key] = val;
+          }
+        });
+      }
+
+      this.facts.set(hash.toPrimitive(), res);
+      if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
+        console.log(`Created fact:`, res.hash.toHex(), res);
+      } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
+        console.log(
+          `Created ${res.type} fact from ${res.source}:`,
+          res.hash.toHex(),
+        );
+      }
+
+      for (const cb of this.ingestors[base.type]) {
+        cb(res);
+      }
+
+      return res;
+    } catch (err) {
+      console.error('FactService.ingest err:', err);
+      throw err;
+    }
   }
 
   public snapshot() {

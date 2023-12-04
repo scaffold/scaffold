@@ -32,6 +32,19 @@ export default class UnclaimedOutputService {
     return this.monitor.waitFor(key, cancelSignal);
   }
 
+  public claimNow(verifier: Verifier) {
+    const key = Hash.digest(Verifier.encode(verifier));
+    const found = this.unclaimedOutputs.get(key.toPrimitive());
+    if (found) {
+      if (found.length === 1) {
+        this.unclaimedOutputs.delete(key.toPrimitive());
+        return found[0];
+      } else {
+        return found.shift()!;
+      }
+    }
+  }
+
   public addUnclaimed(block: BlockFact, outputIdx: number) {
     const { verifier, amount } = block.outputs[outputIdx];
     const spec = { block, outputIdx, amount };

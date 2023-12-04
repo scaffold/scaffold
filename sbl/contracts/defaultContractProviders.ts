@@ -9,12 +9,12 @@ import BurnContract from '~/sbl/contracts/BurnContract.ts';
 import TrueContract from '~/sbl/contracts/TrueContract.ts';
 
 export const defaultContractProviders: ContractProvider[] = [
-  // new BurnContract(),
-  // new RootContract(),
-  // new DataContract(),
-  // new AccountContract(),
-  // new TimeContract(),
+  new BurnContract(),
+  new RootContract(),
+  new DataContract(),
+  new AccountContract(),
+  new TimeContract(),
   new FrontierContract(),
-  // new CollateralContract(),
+  new CollateralContract(),
   new TrueContract(),
 ];

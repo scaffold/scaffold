@@ -26,7 +26,8 @@ export default class CollateralContract implements ContractProvider {
   public contractHash = collateralHash;
 
   public async compute(driver: ComputationDriver) {
-    const _params = CollateralContractParams.decode(driver.getParams());
+    // Just verify that the params decode
+    CollateralContractParams.decode(driver.getParams());
 
     const postings: (Omit<InputSource, 'detail'> & Posting)[] = [];
     const inputCount = await driver.getInputCount();
@@ -42,24 +43,24 @@ export default class CollateralContract implements ContractProvider {
     if (driver.type === ComputationType.Generator) {
       // Sort
       postings.sort((a, b) =>
-        driver.compareBlockOrder(a.blockHash, b.blockHash)
+        driver.compareBlockOrder(a.blockHash, b.blockHash) ||
+        a.outputIdx - b.outputIdx
       );
     } else if (driver.type === ComputationType.Contract) {
       // Assert sorted
       for (let i = 1; i < postings.length; i++) {
-        if (
-          driver.compareBlockOrder(
-            postings[i - 1].blockHash,
-            postings[i].blockHash,
-          ) !== -1
-        ) {
+        const a = postings[i - 1];
+        const b = postings[i];
+        const cmp = driver.compareBlockOrder(a.blockHash, b.blockHash) ||
+          a.outputIdx - b.outputIdx;
+        if (cmp >= 0) {
           driver.fail();
         }
       }
     }
 
     const desc = CollateralUtil.buildTree(postings);
-    const isValid = CollateralUtil.isValid(desc);
+    // const isValid = CollateralUtil.isValid(desc);
     const outputMap = CollateralUtil.getOutputMap(desc);
 
     if (DEBUG) {

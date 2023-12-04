@@ -30,12 +30,16 @@ import {
 } from '~/sbl/ComputationMeta.ts';
 import VerificationService from '~/sbl/VerificationService.ts';
 
+// TODO: Collect all inputs by verifier in here, and getInputSource() should return from here
+interface RunningGeneration {
+  extraIncentive: number;
+}
+
 export default class GenerationService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
-
-  private extraGeneratorIncentive = new Map<HashPrimitive, number>();
-
   private secret: Uint8Array;
+
+  private running = new Map<HashPrimitive, RunningGeneration>();
 
   constructor(private ctx: Context) {
     this.secret = ctx.config.entropyProvider.randomBytes(32);
@@ -52,11 +56,11 @@ export default class GenerationService {
     }
 
     const runHash = Hash.digest(Verifier.encode(verifier));
-    if (this.extraGeneratorIncentive.has(runHash.toPrimitive())) {
-      this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
+    if (this.running.has(runHash.toPrimitive())) {
+      this.running.set(runHash.toPrimitive(), { extraIncentive });
       return;
     } else {
-      this.extraGeneratorIncentive.set(runHash.toPrimitive(), extraIncentive);
+      this.running.set(runHash.toPrimitive(), { extraIncentive });
     }
 
     const special = this.getGenerator(verifier.contract_hash);
@@ -79,8 +83,8 @@ export default class GenerationService {
             await driver.finalize(err);
           }
         },
-        () => this.extraGeneratorIncentive.get(runHash.toPrimitive())!,
-      ).then(() => this.extraGeneratorIncentive.delete(runHash.toPrimitive()));
+        () => this.running.get(runHash.toPrimitive())!.extraIncentive,
+      ).then(() => this.running.delete(runHash.toPrimitive()));
       return;
     }
 
@@ -93,7 +97,7 @@ export default class GenerationService {
             ? acc + /* Math.exp(block.mergeableLogProbabilityValue) * */
               Number(amount)
             : acc;
-        }, this.extraGeneratorIncentive.get(runHash.toPrimitive())!);
+        }, this.running.get(runHash.toPrimitive())!.extraIncentive);
 
     const localGenerator = this.ctx.get(LocalGeneratorService).getGenerator(
       verifier.contract_hash,
@@ -118,7 +122,7 @@ export default class GenerationService {
           }
         },
         getScore,
-      ).then(() => this.extraGeneratorIncentive.delete(runHash.toPrimitive()));
+      ).then(() => this.running.delete(runHash.toPrimitive()));
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
         contract_hash: generatorHash,
@@ -154,9 +158,7 @@ export default class GenerationService {
             }
           },
           getScore,
-        ).then(() =>
-          this.extraGeneratorIncentive.delete(runHash.toPrimitive())
-        );
+        ).then(() => this.running.delete(runHash.toPrimitive()));
       }
     }
   }
@@ -324,6 +326,7 @@ export default class GenerationService {
         return {
           blockHash: input.block.hash,
           blockTimestamp: input.block.timestamp,
+          outputIdx: input.outputIdx,
           ...input.block.outputs[input.outputIdx],
         };
       },
@@ -460,7 +463,7 @@ export default class GenerationService {
       const block = this.ctx.get(BlockBuilder).buildBlock(spec);
 
       const publishDelay = 500 + Math.random() * 500;
-      const publishAt = Date.now() + publishDelay;
+      const publishAt = this.ctx.config.timeProvider.now() + publishDelay;
 
       const fact = this.ctx.get(FactService).ingest(
         this.ctx.get(FactService).compose(block, Block, FactType.Block),
@@ -576,6 +579,6 @@ export default class GenerationService {
   }
 
   public snapshot() {
-    return { extraGeneratorIncentive: this.extraGeneratorIncentive };
+    return { running: this.running };
   }
 }

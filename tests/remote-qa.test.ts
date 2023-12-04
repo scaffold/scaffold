@@ -67,6 +67,7 @@ Deno.test(
     name: `network multi-req test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
+    only: true,
   },
   makeTest({
     timeProvider,

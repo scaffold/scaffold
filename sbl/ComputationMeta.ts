@@ -18,6 +18,7 @@ export const enum BurdenOfProof {
 export interface InputSource extends BlockOutput {
   blockHash: Hash;
   blockTimestamp: bigint;
+  outputIdx: number;
 }
 
 export interface ComputationDriver extends WorkerDriver {

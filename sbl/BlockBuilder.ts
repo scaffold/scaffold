@@ -17,6 +17,8 @@ import FrontierService from '~/sbl/FrontierService.ts';
 import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
+import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
+import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 
 // const defaultTimeout = 100; // Enable block chunking
 const defaultTimeout = 0; // Disable block chunking
@@ -109,19 +111,16 @@ export default class BlockBuilder {
     ioDelta += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
-    if (ioDelta < 0n) {
-      const accountInputs = this.ctx.get(BlockService).getBlocksByOutput(
-        this.selfAccountVerifier,
-      );
-      for (const { block, idx } of accountInputs) {
-        const amount = block.outputs[idx].amount;
-        if (amount > 0n) {
-          inputBlocks.push({ block, outputIdx: idx, amount });
-          ioDelta += amount;
-          if (ioDelta >= 0n) {
-            break;
-          }
-        }
+    while (ioDelta < 0n) {
+      const input = this.ctx.get(UnclaimedOutputService)
+        .claimNow(this.selfAccountVerifier);
+      if (input === undefined) {
+        break;
+      }
+
+      if (input.amount > 0n) {
+        inputBlocks.push(input);
+        ioDelta += input.amount;
       }
     }
 
@@ -203,7 +202,7 @@ export default class BlockBuilder {
 
     if (publishStub) {
       const block = this.publish({
-        outputs: [{ verifier, amount: 0n, detail: new Uint8Array() }],
+        outputs: [{ verifier, amount: 0n, detail: EMPTY_ARR }],
       }, 0);
       inputBlocks.push({ block, outputIdx: 0, amount: 0n });
     }
