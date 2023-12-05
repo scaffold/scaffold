@@ -37,7 +37,7 @@ export default class VerificationService {
       return;
     }
 
-    // Key by: block.hash, verifier, hintPrefix.slice(1)
+    // TODO: Key by: block.hash, verifier, hintPrefix.slice(1)
     const runHash = Hash.digestParts(block.hash, ...hintPrefix);
     if (this.extraContractIncentive.has(runHash.toPrimitive())) {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);

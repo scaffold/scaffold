@@ -51,7 +51,7 @@ Deno.test(
       body: str2bin('good'),
       satisfies: [{
         contract_hash: rootHash,
-        params: Hash.digest(str2bin('good')).toBytes(),
+        params: Hash.digest('good').toBytes(),
       }],
     }, 0);
 
@@ -74,7 +74,7 @@ Deno.test(
       body: str2bin('bad'),
       satisfies: [{
         contract_hash: rootHash,
-        params: Hash.digest(str2bin('good')).toBytes(),
+        params: Hash.digest('good').toBytes(),
       }],
     }, 0);
 

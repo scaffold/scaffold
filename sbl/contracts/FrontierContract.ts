@@ -41,10 +41,10 @@ export default class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
   public async compute(driver: ComputationDriver) {
+    const { level } = FrontierTreeParams.decode(driver.getParams());
     for (let i = 0; i < frontierInputCount; i++) {
       await driver.getInputSource(i);
     }
-    const { level } = FrontierTreeParams.decode(driver.getParams());
     driver.requireFrontierLevel(level + 1);
   }
 }

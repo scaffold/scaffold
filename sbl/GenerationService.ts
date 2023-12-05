@@ -409,7 +409,7 @@ export default class GenerationService {
             this.ctx.config.timeProvider.now();
           if (wait > 0) {
             await new Promise<void>((resolve) =>
-              this.ctx.config.timeProvider.setTimeout(resolve, wait)
+              this.ctx.get(ClockService).setTimeout(resolve, wait)
             );
           }
         }

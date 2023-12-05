@@ -3,6 +3,11 @@ import * as base from '~/sbl/messages.ts';
 const registry = {
   ...base.registry,
 
+  CollateralHintFrontierHash: {
+    name: 'CollateralHintFrontierHash',
+    type: 'record',
+    fields: [],
+  },
   CollateralHintInputHash: {
     name: 'CollateralHintInputHash',
     type: 'record',
@@ -21,6 +26,7 @@ const registry = {
       {
         name: 'hint',
         type: [
+          'CollateralHintFrontierHash',
           'CollateralHintInputHash',
           'CollateralHintVerifier',
         ],
@@ -41,7 +47,7 @@ const registry = {
       { name: 'hints', type: { type: 'array', items: 'bytes' } },
 
       // When running a contract, hints are requested via getHint().
-      // After getHint() calls returning this sequence of hints, this vote signifies the next getHint() or finalize() call.
+      // After getHint() calls returning the above sequence of hints, the vote signifies the next getHint() or finalize() call.
       // VALID_CHALLENGE and ALL_VALID_CONTEST signify getHint(..., BurdenOfProof.Invalidation) being the next call.
       // INVALID_CHALLENGE and ONE_VALID_CONTEST signify getHint(..., BurdenOfProof.Validation) being the next call.
       // FINAL_PASS signifies finalize(COMPUTE_PASS_FLAG) being the next call, meaning the contract passed.
