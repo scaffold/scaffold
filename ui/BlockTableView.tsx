@@ -21,6 +21,7 @@ import FactService from '~/sbl/FactService.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import HashView from '~/ui/HashView.tsx';
 import CollateralUtil from '~/sbl/CollateralUtil.ts';
+import WeightService from '~/sbl/WeightService.ts';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
@@ -199,7 +200,7 @@ export default (
       },
       {
         header: 'frontier_vote',
-        accessorFn: (blockSet) => blockSet.frontier_vote,
+        accessorFn: (block) => block.frontier_vote,
         cell: (props) => (
           <HashView
             hash={props.getValue<Hash>()}
@@ -210,20 +211,11 @@ export default (
       },
       {
         header: 'votes',
-        accessorFn: (blockSet) => blockSet.votes,
+        accessorFn: (block) => block.votes,
       },
       {
         header: 'block size',
         accessorFn: (block) => block.data.byteLength,
-      },
-      {
-        header: 'is valid',
-        accessorFn: (blockSet) =>
-          CollateralUtil.isValid(
-              CollateralUtil.buildTree(blockSet.collateralizations),
-            )
-            ? 'yes'
-            : 'no',
       },
       {
         header: 'collateralizations',
@@ -242,6 +234,40 @@ export default (
           </ol>
         ),
       },
+      {
+        header: 'is valid',
+        accessorFn: (block) =>
+          CollateralUtil.isValid(
+              CollateralUtil.buildTree(block.collateralizations),
+            )
+            ? 'yes'
+            : 'no',
+      },
+      {
+        header: 'is canonical',
+        accessorFn: (block) =>
+          ctx.get(WeightService).isCanonical(block) ? 'yes' : 'no',
+      },
+      // {
+      //   header: 'ancestor weight',
+      //   accessorFn: (block) =>
+      //     ctx.get(WeightService).getAncestorWeight(block).minWeight,
+      // },
+      // {
+      //   header: 'self weight min',
+      //   accessorFn: (block) =>
+      //     ctx.get(WeightService).getSelfWeight(block).minWeight,
+      // },
+      // {
+      //   header: 'self weight max',
+      //   accessorFn: (block) =>
+      //     ctx.get(WeightService).getSelfWeight(block).maxWeight,
+      // },
+      // {
+      //   header: 'descendant weight',
+      //   accessorFn: (block) =>
+      //     ctx.get(WeightService).getDescendantWeight(block).minWeight,
+      // },
     ],
     [],
   );

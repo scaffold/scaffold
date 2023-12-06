@@ -41,7 +41,7 @@ import {
 } from '~/sbl/FactMeta.ts';
 import FactService from '~/sbl/FactService.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
-import { assert, neverPromise } from '~/sbl/util/functional.ts';
+import { assert, neverPromise, todo } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
 import PublicKeyService from '~/sbl/PublicKeyService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
@@ -204,6 +204,7 @@ export default class BlockService {
       if (parent) {
         this.linkBlocks(parent, fact, input.output_idx, idx);
 
+        todo(); // What should this be???
         if (claims.length === 0) {
           this.ctx.get(UnclaimedOutputService).removeUnclaimed(
             parent,
