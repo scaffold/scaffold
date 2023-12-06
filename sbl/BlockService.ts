@@ -80,6 +80,7 @@ export default class BlockService {
     HashPrimitive,
     { block: BlockFact; inputIdx: number }[]
   >();
+  private frontierVoters = new Map<HashPrimitive, BlockFact[]>();
 
   public blockMonitor = new ResolvingMonitor<BlockFact, Hash>((h) => h); // Key is block hash
   public satisfactionMonitor = new WatchingMonitor<BlockFact, Verifier>((v) =>
@@ -152,6 +153,13 @@ export default class BlockService {
           x.block
         )
       ),
+
+      frontierVoters: getOrCreate(
+        this.frontierVoters,
+        base.hash.toPrimitive(),
+        () => [],
+      ),
+
       propagationMask: 0,
 
       derivedWorkValue: 0,
@@ -184,6 +192,9 @@ export default class BlockService {
     this.blockMonitor.resolveAll(fact.hash, fact);
 
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
+
+    getOrCreate(this.frontierVoters, fact.frontier_vote.toPrimitive(), () => [])
+      .push(fact);
 
     fact.inputs.forEach((input, idx) => {
       const claims = this.getClaims(input);

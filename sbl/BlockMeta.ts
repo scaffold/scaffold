@@ -39,6 +39,8 @@ export interface BlockMeta {
   mergeableProbability: number;
   outputClaims: BlockFact[][];
 
+  frontierVoters: BlockFact[];
+
   propagationMask: number;
 
   derivedWorkValue: number;

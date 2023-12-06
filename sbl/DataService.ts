@@ -4,6 +4,7 @@ import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { rootHash } from '~/sbl/constants.ts';
 import FactService from '~/sbl/FactService.ts';
+import ClockService from '~/sbl/ClockService.ts';
 
 export default class DataService {
   private requesting = new Set<HashPrimitive>();
@@ -11,7 +12,7 @@ export default class DataService {
   constructor(private ctx: Context) {}
 
   public request(hash: Hash) {
-    this.ctx.config.timeProvider.setImmediate(() => {
+    this.ctx.get(ClockService).setTimeout(() => {
       if (!this.ctx.get(FactService).has(hash)) {
         this.ctx.get(BlockBuilder).publish({
           outputs: [{
@@ -21,7 +22,7 @@ export default class DataService {
           }],
         });
       }
-    });
+    }, 0);
   }
 
   private getSignatories(hash: Hash): Fact[] {

@@ -8,6 +8,7 @@ import {
   assertNotEquals,
 } from 'std-latest/assert/mod.ts';
 import BlockService from '~/sbl/BlockService.ts';
+import { findOutput } from '../util.ts';
 
 export const baseContractProviders = [new AccountContract()];
 
@@ -17,10 +18,7 @@ export const waitForVerifiedOutput = async (
   outputContractHash: Hash,
   shouldExist = true,
 ) => {
-  const outputIdx = block.outputs.findIndex((x) =>
-    Hash.equals(x.verifier.contract_hash, outputContractHash)
-  );
-  assertNotEquals(outputIdx, -1);
+  const { outputIdx } = findOutput(block, outputContractHash);
 
   const controller = new AbortController();
   const consumerPromise = ctx.get(BlockService).waitForConsumption(

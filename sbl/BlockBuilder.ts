@@ -19,6 +19,7 @@ import { MaybePromise } from '~/sbl/util/types.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 
 // const defaultTimeout = 100; // Enable block chunking
 const defaultTimeout = 0; // Disable block chunking
@@ -89,12 +90,18 @@ export default class BlockBuilder {
         throw new Error(`Unexpected frontier output on an unfinished block!`);
       }
     } else {
+      const level = spec.frontierLevel ?? 0;
+      // const amount = BigInt(
+      //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
+      // );
+      const amount = 10n;
+
       outputs.push({
         verifier: {
           contract_hash: frontierHash,
-          params: FrontierTreeParams.encode({ level: spec.frontierLevel ?? 0 }),
+          params: FrontierTreeParams.encode({ level }),
         },
-        amount: 10n,
+        amount,
         detail: FrontierTreeDetail.encode({
           // input_tree_root: ZERO_HASH,
           // output_tree_root: ZERO_HASH,

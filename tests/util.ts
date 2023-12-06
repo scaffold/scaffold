@@ -13,9 +13,12 @@ import NetworkService from '~/sbl/NetworkService.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import { createGenesisBlock } from '~/sbl/GenesisService.ts';
 import FactService from '~/sbl/FactService.ts';
-import { FactSource } from '~/sbl/FactMeta.ts';
+import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
 import NodeService from '~/sbl/NodeService.ts';
 import { NotUndefined } from '~/sbl/util/functional.ts';
+import { InputSpec } from '~/sbl/BlockBuilder.ts';
+import Hash from '~/sbl/util/Hash.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
 
 const makeConfig = (
   ctxIdx: number,
@@ -129,4 +132,20 @@ export const waitFor = async <T extends NotUndefined>(
       ctx.config.timeProvider.setTimeout(resolve, intervalMs)
     );
   }
+};
+
+export const findOutput = (
+  block: BlockFact,
+  contractHash: Hash,
+  params?: Uint8Array,
+): InputSpec => {
+  for (const [idx, output] of block.outputs.entries()) {
+    if (
+      Hash.equals(output.verifier.contract_hash, contractHash) &&
+      (params === undefined || arrEquals(output.verifier.params, params))
+    ) {
+      return { block, outputIdx: idx, amount: output.amount };
+    }
+  }
+  throw new Error(`No output matches!`);
 };

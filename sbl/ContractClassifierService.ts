@@ -23,7 +23,8 @@ export default class ContractClassifierService {
   );
 
   private freeMarketContractHashes = new Set<HashPrimitive>(
-    [trueHash].map(toHashPrim),
+    [collateralHash, dataHash, frontierHash, rootHash, timeHash, trueHash]
+      .map(toHashPrim),
   );
 
   private charityContractHashes = new Set<HashPrimitive>(

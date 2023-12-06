@@ -44,6 +44,7 @@ export interface ComputationDriver extends WorkerDriver {
   getInputSource(idx: number): MaybePromise<InputSource>; // Returns the input source at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
   // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
+  // TODO: Remove this and call requireOutput({ contract_hash: frontierHash, ... }) instead?
   requireFrontierLevel(level: number): void;
 
   compareBlockOrder(hashA: Hash, hashB: Hash): number; // Clamps the frontier vote

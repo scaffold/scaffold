@@ -132,6 +132,11 @@ export default () => {
 
   return (
     <div>
+      <img
+        src='/scaffold_logo_horizontal.png'
+        style={{ maxHeight: '4rem', maxWidth: '100%' }}
+      />
+
       <CodeView>Hello world!</CodeView>
 
       <a
