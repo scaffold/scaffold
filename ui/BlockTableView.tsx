@@ -64,6 +64,10 @@ export default (
         ),
       },
       {
+        header: 'name',
+        accessorFn: (block) => block.sillyName,
+      },
+      {
         header: 'timestamp',
         accessorFn: (block) =>
           // new Date(Number(block.timestamp)).toLocaleString(),
@@ -166,7 +170,7 @@ export default (
                           {claims.flatMap((claim, idx) => [
                             idx ? '; ' : ': ',
                             <HashView
-                              hash={claim.hash}
+                              hash={claim.block.hash}
                               setHoveredHash={setHoveredHash}
                               setSelectedHash={setSelectedHash}
                             />,
@@ -248,26 +252,26 @@ export default (
         accessorFn: (block) =>
           ctx.get(WeightService).isCanonical(block) ? 'yes' : 'no',
       },
-      // {
-      //   header: 'ancestor weight',
-      //   accessorFn: (block) =>
-      //     ctx.get(WeightService).getAncestorWeight(block).minWeight,
-      // },
-      // {
-      //   header: 'self weight min',
-      //   accessorFn: (block) =>
-      //     ctx.get(WeightService).getSelfWeight(block).minWeight,
-      // },
-      // {
-      //   header: 'self weight max',
-      //   accessorFn: (block) =>
-      //     ctx.get(WeightService).getSelfWeight(block).maxWeight,
-      // },
-      // {
-      //   header: 'descendant weight',
-      //   accessorFn: (block) =>
-      //     ctx.get(WeightService).getDescendantWeight(block).minWeight,
-      // },
+      {
+        header: 'ancestor weight',
+        accessorFn: (block) =>
+          ctx.get(WeightService).getAncestorWeight(block).minWeight,
+      },
+      {
+        header: 'self weight min',
+        accessorFn: (block) =>
+          ctx.get(WeightService).getSelfWeight(block).minWeight,
+      },
+      {
+        header: 'self weight max',
+        accessorFn: (block) =>
+          ctx.get(WeightService).getSelfWeight(block).maxWeight,
+      },
+      {
+        header: 'descendant weight',
+        accessorFn: (block) =>
+          ctx.get(WeightService).getDescendantWeight(block).minWeight,
+      },
     ],
     [],
   );

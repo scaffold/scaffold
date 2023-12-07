@@ -17,7 +17,7 @@ import {
   baseContractProviders,
   waitForVerifiedOutput,
 } from '~/tests/contracts/util.ts';
-import { FrontierTreeParams } from '~/sbl/messages.ts';
+import { FrontierTreeDetail, FrontierTreeParams } from '~/sbl/messages.ts';
 import FactService from '~/sbl/FactService.ts';
 
 Deno.test(
@@ -61,7 +61,7 @@ Deno.test(
               params: FrontierTreeParams.encode({ level: 0 }),
             },
             amount: 10n,
-            detail: EMPTY_ARR,
+            detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
           }],
         }, 0),
     );
@@ -102,6 +102,7 @@ Deno.test(
       satisfies: Array.from({ length: frontierInputCount }, () => ({
         contract_hash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
+        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       })),
     }, 0);
 
@@ -126,6 +127,7 @@ Deno.test(
       satisfies: [{
         contract_hash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
+        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       }],
     }, 0);
 
@@ -150,9 +152,11 @@ Deno.test(
       satisfies: [{
         contract_hash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
+        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       }, {
         contract_hash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
+        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       }],
     }, 0);
 

@@ -1,4 +1,5 @@
 import {
+  Block,
   EpochInclusionProof,
   FrontierTreeDetail,
   FrontierTreeParams,
@@ -25,6 +26,8 @@ export const enum BlockFlag {
 }
 
 export interface BlockMeta {
+  original: Block; // TODO: Remove
+
   verifiers: Verifier[];
 
   // TODO: Store epoch idx and/or canonicality?
@@ -37,7 +40,9 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
-  outputClaims: BlockFact[][];
+  outputClaims: { block: BlockFact; inputIdx: number }[][]; // TODO: Do we need inputIdx here?
+
+  isCanonical: boolean;
 
   frontierVoters: BlockFact[];
 

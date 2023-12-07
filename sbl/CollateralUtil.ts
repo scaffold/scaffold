@@ -36,6 +36,12 @@ digraph G {
 }
 */
 
+// How to incentivize rectification for verifier V?
+//   - Output to V, which forces a new block to be created.
+//     But this doesn't incentivize the new block to be used.
+//   + Blocks derived from an invalid block have a penalty equal to the rectification amount. But if it's too far back, and all available blocks have the same penalty, it doesn't really do anything. If a new chain is created that doesn't include the invalid block, it will likely be chosen.
+//     This is also nice because it penalizes building on an invalid block - not a lot, but your work is at risk of being discarded. So make sure you trust ancestors.
+
 export const CONTEST_TYPE_FINAL = Symbol('CollateralUtil.ContestTypeFinal');
 export interface Posting {
   detail: CollateralContractDetail;

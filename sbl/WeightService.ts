@@ -40,7 +40,7 @@ export default class WeightService {
     return { minWeight };
   }
 
-  public getSelfWeight(fact: BlockFact) {
+  public getSelfWeight(fact: Pick<BlockFact, 'source' | 'inputs' | 'outputs'>) {
     if (fact.source === FactSource.Genesis) {
       return { minWeight: BASE_WORK, maxWeight: BASE_WORK };
     }
@@ -84,9 +84,9 @@ export default class WeightService {
     let minWeight = 0n;
 
     for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
-      if (this.isCanonical(claim)) {
-        minWeight += this.getSelfWeight(claim).minWeight;
-        minWeight += this.getDescendantWeight(claim).minWeight;
+      if (this.isHeaviestClaim(claim.block)) {
+        minWeight += this.getSelfWeight(claim.block).minWeight;
+        minWeight += this.getDescendantWeight(claim.block).minWeight;
       }
     }
 
@@ -97,26 +97,26 @@ export default class WeightService {
 
   public isCanonical(fact: BlockFact) {
     const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
-    if (block !== undefined) {
-      if (!this.isCanonical(block)) {
-        return false;
-      }
-    }
-
-    if (Math.random() < 0) {
-      return true;
+    if (block !== undefined && !this.isCanonical(block)) {
+      return false;
     }
 
     for (const input of fact.inputs) {
       const block = this.ctx.get(BlockService).get(input.block_hash, false);
-      if (block !== undefined) {
-        if (!this.isCanonical(block)) {
-          return false;
-        }
+      if (block !== undefined && !this.isCanonical(block)) {
+        return false;
+      }
+    }
 
+    return this.isHeaviestClaim(fact);
+  }
+
+  private isHeaviestClaim(fact: BlockFact) {
+    for (const input of fact.inputs) {
+      const block = this.ctx.get(BlockService).get(input.block_hash, false);
+      if (block !== undefined) {
         const claims = block.outputClaims[input.output_idx];
         // if (claims.length !== 1) {
-        console.log(fact, block, input.output_idx);
         if (claims.length === 0) {
           throw new Error(`Blocks not linked!`);
         }
@@ -124,10 +124,10 @@ export default class WeightService {
         let bestClaim: BlockFact | undefined;
         let bestScore: bigint | undefined;
         for (const claim of claims) {
-          const score = this.getDescendantWeight(claim).minWeight -
-            this.getSelfWeight(claim).maxWeight;
+          const score = this.getDescendantWeight(claim.block).minWeight -
+            this.getSelfWeight(claim.block).maxWeight;
           if (bestScore === undefined || score > bestScore) {
-            bestClaim = claim;
+            bestClaim = claim.block;
             bestScore = score;
           }
         }
@@ -158,51 +158,16 @@ export default class WeightService {
     return { minWeight };
   }
 
-  // Why did we do this again?
-  // public getSelfWeight(fact: BlockFact) {
-  //   return this.computeSelfWeight(fact);
-  // }
-
   private getVoterWeight(fact: BlockFact) {
     let minWeight = 0n;
 
     for (const voter of fact.frontierVoters) {
-      if (this.isCanonical(voter)) {
+      if (this.isHeaviestClaim(voter)) {
         minWeight += this.getSelfWeight(voter).minWeight;
         minWeight += this.getVoterWeight(voter).minWeight;
       }
     }
 
     return { minWeight };
-
-    // const parents = this.ctx.get(BlockSetService).getParents(fact.hash);
-    // for (const parent of parents) {
-    //   const selfWeight = this.getSelfWeight(parent);
-    //   const descendantWeight = this.getDescendantWeight(parent);
-    //   const score = descendantWeight - selfWeight;
-    //   if (score > best.score) {
-    //     best = { voter, score, weight: selfWeight + descendantWeight };
-    //   }
-    // }
-
-    // if (fact.type === FactType.BlockSet) {
-    //   let best: {
-    //     voter?: BlockFact;
-    //     score: number | bigint;
-    //     weight: bigint;
-    //   } = {
-    //     score: -Infinity,
-    //     weight: 0n,
-    //   };
-    //   const voters = this.ctx.get(FrontierService).getVotersFor(fact.hash);
-    //   for (const voter of voters) {
-    //     const selfWeight = this.getSelfWeight(voter);
-    //     const descendantWeight = this.getDescendantWeight(voter);
-    //     const score = descendantWeight - selfWeight;
-    //     if (score > best.score) {
-    //       best = { voter, score, weight: selfWeight + descendantWeight };
-    //     }
-    //   }
-    // }
   }
 }

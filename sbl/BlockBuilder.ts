@@ -11,15 +11,16 @@ import {
 } from './messages.ts';
 // import IncentiveCalculator from './IncentiveCalculator.ts';
 import BlockService from './BlockService.ts';
-import { accountHash, frontierHash } from './constants.ts';
+import { accountHash, collateralHash, frontierHash } from './constants.ts';
 import KeyService from './KeyService.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
-import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
+import { BlockFact, BlockSetFact, FactSource } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
+import WeightService from '~/sbl/WeightService.ts';
 
 // const defaultTimeout = 100; // Enable block chunking
 const defaultTimeout = 0; // Disable block chunking
@@ -33,7 +34,7 @@ export interface BlockSpec {
   body?: Uint8Array;
   inputs?: InputSpec[];
   refs?: BlockFact[];
-  satisfies?: Verifier[];
+  satisfies?: (Verifier & { detail?: Uint8Array })[];
   outputs?: BlockOutput[];
   frontierVote?: BlockSetFact;
   frontierLevel?: number;
@@ -75,8 +76,8 @@ export default class BlockBuilder {
     const inputBlocks = spec.inputs ?? [];
     const outputs = spec.outputs ?? [];
 
-    for (const verifier of spec.satisfies ?? []) {
-      this.collectInputs(inputBlocks, verifier, true);
+    for (const satisfaction of spec.satisfies ?? []) {
+      this.collectInputs(inputBlocks, satisfaction, true);
     }
 
     if (
@@ -103,6 +104,17 @@ export default class BlockBuilder {
         },
         amount,
         detail: FrontierTreeDetail.encode({
+          tree_weight: inputBlocks.reduce(
+            (acc, cur) => acc + cur.block.frontierDetail.tree_weight,
+            this.ctx.get(WeightService).getSelfWeight({
+              source: FactSource.Local,
+              inputs: inputBlocks.map((input) => ({
+                block_hash: input.block.hash,
+                output_idx: input.outputIdx,
+              })),
+              outputs,
+            }).minWeight,
+          ),
           // input_tree_root: ZERO_HASH,
           // output_tree_root: ZERO_HASH,
 
@@ -135,7 +147,7 @@ export default class BlockBuilder {
       outputs.push({
         verifier: this.selfAccountVerifier,
         amount: ioDelta,
-        detail: new Uint8Array(),
+        detail: EMPTY_ARR,
       });
     } else if (ioDelta < 0n) {
       // TODO: Only output what we actually have
@@ -187,12 +199,12 @@ export default class BlockBuilder {
 
   public collectInputs(
     inputBlocks: InputSpec[],
-    verifier: Verifier,
+    satisfaction: Verifier & { detail?: Uint8Array },
     publishStub: boolean,
   ) {
     for (
       const { block, idx } of this.ctx.get(BlockService)
-        .getBlocksByOutput(verifier)
+        .getBlocksByOutput(satisfaction)
     ) {
       if (
         block.outputClaims[idx].length === 0 &&
@@ -209,7 +221,11 @@ export default class BlockBuilder {
 
     if (publishStub) {
       const block = this.publish({
-        outputs: [{ verifier, amount: 0n, detail: EMPTY_ARR }],
+        outputs: [{
+          verifier: satisfaction,
+          amount: 0n,
+          detail: satisfaction.detail ?? EMPTY_ARR,
+        }],
       }, 0);
       inputBlocks.push({ block, outputIdx: 0, amount: 0n });
     }

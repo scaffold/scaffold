@@ -26,7 +26,7 @@ export interface ComputationDriver extends WorkerDriver {
 
   getContractHash(): Hash;
   getParams(): Uint8Array;
-  getHint(idx: number, bop: BurdenOfProof): Uint8Array;
+  getHint(idx: number, bop: BurdenOfProof): Uint8Array; // Only valid if this is a contract
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
   requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
@@ -39,6 +39,9 @@ export interface ComputationDriver extends WorkerDriver {
   // invert(hash: Hash): MaybePromise<Uint8Array>;
   // fulfills(verifier: Verifier): void; // Something like this would allow bodies that fulfill multiple contracts. We'd still need a way to get the inputs/details. Although, perhaps this can be accomplished better with output details.
   fulfills(block: BlockFact, outputIdx: number): void;
+
+  // TODO: Implement this to allow contracts to provide plaintext data that might be requested as a hint or hash inversion in the future?
+  // register(data: Uint8Array): void;
 
   getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
   getInputSource(idx: number): MaybePromise<InputSource>; // Returns the input source at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.

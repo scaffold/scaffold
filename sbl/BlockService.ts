@@ -57,18 +57,6 @@ import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import CollateralUtil, { CONTEST_TYPE_FINAL } from '~/sbl/CollateralUtil.ts';
 import GenerationService from '~/sbl/GenerationService.ts';
 
-interface CollateralSummary {
-  // 3 cases:
-  //   1. No collateral. Ledger is empty and resolver is block
-  //   2. Unresolved collateral. Ledger is non-empty and resolver is undefined
-  //   3. Resolved collateral. Ledger is non-empty and resolver is defined
-  postedAmountFor: bigint;
-  postedAmountAgainst: bigint;
-  implicitAmountAgainst: bigint;
-  ledger: Collateralization[];
-  resolver?: BlockFact;
-}
-
 export const CHALLENGE_PRICE = 10n;
 
 export const BASE_WORK = 10n;
@@ -139,6 +127,8 @@ export default class BlockService {
     // console.log(block);
 
     const meta: BlockMeta = {
+      original: block,
+
       verifiers: [],
 
       isEpoch: false,
@@ -149,10 +139,14 @@ export default class BlockService {
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map((_, idx) =>
-        this.getClaims({ block_hash: base.hash, output_idx: idx }).map((x) =>
-          x.block
-        )
+        this.getClaims({ block_hash: base.hash, output_idx: idx })
       ),
+
+      isCanonical:
+        this.get(block.frontier_vote, false)?.isCanonical !== false &&
+        block.inputs.every((x) =>
+          this.get(x.block_hash, false)?.isCanonical !== false
+        ),
 
       frontierVoters: getOrCreate(
         this.frontierVoters,
@@ -202,10 +196,9 @@ export default class BlockService {
 
       const parent = this.get(input.block_hash);
       if (parent) {
-        this.linkBlocks(parent, fact, input.output_idx, idx);
+        this.linkIo(parent, fact, input.output_idx, idx);
 
-        todo(); // What should this be???
-        if (claims.length === 0) {
+        if (claims.length === 1) {
           this.ctx.get(UnclaimedOutputService).removeUnclaimed(
             parent,
             input.output_idx,
@@ -221,7 +214,7 @@ export default class BlockService {
       });
       if (claims.length) {
         claims.forEach(({ block, inputIdx }) =>
-          this.linkBlocks(fact, block, outputIdx, inputIdx)
+          this.linkIo(fact, block, outputIdx, inputIdx)
         );
       } else {
         this.ctx.get(UnclaimedOutputService).addUnclaimed(fact, outputIdx);
@@ -376,13 +369,19 @@ export default class BlockService {
     throw new Error(`Unimplemented`);
   }
 
-  // This is called whenever an input becomes available
-  private linkBlocks(
+  private linkFrontier(parent: BlockFact, child: BlockFact) {
+  }
+
+  private linkIo(
     parent: BlockFact,
     child: BlockFact,
     parentOutputIdx: number,
     childInputIdx: number,
   ) {
+    if (!parent.isCanonical) {
+      this.setCanonicality(child, false);
+    }
+
     const verifier = parent.outputs[parentOutputIdx].verifier;
 
     this.checkInputAvailability(child);
@@ -484,190 +483,33 @@ export default class BlockService {
     }
   }
 
+  private setCanonicality(block: BlockFact, isCanonical: boolean) {
+    if (isCanonical !== block.isCanonical) {
+      block.isCanonical = isCanonical;
+
+      for (const output of block.outputClaims) {
+        for (const claim of output) {
+          if (isCanonical) {
+            this.setCanonicality(
+              claim.block,
+              this.get(claim.block.frontier_vote, false)?.isCanonical !==
+                  false &&
+                claim.block.inputs.every((x) =>
+                  this.get(x.block_hash, false)?.isCanonical !== false
+                ),
+            );
+          } else {
+            this.setCanonicality(claim.block, false);
+          }
+        }
+      }
+    }
+  }
+
   public linkNewAncestor(parent: BlockFact, child: BlockFact) {}
 
   public linkNewDescendant(parent: BlockFact, child: BlockFact) {}
 
-  // public getCollateralOutput(block: BlockFact, ancestorOutputIdx?: number) {
-  //   let res: { idx: number; params: CollateralContractParams } | undefined;
-
-  //   block.outputs.forEach(({ verifier }, idx) => {
-  //     if (Hash.equals(verifier.contract_hash, collateralHash)) {
-  //       const params = CollateralContractParams.decode(verifier.params);
-  //       if (
-  //         ancestorOutputIdx === undefined
-  //           ? params.collateral_input_idx === COLLATERAL_INPUT_IDX_INITIAL
-  //           : block.inputs[params.collateral_input_idx].output_idx ===
-  //             ancestorOutputIdx
-  //       ) {
-  //         if (res === undefined) {
-  //           res = { idx, params };
-  //         } else {
-  //           throw new Error(
-  //             `Multiple outputs consuming single collateral input (${res.idx} and ${idx})!`,
-  //           );
-  //         }
-  //       }
-  //     }
-  //   });
-
-  //   return res;
-  // }
-
-  // Hash inversions can be provided via 2 methods:
-  //   Simple provisions, where the reward is paid only to the original hash poster
-  //   The data protocol, where the reward can be paid to someone else
-  // A hash inversion request CLAIMS the 500 and incentivizes the response (by either of the 2 methods).
-
-  // It's always a chain, and the only question is at each point what the resolution would be
-
-  // Parallel hash inversions?
-  // Can claim at any point (even with another open claim), but the first unmet claim is the only one paid
-  // If verification fails AND hash inversion fails, pay to the first claimer
-  // To resolve a hash claim,
-
-  // Multiple verification claims are resolved in order of placement on the chain
-
-  // How to incentivize rectification for verifier V?
-  //   - Output to V, which forces a new block to be created.
-  //     But this doesn't incentivize the new block to be used.
-  //   + Blocks derived from an invalid block have a penalty equal to the rectification amount. But if it's too far back, and all available blocks have the same penalty, it doesn't really do anything. If a new chain is created that doesn't include the invalid block, it will likely be chosen.
-  //     This is also nice because it penalizes building on an invalid block - not a lot, but your work is at risk of being discarded. So make sure you trust ancestors.
-
-  // Jackpot. Easy. ClaimFailingVerifier after timeout.
-
-  // public getCollateral(block: BlockFact): CollateralSummary {
-  //   let ancestorOutputIdx: number | undefined;
-  //   let postedAmountFor = 0n;
-  //   let postedAmountAgainst = 0n;
-  //   const ledger: {
-  //     block: BlockFact;
-  //     params: CollateralContractParams;
-  //     amountDelta: bigint;
-  //     outputIdx: number;
-  //   }[] = [];
-  //   let resolver: BlockFact | undefined;
-
-  //   while (true) {
-  //     const output = this.getCollateralOutput(block, ancestorOutputIdx);
-
-  //     if (output === undefined) {
-  //       resolver = block;
-  //       break;
-  //     }
-
-  //     const amount = block.outputs[output.idx].amount;
-  //     const amountDelta = amount - postedAmountFor - postedAmountAgainst;
-
-  //     if (amountDelta <= 0n) {
-  //       throw new Error(`Did not increase collateral!`);
-  //     }
-
-  //     if (output.params.valid) {
-  //       // For
-  //       postedAmountFor = amount - postedAmountAgainst;
-  //     } else {
-  //       // Against
-  //       postedAmountAgainst = amount - postedAmountFor;
-  //     }
-
-  //     // if (side) {
-  //     //   // Against
-  //     //   amountAgainst = amount - amountFor;
-  //     // } else {
-  //     //   // For
-  //     //   amountFor = amount - amountAgainst;
-  //     // }
-
-  //     // const canonicalClaim = block.outputClaims[idx].find((x) =>
-  //     //   x.canonicality > 0
-  //     // );
-  //     // if (canonicalClaim) {
-  //     //   return this.getFinalCollateral(
-  //     //     canonicalClaim,
-  //     //     idx,
-  //     //     amountFor,
-  //     //     amountAgainst,
-  //     //   );
-  //     // } else {
-  //     //   return { block, amountFor, amountAgainst };
-  //     // }
-
-  //     ledger.push({
-  //       block,
-  //       params: output.params,
-  //       amountDelta,
-  //       outputIdx: output.idx,
-  //     });
-
-  //     const claims = block.outputClaims[output.idx];
-  //     if (claims.length) {
-  //       let maxCanonicality = -Infinity;
-  //       for (const claim of claims) {
-  //         if (claim.canonicality > maxCanonicality) {
-  //           maxCanonicality = claim.canonicality;
-  //           block = claim;
-  //         }
-  //       }
-
-  //       if (block.timestamp >= output.params.free_after) {
-  //         // TODO: Figure out how to enforce timestamp stuff
-  //       }
-  //     } else {
-  //       break;
-  //     }
-
-  //     ancestorOutputIdx = output.idx;
-  //   }
-
-  //   if (ledger.length && !ledger[0].params.valid) {
-  //     throw new Error(`Initial collateral posting is against!`);
-  //   }
-  //   const implicitAmountAgainst = ledger.length
-  //     ? this.getImplicitClaimAgainst(ledger[0].amountDelta)
-  //     : 0n;
-
-  //   return {
-  //     postedAmountFor,
-  //     postedAmountAgainst,
-  //     implicitAmountAgainst,
-  //     ledger,
-  //     resolver,
-  //   };
-  // }
-
-  // public getCollateral(block: BlockFact): CollateralSummary {
-  //   // We need to order by frontier inclusion here
-  //   const ledger = block.collateralizations.sort((a, b) =>
-  //     Number(a.block.timestamp - b.block.timestamp)
-  //   );
-
-  //   let postedAmountFor = 0n;
-  //   let postedAmountAgainst = 0n;
-  //   ledger.forEach((x) => {
-  //     if (x.detail.valid) {
-  //       postedAmountFor += x.amount;
-  //     } else {
-  //       postedAmountAgainst += x.amount;
-  //     }
-  //   });
-  //   let resolver: BlockFact | undefined;
-
-  //   if (ledger.length && !ledger[0].detail.valid) {
-  //     throw new Error(`Initial collateral posting is against!`);
-  //   }
-  //   const implicitAmountAgainst = ledger.length
-  //     ? this.getImplicitClaimAgainst(ledger[0].amount)
-  //     : 0n;
-
-  //   return {
-  //     postedAmountFor,
-  //     postedAmountAgainst,
-  //     implicitAmountAgainst,
-  //     ledger,
-  //     resolver,
-  //   };
-  // }
   public updateCanonicality(block: BlockFact, someInputCanonicality?: boolean) {
     // Note that we consider missing inputs as canonical.
     // We also short-circuit if an input canonicality is false, which is a common case.
@@ -694,10 +536,10 @@ export default class BlockService {
       for (const claims of block.outputClaims) {
         // const maxDerivedWork = isCanonical &&
         //   Math.max(...claims.map((c) => c.derivedWorkValue));
-        for (const outputBlock of claims) {
+        for (const claim of claims) {
           this.updateCanonicality(
-            outputBlock,
-            // outputBlock.derivedWorkValue === maxDerivedWork,
+            claim.block,
+            // claim.block.derivedWorkValue === maxDerivedWork,
           );
         }
       }
@@ -720,7 +562,7 @@ export default class BlockService {
             Math.min(
               Number(amount),
               block.outputClaims[idx].reduce(
-                (acc, claim) => Math.max(acc, claim.canonicality),
+                (acc, claim) => Math.max(acc, claim.block.canonicality),
                 0,
               ),
             ),
@@ -734,10 +576,10 @@ export default class BlockService {
     let sum = Number(block.votes);
 
     for (const claims of block.outputClaims) {
-      for (const outputBlock of claims) {
-        if (outputBlock.canonicality > 0) {
-          sum += outputBlock.derivedWorkValue /
-            outputBlock.inputs.filter(({ block_hash }) => this.get(block_hash))
+      for (const claim of claims) {
+        if (claim.block.canonicality > 0) {
+          sum += claim.block.derivedWorkValue /
+            claim.block.inputs.filter(({ block_hash }) => this.get(block_hash))
               .length;
         }
       }
@@ -765,8 +607,8 @@ export default class BlockService {
     }
 
     for (const claims of block.outputClaims) {
-      for (const outputBlock of claims) {
-        this.updateLogMergeableProbability(outputBlock);
+      for (const claim of claims) {
+        this.updateLogMergeableProbability(claim.block);
       }
     }
 
@@ -871,7 +713,10 @@ export default class BlockService {
       const inBlock = this.get(block_hash);
       if (inBlock) {
         const claims = inBlock.outputClaims[output_idx];
-        const total = claims.reduce((acc, cur) => acc + cur.derivedWork, 0);
+        const total = claims.reduce(
+          (acc, cur) => acc + cur.block.derivedWork,
+          0,
+        );
         prob *= block.derivedWork / total;
       }
     }
@@ -882,7 +727,7 @@ export default class BlockService {
     let res = 0;
     for (const output of block.outputClaims) {
       for (const claim of output) {
-        res += claim.derivedWork * claim.mergeableProbability;
+        res += claim.block.derivedWork * claim.block.mergeableProbability;
       }
     }
     return res;

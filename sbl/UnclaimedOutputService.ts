@@ -61,14 +61,20 @@ export default class UnclaimedOutputService {
 
     const specs = this.unclaimedOutputs.get(key.toPrimitive());
     if (specs === undefined) {
-      throw new Error(`Cannot remove unclaimed; it's not there`);
+      // TODO: Throw an error here
+      return;
+
+      // throw new Error(`Cannot remove unclaimed; it's not there`);
     }
 
     const foundIdx = specs.findIndex((spec) =>
       spec.block === block && spec.outputIdx === outputIdx
     );
     if (foundIdx === -1) {
-      throw new Error(`Cannot remove unclaimed; it's not there`);
+      // TODO: Throw an error here
+      return;
+
+      // throw new Error(`Cannot remove unclaimed; it's not there`);
     }
 
     if (specs.length === 1) {

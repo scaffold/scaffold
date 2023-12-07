@@ -243,7 +243,8 @@ export const registry = {
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },
       // TODO: Move this to BlockInput? No, I don't think so.
-      // TODO: Move this to BlockOutput detail? Maybe! We should be able to fetch the detail of an output without claiming it.
+      // TODO: Move this to BlockOutput detail? Maybe! In any case, it would be nice to be able to fetch the detail of an output without claiming it.
+      // TODO: Accomplish this via hints? Add a requireHint() call? Allow collateral and/or hints to be embedded on the target block itself?
       { name: 'body', type: 'bytes' },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
@@ -742,6 +743,7 @@ export const registry = {
     name: 'FrontierTreeDetail',
     type: 'record',
     fields: [
+      { name: 'tree_weight', type: 'long' },
       // { name: 'input_tree_root', type: 'Hash' },
       // { name: 'output_tree_root', type: 'Hash' },
 

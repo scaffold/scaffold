@@ -42,6 +42,8 @@ export interface Collateralization {
 export type FactBase = {
   hash: Hash;
 
+  sillyName: string;
+
   data: Uint8Array;
   type: FactType;
   message: Uint8Array;

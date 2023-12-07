@@ -22,6 +22,12 @@ import * as log from 'std-latest/log/mod.ts';
 import DataService from '~/sbl/DataService.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import CollateralUtil, { DetailVote } from '~/sbl/CollateralUtil.ts';
+import {
+  adjectives,
+  animals,
+  colors,
+  uniqueNamesGenerator,
+} from 'unique-names-generator';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -364,6 +370,8 @@ export default class FactService {
       const base: FactBase = {
         hash,
 
+        sillyName: this.getSillyName(),
+
         data,
         type,
         message: data.subarray(
@@ -400,7 +408,7 @@ export default class FactService {
 
       if (sortKeys) {
         Object.keys(res).sort().forEach((key) => {
-          if (key !== 'type') {
+          if (key !== 'type' && key !== 'sillyName') {
             const val = (res as Record<string, unknown>)[key];
             delete (res as Record<string, unknown>)[key];
             (res as Record<string, unknown>)[key] = val;
@@ -427,6 +435,13 @@ export default class FactService {
       console.error('FactService.ingest err:', err);
       throw err;
     }
+  }
+
+  private getSillyName() {
+    return uniqueNamesGenerator({
+      dictionaries: [colors, animals],
+      separator: '-',
+    });
   }
 
   public snapshot() {
