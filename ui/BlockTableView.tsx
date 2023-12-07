@@ -22,6 +22,7 @@ import BlockService from '~/sbl/BlockService.ts';
 import HashView from '~/ui/HashView.tsx';
 import CollateralUtil from '~/sbl/CollateralUtil.ts';
 import WeightService from '~/sbl/WeightService.ts';
+import BalanceService from '~/sbl/BalanceService.ts';
 
 const RowDetail = ({ name, val }: { name: string; val: string }) => (
   <div>
@@ -294,6 +295,7 @@ export default (
 
   return (
     <div>
+      Balance: ${Number(ctx.get(BalanceService).getLiquidBalance())}
       <table style={{ borderCollapse: 'collapse' }}>
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (

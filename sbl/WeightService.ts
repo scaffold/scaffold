@@ -20,6 +20,13 @@ import Hash from '~/sbl/util/Hash.ts';
 // A block's derived work is the sum over all outputs of D+S of the smallest claim by D-S.
 //   How do we merge this with parents?
 
+/*
+Propagate derived work towards frontier_vote and frontier inputs. Choose and propagate canonicality forwards.
+When we get a block or increment the work, propagate it towards frontier_vote.
+To get the derived work, fetch the descendant work property of our block, and that of all recursive parent (frontier output claim) blocks.
+When we have multiple claimants of an output, simply choose the highest-scoring by D-S and set all other works to zero or the minimum.
+*/
+
 // OPTIMIZATION:
 // Always propogate weights towards the frontier, which is bounded by log(N)
 

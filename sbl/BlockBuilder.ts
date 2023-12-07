@@ -162,9 +162,8 @@ export default class BlockBuilder {
       output_idx: input.outputIdx,
     }));
 
-    const frontierVote = spec.frontierVote
-      ? spec.frontierVote
-      : this.ctx.get(FrontierService2).getBlockVote(inputBlocks);
+    const frontierVote = spec.frontierVote ??
+      this.ctx.get(FrontierService2).getBlockVote(inputBlocks);
 
     // TODO: Can bundle multiple blocks without bodies
     const body = spec.body ?? new Uint8Array();

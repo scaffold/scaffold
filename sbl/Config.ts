@@ -89,6 +89,7 @@ interface Config {
   storageProvider: StorageProvider;
   networkProviders: NetworkProvider[];
   executionProviders: ExecutionProvider[];
+  // TODO: Split into generation and verification providers
   contractProviders: ContractProvider[];
 
   // appraisalProvider: AppraisalProvider;

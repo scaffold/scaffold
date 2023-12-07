@@ -1,32 +1,33 @@
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import Context from '~/sbl/Context.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import { frontierHash } from '~/sbl/constants.ts';
 import { FrontierTreeParams } from '~/sbl/messages.ts';
-
-/*
-Propagate derived work towards frontier_vote and frontier inputs. Choose and propagate canonicality forwards.
-When we get a block or increment the work, propagate it towards frontier_vote.
-To get the derived work, fetch the descendant work property of our block, and that of all recursive parent (frontier output claim) blocks.
-When we have multiple claimants of an output, simply choose the highest-scoring by D-S and set all other works to zero or the minimum.
-*/
+import { InputSpec } from '~/sbl/BlockBuilder.ts';
+import { lowerBound } from '~/sbl/util/sorted.ts';
 
 export default class FrontierService2 {
   constructor(private ctx: Context) {}
 
-  public getBlockVote(inputs: { block: BlockFact; outputIdx: number }[]) {
-    // this.ctx.get(BlockService).getBlocksByVerifier({
-    //   contract_hash: frontierHash,
-    //   params: FrontierTreeParams.encode({ level: 0 }),
-    // });
+  // TODO: How should we handle refs here?
+  public getBlockVote(inputs: InputSpec[]): BlockFact | undefined {
+    // Trace each input up (towards the frontier output), then east, towards the frontier voters, until we find a single block that includes them all. If we stop without getting a frontier, we can make one
+    // TODO: Is this really the right way to do it? Maybe we should start with choosing inputs from a specific frontier?
 
-    // if (this.frontierSets.length !== 0) {
-    //   const idx = Math.floor(
-    //     this.ctx.config.entropyProvider.randomNumber() *
-    //       this.frontierSets.length,
-    //   );
-    //   return this.frontierSets[idx];
-    // }
+    if (inputs.length === 0) {
+      return;
+    }
+
+    let trace = inputs.toSorted((a, b) =>
+      b.block.frontierParams.level - a.block.frontierParams.level
+    );
+    while (trace.length > 1) {
+      const block = trace.pop()!.block;
+
+      break;
+    }
+
+    return trace[0].block;
   }
 }

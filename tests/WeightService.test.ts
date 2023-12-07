@@ -7,7 +7,7 @@ import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { trueHash } from '~/sbl/constants.ts';
 
 Deno.test(
-  `weighing an empty block`,
+  `self weight of an empty block`,
   makeTest({ contractProviders: [] }, (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -21,7 +21,7 @@ Deno.test(
 );
 
 Deno.test(
-  `weighing a block with a known input`,
+  `self weight of a block with a known input`,
   makeTest({ contractProviders: [] }, (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -45,7 +45,7 @@ Deno.test(
 );
 
 Deno.test(
-  `weighing a block with an unknown input`,
+  `self weight of a block with an unknown input`,
   makeTest({ contractProviders: [] }, (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 

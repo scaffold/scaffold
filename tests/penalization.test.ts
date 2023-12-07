@@ -15,7 +15,7 @@ Deno.test(
     name: `an invalid block should decrease the available account balance`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
-    ignore: true, // We need to fix BalanceService to only accumulate canonical account outputs
+    // ignore: true, // We need to fix BalanceService to only accumulate canonical account outputs
   },
   makeTest({
     contractProviders: [
