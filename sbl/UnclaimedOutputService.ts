@@ -6,6 +6,7 @@ import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import { InputSpec } from '~/sbl/BlockBuilder.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
 import { getOrCreate } from '~/sbl/util/map.ts';
+import WeightService from '~/sbl/WeightService.ts';
 
 export default class UnclaimedOutputService {
   private unclaimedOutputs = new Map<HashPrimitive, InputSpec[]>();
@@ -18,17 +19,16 @@ export default class UnclaimedOutputService {
       return neverPromise;
     }
 
-    const key = Hash.digest(Verifier.encode(verifier));
-    const found = this.unclaimedOutputs.get(key.toPrimitive());
-    if (found) {
-      if (found.length === 1) {
-        this.unclaimedOutputs.delete(key.toPrimitive());
-        return found[0];
-      } else {
-        return found.shift()!;
+    while (true) {
+      const now = this.claimNow(verifier);
+      if (now === undefined) {
+        break;
+      } else if (this.ctx.get(WeightService).isCanonical(now.block)) {
+        return now;
       }
     }
 
+    const key = Hash.digest(Verifier.encode(verifier));
     return this.monitor.waitFor(key, cancelSignal);
   }
 
@@ -46,12 +46,14 @@ export default class UnclaimedOutputService {
   }
 
   public addUnclaimed(block: BlockFact, outputIdx: number) {
-    const { verifier, amount } = block.outputs[outputIdx];
-    const spec = { block, outputIdx, amount };
-    const key = Hash.digest(Verifier.encode(verifier));
-    if (!this.monitor.resolveOne(key, spec)) {
-      getOrCreate(this.unclaimedOutputs, key.toPrimitive(), () => [])
-        .push(spec);
+    if (this.ctx.get(WeightService).isCanonical(block)) {
+      const { verifier, amount } = block.outputs[outputIdx];
+      const spec = { block, outputIdx, amount };
+      const key = Hash.digest(Verifier.encode(verifier));
+      if (!this.monitor.resolveOne(key, spec)) {
+        getOrCreate(this.unclaimedOutputs, key.toPrimitive(), () => [])
+          .push(spec);
+      }
     }
   }
 

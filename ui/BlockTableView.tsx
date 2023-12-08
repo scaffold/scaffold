@@ -249,9 +249,12 @@ export default (
             : 'no',
       },
       {
-        header: 'is canonical',
-        accessorFn: (block) =>
-          ctx.get(WeightService).isCanonical(block) ? 'yes' : 'no',
+        header: 'canonicality',
+        accessorFn: (block) => ctx.get(WeightService).getCanonicality(block),
+        cell: (props) =>
+          props.getValue<bigint>() >= 0
+            ? <strong>{Number(props.getValue<bigint>())}</strong>
+            : Number(props.getValue<bigint>()),
       },
       {
         header: 'ancestor weight',

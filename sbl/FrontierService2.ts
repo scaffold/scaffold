@@ -6,6 +6,7 @@ import { frontierHash } from '~/sbl/constants.ts';
 import { FrontierTreeParams } from '~/sbl/messages.ts';
 import { InputSpec } from '~/sbl/BlockBuilder.ts';
 import { lowerBound } from '~/sbl/util/sorted.ts';
+import WeightService from '~/sbl/WeightService.ts';
 
 export default class FrontierService2 {
   constructor(private ctx: Context) {}
@@ -19,15 +20,23 @@ export default class FrontierService2 {
       return;
     }
 
-    let trace = inputs.toSorted((a, b) =>
-      b.block.frontierParams.level - a.block.frontierParams.level
-    );
-    while (trace.length > 1) {
-      const block = trace.pop()!.block;
+    const heuristic = (block: BlockFact) =>
+      block.outputClaims[block.frontierOutputIdx].some((claim) =>
+          // this.ctx.get(WeightService).isCanonical(claim.block)
+          true
+        )
+        ? -block.frontierParams.level
+        : block.frontierParams.level;
 
-      break;
-    }
+    // let trace = inputs.toSorted((a, b) =>
+    //   heuristic(a.block) - heuristic(b.block)
+    // );
+    // while (trace.length > 1) {
+    //   const block = trace.pop()!.block;
 
-    return trace[0].block;
+    //   break;
+    // }
+
+    // return trace[0].block;
   }
 }

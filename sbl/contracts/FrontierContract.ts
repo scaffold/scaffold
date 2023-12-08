@@ -35,7 +35,7 @@ import { frontierHash } from '~/sbl/constants.ts';
 //   votes: bigint;
 // }
 
-export const frontierInputCount = 4;
+export const frontierInputCount = 2;
 
 export default class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;

@@ -91,7 +91,7 @@ export default class WeightService {
     let minWeight = 0n;
 
     for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
-      if (this.isHeaviestClaim(claim.block)) {
+      if (this.getClaimDelta(claim.block) >= 0n) {
         minWeight += this.getSelfWeight(claim.block).minWeight;
         minWeight += this.getDescendantWeight(claim.block).minWeight;
       }
@@ -103,22 +103,38 @@ export default class WeightService {
   }
 
   public isCanonical(fact: BlockFact) {
+    return this.getCanonicality(fact) >= 0n;
+  }
+
+  public getCanonicality(fact: BlockFact) {
+    let canonicality = this.getClaimDelta(fact);
+
     const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
-    if (block !== undefined && !this.isCanonical(block)) {
-      return false;
+    if (block !== undefined) {
+      const delta = this.getClaimDelta(block);
+      if (delta < canonicality) {
+        canonicality = delta;
+      }
     }
 
     for (const input of fact.inputs) {
       const block = this.ctx.get(BlockService).get(input.block_hash, false);
-      if (block !== undefined && !this.isCanonical(block)) {
-        return false;
+      if (block !== undefined) {
+        const delta = this.getClaimDelta(block);
+        if (delta < canonicality) {
+          canonicality = delta;
+        }
       }
     }
 
-    return this.isHeaviestClaim(fact);
+    return canonicality;
   }
 
-  private isHeaviestClaim(fact: BlockFact) {
+  private getClaimDelta(fact: BlockFact) {
+    const myDescendantWeight = this.getDescendantWeight(fact).minWeight;
+    const mySelfWeight = this.getSelfWeight(fact).maxWeight;
+    let minDelta = myDescendantWeight;
+
     for (const input of fact.inputs) {
       const block = this.ctx.get(BlockService).get(input.block_hash, false);
       if (block !== undefined) {
@@ -128,24 +144,33 @@ export default class WeightService {
           throw new Error(`Blocks not linked!`);
         }
 
-        let bestClaim: BlockFact | undefined;
-        let bestScore: bigint | undefined;
         for (const claim of claims) {
-          const score = this.getDescendantWeight(claim.block).minWeight -
-            this.getSelfWeight(claim.block).maxWeight;
-          if (bestScore === undefined || score > bestScore) {
-            bestClaim = claim.block;
-            bestScore = score;
+          if (claim.block !== fact) {
+            let delta = myDescendantWeight -
+              this.getDescendantWeight(claim.block).minWeight +
+              this.getSelfWeight(claim.block).maxWeight - mySelfWeight;
+            if (delta === 0n) {
+              // Resolve ties by promoting the block that comes first
+              for (const claim2 of claims) {
+                if (claim2.block === fact) {
+                  break;
+                } else if (claim2.block === claim.block) {
+                  delta--;
+                  break;
+                }
+              }
+            }
+            if (delta < minDelta) {
+              minDelta = delta;
+            }
           }
         }
 
-        if (bestClaim !== fact) {
-          return false;
-        }
         // }
       }
     }
-    return true;
+
+    return minDelta;
   }
 
   private getTreeChildrenWeight(fact: BlockFact) {
@@ -169,7 +194,7 @@ export default class WeightService {
     let minWeight = 0n;
 
     for (const voter of fact.frontierVoters) {
-      if (this.isHeaviestClaim(voter)) {
+      if (this.getClaimDelta(voter) >= 0n) {
         minWeight += this.getSelfWeight(voter).minWeight;
         minWeight += this.getVoterWeight(voter).minWeight;
       }
