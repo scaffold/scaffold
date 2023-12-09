@@ -215,10 +215,6 @@ export default (
         ),
       },
       {
-        header: 'votes',
-        accessorFn: (block) => block.votes,
-      },
-      {
         header: 'block size',
         accessorFn: (block) => block.data.byteLength,
       },

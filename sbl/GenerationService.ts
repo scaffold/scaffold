@@ -433,7 +433,6 @@ export default class GenerationService {
         });
         await this.createBlock(verifier, blockSpec, 0);
         workerDriver.resumeTimer();
-        console.log(workerDriver.log);
       },
     };
   }
@@ -487,7 +486,7 @@ export default class GenerationService {
         publishDelay,
       );
 
-      return;
+      return fact;
     }
 
     const block = await this.ctx.get(BlockBuilder).publish(spec);
@@ -528,6 +527,8 @@ export default class GenerationService {
     if (this.isImmediatelyVerifiable(block) !== true) {
       this.ctx.get(LitigationService).litigate(block, [], 'VALID_CHALLENGE');
     }
+
+    return block;
   }
 
   // private litigateBlockVerifier(

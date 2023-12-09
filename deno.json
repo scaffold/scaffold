@@ -12,9 +12,11 @@
     ],
     "jsx": "react"
   },
-  "lint": {},
+  "lint": {
+    "exclude": ["assemblyscript", "avro", "dist", "tests/avro"]
+  },
   "fmt": {
-    "exclude": ["README.md", "jsoncons", "assemblyscript"],
+    "exclude": ["README.md", "assemblyscript", "avro", "dist", "jsoncons"],
     "singleQuote": true
   },
   "tasks": {

@@ -1,24 +1,24 @@
 import { assert } from '~/sbl/util/functional.ts';
 
-// Returns the index of the first element where test(el) returns false
+// Returns the index of the first element where test(el) returns true
 export const search = <T>(arr: T[], test: (x: T) => boolean) => {
   let i = 0;
   let j = arr.length;
   while (i < j) {
     const k = (i + j) >>> 1;
     if (test(arr[k])) {
-      i = k + 1;
-    } else {
       j = k;
+    } else {
+      i = k + 1;
     }
   }
   return i;
 };
 
 export const lowerBound = <T>(arr: T[], cmp: (x: T) => number) =>
-  search(arr, (x) => cmp(x) > 0);
+  search(arr, (x) => cmp(x) <= 0);
 export const upperBound = <T>(arr: T[], cmp: (x: T) => number) =>
-  search(arr, (x) => cmp(x) >= 0);
+  search(arr, (x) => cmp(x) < 0);
 
 assert(lowerBound([1, 2, 4, 5, 5, 6], (x) => 0 - x) === 0);
 assert(lowerBound([1, 2, 4, 5, 5, 6], (x) => 1 - x) === 0);

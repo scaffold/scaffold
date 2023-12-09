@@ -138,8 +138,6 @@ export default class VerificationService {
     let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
 
-    // Do litigation in here
-
     return {
       ...workerDriver,
 

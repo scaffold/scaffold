@@ -10,6 +10,7 @@ Fixed worker pool
 */
 
 import Context from './Context.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import { mapEntries } from './util/functional.ts';
 
 // TODO: Use input monitoring to prevent blocking the main thread?
