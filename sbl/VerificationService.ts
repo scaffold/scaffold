@@ -311,20 +311,11 @@ export default class VerificationService {
         throw COMPUTE_FAIL_FLAG;
       },
 
-      requireFrontierLevel(level) {
-        const frontierOutputs = block.outputs.filter((output) =>
-          Hash.equals(output.verifier.contract_hash, frontierHash)
-        );
-        if (frontierOutputs.length !== 1) {
-          console.error(
-            `Invalid number of frontier outputs ${frontierOutputs.length}!`,
-          );
-          throw COMPUTE_FAIL_FLAG;
-        }
-        const params = FrontierTreeParams.decode(
-          frontierOutputs[0].verifier.params,
-        );
-        if (params.level !== level) {
+      requireFrontier(vote, level) {
+        if (
+          !Hash.equals(block.frontier_vote, vote) ||
+          block.frontierParams.level !== level
+        ) {
           throw COMPUTE_FAIL_FLAG;
         }
       },

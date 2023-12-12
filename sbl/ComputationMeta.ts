@@ -48,7 +48,7 @@ export interface ComputationDriver extends WorkerDriver {
   // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
   // TODO: Remove this and call requireOutput({ contract_hash: frontierHash, ... }) instead?
-  requireFrontierLevel(level: number): void;
+  requireFrontier(vote: Hash, level: number): void;
 
   compareBlockOrder(hashA: Hash, hashB: Hash): number; // Clamps the frontier vote
 

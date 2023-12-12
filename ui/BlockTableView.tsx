@@ -33,6 +33,16 @@ const RowDetail = ({ name, val }: { name: string; val: string }) => (
 const getBlocks = (ctx: Context) =>
   ctx.get(FactService).hackyGetBlocksMatching();
 
+const wrapAccessor =
+  <T,>(fn: (block: BlockFact) => T) => (block: BlockFact) => {
+    try {
+      return fn(block);
+    } catch (err) {
+      console.error(err);
+      return '?';
+    }
+  };
+
 export default (
   { ctx, selectedHash, setSelectedHash, hoveredHash, setHoveredHash }: {
     ctx: Context;
@@ -246,31 +256,43 @@ export default (
       },
       {
         header: 'canonicality',
-        accessorFn: (block) => ctx.get(WeightService).getCanonicality(block),
-        cell: (props) =>
-          props.getValue<bigint>() >= 0
-            ? <strong>{Number(props.getValue<bigint>())}</strong>
-            : Number(props.getValue<bigint>()),
+        accessorFn: wrapAccessor((block) =>
+          ctx.get(WeightService).getCanonicality(block)
+        ),
+        cell: (props) => {
+          const x = props.getValue<bigint | string>();
+          if (typeof x === 'string') {
+            return x;
+          } else if (x >= 0) {
+            return <strong>{Number(x)}</strong>;
+          } else {
+            return Number(x);
+          }
+        },
       },
       {
         header: 'ancestor weight',
-        accessorFn: (block) =>
-          ctx.get(WeightService).getAncestorWeight(block).minWeight,
+        accessorFn: wrapAccessor((block) =>
+          ctx.get(WeightService).getAncestorWeight(block).minWeight
+        ),
       },
       {
         header: 'self weight min',
-        accessorFn: (block) =>
-          ctx.get(WeightService).getSelfWeight(block).minWeight,
+        accessorFn: wrapAccessor((block) =>
+          ctx.get(WeightService).getSelfWeight(block).minWeight
+        ),
       },
       {
         header: 'self weight max',
-        accessorFn: (block) =>
-          ctx.get(WeightService).getSelfWeight(block).maxWeight,
+        accessorFn: wrapAccessor((block) =>
+          ctx.get(WeightService).getSelfWeight(block).maxWeight
+        ),
       },
       {
         header: 'descendant weight',
-        accessorFn: (block) =>
-          ctx.get(WeightService).getDescendantWeight(block).minWeight,
+        accessorFn: wrapAccessor((block) =>
+          ctx.get(WeightService).getDescendantWeight(block).minWeight
+        ),
       },
     ],
     [],

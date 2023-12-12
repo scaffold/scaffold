@@ -1,7 +1,10 @@
+import Context from '~/sbl/Context.ts';
 import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { frontierHash } from '~/sbl/constants.ts';
+import BlockService from '~/sbl/BlockService.ts';
+import Hash from '~/sbl/util/Hash.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -40,11 +43,18 @@ export const frontierInputCount = 2;
 export default class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
-  public async compute(driver: ComputationDriver) {
+  public async compute(driver: ComputationDriver, ctx: Context) {
     const { level } = FrontierTreeParams.decode(driver.getParams());
-    for (let i = 0; i < frontierInputCount; i++) {
-      await driver.getInputSource(i);
+    const sources = await Promise.all(Array.from(
+      { length: frontierInputCount },
+      (_, i) => driver.getInputSource(i),
+    ));
+    const effective = sources
+      .map((s) => ctx.get(BlockService).get(s.blockHash)!.frontier_vote)
+      .filter((v) => !sources.some((t) => Hash.equals(t.blockHash, v)));
+    if (effective.length !== 1) {
+      throw new Error(`Unmergeable frontier inputs!`);
     }
-    driver.requireFrontierLevel(level + 1);
+    driver.requireFrontier(effective[0], level + 1);
   }
 }

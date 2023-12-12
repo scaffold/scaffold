@@ -5,6 +5,7 @@ import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { rootHash } from '~/sbl/constants.ts';
 import FactService from '~/sbl/FactService.ts';
 import ClockService from '~/sbl/ClockService.ts';
+import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 
 export default class DataService {
   private requesting = new Set<HashPrimitive>();
@@ -12,17 +13,20 @@ export default class DataService {
   constructor(private ctx: Context) {}
 
   public request(hash: Hash) {
-    this.ctx.get(ClockService).setTimeout(() => {
-      if (!this.ctx.get(FactService).has(hash)) {
-        this.ctx.get(BlockBuilder).publish({
-          outputs: [{
-            verifier: { contract_hash: rootHash, params: hash.toBytes() },
-            amount: 0n,
-            detail: new Uint8Array(),
-          }],
-        });
-      }
-    }, 0);
+    if (!this.requesting.has(hash.toPrimitive())) {
+      this.requesting.add(hash.toPrimitive());
+      this.ctx.get(ClockService).setTimeout(() => {
+        if (!this.ctx.get(FactService).has(hash)) {
+          this.ctx.get(BlockBuilder).publish({
+            outputs: [{
+              verifier: { contract_hash: rootHash, params: hash.toBytes() },
+              amount: 0n,
+              detail: EMPTY_ARR,
+            }],
+          });
+        }
+      }, 0);
+    }
   }
 
   private getSignatories(hash: Hash): Fact[] {

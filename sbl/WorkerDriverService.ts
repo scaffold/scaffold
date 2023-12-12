@@ -115,24 +115,32 @@ export default class WorkerDriverService {
 
     const startTime = this.ctx.config.timeProvider.now();
     let totalBlockedTime = 0;
+    let pauses = 0;
     let pauseTime: undefined | number;
     const pauseTimer = (why: string) => {
       log?.push({
         timestamp: this.ctx.config.timeProvider.now(),
         message: `Blocking due to ${why}...`,
       });
-      pauseTime ??= this.ctx.config.timeProvider.now();
+      if (pauses++ === 0) {
+        if (pauseTime !== undefined) {
+          throw new Error(`Internal error!`);
+        }
+        pauseTime = this.ctx.config.timeProvider.now();
+      }
     };
     const resumeTimer = () => {
       log?.push({
         timestamp: this.ctx.config.timeProvider.now(),
         message: `Resuming...`,
       });
-      if (pauseTime === undefined) {
-        throw new Error(`Cannot resume without pausing!`);
+      if (--pauses === 0) {
+        if (pauseTime === undefined) {
+          throw new Error(`Cannot resume without pausing!`);
+        }
+        totalBlockedTime += this.ctx.config.timeProvider.now() - pauseTime;
+        pauseTime = undefined;
       }
-      totalBlockedTime += this.ctx.config.timeProvider.now() - pauseTime;
-      pauseTime = undefined;
     };
 
     // TODO: Maybe:

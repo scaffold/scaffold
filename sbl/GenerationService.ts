@@ -1,6 +1,11 @@
 import BlockBuilder, { BlockSpec, InputSpec } from '~/sbl/BlockBuilder.ts';
 import BlockService from './BlockService.ts';
-import { accountHash, generatorHash, rootHash } from './constants.ts';
+import {
+  accountHash,
+  frontierHash,
+  generatorHash,
+  rootHash,
+} from './constants.ts';
 import Context from './Context.ts';
 import WorkerDriverService, { WorkerDriver } from './WorkerDriverService.ts';
 import LocalGeneratorService from './LocalGeneratorService.ts';
@@ -99,9 +104,8 @@ export default class GenerationService {
             : acc;
         }, this.running.get(runHash.toPrimitive())!.extraIncentive);
 
-    const localGenerator = this.ctx.get(LocalGeneratorService).getGenerator(
-      verifier.contract_hash,
-    );
+    const localGenerator = this.ctx.get(LocalGeneratorService)
+      .getGenerator(verifier.contract_hash);
     if (localGenerator) {
       this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
@@ -184,7 +188,7 @@ export default class GenerationService {
     const refs: BlockFact[] = [];
     // const satisfies:Verifier=[];
     const outputs: BlockOutput[] = [];
-    // let frontierVote
+    let frontierVote: Hash | undefined;
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
@@ -331,14 +335,15 @@ export default class GenerationService {
         };
       },
 
-      requireFrontierLevel(level) {
+      requireFrontier(vote, level) {
         if (workerDriver.done.signal.aborted) {
           return;
         }
-        if (frontierLevel === undefined) {
+        if (frontierVote === undefined && frontierLevel === undefined) {
+          frontierVote = vote;
           frontierLevel = level;
         } else {
-          if (frontierLevel !== level) {
+          if (!Hash.equals(frontierVote!, vote) || frontierLevel !== level) {
             // Ingenerable
             throw COMPUTE_INGENERABLE_FLAG;
           }
@@ -423,6 +428,9 @@ export default class GenerationService {
           satisfies: verifierInputs.length ? undefined : [verifier],
           outputs,
           body,
+          frontierVote: frontierVote !== undefined
+            ? this.ctx.get(BlockService).get(frontierVote)
+            : undefined,
           frontierLevel,
           // timestampGte,
         };

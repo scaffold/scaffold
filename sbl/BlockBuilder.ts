@@ -13,12 +13,11 @@ import {
 import BlockService from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './constants.ts';
 import KeyService from './KeyService.ts';
-import FrontierService from '~/sbl/FrontierService.ts';
-import { BlockFact, BlockSetFact, FactSource } from '~/sbl/FactMeta.ts';
+import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
-import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import { arrEquals, EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 import WeightService from '~/sbl/WeightService.ts';
 
@@ -36,7 +35,7 @@ export interface BlockSpec {
   refs?: BlockFact[];
   satisfies?: (Verifier & { detail?: Uint8Array })[];
   outputs?: BlockOutput[];
-  frontierVote?: BlockSetFact;
+  frontierVote?: BlockFact;
   frontierLevel?: number;
   // timestampGte?: bigint;
 }
@@ -277,24 +276,26 @@ export default class BlockBuilder {
 
     const bb = this.buildingBlock;
 
-    let mergeable = (spec.body === undefined || bb.body === undefined) &&
-      (spec.frontierLevel === undefined || bb.frontierLevel === undefined);
+    const mergeable = (spec.body === undefined || bb.body === undefined ||
+      arrEquals(spec.body, bb.body)) &&
+      (spec.frontierVote === undefined || bb.frontierVote === undefined ||
+        spec.frontierVote === bb.frontierVote) &&
+      (spec.frontierLevel === undefined || bb.frontierLevel === undefined ||
+        spec.frontierLevel === bb.frontierLevel);
 
-    if (
-      mergeable && spec.frontierVote !== undefined &&
-      bb.frontierVote !== undefined
-    ) {
-      const mergedVote = this.ctx.get(FrontierService).mergeFrontierVotes(
-        spec.frontierVote,
-        bb.frontierVote,
-      );
-      if (mergedVote !== undefined) {
-        bb.frontierVote = mergedVote;
-      } else {
-        // Frontier votes are not mergeable
-        mergeable = false;
-      }
-    }
+    // if (
+    //   mergeable && spec.frontierVote !== undefined &&
+    //   bb.frontierVote !== undefined
+    // ) {
+    //   const mergedVote = this.ctx.get(FrontierService2)
+    //     .mergeFrontierVotes(spec.frontierVote, bb.frontierVote);
+    //   if (mergedVote !== undefined) {
+    //     bb.frontierVote = mergedVote;
+    //   } else {
+    //     // Frontier votes are not mergeable
+    //     mergeable = false;
+    //   }
+    // }
 
     if (mergeable) {
       bb.body ??= spec.body;

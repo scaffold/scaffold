@@ -189,6 +189,14 @@ export default class BlockService {
 
     getOrCreate(this.frontierVoters, fact.frontier_vote.toPrimitive(), () => [])
       .push(fact);
+    const frontierVote = this.get(fact.frontier_vote, false);
+    if (frontierVote !== undefined) {
+      this.linkFrontier(frontierVote, fact);
+    }
+
+    for (const voter of fact.frontierVoters) {
+      this.linkFrontier(fact, voter);
+    }
 
     fact.inputs.forEach((input, idx) => {
       const claims = this.getClaims(input);
@@ -369,7 +377,12 @@ export default class BlockService {
     throw new Error(`Unimplemented`);
   }
 
-  private linkFrontier(parent: BlockFact, child: BlockFact) {
+  private linkFrontier(frontierVote: BlockFact, block: BlockFact) {
+    if (frontierVote.frontierParams.level < block.frontierParams.level) {
+      throw new Error(
+        `Invalid frontier vote! The voted block's level must be greater than or equal to the voter level!`,
+      );
+    }
   }
 
   private linkIo(
@@ -383,6 +396,22 @@ export default class BlockService {
     }
 
     const verifier = parent.outputs[parentOutputIdx].verifier;
+
+    if (Hash.equals(verifier.contract_hash, frontierHash)) {
+      const expectedFrontierVote = child.inputs.some((input) =>
+          Hash.equals(parent.frontier_vote, input.block_hash)
+        )
+        ? this.get(parent.frontier_vote)?.frontier_vote
+        : parent.frontier_vote;
+      if (
+        expectedFrontierVote !== undefined &&
+        !Hash.equals(expectedFrontierVote, child.frontier_vote)
+      ) {
+        throw new Error(
+          `Invalid frontier vote! A tree branch's vote doesn't represent its leaves' votes!`,
+        );
+      }
+    }
 
     this.checkInputAvailability(child);
 
