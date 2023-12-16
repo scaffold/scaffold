@@ -94,8 +94,8 @@ export default class FactService {
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(NodeService).createFact(base, node);
-    this.factories[FactType.Block] = (base, _, mutator) =>
-      ctx.get(BlockService).createFact(base, mutator);
+    this.factories[FactType.Block] = (base, node, mutator) =>
+      ctx.get(BlockService).createFact(base, node, mutator);
     this.factories[FactType.BlockSet] = (base, _, mutator) =>
       ctx.get(BlockSetService).createFact(base, mutator);
     this.factories[FactType.BlockSetTreeNode] = (base, _, mutator) =>
