@@ -1,6 +1,6 @@
 import { Verifier } from './messages.ts';
 import { Resource } from './WorkerDriverService.ts';
-import * as log from 'std-latest/log/mod.ts';
+import { LogLevel, LogLevels } from 'std-latest/log/mod.ts';
 import secp from './util/secp.ts';
 import Hash from '~/sbl/util/Hash.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
@@ -47,7 +47,7 @@ interface Config {
   userdata?: string;
   selfPrivateKey: Uint8Array;
 
-  logLevel: log.LogLevels;
+  logLevel: LogLevel;
 
   // initialPublicMetadata: {
   //   name: string;
@@ -130,7 +130,7 @@ interface Config {
 export const makeDefaultConfig = () => ({
   network: 'main',
   debugName: '',
-  logLevel: log.LogLevels.WARNING,
+  logLevel: LogLevels.WARNING,
   timeProvider: {
     now: Date.now.bind(Date),
     setImmediate: (cb) => setTimeout(cb, 0),
