@@ -32,7 +32,6 @@ import LitigationService from '~/sbl/LitigationService.ts';
 import FactService from '~/sbl/FactService.ts';
 import secp from '~/sbl/util/secp.ts';
 import GenesisService, { sharedGenesisData } from '~/sbl/GenesisService.ts';
-import BlockSetTableView from '~/ui/BlockSetTableView.tsx';
 import FactView from '~/ui/FactView.tsx';
 import CodeView from '~/ui/CodeView.tsx';
 
@@ -268,13 +267,6 @@ export default () => {
       />
 
       <BlockTableView
-        ctx={client.ctx}
-        selectedHash={selectedHash}
-        setSelectedHash={setSelectedHash}
-        hoveredHash={hoveredHash}
-        setHoveredHash={setHoveredHash}
-      />
-      <BlockSetTableView
         ctx={client.ctx}
         selectedHash={selectedHash}
         setSelectedHash={setSelectedHash}

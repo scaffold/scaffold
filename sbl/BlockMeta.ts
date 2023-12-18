@@ -25,6 +25,11 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
+type BuildingBlock = Pick<
+  BlockFact,
+  'source' | 'frontier_vote' | 'inputs' | 'outputs'
+>;
+
 export interface BlockMeta {
   original: Block; // TODO: Remove
 

@@ -33,7 +33,7 @@ When we have multiple claimants of an output, simply choose the highest-scoring 
 export default class WeightService {
   constructor(private ctx: Context) {}
 
-  public getAncestorWeight(fact: BlockFact) {
+  public getAncestorWeight(fact: Pick<BlockFact, 'frontier_vote' | 'inputs'>) {
     let minWeight = 0n;
 
     const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
@@ -87,7 +87,12 @@ export default class WeightService {
     return { minWeight, maxWeight };
   }
 
-  public getDescendantWeight(fact: BlockFact) {
+  public getDescendantWeight(
+    fact: Pick<
+      BlockFact,
+      'outputClaims' | 'frontierOutputIdx' | 'frontierVoters'
+    >,
+  ) {
     let minWeight = 0n;
 
     for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
@@ -106,7 +111,18 @@ export default class WeightService {
     return this.getCanonicality(fact) >= 0n;
   }
 
-  public getCanonicality(fact: BlockFact) {
+  public getCanonicality(
+    fact: Pick<
+      BlockFact,
+      | 'source'
+      | 'frontier_vote'
+      | 'inputs'
+      | 'outputs'
+      | 'outputClaims'
+      | 'frontierOutputIdx'
+      | 'frontierVoters'
+    >,
+  ) {
     let canonicality = this.getClaimDelta(fact);
 
     const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
@@ -130,7 +146,17 @@ export default class WeightService {
     return canonicality;
   }
 
-  private getClaimDelta(fact: BlockFact) {
+  private getClaimDelta(
+    fact: Pick<
+      BlockFact,
+      | 'source'
+      | 'inputs'
+      | 'outputs'
+      | 'outputClaims'
+      | 'frontierOutputIdx'
+      | 'frontierVoters'
+    >,
+  ) {
     const myDescendantWeight = this.getDescendantWeight(fact).minWeight;
     const mySelfWeight = this.getSelfWeight(fact).maxWeight;
     let minDelta = myDescendantWeight;
@@ -150,7 +176,7 @@ export default class WeightService {
               this.getDescendantWeight(claim.block).minWeight +
               this.getSelfWeight(claim.block).maxWeight - mySelfWeight;
             if (delta === 0n) {
-              // Resolve ties by promoting the block that comes first
+              // Resolve ties by locally promoting the block that comes first
               for (const claim2 of claims) {
                 if (claim2.block === fact) {
                   break;
@@ -173,7 +199,7 @@ export default class WeightService {
     return minDelta;
   }
 
-  private getTreeChildrenWeight(fact: BlockFact) {
+  private getTreeChildrenWeight(fact: Pick<BlockFact, 'inputs'>) {
     let minWeight = 0n;
 
     for (const input of fact.inputs) {
@@ -190,7 +216,7 @@ export default class WeightService {
     return { minWeight };
   }
 
-  private getVoterWeight(fact: BlockFact) {
+  private getVoterWeight(fact: Pick<BlockFact, 'frontierVoters'>) {
     let minWeight = 0n;
 
     for (const voter of fact.frontierVoters) {

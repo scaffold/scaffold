@@ -29,6 +29,10 @@ export interface InputSpec {
   outputIdx: number;
   amount: bigint;
 }
+export interface FrontierSpec {
+  level: number;
+  inputs: InputSpec[];
+}
 export interface BlockSpec {
   body?: Uint8Array;
   inputs?: InputSpec[];
@@ -37,6 +41,7 @@ export interface BlockSpec {
   outputs?: BlockOutput[];
   frontierVote?: BlockFact;
   frontierLevel?: number;
+  frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
 }
 
