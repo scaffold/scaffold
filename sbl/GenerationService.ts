@@ -188,7 +188,6 @@ export default class GenerationService {
     const refs: BlockFact[] = [];
     // const satisfies:Verifier=[];
     const outputs: BlockOutput[] = [];
-    let frontierVote: Hash | undefined;
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
@@ -335,18 +334,15 @@ export default class GenerationService {
         };
       },
 
-      requireFrontier(vote, level) {
+      requireFrontierLevel(level) {
         if (workerDriver.done.signal.aborted) {
           return;
         }
-        if (frontierVote === undefined && frontierLevel === undefined) {
-          frontierVote = vote;
+        if (frontierLevel === undefined) {
           frontierLevel = level;
-        } else {
-          if (!Hash.equals(frontierVote!, vote) || frontierLevel !== level) {
-            // Ingenerable
-            throw COMPUTE_INGENERABLE_FLAG;
-          }
+        } else if (frontierLevel !== level) {
+          // Ingenerable
+          throw COMPUTE_INGENERABLE_FLAG;
         }
       },
 
@@ -428,9 +424,6 @@ export default class GenerationService {
           satisfies: verifierInputs.length ? undefined : [verifier],
           outputs,
           body,
-          frontierVote: frontierVote !== undefined
-            ? this.ctx.get(BlockService).get(frontierVote)
-            : undefined,
           frontierLevel,
           // timestampGte,
         };

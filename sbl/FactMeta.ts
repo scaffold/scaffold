@@ -28,7 +28,7 @@ export enum FactType {
 export enum FactSource {
   Genesis,
   Bootstrap,
-  Building,
+  // Building,
   Local,
   Remote,
 }

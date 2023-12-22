@@ -91,7 +91,7 @@ export default (
         cell: (props) => ({
           [FactSource.Genesis]: 'genesis',
           [FactSource.Bootstrap]: 'bootstrap',
-          [FactSource.Building]: 'building',
+          // [FactSource.Building]: 'building',
           [FactSource.Local]: 'local',
           [FactSource.Remote]: 'remote',
         }[props.getValue<FactSource>()]),

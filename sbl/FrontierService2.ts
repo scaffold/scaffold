@@ -42,48 +42,95 @@ export default class FrontierService2 {
   }
 
   // TODO: How should we handle refs here?
-  public getBlockVote(inputs: InputSpec[]): BlockFact | undefined {
+  public getBlockVote(inputs: InputSpec[]): Hash {
     // Trace each input up (towards the frontier output), then east, towards the frontier voters, until we find a single block that includes them all. If we stop without getting a frontier, we can make one
     // TODO: Is this really the right way to do it? Maybe we should start with choosing inputs from a specific frontier?
 
     if (inputs.length === 0) {
-      return;
+      // TODO: Choose a frontier at random; ZERO_HASH means that it can never be merged
+      return ZERO_HASH;
     }
 
-    debugger;
+    /*
+    Satisfying a non-frontier input involves:
+    - The input block is a descendant of the created block, via a chain of frontier hashes, then a chain of frontier input hashes.
+    - Adding an input means the frontier hash can ONLY move to a voter of it (a descendant via frontier_vote).
 
-    const roots = inputs
-      .map((x) => this.getTreeRoot(x.block))
-      .sort((a, b) =>
-        a.frontierParams.level - b.frontierParams.level ||
-        (this.ctx.get(BlockService).get(a.frontier_vote, false)
-            ?.frontierParams.level ?? Infinity) -
-          (this.ctx.get(BlockService).get(b.frontier_vote, false)
-            ?.frontierParams.level ?? Infinity)
-      );
+    The frontier inputs are fundamentally different than other inputs, because they aren't descendants of the frontier vote. The chain goes like this:
+      createdBlock.frontierInput[0].frontier_vote === createdBlock.frontierInput[1].hash
+      createdBlock.frontierInput[1].frontier_vote === createdBlock.frontier_vote
+      frontierChain = (createdBlock, createdBlock.frontier_vote, createdBlock.frontier_vote.frontier_vote, ...)
+      allowedInputBlocks = (frontierChain, frontierChain.frontierInput[*], frontierChain.frontierInput[*].frontierInput[*], ...)
 
-    let ptr = roots[0];
-    for (let i = 1; i < roots.length; i++) {
-      while (ptr !== roots[i]) {
-        const next = this.ctx.get(BlockService).get(ptr.frontier_vote, false);
+    If X is not canonical, then (1) blocks whose frontier vote is X, and (2) blocks who input X, are not canonical.
+    - All inputs must be canonical
+
+
+    Get all roots
+    The frontier vote is a descendant of all roots
+    The frontier vote is a descendant of the youngest root
+    The frontier vote is a descendant of the frontier_votes of all frontier inputs that do not vote for another fontier input
+    The frontier vote is a
+    */
+
+    const { frontierInputs, normalInputs } = Object.groupBy(
+      inputs,
+      (input) =>
+        Hash.equals(
+            input.block.outputs[input.outputIdx].verifier.contract_hash,
+            frontierHash,
+          )
+          ? 'frontierInputs'
+          : 'normalInputs',
+    );
+
+    // TODO: Reverse this arr
+    let voteChain = [ZERO_HASH];
+    const ensureInChain = (vote: Hash) => {
+      if (frontierInputs !== undefined) {
+        while (true) {
+          const fi = frontierInputs.find((input) =>
+            Hash.equals(input.block.hash, vote)
+          );
+          if (fi !== undefined) {
+            vote = fi.block.frontier_vote;
+          } else {
+            break;
+          }
+        }
+      }
+
+      if (voteChain.some((v) => Hash.equals(v, vote))) {
+        return;
+      }
+
+      const idx = voteChain.length;
+      const last = voteChain[idx - 1];
+
+      let ptr = vote;
+      do {
+        const next = this.ctx.get(BlockService).get(ptr, false);
         if (next === undefined) {
           throw new Error(`Unconnected inputs!`);
         }
+        voteChain.splice(idx, 0, ptr);
+        ptr = next.frontier_vote;
+      } while (!Hash.equals(ptr, last));
+    };
 
-        ptr = next;
+    if (frontierInputs !== undefined) {
+      for (const input of frontierInputs) {
+        ensureInChain(input.block.frontier_vote);
       }
     }
 
-    ptr = roots[0];
-    while (ptr.frontierParams.level > targLevel) {
-      const voter = this.getBestVoter(ptr);
-      if (voter === undefined) {
-        return ptr;
-      } else {
-        ptr = voter;
+    if (normalInputs !== undefined) {
+      for (const input of normalInputs) {
+        ensureInChain(this.getTreeRoot(input.block).hash);
       }
     }
-    return ptr;
+
+    return voteChain[voteChain.length - 1];
   }
 
   private getTreeRoot(block: BlockFact) {
@@ -104,19 +151,5 @@ export default class FrontierService2 {
         return block;
       }
     }
-  }
-
-  private getBestVoter(block: BlockFact) {
-    let bestScore: bigint;
-    let bestDescendant: BlockFact | undefined;
-    for (const voter of block.frontierVoters) {
-      const score = this.ctx.get(WeightService).getCanonicality(voter);
-      if (bestDescendant === undefined || score > bestScore!) {
-        bestScore = score;
-        bestDescendant = voter;
-      }
-    }
-
-    return bestDescendant;
   }
 }

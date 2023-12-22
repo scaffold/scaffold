@@ -166,7 +166,7 @@ export default class BlockBuilder {
       output_idx: input.outputIdx,
     }));
 
-    const frontierVote = spec.frontierVote ??
+    const frontierVote = spec.frontierVote?.hash ??
       this.ctx.get(FrontierService2).getBlockVote(inputBlocks);
 
     // TODO: Can bundle multiple blocks without bodies
@@ -192,7 +192,7 @@ export default class BlockBuilder {
       refs,
       inputs,
       outputs,
-      frontier_vote: frontierVote ? frontierVote.hash : ZERO_HASH,
+      frontier_vote: frontierVote,
       body,
       // claimed_work: claimedWork,
       // is_free_market: true,

@@ -311,11 +311,8 @@ export default class VerificationService {
         throw COMPUTE_FAIL_FLAG;
       },
 
-      requireFrontier(vote, level) {
-        if (
-          !Hash.equals(block.frontier_vote, vote) ||
-          block.frontierParams.level !== level
-        ) {
+      requireFrontierLevel(level) {
+        if (block.frontierParams.level !== level) {
           throw COMPUTE_FAIL_FLAG;
         }
       },

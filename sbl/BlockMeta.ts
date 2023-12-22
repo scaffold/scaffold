@@ -25,10 +25,7 @@ export const enum BlockFlag {
   IsPublic = 1 << 16,
 }
 
-type BuildingBlock = Pick<
-  BlockFact,
-  'source' | 'frontier_vote' | 'inputs' | 'outputs'
->;
+// type BlockIO = Pick<Block, 'frontier_vote' | 'inputs' | 'outputs'>;
 
 export interface BlockMeta {
   original: Block; // TODO: Remove
@@ -45,10 +42,13 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
+
+  // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
   outputClaims: { block: BlockFact; inputIdx: number }[][]; // TODO: Do we need inputIdx here?
 
   isCanonical: boolean;
 
+  // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
   frontierVoters: BlockFact[];
 
   propagationMask: number;

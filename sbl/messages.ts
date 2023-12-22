@@ -229,6 +229,8 @@ export const registry = {
     name: 'Block',
     type: 'record',
     fields: [
+      { name: 'frontier_vote', type: 'Hash' },
+
       // Blocks we depend upon but aren't inputting anything from
       { name: 'refs', type: { type: 'array', items: 'Hash' } },
 
@@ -237,8 +239,6 @@ export const registry = {
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
       // NO: The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
       //   Actually, any balance needs to be spent in an output (can just be the true verifier)
-
-      { name: 'frontier_vote', type: 'Hash' },
 
       // { name: 'verifier', type: 'Verifier' },
       // { name: 'body', type: ['Publication', 'bytes'] },

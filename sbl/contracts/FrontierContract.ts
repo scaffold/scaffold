@@ -43,18 +43,11 @@ export const frontierInputCount = 2;
 export default class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
-  public async compute(driver: ComputationDriver, ctx: Context) {
+  public async compute(driver: ComputationDriver) {
     const { level } = FrontierTreeParams.decode(driver.getParams());
-    const sources = await Promise.all(Array.from(
-      { length: frontierInputCount },
-      (_, i) => driver.getInputSource(i),
-    ));
-    const effective = sources
-      .map((s) => ctx.get(BlockService).get(s.blockHash)!.frontier_vote)
-      .filter((v) => !sources.some((t) => Hash.equals(t.blockHash, v)));
-    if (effective.length !== 1) {
-      throw new Error(`Unmergeable frontier inputs!`);
+    for (let i = 0; i < frontierInputCount; i++) {
+      await driver.getInputSource(i);
     }
-    driver.requireFrontier(effective[0], level + 1);
+    driver.requireFrontierLevel(level + 1);
   }
 }

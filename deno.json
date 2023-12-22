@@ -54,7 +54,7 @@
     "multiformats/": "https://cdn.skypack.dev/multiformats@10.0.2/",
     "dnt": "https://deno.land/x/dnt@0.38.1/mod.ts",
     "unique-names-generator": "https://esm.sh/unique-names-generator@4.7.1",
-    "std-latest/": "https://deno.land/std@0.209.0/",
+    "std-latest/": "https://deno.land/std@0.210.0/",
     "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   }
 }
