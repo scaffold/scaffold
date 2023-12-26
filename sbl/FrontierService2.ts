@@ -3,19 +3,10 @@ import Context from '~/sbl/Context.ts';
 import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import { frontierHash } from '~/sbl/constants.ts';
-import { FrontierTreeParams } from '~/sbl/messages.ts';
 import { InputSpec } from '~/sbl/BlockBuilder.ts';
-import { lowerBound, search } from '~/sbl/util/sorted.ts';
 import WeightService from '~/sbl/WeightService.ts';
-import { assert } from '~/sbl/util/functional.ts';
 
-const DEBUG = true;
 const targLevel = 0;
-
-interface TraceEntry {
-  block: BlockFact;
-  frontierRoot?: BlockFact;
-}
 
 export default class FrontierService2 {
   constructor(private ctx: Context) {}
@@ -43,35 +34,10 @@ export default class FrontierService2 {
 
   // TODO: How should we handle refs here?
   public getBlockVote(inputs: InputSpec[]): Hash {
-    // Trace each input up (towards the frontier output), then east, towards the frontier voters, until we find a single block that includes them all. If we stop without getting a frontier, we can make one
-    // TODO: Is this really the right way to do it? Maybe we should start with choosing inputs from a specific frontier?
-
     if (inputs.length === 0) {
       // TODO: Choose a frontier at random; ZERO_HASH means that it can never be merged
       return ZERO_HASH;
     }
-
-    /*
-    Satisfying a non-frontier input involves:
-    - The input block is a descendant of the created block, via a chain of frontier hashes, then a chain of frontier input hashes.
-    - Adding an input means the frontier hash can ONLY move to a voter of it (a descendant via frontier_vote).
-
-    The frontier inputs are fundamentally different than other inputs, because they aren't descendants of the frontier vote. The chain goes like this:
-      createdBlock.frontierInput[0].frontier_vote === createdBlock.frontierInput[1].hash
-      createdBlock.frontierInput[1].frontier_vote === createdBlock.frontier_vote
-      frontierChain = (createdBlock, createdBlock.frontier_vote, createdBlock.frontier_vote.frontier_vote, ...)
-      allowedInputBlocks = (frontierChain, frontierChain.frontierInput[*], frontierChain.frontierInput[*].frontierInput[*], ...)
-
-    If X is not canonical, then (1) blocks whose frontier vote is X, and (2) blocks who input X, are not canonical.
-    - All inputs must be canonical
-
-
-    Get all roots
-    The frontier vote is a descendant of all roots
-    The frontier vote is a descendant of the youngest root
-    The frontier vote is a descendant of the frontier_votes of all frontier inputs that do not vote for another fontier input
-    The frontier vote is a
-    */
 
     const { frontierInputs, normalInputs } = Object.groupBy(
       inputs,
@@ -84,8 +50,14 @@ export default class FrontierService2 {
           : 'normalInputs',
     );
 
+    const frontierLevel = frontierInputs !== undefined
+      ? frontierInputs[0].block.frontierParams.level + 1
+      : 0;
+
+    // debugger;
+
     // TODO: Reverse this arr
-    let voteChain = [ZERO_HASH];
+    const voteChain = [ZERO_HASH];
     const ensureInChain = (vote: Hash) => {
       if (frontierInputs !== undefined) {
         while (true) {
@@ -112,6 +84,11 @@ export default class FrontierService2 {
         const next = this.ctx.get(BlockService).get(ptr, false);
         if (next === undefined) {
           throw new Error(`Unconnected inputs!`);
+        }
+        if (next.frontierParams.level < frontierLevel) {
+          throw new Error(
+            `Level ${next.frontierParams.level} < ${frontierLevel}`,
+          );
         }
         voteChain.splice(idx, 0, ptr);
         ptr = next.frontier_vote;

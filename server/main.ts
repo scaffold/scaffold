@@ -22,7 +22,8 @@ import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
 import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';
 import Logger, { FilterAction, LogLevel } from '~/sbl/Logger2.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
-import { bin2str } from '~/sbl/util/buffer.ts';
+import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
+import RootContract from '~/sbl/contracts/RootContract.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -57,6 +58,13 @@ const config: Config = {
   initialWorkerCount: 1,
   onlyBridge: false,
 };
+
+for (const provider of config.contractProviders) {
+  if (provider instanceof RootContract) {
+    const data = str2bin('my secret');
+    provider.registry.set(Hash.digest(data).toPrimitive(), data);
+  }
+}
 
 const ctx = new Context(config);
 

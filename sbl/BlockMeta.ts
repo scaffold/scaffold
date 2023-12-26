@@ -32,8 +32,12 @@ export interface BlockMeta {
 
   verifiers: Verifier[];
 
-  // TODO: Store epoch idx and/or canonicality?
-  isEpoch: boolean;
+  // selfWeightMin: bigint;
+  // selfWeightMax: bigint;
+  // descendantWeight: bigint;
+  // claimDelta: bigint;
+  // voterWeight: bigint;
+  // canonicality: bigint;
 
   receivedTimestamp: number;
   flags: BlockFlag;
@@ -61,7 +65,7 @@ export interface BlockMeta {
   // internalCanonicalityProb: number;
   // externalCanonicalityProb: number;
 
-  canonicality: number; // TODO: bigint?
+  canonicalityOld: number; // TODO: bigint?
   collateral: number; // TODO: bigint?
 
   // collateralChain: BlockFact[];

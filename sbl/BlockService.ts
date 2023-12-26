@@ -133,8 +133,6 @@ export default class BlockService {
 
       verifiers: [],
 
-      isEpoch: false,
-
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.None,
       votes: 0n,
@@ -163,7 +161,7 @@ export default class BlockService {
       mergeableLogProbabilityValue: 0,
       mergeableLogProbabilityError: 0,
 
-      canonicality: 0,
+      canonicalityOld: 0,
       collateral: 0,
 
       epochInclusionProofs: new Map(),
@@ -407,21 +405,21 @@ export default class BlockService {
 
     const verifier = parent.outputs[parentOutputIdx].verifier;
 
-    if (Hash.equals(verifier.contract_hash, frontierHash)) {
-      const expectedFrontierVote = child.inputs.some((input) =>
-          Hash.equals(parent.frontier_vote, input.block_hash)
-        )
-        ? this.get(parent.frontier_vote)?.frontier_vote
-        : parent.frontier_vote;
-      if (
-        expectedFrontierVote !== undefined &&
-        !Hash.equals(expectedFrontierVote, child.frontier_vote)
-      ) {
-        throw new Error(
-          `Invalid frontier vote! A tree branch's vote doesn't represent its leaves' votes!`,
-        );
-      }
-    }
+    // if (Hash.equals(verifier.contract_hash, frontierHash)) {
+    //   const expectedFrontierVote = child.inputs.some((input) =>
+    //       Hash.equals(parent.frontier_vote, input.block_hash)
+    //     )
+    //     ? this.get(parent.frontier_vote)?.frontier_vote
+    //     : parent.frontier_vote;
+    //   if (
+    //     expectedFrontierVote !== undefined &&
+    //     !Hash.equals(expectedFrontierVote, child.frontier_vote)
+    //   ) {
+    //     throw new Error(
+    //       `Invalid frontier vote! A tree branch's vote doesn't represent its leaves' votes!`,
+    //     );
+    //   }
+    // }
 
     this.checkInputAvailability(child);
 
@@ -563,12 +561,12 @@ export default class BlockService {
       const inputBlock = this.get(input.block_hash);
       const inputCanonicality = inputBlock === undefined
         ? delta
-        : Math.min(delta, inputBlock.canonicality);
+        : Math.min(delta, inputBlock.canonicalityOld);
       return Math.min(acc, inputCanonicality);
     }, Infinity);
 
-    if (canonicality !== block.canonicality) {
-      block.canonicality = canonicality;
+    if (canonicality !== block.canonicalityOld) {
+      block.canonicalityOld = canonicality;
       if (canonicality > 0) {
         // this.onCanonicalBlockListeners
       }
@@ -601,7 +599,7 @@ export default class BlockService {
             Math.min(
               Number(amount),
               block.outputClaims[idx].reduce(
-                (acc, claim) => Math.max(acc, claim.block.canonicality),
+                (acc, claim) => Math.max(acc, claim.block.canonicalityOld),
                 0,
               ),
             ),
@@ -616,7 +614,7 @@ export default class BlockService {
 
     for (const claims of block.outputClaims) {
       for (const claim of claims) {
-        if (claim.block.canonicality > 0) {
+        if (claim.block.canonicalityOld > 0) {
           sum += claim.block.derivedWorkValue /
             claim.block.inputs.filter(({ block_hash }) => this.get(block_hash))
               .length;

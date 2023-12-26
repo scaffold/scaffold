@@ -98,7 +98,7 @@ export default class GenerationService {
         .reduce((acc, { block, idx }) => {
           const { amount } = block.outputs[idx];
           const claims = block.outputClaims[idx];
-          return claims.length === 0 && block.canonicality > 0
+          return claims.length === 0 && block.canonicalityOld > 0
             ? acc + /* Math.exp(block.mergeableLogProbabilityValue) * */
               Number(amount)
             : acc;

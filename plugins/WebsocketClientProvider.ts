@@ -1,7 +1,11 @@
-import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, {
+  ConnectionProvider,
+  ListeningMode,
+} from '~/sbl/NetworkProvider.ts';
 
 export default class WebsocketClientProvider implements NetworkProvider {
   public protocolName = 'websocket';
+  public listeningMode = ListeningMode.Unique;
 
   public createClient(
     onListen: (spec: string) => void,

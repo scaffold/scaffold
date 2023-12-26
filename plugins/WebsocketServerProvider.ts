@@ -1,8 +1,12 @@
 import { serve } from 'std-latest/http/mod.ts';
-import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, {
+  ConnectionProvider,
+  ListeningMode,
+} from '~/sbl/NetworkProvider.ts';
 
 export default class WebsocketServerProvider implements NetworkProvider {
   public protocolName = 'websocket';
+  public listeningMode = ListeningMode.Persistent;
 
   public createServer(
     onListen: (spec: string) => void,

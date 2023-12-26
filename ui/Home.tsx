@@ -27,7 +27,6 @@ import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
 import JsonView from './JsonView.tsx';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
-import EpochService from '~/sbl/EpochService.ts';
 import LitigationService from '~/sbl/LitigationService.ts';
 import FactService from '~/sbl/FactService.ts';
 import secp from '~/sbl/util/secp.ts';
@@ -96,7 +95,6 @@ client.ctx.get(QaDebugger).addDebugger(
   (answer) => thrustMessages.MazeAnswer.decode(answer),
 );
 
-client.ctx.get(EpochService);
 client.ctx.get(GenesisService).ingestGenesis(sharedGenesisData);
 
 const startGame = () => {

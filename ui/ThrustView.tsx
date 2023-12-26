@@ -369,14 +369,17 @@ export default (
 ) => {
   const [provider, setProvider] = React.useState<ThrustProvider>();
   React.useEffect(() => {
-    console.log('new provider');
-    const provider = new ThrustProvider(sbl, match, player);
-    setProvider(provider);
-    return () => {
-      console.log('destruct provider');
-      setProvider(undefined);
-      provider.destruct();
-    };
+    try {
+      const provider = new ThrustProvider(sbl, match, player);
+      setProvider(provider);
+      return () => {
+        console.log('destruct provider');
+        setProvider(undefined);
+        provider.destruct();
+      };
+    } catch (err) {
+      console.error(err);
+    }
   }, [sbl, match, player]);
 
   const [keyPressed, setKeyPressed] = React.useState<boolean>(false);

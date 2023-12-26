@@ -5,6 +5,7 @@ import BlockService, { BASE_WORK } from '~/sbl/BlockService.ts';
 import { bigintMax } from '~/sbl/util/bigint.ts';
 import { frontierHash } from '~/sbl/constants.ts';
 import Hash from '~/sbl/util/Hash.ts';
+import { getOrCreate } from '~/sbl/util/map.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -30,202 +31,216 @@ When we have multiple claimants of an output, simply choose the highest-scoring 
 // OPTIMIZATION:
 // Always propogate weights towards the frontier, which is bounded by log(N)
 
+interface Cache {
+  ancestorWeight: Map<BlockFact, { minWeight: bigint }>;
+  selfWeight: Map<BlockFact, { minWeight: bigint; maxWeight: bigint }>;
+  descendantWeight: Map<BlockFact, { minWeight: bigint }>;
+  canonicality: Map<BlockFact, bigint>;
+  claimDelta: Map<BlockFact, bigint>;
+  treeChildrenWeight: Map<BlockFact, { minWeight: bigint }>;
+  voterWeight: Map<BlockFact, { minWeight: bigint }>;
+}
+const makeCache = (): Cache => ({
+  ancestorWeight: new Map(),
+  selfWeight: new Map(),
+  descendantWeight: new Map(),
+  canonicality: new Map(),
+  claimDelta: new Map(),
+  treeChildrenWeight: new Map(),
+  voterWeight: new Map(),
+});
+
 export default class WeightService {
   constructor(private ctx: Context) {}
 
-  public getAncestorWeight(fact: Pick<BlockFact, 'frontier_vote' | 'inputs'>) {
-    let minWeight = 0n;
+  public getAncestorWeight(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.ancestorWeight, fact, () => {
+      let minWeight = 0n;
 
-    const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
-    if (block !== undefined) {
-      minWeight += this.getSelfWeight(block).minWeight;
-      minWeight += this.getAncestorWeight(block).minWeight;
-    }
+      const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
+      if (block !== undefined) {
+        minWeight += this.getSelfWeight(block, cache).minWeight;
+        minWeight += this.getAncestorWeight(block, cache).minWeight;
+      }
 
-    minWeight += this.getTreeChildrenWeight(fact).minWeight;
+      minWeight += this.getTreeChildrenWeight(fact, cache).minWeight;
 
-    return { minWeight };
+      return { minWeight };
+    });
   }
 
-  public getSelfWeight(fact: Pick<BlockFact, 'source' | 'inputs' | 'outputs'>) {
-    if (fact.source === FactSource.Genesis) {
-      return { minWeight: BASE_WORK, maxWeight: BASE_WORK };
-    }
+  public getSelfWeight(
+    fact: Pick<BlockFact, 'source' | 'inputs' | 'outputs'>,
+    cache = makeCache(),
+  ) {
+    return getOrCreate(cache.selfWeight, fact, () => {
+      if (fact.source === FactSource.Genesis) {
+        return { minWeight: BASE_WORK, maxWeight: BASE_WORK };
+      }
 
-    let inputKnownSum = 0n;
-    let inputFreeMarketSum = 0n;
-    for (const input of fact.inputs) {
-      const block = this.ctx.get(BlockService).get(input.block_hash, false);
-      if (block !== undefined) {
-        const { verifier, amount } = block.outputs[input.output_idx];
-        inputKnownSum += amount;
-        if (this.ctx.get(ContractClassifierService).isFreeMarket(verifier)) {
-          inputFreeMarketSum += amount;
+      let inputKnownSum = 0n;
+      let inputFreeMarketSum = 0n;
+      for (const input of fact.inputs) {
+        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        if (block !== undefined) {
+          const { verifier, amount } = block.outputs[input.output_idx];
+          inputKnownSum += amount;
+          if (this.ctx.get(ContractClassifierService).isFreeMarket(verifier)) {
+            inputFreeMarketSum += amount;
+          }
         }
       }
-    }
 
-    let outputSum = 0n;
-    let outputCharitySum = 0n;
-    for (const output of fact.outputs) {
-      outputSum += output.amount;
-      if (this.ctx.get(ContractClassifierService).isCharity(output.verifier)) {
-        outputCharitySum += output.amount;
+      let outputSum = 0n;
+      let outputCharitySum = 0n;
+      for (const output of fact.outputs) {
+        outputSum += output.amount;
+        if (
+          this.ctx.get(ContractClassifierService).isCharity(output.verifier)
+        ) {
+          outputCharitySum += output.amount;
+        }
       }
-    }
 
-    const minWeight = bigintMax(
-      0n,
-      BASE_WORK + inputFreeMarketSum - outputCharitySum,
-    );
-    const maxWeight = bigintMax(
-      0n,
-      BASE_WORK + inputFreeMarketSum + outputSum - inputKnownSum -
-        outputCharitySum,
-    );
+      const minWeight = bigintMax(
+        0n,
+        BASE_WORK + inputFreeMarketSum - outputCharitySum,
+      );
+      const maxWeight = bigintMax(
+        0n,
+        BASE_WORK + inputFreeMarketSum + outputSum - inputKnownSum -
+          outputCharitySum,
+      );
 
-    return { minWeight, maxWeight };
+      return { minWeight, maxWeight };
+    });
   }
 
-  public getDescendantWeight(
-    fact: Pick<
-      BlockFact,
-      'outputClaims' | 'frontierOutputIdx' | 'frontierVoters'
-    >,
-  ) {
-    let minWeight = 0n;
+  public getDescendantWeight(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.descendantWeight, fact, () => {
+      let minWeight = 0n;
 
-    for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
-      if (this.getClaimDelta(claim.block) >= 0n) {
-        minWeight += this.getSelfWeight(claim.block).minWeight;
-        minWeight += this.getDescendantWeight(claim.block).minWeight;
+      for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
+        if (this.getClaimDelta(claim.block, cache) >= 0n) {
+          minWeight += this.getSelfWeight(claim.block, cache).minWeight;
+          minWeight += this.getDescendantWeight(claim.block, cache).minWeight;
+        }
       }
-    }
 
-    minWeight += this.getVoterWeight(fact).minWeight;
+      minWeight += this.getVoterWeight(fact, cache).minWeight;
 
-    return { minWeight };
+      return { minWeight };
+    });
   }
 
-  public isCanonical(fact: BlockFact) {
-    return this.getCanonicality(fact) >= 0n;
+  public isCanonical(fact: BlockFact, cache = makeCache()) {
+    return this.getCanonicality(fact, cache) >= 0n;
   }
 
-  public getCanonicality(
-    fact: Pick<
-      BlockFact,
-      | 'source'
-      | 'frontier_vote'
-      | 'inputs'
-      | 'outputs'
-      | 'outputClaims'
-      | 'frontierOutputIdx'
-      | 'frontierVoters'
-    >,
-  ) {
-    let canonicality = this.getClaimDelta(fact);
+  public getCanonicality(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.canonicality, fact, () => {
+      let canonicality = this.getClaimDelta(fact, cache);
 
-    const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
-    if (block !== undefined) {
-      const delta = this.getClaimDelta(block);
-      if (delta < canonicality) {
-        canonicality = delta;
-      }
-    }
-
-    for (const input of fact.inputs) {
-      const block = this.ctx.get(BlockService).get(input.block_hash, false);
+      const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
       if (block !== undefined) {
-        const delta = this.getClaimDelta(block);
+        const delta = this.getClaimDelta(block, cache);
         if (delta < canonicality) {
           canonicality = delta;
         }
       }
-    }
 
-    return canonicality;
-  }
-
-  private getClaimDelta(
-    fact: Pick<
-      BlockFact,
-      | 'source'
-      | 'inputs'
-      | 'outputs'
-      | 'outputClaims'
-      | 'frontierOutputIdx'
-      | 'frontierVoters'
-    >,
-  ) {
-    const myDescendantWeight = this.getDescendantWeight(fact).minWeight;
-    const mySelfWeight = this.getSelfWeight(fact).maxWeight;
-    let minDelta = myDescendantWeight;
-
-    for (const input of fact.inputs) {
-      const block = this.ctx.get(BlockService).get(input.block_hash, false);
-      if (block !== undefined) {
-        const claims = block.outputClaims[input.output_idx];
-        // if (claims.length !== 1) {
-        if (claims.length === 0) {
-          throw new Error(`Blocks not linked!`);
-        }
-
-        for (const claim of claims) {
-          if (claim.block !== fact) {
-            let delta = myDescendantWeight -
-              this.getDescendantWeight(claim.block).minWeight +
-              this.getSelfWeight(claim.block).maxWeight - mySelfWeight;
-            if (delta === 0n) {
-              // Resolve ties by locally promoting the block that comes first
-              for (const claim2 of claims) {
-                if (claim2.block === fact) {
-                  break;
-                } else if (claim2.block === claim.block) {
-                  delta--;
-                  break;
-                }
-              }
-            }
-            if (delta < minDelta) {
-              minDelta = delta;
-            }
+      for (const input of fact.inputs) {
+        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        if (block !== undefined) {
+          const delta = this.getClaimDelta(block, cache);
+          if (delta < canonicality) {
+            canonicality = delta;
           }
         }
-
-        // }
       }
-    }
 
-    return minDelta;
+      return canonicality;
+    });
   }
 
-  private getTreeChildrenWeight(fact: Pick<BlockFact, 'inputs'>) {
-    let minWeight = 0n;
+  private getClaimDelta(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.claimDelta, fact, () => {
+      const myDescendantWeight =
+        this.getDescendantWeight(fact, cache).minWeight;
+      const mySelfWeight = this.getSelfWeight(fact, cache).maxWeight;
+      let minDelta = myDescendantWeight;
 
-    for (const input of fact.inputs) {
-      const block = this.ctx.get(BlockService).get(input.block_hash, false);
-      if (block !== undefined) {
-        const { verifier } = block.outputs[input.output_idx];
-        if (Hash.equals(verifier.contract_hash, frontierHash)) {
-          minWeight += this.getSelfWeight(block).minWeight;
-          minWeight += this.getTreeChildrenWeight(block).minWeight;
+      for (const input of fact.inputs) {
+        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        if (block !== undefined) {
+          const claims = block.outputClaims[input.output_idx];
+          // if (claims.length !== 1) {
+          if (claims.length === 0) {
+            debugger;
+            throw new Error(`Blocks not linked!`);
+          }
+
+          for (const claim of claims) {
+            if (claim.block !== fact) {
+              let delta = myDescendantWeight -
+                this.getDescendantWeight(claim.block, cache).minWeight +
+                this.getSelfWeight(claim.block, cache).maxWeight - mySelfWeight;
+              if (delta === 0n) {
+                // Resolve ties by locally promoting the block that comes first
+                for (const claim2 of claims) {
+                  if (claim2.block === fact) {
+                    break;
+                  } else if (claim2.block === claim.block) {
+                    delta--;
+                    break;
+                  }
+                }
+              }
+              if (delta < minDelta) {
+                minDelta = delta;
+              }
+            }
+          }
+
+          // }
         }
       }
-    }
 
-    return { minWeight };
+      return minDelta;
+    });
   }
 
-  private getVoterWeight(fact: Pick<BlockFact, 'frontierVoters'>) {
-    let minWeight = 0n;
+  private getTreeChildrenWeight(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.treeChildrenWeight, fact, () => {
+      let minWeight = 0n;
 
-    for (const voter of fact.frontierVoters) {
-      if (this.getClaimDelta(voter) >= 0n) {
-        minWeight += this.getSelfWeight(voter).minWeight;
-        minWeight += this.getVoterWeight(voter).minWeight;
+      for (const input of fact.inputs) {
+        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        if (block !== undefined) {
+          const { verifier } = block.outputs[input.output_idx];
+          if (Hash.equals(verifier.contract_hash, frontierHash)) {
+            minWeight += this.getSelfWeight(block, cache).minWeight;
+            minWeight += this.getTreeChildrenWeight(block, cache).minWeight;
+          }
+        }
       }
-    }
 
-    return { minWeight };
+      return { minWeight };
+    });
+  }
+
+  private getVoterWeight(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.voterWeight, fact, () => {
+      let minWeight = 0n;
+
+      for (const voter of fact.frontierVoters) {
+        if (this.getClaimDelta(voter, cache) >= 0n) {
+          minWeight += this.getSelfWeight(voter, cache).minWeight;
+          minWeight += this.getVoterWeight(voter, cache).minWeight;
+        }
+      }
+
+      return { minWeight };
+    });
   }
 }

@@ -1,8 +1,12 @@
-import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, {
+  ConnectionProvider,
+  ListeningMode,
+} from '~/sbl/NetworkProvider.ts';
 import Hash from '~/sbl/util/Hash.ts';
 
 export default class WebrtcProvider implements NetworkProvider {
   public protocolName = 'webrtc';
+  public listeningMode = ListeningMode.Unique;
 
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 

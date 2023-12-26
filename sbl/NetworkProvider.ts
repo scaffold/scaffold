@@ -1,5 +1,10 @@
 import Context from './Context.ts';
 
+export enum ListeningMode {
+  Unique, // Creates a new instance after every new connection
+  Persistent, // Creates only a single instance
+}
+
 export interface ConnectionProvider {
   // Does not need to maintain order between sends, but does need to make sure packet's aren't dropped or mangled.
   // TODO: Should we require ordering?
@@ -35,5 +40,20 @@ export default interface NetworkProvider {
     ctx: Context, // TODO: Maybe move this parameter first; we don't want it to be ignored?
   ): {
     tryConnect(spec: string): void;
+  };
+}
+
+interface NetworkProviderNew {
+  readonly protocolName: string;
+
+  readonly listeningMode: ListeningMode;
+
+  createInstance(
+    isInitiator: boolean,
+    onNewConn: (conn: ConnectionProvider) => void,
+    sendSpec: (spec: string) => void,
+    ctx: Context,
+  ): {
+    recvSpec(spec: string): void;
   };
 }
