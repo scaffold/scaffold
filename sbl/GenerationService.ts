@@ -315,10 +315,16 @@ export default class GenerationService {
             if (input !== undefined) {
               break;
             } else {
+              const voteFor = verifierInputs.length > 0 &&
+                Hash.equals(verifier.contract_hash, frontierHash) &&
+                verifierInputs[verifierInputs.length - 1].block.hash;
               verifierInputs.push(
                 await this.ctx.get(UnclaimedOutputService).claim(
                   verifier,
                   workerDriver.done.signal,
+                  voteFor
+                    ? (spec) => Hash.equals(spec.block.frontier_vote, voteFor)
+                    : undefined,
                 ),
               );
             }

@@ -228,6 +228,9 @@ export default class Hash {
   }
 
   public static equals(h0: Hash, h1: Hash) {
+    if (h0 === h1) {
+      return true;
+    }
     for (let i = 0; i < HASH_SIZE; i++) {
       if (h0.digest[i] !== h1.digest[i]) {
         return false;

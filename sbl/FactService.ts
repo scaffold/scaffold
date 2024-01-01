@@ -347,94 +347,89 @@ export default class FactService {
     }
     this.facts.set(hash.toPrimitive(), invalidFact);
 
-    try {
-      if (data.byteLength < headerSize) {
-        throw new Error(`Message length (${data.byteLength}) is too short!`);
-      }
-      if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
-        throw new Error(`Fact doesn't start with the magic bytes!`);
-      }
-
-      const type: FactType = data[factMagic.byteLength];
-      const signed = typeHasSignature[type];
-      if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
-        throw new Error(`Message length (${data.byteLength}) is too short!`);
-      }
-      const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
-
-      const isSignedByMe = this.verify(
-        { data, signature },
-        this.ctx.get(KeyService).getSelfPublicKey(),
-      );
-
-      const base: FactBase = {
-        hash,
-
-        sillyName: this.getSillyName(),
-
-        data,
-        type,
-        message: data.subarray(
-          headerSize,
-          signed ? -SIGNATURE_LENGTH : undefined,
-        ),
-        signature,
-
-        source,
-        isSignedByMe,
-        fromNodes: [],
-        toNodes: [],
-
-        collateralizations: mapPut(
-          this.collateralByHash,
-          hash.toPrimitive(),
-          () => [],
-        ),
-        validities: mapPut(
-          this.validitiesByHash,
-          hash.toPrimitive(),
-          () => new Map(),
-        ),
-
-        backtrace: new Error().stack,
-      };
-
-      const res = this.factories[base.type](base, fromNode, mutator);
-      if (res.type !== base.type) {
-        throw new Error(
-          `Factory ${base.type} returned incorrect message type ${res.type}!`,
-        );
-      }
-
-      if (sortKeys) {
-        Object.keys(res).sort().forEach((key) => {
-          if (key !== 'type' && key !== 'sillyName') {
-            const val = (res as Record<string, unknown>)[key];
-            delete (res as Record<string, unknown>)[key];
-            (res as Record<string, unknown>)[key] = val;
-          }
-        });
-      }
-
-      this.facts.set(hash.toPrimitive(), res);
-      if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
-        console.log(`Created fact:`, res.hash.toHex(), res);
-      } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
-        console.log(
-          `Created ${res.type} fact from ${res.source}:`,
-          res.hash.toHex(),
-        );
-      }
-
-      for (const cb of this.ingestors[base.type]) {
-        cb(res);
-      }
-
-      return res;
-    } catch (err) {
-      console.error('FactService.ingest err:', err);
-      throw err;
+    if (data.byteLength < headerSize) {
+      throw new Error(`Message length (${data.byteLength}) is too short!`);
     }
+    if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
+      throw new Error(`Fact doesn't start with the magic bytes!`);
+    }
+
+    const type: FactType = data[factMagic.byteLength];
+    const signed = typeHasSignature[type];
+    if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
+      throw new Error(`Message length (${data.byteLength}) is too short!`);
+    }
+    const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
+
+    const isSignedByMe = this.verify(
+      { data, signature },
+      this.ctx.get(KeyService).getSelfPublicKey(),
+    );
+
+    const base: FactBase = {
+      hash,
+
+      sillyName: this.getSillyName(),
+
+      data,
+      type,
+      message: data.subarray(
+        headerSize,
+        signed ? -SIGNATURE_LENGTH : undefined,
+      ),
+      signature,
+
+      source,
+      isSignedByMe,
+      fromNodes: [],
+      toNodes: [],
+
+      collateralizations: mapPut(
+        this.collateralByHash,
+        hash.toPrimitive(),
+        () => [],
+      ),
+      validities: mapPut(
+        this.validitiesByHash,
+        hash.toPrimitive(),
+        () => new Map(),
+      ),
+
+      backtrace: new Error().stack,
+    };
+
+    const res = this.factories[base.type](base, fromNode, mutator);
+    if (res.type !== base.type) {
+      throw new Error(
+        `Factory ${base.type} returned incorrect message type ${res.type}!`,
+      );
+    }
+
+    if (sortKeys) {
+      Object.keys(res).sort().forEach((key) => {
+        if (key !== 'type' && key !== 'sillyName') {
+          const val = (res as Record<string, unknown>)[key];
+          delete (res as Record<string, unknown>)[key];
+          (res as Record<string, unknown>)[key] = val;
+        }
+      });
+    }
+
+    this.facts.set(hash.toPrimitive(), res);
+    if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
+      console.log(`Created fact:`, res.hash.toHex(), res);
+    } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
+      console.log(
+        `Created ${res.type} fact from ${res.source}:`,
+        res.hash.toHex(),
+      );
+    }
+
+    for (const cb of this.ingestors[base.type]) {
+      cb(res);
+    }
+
+    return res;
   }
 
   private getSillyName() {

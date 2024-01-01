@@ -28,7 +28,7 @@ import {
 import NodeService from './NodeService.ts';
 import QaDebugger from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import Hash, { HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import {
   BlockFact,
@@ -57,6 +57,8 @@ import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import CollateralUtil, { CONTEST_TYPE_FINAL } from '~/sbl/CollateralUtil.ts';
 import GenerationService from '~/sbl/GenerationService.ts';
 import { Node } from '~/sbl/NodeService.ts';
+import WeightService from '~/sbl/WeightService.ts';
+import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -424,14 +426,11 @@ export default class BlockService {
     this.checkInputAvailability(child);
 
     // TODO: Only do this once per unique verifier foreach block
-    this.ctx.get(VerificationService).enqueueVerification(
-      child,
-      verifier,
-      [CollateralHint.encode({
-        hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
-      })],
-      0,
-    );
+    const hintPrefix = [CollateralHint.encode({
+      hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
+    })];
+    this.ctx.get(VerificationService)
+      .enqueueVerification(child, verifier, hintPrefix, 0);
 
     if (
       child.verifiers.some((v2) =>

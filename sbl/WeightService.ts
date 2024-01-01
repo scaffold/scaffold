@@ -170,6 +170,9 @@ export default class WeightService {
       const mySelfWeight = this.getSelfWeight(fact, cache).maxWeight;
       let minDelta = myDescendantWeight;
 
+      // TODO: Iterate claims/voters of the frontier_vote here as well?
+      // YES!!! This ensures only one voter becomes canonical.
+
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.block_hash, false);
         if (block !== undefined) {

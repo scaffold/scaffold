@@ -14,13 +14,17 @@ export default class UnclaimedOutputService {
 
   constructor(private ctx: Context) {}
 
-  public claim(verifier: Verifier, cancelSignal: AbortSignal) {
+  public claim(
+    verifier: Verifier,
+    cancelSignal: AbortSignal,
+    filter?: (spec: InputSpec) => boolean,
+  ) {
     if (cancelSignal.aborted) {
       return neverPromise;
     }
 
     while (true) {
-      const now = this.claimNow(verifier);
+      const now = this.claimNow(verifier, filter);
       if (now === undefined) {
         break;
       } else if (this.ctx.get(WeightService).isCanonical(now.block)) {
@@ -29,18 +33,22 @@ export default class UnclaimedOutputService {
     }
 
     const key = Hash.digest(Verifier.encode(verifier));
-    return this.monitor.waitFor(key, cancelSignal);
+    return this.monitor.waitFor(key, cancelSignal, filter);
   }
 
-  public claimNow(verifier: Verifier) {
+  public claimNow(verifier: Verifier, filter?: (spec: InputSpec) => boolean) {
     const key = Hash.digest(Verifier.encode(verifier));
     const found = this.unclaimedOutputs.get(key.toPrimitive());
     if (found) {
-      if (found.length === 1) {
-        this.unclaimedOutputs.delete(key.toPrimitive());
-        return found[0];
-      } else {
-        return found.shift()!;
+      for (let i = 0; i < found.length; i++) {
+        if (filter === undefined || filter(found[i])) {
+          if (found.length === 1) {
+            this.unclaimedOutputs.delete(key.toPrimitive());
+            return found[0];
+          } else {
+            return found.splice(i, 1)[0];
+          }
+        }
       }
     }
   }

@@ -78,13 +78,13 @@ export default (
         header: 'name',
         accessorFn: (block) => block.sillyName,
       },
-      {
-        header: 'timestamp',
-        accessorFn: (block) =>
-          // new Date(Number(block.timestamp)).toLocaleString(),
-          new Date(Number(block.timestamp)).toISOString(),
-        cell: (props) => <pre>{props.getValue<string>()}</pre>,
-      },
+      // {
+      //   header: 'timestamp',
+      //   accessorFn: (block) =>
+      //     // new Date(Number(block.timestamp)).toLocaleString(),
+      //     new Date(Number(block.timestamp)).toISOString(),
+      //   cell: (props) => <pre>{props.getValue<string>()}</pre>,
+      // },
       {
         header: 'source',
         accessorFn: (block) => block.source,

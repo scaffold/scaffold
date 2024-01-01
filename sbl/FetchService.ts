@@ -132,7 +132,7 @@ export default class FetchService {
     //   );
     // }
 
-    let onState: (block: BlockFact) => void;
+    let onState: (block: BlockFact) => boolean;
     if (cb !== undefined) {
       let prevBlock: BlockFact | undefined;
       onState = (block: BlockFact) => {
@@ -143,6 +143,7 @@ export default class FetchService {
           prevBlock = block;
           cb(block);
         }
+        return true;
       };
 
       this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);

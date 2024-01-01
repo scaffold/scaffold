@@ -21,8 +21,9 @@ import { arrEquals, EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 import WeightService from '~/sbl/WeightService.ts';
 
-// const defaultTimeout = 100; // Enable block chunking
-const defaultTimeout = 0; // Disable block chunking
+const defaultTimeout = 100; // Enable block chunking
+// const defaultTimeout = 0; // Disable block chunking
+const enableBlockMerging = false;
 
 export interface InputSpec {
   block: BlockFact;
@@ -44,8 +45,6 @@ export interface BlockSpec {
   frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
 }
-
-const enableBlockMerging = true;
 
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
 export default class BlockBuilder {

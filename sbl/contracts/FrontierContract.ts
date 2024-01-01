@@ -3,8 +3,6 @@ import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { frontierHash } from '~/sbl/constants.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import Hash from '~/sbl/util/Hash.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -48,6 +46,8 @@ export default class FrontierContract implements ContractProvider {
     for (let i = 0; i < frontierInputCount; i++) {
       await driver.getInputSource(i);
     }
+
+    // A little hacky, because if replaced with requireOutput, we wouldn't have the detail yet (because it requires weighing the block).
     driver.requireFrontierLevel(level + 1);
   }
 }

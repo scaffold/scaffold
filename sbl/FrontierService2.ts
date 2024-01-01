@@ -83,6 +83,7 @@ export default class FrontierService2 {
       do {
         const next = this.ctx.get(BlockService).get(ptr, false);
         if (next === undefined) {
+          console.error(inputs);
           throw new Error(`Unconnected inputs!`);
         }
         if (next.frontierParams.level < frontierLevel) {
@@ -112,7 +113,7 @@ export default class FrontierService2 {
 
   private getTreeRoot(block: BlockFact) {
     while (true) {
-      let bestScore: bigint;
+      let bestScore: bigint | undefined;
       let bestDescendant: BlockFact | undefined;
       for (const claim of block.outputClaims[block.frontierOutputIdx]) {
         const score = this.ctx.get(WeightService).getCanonicality(claim.block);
