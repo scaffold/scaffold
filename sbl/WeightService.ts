@@ -178,6 +178,7 @@ export default class WeightService {
       let bestScore = 0n;
       let bestVoter: BlockFact | undefined;
       for (const voter of voters) {
+        // TODO: Should this be based on the voter weight?
         const score = this.getDescendantWeight(voter, cache).minWeight +
           this.getSelfWeight(voter, cache).minWeight;
         if (score > bestScore) {
@@ -257,14 +258,14 @@ export default class WeightService {
       const bestVoter = this.getCanonicalVoter(fact, cache);
 
       if (bestVoter === undefined) {
-        return fact.frontierDetail.tree_weight.map((x) => ({ minWeight: x }));
+        return fact.frontierDetail.tree_weights.map((x) => ({ minWeight: x }));
       }
 
       const subWeight = this.getVoterWeight(bestVoter, cache);
 
       const res: { minWeight: bigint }[] = [];
       for (let i = 0; true; i++) {
-        const selfEl = fact.frontierDetail.tree_weight[i];
+        const selfEl = fact.frontierDetail.tree_weights[i];
         const subEl = subWeight[i + 1];
         if (selfEl !== undefined) {
           if (subEl !== undefined) {
@@ -282,7 +283,7 @@ export default class WeightService {
       }
 
       if (res.length === 0) {
-        throw new Error(`Not at least one tree_weight!`);
+        throw new Error(`Not at least one tree weight!`);
       }
       res[0].minWeight += subWeight[0].minWeight;
 

@@ -4,7 +4,7 @@
 import { Sha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
 import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
-import { arrConcat, arrFromNumber, str2bin } from './buffer.ts';
+import { arrConcat, arrFromNumber, bin2str, str2bin } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 
 // TODO: Try blake?
@@ -35,7 +35,23 @@ const hasher = {
 
 export const HASH_SIZE = 32;
 
+const nonPrintableRegex = /[^\u0020-\u007E]/g;
+
 export default class Hash {
+  // TODO: Remove; only for debugging
+  private name: string;
+
+  private hex: string;
+
+  private constructor(private digest: Uint8Array) {
+    if (digest.byteLength !== HASH_SIZE) {
+      throw new Error(`Invalid digest length`);
+    }
+    this.hex = bin2hex(this.digest);
+
+    this.name = bin2str(this.digest).slice(-16).replace(nonPrintableRegex, '');
+  }
+
   public static fromBytes(bytes: Uint8Array) {
     return new Hash(bytes);
   }
@@ -114,14 +130,6 @@ export default class Hash {
     const data = new Uint8Array(HASH_SIZE);
     crypto.getRandomValues(data);
     return new Hash(data);
-  }
-
-  private hex: string;
-  private constructor(private digest: Uint8Array) {
-    if (digest.byteLength !== HASH_SIZE) {
-      throw new Error(`Invalid digest length`);
-    }
-    this.hex = bin2hex(this.digest);
   }
 
   public toBytes() {

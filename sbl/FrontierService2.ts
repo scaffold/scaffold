@@ -6,11 +6,48 @@ import { frontierHash } from '~/sbl/constants.ts';
 import { InputSpec } from '~/sbl/BlockBuilder.ts';
 import WeightService from '~/sbl/WeightService.ts';
 import { BlockOutput } from '~/sbl/messages.ts';
+import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
+import { todo } from '~/sbl/util/functional.ts';
+import ClockService from '~/sbl/ClockService.ts';
 
 const targLevel = 0;
 
+export const NUM_FRONTIER_LEVELS = 64;
+
+if (frontierInputCount !== 2) {
+  throw new Error(`FrontierService2.getRoot() needs to handle this case`);
+}
+
 export default class FrontierService2 {
-  constructor(private ctx: Context) {}
+  private treeRoots: BlockFact[][] = [];
+
+  constructor(private ctx: Context) {
+    for (let i = 0; i < NUM_FRONTIER_LEVELS; i++) {
+      this.treeRoots.push([]);
+    }
+
+    ctx.get(ClockService).setPoissonInterval(
+      () => this.mergeAll(),
+      ctx.config.backgroundJobParameters.frontierMergeIntervalMs,
+    );
+  }
+
+  public mergeAll() {
+    this.getRoot(NUM_FRONTIER_LEVELS - 1);
+  }
+
+  public getRoot(level: number): BlockFact | undefined {
+    for (let i = 0; i <= level; i++) {
+      while (this.treeRoots[i].length >= frontierInputCount) {
+        this.mergeBlocks(this.treeRoots[i].slice(0, frontierInputCount));
+      }
+    }
+    return this.treeRoots[level][0];
+  }
+
+  private mergeBlocks(blocks: BlockFact[]) {
+    todo();
+  }
 
   public mergeFrontierVotes(a: BlockFact, b: BlockFact) {
     if (a.frontierParams.level > b.frontierParams.level) {
@@ -66,7 +103,7 @@ export default class FrontierService2 {
           offset++;
         }
 
-        input.block.frontierDetail.tree_weight.forEach((x, i) => {
+        input.block.frontierDetail.tree_weights.forEach((x, i) => {
           const idx = offset + i;
           while (weights.length <= idx) {
             weights.push(0n);

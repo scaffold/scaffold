@@ -280,7 +280,7 @@ export default (
       {
         header: 'tree weights',
         accessorFn: wrapAccessor((block) =>
-          block.frontierDetail.tree_weight.join(', ')
+          block.frontierDetail.tree_weights.join(', ')
         ),
       },
       {

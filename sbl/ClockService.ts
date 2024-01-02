@@ -26,7 +26,11 @@ export default class ClockService {
   }
 
   // TODO: Make this a little more efficient & less predictable
-  public setPoissonInterval(func: () => void, wait: number) {
+  public setPoissonInterval(func: () => void, wait?: number) {
+    if (wait === undefined) {
+      return;
+    }
+
     const resolution = 0.25;
     wait *= resolution;
 

@@ -50,7 +50,9 @@ import {
   CollateralContractParams,
   CollateralHint,
 } from '~/sbl/collateralMessages.ts';
-import FrontierService2 from '~/sbl/FrontierService2.ts';
+import FrontierService2, {
+  NUM_FRONTIER_LEVELS,
+} from '~/sbl/FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
@@ -324,8 +326,21 @@ export default class BlockService {
     const frontierParams = FrontierTreeParams.decode(output.verifier.params);
     const frontierDetail = FrontierTreeDetail.decode(output.detail);
 
-    if (frontierDetail.tree_weight.length === 0) {
-      throw new Error(`Not at least one tree_weight!`);
+    if (
+      frontierParams.level < 0 || frontierParams.level >= NUM_FRONTIER_LEVELS
+    ) {
+      throw new Error(`Invalid frontier level ${frontierParams.level}!`);
+    }
+    if (frontierDetail.tree_weights.length === 0) {
+      throw new Error(`Not at least one tree weight!`);
+    }
+    if (frontierDetail.tree_weights.length > NUM_FRONTIER_LEVELS) {
+      throw new Error(`Too many tree weights!`);
+    }
+    for (const weight of frontierDetail.tree_weights) {
+      if (weight < 0n) {
+        throw new Error(`Invalid tree weight ${weight}!`);
+      }
     }
 
     return { frontierOutputIdx: idx, frontierParams, frontierDetail };

@@ -496,6 +496,7 @@ export default class GenerationService {
       return fact;
     }
 
+    console.log('GENERATE', spec);
     const block = await this.ctx.get(BlockBuilder).publish(spec);
 
     // answer.difficultyEstimate = BigInt(durationMs) *

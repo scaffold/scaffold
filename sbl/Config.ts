@@ -11,11 +11,15 @@ import { defaultContractProviders } from '~/sbl/contracts/defaultContractProvide
 
 // TODO: Reorder, rename, reorganize config
 
-export interface TestParameters {
-}
-
 export interface GraphParameters {
   minimumCollateral(work: bigint, time: number): bigint;
+}
+
+export interface BackgroundJobParameters {
+  frontierMergeIntervalMs?: number;
+}
+
+export interface TestParameters {
 }
 
 export interface TimeProvider {
@@ -118,6 +122,7 @@ interface Config {
   workScoreThreshold: number; // TODO: Units?
 
   graphParameters: GraphParameters;
+  backgroundJobParameters: BackgroundJobParameters;
   testParameters: TestParameters;
 
   dbgVerifyGenerations: boolean;
@@ -127,8 +132,10 @@ interface Config {
   enableWorkerLogging: boolean;
 }
 
+export const defaultNetwork = 'main';
+
 export const makeDefaultConfig = () => ({
-  network: 'main',
+  network: defaultNetwork,
   debugName: '',
   logLevel: LogLevels.WARNING,
   timeProvider: {
@@ -163,6 +170,7 @@ export const makeDefaultConfig = () => ({
   graphParameters: {
     minimumCollateral: (work, _time) => work * 1000n,
   },
+  backgroundJobParameters: {},
   testParameters: {},
   dbgVerifyGenerations: false,
   enableValidation: true,

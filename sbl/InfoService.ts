@@ -49,10 +49,7 @@ export default class InfoService {
       bandwidth: Math.floor(40000 / this.ctx.get(NodeService).getAll().length),
     };
 
-    return this.ctx.get(FactService).compose(
-      info,
-      InfoMessage,
-      FactType.Info,
-    );
+    return this.ctx.get(FactService)
+      .compose(info, InfoMessage, FactType.Info);
   }
 }

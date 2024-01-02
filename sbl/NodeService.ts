@@ -185,6 +185,12 @@ export default class NodeService {
   public createFact(base: FactBase, node: Node): InfoFact {
     const msg = InfoMessage.decode(base.message);
 
+    if (msg.network !== this.ctx.config.network) {
+      throw new Error(
+        `Mismatched networks! ${msg.network} !== ${this.ctx.config.network}`,
+      );
+    }
+
     if (msg.userdata) {
       // const { epochStartTime } = JSON.parse(msg.userdata);
       // if (epochStartTime) {

@@ -1,6 +1,6 @@
 import secp from '~/sbl/util/secp.ts';
 import Context from '~/sbl/Context.ts';
-import Config, { makeDefaultConfig } from '~/sbl/Config.ts';
+import Config, { defaultNetwork, makeDefaultConfig } from '~/sbl/Config.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
 import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
 import * as log from 'std-latest/log/mod.ts';
@@ -11,26 +11,29 @@ import LocalStorageProvider from '~/plugins/LocalStorageProvider.ts';
 
 // window['Deno'] = {};
 
+const getNetwork = () =>
+  new URLSearchParams(window.location.search).get('network') ?? defaultNetwork;
+
+const getPrivateKey = () => {
+  const pkid = new URLSearchParams(window.location.search).get('pkid') ?? '';
+  const hex = localStorage.getItem(`sbl_pk_${pkid}`);
+  if (hex) {
+    return hex2bin(hex);
+  } else {
+    const key = secp.utils.randomPrivateKey();
+    localStorage.setItem(`sbl_pk_${pkid}`, bin2hex(key));
+    return key;
+  }
+};
+
 export default class SblClient {
   public ctx: Context;
 
   constructor() {
-    const getPrivateKey = () => {
-      const pkid = new URLSearchParams(window.location.search).get('pkid') ||
-        '';
-      const hex = localStorage.getItem(`sbl_pk_${pkid}`);
-      if (hex) {
-        return hex2bin(hex);
-      } else {
-        const key = secp.utils.randomPrivateKey();
-        localStorage.setItem(`sbl_pk_${pkid}`, bin2hex(key));
-        return key;
-      }
-    };
-
     const config: Config = {
       ...makeDefaultConfig(),
 
+      network: getNetwork(),
       debugName: 'SblClient',
       selfPrivateKey: getPrivateKey(),
 
@@ -47,14 +50,6 @@ export default class SblClient {
     url.protocol = { 'http:': 'ws:', 'https:': 'wss:' }[url.protocol]!;
     url.port = '8314';
     this.ctx.get(ConnectionService).connect('websocket', url.origin);
-
-    let height = 0n;
-    setInterval(() => {
-      // this.ctx.get(QuestionService).getCanonical({
-      //   contract_hash: this.ctx.get(EpochContract).get().hash,
-      //   params: this.ctx.get(EpochContract).makeParams(height++),
-      // }, (answer) => console.log(answer));
-    }, 1000);
 
     // const params = this.ctx.get(EpochContract).makeParams(10n);
     // this.ctx.get(QuestionService).getCanonical(

@@ -1,17 +1,7 @@
 import React from 'react';
 import SblClient from './SblClient.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
-import IncentiveService from '~/sbl/IncentiveService.ts';
-import { IncentiveRegistry } from '../sbl/registries.ts';
 import BlockTableView from './BlockTableView.tsx';
-import AccountService from '../sbl/AccountService.ts';
-import Store2 from '../sbl/util/Store2.ts';
-import StoreView from './StoreView.tsx';
-import StoreSelector from './StoreSelector.tsx';
-import Context from '../sbl/Context.ts';
-import StoreObserver from '../sbl/util/StoreObserver.ts';
-import { Verifier } from '../sbl/messages.ts';
-import Logger from '../sbl/Logger.ts';
 import ThrustView from './ThrustView.tsx';
 import * as moduleHashes from './moduleHashes.ts';
 import * as constants from '../sbl/constants.ts';
@@ -19,20 +9,18 @@ import { bin2str, str2bin } from '../sbl/util/buffer.ts';
 import FetchService from '../sbl/FetchService.ts';
 import LocalGeneratorService from '../sbl/LocalGeneratorService.ts';
 import * as thrustMessages from '../ts/thrustMessages.ts';
-import BlockService from '../sbl/BlockService.ts';
 import BlockBuilder from '../sbl/BlockBuilder.ts';
 import helloGenerator from '../ts/hello.generator.0.ts';
 import thrustGameGenerator from '../ts/thrust_game.generator.0.ts';
 import thrustMazeGenerator from '../ts/thrust_maze.generator.0.ts';
-import JsonView from './JsonView.tsx';
 import QaDebugger from '../sbl/QaDebugger.ts';
 import Input from './Input.tsx';
 import LitigationService from '~/sbl/LitigationService.ts';
-import FactService from '~/sbl/FactService.ts';
-import secp from '~/sbl/util/secp.ts';
 import GenesisService, { sharedGenesisData } from '~/sbl/GenesisService.ts';
 import FactView from '~/ui/FactView.tsx';
 import CodeView from '~/ui/CodeView.tsx';
+import FrontierService2 from '~/sbl/FrontierService2.ts';
+import { defaultNetwork } from '~/sbl/Config.ts';
 
 // QJS
 // const initialContractHex =
@@ -113,6 +101,9 @@ const startGame = () => {
 
 export default () => {
   const [url, setUrl] = React.useState(new URL(window.location.href));
+  const [network, setNetwork] = React.useState<string>(
+    url.searchParams.get('network') ?? defaultNetwork,
+  );
   const [selectedContract, selectContract] = React.useState<string>(
     initialContractHex,
   );
@@ -133,8 +124,21 @@ export default () => {
         src='/scaffold_logo_horizontal.png'
         style={{ maxHeight: '4rem', maxWidth: '100%' }}
       />
+      <br />
 
       <CodeView>Hello world!</CodeView>
+
+      <Input label='Network' value={network} setValue={setNetwork} />
+      <button
+        onClick={() => {
+          const newUrl = new URL(url);
+          newUrl.searchParams.set('network', network);
+          window.location.href = newUrl.toString();
+        }}
+      >
+        Go
+      </button>
+      <br />
 
       <a
         href='#'
@@ -183,6 +187,9 @@ export default () => {
         }}
       >
         Publish bad block
+      </button>
+      <button onClick={() => client.ctx.get(FrontierService2).mergeAll()}>
+        Merge frontier
       </button>
 
       <br />

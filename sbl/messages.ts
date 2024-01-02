@@ -743,7 +743,7 @@ export const registry = {
     name: 'FrontierTreeDetail',
     type: 'record',
     fields: [
-      { name: 'tree_weight', type: { type: 'array', items: 'long' } },
+      { name: 'tree_weights', type: { type: 'array', items: 'long' } },
       // { name: 'input_tree_root', type: 'Hash' },
       // { name: 'output_tree_root', type: 'Hash' },
 
