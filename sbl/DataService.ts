@@ -6,9 +6,12 @@ import { rootHash } from '~/sbl/constants.ts';
 import FactService from '~/sbl/FactService.ts';
 import ClockService from '~/sbl/ClockService.ts';
 import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import * as hashes from './constants.ts';
 
 export default class DataService {
-  private requesting = new Set<HashPrimitive>();
+  private requesting = new Set<HashPrimitive>(
+    Object.values(hashes).map((x) => x.toPrimitive()),
+  );
 
   constructor(private ctx: Context) {}
 

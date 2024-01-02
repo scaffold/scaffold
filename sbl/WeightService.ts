@@ -36,15 +36,17 @@ interface Cache {
   selfWeight: Map<BlockFact, { minWeight: bigint; maxWeight: bigint }>;
   descendantWeight: Map<BlockFact, { minWeight: bigint }>;
   canonicality: Map<BlockFact, bigint>;
+  canonicalVoter: Map<BlockFact, BlockFact | undefined>;
   claimDelta: Map<BlockFact, bigint>;
   treeChildrenWeight: Map<BlockFact, { minWeight: bigint }>;
-  voterWeight: Map<BlockFact, { minWeight: bigint }>;
+  voterWeight: Map<BlockFact, { minWeight: bigint }[]>;
 }
 const makeCache = (): Cache => ({
   ancestorWeight: new Map(),
   selfWeight: new Map(),
   descendantWeight: new Map(),
   canonicality: new Map(),
+  canonicalVoter: new Map(),
   claimDelta: new Map(),
   treeChildrenWeight: new Map(),
   voterWeight: new Map(),
@@ -120,14 +122,20 @@ export default class WeightService {
     return getOrCreate(cache.descendantWeight, fact, () => {
       let minWeight = 0n;
 
+      let count = 0;
       for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
         if (this.getClaimDelta(claim.block, cache) >= 0n) {
           minWeight += this.getSelfWeight(claim.block, cache).minWeight;
           minWeight += this.getDescendantWeight(claim.block, cache).minWeight;
+          count++;
         }
       }
 
-      minWeight += this.getVoterWeight(fact, cache).minWeight;
+      if (count === 0) {
+        minWeight += this.getVoterWeight(fact, cache)[0].minWeight;
+      } else if (count > 1) {
+        throw new Error(`More than one canonical frontier output!`);
+      }
 
       return { minWeight };
     });
@@ -163,6 +171,25 @@ export default class WeightService {
     });
   }
 
+  public getCanonicalVoter(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.canonicalVoter, fact, () => {
+      const voters = this.ctx.get(BlockService).getVoters(fact.hash);
+
+      let bestScore = 0n;
+      let bestVoter: BlockFact | undefined;
+      for (const voter of voters) {
+        const score = this.getDescendantWeight(voter, cache).minWeight +
+          this.getSelfWeight(voter, cache).minWeight;
+        if (score > bestScore) {
+          bestScore = score;
+          bestVoter = voter;
+        }
+      }
+
+      return bestVoter;
+    });
+  }
+
   private getClaimDelta(fact: BlockFact, cache = makeCache()) {
     return getOrCreate(cache.claimDelta, fact, () => {
       const myDescendantWeight =
@@ -170,43 +197,36 @@ export default class WeightService {
       const mySelfWeight = this.getSelfWeight(fact, cache).maxWeight;
       let minDelta = myDescendantWeight;
 
-      // TODO: Iterate claims/voters of the frontier_vote here as well?
-      // YES!!! This ensures only one voter becomes canonical.
-
       for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.block_hash, false);
-        if (block !== undefined) {
-          const claims = block.outputClaims[input.output_idx];
-          // if (claims.length !== 1) {
-          if (claims.length === 0) {
-            debugger;
-            throw new Error(`Blocks not linked!`);
-          }
+        const claims = this.ctx.get(BlockService).getClaims(input);
+        // if (claims.length !== 1) {
+        if (claims.length === 0) {
+          debugger;
+          throw new Error(`Blocks not linked!`);
+        }
 
-          for (const claim of claims) {
-            if (claim.block !== fact) {
-              let delta = myDescendantWeight -
-                this.getDescendantWeight(claim.block, cache).minWeight +
-                this.getSelfWeight(claim.block, cache).maxWeight - mySelfWeight;
-              if (delta === 0n) {
-                // Resolve ties by locally promoting the block that comes first
-                for (const claim2 of claims) {
-                  if (claim2.block === fact) {
-                    break;
-                  } else if (claim2.block === claim.block) {
-                    delta--;
-                    break;
-                  }
+        for (const claim of claims) {
+          if (claim.block !== fact) {
+            let delta = myDescendantWeight -
+              this.getDescendantWeight(claim.block, cache).minWeight +
+              this.getSelfWeight(claim.block, cache).maxWeight - mySelfWeight;
+            if (delta === 0n) {
+              // Resolve ties by locally promoting the block that comes first
+              for (const claim2 of claims) {
+                if (claim2.block === fact) {
+                  break;
+                } else if (claim2.block === claim.block) {
+                  delta--;
+                  break;
                 }
               }
-              if (delta < minDelta) {
-                minDelta = delta;
-              }
+            }
+            if (delta < minDelta) {
+              minDelta = delta;
             }
           }
-
-          // }
         }
+        // }
       }
 
       return minDelta;
@@ -234,16 +254,50 @@ export default class WeightService {
 
   private getVoterWeight(fact: BlockFact, cache = makeCache()) {
     return getOrCreate(cache.voterWeight, fact, () => {
-      let minWeight = 0n;
+      const bestVoter = this.getCanonicalVoter(fact, cache);
 
-      for (const voter of fact.frontierVoters) {
-        if (this.getClaimDelta(voter, cache) >= 0n) {
-          minWeight += this.getSelfWeight(voter, cache).minWeight;
-          minWeight += this.getVoterWeight(voter, cache).minWeight;
+      if (bestVoter === undefined) {
+        return fact.frontierDetail.tree_weight.map((x) => ({ minWeight: x }));
+      }
+
+      const subWeight = this.getVoterWeight(bestVoter, cache);
+
+      const res: { minWeight: bigint }[] = [];
+      for (let i = 0; true; i++) {
+        const selfEl = fact.frontierDetail.tree_weight[i];
+        const subEl = subWeight[i + 1];
+        if (selfEl !== undefined) {
+          if (subEl !== undefined) {
+            res.push({ minWeight: selfEl + subEl.minWeight });
+          } else {
+            res.push({ minWeight: selfEl });
+          }
+        } else {
+          if (subEl !== undefined) {
+            res.push(subEl);
+          } else {
+            break;
+          }
         }
       }
 
-      return { minWeight };
+      if (res.length === 0) {
+        throw new Error(`Not at least one tree_weight!`);
+      }
+      res[0].minWeight += subWeight[0].minWeight;
+
+      return res;
+
+      // let minWeight = 0n;
+
+      // for (const voter of fact.frontierVoters) {
+      //   if (this.getClaimDelta(voter, cache) >= 0n) {
+      //     minWeight += this.getSelfWeight(voter, cache).minWeight;
+      //     minWeight += this.getVoterWeight(voter, cache).minWeight;
+      //   }
+      // }
+
+      // return { minWeight };
     });
   }
 }

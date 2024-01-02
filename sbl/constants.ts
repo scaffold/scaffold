@@ -1,6 +1,10 @@
-import Hash from './util/Hash.ts';
+import Hash, { ZERO_HASH } from './util/Hash.ts';
 
 const SBL = Hash.fromLiteralStr('SBL'.padEnd(32, '\0'));
+
+// TODO: If these are changed to hashes of actual data, allow requesting them in DataService
+
+export const zeroHash = ZERO_HASH;
 
 // TODO: Call this dataHash
 export const rootHash = Hash.xor(SBL, Hash.fromLiteralStr('root'));

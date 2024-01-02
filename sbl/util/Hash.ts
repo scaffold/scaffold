@@ -253,5 +253,5 @@ export default class Hash {
 
 export type HashPrimitive = ReturnType<Hash['toPrimitive']>;
 
-export const ZERO_HASH = Hash.fromLiteral32(0);
+export const ZERO_HASH = Hash.fromBytes(new Uint8Array(HASH_SIZE));
 export const EMPTY_HASH = Hash.digest(new Uint8Array());

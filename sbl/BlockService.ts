@@ -150,11 +150,7 @@ export default class BlockService {
           this.get(x.block_hash, false)?.isCanonical !== false
         ),
 
-      frontierVoters: getOrCreate(
-        this.frontierVoters,
-        base.hash.toPrimitive(),
-        () => [],
-      ),
+      frontierVoters: this.getVoters(base.hash),
 
       propagationMask: 0,
 
@@ -189,8 +185,7 @@ export default class BlockService {
 
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
-    getOrCreate(this.frontierVoters, fact.frontier_vote.toPrimitive(), () => [])
-      .push(fact);
+    this.getVoters(fact.frontier_vote).push(fact);
     const frontierVote = this.get(fact.frontier_vote, false);
     if (frontierVote !== undefined) {
       this.linkFrontier(frontierVote, fact);
@@ -326,11 +321,14 @@ export default class BlockService {
       throw new Error(`Not exactly one frontier output!`);
     }
     const output = block.outputs[idx];
-    return {
-      frontierOutputIdx: idx,
-      frontierParams: FrontierTreeParams.decode(output.verifier.params),
-      frontierDetail: FrontierTreeDetail.decode(output.detail),
-    };
+    const frontierParams = FrontierTreeParams.decode(output.verifier.params);
+    const frontierDetail = FrontierTreeDetail.decode(output.detail);
+
+    if (frontierDetail.tree_weight.length === 0) {
+      throw new Error(`Not at least one tree_weight!`);
+    }
+
+    return { frontierOutputIdx: idx, frontierParams, frontierDetail };
   }
 
   public compare(a: BlockFact, b: BlockFact) {
@@ -719,6 +717,14 @@ export default class BlockService {
   public getBlockIndex(block: BlockFact): bigint {
     // Walk up towards frontier; computing the unique index that this block is aiming to be included at
     throw new Error(`Not implemented`);
+  }
+
+  public getVoters(frontierVote: Hash) {
+    return getOrCreate(
+      this.frontierVoters,
+      frontierVote.toPrimitive(),
+      () => [],
+    );
   }
 
   public getClaims({ block_hash, output_idx }: BlockInput) {

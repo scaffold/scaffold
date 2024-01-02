@@ -2,7 +2,7 @@ import Context from '~/sbl/Context.ts';
 import secp from '~/sbl/util/secp.ts';
 import { hex2bin } from '~/sbl/util/hex.ts';
 import { makeDefaultConfig } from '~/sbl/Config.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 import { AccountContractParams } from '~/sbl/messages.ts';
 import BlockBuilder from '~/sbl/BlockBuilder.ts';
 import { accountHash } from '~/sbl/constants.ts';
@@ -22,7 +22,8 @@ const genesisPublicKey = secp.getPublicKey(genesisPrivateKey);
 
 const initAccounts = [
   '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784', // server
-  '02c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c679', // client
+  '02c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c679', // chrome client
+  '03c37af130a275a525cdd4a660e5d00a0e915c47d812984158fc2c6a2657ca449c', // arc client
 ].map((publicKeyHex) => ({
   publicKey: hex2bin(publicKeyHex),
   amount: 1000000n,
@@ -46,23 +47,25 @@ export const createGenesisBlock = (
     enableValidation: false,
   });
 
-  return ctx.get(BlockBuilder).publish({
-    // body: genesisPublicKey,
-    outputs: accounts.map(({ publicKey, amount }) => ({
+  const block = ctx.get(BlockBuilder).buildBlock({});
+  block.inputs.push({ block_hash: ZERO_HASH, output_idx: 0 });
+  for (const { publicKey, amount } of accounts) {
+    block.outputs.push({
       verifier: {
         contract_hash: accountHash,
         params: AccountContractParams.encode({ public_key: publicKey }),
       },
       amount,
       detail: new Uint8Array(),
-    })),
-  }, 0);
+    });
+  }
+  return ctx.get(BlockService).create(block);
 };
 
 const generatedGenesisData = createGenesisBlock(initAccounts).data;
 // console.log('Genesis block hex:', bin2hex(generatedGenesisData));
 export const sharedGenesisData = hex2bin(
-  '53424c02000000000000000000000000000000000000000000000000000000000000000000000653424c000000000000000000000000000000000000000000006163636f756e7442404b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a578480897a0053424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c67980897a0053424c00000000000000000000000000000000000000000066726f6e7469657202001402140000008bb968823351e016c52d97f57e8984bba163be846e86f045528b3a5c94b8cf486338826d0412c36227cc99b8aa61c03d830312819c3a98506c6164323873959200',
+  '53424c0200000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000853424c00000000000000000000000000000000000000000066726f6e746965720200140602140053424c000000000000000000000000000000000000000000006163636f756e7442404b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a578480897a0053424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c67980897a0053424c000000000000000000000000000000000000000000006163636f756e74444203c37af130a275a525cdd4a660e5d00a0e915c47d812984158fc2c6a2657ca449c80897a000000003d6e207172d08f202915d9fe0f3ef670add06140c09ed2957f857f52453461c4206e92bc960b435c93e68c322c93536b18fff26cca328f0b4489be48425c3b7101',
 );
 if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
   console.log('Genesis block hex:', bin2hex(generatedGenesisData));

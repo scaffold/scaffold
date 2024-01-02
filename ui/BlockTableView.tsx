@@ -278,6 +278,12 @@ export default (
         ),
       },
       {
+        header: 'tree weights',
+        accessorFn: wrapAccessor((block) =>
+          block.frontierDetail.tree_weight.join(', ')
+        ),
+      },
+      {
         header: 'self weight min',
         accessorFn: wrapAccessor((block) =>
           ctx.get(WeightService).getSelfWeight(block).minWeight

@@ -1,10 +1,11 @@
-import { BlockFact } from '~/sbl/FactMeta.ts';
+import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
 import Context from '~/sbl/Context.ts';
 import Hash, { ZERO_HASH } from '~/sbl/util/Hash.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import { frontierHash } from '~/sbl/constants.ts';
 import { InputSpec } from '~/sbl/BlockBuilder.ts';
 import WeightService from '~/sbl/WeightService.ts';
+import { BlockOutput } from '~/sbl/messages.ts';
 
 const targLevel = 0;
 
@@ -30,6 +31,52 @@ export default class FrontierService2 {
     if (it === b) {
       return a;
     }
+  }
+
+  public mergeTreeWeights(
+    inputs: InputSpec[],
+    outputs: BlockOutput[],
+    frontierVote: Hash,
+  ): bigint[] {
+    const selfWeight = this.ctx.get(WeightService).getSelfWeight({
+      source: FactSource.Local,
+      inputs: inputs.map((input) => ({
+        block_hash: input.block.hash,
+        output_idx: input.outputIdx,
+      })),
+      outputs,
+    }).minWeight;
+    const weights = [selfWeight];
+
+    for (const input of inputs) {
+      if (
+        Hash.equals(
+          input.block.outputs[input.outputIdx].verifier.contract_hash,
+          frontierHash,
+        )
+      ) {
+        let ptr = frontierVote;
+        let offset = 0;
+        while (!Hash.equals(ptr, input.block.frontier_vote)) {
+          const next = this.ctx.get(BlockService).get(ptr, false);
+          if (next === undefined) {
+            throw new Error(`Unconnected inputs!`);
+          }
+          ptr = next.frontier_vote;
+          offset++;
+        }
+
+        input.block.frontierDetail.tree_weight.forEach((x, i) => {
+          const idx = offset + i;
+          while (weights.length <= idx) {
+            weights.push(0n);
+          }
+          weights[idx] += x;
+        });
+      }
+    }
+
+    return weights;
   }
 
   // TODO: How should we handle refs here?

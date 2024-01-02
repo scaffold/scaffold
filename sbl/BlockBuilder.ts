@@ -67,7 +67,7 @@ export default class BlockBuilder {
     };
   }
 
-  public buildBlock(spec: BlockSpec, ioDelta = 0n): Block {
+  public buildBlock(spec: BlockSpec): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -79,55 +79,25 @@ export default class BlockBuilder {
     const inputBlocks = spec.inputs ?? [];
     const outputs = spec.outputs ?? [];
 
+    let ioDelta = 0n;
+
     for (const satisfaction of spec.satisfies ?? []) {
       this.collectInputs(inputBlocks, satisfaction, true);
     }
 
-    if (
-      outputs.some((output) =>
-        Hash.equals(output.verifier.contract_hash, frontierHash)
-      )
-    ) {
+    const addFrontierOutput = !outputs.some((output) =>
+      Hash.equals(output.verifier.contract_hash, frontierHash)
+    );
+    const frontierOutputAmount = 10n;
+
+    if (addFrontierOutput) {
+      ioDelta -= frontierOutputAmount;
+    } else {
       if (this.ctx.config.allowSpecifiedFrontierOutputs) {
         console.warn(`Unexpected frontier output on an unfinished block!`);
       } else {
         throw new Error(`Unexpected frontier output on an unfinished block!`);
       }
-    } else {
-      const level = spec.frontierLevel ?? 0;
-      // const amount = BigInt(
-      //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
-      // );
-      const amount = 10n;
-
-      outputs.push({
-        verifier: {
-          contract_hash: frontierHash,
-          params: FrontierTreeParams.encode({ level }),
-        },
-        amount,
-        detail: FrontierTreeDetail.encode({
-          tree_weight: inputBlocks.reduce(
-            (acc, cur) => acc + cur.block.frontierDetail.tree_weight,
-            this.ctx.get(WeightService).getSelfWeight({
-              source: FactSource.Local,
-              inputs: inputBlocks.map((input) => ({
-                block_hash: input.block.hash,
-                output_idx: input.outputIdx,
-              })),
-              outputs,
-            }).minWeight,
-          ),
-          // input_tree_root: ZERO_HASH,
-          // output_tree_root: ZERO_HASH,
-
-          // input_count: 0,
-          // output_count: 0,
-
-          // block_count: 1,
-          // claimed_work: this.computeWork(inputBlocks, outputs),
-        }),
-      });
     }
 
     ioDelta += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
@@ -167,6 +137,33 @@ export default class BlockBuilder {
 
     const frontierVote = spec.frontierVote?.hash ??
       this.ctx.get(FrontierService2).getBlockVote(inputBlocks);
+
+    if (addFrontierOutput) {
+      const level = spec.frontierLevel ?? 0;
+      // const amount = BigInt(
+      //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
+      // );
+
+      outputs.push({
+        verifier: {
+          contract_hash: frontierHash,
+          params: FrontierTreeParams.encode({ level }),
+        },
+        amount: frontierOutputAmount,
+        detail: FrontierTreeDetail.encode({
+          tree_weight: this.ctx.get(FrontierService2)
+            .mergeTreeWeights(inputBlocks, outputs, frontierVote),
+          // input_tree_root: ZERO_HASH,
+          // output_tree_root: ZERO_HASH,
+
+          // input_count: 0,
+          // output_count: 0,
+
+          // block_count: 1,
+          // claimed_work: this.computeWork(inputBlocks, outputs),
+        }),
+      });
+    }
 
     // TODO: Can bundle multiple blocks without bodies
     const body = spec.body ?? new Uint8Array();
