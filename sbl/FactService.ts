@@ -28,6 +28,7 @@ import {
   colors,
   uniqueNamesGenerator,
 } from 'unique-names-generator';
+import SignalingService from '~/sbl/SignalingService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (
@@ -61,6 +62,7 @@ typeHasSignature[FactType.Block] = true;
 typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
 typeHasSignature[FactType.MerkleTreeNode] = true;
+typeHasSignature[FactType.Signal] = true;
 typeHasSignature[FactType.Invalid] = true;
 
 const useZstd = false;
@@ -103,6 +105,10 @@ export default class FactService {
         ? error(`Unexpected mutator`)
         : ctx.get(BlockSetService).createTreeNodeFact(base);
     this.factories[FactType.MerkleTreeNode] = todo;
+    this.factories[FactType.Signal] = (base, _, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(SignalingService).createFact(base);
     this.factories[FactType.Invalid] = (base, _, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
@@ -280,6 +286,10 @@ export default class FactService {
     fact.fromNodes.push(fromNode);
 
     return fact;
+  }
+
+  public forget(fact: Fact) {
+    this.facts.delete(fact.hash.toPrimitive());
   }
 
   public publish(fact: Fact) {

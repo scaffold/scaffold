@@ -61,6 +61,7 @@ try {
       ) {
         await execJob(client, msg.data).catch((err) => console.error(err));
       } else {
+        // TODO: Are shadow realms another option here?
         await execJs(client, msg.data).catch((err) => console.error(err));
       }
     } else {

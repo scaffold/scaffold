@@ -4,6 +4,7 @@ import {
   BlockSet,
   BlockSetTreeNode,
   InfoMessage,
+  Signal,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
@@ -18,6 +19,7 @@ export enum FactType {
   BlockSet, // TODO: Rename to bag or something
   BlockSetTreeNode,
   MerkleTreeNode,
+  Signal,
   Invalid,
   // Frontier,
   // EpochInclusionProof,
@@ -78,6 +80,10 @@ export type BlockSetTreeNodeFact =
   & FactBase
   & { type: FactType.BlockSetTreeNode }
   & BlockSetTreeNode['node'];
+export type SignalFact =
+  & FactBase
+  & { type: FactType.Signal }
+  & Signal;
 export type InvalidFact =
   & FactBase
   & { type: FactType.Invalid };
@@ -92,5 +98,6 @@ export type Fact =
   | BlockFact
   | BlockSetFact
   | BlockSetTreeNodeFact
+  | SignalFact
   | InvalidFact;
 // | FrontierFact;

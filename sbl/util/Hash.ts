@@ -110,15 +110,15 @@ export default class Hash {
     return new Hash(hasher(data));
   }
 
-  // TODO: Do we need this?
+  // TODO: Eliminate this monstrosity
   // It's slightly insecure because we don't lenght-prefix the parts
-  public static digestParts(...parts: (Hash | Uint8Array | number)[]) {
+  public static digestParts(...parts: (Hash | Uint8Array | string | number)[]) {
     return Hash.digest(
       arrConcat(
         ...parts.map((p) =>
           p instanceof Hash
             ? p.toBytes()
-            : p instanceof Uint8Array
+            : p instanceof Uint8Array || typeof p === 'string'
             ? Hash.digest(p).toBytes()
             : arrFromNumber(p, 8)
         ),

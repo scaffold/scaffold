@@ -51,7 +51,7 @@
     "bunny": "https://esm.sh/bunny@1.0.1?target=esnext&pin=v135",
     "angle-normals": "https://esm.sh/angle-normals@1.0.0?target=esnext&pin=v135",
     "simplex-noise": "https://raw.githubusercontent.com/jwagner/simplex-noise.js/3.0.1/simplex-noise.ts",
-    "multiformats/": "https://cdn.skypack.dev/multiformats@10.0.2/",
+    "multiformats/": "https://cdn.skypack.dev/multiformats@13.0.0/",
     "dnt": "https://deno.land/x/dnt@0.38.1/mod.ts",
     "unique-names-generator": "https://esm.sh/unique-names-generator@4.7.1?target=esnext&pin=v135",
     "std-latest/": "https://deno.land/std@0.210.0/",

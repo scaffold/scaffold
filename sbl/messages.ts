@@ -405,13 +405,20 @@ export const registry = {
   //   ],
   // },
 
+  Protocol: {
+    name: 'Protocol',
+    type: 'record',
+    fields: [
+      { name: 'name', type: 'string' },
+      { name: 'persistent_signal', type: ['null', 'string'] },
+    ],
+  },
   Neighbor: {
     name: 'Neighbor',
     type: 'record',
     fields: [
-      { name: 'node_hash', type: 'Hash' },
-      // { name: 'public_key', type: 'bytes' },
-      { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
+      { name: 'public_key', type: 'bytes' },
+      { name: 'protocols', type: { type: 'array', items: 'Protocol' } },
     ],
   },
   // TODO: Prevent replay/forwarding attacks with a challenge/response thing here
@@ -429,11 +436,22 @@ export const registry = {
       { name: 'protocol_version', type: 'string' },
       { name: 'userdata', type: 'string' },
       { name: 'age_ptr', type: 'Hash' },
-      { name: 'handled_protocols', type: { type: 'array', items: 'string' } },
+      { name: 'protocols', type: { type: 'array', items: 'string' } },
 
       { name: 'neighbors', type: { type: 'array', items: 'Neighbor' } },
 
       { name: 'bandwidth', type: 'int' }, // In bytes per second
+    ],
+  },
+  Signal: {
+    name: 'Signal',
+    type: 'record',
+    fields: [
+      { name: 'destination', type: 'Hash' }, // Hash of the public key
+      { name: 'connection_nonce', type: 'Hash' },
+      { name: 'protocol_name', type: 'string' },
+      { name: 'signal_index', type: 'int' },
+      { name: 'signal_data', type: 'string' },
     ],
   },
   PingMessage: {
@@ -908,6 +926,8 @@ export const Neighbor = makeMsg(registry, 'Neighbor');
 export type Neighbor = MsgType<'Neighbor'>;
 export const InfoMessage = makeMsg(registry, 'InfoMessage');
 export type InfoMessage = MsgType<'InfoMessage'>;
+export const Signal = makeMsg(registry, 'Signal');
+export type Signal = MsgType<'Signal'>;
 export const PingMessage = makeMsg(registry, 'PingMessage');
 export type PingMessage = MsgType<'PingMessage'>;
 export const PongMessage = makeMsg(registry, 'PongMessage');
