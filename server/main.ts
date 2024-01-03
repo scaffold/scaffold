@@ -19,6 +19,7 @@ import GenesisService, { sharedGenesisData } from '~/sbl/GenesisService.ts';
 import * as log from 'std-latest/log/mod.ts';
 import WorkerExecutor from '~/sbl/WorkerExecutor.ts';
 import WebsocketServerProvider from '~/plugins/WebsocketServerProvider.ts';
+import WebsocketClientProvider from '~/plugins/WebsocketClientProvider.ts';
 import DenoKvStorageProvider from '~/plugins/DenoKvStorageProvider.ts';
 import Logger, { FilterAction, LogLevel } from '~/sbl/Logger2.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
@@ -51,7 +52,10 @@ const config: Config = {
 
   logLevel: log.LogLevels.INFO,
 
-  networkProviders: [new WebsocketServerProvider()],
+  networkProviders: [
+    new WebsocketServerProvider(),
+    new WebsocketClientProvider(),
+  ],
 
   storageProvider: new DenoKvStorageProvider(),
 

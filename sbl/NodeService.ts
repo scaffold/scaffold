@@ -50,11 +50,6 @@ export interface Node {
   // If trust is less than -1, disconnect
   // Only connect to peers where trust is greater than 0
   trust: number;
-
-  // Benevolence increases when we recieve helpful facts from the node
-  // Benevolence decreases when we send (hopefully helpful) facts to the node
-  // We publish to positively benevolent nodes
-  benevolence: number;
 }
 
 export default class NodeService {

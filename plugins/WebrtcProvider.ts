@@ -1,12 +1,8 @@
-import NetworkProvider, {
-  ConnectionProvider,
-  ListeningMode,
-} from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { SignalingDriver } from '~/sbl/NetworkProvider.ts';
 import Hash from '~/sbl/util/Hash.ts';
 
 export default class WebrtcProvider implements NetworkProvider {
-  public protocolName = 'webrtc';
-  public listeningMode = ListeningMode.Unique;
+  public protocols = 'webrtc@0.0.1';
 
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 
@@ -24,10 +20,8 @@ export default class WebrtcProvider implements NetworkProvider {
     );
   }
 
-  public createClient(
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) {
+  public createInstance(driver: SignalingDriver) {
+    // TODO: Use driver.isInitiator for ordering
     const orderHash = Hash.random();
 
     let reliableChannel: RTCDataChannel | undefined;
@@ -39,7 +33,7 @@ export default class WebrtcProvider implements NetworkProvider {
     };
 
     const dispatchNewConn = (conn: RTCPeerConnection) =>
-      onNewConn({
+      driver.createConnection({
         sendReliable: (data: Uint8Array) => reliableChannel!.send(data),
         sendFast: (data: Uint8Array) => fastChannel!.send(data),
         onRecv: (handler: (data: Uint8Array) => void) => {
@@ -110,20 +104,20 @@ export default class WebrtcProvider implements NetworkProvider {
     };
 
     const connPromise = (async () => {
-      onListen(JSON.stringify({ orderHex: orderHash.toHex() }));
+      driver.sendSignal(JSON.stringify({ orderHex: orderHash.toHex() }));
 
       const config = { iceServers: await this.iceServersPromise };
       const conn = new RTCPeerConnection(config);
 
       conn.onicecandidate = (e) =>
         e.candidate &&
-        onListen(JSON.stringify({ iceCandidate: e.candidate }));
+        driver.sendSignal(JSON.stringify({ iceCandidate: e.candidate }));
 
       return conn;
     })();
 
     return {
-      tryConnect: async (spec: string) => {
+      recvSignal: async (spec: string) => {
         console.log(JSON.parse(spec));
 
         const { orderHex, offer, answer, iceCandidate } = JSON.parse(spec);
@@ -135,7 +129,7 @@ export default class WebrtcProvider implements NetworkProvider {
             await createChannels(conn);
             const offer = await conn.createOffer();
             await conn.setLocalDescription(offer);
-            onListen(JSON.stringify({ offer: conn.localDescription }));
+            driver.sendSignal(JSON.stringify({ offer: conn.localDescription }));
           } else {
             listenForChannels(conn);
           }
@@ -144,7 +138,7 @@ export default class WebrtcProvider implements NetworkProvider {
           await conn.setRemoteDescription(offer);
           const answer = await conn.createAnswer();
           await conn.setLocalDescription(answer);
-          onListen(JSON.stringify({ answer: conn.localDescription }));
+          driver.sendSignal(JSON.stringify({ answer: conn.localDescription }));
         }
         if (answer) {
           await conn.setRemoteDescription(answer);

@@ -1,21 +1,14 @@
-import NetworkProvider, {
-  ConnectionProvider,
-  ListeningMode,
-} from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { SignalingDriver } from '~/sbl/NetworkProvider.ts';
 
 export default class WebsocketClientProvider implements NetworkProvider {
-  public protocolName = 'websocket';
-  public listeningMode = ListeningMode.Unique;
+  public protocols = 'websocket@0.0.1/client';
 
-  public createClient(
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) {
+  public createInstance(driver: SignalingDriver) {
     const sockets: WebSocket[] = [];
 
     return {
-      tryConnect: (spec: string) => {
-        const socket = new WebSocket(spec);
+      recvSignal: (signal: string) => {
+        const socket = new WebSocket(signal);
         socket.binaryType = 'arraybuffer';
         sockets.push(socket);
         socket.addEventListener(
@@ -24,7 +17,7 @@ export default class WebsocketClientProvider implements NetworkProvider {
             // Close any other attempted sockets
             sockets.forEach((s) => s !== socket && s.close());
 
-            onNewConn({
+            driver.createConnection({
               sendReliable: (data: Uint8Array) => socket.send(data),
               sendFast: (data: Uint8Array) => socket.send(data),
               onRecv: (handler: (data: Uint8Array) => void) =>

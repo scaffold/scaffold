@@ -405,6 +405,7 @@ export const registry = {
   //   ],
   // },
 
+  // I'd love to use this, but it's not signed by the neighbor so could be modified
   Protocol: {
     name: 'Protocol',
     type: 'record',
@@ -413,12 +414,13 @@ export const registry = {
       { name: 'persistent_signal', type: ['null', 'string'] },
     ],
   },
+
   Neighbor: {
     name: 'Neighbor',
     type: 'record',
     fields: [
       { name: 'public_key', type: 'bytes' },
-      { name: 'protocols', type: { type: 'array', items: 'Protocol' } },
+      { name: 'protocols', type: { type: 'array', items: 'string' } },
     ],
   },
   // TODO: Prevent replay/forwarding attacks with a challenge/response thing here

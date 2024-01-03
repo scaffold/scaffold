@@ -1,17 +1,10 @@
 import { serve } from 'std-latest/http/mod.ts';
-import NetworkProvider, {
-  ConnectionProvider,
-  ListeningMode,
-} from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { SignalingDriver } from '~/sbl/NetworkProvider.ts';
 
 export default class WebsocketServerProvider implements NetworkProvider {
-  public protocolName = 'websocket';
-  public listeningMode = ListeningMode.Persistent;
+  public protocols = 'websocket@0.0.1/server';
 
-  public createServer(
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) {
+  public createInstance(driver: SignalingDriver) {
     const port = 8314;
 
     // Don't await here; I think serve only resolves once the server closes.
@@ -24,7 +17,7 @@ export default class WebsocketServerProvider implements NetworkProvider {
         socket.binaryType = 'arraybuffer';
 
         socket.addEventListener('open', () =>
-          onNewConn({
+          driver.createConnection({
             sendReliable: (data: Uint8Array) => socket.send(data),
             sendFast: (data: Uint8Array) => socket.send(data),
             onRecv: (handler: (data: Uint8Array) => void) =>
@@ -49,49 +42,13 @@ export default class WebsocketServerProvider implements NetworkProvider {
         }),
     ].forEach((host) =>
       Promise.resolve(host).then((host) =>
-        host && onListen(`ws://${host}:${port}`)
+        host && driver.sendSignal(`ws://${host}:${port}`)
       )
     );
-  }
-
-  public createClient(
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) {
-    let connected = false;
-    const clientAttempts: WebSocket[] = [];
 
     return {
-      tryConnect: (spec: string) => {
-        const socket = new WebSocket(spec);
-        socket.binaryType = 'arraybuffer';
-        clientAttempts.push(socket);
-        socket.addEventListener(
-          'open',
-          () => {
-            if (connected) {
-              return;
-            } else {
-              connected = true;
-            }
-
-            // Close any other attempted clientAttempts
-            clientAttempts.forEach((s) => s.close());
-
-            onNewConn({
-              sendReliable: (data: Uint8Array) => socket.send(data),
-              sendFast: (data: Uint8Array) => socket.send(data),
-              onRecv: (handler: (data: Uint8Array) => void) =>
-                socket.addEventListener(
-                  'message',
-                  (e) => handler(new Uint8Array(e.data)),
-                ),
-              shutdown: () => socket.close(),
-              onClose: (handler: () => void) =>
-                socket.addEventListener('close', () => handler()),
-            });
-          },
-        );
+      recvSignal: () => {
+        throw new Error(`A websocket server doesn't receive signals!`);
       },
     };
   }

@@ -38,21 +38,23 @@ interface NetworkProviderOld {
   };
 }
 
-export interface ConnectionDriver {
+export interface SignalingDriver {
   ctx: Context;
 
+  protocolName: string;
   isInitiator: boolean;
+  isDialer: boolean;
 
   sendSignal(signal: string): void;
   createConnection(conn: ConnectionProvider): void;
 }
 
+export interface SignalingProvider {
+  recvSignal(signal: string): void;
+}
+
 export default interface NetworkProvider {
-  readonly protocolName: string;
+  readonly protocols?: string | string[];
 
-  createPersistentSignal(driver: ConnectionDriver): void;
-
-  createInstance(driver: ConnectionDriver): {
-    recvSignal(signal: string): void;
-  };
+  createInstance(driver: SignalingDriver): SignalingProvider;
 }

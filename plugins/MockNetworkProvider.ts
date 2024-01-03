@@ -21,7 +21,8 @@ class TimerSet {
 }
 
 export default class MockNetworkProvider implements NetworkProvider {
-  public protocolName = 'mock';
+  public dialsTo = 'mock';
+  public listensTo = 'mock';
 
   private servers = new Map<
     string,
