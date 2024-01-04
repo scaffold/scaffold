@@ -17,19 +17,18 @@ import { mapPut } from '~/sbl/util/map.ts';
 import { arrEquals } from '~/sbl/util/buffer.ts';
 import { assert } from '~/sbl/util/functional.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
+import { bin2hex } from '~/sbl/util/hex.ts';
 
 const closeTimeoutMs = 30000;
 
 interface SignalingState {
   remotePublicKey: Uint8Array;
+  sentInitSignal: boolean;
   outgoingSignalIdx: number;
   incomingSignalIdx: number;
   incomingSignalBuffer: (string | undefined)[];
   signalingProvider: SignalingProvider;
   closeTimeout?: number;
-
-  sendSignal(data: string): void;
-  forget(stateHash: Hash): void;
 }
 
 type IngestingSignal = Pick<
@@ -50,6 +49,14 @@ export default class SignalingService {
     });
   }
 
+  public isConnecting(publicKey: Uint8Array, protocolName: string) {
+    return this.states.has(
+      Hash.digestParts(publicKey, protocolName, 0).toPrimitive(),
+    ) || this.states.has(
+      Hash.digestParts(publicKey, protocolName, 1).toPrimitive(),
+    );
+  }
+
   public emit(signal: ConnectionSignal): ConnectionSignalFact {
     return this.ctx.get(FactService)
       .emit(signal, ConnectionSignal, FactType.ConnectionSignal, true);
@@ -65,16 +72,14 @@ export default class SignalingService {
       { isSelfInitiator: signal.is_initiator === base.isSignedByMe },
     );
 
-    if (
-      arrEquals(
-        fact.dst_public_key,
-        this.ctx.get(KeyService).getSelfPublicKey(),
-      )
-    ) {
-      const fromPublicKey = this.ctx.get(FactService).getPublicKey(fact);
-      this.ingestSignal(fromPublicKey, fact);
-    } else {
-      // TODO: Forward
+    const node = this.ctx.get(NodeService).get(fact.dst_public_key);
+    if (node !== undefined) {
+      if (node.isRemote) {
+        this.ctx.get(FactService).sendTo(fact, node);
+      } else {
+        const fromPublicKey = this.ctx.get(FactService).getPublicKey(fact);
+        this.ingestSignal(fromPublicKey, fact);
+      }
     }
 
     this.ctx.get(ClockService).setTimeout(
@@ -86,6 +91,12 @@ export default class SignalingService {
   }
 
   public ingestSignal(publicKey: Uint8Array, signal: IngestingSignal) {
+    console.log(
+      `Ingested signal from ${bin2hex(publicKey)}:`,
+      signal.protocol_name,
+      signal.signal_index,
+      signal.signal_data,
+    );
     const state = this.getSignalingState(publicKey, signal);
     if (signal.signal_index >= 0) {
       state.incomingSignalBuffer[signal.signal_index] = signal.signal_data;
@@ -99,23 +110,28 @@ export default class SignalingService {
       }
     }
 
-    // if (state.outgoingSignalIdx === 0 && state.incomingSignalIdx === 0) {
-    //   state.outgoingSignalIdx = -1;
-    //   state.sendSignal('');
-    //   state.outgoingSignalIdx = 1;
-    // }
+    if (
+      !state.sentInitSignal &&
+      state.outgoingSignalIdx === 0 &&
+      state.incomingSignalIdx === 0
+    ) {
+      state.sentInitSignal = true;
+      this.emit({
+        dst_public_key: publicKey,
+        is_initiator: signal.isSelfInitiator,
+        protocol_name: signal.protocol_name,
+        signal_index: -1,
+        signal_data: '',
+      });
+    }
   }
 
-  private getStateKey(publicKey: Uint8Array, signal: IngestingSignal) {
-    return Hash.digestParts(
+  private getSignalingState(publicKey: Uint8Array, signal: IngestingSignal) {
+    const stateKey = Hash.digestParts(
       publicKey,
       signal.protocol_name,
       signal.isSelfInitiator ? 0 : 1,
     );
-  }
-
-  private getSignalingState(publicKey: Uint8Array, signal: IngestingSignal) {
-    const stateKey = this.getStateKey(publicKey, signal);
     const state = mapPut(
       this.states,
       stateKey.toPrimitive(),
@@ -125,26 +141,35 @@ export default class SignalingService {
       this.ctx.config.timeProvider.clearTimeout(state.closeTimeout);
     }
     state.closeTimeout = this.ctx.config.timeProvider.setTimeout(
-      () => state.forget(stateKey),
+      () => {
+        console.info(`Forgetting signaling state ${stateKey.toHex()}`);
+        assert(this.states.delete(stateKey.toPrimitive()));
+      },
       closeTimeoutMs,
     );
     return state;
   }
 
-  private initSignalingState(publicKey: Uint8Array, signal: IngestingSignal) {
+  private initSignalingState(
+    publicKey: Uint8Array,
+    signal: IngestingSignal,
+  ): SignalingState {
+    const state: Omit<SignalingState, 'signalingProvider'> = {
+      remotePublicKey: publicKey,
+      sentInitSignal: false,
+      outgoingSignalIdx: 0,
+      incomingSignalIdx: 0,
+      incomingSignalBuffer: [],
+    };
+
     const sendSignal = (data: string) =>
-      this.ctx.get(SignalingService).emit({
+      this.emit({
         dst_public_key: publicKey,
         is_initiator: signal.isSelfInitiator,
         protocol_name: signal.protocol_name,
         signal_index: state.outgoingSignalIdx++,
         signal_data: data,
       });
-
-    const forget = (stateHash: Hash) => {
-      console.info(`Forgetting signaling state ${stateHash.toHex()}`);
-      assert(this.states.delete(stateHash.toPrimitive()));
-    };
 
     // If we don't have an initial signal from the peer, we need a provider able to send their address
     const subtype = signal.signal_index < 0 ? 'client' : undefined;
@@ -155,15 +180,6 @@ export default class SignalingService {
       sendSignal,
     );
 
-    const state: SignalingState = {
-      remotePublicKey: publicKey,
-      outgoingSignalIdx: 0,
-      incomingSignalIdx: 0,
-      incomingSignalBuffer: [],
-      signalingProvider,
-      sendSignal,
-      forget,
-    };
-    return state;
+    return Object.assign(state, { signalingProvider });
   }
 }

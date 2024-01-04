@@ -29,7 +29,7 @@ export default class InfoService {
     const neighbors = this.ctx.get(NodeService).getNeighbors();
 
     return {
-      timestamp: this.ctx.config.timeProvider.now(),
+      timestamp: BigInt(this.ctx.config.timeProvider.now()),
       network: this.ctx.config.network,
       name: '',
       client_name: '',
@@ -38,7 +38,7 @@ export default class InfoService {
       age_ptr: ZERO_HASH,
       protocols: this.ctx.get(NetworkService).getProtocolList(),
       neighbors,
-      bandwidth: Math.floor(40000 / neighbors.length),
+      bandwidth: Math.floor(40000 / (neighbors.length + 1)),
     };
   }
 }

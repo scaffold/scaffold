@@ -327,6 +327,8 @@ export default class FactService {
     this.ctx.get(NodeService).getAll()
       .forEach((node) => this.sendTo(fact, node));
   }
+
+  // TODO: RemoteNode
   public sendTo(fact: Fact, nodes: Node | Node[]) {
     if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
       throw new Error(`Trying to publish before publish time!`);

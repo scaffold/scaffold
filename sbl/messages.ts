@@ -418,7 +418,7 @@ export const registry = {
     name: 'NodeInfo',
     type: 'record',
     fields: [
-      { name: 'timestamp', type: 'int' },
+      { name: 'timestamp', type: 'long' },
 
       { name: 'network', type: 'string' },
 
