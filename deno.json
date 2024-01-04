@@ -26,7 +26,7 @@
     "build-html": "cp static/* build/",
     "build-js": "deno bundle --check --watch --config=deno.json app.tsx build/index.js",
     "build-worker": "deno bundle --check --watch --config=deno.json sbl/worker/worker.ts build/worker.js",
-    "serve-build": "deno run --allow-net --allow-read https://deno.land/std@0.210.0/http/file_server.ts build/ --port 17542 --header 'Cross-Origin-Opener-Policy: same-origin' --header 'Cross-Origin-Embedder-Policy: credentialless'",
+    "serve-build": "deno run --allow-net --allow-read https://deno.land/std@0.211.0/http/file_server.ts build/ --port 17542 --header 'Cross-Origin-Opener-Policy: same-origin' --header 'Cross-Origin-Embedder-Policy: credentialless'",
     "serve-ws": "deno run --check --allow-all --unstable --watch server/main.ts",
     "debug-ws": "deno run --check --allow-all --unstable --inspect server/main.ts",
     "test": "deno test --config=deno.json --allow-all --seed=123 --trace-ops tests/",
@@ -54,7 +54,7 @@
     "multiformats/": "https://cdn.skypack.dev/multiformats@13.0.0/",
     "dnt": "https://deno.land/x/dnt@0.38.1/mod.ts",
     "unique-names-generator": "https://esm.sh/unique-names-generator@4.7.1?target=esnext&pin=v135",
-    "std-latest/": "https://deno.land/std@0.210.0/",
+    "std-latest/": "https://deno.land/std@0.211.0/",
     "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   }
 }

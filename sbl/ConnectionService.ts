@@ -98,10 +98,6 @@ export default class ConnectionService {
       altruism: 0,
     };
 
-    if (conn.node?.isRemote) {
-      conn.node.connections.add(conn);
-    }
-
     provider.onClose(shutdown);
     this.ctx.onDestruct(shutdown);
 
@@ -132,6 +128,10 @@ export default class ConnectionService {
           }
 
           conn.node = this.ctx.get(NodeService).getOrCreate(publicKey);
+          if (!conn.node.isRemote) {
+            throw new Error(`Internal error!`);
+          }
+          conn.node.connections.add(conn);
 
           console.log(`Connected and authenticated with ${bin2hex(publicKey)}`);
 
