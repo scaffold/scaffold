@@ -43,7 +43,7 @@ import FactService from '~/sbl/FactService.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
 import { assert, neverPromise, todo } from '~/sbl/util/functional.ts';
 import FrontierService from '~/sbl/FrontierService.ts';
-import PublicKeyService from '~/sbl/PublicKeyService.ts';
+
 import LitigationService from '~/sbl/LitigationService.ts';
 import {
   CollateralContractDetail,
@@ -233,15 +233,10 @@ export default class BlockService {
         0,
       );
 
-      if (Hash.equals(verifier.contract_hash, accountHash)) {
-        const params = AccountContractParams.decode(verifier.params);
-        this.ctx.get(PublicKeyService).addPublicKey(params.public_key);
-      }
-
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
         const params = CollateralContractParams.decode(verifier.params);
         const detailDec = CollateralContractDetail.decode(detail);
-        this.ctx.get(PublicKeyService).addPublicKey(detailDec.public_key);
+
         if (fact.isSignedByMe) {
           this.ctx.get(FactService)
             .updateValidity(params.block_hash, detailDec.hints, detailDec.vote);
@@ -311,6 +306,9 @@ export default class BlockService {
     // }
 
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
+
+    const publicKey = this.ctx.get(FactService).getPublicKey(fact);
+    this.ctx.get(NodeService).getOrCreate(publicKey).producedBlocks.add(fact);
 
     return fact;
   }

@@ -1,6 +1,5 @@
 import secp from './util/secp.ts';
 import Context from './Context.ts';
-import PublicKeyService from '~/sbl/PublicKeyService.ts';
 
 export default class KeyService {
   private selfPublicKey: Uint8Array;
@@ -12,7 +11,6 @@ export default class KeyService {
         `Invalid public key length: ${this.selfPublicKey.byteLength}`,
       );
     }
-    ctx.get(PublicKeyService).addPublicKey(this.selfPublicKey);
   }
 
   public getSelfPublicKey() {

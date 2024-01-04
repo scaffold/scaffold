@@ -56,7 +56,7 @@ export default class NetworkService {
       ?.provider;
   }
 
-  public getClientProtocols() {
+  public getProtocolList() {
     return this.protocols;
   }
 

@@ -1,7 +1,6 @@
 import Context from '../Context.ts';
 import FactService from '~/sbl/FactService.ts';
 import { DataContractParams } from '../messages.ts';
-import NodeService from '../NodeService.ts';
 import Hash, { HASH_SIZE } from '../util/Hash.ts';
 import {
   BurdenOfProof,
@@ -10,6 +9,7 @@ import {
 } from '~/sbl/ComputationMeta.ts';
 import { ContractProvider } from '~/sbl/SpecialContractManager.ts';
 import { dataHash } from '~/sbl/constants.ts';
+import KeyService from '~/sbl/KeyService.ts';
 
 // For easy-to-verify contracts in general:
 //   Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
@@ -30,7 +30,7 @@ export default class DataContract implements ContractProvider {
           const commitment = Hash.digestParts(
             fact.data,
             secret,
-            ctx.get(NodeService).getSelfHash(),
+            ctx.get(KeyService).getSelfPublicKey(),
           );
           driver.requireBody(commitment.toBytes());
         } else {
@@ -48,7 +48,7 @@ export default class DataContract implements ContractProvider {
           Hash.digestParts(
             hint,
             secret,
-            ctx.get(NodeService).getSelfHash(),
+            ctx.get(KeyService).getSelfPublicKey(),
           ),
           Hash.fromBytes(body),
         );

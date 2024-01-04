@@ -43,7 +43,6 @@ export interface SignalingDriver {
 
   protocolName: string;
   isInitiator: boolean;
-  isDialer: boolean;
 
   sendSignal(signal: string): void;
   createConnection(conn: ConnectionProvider): void;

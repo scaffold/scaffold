@@ -405,53 +405,45 @@ export const registry = {
   //   ],
   // },
 
-  // I'd love to use this, but it's not signed by the neighbor so could be modified
-  Protocol: {
-    name: 'Protocol',
-    type: 'record',
-    fields: [
-      { name: 'name', type: 'string' },
-      { name: 'persistent_signal', type: ['null', 'string'] },
-    ],
-  },
-
-  Neighbor: {
-    name: 'Neighbor',
-    type: 'record',
-    fields: [
-      { name: 'public_key', type: 'bytes' },
-      { name: 'protocols', type: { type: 'array', items: 'string' } },
-    ],
-  },
-  // TODO: Prevent replay/forwarding attacks with a challenge/response thing here
   // TODO: Make a way for small updates (appending/dropping a neighbor, updating the bandwidth, updating userdata, etc.)
-  InfoMessage: {
-    name: 'InfoMessage',
+  NodeInfo: {
+    name: 'NodeInfo',
     type: 'record',
     fields: [
-      { name: 'network', type: 'string' },
+      { name: 'timestamp', type: 'int' },
 
-      { name: 'public_key', type: 'bytes' },
+      { name: 'network', type: 'string' },
 
       { name: 'name', type: 'string' },
       { name: 'client_name', type: 'string' },
       { name: 'protocol_version', type: 'string' },
       { name: 'userdata', type: 'string' },
       { name: 'age_ptr', type: 'Hash' },
+
+      // TODO: Add persistent signals here?
       { name: 'protocols', type: { type: 'array', items: 'string' } },
 
-      { name: 'neighbors', type: { type: 'array', items: 'Neighbor' } },
+      { name: 'neighbors', type: { type: 'array', items: 'bytes' } },
 
       { name: 'bandwidth', type: 'int' }, // In bytes per second
     ],
   },
-  Signal: {
-    name: 'Signal',
+  InfoRequest: {
+    name: 'InfoRequest',
     type: 'record',
     fields: [
-      { name: 'destination', type: 'Hash' }, // Hash of the public key
-      { name: 'connection_nonce', type: 'Hash' },
+      // An array of public keys, specifying the path to the node we're looking for.
+      // This request is not signed so it's not prescriptive, just a hint.
+      { name: 'path', type: { type: 'array', items: 'bytes' } },
+    ],
+  },
+  ConnectionSignal: {
+    name: 'ConnectionSignal',
+    type: 'record',
+    fields: [
+      { name: 'public_key', type: 'bytes' },
       { name: 'protocol_name', type: 'string' },
+      { name: 'is_initiator', type: 'boolean' },
       { name: 'signal_index', type: 'int' },
       { name: 'signal_data', type: 'string' },
     ],
@@ -632,7 +624,7 @@ export const registry = {
           'BidMessage',
           'PublicationMessage',
           'RequestBlockMessage',
-          'InfoMessage',
+          'Info',
           'PingMessage',
           'PongMessage',
           'BridgeStartMessage',
@@ -924,12 +916,12 @@ export const PublicationMessage = makeMsg(registry, 'PublicationMessage');
 export type PublicationMessage = MsgType<'PublicationMessage'>;
 export const RequestBlockMessage = makeMsg(registry, 'RequestBlockMessage');
 export type RequestBlockMessage = MsgType<'RequestBlockMessage'>;
-export const Neighbor = makeMsg(registry, 'Neighbor');
-export type Neighbor = MsgType<'Neighbor'>;
-export const InfoMessage = makeMsg(registry, 'InfoMessage');
-export type InfoMessage = MsgType<'InfoMessage'>;
-export const Signal = makeMsg(registry, 'Signal');
-export type Signal = MsgType<'Signal'>;
+export const NodeInfo = makeMsg(registry, 'NodeInfo');
+export type NodeInfo = MsgType<'NodeInfo'>;
+export const InfoRequest = makeMsg(registry, 'InfoRequest');
+export type InfoRequest = MsgType<'InfoRequest'>;
+export const ConnectionSignal = makeMsg(registry, 'ConnectionSignal');
+export type ConnectionSignal = MsgType<'ConnectionSignal'>;
 export const PingMessage = makeMsg(registry, 'PingMessage');
 export type PingMessage = MsgType<'PingMessage'>;
 export const PongMessage = makeMsg(registry, 'PongMessage');

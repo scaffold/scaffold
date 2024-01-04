@@ -8,12 +8,7 @@ import { ConnectionProvider } from './NetworkProvider.ts';
 import { BridgeEndMessage, BridgeStartMessage } from './messages.ts';
 
 export default class BridgingService {
-  private connectors: Map<string, {
-    tryConnect(spec: ConnectionSpec): void;
-  }> = new Map();
-
-  constructor(private ctx: Context) {
-  }
+  constructor(private ctx: Context) {}
 
   public sendConnSpec(
     middle: Node,

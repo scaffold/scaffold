@@ -57,12 +57,13 @@ const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an impl
 const SIGNATURE_RECOVERY_BIT = 64;
 
 const typeHasSignature: boolean[] = [];
-typeHasSignature[FactType.Info] = true;
+typeHasSignature[FactType.NodeInfo] = true;
+typeHasSignature[FactType.InfoRequest] = false;
+typeHasSignature[FactType.ConnectionSignal] = true;
 typeHasSignature[FactType.Block] = true;
 typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
 typeHasSignature[FactType.MerkleTreeNode] = true;
-typeHasSignature[FactType.Signal] = true;
 typeHasSignature[FactType.Invalid] = true;
 
 const useZstd = false;
@@ -92,10 +93,16 @@ export default class FactService {
       this.ingestors.push([]);
     }
 
-    this.factories[FactType.Info] = (base, node, mutator) =>
+    this.factories[FactType.NodeInfo] = (base, _, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
-        : ctx.get(NodeService).createFact(base, node);
+        : ctx.get(NodeService).createFact(base);
+    this.factories[FactType.InfoRequest] = (base, _, mutator) =>
+      mutator !== undefined ? error(`Unexpected mutator`) : todo();
+    this.factories[FactType.ConnectionSignal] = (base, _, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(SignalingService).createFact(base);
     this.factories[FactType.Block] = (base, node, mutator) =>
       ctx.get(BlockService).createFact(base, node, mutator);
     this.factories[FactType.BlockSet] = (base, _, mutator) =>
@@ -105,10 +112,6 @@ export default class FactService {
         ? error(`Unexpected mutator`)
         : ctx.get(BlockSetService).createTreeNodeFact(base);
     this.factories[FactType.MerkleTreeNode] = todo;
-    this.factories[FactType.Signal] = (base, _, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(SignalingService).createFact(base);
     this.factories[FactType.Invalid] = (base, _, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)

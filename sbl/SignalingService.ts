@@ -1,6 +1,11 @@
-import { FactBase, FactSource, FactType, SignalFact } from '~/sbl/FactMeta.ts';
+import {
+  ConnectionSignalFact,
+  FactBase,
+  FactSource,
+  FactType,
+} from '~/sbl/FactMeta.ts';
 import Context from '~/sbl/Context.ts';
-import { Signal } from '~/sbl/messages.ts';
+import { ConnectionSignal } from '~/sbl/messages.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import FactService from '~/sbl/FactService.ts';
@@ -9,6 +14,9 @@ import ClockService from '~/sbl/ClockService.ts';
 import { SignalingProvider } from '~/sbl/NetworkProvider.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
 import { mapPut } from '~/sbl/util/map.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
+import { assert } from '~/sbl/util/functional.ts';
+import ConnectionService from '~/sbl/ConnectionService.ts';
 
 const closeTimeoutMs = 30000;
 
@@ -19,15 +27,15 @@ interface SignalingState {
   incomingSignalBuffer: (string | undefined)[];
   signalingProvider: SignalingProvider;
   closeTimeout?: number;
+
+  sendSignal(data: string): void;
+  forget(stateHash: Hash): void;
 }
 
 export default class SignalingService {
-  private selfDst: Hash;
   private states = new Map<HashPrimitive, SignalingState>();
 
   constructor(private ctx: Context) {
-    this.selfDst = Hash.digest(ctx.get(KeyService).getSelfPublicKey());
-
     ctx.onDestruct(() => {
       for (const [_key, state] of this.states) {
         if (state.closeTimeout !== undefined) {
@@ -37,9 +45,9 @@ export default class SignalingService {
     });
   }
 
-  public emit(signal: Signal): SignalFact {
+  public emit(signal: ConnectionSignal): ConnectionSignalFact {
     const data = this.ctx.get(FactService)
-      .compose(signal, Signal, FactType.Signal);
+      .compose(signal, ConnectionSignal, FactType.ConnectionSignal);
 
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
     const fact = this.ctx.get(FactService).ingest(
@@ -47,7 +55,7 @@ export default class SignalingService {
       FactSource.Local,
       this.ctx.get(NodeService).getSelfNode(),
     );
-    if (fact.type !== FactType.Signal) {
+    if (fact.type !== FactType.ConnectionSignal) {
       throw new Error(`Internal error! Invalid fact type ${fact.type}`);
     }
 
@@ -56,15 +64,17 @@ export default class SignalingService {
     return fact;
   }
 
-  public createFact(base: FactBase): SignalFact {
-    const fact: SignalFact = Object.assign(
+  public createFact(base: FactBase): ConnectionSignalFact {
+    const fact: ConnectionSignalFact = Object.assign(
       base,
-      Signal.decode(base.message),
-      { type: FactType.Signal as const },
+      ConnectionSignal.decode(base.message),
+      { type: FactType.ConnectionSignal as const },
     );
 
-    if (Hash.equals(fact.destination, this.selfDst)) {
-      this.recvSignal(fact);
+    if (
+      arrEquals(fact.public_key, this.ctx.get(KeyService).getSelfPublicKey())
+    ) {
+      this.handleSignal(fact);
     } else {
       // TODO
     }
@@ -77,44 +87,61 @@ export default class SignalingService {
     return fact;
   }
 
-  private recvSignal(signal: SignalFact) {
-    const conn = this.getSignalingState(signal);
+  private handleSignal(signal: ConnectionSignalFact) {
+    const state = this.getSignalingState(signal);
     if (signal.signal_index >= 0) {
-      conn.incomingSignalBuffer[signal.signal_index] = signal.signal_data;
+      state.incomingSignalBuffer[signal.signal_index] = signal.signal_data;
       while (true) {
-        const sig = conn.incomingSignalBuffer[conn.incomingSignalIdx];
+        const sig = state.incomingSignalBuffer[state.incomingSignalIdx];
         if (sig === undefined) {
           break;
         }
-        conn.signalingProvider.recvSignal(sig);
-        conn.incomingSignalIdx++;
+        state.signalingProvider.recvSignal(sig);
+        state.incomingSignalIdx++;
       }
     }
+
+    // if (state.outgoingSignalIdx === 0 && state.incomingSignalIdx === 0) {
+    //   state.outgoingSignalIdx = -1;
+    //   state.sendSignal('');
+    //   state.outgoingSignalIdx = 1;
+    // }
   }
 
-  private getSignalingState(signal: SignalFact) {
-    const publicKey = this.ctx.get(FactService).getPublicKey(signal);
-    const stateHash = Hash.digestParts(
+  private isInitiator(signal: ConnectionSignalFact) {
+    return signal.is_initiator === signal.isSignedByMe;
+  }
+
+  private getStateKey(publicKey: Uint8Array, signal: ConnectionSignalFact) {
+    return Hash.digestParts(
       publicKey,
-      signal.connection_nonce,
       signal.protocol_name,
+      this.isInitiator(signal) ? 0 : 1,
     );
+  }
+
+  private getSignalingState(signal: ConnectionSignalFact) {
+    const publicKey = this.ctx.get(FactService).getPublicKey(signal);
+    const stateKey = this.getStateKey(publicKey, signal);
     const state = mapPut(
       this.states,
-      stateHash.toPrimitive(),
+      stateKey.toPrimitive(),
       () => this.initSignalingState(publicKey, signal),
     );
     if (state.closeTimeout !== undefined) {
       this.ctx.config.timeProvider.clearTimeout(state.closeTimeout);
     }
     state.closeTimeout = this.ctx.config.timeProvider.setTimeout(
-      () => this.forget(stateHash),
+      () => state.forget(stateKey),
       closeTimeoutMs,
     );
     return state;
   }
 
-  private initSignalingState(publicKey: Uint8Array, signal: SignalFact) {
+  private initSignalingState(
+    publicKey: Uint8Array,
+    signal: ConnectionSignalFact,
+  ) {
     // If we don't have an initial signal from the peer, we need a provider able to send their address
     const subtype = signal.signal_index < 0 ? 'client' : undefined;
 
@@ -126,39 +153,41 @@ export default class SignalingService {
       );
     }
 
+    const sendSignal = (data: string) =>
+      this.ctx.get(SignalingService).emit({
+        public_key: publicKey,
+        is_initiator: this.isInitiator(signal),
+        protocol_name: signal.protocol_name,
+        signal_index: state.outgoingSignalIdx++,
+        signal_data: data,
+      });
+
+    const forget = (stateHash: Hash) => {
+      console.info(`Forgetting signaling state ${stateHash}`);
+      assert(this.states.delete(stateHash.toPrimitive()));
+    };
+
     const signalingProvider = provider.createInstance({
       ctx: this.ctx,
 
       protocolName: signal.protocol_name,
-      isInitiator: false,
-      isDialer: false,
+      isInitiator: this.isInitiator(signal),
 
-      sendSignal: (data) =>
-        this.ctx.get(SignalingService).emit({
-          destination: Hash.digest(publicKey),
-          connection_nonce: signal.connection_nonce,
-          protocol_name: signal.protocol_name,
-          signal_index: state.outgoingSignalIdx++,
-          signal_data: data,
-        }),
-      createConnection: (provider) => {
-        throw new Error(`TODO: Create connection`);
-        // Don't drop the signaling state here because it may create additional connections
-      },
+      sendSignal,
+      createConnection: (provider) =>
+        this.ctx.get(ConnectionService)
+          .createConnection(publicKey, signal.protocol_name, provider),
     });
 
     const state: SignalingState = {
       remotePublicKey: publicKey,
-      outgoingSignalIdx: 0,
-      incomingSignalIdx: 0,
+      outgoingSignalIdx: -1,
+      incomingSignalIdx: -1,
       incomingSignalBuffer: [],
       signalingProvider,
+      sendSignal,
+      forget,
     };
     return state;
-  }
-
-  private forget(stateHash: Hash) {
-    console.info(`Forgetting signaling state ${stateHash}`);
-    this.states.delete(stateHash.toPrimitive());
   }
 }

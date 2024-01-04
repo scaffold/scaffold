@@ -8,10 +8,6 @@ import NetworkService from '~/sbl/NetworkService.ts';
 import SignalingService from '~/sbl/SignalingService.ts';
 
 interface Connection {
-  // Altruism increases when we recieve helpful facts from the node
-  // Altruism decreases when we send (hopefully helpful) facts to the node
-  // We publish to positively altruistic nodes
-  altruism: number;
 }
 
 export default class ConnectionService2 {
