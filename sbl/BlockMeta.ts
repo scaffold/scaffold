@@ -6,7 +6,7 @@ import {
   Verifier,
 } from './messages.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
-import { BlockFact, BlockSetFact } from '~/sbl/FactMeta.ts';
+import { BlockFact } from '~/sbl/FactMeta.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 
 export const enum BlockFlag {
@@ -76,10 +76,6 @@ export interface BlockMeta {
 
   // Map from an epoch hash to the best proof from it
   epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
-
-  parentBlockSets: BlockSetFact[];
-  myParentBlockSet?: BlockSetFact;
-  highestParentChain: BlockSetFact[];
 
   frontierOutputIdx: number;
   frontierParams: FrontierTreeParams;

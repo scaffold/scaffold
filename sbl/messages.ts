@@ -405,6 +405,14 @@ export const registry = {
   //   ],
   // },
 
+  Identification: {
+    name: 'Identification',
+    type: 'record',
+    fields: [
+      { name: 'public_key', type: 'bytes' },
+    ],
+  },
+
   // TODO: Make a way for small updates (appending/dropping a neighbor, updating the bandwidth, updating userdata, etc.)
   NodeInfo: {
     name: 'NodeInfo',
@@ -441,7 +449,7 @@ export const registry = {
     name: 'ConnectionSignal',
     type: 'record',
     fields: [
-      { name: 'public_key', type: 'bytes' },
+      { name: 'dst_public_key', type: 'bytes' },
       { name: 'protocol_name', type: 'string' },
       { name: 'is_initiator', type: 'boolean' },
       { name: 'signal_index', type: 'int' },
@@ -624,7 +632,7 @@ export const registry = {
           'BidMessage',
           'PublicationMessage',
           'RequestBlockMessage',
-          'Info',
+          'NodeInfo',
           'PingMessage',
           'PongMessage',
           'BridgeStartMessage',
@@ -916,6 +924,8 @@ export const PublicationMessage = makeMsg(registry, 'PublicationMessage');
 export type PublicationMessage = MsgType<'PublicationMessage'>;
 export const RequestBlockMessage = makeMsg(registry, 'RequestBlockMessage');
 export type RequestBlockMessage = MsgType<'RequestBlockMessage'>;
+export const Identification = makeMsg(registry, 'Identification');
+export type Identification = MsgType<'Identification'>;
 export const NodeInfo = makeMsg(registry, 'NodeInfo');
 export type NodeInfo = MsgType<'NodeInfo'>;
 export const InfoRequest = makeMsg(registry, 'InfoRequest');

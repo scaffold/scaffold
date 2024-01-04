@@ -19,7 +19,7 @@ import CollateralUtil from '~/sbl/CollateralUtil.ts';
 
 const makeTypeIcon = (type: FactType) => {
   switch (type) {
-    case FactType.Info:
+    case FactType.NodeInfo:
       return <BsInfoCircle />;
     case FactType.Block:
       return <BsBox />;
@@ -140,49 +140,7 @@ export default (
         )
         : undefined,
     'VOTES': 'votes' in fact ? Number(fact.votes) : undefined,
-    'LEVEL': 'level' in fact ? fact.level : undefined,
-    'TREE INPUTS': 'input_count' in fact
-      ? `${fact.includedInputs.size} / ${fact.input_count}; excluded ${fact.excludedInputs.size}`
-      : undefined,
-    'TREE OUTPUTS': 'output_count' in fact
-      ? `${fact.includedOutputs.size} / ${fact.output_count}; excluded ${fact.excludedOutputs.size}`
-      : undefined,
-    'LEFT CHILD': 'left_child' in fact
-      ? (
-        <HashView
-          hash={fact.left_child}
-          setHoveredHash={setHoveredHash}
-          setSelectedHash={setSelectedHash}
-        />
-      )
-      : undefined,
-    'RIGHT CHILD': 'right_child' in fact
-      ? (
-        <HashView
-          hash={fact.right_child}
-          setHoveredHash={setHoveredHash}
-          setSelectedHash={setSelectedHash}
-        />
-      )
-      : undefined,
-    'INPUT ROOT': 'input_tree_root' in fact
-      ? (
-        <HashView
-          hash={fact.input_tree_root}
-          setHoveredHash={setHoveredHash}
-          setSelectedHash={setSelectedHash}
-        />
-      )
-      : undefined,
-    'OUTPUT ROOT': 'output_tree_root' in fact
-      ? (
-        <HashView
-          hash={fact.output_tree_root}
-          setHoveredHash={setHoveredHash}
-          setSelectedHash={setSelectedHash}
-        />
-      )
-      : undefined,
+    'LEVEL': 'frontierParams' in fact ? fact.frontierParams.level : undefined,
   };
 
   return (

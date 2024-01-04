@@ -10,18 +10,25 @@ import {
   BlockFact,
   Fact,
   FactBase,
+  FactSource,
   FactType,
+  InfoRequestFact,
   NodeInfoFact,
 } from '~/sbl/FactMeta.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
-import { NodeInfo } from '~/sbl/messages.ts';
+import { InfoRequest, NodeInfo } from '~/sbl/messages.ts';
 import FactService from '~/sbl/FactService.ts';
+import ClockService from '~/sbl/ClockService.ts';
+import { todo } from '~/sbl/util/functional.ts';
+import InfoService from '~/sbl/InfoService.ts';
 
 // Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
 
 // Never sample from nodes; they could easily be overwhelmed by spamming NodeInfo packets
 
-export interface Node {
+export interface RemoteNode {
+  isRemote: true;
+
   infoFact?: NodeInfoFact;
 
   // TODO: Convert these to arrays so we can sample from them more easily
@@ -53,16 +60,34 @@ export interface Node {
   altruism: number;
 }
 
+export interface SelfNode extends
+  Pick<
+    RemoteNode,
+    | 'infoFact'
+    | 'neighbors'
+    | 'hops'
+    | 'producedBlocks'
+  > {
+  isRemote: false;
+}
+
+export type Node = SelfNode | RemoteNode;
+
 export default class NodeService {
+  private selfNode: SelfNode;
   private nodes: Map<HashPrimitive, Node> = new Map();
 
-  private selfNode: Node;
-
   constructor(private ctx: Context) {
-    this.selfNode = this.getOrCreate(
-      this.ctx.get(KeyService).getSelfPublicKey(),
+    this.selfNode = {
+      isRemote: false,
+      neighbors: new Set(),
+      hops: 0,
+      producedBlocks: new Set(),
+    };
+    this.nodes.set(
+      Hash.digest(this.ctx.get(KeyService).getSelfPublicKey()).toPrimitive(),
+      this.selfNode,
     );
-    this.selfNode.hops = 0;
   }
 
   public getSelfNode() {
@@ -78,6 +103,7 @@ export default class NodeService {
     let node = this.nodes.get(hash.toPrimitive());
     if (node === undefined) {
       node = {
+        isRemote: true,
         connections: new Set(),
         neighbors: new Set(),
         hops: Infinity,
@@ -89,6 +115,10 @@ export default class NodeService {
       this.nodes.set(hash.toPrimitive(), node);
     }
     return node;
+  }
+
+  public getAll() {
+    return [...this.nodes.values()];
   }
 
   public getNeighbors() {
@@ -112,16 +142,43 @@ export default class NodeService {
   //   }
   // }
 
-  public createFact(base: FactBase): NodeInfoFact {
-    const msg = NodeInfo.decode(base.message);
+  public connectTo(node: Node) {
+    const bridges = [...node.neighbors].filter((x) =>
+      x.isRemote && x.connections.size !== 0
+    );
+    if (bridges.length === 0) {
+      throw new Error(`No connection available to node!`);
+    }
+    const selectedBridge = bridges[
+      Math.floor(
+        bridges.length * this.ctx.config.entropyProvider.randomNumber(),
+      )
+    ];
+    if (!selectedBridge.isRemote) {
+      throw new Error(`Internal error!`);
+    }
+    const conns = [...selectedBridge.connections];
+    const selectedConn = conns[
+      Math.floor(
+        conns.length * this.ctx.config.entropyProvider.randomNumber(),
+      )
+    ];
+  }
 
-    if (msg.network !== this.ctx.config.network) {
+  public createInfoFact(base: FactBase): NodeInfoFact {
+    const fact = Object.assign(
+      base,
+      NodeInfo.decode(base.message),
+      { type: FactType.NodeInfo as const },
+    );
+
+    if (fact.network !== this.ctx.config.network) {
       throw new Error(
-        `Mismatched networks! ${msg.network} !== ${this.ctx.config.network}`,
+        `Mismatched networks! ${fact.network} !== ${this.ctx.config.network}`,
       );
     }
 
-    if (msg.userdata) {
+    if (fact.userdata) {
       // const { epochStartTime } = JSON.parse(msg.userdata);
       // if (epochStartTime) {
       //   debugSetEpochBaseTime(epochStartTime);
@@ -130,25 +187,59 @@ export default class NodeService {
 
     const publicKey = this.ctx.get(FactService).getPublicKey(base);
     const node = this.getOrCreate(publicKey);
+    node.infoFact = fact;
 
     node.neighbors.clear();
     node.hops = Infinity;
-    msg.neighbors.forEach((neighbor) => {
+    for (const neighbor of fact.neighbors) {
       const neighborNode = this.getOrCreate(neighbor);
 
       neighborNode.neighbors.add(node);
       node.neighbors.add(neighborNode);
 
       node.hops = Math.min(node.hops, neighborNode.hops + 1);
-    });
+    }
 
-    node.neighbors.forEach((neighborNode) =>
-      neighborNode.hops = Math.min(neighborNode.hops, node.hops + 1)
+    for (const neighborNode of node.neighbors) {
+      neighborNode.hops = Math.min(neighborNode.hops, node.hops + 1);
+    }
+
+    return fact;
+  }
+
+  public createRequestFact(base: FactBase): InfoRequestFact {
+    const fact = Object.assign(
+      base,
+      InfoRequest.decode(base.message),
+      { type: FactType.InfoRequest as const },
     );
 
-    node.infoFact = Object.assign(base, msg, {
-      type: FactType.NodeInfo as const,
-    });
-    return node.infoFact;
+    this.ctx.get(ClockService).setTimeout(
+      () => {
+        if (fact.path.length === 0) {
+          const info = this.ctx.get(InfoService).makeInfo();
+          this.ctx.get(FactService).emit(
+            info,
+            NodeInfo,
+            FactType.NodeInfo,
+            fact.fromNodes,
+          );
+        } else if (fact.path.length === 1) {
+          const infoFact = this.get(fact.path[0])?.infoFact;
+          if (infoFact === undefined) {
+            throw new Error(`Unknown node`);
+          }
+          this.ctx.get(FactService).sendTo(infoFact, fact.fromNodes);
+        } else {
+          // TODO: Handle this case
+          todo();
+        }
+
+        this.ctx.get(FactService).forget(fact);
+      },
+      0,
+    );
+
+    return fact;
   }
 }

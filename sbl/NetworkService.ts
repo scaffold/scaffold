@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import NetworkProvider, { SignalingMode } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider from '~/sbl/NetworkProvider.ts';
 import { mapPut } from '~/sbl/util/map.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
 
@@ -58,6 +58,36 @@ export default class NetworkService {
 
   public getProtocolList() {
     return this.protocols;
+  }
+
+  public initConnection(
+    protocol: string | ParsedProtocol,
+    requirePublicKey?: Uint8Array,
+    sendSignal?: (signal: string) => void,
+  ) {
+    const parsed = typeof protocol === 'string'
+      ? this.parseProtocol(protocol)
+      : protocol;
+    const provider = this.findProviderMatching(parsed);
+    if (provider === undefined) {
+      throw new Error(`No provider matching ${parsed.name}/${parsed.subtype}`);
+    }
+
+    return provider.createInstance({
+      ctx: this.ctx,
+
+      protocolName: parsed.name,
+      isInitiator: true,
+
+      sendSignal: sendSignal ?? (() => {
+        throw new Error(
+          `No signal sender provided for ${parsed.name}/${parsed.subtype}`,
+        );
+      }),
+      createConnection: (provider) =>
+        this.ctx.get(ConnectionService)
+          .createConnection(parsed.name, provider, requirePublicKey),
+    });
   }
 
   private areSubtypesCompatible(a?: string, b?: string) {

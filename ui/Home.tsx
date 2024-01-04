@@ -126,7 +126,7 @@ export default () => {
       />
       <br />
 
-      <CodeView>Hello world!</CodeView>
+      {/*<CodeView>Hello world!</CodeView>*/}
 
       <Input label='Network' value={network} setValue={setNetwork} />
       <button

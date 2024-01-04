@@ -2,7 +2,6 @@ import Context from '~/sbl/Context.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
 import {
   BlockFact,
-  BlockSetFact,
   Collateralization,
   Fact,
   FactBase,
@@ -11,7 +10,6 @@ import {
 } from '~/sbl/FactMeta.ts';
 import BlockService from '~/sbl/BlockService.ts';
 import NodeService, { Node } from '~/sbl/NodeService.ts';
-import BlockSetService from '~/sbl/BlockSetService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
 import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
@@ -29,13 +27,10 @@ import {
   uniqueNamesGenerator,
 } from 'unique-names-generator';
 import SignalingService from '~/sbl/SignalingService.ts';
+import ConnectionService from '~/sbl/ConnectionService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
-type FactFactory = (
-  base: FactBase,
-  node: Node,
-  mutator?: (fact: Fact) => void,
-) => Fact;
+type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
 
 // const enum A {
 //   B,
@@ -57,6 +52,7 @@ const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an impl
 const SIGNATURE_RECOVERY_BIT = 64;
 
 const typeHasSignature: boolean[] = [];
+typeHasSignature[FactType.Identification] = true;
 typeHasSignature[FactType.NodeInfo] = true;
 typeHasSignature[FactType.InfoRequest] = false;
 typeHasSignature[FactType.ConnectionSignal] = true;
@@ -65,6 +61,12 @@ typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
 typeHasSignature[FactType.MerkleTreeNode] = true;
 typeHasSignature[FactType.Invalid] = true;
+
+for (let i = 1; i < FactType._SIZE; i++) {
+  if (typeHasSignature[i] === undefined) {
+    throw new Error(`No typeHasSignature specified for ${i}!`);
+  }
+}
 
 const useZstd = false;
 const zstdMagic = new Uint8Array([40, 181, 47, 253]);
@@ -93,26 +95,28 @@ export default class FactService {
       this.ingestors.push([]);
     }
 
-    this.factories[FactType.NodeInfo] = (base, _, mutator) =>
+    this.factories[FactType.Identification] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
-        : ctx.get(NodeService).createFact(base);
-    this.factories[FactType.InfoRequest] = (base, _, mutator) =>
-      mutator !== undefined ? error(`Unexpected mutator`) : todo();
-    this.factories[FactType.ConnectionSignal] = (base, _, mutator) =>
+        : ctx.get(ConnectionService).createIdentificationFact(base);
+    this.factories[FactType.NodeInfo] = (base, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(NodeService).createInfoFact(base);
+    this.factories[FactType.InfoRequest] = (base, mutator) =>
+      mutator !== undefined
+        ? error(`Unexpected mutator`)
+        : ctx.get(NodeService).createRequestFact(base);
+    this.factories[FactType.ConnectionSignal] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(SignalingService).createFact(base);
-    this.factories[FactType.Block] = (base, node, mutator) =>
-      ctx.get(BlockService).createFact(base, node, mutator);
-    this.factories[FactType.BlockSet] = (base, _, mutator) =>
-      ctx.get(BlockSetService).createFact(base, mutator);
-    this.factories[FactType.BlockSetTreeNode] = (base, _, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(BlockSetService).createTreeNodeFact(base);
+    this.factories[FactType.Block] = (base, mutator) =>
+      ctx.get(BlockService).createFact(base, mutator);
+    this.factories[FactType.BlockSet] = (base, mutator) => todo();
+    this.factories[FactType.BlockSetTreeNode] = (base, mutator) => todo();
     this.factories[FactType.MerkleTreeNode] = todo;
-    this.factories[FactType.Invalid] = (base, _, mutator) =>
+    this.factories[FactType.Invalid] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : Object.assign(base, { type: FactType.Invalid as const });
@@ -177,15 +181,6 @@ export default class FactService {
         : []
     );
   }
-  public hackyGetBlockSetsMatching(
-    filter: (block: BlockSetFact) => boolean = () => true,
-  ): BlockSetFact[] {
-    return [...this.facts.values()].flatMap((fact) =>
-      fact !== invalidFact && fact.type === FactType.BlockSet && filter(fact)
-        ? [fact]
-        : []
-    );
-  }
 
   public addCollateral(blockHash: Hash, collateralization: Collateralization) {
     mapPut(this.collateralByHash, blockHash.toPrimitive(), () => [])
@@ -233,7 +228,32 @@ export default class FactService {
     );
   }
 
-  public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
+  public emit<Type extends FactType, MsgType>(
+    msg: MsgType,
+    coder: Coder<MsgType>,
+    type: Type,
+    publish?: boolean | Node | Node[],
+    mutator?: (fact: Fact) => void,
+  ) {
+    // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
+    const data = this.compose(msg, coder, type);
+    const fact = this.ingest(data, FactSource.Local, undefined, mutator);
+    if (fact.type !== type) {
+      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
+    }
+    if (publish === true) {
+      this.publish(fact);
+    } else if (publish) {
+      this.sendTo(fact, publish);
+    }
+    return fact as Fact & { type: Type };
+  }
+
+  public compose<MsgType>(
+    msg: MsgType,
+    coder: Coder<MsgType>,
+    type: FactType,
+  ) {
     const sign = typeHasSignature[type];
 
     let buf: Uint8Array;
@@ -280,13 +300,17 @@ export default class FactService {
   public ingest(
     data: Uint8Array,
     source: FactSource,
-    fromNode: Node,
+    fromNode?: Node,
     mutator?: (fact: Fact) => void,
   ) {
-    const fact = this.create(data, source, fromNode, mutator);
+    const fact = this.create(data, source, mutator);
 
-    fromNode.knownFacts.add(fact);
-    fact.fromNodes.push(fromNode);
+    // TODO: Send back "responses" here?
+
+    if (fromNode !== undefined && fromNode.isRemote) {
+      fromNode.knownFacts.add(fact);
+      fact.fromNodes.push(fromNode);
+    }
 
     return fact;
   }
@@ -303,15 +327,21 @@ export default class FactService {
     this.ctx.get(NodeService).getAll()
       .forEach((node) => this.sendTo(fact, node));
   }
-  public sendTo(fact: Fact, node: Node) {
+  public sendTo(fact: Fact, nodes: Node | Node[]) {
     if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
       throw new Error(`Trying to publish before publish time!`);
     }
 
-    if (!node.knownFacts.has(fact)) {
-      node.knownFacts.add(fact);
-      fact.toNodes.push(node);
-      node.defaultConn?.sendReliable(fact.data);
+    for (const to of Array.isArray(nodes) ? nodes : [nodes]) {
+      if (
+        to.isRemote && !to.knownFacts.has(fact) && to.connections.size !== 0
+      ) {
+        to.knownFacts.add(fact);
+        fact.toNodes.push(to);
+        for (const conn of to.connections) {
+          conn.sendReliable(fact.data);
+        }
+      }
     }
   }
 
@@ -337,7 +367,6 @@ export default class FactService {
   private create(
     data: Uint8Array,
     source: FactSource,
-    fromNode: Node,
     mutator?: (fact: Fact) => void,
   ): Fact {
     if (arrEquals(data.subarray(0, 4), zstdMagic)) {
@@ -411,7 +440,7 @@ export default class FactService {
       backtrace: new Error().stack,
     };
 
-    const res = this.factories[base.type](base, fromNode, mutator);
+    const res = this.factories[base.type](base, mutator);
     if (res.type !== base.type) {
       throw new Error(
         `Factory ${base.type} returned incorrect message type ${res.type}!`,

@@ -1,5 +1,4 @@
 import { BlockFlag, BlockMeta } from './BlockMeta.ts';
-import BlockSetService from '~/sbl/BlockSetService.ts';
 import {
   accountHash,
   collateralHash,
@@ -32,7 +31,6 @@ import Hash, { HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import {
   BlockFact,
-  BlockSetFact,
   Collateralization,
   Fact,
   FactBase,
@@ -42,8 +40,6 @@ import {
 import FactService from '~/sbl/FactService.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
 import { assert, neverPromise, todo } from '~/sbl/util/functional.ts';
-import FrontierService from '~/sbl/FrontierService.ts';
-
 import LitigationService from '~/sbl/LitigationService.ts';
 import {
   CollateralContractDetail,
@@ -89,20 +85,7 @@ export default class BlockService {
   public create(block: Block): BlockFact {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
-    const data = this.ctx.get(FactService)
-      .compose(block, Block, FactType.Block);
-
-    // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
-    const fact = this.ctx.get(FactService).ingest(
-      data,
-      FactSource.Local,
-      this.ctx.get(NodeService).getSelfNode(),
-    );
-    if (fact.type !== FactType.Block) {
-      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
-    }
-
-    this.ctx.get(FactService).publish(fact);
+    return this.ctx.get(FactService).emit(block, Block, FactType.Block, true);
 
     // console.log(
     //   'create',
@@ -110,13 +93,10 @@ export default class BlockService {
     //     Hash.equals(output.verifier.contract_hash, frontierHash)
     //   ),
     // );
-
-    return fact;
   }
 
   public createFact(
     base: FactBase,
-    fromNode: Node,
     mutator?: (fact: BlockFact) => void,
   ): BlockFact {
     const block = Block.decode(base.message);
@@ -165,10 +145,6 @@ export default class BlockService {
       collateral: 0,
 
       epochInclusionProofs: new Map(),
-
-      // parentBlockSets: this.ctx.get(BlockSetService).getParents(base.hash),
-      parentBlockSets: [],
-      highestParentChain: [], // TODO: Literal empty array
 
       ...this.getFrontierMeta(block),
     };
@@ -270,7 +246,8 @@ export default class BlockService {
 
     if (fact.body.byteLength > 0) {
       try {
-        this.ctx.get(FactService).ingest(fact.body, fact.source, fromNode);
+        // TODO: Set the fromNode correctly here
+        this.ctx.get(FactService).ingest(fact.body, fact.source);
       } catch (_err) {
         // If it fails no worries; it just wasn't a valid block
       }
@@ -344,57 +321,57 @@ export default class BlockService {
     return { frontierOutputIdx: idx, frontierParams, frontierDetail };
   }
 
-  public compare(a: BlockFact, b: BlockFact) {
-    // TODO: Use a frontier block
+  // public compare(a: BlockFact, b: BlockFact) {
+  //   // TODO: Use a frontier block
 
-    if (a === b) {
-      return 0;
-    }
+  //   if (a === b) {
+  //     return 0;
+  //   }
 
-    const aHeight = a.highestParentChain.length;
-    const bHeight = b.highestParentChain.length;
+  //   const aHeight = a.highestParentChain.length;
+  //   const bHeight = b.highestParentChain.length;
 
-    const aWork = aHeight ? a.highestParentChain[aHeight - 1].votes : a.votes;
-    const bWork = bHeight ? b.highestParentChain[bHeight - 1].votes : b.votes;
-    if (aWork === undefined || bWork === undefined) {
-      return 0;
-    }
-    if (aWork !== bWork) {
-      // Unmerged chains but we can still order them by placing the higher work one first
-      return bWork - aWork;
-    }
+  //   const aWork = aHeight ? a.highestParentChain[aHeight - 1].votes : a.votes;
+  //   const bWork = bHeight ? b.highestParentChain[bHeight - 1].votes : b.votes;
+  //   if (aWork === undefined || bWork === undefined) {
+  //     return 0;
+  //   }
+  //   if (aWork !== bWork) {
+  //     // Unmerged chains but we can still order them by placing the higher work one first
+  //     return bWork - aWork;
+  //   }
 
-    if (aHeight !== bHeight) {
-      // Unmerged chains but we can still order them by placing the higher one first
-      return bHeight - aHeight;
-    }
+  //   if (aHeight !== bHeight) {
+  //     // Unmerged chains but we can still order them by placing the higher one first
+  //     return bHeight - aHeight;
+  //   }
 
-    for (let i = 0; i < aHeight; i++) {
-      if (a.highestParentChain[i] === b.highestParentChain[i]) {
-        const aHash = i ? a.highestParentChain[i - 1].hash : a.hash;
-        const bHash = i ? b.highestParentChain[i - 1].hash : b.hash;
-        const merge = a.highestParentChain[i];
-        if (
-          Hash.equals(aHash, merge.left_child) &&
-          Hash.equals(bHash, merge.right_child)
-        ) {
-          return -1;
-        } else if (
-          Hash.equals(aHash, merge.right_child) &&
-          Hash.equals(bHash, merge.left_child)
-        ) {
-          return 1;
-        } else {
-          throw new Error(`Unexpected merge children`);
-        }
-      }
-    }
+  //   for (let i = 0; i < aHeight; i++) {
+  //     if (a.highestParentChain[i] === b.highestParentChain[i]) {
+  //       const aHash = i ? a.highestParentChain[i - 1].hash : a.hash;
+  //       const bHash = i ? b.highestParentChain[i - 1].hash : b.hash;
+  //       const merge = a.highestParentChain[i];
+  //       if (
+  //         Hash.equals(aHash, merge.left_child) &&
+  //         Hash.equals(bHash, merge.right_child)
+  //       ) {
+  //         return -1;
+  //       } else if (
+  //         Hash.equals(aHash, merge.right_child) &&
+  //         Hash.equals(bHash, merge.left_child)
+  //       ) {
+  //         return 1;
+  //       } else {
+  //         throw new Error(`Unexpected merge children`);
+  //       }
+  //     }
+  //   }
 
-    console.warn(`Chains aren't merged yet!`);
-    return 0;
-  }
+  //   console.warn(`Chains aren't merged yet!`);
+  //   return 0;
+  // }
 
-  public sort(items: { block: BlockFact }[], frontier: BlockSetFact) {
+  public sort(items: { block: BlockFact }[], frontier: never) {
     throw new Error(`Unimplemented`);
   }
 

@@ -4,17 +4,18 @@ import {
   BlockSet,
   BlockSetTreeNode,
   ConnectionSignal,
+  Identification,
   InfoRequest,
   NodeInfo,
 } from '~/sbl/messages.ts';
 import { Node } from '~/sbl/NodeService.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
-import { BlockSetMeta } from '~/sbl/BlockSetService.ts';
 import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
 import { DetailVote } from '~/sbl/CollateralUtil.ts';
 
 export enum FactType {
   Null = 0, // Reserved
+  Identification,
   NodeInfo,
   InfoRequest,
   ConnectionSignal,
@@ -27,6 +28,7 @@ export enum FactType {
   // EpochInclusionProof,
   // BridgeStart,
   // BridgeEnd,
+  _SIZE,
 }
 
 export enum FactSource {
@@ -67,6 +69,10 @@ export type FactBase = {
   backtrace?: string;
 };
 
+export type IdentificationFact =
+  & FactBase
+  & { type: FactType.Identification }
+  & Identification;
 export type NodeInfoFact =
   & FactBase
   & { type: FactType.NodeInfo }
@@ -78,21 +84,13 @@ export type InfoRequestFact =
 export type ConnectionSignalFact =
   & FactBase
   & { type: FactType.ConnectionSignal }
-  & ConnectionSignal;
+  & ConnectionSignal
+  & { isSelfInitiator: boolean };
 export type BlockFact =
   & FactBase
   & { type: FactType.Block }
   & Block
   & BlockMeta;
-export type BlockSetFact =
-  & FactBase
-  & { type: FactType.BlockSet }
-  & BlockSet
-  & BlockSetMeta;
-export type BlockSetTreeNodeFact =
-  & FactBase
-  & { type: FactType.BlockSetTreeNode }
-  & BlockSetTreeNode['node'];
 export type InvalidFact =
   & FactBase
   & { type: FactType.Invalid };
@@ -103,11 +101,10 @@ export type InvalidFact =
 //   & FrontierMeta;
 
 export type Fact =
+  | IdentificationFact
   | NodeInfoFact
   | InfoRequestFact
   | ConnectionSignalFact
   | BlockFact
-  | BlockSetFact
-  | BlockSetTreeNodeFact
   | InvalidFact;
 // | FrontierFact;

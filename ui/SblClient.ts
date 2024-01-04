@@ -7,6 +7,7 @@ import * as log from 'std-latest/log/mod.ts';
 import WebsocketClientProvider from '~/plugins/WebsocketClientProvider.ts';
 import WebrtcProvider from '~/plugins/WebrtcProvider.ts';
 import LocalStorageProvider from '~/plugins/LocalStorageProvider.ts';
+import NetworkService from '~/sbl/NetworkService.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 // window['Deno'] = {};
@@ -49,7 +50,14 @@ export default class SblClient {
     const url = new URL(window.location.href);
     url.protocol = { 'http:': 'ws:', 'https:': 'wss:' }[url.protocol]!;
     url.port = '8314';
-    this.ctx.get(ConnectionService).connect('websocket', url.origin);
+    this.ctx.get(NetworkService)
+      .initConnection(
+        'websocket@0.0.1',
+        hex2bin(
+          '024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e9',
+        ),
+      )
+      .recvSignal(url.origin);
 
     // const params = this.ctx.get(EpochContract).makeParams(10n);
     // this.ctx.get(QuestionService).getCanonical(

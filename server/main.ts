@@ -25,6 +25,7 @@ import Logger, { FilterAction, LogLevel } from '~/sbl/Logger2.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
 import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
 import RootContract from '~/sbl/contracts/RootContract.ts';
+import ConnectionService from '~/sbl/ConnectionService.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -187,9 +188,9 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
 });
 
 (() => {
-  const block = ctx.get(BlockBuilder).buildBlock({}, 100000000n);
-  block.inputs.push({ block_hash: Hash.random(), output_idx: 0 });
-  ctx.get(BlockService).create(block);
+  // const block = ctx.get(BlockBuilder).buildBlock({});
+  // block.inputs.push({ block_hash: Hash.random(), output_idx: 0 });
+  // ctx.get(BlockService).create(block);
 
   // const entry = entries.find((x) => x.filename === 'wasm-custom-section.wasm')!;
 
@@ -366,13 +367,20 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
 })();
 
 // ctx.get(EpochContract).get();
-ctx.get(NetworkService).serve((protocol: string, spec: string) =>
-  console.log(
-    `ProtocolProvider ${protocol} is listening with spec ${
-      JSON.stringify(spec)
-    }`,
-  )
+
+ctx.get(NetworkService).initConnection(
+  'websocket@0.0.1',
+  undefined,
+  (signal) => console.log(`Listening on ${signal}`),
 );
+
+// ctx.get(NetworkService).serve((protocol: string, spec: string) =>
+//   console.log(
+//     `ProtocolProvider ${protocol} is listening with spec ${
+//       JSON.stringify(spec)
+//     }`,
+//   )
+// );
 // ctx.get(CollatzContract).get();
 
 ctx.get(GenesisService).ingestGenesis(sharedGenesisData);

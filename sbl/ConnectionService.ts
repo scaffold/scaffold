@@ -1,17 +1,15 @@
-import BlockService from './BlockService.ts';
 import Context from './Context.ts';
-import InfoService from './InfoService.ts';
-import { InfoMessage, Packet } from './messages.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
 import NodeService, { Node } from './NodeService.ts';
-import Peer from './Peer.ts';
-import PeerService from './PeerService.ts';
 import { assert, error } from './util/functional.ts';
-import Hash from './util/Hash.ts';
-import BlockSetService from '~/sbl/BlockSetService.ts';
 import FactService from '~/sbl/FactService.ts';
-import { FactSource } from '~/sbl/FactMeta.ts';
+import { FactBase, FactSource, FactType } from '~/sbl/FactMeta.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
+import SignalingService from '~/sbl/SignalingService.ts';
+import { arrEquals } from '~/sbl/util/buffer.ts';
+import KeyService from '~/sbl/KeyService.ts';
+import { Identification } from '~/sbl/messages.ts';
+import { bin2hex } from '~/sbl/util/hex.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -23,7 +21,7 @@ import NetworkService from '~/sbl/NetworkService.ts';
 // export type SELF_CONNECTION = typeof SELF_CONNECTION;
 
 export interface Connection {
-  node: Node;
+  node?: Node;
 
   protocolName: string;
 
@@ -57,16 +55,18 @@ export default class ConnectionService {
   constructor(private ctx: Context) {}
 
   public createConnection(
-    publicKey: Uint8Array,
     protocolName: string,
     provider: ConnectionProvider,
+    requirePublicKey?: Uint8Array,
   ) {
     let isOnline = true;
     const shutdown = () => {
       if (isOnline) {
         isOnline = false;
         provider.shutdown();
-        assert(conn.node.connections.delete(conn));
+        if (conn.node?.isRemote) {
+          assert(conn.node.connections.delete(conn));
+        }
       }
     };
 
@@ -76,7 +76,6 @@ export default class ConnectionService {
     };
 
     const conn: Connection = {
-      node: this.ctx.get(NodeService).getOrCreate(publicKey),
       protocolName,
       provider,
       sendReliable: (data: Uint8Array) => {
@@ -99,19 +98,72 @@ export default class ConnectionService {
       altruism: 0,
     };
 
-    conn.node.connections.add(conn);
+    if (conn.node?.isRemote) {
+      conn.node.connections.add(conn);
+    }
 
     provider.onClose(shutdown);
     this.ctx.onDestruct(shutdown);
 
     provider.onRecv((data) => {
       try {
-        this.ctx.get(FactService).ingest(data, FactSource.Remote, conn!.node);
         conn.lastMsgTimestamp = this.ctx.config.timeProvider.now();
+
+        const fact = this.ctx.get(FactService)
+          .ingest(data, FactSource.Remote, conn.node);
+        if (fact.type === FactType.Identification) {
+          this.ctx.get(FactService).forget(fact);
+
+          if (
+            !arrEquals(
+              fact.public_key,
+              this.ctx.get(KeyService).getSelfPublicKey(),
+            )
+          ) {
+            throw new Error(`Incorrect self identification!`);
+          }
+
+          const publicKey = this.ctx.get(FactService).getPublicKey(fact);
+          if (
+            requirePublicKey !== undefined &&
+            !arrEquals(publicKey, requirePublicKey)
+          ) {
+            throw new Error(`Incorrect remote identification!`);
+          }
+
+          conn.node = this.ctx.get(NodeService).getOrCreate(publicKey);
+
+          console.log(`Connected and authenticated with ${bin2hex(publicKey)}`);
+
+          if (requirePublicKey === undefined) {
+            this.sendIdentification(conn, publicKey);
+          }
+        }
       } catch (err) {
         console.error(err);
         shutdown();
       }
     });
+
+    if (requirePublicKey !== undefined) {
+      this.sendIdentification(conn, requirePublicKey);
+    }
+  }
+
+  public createIdentificationFact(base: FactBase) {
+    return Object.assign(
+      base,
+      Identification.decode(base.message),
+      { type: FactType.Identification as const },
+    );
+  }
+
+  private sendIdentification(conn: Connection, remotePublicKey: Uint8Array) {
+    const identData = this.ctx.get(FactService).compose(
+      { public_key: remotePublicKey },
+      Identification,
+      FactType.Identification,
+    );
+    conn.sendReliable(identData);
   }
 }

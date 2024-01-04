@@ -471,15 +471,15 @@ export default class GenerationService {
       const publishDelay = 500 + Math.random() * 500;
       const publishAt = this.ctx.config.timeProvider.now() + publishDelay;
 
-      const fact = this.ctx.get(FactService).ingest(
-        this.ctx.get(FactService).compose(block, Block, FactType.Block),
-        FactSource.Local,
-        this.ctx.get(NodeService).getSelfNode(),
+      const fact = this.ctx.get(FactService).emit(
+        block,
+        Block,
+        FactType.Block,
+        false,
         (fact) => {
           if (fact.type !== FactType.Block) {
             throw new Error(`Internal error! Invalid fact type ${fact.type}`);
           }
-
           fact.publishAt = publishAt;
         },
       );

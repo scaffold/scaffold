@@ -137,7 +137,7 @@ export const defaultNetwork = 'main';
 export const makeDefaultConfig = () => ({
   network: defaultNetwork,
   debugName: '',
-  logLevel: LogLevels.WARNING,
+  logLevel: LogLevels.INFO, // TODO: Set this to LogLevels.Warning
   timeProvider: {
     now: Date.now.bind(Date),
     setImmediate: (cb) => setTimeout(cb, 0),

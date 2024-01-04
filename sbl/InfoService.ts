@@ -25,10 +25,10 @@ export default class InfoService {
     // this.tickItvl = setTimeout(() => this.tick(), 60000 * (Math.random() + 1));
   }
 
-  public makeInfoPacket() {
+  public makeInfo(): NodeInfo {
     const neighbors = this.ctx.get(NodeService).getNeighbors();
 
-    const info: NodeInfo = {
+    return {
       timestamp: this.ctx.config.timeProvider.now(),
       network: this.ctx.config.network,
       name: '',
@@ -40,7 +40,5 @@ export default class InfoService {
       neighbors,
       bandwidth: Math.floor(40000 / neighbors.length),
     };
-
-    return this.ctx.get(FactService).compose(info, NodeInfo, FactType.NodeInfo);
   }
 }

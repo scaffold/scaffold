@@ -32,6 +32,11 @@ interface SignalingState {
   forget(stateHash: Hash): void;
 }
 
+type IngestingSignal = Pick<
+  ConnectionSignalFact,
+  'protocol_name' | 'signal_index' | 'signal_data' | 'isSelfInitiator'
+>;
+
 export default class SignalingService {
   private states = new Map<HashPrimitive, SignalingState>();
 
@@ -46,37 +51,30 @@ export default class SignalingService {
   }
 
   public emit(signal: ConnectionSignal): ConnectionSignalFact {
-    const data = this.ctx.get(FactService)
-      .compose(signal, ConnectionSignal, FactType.ConnectionSignal);
-
-    // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
-    const fact = this.ctx.get(FactService).ingest(
-      data,
-      FactSource.Local,
-      this.ctx.get(NodeService).getSelfNode(),
-    );
-    if (fact.type !== FactType.ConnectionSignal) {
-      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
-    }
-
-    this.ctx.get(FactService).publish(fact);
-
-    return fact;
+    return this.ctx.get(FactService)
+      .emit(signal, ConnectionSignal, FactType.ConnectionSignal, true);
   }
 
   public createFact(base: FactBase): ConnectionSignalFact {
+    const signal = ConnectionSignal.decode(base.message);
+
     const fact: ConnectionSignalFact = Object.assign(
       base,
-      ConnectionSignal.decode(base.message),
+      signal,
       { type: FactType.ConnectionSignal as const },
+      { isSelfInitiator: signal.is_initiator === base.isSignedByMe },
     );
 
     if (
-      arrEquals(fact.public_key, this.ctx.get(KeyService).getSelfPublicKey())
+      arrEquals(
+        fact.dst_public_key,
+        this.ctx.get(KeyService).getSelfPublicKey(),
+      )
     ) {
-      this.handleSignal(fact);
+      const fromPublicKey = this.ctx.get(FactService).getPublicKey(fact);
+      this.ingestSignal(fromPublicKey, fact);
     } else {
-      // TODO
+      // TODO: Forward
     }
 
     this.ctx.get(ClockService).setTimeout(
@@ -87,8 +85,8 @@ export default class SignalingService {
     return fact;
   }
 
-  private handleSignal(signal: ConnectionSignalFact) {
-    const state = this.getSignalingState(signal);
+  public ingestSignal(publicKey: Uint8Array, signal: IngestingSignal) {
+    const state = this.getSignalingState(publicKey, signal);
     if (signal.signal_index >= 0) {
       state.incomingSignalBuffer[signal.signal_index] = signal.signal_data;
       while (true) {
@@ -108,20 +106,15 @@ export default class SignalingService {
     // }
   }
 
-  private isInitiator(signal: ConnectionSignalFact) {
-    return signal.is_initiator === signal.isSignedByMe;
-  }
-
-  private getStateKey(publicKey: Uint8Array, signal: ConnectionSignalFact) {
+  private getStateKey(publicKey: Uint8Array, signal: IngestingSignal) {
     return Hash.digestParts(
       publicKey,
       signal.protocol_name,
-      this.isInitiator(signal) ? 0 : 1,
+      signal.isSelfInitiator ? 0 : 1,
     );
   }
 
-  private getSignalingState(signal: ConnectionSignalFact) {
-    const publicKey = this.ctx.get(FactService).getPublicKey(signal);
+  private getSignalingState(publicKey: Uint8Array, signal: IngestingSignal) {
     const stateKey = this.getStateKey(publicKey, signal);
     const state = mapPut(
       this.states,
@@ -138,51 +131,34 @@ export default class SignalingService {
     return state;
   }
 
-  private initSignalingState(
-    publicKey: Uint8Array,
-    signal: ConnectionSignalFact,
-  ) {
-    // If we don't have an initial signal from the peer, we need a provider able to send their address
-    const subtype = signal.signal_index < 0 ? 'client' : undefined;
-
-    const provider = this.ctx.get(NetworkService)
-      .findProviderMatching({ name: signal.protocol_name, subtype });
-    if (provider === undefined) {
-      throw new Error(
-        `No provider matching ${signal.protocol_name}/${subtype}`,
-      );
-    }
-
+  private initSignalingState(publicKey: Uint8Array, signal: IngestingSignal) {
     const sendSignal = (data: string) =>
       this.ctx.get(SignalingService).emit({
-        public_key: publicKey,
-        is_initiator: this.isInitiator(signal),
+        dst_public_key: publicKey,
+        is_initiator: signal.isSelfInitiator,
         protocol_name: signal.protocol_name,
         signal_index: state.outgoingSignalIdx++,
         signal_data: data,
       });
 
     const forget = (stateHash: Hash) => {
-      console.info(`Forgetting signaling state ${stateHash}`);
+      console.info(`Forgetting signaling state ${stateHash.toHex()}`);
       assert(this.states.delete(stateHash.toPrimitive()));
     };
 
-    const signalingProvider = provider.createInstance({
-      ctx: this.ctx,
+    // If we don't have an initial signal from the peer, we need a provider able to send their address
+    const subtype = signal.signal_index < 0 ? 'client' : undefined;
 
-      protocolName: signal.protocol_name,
-      isInitiator: this.isInitiator(signal),
-
+    const signalingProvider = this.ctx.get(NetworkService).initConnection(
+      { name: signal.protocol_name, subtype },
+      publicKey,
       sendSignal,
-      createConnection: (provider) =>
-        this.ctx.get(ConnectionService)
-          .createConnection(publicKey, signal.protocol_name, provider),
-    });
+    );
 
     const state: SignalingState = {
       remotePublicKey: publicKey,
-      outgoingSignalIdx: -1,
-      incomingSignalIdx: -1,
+      outgoingSignalIdx: 0,
+      incomingSignalIdx: 0,
       incomingSignalBuffer: [],
       signalingProvider,
       sendSignal,
