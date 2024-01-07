@@ -1,22 +1,14 @@
-import {
-  ConnectionSignalFact,
-  FactBase,
-  FactSource,
-  FactType,
-} from '~/sbl/FactMeta.ts';
+import { ConnectionSignalFact, FactBase, FactType } from '~/sbl/FactMeta.ts';
 import Context from '~/sbl/Context.ts';
 import { ConnectionSignal } from '~/sbl/messages.ts';
 import Hash, { HashPrimitive } from '~/sbl/util/Hash.ts';
-import KeyService from '~/sbl/KeyService.ts';
 import FactService from '~/sbl/FactService.ts';
 import NodeService from '~/sbl/NodeService.ts';
 import ClockService from '~/sbl/ClockService.ts';
 import { SignalingProvider } from '~/sbl/NetworkProvider.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
 import { mapPut } from '~/sbl/util/map.ts';
-import { arrEquals } from '~/sbl/util/buffer.ts';
 import { assert } from '~/sbl/util/functional.ts';
-import ConnectionService from '~/sbl/ConnectionService.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
 
 const closeTimeoutMs = 30000;
@@ -65,11 +57,13 @@ export default class SignalingService {
   public createFact(base: FactBase): ConnectionSignalFact {
     const signal = ConnectionSignal.decode(base.message);
 
+    const isSignedByMe = this.ctx.get(FactService).isSignedByMe(base);
+
     const fact: ConnectionSignalFact = Object.assign(
       base,
       signal,
       { type: FactType.ConnectionSignal as const },
-      { isSelfInitiator: signal.is_initiator === base.isSignedByMe },
+      { isSelfInitiator: signal.is_initiator === isSignedByMe },
     );
 
     const node = this.ctx.get(NodeService).get(fact.dst_public_key);

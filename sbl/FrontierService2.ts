@@ -92,23 +92,19 @@ export default class FrontierService2 {
           frontierHash,
         )
       ) {
-        let ptr = frontierVote;
-        let offset = 0;
-        while (!Hash.equals(ptr, input.block.frontier_vote)) {
+        let ptr = input.block.frontier_vote;
+        let shift = 0;
+        while (!Hash.equals(ptr, frontierVote)) {
           const next = this.ctx.get(BlockService).get(ptr, false);
           if (next === undefined) {
             throw new Error(`Unconnected inputs!`);
           }
           ptr = next.frontier_vote;
-          offset++;
+          shift++;
         }
 
         input.block.frontierDetail.tree_weights.forEach((x, i) => {
-          const idx = offset + i;
-          while (weights.length <= idx) {
-            weights.push(0n);
-          }
-          weights[idx] += x;
+          weights[i > shift ? i - shift : 0] += x;
         });
       }
     }

@@ -1,16 +1,10 @@
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import Context from './Context.ts';
-import { ConnectionProvider } from './NetworkProvider.ts';
-import ConnectionService, { Connection } from './ConnectionService.ts';
-import BridgingService from './BridgingService.ts';
-import { getOrCreate } from './util/map.ts';
+import { Connection } from './ConnectionService.ts';
 import KeyService from './KeyService.ts';
-// import { debugSetEpochBaseTime } from '~/sbl/EpochContract.ts';
 import {
-  BlockFact,
   Fact,
   FactBase,
-  FactSource,
   FactType,
   InfoRequestFact,
   NodeInfoFact,
@@ -23,8 +17,8 @@ import { todo } from '~/sbl/util/functional.ts';
 import InfoService from '~/sbl/InfoService.ts';
 import SignalingService from '~/sbl/SignalingService.ts';
 
-const emitInfoIntervalMs = 10000;
-const infoExpirationMs = 60000;
+const emitInfoIntervalMs = 60000;
+const infoExpirationMs = 10 * emitInfoIntervalMs;
 
 // Bitcoin makes these attacks more difficult by only making an outbound connection to one IP address per /16 (x.y.0.0).
 
@@ -47,7 +41,7 @@ interface NodeCommon {
   hops: number;
 
   // TODO: Filter this by canonicality
-  producedBlocks: Set<BlockFact>;
+  producedFacts: Set<Fact>;
 }
 
 export interface RemoteNode extends NodeCommon {
@@ -87,23 +81,23 @@ export default class NodeService {
       infoRequests: new Set(),
       neighbors: new Set(),
       hops: 0,
-      producedBlocks: new Set(),
+      producedFacts: new Set(),
     };
     this.nodes.set(
       Hash.digest(ctx.get(KeyService).getSelfPublicKey()).toPrimitive(),
       this.selfNode,
     );
 
-    ctx.get(ClockService).setPoissonInterval(
-      () =>
-        this.ctx.get(FactService).emit(
-          this.ctx.get(InfoService).makeInfo(),
-          NodeInfo,
-          FactType.NodeInfo,
-          true,
-        ),
-      emitInfoIntervalMs,
-    );
+    // ctx.get(ClockService).setPoissonInterval(
+    //   () =>
+    //     this.ctx.get(FactService).emit(
+    //       this.ctx.get(InfoService).makeInfo(),
+    //       NodeInfo,
+    //       FactType.NodeInfo,
+    //       true,
+    //     ),
+    //   emitInfoIntervalMs,
+    // );
   }
 
   public getSelfNode() {
@@ -124,7 +118,7 @@ export default class NodeService {
         infoRequests: new Set(),
         neighbors: new Set(),
         hops: Infinity,
-        producedBlocks: new Set(),
+        producedFacts: new Set(),
         connections: new Set(),
         knownFacts: new Set(),
         trust: 0,

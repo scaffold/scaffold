@@ -213,7 +213,7 @@ export default class BlockService {
         const params = CollateralContractParams.decode(verifier.params);
         const detailDec = CollateralContractDetail.decode(detail);
 
-        if (fact.isSignedByMe) {
+        if (this.ctx.get(FactService).isSignedByMe(fact)) {
           this.ctx.get(FactService)
             .updateValidity(params.block_hash, detailDec.hints, detailDec.vote);
         }
@@ -283,9 +283,6 @@ export default class BlockService {
     // }
 
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
-
-    const publicKey = this.ctx.get(FactService).getPublicKey(fact);
-    this.ctx.get(NodeService).getOrCreate(publicKey).producedBlocks.add(fact);
 
     return fact;
   }

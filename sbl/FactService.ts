@@ -347,12 +347,20 @@ export default class FactService {
     }
   }
 
-  public verify(fact: Pick<Fact, 'data' | 'signature'>, publicKey: Uint8Array) {
-    const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
-    return fact.signature !== undefined &&
-      secp.verify(this.getSignature(fact), hash.toBytes(), publicKey);
+  public verify(fact: Pick<Fact, 'signer'>, publicKey: Uint8Array) {
+    // const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
+    // return fact.signature !== undefined &&
+    //   secp.verify(this.getSignature(fact), hash.toBytes(), publicKey);
+    return arrEquals(fact.signer, publicKey);
   }
-  public getPublicKey(fact: Pick<Fact, 'data' | 'signature'>) {
+  public isSignedByMe(fact: Pick<Fact, 'signer'>) {
+    return this.verify(fact, this.ctx.get(KeyService).getSelfPublicKey());
+  }
+  public getPublicKey(fact: Pick<Fact, 'signer'>) {
+    return fact.signer;
+  }
+
+  private computePublicKey(fact: Pick<Fact, 'data' | 'signature'>) {
     const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
     return this.getSignature(fact)
       .recoverPublicKey(hash.toBytes()).toRawBytes();
@@ -405,11 +413,6 @@ export default class FactService {
     }
     const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
 
-    const isSignedByMe = this.verify(
-      { data, signature },
-      this.ctx.get(KeyService).getSelfPublicKey(),
-    );
-
     const base: FactBase = {
       hash,
 
@@ -424,7 +427,7 @@ export default class FactService {
       signature,
 
       source,
-      isSignedByMe,
+      signer: this.computePublicKey({ data, signature }),
       fromNodes: [],
       toNodes: [],
 
@@ -472,6 +475,8 @@ export default class FactService {
     for (const cb of this.ingestors[base.type]) {
       cb(res);
     }
+
+    this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);
 
     return res;
   }
