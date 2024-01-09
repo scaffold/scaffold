@@ -27,6 +27,8 @@ export const enum BlockFlag {
 
 // type BlockIO = Pick<Block, 'frontier_vote' | 'inputs' | 'outputs'>;
 
+export const ZERO_BLOCK = Symbol('ZeroBlock');
+
 export interface BlockMeta {
   original: Block; // TODO: Remove
 
@@ -51,6 +53,9 @@ export interface BlockMeta {
   outputClaims: { block: BlockFact; inputIdx: number }[][]; // TODO: Do we need inputIdx here?
 
   isCanonical: boolean;
+
+  frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
+  frontierChainDepth?: number;
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
   frontierVoters: BlockFact[];

@@ -195,6 +195,8 @@ export const registry = {
       { name: 'output_idx', type: 'int' },
       // I don't think we necessarily need this
       // { name: 'amount', type: 'long' },
+
+      // { name: 'result_idx', type: 'int' }, // -1 means there is no body
     ],
   },
   BlockOutput: {
@@ -233,6 +235,8 @@ export const registry = {
 
       // Blocks we depend upon but aren't inputting anything from
       { name: 'refs', type: { type: 'array', items: 'Hash' } },
+
+      // { name: 'results', type: { type: 'array', items: 'bytes' } },
 
       // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },

@@ -1,4 +1,4 @@
-import { BlockFlag, BlockMeta } from './BlockMeta.ts';
+import { BlockFlag, BlockMeta, ZERO_BLOCK } from './BlockMeta.ts';
 import {
   accountHash,
   collateralHash,
@@ -131,6 +131,13 @@ export default class BlockService {
         block.inputs.every((x) =>
           this.get(x.block_hash, false)?.isCanonical !== false
         ),
+
+      frontierVoteBlock: Hash.equals(block.frontier_vote, ZERO_HASH)
+        ? ZERO_BLOCK
+        : undefined,
+      frontierChainDepth: Hash.equals(block.frontier_vote, ZERO_HASH)
+        ? 0
+        : undefined,
 
       frontierVoters: this.getVoters(base.hash),
 
@@ -377,6 +384,21 @@ export default class BlockService {
       throw new Error(
         `Invalid frontier vote! The voted block's level must be greater than or equal to the voter level!`,
       );
+    }
+
+    block.frontierVoteBlock = frontierVote;
+    if (frontierVote.frontierChainDepth !== undefined) {
+      this.setFrontierChainDepth(block, frontierVote.frontierChainDepth + 1);
+    }
+  }
+
+  private setFrontierChainDepth(block: BlockFact, depth: number) {
+    if (block.frontierChainDepth !== undefined) {
+      throw new Error(`Internal error`);
+    }
+    block.frontierChainDepth = depth;
+    for (const voter of block.frontierVoters) {
+      this.setFrontierChainDepth(voter, depth + 1);
     }
   }
 

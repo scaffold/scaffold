@@ -12,7 +12,9 @@ export default class UnclaimedOutputService {
   private unclaimedOutputs = new Map<HashPrimitive, InputSpec[]>();
   private monitor = new ResolvingMonitor<InputSpec, Hash>((h) => h);
 
-  constructor(private ctx: Context) {}
+  constructor(private ctx: Context) {
+    throw new Error(`Do not construct me!`);
+  }
 
   public claim(
     verifier: Verifier,
