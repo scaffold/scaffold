@@ -41,8 +41,8 @@ export default class SblClient {
       logLevel: log.LogLevels.DEBUG,
 
       networkProviders: [new WebsocketClientProvider(), new WebrtcProvider()],
-
       storageProvider: new LocalStorageProvider(),
+      // contractProviders: [],
     };
 
     this.ctx = new Context(config);
@@ -50,14 +50,12 @@ export default class SblClient {
     const url = new URL(window.location.href);
     url.protocol = { 'http:': 'ws:', 'https:': 'wss:' }[url.protocol]!;
     url.port = '8314';
-    this.ctx.get(NetworkService)
-      .initConnection(
-        'websocket@0.0.1',
-        hex2bin(
-          '024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e9',
-        ),
-      )
-      .recvSignal(url.origin);
+    this.ctx.get(NetworkService).initConnection(
+      'websocket@0.0.1',
+      hex2bin(
+        '024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e9',
+      ),
+    ).recvSignal(url.origin);
 
     // const params = this.ctx.get(EpochContract).makeParams(10n);
     // this.ctx.get(QuestionService).getCanonical(

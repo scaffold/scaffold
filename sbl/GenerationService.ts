@@ -41,6 +41,7 @@ import {
 import VerificationService from '~/sbl/VerificationService.ts';
 import { mapPut } from '~/sbl/util/map.ts';
 import FrontierChainService from '~/sbl/FrontierChainService.ts';
+import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -289,6 +290,44 @@ export default class GenerationService {
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
+    const isFrontierMergeable = (a: BlockFact, b: BlockFact) => {
+      const used = new Set<HashPrimitive>();
+
+      const queue = [a, b];
+      for (let i = 0; i < queue.length; i++) {
+        const el = queue[i];
+
+        for (const input of el.inputs) {
+          const key = Hash.digestParts(input.block_hash, input.output_idx);
+          if (used.has(key.toPrimitive())) {
+            return false;
+          }
+          used.add(key.toPrimitive());
+        }
+
+        if (el.frontierParams.level !== 0) {
+          const children = el.inputs.flatMap((input) => {
+            const block = this.ctx.get(BlockService).get(input.block_hash);
+            return block !== undefined &&
+                Hash.equals(
+                  block.outputs[input.output_idx].verifier.contract_hash,
+                  frontierHash,
+                )
+              ? [block]
+              : [];
+          });
+          if (children.length !== frontierInputCount) {
+            return false;
+          }
+          for (const child of children) {
+            queue.push(child);
+          }
+        }
+      }
+
+      return true;
+    };
+
     const isMergeable = (block: BlockFact, isInput: boolean) => {
       if (
         isInput && verifierInputs.length > 0 &&
@@ -297,7 +336,8 @@ export default class GenerationService {
         const lastBlock = verifierInputs[verifierInputs.length - 1].block;
         return block.frontierVoteBlock !== undefined &&
           (block.frontierVoteBlock === lastBlock ||
-            block.frontierVoteBlock === lastBlock.frontierVoteBlock);
+            (block.frontierVoteBlock === lastBlock.frontierVoteBlock &&
+              isFrontierMergeable(block, lastBlock)));
       }
 
       return this.ctx.get(FrontierChainService).getMerger([
