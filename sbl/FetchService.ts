@@ -67,11 +67,11 @@ export default class FetchService {
 
     internalIncentive = 1n;
     if (internalIncentive !== undefined) {
-      this.ctx.get(GenerationService).enqueueGeneration(
-        verifier,
-        detail,
-        Number(internalIncentive),
-      );
+      // this.ctx.get(GenerationService).enqueueGeneration(
+      //   verifier,
+      //   detail,
+      //   Number(internalIncentive),
+      // );
 
       // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
 
@@ -157,11 +157,11 @@ export default class FetchService {
       released = true;
 
       if (internalIncentive !== undefined) {
-        this.ctx.get(GenerationService).enqueueGeneration(
-          verifier,
-          detail,
-          0,
-        );
+        // this.ctx.get(GenerationService).enqueueGeneration(
+        //   verifier,
+        //   detail,
+        //   0,
+        // );
       }
 
       if (externalIncentive !== undefined) {

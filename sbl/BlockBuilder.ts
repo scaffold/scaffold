@@ -20,6 +20,7 @@ import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import { arrEquals, EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 import WeightService from '~/sbl/WeightService.ts';
+import GenerationService from '~/sbl/GenerationService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -104,8 +105,8 @@ export default class BlockBuilder {
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     while (ioDelta < 0n) {
-      const input = this.ctx.get(UnclaimedOutputService)
-        .claimNow(this.selfAccountVerifier);
+      const input = this.ctx.get(GenerationService)
+        .claimInput(this.selfAccountVerifier);
       if (input === undefined) {
         break;
       }

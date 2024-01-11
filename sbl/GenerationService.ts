@@ -40,17 +40,18 @@ import {
 } from '~/sbl/ComputationMeta.ts';
 import VerificationService from '~/sbl/VerificationService.ts';
 import { mapPut } from '~/sbl/util/map.ts';
-import FrontierChain from '~/sbl/FrontierChain.ts';
+import FrontierChainService from '~/sbl/FrontierChainService.ts';
 
-interface GenerationState {
-  frontierChain: FrontierChain;
-  claimInput?(input: InputSpec): void;
+interface RunState {
+  verifierState: VerifierState;
+  isMergeable(block: BlockFact, isInput: boolean): boolean;
+  acceptInput?(input: InputSpec): void;
 }
 
 interface VerifierState {
   verifier: Verifier;
   unclaimedInputs: InputSpec[];
-  running: GenerationState[];
+  running: RunState[];
 }
 
 export default class GenerationService {
@@ -63,7 +64,7 @@ export default class GenerationService {
     this.secret = ctx.config.entropyProvider.randomBytes(32);
   }
 
-  public addInput(input: InputSpec, extraIncentive = 0) {
+  public addInput(input: InputSpec) {
     const verifier = input.block.outputs[input.outputIdx].verifier;
 
     if (
@@ -77,30 +78,33 @@ export default class GenerationService {
     }
 
     const key = Hash.digest(Verifier.encode(verifier));
-    return mapPut(
+    const verifierState = mapPut(
       this.states,
       key.toPrimitive(),
-      () => {
-        const gen: GenerationState = {
-          verifier,
-          unclaimedInputs: [input],
-          extraIncentive,
-        };
-        gen.runPromise = this.launchRun(gen);
-        gen.runPromise?.then(() =>
-          assert(this.states.delete(key.toPrimitive()))
-        );
-        return gen;
-      },
-      (x) => {
-        x.sources.push(source);
-        x.extraIncentive = extraIncentive;
-        if (x.onAddSource !== undefined) {
-          x.onAddSource();
-        }
-        return x;
-      },
+      () => ({ verifier, unclaimedInputs: [], running: [] }),
     );
+
+    const mergeable = verifierState.running.filter((run) =>
+      run.isMergeable(input.block, true)
+    );
+
+    if (mergeable.length !== 0) {
+      for (const runState of mergeable) {
+        if (runState.acceptInput !== undefined) {
+          runState.acceptInput(input);
+          return;
+        }
+      }
+    } else {
+      const runState = { verifierState, isMergeable: todo };
+      const launch = this.launchRun(runState, input);
+      if (launch !== undefined) {
+        verifierState.running.push(runState);
+        return;
+      }
+    }
+
+    verifierState.unclaimedInputs.push(input);
   }
 
   public removeInput(input: InputSpec) {
@@ -112,8 +116,17 @@ export default class GenerationService {
     }
   }
 
-  private launchRun(state: GenerationState): Promise<void> | undefined {
-    const verifier = state.verifier;
+  public claimInput(verifier: Verifier) {
+    const key = Hash.digest(Verifier.encode(verifier));
+    const state = this.states.get(key.toPrimitive());
+    return state?.unclaimedInputs.shift();
+  }
+
+  private launchRun(
+    runState: RunState,
+    initialInput: InputSpec,
+  ): Promise<void> | undefined {
+    const verifier = runState.verifierState.verifier;
 
     if (Hash.equals(verifier.contract_hash, accountHash)) {
       return;
@@ -124,7 +137,11 @@ export default class GenerationService {
       return this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-          const driver = this.makeGenerationDriver(state, workerDriver);
+          const driver = this.makeGenerationDriver(
+            runState,
+            initialInput,
+            workerDriver,
+          );
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
@@ -139,7 +156,7 @@ export default class GenerationService {
             await driver.finalize(err);
           }
         },
-        () => state.extraIncentive,
+        () => 0,
       );
     }
 
@@ -152,7 +169,7 @@ export default class GenerationService {
             ? acc + /* Math.exp(block.mergeableLogProbabilityValue) * */
               Number(amount)
             : acc;
-        }, state.extraIncentive);
+        }, 0);
 
     const localGenerator = this.ctx.get(LocalGeneratorService)
       .getGenerator(verifier.contract_hash);
@@ -160,7 +177,11 @@ export default class GenerationService {
       return this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-          const driver = this.makeGenerationDriver(state, workerDriver);
+          const driver = this.makeGenerationDriver(
+            runState,
+            initialInput,
+            workerDriver,
+          );
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
@@ -188,7 +209,11 @@ export default class GenerationService {
         return this.ctx.get(WorkerDriverService).run(
           async (workerDriver) => {
             await workerDriver.setAllocation({ webWorkerCount: 1 });
-            const driver = this.makeGenerationDriver(state, workerDriver);
+            const driver = this.makeGenerationDriver(
+              runState,
+              initialInput,
+              workerDriver,
+            );
             workerDriver.log?.push({
               timestamp: this.ctx.config.timeProvider.now(),
               message:
@@ -226,13 +251,14 @@ export default class GenerationService {
   }
 
   private makeGenerationDriver(
-    state: GenerationState,
+    state: RunState,
+    initialInput: InputSpec,
     workerDriver: WorkerDriver,
   ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
     let emitCorrect: boolean | undefined;
 
     let body: Uint8Array | undefined;
-    let verifierInputs: InputSpec[] = [state.unclaimedInputs.shift()!];
+    let verifierInputs: InputSpec[] = [initialInput];
     const otherInputs: InputSpec[] = [];
     let inputsAreFixed = false;
     const refs: BlockFact[] = [];
@@ -241,13 +267,48 @@ export default class GenerationService {
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
+    const isMergeable = (block: BlockFact, isInput: boolean) => {
+      if (
+        isInput &&
+        verifierInputs.length > 0 &&
+        Hash.equals(state.verifierState.verifier.contract_hash, frontierHash) &&
+        block.frontierVoteBlock !==
+          verifierInputs[verifierInputs.length - 1].block
+      ) {
+        return false;
+      }
+
+      return this.ctx.get(FrontierChainService).getMerger([
+        ...verifierInputs.map((x) => x.block),
+        ...otherInputs.map((x) => x.block),
+        ...refs,
+        block,
+      ]) !== undefined;
+    };
+    state.isMergeable = isMergeable;
+
+    const collectInputs = () => {
+      if (!inputsAreFixed) {
+        state.verifierState.unclaimedInputs = state.verifierState
+          .unclaimedInputs.filter((input) => {
+            if (isMergeable(input.block, true)) {
+              verifierInputs.push(input);
+              return false;
+            } else {
+              return true;
+            }
+          });
+        inputsAreFixed = true;
+      }
+    };
+
     return {
       ...workerDriver,
 
       type: ComputationType.Generator,
 
-      getContractHash: () => state.verifier.contract_hash,
-      getParams: () => state.verifier.params,
+      getContractHash: () => state.verifierState.verifier.contract_hash,
+      getParams: () => state.verifierState.verifier.params,
       getHint: () => {
         throw new Error(`Cannot call getHint() inside a generator!`);
       },
@@ -287,7 +348,7 @@ export default class GenerationService {
       },
       emitCorrect: () => {
         if (emitCorrect === undefined) {
-          emitCorrect = this.shouldEmitCorrect(state.verifier);
+          emitCorrect = this.shouldEmitCorrect(state.verifierState.verifier);
         }
         return emitCorrect;
       },
@@ -309,6 +370,8 @@ export default class GenerationService {
           );
 
           const verifier = { contract_hash: contractHash, params };
+
+          // TODO: Check isMergeable() here
 
           // TODO: Call pause/resume when requesting?
           this.ctx.get(FetchService).fetch(
@@ -340,11 +403,7 @@ export default class GenerationService {
         }),
 
       getInputCount: () => {
-        if (!inputsAreFixed) {
-          verifierInputs = [...verifierInputs, ...state.unclaimedInputs];
-          state.unclaimedInputs = [];
-          inputsAreFixed = true;
-        }
+        collectInputs();
         return verifierInputs.length;
       },
       getInputSource: async (idx: number) => {
@@ -362,26 +421,21 @@ export default class GenerationService {
             if (input !== undefined) {
               break;
             } else {
-              if (
-                verifierInputs.length > 0 &&
-                Hash.equals(state.verifier.contract_hash, frontierHash)
-              ) {
-                const voteFor =
-                  verifierInputs[verifierInputs.length - 1].block.hash;
-                const idx = state.unclaimedInputs.findIndex((spec) =>
-                  Hash.equals(spec.block.frontier_vote, voteFor)
+              const idx = state.verifierState.unclaimedInputs
+                .findIndex((input) => isMergeable(input.block, true));
+              if (idx !== -1) {
+                verifierInputs.push(
+                  state.verifierState.unclaimedInputs.splice(idx, 1)[0],
                 );
-                if (idx !== -1) {
-                  verifierInputs.push(state.unclaimedInputs.splice(idx, 1)[0]);
-                }
+              } else {
+                await new Promise<void>((resolve) => {
+                  state.acceptInput = (input) => {
+                    state.acceptInput = undefined;
+                    verifierInputs.push(input);
+                    resolve();
+                  };
+                });
               }
-
-              verifierInputs.push(
-                await this.ctx.get(UnclaimedOutputService).claim(
-                  state.verifier,
-                  workerDriver.done.signal,
-                ),
-              );
             }
           }
         }
@@ -476,13 +530,17 @@ export default class GenerationService {
           }
         }
 
+        collectInputs();
+
         // If this property was never retrieved, we can assume the generator created a correct block.
         const isCorrect = emitCorrect ?? true;
 
         const blockSpec: BlockSpec = {
           refs,
           inputs: [...verifierInputs, ...otherInputs],
-          satisfies: verifierInputs.length ? undefined : [state.verifier],
+          satisfies: verifierInputs.length
+            ? undefined
+            : [state.verifierState.verifier],
           outputs,
           body,
           frontierLevel,
@@ -493,7 +551,7 @@ export default class GenerationService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Creating block...`,
         });
-        await this.createBlock(state.verifier, blockSpec, 0);
+        await this.createBlock(state.verifierState.verifier, blockSpec, 0);
         workerDriver.resumeTimer();
       },
     };
@@ -643,6 +701,6 @@ export default class GenerationService {
   }
 
   public snapshot() {
-    return { running: this.running };
+    return { states: this.states };
   }
 }

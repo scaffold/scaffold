@@ -189,10 +189,11 @@ export default class BlockService {
         this.linkIo(parent, fact, input.output_idx, idx);
 
         if (claims.length === 1) {
-          this.ctx.get(UnclaimedOutputService).removeUnclaimed(
-            parent,
-            input.output_idx,
-          );
+          this.ctx.get(GenerationService).removeInput({
+            block: parent,
+            outputIdx: input.output_idx,
+            amount: parent.outputs[input.output_idx].amount,
+          });
         }
       }
     });
@@ -207,14 +208,9 @@ export default class BlockService {
           this.linkIo(fact, block, outputIdx, inputIdx)
         );
       } else {
-        this.ctx.get(UnclaimedOutputService).addUnclaimed(fact, outputIdx);
+        this.ctx.get(GenerationService)
+          .addInput({ block: fact, outputIdx, amount });
       }
-
-      this.ctx.get(GenerationService).enqueueGeneration(
-        verifier,
-        detail,
-        0,
-      );
 
       if (Hash.equals(verifier.contract_hash, collateralHash)) {
         const params = CollateralContractParams.decode(verifier.params);
@@ -723,9 +719,27 @@ export default class BlockService {
     */
   }
 
-  public getBlockIndex(block: BlockFact): bigint {
+  public getBlockIndex(block: BlockFact): { min: bigint; max: bigint } {
     // Walk up towards frontier; computing the unique index that this block is aiming to be included at
-    throw new Error(`Not implemented`);
+    if (block.frontierVoteBlock === undefined) {
+      throw new Error(`Unconnected block!`);
+    }
+
+    const treeSize = (2n << BigInt(block.frontierParams.level)) - 1n;
+    if (block.frontierVoteBlock === ZERO_BLOCK) {
+      return { min: treeSize, max: treeSize };
+    }
+
+    const voteIdx = this.getBlockIndex(block.frontierVoteBlock);
+    return {
+      min: voteIdx.min + treeSize,
+      max: voteIdx.max +
+        (2n << BigInt(block.frontierVoteBlock.frontierParams.level)) - 1n -
+        BigInt(
+          block.frontierVoteBlock.frontierParams.level -
+            block.frontierParams.level,
+        ),
+    };
   }
 
   public getVoters(frontierVote: Hash) {
