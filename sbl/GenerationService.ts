@@ -84,6 +84,25 @@ export default class GenerationService {
       () => ({ verifier, unclaimedInputs: [], running: [] }),
     );
 
+    this.insertInput(verifierState, input);
+  }
+
+  public removeInput(input: InputSpec) {
+    const verifier = input.block.outputs[input.outputIdx].verifier;
+    const key = Hash.digest(Verifier.encode(verifier));
+    const state = this.states.get(key.toPrimitive());
+    if (state !== undefined) {
+      state.unclaimedInputs = state.unclaimedInputs.filter((x) => x !== input);
+    }
+  }
+
+  public claimInput(verifier: Verifier) {
+    const key = Hash.digest(Verifier.encode(verifier));
+    const state = this.states.get(key.toPrimitive());
+    return state?.unclaimedInputs.shift();
+  }
+
+  private insertInput(verifierState: VerifierState, input: InputSpec) {
     const mergeable = verifierState.running.filter((run) =>
       run.isMergeable(input.block, true)
     );
@@ -100,6 +119,15 @@ export default class GenerationService {
       const launch = this.launchRun(runState, input);
       if (launch !== undefined) {
         verifierState.running.push(runState);
+        launch.then(() => {
+          const idx = verifierState.running.indexOf(runState);
+          if (idx === -1) {
+            throw new Error(`Internal error!`);
+          }
+          verifierState.running.splice(idx, 1);
+
+          this.launchUnclaimed(verifierState);
+        });
         return;
       }
     }
@@ -107,19 +135,13 @@ export default class GenerationService {
     verifierState.unclaimedInputs.push(input);
   }
 
-  public removeInput(input: InputSpec) {
-    const verifier = input.block.outputs[input.outputIdx].verifier;
-    const key = Hash.digest(Verifier.encode(verifier));
-    const state = this.states.get(key.toPrimitive());
-    if (state !== undefined) {
-      state.unclaimedInputs = state.unclaimedInputs.filter((x) => x !== input);
-    }
-  }
+  private launchUnclaimed(verifierState: VerifierState) {
+    const reinsert = verifierState.unclaimedInputs;
+    verifierState.unclaimedInputs = [];
 
-  public claimInput(verifier: Verifier) {
-    const key = Hash.digest(Verifier.encode(verifier));
-    const state = this.states.get(key.toPrimitive());
-    return state?.unclaimedInputs.shift();
+    for (const input of reinsert) {
+      this.insertInput(verifierState, input);
+    }
   }
 
   private launchRun(
@@ -269,13 +291,13 @@ export default class GenerationService {
 
     const isMergeable = (block: BlockFact, isInput: boolean) => {
       if (
-        isInput &&
-        verifierInputs.length > 0 &&
-        Hash.equals(state.verifierState.verifier.contract_hash, frontierHash) &&
-        block.frontierVoteBlock !==
-          verifierInputs[verifierInputs.length - 1].block
+        isInput && verifierInputs.length > 0 &&
+        Hash.equals(state.verifierState.verifier.contract_hash, frontierHash)
       ) {
-        return false;
+        const lastBlock = verifierInputs[verifierInputs.length - 1].block;
+        return block.frontierVoteBlock !== undefined &&
+          (block.frontierVoteBlock === lastBlock ||
+            block.frontierVoteBlock === lastBlock.frontierVoteBlock);
       }
 
       return this.ctx.get(FrontierChainService).getMerger([
