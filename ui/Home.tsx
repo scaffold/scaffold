@@ -21,6 +21,10 @@ import FactView from '~/ui/FactView.tsx';
 import CodeView from '~/ui/CodeView.tsx';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
 import { defaultNetwork } from '~/sbl/Config.ts';
+import SplashHeader from '~/ui/sections/SplashHeader.tsx';
+import CodeExample from '~/ui/sections/CodeExample.tsx';
+import Nope from '~/ui/sections/Nope.tsx';
+import FeatureCard from '~/ui/sections/FeatureCard.tsx';
 
 // QJS
 // const initialContractHex =
@@ -119,133 +123,230 @@ export default () => {
   ]);
 
   return (
-    <div>
-      <img
-        src='/scaffold_logo_horizontal.png'
-        style={{ maxHeight: '4rem', maxWidth: '100%' }}
+    <>
+      <div
+        style={{
+          alignSelf: 'stretch',
+          display: 'flex',
+          flexDirection: 'row',
+          backgroundColor: '#111',
+          gap: '2rem',
+        }}
+      >
+        <a href='/' style={{ margin: '0.4rem' }}>
+          <img
+            src='/scaffold_logo_horizontal_white.png'
+            style={{ display: 'block', maxHeight: '4rem' }}
+          />
+        </a>
+
+        <div style={{ flex: '1' }}></div>
+
+        <a href='/explorer' className='header-link'>Explorer</a>
+        <a href='/docs' className='header-link'>Docs</a>
+        <a href='/community' className='header-link'>Community</a>
+        <a href='/blog' className='header-link'>Blog</a>
+
+        <div></div>
+
+        {/*Balance: ${Number(ctx.get(BalanceService).getLiquidBalance())}*/}
+      </div>
+      <br />
+
+      <SplashHeader />
+      <CodeExample />
+      <Nope />
+
+      <FeatureCard
+        title='Fast. Very fast. Period.'
+        desc="From the beginning Scaffold's #1 design goal has been speed and simplicity. We don't compromise on this."
       />
-      <br />
 
-      {/*<CodeView>Hello world!</CodeView>*/}
+      <FeatureCard
+        title='Cheap'
+        desc='Stop spending $$$ to serve the same data to everyone. Let your users be your cloud.'
+      />
 
-      <Input label='Network' value={network} setValue={setNetwork} />
-      <button
-        onClick={() => {
-          const newUrl = new URL(url);
-          newUrl.searchParams.set('network', network);
-          window.location.href = newUrl.toString();
-        }}
-      >
-        Go
-      </button>
-      <br />
+      <FeatureCard
+        title='Hackable'
+        desc='The whole site is defined by a hash. Edit any of the sources to generate a new website.'
+      />
 
-      <a
-        href='#'
-        onClick={() => {
-          const newUrl = new URL(url);
-          newUrl.searchParams.set('game', startGame().toHex());
-          window.history.pushState({}, '', newUrl);
-          setUrl(newUrl);
-        }}
-      >
-        New Game
-      </a>
-      <br />
+      <FeatureCard
+        title='This site runs on Scaffold'
+        desc='The whole site is defined by a hash. Edit any of the sources to generate a new website.'
+      />
 
-      <button
-        onClick={() => {
-          client.ctx.get(BlockBuilder).publish({});
-        }}
-      >
-        Publish empty block
-      </button>
-      <button
-        onClick={() => {
-          client.ctx.get(BlockBuilder).publish({
-            body: str2bin('abc'),
-            satisfies: [{
-              contract_hash: constants.rootHash,
-              params: Hash.digest('abc').toBytes(),
-            }],
-          });
-        }}
-      >
-        Publish normal block
-      </button>
-      <button
-        onClick={async () => {
-          const badBlock = await client.ctx.get(BlockBuilder).publish({
-            body: str2bin('abc'),
-            satisfies: [{
-              contract_hash: constants.rootHash,
-              params: Hash.random().toBytes(),
-            }],
-          });
-          client.ctx.get(LitigationService)
-            .litigate(badBlock, [], 'VALID_CHALLENGE');
-        }}
-      >
-        Publish bad block
-      </button>
-      <button onClick={() => client.ctx.get(FrontierService2).mergeAll()}>
-        Merge frontier
-      </button>
+      <FeatureCard
+        title='Versatile'
+        desc='Sharing static content P2P is just the tip of the iceberg; Scaffold does this without breaking a sweat.'
+      />
 
-      <br />
-      <select
-        value={selectedContract}
-        onChange={(e) => selectContract(e.target.value)}
-      >
-        {contractHashes.map(([name, hash]) => (
-          <option value={hash.toHex()}>{name} ({hash.toHex()})</option>
-        ))}
-      </select>
-      <br />
-      <Input label='Params' value={params} setValue={setParams} />
-      <button
-        onClick={() =>
-          client.ctx.get(FetchService).fetch(
-            {
-              contract_hash: Hash.fromHex(selectedContract!),
-              params: str2bin(params),
-            },
-            // TODO: Why isn't this being picked up on the work queue?
-            // It's because there's no generators registered.
-            // Need to make a generatorHash and register them.
-            // Does the same WASM act as both a generator and a contract?
-            { internalIncentive: 1n, externalIncentive: 1n },
-            (block) => console.log(bin2str(block.body), block),
-          )}
-      >
-        REQUEST
-      </button>
-      <br />
-      <Input label='Body' value={body} setValue={setBody} />
-      <button
-        onClick={() =>
-          client.ctx.get(BlockBuilder).publish({
-            body: str2bin(body),
-            satisfies: [{
-              contract_hash: Hash.fromHex(selectedContract!),
-              params: str2bin(params),
-            }],
-          })}
-      >
-        PROVIDE
-      </button>
+      <FeatureCard
+        title='Scalable'
+        desc='Your users connect to the entire Scaffold network.'
+      />
 
-      <br />
-      {
-        /*
+      <FeatureCard
+        title='Embrace the web'
+        desc='WebRTC | WebSockets | WebAssembly'
+      />
+
+      <FeatureCard
+        title='How does it work?'
+        desc='Scaffold is a global block-graph that incentivizes speed and correctness.'
+      />
+
+      <FeatureCard
+        title='Is this a cryptocurrency?'
+        desc={`Yes. However,
+    (1) we believe it is necessary - to perform computations (not just returning static content) on non-trusted platforms (browsers), you have to incentivize correct answers and disincentivize incorrect answers. This requires some kind of transferrable store of value.
+    (2) we believe it may be the first time using a cryptocurrency IS necessary. Many (if not all) of existing cryptocurrencies were created to achieve distributed consensus (usually to enable the creation of a token), at the cost of speed and throughput. We do the opposite - we prioritize speed first and consensus second. Large transactions will be finalized much more slowly, but this isn't a problem because we're using extremely small transactions to incentivize computation.`}
+      />
+
+      <div style={{ width: '100%' }}>
+        <div style={{ backgroundColor: 'white', padding: '1rem' }}>
+          <div style={{ backgroundColor: '#15079C' }}>
+            Navy Blue Clarity, Possibility, Speed, #15079C
+          </div>
+          <div style={{ backgroundColor: '#8CB3F2' }}>
+            Sky Blue Pioneer, Leader, Creative, #8CB3F2
+          </div>
+          <div style={{ backgroundColor: '#EEF0AD' }}>
+            Pale Yellow Collaborator, Bridge, Developer, #EEF0AD
+          </div>
+          <div style={{ backgroundColor: '#D12D0E' }}>
+            Burnt Orange Trust, Foundation, Expert, #D12D0E
+          </div>
+          <div style={{ backgroundColor: '#372733' }}>
+            #372733
+          </div>
+        </div>
+
+        The Onyx Programming Language A data-oriented, expressive, and modern
+        programming language
+
+        $ # Install Onyx in one command $ # Read the docs $ curl
+        onyxlang.io/docs $ # Try Onyx in your browser $ curl try.onyxlang.io
+
+        <Input label='Network' value={network} setValue={setNetwork} />
+        <button
+          onClick={() => {
+            const newUrl = new URL(url);
+            newUrl.searchParams.set('network', network);
+            window.location.href = newUrl.toString();
+          }}
+        >
+          Go
+        </button>
+        <br />
+
+        <a
+          href='#'
+          onClick={() => {
+            const newUrl = new URL(url);
+            newUrl.searchParams.set('game', startGame().toHex());
+            window.history.pushState({}, '', newUrl);
+            setUrl(newUrl);
+          }}
+        >
+          New Game
+        </a>
+        <br />
+
+        <button
+          onClick={() => {
+            client.ctx.get(BlockBuilder).publish({});
+          }}
+        >
+          Publish empty block
+        </button>
+        <button
+          onClick={() => {
+            client.ctx.get(BlockBuilder).publish({
+              body: str2bin('abc'),
+              satisfies: [{
+                contract_hash: constants.rootHash,
+                params: Hash.digest('abc').toBytes(),
+              }],
+            });
+          }}
+        >
+          Publish normal block
+        </button>
+        <button
+          onClick={async () => {
+            const badBlock = await client.ctx.get(BlockBuilder).publish({
+              body: str2bin('abc'),
+              satisfies: [{
+                contract_hash: constants.rootHash,
+                params: Hash.random().toBytes(),
+              }],
+            });
+            client.ctx.get(LitigationService)
+              .litigate(badBlock, [], 'VALID_CHALLENGE');
+          }}
+        >
+          Publish bad block
+        </button>
+        <button onClick={() => client.ctx.get(FrontierService2).mergeAll()}>
+          Merge frontier
+        </button>
+
+        <br />
+        <select
+          value={selectedContract}
+          onChange={(e) => selectContract(e.target.value)}
+        >
+          {contractHashes.map(([name, hash]) => (
+            <option value={hash.toHex()}>{name} ({hash.toHex()})</option>
+          ))}
+        </select>
+        <br />
+        <Input label='Params' value={params} setValue={setParams} />
+        <button
+          onClick={() =>
+            client.ctx.get(FetchService).fetch(
+              {
+                contract_hash: Hash.fromHex(selectedContract!),
+                params: str2bin(params),
+              },
+              // TODO: Why isn't this being picked up on the work queue?
+              // It's because there's no generators registered.
+              // Need to make a generatorHash and register them.
+              // Does the same WASM act as both a generator and a contract?
+              { internalIncentive: 1n, externalIncentive: 1n },
+              (block) => console.log(bin2str(block.body), block),
+            )}
+        >
+          REQUEST
+        </button>
+        <br />
+        <Input label='Body' value={body} setValue={setBody} />
+        <button
+          onClick={() =>
+            client.ctx.get(BlockBuilder).publish({
+              body: str2bin(body),
+              satisfies: [{
+                contract_hash: Hash.fromHex(selectedContract!),
+                params: str2bin(params),
+              }],
+            })}
+        >
+          PROVIDE
+        </button>
+
+        <br />
+        {
+          /*
         <a href='#' onClick={() => client.ctx.get(AccountService)}>
           Start account loop
         </a>
         */
-      }
+        }
 
-      {
-        /*
+        {
+          /*
       <StoreSelector
         ctx={client.ctx}
         onSelectClass={(clz) => setShownStore({ key: Math.random(), clz })}
@@ -258,40 +359,41 @@ export default () => {
         />
       )}
         */
-      }
+        }
 
-      <button onClick={() => client.close()}>STOP</button>
-      <br />
+        <button onClick={() => client.close()}>STOP</button>
+        <br />
 
-      <FactView
-        ctx={client.ctx}
-        selectedHash={selectedHash}
-        setSelectedHash={setSelectedHash}
-        hoveredHash={hoveredHash}
-        setHoveredHash={setHoveredHash}
-      />
+        <FactView
+          ctx={client.ctx}
+          selectedHash={selectedHash}
+          setSelectedHash={setSelectedHash}
+          hoveredHash={hoveredHash}
+          setHoveredHash={setHoveredHash}
+        />
 
-      <BlockTableView
-        ctx={client.ctx}
-        selectedHash={selectedHash}
-        setSelectedHash={setSelectedHash}
-        hoveredHash={hoveredHash}
-        setHoveredHash={setHoveredHash}
-      />
-      {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
+        <BlockTableView
+          ctx={client.ctx}
+          selectedHash={selectedHash}
+          setSelectedHash={setSelectedHash}
+          hoveredHash={hoveredHash}
+          setHoveredHash={setHoveredHash}
+        />
+        {/*<JsonView name='WorkQueue' ctx={client.ctx} Table={WorkQueue} />*/}
 
-      {gameHash && (
-        <>
-          Game ID: <pre style={{ display: 'inline' }}>{gameHex}</pre>
-          {
-            <ThrustView
-              sbl={client.ctx}
-              match={gameHash}
-              player={player}
-            />
-          }
-        </>
-      )}
-    </div>
+        {gameHash && (
+          <>
+            Game ID: <pre style={{ display: 'inline' }}>{gameHex}</pre>
+            {
+              <ThrustView
+                sbl={client.ctx}
+                match={gameHash}
+                player={player}
+              />
+            }
+          </>
+        )}
+      </div>
+    </>
   );
 };
