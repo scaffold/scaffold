@@ -25,6 +25,8 @@ import SplashHeader from '~/ui/sections/SplashHeader.tsx';
 import CodeExample from '~/ui/sections/CodeExample.tsx';
 import Nope from '~/ui/sections/Nope.tsx';
 import FeatureCard from '~/ui/sections/FeatureCard.tsx';
+import observationMonitor from '~/ui/observationMonitor.ts';
+import ScaffoldLogo from '~/ui/ScaffoldLogo.tsx';
 
 // QJS
 // const initialContractHex =
@@ -126,17 +128,29 @@ export default () => {
     <>
       <div
         style={{
+          height: '4rem',
           alignSelf: 'stretch',
           display: 'flex',
           flexDirection: 'row',
           backgroundColor: '#111',
           gap: '2rem',
+          padding: '0.5rem',
         }}
       >
-        <a href='/' style={{ margin: '0.4rem' }}>
-          <img
-            src='/scaffold_logo_horizontal_white.png'
-            style={{ display: 'block', maxHeight: '4rem' }}
+        {
+          /*
+          <a href='/'>
+            <img
+              src='/scaffold_logo_horizontal_white.png'
+              style={{ display: 'block', height: '100%' }}
+            />
+          </a>
+          */
+        }
+        <a href='/'>
+          <ScaffoldLogo
+            style={{ display: 'block', height: '100%' }}
+            color='#8CB3F2'
           />
         </a>
 
