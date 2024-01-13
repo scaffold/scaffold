@@ -26,6 +26,7 @@ import NetworkService from '~/sbl/NetworkService.ts';
 import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
 import RootContract from '~/sbl/contracts/RootContract.ts';
 import ConnectionService from '~/sbl/ConnectionService.ts';
+import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
 // import EpochContract from '~/graph/EpochContract.ts';
 // import ThrustInitContract from '~/graph/ThrustInitContract.ts';
 // import ThrustGameContract from '~/graph/ThrustGameContract.ts';
@@ -58,7 +59,8 @@ const config: Config = {
     new WebsocketClientProvider(),
   ],
 
-  storageProvider: new DenoKvStorageProvider(),
+  // storageProvider: new DenoKvStorageProvider(),
+  storageProvider: new NullStorageProvider(),
 
   initialWorkerCount: 1,
   onlyBridge: false,

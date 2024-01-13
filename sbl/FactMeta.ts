@@ -37,6 +37,7 @@ export enum FactSource {
   // Building,
   Local,
   Remote,
+  Storage,
 }
 
 export interface Collateralization {

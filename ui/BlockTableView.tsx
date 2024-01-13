@@ -94,6 +94,7 @@ export default (
           // [FactSource.Building]: 'building',
           [FactSource.Local]: 'local',
           [FactSource.Remote]: 'remote',
+          [FactSource.Storage]: 'storage',
         }[props.getValue<FactSource>()]),
       },
       // {

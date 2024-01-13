@@ -8,6 +8,7 @@ import WebsocketClientProvider from '~/plugins/WebsocketClientProvider.ts';
 import WebrtcProvider from '~/plugins/WebrtcProvider.ts';
 import LocalStorageProvider from '~/plugins/LocalStorageProvider.ts';
 import NetworkService from '~/sbl/NetworkService.ts';
+import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 
 // window['Deno'] = {};
@@ -41,7 +42,8 @@ export default class SblClient {
       logLevel: log.LogLevels.DEBUG,
 
       networkProviders: [new WebsocketClientProvider(), new WebrtcProvider()],
-      storageProvider: new LocalStorageProvider(),
+      // storageProvider: new LocalStorageProvider(),
+      storageProvider: new NullStorageProvider(),
       // contractProviders: [],
     };
 
@@ -82,36 +84,3 @@ export default class SblClient {
     return this.ctx.destruct();
   }
 }
-
-/*
-Connected peers & DHT node counts & address
-My DHT nodes
-All DHT nodes
-My DHT entries
-All DHT entries
-Received SUBs & scores
-Sent SUBs & answer(s)
-My generators
-My SUBs
-  Question
-  Contract name
-  Contract params
-  Answer
-  Accept collateral (weighted, count)
-  Reject collateral (weighted, count)
-  My side
-  Dupe?
-
-
-contract (add)
-  SUBs
-  generators (add)
-  question (add)
-    SUBs
-    answer (add)
-      SUBs
-      collateral (add)
-
-/contract/[contract hash]
-
-*/

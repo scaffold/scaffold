@@ -124,6 +124,8 @@ export default class FactService {
     //   mutator !== undefined
     //     ? error(`Unexpected mutator`)
     //     : ctx.get(FrontierService).createFact(base);
+
+    this.ingestFromStorage();
   }
 
   public getSize() {
@@ -472,6 +474,8 @@ export default class FactService {
       );
     }
 
+    this.writeToStorage(res);
+
     for (const cb of this.ingestors[base.type]) {
       cb(res);
     }
@@ -479,6 +483,33 @@ export default class FactService {
     this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);
 
     return res;
+  }
+
+  private writeToStorage(fact: Fact) {
+    try {
+      this.ctx.config.storageProvider.set(0, fact.hash, fact.data);
+    } catch (err) {
+      console.error(
+        `Could not save fact ${fact.hash.toHex()} to storage:`,
+        err,
+      );
+    }
+  }
+
+  private async ingestFromStorage() {
+    let count = 0;
+    for await (const entry of this.ctx.config.storageProvider.list(0)) {
+      try {
+        this.create(entry.value, FactSource.Storage);
+        count++;
+      } catch (err) {
+        console.error(
+          `Could not ingest fact ${entry.key.toHex()} from storage:`,
+          err,
+        );
+      }
+    }
+    console.log(`Ingested ${count} facts from storage!`);
   }
 
   private getSillyName() {

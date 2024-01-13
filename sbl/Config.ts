@@ -39,7 +39,7 @@ export interface EntropyProvider {
 export interface StorageProvider {
   set(namespace: number, key: Hash, value?: Uint8Array): void;
   get(namespace: number, key: Hash): MaybePromise<Uint8Array | undefined>;
-  list(namespace: number): AsyncIterator<{ key: Hash; value: Uint8Array }>;
+  list(namespace: number): AsyncIterable<{ key: Hash; value: Uint8Array }>;
   close(): MaybePromise<void>;
 }
 
