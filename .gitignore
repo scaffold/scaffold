@@ -1,11 +1,4 @@
 .DS_Store
 Thumbs.db
-node_modules/
 dist/
-build/
-jsoncons/
-wasi-sdk-20.0/
 server/bootstrap/
-wasm/
-npm/
-gource.webm

@@ -1,4 +1,0 @@
-- [Getting started](/)
-- [Concepts](concepts.md)
-- [The computation driver](computation-driver.md)
-- [Hints](hints.md)
