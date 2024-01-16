@@ -1,4 +1,4 @@
-import { LinkExec, MkdirExec } from '../scriptTypes.ts';
+import { LinkExec, MkdirExec } from './scriptTypes.ts';
 import { error } from '../util/functional.ts';
 import ExtFs from './ExtFs.ts';
 import {

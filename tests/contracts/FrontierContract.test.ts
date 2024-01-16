@@ -16,7 +16,7 @@ import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
-} from '~/tests/contracts/util.ts';
+} from '../../tests/contracts/util.ts';
 import { FrontierTreeDetail, FrontierTreeParams } from '../../src/messages.ts';
 import FactService from '../../src/FactService.ts';
 

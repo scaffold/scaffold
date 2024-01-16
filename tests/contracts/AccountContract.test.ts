@@ -10,7 +10,7 @@ import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
-} from '~/tests/contracts/util.ts';
+} from '../../tests/contracts/util.ts';
 
 Deno.test(
   {

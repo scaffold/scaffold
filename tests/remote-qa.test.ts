@@ -1,13 +1,13 @@
 import { assertEquals } from 'std-latest/assert/mod.ts';
 import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
-import * as collatzMessages from '~/ts/collatzMessages.ts';
+import * as collatzMessages from '../ts/collatzMessages.ts';
 import LocalGeneratorService from '../src/LocalGeneratorService.ts';
 import * as moduleHashes from '../ts/moduleHashes.ts';
 import collatzGenerator from '../ts/collatz.generator.0.ts';
 import FetchService from '../src/FetchService.ts';
 import { Block } from '../src/messages.ts';
-import MockNetworkProvider from '~/plugins/MockNetworkProvider.ts';
-import MockTimeProvider from '~/tests/MockTimeProvider.ts';
+import MockNetworkProvider from '../plugins/MockNetworkProvider.ts';
+import MockTimeProvider from '../tests/MockTimeProvider.ts';
 import AccountContract from '../src/contracts/AccountContract.ts';
 import DataContract from '../src/contracts/DataContract.ts';
 

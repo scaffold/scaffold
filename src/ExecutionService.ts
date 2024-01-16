@@ -1,7 +1,7 @@
 import Context from './Context.ts';
 import ExecutionProvider from './ExecutionProvider.ts';
 import { arrEquals } from './util/buffer.ts';
-import { bin2hex } from '~/sbl/pathUtils.ts';
+import { bin2hex } from '../sbl/pathUtils.ts';
 
 export default class ExecutionService {
   private providers: ExecutionProvider[];

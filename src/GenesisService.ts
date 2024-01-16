@@ -11,7 +11,7 @@ import { bin2hex } from './util/hex.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import FactService from './FactService.ts';
 import NodeService from './NodeService.ts';
-import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
+import NullStorageProvider from '../plugins/NullStorageProvider.ts';
 import { LogLevels } from 'std-latest/log/mod.ts';
 
 // bin2hex(secp.utils.randomPrivateKey())

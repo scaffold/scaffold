@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import AccountContract from '../src/contracts/AccountContract.ts';
 import RootContract from '../src/contracts/RootContract.ts';
-import { makeTest, provideInitialBalance } from '~/tests/util.ts';
+import { makeTest, provideInitialBalance } from '../tests/util.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import CollateralContract from '../src/contracts/CollateralContract.ts';
 import BlockBuilder from '../src/BlockBuilder.ts';

@@ -3,7 +3,7 @@ import { WorkerComm } from './workerTypes.ts';
 import { JobMessage } from './workerTypes.ts';
 import { BaseImports } from './execJob.ts';
 import { LockWrapperParams } from '../messages.ts';
-import { bin2hex, bin2str, decodePathEntry } from '~/sbl/pathUtils.ts';
+import { bin2hex, bin2str, decodePathEntry } from '../sbl/pathUtils.ts';
 import WasiImpl, { WasiError } from './WasiImpl.ts';
 import * as wc from './WasiConstants.ts';
 

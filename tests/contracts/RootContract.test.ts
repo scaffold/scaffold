@@ -10,7 +10,7 @@ import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
-} from '~/tests/contracts/util.ts';
+} from '../../tests/contracts/util.ts';
 import Hash from '../../src/util/Hash.ts';
 
 Deno.test(
