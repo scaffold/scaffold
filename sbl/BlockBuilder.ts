@@ -16,7 +16,6 @@ import KeyService from './KeyService.ts';
 import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import FrontierService2 from '~/sbl/FrontierService2.ts';
-import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import { arrEquals, EMPTY_ARR } from '~/sbl/util/buffer.ts';
 import { frontierInputCount } from '~/sbl/contracts/FrontierContract.ts';
 import WeightService from '~/sbl/WeightService.ts';

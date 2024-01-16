@@ -3,7 +3,7 @@ import Context from './Context.ts';
 import FetchService from './FetchService.ts';
 import Hash from './util/Hash.ts';
 
-export default class Sbl {
+export default class Scaffold {
   private ctx: Context;
 
   constructor(config: Config) {

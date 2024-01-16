@@ -2,9 +2,10 @@ import BlockService from './BlockService.ts';
 import Context from './Context.ts';
 import GenerationService from './GenerationService.ts';
 import { BlockFact } from '~/sbl/FactMeta.ts';
-import IncentiveService from './IncentiveService.ts';
 import { Block, Verifier } from './messages.ts';
 import Hash from './util/Hash.ts';
+import BlockBuilder from '~/sbl/BlockBuilder.ts';
+import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
 
 export const enum FetchMode {
   All,
@@ -117,7 +118,9 @@ export default class FetchService {
 
     externalIncentive = this.ctx.config.getDepositIncentive(verifier);
     if (externalIncentive !== undefined) {
-      this.ctx.get(IncentiveService).incentivize(verifier, externalIncentive);
+      this.ctx.get(BlockBuilder).publish({
+        outputs: [{ verifier, amount: externalIncentive, detail:EMPTY_ARR }],
+      }, 0);
     }
 
     // if (bid !== undefined) {
@@ -165,10 +168,7 @@ export default class FetchService {
       }
 
       if (externalIncentive !== undefined) {
-        this.ctx.get(IncentiveService).incentivize(
-          verifier,
-          -externalIncentive,
-        );
+        // TODO: Claim our incentive to get it back
       }
 
       if (cb !== undefined) {

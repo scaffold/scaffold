@@ -51,7 +51,6 @@ import FrontierService2, {
 } from '~/sbl/FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
-import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import CollateralUtil, { CONTEST_TYPE_FINAL } from '~/sbl/CollateralUtil.ts';
 import GenerationService from '~/sbl/GenerationService.ts';
 import { Node } from '~/sbl/NodeService.ts';

@@ -26,7 +26,6 @@ import FactService from '~/sbl/FactService.ts';
 import ClockService from '~/sbl/ClockService.ts';
 import { MaybePromise } from '~/sbl/util/types.ts';
 import FetchService from '~/sbl/FetchService.ts';
-import UnclaimedOutputService from '~/sbl/UnclaimedOutputService.ts';
 import KeyService from '~/sbl/KeyService.ts';
 import { bin2hex } from '~/sbl/util/hex.ts';
 import ContractClassifierService from '~/sbl/ContractClassifierService.ts';
