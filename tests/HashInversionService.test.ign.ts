@@ -1,6 +1,6 @@
 import { makeTest } from './util.ts';
-import BlockService from '../sbl/BlockService.ts';
-import Hash from '../sbl/util/Hash.ts';
+import BlockService from '../src/BlockService.ts';
+import Hash from '../src/util/Hash.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals } from 'std-latest/testing/asserts.ts';
 import HashInversionService from '../sbl/HashInversionService.ts';

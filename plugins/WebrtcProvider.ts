@@ -1,5 +1,5 @@
-import NetworkProvider, { SignalingDriver } from '~/sbl/NetworkProvider.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import NetworkProvider, { SignalingDriver } from '../src/NetworkProvider.ts';
+import Hash from '../src/util/Hash.ts';
 
 export default class WebrtcProvider implements NetworkProvider {
   public protocols = 'webrtc@0.0.1';

@@ -1,24 +1,24 @@
 import { deadline } from 'std-latest/async/mod.ts';
-import secp from '~/sbl/util/secp.ts';
-import Context from '~/sbl/Context.ts';
-import Config, { makeDefaultConfig } from '~/sbl/Config.ts';
-import BlockService from '../sbl/BlockService.ts';
-import { BlockInput } from '../sbl/messages.ts';
-import { bin2hex } from '../sbl/util/hex.ts';
+import secp from '../src/util/secp.ts';
+import Context from '../src/Context.ts';
+import Config, { makeDefaultConfig } from '../src/Config.ts';
+import BlockService from '../src/BlockService.ts';
+import { BlockInput } from '../src/messages.ts';
+import { bin2hex } from '../src/util/hex.ts';
 // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
 import MockTimeProvider from './MockTimeProvider.ts';
-import ConnectionService from '../sbl/ConnectionService.ts';
+import ConnectionService from '../src/ConnectionService.ts';
 import NullStorageProvider from '~/plugins/NullStorageProvider.ts';
-import NetworkService from '~/sbl/NetworkService.ts';
-import KeyService from '~/sbl/KeyService.ts';
-import { createGenesisBlock } from '~/sbl/GenesisService.ts';
-import FactService from '~/sbl/FactService.ts';
-import { BlockFact, FactSource } from '~/sbl/FactMeta.ts';
-import NodeService from '~/sbl/NodeService.ts';
-import { NotUndefined } from '~/sbl/util/functional.ts';
-import { InputSpec } from '~/sbl/BlockBuilder.ts';
-import Hash from '~/sbl/util/Hash.ts';
-import { arrEquals } from '~/sbl/util/buffer.ts';
+import NetworkService from '../src/NetworkService.ts';
+import KeyService from '../src/KeyService.ts';
+import { createGenesisBlock } from '../src/GenesisService.ts';
+import FactService from '../src/FactService.ts';
+import { BlockFact, FactSource } from '../src/FactMeta.ts';
+import NodeService from '../src/NodeService.ts';
+import { NotUndefined } from '../src/util/functional.ts';
+import { InputSpec } from '../src/BlockBuilder.ts';
+import Hash from '../src/util/Hash.ts';
+import { arrEquals } from '../src/util/buffer.ts';
 
 const makeConfig = (
   ctxIdx: number,

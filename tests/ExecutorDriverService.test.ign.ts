@@ -1,12 +1,12 @@
 import * as msg from './messages.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash from '../src/util/Hash.ts';
 import { makeTest } from './util.ts';
-import BlockService from '../sbl/BlockService.ts';
+import BlockService from '../src/BlockService.ts';
 import { assertSnapshot } from 'std-latest/testing/snapshot.ts';
-import FetchService from '../sbl/FetchService.ts';
+import FetchService from '../src/FetchService.ts';
 import LocalGeneratorService, {
   LocalGenerator,
-} from '../sbl/LocalGeneratorService.ts';
+} from '../src/LocalGeneratorService.ts';
 import ExecutorDriverService from '../sbl/ExecutorDriverService.ts';
 import ExecutorLauncherService from '../sbl/ExecutorLauncherService.ts';
 

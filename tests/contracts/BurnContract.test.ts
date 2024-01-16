@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { burnHash } from '~/sbl/constants.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import BurnContract from '~/sbl/contracts/BurnContract.ts';
-import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import BlockBuilder from '../../src/BlockBuilder.ts';
+import { burnHash } from '../../src/constants.ts';
+import BlockService from '../../src/BlockService.ts';
+import BurnContract from '../../src/contracts/BurnContract.ts';
+import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,

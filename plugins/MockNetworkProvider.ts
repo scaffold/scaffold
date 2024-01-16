@@ -1,6 +1,6 @@
-import NetworkProvider, { ConnectionProvider } from '~/sbl/NetworkProvider.ts';
-import Hash from '~/sbl/util/Hash.ts';
-import { TimeProvider } from '~/sbl/Config.ts';
+import NetworkProvider, { ConnectionProvider } from '../src/NetworkProvider.ts';
+import Hash from '../src/util/Hash.ts';
+import { TimeProvider } from '../src/Config.ts';
 
 class TimerSet {
   private timeouts = new Set<number>();

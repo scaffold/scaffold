@@ -1,11 +1,11 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { accountHash, collateralHash } from '~/sbl/constants.ts';
-import KeyService from '~/sbl/KeyService.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import CollateralContract from '~/sbl/contracts/CollateralContract.ts';
-import { EMPTY_ARR, str2bin } from '~/sbl/util/buffer.ts';
+import BlockBuilder from '../../src/BlockBuilder.ts';
+import { accountHash, collateralHash } from '../../src/constants.ts';
+import KeyService from '../../src/KeyService.ts';
+import BlockService from '../../src/BlockService.ts';
+import CollateralContract from '../../src/contracts/CollateralContract.ts';
+import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
@@ -13,9 +13,9 @@ import {
 import {
   CollateralContractDetail,
   CollateralContractParams,
-} from '~/sbl/collateralMessages.ts';
-import { EMPTY_HASH } from '~/sbl/util/Hash.ts';
-import { AccountContractParams } from '~/sbl/messages.ts';
+} from '../../src/collateralMessages.ts';
+import { EMPTY_HASH } from '../../src/util/Hash.ts';
+import { AccountContractParams } from '../../src/messages.ts';
 
 Deno.test(
   {

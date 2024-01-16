@@ -1,4 +1,4 @@
-import { TimeProvider } from '~/sbl/Config.ts';
+import { TimeProvider } from '../src/Config.ts';
 import { RedBlackTree } from 'std-latest/data_structures/mod.ts';
 
 // TODO: Use this instead? https://deno.land/std@0.208.0/testing/time.ts?s=FakeTime

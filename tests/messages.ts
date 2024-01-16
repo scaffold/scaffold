@@ -1,4 +1,4 @@
-import * as base from '~/sbl/messages.ts';
+import * as base from '../src/messages.ts';
 
 const registry = {
   ...base.registry,

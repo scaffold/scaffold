@@ -1,5 +1,5 @@
 import { assert, assertEquals } from 'std-latest/testing/asserts.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash from '../src/util/Hash.ts';
 import { makeTest } from './util.ts';
 import WorkQueue from '~/sbl/WorkQueue.ts';
 

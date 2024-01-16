@@ -1,5 +1,5 @@
-import Hash from '~/sbl/util/Hash.ts';
-import { StorageProvider } from '~/sbl/Config.ts';
+import Hash from '../src/util/Hash.ts';
+import { StorageProvider } from '../src/Config.ts';
 
 export default class NullStorageProvider implements StorageProvider {
   public set(_namespace: number, _key: Hash, _value?: Uint8Array) {}

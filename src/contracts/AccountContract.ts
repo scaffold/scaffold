@@ -1,0 +1,17 @@
+import { ComputationDriver, ComputationType } from '../ComputationMeta.ts';
+import { AccountContractParams } from '../messages.ts';
+import { ContractProvider } from '../SpecialContractManager.ts';
+import { accountHash } from '../constants.ts';
+
+export default class AccountContract implements ContractProvider {
+  public contractHash = accountHash;
+
+  public compute(driver: ComputationDriver) {
+    if (driver.type === ComputationType.Generator) {
+      return;
+    }
+
+    const { public_key } = AccountContractParams.decode(driver.getParams());
+    driver.requireSignature(public_key);
+  }
+}

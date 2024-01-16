@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
-import CollateralUtil, { Posting } from '~/sbl/CollateralUtil.ts';
-import { CollateralContractDetail } from '~/sbl/collateralMessages.ts';
-import { bin2str, str2bin } from '~/sbl/util/buffer.ts';
-import { bin2hex, hex2bin } from '~/sbl/util/hex.ts';
-import { HashPrimitive } from '~/sbl/util/Hash.ts';
-import { BlockOutput } from '~/sbl/messages.ts';
+import CollateralUtil, { Posting } from '../src/CollateralUtil.ts';
+import { CollateralContractDetail } from '../src/collateralMessages.ts';
+import { bin2str, str2bin } from '../src/util/buffer.ts';
+import { bin2hex, hex2bin } from '../src/util/hex.ts';
+import { HashPrimitive } from '../src/util/Hash.ts';
+import { BlockOutput } from '../src/messages.ts';
 
 const makePosting = (
   publicKey: string,

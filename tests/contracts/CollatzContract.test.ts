@@ -1,15 +1,15 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { collatzHash } from '~/sbl/constants.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import CollatzContract from '~/sbl/contracts/CollatzContract.ts';
-import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import BlockBuilder from '../../src/BlockBuilder.ts';
+import { collatzHash } from '../../src/constants.ts';
+import BlockService from '../../src/BlockService.ts';
+import CollatzContract from '../../src/contracts/CollatzContract.ts';
+import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
 } from '~/tests/contracts/util.ts';
-import * as collatzMessages from '~/sbl/contracts/collatzMessages.ts';
+import * as collatzMessages from '../../src/contracts/collatzMessages.ts';
 
 const params: collatzMessages.Params = { num: 1n };
 const goodAnswer: collatzMessages.Answer = { stopping_time: 0n, maximum: 1n };

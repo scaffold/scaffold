@@ -1,17 +1,17 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { rootHash } from '~/sbl/constants.ts';
-import KeyService from '~/sbl/KeyService.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import { AccountContractParams } from '~/sbl/messages.ts';
-import RootContract from '~/sbl/contracts/RootContract.ts';
-import { EMPTY_ARR, str2bin } from '~/sbl/util/buffer.ts';
+import BlockBuilder from '../../src/BlockBuilder.ts';
+import { rootHash } from '../../src/constants.ts';
+import KeyService from '../../src/KeyService.ts';
+import BlockService from '../../src/BlockService.ts';
+import { AccountContractParams } from '../../src/messages.ts';
+import RootContract from '../../src/contracts/RootContract.ts';
+import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
 } from '~/tests/contracts/util.ts';
-import Hash from '~/sbl/util/Hash.ts';
+import Hash from '../../src/util/Hash.ts';
 
 Deno.test(
   {

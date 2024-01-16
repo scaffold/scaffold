@@ -1,23 +1,23 @@
 import { connectCtxs, makeTest, waitFor } from './util.ts';
-import BlockService from '../sbl/BlockService.ts';
-import Hash from '../sbl/util/Hash.ts';
+import BlockService from '../src/BlockService.ts';
+import Hash from '../src/util/Hash.ts';
 import {
   accountHash,
   collateralHash,
   rootHash,
   trueHash,
-} from '../sbl/constants.ts';
+} from '../src/constants.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
 import {
   AccountContractParams,
   CollateralContractParams,
-} from '../sbl/messages.ts';
-import NodeService from '../sbl/NodeService.ts';
-import KeyService from '../sbl/KeyService.ts';
+} from '../src/messages.ts';
+import NodeService from '../src/NodeService.ts';
+import KeyService from '../src/KeyService.ts';
 import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
-import { mapOne } from '../sbl/util/functional.ts';
-import LitigationService from '../sbl/LitigationService.ts';
+import { mapOne } from '../src/util/functional.ts';
+import LitigationService from '../src/LitigationService.ts';
 
 Deno.test(
   { name: `an invalid body should have collateral posted against` },

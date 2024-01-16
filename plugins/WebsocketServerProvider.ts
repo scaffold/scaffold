@@ -1,5 +1,5 @@
 import { serve } from 'std-latest/http/mod.ts';
-import NetworkProvider, { SignalingDriver } from '~/sbl/NetworkProvider.ts';
+import NetworkProvider, { SignalingDriver } from '../src/NetworkProvider.ts';
 
 export default class WebsocketServerProvider implements NetworkProvider {
   public protocols = 'websocket@0.0.1/server';

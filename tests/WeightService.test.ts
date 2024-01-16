@@ -1,10 +1,10 @@
 import { assertEquals } from 'std-latest/assert/mod.ts';
 import { findOutput, makeTest, provideInitialBalance } from '~/tests/util.ts';
-import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import WeightService from '~/sbl/WeightService.ts';
-import { BASE_WORK } from '~/sbl/BlockService.ts';
-import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
-import { trueHash } from '~/sbl/constants.ts';
+import BlockBuilder from '../src/BlockBuilder.ts';
+import WeightService from '../src/WeightService.ts';
+import { BASE_WORK } from '../src/BlockService.ts';
+import { EMPTY_ARR } from '../src/util/buffer.ts';
+import { trueHash } from '../src/constants.ts';
 
 Deno.test(
   `self weight of an empty block`,

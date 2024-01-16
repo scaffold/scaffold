@@ -1,13 +1,13 @@
-import AccountContract from '~/sbl/contracts/AccountContract.ts';
-import { BlockFact } from '~/sbl/FactMeta.ts';
-import Hash from '~/sbl/util/Hash.ts';
-import Context from '~/sbl/Context.ts';
+import AccountContract from '../../src/contracts/AccountContract.ts';
+import { BlockFact } from '../../src/FactMeta.ts';
+import Hash from '../../src/util/Hash.ts';
+import Context from '../../src/Context.ts';
 import {
   assert,
   assertEquals,
   assertNotEquals,
 } from 'std-latest/assert/mod.ts';
-import BlockService from '~/sbl/BlockService.ts';
+import BlockService from '../../src/BlockService.ts';
 import { findOutput } from '../util.ts';
 
 export const baseContractProviders = [new AccountContract()];

@@ -1,5 +1,5 @@
 import { parse } from 'std-latest/flags/mod.ts';
-import { error } from '~/sbl/util/functional.ts';
+import { error } from '../src/util/functional.ts';
 import { readAll } from 'std-latest/streams/read_all.ts';
 
 class DenoInterface {

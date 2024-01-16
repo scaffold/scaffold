@@ -1,11 +1,11 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '~/sbl/BlockBuilder.ts';
-import { timeHash } from '~/sbl/constants.ts';
-import BlockService from '~/sbl/BlockService.ts';
-import { TimeParams } from '~/sbl/messages.ts';
-import TimeContract from '~/sbl/contracts/TimeContract.ts';
-import { EMPTY_ARR } from '~/sbl/util/buffer.ts';
+import BlockBuilder from '../../src/BlockBuilder.ts';
+import { timeHash } from '../../src/constants.ts';
+import BlockService from '../../src/BlockService.ts';
+import { TimeParams } from '../../src/messages.ts';
+import TimeContract from '../../src/contracts/TimeContract.ts';
+import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,

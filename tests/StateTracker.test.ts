@@ -1,6 +1,6 @@
 import { assertEquals } from 'std-latest/assert/mod.ts';
 import { makeTest } from './util.ts';
-import StateTracker from '~/sbl/util/StateTracker.ts';
+import StateTracker from '../src/util/StateTracker.ts';
 
 interface Key {
   idx: bigint;
