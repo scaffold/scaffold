@@ -119,7 +119,7 @@ export default class FetchService {
     externalIncentive = this.ctx.config.getDepositIncentive(verifier);
     if (externalIncentive !== undefined) {
       this.ctx.get(BlockBuilder).publish({
-        outputs: [{ verifier, amount: externalIncentive, detail:EMPTY_ARR }],
+        outputs: [{ verifier, amount: externalIncentive, detail: EMPTY_ARR }],
       }, 0);
     }
 

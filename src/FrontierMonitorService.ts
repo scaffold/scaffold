@@ -1,6 +1,6 @@
 import Context from './Context.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
-import { BlockFact, BlockSetFact } from './FactMeta.ts';
+import { BlockFact } from './FactMeta.ts';
 import { Verifier } from './messages.ts';
 
 export type MonitorCb = (block: BlockFact, outputIdx: number) => void;
@@ -17,8 +17,5 @@ export default class FrontierMonitorService {
     onExit: MonitorCb,
   ) {
     return { releaseMonitor: () => {} };
-  }
-
-  public replaceFrontierSet(oldSet?: BlockSetFact, newSet?: BlockSetFact) {
   }
 }

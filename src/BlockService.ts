@@ -46,9 +46,7 @@ import {
   CollateralContractParams,
   CollateralHint,
 } from './collateralMessages.ts';
-import FrontierService2, {
-  NUM_FRONTIER_LEVELS,
-} from './FrontierService2.ts';
+import FrontierService2, { NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from './util/types.ts';
 import CollateralUtil, { CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
