@@ -22,7 +22,7 @@
   "tasks": {
     "fmt": "deno fmt --options-single-quote --watch",
     "lint": "deno lint --watch",
-    "serve-ui": "deno run --allow-all https://deno.land/x/packup/cli.ts --static-dir build/ index.html --import-map=import_map.json",
+    "serve-ui": "deno run --allow-all https://deno.land/x/packup/cli.ts --static-dir build/ index.html",
     "build-html": "cp static/* build/",
     "build-js": "deno bundle --check --watch --config=deno.json app.tsx build/index.js",
     "build-worker": "deno bundle --check --watch --config=deno.json sbl/worker/worker.ts build/worker.js",

@@ -319,6 +319,7 @@ export default class FactService {
 
   public forget(fact: Fact) {
     this.facts.delete(fact.hash.toPrimitive());
+    this.deleteFromStorage(fact);
   }
 
   public publish(fact: Fact) {
@@ -491,6 +492,17 @@ export default class FactService {
     } catch (err) {
       console.error(
         `Could not save fact ${fact.hash.toHex()} to storage:`,
+        err,
+      );
+    }
+  }
+
+  private deleteFromStorage(fact: Fact) {
+    try {
+      this.ctx.config.storageProvider.set(0, fact.hash);
+    } catch (err) {
+      console.error(
+        `Could not delete fact ${fact.hash.toHex()} from storage:`,
         err,
       );
     }
