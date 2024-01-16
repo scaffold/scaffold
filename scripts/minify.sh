@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Probably doesn't work
+exit 1
+
 npx terser \
   build/index.js \
   --compress drop_console=true,drop_debugger=true,ecma=2022,keep_fargs=false,keep_infinity=true,passes=4,pure_getters=true,toplevel=true \

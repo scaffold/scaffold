@@ -1,6 +1,5 @@
 import * as fflate from 'https://cdn.skypack.dev/fflate?min';
-
-const str2bin = (str: string) => new TextEncoder().encode(str);
+import { str2bin } from '~/sbl/util/buffer.ts';
 
 export const unzip = <ReturnType>(
   data: Uint8Array,

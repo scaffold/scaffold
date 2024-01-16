@@ -1,5 +1,5 @@
 import { bundle } from 'https://deno.land/x/emit@0.33.0/mod.ts';
-import denoJson from './deno.json' with { type: 'json' };
+import denoJson from '../deno.json' with { type: 'json' };
 
 const result = await bundle(
   new URL('./app.tsx', import.meta.url),
