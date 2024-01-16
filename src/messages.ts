@@ -1,5 +1,4 @@
-// @deno-types="../avro/index.d.ts"
-import * as avro from 'avro';
+import { avro } from '../deps.ts';
 import HashClass from './util/Hash.ts';
 
 // declare global {

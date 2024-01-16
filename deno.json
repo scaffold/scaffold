@@ -1,58 +1,30 @@
 {
+  "name": "scaffold",
   "lock": false,
   "compilerOptions": {
     "allowJs": true,
     "strict": true,
     "lib": [
       "dom",
-      "dom.iterable",
-      "dom.asynciterable",
       "deno.ns",
       "deno.unstable"
-    ],
-    "jsx": "react"
+    ]
   },
   "lint": {
-    "exclude": ["assemblyscript", "avro", "dist", "tests/avro"]
+    "exclude": ["avro", "dist", "tests/avro"]
   },
   "fmt": {
-    "exclude": ["README.md", "assemblyscript", "avro", "dist", "jsoncons"],
+    "exclude": ["README.md", "avro", "dist"],
     "singleQuote": true
   },
   "tasks": {
-    "fmt": "deno fmt --options-single-quote --watch",
-    "lint": "deno lint --watch",
-    "serve-ui": "deno run --allow-all https://deno.land/x/packup/cli.ts --static-dir dist/ index.html",
-    "build-html": "cp static/* dist/",
-    "build-js": "deno bundle --check --watch --config=deno.json app.tsx dist/index.js",
-    "build-worker": "deno bundle --check --watch --config=deno.json src/worker/worker.ts dist/worker.js",
-    "serve-build": "deno run --allow-net --allow-read https://deno.land/std@0.211.0/http/file_server.ts dist/ --port 17542 --header 'Cross-Origin-Opener-Policy: same-origin' --header 'Cross-Origin-Embedder-Policy: credentialless'",
-    "serve-ws": "deno run --check --allow-all --unstable --watch server/main.ts",
-    "debug-ws": "deno run --check --allow-all --unstable --inspect server/main.ts",
-    "test": "deno test --config=deno.json --allow-all --seed=123 --trace-ops tests/",
+    "dev": "export DENO_FLAGS=--watch ; deno task fmt & deno task bundle-js & deno task bundle-worker & deno task run-server",
+    "fmt": "deno fmt $DENO_FLAGS",
+    "lint": "deno lint $DENO_FLAGS",
+    "bundle-js": "deno bundle $DENO_FLAGS --check --config=deno.json mod.ts dist/index.js",
+    "bundle-worker": "deno bundle $DENO_FLAGS --check --config=deno.json src/worker/worker.ts dist/worker.js",
+    "run-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/server.ts",
+    "test": "deno test $DENO_FLAGS --config=deno.json --allow-all --seed=123 --trace-ops tests/",
     "test-avro": "# mocha --ui tdd --reporter dot"
-  },
-  "imports": {
-    "react": "https://esm.sh/react@18.2.0?target=esnext&pin=v135",
-    "react-dom": "https://esm.sh/react-dom@18.2.0?target=esnext&pin=v135",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.4.4?target=esnext&pin=v135",
-    "react-icons/bs": "https://esm.sh/react-icons@4.10.1/bs?target=esnext&pin=v135",
-    "tanstack-virtual": "https://esm.sh/@tanstack/react-virtual@3.0.0-alpha.0?target=esnext&pin=v135",
-    "tanstack-table": "https://esm.sh/@tanstack/react-table@8.9.3?target=esnext&pin=v135",
-    "secp256k1": "https://deno.land/x/secp256k1@2.0.0/index.ts",
-    "avro": "./avro/index.js",
-    "binaryen": "https://cdn.jsdelivr.net/gh/AssemblyScript/binaryen.js@112.0.0-nightly.20230411/index.js",
-    "threejs": "https://esm.sh/three@r139?target=esnext&pin=v135",
-    "regl": "https://esm.sh/regl@2.1.0?target=esnext&pin=v135",
-    "react-regl": "https://esm.sh/react-regl@4.3.5?target=esnext&pin=v135",
-    "gl-matrix": "https://esm.sh/gl-matrix@3.4.1?target=esnext&pin=v135",
-    "bunny": "https://esm.sh/bunny@1.0.1?target=esnext&pin=v135",
-    "angle-normals": "https://esm.sh/angle-normals@1.0.0?target=esnext&pin=v135",
-    "simplex-noise": "https://raw.githubusercontent.com/jwagner/simplex-noise.js/3.0.1/simplex-noise.ts",
-    "multiformats/": "https://cdn.skypack.dev/multiformats@13.0.0/",
-    "dnt": "https://deno.land/x/dnt@0.38.1/mod.ts",
-    "unique-names-generator": "https://esm.sh/unique-names-generator@4.7.1?target=esnext&pin=v135",
-    "std-latest/": "https://deno.land/std@0.212.0/",
-    "__comment__": "TODO: jspm.dev, esm.sh, and cdn.skypack.dev basically do the same thing (I think), so choose one?"
   }
 }

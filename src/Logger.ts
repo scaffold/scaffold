@@ -2,8 +2,8 @@ import Context from './Context.ts';
 import Hash from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import QaDebugger from './QaDebugger.ts';
-import * as log from 'std-latest/log/mod.ts';
-import { getLevelName } from 'std-latest/log/levels.ts';
+import { log } from '../deps.ts';
+import { logLevels } from '../deps.ts';
 
 const sortKeys = (obj: { [key: string]: any }) =>
   Object.fromEntries(
@@ -36,7 +36,7 @@ export default class Logger {
   private setupPromise: void; // Promise<void>;
   constructor(private ctx: Context) {
     logConfig.loggers[`sbl_${ctx.config.debugName}`] = {
-      level: getLevelName(ctx.config.logLevel),
+      level: logLevels.getLevelName(ctx.config.logLevel),
       handlers: [
         'console',
         // 'file',

@@ -108,6 +108,40 @@ export default class WorkerExecutor {
     const exitResolver = Promise.withResolvers<void>();
 
     let sentJob = false;
+    let closed = false;
+
+    const exit = (err: unknown) => {
+      if (closed) {
+        return;
+      }
+      closed = true;
+
+      if (err !== undefined) {
+        console.error(err);
+      }
+
+      // Hacky solution to pass/fail based on output; eventually WASM should call our driver methods directly
+      const outputBufs = Object.fromEntries(
+        Object.entries(outputs).map(([key, { size, chunks }]) => {
+          const buf = new Uint8Array(size);
+          chunks.reduce((offset, chunk) => {
+            buf.set(chunk, offset);
+            return offset + chunk.length;
+          }, 0);
+          return [key, buf];
+        }),
+      );
+      console.log('Outputs:', outputBufs);
+      if ('stdout' in outputBufs) {
+        driver.requireBody(outputBufs.stdout);
+      }
+      if ('fail' in outputBufs) {
+        driver.fail();
+      }
+
+      exitResolver.resolve();
+    };
+    worker.addEventListener('close', exit);
 
     const getBody = (file: OpenFile) => {
       if (file.body === undefined) {
@@ -162,30 +196,7 @@ export default class WorkerExecutor {
         return undefined;
       },
       exit(err): undefined {
-        if (err !== undefined) {
-          console.error(err);
-        }
-
-        // Hacky solution to pass/fail based on output; eventually WASM should call our driver methods directly
-        const outputBufs = Object.fromEntries(
-          Object.entries(outputs).map(([key, { size, chunks }]) => {
-            const buf = new Uint8Array(size);
-            chunks.reduce((offset, chunk) => {
-              buf.set(chunk, offset);
-              return offset + chunk.length;
-            }, 0);
-            return [key, buf];
-          }),
-        );
-        console.log('Outputs:', outputBufs);
-        if ('stdout' in outputBufs) {
-          driver.requireBody(outputBufs.stdout);
-        }
-        if ('fail' in outputBufs) {
-          driver.fail();
-        }
-
-        exitResolver.resolve();
+        exit(err);
       },
 
       // Each of these returns the TOTAL size of the source buffer; irrespective of the dstBuf size or offset.

@@ -41,7 +41,7 @@ import {
   FsNode,
 } from './fsTypes.ts';
 import * as wc from './WasiConstants.ts';
-import * as log from 'std-latest/log/mod.ts';
+import { log } from '../../deps.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 import { decodePathEntry, formatPath } from './pathUtils.ts';
 

@@ -25,7 +25,7 @@
 //   return res;
 // };
 
-import { decodeHex, encodeHex } from 'std-latest/encoding/hex.ts';
+import { hex } from '../../deps.ts';
 
-export const bin2hex = encodeHex;
-export const hex2bin = decodeHex;
+export const bin2hex = hex.encodeHex;
+export const hex2bin = hex.decodeHex;

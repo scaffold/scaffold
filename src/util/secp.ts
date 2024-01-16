@@ -4,7 +4,7 @@
 //   }
 // }
 
-import * as secp from 'secp256k1';
+import { secp } from '../../deps.ts';
 
 // Uncaught RangeError: WebAssembly.Compile is disallowed on the main thread, if the buffer size is larger than 4KB. Use WebAssembly.compile, or compile on a worker thread.
 // import { crypto } from 'std-latest/crypto/mod.ts';

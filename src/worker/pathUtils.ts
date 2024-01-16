@@ -1,18 +1,21 @@
-import { base10 } from 'multiformats/bases/base10';
-import { base16 } from 'multiformats/bases/base16';
-import { base32, base32hex } from 'multiformats/bases/base32';
-import { base36 } from 'multiformats/bases/base36';
-import { base58btc } from 'multiformats/bases/base58';
-import { base64url } from 'multiformats/bases/base64';
+import { multiformats } from '../../deps.ts';
 import { memoize } from '../util/functional.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 
 const MULTIBASE_PREFIX = ':';
 // const MULTIBASE_ENCODER = base58btc;
-const MULTIBASE_ENCODER = base16;
+const MULTIBASE_ENCODER = multiformats.bases.base16;
 
 const multibaseMap = Object.fromEntries(
-  [base10, base16, base32, base32hex, base36, base58btc, base64url].map(
+  [
+    multiformats.bases.base10,
+    multiformats.bases.base16,
+    multiformats.bases.base32,
+    multiformats.bases.base32hex,
+    multiformats.bases.base36,
+    multiformats.bases.base58btc,
+    multiformats.bases.base64url,
+  ].map(
     (base) => [base.prefix, base],
   ),
 );

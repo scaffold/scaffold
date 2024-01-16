@@ -1,4 +1,4 @@
-import { serve } from 'std-latest/http/mod.ts';
+import { http } from '../dev_deps.ts';
 import NetworkProvider, { SignalingDriver } from '../src/NetworkProvider.ts';
 
 export default class WebsocketServerProvider implements NetworkProvider {
@@ -8,7 +8,7 @@ export default class WebsocketServerProvider implements NetworkProvider {
     const port = 8314;
 
     // Don't await here; I think serve only resolves once the server closes.
-    serve(
+    http.serve(
       (req: Request) => {
         if (req.headers.get('upgrade') !== 'websocket') {
           return new Response(null, { status: 501 });

@@ -1,5 +1,4 @@
-import { equals } from 'std-latest/bytes/equals.ts';
-import { concat } from 'std-latest/bytes/concat.ts';
+import { bytes } from '../../deps.ts';
 import { memoize } from './functional.ts';
 
 export const EMPTY_ARR = new Uint8Array();
@@ -11,7 +10,7 @@ export const str2bin = (str: string): Uint8Array =>
   new TextEncoder().encode(str);
 
 export const arrEquals = (a: Uint8Array, b: Uint8Array) =>
-  a === b || equals(a, b);
+  a === b || bytes.equals(a, b);
 
 export const arrCompare = (a: Uint8Array, b: Uint8Array) => {
   const len = Math.min(a.length, b.length);
@@ -32,7 +31,7 @@ export const arrCompare = (a: Uint8Array, b: Uint8Array) => {
   }
 };
 
-export const arrConcat = (...arrs: Uint8Array[]) => concat(arrs);
+export const arrConcat = (...arrs: Uint8Array[]) => bytes.concat(arrs);
 
 export const arrFromNumber = (num: number, bytes: number) => {
   const arr = [];

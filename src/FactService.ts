@@ -12,20 +12,15 @@ import BlockService from './BlockService.ts';
 import NodeService, { Node } from './NodeService.ts';
 import { Coder } from './messages.ts';
 import secp from './util/secp.ts';
-import * as zstd from 'https://deno.land/x/zstd_wasm@0.0.20/deno/zstd.ts';
+import { zstd } from '../deps.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
 import { mapPut } from './util/map.ts';
-import * as log from 'std-latest/log/mod.ts';
+import { log } from '../deps.ts';
 import DataService from './DataService.ts';
 import KeyService from './KeyService.ts';
 import CollateralUtil, { DetailVote } from './CollateralUtil.ts';
-import {
-  adjectives,
-  animals,
-  colors,
-  uniqueNamesGenerator,
-} from 'unique-names-generator';
+import { uniqueNamesGenerator } from '../deps.ts';
 import SignalingService from './SignalingService.ts';
 import ConnectionService from './ConnectionService.ts';
 
@@ -525,8 +520,8 @@ export default class FactService {
   }
 
   private getSillyName() {
-    return uniqueNamesGenerator({
-      dictionaries: [colors, animals],
+    return uniqueNamesGenerator.uniqueNamesGenerator({
+      dictionaries: [uniqueNamesGenerator.colors, uniqueNamesGenerator.animals],
       separator: '-',
     });
   }

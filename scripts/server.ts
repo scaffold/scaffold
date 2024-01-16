@@ -1,5 +1,6 @@
-import * as fs from 'std-latest/fs/mod.ts';
-import * as path from 'std-latest/path/mod.ts';
+import { fs } from '../dev_deps.ts';
+import { path } from '../dev_deps.ts';
+import { log } from '../deps.ts';
 import Context from '../src/Context.ts';
 import Config, { makeDefaultConfig } from '../src/Config.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
@@ -16,7 +17,6 @@ import { accountHash, generatorHash, rootHash } from '../src/constants.ts';
 import { AccountContractParams, JsWasiParams } from '../src/messages.ts';
 import KeyService from '../src/KeyService.ts';
 import GenesisService, { sharedGenesisData } from '../src/GenesisService.ts';
-import * as log from 'std-latest/log/mod.ts';
 import WorkerExecutor from '../src/WorkerExecutor.ts';
 import WebsocketServerProvider from '../plugins/WebsocketServerProvider.ts';
 import WebsocketClientProvider from '../plugins/WebsocketClientProvider.ts';

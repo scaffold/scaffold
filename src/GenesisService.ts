@@ -12,7 +12,7 @@ import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import FactService from './FactService.ts';
 import NodeService from './NodeService.ts';
 import NullStorageProvider from '../plugins/NullStorageProvider.ts';
-import { LogLevels } from 'std-latest/log/mod.ts';
+import { log } from '../deps.ts';
 
 // bin2hex(secp.utils.randomPrivateKey())
 const genesisPrivateKey = hex2bin(
@@ -38,7 +38,7 @@ export const createGenesisBlock = (
     debugName: 'GenesisFactory',
     selfPrivateKey: genesisPrivateKey,
 
-    logLevel: LogLevels.ERROR,
+    logLevel: log.LogLevels.ERROR,
 
     networkProviders: [],
 
