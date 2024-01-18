@@ -91,16 +91,16 @@ export class ResolvingMonitor<Value, Key> extends Monitor<Value, Key> {
     });
   }
 
-  public resolveOne(key: Key, value: Value) {
+  public override resolveOne(key: Key, value: Value) {
     return super.resolveOne(key, value);
   }
-  public resolveAll(key: Key, value: Value) {
+  public override resolveAll(key: Key, value: Value) {
     super.resolveAll(key, value);
   }
 }
 
 export class WatchingMonitor<Value, Key> extends Monitor<Value, Key> {
-  public callAll(key: Key, value: Value) {
+  public override callAll(key: Key, value: Value) {
     super.callAll(key, value);
   }
 }

@@ -121,6 +121,8 @@ interface Config {
 
   workScoreThreshold: number; // TODO: Units?
 
+  selfIncentiveMultiplier: number; // How much more we should prioritize our own requests vs others' requests.
+
   graphParameters: GraphParameters;
   backgroundJobParameters: BackgroundJobParameters;
   testParameters: TestParameters;
@@ -167,6 +169,7 @@ export const makeDefaultConfig = () => ({
     memoryMb: 1024,
   },
   workScoreThreshold: 10,
+  selfIncentiveMultiplier: 1.5,
   graphParameters: {
     minimumCollateral: (work, _time) => work * 1000n,
   },

@@ -1,6 +1,8 @@
 import Config from './Config.ts';
 import Context from './Context.ts';
 import FetchService from './FetchService.ts';
+import Query from './Query.ts';
+import { Resource } from './Query.ts';
 import Hash from './util/Hash.ts';
 import { todo } from './util/functional.ts';
 
@@ -15,28 +17,15 @@ export default class Scaffold {
     return this.ctx;
   }
 
-  public fetch(
-    contractHash: Hash | string,
-    params: Uint8Array,
-    onAnswer: (answer: Uint8Array) => void,
-  ) {
+  public fetch(resource: Resource, onAnswer: (answer: Uint8Array) => void) {
     return this.ctx.get(FetchService).fetch(
-      {
-        contract_hash: contractHash instanceof Hash
-          ? contractHash
-          : Hash.fromHex(contractHash),
-        params,
-      },
+      Query.fromResource(resource).toVerifier(),
       {},
       (block) => onAnswer(block.body),
     );
   }
 
-  public put(
-    contractHash: Hash | string,
-    params: Uint8Array,
-    answer: Uint8Array,
-  ) {
+  public put(resource: Resource, answer: Uint8Array) {
     todo();
   }
 

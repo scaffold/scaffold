@@ -3,6 +3,8 @@
   "lock": false,
   "compilerOptions": {
     "allowJs": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
     "strict": true,
     "lib": [
       "dom",
@@ -18,13 +20,13 @@
     "singleQuote": true
   },
   "tasks": {
-    "dev": "export DENO_FLAGS=--watch ; deno task fmt & deno task bundle-js & deno task bundle-worker & deno task run-server",
+    "dev": "export DENO_FLAGS=--watch ; deno task fmt & deno task run-server",
     "fmt": "deno fmt $DENO_FLAGS",
     "lint": "deno lint $DENO_FLAGS",
-    "bundle-js": "deno bundle $DENO_FLAGS --check --config=deno.json mod.ts dist/index.js",
-    "bundle-worker": "deno bundle $DENO_FLAGS --check --config=deno.json src/worker/worker.ts dist/worker.js",
+    "bundle-js": "deno bundle $DENO_FLAGS --check mod.ts dist/index.js",
+    "bundle-worker": "deno bundle $DENO_FLAGS --check src/worker/worker.ts dist/worker.js",
     "run-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/server.ts",
-    "test": "deno test $DENO_FLAGS --config=deno.json --allow-all --seed=123 --trace-ops tests/",
+    "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-ops tests/",
     "test-avro": "# mocha --ui tdd --reporter dot"
   }
 }

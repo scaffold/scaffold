@@ -24,13 +24,13 @@ class HashLogicalType extends avro.types.LogicalType {
     return HashClass.fromBytes(bytes);
   }
 
-  protected _fromValue(buf: Uint8Array) {
+  protected override _fromValue(buf: Uint8Array) {
     return this.fromBytes(buf);
   }
-  protected _toValue(hash: HashClass) {
+  protected override _toValue(hash: HashClass) {
     return hash.toBytes();
   }
-  protected _resolve(type: any) {
+  protected override _resolve(type: any) {
     if (avro.Type.isType(type, 'fixed') && type.getSize() === 32) {
       return this._fromValue;
     }
@@ -46,13 +46,13 @@ class Uint8ArrayLogicalType extends avro.types.LogicalType {
     return bytes;
   }
 
-  protected _fromValue(buf: Uint8Array) {
+  protected override _fromValue(buf: Uint8Array) {
     return this.fromBytes(buf);
   }
-  protected _toValue(val: Uint8Array) {
+  protected override _toValue(val: Uint8Array) {
     return val;
   }
-  protected _resolve(type: any) {
+  protected override _resolve(type: any) {
     if (avro.Type.isType(type, 'bytes')) {
       return this._fromValue;
     }
