@@ -169,18 +169,32 @@ export default class BlockBuilder {
     const body = spec.body ?? new Uint8Array();
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
-    for (const block of refBlocks) {
-      const inputTs = block.timestamp;
-      if (inputTs >= timestamp) {
-        // timestamp = inputTs + 1n;
-        timestamp = inputTs;
+    if (this.ctx.config.graphParameters.enforceTimestampMonotonicity) {
+      if (!Hash.equals(frontierVote, ZERO_HASH)) {
+        const frontierBlock = this.ctx.get(BlockService)
+          .get(frontierVote, false);
+        if (frontierBlock === undefined) {
+          throw new Error(`Unknown frontier vote!`);
+        }
+        const inputTs = frontierBlock.timestamp +
+          this.ctx.config.graphParameters.minimumGenerationTime;
+        if (inputTs > timestamp) {
+          timestamp = inputTs;
+        }
       }
-    }
-    for (const { block } of inputBlocks) {
-      const inputTs = block.timestamp;
-      if (inputTs >= timestamp) {
-        // timestamp = inputTs + 1n;
-        timestamp = inputTs;
+      for (const block of refBlocks) {
+        const inputTs = block.timestamp +
+          this.ctx.config.graphParameters.minimumGenerationTime;
+        if (inputTs > timestamp) {
+          timestamp = inputTs;
+        }
+      }
+      for (const { block } of inputBlocks) {
+        const inputTs = block.timestamp +
+          this.ctx.config.graphParameters.minimumGenerationTime;
+        if (inputTs > timestamp) {
+          timestamp = inputTs;
+        }
       }
     }
 

@@ -98,7 +98,10 @@ export default class BlockService {
   ): BlockFact {
     const block = Block.decode(base.message);
 
-    if (block.timestamp > BigInt(this.ctx.config.timeProvider.now())) {
+    if (
+      this.ctx.config.discardFutureBlocks &&
+      block.timestamp > BigInt(this.ctx.config.timeProvider.now())
+    ) {
       throw new Error(`Discarding block because the timestamp is too late`);
     }
 
@@ -373,6 +376,15 @@ export default class BlockService {
   }
 
   private linkFrontier(frontierVote: BlockFact, block: BlockFact) {
+    if (
+      this.ctx.config.graphParameters.enforceTimestampMonotonicity &&
+      block.timestamp <
+        frontierVote.timestamp +
+          this.ctx.config.graphParameters.minimumGenerationTime
+    ) {
+      throw new Error(`Generation time is too short!`);
+    }
+
     if (frontierVote.frontierParams.level < block.frontierParams.level) {
       throw new Error(
         `Invalid frontier vote! The voted block's level must be greater than or equal to the voter level!`,
@@ -401,6 +413,14 @@ export default class BlockService {
     parentOutputIdx: number,
     childInputIdx: number,
   ) {
+    if (
+      this.ctx.config.graphParameters.enforceTimestampMonotonicity &&
+      child.timestamp <
+        parent.timestamp + this.ctx.config.graphParameters.minimumGenerationTime
+    ) {
+      throw new Error(`Generation time is too short!`);
+    }
+
     if (!parent.isCanonical) {
       this.setCanonicality(child, false);
     }

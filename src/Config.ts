@@ -12,6 +12,8 @@ import { defaultContractProviders } from './contracts/defaultContractProviders.t
 // TODO: Reorder, rename, reorganize config
 
 export interface GraphParameters {
+  enforceTimestampMonotonicity: boolean;
+  minimumGenerationTime: bigint;
   minimumCollateral(work: bigint, time: number): bigint;
 }
 
@@ -105,6 +107,8 @@ interface Config {
 
   // requiredProfitPerComputeRatio: number;
 
+  discardFutureBlocks: boolean;
+
   // Only use this for tests; it'll simply throw an error when we try to ingest one too many facts.
   limitFactCount: number;
 
@@ -158,6 +162,7 @@ export const makeDefaultConfig = () => ({
   getGenerationReward: (_verifier, computeTimeSeconds) =>
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
+  discardFutureBlocks: false,
   // limitFactCount: Infinity,
   limitFactCount: 100,
   allowSpecifiedFrontierOutputs: false,
@@ -171,6 +176,8 @@ export const makeDefaultConfig = () => ({
   workScoreThreshold: 10,
   selfIncentiveMultiplier: 1.5,
   graphParameters: {
+    enforceTimestampMonotonicity: false,
+    minimumGenerationTime: 1n,
     minimumCollateral: (work, _time) => work * 1000n,
   },
   backgroundJobParameters: {},
