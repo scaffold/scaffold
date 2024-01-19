@@ -29,6 +29,8 @@ const makeConfig = (
   debugName: `ctx_${ctxIdx + 1}`,
   selfPrivateKey: secp.utils.randomPrivateKey(),
 
+  workerPath: new URL('./worker/worker.ts', import.meta.url).href,
+
   timeProvider: new MockTimeProvider(),
   storageProvider: new NullStorageProvider(),
   networkProviders: [],

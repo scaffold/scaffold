@@ -90,6 +90,8 @@ interface Config {
   //   ) => Uint8Array;
   // }[];
 
+  workerPath?: string;
+
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
   storageProvider: StorageProvider;

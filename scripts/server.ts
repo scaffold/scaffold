@@ -54,6 +54,8 @@ const config: Config = {
 
   logLevel: log.LogLevels.INFO,
 
+  workerPath: new URL('./worker/worker.ts', import.meta.url).href,
+
   networkProviders: [
     new WebsocketServerProvider(),
     new WebsocketClientProvider(),

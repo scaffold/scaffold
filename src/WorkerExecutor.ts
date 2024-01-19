@@ -46,33 +46,34 @@ const writeIovs = (dstBufs: Uint8Array[], src: Uint8Array, offset: number) => {
 };
 
 export default class WorkerExecutor {
-  constructor(private ctx: Context) {}
+  constructor(private ctx: Context) {
+    if (this.ctx.config.workerPath === undefined) {
+      throw new Error(
+        `You must set the workerPath in config to execute WASM computations!`,
+      );
+    }
+  }
 
   public run(job: JobMessage, driver: ComputationDriver): MaybePromise<void> {
     if (driver.done.signal.aborted) {
       return;
     }
 
-    const worker = new Worker(
-      typeof Deno !== 'undefined'
-        ? new URL('./worker/worker.ts', import.meta.url).href // Deno
-        : new URL('./worker.js', window.location.href).href, // Browser
-      {
-        type: 'module',
-        // deno: {
-        //   namespace: false,
-        //   permissions: {
-        //     env: false,
-        //     hrtime: false,
-        //     net: false,
-        //     ffi: false,
-        //     read: false,
-        //     run: false,
-        //     write: false,
-        //   },
-        // },
-      },
-    );
+    const worker = new Worker(this.ctx.config.workerPath!, {
+      type: 'module',
+      // deno: {
+      //   namespace: false,
+      //   permissions: {
+      //     env: false,
+      //     hrtime: false,
+      //     net: false,
+      //     ffi: false,
+      //     read: false,
+      //     run: false,
+      //     write: false,
+      //   },
+      // },
+    });
 
     const sigBuf = new SharedArrayBuffer(8);
     const msg: InitialMessage = { sigBuf };
