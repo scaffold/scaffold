@@ -381,6 +381,11 @@ export default class FactService {
       data = new Uint8Array(zstd.decompress(data));
     }
 
+    const type: FactType = data[factMagic.byteLength];
+    if (!this.ctx.config.enableBlockIngestion && type === FactType.Block) {
+      throw new Error(`Block ingestion disabled!`);
+    }
+
     const hash = Hash.digest(data);
     const existing = this.facts.get(hash.toPrimitive());
     if (existing !== undefined) {
@@ -404,7 +409,6 @@ export default class FactService {
       throw new Error(`Fact doesn't start with the magic bytes!`);
     }
 
-    const type: FactType = data[factMagic.byteLength];
     const signed = typeHasSignature[type];
     if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
       throw new Error(`Message length (${data.byteLength}) is too short!`);

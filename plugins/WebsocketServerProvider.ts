@@ -4,9 +4,9 @@ import NetworkProvider, { SignalingDriver } from '../src/NetworkProvider.ts';
 export default class WebsocketServerProvider implements NetworkProvider {
   public protocols = 'websocket@0.0.1/server';
 
-  public createInstance(driver: SignalingDriver) {
-    const port = 8314;
+  constructor(private port = 8314) {}
 
+  public createInstance(driver: SignalingDriver) {
     // Don't await here; I think serve only resolves once the server closes.
     http.serve(
       (req: Request) => {
@@ -31,7 +31,7 @@ export default class WebsocketServerProvider implements NetworkProvider {
 
         return response;
       },
-      { port },
+      { port: this.port },
     );
 
     [
@@ -42,7 +42,7 @@ export default class WebsocketServerProvider implements NetworkProvider {
         }),
     ].forEach((host) =>
       Promise.resolve(host).then((host) =>
-        host && driver.sendSignal(`ws://${host}:${port}`)
+        host && driver.sendSignal(`ws://${host}:${this.port}`)
       )
     );
 

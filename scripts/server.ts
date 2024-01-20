@@ -65,7 +65,6 @@ const config: Config = {
   storageProvider: new NullStorageProvider(),
 
   initialWorkerCount: 1,
-  onlyBridge: false,
 };
 
 for (const provider of config.contractProviders) {

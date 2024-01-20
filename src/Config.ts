@@ -121,8 +121,6 @@ interface Config {
 
   maxShutdownTimeMs: number;
 
-  onlyBridge?: boolean;
-
   resourceLimits: Record<Resource, number>;
 
   workScoreThreshold: number; // TODO: Units?
@@ -135,8 +133,8 @@ interface Config {
 
   dbgVerifyGenerations: boolean;
 
+  enableBlockIngestion: boolean;
   enableValidation: boolean;
-
   enableWorkerLogging: boolean;
 }
 
@@ -185,6 +183,7 @@ export const makeDefaultConfig = () => ({
   backgroundJobParameters: {},
   testParameters: {},
   dbgVerifyGenerations: false,
+  enableBlockIngestion: true,
   enableValidation: true,
   enableWorkerLogging: true,
 } satisfies Partial<Config>);
