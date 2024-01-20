@@ -23,6 +23,7 @@ import CollateralUtil, { DetailVote } from './CollateralUtil.ts';
 import { uniqueNamesGenerator } from '../deps.ts';
 import SignalingService from './SignalingService.ts';
 import ConnectionService from './ConnectionService.ts';
+import MonitoringService from './MonitoringService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
@@ -73,7 +74,8 @@ const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
 export default class FactService {
   private factories: FactFactory[] = [];
-  private ingestors: ((fact: FactBase) => void)[][] = [];
+  private ingestListeners: ((fact: unknown) => void)[][] = [];
+  private forgetListeners: ((fact: unknown) => void)[][] = [];
   private facts = new Map<HashPrimitive, Fact | typeof invalidFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
@@ -87,7 +89,8 @@ export default class FactService {
       this.factories.push(() => {
         throw new Error(`Invalid message type ${i}!`);
       });
-      this.ingestors.push([]);
+      this.ingestListeners.push([]);
+      this.forgetListeners.push([]);
     }
 
     this.factories[FactType.Identification] = (base, mutator) =>
@@ -127,11 +130,18 @@ export default class FactService {
     return this.facts.size;
   }
 
-  public registerIngestor<Type extends FactType>(
+  public onIngest<Type extends FactType>(
     type: Type,
-    cb: (fact: FactBase & { type: Type }) => void,
+    cb: (fact: Fact & { type: Type }) => void,
   ) {
-    this.ingestors[type].push(cb as (fact: FactBase) => void);
+    this.ingestListeners[type].push(cb as (fact: unknown) => void);
+  }
+
+  public onForget<Type extends FactType>(
+    type: Type,
+    cb: (fact: Fact & { type: Type }) => void,
+  ) {
+    this.forgetListeners[type].push(cb as (fact: unknown) => void);
   }
 
   // public async init() {
@@ -182,6 +192,8 @@ export default class FactService {
   public addCollateral(blockHash: Hash, collateralization: Collateralization) {
     mapPut(this.collateralByHash, blockHash.toPrimitive(), () => [])
       .push(collateralization);
+    this.ctx.get(MonitoringService).collateralMonitor
+      .callAll(blockHash, collateralization);
   }
   public getValidity(
     blockHash: Hash,
@@ -313,6 +325,9 @@ export default class FactService {
   }
 
   public forget(fact: Fact) {
+    for (const cb of this.forgetListeners[fact.type]) {
+      cb(fact);
+    }
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);
   }
@@ -476,7 +491,7 @@ export default class FactService {
 
     this.writeToStorage(res);
 
-    for (const cb of this.ingestors[base.type]) {
+    for (const cb of this.ingestListeners[base.type]) {
       cb(res);
     }
 

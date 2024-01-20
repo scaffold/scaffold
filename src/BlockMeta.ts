@@ -27,6 +27,11 @@ export const enum BlockFlag {
 
 // type BlockIO = Pick<Block, 'frontier_vote' | 'inputs' | 'outputs'>;
 
+export interface OutputClaim {
+  block: BlockFact;
+  inputIdx: number;
+}
+
 export const ZERO_BLOCK = Symbol('ZeroBlock');
 
 export interface BlockMeta {
@@ -50,7 +55,7 @@ export interface BlockMeta {
   mergeableProbability: number;
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
-  outputClaims: { block: BlockFact; inputIdx: number }[][]; // TODO: Do we need inputIdx here?
+  outputClaims: OutputClaim[][]; // TODO: Do we need inputIdx here?
 
   isCanonical: boolean;
 

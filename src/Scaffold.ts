@@ -18,6 +18,7 @@ export default class Scaffold {
   }
 
   public fetch(resource: Resource, onAnswer: (answer: Uint8Array) => void) {
+    todo();
     return this.ctx.get(FetchService).fetch(
       Query.fromResource(resource).toVerifier(),
       {},

@@ -6,6 +6,7 @@ import { Block, Verifier } from './messages.ts';
 import Hash from './util/Hash.ts';
 import BlockBuilder from './BlockBuilder.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
+import { Collateralization } from './FactMeta.ts';
 
 export const enum FetchMode {
   All,
@@ -22,6 +23,13 @@ interface FetchOptions {
   blockComparator?: (a: BlockFact, b: BlockFact) => number;
   verify?: true;
   certaintyThreshold?: number;
+
+  onIncentiveBlock?: (block: BlockFact) => void;
+  onResponseBlock?: (block: BlockFact) => void;
+  onResponseCollateral?: (collateral: Collateralization) => void;
+  // The descending frontier chain
+  // The total derived work / canonicality
+
   abortSignal?: AbortSignal;
 }
 
@@ -196,6 +204,12 @@ export default class FetchService {
       //   );
       //   externalIncentive = incentive;
       // },
+
+      // The incentive block
+      // The response block
+      // The collateral block
+      // The descending frontier chain
+      // The total derived work / canonicality
     };
   }
 }

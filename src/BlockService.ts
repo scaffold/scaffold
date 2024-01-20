@@ -1,4 +1,4 @@
-import { BlockFlag, BlockMeta, ZERO_BLOCK } from './BlockMeta.ts';
+import { BlockFlag, BlockMeta, OutputClaim, ZERO_BLOCK } from './BlockMeta.ts';
 import {
   accountHash,
   collateralHash,
@@ -54,6 +54,7 @@ import GenerationService from './GenerationService.ts';
 import { Node } from './NodeService.ts';
 import WeightService from './WeightService.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
+import MonitoringService from './MonitoringService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -62,15 +63,14 @@ export const BASE_WORK = 10n;
 export const neverAbort = new AbortController().signal;
 
 export default class BlockService {
-  private claimsByOutput = new Map<
-    HashPrimitive,
-    { block: BlockFact; inputIdx: number }[]
-  >();
+  private claimsByOutput = new Map<HashPrimitive, OutputClaim[]>();
   private frontierVoters = new Map<HashPrimitive, BlockFact[]>();
 
-  public blockMonitor = new ResolvingMonitor<BlockFact, Hash>((h) => h); // Key is block hash
-  public satisfactionMonitor = new WatchingMonitor<BlockFact, Verifier>((v) =>
-    Hash.digest(Verifier.encode(v))
+  public blockMonitor = new ResolvingMonitor<Hash, BlockFact>((h) =>
+    h.toPrimitive()
+  ); // Key is block hash
+  public satisfactionMonitor = new WatchingMonitor<Verifier, BlockFact>((v) =>
+    Hash.digest(Verifier.encode(v)).toPrimitive()
   ); // Key is input verifier
 
   constructor(private ctx: Context) {}
@@ -182,7 +182,9 @@ export default class BlockService {
 
     fact.inputs.forEach((input, idx) => {
       const claims = this.getClaims(input);
-      claims.push({ block: fact, inputIdx: idx });
+      const claim = { block: fact, inputIdx: idx };
+      claims.push(claim);
+      this.ctx.get(MonitoringService).claimMonitor.callAll(input, claim);
 
       const parent = this.get(input.block_hash);
       if (parent) {
