@@ -24,7 +24,7 @@ interface FetchOptions {
   verify?: true;
   certaintyThreshold?: number;
 
-  onIncentiveBlock?: (block: BlockFact) => void;
+  onIncentiveBlock?: (block: BlockFact, outputIdx: number) => void;
   onResponseBlock?: (block: BlockFact) => void;
   onResponseCollateral?: (collateral: Collateralization) => void;
   // The descending frontier chain
@@ -61,6 +61,9 @@ export default class FetchService {
       blockSelector,
       blockComparator,
       verify,
+      onIncentiveBlock,
+      onResponseBlock,
+      onResponseCollateral,
       abortSignal,
     }: FetchOptions,
     cb?: (block: BlockFact) => void,
@@ -126,9 +129,17 @@ export default class FetchService {
 
     externalIncentive = this.ctx.config.getDepositIncentive(verifier);
     if (externalIncentive !== undefined) {
-      this.ctx.get(BlockBuilder).publish({
+      const incentiveBlock = this.ctx.get(BlockBuilder).publish({
         outputs: [{ verifier, amount: externalIncentive, detail: EMPTY_ARR }],
       }, 0);
+      if (onIncentiveBlock !== undefined) {
+        onIncentiveBlock(
+          incentiveBlock,
+          incentiveBlock.outputs.findIndex((x) =>
+            this.ctx.get(BlockService).areVerifiersEqual(x.verifier, verifier)
+          ),
+        );
+      }
     }
 
     // if (bid !== undefined) {

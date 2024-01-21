@@ -69,8 +69,7 @@ const config: Config = {
 
 for (const provider of config.contractProviders) {
   if (provider instanceof RootContract) {
-    const data = str2bin('my secret');
-    provider.registry.set(Hash.digest(data).toPrimitive(), data);
+    provider.addData(str2bin('my secret'));
   }
 }
 
