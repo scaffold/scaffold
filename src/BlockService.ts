@@ -245,12 +245,14 @@ export default class BlockService {
       this.checkInputAvailability(fact);
     }
 
-    if (fact.body.byteLength > 0) {
-      try {
-        // TODO: Set the fromNode correctly here
-        this.ctx.get(FactService).ingest(fact.body, fact.source);
-      } catch (_err) {
-        // If it fails no worries; it just wasn't a valid block
+    for (const result of fact.results) {
+      if (result.byteLength > 0) {
+        try {
+          // TODO: Set the fromNode correctly here
+          this.ctx.get(FactService).ingest(result, fact.source);
+        } catch (_err) {
+          // If it fails no worries; it just wasn't a valid block
+        }
       }
     }
 
@@ -765,13 +767,22 @@ export default class BlockService {
     );
   }
 
+<<<<<<< Updated upstream
   public getClaims({ blockHash, outputIdx }: BlockInput) {
+=======
+  public getClaims(input: { block_hash: Hash; output_idx: number }) {
+>>>>>>> Stashed changes
     // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(
       this.claimsByOutput,
       Hash.composePrimitives(
+<<<<<<< Updated upstream
         blockHash.toPrimitive(),
         Hash.fromLiteral32(outputIdx).toPrimitive(),
+=======
+        input.block_hash.toPrimitive(),
+        Hash.fromLiteral32(input.output_idx).toPrimitive(),
+>>>>>>> Stashed changes
       ),
       () => [],
     );

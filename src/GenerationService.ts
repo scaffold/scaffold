@@ -318,7 +318,7 @@ export default class GenerationService {
               this.isFrontierMergeable(block, lastBlock)));
       }
 
-      return this.ctx.get(FrontierChainService).getMerger([
+      return this.ctx.get(FrontierChainService).getVote([
         ...verifierInputs,
         ...otherInputs,
         ...refs.map((ref) => ({ block: ref })),

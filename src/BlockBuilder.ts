@@ -20,6 +20,8 @@ import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import WeightService from './WeightService.ts';
 import GenerationService from './GenerationService.ts';
+import { assert, todo } from './util/functional.ts';
+import FrontierChainService from './FrontierChainService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -30,19 +32,21 @@ export interface InputSpec {
   outputIdx: number;
   amount: bigint;
 }
-export interface FrontierSpec {
-  level: number;
-  inputs: InputSpec[];
-}
-export interface BlockSpec {
-  body?: Uint8Array;
-  inputs?: InputSpec[];
-  refs?: BlockFact[];
-  satisfies?: (Verifier & { detail?: Uint8Array })[];
-  outputs?: BlockOutput[];
+
+// export interface FrontierSpec {
+//   level: number;
+//   inputs: InputSpec[];
+// }
+
+export interface BlockDraft {
   frontierVote?: BlockFact;
   frontierLevel?: number;
-  frontierSpec?: FrontierSpec;
+  refs?: BlockFact[];
+  inputs?: InputSpec[];
+  satisfies?: (Verifier & { detail?: Uint8Array })[];
+  outputs?: Omit<BlockOutput, 'groupIdx'>[];
+  result?: Uint8Array;
+  // frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
 }
 
@@ -53,7 +57,7 @@ export default class BlockBuilder {
   private pubsPerMs = 0;
 
   // We can do this because adding more inputs, outputs, or a body should never remove validity
-  private buildingBlock?: BlockSpec;
+  private drafts: BlockDraft[] = [];
   private emitAt = Infinity;
   private emitTimeout = -1;
   private resolvers: ((block: BlockFact) => void)[] = [];
@@ -67,7 +71,7 @@ export default class BlockBuilder {
     };
   }
 
-  public buildBlock(spec: BlockSpec): Block {
+  public buildBlock(drafts: BlockDraft[]): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -75,15 +79,61 @@ export default class BlockBuilder {
     // const inputs = this.ctx.get(IncentiveRegistry).pop(verifier_hash)?.inputs ||
     //   [];
 
-    const refBlocks = spec.refs ?? [];
-    const inputBlocks = spec.inputs ?? [];
-    const outputs = spec.outputs ?? [];
+    // drafts.sort((a, b) =>
+    //   Number(b.result !== undefined) - Number(a.result !== undefined)
+    // );
+
+    let frontierLevel: number | undefined;
+    const refBlocks: BlockFact[] = [];
+    const inputs: (InputSpec & BlockInput)[] = [];
+    const outputs: BlockOutput[] = [];
+    const results: Uint8Array[] = [];
+
+    let groupIdx = 0;
+    for (const draft of drafts) {
+      if (draft.frontierLevel !== undefined) {
+        if (frontierLevel === undefined) {
+          frontierLevel = draft.frontierLevel;
+        } else if (frontierLevel !== draft.frontierLevel) {
+          throw new Error(`Cannot merge different frontier levels!`);
+        }
+      }
+
+      if (draft.refs !== undefined) {
+        for (const ref of draft.refs) {
+          refBlocks.push(ref);
+        }
+      }
+
+      if (draft.inputs !== undefined) {
+        for (const input of draft.inputs) {
+          inputs.push({ ...input, blockHash: input.block.hash, groupIdx });
+        }
+      }
+
+      if (draft.satisfies !== undefined) {
+        for (const satisfaction of draft.satisfies) {
+          this.collectInputs(
+            satisfaction,
+            true,
+            (input) =>
+              inputs.push({ ...input, blockHash: input.block.hash, groupIdx }),
+          );
+        }
+      }
+
+      if (draft.outputs !== undefined) {
+        for (const output of draft.outputs) {
+          outputs.push({ ...output, groupIdx });
+        }
+      }
+
+      results.push(draft.result ?? EMPTY_ARR);
+
+      groupIdx++;
+    }
 
     let ioDelta = 0n;
-
-    for (const satisfaction of spec.satisfies ?? []) {
-      this.collectInputs(inputBlocks, satisfaction, true);
-    }
 
     const addFrontierOutput = !outputs.some((output) =>
       Hash.equals(output.verifier.contract_hash, frontierHash)
@@ -100,7 +150,7 @@ export default class BlockBuilder {
       }
     }
 
-    ioDelta += inputBlocks.reduce((acc, cur) => acc + cur.amount, 0n);
+    ioDelta += inputs.reduce((acc, cur) => acc + cur.amount, 0n);
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     while (ioDelta < 0n) {
@@ -111,17 +161,27 @@ export default class BlockBuilder {
       }
 
       if (input.amount > 0n) {
-        inputBlocks.push(input);
+        // TODO: Handle groups without any result
+        results.push(EMPTY_ARR);
+        inputs.push({
+          ...input,
+          blockHash: input.block.hash,
+          groupIdx: groupIdx++,
+        });
+        assert(results.length === groupIdx);
         ioDelta += input.amount;
       }
     }
 
     if (ioDelta > 0n) {
+      results.push(EMPTY_ARR);
       outputs.push({
         verifier: this.selfAccountVerifier,
         amount: ioDelta,
         detail: EMPTY_ARR,
+        groupIdx: groupIdx++,
       });
+      assert(results.length === groupIdx);
     } else if (ioDelta < 0n) {
       // TODO: Only output what we actually have
       if (this.ctx.config.enableValidation) {
@@ -130,20 +190,19 @@ export default class BlockBuilder {
     }
 
     const refs = refBlocks.map((block) => block.hash);
-    const inputs = inputBlocks.map((input) => ({
-      blockHash: input.block.hash,
-      outputIdx: input.outputIdx,
-    }));
 
-    const frontierVote = spec.frontierVote?.hash ??
-      this.ctx.get(FrontierService2).getBlockVote(inputBlocks);
+    const frontierVote = this.ctx.get(FrontierChainService).getVote([
+      ...inputs,
+      ...refBlocks.map((ref) => ({ block: ref })),
+    ]).hash;
 
     if (addFrontierOutput) {
-      const level = spec.frontierLevel ?? 0;
+      const level = frontierLevel ?? 0;
       // const amount = BigInt(
       //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
       // );
 
+      results.push(EMPTY_ARR);
       outputs.push({
         verifier: {
           contract_hash: frontierHash,
@@ -152,7 +211,7 @@ export default class BlockBuilder {
         amount: frontierOutputAmount,
         detail: FrontierTreeDetail.encode({
           treeWeights: this.ctx.get(FrontierService2)
-            .mergeTreeWeights(inputBlocks, outputs, frontierVote),
+            .mergeTreeWeights(inputs, outputs, frontierVote),
           // input_tree_root: ZERO_HASH,
           // output_tree_root: ZERO_HASH,
 
@@ -160,13 +219,12 @@ export default class BlockBuilder {
           // output_count: 0,
 
           // block_count: 1,
-          // claimed_work: this.computeWork(inputBlocks, outputs),
+          // claimed_work: this.computeWork(inputs, outputs),
         }),
+        groupIdx: groupIdx++,
       });
+      assert(results.length === groupIdx);
     }
-
-    // TODO: Can bundle multiple blocks without bodies
-    const body = spec.body ?? new Uint8Array();
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
     if (this.ctx.config.graphParameters.enforceTimestampMonotonicity) {
@@ -189,7 +247,7 @@ export default class BlockBuilder {
           timestamp = inputTs;
         }
       }
-      for (const { block } of inputBlocks) {
+      for (const { block } of inputs) {
         const inputTs = block.timestamp +
           this.ctx.config.graphParameters.minimumGenerationTime;
         if (inputTs > timestamp) {
@@ -198,22 +256,13 @@ export default class BlockBuilder {
       }
     }
 
-    return {
-      refs,
-      inputs,
-      outputs,
-      frontierVote,
-      body,
-      // claimed_work: claimedWork,
-      // is_free_market: true,
-      timestamp,
-    };
+    return { frontierVote, refs, inputs, outputs, results, timestamp };
   }
 
-  public collectInputs(
-    inputBlocks: InputSpec[],
+  private collectInputs(
     satisfaction: Verifier & { detail?: Uint8Array },
     publishStub: boolean,
+    addInput: (input: InputSpec) => void,
   ) {
     for (
       const { block, idx } of this.ctx.get(BlockService)
@@ -223,11 +272,7 @@ export default class BlockBuilder {
         block.outputClaims[idx].length === 0 &&
         block.outputs[idx].amount >= 0n
       ) {
-        inputBlocks.push({
-          block,
-          outputIdx: idx,
-          amount: block.outputs[idx].amount,
-        });
+        addInput({ block, outputIdx: idx, amount: block.outputs[idx].amount });
         publishStub = false;
       }
     }
@@ -240,27 +285,30 @@ export default class BlockBuilder {
           detail: satisfaction.detail ?? EMPTY_ARR,
         }],
       }, 0);
-      inputBlocks.push({ block, outputIdx: 0, amount: 0n });
+      addInput({
+        block,
+        outputIdx: block.outputs.findIndex((x) =>
+          this.ctx.get(BlockService).areVerifiersEqual(x.verifier, satisfaction)
+        ),
+        amount: 0n,
+      });
     }
   }
 
   private doEmit = () => {
-    const bb = this.buildingBlock;
-    if (bb === undefined) {
-      throw new Error(`Can't emit an undefined block!`);
-    }
-    this.buildingBlock = undefined;
+    const drafts = this.drafts;
+    this.drafts = [];
     const resolvers = this.resolvers;
     this.resolvers = [];
-    const fact = this.ctx.get(BlockService).create(this.buildBlock(bb));
+    const fact = this.ctx.get(BlockService).create(this.buildBlock(drafts));
     resolvers.forEach((fn) => fn(fact));
   };
 
-  public publish(spec: BlockSpec, timeout: 0): BlockFact;
-  public publish(spec: BlockSpec, timeout?: number): MaybePromise<BlockFact>;
-  public publish(spec: BlockSpec, timeout?: number) {
+  public publish(draft: BlockDraft, timeout: 0): BlockFact;
+  public publish(draft: BlockDraft, timeout?: number): MaybePromise<BlockFact>;
+  public publish(draft: BlockDraft, timeout?: number) {
     if (!enableBlockMerging) {
-      return this.ctx.get(BlockService).create(this.buildBlock(spec));
+      return this.ctx.get(BlockService).create(this.buildBlock([draft]));
     }
 
     timeout ??= defaultTimeout;
@@ -270,16 +318,14 @@ export default class BlockBuilder {
 
     this.pubsPerMs++;
 
-    if (this.buildingBlock === undefined) {
+    if (this.drafts.length === 0) {
       if (timeout === 0) {
-        return this.ctx.get(BlockService).create(this.buildBlock(spec));
+        return this.ctx.get(BlockService).create(this.buildBlock([draft]));
       } else {
-        this.buildingBlock = spec;
+        this.drafts.push(draft);
         this.emitAt = this.ctx.config.timeProvider.now() + timeout;
-        this.emitTimeout = this.ctx.config.timeProvider.setTimeout(
-          this.doEmit,
-          timeout,
-        );
+        this.emitTimeout = this.ctx.config.timeProvider
+          .setTimeout(this.doEmit, timeout);
         if (this.resolvers.length !== 0) {
           throw new Error(
             `Resolvers should be empty if building block isn't set!`,
@@ -289,14 +335,17 @@ export default class BlockBuilder {
       }
     }
 
-    const bb = this.buildingBlock;
-
-    const mergeable = (spec.body === undefined || bb.body === undefined ||
-      arrEquals(spec.body, bb.body)) &&
-      (spec.frontierVote === undefined || bb.frontierVote === undefined ||
-        spec.frontierVote === bb.frontierVote) &&
-      (spec.frontierLevel === undefined || bb.frontierLevel === undefined ||
-        spec.frontierLevel === bb.frontierLevel);
+    const existingFrontierLevel = this.drafts
+      .find((d) => d.frontierLevel !== undefined)?.frontierLevel;
+    const mergeable = (existingFrontierLevel === undefined ||
+      draft.frontierLevel === undefined ||
+      existingFrontierLevel === draft.frontierLevel) &&
+      this.ctx.get(FrontierChainService).getVote(
+          [...this.drafts, draft].flatMap((d) => [
+            ...d.inputs ?? [],
+            ...d.refs?.map((ref) => ({ block: ref })) ?? [],
+          ]),
+        ) !== undefined;
 
     // if (
     //   mergeable && spec.frontierVote !== undefined &&
@@ -313,36 +362,17 @@ export default class BlockBuilder {
     // }
 
     if (mergeable) {
-      bb.body ??= spec.body;
-      if (spec.inputs !== undefined) {
-        bb.inputs = bb.inputs !== undefined
-          ? bb.inputs.concat(spec.inputs)
-          : spec.inputs;
-      }
-      if (spec.refs !== undefined) {
-        bb.refs = bb.refs !== undefined ? bb.refs.concat(spec.refs) : spec.refs;
-      }
-      if (spec.satisfies !== undefined) {
-        bb.satisfies = bb.satisfies !== undefined
-          ? bb.satisfies.concat(spec.satisfies)
-          : spec.satisfies;
-      }
-      if (spec.outputs !== undefined) {
-        bb.outputs = bb.outputs !== undefined
-          ? bb.outputs.concat(spec.outputs)
-          : spec.outputs;
-      }
-      bb.frontierVote ??= spec.frontierVote;
-      bb.frontierLevel ??= spec.frontierLevel;
+      this.drafts.push(draft);
 
       if (timeout === 0) {
         // Mergeable and we need to emit immediately:
         // Merge and emit; clear building block.
         this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
-        this.buildingBlock = undefined;
+        const drafts = this.drafts;
+        this.drafts = [];
         const resolvers = this.resolvers;
         this.resolvers = [];
-        const fact = this.ctx.get(BlockService).create(this.buildBlock(bb));
+        const fact = this.ctx.get(BlockService).create(this.buildBlock(drafts));
         resolvers.forEach((fn) => fn(fact));
         return fact;
       } else {
@@ -352,10 +382,8 @@ export default class BlockBuilder {
         if (emitAt < this.emitAt) {
           this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
           this.emitAt = emitAt;
-          this.emitTimeout = this.ctx.config.timeProvider.setTimeout(
-            this.doEmit,
-            timeout,
-          );
+          this.emitTimeout = this.ctx.config.timeProvider
+            .setTimeout(this.doEmit, timeout);
         }
         return new Promise((resolve) => this.resolvers.push(resolve));
       }
@@ -363,27 +391,27 @@ export default class BlockBuilder {
       if (timeout === 0) {
         // Not mergeable and we need to emit immediately:
         // Just emit the current block now and leave the other one to emit later.
-        return this.ctx.get(BlockService).create(this.buildBlock(spec));
+        return this.ctx.get(BlockService).create(this.buildBlock([draft]));
       } else {
         // Not mergeable and we can wait to emit:
         // Emit the block that should be emitted first; leave the other one for later.
         const emitAt = this.ctx.config.timeProvider.now() + timeout;
         if (emitAt < this.emitAt) {
           // Emit the current block now and leave the building one for later.
-          return this.ctx.get(BlockService).create(this.buildBlock(spec));
+          return this.ctx.get(BlockService).create(this.buildBlock([draft]));
         } else {
           // Emit the building block now and leave the current one for later.
           this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
-          this.buildingBlock = spec;
+          const drafts = this.drafts;
+          this.drafts = [draft];
           this.emitAt = emitAt;
-          this.emitTimeout = this.ctx.config.timeProvider.setTimeout(
-            this.doEmit,
-            timeout,
-          );
+          this.emitTimeout = this.ctx.config.timeProvider
+            .setTimeout(this.doEmit, timeout);
           const bbResolvers = this.resolvers;
           return new Promise((resolve) => {
             this.resolvers = [resolve];
-            const fact = this.ctx.get(BlockService).create(this.buildBlock(bb));
+            const fact = this.ctx.get(BlockService)
+              .create(this.buildBlock(drafts));
             bbResolvers.forEach((fn) => fn(fact));
           });
         }

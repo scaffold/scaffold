@@ -6,7 +6,7 @@ import Context from './Context.ts';
 import { frontierHash } from './constants.ts';
 import { todo } from './util/functional.ts';
 
-export type BlockVertex = Pick<
+export type VertexBase = Pick<
   BlockFact,
   'outputs' | 'outputClaims' | 'frontierOutputIdx' | 'frontierVoteBlock'
 >;
@@ -31,7 +31,9 @@ const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
 export default class FrontierChainService {
   constructor(private ctx: Context) {}
 
-  public getMerger(inputs: { block: BlockVertex; outputIdx?: number }[]) {
+  public getVote<VertexType extends VertexBase>(
+    inputs: { block: VertexType; outputIdx?: number }[],
+  ): VertexType {
     const frontierInputs = inputs.filter((input) =>
       input.outputIdx !== undefined &&
       Hash.equals(
@@ -107,7 +109,7 @@ export default class FrontierChainService {
   //   return bestParent;
   // }
 
-  private getFrontierChain(block: BlockVertex) {
+  private getFrontierChain(block: VertexBase) {
     return this.recurse(block, (el, queue) => {
       switch (el.frontierVoteBlock) {
         case undefined:
@@ -120,7 +122,7 @@ export default class FrontierChainService {
     });
   }
 
-  private getAllParents(block: BlockVertex) {
+  private getAllParents(block: VertexBase) {
     return this.recurse(block, (el, queue) => {
       for (const claim of el.outputClaims[el.frontierOutputIdx]) {
         queue.push(claim.block);
@@ -129,8 +131,8 @@ export default class FrontierChainService {
   }
 
   private recurse(
-    block: BlockVertex,
-    pusher: (el: BlockVertex, queue: BlockVertex[]) => void,
+    block: VertexBase,
+    pusher: (el: VertexBase, queue: VertexBase[]) => void,
   ) {
     const queue = [block];
     for (let i = 0; i < queue.length; i++) {

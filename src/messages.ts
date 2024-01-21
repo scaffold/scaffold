@@ -195,7 +195,7 @@ export const registry = {
       // I don't think we necessarily need this
       // { name: 'amount', type: 'long' },
 
-      // { name: 'result_idx', type: 'int' }, // -1 means there is no body
+      { name: 'groupIdx', type: 'int' },
     ],
   },
   BlockOutput: {
@@ -215,6 +215,8 @@ export const registry = {
       { name: 'amount', type: 'long' },
 
       { name: 'detail', type: 'bytes' },
+
+      { name: 'groupIdx', type: 'int' },
     ],
   },
   EpochInclusionProof: {
@@ -235,8 +237,6 @@ export const registry = {
       // Blocks we depend upon but aren't inputting anything from
       { name: 'refs', type: { type: 'array', items: 'Hash' } },
 
-      // { name: 'results', type: { type: 'array', items: 'bytes' } },
-
       // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
@@ -248,7 +248,9 @@ export const registry = {
       // TODO: Move this to BlockInput? No, I don't think so.
       // TODO: Move this to BlockOutput detail? Maybe! In any case, it would be nice to be able to fetch the detail of an output without claiming it.
       // TODO: Accomplish this via hints? Add a requireHint() call? Allow collateral and/or hints to be embedded on the target block itself?
-      { name: 'body', type: 'bytes' },
+      // { name: 'body', type: 'bytes' },
+
+      { name: 'results', type: { type: 'array', items: 'bytes' } },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
       // { name: 'is_free_market', type: 'boolean' },
