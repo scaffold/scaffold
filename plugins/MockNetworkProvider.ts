@@ -1,4 +1,7 @@
-import NetworkProvider, { ConnectionProvider } from '../src/NetworkProvider.ts';
+import NetworkProvider, {
+  ConnectionProvider,
+  SignalingDriver,
+} from '../src/NetworkProvider.ts';
 import Hash from '../src/util/Hash.ts';
 import { TimeProvider } from '../src/Config.ts';
 
@@ -20,16 +23,15 @@ class TimerSet {
   }
 }
 
-export default class MockNetworkProvider implements NetworkProvider {
-  public dialsTo = 'mock';
-  public listensTo = 'mock';
+interface Server extends ConnectionProvider {
+  recvHandler?(data: Uint8Array): void;
+  closeHandler?(): void;
+}
 
-  private servers = new Map<
-    string,
-    {
-      connect: (send: (data: Uint8Array) => void) => (data: Uint8Array) => void;
-    }
-  >();
+export default class MockNetworkProvider implements NetworkProvider {
+  public protocols = 'mock';
+
+  private servers = new Map<string, Server>();
 
   constructor(
     private opts: {
@@ -41,86 +43,61 @@ export default class MockNetworkProvider implements NetworkProvider {
     },
   ) {}
 
-  public createServer(
-    onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) {
-    const onClose: (() => void)[] = [];
+  public createInstance(driver: SignalingDriver) {
     const timerSet = new TimerSet(this.opts.timeProvider);
+
+    let remote: Server | undefined;
 
     const addr = Hash.random().toHex();
-    this.servers.set(addr, {
-      connect: (send: (data: Uint8Array) => void) => {
-        let recvHandler: (data: Uint8Array) => void;
-        onNewConn({
-          sendReliable: (data: Uint8Array) =>
-            // console.log(
-            //   Packet.decode(data.subarray(64)),
-            timerSet.set(
-              () => send(data),
-              (Math.random() + 0.5) * this.opts.sendReliableLatencyMs,
-            ),
-          // ),
-          sendFast: (data: Uint8Array) =>
-            Math.random() > this.opts.sendFastDropRatio &&
-            timerSet.set(
-              () => send(data),
-              (Math.random() + 0.5) * this.opts.sendFastLatencyMs,
-            ),
-          onRecv: (handler: (data: Uint8Array) => void) => {
-            recvHandler = handler;
-          },
-          shutdown: () => {
-            onClose.forEach((cb) => cb());
-            // console.log('CLOSE', timeouts);
-            timerSet.clearAll();
-          },
-          onClose: (handler: () => void) => onClose.push(handler),
-        });
-        return recvHandler!;
+    const server: Server = {
+      sendReliable: (data: Uint8Array) =>
+        timerSet.set(
+          () => remote!.recvHandler!(data),
+          (Math.random() + 0.5) * this.opts.sendReliableLatencyMs,
+        ),
+      sendFast: (data: Uint8Array) =>
+        Math.random() > this.opts.sendFastDropRatio &&
+        timerSet.set(
+          () => remote!.recvHandler!(data),
+          (Math.random() + 0.5) * this.opts.sendFastLatencyMs,
+        ),
+      onRecv: (handler: (data: Uint8Array) => void) => {
+        if (server.onRecv !== undefined) {
+          throw new Error(`Cannot call onRecv multiple times!`);
+        }
+        server.recvHandler = handler;
       },
-    });
-    onListen(addr);
-  }
+      shutdown: () => {
+        server.closeHandler!();
+        // console.log('CLOSE', timeouts);
+        timerSet.clearAll();
+      },
+      onClose: (handler: () => void) => {
+        if (server.closeHandler !== undefined) {
+          throw new Error(`Cannot call onClose multiple times!`);
+        }
+        server.closeHandler = handler;
+      },
+    };
 
-  public createClient(
-    _onListen: (spec: string) => void,
-    onNewConn: (conn: ConnectionProvider) => void,
-  ) {
-    let send: (data: Uint8Array) => void;
-    const onClose: (() => void)[] = [];
-    const timerSet = new TimerSet(this.opts.timeProvider);
+    this.servers.set(addr, server);
+    driver.sendSignal(addr);
 
     return {
-      tryConnect: (spec: string) => {
-        const server = this.servers.get(spec);
-        if (server === undefined) {
-          console.error(`Tried connecting to a non-existent spec ${spec}`);
-          return;
+      recvSignal: (signal: string) => {
+        if (remote !== undefined) {
+          throw new Error(`Extra signal ${signal}`);
         }
 
-        timerSet.set(() =>
-          onNewConn({
-            sendReliable: (data: Uint8Array) =>
-              timerSet.set(
-                () => send(data),
-                (Math.random() + 0.5) * this.opts.sendReliableLatencyMs,
-              ),
-            sendFast: (data: Uint8Array) =>
-              Math.random() > this.opts.sendFastDropRatio &&
-              timerSet.set(
-                () => send(data),
-                (Math.random() + 0.5) * this.opts.sendFastLatencyMs,
-              ),
-            onRecv: (handler: (data: Uint8Array) => void) => {
-              send = server.connect(handler);
-            },
-            shutdown: () => {
-              onClose.forEach((cb) => cb());
-              timerSet.clearAll();
-            },
-            onClose: (handler: () => void) => onClose.push(handler),
-          }), (Math.random() + 0.5) * this.opts.connectLatencyMs);
+        remote = this.servers.get(signal);
+        if (remote === undefined) {
+          throw new Error(`Unable to connect to ${signal}`);
+        }
+
+        timerSet.set(
+          () => driver.createConnection(server),
+          (Math.random() + 0.5) * this.opts.connectLatencyMs,
+        );
       },
     };
   }

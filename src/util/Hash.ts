@@ -6,6 +6,7 @@ import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, arrFromNumber, bin2str, str2bin } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
+import { DevtoolsFormattable } from '../../plugins/devtoolsFormatterPlugin.ts';
 
 // TODO: Try blake?
 
@@ -37,7 +38,7 @@ export const HASH_SIZE = 32;
 
 const nonPrintableRegex = /[^\u0020-\u007E]/g;
 
-export default class Hash {
+export default class Hash implements DevtoolsFormattable {
   // TODO: Remove; only for debugging
   private name: string;
 
@@ -256,6 +257,11 @@ export default class Hash {
       }
     }
     return 0;
+  }
+
+  _devtoolsFormatHeader() {
+    return null;
+    // return ['span', {}, this.toHex().slice(0, 8)] as const;
   }
 }
 

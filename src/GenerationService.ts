@@ -16,7 +16,7 @@ import {
   Verifier,
 } from './messages.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
-import { assert, todo } from './util/functional.ts';
+import { assert, error, todo } from './util/functional.ts';
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import WorkerExecutor from './WorkerExecutor.ts';
 import LitigationService from './LitigationService.ts';
@@ -44,7 +44,7 @@ import { frontierInputCount } from './contracts/FrontierContract.ts';
 
 interface RunState {
   verifierState: VerifierState;
-  isMergeable(block: BlockFact, isInput: boolean): boolean;
+  isMergeable(block: BlockFact, outputIdx?: number): boolean;
   acceptInput?(input: InputSpec): void;
 }
 
@@ -103,8 +103,10 @@ export default class GenerationService {
   }
 
   private insertInput(verifierState: VerifierState, input: InputSpec) {
+    // Insert the input into the highest-
+
     const mergeable = verifierState.running.filter((run) =>
-      run.isMergeable(input.block, true)
+      run.isMergeable(input.block, input.outputIdx)
     );
 
     if (mergeable.length !== 0) {
@@ -115,7 +117,10 @@ export default class GenerationService {
         }
       }
     } else {
-      const runState = { verifierState, isMergeable: todo };
+      const runState = {
+        verifierState,
+        isMergeable: () => error(`Should not be called!`),
+      };
       const launch = this.launchRun(runState, input);
       if (launch !== undefined) {
         verifierState.running.push(runState);
@@ -289,11 +294,23 @@ export default class GenerationService {
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
-    const isMergeable = (block: BlockFact, isInput: boolean) => {
+    state.isMergeable = (block: BlockFact, outputIdx?: number) => {
       if (
-        isInput && verifierInputs.length > 0 &&
+        outputIdx !== undefined && verifierInputs.length > 0 &&
         Hash.equals(state.verifierState.verifier.contract_hash, frontierHash)
       ) {
+        const frontierCount = verifierInputs.filter((x) =>
+          Hash.equals(
+            x.block.outputs[x.outputIdx].verifier.contract_hash,
+            frontierHash,
+          )
+        ).length;
+        if (frontierCount > frontierInputCount) {
+          throw new Error(`Internal error!`);
+        } else if (frontierCount === frontierInputCount) {
+          return false;
+        }
+
         const lastBlock = verifierInputs[verifierInputs.length - 1].block;
         return block.frontierVoteBlock !== undefined &&
           (block.frontierVoteBlock === lastBlock ||
@@ -302,19 +319,18 @@ export default class GenerationService {
       }
 
       return this.ctx.get(FrontierChainService).getMerger([
-        ...verifierInputs.map((x) => x.block),
-        ...otherInputs.map((x) => x.block),
-        ...refs,
-        block,
+        ...verifierInputs,
+        ...otherInputs,
+        ...refs.map((ref) => ({ block: ref })),
+        { block, outputIdx },
       ]) !== undefined;
     };
-    state.isMergeable = isMergeable;
 
     const collectInputs = () => {
       if (!inputsAreFixed) {
         state.verifierState.unclaimedInputs = state.verifierState
           .unclaimedInputs.filter((input) => {
-            if (isMergeable(input.block, true)) {
+            if (state.isMergeable(input.block, input.outputIdx)) {
               verifierInputs.push(input);
               return false;
             } else {
@@ -445,7 +461,9 @@ export default class GenerationService {
               break;
             } else {
               const idx = state.verifierState.unclaimedInputs
-                .findIndex((input) => isMergeable(input.block, true));
+                .findIndex((input) =>
+                  state.isMergeable(input.block, input.outputIdx)
+                );
               if (idx !== -1) {
                 verifierInputs.push(
                   state.verifierState.unclaimedInputs.splice(idx, 1)[0],

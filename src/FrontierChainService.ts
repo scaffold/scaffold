@@ -3,9 +3,17 @@ import { BlockFact } from './FactMeta.ts';
 import WeightService from './WeightService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import Context from './Context.ts';
+import { frontierHash } from './constants.ts';
+import { todo } from './util/functional.ts';
+
+export type BlockVertex = Pick<
+  BlockFact,
+  'outputs' | 'outputClaims' | 'frontierOutputIdx' | 'frontierVoteBlock'
+>;
 
 // The frontier can always be extended or swapped to its parent
 
+// TODO: Move to set util
 const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
   if (a.size > b.size) {
     const t = a;
@@ -23,99 +31,83 @@ const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
 export default class FrontierChainService {
   constructor(private ctx: Context) {}
 
-  public getMerger(blocks: BlockFact[]) {
-    const parents = blocks.map((b) => this.getAllParents(b));
-    return blocks.find((b) => {
-      const chain = this.getFrontierChain(b);
+  public getMerger(inputs: { block: BlockVertex; outputIdx?: number }[]) {
+    const frontierInputs = inputs.filter((input) =>
+      input.outputIdx !== undefined &&
+      Hash.equals(
+        input.block.outputs[input.outputIdx].verifier.contract_hash,
+        frontierHash,
+      )
+    );
+
+    todo();
+
+    for (let i = 1; i < frontierInputs.length; i++) {
+      const targ = frontierInputs[i - 1];
+      const cur = frontierInputs[i].block.frontierVoteBlock;
+    }
+
+    const parents = inputs.map((input) => this.getAllParents(input.block));
+    return inputs.find((input) => {
+      const chain = this.getFrontierChain(input.block);
       return parents.every((p) => doesIntersect(chain, p));
-    });
+    })?.block;
   }
 
-  // Returns the shortest chain
-  public intersect(...chains: BlockFact[]) {
-    this.sortAndVerifyMergeable(chains);
-    return chains[0];
-  }
+  // // Returns the shortest chain
+  // public intersect(...chains: BlockFact[]) {
+  //   this.sortAndVerifyMergeable(chains);
+  //   return chains[0];
+  // }
 
-  // Returns the longest chain
-  public union(...chains: BlockFact[]) {
-    this.sortAndVerifyMergeable(chains);
-    return chains[chains.length - 1];
-  }
+  // // Returns the longest chain
+  // public union(...chains: BlockFact[]) {
+  //   this.sortAndVerifyMergeable(chains);
+  //   return chains[chains.length - 1];
+  // }
 
-  // public intersectParent(
-  //   descendant: BlockFact,
-  //   chain: BlockFact,
-  // ): BlockFact | undefined {
-  //   const parent = this.getBestParent(descendant);
-  //   if (parent !== undefined) {
-  //     const res = this.intersectParent(parent, chain);
-  //     if (res !== undefined) {
-  //       return res;
-  //     }
-  //   }
-
-  //   if (this.extends(descendant, chain)) {
-  //   }
-
-  //   while (true) {
-  //     if (this.chain.some((hash) => Hash.equals(hash, block.hash))) {
-  //       return block;
-  //     }
-
-  //     if (bestDescendant !== undefined) {
-  //       block = bestDescendant;
-  //     } else {
-  //       return;
+  // private sortAndVerifyMergeable(chains: BlockFact[]) {
+  //   chains.sort((a, b) => a.frontierChainDepth! - b.frontierChainDepth!);
+  //   for (let i = 1; i < chains.length; i++) {
+  //     if (!this.extends(chains[i - 1], chains[i])) {
+  //       throw new Error(`Chains are not mergeable!`);
   //     }
   //   }
   // }
 
-  // private unionParent(descendant: BlockFact, chain: BlockFact) {
+  // private extends(shorter: BlockFact, longer: BlockFact) {
+  //   if (
+  //     longer.frontierChainDepth === undefined ||
+  //     shorter.frontierChainDepth === undefined
+  //   ) {
+  //     throw new Error(`Incomplete frontier chain!`);
+  //   }
+
+  //   while (longer.frontierChainDepth! > shorter.frontierChainDepth!) {
+  //     const next = longer.frontierVoteBlock;
+  //     if (next === undefined || next === ZERO_BLOCK) {
+  //       throw new Error(`Internal error!`);
+  //     }
+  //     longer = next;
+  //   }
+
+  //   return longer === shorter;
   // }
 
-  private sortAndVerifyMergeable(chains: BlockFact[]) {
-    chains.sort((a, b) => a.frontierChainDepth! - b.frontierChainDepth!);
-    for (let i = 1; i < chains.length; i++) {
-      if (!this.extends(chains[i - 1], chains[i])) {
-        throw new Error(`Chains are not mergeable!`);
-      }
-    }
-  }
+  // private getBestParent(block: BlockFact) {
+  //   let bestScore: bigint | undefined;
+  //   let bestParent: BlockFact | undefined;
+  //   for (const claim of block.outputClaims[block.frontierOutputIdx]) {
+  //     const score = this.ctx.get(WeightService).getCanonicality(claim.block);
+  //     if (bestParent === undefined || score > bestScore!) {
+  //       bestScore = score;
+  //       bestParent = claim.block;
+  //     }
+  //   }
+  //   return bestParent;
+  // }
 
-  private extends(shorter: BlockFact, longer: BlockFact) {
-    if (
-      longer.frontierChainDepth === undefined ||
-      shorter.frontierChainDepth === undefined
-    ) {
-      throw new Error(`Incomplete frontier chain!`);
-    }
-
-    while (longer.frontierChainDepth! > shorter.frontierChainDepth!) {
-      const next = longer.frontierVoteBlock;
-      if (next === undefined || next === ZERO_BLOCK) {
-        throw new Error(`Internal error!`);
-      }
-      longer = next;
-    }
-
-    return longer === shorter;
-  }
-
-  private getBestParent(block: BlockFact) {
-    let bestScore: bigint | undefined;
-    let bestParent: BlockFact | undefined;
-    for (const claim of block.outputClaims[block.frontierOutputIdx]) {
-      const score = this.ctx.get(WeightService).getCanonicality(claim.block);
-      if (bestParent === undefined || score > bestScore!) {
-        bestScore = score;
-        bestParent = claim.block;
-      }
-    }
-    return bestParent;
-  }
-
-  private getFrontierChain(block: BlockFact) {
+  private getFrontierChain(block: BlockVertex) {
     return this.recurse(block, (el, queue) => {
       switch (el.frontierVoteBlock) {
         case undefined:
@@ -128,7 +120,7 @@ export default class FrontierChainService {
     });
   }
 
-  private getAllParents(block: BlockFact) {
+  private getAllParents(block: BlockVertex) {
     return this.recurse(block, (el, queue) => {
       for (const claim of el.outputClaims[el.frontierOutputIdx]) {
         queue.push(claim.block);
@@ -137,8 +129,8 @@ export default class FrontierChainService {
   }
 
   private recurse(
-    block: BlockFact,
-    pusher: (el: BlockFact, queue: BlockFact[]) => void,
+    block: BlockVertex,
+    pusher: (el: BlockVertex, queue: BlockVertex[]) => void,
   ) {
     const queue = [block];
     for (let i = 0; i < queue.length; i++) {

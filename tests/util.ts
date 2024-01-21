@@ -1,4 +1,4 @@
-import { deadline } from 'std-latest/async/mod.ts';
+import { async } from '../test_deps.ts';
 import secp from '../src/util/secp.ts';
 import Context from '../src/Context.ts';
 import Config, { makeDefaultConfig } from '../src/Config.ts';
@@ -19,6 +19,7 @@ import { NotUndefined } from '../src/util/functional.ts';
 import { InputSpec } from '../src/BlockBuilder.ts';
 import Hash from '../src/util/Hash.ts';
 import { arrEquals } from '../src/util/buffer.ts';
+import { SignalingProvider } from '../src/NetworkProvider.ts';
 
 const makeConfig = (
   ctxIdx: number,
@@ -62,7 +63,7 @@ export const makeTest = (
       return ctx;
     },
   );
-  return deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000)
+  return async.deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000)
     .finally(() => ctxs.forEach((ctx) => ctx.destruct()));
 };
 
@@ -85,24 +86,37 @@ export const provideInitialBalance = (...ctxs: Context[]) => {
   return genesis.hash;
 };
 
+const connectPair = (a: Context, b: Context) => {
+  let bProvider: SignalingProvider | undefined;
+  const bMessages: string[] = [];
+
+  const aProvider = a.get(NetworkService).initConnection(
+    'mock',
+    undefined,
+    (signal) =>
+      bProvider !== undefined
+        ? bProvider.recvSignal(signal)
+        : bMessages.push(signal),
+  );
+
+  bProvider = b.get(NetworkService).initConnection(
+    'mock',
+    undefined,
+    (signal) => aProvider.recvSignal(signal),
+  );
+  for (const msg of bMessages) {
+    bProvider.recvSignal(msg);
+  }
+};
+
 export const connectCtxs = (ctxs: Context[], topology: 'chain' | 'mesh') => {
   switch (topology) {
     case 'chain':
-      ctxs.forEach((ctx, idx) =>
-        ctx.get(NetworkService).serve((protocol: string, spec: string) =>
-          idx && ctxs[idx - 1].get(ConnectionService).connect(protocol, spec)
-        )
-      );
+      ctxs.forEach((ctx, idx) => idx && connectPair(ctx, ctxs[idx - 1]));
       break;
 
     case 'mesh':
-      ctxs.forEach((ctx1) =>
-        ctxs.forEach((ctx2) =>
-          ctx1.get(NetworkService).serve((protocol: string, spec: string) =>
-            ctx2.get(ConnectionService).connect(protocol, spec)
-          )
-        )
-      );
+      ctxs.forEach((ctx1) => ctxs.forEach((ctx2) => connectPair(ctx1, ctx2)));
       break;
   }
 };
