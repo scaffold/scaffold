@@ -49,12 +49,12 @@ export const createGenesisBlock = (
   });
 
   const block = ctx.get(BlockBuilder).buildBlock({});
-  block.inputs.push({ block_hash: ZERO_HASH, output_idx: 0 });
+  block.inputs.push({ blockHash: ZERO_HASH, outputIdx: 0 });
   for (const { publicKey, amount } of accounts) {
     block.outputs.push({
       verifier: {
         contract_hash: accountHash,
-        params: AccountContractParams.encode({ public_key: publicKey }),
+        params: AccountContractParams.encode({ publicKey }),
       },
       amount,
       detail: new Uint8Array(),

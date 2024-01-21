@@ -62,7 +62,7 @@ export default class BlockBuilder {
     this.selfAccountVerifier = {
       contract_hash: accountHash,
       params: AccountContractParams.encode({
-        public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+        publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
       }),
     };
   }
@@ -131,8 +131,8 @@ export default class BlockBuilder {
 
     const refs = refBlocks.map((block) => block.hash);
     const inputs = inputBlocks.map((input) => ({
-      block_hash: input.block.hash,
-      output_idx: input.outputIdx,
+      blockHash: input.block.hash,
+      outputIdx: input.outputIdx,
     }));
 
     const frontierVote = spec.frontierVote?.hash ??
@@ -151,7 +151,7 @@ export default class BlockBuilder {
         },
         amount: frontierOutputAmount,
         detail: FrontierTreeDetail.encode({
-          tree_weights: this.ctx.get(FrontierService2)
+          treeWeights: this.ctx.get(FrontierService2)
             .mergeTreeWeights(inputBlocks, outputs, frontierVote),
           // input_tree_root: ZERO_HASH,
           // output_tree_root: ZERO_HASH,
@@ -202,7 +202,7 @@ export default class BlockBuilder {
       refs,
       inputs,
       outputs,
-      frontier_vote: frontierVote,
+      frontierVote,
       body,
       // claimed_work: claimedWork,
       // is_free_market: true,

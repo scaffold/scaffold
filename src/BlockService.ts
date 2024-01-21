@@ -123,19 +123,18 @@ export default class BlockService {
       derivedWork: 0,
       mergeableProbability: 0,
       outputClaims: block.outputs.map((_, idx) =>
-        this.getClaims({ block_hash: base.hash, output_idx: idx })
+        this.getClaims({ blockHash: base.hash, outputIdx: idx })
       ),
 
-      isCanonical:
-        this.get(block.frontier_vote, false)?.isCanonical !== false &&
+      isCanonical: this.get(block.frontierVote, false)?.isCanonical !== false &&
         block.inputs.every((x) =>
-          this.get(x.block_hash, false)?.isCanonical !== false
+          this.get(x.blockHash, false)?.isCanonical !== false
         ),
 
-      frontierVoteBlock: Hash.equals(block.frontier_vote, ZERO_HASH)
+      frontierVoteBlock: Hash.equals(block.frontierVote, ZERO_HASH)
         ? ZERO_BLOCK
         : undefined,
-      frontierChainDepth: Hash.equals(block.frontier_vote, ZERO_HASH)
+      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH)
         ? 0
         : undefined,
 
@@ -170,8 +169,8 @@ export default class BlockService {
 
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
-    this.getVoters(fact.frontier_vote).push(fact);
-    const frontierVote = this.get(fact.frontier_vote, false);
+    this.getVoters(fact.frontierVote).push(fact);
+    const frontierVote = this.get(fact.frontierVote, false);
     if (frontierVote !== undefined) {
       this.linkFrontier(frontierVote, fact);
     }
@@ -186,25 +185,22 @@ export default class BlockService {
       claims.push(claim);
       this.ctx.get(MonitoringService).claimMonitor.callAll(input, claim);
 
-      const parent = this.get(input.block_hash);
+      const parent = this.get(input.blockHash);
       if (parent) {
-        this.linkIo(parent, fact, input.output_idx, idx);
+        this.linkIo(parent, fact, input.outputIdx, idx);
 
         if (claims.length === 1) {
           this.ctx.get(GenerationService).removeInput({
             block: parent,
-            outputIdx: input.output_idx,
-            amount: parent.outputs[input.output_idx].amount,
+            outputIdx: input.outputIdx,
+            amount: parent.outputs[input.outputIdx].amount,
           });
         }
       }
     });
 
     fact.outputs.forEach(({ verifier, amount, detail }, outputIdx) => {
-      const claims = this.getClaims({
-        block_hash: base.hash,
-        output_idx: outputIdx,
-      });
+      const claims = this.getClaims({ blockHash: base.hash, outputIdx });
       if (claims.length) {
         claims.forEach(({ block, inputIdx }) =>
           this.linkIo(fact, block, outputIdx, inputIdx)
@@ -308,13 +304,13 @@ export default class BlockService {
     ) {
       throw new Error(`Invalid frontier level ${frontierParams.level}!`);
     }
-    if (frontierDetail.tree_weights.length === 0) {
+    if (frontierDetail.treeWeights.length === 0) {
       throw new Error(`Not at least one tree weight!`);
     }
-    if (frontierDetail.tree_weights.length > NUM_FRONTIER_LEVELS) {
+    if (frontierDetail.treeWeights.length > NUM_FRONTIER_LEVELS) {
       throw new Error(`Too many tree weights!`);
     }
-    for (const weight of frontierDetail.tree_weights) {
+    for (const weight of frontierDetail.treeWeights) {
       if (weight < 0n) {
         throw new Error(`Invalid tree weight ${weight}!`);
       }
@@ -495,10 +491,10 @@ export default class BlockService {
     let inputSum = 0n;
     let inputFreeMarketSum = BASE_WORK;
     if (
-      block.inputs.every(({ block_hash, output_idx }) => {
-        const block = this.get(block_hash);
+      block.inputs.every(({ blockHash, outputIdx }) => {
+        const block = this.get(blockHash);
         if (block !== undefined) {
-          const { amount, verifier } = block.outputs[output_idx];
+          const { amount, verifier } = block.outputs[outputIdx];
           inputSum += amount;
           if (this.ctx.get(ContractClassifierService).isFreeMarket(verifier)) {
             inputFreeMarketSum += amount;
@@ -550,10 +546,10 @@ export default class BlockService {
           if (isCanonical) {
             this.setCanonicality(
               claim.block,
-              this.get(claim.block.frontier_vote, false)?.isCanonical !==
+              this.get(claim.block.frontierVote, false)?.isCanonical !==
                   false &&
                 claim.block.inputs.every((x) =>
-                  this.get(x.block_hash, false)?.isCanonical !== false
+                  this.get(x.blockHash, false)?.isCanonical !== false
                 ),
             );
           } else {
@@ -579,7 +575,7 @@ export default class BlockService {
       );
       assert(maxCompetitorWork !== -Infinity);
       const delta = block.derivedWorkValue - maxCompetitorWork;
-      const inputBlock = this.get(input.block_hash);
+      const inputBlock = this.get(input.blockHash);
       const inputCanonicality = inputBlock === undefined
         ? delta
         : Math.min(delta, inputBlock.canonicalityOld);
@@ -603,8 +599,8 @@ export default class BlockService {
       }
     }
 
-    for (const { block_hash } of block.inputs) {
-      const input = this.get(block_hash);
+    for (const { blockHash } of block.inputs) {
+      const input = this.get(blockHash);
       if (input !== undefined) {
         this.updateCollateral(input);
       }
@@ -637,7 +633,7 @@ export default class BlockService {
       for (const claim of claims) {
         if (claim.block.canonicalityOld > 0) {
           sum += claim.block.derivedWorkValue /
-            claim.block.inputs.filter(({ block_hash }) => this.get(block_hash))
+            claim.block.inputs.filter(({ blockHash }) => this.get(blockHash))
               .length;
         }
       }
@@ -654,7 +650,7 @@ export default class BlockService {
     block.derivedWorkError = 0;
 
     const knownInputs = block.inputs
-      .map(({ block_hash }) => this.get(block_hash))
+      .map(({ blockHash }) => this.get(blockHash))
       .filter(Boolean);
     const errInc = err / knownInputs.length;
     for (const input of knownInputs) {
@@ -769,13 +765,13 @@ export default class BlockService {
     );
   }
 
-  public getClaims({ block_hash, output_idx }: BlockInput) {
+  public getClaims({ blockHash, outputIdx }: BlockInput) {
     // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(
       this.claimsByOutput,
       Hash.composePrimitives(
-        block_hash.toPrimitive(),
-        Hash.fromLiteral32(output_idx).toPrimitive(),
+        blockHash.toPrimitive(),
+        Hash.fromLiteral32(outputIdx).toPrimitive(),
       ),
       () => [],
     );
@@ -793,10 +789,10 @@ export default class BlockService {
 
   private calculateMergeableProbability(block: BlockFact) {
     let prob = 1;
-    for (const { block_hash, output_idx } of block.inputs) {
-      const inBlock = this.get(block_hash);
+    for (const { blockHash, outputIdx } of block.inputs) {
+      const inBlock = this.get(blockHash);
       if (inBlock) {
-        const claims = inBlock.outputClaims[output_idx];
+        const claims = inBlock.outputClaims[outputIdx];
         const total = claims.reduce(
           (acc, cur) => acc + cur.block.derivedWork,
           0,
@@ -854,8 +850,8 @@ export default class BlockService {
   public getBlocksByInput(input: BlockInput) {
     return this.ctx.get(FactService).hackyGetBlocksMatching((block) =>
       block.inputs.some((y) =>
-        Hash.equals(y.block_hash, input.block_hash) &&
-        y.output_idx === input.output_idx
+        Hash.equals(y.blockHash, input.blockHash) &&
+        y.outputIdx === input.outputIdx
       )
     );
   }
@@ -979,15 +975,13 @@ export default class BlockService {
     const promises: { inputPromise: Promise<BlockFact>; outputIdx: number }[] =
       [];
     for (const input of block.inputs) {
-      const inputPromise = this.ctx.get(BlockService).waitForBlock(
-        input.block_hash,
-        controller.signal,
-      );
+      const inputPromise = this.ctx.get(BlockService)
+        .waitForBlock(input.blockHash, controller.signal);
       if (inputPromise instanceof Promise) {
         cancelSignal.addEventListener('abort', () => controller.abort());
-        promises.push({ inputPromise, outputIdx: input.output_idx });
+        promises.push({ inputPromise, outputIdx: input.outputIdx });
       } else {
-        const test = inputPromise.outputs[input.output_idx].verifier;
+        const test = inputPromise.outputs[input.outputIdx].verifier;
         if (this.areVerifiersEqual(test, verifier)) {
           controller.abort();
           return true;

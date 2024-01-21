@@ -260,11 +260,11 @@ export default class VerificationService {
         let count = 0;
         for (const input of block.inputs) {
           const block = await this.ctx.get(BlockService).waitForBlock(
-            input.block_hash,
+            input.blockHash,
             workerDriver.done.signal,
           );
 
-          const output = block.outputs[input.output_idx];
+          const output = block.outputs[input.outputIdx];
           if (
             this.ctx.get(BlockService).areVerifiersEqual(
               output.verifier,
@@ -287,11 +287,11 @@ export default class VerificationService {
 
         for (const input of block.inputs) {
           const inputBlock = await this.ctx.get(BlockService).waitForBlock(
-            input.block_hash,
+            input.blockHash,
             workerDriver.done.signal,
           );
 
-          const output = inputBlock.outputs[input.output_idx];
+          const output = inputBlock.outputs[input.outputIdx];
           if (
             this.ctx.get(BlockService).areVerifiersEqual(
               output.verifier,
@@ -302,7 +302,7 @@ export default class VerificationService {
             return {
               blockHash: inputBlock.hash,
               blockTimestamp: inputBlock.timestamp,
-              outputIdx: input.output_idx,
+              outputIdx: input.outputIdx,
               ...output,
             };
           }
@@ -365,9 +365,9 @@ export default class VerificationService {
             let count = 0;
             for (const input of block.inputs) {
               const block = await this.ctx.get(BlockService)
-                .waitForBlock(input.block_hash, workerDriver.done.signal);
+                .waitForBlock(input.blockHash, workerDriver.done.signal);
 
-              const output = block.outputs[input.output_idx];
+              const output = block.outputs[input.outputIdx];
               if (
                 this.ctx.get(BlockService)
                   .areVerifiersEqual(output.verifier, verifier) &&

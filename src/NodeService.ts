@@ -183,9 +183,9 @@ export default class NodeService {
     }
 
     this.ctx.get(SignalingService).ingestSignal(node.publicKey, {
-      protocol_name: protocol.name,
-      signal_index: -1,
-      signal_data: '',
+      protocolName: protocol.name,
+      signalIdx: -1,
+      signalData: '',
       isSelfInitiator: true,
     });
   }

@@ -393,7 +393,7 @@ export default class CollateralUtil {
         mapPut(outputKeys, bin2hex(dst), () => ({
           verifier: {
             contract_hash: accountHash,
-            params: AccountContractParams.encode({ public_key: dst }),
+            params: AccountContractParams.encode({ publicKey: dst }),
           },
           amount,
           detail: EMPTY_ARR,

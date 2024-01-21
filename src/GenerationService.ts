@@ -70,7 +70,7 @@ export default class GenerationService {
     if (
       Hash.equals(verifier.contract_hash, accountHash) &&
       !arrEquals(
-        AccountContractParams.decode(verifier.params).public_key,
+        AccountContractParams.decode(verifier.params).publicKey,
         this.ctx.get(KeyService).getSelfPublicKey(),
       )
     ) {
@@ -606,7 +606,7 @@ export default class GenerationService {
       const el = queue[i];
 
       for (const input of el.inputs) {
-        const key = Hash.digestParts(input.block_hash, input.output_idx);
+        const key = Hash.digestParts(input.blockHash, input.outputIdx);
         if (used.has(key.toPrimitive())) {
           return false;
         }
@@ -615,9 +615,9 @@ export default class GenerationService {
 
       if (el.frontierParams.level !== 0) {
         const children = el.inputs.flatMap((input) => {
-          const block = this.ctx.get(BlockService).get(input.block_hash);
+          const block = this.ctx.get(BlockService).get(input.blockHash);
           return block !== undefined && Hash.equals(
-              block.outputs[input.output_idx].verifier.contract_hash,
+              block.outputs[input.outputIdx].verifier.contract_hash,
               frontierHash,
             )
             ? [block]
@@ -712,9 +712,9 @@ export default class GenerationService {
     if (this.ctx.config.dbgVerifyGenerations) {
       for (let i = 0; i < block.inputs.length; i++) {
         const input = block.inputs[i];
-        const inputBlock = this.ctx.get(BlockService).get(input.block_hash);
+        const inputBlock = this.ctx.get(BlockService).get(input.blockHash);
         if (inputBlock !== undefined) {
-          const verifier = inputBlock.outputs[input.output_idx].verifier;
+          const verifier = inputBlock.outputs[input.outputIdx].verifier;
           this.ctx.get(VerificationService)
             .enqueueVerification(block, verifier, [CollateralHint.encode({
               hint: { CollateralHintVerifier: { input_idx: i } },
@@ -763,11 +763,11 @@ export default class GenerationService {
 
   private isImmediatelyVerifiable(block: BlockFact) {
     for (const input of block.inputs) {
-      const inputBlock = this.ctx.get(BlockService).get(input.block_hash);
+      const inputBlock = this.ctx.get(BlockService).get(input.blockHash);
       if (inputBlock === undefined) {
         return undefined;
       }
-      const { verifier } = inputBlock.outputs[input.output_idx];
+      const { verifier } = inputBlock.outputs[input.outputIdx];
       if (
         !this.ctx.get(ContractClassifierService)
           .isImmediatelyVerifiable(verifier)

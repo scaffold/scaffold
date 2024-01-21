@@ -188,10 +188,10 @@ export const registry = {
     name: 'BlockInput',
     type: 'record',
     fields: [
-      { name: 'block_hash', type: 'Hash' },
+      { name: 'blockHash', type: 'Hash' },
       // TODO: Array? Or add a refs array to the block?
       // TODO: -1 if we're not claiming any output?
-      { name: 'output_idx', type: 'int' },
+      { name: 'outputIdx', type: 'int' },
       // I don't think we necessarily need this
       // { name: 'amount', type: 'long' },
 
@@ -230,7 +230,7 @@ export const registry = {
     name: 'Block',
     type: 'record',
     fields: [
-      { name: 'frontier_vote', type: 'Hash' },
+      { name: 'frontierVote', type: 'Hash' },
 
       // Blocks we depend upon but aren't inputting anything from
       { name: 'refs', type: { type: 'array', items: 'Hash' } },
@@ -412,7 +412,7 @@ export const registry = {
     name: 'Identification',
     type: 'record',
     fields: [
-      { name: 'public_key', type: 'bytes' },
+      { name: 'publicKey', type: 'bytes' },
     ],
   },
 
@@ -426,10 +426,10 @@ export const registry = {
       { name: 'network', type: 'string' },
 
       { name: 'name', type: 'string' },
-      { name: 'client_name', type: 'string' },
-      { name: 'protocol_version', type: 'string' },
+      { name: 'clientName', type: 'string' },
+      { name: 'protocolVersion', type: 'string' },
       { name: 'userdata', type: 'string' },
-      { name: 'age_ptr', type: 'Hash' },
+      { name: 'agePtr', type: 'Hash' },
 
       // TODO: Add persistent signals here?
       { name: 'protocols', type: { type: 'array', items: 'string' } },
@@ -452,11 +452,11 @@ export const registry = {
     name: 'ConnectionSignal',
     type: 'record',
     fields: [
-      { name: 'dst_public_key', type: 'bytes' },
-      { name: 'protocol_name', type: 'string' },
-      { name: 'is_initiator', type: 'boolean' },
-      { name: 'signal_index', type: 'int' },
-      { name: 'signal_data', type: 'string' },
+      { name: 'dstPublicKey', type: 'bytes' },
+      { name: 'protocolName', type: 'string' },
+      { name: 'isInitiator', type: 'boolean' },
+      { name: 'signalIdx', type: 'int' },
+      { name: 'signalData', type: 'string' },
     ],
   },
   PingMessage: {
@@ -657,7 +657,7 @@ export const registry = {
     name: 'AccountContractParams',
     type: 'record',
     fields: [
-      { name: 'public_key', type: 'bytes' }, // 33 bytes
+      { name: 'publicKey', type: 'bytes' }, // 33 bytes
     ],
   },
 
@@ -766,7 +766,7 @@ export const registry = {
     name: 'FrontierTreeDetail',
     type: 'record',
     fields: [
-      { name: 'tree_weights', type: { type: 'array', items: 'long' } },
+      { name: 'treeWeights', type: { type: 'array', items: 'long' } },
       // { name: 'input_tree_root', type: 'Hash' },
       // { name: 'output_tree_root', type: 'Hash' },
 

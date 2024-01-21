@@ -39,21 +39,21 @@ export default class HintSuggestionService {
     if ('CollateralHintInputHash' in hint) {
       if (rest.length === 0) {
         const input = block.inputs[hint.CollateralHintInputHash.input_idx];
-        const inBlock = this.ctx.get(FactService).get(input.block_hash, false);
+        const inBlock = this.ctx.get(FactService).get(input.blockHash, false);
         return inBlock !== undefined ? [inBlock.data] : [];
       } else {
         throw new Error(`Invalid request!`);
       }
     } else if ('CollateralHintVerifier' in hint) {
       const input = block.inputs[hint.CollateralHintVerifier.input_idx];
-      const inBlock = this.ctx.get(FactService).get(input.block_hash, false);
+      const inBlock = this.ctx.get(FactService).get(input.blockHash, false);
       if (inBlock === undefined) {
         return [];
       }
       if (inBlock.type !== FactType.Block) {
         throw new Error(`Invalid fact type!`);
       }
-      const verifier = inBlock.outputs[input.output_idx].verifier;
+      const verifier = inBlock.outputs[input.outputIdx].verifier;
       return (this.providers.get(verifier.contract_hash.toPrimitive()) ?? [])
         .flatMap((provider) => provider.suggestNext(verifier.params, rest));
     } else {

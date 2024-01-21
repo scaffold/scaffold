@@ -1,5 +1,5 @@
 import { WorkerDriver } from './WorkerDriverService.ts';
-import { BlockOutput } from './messages.ts';
+import { BlockInput, BlockOutput } from './messages.ts';
 import Hash from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
@@ -15,11 +15,9 @@ export const enum BurdenOfProof {
   Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid. Self-votes are INVALID, and a single VALID child vote validates.
 }
 
-export interface InputSource extends BlockOutput {
-  blockHash: Hash;
+export type InputSource = BlockInput & BlockOutput & {
   blockTimestamp: bigint;
-  outputIdx: number;
-}
+};
 
 export interface ComputationDriver extends WorkerDriver {
   type: ComputationType;

@@ -58,7 +58,7 @@ export default class FrontierService2 {
 
     let it = a;
     while (it.frontierParams.level < b.frontierParams.level) {
-      const vote = this.ctx.get(BlockService).get(it.frontier_vote);
+      const vote = this.ctx.get(BlockService).get(it.frontierVote);
       if (vote === undefined) {
         return;
       }
@@ -78,8 +78,8 @@ export default class FrontierService2 {
     const selfWeight = this.ctx.get(WeightService).getSelfWeight({
       source: FactSource.Local,
       inputs: inputs.map((input) => ({
-        block_hash: input.block.hash,
-        output_idx: input.outputIdx,
+        blockHash: input.block.hash,
+        outputIdx: input.outputIdx,
       })),
       outputs,
     }).minWeight;
@@ -92,18 +92,18 @@ export default class FrontierService2 {
           frontierHash,
         )
       ) {
-        let ptr = input.block.frontier_vote;
+        let ptr = input.block.frontierVote;
         let shift = 0;
         while (!Hash.equals(ptr, frontierVote)) {
           const next = this.ctx.get(BlockService).get(ptr, false);
           if (next === undefined) {
             throw new Error(`Unconnected inputs!`);
           }
-          ptr = next.frontier_vote;
+          ptr = next.frontierVote;
           shift++;
         }
 
-        input.block.frontierDetail.tree_weights.forEach((x, i) => {
+        input.block.frontierDetail.treeWeights.forEach((x, i) => {
           weights[i > shift ? i - shift : 0] += x;
         });
       }
@@ -145,7 +145,7 @@ export default class FrontierService2 {
             Hash.equals(input.block.hash, vote)
           );
           if (fi !== undefined) {
-            vote = fi.block.frontier_vote;
+            vote = fi.block.frontierVote;
           } else {
             break;
           }
@@ -172,13 +172,13 @@ export default class FrontierService2 {
           );
         }
         voteChain.splice(idx, 0, ptr);
-        ptr = next.frontier_vote;
+        ptr = next.frontierVote;
       } while (!Hash.equals(ptr, last));
     };
 
     if (frontierInputs !== undefined) {
       for (const input of frontierInputs) {
-        ensureInChain(input.block.frontier_vote);
+        ensureInChain(input.block.frontierVote);
       }
     }
 

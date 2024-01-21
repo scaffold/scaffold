@@ -11,7 +11,7 @@ export default class AccountContract implements ContractProvider {
       return;
     }
 
-    const { public_key } = AccountContractParams.decode(driver.getParams());
-    driver.requireSignature(public_key);
+    const { publicKey } = AccountContractParams.decode(driver.getParams());
+    driver.requireSignature(publicKey);
   }
 }

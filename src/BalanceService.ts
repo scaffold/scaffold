@@ -13,7 +13,7 @@ export default class BalanceService {
   ) {
     return this.ctx.get(BlockService).getBlocksByOutput({
       contract_hash: accountHash,
-      params: AccountContractParams.encode({ public_key: publicKey }),
+      params: AccountContractParams.encode({ publicKey }),
     }).reduce(
       (acc, cur) =>
         cur.block.outputClaims[cur.idx].length === 0 &&

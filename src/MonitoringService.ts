@@ -24,7 +24,7 @@ Collateral(block: BlockFact)
 
 export default class MonitoringService {
   public claimMonitor = new WatchingMonitor<BlockInput, OutputClaim>((input) =>
-    input.block_hash.toPrimitive() + input.output_idx
+    input.blockHash.toPrimitive() + input.outputIdx
   );
 
   // public canonicalityMonitor = new WatchingMonitor<Hash, boolean>((hash) =>

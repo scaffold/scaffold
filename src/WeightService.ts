@@ -59,7 +59,7 @@ export default class WeightService {
     return getOrCreate(cache.ancestorWeight, fact, () => {
       let minWeight = 0n;
 
-      const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
+      const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
       if (block !== undefined) {
         minWeight += this.getSelfWeight(block, cache).minWeight;
         minWeight += this.getAncestorWeight(block, cache).minWeight;
@@ -83,9 +83,9 @@ export default class WeightService {
       let inputKnownSum = 0n;
       let inputFreeMarketSum = 0n;
       for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined) {
-          const { verifier, amount } = block.outputs[input.output_idx];
+          const { verifier, amount } = block.outputs[input.outputIdx];
           inputKnownSum += amount;
           if (this.ctx.get(ContractClassifierService).isFreeMarket(verifier)) {
             inputFreeMarketSum += amount;
@@ -149,7 +149,7 @@ export default class WeightService {
     return getOrCreate(cache.canonicality, fact, () => {
       let canonicality = this.getClaimDelta(fact, cache);
 
-      const block = this.ctx.get(BlockService).get(fact.frontier_vote, false);
+      const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
       if (block !== undefined) {
         const delta = this.getClaimDelta(block, cache);
         if (delta < canonicality) {
@@ -158,7 +158,7 @@ export default class WeightService {
       }
 
       for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined) {
           const delta = this.getClaimDelta(block, cache);
           if (delta < canonicality) {
@@ -239,9 +239,9 @@ export default class WeightService {
       let minWeight = 0n;
 
       for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.block_hash, false);
+        const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined) {
-          const { verifier } = block.outputs[input.output_idx];
+          const { verifier } = block.outputs[input.outputIdx];
           if (Hash.equals(verifier.contract_hash, frontierHash)) {
             minWeight += this.getSelfWeight(block, cache).minWeight;
             minWeight += this.getTreeChildrenWeight(block, cache).minWeight;
@@ -258,14 +258,14 @@ export default class WeightService {
       const bestVoter = this.getCanonicalVoter(fact, cache);
 
       if (bestVoter === undefined) {
-        return fact.frontierDetail.tree_weights.map((x) => ({ minWeight: x }));
+        return fact.frontierDetail.treeWeights.map((x) => ({ minWeight: x }));
       }
 
       const subWeight = this.getVoterWeight(bestVoter, cache);
 
       const res: { minWeight: bigint }[] = [];
       for (let i = 0; true; i++) {
-        const selfEl = fact.frontierDetail.tree_weights[i];
+        const selfEl = fact.frontierDetail.treeWeights[i];
         const subEl = subWeight[i + 1];
         if (selfEl !== undefined) {
           if (subEl !== undefined) {

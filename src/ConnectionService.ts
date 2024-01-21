@@ -112,7 +112,7 @@ export default class ConnectionService {
 
           if (
             !arrEquals(
-              fact.public_key,
+              fact.publicKey,
               this.ctx.get(KeyService).getSelfPublicKey(),
             )
           ) {
@@ -160,7 +160,7 @@ export default class ConnectionService {
 
   private sendIdentification(conn: Connection, remotePublicKey: Uint8Array) {
     const identData = this.ctx.get(FactService).compose(
-      { public_key: remotePublicKey },
+      { publicKey: remotePublicKey },
       Identification,
       FactType.Identification,
     );
