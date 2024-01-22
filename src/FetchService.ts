@@ -7,6 +7,7 @@ import Hash from './util/Hash.ts';
 import BlockBuilder from './BlockBuilder.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
+import { todo } from './util/functional.ts';
 
 export const enum FetchMode {
   All,
@@ -66,7 +67,7 @@ export default class FetchService {
       onResponseCollateral,
       abortSignal,
     }: FetchOptions,
-    cb?: (block: BlockFact) => void,
+    cb?: (result: Uint8Array, block: BlockFact) => void,
   ) {
     if (abortSignal?.aborted) {
       return;
@@ -129,17 +130,17 @@ export default class FetchService {
 
     externalIncentive = this.ctx.config.getDepositIncentive(verifier);
     if (externalIncentive !== undefined) {
-      const incentiveBlock = this.ctx.get(BlockBuilder).publish({
+      this.ctx.get(BlockBuilder).publishPersistentDraft({
         outputs: [{ verifier, amount: externalIncentive, detail: EMPTY_ARR }],
-      }, 0);
-      if (onIncentiveBlock !== undefined) {
-        onIncentiveBlock(
-          incentiveBlock,
-          incentiveBlock.outputs.findIndex((x) =>
-            this.ctx.get(BlockService).areVerifiersEqual(x.verifier, verifier)
-          ),
-        );
-      }
+        timeout: 0,
+        onBlock: onIncentiveBlock !== undefined
+          ? (block, groupIdx) =>
+            onIncentiveBlock(
+              block,
+              block.outputs.findIndex((x) => x.groupIdx === groupIdx),
+            )
+          : undefined,
+      });
     }
 
     // if (bid !== undefined) {
@@ -163,7 +164,7 @@ export default class FetchService {
           (blockComparator || defaultBlockComparator)(prevBlock, block)
         ) {
           prevBlock = block;
-          cb(block);
+          cb(todo(), block);
         }
         return true;
       };

@@ -20,17 +20,22 @@ export default class HintSuggestionService {
 
   public suggest(block: BlockFact, hints: Uint8Array[]): Uint8Array[] {
     if (hints.length === 0) {
-      return Array.from(
-        { length: block.inputs.length << 1 },
-        (_, i) =>
-          i & 1
-            ? CollateralHint.encode({
-              hint: { CollateralHintVerifier: { input_idx: i >>> 1 } },
-            })
-            : CollateralHint.encode({
-              hint: { CollateralHintInputHash: { input_idx: i >>> 1 } },
+      return [
+        ...Array.from(
+          { length: block.inputs.length },
+          (_, i) =>
+            CollateralHint.encode({
+              hint: { CollateralHintInputHash: { inputIdx: i } },
             }),
-      );
+        ),
+        ...Array.from(
+          { length: block.bodies.length },
+          (_, i) =>
+            CollateralHint.encode({
+              hint: { CollateralHintVerifier: { groupIdx: i } },
+            }),
+        ),
+      ];
     }
 
     const [first, ...rest] = hints;
@@ -38,22 +43,17 @@ export default class HintSuggestionService {
     const { hint } = CollateralHint.decode(first);
     if ('CollateralHintInputHash' in hint) {
       if (rest.length === 0) {
-        const input = block.inputs[hint.CollateralHintInputHash.input_idx];
+        const input = block.inputs[hint.CollateralHintInputHash.inputIdx];
         const inBlock = this.ctx.get(FactService).get(input.blockHash, false);
         return inBlock !== undefined ? [inBlock.data] : [];
       } else {
         throw new Error(`Invalid request!`);
       }
     } else if ('CollateralHintVerifier' in hint) {
-      const input = block.inputs[hint.CollateralHintVerifier.input_idx];
-      const inBlock = this.ctx.get(FactService).get(input.blockHash, false);
-      if (inBlock === undefined) {
+      const verifier = block.verifiers[hint.CollateralHintVerifier.groupIdx];
+      if (verifier === undefined) {
         return [];
       }
-      if (inBlock.type !== FactType.Block) {
-        throw new Error(`Invalid fact type!`);
-      }
-      const verifier = inBlock.outputs[input.outputIdx].verifier;
       return (this.providers.get(verifier.contract_hash.toPrimitive()) ?? [])
         .flatMap((provider) => provider.suggestNext(verifier.params, rest));
     } else {

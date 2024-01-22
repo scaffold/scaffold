@@ -80,6 +80,7 @@ export default class FrontierService2 {
       inputs: inputs.map((input) => ({
         blockHash: input.block.hash,
         outputIdx: input.outputIdx,
+        groupIdx: todo(),
       })),
       outputs,
     }).minWeight;

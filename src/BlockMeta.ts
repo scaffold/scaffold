@@ -8,6 +8,7 @@ import {
 import Hash, { HashPrimitive } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
+import { BlockDraft } from './BlockBuilder.ts';
 
 export const enum BlockFlag {
   None = 0,
@@ -37,7 +38,7 @@ export const ZERO_BLOCK = Symbol('ZeroBlock');
 export interface BlockMeta {
   original: Block; // TODO: Remove
 
-  verifiers: Verifier[];
+  verifiers: (Verifier | undefined)[];
 
   // selfWeightMin: bigint;
   // selfWeightMax: bigint;
@@ -90,4 +91,9 @@ export interface BlockMeta {
   frontierOutputIdx: number;
   frontierParams: FrontierTreeParams;
   frontierDetail: FrontierTreeDetail;
+
+  // Only republish a draft if the canonicality of the new block will be higher.
+  // If, for example, we're just building on an uncanonical input, there's nothing we can do but ignore the source until/unless that changes.
+  // Or, for example, we're double-claiming an output whose other claim is very well established.
+  persistentSources: BlockDraft[];
 }

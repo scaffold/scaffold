@@ -150,43 +150,42 @@ for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
   });
 }
 entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
-  return;
-  if (generator) {
-    const contractHash = entries.find((e) =>
-      e.contractName === contractName && e.generator === undefined
-    )?.hash || error(`No contract with name ${contractName}!`);
+  // if (generator) {
+  //   const contractHash = entries.find((e) =>
+  //     e.contractName === contractName && e.generator === undefined
+  //   )?.hash || error(`No contract with name ${contractName}!`);
 
-    // Supply generator
-    switch (ext) {
-      case 'js':
-        ctx.get(LocalGeneratorService).addGenerator(
-          contractHash,
-          new Function(bin2str(body))() as LocalGenerator,
-        );
-        break;
+  //   // Supply generator
+  //   switch (ext) {
+  //     case 'js':
+  //       ctx.get(LocalGeneratorService).addGenerator(
+  //         contractHash,
+  //         new Function(bin2str(body))() as LocalGenerator,
+  //       );
+  //       break;
 
-      case 'wasm':
-        ctx.get(BlockBuilder).publish({
-          body,
-          satisfies: [{
-            contract_hash: generatorHash,
-            params: contractHash.toBytes(),
-          }],
-        });
-        break;
-    }
-  } else {
-    // Supply contract
-    ctx.get(BlockBuilder).publish({
-      body,
-      satisfies: [{
-        contract_hash: rootHash,
-        params: Hash.digest(body).toBytes(),
-      }],
-    });
-  }
+  //     case 'wasm':
+  //       ctx.get(BlockBuilder).publish({
+  //         body,
+  //         satisfies: [{
+  //           contract_hash: generatorHash,
+  //           params: contractHash.toBytes(),
+  //         }],
+  //       });
+  //       break;
+  //   }
+  // } else {
+  //   // Supply contract
+  //   ctx.get(BlockBuilder).publish({
+  //     body,
+  //     satisfies: [{
+  //       contract_hash: rootHash,
+  //       params: Hash.digest(body).toBytes(),
+  //     }],
+  //   });
+  // }
 
-  ctx.get(QaDebugger).addDebugger(filename, hash);
+  // ctx.get(QaDebugger).addDebugger(filename, hash);
 });
 
 (() => {

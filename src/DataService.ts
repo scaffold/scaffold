@@ -20,7 +20,8 @@ export default class DataService {
       this.requesting.add(hash.toPrimitive());
       this.ctx.get(ClockService).setTimeout(() => {
         if (!this.ctx.get(FactService).has(hash)) {
-          this.ctx.get(BlockBuilder).publish({
+          // TODO: Once we get the data, we don't need to keep publishing anymore
+          this.ctx.get(BlockBuilder).publishPersistentDraft({
             outputs: [{
               verifier: { contract_hash: rootHash, params: hash.toBytes() },
               amount: 0n,

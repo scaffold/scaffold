@@ -57,7 +57,6 @@ export interface ComputationDriver extends WorkerDriver {
   // setBurdenOfProof(on: BurdenOfProof): void; // You can't call this after getting the hint, because we want it to be the same for ALL hints for any given verifier.
   pass(): never;
   fail(): never;
-  setResult(pass: boolean): never;
 
   offsetCanonicality(offset: bigint): void;
 

@@ -21,6 +21,7 @@ import {
   COMPUTE_FAIL_FLAG,
   COMPUTE_PASS_FLAG,
 } from './ComputationMeta.ts';
+import { CollateralHint } from './collateralMessages.ts';
 
 export default class VerificationService {
   private extraContractIncentive = new Map<HashPrimitive, number>();
@@ -81,7 +82,8 @@ export default class VerificationService {
       params: verifier.contract_hash.toBytes(),
     });
     if (contractBlocks.length) {
-      const contractCode = contractBlocks[0].body;
+      const contractCode =
+        contractBlocks[0].block.bodies[contractBlocks[0].groupIdx];
 
       this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
@@ -134,7 +136,13 @@ export default class VerificationService {
     hintPrefix: Uint8Array[],
     workerDriver: WorkerDriver,
   ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
-    const hints = hintPrefix.slice(0, 1);
+    const rootHint = CollateralHint.decode(hintPrefix[0]).hint;
+    if (!('CollateralHintVerifier' in rootHint)) {
+      throw new Error(`Invalid root hint ${JSON.stringify(rootHint)}`);
+    }
+    const groupIdx = rootHint.CollateralHintVerifier.groupIdx;
+
+    const readHints = hintPrefix.slice(0, 1);
     let requireInputCount: number | undefined;
     let nextOutputIdx = 0;
 
@@ -158,15 +166,15 @@ export default class VerificationService {
             break;
         }
 
-        if (idx > hints.length) {
+        if (idx > readHints.length) {
           throw new Error(`Must get hints in order at index ${idx}!`);
-        } else if (idx === hints.length) {
-          this.ctx.get(LitigationService).litigate(block, hints, vote);
+        } else if (idx === readHints.length) {
+          this.ctx.get(LitigationService).litigate(block, readHints, vote);
           if (idx < hintPrefix.length) {
-            hints.push(hintPrefix[idx]);
+            readHints.push(hintPrefix[idx]);
           } else {
             const suggestions = this.ctx.get(HintSuggestionService)
-              .suggest(block, hints);
+              .suggest(block, readHints);
             if (suggestions.length === 0) {
               throw new Error(
                 `Hint required but we don't have any suggestions!`,
@@ -174,21 +182,23 @@ export default class VerificationService {
             }
             // TODO: Make this crypto random
             const random = this.ctx.config.entropyProvider.randomNumber();
-            hints.push(suggestions[Math.floor(random * suggestions.length)]);
+            readHints.push(
+              suggestions[Math.floor(random * suggestions.length)],
+            );
           }
         } else {
           this.ctx.get(LitigationService)
-            .litigate(block, hints.slice(0, idx), vote);
+            .litigate(block, readHints.slice(0, idx), vote);
         }
 
-        return hints[idx];
+        return readHints[idx];
       },
-      getBody: () => block.body,
+      getBody: () => block.bodies[groupIdx],
       requireBody: (data) => {
         if (workerDriver.done.signal.aborted) {
           return;
         }
-        if (!arrEquals(block.body, data)) {
+        if (!arrEquals(block.bodies[groupIdx], data)) {
           throw COMPUTE_FAIL_FLAG;
         }
       },
@@ -236,15 +246,11 @@ export default class VerificationService {
             workerDriver.done.signal,
           );
 
-          if (
-            await this.ctx.get(BlockService).doesBlockSatisfy(
-              ref,
-              verifier,
-              workerDriver.done.signal,
-            )
-          ) {
+          const groupIdx = await this.ctx.get(BlockService)
+            .getGroupIndex(ref, verifier, workerDriver.done.signal);
+          if (groupIdx !== undefined) {
             workerDriver.resumeTimer();
-            return ref.body;
+            return ref.bodies[groupIdx];
           }
         }
         throw COMPUTE_FAIL_FLAG;
@@ -340,13 +346,6 @@ export default class VerificationService {
       fail() {
         throw COMPUTE_FAIL_FLAG;
       },
-      setResult(pass: boolean) {
-        if (pass) {
-          throw COMPUTE_PASS_FLAG;
-        } else {
-          throw COMPUTE_FAIL_FLAG;
-        }
-      },
 
       offsetCanonicality(offset: bigint) {
         return todo();
@@ -387,7 +386,7 @@ export default class VerificationService {
 
         const vote = isValid ? 'FINAL_PASS' : 'FINAL_FAIL';
         try {
-          this.ctx.get(LitigationService).litigate(block, hints, vote);
+          this.ctx.get(LitigationService).litigate(block, readHints, vote);
         } catch (err) {
           console.error(`Litigation failed:`, err);
         }

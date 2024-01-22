@@ -39,7 +39,7 @@ export default class RootContract implements ContractProvider {
       driver.ingenerable();
     } else if (driver.type === ComputationType.Contract) {
       const valid = Hash.equals(Hash.digest(driver.getBody()), hash);
-      driver.setResult(valid);
+      valid ? driver.pass() : driver.fail();
     }
   }
 }

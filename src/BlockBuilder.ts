@@ -13,7 +13,7 @@ import {
 import BlockService from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './constants.ts';
 import KeyService from './KeyService.ts';
-import { BlockFact, FactSource } from './FactMeta.ts';
+import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
 import FrontierService2 from './FrontierService2.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
@@ -45,9 +45,13 @@ export interface BlockDraft {
   inputs?: InputSpec[];
   satisfies?: (Verifier & { detail?: Uint8Array })[];
   outputs?: Omit<BlockOutput, 'groupIdx'>[];
-  result?: Uint8Array;
+  body?: Uint8Array;
   // frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
+
+  timeout?: number;
+  deadline?: number;
+  onBlock?(block: BlockFact, groupIdx: number): void;
 }
 
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
@@ -80,14 +84,14 @@ export default class BlockBuilder {
     //   [];
 
     // drafts.sort((a, b) =>
-    //   Number(b.result !== undefined) - Number(a.result !== undefined)
+    //   Number(b.body !== undefined) - Number(a.body !== undefined)
     // );
 
     let frontierLevel: number | undefined;
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
-    const results: Uint8Array[] = [];
+    const bodies: Uint8Array[] = [];
 
     let groupIdx = 0;
     for (const draft of drafts) {
@@ -128,7 +132,7 @@ export default class BlockBuilder {
         }
       }
 
-      results.push(draft.result ?? EMPTY_ARR);
+      bodies.push(draft.body ?? EMPTY_ARR);
 
       groupIdx++;
     }
@@ -162,26 +166,26 @@ export default class BlockBuilder {
 
       if (input.amount > 0n) {
         // TODO: Handle groups without any result
-        results.push(EMPTY_ARR);
+        bodies.push(EMPTY_ARR);
         inputs.push({
           ...input,
           blockHash: input.block.hash,
           groupIdx: groupIdx++,
         });
-        assert(results.length === groupIdx);
+        assert(bodies.length === groupIdx);
         ioDelta += input.amount;
       }
     }
 
     if (ioDelta > 0n) {
-      results.push(EMPTY_ARR);
+      bodies.push(EMPTY_ARR);
       outputs.push({
         verifier: this.selfAccountVerifier,
         amount: ioDelta,
         detail: EMPTY_ARR,
         groupIdx: groupIdx++,
       });
-      assert(results.length === groupIdx);
+      assert(bodies.length === groupIdx);
     } else if (ioDelta < 0n) {
       // TODO: Only output what we actually have
       if (this.ctx.config.enableValidation) {
@@ -202,7 +206,7 @@ export default class BlockBuilder {
       //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
       // );
 
-      results.push(EMPTY_ARR);
+      bodies.push(EMPTY_ARR);
       outputs.push({
         verifier: {
           contract_hash: frontierHash,
@@ -223,7 +227,7 @@ export default class BlockBuilder {
         }),
         groupIdx: groupIdx++,
       });
-      assert(results.length === groupIdx);
+      assert(bodies.length === groupIdx);
     }
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
@@ -256,7 +260,7 @@ export default class BlockBuilder {
       }
     }
 
-    return { frontierVote, refs, inputs, outputs, results, timestamp };
+    return { frontierVote, refs, inputs, outputs, bodies, timestamp };
   }
 
   private collectInputs(
@@ -278,20 +282,30 @@ export default class BlockBuilder {
     }
 
     if (publishStub) {
-      const block = this.publish({
+      let published = false;
+      this.publishSingleDraft({
         outputs: [{
           verifier: satisfaction,
           amount: 0n,
           detail: satisfaction.detail ?? EMPTY_ARR,
         }],
-      }, 0);
-      addInput({
-        block,
-        outputIdx: block.outputs.findIndex((x) =>
-          this.ctx.get(BlockService).areVerifiersEqual(x.verifier, satisfaction)
-        ),
-        amount: 0n,
+        timeout: 0,
+        onBlock: (block, groupIdx) => {
+          if (published) {
+            throw new Error(`Should not publish twice!`);
+          }
+          published = true;
+
+          addInput({
+            block,
+            outputIdx: block.outputs.findIndex((x) => x.groupIdx === groupIdx),
+            amount: 0n,
+          });
+        },
       });
+      if (!published) {
+        throw new Error(`Block did not immediately publish!`);
+      }
     }
   }
 
@@ -304,118 +318,151 @@ export default class BlockBuilder {
     resolvers.forEach((fn) => fn(fact));
   };
 
-  public publish(draft: BlockDraft, timeout: 0): BlockFact;
-  public publish(draft: BlockDraft, timeout?: number): MaybePromise<BlockFact>;
-  public publish(draft: BlockDraft, timeout?: number) {
-    if (!enableBlockMerging) {
-      return this.ctx.get(BlockService).create(this.buildBlock([draft]));
+  public publishSingleDraft(draft: BlockDraft): BlockFact {
+    this.processDraft(draft);
+
+    const block = this.ctx.get(BlockService).create(this.buildBlock([draft]));
+    if (draft.onBlock !== undefined) {
+      // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
+      draft.onBlock(block, 0);
     }
 
-    timeout ??= defaultTimeout;
-    if (timeout < 0) {
-      throw new Error(`Block publish timeout cannot be negative!`);
+    return block;
+  }
+
+  public publishPersistentDraft(draft: BlockDraft): void {
+    this.processDraft(draft);
+
+    const block = this.ctx.get(BlockService).create(
+      this.buildBlock([draft]),
+      (fact) => {
+        if (fact.type !== FactType.Block) {
+          throw new Error(`Invalid fact type!`);
+        }
+        fact.persistentSources.push(draft);
+      },
+    );
+    if (draft.onBlock !== undefined) {
+      // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
+      draft.onBlock(block, 0);
     }
+  }
 
-    this.pubsPerMs++;
-
-    if (this.drafts.length === 0) {
-      if (timeout === 0) {
-        return this.ctx.get(BlockService).create(this.buildBlock([draft]));
+  private processDraft(draft: BlockDraft) {
+    if (draft.timeout !== undefined) {
+      if (draft.deadline !== undefined) {
+        throw new Error(`Cannot set both timeout and deadline!`);
       } else {
-        this.drafts.push(draft);
-        this.emitAt = this.ctx.config.timeProvider.now() + timeout;
-        this.emitTimeout = this.ctx.config.timeProvider
-          .setTimeout(this.doEmit, timeout);
-        if (this.resolvers.length !== 0) {
-          throw new Error(
-            `Resolvers should be empty if building block isn't set!`,
-          );
-        }
-        return new Promise((resolve) => this.resolvers.push(resolve));
-      }
-    }
-
-    const existingFrontierLevel = this.drafts
-      .find((d) => d.frontierLevel !== undefined)?.frontierLevel;
-    const mergeable = (existingFrontierLevel === undefined ||
-      draft.frontierLevel === undefined ||
-      existingFrontierLevel === draft.frontierLevel) &&
-      this.ctx.get(FrontierChainService).getVote(
-          [...this.drafts, draft].flatMap((d) => [
-            ...d.inputs ?? [],
-            ...d.refs?.map((ref) => ({ block: ref })) ?? [],
-          ]),
-        ) !== undefined;
-
-    // if (
-    //   mergeable && spec.frontierVote !== undefined &&
-    //   bb.frontierVote !== undefined
-    // ) {
-    //   const mergedVote = this.ctx.get(FrontierService2)
-    //     .mergeFrontierVotes(spec.frontierVote, bb.frontierVote);
-    //   if (mergedVote !== undefined) {
-    //     bb.frontierVote = mergedVote;
-    //   } else {
-    //     // Frontier votes are not mergeable
-    //     mergeable = false;
-    //   }
-    // }
-
-    if (mergeable) {
-      this.drafts.push(draft);
-
-      if (timeout === 0) {
-        // Mergeable and we need to emit immediately:
-        // Merge and emit; clear building block.
-        this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
-        const drafts = this.drafts;
-        this.drafts = [];
-        const resolvers = this.resolvers;
-        this.resolvers = [];
-        const fact = this.ctx.get(BlockService).create(this.buildBlock(drafts));
-        resolvers.forEach((fn) => fn(fact));
-        return fact;
-      } else {
-        // Mergeable and we can wait to emit:
-        // Merge and re-schedule the emit if we're reducing it.
-        const emitAt = this.ctx.config.timeProvider.now() + timeout;
-        if (emitAt < this.emitAt) {
-          this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
-          this.emitAt = emitAt;
-          this.emitTimeout = this.ctx.config.timeProvider
-            .setTimeout(this.doEmit, timeout);
-        }
-        return new Promise((resolve) => this.resolvers.push(resolve));
-      }
-    } else {
-      if (timeout === 0) {
-        // Not mergeable and we need to emit immediately:
-        // Just emit the current block now and leave the other one to emit later.
-        return this.ctx.get(BlockService).create(this.buildBlock([draft]));
-      } else {
-        // Not mergeable and we can wait to emit:
-        // Emit the block that should be emitted first; leave the other one for later.
-        const emitAt = this.ctx.config.timeProvider.now() + timeout;
-        if (emitAt < this.emitAt) {
-          // Emit the current block now and leave the building one for later.
-          return this.ctx.get(BlockService).create(this.buildBlock([draft]));
-        } else {
-          // Emit the building block now and leave the current one for later.
-          this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
-          const drafts = this.drafts;
-          this.drafts = [draft];
-          this.emitAt = emitAt;
-          this.emitTimeout = this.ctx.config.timeProvider
-            .setTimeout(this.doEmit, timeout);
-          const bbResolvers = this.resolvers;
-          return new Promise((resolve) => {
-            this.resolvers = [resolve];
-            const fact = this.ctx.get(BlockService)
-              .create(this.buildBlock(drafts));
-            bbResolvers.forEach((fn) => fn(fact));
-          });
-        }
+        draft.deadline = this.ctx.config.timeProvider.now() + draft.timeout;
+        draft.timeout = undefined;
       }
     }
   }
+
+  // timeout ??= defaultTimeout;
+  // if (timeout < 0) {
+  //   throw new Error(`Block publish timeout cannot be negative!`);
+  // }
+
+  // this.pubsPerMs++;
+
+  // if (this.drafts.length === 0) {
+  //   if (timeout === 0) {
+  //     return this.ctx.get(BlockService).create(this.buildBlock([draft]));
+  //   } else {
+  //     this.drafts.push(draft);
+  //     this.emitAt = this.ctx.config.timeProvider.now() + timeout;
+  //     this.emitTimeout = this.ctx.config.timeProvider
+  //       .setTimeout(this.doEmit, timeout);
+  //     if (this.resolvers.length !== 0) {
+  //       throw new Error(
+  //         `Resolvers should be empty if building block isn't set!`,
+  //       );
+  //     }
+  //     return new Promise((resolve) => this.resolvers.push(resolve));
+  //   }
+  // }
+
+  // const existingFrontierLevel = this.drafts
+  //   .find((d) => d.frontierLevel !== undefined)?.frontierLevel;
+  // const mergeable = (existingFrontierLevel === undefined ||
+  //   draft.frontierLevel === undefined ||
+  //   existingFrontierLevel === draft.frontierLevel) &&
+  //   this.ctx.get(FrontierChainService).getVote(
+  //       [...this.drafts, draft].flatMap((d) => [
+  //         ...d.inputs ?? [],
+  //         ...d.refs?.map((ref) => ({ block: ref })) ?? [],
+  //       ]),
+  //     ) !== undefined;
+
+  // // if (
+  // //   mergeable && spec.frontierVote !== undefined &&
+  // //   bb.frontierVote !== undefined
+  // // ) {
+  // //   const mergedVote = this.ctx.get(FrontierService2)
+  // //     .mergeFrontierVotes(spec.frontierVote, bb.frontierVote);
+  // //   if (mergedVote !== undefined) {
+  // //     bb.frontierVote = mergedVote;
+  // //   } else {
+  // //     // Frontier votes are not mergeable
+  // //     mergeable = false;
+  // //   }
+  // // }
+
+  // if (mergeable) {
+  //   this.drafts.push(draft);
+
+  //   if (timeout === 0) {
+  //     // Mergeable and we need to emit immediately:
+  //     // Merge and emit; clear building block.
+  //     this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
+  //     const drafts = this.drafts;
+  //     this.drafts = [];
+  //     const resolvers = this.resolvers;
+  //     this.resolvers = [];
+  //     const fact = this.ctx.get(BlockService).create(this.buildBlock(drafts));
+  //     resolvers.forEach((fn) => fn(fact));
+  //     return fact;
+  //   } else {
+  //     // Mergeable and we can wait to emit:
+  //     // Merge and re-schedule the emit if we're reducing it.
+  //     const emitAt = this.ctx.config.timeProvider.now() + timeout;
+  //     if (emitAt < this.emitAt) {
+  //       this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
+  //       this.emitAt = emitAt;
+  //       this.emitTimeout = this.ctx.config.timeProvider
+  //         .setTimeout(this.doEmit, timeout);
+  //     }
+  //     return new Promise((resolve) => this.resolvers.push(resolve));
+  //   }
+  // } else {
+  //   if (timeout === 0) {
+  //     // Not mergeable and we need to emit immediately:
+  //     // Just emit the current block now and leave the other one to emit later.
+  //     return this.ctx.get(BlockService).create(this.buildBlock([draft]));
+  //   } else {
+  //     // Not mergeable and we can wait to emit:
+  //     // Emit the block that should be emitted first; leave the other one for later.
+  //     const emitAt = this.ctx.config.timeProvider.now() + timeout;
+  //     if (emitAt < this.emitAt) {
+  //       // Emit the current block now and leave the building one for later.
+  //       return this.ctx.get(BlockService).create(this.buildBlock([draft]));
+  //     } else {
+  //       // Emit the building block now and leave the current one for later.
+  //       this.ctx.config.timeProvider.clearTimeout(this.emitTimeout);
+  //       const drafts = this.drafts;
+  //       this.drafts = [draft];
+  //       this.emitAt = emitAt;
+  //       this.emitTimeout = this.ctx.config.timeProvider
+  //         .setTimeout(this.doEmit, timeout);
+  //       const bbResolvers = this.resolvers;
+  //       return new Promise((resolve) => {
+  //         this.resolvers = [resolve];
+  //         const fact = this.ctx.get(BlockService)
+  //           .create(this.buildBlock(drafts));
+  //         bbResolvers.forEach((fn) => fn(fact));
+  //       });
+  //     }
+  //   }
+  // }
 }

@@ -52,7 +52,7 @@ export default class DataContract implements ContractProvider {
           ),
           Hash.fromBytes(body),
         );
-      driver.setResult(valid);
+      valid ? driver.pass() : driver.fail();
     } else {
       throw new Error(`Invalid driver type!`);
     }

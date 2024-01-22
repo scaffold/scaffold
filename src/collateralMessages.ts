@@ -11,12 +11,12 @@ const registry = {
   CollateralHintInputHash: {
     name: 'CollateralHintInputHash',
     type: 'record',
-    fields: [{ name: 'input_idx', type: 'int' }],
+    fields: [{ name: 'inputIdx', type: 'int' }],
   },
   CollateralHintVerifier: {
     name: 'CollateralHintVerifier',
     type: 'record',
-    fields: [{ name: 'input_idx', type: 'int' }],
+    fields: [{ name: 'groupIdx', type: 'int' }],
   },
 
   CollateralHint: {
@@ -37,13 +37,13 @@ const registry = {
   CollateralContractParams: {
     name: 'CollateralContractParams',
     type: 'record',
-    fields: [{ name: 'block_hash', type: 'Hash' }],
+    fields: [{ name: 'blockHash', type: 'Hash' }],
   },
   CollateralContractDetail: {
     name: 'CollateralContractDetail',
     type: 'record',
     fields: [
-      { name: 'public_key', type: 'bytes' }, // 33 bytes
+      { name: 'publicKey', type: 'bytes' }, // 33 bytes
       { name: 'hints', type: { type: 'array', items: 'bytes' } },
 
       // When running a contract, hints are requested via getHint().

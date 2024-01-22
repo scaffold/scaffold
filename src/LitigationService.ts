@@ -17,7 +17,7 @@ export default class LitigationService {
     vote = this.ctx.get(FactService).updateValidity(fact.hash, hints, vote);
     this.rectify(fact, [{
       detail: {
-        public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+        publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
         hints,
         vote,
       },
@@ -34,22 +34,21 @@ export default class LitigationService {
       ),
       (hints) => this.ctx.get(FactService).getValidity(fact.hash, hints),
       (hints, vote, amount) =>
-        this.ctx.get(BlockBuilder).publish({
+        this.ctx.get(BlockBuilder).publishPersistentDraft({
           outputs: [{
             verifier: {
               contract_hash: collateralHash,
-              params: CollateralContractParams.encode({
-                block_hash: fact.hash,
-              }),
+              params: CollateralContractParams.encode({ blockHash: fact.hash }),
             },
             amount,
             detail: CollateralContractDetail.encode({
-              public_key: this.ctx.get(KeyService).getSelfPublicKey(),
+              publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
               hints,
               vote,
             }),
           }],
-        }, 0),
+          timeout: 0,
+        }),
     );
   }
 }

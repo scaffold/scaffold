@@ -1,4 +1,4 @@
-import BlockBuilder, { BlockSpec, InputSpec } from './BlockBuilder.ts';
+import BlockBuilder, { BlockDraft, InputSpec } from './BlockBuilder.ts';
 import BlockService from './BlockService.ts';
 import {
   accountHash,
@@ -231,7 +231,8 @@ export default class GenerationService {
         params: verifier.contract_hash.toBytes(),
       });
       if (generatorBlocks.length) {
-        const generatorCode = generatorBlocks[0].body;
+        const generatorCode =
+          generatorBlocks[0].block.bodies[generatorBlocks[0].groupIdx];
 
         return this.ctx.get(WorkerDriverService).run(
           async (workerDriver) => {
@@ -416,7 +417,7 @@ export default class GenerationService {
           this.ctx.get(FetchService).fetch(
             verifier,
             { abortSignal: workerDriver.done.signal },
-            (block) => {
+            (result, block) => {
               this.ctx.get(Logger).info('got req', { verifier, block });
 
               // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
@@ -429,7 +430,7 @@ export default class GenerationService {
 
               refs.push(block);
               workerDriver.resumeTimer();
-              reply(block.body);
+              reply(result);
             },
           );
         }),
@@ -525,13 +526,6 @@ export default class GenerationService {
       fail() {
         throw COMPUTE_INGENERABLE_FLAG;
       },
-      setResult(pass: boolean) {
-        if (pass) {
-          throw COMPUTE_GENERABLE_FLAG;
-        } else {
-          throw COMPUTE_INGENERABLE_FLAG;
-        }
-      },
 
       offsetCanonicality(offset: bigint) {
         return todo();
@@ -576,7 +570,7 @@ export default class GenerationService {
         // If this property was never retrieved, we can assume the generator created a correct block.
         const isCorrect = emitCorrect ?? true;
 
-        const blockSpec: BlockSpec = {
+        const blockDraft: BlockDraft = {
           refs,
           inputs: [...verifierInputs, ...otherInputs],
           satisfies: verifierInputs.length
@@ -592,7 +586,7 @@ export default class GenerationService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Creating block...`,
         });
-        await this.createBlock(state.verifierState.verifier, blockSpec, 0);
+        this.createBlock(state.verifierState.verifier, blockDraft, 0);
         workerDriver.resumeTimer();
       },
     };
@@ -646,9 +640,9 @@ export default class GenerationService {
     ) === 1;
   }
 
-  private async createBlock(
+  private createBlock(
     verifier: Verifier,
-    spec: BlockSpec,
+    draft: BlockDraft,
     durationMs: number,
   ) {
     if (Hash.equals(verifier.contract_hash, rootHash)) {
@@ -657,7 +651,7 @@ export default class GenerationService {
       // Instead, wait for a time.
       // TODO: Wait for our block to become canonical in the blockset.
 
-      const block = this.ctx.get(BlockBuilder).buildBlock(spec);
+      const block = this.ctx.get(BlockBuilder).buildBlock([draft]);
 
       const publishDelay = 500 + Math.random() * 500;
       const publishAt = this.ctx.config.timeProvider.now() + publishDelay;
@@ -687,8 +681,21 @@ export default class GenerationService {
       return fact;
     }
 
-    console.log('GENERATE', spec);
-    const block = await this.ctx.get(BlockBuilder).publish(spec);
+    console.log('GENERATE', draft);
+    assert(draft.onBlock === undefined);
+    draft.onBlock = (block, groupIdx) => {
+      if (this.ctx.config.dbgVerifyGenerations) {
+        this.ctx.get(VerificationService)
+          .enqueueVerification(block, verifier, [CollateralHint.encode({
+            hint: { CollateralHintVerifier: { groupIdx } },
+          })], 0);
+      }
+
+      if (this.isImmediatelyVerifiable(block) !== true) {
+        this.ctx.get(LitigationService).litigate(block, [], 'VALID_CHALLENGE');
+      }
+    };
+    this.ctx.get(BlockBuilder).publishPersistentDraft(draft);
 
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
@@ -708,26 +715,6 @@ export default class GenerationService {
     //     blockExt,
     //   );
     // }
-
-    if (this.ctx.config.dbgVerifyGenerations) {
-      for (let i = 0; i < block.inputs.length; i++) {
-        const input = block.inputs[i];
-        const inputBlock = this.ctx.get(BlockService).get(input.blockHash);
-        if (inputBlock !== undefined) {
-          const verifier = inputBlock.outputs[input.outputIdx].verifier;
-          this.ctx.get(VerificationService)
-            .enqueueVerification(block, verifier, [CollateralHint.encode({
-              hint: { CollateralHintVerifier: { input_idx: i } },
-            })], 0);
-        }
-      }
-    }
-
-    if (this.isImmediatelyVerifiable(block) !== true) {
-      this.ctx.get(LitigationService).litigate(block, [], 'VALID_CHALLENGE');
-    }
-
-    return block;
   }
 
   // private litigateBlockVerifier(

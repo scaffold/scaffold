@@ -250,7 +250,7 @@ export const registry = {
       // TODO: Accomplish this via hints? Add a requireHint() call? Allow collateral and/or hints to be embedded on the target block itself?
       // { name: 'body', type: 'bytes' },
 
-      { name: 'results', type: { type: 'array', items: 'bytes' } },
+      { name: 'bodies', type: { type: 'array', items: 'bytes' } },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
       // { name: 'is_free_market', type: 'boolean' },

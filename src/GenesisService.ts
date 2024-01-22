@@ -48,8 +48,13 @@ export const createGenesisBlock = (
     enableValidation: false,
   });
 
-  const block = ctx.get(BlockBuilder).buildBlock({});
-  block.inputs.push({ blockHash: ZERO_HASH, outputIdx: 0 });
+  const block = ctx.get(BlockBuilder).buildBlock([]);
+  let groupIdx = 0;
+  block.inputs.push({
+    blockHash: ZERO_HASH,
+    outputIdx: 0,
+    groupIdx: groupIdx++,
+  });
   for (const { publicKey, amount } of accounts) {
     block.outputs.push({
       verifier: {
@@ -58,6 +63,7 @@ export const createGenesisBlock = (
       },
       amount,
       detail: new Uint8Array(),
+      groupIdx: groupIdx++,
     });
   }
   return ctx.get(BlockService).create(block);

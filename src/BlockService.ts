@@ -79,10 +79,11 @@ export default class BlockService {
     return Hash.digestParts(signer, Block.encode(block));
   }
 
-  public create(block: Block): BlockFact {
+  public create(block: Block, mutator?: (fact: Fact) => void): BlockFact {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
-    return this.ctx.get(FactService).emit(block, Block, FactType.Block, true);
+    return this.ctx.get(FactService)
+      .emit(block, Block, FactType.Block, true, mutator);
 
     // console.log(
     //   'create',
@@ -153,6 +154,8 @@ export default class BlockService {
       epochInclusionProofs: new Map(),
 
       ...this.getFrontierMeta(block),
+
+      persistentSources: [],
     };
     const fact: BlockFact = Object.assign(
       base,
@@ -180,6 +183,13 @@ export default class BlockService {
     }
 
     fact.inputs.forEach((input, idx) => {
+      // TODO: Make this case work; just plugin an EMPTY_ARR or an undefined body
+      if (fact.bodies[input.groupIdx] === undefined) {
+        throw new Error(
+          `Invalid groupIdx ${input.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
+        );
+      }
+
       const claims = this.getClaims(input);
       const claim = { block: fact, inputIdx: idx };
       claims.push(claim);
@@ -199,7 +209,14 @@ export default class BlockService {
       }
     });
 
-    fact.outputs.forEach(({ verifier, amount, detail }, outputIdx) => {
+    fact.outputs.forEach((output, outputIdx) => {
+      // TODO: Make this case work; just plugin an EMPTY_ARR or an undefined body
+      if (fact.bodies[output.groupIdx] === undefined) {
+        throw new Error(
+          `Invalid groupIdx ${output.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
+        );
+      }
+
       const claims = this.getClaims({ blockHash: base.hash, outputIdx });
       if (claims.length) {
         claims.forEach(({ block, inputIdx }) =>
@@ -207,23 +224,26 @@ export default class BlockService {
         );
       } else {
         this.ctx.get(GenerationService)
-          .addInput({ block: fact, outputIdx, amount });
+          .addInput({ block: fact, outputIdx, amount: output.amount });
       }
 
-      if (Hash.equals(verifier.contract_hash, collateralHash)) {
-        const params = CollateralContractParams.decode(verifier.params);
-        const detailDec = CollateralContractDetail.decode(detail);
+      if (Hash.equals(output.verifier.contract_hash, collateralHash)) {
+        const params = CollateralContractParams.decode(output.verifier.params);
+        const detailDec = CollateralContractDetail.decode(output.detail);
 
         if (this.ctx.get(FactService).isSignedByMe(fact)) {
-          this.ctx.get(FactService)
-            .updateValidity(params.block_hash, detailDec.hints, detailDec.vote);
+          this.ctx.get(FactService).updateValidity(
+            params.blockHash,
+            detailDec.hints,
+            detailDec.vote,
+          );
         }
 
-        this.ctx.get(FactService).addCollateral(params.block_hash, {
+        this.ctx.get(FactService).addCollateral(params.blockHash, {
           collateralBlock: fact,
           collateralOutputIdx: outputIdx,
           detail: detailDec,
-          amount,
+          amount: output.amount,
         });
 
         // const contestedBlock = this.ctx.get(FactService).get(params.block_hash);
@@ -245,11 +265,11 @@ export default class BlockService {
       this.checkInputAvailability(fact);
     }
 
-    for (const result of fact.results) {
-      if (result.byteLength > 0) {
+    for (const body of fact.bodies) {
+      if (body.byteLength > 0) {
         try {
           // TODO: Set the fromNode correctly here
-          this.ctx.get(FactService).ingest(result, fact.source);
+          this.ctx.get(FactService).ingest(body, fact.source);
         } catch (_err) {
           // If it fails no worries; it just wasn't a valid block
         }
@@ -426,6 +446,7 @@ export default class BlockService {
     }
 
     const verifier = parent.outputs[parentOutputIdx].verifier;
+    const groupIdx = child.inputs[childInputIdx].groupIdx;
 
     // if (Hash.equals(verifier.contract_hash, frontierHash)) {
     //   const expectedFrontierVote = child.inputs.some((input) =>
@@ -446,22 +467,13 @@ export default class BlockService {
     this.checkInputAvailability(child);
 
     // TODO: Only do this once per unique verifier foreach block
-    const hintPrefix = [CollateralHint.encode({
-      hint: { CollateralHintVerifier: { input_idx: childInputIdx } },
-    })];
+    const hintPrefix = [
+      CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } }),
+    ];
     this.ctx.get(VerificationService)
       .enqueueVerification(child, verifier, hintPrefix, 0);
 
-    if (
-      child.verifiers.some((v2) =>
-        Hash.equals(verifier.contract_hash, v2.contract_hash) &&
-        arrEquals(verifier.params, v2.params)
-      )
-    ) {
-      return;
-    }
-
-    child.verifiers.push(verifier);
+    child.verifiers[groupIdx] = verifier;
 
     this.satisfactionMonitor.callAll(verifier, child);
 
@@ -767,22 +779,13 @@ export default class BlockService {
     );
   }
 
-<<<<<<< Updated upstream
-  public getClaims({ blockHash, outputIdx }: BlockInput) {
-=======
-  public getClaims(input: { block_hash: Hash; output_idx: number }) {
->>>>>>> Stashed changes
+  public getClaims(input: { blockHash: Hash; outputIdx: number }) {
     // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(
       this.claimsByOutput,
       Hash.composePrimitives(
-<<<<<<< Updated upstream
-        blockHash.toPrimitive(),
-        Hash.fromLiteral32(outputIdx).toPrimitive(),
-=======
-        input.block_hash.toPrimitive(),
-        Hash.fromLiteral32(input.output_idx).toPrimitive(),
->>>>>>> Stashed changes
+        input.blockHash.toPrimitive(),
+        Hash.fromLiteral32(input.outputIdx).toPrimitive(),
       ),
       () => [],
     );
@@ -850,12 +853,15 @@ export default class BlockService {
   }
 
   public getBlocksByVerifier(verifier: Verifier) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching((block) =>
-      block.verifiers.some((v) =>
-        Hash.equals(v.contract_hash, verifier.contract_hash) &&
-        arrEquals(v.params, verifier.params)
-      )
-    );
+    return this.ctx.get(FactService).hackyGetBlocksMatching()
+      .flatMap((block) => {
+        const idx = block.verifiers.findIndex((v) =>
+          v !== undefined &&
+          Hash.equals(v.contract_hash, verifier.contract_hash) &&
+          arrEquals(v.params, verifier.params)
+        );
+        return idx !== -1 ? [{ block, groupIdx: idx }] : [];
+      });
   }
 
   public getBlocksByInput(input: BlockInput) {
@@ -868,16 +874,15 @@ export default class BlockService {
   }
 
   public getBlocksByOutput(verifier: Verifier) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching().flatMap((
-      block,
-    ) =>
-      block.outputs.flatMap((y, idx) =>
-        Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
-          arrEquals(y.verifier.params, verifier.params)
-          ? [{ block, idx }]
-          : []
-      )
-    );
+    return this.ctx.get(FactService).hackyGetBlocksMatching()
+      .flatMap((block) =>
+        block.outputs.flatMap((y, idx) =>
+          Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
+            arrEquals(y.verifier.params, verifier.params)
+            ? [{ block, idx }]
+            : []
+        )
+      );
   }
 
   public getBlocksByOutputFilter(
@@ -907,7 +912,7 @@ export default class BlockService {
   public async getSelfVerification(block: BlockFact) {
     const myCollateral = this.getBlocksByOutput({
       contract_hash: collateralHash,
-      params: CollateralContractParams.encode({ block_hash: block.hash }),
+      params: CollateralContractParams.encode({ blockHash: block.hash }),
     }).filter(({ block }) => block.source === FactSource.Local); // TODO: Filter by signature so we get our blocks even if someone else sent them to us
 
     // myCollateral
@@ -918,9 +923,9 @@ export default class BlockService {
     block: BlockFact,
     cancelSignal = neverAbort,
   ) {
-    for (let i = 0; i < block.inputs.length; i++) {
+    for (let i = 0; i < block.bodies.length; i++) {
       const hint = CollateralHint.encode({
-        hint: { CollateralHintVerifier: { input_idx: i } },
+        hint: { CollateralHintVerifier: { groupIdx: i } },
       });
 
       while (
@@ -972,48 +977,48 @@ export default class BlockService {
     }
   }
 
-  public doesBlockSatisfy(
+  public getGroupIndex(
     block: BlockFact,
     verifier: Verifier,
     cancelSignal: AbortSignal,
-  ) {
+  ): MaybePromise<number | undefined> {
     if (cancelSignal.aborted) {
       return neverPromise;
     }
 
     // TODO: Cache unused abort controllers
     const controller = new AbortController();
-    const promises: { inputPromise: Promise<BlockFact>; outputIdx: number }[] =
+    const promises: { inputPromise: Promise<BlockFact>; input: BlockInput }[] =
       [];
     for (const input of block.inputs) {
       const inputPromise = this.ctx.get(BlockService)
         .waitForBlock(input.blockHash, controller.signal);
       if (inputPromise instanceof Promise) {
         cancelSignal.addEventListener('abort', () => controller.abort());
-        promises.push({ inputPromise, outputIdx: input.outputIdx });
+        promises.push({ inputPromise, input });
       } else {
         const test = inputPromise.outputs[input.outputIdx].verifier;
         if (this.areVerifiersEqual(test, verifier)) {
           controller.abort();
-          return true;
+          return input.groupIdx;
         }
       }
     }
 
     let remaining = promises.length;
     if (remaining === 0) {
-      return Promise.resolve(false);
+      return;
     }
 
-    return new Promise<boolean>((resolve) => {
-      promises.forEach(async ({ inputPromise, outputIdx }) => {
-        const test = (await inputPromise).outputs[outputIdx].verifier;
+    return new Promise<number | undefined>((resolve) => {
+      promises.forEach(async ({ inputPromise, input }) => {
+        const test = (await inputPromise).outputs[input.outputIdx].verifier;
         if (this.areVerifiersEqual(test, verifier)) {
           controller.abort();
-          resolve(true);
+          resolve(input.groupIdx);
         } else {
           if (--remaining === 0) {
-            resolve(false);
+            resolve(undefined);
           }
         }
       });

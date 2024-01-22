@@ -440,7 +440,7 @@ export default class CollateralUtil {
             remainingResultReward -= d;
           }
 
-          addOutput(posting.detail.public_key, amount);
+          addOutput(posting.detail.publicKey, amount);
         }
       }
 
@@ -483,7 +483,7 @@ export default class CollateralUtil {
           parent = parent.parent;
         }
 
-        addOutput(posting.detail.public_key, amount);
+        addOutput(posting.detail.publicKey, amount);
       }
     }
 
