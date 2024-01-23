@@ -26,7 +26,7 @@ snapshot[`ingest should add block to our registry 1`] = `
           {
             amount: -1n,
             verifier: {
-              contract_hash: Hash {
+              contractHash: Hash {
                 digest: Uint8Array(32) [
                   148,
                   251,
@@ -73,7 +73,7 @@ snapshot[`ingest should add block to our registry 1`] = `
         receivedTimestamp: 1000,
         timestamp: 1677196959614n,
         verifier: {
-          contract_hash: Hash {
+          contractHash: Hash {
             digest: Uint8Array(32) [
               0,
               0,

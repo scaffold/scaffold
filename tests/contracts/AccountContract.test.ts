@@ -26,7 +26,7 @@ Deno.test(
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: accountHash,
+          contractHash: accountHash,
           params: AccountContractParams.encode({
             public_key: ctx1.get(KeyService).getSelfPublicKey(),
           }),
@@ -53,7 +53,7 @@ Deno.test(
 
     const validBlock = ctx1.get(BlockBuilder).publish({
       satisfies: [{
-        contract_hash: accountHash,
+        contractHash: accountHash,
         params: AccountContractParams.encode({
           public_key: ctx1.get(KeyService).getSelfPublicKey(),
         }),
@@ -77,7 +77,7 @@ Deno.test(
 
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       satisfies: [{
-        contract_hash: accountHash,
+        contractHash: accountHash,
         params: AccountContractParams.encode({
           public_key: ctx2.get(KeyService).getSelfPublicKey(),
         }),

@@ -89,26 +89,26 @@ export default class FetchService {
       // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
 
       // const gen = this.ctx.get(LocalGenerationService).getGenerator(
-      //   verifier.contract_hash,
+      //   verifier.contractHash,
       // );
       // if (gen) {
       //   const res = gen({
       //     ctx: this.ctx,
-      //     contractHash: verifier.contract_hash,
+      //     contractHash: verifier.contractHash,
       //     params: verifier.params,
       //     emitCorrect: true,
       //     setFreeMarket: () => error('Not implemented'),
       //     request: (contractHash: Hash, params: Uint8Array) =>
       //       new Promise((resolve) =>
       //         this.fetch(
-      //           { contract_hash: contractHash, params },
+      //           { contractHash: contractHash, params },
       //           {},
       //           // TODO: Handle dirty inputs (repeated resolve calls)
       //           (block) => resolve(block.body),
       //         )
       //       ),
       //     notify: (contractHash: Hash, params: Uint8Array) =>
-      //       this.fetch({ contract_hash: contractHash, params }, {}),
+      //       this.fetch({ contractHash: contractHash, params }, {}),
       //   });
       //   if (res instanceof Promise) {
       //     res.then((body) => {

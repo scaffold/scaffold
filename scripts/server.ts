@@ -168,7 +168,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   //       ctx.get(BlockBuilder).publish({
   //         body,
   //         satisfies: [{
-  //           contract_hash: generatorHash,
+  //           contractHash: generatorHash,
   //           params: contractHash.toBytes(),
   //         }],
   //       });
@@ -179,7 +179,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   //   ctx.get(BlockBuilder).publish({
   //     body,
   //     satisfies: [{
-  //       contract_hash: rootHash,
+  //       contractHash: rootHash,
   //       params: Hash.digest(body).toBytes(),
   //     }],
   //   });
@@ -206,7 +206,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   // })));
 
   // ctx.get(ExecutorDriverService).run(
-  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   { contractHash: ZERO_HASH, params: new Uint8Array() },
   //   {},
   //   () => 1,
   //   async (driver, cancel) => {
@@ -240,7 +240,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   // })));
 
   // ctx.get(ExecutorDriverService).run(
-  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   { contractHash: ZERO_HASH, params: new Uint8Array() },
   //   {},
   //   () => 1,
   //   async (driver, cancel) => {
@@ -294,7 +294,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   // })));
 
   // ctx.get(ExecutorDriverService).run(
-  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   { contractHash: ZERO_HASH, params: new Uint8Array() },
   //   {},
   //   () => 1,
   //   async (driver, cancel) => {
@@ -343,7 +343,7 @@ entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
   // })));
 
   // ctx.get(ExecutorDriverService).run(
-  //   { contract_hash: ZERO_HASH, params: new Uint8Array() },
+  //   { contractHash: ZERO_HASH, params: new Uint8Array() },
   //   {},
   //   () => 1,
   //   async (driver, cancel) => {
@@ -405,7 +405,7 @@ self.addEventListener('unload', () => {
 
 //   const tracker = ctx.get(StateTracker).track(
 //     (idx) => ({
-//       contract_hash: contractHash,
+//       contractHash: contractHash,
 //       params: epochMessages.Params.encode({ height: idx }),
 //     }),
 //     (idx, state) =>
@@ -565,7 +565,7 @@ self.addEventListener('unload', () => {
 //   ctx.get(GraphUtils).supplyGenerator(contract, clangGenerator);
 
 //   const question = ctx.get(QuestionService).getCanonical({
-//     contract_hash: contract.hash,
+//     contractHash: contract.hash,
 //     params: new Uint8Array([]),
 //   });
 //   question.onAnswer((answer) => console.log(answer));

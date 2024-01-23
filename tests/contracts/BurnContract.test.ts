@@ -23,7 +23,7 @@ Deno.test(
 
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
-        verifier: { contract_hash: burnHash, params: EMPTY_ARR },
+        verifier: { contractHash: burnHash, params: EMPTY_ARR },
         amount: 10n,
         detail: EMPTY_ARR,
       }],
@@ -45,7 +45,7 @@ Deno.test(
     provideInitialBalance(ctx1);
 
     const invalidBlock = ctx1.get(BlockBuilder).publish({
-      satisfies: [{ contract_hash: burnHash, params: EMPTY_ARR }],
+      satisfies: [{ contractHash: burnHash, params: EMPTY_ARR }],
     }, 0);
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));

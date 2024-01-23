@@ -26,7 +26,7 @@ Deno.test(
 
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
-        verifier: { contract_hash: rootHash, params: genesisHash.toBytes() },
+        verifier: { contractHash: rootHash, params: genesisHash.toBytes() },
         amount: 10n,
         detail: EMPTY_ARR,
       }],
@@ -50,7 +50,7 @@ Deno.test(
     const validBlock = ctx1.get(BlockBuilder).publish({
       body: str2bin('good'),
       satisfies: [{
-        contract_hash: rootHash,
+        contractHash: rootHash,
         params: Hash.digest('good').toBytes(),
       }],
     }, 0);
@@ -73,7 +73,7 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       body: str2bin('bad'),
       satisfies: [{
-        contract_hash: rootHash,
+        contractHash: rootHash,
         params: Hash.digest('good').toBytes(),
       }],
     }, 0);

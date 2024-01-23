@@ -54,7 +54,7 @@ export default class HintSuggestionService {
       if (verifier === undefined) {
         return [];
       }
-      return (this.providers.get(verifier.contract_hash.toPrimitive()) ?? [])
+      return (this.providers.get(verifier.contractHash.toPrimitive()) ?? [])
         .flatMap((provider) => provider.suggestNext(verifier.params, rest));
     } else {
       throw new Error(`Invalid top-level hint!`);

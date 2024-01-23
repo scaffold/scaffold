@@ -31,7 +31,7 @@ Deno.test(
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 10n,
@@ -61,7 +61,7 @@ Deno.test(
     const collateralBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 1000n,
@@ -72,7 +72,7 @@ Deno.test(
         }),
       }, {
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 10n,
@@ -95,7 +95,7 @@ Deno.test(
       ],
       outputs: [{
         verifier: {
-          contract_hash: accountHash,
+          contractHash: accountHash,
           params: AccountContractParams.encode({ public_key: str2bin('pk2') }),
         },
         amount: 1010n,
@@ -122,7 +122,7 @@ Deno.test(
     const collateralBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 1000n,
@@ -133,7 +133,7 @@ Deno.test(
         }),
       }, {
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 10n,
@@ -152,7 +152,7 @@ Deno.test(
       ],
       outputs: [{
         verifier: {
-          contract_hash: accountHash,
+          contractHash: accountHash,
           params: AccountContractParams.encode({ public_key: str2bin('pk2') }),
         },
         amount: 1010n,
@@ -178,7 +178,7 @@ Deno.test(
     const collateralBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 1000n,
@@ -189,7 +189,7 @@ Deno.test(
         }),
       }, {
         verifier: {
-          contract_hash: collateralHash,
+          contractHash: collateralHash,
           params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
         },
         amount: 10n,
@@ -212,7 +212,7 @@ Deno.test(
       ],
       outputs: [{
         verifier: {
-          contract_hash: accountHash,
+          contractHash: accountHash,
           params: AccountContractParams.encode({ public_key: str2bin('pk1') }),
         },
         amount: 1010n,

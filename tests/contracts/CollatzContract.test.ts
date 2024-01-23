@@ -38,7 +38,7 @@ Deno.test(
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: collatzHash,
+          contractHash: collatzHash,
           params: collatzMessages.Params.encode(params),
         },
         amount: 10n,
@@ -71,7 +71,7 @@ Deno.test(
     const validBlock = ctx1.get(BlockBuilder).publish({
       body: collatzMessages.Answer.encode(goodAnswer),
       satisfies: [{
-        contract_hash: collatzHash,
+        contractHash: collatzHash,
         params: collatzMessages.Params.encode(params),
       }],
     }, 0);
@@ -95,7 +95,7 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       body: collatzMessages.Answer.encode(badAnswer),
       satisfies: [{
-        contract_hash: collatzHash,
+        contractHash: collatzHash,
         params: collatzMessages.Params.encode(params),
       }],
     }, 0);

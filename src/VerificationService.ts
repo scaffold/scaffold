@@ -47,7 +47,7 @@ export default class VerificationService {
       this.extraContractIncentive.set(runHash.toPrimitive(), extraIncentive);
     }
 
-    const special = this.getVerifier(verifier.contract_hash);
+    const special = this.getVerifier(verifier.contractHash);
     if (special) {
       this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
@@ -61,7 +61,7 @@ export default class VerificationService {
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
-              `Starting special verifier for ${verifier.contract_hash.toHex()}:${
+              `Starting special verifier for ${verifier.contractHash.toHex()}:${
                 bin2hex(verifier.params)
               }`,
           });
@@ -78,8 +78,8 @@ export default class VerificationService {
     }
 
     const contractBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
-      contract_hash: rootHash,
-      params: verifier.contract_hash.toBytes(),
+      contractHash: rootHash,
+      params: verifier.contractHash.toBytes(),
     });
     if (contractBlocks.length) {
       const contractCode =
@@ -97,7 +97,7 @@ export default class VerificationService {
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
-              `Starting worker verifier for ${verifier.contract_hash.toHex()}:${
+              `Starting worker verifier for ${verifier.contractHash.toHex()}:${
                 bin2hex(verifier.params)
               }`,
           });
@@ -105,7 +105,7 @@ export default class VerificationService {
             await this.ctx.get(WorkerExecutor).run(
               {
                 code: contractCode,
-                // contractHash: verifier.contract_hash.toBytes(),
+                // contractHash: verifier.contractHash.toBytes(),
                 // params: verifier.params,
                 // body: block.body,
                 // emitCorrect: true,
@@ -151,7 +151,7 @@ export default class VerificationService {
 
       type: ComputationType.Contract,
 
-      getContractHash: () => verifier.contract_hash,
+      getContractHash: () => verifier.contractHash,
       getParams: () => verifier.params,
       getHint: (idx, bop) => {
         idx++;
@@ -239,7 +239,7 @@ export default class VerificationService {
           `request(${contractHash.toHex()}, ${bin2hex(params)})`,
         );
 
-        const verifier = { contract_hash: contractHash, params };
+        const verifier = { contractHash: contractHash, params };
         for (const hash of block.refs) {
           const ref = await this.ctx.get(BlockService).waitForBlock(
             hash,
@@ -407,7 +407,7 @@ export default class VerificationService {
   //     const fact = this.ctx.get(FactService).get(input.block_hash);
   //     if (fact !== undefined && fact.type === FactType.Block) {
   //       const v2 = fact.outputs[input.output_idx].verifier;
-  //       return Hash.equals(v2.contract_hash, verifier.contract_hash) &&
+  //       return Hash.equals(v2.contractHash, verifier.contractHash) &&
   //         arrEquals(v2.params, verifier.params);
   //     }
   //   });
@@ -429,7 +429,7 @@ export default class VerificationService {
   // }
 
   private areOutputsEqual(a: BlockOutput, b: BlockOutput) {
-    return Hash.equals(a.verifier.contract_hash, b.verifier.contract_hash) &&
+    return Hash.equals(a.verifier.contractHash, b.verifier.contractHash) &&
       arrEquals(a.verifier.params, b.verifier.params) &&
       a.amount === b.amount &&
       arrEquals(a.detail, b.detail);

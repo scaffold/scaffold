@@ -1,9 +1,5 @@
-import { assertEquals } from 'std-latest/assert/mod.ts';
-import {
-  findOutput,
-  makeTest,
-  provideInitialBalance,
-} from '../../tests/util.ts';
+import { assert } from '../test_deps.ts';
+import { findOutput, makeTest, provideInitialBalance } from '../tests/util.ts';
 import BlockBuilder from '../src/BlockBuilder.ts';
 import WeightService from '../src/WeightService.ts';
 import { BASE_WORK } from '../src/BlockService.ts';
@@ -15,9 +11,9 @@ Deno.test(
   makeTest({ contractProviders: [] }, (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    assertEquals(
+    assert.assertEquals(
       ctx1.get(WeightService).getSelfWeight(
-        ctx1.get(BlockBuilder).publish({}, 0),
+        ctx1.get(BlockBuilder).publishSingleDraft({}),
       ),
       { minWeight: BASE_WORK, maxWeight: BASE_WORK },
     );
@@ -29,19 +25,19 @@ Deno.test(
   makeTest({ contractProviders: [] }, (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const incentiveBlock = ctx1.get(BlockBuilder).publish({
+    const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
-        verifier: { contract_hash: trueHash, params: EMPTY_ARR },
+        verifier: { contractHash: trueHash, params: EMPTY_ARR },
         amount: 123n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
-    assertEquals(
+    assert.assertEquals(
       ctx1.get(WeightService).getSelfWeight(
-        ctx1.get(BlockBuilder).publish({
+        ctx1.get(BlockBuilder).publishSingleDraft({
           inputs: [findOutput(incentiveBlock, trueHash)],
-        }, 0),
+        }),
       ),
       { minWeight: BASE_WORK + 123n, maxWeight: BASE_WORK + 123n },
     );
@@ -53,19 +49,19 @@ Deno.test(
   makeTest({ contractProviders: [] }, (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
-    const incentiveBlock = ctx2.get(BlockBuilder).publish({
+    const incentiveBlock = ctx2.get(BlockBuilder).publishSingleDraft({
       outputs: [{
-        verifier: { contract_hash: trueHash, params: EMPTY_ARR },
+        verifier: { contractHash: trueHash, params: EMPTY_ARR },
         amount: 123n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
-    assertEquals(
+    assert.assertEquals(
       ctx1.get(WeightService).getSelfWeight(
-        ctx1.get(BlockBuilder).publish({
+        ctx1.get(BlockBuilder).publishSingleDraft({
           inputs: [findOutput(incentiveBlock, trueHash)],
-        }, 0),
+        }),
       ),
       { minWeight: BASE_WORK, maxWeight: BASE_WORK + 123n },
     );

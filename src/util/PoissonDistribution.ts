@@ -19,3 +19,4 @@ export default class PoissonDistribution {
 }
 
 // Also can try: import poisson from 'https://cdn.jsdelivr.net/gh/stdlib-js/random-base-poisson@deno/mod.js';
+// Also can try: https://en.wikipedia.org/wiki/Ziggurat_algorithm

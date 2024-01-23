@@ -392,7 +392,7 @@ export default class CollateralUtil {
       if (amount > 0n) {
         mapPut(outputKeys, bin2hex(dst), () => ({
           verifier: {
-            contract_hash: accountHash,
+            contractHash: accountHash,
             params: AccountContractParams.encode({ publicKey: dst }),
           },
           amount,
@@ -406,7 +406,7 @@ export default class CollateralUtil {
     const addBurn = (amount: bigint) => {
       if (amount > 0n) {
         mapPut(outputKeys, '', () => ({
-          verifier: { contract_hash: burnHash, params: EMPTY_ARR },
+          verifier: { contractHash: burnHash, params: EMPTY_ARR },
           amount,
           detail: EMPTY_ARR,
         }), (output) => {

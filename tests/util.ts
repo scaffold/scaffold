@@ -157,7 +157,7 @@ export const findOutput = (
 ): InputSpec => {
   for (const [idx, output] of block.outputs.entries()) {
     if (
-      Hash.equals(output.verifier.contract_hash, contractHash) &&
+      Hash.equals(output.verifier.contractHash, contractHash) &&
       (params === undefined || arrEquals(output.verifier.params, params))
     ) {
       return { block, outputIdx: idx, amount: output.amount };

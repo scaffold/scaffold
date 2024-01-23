@@ -6,10 +6,10 @@ import Hash from './util/Hash.ts';
 import StateTrackerUtil from './util/StateTracker.ts';
 
 export default class StateTracker
-  extends StateTrackerUtil<Verifier, BlockFact> {
+  extends StateTrackerUtil<Verifier, Uint8Array> {
   constructor(private ctx: Context) {
     super(
-      (verifier: Verifier, onState: (state: BlockFact) => void) =>
+      (verifier: Verifier, onState: (state: Uint8Array) => void) =>
         this.ctx.get(FetchService).fetch(
           verifier,
           { internalIncentive: 10n },

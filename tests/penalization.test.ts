@@ -31,7 +31,7 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       body: str2bin('bad'),
       satisfies: [{
-        contract_hash: rootHash,
+        contractHash: rootHash,
         params: Hash.digest('good').toBytes(),
       }],
     }, 0);

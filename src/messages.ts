@@ -180,7 +180,7 @@ export const registry = {
     name: 'Verifier',
     type: 'record',
     fields: [
-      { name: 'contract_hash', type: 'Hash' },
+      { name: 'contractHash', type: 'Hash' },
       { name: 'params', type: 'bytes' },
     ],
   },
@@ -263,7 +263,7 @@ export const registry = {
       //   the answer will be created as soon as possible after the required timestamp.
       { name: 'timestamp', type: 'long' },
     ],
-    // A block implicitly adds collateral to the data availability contracts of all input/output/verifier.contract_hash hashes
+    // A block implicitly adds collateral to the data availability contracts of all input/output/verifier.contractHash hashes
     // Maybe put the verifier on the collateral claim?
   },
   BlockSetTreeEmpty: {
@@ -405,7 +405,7 @@ export const registry = {
   //         'SelfLicensesContract',
   //       ],
   //     },
-  //     // { name: 'contract_hash', type: 'Hash' },
+  //     // { name: 'contractHash', type: 'Hash' },
   //     { name: 'params', type: 'bytes' },
   //   ],
   // },
@@ -994,11 +994,11 @@ export type FrontierTreeDetail = MsgType<'FrontierTreeDetail'>;
 //   contract: {
 //     Question: {
 //       contract: null,
-//       contract_hash: HashClass.digest('abc'),
+//       contractHash: HashClass.digest('abc'),
 //       params: new Uint8Array([4, 5, 6]),
 //     },
 //   },
-//   contract_hash: HashClass.digest('abc'),
+//   contractHash: HashClass.digest('abc'),
 //   params: new Uint8Array([1, 2, 3]),
 // });
 // console.log(buf);

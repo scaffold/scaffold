@@ -150,7 +150,7 @@ export default class WorkerExecutor {
           new Promise((resolve, reject) => {
             if (cancelCb !== terminateFn) throw new Error('Internal error');
             cancelCb = reject;
-            driver.request(verifier.contract_hash, verifier.params).then(
+            driver.request(verifier.contractHash, verifier.params).then(
               (body) => {
                 if (cancelCb !== reject) throw new Error('Internal error');
                 cancelCb = terminateFn;
@@ -164,8 +164,8 @@ export default class WorkerExecutor {
     };
 
     const getBodyHash = (file: OpenFile) =>
-      file.verifier.then(({ contract_hash, params }) =>
-        Hash.equals(contract_hash, rootHash)
+      file.verifier.then(({ contractHash, params }) =>
+        Hash.equals(contractHash, rootHash)
           ? Hash.fromBytes(params)
           : getBody(file).then(Hash.digest)
       );
@@ -241,7 +241,7 @@ export default class WorkerExecutor {
         inodes.set(inode, {
           path: [],
           verifier: Promise.resolve({
-            contract_hash: rootHash,
+            contractHash: rootHash,
             params: hash.toBytes(),
           }),
         });
@@ -261,7 +261,7 @@ export default class WorkerExecutor {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
             driver.notify(contractHash, params);
-            return { contract_hash: contractHash, params };
+            return { contractHash: contractHash, params };
           }),
         });
       },
@@ -309,7 +309,7 @@ export default class WorkerExecutor {
       //   result: Uint8Array,
       // ): Promise<number> {
       //   const verifier = {
-      //     contract_hash: Hash.fromBytes(contractHash),
+      //     contractHash: Hash.fromBytes(contractHash),
       //     params,
       //   };
       //   const verifierHash = Hash.digest(Verifier.encode(verifier));

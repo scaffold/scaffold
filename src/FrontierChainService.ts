@@ -6,11 +6,6 @@ import Context from './Context.ts';
 import { frontierHash } from './constants.ts';
 import { todo } from './util/functional.ts';
 
-export type VertexBase = Pick<
-  BlockFact,
-  'outputs' | 'outputClaims' | 'frontierOutputIdx' | 'frontierVoteBlock'
->;
-
 // The frontier can always be extended or swapped to its parent
 
 // TODO: Move to set util
@@ -31,13 +26,11 @@ const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
 export default class FrontierChainService {
   constructor(private ctx: Context) {}
 
-  public getVote<VertexType extends VertexBase>(
-    inputs: { block: VertexType; outputIdx?: number }[],
-  ): VertexType {
+  public getVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
     const frontierInputs = inputs.filter((input) =>
       input.outputIdx !== undefined &&
       Hash.equals(
-        input.block.outputs[input.outputIdx].verifier.contract_hash,
+        input.block.outputs[input.outputIdx].verifier.contractHash,
         frontierHash,
       )
     );
@@ -109,7 +102,7 @@ export default class FrontierChainService {
   //   return bestParent;
   // }
 
-  private getFrontierChain(block: VertexBase) {
+  private getFrontierChain(block: BlockFact) {
     return this.recurse(block, (el, queue) => {
       switch (el.frontierVoteBlock) {
         case undefined:
@@ -122,7 +115,7 @@ export default class FrontierChainService {
     });
   }
 
-  private getAllParents(block: VertexBase) {
+  private getAllParents(block: BlockFact) {
     return this.recurse(block, (el, queue) => {
       for (const claim of el.outputClaims[el.frontierOutputIdx]) {
         queue.push(claim.block);
@@ -131,8 +124,8 @@ export default class FrontierChainService {
   }
 
   private recurse(
-    block: VertexBase,
-    pusher: (el: VertexBase, queue: VertexBase[]) => void,
+    block: BlockFact,
+    pusher: (el: BlockFact, queue: BlockFact[]) => void,
   ) {
     const queue = [block];
     for (let i = 0; i < queue.length; i++) {

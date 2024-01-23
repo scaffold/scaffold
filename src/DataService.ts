@@ -23,7 +23,7 @@ export default class DataService {
           // TODO: Once we get the data, we don't need to keep publishing anymore
           this.ctx.get(BlockBuilder).publishPersistentDraft({
             outputs: [{
-              verifier: { contract_hash: rootHash, params: hash.toBytes() },
+              verifier: { contractHash: rootHash, params: hash.toBytes() },
               amount: 0n,
               detail: EMPTY_ARR,
             }],

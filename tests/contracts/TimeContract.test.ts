@@ -25,7 +25,7 @@ Deno.test(
     const incentiveBlock = ctx1.get(BlockBuilder).publish({
       outputs: [{
         verifier: {
-          contract_hash: timeHash,
+          contractHash: timeHash,
           params: TimeParams.encode({ time: 123n }),
         },
         amount: 10n,
@@ -50,7 +50,7 @@ Deno.test(
 
     const validBlock = ctx1.get(BlockBuilder).publish({
       satisfies: [{
-        contract_hash: timeHash,
+        contractHash: timeHash,
         params: TimeParams.encode({ time: 0n }),
       }],
     }, 0);
@@ -72,7 +72,7 @@ Deno.test(
 
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       satisfies: [{
-        contract_hash: timeHash,
+        contractHash: timeHash,
         params: TimeParams.encode({ time: 123n }),
       }],
     }, 0);

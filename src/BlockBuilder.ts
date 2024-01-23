@@ -22,6 +22,7 @@ import WeightService from './WeightService.ts';
 import GenerationService from './GenerationService.ts';
 import { assert, todo } from './util/functional.ts';
 import FrontierChainService from './FrontierChainService.ts';
+import { ZERO_BLOCK } from './BlockMeta.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -39,7 +40,7 @@ export interface InputSpec {
 // }
 
 export interface BlockDraft {
-  frontierVote?: BlockFact;
+  frontierVote?: BlockFact | typeof ZERO_BLOCK;
   frontierLevel?: number;
   refs?: BlockFact[];
   inputs?: InputSpec[];
@@ -68,7 +69,7 @@ export default class BlockBuilder {
 
   constructor(private ctx: Context) {
     this.selfAccountVerifier = {
-      contract_hash: accountHash,
+      contractHash: accountHash,
       params: AccountContractParams.encode({
         publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
       }),
@@ -87,6 +88,7 @@ export default class BlockBuilder {
     //   Number(b.body !== undefined) - Number(a.body !== undefined)
     // );
 
+    let frontierVoteBlock: BlockFact | typeof ZERO_BLOCK | undefined;
     let frontierLevel: number | undefined;
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
@@ -95,6 +97,14 @@ export default class BlockBuilder {
 
     let groupIdx = 0;
     for (const draft of drafts) {
+      if (draft.frontierVote !== undefined) {
+        if (frontierVoteBlock === undefined) {
+          frontierVoteBlock = draft.frontierVote;
+        } else if (frontierVoteBlock !== draft.frontierVote) {
+          throw new Error(`Cannot merge different frontier votes!`);
+        }
+      }
+
       if (draft.frontierLevel !== undefined) {
         if (frontierLevel === undefined) {
           frontierLevel = draft.frontierLevel;
@@ -140,13 +150,17 @@ export default class BlockBuilder {
     let ioDelta = 0n;
 
     const addFrontierOutput = !outputs.some((output) =>
-      Hash.equals(output.verifier.contract_hash, frontierHash)
+      Hash.equals(output.verifier.contractHash, frontierHash)
     );
     const frontierOutputAmount = 10n;
 
     if (addFrontierOutput) {
       ioDelta -= frontierOutputAmount;
     } else {
+      // We can't really add a frontier output in the draft because the frontier output detail needs the tree weights,
+      // which need to be computed from the full inputs and outputs of the block (from multiple BlockDrafts).
+      // If we decide to remove the self weight from the tree weights, this can change and we can pass the frontier output as a normal output.
+      // See https://github.com/orgs/scaffold/projects/1/views/2?pane=issue&itemId=50902340
       if (this.ctx.config.allowSpecifiedFrontierOutputs) {
         console.warn(`Unexpected frontier output on an unfinished block!`);
       } else {
@@ -195,10 +209,14 @@ export default class BlockBuilder {
 
     const refs = refBlocks.map((block) => block.hash);
 
-    const frontierVote = this.ctx.get(FrontierChainService).getVote([
+    frontierVoteBlock ??= this.ctx.get(FrontierChainService).getVote([
       ...inputs,
       ...refBlocks.map((ref) => ({ block: ref })),
-    ]).hash;
+    ]);
+    const frontierVote =
+      frontierVoteBlock !== undefined && frontierVoteBlock !== ZERO_BLOCK
+        ? frontierVoteBlock.hash
+        : ZERO_HASH;
 
     if (addFrontierOutput) {
       const level = frontierLevel ?? 0;
@@ -209,7 +227,7 @@ export default class BlockBuilder {
       bodies.push(EMPTY_ARR);
       outputs.push({
         verifier: {
-          contract_hash: frontierHash,
+          contractHash: frontierHash,
           params: FrontierTreeParams.encode({ level }),
         },
         amount: frontierOutputAmount,
@@ -232,13 +250,8 @@ export default class BlockBuilder {
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
     if (this.ctx.config.graphParameters.enforceTimestampMonotonicity) {
-      if (!Hash.equals(frontierVote, ZERO_HASH)) {
-        const frontierBlock = this.ctx.get(BlockService)
-          .get(frontierVote, false);
-        if (frontierBlock === undefined) {
-          throw new Error(`Unknown frontier vote!`);
-        }
-        const inputTs = frontierBlock.timestamp +
+      if (frontierVoteBlock !== undefined && frontierVoteBlock !== ZERO_BLOCK) {
+        const inputTs = frontierVoteBlock.timestamp +
           this.ctx.config.graphParameters.minimumGenerationTime;
         if (inputTs > timestamp) {
           timestamp = inputTs;
@@ -319,7 +332,11 @@ export default class BlockBuilder {
   };
 
   public publishSingleDraft(draft: BlockDraft): BlockFact {
-    this.processDraft(draft);
+    if (draft.timeout !== undefined || draft.deadline !== undefined) {
+      throw new Error(
+        `Cannot use timeout or deadline when calling publishSingleDraft!`,
+      );
+    }
 
     const block = this.ctx.get(BlockService).create(this.buildBlock([draft]));
     if (draft.onBlock !== undefined) {
@@ -331,7 +348,14 @@ export default class BlockBuilder {
   }
 
   public publishPersistentDraft(draft: BlockDraft): void {
-    this.processDraft(draft);
+    if (draft.timeout !== undefined) {
+      if (draft.deadline !== undefined) {
+        throw new Error(`Cannot set both timeout and deadline!`);
+      } else {
+        draft.deadline = this.ctx.config.timeProvider.now() + draft.timeout;
+        draft.timeout = undefined;
+      }
+    }
 
     const block = this.ctx.get(BlockService).create(
       this.buildBlock([draft]),
@@ -345,17 +369,6 @@ export default class BlockBuilder {
     if (draft.onBlock !== undefined) {
       // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
       draft.onBlock(block, 0);
-    }
-  }
-
-  private processDraft(draft: BlockDraft) {
-    if (draft.timeout !== undefined) {
-      if (draft.deadline !== undefined) {
-        throw new Error(`Cannot set both timeout and deadline!`);
-      } else {
-        draft.deadline = this.ctx.config.timeProvider.now() + draft.timeout;
-        draft.timeout = undefined;
-      }
     }
   }
 

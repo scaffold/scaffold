@@ -13,7 +13,7 @@ Scaffold is not a cryptocurrency. While it does use coins, due to the slow conse
 ```ts
 ctx.get(FetchService).fetch(
   {
-    contract_hash: MyContract.hash,
+    contractHash: MyContract.hash,
     params: MyContract.encodeParams({x: 5, y: 7}),
   },
   (block) => console.log(MyContract.decodeBody(block.body)), // 12

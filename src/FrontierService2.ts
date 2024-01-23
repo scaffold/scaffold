@@ -89,7 +89,7 @@ export default class FrontierService2 {
     for (const input of inputs) {
       if (
         Hash.equals(
-          input.block.outputs[input.outputIdx].verifier.contract_hash,
+          input.block.outputs[input.outputIdx].verifier.contractHash,
           frontierHash,
         )
       ) {
@@ -124,7 +124,7 @@ export default class FrontierService2 {
       inputs,
       (input) =>
         Hash.equals(
-            input.block.outputs[input.outputIdx].verifier.contract_hash,
+            input.block.outputs[input.outputIdx].verifier.contractHash,
             frontierHash,
           )
           ? 'frontierInputs'

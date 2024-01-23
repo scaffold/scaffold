@@ -88,7 +88,7 @@ export default class BlockService {
     // console.log(
     //   'create',
     //   fact.outputs.find((output) =>
-    //     Hash.equals(output.verifier.contract_hash, frontierHash)
+    //     Hash.equals(output.verifier.contractHash, frontierHash)
     //   ),
     // );
   }
@@ -107,7 +107,7 @@ export default class BlockService {
     }
 
     // console.log(
-    //   `Ingesting block ${block.verifier.contract_hash.toHex()} : ${
+    //   `Ingesting block ${block.verifier.contractHash.toHex()} : ${
     //     trunc(bin2hex(block.verifier.params), 100)
     //   } -> ${trunc(bin2hex(block.body), 100)}`,
     // );
@@ -227,7 +227,7 @@ export default class BlockService {
           .addInput({ block: fact, outputIdx, amount: output.amount });
       }
 
-      if (Hash.equals(output.verifier.contract_hash, collateralHash)) {
+      if (Hash.equals(output.verifier.contractHash, collateralHash)) {
         const params = CollateralContractParams.decode(output.verifier.params);
         const detailDec = CollateralContractDetail.decode(output.detail);
 
@@ -255,7 +255,7 @@ export default class BlockService {
         // }
       }
 
-      // if (Hash.equals(verifier.contract_hash, epochInclusionHash)) {
+      // if (Hash.equals(verifier.contractHash, epochInclusionHash)) {
       //   const { hash } = EpochInclusionParams.decode(verifier.params);
       //   this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
       // }
@@ -312,7 +312,7 @@ export default class BlockService {
 
   private getFrontierMeta(block: Block) {
     const cb = (output: BlockOutput) =>
-      Hash.equals(output.verifier.contract_hash, frontierHash);
+      Hash.equals(output.verifier.contractHash, frontierHash);
     const idx = block.outputs.findIndex(cb);
     if (idx === -1 || block.outputs.findLastIndex(cb) !== idx) {
       throw new Error(`Not exactly one frontier output!`);
@@ -448,7 +448,7 @@ export default class BlockService {
     const verifier = parent.outputs[parentOutputIdx].verifier;
     const groupIdx = child.inputs[childInputIdx].groupIdx;
 
-    // if (Hash.equals(verifier.contract_hash, frontierHash)) {
+    // if (Hash.equals(verifier.contractHash, frontierHash)) {
     //   const expectedFrontierVote = child.inputs.some((input) =>
     //       Hash.equals(parent.frontier_vote, input.block_hash)
     //     )
@@ -478,7 +478,7 @@ export default class BlockService {
     this.satisfactionMonitor.callAll(verifier, child);
 
     // // Commented out because we're moving to out-of-block collateralizations
-    // if (Hash.equals(verifier.contract_hash, collateralHash)) {
+    // if (Hash.equals(verifier.contractHash, collateralHash)) {
     //   const { collateral_input_idx, valid, public_key, free_after } =
     //     CollateralContractParams.decode(verifier.params);
 
@@ -694,8 +694,8 @@ export default class BlockService {
       if (inBlock) {
         const idx = inBlock.outputs.findIndex((o) =>
           Hash.equals(
-            o.verifier.contract_hash,
-            block.verifier.contract_hash,
+            o.verifier.contractHash,
+            block.verifier.contractHash,
           ) && arrEquals(o.verifier.params, block.verifier.params) &&
           o.amount === amount
         );
@@ -829,7 +829,7 @@ export default class BlockService {
   }
 
   public areVerifiersEqual(a: Verifier, b: Verifier) {
-    return Hash.equals(a.contract_hash, b.contract_hash) &&
+    return Hash.equals(a.contractHash, b.contractHash) &&
       arrEquals(a.params, b.params);
   }
 
@@ -857,7 +857,7 @@ export default class BlockService {
       .flatMap((block) => {
         const idx = block.verifiers.findIndex((v) =>
           v !== undefined &&
-          Hash.equals(v.contract_hash, verifier.contract_hash) &&
+          Hash.equals(v.contractHash, verifier.contractHash) &&
           arrEquals(v.params, verifier.params)
         );
         return idx !== -1 ? [{ block, groupIdx: idx }] : [];
@@ -877,7 +877,7 @@ export default class BlockService {
     return this.ctx.get(FactService).hackyGetBlocksMatching()
       .flatMap((block) =>
         block.outputs.flatMap((y, idx) =>
-          Hash.equals(y.verifier.contract_hash, verifier.contract_hash) &&
+          Hash.equals(y.verifier.contractHash, verifier.contractHash) &&
             arrEquals(y.verifier.params, verifier.params)
             ? [{ block, idx }]
             : []
@@ -893,7 +893,7 @@ export default class BlockService {
       block,
     ) =>
       block.outputs.flatMap((y, idx) =>
-        Hash.equals(y.verifier.contract_hash, contractHash) &&
+        Hash.equals(y.verifier.contractHash, contractHash) &&
           cond(y.verifier.params)
           ? [{ block, idx }]
           : []
@@ -911,7 +911,7 @@ export default class BlockService {
 
   public async getSelfVerification(block: BlockFact) {
     const myCollateral = this.getBlocksByOutput({
-      contract_hash: collateralHash,
+      contractHash: collateralHash,
       params: CollateralContractParams.encode({ blockHash: block.hash }),
     }).filter(({ block }) => block.source === FactSource.Local); // TODO: Filter by signature so we get our blocks even if someone else sent them to us
 

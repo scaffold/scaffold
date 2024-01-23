@@ -38,7 +38,7 @@ Deno.test(
     const commitment = await new Promise<BlockExt>((resolve) =>
       ctx.get(FetchService).fetch(
         {
-          contract_hash: dataHash,
+          contractHash: dataHash,
           params: DataContractParams.encode({
             hash: Hash.digest('abc'),
             secret,

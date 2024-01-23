@@ -33,18 +33,18 @@ export default class ContractClassifierService {
 
   constructor(private ctx: Context) {}
 
-  public isImmediatelyVerifiable({ contract_hash }: Verifier) {
+  public isImmediatelyVerifiable({ contractHash }: Verifier) {
     return this.immediatelyVerifiableContractHashes.has(
-      contract_hash.toPrimitive(),
+      contractHash.toPrimitive(),
     );
   }
 
-  public isFreeMarket({ contract_hash }: Verifier) {
-    return this.freeMarketContractHashes.has(contract_hash.toPrimitive());
+  public isFreeMarket({ contractHash }: Verifier) {
+    return this.freeMarketContractHashes.has(contractHash.toPrimitive());
   }
 
-  public isCharity({ contract_hash }: Verifier) {
+  public isCharity({ contractHash }: Verifier) {
     // TODO: Also return true if we're sending the funds back to an input signer, up to the input amount
-    return this.charityContractHashes.has(contract_hash.toPrimitive());
+    return this.charityContractHashes.has(contractHash.toPrimitive());
   }
 }

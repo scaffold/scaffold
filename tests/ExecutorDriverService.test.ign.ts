@@ -32,7 +32,7 @@ Deno.test(
     await new Promise<void>((resolve, reject) => {
       ctx.get(FetchService).fetch(
         {
-          contract_hash: infiniteChainContractHash,
+          contractHash: infiniteChainContractHash,
           params: msg.InfiniteChainParams.encode({ x: 0n }),
         },
         {},

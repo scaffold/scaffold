@@ -58,7 +58,7 @@ export const createGenesisBlock = (
   for (const { publicKey, amount } of accounts) {
     block.outputs.push({
       verifier: {
-        contract_hash: accountHash,
+        contractHash: accountHash,
         params: AccountContractParams.encode({ publicKey }),
       },
       amount,

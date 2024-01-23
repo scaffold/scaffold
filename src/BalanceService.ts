@@ -12,7 +12,7 @@ export default class BalanceService {
     publicKey = this.ctx.get(KeyService).getSelfPublicKey(),
   ) {
     return this.ctx.get(BlockService).getBlocksByOutput({
-      contract_hash: accountHash,
+      contractHash: accountHash,
       params: AccountContractParams.encode({ publicKey }),
     }).reduce(
       (acc, cur) =>

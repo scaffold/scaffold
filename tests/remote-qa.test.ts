@@ -50,7 +50,7 @@ Deno.test(
     const block = await new Promise<Block>((resolve) =>
       ctx2.get(FetchService).fetch(
         {
-          contract_hash: moduleHashes.collatz_wasm_hash,
+          contractHash: moduleHashes.collatz_wasm_hash,
           params: collatzMessages.Params.encode({ num: 1n }),
         },
         {},
@@ -94,7 +94,7 @@ Deno.test(
     const block = await new Promise<Block>((resolve) =>
       ctx2.get(FetchService).fetch(
         {
-          contract_hash: moduleHashes.collatz_wasm_hash,
+          contractHash: moduleHashes.collatz_wasm_hash,
           params: collatzMessages.Params.encode({ num: 10n }),
         },
         {},

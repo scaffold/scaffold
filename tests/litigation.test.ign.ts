@@ -31,7 +31,7 @@ Deno.test(
       inputs: [{ block_hash: Hash.random(), output_idx: 123 }],
       outputs: [{
         verifier: {
-          contract_hash: rootHash,
+          contractHash: rootHash,
           params: Hash.digest('abc').toBytes(),
         },
         amount: 100n,
@@ -46,7 +46,7 @@ Deno.test(
       inputs: [{ block_hash: incentiveBlock.hash, output_idx: 0 }],
       outputs: [{
         verifier: {
-          contract_hash: accountHash,
+          contractHash: accountHash,
           params: AccountContractParams.encode({
             public_key: ctx2.get(KeyService).getSelfPublicKey(),
           }),

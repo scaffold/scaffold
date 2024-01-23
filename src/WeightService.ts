@@ -192,6 +192,12 @@ export default class WeightService {
   }
 
   private getClaimDelta(fact: BlockFact, cache = makeCache()) {
+    // TODO: This should be based on:
+    // 1. input siblings,
+    // 2. frontier vote siblings,
+    // 3. frontier vote tree parents, and
+    // 4. tree child frontier voters
+
     return getOrCreate(cache.claimDelta, fact, () => {
       const myDescendantWeight =
         this.getDescendantWeight(fact, cache).minWeight;
@@ -242,7 +248,7 @@ export default class WeightService {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined) {
           const { verifier } = block.outputs[input.outputIdx];
-          if (Hash.equals(verifier.contract_hash, frontierHash)) {
+          if (Hash.equals(verifier.contractHash, frontierHash)) {
             minWeight += this.getSelfWeight(block, cache).minWeight;
             minWeight += this.getTreeChildrenWeight(block, cache).minWeight;
           }

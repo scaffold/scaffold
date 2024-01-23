@@ -57,7 +57,7 @@ Deno.test(
         ctx1.get(BlockBuilder).publish({
           outputs: [{
             verifier: {
-              contract_hash: frontierHash,
+              contractHash: frontierHash,
               params: FrontierTreeParams.encode({ level: 0 }),
             },
             amount: 10n,
@@ -100,7 +100,7 @@ Deno.test(
     const validBlock = ctx1.get(BlockBuilder).publish({
       frontierLevel: 4,
       satisfies: Array.from({ length: frontierInputCount }, () => ({
-        contract_hash: frontierHash,
+        contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
         detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       })),
@@ -125,7 +125,7 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       frontierLevel: 4,
       satisfies: [{
-        contract_hash: frontierHash,
+        contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
         detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       }],
@@ -150,11 +150,11 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publish({
       frontierLevel: 5,
       satisfies: [{
-        contract_hash: frontierHash,
+        contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
         detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       }, {
-        contract_hash: frontierHash,
+        contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
         detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
       }],

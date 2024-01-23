@@ -34,7 +34,7 @@ export default class QaDebugger {
   }
 
   public debugQuestion(spec: Verifier) {
-    const dbgr = this.debuggers.get(spec.contract_hash.toHex());
+    const dbgr = this.debuggers.get(spec.contractHash.toHex());
     if (dbgr) {
       return {
         dbgContract: dbgr.contractName,
@@ -45,18 +45,20 @@ export default class QaDebugger {
     }
   }
 
-  public debugAnswer(
-    { verifiers, body }: { verifiers: Verifier[]; body: Uint8Array },
-  ) {
-    const dbgrs = verifiers.map((v) =>
-      this.debuggers.get(v.contract_hash.toHex())
-    ).filter(Boolean);
-    if (dbgrs.length) {
-      return {
-        dbgAnswer: dbgrs[0]!.answerDebugger
-          ? dbgrs[0]!.answerDebugger(body)
-          : undefined,
-      };
-    }
+  public debugAnswer({ verifiers, bodies }: {
+    verifiers: (Verifier | undefined)[];
+    bodies: Uint8Array[];
+  }): { dbgAnswer: any } | undefined {
+    // const dbgrs = verifiers.map((v) =>
+    //   this.debuggers.get(v.contractHash.toHex())
+    // ).filter(Boolean);
+    // if (dbgrs.length) {
+    //   return {
+    //     dbgAnswer: dbgrs[0]!.answerDebugger
+    //       ? dbgrs[0]!.answerDebugger(body)
+    //       : undefined,
+    //   };
+    // }
+    return undefined;
   }
 }

@@ -87,7 +87,7 @@ export default class Query {
       loadRest === undefined && arrEquals(paramsCmd, str2bin('params')) &&
       params !== undefined && paramsRest === undefined && arrRest === undefined
     ) {
-      return { contract_hash: Hash.fromBytes(contractHash), params };
+      return { contractHash: Hash.fromBytes(contractHash), params };
     } else {
       throw new Error(`Not a valid verifier query!`);
     }

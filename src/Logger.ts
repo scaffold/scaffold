@@ -102,7 +102,7 @@ export default class Logger {
         return trim(bin2hex(new Uint8Array(val.data)), maxStrLen);
       } else if (
         typeof val === 'object' && val !== null &&
-        'contract_hash' in val &&
+        'contractHash' in val &&
         'params' in val
       ) {
         return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };

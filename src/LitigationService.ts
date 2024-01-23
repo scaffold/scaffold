@@ -37,7 +37,7 @@ export default class LitigationService {
         this.ctx.get(BlockBuilder).publishPersistentDraft({
           outputs: [{
             verifier: {
-              contract_hash: collateralHash,
+              contractHash: collateralHash,
               params: CollateralContractParams.encode({ blockHash: fact.hash }),
             },
             amount,

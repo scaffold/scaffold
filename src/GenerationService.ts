@@ -68,7 +68,7 @@ export default class GenerationService {
     const verifier = input.block.outputs[input.outputIdx].verifier;
 
     if (
-      Hash.equals(verifier.contract_hash, accountHash) &&
+      Hash.equals(verifier.contractHash, accountHash) &&
       !arrEquals(
         AccountContractParams.decode(verifier.params).publicKey,
         this.ctx.get(KeyService).getSelfPublicKey(),
@@ -155,11 +155,11 @@ export default class GenerationService {
   ): Promise<void> | undefined {
     const verifier = runState.verifierState.verifier;
 
-    if (Hash.equals(verifier.contract_hash, accountHash)) {
+    if (Hash.equals(verifier.contractHash, accountHash)) {
       return;
     }
 
-    const special = this.getGenerator(verifier.contract_hash);
+    const special = this.getGenerator(verifier.contractHash);
     if (special) {
       return this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
@@ -172,7 +172,7 @@ export default class GenerationService {
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
-              `Starting special generator for ${verifier.contract_hash.toHex()}:${
+              `Starting special generator for ${verifier.contractHash.toHex()}:${
                 bin2hex(verifier.params)
               }`,
           });
@@ -199,7 +199,7 @@ export default class GenerationService {
         }, 0);
 
     const localGenerator = this.ctx.get(LocalGeneratorService)
-      .getGenerator(verifier.contract_hash);
+      .getGenerator(verifier.contractHash);
     if (localGenerator) {
       return this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
@@ -212,7 +212,7 @@ export default class GenerationService {
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
-              `Starting local generator for ${verifier.contract_hash.toHex()}:${
+              `Starting local generator for ${verifier.contractHash.toHex()}:${
                 bin2hex(verifier.params)
               }`,
           });
@@ -227,8 +227,8 @@ export default class GenerationService {
       );
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
-        contract_hash: generatorHash,
-        params: verifier.contract_hash.toBytes(),
+        contractHash: generatorHash,
+        params: verifier.contractHash.toBytes(),
       });
       if (generatorBlocks.length) {
         const generatorCode =
@@ -245,7 +245,7 @@ export default class GenerationService {
             workerDriver.log?.push({
               timestamp: this.ctx.config.timeProvider.now(),
               message:
-                `Starting worker generator for ${verifier.contract_hash.toHex()}:${
+                `Starting worker generator for ${verifier.contractHash.toHex()}:${
                   bin2hex(verifier.params)
                 }`,
             });
@@ -253,7 +253,7 @@ export default class GenerationService {
               await this.ctx.get(WorkerExecutor).run(
                 {
                   code: generatorCode,
-                  // contractHash: verifier.contract_hash.toBytes(),
+                  // contractHash: verifier.contractHash.toBytes(),
                   // params: verifier.params,
                   // emitCorrect: this.shouldEmitCorrect(verifier),
                 },
@@ -298,11 +298,11 @@ export default class GenerationService {
     state.isMergeable = (block: BlockFact, outputIdx?: number) => {
       if (
         outputIdx !== undefined && verifierInputs.length > 0 &&
-        Hash.equals(state.verifierState.verifier.contract_hash, frontierHash)
+        Hash.equals(state.verifierState.verifier.contractHash, frontierHash)
       ) {
         const frontierCount = verifierInputs.filter((x) =>
           Hash.equals(
-            x.block.outputs[x.outputIdx].verifier.contract_hash,
+            x.block.outputs[x.outputIdx].verifier.contractHash,
             frontierHash,
           )
         ).length;
@@ -347,7 +347,7 @@ export default class GenerationService {
 
       type: ComputationType.Generator,
 
-      getContractHash: () => state.verifierState.verifier.contract_hash,
+      getContractHash: () => state.verifierState.verifier.contractHash,
       getParams: () => state.verifierState.verifier.params,
       getHint: () => {
         throw new Error(`Cannot call getHint() inside a generator!`);
@@ -395,7 +395,7 @@ export default class GenerationService {
 
       notify: (contractHash, params) => {
         this.ctx.get(FetchService).fetch(
-          { contract_hash: contractHash, params },
+          { contractHash: contractHash, params },
           { abortSignal: workerDriver.done.signal },
         );
       },
@@ -409,7 +409,7 @@ export default class GenerationService {
             `request(${contractHash.toHex()}, ${bin2hex(params)})`,
           );
 
-          const verifier = { contract_hash: contractHash, params };
+          const verifier = { contractHash: contractHash, params };
 
           // TODO: Check isMergeable() here
 
@@ -611,7 +611,7 @@ export default class GenerationService {
         const children = el.inputs.flatMap((input) => {
           const block = this.ctx.get(BlockService).get(input.blockHash);
           return block !== undefined && Hash.equals(
-              block.outputs[input.outputIdx].verifier.contract_hash,
+              block.outputs[input.outputIdx].verifier.contractHash,
               frontierHash,
             )
             ? [block]
@@ -633,7 +633,7 @@ export default class GenerationService {
     return Hash.compare(
       Hash.digest(arrConcat(
         this.secret,
-        verifier.contract_hash.toBytes(),
+        verifier.contractHash.toBytes(),
         verifier.params,
       )),
       this.attemptDupeFraction,
@@ -645,7 +645,7 @@ export default class GenerationService {
     draft: BlockDraft,
     durationMs: number,
   ) {
-    if (Hash.equals(verifier.contract_hash, rootHash)) {
+    if (Hash.equals(verifier.contractHash, rootHash)) {
       // Special case for root contracts - don't publish the plaintext immediately.
       // This prevents others from stealing it and re-publishing it in their own block.
       // Instead, wait for a time.
@@ -702,7 +702,7 @@ export default class GenerationService {
     // const hash = Hash.digest(Verifier.encode(verifier));
 
     // // Special case for epoch blocks; we need to send the epoch inclusion proof to all inputs
-    // if (Hash.equals(verifier.contract_hash, epochHash)) {
+    // if (Hash.equals(verifier.contractHash, epochHash)) {
     //   blockExt.isEpoch = true;
 
     //   this.ctx.get(EpochInclusionProofService).updateProof(
@@ -727,7 +727,7 @@ export default class GenerationService {
   //     const fact = this.ctx.get(FactService).get(input.block_hash);
   //     if (fact !== undefined && fact.type === FactType.Block) {
   //       const v2 = fact.outputs[input.output_idx].verifier;
-  //       return Hash.equals(v2.contract_hash, verifier.contract_hash) &&
+  //       return Hash.equals(v2.contractHash, verifier.contractHash) &&
   //         arrEquals(v2.params, verifier.params);
   //     }
   //   });
