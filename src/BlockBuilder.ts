@@ -213,10 +213,9 @@ export default class BlockBuilder {
       ...inputs,
       ...refBlocks.map((ref) => ({ block: ref })),
     ]);
-    const frontierVote =
-      frontierVoteBlock !== undefined && frontierVoteBlock !== ZERO_BLOCK
-        ? frontierVoteBlock.hash
-        : ZERO_HASH;
+    const frontierVote = frontierVoteBlock !== ZERO_BLOCK
+      ? frontierVoteBlock.hash
+      : ZERO_HASH;
 
     if (addFrontierOutput) {
       const level = frontierLevel ?? 0;
@@ -233,7 +232,7 @@ export default class BlockBuilder {
         amount: frontierOutputAmount,
         detail: FrontierTreeDetail.encode({
           treeWeights: this.ctx.get(FrontierService2)
-            .mergeTreeWeights(inputs, outputs, frontierVote),
+            .mergeTreeWeights(inputs, outputs, frontierVoteBlock),
           // input_tree_root: ZERO_HASH,
           // output_tree_root: ZERO_HASH,
 

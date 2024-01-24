@@ -132,7 +132,10 @@ export default class WeightService {
       }
 
       if (count === 0) {
-        minWeight += this.getVoterWeight(fact, cache)[0].minWeight;
+        const bestVoter = this.getCanonicalVoter(fact, cache);
+        if (bestVoter !== undefined) {
+          minWeight += this.getVoterWeight(bestVoter, cache)[0].minWeight;
+        }
       } else if (count > 1) {
         throw new Error(`More than one canonical frontier output!`);
       }

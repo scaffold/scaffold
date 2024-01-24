@@ -136,7 +136,7 @@ export default class BlockService {
         ? ZERO_BLOCK
         : undefined,
       frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH)
-        ? 0
+        ? 1
         : undefined,
 
       frontierVoters: this.getVoters(base.hash),

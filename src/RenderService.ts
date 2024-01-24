@@ -6,6 +6,7 @@ import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import { BlockInput } from './messages.ts';
+import WeightService from './WeightService.ts';
 
 interface Graph {
   ids: Map<unknown, string>;
@@ -24,7 +25,7 @@ export default class RenderService {
     const graph: Graph = { ids: new Map(), nextId: 1, lines: [] };
 
     graph.lines.push(`digraph G {`);
-    graph.lines.push(`rankdir=LR;`);
+    graph.lines.push(`rankdir=RL;`);
     // graph.lines.push(`size="8,5"`);
     graph.lines.push(`node [shape=box]`);
 
@@ -41,9 +42,20 @@ export default class RenderService {
   }
 
   private renderBlock(graph: Graph, block: BlockFact) {
+    const title = block.hash.toHex().slice(0, 8) + ' @ ' +
+      block.frontierParams.level;
+    const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
+    const props = Object.entries({
+      self: `${selfWeight.minWeight}-${selfWeight.maxWeight}`,
+      anc: this.ctx.get(WeightService).getAncestorWeight(block).minWeight,
+      desc: this.ctx.get(WeightService).getDescendantWeight(block).minWeight,
+      tree: block.frontierDetail.treeWeights.join(','),
+      canon: this.ctx.get(WeightService).getCanonicality(block),
+    }).map(([key, val]) => `${key}: ${val}`).join('\n');
+
     const bId = this.getId(graph, block);
     const attrs = this.renderAttrs({
-      label: block.hash.toHex().slice(0, 8),
+      label: `${title}\n${props}`,
       // color: 'black',
     });
 
@@ -56,10 +68,6 @@ export default class RenderService {
   }
 
   private renderFrontierVote(graph: Graph, block: BlockFact) {
-    if (block.frontierVoteBlock === ZERO_BLOCK) {
-      return;
-    }
-
     const bId = this.getId(graph, block);
     const vId = this.getId(graph, block.frontierVoteBlock);
     const attrs = this.renderAttrs({
@@ -76,19 +84,22 @@ export default class RenderService {
     const bId = this.getId(graph, block);
     const iId = this.getId(graph, inputBlock);
     const attrs = this.renderAttrs({
-      color: isFrontier ? 'blue' : 'black',
+      color: isFrontier ? 'blue' : 'gray',
+      label: `$${inputBlock?.outputs[input.outputIdx].amount ?? '?'}`,
     });
 
     graph.lines.push(`  ${bId} -> ${iId} ${attrs};`);
   }
 
-  private getId(graph: Graph, object: Fact | undefined) {
-    if (object !== undefined) {
-      return mapPut(graph.ids, object, () => `v${graph.nextId++}`);
-    } else {
+  private getId(graph: Graph, object: Fact | typeof ZERO_BLOCK | undefined) {
+    if (object === undefined) {
       const id = `u${graph.nextId++}`;
       graph.lines.push(`	${id} [shape=plain, label="?"];`);
       return id;
+    } else if (object === ZERO_BLOCK) {
+      return mapPut(graph.ids, object, () => `ZERO`);
+    } else {
+      return mapPut(graph.ids, object, () => `v${graph.nextId++}`);
     }
   }
 

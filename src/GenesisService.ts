@@ -13,6 +13,8 @@ import FactService from './FactService.ts';
 import NodeService from './NodeService.ts';
 import NullStorageProvider from '../plugins/NullStorageProvider.ts';
 import { log } from '../deps.ts';
+import { EMPTY_ARR } from './util/buffer.ts';
+import { ZERO_BLOCK } from './BlockMeta.ts';
 
 // bin2hex(secp.utils.randomPrivateKey())
 const genesisPrivateKey = hex2bin(
@@ -21,7 +23,7 @@ const genesisPrivateKey = hex2bin(
 const genesisPublicKey = secp.getPublicKey(genesisPrivateKey);
 
 const initAccounts = [
-  '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784', // server
+  '024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e9', // server
   '02c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c679', // chrome client
   '022dcf09ad49df279eaf9f3c2ecea2756e46676be80db075618dd372311c2e5f4b', // arc client
 ].map((publicKeyHex) => ({
@@ -48,13 +50,18 @@ export const createGenesisBlock = (
     enableValidation: false,
   });
 
-  const block = ctx.get(BlockBuilder).buildBlock([]);
+  const block = ctx.get(BlockBuilder).buildBlock([{
+    frontierVote: ZERO_BLOCK,
+  }]);
+
   let groupIdx = 0;
   block.inputs.push({
     blockHash: ZERO_HASH,
     outputIdx: 0,
     groupIdx: groupIdx++,
   });
+  block.bodies.push(EMPTY_ARR);
+
   for (const { publicKey, amount } of accounts) {
     block.outputs.push({
       verifier: {
@@ -65,14 +72,16 @@ export const createGenesisBlock = (
       detail: new Uint8Array(),
       groupIdx: groupIdx++,
     });
+    block.bodies.push(EMPTY_ARR);
   }
+
   return ctx.get(BlockService).create(block);
 };
 
 const generatedGenesisData = createGenesisBlock(initAccounts).data;
 // console.log('Genesis block hex:', bin2hex(generatedGenesisData));
 export const sharedGenesisData = hex2bin(
-  '53424c0500000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000853424c00000000000000000000000000000000000000000066726f6e746965720200140602140053424c000000000000000000000000000000000000000000006163636f756e7442404b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a578480897a0053424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c67980897a0053424c000000000000000000000000000000000000000000006163636f756e744442022dcf09ad49df279eaf9f3c2ecea2756e46676be80db075618dd372311c2e5f4b80897a000000f8b19783a063ae224bfdbd01e1473918bf2c4ac231a76ad994acec08c42a50ea78e6c221ecaf0d5682b6738952fa4aec97a404dc4f52b273d337b2c85f7acaf336917e8292c001',
+  '53424c050000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000853424c00000000000000000000000000000000000000000066726f6e74696572020014060214000253424c000000000000000000000000000000000000000000006163636f756e744442024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e980897a000253424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c67980897a000453424c000000000000000000000000000000000000000000006163636f756e744442022dcf09ad49df279eaf9f3c2ecea2756e46676be80db075618dd372311c2e5f4b80897a0006000c00000000000000a2b0f1c1a7631c368ddf2c5c88b11fa4c7b2eb3f9adaa8bb6d1bd5f591e7c5ef48ad8869be5e792ee28992215730b1fc13bee20ccde705f3ed5fbb3e07b9d005bf4412ca681800',
 );
 if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
   console.log('Genesis block hex:', bin2hex(generatedGenesisData));
@@ -86,7 +95,11 @@ export default class GenesisService {
 
   public ingestGenesis(data: Uint8Array) {
     try {
-      this.ctx.get(FactService).ingest(data, FactSource.Genesis);
+      const fact = this.ctx.get(FactService).ingest(data, FactSource.Genesis);
+      if (fact.type !== FactType.Block) {
+        throw new Error(`Invalid fact type!`);
+      }
+      return fact;
     } catch (err) {
       console.error(err);
       console.error(`You probably need to update the genesis block data!`);

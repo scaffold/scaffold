@@ -117,10 +117,7 @@ export default class GenerationService {
         }
       }
     } else {
-      const runState = {
-        verifierState,
-        isMergeable: () => error(`Should not be called!`),
-      };
+      const runState = { verifierState, isMergeable: () => true };
       const launch = this.launchRun(runState, input);
       if (launch !== undefined) {
         verifierState.running.push(runState);
@@ -341,6 +338,8 @@ export default class GenerationService {
         inputsAreFixed = true;
       }
     };
+
+    this.launchUnclaimed(state.verifierState);
 
     return {
       ...workerDriver,
@@ -681,7 +680,7 @@ export default class GenerationService {
       return fact;
     }
 
-    console.log('GENERATE', draft);
+    // console.log('GENERATE', draft);
     assert(draft.onBlock === undefined);
     draft.onBlock = (block, groupIdx) => {
       if (this.ctx.config.dbgVerifyGenerations) {

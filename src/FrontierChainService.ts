@@ -5,6 +5,8 @@ import { ZERO_BLOCK } from './BlockMeta.ts';
 import Context from './Context.ts';
 import { frontierHash } from './constants.ts';
 import { todo } from './util/functional.ts';
+import BlockService from './BlockService.ts';
+import FrontierService2 from './FrontierService2.ts';
 
 // The frontier can always be extended or swapped to its parent
 
@@ -26,27 +28,37 @@ const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
 export default class FrontierChainService {
   constructor(private ctx: Context) {}
 
-  public getVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
-    const frontierInputs = inputs.filter((input) =>
-      input.outputIdx !== undefined &&
-      Hash.equals(
-        input.block.outputs[input.outputIdx].verifier.contractHash,
-        frontierHash,
-      )
-    );
-
-    todo();
-
-    for (let i = 1; i < frontierInputs.length; i++) {
-      const targ = frontierInputs[i - 1];
-      const cur = frontierInputs[i].block.frontierVoteBlock;
+  public getVote(
+    inputs: { block: BlockFact; outputIdx?: number }[],
+  ): BlockFact | typeof ZERO_BLOCK {
+    try {
+      const hash = this.ctx.get(FrontierService2).getBlockVote(inputs);
+      return this.ctx.get(BlockService).get(hash, false)!;
+    } catch (err) {
+      console.error(err);
+      return ZERO_BLOCK;
     }
 
-    const parents = inputs.map((input) => this.getAllParents(input.block));
-    return inputs.find((input) => {
-      const chain = this.getFrontierChain(input.block);
-      return parents.every((p) => doesIntersect(chain, p));
-    })?.block;
+    // const frontierInputs = inputs.filter((input) =>
+    //   input.outputIdx !== undefined &&
+    //   Hash.equals(
+    //     input.block.outputs[input.outputIdx].verifier.contractHash,
+    //     frontierHash,
+    //   )
+    // );
+
+    // todo();
+
+    // for (let i = 1; i < frontierInputs.length; i++) {
+    //   const targ = frontierInputs[i - 1];
+    //   const cur = frontierInputs[i].block.frontierVoteBlock;
+    // }
+
+    // const parents = inputs.map((input) => this.getAllParents(input.block));
+    // return inputs.find((input) => {
+    //   const chain = this.getFrontierChain(input.block);
+    //   return parents.every((p) => doesIntersect(chain, p));
+    // })?.block;
   }
 
   // // Returns the shortest chain

@@ -9,6 +9,9 @@ import { BlockOutput } from './messages.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { todo } from './util/functional.ts';
 import ClockService from './ClockService.ts';
+import { ZERO_BLOCK } from './BlockMeta.ts';
+import { error } from './util/functional.ts';
+import { CHAR_0 } from 'https://deno.land/std@0.181.0/path/_constants.ts';
 
 const targLevel = 0;
 
@@ -73,14 +76,14 @@ export default class FrontierService2 {
   public mergeTreeWeights(
     inputs: InputSpec[],
     outputs: BlockOutput[],
-    frontierVote: Hash,
+    frontierVote: BlockFact | typeof ZERO_BLOCK,
   ): bigint[] {
     const selfWeight = this.ctx.get(WeightService).getSelfWeight({
       source: FactSource.Local,
       inputs: inputs.map((input) => ({
         blockHash: input.block.hash,
         outputIdx: input.outputIdx,
-        groupIdx: todo(),
+        groupIdx: -1,
       })),
       outputs,
     }).minWeight;
@@ -93,19 +96,23 @@ export default class FrontierService2 {
           frontierHash,
         )
       ) {
-        let ptr = input.block.frontierVote;
-        let shift = 0;
-        while (!Hash.equals(ptr, frontierVote)) {
-          const next = this.ctx.get(BlockService).get(ptr, false);
-          if (next === undefined) {
-            throw new Error(`Unconnected inputs!`);
-          }
-          ptr = next.frontierVote;
-          shift++;
-        }
+        const voteDepth = frontierVote === ZERO_BLOCK
+          ? 0
+          : frontierVote.frontierChainDepth ??
+            error(`Unconnected frontier chain!`);
+        const childDepth = input.block.frontierChainDepth ??
+          error(`Unconnected frontier chain!`);
+        const shift = voteDepth - childDepth + 1;
 
         input.block.frontierDetail.treeWeights.forEach((x, i) => {
-          weights[i > shift ? i - shift : 0] += x;
+          i += shift;
+          if (i < 0) {
+            i = 0;
+          }
+          while (weights.length <= i) {
+            weights.push(0n);
+          }
+          weights[i] += x;
         });
       }
     }
@@ -113,8 +120,7 @@ export default class FrontierService2 {
     return weights;
   }
 
-  // TODO: How should we handle refs here?
-  public getBlockVote(inputs: InputSpec[]): Hash {
+  public getBlockVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
     if (inputs.length === 0) {
       // TODO: Choose a frontier at random; ZERO_HASH means that it can never be merged
       return ZERO_HASH;
@@ -123,7 +129,8 @@ export default class FrontierService2 {
     const { frontierInputs, normalInputs } = Object.groupBy(
       inputs,
       (input) =>
-        Hash.equals(
+        input.outputIdx !== undefined &&
+          Hash.equals(
             input.block.outputs[input.outputIdx].verifier.contractHash,
             frontierHash,
           )

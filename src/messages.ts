@@ -768,6 +768,9 @@ export const registry = {
     name: 'FrontierTreeDetail',
     type: 'record',
     fields: [
+      // Item 0 is the weight of blocks in the tree voting for frontierVote.
+      // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
+      // ...
       { name: 'treeWeights', type: { type: 'array', items: 'long' } },
       // { name: 'input_tree_root', type: 'Hash' },
       // { name: 'output_tree_root', type: 'Hash' },
