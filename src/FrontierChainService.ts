@@ -57,7 +57,7 @@ export default class FrontierChainService {
       ),
     );
 
-    const externalInputs = new Set<BlockFact | typeof ZERO_BLOCK>();
+    const externalInputs = new Set<BlockFact | typeof ZERO_BLOCK>([ZERO_BLOCK]);
 
     for (const { block } of inputs) {
       if (!doesIntersect(frontierInputs, this.getAllParents(block))) {
@@ -68,7 +68,7 @@ export default class FrontierChainService {
       if (fi.frontierVoteBlock === undefined) {
         throw new Error(`Unconnected frontier chain!`);
       } else if (
-        fi.frontierVoteBlock === ZERO_BLOCK ||
+        fi.frontierVoteBlock !== ZERO_BLOCK &&
         !frontierInputs.has(fi.frontierVoteBlock)
       ) {
         externalInputs.add(fi.frontierVoteBlock);

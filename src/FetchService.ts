@@ -164,7 +164,11 @@ export default class FetchService {
           (blockComparator || defaultBlockComparator)(prevBlock, block)
         ) {
           prevBlock = block;
-          cb(todo(), block);
+          const groupIdx = block.verifiers.findIndex((v) =>
+            v !== undefined &&
+            this.ctx.get(BlockService).areVerifiersEqual(v, verifier)
+          );
+          cb(block.bodies[groupIdx], block);
         }
         return true;
       };

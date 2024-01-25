@@ -172,8 +172,15 @@ export default class BlockBuilder {
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     while (ioDelta < 0n) {
-      const input = this.ctx.get(GenerationService)
-        .claimInput(this.selfAccountVerifier);
+      const input = this.ctx.get(GenerationService).claimInput(
+        this.selfAccountVerifier,
+        (accountInput) =>
+          this.ctx.get(FrontierChainService).getVote([
+            ...inputs,
+            ...refBlocks.map((ref) => ({ block: ref })),
+            accountInput,
+          ]) !== undefined,
+      );
       if (input === undefined) {
         break;
       }

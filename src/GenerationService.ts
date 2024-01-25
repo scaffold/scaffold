@@ -96,10 +96,19 @@ export default class GenerationService {
     }
   }
 
-  public claimInput(verifier: Verifier) {
+  public claimInput(verifier: Verifier, pred?: (input: InputSpec) => boolean) {
     const key = Hash.digest(Verifier.encode(verifier));
     const state = this.states.get(key.toPrimitive());
-    return state?.unclaimedInputs.shift();
+    if (state !== undefined) {
+      if (pred !== undefined) {
+        const idx = state.unclaimedInputs.findIndex(pred);
+        if (idx !== -1) {
+          return state.unclaimedInputs.splice(idx, 1)[0];
+        }
+      } else {
+        return state.unclaimedInputs.shift();
+      }
+    }
   }
 
   private insertInput(verifierState: VerifierState, input: InputSpec) {
@@ -294,6 +303,7 @@ export default class GenerationService {
 
     state.isMergeable = (block: BlockFact, outputIdx?: number) => {
       if (
+        false &&
         outputIdx !== undefined && verifierInputs.length > 0 &&
         Hash.equals(state.verifierState.verifier.contractHash, frontierHash)
       ) {
