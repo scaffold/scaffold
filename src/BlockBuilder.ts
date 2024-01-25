@@ -213,6 +213,9 @@ export default class BlockBuilder {
       ...inputs,
       ...refBlocks.map((ref) => ({ block: ref })),
     ]);
+    if (frontierVoteBlock === undefined) {
+      throw new Error(`Unmergeable inputs!`);
+    }
     const frontierVote = frontierVoteBlock !== ZERO_BLOCK
       ? frontierVoteBlock.hash
       : ZERO_HASH;

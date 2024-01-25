@@ -6,6 +6,8 @@ import { bigintMax } from './util/bigint.ts';
 import { frontierHash } from './constants.ts';
 import Hash from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
+import { ZERO_BLOCK } from './BlockMeta.ts';
+import { ZERO_HASH } from './util/Hash.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -36,7 +38,8 @@ interface Cache {
   selfWeight: Map<BlockFact, { minWeight: bigint; maxWeight: bigint }>;
   descendantWeight: Map<BlockFact, { minWeight: bigint }>;
   canonicality: Map<BlockFact, bigint>;
-  canonicalVoter: Map<BlockFact, BlockFact | undefined>;
+  canonicalVoter: Map<BlockFact | typeof ZERO_BLOCK, BlockFact | undefined>;
+  canonicalParent: Map<BlockFact, BlockFact | undefined>;
   claimDelta: Map<BlockFact, bigint>;
   treeChildrenWeight: Map<BlockFact, { minWeight: bigint }>;
   voterWeight: Map<BlockFact, { minWeight: bigint }[]>;
@@ -47,6 +50,7 @@ const makeCache = (): Cache => ({
   descendantWeight: new Map(),
   canonicality: new Map(),
   canonicalVoter: new Map(),
+  canonicalParent: new Map(),
   claimDelta: new Map(),
   treeChildrenWeight: new Map(),
   voterWeight: new Map(),
@@ -174,9 +178,14 @@ export default class WeightService {
     });
   }
 
-  public getCanonicalVoter(fact: BlockFact, cache = makeCache()) {
+  public getCanonicalVoter(
+    fact: BlockFact | typeof ZERO_BLOCK,
+    cache = makeCache(),
+  ) {
     return getOrCreate(cache.canonicalVoter, fact, () => {
-      const voters = this.ctx.get(BlockService).getVoters(fact.hash);
+      const voters = this.ctx.get(BlockService).getVoters(
+        fact === ZERO_BLOCK ? ZERO_HASH : fact.hash,
+      );
 
       let bestScore = 0n;
       let bestVoter: BlockFact | undefined;
@@ -191,6 +200,25 @@ export default class WeightService {
       }
 
       return bestVoter;
+    });
+  }
+
+  public getCanonicalParent(fact: BlockFact, cache = makeCache()) {
+    return getOrCreate(cache.canonicalParent, fact, () => {
+      const parents = fact.outputClaims[fact.frontierOutputIdx];
+
+      let bestScore = 0n;
+      let bestParent: BlockFact | undefined;
+      for (const claim of parents) {
+        // TODO: Should this be based on the parent weight?
+        const score = this.getCanonicality(claim.block, cache);
+        if (score > bestScore) {
+          bestScore = score;
+          bestParent = claim.block;
+        }
+      }
+
+      return bestParent;
     });
   }
 
