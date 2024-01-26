@@ -1,6 +1,6 @@
-import NetworkProvider, { SignalingDriver } from '../src/NetworkProvider.ts';
+import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 
-export default class WebsocketClientProvider implements NetworkProvider {
+export class WebsocketClientProvider implements NetworkProvider {
   public protocols = 'websocket@0.0.1/client';
 
   public createInstance(driver: SignalingDriver) {

@@ -9,7 +9,7 @@ export const enum TimeGeneratorModifier {
   None,
 }
 
-export default class TimeContract implements ContractProvider {
+export class TimeContract implements ContractProvider {
   public contractHash = timeHash;
 
   public compute(driver: ComputationDriver) {

@@ -1,10 +1,10 @@
-import BlockService from './BlockService.ts';
-import Context from './Context.ts';
-import GenerationService from './GenerationService.ts';
+import { BlockService } from './BlockService.ts';
+import { Context } from './Context.ts';
+import { GenerationService } from './GenerationService.ts';
 import { BlockFact } from './FactMeta.ts';
 import { Block, Verifier } from './messages.ts';
-import Hash from './util/Hash.ts';
-import BlockBuilder from './BlockBuilder.ts';
+import { Hash } from './util/Hash.ts';
+import { BlockBuilder } from './BlockBuilder.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
 import { todo } from './util/functional.ts';
@@ -41,7 +41,7 @@ export const defaultBlockSelector = (blocks: BlockFact[]) => blocks[0];
 export const defaultBlockComparator = (a: BlockFact, b: BlockFact) => -1;
 
 // TODO: Rename to RequestService?
-export default class FetchService {
+export class FetchService {
   private pendingKeyedFetches = new Set<unknown>();
 
   constructor(private ctx: Context) {}

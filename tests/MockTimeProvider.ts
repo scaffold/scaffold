@@ -11,7 +11,7 @@ interface Entry {
   stack: string;
 }
 
-export default class MockTimeProvider implements TimeProvider {
+export class MockTimeProvider implements TimeProvider {
   private queue: data_structures.RedBlackTree<Entry> = new data_structures
     .RedBlackTree((a, b) =>
     a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.idx - b.idx);

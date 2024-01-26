@@ -1,7 +1,7 @@
-import Context from './Context.ts';
-import AppraisalProvider, { Action, Appraisal } from './AppraisalProvider.ts';
+import { Context } from './Context.ts';
+import { Action, Appraisal, AppraisalProvider } from './AppraisalProvider.ts';
 import { RBTree } from 'std-latest/collections/rb_tree.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 
 const valuePerSecond = Symbol('valuePerSecond');
 const tiebreak = Symbol('tiebreak');
@@ -15,7 +15,7 @@ type Entry = Action & {
 
 let nextTiebreak = 0;
 
-export default class ActionExecutor {
+export class ActionExecutor {
   private provider: ReturnType<AppraisalProvider['create']>;
   private executors: Map<Action['type'], (action: never) => void> = new Map();
 

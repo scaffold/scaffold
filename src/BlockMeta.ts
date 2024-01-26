@@ -5,7 +5,7 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { BlockDraft } from './BlockBuilder.ts';

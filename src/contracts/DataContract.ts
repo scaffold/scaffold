@@ -1,7 +1,7 @@
-import Context from '../Context.ts';
-import FactService from '../FactService.ts';
+import { Context } from '../Context.ts';
+import { FactService } from '../FactService.ts';
 import { DataContractParams } from '../messages.ts';
-import Hash, { HASH_SIZE } from '../util/Hash.ts';
+import { Hash, HASH_SIZE } from '../util/Hash.ts';
 import {
   BurdenOfProof,
   ComputationDriver,
@@ -9,7 +9,7 @@ import {
 } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { dataHash } from '../constants.ts';
-import KeyService from '../KeyService.ts';
+import { KeyService } from '../KeyService.ts';
 
 // For easy-to-verify contracts in general:
 //   Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
@@ -18,7 +18,7 @@ import KeyService from '../KeyService.ts';
 //   In order to not lose his collateral, he must provide the plaintext as a hint.
 //   It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
-export default class DataContract implements ContractProvider {
+export class DataContract implements ContractProvider {
   public contractHash = dataHash;
 
   public compute(driver: ComputationDriver, ctx: Context) {

@@ -1,5 +1,5 @@
-import Hash, { ZERO_HASH } from './util/Hash.ts';
-import Context from './Context.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
+import { Context } from './Context.ts';
 import {
   AccountContractParams,
   Block,
@@ -9,19 +9,19 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-// import IncentiveCalculator from './IncentiveCalculator.ts';
-import BlockService from './BlockService.ts';
+// import { IncentiveCalculator } from './IncentiveCalculator.ts';
+import { BlockService } from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './constants.ts';
-import KeyService from './KeyService.ts';
+import { KeyService } from './KeyService.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
-import FrontierService2 from './FrontierService2.ts';
+import { FrontierService2 } from './FrontierService2.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
-import WeightService from './WeightService.ts';
-import GenerationService from './GenerationService.ts';
+import { WeightService } from './WeightService.ts';
+import { GenerationService } from './GenerationService.ts';
 import { assert, todo } from './util/functional.ts';
-import FrontierChainService from './FrontierChainService.ts';
+import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 
 const defaultTimeout = 100; // Enable block chunking
@@ -56,7 +56,7 @@ export interface BlockDraft {
 }
 
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
-export default class BlockBuilder {
+export class BlockBuilder {
   private selfAccountVerifier: Verifier;
 
   private pubsPerMs = 0;

@@ -1,14 +1,14 @@
-import BlockBuilder, { BlockDraft, InputSpec } from './BlockBuilder.ts';
-import BlockService from './BlockService.ts';
+import { BlockBuilder, BlockDraft, InputSpec } from './BlockBuilder.ts';
+import { BlockService } from './BlockService.ts';
 import {
   accountHash,
   frontierHash,
   generatorHash,
   rootHash,
 } from './constants.ts';
-import Context from './Context.ts';
-import WorkerDriverService, { WorkerDriver } from './WorkerDriverService.ts';
-import LocalGeneratorService from './LocalGeneratorService.ts';
+import { Context } from './Context.ts';
+import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
+import { LocalGeneratorService } from './LocalGeneratorService.ts';
 import {
   AccountContractParams,
   Block,
@@ -17,18 +17,18 @@ import {
 } from './messages.ts';
 import { arrConcat, arrEquals } from './util/buffer.ts';
 import { assert, error, todo } from './util/functional.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
-import WorkerExecutor from './WorkerExecutor.ts';
-import LitigationService from './LitigationService.ts';
-import Logger from './Logger.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { WorkerExecutor } from './WorkerExecutor.ts';
+import { LitigationService } from './LitigationService.ts';
+import { Logger } from './Logger.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
-import FactService from './FactService.ts';
-import ClockService from './ClockService.ts';
+import { FactService } from './FactService.ts';
+import { ClockService } from './ClockService.ts';
 import { MaybePromise } from './util/types.ts';
-import FetchService from './FetchService.ts';
-import KeyService from './KeyService.ts';
+import { FetchService } from './FetchService.ts';
+import { KeyService } from './KeyService.ts';
 import { bin2hex } from './util/hex.ts';
-import ContractClassifierService from './ContractClassifierService.ts';
+import { ContractClassifierService } from './ContractClassifierService.ts';
 import { CollateralHint } from './collateralMessages.ts';
 import {
   ComputationDriver,
@@ -37,9 +37,9 @@ import {
   COMPUTE_INGENERABLE_FLAG,
   InputSource,
 } from './ComputationMeta.ts';
-import VerificationService from './VerificationService.ts';
+import { VerificationService } from './VerificationService.ts';
 import { mapPut } from './util/map.ts';
-import FrontierChainService from './FrontierChainService.ts';
+import { FrontierChainService } from './FrontierChainService.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 
 interface RunState {
@@ -54,7 +54,7 @@ interface VerifierState {
   running: RunState[];
 }
 
-export default class GenerationService {
+export class GenerationService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
   private secret: Uint8Array;
 

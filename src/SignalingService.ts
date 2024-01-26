@@ -1,12 +1,12 @@
 import { ConnectionSignalFact, FactBase, FactType } from './FactMeta.ts';
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { ConnectionSignal } from './messages.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
-import FactService from './FactService.ts';
-import NodeService from './NodeService.ts';
-import ClockService from './ClockService.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { FactService } from './FactService.ts';
+import { NodeService } from './NodeService.ts';
+import { ClockService } from './ClockService.ts';
 import { SignalingProvider } from './NetworkProvider.ts';
-import NetworkService from './NetworkService.ts';
+import { NetworkService } from './NetworkService.ts';
 import { mapPut } from './util/map.ts';
 import { assert } from './util/functional.ts';
 import { bin2hex } from './util/hex.ts';
@@ -28,7 +28,7 @@ type IngestingSignal = Pick<
   'protocolName' | 'signalIdx' | 'signalData' | 'isSelfInitiator'
 >;
 
-export default class SignalingService {
+export class SignalingService {
   private states = new Map<HashPrimitive, SignalingState>();
 
   constructor(private ctx: Context) {

@@ -1,14 +1,14 @@
-import secp from './util/secp.ts';
-import Context from './Context.ts';
-import NodeService from './NodeService.ts';
-import KeyService from './KeyService.ts';
+import { secp } from './util/secp.ts';
+import { Context } from './Context.ts';
+import { NodeService } from './NodeService.ts';
+import { KeyService } from './KeyService.ts';
 import { NodeInfo } from './messages.ts';
-import FactService from './FactService.ts';
+import { FactService } from './FactService.ts';
 import { FactType } from './FactMeta.ts';
-import Hash, { ZERO_HASH } from './util/Hash.ts';
-import NetworkService from './NetworkService.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
+import { NetworkService } from './NetworkService.ts';
 
-export default class InfoService {
+export class InfoService {
   private tickItvl?: number;
 
   constructor(private ctx: Context) {

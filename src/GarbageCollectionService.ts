@@ -1,11 +1,11 @@
-import BlockService from './BlockService.ts';
-import Context from './Context.ts';
+import { BlockService } from './BlockService.ts';
+import { Context } from './Context.ts';
 import { FactSource, FactType } from './FactMeta.ts';
-import FactService, { invalidFact } from './FactService.ts';
+import { FactService, invalidFact } from './FactService.ts';
 import { frontierHash } from './constants.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 
-export default class GarbageCollectionService {
+export class GarbageCollectionService {
   constructor(private ctx: Context) {}
 
   public collect() {

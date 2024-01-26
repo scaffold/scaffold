@@ -1,19 +1,19 @@
-import BlockService from './BlockService.ts';
+import { BlockService } from './BlockService.ts';
 import { frontierHash, rootHash } from './constants.ts';
-import Context from './Context.ts';
-import WorkerDriverService, { WorkerDriver } from './WorkerDriverService.ts';
+import { Context } from './Context.ts';
+import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
 import { BlockOutput, FrontierTreeParams, Verifier } from './messages.ts';
 import { arrEquals } from './util/buffer.ts';
 import { todo } from './util/functional.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
-import WorkerExecutor from './WorkerExecutor.ts';
-import LitigationService from './LitigationService.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { WorkerExecutor } from './WorkerExecutor.ts';
+import { LitigationService } from './LitigationService.ts';
 import { BlockFact } from './FactMeta.ts';
-import FactService from './FactService.ts';
+import { FactService } from './FactService.ts';
 import { MaybePromise } from './util/types.ts';
 import { bin2hex } from './util/hex.ts';
 import { DetailVote } from './CollateralUtil.ts';
-import HintSuggestionService from './HintSuggestionService.ts';
+import { HintSuggestionService } from './HintSuggestionService.ts';
 import {
   BurdenOfProof,
   ComputationDriver,
@@ -23,7 +23,7 @@ import {
 } from './ComputationMeta.ts';
 import { CollateralHint } from './collateralMessages.ts';
 
-export default class VerificationService {
+export class VerificationService {
   private extraContractIncentive = new Map<HashPrimitive, number>();
 
   constructor(private ctx: Context) {}

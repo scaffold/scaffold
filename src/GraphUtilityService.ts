@@ -1,13 +1,13 @@
-import BlockBuilder from './BlockBuilder.ts';
+import { BlockBuilder } from './BlockBuilder.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { trueHash } from './constants.ts';
 import { FrontierTreeParams } from './messages.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 
-export default class GraphUtilityService {
+export class GraphUtilityService {
   constructor(private ctx: Context) {}
 
   public addBlock(

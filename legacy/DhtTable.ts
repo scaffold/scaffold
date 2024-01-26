@@ -1,6 +1,6 @@
 import { Node } from './NodeService.ts';
-import Context from './Context.ts';
-import Hash from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash } from './util/Hash.ts';
 
 const maxBucketEntries = 10;
 
@@ -9,7 +9,7 @@ export interface DhtEntry {
   node: Node;
 }
 
-export default class DhtTable {
+export class DhtTable {
   private buckets: DhtEntry[][] = [...new Array(257)].map(() => []);
 
   constructor(private ctx: Context, public centerHash: Hash) {}

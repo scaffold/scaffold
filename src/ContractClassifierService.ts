@@ -1,5 +1,5 @@
-import Hash, { HashPrimitive } from './util/Hash.ts';
-import Context from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
 import {
   accountHash,
   burnHash,
@@ -16,7 +16,7 @@ import { Verifier } from './messages.ts';
 const toHashPrim = (x: string | Hash) =>
   (x instanceof Hash ? x : Hash.fromHex(x)).toPrimitive();
 
-export default class ContractClassifierService {
+export class ContractClassifierService {
   private immediatelyVerifiableContractHashes = new Set<HashPrimitive>(
     [accountHash, collateralHash, dataHash, frontierHash, rootHash, timeHash]
       .map(toHashPrim),

@@ -1,6 +1,6 @@
 import { LinkExec, MkdirExec } from './scriptTypes.ts';
 import { error } from '../util/functional.ts';
-import ExtFs from './ExtFs.ts';
+import { ExtFs } from './ExtFs.ts';
 import {
   FS_CAPABILITY_ALL,
   FS_CAPABILITY_DIR_ENTRY_CREATE,
@@ -13,13 +13,13 @@ import {
   FsFileNode,
   FsNode,
 } from './fsTypes.ts';
-import IdentityFs from './IdentityFs.ts';
-import MemFs from './MemFs.ts';
-import WasiImpl, { FsNodeHandle } from './WasiImpl.ts';
+import { IdentityFs } from './IdentityFs.ts';
+import { MemFs } from './MemFs.ts';
+import { FsNodeHandle, WasiImpl } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
 import { JsWasiParams } from '../messages.ts';
-import logger from './logger.ts';
+import { logger } from './logger.ts';
 import { BaseImports } from './execJob.ts';
 import { makeClientUtils } from './clientUtils.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';

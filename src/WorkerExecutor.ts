@@ -1,4 +1,4 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { formatPath } from './worker/pathUtils.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import {
@@ -6,12 +6,13 @@ import {
   JobMessage,
   WorkerComm,
 } from './worker/workerTypes.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 import { Block, Verifier } from './messages.ts';
 import { rootHash } from './constants.ts';
 import { error } from './util/functional.ts';
-import WorkerDebuggerManager, {
+import {
   WorkerDebugger,
+  WorkerDebuggerManager,
 } from './WorkerDebuggerManager.ts';
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { MaybePromise } from './util/types.ts';
@@ -45,7 +46,7 @@ const writeIovs = (dstBufs: Uint8Array[], src: Uint8Array, offset: number) => {
   return it - offset;
 };
 
-export default class WorkerExecutor {
+export class WorkerExecutor {
   constructor(private ctx: Context) {
     if (this.ctx.config.workerPath === undefined) {
       throw new Error(

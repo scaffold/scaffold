@@ -1,5 +1,5 @@
 import { avro } from '../deps.ts';
-import HashClass from './util/Hash.ts';
+import { Hash as HashClass } from './util/Hash.ts';
 
 // declare global {
 //   interface Crypto {

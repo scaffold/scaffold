@@ -1,7 +1,7 @@
 import { http } from '../dev_deps.ts';
-import NetworkProvider, { SignalingDriver } from '../src/NetworkProvider.ts';
+import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 
-export default class WebsocketServerProvider implements NetworkProvider {
+export class WebsocketServerProvider implements NetworkProvider {
   public protocols = 'websocket@0.0.1/server';
 
   constructor(private port = 8314) {}

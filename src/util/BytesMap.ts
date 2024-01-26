@@ -1,4 +1,4 @@
-import Hash, { HASH_SIZE, HashPrimitive, ZERO_HASH } from './Hash.ts';
+import { Hash, HASH_SIZE, HashPrimitive, ZERO_HASH } from './Hash.ts';
 import { bin2hex } from './hex.ts';
 import { MapSpec } from './map.ts';
 
@@ -6,7 +6,7 @@ if (typeof ZERO_HASH.toPrimitive() === 'number') {
   throw new Error(`Hash primitive can't be a number!`);
 }
 
-export default class BytesMap<T> implements MapSpec<Uint8Array, T> {
+export class BytesMap<T> implements MapSpec<Uint8Array, T> {
   private map = new Map<number | HashPrimitive, T>();
 
   private toPrimitive(key: Uint8Array) {

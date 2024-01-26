@@ -3,7 +3,7 @@ import { ContractProvider } from '../SpecialContractManager.ts';
 import { collatzHash } from '../constants.ts';
 import * as collatzMessages from './collatzMessages.ts';
 
-export default class CollatzContract implements ContractProvider {
+export class CollatzContract implements ContractProvider {
   public contractHash = collatzHash;
 
   public async compute(driver: ComputationDriver) {

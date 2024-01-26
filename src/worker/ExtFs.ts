@@ -17,7 +17,7 @@ interface ExtFsNode extends FsDirNode, FsFileNode {}
 const EXTFS_DEFAULT_CAP_MASK: FsCapabilityMask = FS_CAPABILITY_DIR_READ_ENTRY |
   FS_CAPABILITY_FILE_READ;
 
-export default class ExtFs implements Fs {
+export class ExtFs implements Fs {
   constructor(
     private inodeSource: { nextInode: number },
     private client: WorkerChannelClient<WorkerComm>,

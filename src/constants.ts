@@ -1,4 +1,4 @@
-import Hash, { ZERO_HASH } from './util/Hash.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
 
 const SBL = Hash.fromLiteralStr('SBL'.padEnd(32, '\0'));
 

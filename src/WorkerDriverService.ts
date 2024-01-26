@@ -9,7 +9,7 @@ Fixed worker pool
   Kill if we have a missing input, and subscribe to the input to re-enqueue if the input becomes available.
 */
 
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { mapEntries } from './util/functional.ts';
 
@@ -59,7 +59,7 @@ interface WorkEntry {
 
 const logScoreAccuracy = 0.1;
 
-export default class WorkerDriverService {
+export class WorkerDriverService {
   private allocated: Record<Resource, number>;
 
   private workerQueue: WorkEntry[] = [];

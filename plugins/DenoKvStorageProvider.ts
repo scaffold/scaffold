@@ -1,7 +1,7 @@
-import Hash from '../src/util/Hash.ts';
+import { Hash } from '../src/util/Hash.ts';
 import { StorageProvider } from '../src/Config.ts';
 
-export default class DenoKvStorageProvider implements StorageProvider {
+export class DenoKvStorageProvider implements StorageProvider {
   private kv = Deno.openKv();
 
   public async set(namespace: number, key: Hash, value?: Uint8Array) {

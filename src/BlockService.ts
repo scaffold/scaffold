@@ -9,9 +9,9 @@ import {
   rootHash,
   timeHash,
 } from './constants.ts';
-import Context from './Context.ts';
-import VerificationService from './VerificationService.ts';
-import Logger from './Logger.ts';
+import { Context } from './Context.ts';
+import { VerificationService } from './VerificationService.ts';
+import { Logger } from './Logger.ts';
 import {
   AccountContractParams,
   Block,
@@ -24,10 +24,10 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-import NodeService from './NodeService.ts';
-import QaDebugger from './QaDebugger.ts';
+import { NodeService } from './NodeService.ts';
+import { QaDebugger } from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
-import Hash, { HashPrimitive, ZERO_HASH } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import {
   BlockFact,
@@ -37,24 +37,24 @@ import {
   FactSource,
   FactType,
 } from './FactMeta.ts';
-import FactService from './FactService.ts';
-import ContractClassifierService from './ContractClassifierService.ts';
+import { FactService } from './FactService.ts';
+import { ContractClassifierService } from './ContractClassifierService.ts';
 import { assert, neverPromise, todo } from './util/functional.ts';
-import LitigationService from './LitigationService.ts';
+import { LitigationService } from './LitigationService.ts';
 import {
   CollateralContractDetail,
   CollateralContractParams,
   CollateralHint,
 } from './collateralMessages.ts';
-import FrontierService2, { NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
+import { FrontierService2, NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise } from './util/types.ts';
-import CollateralUtil, { CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
-import GenerationService from './GenerationService.ts';
+import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
+import { GenerationService } from './GenerationService.ts';
 import { Node } from './NodeService.ts';
-import WeightService from './WeightService.ts';
+import { WeightService } from './WeightService.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
-import MonitoringService from './MonitoringService.ts';
+import { MonitoringService } from './MonitoringService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -62,7 +62,7 @@ export const BASE_WORK = 10n;
 
 export const neverAbort = new AbortController().signal;
 
-export default class BlockService {
+export class BlockService {
   private claimsByOutput = new Map<HashPrimitive, OutputClaim[]>();
   private frontierVoters = new Map<HashPrimitive, BlockFact[]>();
 

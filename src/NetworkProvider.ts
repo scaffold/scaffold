@@ -1,4 +1,4 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 
 export interface ConnectionProvider {
   // Does not need to maintain order between sends, but does need to make sure packet's aren't dropped or mangled.
@@ -52,7 +52,7 @@ export interface SignalingProvider {
   recvSignal(signal: string): void;
 }
 
-export default interface NetworkProvider {
+export interface NetworkProvider {
   readonly protocols?: string | string[];
 
   createInstance(driver: SignalingDriver): SignalingProvider;

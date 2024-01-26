@@ -1,13 +1,13 @@
 import { log, secp } from '../deps.ts';
-import Context from '../src/Context.ts';
+import { Context } from '../src/Context.ts';
 import { makeDefaultConfig } from '../src/Config.ts';
-import NullStorageProvider from '../plugins/NullStorageProvider.ts';
-import RenderService from '../src/RenderService.ts';
-import GenesisService, { sharedGenesisData } from '../src/GenesisService.ts';
-import BlockBuilder from '../src/BlockBuilder.ts';
+import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
+import { RenderService } from '../src/RenderService.ts';
+import { GenesisService, sharedGenesisData } from '../src/GenesisService.ts';
+import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
-import FrontierContract from '../src/contracts/FrontierContract.ts';
-import GraphUtilityService from '../src/GraphUtilityService.ts';
+import { FrontierContract } from '../src/contracts/FrontierContract.ts';
+import { GraphUtilityService } from '../src/GraphUtilityService.ts';
 import { ZERO_BLOCK } from '../src/BlockMeta.ts';
 
 const ctx = new Context({

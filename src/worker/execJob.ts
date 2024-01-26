@@ -1,14 +1,14 @@
 import { error } from '../util/functional.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
-import Hash from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { makeClientUtils } from './clientUtils.ts';
 import { makeWasi } from './jsWasiUtils.ts';
 import { jsLockHash, jsWasiHash, rootHash } from '../constants.ts';
-import logger from './logger.ts';
+import { logger } from './logger.ts';
 import { WasiExit } from './WasiImpl.ts';
 import { JsWasiParams } from '../messages.ts';
-// import binaryen from 'binaryen';
+// import { binaryen } from 'binaryen';
 
 export interface BaseImports extends WebAssembly.Imports {
   scaffold: {

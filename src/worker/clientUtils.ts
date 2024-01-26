@@ -1,4 +1,4 @@
-import Hash from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { WorkerComm } from './workerTypes.ts';
 

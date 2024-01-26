@@ -2,7 +2,7 @@ import { Answer } from './AnswerRegistry.ts';
 import { Question } from './QuestionRegistry.ts';
 import { Connection } from './ConnectionService.ts';
 import { Node } from './NodeService.ts';
-import Peer from './Peer.ts';
+import { Peer } from './Peer.ts';
 
 export type PublishAction = {
   type: 'publish';

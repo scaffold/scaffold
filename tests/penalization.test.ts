@@ -1,14 +1,14 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
-import AccountContract from '../src/contracts/AccountContract.ts';
-import RootContract from '../src/contracts/RootContract.ts';
+import { AccountContract } from '../src/contracts/AccountContract.ts';
+import { RootContract } from '../src/contracts/RootContract.ts';
 import { makeTest, provideInitialBalance } from '../tests/util.ts';
 import { str2bin } from '../src/util/buffer.ts';
-import CollateralContract from '../src/contracts/CollateralContract.ts';
-import BlockBuilder from '../src/BlockBuilder.ts';
+import { CollateralContract } from '../src/contracts/CollateralContract.ts';
+import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { collateralHash, rootHash } from '../src/constants.ts';
-import Hash from '../src/util/Hash.ts';
-import BalanceService from '../src/BalanceService.ts';
-import LitigationService from '../src/LitigationService.ts';
+import { Hash } from '../src/util/Hash.ts';
+import { BalanceService } from '../src/BalanceService.ts';
+import { LitigationService } from '../src/LitigationService.ts';
 
 Deno.test(
   {

@@ -1,13 +1,13 @@
-import Context from '../Context.ts';
-import Hash, { HASH_SIZE, HashPrimitive } from '../util/Hash.ts';
-import FactService from '../FactService.ts';
+import { Context } from '../Context.ts';
+import { Hash, HASH_SIZE, HashPrimitive } from '../util/Hash.ts';
+import { FactService } from '../FactService.ts';
 import { ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { rootHash } from '../constants.ts';
 import { mapPut } from '../util/map.ts';
 import { arrEquals } from '../util/buffer.ts';
 
-export default class RootContract implements ContractProvider {
+export class RootContract implements ContractProvider {
   public contractHash = rootHash;
 
   private registry = new Map<HashPrimitive, Uint8Array>();

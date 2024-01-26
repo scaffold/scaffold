@@ -1,12 +1,12 @@
-import Config from './Config.ts';
-import Context from './Context.ts';
-import FetchService from './FetchService.ts';
-import Query from './Query.ts';
+import { Config } from './Config.ts';
+import { Context } from './Context.ts';
+import { FetchService } from './FetchService.ts';
+import { Query } from './Query.ts';
 import { Resource } from './Query.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 import { todo } from './util/functional.ts';
 
-export default class Scaffold {
+export class Scaffold {
   private ctx: Context;
 
   constructor(config: Config) {

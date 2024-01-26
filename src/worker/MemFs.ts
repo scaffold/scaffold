@@ -8,7 +8,7 @@ import {
   FsNode,
 } from './fsTypes.ts';
 
-export default class MemFs implements Fs {
+export class MemFs implements Fs {
   constructor(private inodeSource: { nextInode: number }) {}
 
   public createDirNode(): FsDirNode {

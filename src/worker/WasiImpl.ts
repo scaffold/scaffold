@@ -169,7 +169,7 @@ const getInheritingRights = (capMask: FsCapabilityMask) => {
   }
 };
 
-export default class WasiImpl {
+export class WasiImpl {
   private memory?: WebAssembly.Memory;
   private handles: Map<number, FsNodeHandle> = new Map();
   private fdIt: number = 1;

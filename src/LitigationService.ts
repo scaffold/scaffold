@@ -1,16 +1,16 @@
-import BlockBuilder from './BlockBuilder.ts';
+import { BlockBuilder } from './BlockBuilder.ts';
 import { collateralHash } from './constants.ts';
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { Fact } from './FactMeta.ts';
-import KeyService from './KeyService.ts';
+import { KeyService } from './KeyService.ts';
 import {
   CollateralContractDetail,
   CollateralContractParams,
 } from './collateralMessages.ts';
-import FactService from './FactService.ts';
-import CollateralUtil, { DetailVote, Posting } from './CollateralUtil.ts';
+import { FactService } from './FactService.ts';
+import { CollateralUtil, DetailVote, Posting } from './CollateralUtil.ts';
 
-export default class LitigationService {
+export class LitigationService {
   constructor(private ctx: Context) {}
 
   public litigate(fact: Fact, hints: Uint8Array[], vote: DetailVote) {

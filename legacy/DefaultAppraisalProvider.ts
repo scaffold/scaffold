@@ -1,6 +1,6 @@
-import AppraisalProvider, { Action, Appraisal } from './AppraisalProvider.ts';
+import { Action, Appraisal, AppraisalProvider } from './AppraisalProvider.ts';
 
-export default class DefaultAppraisalProvider implements AppraisalProvider {
+export class DefaultAppraisalProvider implements AppraisalProvider {
   public create(onAppraise: (action: Action, prediction: Appraisal) => void) {
     return {
       requestAppraisal: (action: Action) => {

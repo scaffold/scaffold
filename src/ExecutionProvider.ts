@@ -6,7 +6,7 @@ import { ComputationDriver } from './ComputationMeta.ts';
 // We need to figure out how to combine it with local generators, which are keyed off contract hash.
 // How should this interact with WASM wrappers?
 
-export default interface ExecutionProvider {
+export interface ExecutionProvider {
   readonly name: string;
   readonly magicBytes: Uint8Array;
 

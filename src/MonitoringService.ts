@@ -1,7 +1,7 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { BlockInput } from './messages.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { WatchingMonitor } from './util/Monitor.ts';
 import { mapPut } from './util/map.ts';
 import { Collateralization } from './FactMeta.ts';
@@ -22,7 +22,7 @@ DerivedWork(block: BlockFact)
 Collateral(block: BlockFact)
 */
 
-export default class MonitoringService {
+export class MonitoringService {
   public claimMonitor = new WatchingMonitor<BlockInput, OutputClaim>((input) =>
     input.blockHash.toPrimitive() + input.outputIdx
   );

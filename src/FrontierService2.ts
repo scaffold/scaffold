@@ -1,14 +1,14 @@
 import { BlockFact, FactSource } from './FactMeta.ts';
-import Context from './Context.ts';
-import Hash, { ZERO_HASH } from './util/Hash.ts';
-import BlockService from './BlockService.ts';
+import { Context } from './Context.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
+import { BlockService } from './BlockService.ts';
 import { frontierHash } from './constants.ts';
 import { InputSpec } from './BlockBuilder.ts';
-import WeightService from './WeightService.ts';
+import { WeightService } from './WeightService.ts';
 import { BlockOutput } from './messages.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { todo } from './util/functional.ts';
-import ClockService from './ClockService.ts';
+import { ClockService } from './ClockService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { error } from './util/functional.ts';
 import { CHAR_0 } from 'https://deno.land/std@0.181.0/path/_constants.ts';
@@ -21,7 +21,7 @@ if (frontierInputCount !== 2) {
   throw new Error(`FrontierService2.getRoot() needs to handle this case`);
 }
 
-export default class FrontierService2 {
+export class FrontierService2 {
   private treeRoots: BlockFact[][] = [];
 
   constructor(private ctx: Context) {

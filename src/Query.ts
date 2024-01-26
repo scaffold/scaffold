@@ -1,4 +1,4 @@
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 import { arrEquals, bin2str, str2bin } from './util/buffer.ts';
 import { hex2bin } from './util/hex.ts';
 
@@ -6,7 +6,7 @@ type ResourceEntry = string | Uint8Array | Hash;
 
 export type Resource = (ResourceEntry[] | ResourceEntry)[] | string | URL;
 
-export default class Query {
+export class Query {
   public static fromResource(resource: Resource) {
     if (typeof resource === 'string') {
       resource = new URL(resource);

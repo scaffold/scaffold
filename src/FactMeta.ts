@@ -9,7 +9,7 @@ import {
   NodeInfo,
 } from './messages.ts';
 import { Node } from './NodeService.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
 

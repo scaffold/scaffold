@@ -1,17 +1,17 @@
-import Context from './Context.ts';
-import secp from './util/secp.ts';
+import { Context } from './Context.ts';
+import { secp } from './util/secp.ts';
 import { hex2bin } from './util/hex.ts';
 import { makeDefaultConfig } from './Config.ts';
-import Hash, { ZERO_HASH } from './util/Hash.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
 import { AccountContractParams } from './messages.ts';
-import BlockBuilder from './BlockBuilder.ts';
+import { BlockBuilder } from './BlockBuilder.ts';
 import { accountHash } from './constants.ts';
-import BlockService from './BlockService.ts';
+import { BlockService } from './BlockService.ts';
 import { bin2hex } from './util/hex.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
-import FactService from './FactService.ts';
-import NodeService from './NodeService.ts';
-import NullStorageProvider from '../plugins/NullStorageProvider.ts';
+import { FactService } from './FactService.ts';
+import { NodeService } from './NodeService.ts';
+import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import { log } from '../deps.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
@@ -92,7 +92,7 @@ if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
   );
 }
 
-export default class GenesisService {
+export class GenesisService {
   constructor(private ctx: Context) {}
 
   public ingestGenesis(data: Uint8Array) {

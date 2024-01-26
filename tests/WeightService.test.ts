@@ -1,7 +1,7 @@
 import { assert } from '../test_deps.ts';
 import { findOutput, makeTest, provideInitialBalance } from '../tests/util.ts';
-import BlockBuilder from '../src/BlockBuilder.ts';
-import WeightService from '../src/WeightService.ts';
+import { BlockBuilder } from '../src/BlockBuilder.ts';
+import { WeightService } from '../src/WeightService.ts';
 import { BASE_WORK } from '../src/BlockService.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
 import { trueHash } from '../src/constants.ts';

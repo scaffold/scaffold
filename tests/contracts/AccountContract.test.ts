@@ -1,11 +1,11 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '../../src/BlockBuilder.ts';
+import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { accountHash } from '../../src/constants.ts';
-import KeyService from '../../src/KeyService.ts';
-import BlockService from '../../src/BlockService.ts';
+import { KeyService } from '../../src/KeyService.ts';
+import { BlockService } from '../../src/BlockService.ts';
 import { AccountContractParams } from '../../src/messages.ts';
-import AccountContract from '../../src/contracts/AccountContract.ts';
+import { AccountContract } from '../../src/contracts/AccountContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,

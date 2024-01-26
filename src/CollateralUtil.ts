@@ -72,7 +72,7 @@ export interface CollateralDescriptor {
 }
 export type DetailVote = CollateralContractDetail['vote'];
 
-export default class CollateralUtil {
+export class CollateralUtil {
   private static makeContest(parent?: Contest): Contest {
     return {
       postings: [],

@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
-import CollateralUtil, { Posting } from '../src/CollateralUtil.ts';
+import { CollateralUtil, Posting } from '../src/CollateralUtil.ts';
 import { CollateralContractDetail } from '../src/collateralMessages.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';

@@ -1,7 +1,7 @@
-import Context from './Context.ts';
-import Hash from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash } from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
-import QaDebugger from './QaDebugger.ts';
+import { QaDebugger } from './QaDebugger.ts';
 import { log } from '../deps.ts';
 import { logLevels } from '../deps.ts';
 
@@ -32,7 +32,7 @@ const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } =
     loggers: {},
   };
 
-export default class Logger {
+export class Logger {
   private setupPromise: void; // Promise<void>;
   constructor(private ctx: Context) {
     logConfig.loggers[`sbl_${ctx.config.debugName}`] = {

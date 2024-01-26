@@ -9,7 +9,7 @@ import {
 } from '../collateralMessages.ts';
 import { accountHash, collateralHash } from '../constants.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import CollateralUtil, { Posting } from '../CollateralUtil.ts';
+import { CollateralUtil, Posting } from '../CollateralUtil.ts';
 
 // Only used in tests,
 // Used to make sure that generating collateral contracts "out-of-spec" never wins.
@@ -22,7 +22,7 @@ export const enum CollateralGeneratorModifier {
 const DEBUG = true;
 const resolutionDelay = 5000n;
 
-export default class CollateralContract implements ContractProvider {
+export class CollateralContract implements ContractProvider {
   public contractHash = collateralHash;
 
   public async compute(driver: ComputationDriver) {

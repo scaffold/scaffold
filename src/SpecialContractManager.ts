@@ -1,5 +1,5 @@
-import Context from './Context.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
 import { ComputationDriver } from './ComputationMeta.ts';
 
@@ -9,7 +9,7 @@ export interface ContractProvider {
   compute(driver: ComputationDriver, ctx: Context): MaybePromise<void>;
 }
 
-// export default class SpecialContractManager {
+// export class SpecialContractManager {
 //   private entries = new Map<HashPrimitive, ContractProvider>();
 
 //   constructor(private ctx: Context) {

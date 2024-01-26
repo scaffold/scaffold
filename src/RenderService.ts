@@ -1,12 +1,12 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { Graphviz } from 'https://esm.sh/@hpcc-js/wasm@2.15.3?target=esnext&pin=v135';
 import { BlockFact, Fact } from './FactMeta.ts';
-import FactService from './FactService.ts';
+import { FactService } from './FactService.ts';
 import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import BlockService from './BlockService.ts';
+import { BlockService } from './BlockService.ts';
 import { BlockInput } from './messages.ts';
-import WeightService from './WeightService.ts';
+import { WeightService } from './WeightService.ts';
 import { FactType } from './FactMeta.ts';
 
 interface Graph {
@@ -15,7 +15,7 @@ interface Graph {
   lines: string[];
 }
 
-export default class RenderService {
+export class RenderService {
   private graphviz: ReturnType<typeof Graphviz['load']>;
 
   private extra: BlockFact[] = [];

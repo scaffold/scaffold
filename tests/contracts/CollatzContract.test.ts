@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '../../src/BlockBuilder.ts';
+import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { collatzHash } from '../../src/constants.ts';
-import BlockService from '../../src/BlockService.ts';
-import CollatzContract from '../../src/contracts/CollatzContract.ts';
+import { BlockService } from '../../src/BlockService.ts';
+import { CollatzContract } from '../../src/contracts/CollatzContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,

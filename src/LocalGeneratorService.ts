@@ -1,5 +1,5 @@
-import Context from './Context.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { MaybePromise } from './util/types.ts';
 import { ComputationDriver } from './ComputationMeta.ts';
@@ -34,7 +34,7 @@ export type LocalGenerator = (
   ctx: Context,
 ) => MaybePromise<void>;
 
-export default class LocalGeneratorService {
+export class LocalGeneratorService {
   private registry: Map<HashPrimitive, LocalGenerator> = new Map();
 
   constructor(private ctx: Context) {}

@@ -1,11 +1,11 @@
-import Context from './Context.ts';
-import KeyService from './KeyService.ts';
-import BlockService from './BlockService.ts';
+import { Context } from './Context.ts';
+import { KeyService } from './KeyService.ts';
+import { BlockService } from './BlockService.ts';
 import { accountHash } from './constants.ts';
 import { AccountContractParams } from './messages.ts';
-import WeightService from './WeightService.ts';
+import { WeightService } from './WeightService.ts';
 
-export default class BalanceService {
+export class BalanceService {
   constructor(private ctx: Context) {}
 
   public getLiquidBalance(

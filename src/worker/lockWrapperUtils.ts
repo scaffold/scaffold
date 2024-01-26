@@ -4,7 +4,7 @@ import { JobMessage } from './workerTypes.ts';
 import { BaseImports } from './execJob.ts';
 import { LockWrapperParams } from '../messages.ts';
 import { bin2hex } from '../util/hex.ts';
-import WasiImpl, { WasiError } from './WasiImpl.ts';
+import { WasiError, WasiImpl } from './WasiImpl.ts';
 import * as wc from './WasiConstants.ts';
 import { bin2str } from '../util/buffer.ts';
 

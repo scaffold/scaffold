@@ -3,7 +3,7 @@ import { AccountContractParams } from '../messages.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { accountHash } from '../constants.ts';
 
-export default class AccountContract implements ContractProvider {
+export class AccountContract implements ContractProvider {
   public contractHash = accountHash;
 
   public compute(driver: ComputationDriver) {

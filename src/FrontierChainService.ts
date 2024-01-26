@@ -1,12 +1,12 @@
-import Hash, { ZERO_HASH } from './util/Hash.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
-import WeightService from './WeightService.ts';
+import { WeightService } from './WeightService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { frontierHash } from './constants.ts';
 import { todo } from './util/functional.ts';
-import BlockService from './BlockService.ts';
-import FrontierService2 from './FrontierService2.ts';
+import { BlockService } from './BlockService.ts';
+import { FrontierService2 } from './FrontierService2.ts';
 import { error } from './util/functional.ts';
 
 const targVoteLevel = 4;
@@ -26,7 +26,7 @@ const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
   return false;
 };
 
-export default class FrontierChainService {
+export class FrontierChainService {
   constructor(private ctx: Context) {}
 
   public getVote(inputs: { block: BlockFact; outputIdx?: number }[]) {

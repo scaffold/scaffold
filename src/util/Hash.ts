@@ -38,7 +38,7 @@ export const HASH_SIZE = 32;
 
 const nonPrintableRegex = /[^\u0020-\u007E]/g;
 
-export default class Hash implements DevtoolsFormattable {
+export class Hash implements DevtoolsFormattable {
   // TODO: Remove; only for debugging
   private name: string;
 

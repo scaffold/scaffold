@@ -1,9 +1,9 @@
-import Context from './Context.ts';
-import ExecutionProvider from './ExecutionProvider.ts';
+import { Context } from './Context.ts';
+import { ExecutionProvider } from './ExecutionProvider.ts';
 import { arrEquals } from './util/buffer.ts';
 import { bin2hex } from '../sbl/pathUtils.ts';
 
-export default class ExecutionService {
+export class ExecutionService {
   private providers: ExecutionProvider[];
 
   constructor(private ctx: Context) {

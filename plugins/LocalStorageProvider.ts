@@ -1,4 +1,4 @@
-import Hash, { HASH_SIZE } from '../src/util/Hash.ts';
+import { Hash, HASH_SIZE } from '../src/util/Hash.ts';
 import { StorageProvider } from '../src/Config.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
 
@@ -6,7 +6,7 @@ import { bin2hex, hex2bin } from '../src/util/hex.ts';
 // https://developer.mozilla.org/en-US/docs/Web/API/StorageEvent
 // https://developer.mozilla.org/en-US/docs/Web/API/StorageManager
 
-export default class LocalStorageProvider implements StorageProvider {
+export class LocalStorageProvider implements StorageProvider {
   public set(namespace: number, key: Hash, value?: Uint8Array) {
     if (value !== undefined) {
       localStorage.setItem(

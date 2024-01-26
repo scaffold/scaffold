@@ -1,6 +1,6 @@
 import { WorkerDriver } from './WorkerDriverService.ts';
 import { BlockInput, BlockOutput } from './messages.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
 

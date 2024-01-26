@@ -15,7 +15,7 @@ Unbusy timestamps
 Pretty source hash/public key
 */
 
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 
 export enum LogLevel {
   TRACE,
@@ -44,7 +44,7 @@ export type LogHandler = (
   attrs: Record<string, unknown>,
 ) => void;
 
-export default class Logger {
+export class Logger {
   private attrs = new Map<string, LogAttribute>();
 
   constructor(private ctx: Context) {}

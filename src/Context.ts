@@ -1,6 +1,6 @@
-import Config from './Config.ts';
+import { Config } from './Config.ts';
 
-export default class Context {
+export class Context {
   private objs = new Map<{ new (context: Context): unknown }, unknown>();
   private destructors: (() => Promise<void> | void)[] = [];
   private isDestructed = false;

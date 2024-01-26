@@ -1,45 +1,46 @@
 import { fs } from '../dev_deps.ts';
 import { path } from '../dev_deps.ts';
 import { log } from '../deps.ts';
-import Context from '../src/Context.ts';
-import Config, { makeDefaultConfig } from '../src/Config.ts';
+import { Context } from '../src/Context.ts';
+import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
-import BlockService from '../src/BlockService.ts';
-import Hash, { ZERO_HASH } from '../src/util/Hash.ts';
-import QaDebugger from '../src/QaDebugger.ts';
+import { BlockService } from '../src/BlockService.ts';
+import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
+import { QaDebugger } from '../src/QaDebugger.ts';
 import { error } from '../src/util/functional.ts';
-import LocalGeneratorService, {
+import {
   LocalGenerator,
+  LocalGeneratorService,
 } from '../src/LocalGeneratorService.ts';
 // import { epochStartTime } from '~/server/epochStartTime.ts';
-import BlockBuilder from '../src/BlockBuilder.ts';
+import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { accountHash, generatorHash, rootHash } from '../src/constants.ts';
 import { AccountContractParams, JsWasiParams } from '../src/messages.ts';
-import KeyService from '../src/KeyService.ts';
-import GenesisService, { sharedGenesisData } from '../src/GenesisService.ts';
-import WorkerExecutor from '../src/WorkerExecutor.ts';
-import WebsocketServerProvider from '../plugins/WebsocketServerProvider.ts';
-import WebsocketClientProvider from '../plugins/WebsocketClientProvider.ts';
-import DenoKvStorageProvider from '../plugins/DenoKvStorageProvider.ts';
-import Logger, { FilterAction, LogLevel } from '../src/Logger2.ts';
-import NetworkService from '../src/NetworkService.ts';
+import { KeyService } from '../src/KeyService.ts';
+import { GenesisService, sharedGenesisData } from '../src/GenesisService.ts';
+import { WorkerExecutor } from '../src/WorkerExecutor.ts';
+import { WebsocketServerProvider } from '../plugins/WebsocketServerProvider.ts';
+import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
+import { DenoKvStorageProvider } from '../plugins/DenoKvStorageProvider.ts';
+import { FilterAction, Logger, LogLevel } from '../src/Logger2.ts';
+import { NetworkService } from '../src/NetworkService.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
-import RootContract from '../src/contracts/RootContract.ts';
-import ConnectionService from '../src/ConnectionService.ts';
-import NullStorageProvider from '../plugins/NullStorageProvider.ts';
-// import EpochContract from '~/graph/EpochContract.ts';
-// import ThrustInitContract from '~/graph/ThrustInitContract.ts';
-// import ThrustGameContract from '~/graph/ThrustGameContract.ts';
-// import StateTracker from '~/sbl/StateTracker.ts';
+import { RootContract } from '../src/contracts/RootContract.ts';
+import { ConnectionService } from '../src/ConnectionService.ts';
+import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
+// import { EpochContract } from '~/graph/EpochContract.ts';
+// import { ThrustInitContract } from '~/graph/ThrustInitContract.ts';
+// import { ThrustGameContract } from '~/graph/ThrustGameContract.ts';
+// import { StateTracker } from '~/sbl/StateTracker.ts';
 // import * as thrustMessages from '~/graph/thrustMessages.ts';
-// import QuestionService from '~/sbl/QuestionService.ts';
+// import { QuestionService } from '~/sbl/QuestionService.ts';
 // import * as epochMessages from '~/graph/epochMessages.ts';
-// // import DefaultAppraisalProvider from '~/sbl/DefaultAppraisalProvider.ts';
+// // import { DefaultAppraisalProvider } from '~/sbl/DefaultAppraisalProvider.ts';
 // import { unzip } from './tools.ts';
-// import GraphUtils from '~/sbl/GraphUtils.ts';
+// import { GraphUtils } from '~/sbl/GraphUtils.ts';
 // import { formatPath, parsePath } from '~/sbl/pathUtils.ts';
 // import { Generator } from '~/sbl/scriptTypes.ts';
-// import AnyContract from '~/graph/AnyContract.ts';
+// import { AnyContract } from '~/graph/AnyContract.ts';
 // import { arrEquals } from '~/sbl/util/buffer.ts';
 
 const config: Config = {

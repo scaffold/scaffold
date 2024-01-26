@@ -1,7 +1,7 @@
-import Context from './Context.ts';
-import NetworkProvider from './NetworkProvider.ts';
+import { Context } from './Context.ts';
+import { NetworkProvider } from './NetworkProvider.ts';
 import { mapPut } from './util/map.ts';
-import ConnectionService from './ConnectionService.ts';
+import { ConnectionService } from './ConnectionService.ts';
 
 const protocolRegex = /^(.+?)(?:\/(\w+))?$/;
 
@@ -10,7 +10,7 @@ interface ParsedProtocol {
   subtype?: string;
 }
 
-export default class NetworkService {
+export class NetworkService {
   private providers = new Map<
     string,
     { provider: NetworkProvider; subtype?: string }[]

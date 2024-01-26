@@ -1,7 +1,7 @@
-import Hash, { HashPrimitive } from './util/Hash.ts';
-import Context from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
 import { Connection } from './ConnectionService.ts';
-import KeyService from './KeyService.ts';
+import { KeyService } from './KeyService.ts';
 import {
   Fact,
   FactBase,
@@ -9,13 +9,13 @@ import {
   InfoRequestFact,
   NodeInfoFact,
 } from './FactMeta.ts';
-import NetworkService from './NetworkService.ts';
+import { NetworkService } from './NetworkService.ts';
 import { InfoRequest, NodeInfo } from './messages.ts';
-import FactService from './FactService.ts';
-import ClockService from './ClockService.ts';
+import { FactService } from './FactService.ts';
+import { ClockService } from './ClockService.ts';
 import { todo } from './util/functional.ts';
-import InfoService from './InfoService.ts';
-import SignalingService from './SignalingService.ts';
+import { InfoService } from './InfoService.ts';
+import { SignalingService } from './SignalingService.ts';
 
 const emitInfoIntervalMs = 60000;
 const infoExpirationMs = 10 * emitInfoIntervalMs;
@@ -70,7 +70,7 @@ export interface SelfNode extends NodeCommon {
 
 export type Node = SelfNode | RemoteNode;
 
-export default class NodeService {
+export class NodeService {
   private selfNode: SelfNode;
   private nodes: Map<HashPrimitive, Node> = new Map();
 

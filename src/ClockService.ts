@@ -1,7 +1,7 @@
-import Context from './Context.ts';
-import PoissonDistribution from './util/PoissonDistribution.ts';
+import { Context } from './Context.ts';
+import { PoissonDistribution } from './util/PoissonDistribution.ts';
 
-export default class ClockService {
+export class ClockService {
   private timeouts = new Set<number>();
   private intervals = new Set<number>();
 

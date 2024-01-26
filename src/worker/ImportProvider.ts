@@ -1,4 +1,4 @@
-import Hash, { HashPrimitive } from '../util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
 
@@ -22,7 +22,7 @@ type ImportProvider = (
   spec: ImportSpec,
 ) => Promise<WebAssembly.Imports>;
 
-export default class ImportFactory {
+export class ImportFactory {
   private providers = new Map<HashPrimitive, ImportProvider>();
   private defaultProvider: ImportProvider = () => {
     throw new Error(`No default import provider registered!`);

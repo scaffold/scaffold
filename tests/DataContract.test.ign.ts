@@ -6,8 +6,8 @@
 //   It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
 import { makeTest, waitForBlock } from './util.ts';
-import BlockService from '../src/BlockService.ts';
-import Hash from '../src/util/Hash.ts';
+import { BlockService } from '../src/BlockService.ts';
+import { Hash } from '../src/util/Hash.ts';
 import {
   collateralHash,
   dataHash,
@@ -20,14 +20,14 @@ import {
   CollateralContractParams,
   DataContractParams,
 } from '../src/messages.ts';
-import NodeService from '../src/NodeService.ts';
-import KeyService from '../src/KeyService.ts';
+import { NodeService } from '../src/NodeService.ts';
+import { KeyService } from '../src/KeyService.ts';
 import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
 import { mapOne } from '../src/util/functional.ts';
-import HashInversionService from '../sbl/HashInversionService.ts';
-import FetchService from '../src/FetchService.ts';
+import { HashInversionService } from '../sbl/HashInversionService.ts';
+import { FetchService } from '../src/FetchService.ts';
 import { BlockExt } from '../src/BlockMeta.ts';
-import LitigationService from '../src/LitigationService.ts';
+import { LitigationService } from '../src/LitigationService.ts';
 
 Deno.test(
   { name: `an invalid body should have collateral posted against` },

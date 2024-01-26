@@ -1,13 +1,13 @@
-import Context from './Context.ts';
-import DhtTable, { DhtEntry } from './DhtTable.ts';
-import Hash from './util/Hash.ts';
-import NodeService from './NodeService.ts';
+import { Context } from './Context.ts';
+import { DhtEntry, DhtTable } from './DhtTable.ts';
+import { Hash } from './util/Hash.ts';
+import { NodeService } from './NodeService.ts';
 import { DhtJoinMessage } from './messages.ts';
-import MessageCtx from './MessageCtx.ts';
+import { MessageCtx } from './MessageCtx.ts';
 
 const dhtEntryLifespanMs = 1000 * 60 * 60;
 
-export default class DhtService {
+export class DhtService {
   // Need to keep one table for use even when we haven't completed any work.
   // Peers won't respect it as valid since it doesn't have any proof of work.
   private selfTable: DhtTable;

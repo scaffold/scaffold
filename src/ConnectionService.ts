@@ -1,13 +1,13 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
-import NodeService, { Node } from './NodeService.ts';
+import { Node, NodeService } from './NodeService.ts';
 import { assert, error } from './util/functional.ts';
-import FactService from './FactService.ts';
+import { FactService } from './FactService.ts';
 import { FactBase, FactSource, FactType } from './FactMeta.ts';
-import NetworkService from './NetworkService.ts';
-import SignalingService from './SignalingService.ts';
+import { NetworkService } from './NetworkService.ts';
+import { SignalingService } from './SignalingService.ts';
 import { arrEquals } from './util/buffer.ts';
-import KeyService from './KeyService.ts';
+import { KeyService } from './KeyService.ts';
 import { Identification } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
 
@@ -46,7 +46,7 @@ export interface Connection {
   altruism: number;
 }
 
-export default class ConnectionService {
+export class ConnectionService {
   // private connections: Map<string, Connection> = new Map();
   // private anonymousConns: {tryConnect(spec: string): void;}[] = [];
 

@@ -1,4 +1,4 @@
-import Context from '../Context.ts';
+import { Context } from '../Context.ts';
 import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
@@ -38,7 +38,7 @@ import { frontierHash } from '../constants.ts';
 
 export const frontierInputCount = 2;
 
-export default class FrontierContract implements ContractProvider {
+export class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
   public async compute(driver: ComputationDriver) {

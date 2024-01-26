@@ -1,11 +1,11 @@
 import { Verifier } from './messages.ts';
 import { Resource } from './WorkerDriverService.ts';
 import { log } from '../deps.ts';
-import secp from './util/secp.ts';
-import Hash from './util/Hash.ts';
+import { secp } from './util/secp.ts';
+import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/types.ts';
-import NetworkProvider from './NetworkProvider.ts';
-import ExecutionProvider from './ExecutionProvider.ts';
+import { NetworkProvider } from './NetworkProvider.ts';
+import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';
 import { defaultContractProviders } from './contracts/defaultContractProviders.ts';
 
@@ -46,7 +46,7 @@ export interface StorageProvider {
 }
 
 // You can modify the Config by mutating ctx.config
-interface Config {
+export interface Config {
   network: string;
 
   debugName: string;
@@ -191,5 +191,3 @@ export const makeDefaultConfig = () => ({
   enableValidation: true,
   enableWorkerLogging: true,
 } satisfies Partial<Config>);
-
-export default Config;

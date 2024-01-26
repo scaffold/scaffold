@@ -1,5 +1,5 @@
-import Context from './Context.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 
 export interface WorkerDebugger {
   log(msg: Uint8Array): void;
@@ -14,7 +14,7 @@ export interface WorkerDebugger {
 //   Allow mutation of requests/replies.
 //   Allow mutation of previous requests/replies (which will rollback and rerun).
 
-export default class WorkerDebuggerManager {
+export class WorkerDebuggerManager {
   private dbgrs = new Map<HashPrimitive, WorkerDebugger>();
 
   constructor(private ctx: Context) {}

@@ -1,10 +1,10 @@
 import { log, secp } from '../deps.ts';
-import Context from '../src/Context.ts';
+import { Context } from '../src/Context.ts';
 import { makeDefaultConfig } from '../src/Config.ts';
-import WebsocketServerProvider from '../plugins/WebsocketServerProvider.ts';
-import WebsocketClientProvider from '../plugins/WebsocketClientProvider.ts';
-import NetworkService from '../src/NetworkService.ts';
-import NullStorageProvider from '../plugins/NullStorageProvider.ts';
+import { WebsocketServerProvider } from '../plugins/WebsocketServerProvider.ts';
+import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
+import { NetworkService } from '../src/NetworkService.ts';
+import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 
 const ctx = new Context({
   ...makeDefaultConfig(),

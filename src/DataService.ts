@@ -1,14 +1,14 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { Fact } from './FactMeta.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
-import BlockBuilder from './BlockBuilder.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { BlockBuilder } from './BlockBuilder.ts';
 import { rootHash } from './constants.ts';
-import FactService from './FactService.ts';
-import ClockService from './ClockService.ts';
+import { FactService } from './FactService.ts';
+import { ClockService } from './ClockService.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import * as hashes from './constants.ts';
 
-export default class DataService {
+export class DataService {
   private requesting = new Set<HashPrimitive>(
     Object.values(hashes).map((x) => x.toPrimitive()),
   );

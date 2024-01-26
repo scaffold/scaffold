@@ -1,6 +1,6 @@
-import Hash from './util/Hash.ts';
-import Context from './Context.ts';
-import secp from './util/secp.ts';
+import { Hash } from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { secp } from './util/secp.ts';
 import { hex2bin } from './util/hex.ts';
 
 // NOTE THAT THIS IS NOT A VRF
@@ -20,7 +20,7 @@ interface VrfOutput {
   proof: Uint8Array;
 }
 
-export default class VerifiableRandomFunction {
+export class VerifiableRandomFunction {
   private entropy = hex2bin(
     // Just some random bytes
     'fe972dbb977858fbabb4b08bead31e6cd0e2afbafb81bc3f64e1d4c45eae921a',

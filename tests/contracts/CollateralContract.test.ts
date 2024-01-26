@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
-import BlockBuilder from '../../src/BlockBuilder.ts';
+import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { accountHash, collateralHash } from '../../src/constants.ts';
-import KeyService from '../../src/KeyService.ts';
-import BlockService from '../../src/BlockService.ts';
-import CollateralContract from '../../src/contracts/CollateralContract.ts';
+import { KeyService } from '../../src/KeyService.ts';
+import { BlockService } from '../../src/BlockService.ts';
+import { CollateralContract } from '../../src/contracts/CollateralContract.ts';
 import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,

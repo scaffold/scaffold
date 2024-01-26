@@ -4,7 +4,7 @@ const NEVER: () => void = () => {
   throw new Error(`This should never be called!`);
 };
 
-export default class StateTracker<Key, State> {
+export class StateTracker<Key, State> {
   constructor(
     private getter: (
       key: Key,

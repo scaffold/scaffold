@@ -1,5 +1,5 @@
-import Context from './Context.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import {
   BlockFact,
   Collateralization,
@@ -8,24 +8,24 @@ import {
   FactSource,
   FactType,
 } from './FactMeta.ts';
-import BlockService from './BlockService.ts';
-import NodeService, { Node } from './NodeService.ts';
+import { BlockService } from './BlockService.ts';
+import { Node, NodeService } from './NodeService.ts';
 import { Coder } from './messages.ts';
-import secp from './util/secp.ts';
+import { secp } from './util/secp.ts';
 import { zstd } from '../deps.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
 import { mapPut } from './util/map.ts';
 import { log } from '../deps.ts';
-import DataService from './DataService.ts';
-import KeyService from './KeyService.ts';
-import CollateralUtil, { DetailVote } from './CollateralUtil.ts';
+import { DataService } from './DataService.ts';
+import { KeyService } from './KeyService.ts';
+import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
 import { uniqueNamesGenerator } from '../deps.ts';
-import SignalingService from './SignalingService.ts';
-import ConnectionService from './ConnectionService.ts';
-import MonitoringService from './MonitoringService.ts';
+import { SignalingService } from './SignalingService.ts';
+import { ConnectionService } from './ConnectionService.ts';
+import { MonitoringService } from './MonitoringService.ts';
 import { frontierHash } from './constants.ts';
-import GarbageCollectionService from './GarbageCollectionService.ts';
+import { GarbageCollectionService } from './GarbageCollectionService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
@@ -74,7 +74,7 @@ const sortKeys = true;
 
 export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
-export default class FactService {
+export class FactService {
   private factories: FactFactory[] = [];
   private ingestListeners: ((fact: unknown) => void)[][] = [];
   private forgetListeners: ((fact: unknown) => void)[][] = [];

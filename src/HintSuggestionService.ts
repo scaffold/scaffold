@@ -1,15 +1,15 @@
-import Context from './Context.ts';
-import Hash, { HashPrimitive } from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact, FactType } from './FactMeta.ts';
 import { CollateralHint } from './collateralMessages.ts';
-import FactService from './FactService.ts';
+import { FactService } from './FactService.ts';
 import { mapPut } from './util/map.ts';
 
 export interface HintProvider {
   suggestNext(params: Uint8Array, hints: Uint8Array[]): Uint8Array[];
 }
 
-export default class HintSuggestionService {
+export class HintSuggestionService {
   private providers = new Map<HashPrimitive, HintProvider[]>();
 
   constructor(private ctx: Context) {}

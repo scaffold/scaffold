@@ -1,4 +1,4 @@
-export default class Distribution {
+export class Distribution {
   private n = 0;
   private s_1 = 0;
   private s_2 = 0;

@@ -16,7 +16,7 @@ secp.etc.hmacSha256Sync = (key, ...msgs) => {
   return new Uint8Array(algo.digest());
 };
 
-export default secp;
+export { secp };
 
 // // We need this until https://github.com/paulmillr/noble-secp256k1/pull/100
 // import { etc } from 'https://deno.land/x/secp256k1@2.0.0/index.ts';

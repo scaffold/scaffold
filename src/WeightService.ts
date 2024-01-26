@@ -1,10 +1,10 @@
-import Context from './Context.ts';
+import { Context } from './Context.ts';
 import { BlockFact, FactSource } from './FactMeta.ts';
-import ContractClassifierService from './ContractClassifierService.ts';
-import BlockService, { BASE_WORK } from './BlockService.ts';
+import { ContractClassifierService } from './ContractClassifierService.ts';
+import { BASE_WORK, BlockService } from './BlockService.ts';
 import { bigintMax } from './util/bigint.ts';
 import { frontierHash } from './constants.ts';
-import Hash from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { ZERO_HASH } from './util/Hash.ts';
@@ -56,7 +56,7 @@ const makeCache = (): Cache => ({
   voterWeight: new Map(),
 });
 
-export default class WeightService {
+export class WeightService {
   constructor(private ctx: Context) {}
 
   public getAncestorWeight(fact: BlockFact, cache = makeCache()) {

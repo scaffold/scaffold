@@ -1,8 +1,9 @@
-import NetworkProvider, {
+import {
   ConnectionProvider,
+  NetworkProvider,
   SignalingDriver,
 } from '../src/NetworkProvider.ts';
-import Hash from '../src/util/Hash.ts';
+import { Hash } from '../src/util/Hash.ts';
 import { TimeProvider } from '../src/Config.ts';
 
 class TimerSet {
@@ -28,7 +29,7 @@ interface Server extends ConnectionProvider {
   closeHandler?(): void;
 }
 
-export default class MockNetworkProvider implements NetworkProvider {
+export class MockNetworkProvider implements NetworkProvider {
   public protocols = 'mock';
 
   private servers = new Map<string, Server>();

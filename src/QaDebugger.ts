@@ -1,9 +1,9 @@
-import Context from './Context.ts';
-import Hash from './util/Hash.ts';
+import { Context } from './Context.ts';
+import { Hash } from './util/Hash.ts';
 import { Verifier } from './messages.ts';
 import * as hashes from './constants.ts';
 
-export default class QaDebugger {
+export class QaDebugger {
   private debuggers: Map<string, {
     contractName: string;
     paramDebugger?: (params: Uint8Array) => any;
