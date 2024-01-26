@@ -37,7 +37,9 @@ export class DataContract implements ContractProvider {
           driver.requireBody(Hash.random().toBytes());
         }
       } else {
-        driver.ingenerable();
+        driver.ingenerable(
+          `We don't know any data matching the specified hash!`,
+        );
       }
     } else if (driver.type === ComputationType.Contract) {
       const body = driver.getBody();
@@ -52,7 +54,9 @@ export class DataContract implements ContractProvider {
           ),
           Hash.fromBytes(body),
         );
-      valid ? driver.pass() : driver.fail();
+      valid
+        ? driver.pass()
+        : driver.fail(`Given data doesn't hash to the correct value!`);
     } else {
       throw new Error(`Invalid driver type!`);
     }

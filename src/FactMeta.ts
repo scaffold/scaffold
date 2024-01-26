@@ -67,6 +67,8 @@ export type FactBase = {
   collateralizations: Collateralization[];
   validities: Map<HashPrimitive, DetailVote>;
 
+  visitedAt: number;
+  visitedBy?: string;
   references: number;
 
   backtrace?: string;

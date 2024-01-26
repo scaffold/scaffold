@@ -1,12 +1,19 @@
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
-import { FactSource, FactType } from './FactMeta.ts';
+import { Fact, FactSource, FactType } from './FactMeta.ts';
 import { FactService, invalidFact } from './FactService.ts';
 import { frontierHash } from './constants.ts';
 import { Hash } from './util/Hash.ts';
 
 export class GarbageCollectionService {
+  private tick = 0;
+
   constructor(private ctx: Context) {}
+
+  public markVisited(fact: Fact) {
+    fact.visitedAt = this.tick++;
+    fact.visitedBy = new Error().stack;
+  }
 
   public collect() {
     const drop = this.ctx.get(FactService).getSize() -
@@ -50,14 +57,27 @@ export class GarbageCollectionService {
       },
     );
 
-    if (candidates.length > 0) {
-      const sel = candidates[Math.floor(Math.random() * candidates.length)];
-      if (sel[1] === invalidFact) {
-        this.ctx.get(FactService).getAll().delete(sel[0]);
-      } else {
-        console.log('DROP', candidates.length, sel[0]);
-        this.ctx.get(FactService).forget(sel[1]);
+    let bestCandidate: Fact | undefined;
+    for (const [_key, cd] of candidates) {
+      if (
+        cd !== invalidFact &&
+        (bestCandidate === undefined || cd.visitedAt < bestCandidate.visitedAt)
+      ) {
+        bestCandidate = cd;
       }
     }
+    if (bestCandidate !== undefined) {
+      this.ctx.get(FactService).forget(bestCandidate);
+    }
+
+    // if (candidates.length > 0) {
+    //   const sel = candidates[Math.floor(Math.random() * candidates.length)];
+    //   if (sel[1] === invalidFact) {
+    //     this.ctx.get(FactService).getAll().delete(sel[0]);
+    //   } else {
+    //     console.log('DROP', candidates.length, sel[0]);
+    //     this.ctx.get(FactService).forget(sel[1]);
+    //   }
+    // }
   }
 }

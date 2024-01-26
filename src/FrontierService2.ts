@@ -169,7 +169,7 @@ export class FrontierService2 {
 
       let ptr = vote;
       do {
-        const next = this.ctx.get(BlockService).get(ptr, false);
+        const next = this.ctx.get(BlockService).get(ptr);
         if (next === undefined) {
           console.error(inputs);
           throw new Error(`Unconnected inputs!`);

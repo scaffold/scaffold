@@ -18,10 +18,17 @@ import {
   BurdenOfProof,
   ComputationDriver,
   ComputationType,
-  COMPUTE_FAIL_FLAG,
-  COMPUTE_PASS_FLAG,
 } from './ComputationMeta.ts';
 import { CollateralHint } from './collateralMessages.ts';
+
+const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
+class VerificationException extends Error {
+  constructor(
+    msg: string,
+  ) {
+    super(msg);
+  }
+}
 
 export class VerificationService {
   private extraContractIncentive = new Map<HashPrimitive, number>();
@@ -67,7 +74,7 @@ export class VerificationService {
           });
           try {
             await special.compute(driver, this.ctx);
-            await driver.finalize(COMPUTE_PASS_FLAG);
+            await driver.finalize(VERIFICATION_SUCCESS_FLAG);
           } catch (err) {
             await driver.finalize(err);
           }
@@ -112,7 +119,7 @@ export class VerificationService {
               },
               driver,
             );
-            await driver.finalize(COMPUTE_PASS_FLAG);
+            await driver.finalize(VERIFICATION_SUCCESS_FLAG);
           } catch (err) {
             await driver.finalize(err);
           }
@@ -199,7 +206,9 @@ export class VerificationService {
           return;
         }
         if (!arrEquals(block.bodies[groupIdx], data)) {
-          throw COMPUTE_FAIL_FLAG;
+          throw new VerificationException(
+            `requireBody(...) failed - the block's body does not match the contract's specification!`,
+          );
         }
       },
       requireOutput: (output: BlockOutput) => {
@@ -212,16 +221,22 @@ export class VerificationService {
             return;
           }
         }
-        throw COMPUTE_FAIL_FLAG;
+        throw new VerificationException(
+          `requireOutput(...) failed - there aren't any block outputs matching the contract's specification!`,
+        );
       },
       requireTimestampGte: (timestamp: bigint) => {
         if (block.timestamp < timestamp) {
-          throw COMPUTE_FAIL_FLAG;
+          throw new VerificationException(
+            `requireTimestampGte(...) failed - the block's timestamp is less than contract's specification!`,
+          );
         }
       },
       requireSignature: (publicKey) => {
         if (!this.ctx.get(FactService).verify(block, publicKey)) {
-          throw COMPUTE_FAIL_FLAG;
+          throw new VerificationException(
+            `requireSignature(...) failed - the block's signature does not match the contract's specification!`,
+          );
         }
       },
       emitCorrect: () => {
@@ -241,10 +256,8 @@ export class VerificationService {
 
         const verifier = { contractHash: contractHash, params };
         for (const hash of block.refs) {
-          const ref = await this.ctx.get(BlockService).waitForBlock(
-            hash,
-            workerDriver.done.signal,
-          );
+          const ref = await this.ctx.get(BlockService)
+            .waitForBlock(hash, workerDriver.done.signal);
 
           const groupIdx = await this.ctx.get(BlockService)
             .getGroupIndex(ref, verifier, workerDriver.done.signal);
@@ -253,7 +266,10 @@ export class VerificationService {
             return ref.bodies[groupIdx];
           }
         }
-        throw COMPUTE_FAIL_FLAG;
+
+        throw new VerificationException(
+          `request(...) failed - no refs match the specified verifier!`,
+        );
       },
 
       fulfills: (_block: BlockFact, _outputIdx: number) => {
@@ -314,12 +330,16 @@ export class VerificationService {
           }
         }
 
-        throw COMPUTE_FAIL_FLAG;
+        throw new VerificationException(
+          `getInputSource(...) failed - there aren't enough inputs matching the contract's specification!`,
+        );
       },
 
       requireFrontierLevel(level) {
         if (block.frontierParams.level !== level) {
-          throw COMPUTE_FAIL_FLAG;
+          throw new VerificationException(
+            `requireFrontierLevel(...) failed - the block's frontier level does not match the contract's specification!`,
+          );
         }
       },
 
@@ -341,10 +361,10 @@ export class VerificationService {
       // },
 
       pass() {
-        throw COMPUTE_PASS_FLAG;
+        throw VERIFICATION_SUCCESS_FLAG;
       },
-      fail() {
-        throw COMPUTE_FAIL_FLAG;
+      fail(msg) {
+        throw new VerificationException(msg ?? `fail() called!`);
       },
 
       offsetCanonicality(offset: bigint) {
@@ -358,7 +378,7 @@ export class VerificationService {
       finalize: async (err: unknown) => {
         workerDriver.pauseTimer(`finalize()`);
 
-        const isValid = err === COMPUTE_PASS_FLAG;
+        const isValid = err === VERIFICATION_SUCCESS_FLAG;
         if (isValid) {
           if (requireInputCount !== undefined) {
             let count = 0;
@@ -372,12 +392,14 @@ export class VerificationService {
                   .areVerifiersEqual(output.verifier, verifier) &&
                 ++count > requireInputCount
               ) {
-                throw COMPUTE_FAIL_FLAG;
+                break;
               }
             }
 
             if (count !== requireInputCount) {
-              throw COMPUTE_FAIL_FLAG;
+              throw new VerificationException(
+                `finalize(...) failed - there's too many inputs matching the contract's specification!`,
+              );
             }
           }
         } else {

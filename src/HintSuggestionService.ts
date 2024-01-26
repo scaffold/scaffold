@@ -44,7 +44,7 @@ export class HintSuggestionService {
     if ('CollateralHintInputHash' in hint) {
       if (rest.length === 0) {
         const input = block.inputs[hint.CollateralHintInputHash.inputIdx];
-        const inBlock = this.ctx.get(FactService).get(input.blockHash, false);
+        const inBlock = this.ctx.get(FactService).get(input.blockHash);
         return inBlock !== undefined ? [inBlock.data] : [];
       } else {
         throw new Error(`Invalid request!`);

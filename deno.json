@@ -13,7 +13,27 @@
     ]
   },
   "lint": {
-    "exclude": ["avro", "dist", "tests/avro"]
+    "exclude": ["avro", "dist", "tests/avro"],
+    "rules": {
+      "tags": ["recommended"],
+      "include": [
+        "ban-untagged-todo",
+        "camelCase",
+        "default-param-last",
+        "eqeqeq",
+        "guard-for-in",
+        "no-console",
+        "no-const-assign",
+        "no-eval",
+        "no-external-import",
+        "no-non-null-asserted-optional-chain",
+        "no-self-compare",
+        "no-sparse-arrays",
+        "prefer-ascii",
+        "single-var-declarator"
+      ],
+      "exclude": []
+    }
   },
   "fmt": {
     "exclude": ["README.md", "avro", "dist"],

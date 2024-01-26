@@ -54,7 +54,7 @@ export class CollateralContract implements ContractProvider {
         const cmp = driver.compareBlockOrder(a.blockHash, b.blockHash) ||
           a.outputIdx - b.outputIdx;
         if (cmp >= 0) {
-          driver.fail();
+          driver.fail(`Collateral inputs aren't sorted!`);
         }
       }
     }

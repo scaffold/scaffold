@@ -60,7 +60,7 @@ export class FrontierChainService {
     let voteLevel = targVoteLevel;
     for (const fi of frontierInputs) {
       const level = fi.frontierParams.level + 2;
-      if (voteLevel < level) {
+      if (level > voteLevel) {
         voteLevel = level;
       }
     }
@@ -124,7 +124,7 @@ export class FrontierChainService {
       //   }
       //   res = next;
       // } while (res.frontierParams.level > voteLevel);
-      return res;
+      return ZERO_BLOCK;
     }
 
     if (res !== undefined) {

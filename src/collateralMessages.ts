@@ -50,7 +50,7 @@ const registry = {
       // After getHint() calls returning the above sequence of hints, the vote signifies the next getHint() or finalize() call.
       // VALID_CHALLENGE and ALL_VALID_CONTEST signify getHint(..., BurdenOfProof.Invalidation) being the next call.
       // INVALID_CHALLENGE and ONE_VALID_CONTEST signify getHint(..., BurdenOfProof.Validation) being the next call.
-      // FINAL_PASS signifies finalize(COMPUTE_PASS_FLAG) being the next call, meaning the contract passed.
+      // FINAL_PASS signifies finalize(VERIFICATION_SUCCESS_FLAG) being the next call, meaning the contract passed.
       // FINAL_FAIL signifies finalize([someErr]) being the next call, meaning the contract failed.
       // FINAL_CONTEST isn't used at the moment, but it would signify us knowing finalize() being the next call, as opposed to getHint(), but not knowing if the contract passed or failed.
       {

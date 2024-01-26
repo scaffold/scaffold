@@ -56,19 +56,12 @@ export interface ComputationDriver extends WorkerDriver {
 
   // setBurdenOfProof(on: BurdenOfProof): void; // You can't call this after getting the hint, because we want it to be the same for ALL hints for any given verifier.
   pass(): never;
-  fail(): never;
+  fail(msg?: string): never;
 
   offsetCanonicality(offset: bigint): void;
 
-  ingenerable(): void; // TODO: Maybe just throw an exception instead?
+  ingenerable(msg?: string): void; // TODO: Maybe just throw an exception instead?
 }
 
 // A contract CANNOT require inputting a specific block hash. It can request the block data, but this won't make it dependent on that block.
 // Note that a contract/generator can only read input IO addressed to its contractHash & params.
-
-// export const COMPUTE_VALIDATE_FLAG = Symbol('ComputeLauncher.Validate');
-// export const COMPUTE_INVALIDATE_FLAG = Symbol('ComputeLauncher.Invalidate');
-export const COMPUTE_PASS_FLAG = Symbol('ComputeLauncher.Pass');
-export const COMPUTE_FAIL_FLAG = Symbol('ComputeLauncher.Fail');
-export const COMPUTE_GENERABLE_FLAG = Symbol('ComputeLauncher.Generable');
-export const COMPUTE_INGENERABLE_FLAG = Symbol('ComputeLauncher.Ingenerable');

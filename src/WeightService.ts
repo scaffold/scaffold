@@ -207,7 +207,7 @@ export class WeightService {
     return getOrCreate(cache.canonicalParent, fact, () => {
       const parents = fact.outputClaims[fact.frontierOutputIdx];
 
-      let bestScore = 0n;
+      let bestScore = -1n;
       let bestParent: BlockFact | undefined;
       for (const claim of parents) {
         // TODO: Should this be based on the parent weight?

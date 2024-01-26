@@ -113,6 +113,8 @@ export class BlockService {
     // );
     // console.log(block);
 
+    const frontierVote = this.get(block.frontierVote, false);
+
     const meta: BlockMeta = {
       original: block,
 
@@ -127,7 +129,7 @@ export class BlockService {
         this.getClaims({ blockHash: base.hash, outputIdx: idx })
       ),
 
-      isCanonical: this.get(block.frontierVote, false)?.isCanonical !== false &&
+      isCanonical: frontierVote?.isCanonical !== false &&
         block.inputs.every((x) =>
           this.get(x.blockHash, false)?.isCanonical !== false
         ),
@@ -173,7 +175,6 @@ export class BlockService {
     // this.ctx.get(EpochInclusionProofService).popEips(fact);
 
     this.getVoters(fact.frontierVote).push(fact);
-    const frontierVote = this.get(fact.frontierVote, false);
     if (frontierVote !== undefined) {
       this.linkFrontier(frontierVote, fact);
     }
@@ -195,7 +196,7 @@ export class BlockService {
       claims.push(claim);
       this.ctx.get(MonitoringService).claimMonitor.callAll(input, claim);
 
-      const parent = this.get(input.blockHash);
+      const parent = this.get(input.blockHash, false);
       if (parent) {
         this.linkIo(parent, fact, input.outputIdx, idx);
 
@@ -332,11 +333,20 @@ export class BlockService {
       }
     }
 
+    let outputIdx = 0;
     for (const output of block.outputs) {
       if (Hash.equals(output.verifier.contractHash, collateralHash)) {
         const params = CollateralContractParams.decode(output.verifier.params);
         this.ctx.get(FactService).forgetCollateral(params.blockHash, block);
       }
+
+      this.ctx.get(GenerationService).removeInput({
+        block,
+        outputIdx,
+        amount: output.amount,
+      });
+
+      outputIdx++;
     }
   }
 
@@ -536,7 +546,7 @@ export class BlockService {
     let inputFreeMarketSum = BASE_WORK;
     if (
       block.inputs.every(({ blockHash, outputIdx }) => {
-        const block = this.get(blockHash);
+        const block = this.get(blockHash, false);
         if (block !== undefined) {
           const { amount, verifier } = block.outputs[outputIdx];
           inputSum += amount;
@@ -619,7 +629,7 @@ export class BlockService {
       );
       assert(maxCompetitorWork !== -Infinity);
       const delta = block.derivedWorkValue - maxCompetitorWork;
-      const inputBlock = this.get(input.blockHash);
+      const inputBlock = this.get(input.blockHash, false);
       const inputCanonicality = inputBlock === undefined
         ? delta
         : Math.min(delta, inputBlock.canonicalityOld);
@@ -644,7 +654,7 @@ export class BlockService {
     }
 
     for (const { blockHash } of block.inputs) {
-      const input = this.get(blockHash);
+      const input = this.get(blockHash, false);
       if (input !== undefined) {
         this.updateCollateral(input);
       }
@@ -677,8 +687,9 @@ export class BlockService {
       for (const claim of claims) {
         if (claim.block.canonicalityOld > 0) {
           sum += claim.block.derivedWorkValue /
-            claim.block.inputs.filter(({ blockHash }) => this.get(blockHash))
-              .length;
+            claim.block.inputs.filter(({ blockHash }) =>
+              this.get(blockHash, false)
+            ).length;
         }
       }
     }
@@ -694,7 +705,7 @@ export class BlockService {
     block.derivedWorkError = 0;
 
     const knownInputs = block.inputs
-      .map(({ blockHash }) => this.get(blockHash))
+      .map(({ blockHash }) => this.get(blockHash, false))
       .filter(Boolean);
     const errInc = err / knownInputs.length;
     for (const input of knownInputs) {
@@ -834,7 +845,7 @@ export class BlockService {
   private calculateMergeableProbability(block: BlockFact) {
     let prob = 1;
     for (const { blockHash, outputIdx } of block.inputs) {
-      const inBlock = this.get(blockHash);
+      const inBlock = this.get(blockHash, false);
       if (inBlock) {
         const claims = inBlock.outputClaims[outputIdx];
         const total = claims.reduce(

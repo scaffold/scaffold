@@ -30,13 +30,7 @@ import { KeyService } from './KeyService.ts';
 import { bin2hex } from './util/hex.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { CollateralHint } from './collateralMessages.ts';
-import {
-  ComputationDriver,
-  ComputationType,
-  COMPUTE_GENERABLE_FLAG,
-  COMPUTE_INGENERABLE_FLAG,
-  InputSource,
-} from './ComputationMeta.ts';
+import { ComputationDriver, ComputationType } from './ComputationMeta.ts';
 import { VerificationService } from './VerificationService.ts';
 import { mapPut } from './util/map.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
@@ -52,6 +46,13 @@ interface VerifierState {
   verifier: Verifier;
   unclaimedInputs: InputSpec[];
   running: RunState[];
+}
+
+const GENERATION_SUCCESS_FLAG = Symbol('GenerationService.Success');
+class GenerationException extends Error {
+  constructor(msg: string) {
+    super(msg);
+  }
 }
 
 export class GenerationService {
@@ -112,8 +113,6 @@ export class GenerationService {
   }
 
   private insertInput(verifierState: VerifierState, input: InputSpec) {
-    // Insert the input into the highest-
-
     const mergeable = verifierState.running.filter((run) =>
       run.isMergeable(input.block, input.outputIdx)
     );
@@ -184,7 +183,7 @@ export class GenerationService {
           });
           try {
             await special.compute(driver, this.ctx);
-            await driver.finalize(COMPUTE_GENERABLE_FLAG);
+            await driver.finalize(GENERATION_SUCCESS_FLAG);
           } catch (err) {
             await driver.finalize(err);
           }
@@ -224,7 +223,7 @@ export class GenerationService {
           });
           try {
             await localGenerator(driver, this.ctx);
-            await driver.finalize(COMPUTE_GENERABLE_FLAG);
+            await driver.finalize(GENERATION_SUCCESS_FLAG);
           } catch (err) {
             await driver.finalize(err);
           }
@@ -265,7 +264,7 @@ export class GenerationService {
                 },
                 driver,
               );
-              await driver.finalize(COMPUTE_GENERABLE_FLAG);
+              await driver.finalize(GENERATION_SUCCESS_FLAG);
             } catch (err) {
               await driver.finalize(err);
             }
@@ -373,7 +372,9 @@ export class GenerationService {
         } else {
           if (!arrEquals(body, data)) {
             // Ingenerable
-            throw COMPUTE_INGENERABLE_FLAG;
+            throw new GenerationException(
+              `requireBody(...) called multiple times with different bodies!`,
+            );
           }
         }
       },
@@ -392,7 +393,9 @@ export class GenerationService {
         // TODO: If we don't call this, maybe we don't necessarily need to sign the block?
         const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKey();
         if (!arrEquals(publicKey, selfPublicKey)) {
-          throw COMPUTE_INGENERABLE_FLAG;
+          throw new GenerationException(
+            `requireSignature(...) called with an unknown public key!`,
+          );
         }
       },
       emitCorrect: () => {
@@ -508,7 +511,9 @@ export class GenerationService {
           frontierLevel = level;
         } else if (frontierLevel !== level) {
           // Ingenerable
-          throw COMPUTE_INGENERABLE_FLAG;
+          throw new GenerationException(
+            `requireFrontierLevel(...) called multiple times with different levels!`,
+          );
         }
       },
 
@@ -530,23 +535,23 @@ export class GenerationService {
       // },
 
       pass() {
-        throw COMPUTE_GENERABLE_FLAG;
+        throw GENERATION_SUCCESS_FLAG;
       },
-      fail() {
-        throw COMPUTE_INGENERABLE_FLAG;
+      fail(msg) {
+        throw new GenerationException(msg ?? `fail() called!`);
       },
 
       offsetCanonicality(offset: bigint) {
         return todo();
       },
 
-      ingenerable: () => {
+      ingenerable: (msg) => {
         // Ingenerable
-        throw COMPUTE_INGENERABLE_FLAG;
+        throw new GenerationException(msg ?? `ingenerable() called!`);
       },
 
       finalize: async (err: unknown) => {
-        if (err !== COMPUTE_GENERABLE_FLAG) {
+        if (err !== GENERATION_SUCCESS_FLAG) {
           console.error(`Cannot generate: `, err);
           return;
         }

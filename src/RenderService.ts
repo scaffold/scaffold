@@ -56,8 +56,8 @@ export class RenderService {
   }
 
   private renderBlock(graph: Graph, block: BlockFact, isDeleted = false) {
-    const title = block.hash.toHex().slice(0, 8) + ' @ ' +
-      block.frontierParams.level;
+    const title = block.hash.toHex().slice(0, 8) + ' ^' +
+      block.frontierParams.level + ' @' + block.visitedAt;
 
     let props = 'DELETED';
     if (!isDeleted) {

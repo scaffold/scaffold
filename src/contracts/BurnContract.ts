@@ -6,6 +6,6 @@ export class BurnContract implements ContractProvider {
   public contractHash = burnHash;
 
   public compute(driver: ComputationDriver) {
-    driver.fail();
+    driver.fail(`A burn output cannot be spent`);
   }
 }

@@ -169,8 +169,12 @@ export class FactService {
     if (fact === invalidFact) {
       throw new Error(`Cannot get an ingesting or invalid fact!`);
     }
-    if (fact === undefined && request) {
-      this.ctx.get(DataService).request(hash);
+    if (request) {
+      if (fact !== undefined) {
+        this.ctx.get(GarbageCollectionService).markVisited(fact);
+      } else {
+        // this.ctx.get(DataService).request(hash);
+      }
     }
     return fact;
   }
@@ -478,6 +482,7 @@ export class FactService {
         () => new Map(),
       ),
 
+      visitedAt: 0,
       references: 0,
 
       backtrace: new Error().stack,
@@ -510,6 +515,7 @@ export class FactService {
       );
     }
 
+    this.ctx.get(GarbageCollectionService).markVisited(res);
     this.ctx.get(GarbageCollectionService).collect();
 
     this.writeToStorage(res);
