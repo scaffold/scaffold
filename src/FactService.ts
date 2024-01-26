@@ -351,6 +351,7 @@ export class FactService {
     if (fact.type === FactType.Block) {
       this.ctx.get(BlockService).forget(fact);
     }
+    this.ctx.get(NodeService).get(fact.signer)?.producedFacts.delete(fact);
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);
   }

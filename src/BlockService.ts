@@ -323,13 +323,10 @@ export class BlockService {
     }
 
     for (const input of block.inputs) {
-      const inputBlock = this.get(input.blockHash, false);
-      if (inputBlock !== undefined) {
-        const claims = inputBlock.outputClaims[input.outputIdx];
-        const idx = claims.findIndex((claim) => claim.block === block);
-        if (idx !== -1) {
-          claims.splice(idx, 1);
-        }
+      const claims = this.getClaims(input);
+      const idx = claims.findIndex((claim) => claim.block === block);
+      if (idx !== -1) {
+        claims.splice(idx, 1);
       }
     }
 
@@ -824,10 +821,7 @@ export class BlockService {
     // TODO: I think this is secure (resistant to collisions), but should verify
     return getOrCreate(
       this.claimsByOutput,
-      Hash.composePrimitives(
-        input.blockHash.toPrimitive(),
-        Hash.fromLiteral32(input.outputIdx).toPrimitive(),
-      ),
+      Hash.digestParts(input.blockHash, input.outputIdx).toPrimitive(),
       () => [],
     );
   }

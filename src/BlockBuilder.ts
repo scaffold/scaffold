@@ -372,7 +372,8 @@ export class BlockBuilder {
         if (fact.type !== FactType.Block) {
           throw new Error(`Invalid fact type!`);
         }
-        fact.persistentSources.push(draft);
+        // TODO: We need to enable this in a way that doesn't block the GC of inputs/refs
+        // fact.persistentSources.push(draft);
       },
     );
     if (draft.onBlock !== undefined) {
