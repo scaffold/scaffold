@@ -24,6 +24,8 @@ import { uniqueNamesGenerator } from '../deps.ts';
 import SignalingService from './SignalingService.ts';
 import ConnectionService from './ConnectionService.ts';
 import MonitoringService from './MonitoringService.ts';
+import { frontierHash } from './constants.ts';
+import GarbageCollectionService from './GarbageCollectionService.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
@@ -70,7 +72,7 @@ const zstdMagic = new Uint8Array([40, 181, 47, 253]);
 
 const sortKeys = true;
 
-const invalidFact: unique symbol = Symbol('FactService.invalidFact');
+export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
 export default class FactService {
   private factories: FactFactory[] = [];
@@ -128,6 +130,10 @@ export default class FactService {
 
   public getSize() {
     return this.facts.size;
+  }
+
+  public getAll() {
+    return this.facts;
   }
 
   public onIngest<Type extends FactType>(
@@ -189,12 +195,22 @@ export default class FactService {
     );
   }
 
-  public addCollateral(blockHash: Hash, collateralization: Collateralization) {
-    mapPut(this.collateralByHash, blockHash.toPrimitive(), () => [])
+  public addCollateral(hash: Hash, collateralization: Collateralization) {
+    mapPut(this.collateralByHash, hash.toPrimitive(), () => [])
       .push(collateralization);
     this.ctx.get(MonitoringService).collateralMonitor
-      .callAll(blockHash, collateralization);
+      .callAll(hash, collateralization);
   }
+  public forgetCollateral(hash: Hash, collateralBlock: BlockFact) {
+    const colls = mapPut(this.collateralByHash, hash.toPrimitive(), () => []);
+    const idx = colls.findIndex((coll) =>
+      coll.collateralBlock === collateralBlock
+    );
+    if (idx !== -1) {
+      colls.splice(idx, 1);
+    }
+  }
+
   public getValidity(
     blockHash: Hash,
     hints: Uint8Array[],
@@ -328,6 +344,9 @@ export default class FactService {
     for (const cb of this.forgetListeners[fact.type]) {
       cb(fact);
     }
+    if (fact.type === FactType.Block) {
+      this.ctx.get(BlockService).forget(fact);
+    }
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);
   }
@@ -459,6 +478,8 @@ export default class FactService {
         () => new Map(),
       ),
 
+      references: 0,
+
       backtrace: new Error().stack,
     };
 
@@ -488,6 +509,8 @@ export default class FactService {
         res.hash.toHex(),
       );
     }
+
+    this.ctx.get(GarbageCollectionService).collect();
 
     this.writeToStorage(res);
 

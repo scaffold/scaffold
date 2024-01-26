@@ -111,6 +111,9 @@ interface Config {
 
   discardFutureBlocks: boolean;
 
+  // Start forgetting facts when there's too many.
+  targetFactCount: number;
+
   // Only use this for tests; it'll simply throw an error when we try to ingest one too many facts.
   limitFactCount: number;
 
@@ -163,6 +166,7 @@ export const makeDefaultConfig = () => ({
     BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
   discardFutureBlocks: false,
+  targetFactCount: 10,
   // limitFactCount: Infinity,
   limitFactCount: 100,
   allowSpecifiedFrontierOutputs: false,

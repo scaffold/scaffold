@@ -1,5 +1,5 @@
 import Context from './Context.ts';
-import { Graphviz } from '../dev_deps.ts';
+import { Graphviz } from 'https://esm.sh/@hpcc-js/wasm@2.15.3?target=esnext&pin=v135';
 import { BlockFact, Fact } from './FactMeta.ts';
 import FactService from './FactService.ts';
 import { mapPut } from './util/map.ts';
@@ -7,6 +7,7 @@ import { ZERO_BLOCK } from './BlockMeta.ts';
 import BlockService from './BlockService.ts';
 import { BlockInput } from './messages.ts';
 import WeightService from './WeightService.ts';
+import { FactType } from './FactMeta.ts';
 
 interface Graph {
   ids: Map<unknown, string>;
@@ -17,20 +18,31 @@ interface Graph {
 export default class RenderService {
   private graphviz: ReturnType<typeof Graphviz['load']>;
 
+  private extra: BlockFact[] = [];
+
   constructor(private ctx: Context) {
     this.graphviz = Graphviz.load();
+
+    ctx.get(FactService).onForget(
+      FactType.Block,
+      (block) => this.extra.push(block),
+    );
   }
 
   public async renderSvg() {
     const graph: Graph = { ids: new Map(), nextId: 1, lines: [] };
 
     graph.lines.push(`digraph G {`);
-    graph.lines.push(`rankdir=RL;`);
-    // graph.lines.push(`size="8,5"`);
-    graph.lines.push(`node [shape=box]`);
+    graph.lines.push(`  rankdir=RL;`);
+    graph.lines.push(`  graph [size="1,1"];`);
+    graph.lines.push(`  node [shape=box];`);
 
     for (const block of this.ctx.get(FactService).hackyGetBlocksMatching()) {
       this.renderBlock(graph, block);
+    }
+
+    for (const block of this.extra) {
+      this.renderBlock(graph, block, true);
     }
 
     graph.lines.push(`}`);
@@ -38,25 +50,31 @@ export default class RenderService {
     const graphviz = await this.graphviz;
     // Formats: "svg" | "dot" | "json" | "dot_json" | "xdot_json" | "plain" | "plain-ext"
     // Engines: "circo" | "dot" | "fdp" | "sfdp" | "neato" | "osage" | "patchwork" | "twopi" | "nop" | "nop2"
-    return graphviz.layout(graph.lines.join('\n'), 'svg', 'dot');
+    let svg = graphviz.layout(graph.lines.join('\n'), 'svg', 'dot');
+    svg = svg.replace(/^.*<svg width="[^"]+" height="[^"]+"/im, '<svg');
+    return svg;
   }
 
-  private renderBlock(graph: Graph, block: BlockFact) {
+  private renderBlock(graph: Graph, block: BlockFact, isDeleted = false) {
     const title = block.hash.toHex().slice(0, 8) + ' @ ' +
       block.frontierParams.level;
-    const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
-    const props = Object.entries({
-      self: `${selfWeight.minWeight}-${selfWeight.maxWeight}`,
-      anc: this.ctx.get(WeightService).getAncestorWeight(block).minWeight,
-      desc: this.ctx.get(WeightService).getDescendantWeight(block).minWeight,
-      tree: block.frontierDetail.treeWeights.join(','),
-      canon: this.ctx.get(WeightService).getCanonicality(block),
-    }).map(([key, val]) => `${key}: ${val}`).join('\n');
+
+    let props = 'DELETED';
+    if (!isDeleted) {
+      const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
+      props = Object.entries({
+        self: `${selfWeight.minWeight}-${selfWeight.maxWeight}`,
+        anc: this.ctx.get(WeightService).getAncestorWeight(block).minWeight,
+        desc: this.ctx.get(WeightService).getDescendantWeight(block).minWeight,
+        tree: block.frontierDetail.treeWeights.join(','),
+        canon: this.ctx.get(WeightService).getCanonicality(block),
+      }).map(([key, val]) => `${key}: ${val}`).join('\n');
+    }
 
     const bId = this.getId(graph, block);
     const attrs = this.renderAttrs({
       label: `${title}\n${props}`,
-      // color: 'black',
+      color: isDeleted ? 'red' : 'black',
     });
 
     graph.lines.push(`  ${bId} ${attrs};`);

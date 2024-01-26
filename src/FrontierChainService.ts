@@ -57,6 +57,14 @@ export default class FrontierChainService {
       ),
     );
 
+    let voteLevel = targVoteLevel;
+    for (const fi of frontierInputs) {
+      const level = fi.frontierParams.level + 2;
+      if (voteLevel < level) {
+        voteLevel = level;
+      }
+    }
+
     const externalInputs = new Set<BlockFact | typeof ZERO_BLOCK>([ZERO_BLOCK]);
 
     for (const { block } of inputs) {
@@ -66,7 +74,8 @@ export default class FrontierChainService {
     }
     for (const fi of frontierInputs) {
       if (fi.frontierVoteBlock === undefined) {
-        throw new Error(`Unconnected frontier chain!`);
+        // throw new Error(`Unconnected frontier chain!`);
+        return undefined;
       } else if (
         fi.frontierVoteBlock !== ZERO_BLOCK &&
         !frontierInputs.has(fi.frontierVoteBlock)
@@ -114,12 +123,12 @@ export default class FrontierChainService {
       //     break;
       //   }
       //   res = next;
-      // } while (res.frontierParams.level > targVoteLevel);
+      // } while (res.frontierParams.level > voteLevel);
       return res;
     }
 
     if (res !== undefined) {
-      if (res.frontierParams.level < targVoteLevel) {
+      if (res.frontierParams.level < voteLevel) {
         // Go to parent
         do {
           const next = this.ctx.get(WeightService).getCanonicalParent(res);
@@ -127,8 +136,8 @@ export default class FrontierChainService {
             break;
           }
           res = next;
-        } while (res.frontierParams.level < targVoteLevel);
-      } else if (res.frontierParams.level > targVoteLevel) {
+        } while (res.frontierParams.level < voteLevel);
+      } else if (res.frontierParams.level > voteLevel) {
         // Go to best voter
         // do {
         //   const next = this.ctx.get(WeightService).getCanonicalVoter(res);
@@ -136,7 +145,7 @@ export default class FrontierChainService {
         //     break;
         //   }
         //   res = next;
-        // } while (res.frontierParams.level > targVoteLevel);
+        // } while (res.frontierParams.level > voteLevel);
       }
     }
 
@@ -200,7 +209,8 @@ export default class FrontierChainService {
     return this.recurse(block, (el, queue) => {
       switch (el.frontierVoteBlock) {
         case undefined:
-          throw new Error(`Unconnected frontier chain!`);
+          // throw new Error(`Unconnected frontier chain!`);
+          break;
         case ZERO_BLOCK:
           break;
         default:

@@ -310,6 +310,36 @@ export default class BlockService {
     return fact;
   }
 
+  public forget(block: BlockFact) {
+    for (const voter of block.frontierVoters) {
+      voter.frontierVoteBlock = undefined;
+    }
+
+    const voters = this.getVoters(block.frontierVote);
+    const idx = voters.indexOf(block);
+    if (idx !== -1) {
+      voters.splice(idx, 1);
+    }
+
+    for (const input of block.inputs) {
+      const inputBlock = this.get(input.blockHash, false);
+      if (inputBlock !== undefined) {
+        const claims = inputBlock.outputClaims[input.outputIdx];
+        const idx = claims.findIndex((claim) => claim.block === block);
+        if (idx !== -1) {
+          claims.splice(idx, 1);
+        }
+      }
+    }
+
+    for (const output of block.outputs) {
+      if (Hash.equals(output.verifier.contractHash, collateralHash)) {
+        const params = CollateralContractParams.decode(output.verifier.params);
+        this.ctx.get(FactService).forgetCollateral(params.blockHash, block);
+      }
+    }
+  }
+
   private getFrontierMeta(block: Block) {
     const cb = (output: BlockOutput) =>
       Hash.equals(output.verifier.contractHash, frontierHash);
