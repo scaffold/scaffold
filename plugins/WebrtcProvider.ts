@@ -11,10 +11,16 @@ export class WebrtcProvider implements NetworkProvider {
       [
         'https://raw.githubusercontent.com/pradt2/always-online-stun/master/valid_hosts.txt',
         'https://raw.githubusercontent.com/pradt2/always-online-stun/master/valid_ipv4s.txt',
-      ].map((url) => fetch(url).then((resp) => resp.text())),
+      ].map((url) =>
+        fetch(url).then((resp) => resp.text(), (err) => {
+          console.warn(err);
+          return '';
+        })
+      ),
     ).then((resps) =>
       resps
-        .flatMap((resp) => resp.trim().split('\n'))
+        .flatMap((resp) => resp.split('\n'))
+        .filter(Boolean)
         .map((host) => ({ urls: `stun:${host}`, order: Math.random() }))
         .sort((a, b) => a.order - b.order)
     );

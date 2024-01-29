@@ -7,6 +7,7 @@ import { AccountContract } from './AccountContract.ts';
 import { CollateralContract } from './CollateralContract.ts';
 import { BurnContract } from './BurnContract.ts';
 import { TrueContract } from './TrueContract.ts';
+import { CollatzContract } from './CollatzContract.ts';
 
 export const defaultContractProviders: ContractProvider[] = [
   new BurnContract(),
@@ -17,4 +18,5 @@ export const defaultContractProviders: ContractProvider[] = [
   new FrontierContract(),
   new CollateralContract(),
   new TrueContract(),
+  new CollatzContract(),
 ];

@@ -15,7 +15,7 @@ import { CHAR_0 } from 'https://deno.land/std@0.181.0/path/_constants.ts';
 
 const targLevel = 0;
 
-export const NUM_FRONTIER_LEVELS = 64;
+export const NUM_FRONTIER_LEVELS = 256;
 
 if (frontierInputCount !== 2) {
   throw new Error(`FrontierService2.getRoot() needs to handle this case`);

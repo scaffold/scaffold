@@ -33,6 +33,7 @@ export interface InputSpec {
   outputIdx: number;
   amount: bigint;
 }
+export type OutputSpec = Omit<BlockOutput, 'groupIdx'>;
 
 // export interface FrontierSpec {
 //   level: number;
@@ -42,10 +43,11 @@ export interface InputSpec {
 export interface BlockDraft {
   frontierVote?: BlockFact | typeof ZERO_BLOCK;
   frontierLevel?: number;
+  frontierOutputAmount?: bigint;
   refs?: BlockFact[];
   inputs?: InputSpec[];
   satisfies?: (Verifier & { detail?: Uint8Array })[];
-  outputs?: Omit<BlockOutput, 'groupIdx'>[];
+  outputs?: OutputSpec[];
   body?: Uint8Array;
   // frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
@@ -90,6 +92,7 @@ export class BlockBuilder {
 
     let frontierVoteBlock: BlockFact | typeof ZERO_BLOCK | undefined;
     let frontierLevel: number | undefined;
+    let frontierOutputAmount = 10n;
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
@@ -111,6 +114,10 @@ export class BlockBuilder {
         } else if (frontierLevel !== draft.frontierLevel) {
           throw new Error(`Cannot merge different frontier levels!`);
         }
+      }
+
+      if (draft.frontierOutputAmount !== undefined) {
+        frontierOutputAmount += draft.frontierOutputAmount;
       }
 
       if (draft.refs !== undefined) {
@@ -152,7 +159,6 @@ export class BlockBuilder {
     const addFrontierOutput = !outputs.some((output) =>
       Hash.equals(output.verifier.contractHash, frontierHash)
     );
-    const frontierOutputAmount = 10n;
 
     if (addFrontierOutput) {
       ioDelta -= frontierOutputAmount;
@@ -311,7 +317,6 @@ export class BlockBuilder {
           amount: 0n,
           detail: satisfaction.detail ?? EMPTY_ARR,
         }],
-        timeout: 0,
         onBlock: (block, groupIdx) => {
           if (published) {
             throw new Error(`Should not publish twice!`);
@@ -373,6 +378,7 @@ export class BlockBuilder {
           throw new Error(`Invalid fact type!`);
         }
         // TODO: We need to enable this in a way that doesn't block the GC of inputs/refs
+        // WeakRef?
         // fact.persistentSources.push(draft);
       },
     );

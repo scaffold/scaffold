@@ -1,10 +1,16 @@
-import { BlockBuilder, BlockDraft, InputSpec } from './BlockBuilder.ts';
+import {
+  BlockBuilder,
+  BlockDraft,
+  InputSpec,
+  OutputSpec,
+} from './BlockBuilder.ts';
 import { BlockService } from './BlockService.ts';
 import {
   accountHash,
   frontierHash,
   generatorHash,
   rootHash,
+  trueHash,
 } from './constants.ts';
 import { Context } from './Context.ts';
 import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
@@ -15,7 +21,7 @@ import {
   BlockOutput,
   Verifier,
 } from './messages.ts';
-import { arrConcat, arrEquals } from './util/buffer.ts';
+import { arrConcat, arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { WorkerExecutor } from './WorkerExecutor.ts';
@@ -66,6 +72,10 @@ export class GenerationService {
   }
 
   public addInput(input: InputSpec) {
+    if (input.amount < 0n) {
+      return;
+    }
+
     const verifier = input.block.outputs[input.outputIdx].verifier;
 
     if (
@@ -296,7 +306,7 @@ export class GenerationService {
     let inputsAreFixed = false;
     const refs: BlockFact[] = [];
     // const satisfies:Verifier=[];
-    const outputs: BlockOutput[] = [];
+    const outputs: OutputSpec[] = [];
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
@@ -378,7 +388,7 @@ export class GenerationService {
           }
         }
       },
-      requireOutput: (output: BlockOutput) => {
+      requireOutput: (output: OutputSpec) => {
         if (workerDriver.done.signal.aborted) {
           return;
         }
@@ -584,15 +594,29 @@ export class GenerationService {
         // If this property was never retrieved, we can assume the generator created a correct block.
         const isCorrect = emitCorrect ?? true;
 
+        const inputs = [...verifierInputs, ...otherInputs];
+
+        const desiredReward = this.ctx.config.getGenerationReward(
+          state.verifierState.verifier,
+          workerDriver.getCpuTime() / 1000,
+        );
+        const depositedReward = inputs.reduce(
+          (acc, input) => acc + input.amount,
+          0n,
+        );
+
         const blockDraft: BlockDraft = {
           refs,
-          inputs: [...verifierInputs, ...otherInputs],
+          inputs,
           satisfies: verifierInputs.length
             ? undefined
             : [state.verifierState.verifier],
           outputs,
           body,
           frontierLevel,
+          frontierOutputAmount: depositedReward < desiredReward
+            ? depositedReward - desiredReward
+            : 0n,
           // timestampGte,
         };
 
@@ -600,7 +624,7 @@ export class GenerationService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Creating block...`,
         });
-        this.createBlock(state.verifierState.verifier, blockDraft, 0);
+        this.createBlock(state.verifierState.verifier, blockDraft);
         workerDriver.resumeTimer();
       },
     };
@@ -654,11 +678,7 @@ export class GenerationService {
     ) === 1;
   }
 
-  private createBlock(
-    verifier: Verifier,
-    draft: BlockDraft,
-    durationMs: number,
-  ) {
+  private createBlock(verifier: Verifier, draft: BlockDraft) {
     if (Hash.equals(verifier.contractHash, rootHash)) {
       // Special case for root contracts - don't publish the plaintext immediately.
       // This prevents others from stealing it and re-publishing it in their own block.

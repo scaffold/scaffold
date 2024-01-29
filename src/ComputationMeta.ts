@@ -3,6 +3,7 @@ import { BlockInput, BlockOutput } from './messages.ts';
 import { Hash } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
+import { OutputSpec } from './BlockBuilder.ts';
 
 export const enum ComputationType {
   Contract,
@@ -27,7 +28,7 @@ export interface ComputationDriver extends WorkerDriver {
   getHint(idx: number, bop: BurdenOfProof): Uint8Array; // Only valid if this is a contract
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
-  requireOutput(output: BlockOutput): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
+  requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: bigint): MaybePromise<void>;
   requireSignature(publicKey: Uint8Array): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract

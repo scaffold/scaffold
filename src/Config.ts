@@ -162,8 +162,8 @@ export const makeDefaultConfig = () => ({
   executionProviders: [],
   contractProviders: defaultContractProviders,
   approxComputePricePerSecond: 1000n,
-  getGenerationReward: (_verifier, computeTimeSeconds) =>
-    BigInt(computeTimeSeconds * 1e6) + 1000n,
+  getGenerationReward: (_verifier, computeTimeSeconds) => 0n,
+  // BigInt(computeTimeSeconds * 1e6) + 1000n,
   getDepositIncentive: (_verifier) => 1n,
   discardFutureBlocks: false,
   targetFactCount: 1000,

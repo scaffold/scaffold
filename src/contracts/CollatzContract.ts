@@ -8,6 +8,7 @@ export class CollatzContract implements ContractProvider {
 
   public async compute(driver: ComputationDriver) {
     const { num } = collatzMessages.Params.decode(driver.getParams());
+    console.log(num);
 
     let answer: collatzMessages.Answer;
     if (num === 1n) {

@@ -239,9 +239,7 @@ export class VerificationService {
           );
         }
       },
-      emitCorrect: () => {
-        throw new Error(`Cannot call emitCorrect() from a contract!`);
-      },
+      emitCorrect: () => true,
 
       notify: (_contractHash, _params) => {},
       request: async (contractHash, params) => {

@@ -8,6 +8,7 @@ import { todo } from './util/functional.ts';
 import { BlockService } from './BlockService.ts';
 import { FrontierService2 } from './FrontierService2.ts';
 import { error } from './util/functional.ts';
+import { frontierInputCount } from './contracts/FrontierContract.ts';
 
 const targVoteLevel = 4;
 
@@ -56,6 +57,10 @@ export class FrontierChainService {
           : []
       ),
     );
+
+    if (frontierInputs.size > frontierInputCount) {
+      return undefined;
+    }
 
     let voteLevel = targVoteLevel;
     for (const fi of frontierInputs) {

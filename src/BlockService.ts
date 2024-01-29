@@ -118,7 +118,7 @@ export class BlockService {
     const meta: BlockMeta = {
       original: block,
 
-      verifiers: [],
+      verifiers: block.bodies.map(() => undefined),
 
       receivedTimestamp: this.ctx.config.timeProvider.now(),
       flags: BlockFlag.None,
@@ -215,6 +215,14 @@ export class BlockService {
       if (fact.bodies[output.groupIdx] === undefined) {
         throw new Error(
           `Invalid groupIdx ${output.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
+        );
+      }
+      if (
+        output.amount < 0n &&
+        !Hash.equals(output.verifier.contractHash, frontierHash)
+      ) {
+        throw new Error(
+          `Negative output amounts are only allowed on frontier outputs!`,
         );
       }
 
