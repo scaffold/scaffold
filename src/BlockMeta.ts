@@ -96,4 +96,6 @@ export interface BlockMeta {
   // If, for example, we're just building on an uncanonical input, there's nothing we can do but ignore the source until/unless that changes.
   // Or, for example, we're double-claiming an output whose other claim is very well established.
   persistentSources: BlockDraft[];
+
+  // updateCbs: (() => void)[];
 }

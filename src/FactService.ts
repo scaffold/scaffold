@@ -26,6 +26,7 @@ import { ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { frontierHash } from './constants.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
+import { multimapPop } from './util/map.ts';
 
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
@@ -142,12 +143,34 @@ export class FactService {
   ) {
     this.ingestListeners[type].push(cb as (fact: unknown) => void);
   }
+  public offIngest<Type extends FactType>(
+    type: Type,
+    cb: (fact: Fact & { type: Type }) => void,
+  ) {
+    const idx = this.ingestListeners[type]
+      .lastIndexOf(cb as (fact: unknown) => void);
+    if (idx === -1) {
+      throw new Error(`Invalid listener`);
+    }
+    this.ingestListeners[type].splice(idx);
+  }
 
   public onForget<Type extends FactType>(
     type: Type,
     cb: (fact: Fact & { type: Type }) => void,
   ) {
     this.forgetListeners[type].push(cb as (fact: unknown) => void);
+  }
+  public offForget<Type extends FactType>(
+    type: Type,
+    cb: (fact: Fact & { type: Type }) => void,
+  ) {
+    const idx = this.forgetListeners[type]
+      .lastIndexOf(cb as (fact: unknown) => void);
+    if (idx === -1) {
+      throw new Error(`Invalid listener`);
+    }
+    this.forgetListeners[type].splice(idx);
   }
 
   // public async init() {
