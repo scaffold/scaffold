@@ -19,7 +19,7 @@ import { FsNodeHandle, WasiImpl } from './WasiImpl.ts';
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { JobMessage, WorkerComm } from './workerTypes.ts';
 import { JsWasiParams } from '../messages.ts';
-import { logger } from './logger.ts';
+import logger from './logger.ts';
 import { BaseImports } from './execJob.ts';
 import { makeClientUtils } from './clientUtils.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';

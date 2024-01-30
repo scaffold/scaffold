@@ -1,7 +1,7 @@
 import { WorkerChannelClient } from './WorkerChannel.ts';
 import { InitialMessage, JobMessage, WorkerComm } from './workerTypes.ts';
-import { execJob } from './execJob.ts';
-import { execJs } from './execJs.ts';
+import execJob from './execJob.ts';
+import execJs from './execJs.ts';
 import { arrEquals } from '../util/buffer.ts';
 
 const wasmMagic = new Uint8Array([0, 0x61, 0x73, 0x6D]);

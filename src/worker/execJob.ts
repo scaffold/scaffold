@@ -5,7 +5,7 @@ import { Hash } from '../util/Hash.ts';
 import { makeClientUtils } from './clientUtils.ts';
 import { makeWasi } from './jsWasiUtils.ts';
 import { jsLockHash, jsWasiHash, rootHash } from '../constants.ts';
-import { logger } from './logger.ts';
+import logger from './logger.ts';
 import { WasiExit } from './WasiImpl.ts';
 import { JsWasiParams } from '../messages.ts';
 // import { binaryen } from 'binaryen';
