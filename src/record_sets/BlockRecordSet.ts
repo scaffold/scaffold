@@ -1,8 +1,8 @@
-import { Context } from './Context.ts';
-import { BlockFact } from './FactMeta.ts';
-import { ReactiveRecordSet } from './util/ReactiveRecordSet.ts';
-import { FactService } from './FactService.ts';
-import { FactType } from './FactMeta.ts';
+import { Context } from '../Context.ts';
+import { BlockFact } from '../FactMeta.ts';
+import { ReactiveRecordSet } from '../util/ReactiveRecordSet.ts';
+import { FactService } from '../FactService.ts';
+import { FactType } from '../FactMeta.ts';
 
 export class BlockRecordSet implements ReactiveRecordSet<BlockFact> {
   constructor(private ctx: Context) {}
