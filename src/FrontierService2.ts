@@ -1,17 +1,22 @@
 import { BlockFact, FactSource } from './FactMeta.ts';
 import { Context } from './Context.ts';
-import { Hash, ZERO_HASH } from './util/Hash.ts';
+import { Hash, HASH_BITS, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BlockService } from './BlockService.ts';
 import { frontierHash } from './constants.ts';
 import { InputSpec } from './BlockBuilder.ts';
 import { WeightService } from './WeightService.ts';
-import { BlockOutput } from './messages.ts';
+import {
+  BlockOutput,
+  FrontierTreeIoBranch,
+  FrontierTreeIoEntry,
+} from './messages.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { todo } from './util/functional.ts';
 import { ClockService } from './ClockService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { error } from './util/functional.ts';
-import { CHAR_0 } from 'https://deno.land/std@0.181.0/path/_constants.ts';
+import { Verifier } from './messages.ts';
+import { mapPut } from './util/map.ts';
 
 const targLevel = 0;
 
@@ -118,6 +123,118 @@ export class FrontierService2 {
     }
 
     return weights;
+  }
+
+  public mergeTreeIo(inputs: { block: BlockFact; outputIdx?: number }[]) {
+    // left frontier tree -> left frontier input block -> right frontier tree -> right frontier input block
+
+    const consumedInputs = new Map<HashPrimitive, FrontierTreeIoBranch>();
+    const producedOutputs = new Map<HashPrimitive, FrontierTreeIoBranch>();
+
+    for (const input of inputs) {
+      if (input.outputIdx === input.block.frontierOutputIdx) {
+        this.iterateBranches(
+          input.block.frontierDetail.consumedInputsRoot,
+          (branch) => {
+            const key = Hash.digest(FrontierTreeIoBranch.encode(branch));
+            if (!producedOutputs.delete(key.toPrimitive())) {
+              mapPut(
+                consumedInputs,
+                key.toPrimitive(),
+                () => branch,
+                () => error(`This merge would double-spend an input!`),
+              );
+            }
+          },
+        );
+
+        this.iterateBranches(
+          input.block.frontierDetail.producedOutputsRoot,
+          (branch) => {
+            const key = Hash.digest(FrontierTreeIoBranch.encode(branch));
+            if (!consumedInputs.delete(key.toPrimitive())) {
+              mapPut(
+                producedOutputs,
+                key.toPrimitive(),
+                () => branch,
+                () => error(`This merge would doubly-create an output!`),
+              );
+            }
+          },
+        );
+
+        for (const input2 of input.block.inputs) {
+          const inputBlock = this.ctx.get(BlockService)
+            .get(input2.blockHash, false);
+          if (inputBlock === undefined) {
+            throw new Error(`Unknown frontier child input!`);
+          }
+
+          const branch = {
+            path: Hash.digest(
+              Verifier.encode(inputBlock.outputs[input2.outputIdx].verifier),
+            ).toBigint() ^ (1n << BigInt(HASH_BITS)),
+            childHash: input2.blockHash,
+            outputIdx: input2.outputIdx,
+            amount: inputBlock.outputs[input2.outputIdx].amount,
+          };
+
+          const key = Hash.digest(FrontierTreeIoBranch.encode(branch));
+          if (!producedOutputs.delete(key.toPrimitive())) {
+            mapPut(
+              consumedInputs,
+              key.toPrimitive(),
+              () => branch,
+              () => error(`This merge would double-spend an input!`),
+            );
+          }
+        }
+
+        let outputIdx = 0;
+        for (const output2 of input.block.outputs) {
+          const branch = {
+            path: Hash.digest(Verifier.encode(output2.verifier)).toBigint() ^
+              (1n << BigInt(HASH_BITS)),
+            childHash: input.block.hash,
+            outputIdx: outputIdx++,
+            amount: output2.amount,
+          };
+
+          const key = Hash.digest(FrontierTreeIoBranch.encode(branch));
+          if (!consumedInputs.delete(key.toPrimitive())) {
+            mapPut(
+              producedOutputs,
+              key.toPrimitive(),
+              () => branch,
+              () => error(`This merge would doubly-create an output!`),
+            );
+          }
+        }
+      }
+    }
+
+    return {
+      consumedInputsRoot: { branches: [...consumedInputs.values()] },
+      producedOutputsRoot: { branches: [...producedOutputs.values()] },
+    };
+  }
+
+  private iterateBranches(
+    entry: FrontierTreeIoEntry,
+    cb: (branch: FrontierTreeIoBranch) => void,
+  ) {
+    for (const branch of entry.branches) {
+      if (branch.outputIdx === -1) {
+        // TODO: Process childHash as another FrontierTreeIoEntry
+        // Child entries will need to be passed the parent path(s), so they can add it into their key hashes.
+        todo();
+      } else if (branch.outputIdx < 0) {
+        throw new Error(`Invalid outputIdx: ${branch.outputIdx}`);
+      } else {
+        // Process as a block IO entry
+        cb(branch);
+      }
+    }
   }
 
   public getBlockVote(inputs: { block: BlockFact; outputIdx?: number }[]) {

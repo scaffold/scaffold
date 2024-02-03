@@ -57,3 +57,6 @@ assert(arrEquals(bigint2bin(263n), new Uint8Array([7, 1])));
 
 const t = 13473837727108541341n;
 assert(bin2bigint(bigint2bin(t, 8)) === t);
+
+// Check that adding extra zeros doesn't change the number
+assert(bin2bigint(new Uint8Array([5, 0, 0, 0, 0])) === 5n);

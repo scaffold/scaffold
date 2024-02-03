@@ -1,0 +1,19 @@
+import { fs } from '../dev_deps.ts';
+import { MaybePromise } from '../src/util/types.ts';
+
+export const bootstrapFromGlobs = async (
+  globs: (string | URL)[],
+  emitData: (name: string, data: Uint8Array) => MaybePromise<void>,
+) => {
+  let count = 0;
+
+  for (const glob of globs) {
+    for await (const file of fs.expandGlob(glob, { includeDirs: false })) {
+      const data = await Deno.readFile(file.path);
+      await emitData(file.name, data);
+      count++;
+    }
+  }
+
+  return { count };
+};

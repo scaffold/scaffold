@@ -28,6 +28,7 @@ import { bin2str, str2bin } from '../src/util/buffer.ts';
 import { RootContract } from '../src/contracts/RootContract.ts';
 import { ConnectionService } from '../src/ConnectionService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
+import { bootstrapFromGlobs } from './bootstrapUtils.ts';
 // import { EpochContract } from '~/graph/EpochContract.ts';
 // import { ThrustInitContract } from '~/graph/ThrustInitContract.ts';
 // import { ThrustGameContract } from '~/graph/ThrustGameContract.ts';
@@ -68,126 +69,64 @@ const config: Config = {
   initialWorkerCount: 1,
 };
 
-for (const provider of config.contractProviders) {
-  if (provider instanceof RootContract) {
-    provider.addData(str2bin('my secret'));
-  }
-}
-
 const ctx = new Context(config);
 
-ctx.get(Logger).registerAttribute('worker', {
-  preposition: 'on',
-  filterAction: FilterAction.EQ,
-});
-ctx.get(Logger).registerAttribute('job', {
-  prefix: 'job',
-  preposition: 'in',
-  filterAction: FilterAction.EQ,
-});
-ctx.get(Logger).registerAttribute('contract', {
-  prefix: 'contract',
-  preposition: 'for',
-  filterAction: FilterAction.EQ,
-});
-ctx.get(Logger).registerAttribute('params', {
-  prefix: 'params',
-  preposition: 'for',
-  filterAction: FilterAction.EQ,
-});
-ctx.get(Logger).registerAttribute('body', {
-  prefix: 'body',
-  preposition: 'forf',
-  filterAction: FilterAction.EQ,
-});
-// INFO Running generation on Worker_1 in job 5e2bcfb7 for contract fa1ff0c1, params a8af5d5b, and body 26bdafde
+const rootContract =
+  ctx.config.contractProviders.find((provider): provider is RootContract =>
+    provider instanceof RootContract
+  ) ?? error(`No root contract added!`);
 
-const arr: string[] = [];
-ctx.get(Logger).parseLog(
-  arr,
-  (key, val) => arr.push(val as string),
-  LogLevel.INFO,
-  'Running generation',
-  {
-    worker: 'worker_1',
-    job: '5e2bcfb7',
-    contract: 'fa1ff0c1',
-    params: 'a8af5d5b',
-    body: '26bdafde',
-  },
+rootContract.addData(str2bin('my secret'));
+bootstrapFromGlobs([
+  '../examples/*/target/wasm32-unknown-unknown/release/scaffold_rust.wasm',
+], (name, data) => {
+  const hash = rootContract.addData(data);
+  console.log(`Bootstrapped ${name}: ${hash.toHex()}`);
+  ctx.get(QaDebugger).addDebugger(name, hash);
+}).then(({ count }) =>
+  console.log(`Bootstrapping done! Loaded ${count} datas.`)
 );
 
-// throw new Error();
+// ctx.get(Logger).registerAttribute('worker', {
+//   preposition: 'on',
+//   filterAction: FilterAction.EQ,
+// });
+// ctx.get(Logger).registerAttribute('job', {
+//   prefix: 'job',
+//   preposition: 'in',
+//   filterAction: FilterAction.EQ,
+// });
+// ctx.get(Logger).registerAttribute('contract', {
+//   prefix: 'contract',
+//   preposition: 'for',
+//   filterAction: FilterAction.EQ,
+// });
+// ctx.get(Logger).registerAttribute('params', {
+//   prefix: 'params',
+//   preposition: 'for',
+//   filterAction: FilterAction.EQ,
+// });
+// ctx.get(Logger).registerAttribute('body', {
+//   prefix: 'body',
+//   preposition: 'forf',
+//   filterAction: FilterAction.EQ,
+// });
+// // INFO Running generation on Worker_1 in job 5e2bcfb7 for contract fa1ff0c1, params a8af5d5b, and body 26bdafde
 
-const bootstrapPath = path.join(
-  path.dirname(path.fromFileUrl(import.meta.url)),
-  'bootstrap',
-);
-fs.walk(bootstrapPath, { includeDirs: false });
-
-const entries: {
-  filename: string;
-  contractName: string;
-  generator?: string;
-  ext: string;
-  body: Uint8Array;
-  hash: Hash;
-}[] = [];
-for await (const entry of fs.walk(bootstrapPath, { includeDirs: false })) {
-  const body = await Deno.readFile(entry.path);
-  const hash = Hash.digest(body);
-
-  const [_, contractName, generator, ext] = entry.name.match(
-    /^([\w-]+)\.(?:generator\.([\w-]+)\.)?([\w-]+)$/,
-  ) || error(`Invalid filename ${entry.name}!`);
-
-  entries.push({
-    filename: entry.name,
-    contractName,
-    generator,
-    ext,
-    body,
-    hash,
-  });
-}
-entries.forEach(({ filename, contractName, generator, ext, body, hash }) => {
-  // if (generator) {
-  //   const contractHash = entries.find((e) =>
-  //     e.contractName === contractName && e.generator === undefined
-  //   )?.hash || error(`No contract with name ${contractName}!`);
-
-  //   // Supply generator
-  //   switch (ext) {
-  //     case 'js':
-  //       ctx.get(LocalGeneratorService).addGenerator(
-  //         contractHash,
-  //         new Function(bin2str(body))() as LocalGenerator,
-  //       );
-  //       break;
-
-  //     case 'wasm':
-  //       ctx.get(BlockBuilder).publish({
-  //         body,
-  //         satisfies: [{
-  //           contractHash: generatorHash,
-  //           params: contractHash.toBytes(),
-  //         }],
-  //       });
-  //       break;
-  //   }
-  // } else {
-  //   // Supply contract
-  //   ctx.get(BlockBuilder).publish({
-  //     body,
-  //     satisfies: [{
-  //       contractHash: rootHash,
-  //       params: Hash.digest(body).toBytes(),
-  //     }],
-  //   });
-  // }
-
-  // ctx.get(QaDebugger).addDebugger(filename, hash);
-});
+// const arr: string[] = [];
+// ctx.get(Logger).parseLog(
+//   arr,
+//   (key, val) => arr.push(val as string),
+//   LogLevel.INFO,
+//   'Running generation',
+//   {
+//     worker: 'worker_1',
+//     job: '5e2bcfb7',
+//     contract: 'fa1ff0c1',
+//     params: 'a8af5d5b',
+//     body: '26bdafde',
+//   },
+// );
 
 (() => {
   // const block = ctx.get(BlockBuilder).buildBlock({});

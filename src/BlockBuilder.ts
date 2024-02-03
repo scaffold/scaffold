@@ -257,6 +257,8 @@ export class BlockBuilder {
 
           // block_count: 1,
           // claimed_work: this.computeWork(inputs, outputs),
+
+          ...this.ctx.get(FrontierService2).mergeTreeIo(inputs),
         }),
         groupIdx: groupIdx++,
       });

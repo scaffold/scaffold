@@ -20,6 +20,7 @@ export class RootContract implements ContractProvider {
       }
       return prevData;
     });
+    return hash;
   }
 
   public compute(driver: ComputationDriver, ctx: Context) {

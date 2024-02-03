@@ -77,5 +77,7 @@ export class CollateralContract implements ContractProvider {
     for (const output of outputMap.values()) {
       driver.requireOutput(output);
     }
+
+    // TODO: Do something, maybe involving the fronteir vote, frontier level, or timestamp, to block resolution at least until the block is included in a frontier tree parent?
   }
 }

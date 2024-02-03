@@ -1,5 +1,6 @@
 import { avro } from '../deps.ts';
-import { Hash as HashClass } from './util/Hash.ts';
+import { Hash } from './util/Hash.ts';
+import { bigint2bin, bin2bigint } from './util/bigint.ts';
 
 // declare global {
 //   interface Crypto {
@@ -21,13 +22,13 @@ class HashLogicalType extends avro.types.LogicalType {
   // protected _export(schema: avro.Schema) {}
 
   public fromBytes(bytes: Uint8Array) {
-    return HashClass.fromBytes(bytes);
+    return Hash.fromBytes(bytes);
   }
 
   protected override _fromValue(buf: Uint8Array) {
     return this.fromBytes(buf);
   }
-  protected override _toValue(hash: HashClass) {
+  protected override _toValue(hash: Hash) {
     return hash.toBytes();
   }
   protected override _resolve(type: any) {
@@ -59,9 +60,28 @@ class Uint8ArrayLogicalType extends avro.types.LogicalType {
   }
 }
 
+class BigIntLogicalType extends avro.types.LogicalType {
+  public fromBytes(bytes: Uint8Array) {
+    return bin2bigint(bytes);
+  }
+
+  protected override _fromValue(buf: Uint8Array) {
+    return this.fromBytes(buf);
+  }
+  protected override _toValue(num: bigint) {
+    return bigint2bin(num);
+  }
+  protected override _resolve(type: any) {
+    if (avro.Type.isType(type, 'bytes')) {
+      return this._fromValue;
+    }
+  }
+}
+
 const logicalTypes = {
   HashLogicalType,
   Uint8ArrayLogicalType,
+  BigIntLogicalType,
 } as const;
 
 type UnionType<
@@ -137,13 +157,15 @@ const long = avro.types.LongType.__with({
 // noUnpack
 
 export const registry = {
-  Hash: {
-    name: 'Hash',
+  hash: {
+    name: 'hash',
     type: 'fixed',
     size: 32,
     logicalType: 'HashLogicalType',
   },
   bytes: { name: 'bytes', type: 'bytes', logicalType: 'Uint8ArrayLogicalType' },
+  bigint: { name: 'bigint', type: 'bytes', logicalType: 'BigIntLogicalType' },
+
   Json: {
     type: 'record',
     name: 'Json',
@@ -180,7 +202,7 @@ export const registry = {
     name: 'Verifier',
     type: 'record',
     fields: [
-      { name: 'contractHash', type: 'Hash' },
+      { name: 'contractHash', type: 'hash' },
       { name: 'params', type: 'bytes' },
     ],
   },
@@ -188,7 +210,7 @@ export const registry = {
     name: 'BlockInput',
     type: 'record',
     fields: [
-      { name: 'blockHash', type: 'Hash' },
+      { name: 'blockHash', type: 'hash' },
       // TODO: Array? Or add a refs array to the block?
       // TODO: -1 if we're not claiming any output?
       { name: 'outputIdx', type: 'int' },
@@ -212,7 +234,7 @@ export const registry = {
 
       // A ppsitive amount means we're paying/incentivizing descendant blocks who claim this output.
       // A negative amount means descendant blocks who claim this output must pay us (with another positive input or negative output to make their block sum zero).
-      { name: 'amount', type: 'long' },
+      { name: 'amount', type: 'bigint' },
 
       { name: 'detail', type: 'bytes' },
 
@@ -223,8 +245,8 @@ export const registry = {
     name: 'EpochInclusionProof',
     type: 'record',
     fields: [
-      { name: 'block_hash', type: 'Hash' },
-      { name: 'epoch_hash', type: 'Hash' },
+      { name: 'block_hash', type: 'hash' },
+      { name: 'epoch_hash', type: 'hash' },
       { name: 'input_indices', type: { type: 'array', items: 'int' } },
     ],
   },
@@ -232,10 +254,10 @@ export const registry = {
     name: 'Block',
     type: 'record',
     fields: [
-      { name: 'frontierVote', type: 'Hash' },
+      { name: 'frontierVote', type: 'hash' },
 
       // Blocks we depend upon but aren't inputting anything from
-      { name: 'refs', type: { type: 'array', items: 'Hash' } },
+      { name: 'refs', type: { type: 'array', items: 'hash' } },
 
       // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
@@ -266,6 +288,7 @@ export const registry = {
     // A block implicitly adds collateral to the data availability contracts of all input/output/verifier.contractHash hashes
     // Maybe put the verifier on the collateral claim?
   },
+
   BlockSetTreeEmpty: {
     name: 'BlockSetTreeEmpty',
     type: 'record',
@@ -275,15 +298,15 @@ export const registry = {
     name: 'BlockSetTreeBranch',
     type: 'record',
     fields: [
-      { name: 'left_child', type: ['null', 'Hash'] },
-      { name: 'right_child', type: ['null', 'Hash'] },
+      { name: 'left_child', type: ['null', 'hash'] },
+      { name: 'right_child', type: ['null', 'hash'] },
     ],
   },
   BlockSetTreeIo: {
     name: 'BlockSetTreeIo',
     type: 'record',
     fields: [
-      { name: 'block_hash', type: 'Hash' },
+      { name: 'block_hash', type: 'hash' },
       { name: 'output_idx', type: 'int' },
 
       // For input trees, this must be -1
@@ -296,7 +319,7 @@ export const registry = {
     fields: [
       // For the input tree, this is keyed by ???
       // For the output tree, this is keyed by verifier
-      { name: 'key', type: 'Hash' },
+      { name: 'key', type: 'hash' },
       { name: 'ios', type: { type: 'array', items: 'BlockSetTreeIo' } },
     ],
   },
@@ -320,13 +343,13 @@ export const registry = {
     name: 'BlockSet',
     type: 'record',
     fields: [
-      { name: 'left_child', type: 'Hash' },
-      { name: 'right_child', type: 'Hash' },
+      { name: 'left_child', type: 'hash' },
+      { name: 'right_child', type: 'hash' },
 
-      { name: 'input_tree_root', type: 'Hash' },
-      { name: 'output_tree_root', type: 'Hash' },
+      { name: 'input_tree_root', type: 'hash' },
+      { name: 'output_tree_root', type: 'hash' },
 
-      { name: 'frontier_vote', type: 'Hash' },
+      { name: 'frontier_vote', type: 'hash' },
 
       { name: 'input_count', type: 'int' },
       { name: 'output_count', type: 'int' },
@@ -345,7 +368,7 @@ export const registry = {
   //   fields: [
   //     { name: 'public_key', type: 'bytes' },
   //     { name: 'idx', type: 'int' },
-  //     { name: 'frontier', type: 'Hash' },
+  //     { name: 'frontier', type: 'hash' },
   //   ],
   // },
 
@@ -369,7 +392,7 @@ export const registry = {
     name: 'RequestBlockMessage',
     type: 'record',
     fields: [
-      { name: 'hash', type: 'Hash' },
+      { name: 'hash', type: 'hash' },
     ],
   },
 
@@ -405,7 +428,7 @@ export const registry = {
   //         'SelfLicensesContract',
   //       ],
   //     },
-  //     // { name: 'contractHash', type: 'Hash' },
+  //     // { name: 'contractHash', type: 'hash' },
   //     { name: 'params', type: 'bytes' },
   //   ],
   // },
@@ -431,7 +454,7 @@ export const registry = {
       { name: 'clientName', type: 'string' },
       { name: 'protocolVersion', type: 'string' },
       { name: 'userdata', type: 'string' },
-      { name: 'agePtr', type: 'Hash' },
+      { name: 'agePtr', type: 'hash' },
 
       // TODO: Add persistent signals here?
       { name: 'protocols', type: { type: 'array', items: 'string' } },
@@ -464,12 +487,12 @@ export const registry = {
   PingMessage: {
     name: 'PingMessage',
     type: 'record',
-    fields: [{ name: 'secret', type: 'Hash' }],
+    fields: [{ name: 'secret', type: 'hash' }],
   },
   PongMessage: {
     name: 'PongMessage',
     type: 'record',
-    fields: [{ name: 'secret', type: 'Hash' }],
+    fields: [{ name: 'secret', type: 'hash' }],
   },
   ConnectionSpec: {
     name: 'ConnectionSpec',
@@ -483,7 +506,7 @@ export const registry = {
     name: 'BridgeStartMessage',
     type: 'record',
     fields: [
-      { name: 'dst_node_hash', type: 'Hash' },
+      { name: 'dst_node_hash', type: 'hash' },
       { name: 'connection_spec', type: 'ConnectionSpec' },
     ],
   },
@@ -491,7 +514,7 @@ export const registry = {
     name: 'BridgeEndMessage',
     type: 'record',
     fields: [
-      { name: 'src_node_hash', type: 'Hash' },
+      { name: 'src_node_hash', type: 'hash' },
       { name: 'connection_spec', type: 'ConnectionSpec' },
     ],
   },
@@ -500,10 +523,10 @@ export const registry = {
     name: 'SubscribeMessage',
     type: 'record',
     fields: [
-      // { name: 'question_hash', type: 'Hash' },
+      // { name: 'question_hash', type: 'hash' },
       { name: 'verifier', type: 'Verifier' },
       // { name: 'child_question', type: 'Verifier' },
-      // // { name: 'destination', type: 'Hash' },
+      // // { name: 'destination', type: 'hash' },
       // { name: 'expected_reward', type: 'long' },
     ],
   },
@@ -512,10 +535,10 @@ export const registry = {
     name: 'UnsubscribeMessage',
     type: 'record',
     fields: [
-      // { name: 'question_hash', type: 'Hash' },
+      // { name: 'question_hash', type: 'hash' },
       { name: 'question', type: 'Verifier' },
       // { name: 'child_question', type: 'Verifier' },
-      // // { name: 'destination', type: 'Hash' },
+      // // { name: 'destination', type: 'hash' },
       // { name: 'expected_reward', type: 'long' },
     ],
   },
@@ -534,7 +557,7 @@ export const registry = {
     name: 'PublishMessage',
     type: 'record',
     fields: [
-      // { name: 'question_hash', type: 'Hash' },
+      // { name: 'question_hash', type: 'hash' },
       // { name: 'question', type: 'Verifier' }, // I think this can just be the question hash, since subscribers will know it?
 
       // Note that the answer in here behaves as an input - if it becomes non-canonical, this publication needs to become so as well.
@@ -543,7 +566,7 @@ export const registry = {
 
       // { name: 'author_public_key', type: 'bytes' },
 
-      { name: 'inputs', type: { type: 'array', items: 'Hash' } },
+      { name: 'inputs', type: { type: 'array', items: 'hash' } },
       // { name: 'birth_proof', type: 'HashExpr' },
       { name: 'data', type: 'bytes' },
 
@@ -560,7 +583,7 @@ export const registry = {
     name: 'ForwardingFeedback',
     type: 'record',
     fields: [
-      { name: 'answer_hash', type: 'Hash' },
+      { name: 'answer_hash', type: 'hash' },
 
       // Negative means you were too slow, by N ms.
       // Positive means you were quicker than everyone else by N ms.
@@ -570,13 +593,13 @@ export const registry = {
   CiteMessage: {
     name: 'CiteMessage',
     type: 'record',
-    fields: [{ name: 'payment_proof', type: 'Hash' }],
+    fields: [{ name: 'payment_proof', type: 'hash' }],
   },
   CollateralMessage: {
     name: 'CollateralMessage',
     type: 'record',
     fields: [
-      { name: 'publication_hash', type: 'Hash' },
+      { name: 'publication_hash', type: 'hash' },
       { name: 'collateral', type: 'long' },
     ],
   },
@@ -585,7 +608,7 @@ export const registry = {
     name: 'DerivedWorkMessage',
     type: 'record',
     fields: [
-      { name: 'answer_hash', type: 'Hash' },
+      { name: 'answer_hash', type: 'hash' },
       { name: 'work_log2', type: 'int' },
     ],
   },
@@ -601,13 +624,13 @@ export const registry = {
   DhtJoinMessage: {
     name: 'DhtJoinMessage',
     type: 'record',
-    fields: [{ name: 'hash', type: 'Hash' }],
+    fields: [{ name: 'hash', type: 'hash' }],
   },
   FeedbackMessage: {
     name: 'FeedbackMessage',
     type: 'record',
     fields: [
-      // { name: 'code', type: 'Hash' },
+      // { name: 'code', type: 'hash' },
       { name: 'msg_phrase', type: 'string' },
       { name: 'msg_detail', type: 'string' },
 
@@ -667,7 +690,7 @@ export const registry = {
     name: 'DataContractParams',
     type: 'record',
     fields: [
-      { name: 'hash', type: 'Hash' },
+      { name: 'hash', type: 'hash' },
       { name: 'secret', type: 'bytes' },
     ],
   },
@@ -683,7 +706,7 @@ export const registry = {
     name: 'EpochInclusionParams',
     type: 'record',
     fields: [
-      { name: 'hash', type: 'Hash' },
+      { name: 'hash', type: 'hash' },
     ],
   },
   EpochBody: {
@@ -691,12 +714,12 @@ export const registry = {
     type: 'record',
     fields: [
       // This is the hash of the epoch at `height - 1`.
-      { name: 'prior_hash', type: 'Hash' },
+      { name: 'prior_hash', type: 'hash' },
 
       // This is the hash of the epoch at `height - LSB(height)`.
-      { name: 'skip_hash', type: 'Hash' },
+      { name: 'skip_hash', type: 'hash' },
 
-      { name: 'events', type: { type: 'array', items: 'Hash' } },
+      { name: 'events', type: { type: 'array', items: 'hash' } },
     ],
   },
 
@@ -772,14 +795,36 @@ export const registry = {
       // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
       // ...
       { name: 'treeWeights', type: { type: 'array', items: 'long' } },
-      // { name: 'input_tree_root', type: 'Hash' },
-      // { name: 'output_tree_root', type: 'Hash' },
+      // { name: 'input_tree_root', type: 'hash' },
+      // { name: 'output_tree_root', type: 'hash' },
 
       // { name: 'input_count', type: 'int' }, // TODO: long
       // { name: 'output_count', type: 'int' }, // TODO: long
 
       // { name: 'block_count', type: 'int' }, // TODO: long
       // { name: 'claimed_work', type: 'long' },
+
+      { name: 'consumedInputsRoot', type: 'FrontierTreeIoEntry' },
+      { name: 'producedOutputsRoot', type: 'FrontierTreeIoEntry' },
+    ],
+  },
+
+  FrontierTreeIoEntry: {
+    name: 'FrontierTreeIoEntry',
+    type: 'record',
+    fields: [{
+      name: 'branches',
+      type: { type: 'array', items: 'FrontierTreeIoBranch' },
+    }],
+  },
+  FrontierTreeIoBranch: {
+    name: 'FrontierTreeIoBranch',
+    type: 'record',
+    fields: [
+      { name: 'path', type: 'bigint' },
+      { name: 'childHash', type: 'hash' }, // Either a block hash or another io entry hash
+      { name: 'outputIdx', type: 'int' }, // -1 means the childHash is an entry hash; a non-negative number means it's a block hash
+      { name: 'amount', type: 'bigint' },
     ],
   },
 
@@ -992,6 +1037,10 @@ export const FrontierTreeParams = makeMsg(registry, 'FrontierTreeParams');
 export type FrontierTreeParams = MsgType<'FrontierTreeParams'>;
 export const FrontierTreeDetail = makeMsg(registry, 'FrontierTreeDetail');
 export type FrontierTreeDetail = MsgType<'FrontierTreeDetail'>;
+export const FrontierTreeIoEntry = makeMsg(registry, 'FrontierTreeIoEntry');
+export type FrontierTreeIoEntry = MsgType<'FrontierTreeIoEntry'>;
+export const FrontierTreeIoBranch = makeMsg(registry, 'FrontierTreeIoBranch');
+export type FrontierTreeIoBranch = MsgType<'FrontierTreeIoBranch'>;
 
 // const buf = Question.encode({
 //   contract: {

@@ -7,6 +7,8 @@ import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, arrFromNumber, bin2str, str2bin } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 import { DevtoolsFormattable } from '../../plugins/devtoolsFormatterPlugin.ts';
+import { assert } from './functional.ts';
+import { bin2bigint } from './bigint.ts';
 
 // TODO: Try blake?
 
@@ -35,6 +37,7 @@ const hasher = {
 }.sha3;
 
 export const HASH_SIZE = 32;
+export const HASH_BITS = HASH_SIZE * 8;
 
 const nonPrintableRegex = /[^\u0020-\u007E]/g;
 
@@ -62,6 +65,9 @@ export class Hash implements DevtoolsFormattable {
   }
 
   public static fromBigint(num: bigint) {
+    if ((num >> 256n) !== 0n) {
+      throw new Error(`Cannot convert bigint to Hash - out of range!`);
+    }
     const arr = new Uint8Array(32);
     const view = new DataView(arr.buffer);
     view.setBigUint64(0, (num >> 192n) & 0xFFFFFFFFFFFFFFFFn);
@@ -269,3 +275,7 @@ export type HashPrimitive = ReturnType<Hash['toPrimitive']>;
 
 export const ZERO_HASH = Hash.fromBytes(new Uint8Array(HASH_SIZE));
 export const EMPTY_HASH = Hash.digest(new Uint8Array());
+
+const test = Hash.random();
+assert(Hash.equals(Hash.fromBigint(test.toBigint()), test));
+// assert(bin2bigint(test.toBytes()) === test.toBigint());
