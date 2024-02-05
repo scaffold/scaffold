@@ -21,7 +21,7 @@ const formatter: log.FormatterFunction = (logRecord) =>
 const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } =
   {
     handlers: {
-      console: new log.handlers.ConsoleHandler('DEBUG', { formatter }),
+      console: new log.ConsoleHandler('DEBUG', { formatter }),
       // file: new log.handlers.FileHandler('DEBUG', {
       //   filename: `/tmp/sbl_${Date.now()}_${
       //     Math.random().toString(36).slice(2)

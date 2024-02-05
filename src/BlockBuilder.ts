@@ -57,6 +57,12 @@ export interface BlockDraft {
   onBlock?(block: BlockFact, groupIdx: number): void;
 }
 
+class RetryBuildingException extends Error {
+  constructor(msg: string) {
+    super(msg);
+  }
+}
+
 // TODO: If a block is rejected for double-spending or doesn't become canonical, we gotta re-build a new block that doesn't include the problematic inputs.
 export class BlockBuilder {
   private selfAccountVerifier: Verifier;
@@ -216,7 +222,7 @@ export class BlockBuilder {
     } else if (ioDelta < 0n) {
       // TODO: Only output what we actually have
       if (this.ctx.config.enableValidation) {
-        throw new Error('INSUFFICIENT_COINS');
+        throw new RetryBuildingException('Insufficient coins');
       }
     }
 
@@ -363,7 +369,7 @@ export class BlockBuilder {
     return block;
   }
 
-  public publishPersistentDraft(draft: BlockDraft): void {
+  public async publishPersistentDraft(draft: BlockDraft) {
     if (draft.timeout !== undefined) {
       if (draft.deadline !== undefined) {
         throw new Error(`Cannot set both timeout and deadline!`);
@@ -373,8 +379,22 @@ export class BlockBuilder {
       }
     }
 
-    const block = this.ctx.get(BlockService).create(
-      this.buildBlock([draft]),
+    let block: Block;
+    try {
+      block = this.buildBlock([draft]);
+    } catch (err) {
+      if (err instanceof RetryBuildingException) {
+        await new Promise<void>((resolve) =>
+          this.ctx.config.timeProvider.setImmediate(resolve)
+        );
+        block = this.buildBlock([draft]);
+      } else {
+        throw err;
+      }
+    }
+
+    const fact = this.ctx.get(BlockService).create(
+      block,
       (fact) => {
         if (fact.type !== FactType.Block) {
           throw new Error(`Invalid fact type!`);
@@ -386,7 +406,7 @@ export class BlockBuilder {
     );
     if (draft.onBlock !== undefined) {
       // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
-      draft.onBlock(block, 0);
+      draft.onBlock(fact, 0);
     }
   }
 

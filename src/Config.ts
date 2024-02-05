@@ -164,7 +164,7 @@ export const makeDefaultConfig = () => ({
   approxComputePricePerSecond: 1000n,
   getGenerationReward: (_verifier, computeTimeSeconds) => 0n,
   // BigInt(computeTimeSeconds * 1e6) + 1000n,
-  getDepositIncentive: (_verifier) => 1n,
+  getDepositIncentive: (_verifier) => 10n,
   discardFutureBlocks: false,
   targetFactCount: 1000,
   // limitFactCount: Infinity,

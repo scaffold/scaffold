@@ -17,6 +17,7 @@ export const enum FetchMode {
 interface FetchOptions {
   detail?: Uint8Array;
   dedupKey?: Hash | unknown;
+  incentive?: bigint;
   internalIncentive?: bigint;
   externalIncentive?: bigint; // TODO: Remove this, since we calculate it via config. Maybe change to boolean, if there's cases when we don't want to incentivize.
   bid?: { output: Verifier; amount: bigint };
@@ -56,6 +57,7 @@ export class FetchService {
     {
       detail,
       dedupKey,
+      incentive,
       internalIncentive,
       externalIncentive,
       bid,
@@ -72,6 +74,8 @@ export class FetchService {
     if (abortSignal?.aborted) {
       return;
     }
+
+    console.log('FETCH', verifier);
 
     // console.log(
     //   `Fetching block`,
@@ -128,10 +132,10 @@ export class FetchService {
       // );
     }
 
-    externalIncentive = this.ctx.config.getDepositIncentive(verifier);
-    if (externalIncentive !== undefined) {
+    incentive ??= this.ctx.config.getDepositIncentive(verifier);
+    if (incentive >= 0n) {
       this.ctx.get(BlockBuilder).publishPersistentDraft({
-        outputs: [{ verifier, amount: externalIncentive, detail: EMPTY_ARR }],
+        outputs: [{ verifier, amount: incentive, detail: EMPTY_ARR }],
         timeout: 0,
         onBlock: onIncentiveBlock !== undefined
           ? (block, groupIdx) =>

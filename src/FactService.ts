@@ -28,6 +28,14 @@ import { frontierHash } from './constants.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
 import { multimapPop } from './util/map.ts';
 
+export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
+
+export const enum LoadFlags {
+  MarkVisited = 1 << 0,
+  RequestFromStorage = 1 << 1,
+  RequestFromRemote = 1 << 2,
+}
+
 // TODO: We might have to update this to a fact-factory and a fact-ingestor
 type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
 
@@ -72,8 +80,6 @@ const zstdMagic = new Uint8Array([40, 181, 47, 253]);
 (window as any).zstd = zstd;
 
 const sortKeys = true;
-
-export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
 export class FactService {
   private factories: FactFactory[] = [];

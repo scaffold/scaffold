@@ -72,7 +72,7 @@ export class GenerationService {
   }
 
   public addInput(input: InputSpec) {
-    if (input.amount < 0n) {
+    if (input.amount <= 0n) {
       return;
     }
 
@@ -416,10 +416,11 @@ export class GenerationService {
       },
 
       notify: (contractHash, params) => {
-        this.ctx.get(FetchService).fetch(
-          { contractHash: contractHash, params },
-          { abortSignal: workerDriver.done.signal },
-        );
+        // TODO: Enable notification
+        // this.ctx.get(FetchService).fetch(
+        //   { contractHash: contractHash, params },
+        //   { abortSignal: workerDriver.done.signal },
+        // );
       },
       request: (contractHash, params) =>
         new Promise((reply) => {
@@ -431,16 +432,20 @@ export class GenerationService {
             `request(${contractHash.toHex()}, ${bin2hex(params)})`,
           );
 
-          const verifier = { contractHash: contractHash, params };
+          const incentive = verifierInputs.reduce((acc, input) =>
+            acc + input.amount, 0n) * 15n / 16n;
 
           // TODO: Check isMergeable() here
 
           // TODO: Call pause/resume when requesting?
           this.ctx.get(FetchService).fetch(
-            verifier,
-            { abortSignal: workerDriver.done.signal },
+            { contractHash, params },
+            { abortSignal: workerDriver.done.signal, incentive },
             (result, block) => {
-              this.ctx.get(Logger).info('got req', { verifier, block });
+              this.ctx.get(Logger).info('got req', {
+                verifier: { contractHash, params },
+                block,
+              });
 
               // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
               // If it's not, or maybe just in any case of not having a canonical input:
