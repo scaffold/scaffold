@@ -158,6 +158,7 @@ export class VerificationService {
 
       type: ComputationType.Contract,
 
+      getVerifier: () => verifier,
       getContractHash: () => verifier.contractHash,
       getParams: () => verifier.params,
       getHint: (idx, bop) => {

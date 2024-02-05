@@ -317,10 +317,7 @@ export class GenerationService {
         Hash.equals(state.verifierState.verifier.contractHash, frontierHash)
       ) {
         const frontierCount = verifierInputs.filter((x) =>
-          Hash.equals(
-            x.block.outputs[x.outputIdx].verifier.contractHash,
-            frontierHash,
-          )
+          x.outputIdx === x.block.frontierOutputIdx
         ).length;
         if (frontierCount > frontierInputCount) {
           throw new Error(`Internal error!`);
@@ -365,6 +362,7 @@ export class GenerationService {
 
       type: ComputationType.Generator,
 
+      getVerifier: () => state.verifierState.verifier,
       getContractHash: () => state.verifierState.verifier.contractHash,
       getParams: () => state.verifierState.verifier.params,
       getHint: () => {
@@ -653,10 +651,8 @@ export class GenerationService {
       if (el.frontierParams.level !== 0) {
         const children = el.inputs.flatMap((input) => {
           const block = this.ctx.get(BlockService).get(input.blockHash);
-          return block !== undefined && Hash.equals(
-              block.outputs[input.outputIdx].verifier.contractHash,
-              frontierHash,
-            )
+          return block !== undefined &&
+              input.outputIdx === block.frontierOutputIdx
             ? [block]
             : [];
         });

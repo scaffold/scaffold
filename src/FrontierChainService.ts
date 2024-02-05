@@ -60,13 +60,10 @@ export class FrontierChainService {
       return undefined;
     }
 
-    let voteLevel = targVoteLevel;
-    for (const fi of frontierInputs) {
-      const level = fi.frontierParams.level + 2;
-      if (level > voteLevel) {
-        voteLevel = level;
-      }
-    }
+    const requireVoteLevel = Math.max(
+      ...[...frontierInputs].map((fi) => fi.frontierParams.level),
+    ) + 1;
+    const voteLevel = Math.max(targVoteLevel, requireVoteLevel + 1);
 
     // Inputs that are not a tree child of a frontier input
     const externalInputs = new Set<BlockFact | typeof ZERO_BLOCK>([ZERO_BLOCK]);
@@ -141,6 +138,10 @@ export class FrontierChainService {
       //   }
       //   res = next;
       // } while (res.frontierParams.level > voteLevel);
+    }
+
+    if (res.frontierParams.level < requireVoteLevel) {
+      return undefined;
     }
 
     return res;

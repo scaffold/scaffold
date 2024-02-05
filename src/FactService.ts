@@ -24,7 +24,6 @@ import { uniqueNamesGenerator } from '../deps.ts';
 import { SignalingService } from './SignalingService.ts';
 import { ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
-import { frontierHash } from './constants.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
 import { multimapPop } from './util/map.ts';
 

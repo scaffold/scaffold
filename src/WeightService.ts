@@ -3,7 +3,6 @@ import { BlockFact, FactSource } from './FactMeta.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { BASE_WORK, BlockService } from './BlockService.ts';
 import { bigintMax } from './util/bigint.ts';
-import { frontierHash } from './constants.ts';
 import { Hash } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
@@ -277,12 +276,11 @@ export class WeightService {
 
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
-        if (block !== undefined) {
-          const { verifier } = block.outputs[input.outputIdx];
-          if (Hash.equals(verifier.contractHash, frontierHash)) {
-            minWeight += this.getSelfWeight(block, cache).minWeight;
-            minWeight += this.getTreeChildrenWeight(block, cache).minWeight;
-          }
+        if (
+          block !== undefined && input.outputIdx === block.frontierOutputIdx
+        ) {
+          minWeight += this.getSelfWeight(block, cache).minWeight;
+          minWeight += this.getTreeChildrenWeight(block, cache).minWeight;
         }
       }
 

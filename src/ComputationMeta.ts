@@ -4,6 +4,7 @@ import { Hash } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
 import { OutputSpec } from './BlockBuilder.ts';
+import { Verifier } from './messages.ts';
 
 export const enum ComputationType {
   Contract,
@@ -23,8 +24,10 @@ export type InputSource = BlockInput & BlockOutput & {
 export interface ComputationDriver extends WorkerDriver {
   type: ComputationType;
 
+  getVerifier(): Verifier; // TODO: Standardize on either getVerifier() or getContractHash() and getParams()
   getContractHash(): Hash;
   getParams(): Uint8Array;
+
   getHint(idx: number, bop: BurdenOfProof): Uint8Array; // Only valid if this is a contract
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().

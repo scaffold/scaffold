@@ -84,13 +84,6 @@ export class BlockService {
 
     return this.ctx.get(FactService)
       .emit(block, Block, FactType.Block, true, mutator);
-
-    // console.log(
-    //   'create',
-    //   fact.outputs.find((output) =>
-    //     Hash.equals(output.verifier.contractHash, frontierHash)
-    //   ),
-    // );
   }
 
   public createFact(
@@ -217,10 +210,7 @@ export class BlockService {
           `Invalid groupIdx ${output.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
         );
       }
-      if (
-        output.amount < 0n &&
-        !Hash.equals(output.verifier.contractHash, frontierHash)
-      ) {
+      if (output.amount < 0n && outputIdx !== fact.frontierOutputIdx) {
         throw new Error(
           `Negative output amounts are only allowed on frontier outputs!`,
         );
@@ -493,7 +483,7 @@ export class BlockService {
     const verifier = parent.outputs[parentOutputIdx].verifier;
     const groupIdx = child.inputs[childInputIdx].groupIdx;
 
-    // if (Hash.equals(verifier.contractHash, frontierHash)) {
+    // if (parentOutputIdx === parent.frontierOutputIdx) {
     //   const expectedFrontierVote = child.inputs.some((input) =>
     //       Hash.equals(parent.frontier_vote, input.block_hash)
     //     )

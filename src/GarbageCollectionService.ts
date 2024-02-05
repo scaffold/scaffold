@@ -2,8 +2,6 @@ import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { Fact, FactSource, FactType } from './FactMeta.ts';
 import { FactService, invalidFact } from './FactService.ts';
-import { frontierHash } from './constants.ts';
-import { Hash } from './util/Hash.ts';
 
 export class GarbageCollectionService {
   private tick = 0;
@@ -49,10 +47,8 @@ export class GarbageCollectionService {
         return !fact.inputs.some((input) => {
           const inputBlock = this.ctx.get(BlockService)
             .get(input.blockHash, false);
-          return inputBlock !== undefined && Hash.equals(
-            inputBlock.outputs[input.outputIdx].verifier.contractHash,
-            frontierHash,
-          );
+          return inputBlock !== undefined &&
+            input.outputIdx === inputBlock.frontierOutputIdx;
         });
       },
     );

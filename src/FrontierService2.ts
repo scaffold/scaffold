@@ -2,7 +2,6 @@ import { BlockFact, FactSource } from './FactMeta.ts';
 import { Context } from './Context.ts';
 import { Hash, HASH_BITS, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BlockService } from './BlockService.ts';
-import { frontierHash } from './constants.ts';
 import { InputSpec } from './BlockBuilder.ts';
 import { WeightService } from './WeightService.ts';
 import {
@@ -95,12 +94,7 @@ export class FrontierService2 {
     const weights = [selfWeight];
 
     for (const input of inputs) {
-      if (
-        Hash.equals(
-          input.block.outputs[input.outputIdx].verifier.contractHash,
-          frontierHash,
-        )
-      ) {
+      if (input.outputIdx === input.block.frontierOutputIdx) {
         const voteDepth = frontierVote === ZERO_BLOCK
           ? 0
           : frontierVote.frontierChainDepth ??
@@ -247,10 +241,7 @@ export class FrontierService2 {
       inputs,
       (input) =>
         input.outputIdx !== undefined &&
-          Hash.equals(
-            input.block.outputs[input.outputIdx].verifier.contractHash,
-            frontierHash,
-          )
+          input.outputIdx === input.block.frontierOutputIdx
           ? 'frontierInputs'
           : 'normalInputs',
     );
