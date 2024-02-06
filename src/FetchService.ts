@@ -1,23 +1,34 @@
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
-import { GenerationService } from './GenerationService.ts';
 import { BlockFact } from './FactMeta.ts';
 import { Block, Verifier } from './messages.ts';
-import { Hash } from './util/Hash.ts';
 import { BlockBuilder } from './BlockBuilder.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
-import { error, todo } from './util/functional.ts';
 import { arrEquals } from './util/buffer.ts';
 import { FactService } from './FactService.ts';
-import { zeroHash } from './constants.ts';
-import { collatzHash } from './constants.ts';
 
 export enum FetchMode {
-  Oldest,
+  // Selects the first valid block satisfying the given verifier.
+  // Doesn't update unless the block becomes uncanonical? or invalid, in which case it resets to the most canonical known block.
+  Fastest,
+
+  // Selects the most canonical valid block satisfying the given verifier.
+  // Updates if we find a stronger block.
+  Strongest,
+
+  // Selects the least positively canonical valid block satisfying the given verifier.
+  // Updates if the block becomes uncanonical, invalid, or we get a newer block.
   Latest,
+
+  // Selects all valid blocks satisfying the given verifier.
+  // It is the user's responsibility to monitor them for validity and canonicality changes.
   All,
 }
+
+// If no callbacks are specified, just notify/incentivize the network of an upcoming fetch.
+
+// TODO: Do we need a special case for hash inversions?
 
 export interface FetchOptions {
   // Pass a signal to allow cancelling the request
@@ -64,6 +75,8 @@ export class FetchService {
   constructor(private ctx: Context) {}
 
   public fetch(verifier: Verifier, options: FetchOptions) {
+    options.mode ??= FetchMode.Fastest;
+
     const {
       abortSignal,
       dedupKey,
@@ -84,8 +97,8 @@ export class FetchService {
 
     const got = this.ctx.get(BlockService).getBlocksByVerifier(verifier);
     if (got.length > 0) {
-      const last = got[got.length - 1];
       if (onBody !== undefined) {
+        const last = got[got.length - 1];
         onBody(last.block.bodies[last.groupIdx]);
       }
     } else {
@@ -144,7 +157,9 @@ export class FetchService {
           if (
             block.canonicality >= 0n &&
             (bestBlock === undefined ||
-              block.canonicality > bestBlock.canonicality) &&
+              (mode === FetchMode.Latest
+                ? block.canonicality <= bestBlock.canonicality
+                : block.canonicality > bestBlock.canonicality)) &&
             block.verifiers.some(
               (v) =>
                 v !== undefined &&

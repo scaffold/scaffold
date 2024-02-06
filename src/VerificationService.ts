@@ -30,6 +30,8 @@ class VerificationException extends Error {
   }
 }
 
+const PROMISE_ANY_REJECTION = Symbol('VerificationService.PromiseAnyRejection');
+
 export class VerificationService {
   private extraContractIncentive = new Map<HashPrimitive, number>();
 
@@ -150,7 +152,7 @@ export class VerificationService {
     const groupIdx = rootHint.CollateralHintVerifier.groupIdx;
 
     const readHints = hintPrefix.slice(0, 1);
-    let requireInputCount: number | undefined;
+    let nextInputIdx = 0;
     let nextOutputIdx = 0;
 
     return {
@@ -233,6 +235,8 @@ export class VerificationService {
           );
         }
       },
+      isSignedBy: (publicKey) =>
+        this.ctx.get(FactService).verify(block, publicKey),
       requireSignature: (publicKey) => {
         if (!this.ctx.get(FactService).verify(block, publicKey)) {
           throw new VerificationException(
@@ -242,18 +246,19 @@ export class VerificationService {
       },
       emitCorrect: () => true,
 
-      notify: (_contractHash, _params) => {},
-      request: async (contractHash, params) => {
+      notify: (verifier) => {},
+      fetch: async (verifier) => {
         if (workerDriver.done.signal.aborted) {
           // Should have already interrupted earlier
           throw new Error(`Internal error`);
         }
 
         workerDriver.pauseTimer(
-          `request(${contractHash.toHex()}, ${bin2hex(params)})`,
+          `request(${verifier.contractHash.toHex()}, ${
+            bin2hex(verifier.params)
+          })`,
         );
 
-        const verifier = { contractHash: contractHash, params };
         for (const hash of block.refs) {
           const ref = await this.ctx.get(BlockService)
             .waitForBlock(hash, workerDriver.done.signal);
@@ -271,26 +276,18 @@ export class VerificationService {
         );
       },
 
-      fulfills: (_block: BlockFact, _outputIdx: number) => {
-        // Do nothing here; the way to tell if this block A indeed fulfills B's output is to input the output then verify.
-      },
-
       getInputCount: async () => {
         workerDriver.pauseTimer(`getInputCount()`);
 
         let count = 0;
         for (const input of block.inputs) {
-          const block = await this.ctx.get(BlockService).waitForBlock(
-            input.blockHash,
-            workerDriver.done.signal,
-          );
+          const block = await this.ctx.get(BlockService)
+            .waitForBlock(input.blockHash, workerDriver.done.signal);
 
           const output = block.outputs[input.outputIdx];
           if (
-            this.ctx.get(BlockService).areVerifiersEqual(
-              output.verifier,
-              verifier,
-            )
+            this.ctx.get(BlockService)
+              .areVerifiersEqual(output.verifier, verifier)
           ) {
             count++;
           }
@@ -299,43 +296,77 @@ export class VerificationService {
         workerDriver.resumeTimer();
         return count;
       },
-      getInputSource: async (idx: number) => {
-        workerDriver.pauseTimer(`getInputSource(${idx})`);
+      requireInput: async (satisfies, outputsTo) => {
+        workerDriver.pauseTimer(`requireInput()`);
 
-        if (requireInputCount === undefined || requireInputCount <= idx) {
-          requireInputCount = idx + 1;
-        }
+        // Do nothing here; the way to tell if this block A indeed fulfills B's output is to input the output then verify.
 
-        for (const input of block.inputs) {
-          const inputBlock = await this.ctx.get(BlockService).waitForBlock(
-            input.blockHash,
-            workerDriver.done.signal,
-          );
+        while (nextInputIdx < block.inputs.length) {
+          const input = block.inputs[nextInputIdx++];
+          if (input.groupIdx !== groupIdx) {
+            continue;
+          }
+
+          const inputBlock = await this.ctx.get(BlockService)
+            .waitForBlock(input.blockHash, workerDriver.done.signal);
 
           const output = inputBlock.outputs[input.outputIdx];
           if (
-            this.ctx.get(BlockService).areVerifiersEqual(
-              output.verifier,
-              verifier,
-            ) && idx-- === 0
+            !this.ctx.get(BlockService)
+              .areVerifiersEqual(output.verifier, outputsTo ?? verifier)
           ) {
-            workerDriver.resumeTimer();
-            return {
-              blockHash: inputBlock.hash,
-              blockTimestamp: inputBlock.timestamp,
-
-              groupIdx: output.groupIdx,
-              body: inputBlock.bodies[output.groupIdx],
-
-              outputIdx: input.outputIdx,
-              outputAmount: output.amount,
-              outputDetail: output.detail,
-            };
+            throw new VerificationException(
+              `requireInput(...) failed - incorrect output verifier`,
+            );
           }
+
+          if (satisfies !== undefined) {
+            await Promise.any(inputBlock.inputs.map(async (inputInput) => {
+              if (inputInput.groupIdx !== output.groupIdx) {
+                throw PROMISE_ANY_REJECTION;
+              }
+              const inputInputBlock = await this.ctx.get(BlockService)
+                .waitForBlock(inputInput.blockHash, workerDriver.done.signal);
+
+              if (
+                !this.ctx.get(BlockService).areVerifiersEqual(
+                  inputInputBlock.outputs[inputInput.outputIdx].verifier,
+                  satisfies,
+                )
+              ) {
+                throw PROMISE_ANY_REJECTION;
+              }
+            })).catch((aggError: AggregateError | unknown) => {
+              if (
+                aggError instanceof AggregateError &&
+                aggError.errors.every((x: unknown) =>
+                  x === PROMISE_ANY_REJECTION
+                )
+              ) {
+                throw new VerificationException(
+                  `requireInput(...) failed - incorrect input satisfaction`,
+                );
+              } else {
+                throw aggError;
+              }
+            });
+          }
+
+          workerDriver.resumeTimer();
+          return {
+            input: {
+              block: inputBlock,
+              outputIdx: input.outputIdx,
+              amount: output.amount,
+            },
+            output,
+            body: inputBlock.bodies[output.groupIdx],
+            timestamp: inputBlock.timestamp,
+          };
         }
 
         throw new VerificationException(
-          `getInputSource(...) failed - there aren't enough inputs matching the contract's specification!`,
+          `requireInput(...) failed - there aren't enough inputs with the correct groupIdx!`,
         );
       },
 

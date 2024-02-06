@@ -963,12 +963,16 @@ export class BlockService {
       );
   }
 
-  public waitForBlock(hash: Hash, cancelSignal: AbortSignal) {
+  public waitForBlock(
+    hash: Hash,
+    cancelSignal: AbortSignal,
+    filter?: (val: BlockFact) => boolean,
+  ) {
     const got = this.get(hash);
     if (got) {
       return got;
     }
-    return this.blockMonitor.waitFor(hash, cancelSignal);
+    return this.blockMonitor.waitFor(hash, cancelSignal, filter);
   }
 
   public async getSelfVerification(block: BlockFact) {

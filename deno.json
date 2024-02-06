@@ -13,9 +13,15 @@
     ]
   },
   "lint": {
-    "exclude": ["avro", "dist", "tests/avro"],
+    "exclude": [
+      "avro",
+      "dist",
+      "tests/avro"
+    ],
     "rules": {
-      "tags": ["recommended"],
+      "tags": [
+        "recommended"
+      ],
       "include": [
         "ban-untagged-todo",
         "camelCase",
@@ -36,7 +42,11 @@
     }
   },
   "fmt": {
-    "exclude": ["README.md", "avro", "dist"],
+    "exclude": [
+      "README.md",
+      "avro",
+      "dist"
+    ],
     "singleQuote": true
   },
   "tasks": {

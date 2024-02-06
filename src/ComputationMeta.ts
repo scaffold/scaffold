@@ -5,6 +5,7 @@ import { BlockFact } from './FactMeta.ts';
 import { MaybePromise } from './util/types.ts';
 import { OutputSpec } from './BlockBuilder.ts';
 import { Verifier } from './messages.ts';
+import { InputSpec } from './BlockBuilder.ts';
 
 export const enum ComputationType {
   Contract,
@@ -41,21 +42,26 @@ export interface ComputationDriver extends WorkerDriver {
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().
   requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: bigint): MaybePromise<void>;
+  isSignedBy(publicKey: Uint8Array): boolean;
   requireSignature(publicKey: Uint8Array): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
-  notify(contractHash: Hash, params: Uint8Array): void;
-  request(contractHash: Hash, params: Uint8Array): Promise<Uint8Array>; // TODO: fetch?
-  // invert(hash: Hash): MaybePromise<Uint8Array>;
-  // fulfills(verifier: Verifier): void; // Something like this would allow bodies that fulfill multiple contracts. We'd still need a way to get the inputs/details. Although, perhaps this can be accomplished better with output details.
-  fulfills(block: BlockFact, outputIdx: number): void;
+  notify(verifier: Verifier): void;
+  fetch(verifier: Verifier): Promise<Uint8Array>;
+
+  getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
+  requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<
+    {
+      input: InputSpec;
+      output: BlockOutput;
+      body: Uint8Array;
+      timestamp: bigint;
+    }
+  >; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.
+  // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
   // TODO: Implement this to allow contracts to provide plaintext data that might be requested as a hint or hash inversion in the future?
   // register(data: Uint8Array): void;
-
-  getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
-  getInputSource(idx: number): MaybePromise<InputSource>; // Returns the input source at an index. The IO always has the same contractHash & params as this contract. If getInputCount() hasn't been called, block until we have another input.
-  // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
   // TODO: Remove this and call requireOutput({ contractHash: frontierHash, ... }) instead?
   requireFrontierLevel(level: number): void;

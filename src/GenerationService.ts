@@ -397,6 +397,8 @@ export class GenerationService {
           timestampGte = timestamp;
         }
       },
+      isSignedBy: (publicKey) =>
+        arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey()),
       requireSignature: (publicKey) => {
         // TODO: If we don't call this, maybe we don't necessarily need to sign the block?
         const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKey();
@@ -413,16 +415,15 @@ export class GenerationService {
         return emitCorrect;
       },
 
-      notify: (contractHash, params) => {
-        // TODO: Enable notification
-        // this.ctx.get(FetchService).fetch(
-        //   { contractHash: contractHash, params },
-        //   { abortSignal: workerDriver.done.signal },
-        // );
+      notify: (verifier) => {
+        this.ctx.get(FetchService).fetch(verifier, {
+          abortSignal: workerDriver.done.signal,
+        });
       },
-      request: (contractHash, params) =>
+      request: (verifier) =>
         new Promise((reply) => {
           if (workerDriver.done.signal.aborted) {
+            // Never resolve
             return;
           }
 
