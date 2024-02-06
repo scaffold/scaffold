@@ -13,13 +13,15 @@ import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
 
+// TODO: Rename to packet?
+
 export enum FactType {
   Null = 0, // Reserved
   Identification,
   NodeInfo,
   InfoRequest,
   ConnectionSignal,
-  Block,
+  Block, // TODO: Rename to bundle or something
   BlockSet, // TODO: Rename to bag or something
   BlockSetTreeNode,
   MerkleTreeNode,
@@ -48,29 +50,36 @@ export interface Collateralization {
 }
 
 export type FactBase = {
+  // The hash of full data, including header, type, message, and signature.
   hash: Hash;
 
-  sillyName: string;
+  // Packet parsing properties
+  data: Uint8Array; // The full packet data
+  type: FactType; // The type
+  message: Uint8Array; // The subset of the packet data that will be deserialized into a sub-type.
+  signature?: Uint8Array; // The subset of the packet data that should be used as a signature, if any.
 
-  data: Uint8Array;
-  type: FactType;
-  message: Uint8Array;
-  signature?: Uint8Array;
-
+  // Reception properties
+  receivedAt: number;
   source: FactSource;
   signer: Uint8Array;
   fromNodes: Node[];
+
+  // Publication properties
+  publishAt?: number;
   toNodes: Node[];
 
-  publishAt?: number;
-
+  // Validity properties
   collateralizations: Collateralization[];
   validities: Map<HashPrimitive, DetailVote>;
 
+  // GC properties
   visitedAt: number;
   visitedBy?: string;
   references: number;
 
+  // Debug properties
+  sillyName: string;
   backtrace?: string;
 };
 

@@ -1,10 +1,12 @@
 import { Config } from './Config.ts';
 import { Context } from './Context.ts';
-import { FetchService } from './FetchService.ts';
+import { FetchOptions, FetchService } from './FetchService.ts';
 import { Query } from './Query.ts';
 import { Resource } from './Query.ts';
 import { Hash } from './util/Hash.ts';
 import { todo } from './util/functional.ts';
+
+export type FetchCallback = (body?: Uint8Array) => void;
 
 export class Scaffold {
   private ctx: Context;
@@ -17,16 +19,29 @@ export class Scaffold {
     return this.ctx;
   }
 
-  public fetch(resource: Resource, onAnswer: (answer: Uint8Array) => void) {
-    todo();
+  public fetch(
+    resource: Resource,
+    optionsOrCallback: FetchOptions | FetchCallback,
+    callback?: FetchCallback,
+  ) {
+    if (typeof optionsOrCallback === 'function') {
+      optionsOrCallback = { onBody: optionsOrCallback };
+    }
+
+    if (callback !== undefined) {
+      if (optionsOrCallback.onBody !== undefined) {
+        throw new Error(`Cannot pass two callbacks!`);
+      }
+      optionsOrCallback.onBody = callback;
+    }
+
     return this.ctx.get(FetchService).fetch(
       Query.fromResource(resource).toVerifier(),
-      {},
-      (block) => onAnswer(block.body),
+      optionsOrCallback,
     );
   }
 
-  public put(resource: Resource, answer: Uint8Array) {
+  public put(resource: Resource, body: Uint8Array) {
     todo();
   }
 

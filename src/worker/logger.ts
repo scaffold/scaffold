@@ -7,16 +7,20 @@ import { log } from '../../deps.ts';
 // };
 const formatter: log.FormatterFunction = (logRecord) =>
   `${logRecord.levelName} ${logRecord.msg} ${
-    logRecord.args.map((a) =>
-      JSON.stringify(a, (_key, value) =>
-        typeof value === 'bigint' ? value.toString() : value)
-    ).join(',')
+    logRecord.args
+      .map((a) =>
+        JSON.stringify(a, (_key, value) =>
+          typeof value === 'bigint' ? value.toString() : value)
+      )
+      .join(',')
   }`;
 
-const consoleHandler = new log.handlers.ConsoleHandler('DEBUG', { formatter });
-const fileHandler = new log.handlers.FileHandler('DEBUG', {
+const consoleHandler = new log.ConsoleHandler('DEBUG', { formatter });
+const fileHandler = new log.FileHandler('DEBUG', {
   filename: `/tmp/sbl_worker_${Date.now()}_${
-    Math.random().toString(36).slice(2)
+    Math.random()
+      .toString(36)
+      .slice(2)
   }.log`,
   formatter,
 });

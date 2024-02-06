@@ -21,15 +21,14 @@ export interface BackgroundJobParameters {
   frontierMergeIntervalMs?: number;
 }
 
-export interface TestParameters {
-}
+export interface TestParameters {}
 
 export interface TimeProvider {
   now(): number;
   setImmediate(cb: () => void): void;
-  setTimeout(cb: () => void, delay: number): number;
+  setTimeout(cb: () => void, delayMs: number): number;
   clearTimeout(idx: number): void;
-  setInterval(cb: () => void, delay: number): number;
+  setInterval(cb: () => void, delayMs: number): number;
   clearInterval(idx: number): void;
 }
 
@@ -143,51 +142,52 @@ export interface Config {
 
 export const defaultNetwork = 'main';
 
-export const makeDefaultConfig = () => ({
-  network: defaultNetwork,
-  debugName: '',
-  logLevel: log.LogLevels.INFO, // TODO: Set this to LogLevels.Warning
-  timeProvider: {
-    now: Date.now.bind(Date),
-    setImmediate: (cb) => setTimeout(cb, 0),
-    setTimeout: setTimeout.bind(window),
-    clearTimeout: clearTimeout.bind(window),
-    setInterval: setInterval.bind(window),
-    clearInterval: clearInterval.bind(window),
-  },
-  entropyProvider: {
-    randomNumber: Math.random.bind(Math),
-    randomBytes: secp.etc.randomBytes,
-  },
-  executionProviders: [],
-  contractProviders: defaultContractProviders,
-  approxComputePricePerSecond: 1000n,
-  getGenerationReward: (_verifier, computeTimeSeconds) => 0n,
-  // BigInt(computeTimeSeconds * 1e6) + 1000n,
-  getDepositIncentive: (_verifier) => 10n,
-  discardFutureBlocks: false,
-  targetFactCount: 1000,
-  // limitFactCount: Infinity,
-  limitFactCount: 10000,
-  allowSpecifiedFrontierOutputs: false,
-  initialWorkerCount: 16,
-  maxShutdownTimeMs: 10000,
-  resourceLimits: {
-    webWorkerCount: 16,
-    cpuUsage: navigator.hardwareConcurrency,
-    memoryMb: 1024,
-  },
-  workScoreThreshold: 10,
-  selfIncentiveMultiplier: 1.5,
-  graphParameters: {
-    enforceTimestampMonotonicity: false,
-    minimumGenerationTime: 1n,
-    minimumCollateral: (work, _time) => work * 1000n,
-  },
-  backgroundJobParameters: {},
-  testParameters: {},
-  dbgVerifyGenerations: false,
-  enableBlockIngestion: true,
-  enableValidation: true,
-  enableWorkerLogging: true,
-} satisfies Partial<Config>);
+export const makeDefaultConfig = () =>
+  ({
+    network: defaultNetwork,
+    debugName: '',
+    logLevel: log.LogLevels.INFO, // TODO: Set this to LogLevels.Warning
+    timeProvider: {
+      now: Date.now.bind(Date),
+      setImmediate: (cb) => setTimeout(cb, 0),
+      setTimeout: setTimeout.bind(window),
+      clearTimeout: clearTimeout.bind(window),
+      setInterval: setInterval.bind(window),
+      clearInterval: clearInterval.bind(window),
+    },
+    entropyProvider: {
+      randomNumber: Math.random.bind(Math),
+      randomBytes: secp.etc.randomBytes,
+    },
+    executionProviders: [],
+    contractProviders: defaultContractProviders,
+    approxComputePricePerSecond: 1000n,
+    getGenerationReward: (_verifier, computeTimeSeconds) => 0n,
+    // BigInt(computeTimeSeconds * 1e6) + 1000n,
+    getDepositIncentive: (_verifier) => 10n,
+    discardFutureBlocks: false,
+    targetFactCount: 1000,
+    // limitFactCount: Infinity,
+    limitFactCount: 10000,
+    allowSpecifiedFrontierOutputs: false,
+    initialWorkerCount: 16,
+    maxShutdownTimeMs: 10000,
+    resourceLimits: {
+      webWorkerCount: 16,
+      cpuUsage: navigator.hardwareConcurrency,
+      memoryMb: 1024,
+    },
+    workScoreThreshold: 10,
+    selfIncentiveMultiplier: 1.5,
+    graphParameters: {
+      enforceTimestampMonotonicity: false,
+      minimumGenerationTime: 1n,
+      minimumCollateral: (work, _time) => work * 1000n,
+    },
+    backgroundJobParameters: {},
+    testParameters: {},
+    dbgVerifyGenerations: false,
+    enableBlockIngestion: true,
+    enableValidation: true,
+    enableWorkerLogging: true,
+  }) satisfies Partial<Config>;

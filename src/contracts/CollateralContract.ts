@@ -29,14 +29,15 @@ export class CollateralContract implements ContractProvider {
     // Just verify that the params decode
     CollateralContractParams.decode(driver.getParams());
 
-    const postings: (Omit<InputSource, 'detail'> & Posting)[] = [];
+    const postings: (InputSource & Posting)[] = [];
     const inputCount = await driver.getInputCount();
     for (let i = 0; i < inputCount; i++) {
       const source = await driver.getInputSource(i);
       await driver.requireTimestampGte(source.blockTimestamp + resolutionDelay);
       postings.push({
         ...source,
-        detail: CollateralContractDetail.decode(source.detail),
+        detail: CollateralContractDetail.decode(source.outputDetail),
+        amount: source.outputAmount,
       });
     }
 

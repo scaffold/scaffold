@@ -43,22 +43,25 @@ interface Cache {
   treeChildrenWeight: Map<BlockFact, { minWeight: bigint }>;
   voterWeight: Map<BlockFact, { minWeight: bigint }[]>;
 }
-const makeCache = (): Cache => ({
-  ancestorWeight: new Map(),
-  selfWeight: new Map(),
-  descendantWeight: new Map(),
-  canonicality: new Map(),
-  canonicalVoter: new Map(),
-  canonicalParent: new Map(),
-  claimDelta: new Map(),
-  treeChildrenWeight: new Map(),
-  voterWeight: new Map(),
-});
 
 export class WeightService {
   constructor(private ctx: Context) {}
 
-  public getAncestorWeight(fact: BlockFact, cache = makeCache()) {
+  public makeCache(): Cache {
+    return {
+      ancestorWeight: new Map(),
+      selfWeight: new Map(),
+      descendantWeight: new Map(),
+      canonicality: new Map(),
+      canonicalVoter: new Map(),
+      canonicalParent: new Map(),
+      claimDelta: new Map(),
+      treeChildrenWeight: new Map(),
+      voterWeight: new Map(),
+    };
+  }
+
+  public getAncestorWeight(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.ancestorWeight, fact, () => {
       let minWeight = 0n;
 
@@ -76,7 +79,7 @@ export class WeightService {
 
   public getSelfWeight(
     fact: Pick<BlockFact, 'source' | 'inputs' | 'outputs'>,
-    cache = makeCache(),
+    cache = this.makeCache(),
   ) {
     return getOrCreate(cache.selfWeight, fact, () => {
       if (fact.source === FactSource.Genesis) {
@@ -121,7 +124,7 @@ export class WeightService {
     });
   }
 
-  public getDescendantWeight(fact: BlockFact, cache = makeCache()) {
+  public getDescendantWeight(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.descendantWeight, fact, () => {
       let minWeight = 0n;
 
@@ -147,11 +150,11 @@ export class WeightService {
     });
   }
 
-  public isCanonical(fact: BlockFact, cache = makeCache()) {
+  public isCanonical(fact: BlockFact, cache = this.makeCache()) {
     return this.getCanonicality(fact, cache) >= 0n;
   }
 
-  public getCanonicality(fact: BlockFact, cache = makeCache()) {
+  public getCanonicality(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.canonicality, fact, () => {
       let canonicality = this.getClaimDelta(fact, cache);
 
@@ -179,7 +182,7 @@ export class WeightService {
 
   public getCanonicalVoter(
     fact: BlockFact | typeof ZERO_BLOCK,
-    cache = makeCache(),
+    cache = this.makeCache(),
   ) {
     return getOrCreate(cache.canonicalVoter, fact, () => {
       const voters = this.ctx.get(BlockService).getVoters(
@@ -202,7 +205,7 @@ export class WeightService {
     });
   }
 
-  public getCanonicalParent(fact: BlockFact, cache = makeCache()) {
+  public getCanonicalParent(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.canonicalParent, fact, () => {
       const parents = fact.outputClaims[fact.frontierOutputIdx];
 
@@ -221,7 +224,7 @@ export class WeightService {
     });
   }
 
-  private getClaimDelta(fact: BlockFact, cache = makeCache()) {
+  private getClaimDelta(fact: BlockFact, cache = this.makeCache()) {
     // TODO: This should be based on:
     // 1. input siblings,
     // 2. frontier vote siblings,
@@ -270,7 +273,7 @@ export class WeightService {
     });
   }
 
-  private getTreeChildrenWeight(fact: BlockFact, cache = makeCache()) {
+  private getTreeChildrenWeight(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.treeChildrenWeight, fact, () => {
       let minWeight = 0n;
 
@@ -288,7 +291,7 @@ export class WeightService {
     });
   }
 
-  private getVoterWeight(fact: BlockFact, cache = makeCache()) {
+  private getVoterWeight(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.voterWeight, fact, () => {
       const bestVoter = this.getCanonicalVoter(fact, cache);
 

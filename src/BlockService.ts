@@ -69,9 +69,10 @@ export class BlockService {
   public blockMonitor = new ResolvingMonitor<Hash, BlockFact>((h) =>
     h.toPrimitive()
   ); // Key is block hash
-  public satisfactionMonitor = new WatchingMonitor<Verifier, BlockFact>((v) =>
-    Hash.digest(Verifier.encode(v)).toPrimitive()
-  ); // Key is input verifier
+  public satisfactionMonitor = new WatchingMonitor<
+    Verifier,
+    (block: BlockFact) => void
+  >((v) => Hash.digest(Verifier.encode(v)).toPrimitive()); // Key is input verifier
 
   constructor(private ctx: Context) {}
 
@@ -82,7 +83,8 @@ export class BlockService {
   public create(block: Block, mutator?: (fact: Fact) => void): BlockFact {
     // Immortalization attempts to spread the block as widely as possible to make it immutable and hard to change.
 
-    return this.ctx.get(FactService)
+    return this.ctx
+      .get(FactService)
       .emit(block, Block, FactType.Block, true, mutator);
   }
 
@@ -113,7 +115,8 @@ export class BlockService {
 
       verifiers: block.bodies.map(() => undefined),
 
-      receivedTimestamp: this.ctx.config.timeProvider.now(),
+      canonicality: -1n,
+
       flags: BlockFlag.None,
       votes: 0n,
       derivedWork: 0,
@@ -123,8 +126,8 @@ export class BlockService {
       ),
 
       isCanonical: frontierVote?.isCanonical !== false &&
-        block.inputs.every((x) =>
-          this.get(x.blockHash, false)?.isCanonical !== false
+        block.inputs.every(
+          (x) => this.get(x.blockHash, false)?.isCanonical !== false,
         ),
 
       frontierVoteBlock: Hash.equals(block.frontierVote, ZERO_HASH)
@@ -152,12 +155,9 @@ export class BlockService {
 
       persistentSources: [],
     };
-    const fact: BlockFact = Object.assign(
-      base,
-      block,
-      meta,
-      { type: FactType.Block as const },
-    );
+    const fact: BlockFact = Object.assign(base, block, meta, {
+      type: FactType.Block as const,
+    });
 
     if (mutator !== undefined) {
       mutator(fact);
@@ -222,7 +222,8 @@ export class BlockService {
           this.linkIo(fact, block, outputIdx, inputIdx)
         );
       } else {
-        this.ctx.get(GenerationService)
+        this.ctx
+          .get(GenerationService)
           .addInput({ block: fact, outputIdx, amount: output.amount });
       }
 
@@ -231,11 +232,9 @@ export class BlockService {
         const detailDec = CollateralContractDetail.decode(output.detail);
 
         if (this.ctx.get(FactService).isSignedByMe(fact)) {
-          this.ctx.get(FactService).updateValidity(
-            params.blockHash,
-            detailDec.hints,
-            detailDec.vote,
-          );
+          this.ctx
+            .get(FactService)
+            .updateValidity(params.blockHash, detailDec.hints, detailDec.vote);
         }
 
         this.ctx.get(FactService).addCollateral(params.blockHash, {
@@ -253,6 +252,9 @@ export class BlockService {
         //   this.ctx.get(LitigationService).scheduleResolution(contestedBlock);
         // }
       }
+
+      this.ctx.get(MonitoringService).verifierOutputMonitor
+        .callAll(output.verifier, fact, outputIdx);
 
       // if (Hash.equals(verifier.contractHash, epochInclusionHash)) {
       //   const { hash } = EpochInclusionParams.decode(verifier.params);
@@ -357,7 +359,8 @@ export class BlockService {
     const frontierDetail = FrontierTreeDetail.decode(output.detail);
 
     if (
-      frontierParams.level < 0 || frontierParams.level >= NUM_FRONTIER_LEVELS
+      frontierParams.level < 0 ||
+      frontierParams.level >= NUM_FRONTIER_LEVELS
     ) {
       throw new Error(`Invalid frontier level ${frontierParams.level}!`);
     }
@@ -505,12 +508,18 @@ export class BlockService {
     const hintPrefix = [
       CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } }),
     ];
-    this.ctx.get(VerificationService)
+    this.ctx
+      .get(VerificationService)
       .enqueueVerification(child, verifier, hintPrefix, 0);
 
     child.verifiers[groupIdx] = verifier;
 
     this.satisfactionMonitor.callAll(verifier, child);
+
+    if (child.canonicality >= 0n) {
+      this.ctx.get(MonitoringService).verifierInputMonitor
+        .callAll(verifier, child, childInputIdx);
+    }
 
     // // Commented out because we're moving to out-of-block collateralizations
     // if (Hash.equals(verifier.contractHash, collateralHash)) {
@@ -586,6 +595,15 @@ export class BlockService {
     }
   }
 
+  public updateCanonicalities(blocks: BlockFact[]) {
+    const cache = this.ctx.get(WeightService).makeCache();
+    for (const block of blocks) {
+      const newCanonicality = this.ctx.get(WeightService)
+        .getCanonicality(block, cache);
+      block.canonicality = newCanonicality;
+    }
+  }
+
   private setCanonicality(block: BlockFact, isCanonical: boolean) {
     if (isCanonical !== block.isCanonical) {
       block.isCanonical = isCanonical;
@@ -597,8 +615,8 @@ export class BlockService {
               claim.block,
               this.get(claim.block.frontierVote, false)?.isCanonical !==
                   false &&
-                claim.block.inputs.every((x) =>
-                  this.get(x.blockHash, false)?.isCanonical !== false
+                claim.block.inputs.every(
+                  (x) => this.get(x.blockHash, false)?.isCanonical !== false,
                 ),
             );
           } else {
@@ -722,7 +740,6 @@ export class BlockService {
 
   public updateLogMergeableProbability(block: BlockFact) {
     // Commented out because I think a canonicality bool is fine
-
     /*
     let sum = 0;
     for (const { block_hash, amount } of block.inputs) {
@@ -799,7 +816,8 @@ export class BlockService {
     return {
       min: voteIdx.min + treeSize,
       max: voteIdx.max +
-        (2n << BigInt(block.frontierVoteBlock.frontierParams.level)) - 1n -
+        (2n << BigInt(block.frontierVoteBlock.frontierParams.level)) -
+        1n -
         BigInt(
           block.frontierVoteBlock.frontierParams.level -
             block.frontierParams.level,
@@ -862,8 +880,10 @@ export class BlockService {
   }
 
   public areVerifiersEqual(a: Verifier, b: Verifier) {
-    return Hash.equals(a.contractHash, b.contractHash) &&
-      arrEquals(a.params, b.params);
+    return (
+      Hash.equals(a.contractHash, b.contractHash) &&
+      arrEquals(a.params, b.params)
+    );
   }
 
   public get(hash: Hash, request = true): BlockFact | undefined {
@@ -886,28 +906,36 @@ export class BlockService {
   }
 
   public getBlocksByVerifier(verifier: Verifier) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching()
+    return this.ctx
+      .get(FactService)
+      .hackyGetBlocksMatching()
       .flatMap((block) => {
-        const idx = block.verifiers.findIndex((v) =>
-          v !== undefined &&
-          Hash.equals(v.contractHash, verifier.contractHash) &&
-          arrEquals(v.params, verifier.params)
+        const idx = block.verifiers.findIndex(
+          (v) =>
+            v !== undefined &&
+            Hash.equals(v.contractHash, verifier.contractHash) &&
+            arrEquals(v.params, verifier.params),
         );
         return idx !== -1 ? [{ block, groupIdx: idx }] : [];
       });
   }
 
   public getBlocksByInput(input: BlockInput) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching((block) =>
-      block.inputs.some((y) =>
-        Hash.equals(y.blockHash, input.blockHash) &&
-        y.outputIdx === input.outputIdx
-      )
-    );
+    return this.ctx
+      .get(FactService)
+      .hackyGetBlocksMatching((block) =>
+        block.inputs.some(
+          (y) =>
+            Hash.equals(y.blockHash, input.blockHash) &&
+            y.outputIdx === input.outputIdx,
+        )
+      );
   }
 
   public getBlocksByOutput(verifier: Verifier) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching()
+    return this.ctx
+      .get(FactService)
+      .hackyGetBlocksMatching()
       .flatMap((block) =>
         block.outputs.flatMap((y, idx) =>
           Hash.equals(y.verifier.contractHash, verifier.contractHash) &&
@@ -922,16 +950,17 @@ export class BlockService {
     contractHash: Hash,
     cond: (params: Uint8Array) => boolean,
   ) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching().flatMap((
-      block,
-    ) =>
-      block.outputs.flatMap((y, idx) =>
-        Hash.equals(y.verifier.contractHash, contractHash) &&
-          cond(y.verifier.params)
-          ? [{ block, idx }]
-          : []
-      )
-    );
+    return this.ctx
+      .get(FactService)
+      .hackyGetBlocksMatching()
+      .flatMap((block) =>
+        block.outputs.flatMap((y, idx) =>
+          Hash.equals(y.verifier.contractHash, contractHash) &&
+            cond(y.verifier.params)
+            ? [{ block, idx }]
+            : []
+        )
+      );
   }
 
   public waitForBlock(hash: Hash, cancelSignal: AbortSignal) {
@@ -1024,7 +1053,8 @@ export class BlockService {
     const promises: { inputPromise: Promise<BlockFact>; input: BlockInput }[] =
       [];
     for (const input of block.inputs) {
-      const inputPromise = this.ctx.get(BlockService)
+      const inputPromise = this.ctx
+        .get(BlockService)
         .waitForBlock(input.blockHash, controller.signal);
       if (inputPromise instanceof Promise) {
         cancelSignal.addEventListener('abort', () => controller.abort());

@@ -17,9 +17,17 @@ export const enum BurdenOfProof {
   Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid. Self-votes are INVALID, and a single VALID child vote validates.
 }
 
-export type InputSource = BlockInput & BlockOutput & {
+export interface InputSource {
+  blockHash: Hash;
   blockTimestamp: bigint;
-};
+
+  groupIdx: number;
+  body: Uint8Array;
+
+  outputIdx: number;
+  outputAmount: bigint;
+  outputDetail: Uint8Array;
+}
 
 export interface ComputationDriver extends WorkerDriver {
   type: ComputationType;

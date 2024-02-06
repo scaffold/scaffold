@@ -485,8 +485,6 @@ export class FactService {
     const base: FactBase = {
       hash,
 
-      sillyName: this.getSillyName(),
-
       data,
       type,
       message: data.subarray(
@@ -495,9 +493,11 @@ export class FactService {
       ),
       signature,
 
+      receivedAt: this.ctx.config.timeProvider.now(),
       source,
       signer: this.computePublicKey({ data, signature }),
       fromNodes: [],
+
       toNodes: [],
 
       collateralizations: mapPut(
@@ -514,6 +514,7 @@ export class FactService {
       visitedAt: 0,
       references: 0,
 
+      sillyName: this.getSillyName(),
       backtrace: new Error().stack,
     };
 
@@ -551,6 +552,12 @@ export class FactService {
 
     for (const cb of this.ingestListeners[base.type]) {
       cb(res);
+    }
+
+    if (res.type === FactType.Block) {
+      this.ctx.get(BlockService).updateCanonicalities(
+        this.hackyGetBlocksMatching(),
+      );
     }
 
     this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);

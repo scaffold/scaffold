@@ -1,21 +1,18 @@
 import { HashPrimitive } from './Hash.ts';
 import { getOrCreate } from './map.ts';
 
-class Monitor<Key, Value, ReturnType> {
-  protected listeners = new Map<
-    HashPrimitive,
-    ((value: Value) => ReturnType)[]
-  >();
+class Monitor<Key, Callback extends (...args: never[]) => void> {
+  protected listeners = new Map<HashPrimitive, Callback[]>();
 
   constructor(protected keyFn: (key: Key) => HashPrimitive) {}
 
-  public on(key: Key, cb: (value: Value) => ReturnType) {
+  public on(key: Key, cb: Callback) {
     const hp = this.keyFn(key);
     getOrCreate(this.listeners, hp, () => []).push(cb);
     return { release: () => this.off(key, cb) };
   }
 
-  public off(key: Key, cb: (value: Value) => ReturnType) {
+  public off(key: Key, cb: Callback) {
     const hp = this.keyFn(key);
     const listeners = this.listeners.get(hp);
     if (listeners === undefined) {
@@ -33,11 +30,12 @@ class Monitor<Key, Value, ReturnType> {
   }
 }
 
-export class ResolvingMonitor<Key, Value> extends Monitor<Key, Value, boolean> {
+export class ResolvingMonitor<Key, Value>
+  extends Monitor<Key, (arg: Value) => boolean> {
   public waitFor(
     key: Key,
     until: AbortSignal,
-    filter?: (value: Value) => boolean,
+    filter?: (val: Value) => boolean,
   ) {
     return new Promise<Value>((resolve) => {
       if (!until.aborted) {
@@ -93,13 +91,14 @@ export class ResolvingMonitor<Key, Value> extends Monitor<Key, Value, boolean> {
   }
 }
 
-export class WatchingMonitor<Key, Value> extends Monitor<Key, Value, void> {
-  public callAll(key: Key, value: Value) {
+export class WatchingMonitor<Key, Callback extends (...args: never[]) => void>
+  extends Monitor<Key, Callback> {
+  public callAll(key: Key, ...values: Parameters<Callback>) {
     const hp = this.keyFn(key);
     const listeners = this.listeners.get(hp);
     if (listeners !== undefined) {
       for (const l of listeners) {
-        l(value);
+        l(...values);
       }
     }
   }

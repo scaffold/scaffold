@@ -436,10 +436,10 @@ export class GenerationService {
           // TODO: Check isMergeable() here
 
           // TODO: Call pause/resume when requesting?
-          this.ctx.get(FetchService).fetch(
-            { contractHash, params },
-            { abortSignal: workerDriver.done.signal, incentive },
-            (result, block) => {
+          this.ctx.get(FetchService).fetch({ contractHash, params }, {
+            abortSignal: workerDriver.done.signal,
+            incentive,
+            onResponseBlock: (block, groupIdx) => {
               this.ctx.get(Logger).info('got req', {
                 verifier: { contractHash, params },
                 block,
@@ -455,9 +455,9 @@ export class GenerationService {
 
               refs.push(block);
               workerDriver.resumeTimer();
-              reply(result);
+              reply(block.bodies[groupIdx]);
             },
-          );
+          });
         }),
 
       fulfills: (block: BlockFact, outputIdx: number) =>
@@ -507,12 +507,19 @@ export class GenerationService {
           }
         }
 
+        const output = input.block.outputs[input.outputIdx];
+
         workerDriver.resumeTimer();
         return {
           blockHash: input.block.hash,
           blockTimestamp: input.block.timestamp,
+
+          groupIdx: output.groupIdx,
+          body: input.block.bodies[output.groupIdx],
+
           outputIdx: input.outputIdx,
-          ...input.block.outputs[input.outputIdx],
+          outputAmount: output.amount,
+          outputDetail: output.detail,
         };
       },
 

@@ -323,8 +323,13 @@ export class VerificationService {
             return {
               blockHash: inputBlock.hash,
               blockTimestamp: inputBlock.timestamp,
+
+              groupIdx: output.groupIdx,
+              body: inputBlock.bodies[output.groupIdx],
+
               outputIdx: input.outputIdx,
-              ...output,
+              outputAmount: output.amount,
+              outputDetail: output.detail,
             };
           }
         }

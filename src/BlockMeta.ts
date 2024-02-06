@@ -45,9 +45,8 @@ export interface BlockMeta {
   // descendantWeight: bigint;
   // claimDelta: bigint;
   // voterWeight: bigint;
-  // canonicality: bigint;
+  canonicality: bigint;
 
-  receivedTimestamp: number;
   flags: BlockFlag;
   claimedWork?: bigint;
   votes: bigint;
@@ -56,7 +55,7 @@ export interface BlockMeta {
   mergeableProbability: number;
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
-  outputClaims: OutputClaim[][]; // TODO: Do we need inputIdx here?
+  outputClaims: OutputClaim[][];
 
   isCanonical: boolean;
 

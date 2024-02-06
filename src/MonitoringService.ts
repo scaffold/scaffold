@@ -1,6 +1,6 @@
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
-import { BlockInput } from './messages.ts';
+import { BlockInput, Verifier } from './messages.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { WatchingMonitor } from './util/Monitor.ts';
 import { mapPut } from './util/map.ts';
@@ -23,9 +23,24 @@ Collateral(block: BlockFact)
 */
 
 export class MonitoringService {
-  public claimMonitor = new WatchingMonitor<BlockInput, OutputClaim>((input) =>
-    input.blockHash.toPrimitive() + input.outputIdx
-  );
+  // TODO: How to manage canonicality and validity here?
+  public verifierOutputMonitor = new WatchingMonitor<
+    Verifier,
+    (block: BlockFact, outputIdx: number) => void
+  >((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
+
+  // TODO: How to manage canonicality and validity here?
+  public verifierInputMonitor = new WatchingMonitor<
+    Verifier,
+    (block: BlockFact, inputIdx: number) => void
+  >((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
+
+  public claimMonitor = new WatchingMonitor<
+    BlockInput,
+    (claim: OutputClaim) => void
+  >((
+    input,
+  ) => input.blockHash.toPrimitive() + input.outputIdx);
 
   // public canonicalityMonitor = new WatchingMonitor<Hash, boolean>((hash) =>
   //   hash.toPrimitive()
@@ -35,9 +50,10 @@ export class MonitoringService {
   //   hash.toPrimitive()
   // );
 
-  public collateralMonitor = new WatchingMonitor<Hash, Collateralization>((
-    hash,
-  ) => hash.toPrimitive());
+  public collateralMonitor = new WatchingMonitor<
+    Hash,
+    (collateralization: Collateralization) => void
+  >((hash) => hash.toPrimitive());
 
   constructor(private ctx: Context) {}
 }

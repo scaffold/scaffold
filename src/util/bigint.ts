@@ -19,16 +19,23 @@ export const bin2bigint = (arr: Uint8Array) => {
 };
 
 export const bigint2bin = (num: bigint, size?: number) => {
+  if (num < 0n) {
+    throw new Error(`Cannot convert a negative bigint to binary!`);
+  }
+
   if (size) {
     const arr = new Uint8Array(size);
     for (let i = 0; i < size; i++) {
       arr[i] = Number(num & 0xFFn);
       num >>= 8n;
     }
+    if (num !== 0n) {
+      throw new Error(`Bigint exceeds ${size} bytes!`);
+    }
     return arr;
   } else {
     const arr: number[] = [];
-    while (num > 0n) {
+    while (num !== 0n) {
       arr.push(Number(num & 0xFFn));
       num >>= 8n;
     }

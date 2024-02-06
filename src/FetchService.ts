@@ -7,177 +7,156 @@ import { Hash } from './util/Hash.ts';
 import { BlockBuilder } from './BlockBuilder.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
-import { todo } from './util/functional.ts';
+import { error, todo } from './util/functional.ts';
+import { arrEquals } from './util/buffer.ts';
+import { FactService } from './FactService.ts';
+import { zeroHash } from './constants.ts';
+import { collatzHash } from './constants.ts';
 
-export const enum FetchMode {
+export enum FetchMode {
+  Oldest,
+  Latest,
   All,
-  Canonical,
 }
 
-interface FetchOptions {
-  detail?: Uint8Array;
-  dedupKey?: Hash | unknown;
-  incentive?: bigint;
-  internalIncentive?: bigint;
-  externalIncentive?: bigint; // TODO: Remove this, since we calculate it via config. Maybe change to boolean, if there's cases when we don't want to incentivize.
-  bid?: { output: Verifier; amount: bigint };
-  blockSelector?: (blocks: BlockFact[]) => BlockFact;
-  blockComparator?: (a: BlockFact, b: BlockFact) => number;
-  verify?: true;
-  certaintyThreshold?: number;
+export interface FetchOptions {
+  // Pass a signal to allow cancelling the request
+  abortSignal?: AbortSignal;
 
+  // If this is set, abort/cancel/release any previous fetches with the same key
+  dedupKey?: unknown;
+
+  // The amount of generation incentive to use
+  incentive?: bigint;
+
+  // Which block to select, if there's multiple candidates
+  mode?: FetchMode;
+
+  // Whether to verify results before returning them
+  verify?: boolean;
+
+  // Whether to limit how fast the body callback is called; only affects the onBody callback
+  debounceMs?: number;
+
+  // Delays the body callback until its canonicality is at least this value; only affects the onBody callback
+  minCanonicality?: bigint;
+
+  // This is called whenever we create a block incentivizing our request
   onIncentiveBlock?: (block: BlockFact, outputIdx: number) => void;
-  onResponseBlock?: (block: BlockFact) => void;
+
+  // This is called whenever we generate or receive a block fulfilling our request
+  onResponseBlock?: (block: BlockFact, groupIdx: number) => void;
+
+  // This is called whenever we generate or receive a block collateralizing the most recently called response block
   onResponseCollateral?: (collateral: Collateralization) => void;
+
+  // TODO: Also need to expose (perhaps via another api):
   // The descending frontier chain
   // The total derived work / canonicality
 
-  abortSignal?: AbortSignal;
+  // This is called whenever we generate or receive a more up-to-date body, subject to debouncing and the canonicality threshold.
+  onBody?: (body?: Uint8Array) => void;
 }
 
-// TODO: Find canonical block
-// Rank by mergability probability
-//   Which is mostly the amount allocated to free-market verifiers from all terminal descendants
-export const defaultBlockSelector = (blocks: BlockFact[]) => blocks[0];
-export const defaultBlockComparator = (a: BlockFact, b: BlockFact) => -1;
-
-// TODO: Rename to RequestService?
 export class FetchService {
-  private pendingKeyedFetches = new Set<unknown>();
+  private pendingKeyedFetches = new Map<unknown, unknown>();
 
   constructor(private ctx: Context) {}
 
-  // public listen(verifier:Verifier, {}?:FetchOptions, cb?: (body: Uint8Array) => void) {}
-  // public listenBlock(verifier:Verifier, {}?:FetchOptions, cb?: (block: BlockFact) => void) {}
-  // public fetch(verifier:Verifier, {}?:FetchOptions): Promise<Uint8Array> {}
-
-  // TODO: Rename to query?
-  public fetch(
-    verifier: Verifier,
-    {
-      detail,
+  public fetch(verifier: Verifier, options: FetchOptions) {
+    const {
+      abortSignal,
       dedupKey,
       incentive,
-      internalIncentive,
-      externalIncentive,
-      bid,
-      blockSelector,
-      blockComparator,
+      mode,
       verify,
+      debounceMs,
+      minCanonicality,
       onIncentiveBlock,
       onResponseBlock,
       onResponseCollateral,
-      abortSignal,
-    }: FetchOptions,
-    cb?: (result: Uint8Array, block: BlockFact) => void,
-  ) {
+      onBody,
+    } = options;
+
     if (abortSignal?.aborted) {
-      return;
+      return { release: () => {} };
     }
 
-    console.log('FETCH', verifier);
-
-    // console.log(
-    //   `Fetching block`,
-    //   { ...verifier, ...this.ctx.get(QaDebugger).debugQuestion(verifier) },
-    // );
-
-    internalIncentive = 1n;
-    if (internalIncentive !== undefined) {
-      // this.ctx.get(GenerationService).enqueueGeneration(
-      //   verifier,
-      //   detail,
-      //   Number(internalIncentive),
-      // );
-
-      // TODO: We don't need the contract/generator before starting execution. Just request it like any other input.
-
-      // const gen = this.ctx.get(LocalGenerationService).getGenerator(
-      //   verifier.contractHash,
-      // );
-      // if (gen) {
-      //   const res = gen({
-      //     ctx: this.ctx,
-      //     contractHash: verifier.contractHash,
-      //     params: verifier.params,
-      //     emitCorrect: true,
-      //     setFreeMarket: () => error('Not implemented'),
-      //     request: (contractHash: Hash, params: Uint8Array) =>
-      //       new Promise((resolve) =>
-      //         this.fetch(
-      //           { contractHash: contractHash, params },
-      //           {},
-      //           // TODO: Handle dirty inputs (repeated resolve calls)
-      //           (block) => resolve(block.body),
-      //         )
-      //       ),
-      //     notify: (contractHash: Hash, params: Uint8Array) =>
-      //       this.fetch({ contractHash: contractHash, params }, {}),
-      //   });
-      //   if (res instanceof Promise) {
-      //     res.then((body) => {
-      //       const block = this.ctx.get(BlockBuilder).build(verifier, body);
-      //       this.ctx.get(BlockService).ingest(block);
-      //     });
-      //   }
-      // }
-
-      // const verifierHash = Hash.digest(Verifier.encode(verifier));
-      // this.ctx.get(ExtraIncentiveByVerifierStore).mutate(
-      //   verifierHash,
-      //   (val) => ({
-      //     verifier,
-      //     amount: val ? val.amount + internalIncentive : internalIncentive,
-      //   }),
-      // );
+    const got = this.ctx.get(BlockService).getBlocksByVerifier(verifier);
+    if (got.length > 0) {
+      const last = got[got.length - 1];
+      if (onBody !== undefined) {
+        onBody(last.block.bodies[last.groupIdx]);
+      }
+    } else {
+      const amount = incentive ?? this.ctx.config.getDepositIncentive(verifier);
+      if (amount >= 0n) {
+        this.ctx.get(BlockBuilder).publishPersistentDraft({
+          outputs: [{ verifier, amount, detail: EMPTY_ARR }],
+          timeout: 0,
+          onBlock: onIncentiveBlock !== undefined
+            ? (block, groupIdx) =>
+              onIncentiveBlock(
+                block,
+                block.outputs.findIndex((x) => x.groupIdx === groupIdx),
+              )
+            : undefined,
+        });
+      }
     }
 
-    incentive ??= this.ctx.config.getDepositIncentive(verifier);
-    if (incentive >= 0n) {
-      this.ctx.get(BlockBuilder).publishPersistentDraft({
-        outputs: [{ verifier, amount: incentive, detail: EMPTY_ARR }],
-        timeout: 0,
-        onBlock: onIncentiveBlock !== undefined
-          ? (block, groupIdx) =>
-            onIncentiveBlock(
-              block,
-              block.outputs.findIndex((x) => x.groupIdx === groupIdx),
-            )
-          : undefined,
-      });
-    }
-
-    // if (bid !== undefined) {
-    //   this.ctx.get(NodeService).getAll().forEach((node) =>
-    //     node.defaultConn?.sendReliable({
-    //       BidMessage: {
-    //         input: verifier,
-    //         output: bid.output,
-    //         amount: bid.amount,
-    //       },
-    //     })
-    //   );
-    // }
-
-    let onState: (block: BlockFact) => boolean;
-    if (cb !== undefined) {
-      let prevBlock: BlockFact | undefined;
-      onState = (block: BlockFact) => {
-        if (
-          prevBlock === undefined ||
-          (blockComparator || defaultBlockComparator)(prevBlock, block)
-        ) {
-          prevBlock = block;
-          const groupIdx = block.verifiers.findIndex((v) =>
-            v !== undefined &&
-            this.ctx.get(BlockService).areVerifiersEqual(v, verifier)
+    let onState: (block?: BlockFact) => boolean;
+    let watchItvl: number | undefined;
+    if (onBody !== undefined || onResponseBlock !== undefined) {
+      let prevBody: Uint8Array | undefined;
+      onState = (block) => {
+        if (block !== undefined) {
+          const groupIdx = block.verifiers.findIndex(
+            (v) =>
+              v !== undefined &&
+              this.ctx.get(BlockService).areVerifiersEqual(v, verifier),
           );
-          cb(block.bodies[groupIdx], block);
+          onResponseBlock?.(block, groupIdx);
+
+          const body = block.bodies[groupIdx];
+          if (prevBody === undefined || !arrEquals(body, prevBody)) {
+            prevBody = body;
+            onBody?.(body);
+          }
+        } else {
+          if (prevBody !== undefined) {
+            prevBody = undefined;
+            onBody?.(undefined);
+          }
         }
+
         return true;
       };
 
-      this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
+      // TODO: Enable this and disable the interval-based monitoring
+      // this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
+
+      watchItvl = this.ctx.config.timeProvider.setInterval(() => {
+        let bestBlock: BlockFact | undefined;
+
+        const blocks = this.ctx.get(FactService).hackyGetBlocksMatching();
+        for (const block of blocks) {
+          if (
+            block.canonicality >= 0n &&
+            (bestBlock === undefined ||
+              block.canonicality > bestBlock.canonicality) &&
+            block.verifiers.some(
+              (v) =>
+                v !== undefined &&
+                this.ctx.get(BlockService).areVerifiersEqual(v, verifier),
+            )
+          ) {
+            bestBlock = block;
+          }
+        }
+
+        onState(bestBlock);
+      }, 100);
     }
 
     let released = false;
@@ -187,49 +166,14 @@ export class FetchService {
       }
       released = true;
 
-      if (internalIncentive !== undefined) {
-        // this.ctx.get(GenerationService).enqueueGeneration(
-        //   verifier,
-        //   detail,
-        //   0,
-        // );
-      }
-
-      if (externalIncentive !== undefined) {
-        // TODO: Claim our incentive to get it back
-      }
-
-      if (cb !== undefined) {
-        this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
+      if (watchItvl !== undefined) {
+        // this.ctx.get(BlockService).satisfactionMonitor.off(verifier, onState);
+        this.ctx.config.timeProvider.clearInterval(watchItvl);
       }
     };
 
     abortSignal?.addEventListener('abort', release);
 
-    return {
-      release, // getTotalInternalIncentive: () =>
-      //   BigInt(this.ctx.get(WorkQueue).getTotalIncentive(verifier)),
-      // getTotalExternalIncentive: () => error('Not implemented'),
-      // setInternalIncentive: (incentive: bigint) => {
-      //   this.ctx.get(WorkQueue).addExtraIncentive(
-      //     verifier,
-      //     Number(incentive - (internalIncentive || 0n)),
-      //   );
-      //   internalIncentive = incentive;
-      // },
-      // setExternalIncentive: (incentive: bigint) => {
-      //   this.ctx.get(IncentiveService).incentivize(
-      //     verifier,
-      //     incentive - (externalIncentive || 0n),
-      //   );
-      //   externalIncentive = incentive;
-      // },
-
-      // The incentive block
-      // The response block
-      // The collateral block
-      // The descending frontier chain
-      // The total derived work / canonicality
-    };
+    return { release };
   }
 }
