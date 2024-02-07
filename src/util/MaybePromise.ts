@@ -11,3 +11,34 @@ export const maybeThen = <T, R>(
     return cb(p);
   }
 };
+
+export const raceTruthy = <T>(
+  cb: (until: AbortSignal) => MaybePromise<T>[],
+  until: AbortSignal,
+) => {
+  if (until.aborted) {
+    return;
+  }
+
+  const controller = new AbortController();
+  until.addEventListener('abort', () => controller.abort());
+
+  const promises = cb(controller.signal);
+  let count = promises.length;
+  if (count === 0) {
+    return;
+  }
+
+  return new Promise<T | undefined>((resolve) => {
+    for (const promise of promises) {
+      maybeThen(promise, (val) => {
+        if (val) {
+          controller.abort();
+          resolve(val);
+        } else if (--count === 0) {
+          resolve(undefined);
+        }
+      });
+    }
+  });
+};

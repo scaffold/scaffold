@@ -4,6 +4,7 @@ import { BlockFact, FactType } from './FactMeta.ts';
 import { CollateralHint } from './collateralMessages.ts';
 import { FactService } from './FactService.ts';
 import { mapPut } from './util/map.ts';
+import { BlockService } from './BlockService.ts';
 
 export interface HintProvider {
   suggestNext(params: Uint8Array, hints: Uint8Array[]): Uint8Array[];
@@ -50,12 +51,16 @@ export class HintSuggestionService {
         throw new Error(`Invalid request!`);
       }
     } else if ('CollateralHintVerifier' in hint) {
-      const verifier = block.verifiers[hint.CollateralHintVerifier.groupIdx];
-      if (verifier === undefined) {
-        return [];
-      }
-      return (this.providers.get(verifier.contractHash.toPrimitive()) ?? [])
-        .flatMap((provider) => provider.suggestNext(verifier.params, rest));
+      return block.inputs.flatMap((input) => {
+        const verifier =
+          input.groupIdx === hint.CollateralHintVerifier.groupIdx &&
+          this.ctx.get(BlockService).get(input.blockHash, false)
+            ?.outputs[input.outputIdx].verifier;
+        return verifier
+          ? (this.providers.get(verifier.contractHash.toPrimitive()) ?? [])
+            .flatMap((provider) => provider.suggestNext(verifier.params, rest))
+          : [];
+      });
     } else {
       throw new Error(`Invalid top-level hint!`);
     }

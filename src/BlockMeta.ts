@@ -38,7 +38,7 @@ export const ZERO_BLOCK = Symbol('ZeroBlock');
 export interface BlockMeta {
   original: Block; // TODO: Remove
 
-  verifiers: (Verifier | undefined)[];
+  // verifiers: (Verifier | undefined)[];
 
   // selfWeightMin: bigint;
   // selfWeightMax: bigint;

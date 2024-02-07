@@ -56,6 +56,7 @@ import { MonitoringService } from './MonitoringService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { neverAbort } from './util/abortable.ts';
 import { GenerationService } from './GenerationService.ts';
+import { raceTruthy } from './util/MaybePromise.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -112,7 +113,7 @@ export class BlockService {
     const meta: BlockMeta = {
       original: block,
 
-      verifiers: block.bodies.map(() => undefined),
+      // verifiers: block.bodies.map(() => undefined),
 
       canonicality: -1n,
 
@@ -515,13 +516,13 @@ export class BlockService {
       .get(VerificationService)
       .enqueueVerification(child, verifier, hintPrefix, 0);
 
-    if (
-      child.verifiers[groupIdx] !== undefined &&
-      !this.areVerifiersEqual(child.verifiers[groupIdx]!, verifier)
-    ) {
-      throw new Error(`Cannot have multiple verifiers for the same groupIdx!`);
-    }
-    child.verifiers[groupIdx] = verifier;
+    // if (
+    //   child.verifiers[groupIdx] !== undefined &&
+    //   !this.areVerifiersEqual(child.verifiers[groupIdx]!, verifier)
+    // ) {
+    //   throw new Error(`Cannot have multiple verifiers for the same groupIdx!`);
+    // }
+    // child.verifiers[groupIdx] = verifier;
 
     this.satisfactionMonitor.callAll(verifier, child);
 
@@ -919,13 +920,15 @@ export class BlockService {
       .get(FactService)
       .hackyGetBlocksMatching()
       .flatMap((block) => {
-        const idx = block.verifiers.findIndex(
-          (v) =>
-            v !== undefined &&
-            Hash.equals(v.contractHash, verifier.contractHash) &&
-            arrEquals(v.params, verifier.params),
-        );
-        return idx !== -1 ? [{ block, groupIdx: idx }] : [];
+        const input = block.inputs.find((input) => {
+          const inputBlock = this.get(input.blockHash, false);
+          return inputBlock !== undefined &&
+            this.areVerifiersEqual(
+              inputBlock.outputs[input.outputIdx].verifier,
+              verifier,
+            );
+        });
+        return input !== undefined ? [{ block, groupIdx: input.groupIdx }] : [];
       });
   }
 
@@ -1058,23 +1061,23 @@ export class BlockService {
     verifier: Verifier,
     cancelSignal: AbortSignal,
   ) {
-    const test = block.verifiers[groupIdx];
-    if (test !== undefined) {
-      return this.areVerifiersEqual(test, verifier);
-    } else {
-      const inputIdx = block.inputs.find((x) => x.groupIdx === groupIdx);
-      if (inputIdx === undefined) {
-        return false;
-      }
-      return maybeThen(
-        this.waitForBlock(inputIdx.blockHash, cancelSignal),
-        (block) =>
-          this.areVerifiersEqual(
-            block.outputs[inputIdx.outputIdx].verifier,
-            verifier,
+    return maybeThen(
+      raceTruthy(
+        (until) =>
+          block.inputs.map((input) =>
+            input.groupIdx === groupIdx && maybeThen(
+              this.waitForBlock(input.blockHash, until),
+              (block) =>
+                this.areVerifiersEqual(
+                  block.outputs[input.outputIdx].verifier,
+                  verifier,
+                ),
+            )
           ),
-      );
-    }
+        cancelSignal,
+      ),
+      (x) => x ?? false,
+    );
   }
 
   public getGroupIndex(

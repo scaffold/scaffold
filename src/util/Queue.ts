@@ -2,16 +2,14 @@ import { HashPrimitive } from './Hash.ts';
 import { getOrCreate } from './map.ts';
 
 export class Queue<Key, Value> {
-  protected queues = new Map<
-    HashPrimitive,
-    {
-      pending: Value[];
-      handlers: {
-        filter(value: Value): boolean;
-        resolve(value: Value): void;
-      }[];
-    }
-  >();
+  protected queues = new Map<HashPrimitive, {
+    key: Key; // TODO: Remove; it's just for debugging
+    pending: Value[];
+    handlers: {
+      filter(value: Value): boolean;
+      resolve(value: Value): void;
+    }[];
+  }>();
 
   constructor(protected keyFn: (key: Key) => HashPrimitive) {}
 
@@ -57,7 +55,7 @@ export class Queue<Key, Value> {
       const queue = getOrCreate(
         this.queues,
         hp,
-        () => ({ pending: [], handlers: [] }),
+        () => ({ key, pending: [], handlers: [] }),
       );
 
       for (let i = 0; i < queue.pending.length; i++) {
@@ -83,7 +81,7 @@ export class Queue<Key, Value> {
     const queue = getOrCreate(
       this.queues,
       hp,
-      () => ({ pending: [], handlers: [] }),
+      () => ({ key, pending: [], handlers: [] }),
     );
     for (let i = 0; i < queue.handlers.length; i++) {
       if (queue.handlers[i].filter(value)) {

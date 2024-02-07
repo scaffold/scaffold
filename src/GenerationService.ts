@@ -492,10 +492,21 @@ export class GenerationService {
                   if (!isMergeable(input)) {
                     return false;
                   }
-                  const test = input.block
-                    .verifiers[input.block.outputs[input.outputIdx].groupIdx];
-                  return test !== undefined && this.ctx.get(BlockService)
-                    .areVerifiersEqual(test, satisfies);
+
+                  const groupIdx =
+                    input.block.outputs[input.outputIdx].groupIdx;
+                  return input.block.inputs.some((input) => {
+                    if (input.groupIdx !== groupIdx) {
+                      return false;
+                    }
+                    const inputBlock = this.ctx.get(BlockService)
+                      .get(input.blockHash, false);
+                    return inputBlock !== undefined &&
+                      this.ctx.get(BlockService).areVerifiersEqual(
+                        inputBlock.outputs[input.outputIdx].verifier,
+                        satisfies,
+                      );
+                  });
                 },
               ),
             workerDriver.done.signal,

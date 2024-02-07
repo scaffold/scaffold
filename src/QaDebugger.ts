@@ -45,8 +45,8 @@ export class QaDebugger {
     }
   }
 
-  public debugAnswer({ verifiers, bodies }: {
-    verifiers: (Verifier | undefined)[];
+  public debugAnswer({ bodies }: {
+    // verifiers: (Verifier | undefined)[];
     bodies: Uint8Array[];
   }): { dbgAnswer: any } | undefined {
     // const dbgrs = verifiers.map((v) =>

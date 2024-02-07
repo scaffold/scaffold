@@ -124,14 +124,21 @@ export class FetchService {
       let prevBody: Uint8Array | undefined;
       onState = (block) => {
         if (block !== undefined) {
-          const groupIdx = block.verifiers.findIndex(
-            (v) =>
-              v !== undefined &&
-              this.ctx.get(BlockService).areVerifiersEqual(v, verifier),
-          );
-          onResponseBlock?.(block, groupIdx);
+          const input = block.inputs.find((input) => {
+            const inputBlock = this.ctx.get(BlockService)
+              .get(input.blockHash, false);
+            return inputBlock !== undefined &&
+              this.ctx.get(BlockService).areVerifiersEqual(
+                inputBlock.outputs[input.outputIdx].verifier,
+                verifier,
+              );
+          });
+          if (input === undefined) {
+            throw new Error(`Verifier not found!`);
+          }
+          onResponseBlock?.(block, input.groupIdx);
 
-          const body = block.bodies[groupIdx];
+          const body = block.bodies[input.groupIdx];
           if (prevBody === undefined || !arrEquals(body, prevBody)) {
             prevBody = body;
             onBody?.(body);
@@ -160,11 +167,15 @@ export class FetchService {
               (mode === FetchMode.Latest
                 ? block.canonicality <= bestBlock.canonicality
                 : block.canonicality > bestBlock.canonicality)) &&
-            block.verifiers.some(
-              (v) =>
-                v !== undefined &&
-                this.ctx.get(BlockService).areVerifiersEqual(v, verifier),
-            )
+            block.inputs.some((input) => {
+              const inputBlock = this.ctx.get(BlockService)
+                .get(input.blockHash, false);
+              return inputBlock !== undefined &&
+                this.ctx.get(BlockService).areVerifiersEqual(
+                  inputBlock.outputs[input.outputIdx].verifier,
+                  verifier,
+                );
+            })
           ) {
             bestBlock = block;
           }
