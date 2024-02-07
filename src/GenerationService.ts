@@ -30,7 +30,7 @@ import { Logger } from './Logger.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { FetchService } from './FetchService.ts';
 import { KeyService } from './KeyService.ts';
 import { bin2hex } from './util/hex.ts';
@@ -41,6 +41,8 @@ import { VerificationService } from './VerificationService.ts';
 import { mapPut } from './util/map.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
+import { UnspentOutputManager } from './UnspentOutputManager.ts';
+import { retryAbortable } from './util/abortable.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -301,8 +303,7 @@ export class GenerationService {
     let emitCorrect: boolean | undefined;
 
     let body: Uint8Array | undefined;
-    let verifierInputs: InputSpec[] = [initialInput];
-    const otherInputs: InputSpec[] = [];
+    const inputs: InputSpec[] = [initialInput];
     let inputsAreFixed = false;
     const refs: BlockFact[] = [];
     // const satisfies:Verifier=[];
@@ -311,30 +312,29 @@ export class GenerationService {
     let timestampGte: bigint | undefined;
 
     state.isMergeable = (block: BlockFact, outputIdx?: number) => {
-      if (
-        false &&
-        outputIdx !== undefined && verifierInputs.length > 0 &&
-        Hash.equals(state.verifierState.verifier.contractHash, frontierHash)
-      ) {
-        const frontierCount = verifierInputs.filter((x) =>
-          x.outputIdx === x.block.frontierOutputIdx
-        ).length;
-        if (frontierCount > frontierInputCount) {
-          throw new Error(`Internal error!`);
-        } else if (frontierCount === frontierInputCount) {
-          return false;
-        }
+      // if (
+      //   false &&
+      //   outputIdx !== undefined && verifierInputs.length > 0 &&
+      //   Hash.equals(state.verifierState.verifier.contractHash, frontierHash)
+      // ) {
+      //   const frontierCount = verifierInputs.filter((x) =>
+      //     x.outputIdx === x.block.frontierOutputIdx
+      //   ).length;
+      //   if (frontierCount > frontierInputCount) {
+      //     throw new Error(`Internal error!`);
+      //   } else if (frontierCount === frontierInputCount) {
+      //     return false;
+      //   }
 
-        const lastBlock = verifierInputs[verifierInputs.length - 1].block;
-        return block.frontierVoteBlock !== undefined &&
-          (block.frontierVoteBlock === lastBlock ||
-            (block.frontierVoteBlock === lastBlock.frontierVoteBlock &&
-              this.isFrontierMergeable(block, lastBlock)));
-      }
+      //   const lastBlock = verifierInputs[verifierInputs.length - 1].block;
+      //   return block.frontierVoteBlock !== undefined &&
+      //     (block.frontierVoteBlock === lastBlock ||
+      //       (block.frontierVoteBlock === lastBlock.frontierVoteBlock &&
+      //         this.isFrontierMergeable(block, lastBlock)));
+      // }
 
       return this.ctx.get(FrontierChainService).getVote([
-        ...verifierInputs,
-        ...otherInputs,
+        ...inputs,
         ...refs.map((ref) => ({ block: ref })),
         { block, outputIdx },
       ]) !== undefined;
@@ -345,7 +345,7 @@ export class GenerationService {
         state.verifierState.unclaimedInputs = state.verifierState
           .unclaimedInputs.filter((input) => {
             if (state.isMergeable(input.block, input.outputIdx)) {
-              verifierInputs.push(input);
+              inputs.push(input);
               return false;
             } else {
               return true;
@@ -417,10 +417,11 @@ export class GenerationService {
 
       notify: (verifier) => {
         this.ctx.get(FetchService).fetch(verifier, {
+          // TODO: Incentivize?
           abortSignal: workerDriver.done.signal,
         });
       },
-      request: (verifier) =>
+      fetch: (verifier) =>
         new Promise((reply) => {
           if (workerDriver.done.signal.aborted) {
             // Never resolve
@@ -428,23 +429,22 @@ export class GenerationService {
           }
 
           workerDriver.pauseTimer(
-            `request(${contractHash.toHex()}, ${bin2hex(params)})`,
+            `request(${verifier.contractHash.toHex()}, ${
+              bin2hex(verifier.params)
+            })`,
           );
 
-          const incentive = verifierInputs.reduce((acc, input) =>
+          const incentive = inputs.reduce((acc, input) =>
             acc + input.amount, 0n) * 15n / 16n;
 
           // TODO: Check isMergeable() here
 
           // TODO: Call pause/resume when requesting?
-          this.ctx.get(FetchService).fetch({ contractHash, params }, {
+          this.ctx.get(FetchService).fetch(verifier, {
             abortSignal: workerDriver.done.signal,
             incentive,
             onResponseBlock: (block, groupIdx) => {
-              this.ctx.get(Logger).info('got req', {
-                verifier: { contractHash, params },
-                block,
-              });
+              this.ctx.get(Logger).info('got req', { verifier, block });
 
               // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
               // If it's not, or maybe just in any case of not having a canonical input:
@@ -461,66 +461,62 @@ export class GenerationService {
           });
         }),
 
-      fulfills: (block: BlockFact, outputIdx: number) =>
-        otherInputs.push({
-          block,
-          outputIdx,
-          amount: block.outputs[outputIdx].amount,
-        }),
-
-      getInputCount: () => {
+      collectInputs: () => {
         collectInputs();
-        return verifierInputs.length;
+        return Promise.all(inputs.map(async (input) => {
+          const output = input.block.outputs[input.outputIdx];
+          return {
+            input,
+            output,
+            body: input.block.bodies[output.groupIdx],
+            timestamp: input.block.timestamp,
+          };
+        }));
       },
-      getInputSource: async (idx: number) => {
-        workerDriver.pauseTimer(`getInputSource(${idx})`);
-
-        let input: InputSpec;
+      requireInput: async (satisfies, outputsTo) => {
         if (inputsAreFixed) {
-          input = verifierInputs[idx];
-          if (input === undefined) {
-            throw new Error(`Invalid index!`);
-          }
+          throw new Error(
+            `Cannot call requireInput(...) after calling getInputCount()!`,
+          );
+        }
+
+        workerDriver.pauseTimer(`requireInput()`);
+
+        let input: InputSpec | undefined;
+        if (satisfies === undefined) {
+          input = await this.ctx.get(UnspentOutputManager).waitFor(
+            outputsTo ?? state.verifierState.verifier,
+            workerDriver.done.signal,
+            (input) => state.isMergeable(input.block, input.outputIdx),
+          );
         } else {
-          while (true) {
-            input = verifierInputs[idx];
-            if (input !== undefined) {
-              break;
-            } else {
-              const idx = state.verifierState.unclaimedInputs
-                .findIndex((input) =>
-                  state.isMergeable(input.block, input.outputIdx)
-                );
-              if (idx !== -1) {
-                verifierInputs.push(
-                  state.verifierState.unclaimedInputs.splice(idx, 1)[0],
-                );
-              } else {
-                await new Promise<void>((resolve) => {
-                  state.acceptInput = (input) => {
-                    state.acceptInput = undefined;
-                    verifierInputs.push(input);
-                    resolve();
-                  };
-                });
-              }
-            }
-          }
+          input = await retryAbortable(
+            (abort) =>
+              this.ctx.get(UnspentOutputManager).waitFor(
+                outputsTo ?? state.verifierState.verifier,
+                abort,
+                (input) => {
+                  if (!state.isMergeable(input.block, input.outputIdx)) {
+                    return false;
+                  }
+                  const test = input.block
+                    .verifiers[input.block.outputs[input.outputIdx].groupIdx];
+                  return test !== undefined && this.ctx.get(BlockService)
+                    .areVerifiersEqual(test, satisfies);
+                },
+              ),
+            workerDriver.done.signal,
+          );
         }
 
         const output = input.block.outputs[input.outputIdx];
 
         workerDriver.resumeTimer();
         return {
-          blockHash: input.block.hash,
-          blockTimestamp: input.block.timestamp,
-
-          groupIdx: output.groupIdx,
+          input,
+          output,
           body: input.block.bodies[output.groupIdx],
-
-          outputIdx: input.outputIdx,
-          outputAmount: output.amount,
-          outputDetail: output.detail,
+          timestamp: input.block.timestamp,
         };
       },
 
@@ -605,8 +601,6 @@ export class GenerationService {
         // If this property was never retrieved, we can assume the generator created a correct block.
         const isCorrect = emitCorrect ?? true;
 
-        const inputs = [...verifierInputs, ...otherInputs];
-
         const desiredReward = this.ctx.config.getGenerationReward(
           state.verifierState.verifier,
           workerDriver.getCpuTime() / 1000,
@@ -619,9 +613,6 @@ export class GenerationService {
         const blockDraft: BlockDraft = {
           refs,
           inputs,
-          satisfies: verifierInputs.length
-            ? undefined
-            : [state.verifierState.verifier],
           outputs,
           body,
           frontierLevel,

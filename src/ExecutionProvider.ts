@@ -1,5 +1,5 @@
 import { JobMessage } from './worker/workerTypes.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { ComputationDriver } from './ComputationMeta.ts';
 
 // TODO: Hold off on using this.

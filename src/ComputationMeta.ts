@@ -2,10 +2,12 @@ import { WorkerDriver } from './WorkerDriverService.ts';
 import { BlockInput, BlockOutput } from './messages.ts';
 import { Hash } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { OutputSpec } from './BlockBuilder.ts';
 import { Verifier } from './messages.ts';
 import { InputSpec } from './BlockBuilder.ts';
+
+// TODO: ComputationProvider?
 
 export const enum ComputationType {
   Contract,
@@ -19,15 +21,10 @@ export const enum BurdenOfProof {
 }
 
 export interface InputSource {
-  blockHash: Hash;
-  blockTimestamp: bigint;
-
-  groupIdx: number;
+  input: InputSpec;
+  output: BlockOutput;
   body: Uint8Array;
-
-  outputIdx: number;
-  outputAmount: bigint;
-  outputDetail: Uint8Array;
+  timestamp: bigint;
 }
 
 export interface ComputationDriver extends WorkerDriver {
@@ -49,15 +46,11 @@ export interface ComputationDriver extends WorkerDriver {
   notify(verifier: Verifier): void;
   fetch(verifier: Verifier): Promise<Uint8Array>;
 
-  getInputCount(): MaybePromise<number>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
-  requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<
-    {
-      input: InputSpec;
-      output: BlockOutput;
-      body: Uint8Array;
-      timestamp: bigint;
-    }
-  >; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.
+  collectInputs(): MaybePromise<InputSource[]>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
+  requireInput(
+    satisfies?: Verifier,
+    outputsTo?: Verifier,
+  ): MaybePromise<InputSource>; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.
   // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
   // TODO: Implement this to allow contracts to provide plaintext data that might be requested as a hint or hash inversion in the future?

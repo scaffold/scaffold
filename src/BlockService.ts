@@ -48,7 +48,7 @@ import {
 } from './collateralMessages.ts';
 import { FrontierService2, NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
 import { GenerationService } from './GenerationService.ts';
 import { Node } from './NodeService.ts';
@@ -512,6 +512,12 @@ export class BlockService {
       .get(VerificationService)
       .enqueueVerification(child, verifier, hintPrefix, 0);
 
+    if (
+      child.verifiers[groupIdx] !== undefined &&
+      !this.areVerifiersEqual(child.verifiers[groupIdx]!, verifier)
+    ) {
+      throw new Error(`Cannot have multiple verifiers for the same groupIdx!`);
+    }
     child.verifiers[groupIdx] = verifier;
 
     this.satisfactionMonitor.callAll(verifier, child);
@@ -1040,6 +1046,31 @@ export class BlockService {
         }, 100);
         cancelSignal.addEventListener('abort', listener);
       });
+    }
+  }
+
+  public satisfies(
+    block: BlockFact,
+    groupIdx: number,
+    verifier: Verifier,
+    cancelSignal: AbortSignal,
+  ) {
+    const test = block.verifiers[groupIdx];
+    if (test !== undefined) {
+      return this.areVerifiersEqual(test, verifier);
+    } else {
+      const inputIdx = block.inputs.find((x) => x.groupIdx === groupIdx);
+      if (inputIdx === undefined) {
+        return false;
+      }
+      return maybeThen(
+        this.waitForBlock(inputIdx.blockHash, cancelSignal),
+        (block) =>
+          this.areVerifiersEqual(
+            block.outputs[inputIdx.outputIdx].verifier,
+            verifier,
+          ),
+      );
     }
   }
 

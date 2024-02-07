@@ -1,5 +1,5 @@
 import { fs } from '../dev_deps.ts';
-import { MaybePromise } from '../src/util/types.ts';
+import { MaybePromise } from '../src/util/MaybePromise.ts';
 
 export const bootstrapFromGlobs = async (
   globs: (string | URL)[],

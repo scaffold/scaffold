@@ -3,7 +3,7 @@ import { Resource } from './WorkerDriverService.ts';
 import { log } from '../deps.ts';
 import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { NetworkProvider } from './NetworkProvider.ts';
 import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';

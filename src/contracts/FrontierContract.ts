@@ -44,7 +44,7 @@ export class FrontierContract implements ContractProvider {
   public async compute(driver: ComputationDriver) {
     const { level } = FrontierTreeParams.decode(driver.getParams());
     for (let i = 0; i < frontierInputCount; i++) {
-      await driver.getInputSource(i);
+      await driver.requireInput();
     }
 
     // A little hacky, because if replaced with requireOutput, we wouldn't have the detail yet (because it requires weighing the block).

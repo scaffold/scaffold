@@ -15,7 +15,7 @@ import {
   WorkerDebuggerManager,
 } from './WorkerDebuggerManager.ts';
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
@@ -151,13 +151,11 @@ export class WorkerExecutor {
           new Promise((resolve, reject) => {
             if (cancelCb !== terminateFn) throw new Error('Internal error');
             cancelCb = reject;
-            driver.request(verifier.contractHash, verifier.params).then(
-              (body) => {
-                if (cancelCb !== reject) throw new Error('Internal error');
-                cancelCb = terminateFn;
-                resolve(body);
-              },
-            );
+            driver.fetch(verifier).then((body) => {
+              if (cancelCb !== reject) throw new Error('Internal error');
+              cancelCb = terminateFn;
+              resolve(body);
+            });
           })
         );
       }
@@ -261,7 +259,7 @@ export class WorkerExecutor {
         inodes.set(subInode, {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
-            driver.notify(contractHash, params);
+            driver.notify({ contractHash, params });
             return { contractHash: contractHash, params };
           }),
         });

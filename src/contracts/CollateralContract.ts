@@ -30,30 +30,29 @@ export class CollateralContract implements ContractProvider {
     CollateralContractParams.decode(driver.getParams());
 
     const postings: (InputSource & Posting)[] = [];
-    const inputCount = await driver.getInputCount();
-    for (let i = 0; i < inputCount; i++) {
-      const source = await driver.getInputSource(i);
-      await driver.requireTimestampGte(source.blockTimestamp + resolutionDelay);
+    for (const input of await driver.collectInputs()) {
+      await driver.requireTimestampGte(input.timestamp + resolutionDelay);
       postings.push({
-        ...source,
-        detail: CollateralContractDetail.decode(source.outputDetail),
-        amount: source.outputAmount,
+        ...input,
+        detail: CollateralContractDetail.decode(input.output.detail),
+        amount: input.output.amount,
       });
     }
 
     if (driver.type === ComputationType.Generator) {
       // Sort
       postings.sort((a, b) =>
-        driver.compareBlockOrder(a.blockHash, b.blockHash) ||
-        a.outputIdx - b.outputIdx
+        driver.compareBlockOrder(a.input.block.hash, b.input.block.hash) ||
+        a.input.outputIdx - b.input.outputIdx
       );
     } else if (driver.type === ComputationType.Contract) {
       // Assert sorted
       for (let i = 1; i < postings.length; i++) {
         const a = postings[i - 1];
         const b = postings[i];
-        const cmp = driver.compareBlockOrder(a.blockHash, b.blockHash) ||
-          a.outputIdx - b.outputIdx;
+        const cmp =
+          driver.compareBlockOrder(a.input.block.hash, b.input.block.hash) ||
+          a.input.outputIdx - b.input.outputIdx;
         if (cmp >= 0) {
           driver.fail(`Collateral inputs aren't sorted!`);
         }

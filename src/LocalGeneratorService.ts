@@ -1,7 +1,7 @@
 import { Context } from './Context.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { ComputationDriver } from './ComputationMeta.ts';
 
 // export interface LocalGeneratorOpts {

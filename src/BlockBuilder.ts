@@ -14,7 +14,7 @@ import { BlockService } from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './constants.ts';
 import { KeyService } from './KeyService.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { FrontierService2 } from './FrontierService2.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';

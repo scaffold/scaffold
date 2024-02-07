@@ -10,7 +10,7 @@ import { WorkerExecutor } from './WorkerExecutor.ts';
 import { LitigationService } from './LitigationService.ts';
 import { BlockFact } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
-import { MaybePromise } from './util/types.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 import { bin2hex } from './util/hex.ts';
 import { DetailVote } from './CollateralUtil.ts';
 import { HintSuggestionService } from './HintSuggestionService.ts';
@@ -29,8 +29,6 @@ class VerificationException extends Error {
     super(msg);
   }
 }
-
-const PROMISE_ANY_REJECTION = Symbol('VerificationService.PromiseAnyRejection');
 
 export class VerificationService {
   private extraContractIncentive = new Map<HashPrimitive, number>();
@@ -276,25 +274,29 @@ export class VerificationService {
         );
       },
 
-      getInputCount: async () => {
-        workerDriver.pauseTimer(`getInputCount()`);
+      collectInputs: () => {
+        nextInputIdx = block.inputs.length;
+        return Promise.all(
+          block.inputs.filter((x) => x.groupIdx === groupIdx).map(
+            async (input) => {
+              const inputBlock = await this.ctx.get(BlockService)
+                .waitForBlock(input.blockHash, workerDriver.done.signal);
 
-        let count = 0;
-        for (const input of block.inputs) {
-          const block = await this.ctx.get(BlockService)
-            .waitForBlock(input.blockHash, workerDriver.done.signal);
+              const output = inputBlock.outputs[input.outputIdx];
 
-          const output = block.outputs[input.outputIdx];
-          if (
-            this.ctx.get(BlockService)
-              .areVerifiersEqual(output.verifier, verifier)
-          ) {
-            count++;
-          }
-        }
-
-        workerDriver.resumeTimer();
-        return count;
+              return {
+                input: {
+                  block: inputBlock,
+                  outputIdx: input.outputIdx,
+                  amount: output.amount,
+                },
+                output,
+                body: inputBlock.bodies[output.groupIdx],
+                timestamp: inputBlock.timestamp,
+              };
+            },
+          ),
+        );
       },
       requireInput: async (satisfies, outputsTo) => {
         workerDriver.pauseTimer(`requireInput()`);
@@ -321,35 +323,18 @@ export class VerificationService {
           }
 
           if (satisfies !== undefined) {
-            await Promise.any(inputBlock.inputs.map(async (inputInput) => {
-              if (inputInput.groupIdx !== output.groupIdx) {
-                throw PROMISE_ANY_REJECTION;
-              }
-              const inputInputBlock = await this.ctx.get(BlockService)
-                .waitForBlock(inputInput.blockHash, workerDriver.done.signal);
-
-              if (
-                !this.ctx.get(BlockService).areVerifiersEqual(
-                  inputInputBlock.outputs[inputInput.outputIdx].verifier,
-                  satisfies,
-                )
-              ) {
-                throw PROMISE_ANY_REJECTION;
-              }
-            })).catch((aggError: AggregateError | unknown) => {
-              if (
-                aggError instanceof AggregateError &&
-                aggError.errors.every((x: unknown) =>
-                  x === PROMISE_ANY_REJECTION
-                )
-              ) {
-                throw new VerificationException(
-                  `requireInput(...) failed - incorrect input satisfaction`,
-                );
-              } else {
-                throw aggError;
-              }
-            });
+            if (
+              !await this.ctx.get(BlockService).satisfies(
+                inputBlock,
+                output.groupIdx,
+                satisfies,
+                workerDriver.done.signal,
+              )
+            ) {
+              throw new VerificationException(
+                `requireInput(...) failed - incorrect input satisfaction`,
+              );
+            }
           }
 
           workerDriver.resumeTimer();
@@ -415,27 +400,10 @@ export class VerificationService {
 
         const isValid = err === VERIFICATION_SUCCESS_FLAG;
         if (isValid) {
-          if (requireInputCount !== undefined) {
-            let count = 0;
-            for (const input of block.inputs) {
-              const block = await this.ctx.get(BlockService)
-                .waitForBlock(input.blockHash, workerDriver.done.signal);
-
-              const output = block.outputs[input.outputIdx];
-              if (
-                this.ctx.get(BlockService)
-                  .areVerifiersEqual(output.verifier, verifier) &&
-                ++count > requireInputCount
-              ) {
-                break;
-              }
-            }
-
-            if (count !== requireInputCount) {
-              throw new VerificationException(
-                `finalize(...) failed - there's too many inputs matching the contract's specification!`,
-              );
-            }
+          if (nextInputIdx > 0 && nextInputIdx !== block.inputs.length) {
+            throw new VerificationException(
+              `finalize(...) failed - there's too many inputs matching the contract's specification!`,
+            );
           }
         } else {
           console.error(`Verification failed:`, err);
