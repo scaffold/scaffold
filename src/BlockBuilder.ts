@@ -19,7 +19,7 @@ import { FrontierService2 } from './FrontierService2.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { WeightService } from './WeightService.ts';
-import { GenerationService } from './GenerationService.ts';
+import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { assert, todo } from './util/functional.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
@@ -184,7 +184,7 @@ export class BlockBuilder {
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     while (ioDelta < 0n) {
-      const input = this.ctx.get(GenerationService).claimInput(
+      const input = this.ctx.get(UnspentOutputManager).pop(
         this.selfAccountVerifier,
         (accountInput) =>
           this.ctx.get(FrontierChainService).getVote([

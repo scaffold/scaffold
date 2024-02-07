@@ -67,111 +67,117 @@ export class GenerationService {
   private attemptDupeFraction = Hash.fromFraction(0, 8);
   private secret: Uint8Array;
 
-  private states = new Map<HashPrimitive, VerifierState>();
+  // private states = new Map<HashPrimitive, VerifierState>();
+  private running = new Set<HashPrimitive>();
 
   constructor(private ctx: Context) {
     this.secret = ctx.config.entropyProvider.randomBytes(32);
   }
 
-  public addInput(input: InputSpec) {
-    if (input.amount <= 0n) {
-      return;
-    }
-
-    const verifier = input.block.outputs[input.outputIdx].verifier;
-
-    if (
-      Hash.equals(verifier.contractHash, accountHash) &&
-      !arrEquals(
-        AccountContractParams.decode(verifier.params).publicKey,
-        this.ctx.get(KeyService).getSelfPublicKey(),
-      )
-    ) {
-      return;
-    }
-
+  public ensureRunning(verifier: Verifier) {
     const key = Hash.digest(Verifier.encode(verifier));
-    const verifierState = mapPut(
-      this.states,
-      key.toPrimitive(),
-      () => ({ verifier, unclaimedInputs: [], running: [] }),
-    );
-
-    this.insertInput(verifierState, input);
-  }
-
-  public removeInput(input: InputSpec) {
-    const verifier = input.block.outputs[input.outputIdx].verifier;
-    const key = Hash.digest(Verifier.encode(verifier));
-    const state = this.states.get(key.toPrimitive());
-    if (state !== undefined) {
-      state.unclaimedInputs = state.unclaimedInputs.filter((x) => x !== input);
-    }
-  }
-
-  public claimInput(verifier: Verifier, pred?: (input: InputSpec) => boolean) {
-    const key = Hash.digest(Verifier.encode(verifier));
-    const state = this.states.get(key.toPrimitive());
-    if (state !== undefined) {
-      if (pred !== undefined) {
-        const idx = state.unclaimedInputs.findIndex(pred);
-        if (idx !== -1) {
-          return state.unclaimedInputs.splice(idx, 1)[0];
-        }
-      } else {
-        return state.unclaimedInputs.shift();
-      }
-    }
-  }
-
-  private insertInput(verifierState: VerifierState, input: InputSpec) {
-    const mergeable = verifierState.running.filter((run) =>
-      run.isMergeable(input.block, input.outputIdx)
-    );
-
-    if (mergeable.length !== 0) {
-      for (const runState of mergeable) {
-        if (runState.acceptInput !== undefined) {
-          runState.acceptInput(input);
-          return;
-        }
-      }
-    } else {
-      const runState = { verifierState, isMergeable: () => true };
-      const launch = this.launchRun(runState, input);
+    if (!this.running.has(key.toPrimitive())) {
+      const launch = this.launchRun(verifier);
       if (launch !== undefined) {
-        verifierState.running.push(runState);
-        launch.then(() => {
-          const idx = verifierState.running.indexOf(runState);
-          if (idx === -1) {
-            throw new Error(`Internal error!`);
-          }
-          verifierState.running.splice(idx, 1);
-
-          this.launchUnclaimed(verifierState);
-        });
-        return;
+        this.running.add(key.toPrimitive());
+        launch.finally(() => this.running.delete(key.toPrimitive()));
       }
     }
-
-    verifierState.unclaimedInputs.push(input);
   }
 
-  private launchUnclaimed(verifierState: VerifierState) {
-    const reinsert = verifierState.unclaimedInputs;
-    verifierState.unclaimedInputs = [];
+  // private addInput(input: InputSpec) {
+  //   if (input.amount <= 0n) {
+  //     return;
+  //   }
 
-    for (const input of reinsert) {
-      this.insertInput(verifierState, input);
-    }
-  }
+  //   const verifier = input.block.outputs[input.outputIdx].verifier;
 
-  private launchRun(
-    runState: RunState,
-    initialInput: InputSpec,
-  ): Promise<void> | undefined {
-    const verifier = runState.verifierState.verifier;
+  //   if (
+  //     Hash.equals(verifier.contractHash, accountHash) &&
+  //     !arrEquals(
+  //       AccountContractParams.decode(verifier.params).publicKey,
+  //       this.ctx.get(KeyService).getSelfPublicKey(),
+  //     )
+  //   ) {
+  //     return;
+  //   }
 
+  //   const key = Hash.digest(Verifier.encode(verifier));
+  //   const verifierState = mapPut(
+  //     this.states,
+  //     key.toPrimitive(),
+  //     () => ({ verifier, unclaimedInputs: [], running: [] }),
+  //   );
+
+  //   this.insertInput(verifierState, input);
+  // }
+
+  // private removeInput(input: InputSpec) {
+  //   const verifier = input.block.outputs[input.outputIdx].verifier;
+  //   const key = Hash.digest(Verifier.encode(verifier));
+  //   const state = this.states.get(key.toPrimitive());
+  //   if (state !== undefined) {
+  //     state.unclaimedInputs = state.unclaimedInputs.filter((x) =>
+  //       x.block !== input.block || x.outputIdx !== input.outputIdx
+  //     );
+  //   }
+  // }
+
+  // private claimInput(verifier: Verifier, pred?: (input: InputSpec) => boolean) {
+  //   const key = Hash.digest(Verifier.encode(verifier));
+  //   const state = this.states.get(key.toPrimitive());
+  //   if (state !== undefined) {
+  //     if (pred !== undefined) {
+  //       const idx = state.unclaimedInputs.findIndex(pred);
+  //       if (idx !== -1) {
+  //         return state.unclaimedInputs.splice(idx, 1)[0];
+  //       }
+  //     } else {
+  //       return state.unclaimedInputs.shift();
+  //     }
+  //   }
+  // }
+
+  // private insertInput(verifierState: VerifierState, input: InputSpec) {
+  //   const mergeable = verifierState.running.filter((run) =>
+  //     run.isMergeable(input.block, input.outputIdx)
+  //   );
+
+  //   if (mergeable.length !== 0) {
+  //     for (const runState of mergeable) {
+  //       if (runState.acceptInput !== undefined) {
+  //         runState.acceptInput(input);
+  //         return;
+  //       }
+  //     }
+  //   } else {
+  //     const runState = { verifierState, isMergeable: () => true };
+  //     const launch = this.launchRun(runState);
+  //     if (launch !== undefined) {
+  //       verifierState.running.push(runState);
+  //       launch.then(() => {
+  //         const idx = verifierState.running.indexOf(runState);
+  //         if (idx === -1) {
+  //           throw new Error(`Internal error!`);
+  //         }
+  //         verifierState.running.splice(idx, 1);
+  //       });
+  //     }
+  //   }
+
+  //   verifierState.unclaimedInputs.push(input);
+  // }
+
+  // private launchUnclaimed(verifierState: VerifierState) {
+  //   const reinsert = verifierState.unclaimedInputs;
+  //   verifierState.unclaimedInputs = [];
+
+  //   for (const input of reinsert) {
+  //     this.insertInput(verifierState, input);
+  //   }
+  // }
+
+  private launchRun(verifier: Verifier): Promise<void> | undefined {
     if (Hash.equals(verifier.contractHash, accountHash)) {
       return;
     }
@@ -181,11 +187,7 @@ export class GenerationService {
       return this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-          const driver = this.makeGenerationDriver(
-            runState,
-            initialInput,
-            workerDriver,
-          );
+          const driver = this.makeGenerationDriver(verifier, workerDriver);
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
@@ -221,11 +223,7 @@ export class GenerationService {
       return this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-          const driver = this.makeGenerationDriver(
-            runState,
-            initialInput,
-            workerDriver,
-          );
+          const driver = this.makeGenerationDriver(verifier, workerDriver);
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message:
@@ -254,11 +252,7 @@ export class GenerationService {
         return this.ctx.get(WorkerDriverService).run(
           async (workerDriver) => {
             await workerDriver.setAllocation({ webWorkerCount: 1 });
-            const driver = this.makeGenerationDriver(
-              runState,
-              initialInput,
-              workerDriver,
-            );
+            const driver = this.makeGenerationDriver(verifier, workerDriver);
             workerDriver.log?.push({
               timestamp: this.ctx.config.timeProvider.now(),
               message:
@@ -296,14 +290,14 @@ export class GenerationService {
   }
 
   private makeGenerationDriver(
-    state: RunState,
-    initialInput: InputSpec,
+    verifier: Verifier,
     workerDriver: WorkerDriver,
   ): ComputationDriver & { finalize(err: unknown): MaybePromise<void> } {
     let emitCorrect: boolean | undefined;
 
     let body: Uint8Array | undefined;
-    const inputs: InputSpec[] = [initialInput];
+    const fulfillsVerifiers = [verifier];
+    let inputs: InputSpec[] = [];
     let inputsAreFixed = false;
     const refs: BlockFact[] = [];
     // const satisfies:Verifier=[];
@@ -311,7 +305,9 @@ export class GenerationService {
     let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
-    state.isMergeable = (block: BlockFact, outputIdx?: number) => {
+    const isMergeable = (
+      testInput: { block: BlockFact; outputIdx?: number },
+    ) => {
       // if (
       //   false &&
       //   outputIdx !== undefined && verifierInputs.length > 0 &&
@@ -336,35 +332,29 @@ export class GenerationService {
       return this.ctx.get(FrontierChainService).getVote([
         ...inputs,
         ...refs.map((ref) => ({ block: ref })),
-        { block, outputIdx },
+        testInput,
       ]) !== undefined;
     };
 
     const collectInputs = () => {
       if (!inputsAreFixed) {
-        state.verifierState.unclaimedInputs = state.verifierState
-          .unclaimedInputs.filter((input) => {
-            if (state.isMergeable(input.block, input.outputIdx)) {
-              inputs.push(input);
-              return false;
-            } else {
-              return true;
-            }
-          });
+        for (const verifier of fulfillsVerifiers) {
+          inputs = inputs.concat(
+            this.ctx.get(UnspentOutputManager).popAll(verifier, isMergeable),
+          );
+        }
         inputsAreFixed = true;
       }
     };
-
-    this.launchUnclaimed(state.verifierState);
 
     return {
       ...workerDriver,
 
       type: ComputationType.Generator,
 
-      getVerifier: () => state.verifierState.verifier,
-      getContractHash: () => state.verifierState.verifier.contractHash,
-      getParams: () => state.verifierState.verifier.params,
+      getVerifier: () => verifier,
+      getContractHash: () => verifier.contractHash,
+      getParams: () => verifier.params,
       getHint: () => {
         throw new Error(`Cannot call getHint() inside a generator!`);
       },
@@ -410,7 +400,7 @@ export class GenerationService {
       },
       emitCorrect: () => {
         if (emitCorrect === undefined) {
-          emitCorrect = this.shouldEmitCorrect(state.verifierState.verifier);
+          emitCorrect = this.shouldEmitCorrect(verifier);
         }
         return emitCorrect;
       },
@@ -463,7 +453,7 @@ export class GenerationService {
 
       collectInputs: () => {
         collectInputs();
-        return Promise.all(inputs.map(async (input) => {
+        return inputs.map((input) => {
           const output = input.block.outputs[input.outputIdx];
           return {
             input,
@@ -471,12 +461,12 @@ export class GenerationService {
             body: input.block.bodies[output.groupIdx],
             timestamp: input.block.timestamp,
           };
-        }));
+        });
       },
       requireInput: async (satisfies, outputsTo) => {
         if (inputsAreFixed) {
           throw new Error(
-            `Cannot call requireInput(...) after calling getInputCount()!`,
+            `Cannot call requireInput(...) after calling collectInputs()!`,
           );
         }
 
@@ -485,18 +475,21 @@ export class GenerationService {
         let input: InputSpec | undefined;
         if (satisfies === undefined) {
           input = await this.ctx.get(UnspentOutputManager).waitFor(
-            outputsTo ?? state.verifierState.verifier,
+            outputsTo ?? verifier,
             workerDriver.done.signal,
-            (input) => state.isMergeable(input.block, input.outputIdx),
+            isMergeable,
           );
+          if (outputsTo !== undefined) {
+            fulfillsVerifiers.push(outputsTo);
+          }
         } else {
           input = await retryAbortable(
             (abort) =>
               this.ctx.get(UnspentOutputManager).waitFor(
-                outputsTo ?? state.verifierState.verifier,
+                outputsTo ?? verifier,
                 abort,
                 (input) => {
-                  if (!state.isMergeable(input.block, input.outputIdx)) {
+                  if (!isMergeable(input)) {
                     return false;
                   }
                   const test = input.block
@@ -508,6 +501,36 @@ export class GenerationService {
             workerDriver.done.signal,
           );
         }
+
+        inputs.push(input);
+
+        // let input: InputSpec | undefined;
+        // while (true) {
+        //   input = this.claimInput(
+        //     outputsTo ?? verifier,
+        //     (input) => {
+        //       if (!state.isMergeable(input.block, input.outputIdx)) {
+        //         return false;
+        //       }
+        //       if (satisfies !== undefined) {
+        //         const test = input.block
+        //           .verifiers[input.block.outputs[input.outputIdx].groupIdx];
+        //         return test !== undefined && this.ctx.get(BlockService)
+        //           .areVerifiersEqual(test, satisfies);
+        //       } else {
+        //         return true;
+        //       }
+        //     },
+        //   );
+
+        //   if (input !== undefined) {
+        //     break;
+        //   } else {
+        //     await new Promise<void>((resolve) =>
+        //       this.ctx.config.timeProvider.setTimeout(resolve, 100)
+        //     );
+        //   }
+        // }
 
         const output = input.block.outputs[input.outputIdx];
 
@@ -602,7 +625,7 @@ export class GenerationService {
         const isCorrect = emitCorrect ?? true;
 
         const desiredReward = this.ctx.config.getGenerationReward(
-          state.verifierState.verifier,
+          verifier,
           workerDriver.getCpuTime() / 1000,
         );
         const depositedReward = inputs.reduce(
@@ -626,7 +649,7 @@ export class GenerationService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Creating block...`,
         });
-        this.createBlock(state.verifierState.verifier, blockDraft);
+        this.createBlock(verifier, blockDraft);
         workerDriver.resumeTimer();
       },
     };
@@ -800,6 +823,6 @@ export class GenerationService {
   }
 
   public snapshot() {
-    return { states: this.states };
+    return {};
   }
 }

@@ -1,6 +1,8 @@
 import { HashPrimitive } from './Hash.ts';
 import { getOrCreate } from './map.ts';
 
+// TODO: Change these to take AbortSiganls, and remove off() methods.
+
 class Monitor<Key, Callback extends (...args: never[]) => void> {
   protected listeners = new Map<HashPrimitive, Callback[]>();
 

@@ -50,17 +50,16 @@ import { FrontierService2, NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
-import { GenerationService } from './GenerationService.ts';
 import { Node } from './NodeService.ts';
 import { WeightService } from './WeightService.ts';
-import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { MonitoringService } from './MonitoringService.ts';
+import { UnspentOutputManager } from './UnspentOutputManager.ts';
+import { neverAbort } from './util/abortable.ts';
+import { GenerationService } from './GenerationService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
 export const BASE_WORK = 10n;
-
-export const neverAbort = new AbortController().signal;
 
 export class BlockService {
   private claimsByOutput = new Map<HashPrimitive, OutputClaim[]>();
@@ -194,11 +193,10 @@ export class BlockService {
         this.linkIo(parent, fact, input.outputIdx, idx);
 
         if (claims.length === 1) {
-          this.ctx.get(GenerationService).removeInput({
-            block: parent,
-            outputIdx: input.outputIdx,
-            amount: parent.outputs[input.outputIdx].amount,
-          });
+          this.ctx.get(UnspentOutputManager).remove(
+            parent.outputs[input.outputIdx].verifier,
+            (x) => x.block === parent && x.outputIdx === input.outputIdx,
+          );
         }
       }
     });
@@ -221,10 +219,16 @@ export class BlockService {
         claims.forEach(({ block, inputIdx }) =>
           this.linkIo(fact, block, outputIdx, inputIdx)
         );
+      } else if (output.amount >= 0n) {
+        this.ctx.get(UnspentOutputManager).insert(output.verifier, {
+          block: fact,
+          outputIdx,
+          amount: output.amount,
+        });
+        this.ctx.get(GenerationService).ensureRunning(output.verifier);
       } else {
-        this.ctx
-          .get(GenerationService)
-          .addInput({ block: fact, outputIdx, amount: output.amount });
+        // TODO: What to do in this case; we still need to make the output available if it's required
+        // We should add it anyways, and make sure we filter for an appropriate amount when waiting
       }
 
       if (Hash.equals(output.verifier.contractHash, collateralHash)) {
@@ -337,11 +341,10 @@ export class BlockService {
         this.ctx.get(FactService).forgetCollateral(params.blockHash, block);
       }
 
-      this.ctx.get(GenerationService).removeInput({
-        block,
-        outputIdx,
-        amount: output.amount,
-      });
+      this.ctx.get(UnspentOutputManager).remove(
+        output.verifier,
+        (x) => x.block === block && x.outputIdx === outputIdx,
+      );
 
       outputIdx++;
     }

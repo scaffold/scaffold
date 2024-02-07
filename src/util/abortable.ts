@@ -1,5 +1,9 @@
 import { MaybePromise, maybeThen } from './MaybePromise.ts';
 
+export const neverAbort = new AbortController().signal;
+// TODO: Are the abort callbacks garbage collected?
+// We could make this a mock that just drops calls to addEventListener.
+
 export const retryAbortable = <T>(
   cb: (until: AbortSignal) => MaybePromise<T>,
   until: AbortSignal,
