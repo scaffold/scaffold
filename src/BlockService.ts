@@ -57,6 +57,7 @@ import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { neverAbort } from './util/abortable.ts';
 import { GenerationService } from './GenerationService.ts';
 import { raceTruthy } from './util/MaybePromise.ts';
+import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -531,6 +532,9 @@ export class BlockService {
         .callAll(verifier, child, childInputIdx);
     }
 
+    this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(parent);
+    this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(child);
+
     // // Commented out because we're moving to out-of-block collateralizations
     // if (Hash.equals(verifier.contractHash, collateralHash)) {
     //   const { collateral_input_idx, valid, public_key, free_after } =
@@ -610,7 +614,10 @@ export class BlockService {
     for (const block of blocks) {
       const newCanonicality = this.ctx.get(WeightService)
         .getCanonicality(block, cache);
-      block.canonicality = newCanonicality;
+      if (newCanonicality !== block.canonicality) {
+        block.canonicality = newCanonicality;
+        this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
+      }
     }
   }
 

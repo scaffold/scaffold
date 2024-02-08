@@ -10,8 +10,8 @@ Fixed worker pool
 */
 
 import { Context } from './Context.ts';
-import { BlockFact } from './FactMeta.ts';
 import { mapEntries } from './util/functional.ts';
+import { WorkerRecordSet } from './record_sets/WorkerRecordSet.ts';
 
 // TODO: Use input monitoring to prevent blocking the main thread?
 // https://developer.mozilla.org/en-US/docs/Web/API/Scheduling/isInputPending
@@ -38,7 +38,7 @@ export interface WorkerDriver {
   done: AbortController;
 
   pauseTimer(why: string): void;
-  resumeTimer(): void;
+  resumeTimer(why: string): void;
 
   getTotalTime(): number;
   getCpuTime(): number;
@@ -64,6 +64,8 @@ export class WorkerDriverService {
 
   private workerQueue: WorkEntry[] = [];
 
+  private allWorkers: WorkerDriver[] = [];
+
   // Past compute time is a sunk cost.
   // Weigh pending and running computations by Expected[reward(remaining_cpu_time) / remaining_cpu_time * acceptance_probability(reward, remaining_cpu_time + remaining_blocking_time)]
   // ^ This is a way to compare executions wrt. CPU time, which is likely a limit. But for times when # of workers or memory is the limit, we need to handle that case too.
@@ -76,15 +78,16 @@ export class WorkerDriverService {
     this.allocated = mapEntries(ctx.config.resourceLimits, (_k, _v) => 0);
   }
 
+  public getAllWorkers() {
+    return this.allWorkers;
+  }
+
   public run(
     launch: (driver: WorkerDriver) => Promise<void>,
     getScore: () => number, // Expected profit/ms
   ) /* TODO: Return a setScore(score: number) method so we can update from block update? Probably need to start implementing the launcher to determine this. */ {
-    const log = this.ctx.config.enableWorkerLogging
-      ? [{
-        timestamp: this.ctx.config.timeProvider.now(),
-        message: 'Started worker',
-      }]
+    const log: LogEntry[] | undefined = this.ctx.config.enableWorkerLogging
+      ? []
       : undefined;
 
     const allocation = mapEntries(
@@ -128,11 +131,13 @@ export class WorkerDriverService {
         }
         pauseTime = this.ctx.config.timeProvider.now();
       }
+
+      this.ctx.maybeGet(WorkerRecordSet)?.dispatchUpdate(driver);
     };
-    const resumeTimer = () => {
+    const resumeTimer = (why: string) => {
       log?.push({
         timestamp: this.ctx.config.timeProvider.now(),
-        message: `Resuming...`,
+        message: `${why}; resuming...`,
       });
       if (--pauses === 0) {
         if (pauseTime === undefined) {
@@ -141,6 +146,8 @@ export class WorkerDriverService {
         totalBlockedTime += this.ctx.config.timeProvider.now() - pauseTime;
         pauseTime = undefined;
       }
+
+      this.ctx.maybeGet(WorkerRecordSet)?.dispatchUpdate(driver);
     };
 
     // TODO: Maybe:
@@ -164,7 +171,7 @@ export class WorkerDriverService {
             Re-write using canonical_block as input (no need to re-generate)
     */
 
-    return launch({
+    const driver: WorkerDriver = {
       setAllocation: (resources) => {
         // TODO: On cancel, kill this promise (never resolve or reject)
         // Right now we just deal with worker count
@@ -199,7 +206,7 @@ export class WorkerDriverService {
               // inputs,
               getScore,
               continuation: () => {
-                resumeTimer();
+                resumeTimer(`Allocation succeeded`);
                 resolve();
               },
             });
@@ -218,13 +225,34 @@ export class WorkerDriverService {
       getCpuTime: () =>
         (pauseTime ?? this.ctx.config.timeProvider.now()) -
         startTime - totalBlockedTime,
-    }).then(
+    };
+
+    this.allWorkers.push(driver);
+    this.ctx.maybeGet(WorkerRecordSet)?.dispatchAdd(driver);
+
+    if (log !== undefined) {
+      done.signal.addEventListener('abort', () =>
+        log.push({
+          timestamp: this.ctx.config.timeProvider.now(),
+          message: `Aborted!`,
+        }));
+    }
+
+    return launch(driver).then(
       () => {
+        log?.push({
+          timestamp: this.ctx.config.timeProvider.now(),
+          message: `Finished!`,
+        });
         done.abort();
         this.allocated.webWorkerCount -= allocation.webWorkerCount;
         this.resume();
       },
       (err) => {
+        log?.push({
+          timestamp: this.ctx.config.timeProvider.now(),
+          message: `Failed!`,
+        });
         if (err === WORKER_FAIL_FLAG) {
           console.error(
             `WorkerDriverService.run launch failed! Not restarting...`,

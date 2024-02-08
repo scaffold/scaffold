@@ -81,7 +81,11 @@ export class Logger {
     // return this.get().critical(msg, serializedParams);
   }
 
-  public serialize(obj: any, n = 2, maxStrLen = 64): string {
+  public serialize(
+    obj: any,
+    n?: number,
+    maxStrLen = 64,
+  ): string {
     // val = sortKeys(val);
     return JSON.stringify(obj, (key, val) => {
       if (key === 'defaultConn') {
@@ -100,22 +104,22 @@ export class Logger {
         typeof val === 'object' && val !== null && val.type === 'Buffer'
       ) {
         return trim(bin2hex(new Uint8Array(val.data)), maxStrLen);
-      } else if (
-        typeof val === 'object' && val !== null &&
-        'contractHash' in val &&
-        'params' in val
-      ) {
-        return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };
-      } else if (
-        typeof val === 'object' && val !== null &&
-        'verifiers' in val &&
-        'body' in val
-      ) {
-        if (val !== obj && 'hash' in val && val.hash instanceof Hash) {
-          return { hash: trim(val.hash.toHex(), maxStrLen) };
-        } else {
-          return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
-        }
+        // } else if (
+        //   typeof val === 'object' && val !== null &&
+        //   'contractHash' in val &&
+        //   'params' in val
+        // ) {
+        //   return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };
+        // } else if (
+        //   typeof val === 'object' && val !== null &&
+        //   'verifiers' in val &&
+        //   'body' in val
+        // ) {
+        //   if (val !== obj && 'hash' in val && val.hash instanceof Hash) {
+        //     return { hash: trim(val.hash.toHex(), maxStrLen) };
+        //   } else {
+        //     return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
+        //   }
       } else {
         return val;
       }

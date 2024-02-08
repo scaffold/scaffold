@@ -26,6 +26,7 @@ import { ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
 import { multimapPop } from './util/map.ts';
+import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 
 export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
@@ -378,6 +379,7 @@ export class FactService {
     }
     if (fact.type === FactType.Block) {
       this.ctx.get(BlockService).forget(fact);
+      this.ctx.maybeGet(BlockRecordSet)?.dispatchRemove(fact);
     }
     this.ctx.get(NodeService).get(fact.signer)?.producedFacts.delete(fact);
     this.facts.delete(fact.hash.toPrimitive());
@@ -558,6 +560,8 @@ export class FactService {
       this.ctx.get(BlockService).updateCanonicalities(
         this.hackyGetBlocksMatching(),
       );
+
+      this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(res);
     }
 
     this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);

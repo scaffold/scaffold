@@ -20,6 +20,8 @@ import {
   ComputationType,
 } from './ComputationMeta.ts';
 import { CollateralHint } from './collateralMessages.ts';
+import { VerifierHelper } from './VerifierHelper.ts';
+import { QaDebugger } from './QaDebugger.ts';
 
 const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
 class VerificationException extends Error {
@@ -67,10 +69,9 @@ export class VerificationService {
           );
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
-            message:
-              `Starting special verifier for ${verifier.contractHash.toHex()}:${
-                bin2hex(verifier.params)
-              }`,
+            message: `Starting special verifier for ${
+              this.ctx.get(QaDebugger).debugVerifier(verifier)
+            }`,
           });
           try {
             await special.compute(driver, this.ctx);
@@ -103,10 +104,9 @@ export class VerificationService {
           );
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
-            message:
-              `Starting worker verifier for ${verifier.contractHash.toHex()}:${
-                bin2hex(verifier.params)
-              }`,
+            message: `Starting worker verifier for ${
+              this.ctx.get(QaDebugger).debugVerifier(verifier)
+            }`,
           });
           try {
             await this.ctx.get(WorkerExecutor).run(
@@ -244,7 +244,7 @@ export class VerificationService {
       },
       emitCorrect: () => true,
 
-      notify: (verifier) => {},
+      notify: (_verifier) => {},
       fetch: async (verifier) => {
         if (workerDriver.done.signal.aborted) {
           // Should have already interrupted earlier
@@ -252,9 +252,7 @@ export class VerificationService {
         }
 
         workerDriver.pauseTimer(
-          `request(${verifier.contractHash.toHex()}, ${
-            bin2hex(verifier.params)
-          })`,
+          `fetch(${this.ctx.get(QaDebugger).debugVerifier(verifier)})`,
         );
 
         for (const hash of block.refs) {
@@ -264,13 +262,18 @@ export class VerificationService {
           const groupIdx = await this.ctx.get(BlockService)
             .getGroupIndex(ref, verifier, workerDriver.done.signal);
           if (groupIdx !== undefined) {
-            workerDriver.resumeTimer();
-            return ref.bodies[groupIdx];
+            const body = ref.bodies[groupIdx];
+            workerDriver.resumeTimer(
+              `Read from ${ref.hash.toHex().slice(0, 10)}: ${
+                bin2hex(body).slice(0, 10)
+              }`,
+            );
+            return body;
           }
         }
 
         throw new VerificationException(
-          `request(...) failed - no refs match the specified verifier!`,
+          `fetch(...) failed - no refs match the specified verifier!`,
         );
       },
 
@@ -299,7 +302,17 @@ export class VerificationService {
         );
       },
       requireInput: async (satisfies, outputsTo) => {
-        workerDriver.pauseTimer(`requireInput()`);
+        workerDriver.pauseTimer(
+          `requireInput(${
+            satisfies !== undefined
+              ? this.ctx.get(QaDebugger).debugVerifier(satisfies)
+              : 'undefined'
+          }, ${
+            outputsTo !== undefined
+              ? this.ctx.get(QaDebugger).debugVerifier(outputsTo)
+              : 'undefined'
+          })`,
+        );
 
         // Do nothing here; the way to tell if this block A indeed fulfills B's output is to input the output then verify.
 
@@ -337,7 +350,12 @@ export class VerificationService {
             }
           }
 
-          workerDriver.resumeTimer();
+          workerDriver.resumeTimer(
+            `Linked to ${
+              inputBlock.hash.toHex().slice(0, 10)
+            }:${input.outputIdx}`,
+          );
+
           return {
             input: {
               block: inputBlock,
@@ -396,9 +414,9 @@ export class VerificationService {
       },
 
       finalize: async (err: unknown) => {
-        workerDriver.pauseTimer(`finalize()`);
-
         const isValid = err === VERIFICATION_SUCCESS_FLAG;
+        workerDriver.pauseTimer(`finalize(${isValid ? 'VALID' : 'INVALID'})`);
+
         if (isValid) {
           if (nextInputIdx > 0 && nextInputIdx !== block.inputs.length) {
             throw new VerificationException(
@@ -417,7 +435,7 @@ export class VerificationService {
         }
         workerDriver.done.abort();
 
-        workerDriver.resumeTimer();
+        workerDriver.resumeTimer(`Done`);
       },
     };
   }

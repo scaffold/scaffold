@@ -1,64 +1,71 @@
 import { Context } from './Context.ts';
-import { Hash } from './util/Hash.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
 import { Verifier } from './messages.ts';
 import * as hashes from './constants.ts';
+import { bin2hex } from './util/hex.ts';
+import { BlockFact } from './FactMeta.ts';
+import { BlockService } from './BlockService.ts';
+import { Logger } from './Logger.ts';
+
+interface Debugger {
+  contractName: string;
+  paramDebugger?: (params: Uint8Array) => unknown;
+  bodyDebugger?: (body: Uint8Array) => unknown;
+}
 
 export class QaDebugger {
-  private debuggers: Map<string, {
-    contractName: string;
-    paramDebugger?: (params: Uint8Array) => any;
-    answerDebugger?: (answer: Uint8Array) => any;
-  }> = new Map();
+  private debuggers: Map<HashPrimitive, Debugger> = new Map();
 
   constructor(private ctx: Context) {
-    const timeout = ctx.config.timeProvider.setTimeout(() => {
-      Object.entries(hashes).forEach(([name, hash]) =>
-        this.addDebugger(name, hash)
-      );
-    }, 0);
-
-    ctx.onDestruct(() => ctx.config.timeProvider.clearTimeout(timeout));
+    Object.entries(hashes).forEach(([name, hash]) =>
+      this.addDebugger(name, hash)
+    );
   }
 
   public addDebugger(
     contractName: string,
     contractHash: Hash,
-    paramDebugger?: (params: Uint8Array) => any,
-    answerDebugger?: (answer: Uint8Array) => any,
+    paramDebugger?: (params: Uint8Array) => unknown,
+    bodyDebugger?: (body: Uint8Array) => unknown,
   ) {
-    this.debuggers.set(contractHash.toHex(), {
+    this.debuggers.set(contractHash.toPrimitive(), {
       contractName,
       paramDebugger,
-      answerDebugger,
+      bodyDebugger,
     });
   }
 
-  public debugQuestion(spec: Verifier) {
-    const dbgr = this.debuggers.get(spec.contractHash.toHex());
-    if (dbgr) {
-      return {
-        dbgContract: dbgr.contractName,
-        dbgParams: dbgr.paramDebugger
-          ? dbgr.paramDebugger(spec.params)
-          : undefined,
-      };
-    }
+  public debugVerifier(verifier: Verifier) {
+    const dbgr = this.debuggers.get(verifier.contractHash.toPrimitive());
+    const contractStr = dbgr?.contractName ??
+      verifier.contractHash.toHex().slice(0, 10);
+    const paramsStr = this.serialize(dbgr?.paramDebugger?.(verifier.params)) ??
+      bin2hex(verifier.params).slice(0, 10);
+    return `${contractStr}/${paramsStr}`;
   }
 
-  public debugAnswer({ bodies }: {
-    // verifiers: (Verifier | undefined)[];
-    bodies: Uint8Array[];
-  }): { dbgAnswer: any } | undefined {
-    // const dbgrs = verifiers.map((v) =>
-    //   this.debuggers.get(v.contractHash.toHex())
-    // ).filter(Boolean);
-    // if (dbgrs.length) {
-    //   return {
-    //     dbgAnswer: dbgrs[0]!.answerDebugger
-    //       ? dbgrs[0]!.answerDebugger(body)
-    //       : undefined,
-    //   };
-    // }
-    return undefined;
+  public debugBody(block: BlockFact, groupIdx: number) {
+    const body = block.bodies[groupIdx];
+
+    for (const input of block.inputs) {
+      if (input.groupIdx === groupIdx) {
+        const inputBlock = this.ctx.get(BlockService)
+          .get(input.blockHash, false);
+        if (inputBlock !== undefined) {
+          const verifier = inputBlock.outputs[input.outputIdx].verifier;
+          const dbgr = this.debuggers.get(verifier.contractHash.toPrimitive());
+          const str = this.serialize(dbgr?.bodyDebugger?.(body));
+          if (str !== undefined) {
+            return str;
+          }
+        }
+      }
+    }
+
+    return bin2hex(body).slice(0, 10);
+  }
+
+  private serialize(val: unknown) {
+    return typeof val === 'object' ? this.ctx.get(Logger).serialize(val) : val;
   }
 }

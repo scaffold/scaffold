@@ -1,12 +1,83 @@
-export interface ReactiveRecordSet<RecordType> {
-  getAll(): Iterable<RecordType>;
+import { mapPut } from './map.ts';
 
-  onAdd(cb: (record: RecordType) => void): void;
-  offAdd(cb: (record: RecordType) => void): void;
+// export interface ReactiveRecordSet<RecordType> {
+//   getAll(): Iterable<RecordType>;
 
-  onRemove(cb: (record: RecordType) => void): void;
-  offRemove(cb: (record: RecordType) => void): void;
+//   onAdd(cb: (record: RecordType) => void): void;
+//   offAdd(cb: (record: RecordType) => void): void;
 
-  onUpdate(record: RecordType, cb: (record: RecordType) => void): void;
-  offUpdate(record: RecordType, cb: (record: RecordType) => void): void;
+//   onRemove(cb: (record: RecordType) => void): void;
+//   offRemove(cb: (record: RecordType) => void): void;
+
+//   onUpdate(record: RecordType, cb: (record: RecordType) => void): void;
+//   offUpdate(record: RecordType, cb: (record: RecordType) => void): void;
+// }
+
+export abstract class ReactiveRecordSet<RecordType> {
+  private addListeners: ((record: RecordType) => void)[] = [];
+  private removeListeners: ((record: RecordType) => void)[] = [];
+  private updateListeners = new Map<
+    RecordType,
+    ((record: RecordType) => void)[]
+  >();
+
+  abstract getAll(): Iterable<RecordType>;
+
+  public onAdd(cb: (record: RecordType) => void) {
+    this.addListeners.push(cb);
+  }
+  public offAdd(cb: (record: RecordType) => void) {
+    const idx = this.addListeners.indexOf(cb);
+    if (idx === -1) {
+      throw new Error(`Cannot remove a non-existent callback!`);
+    }
+    this.addListeners.splice(idx, 1);
+  }
+
+  public onRemove(cb: (record: RecordType) => void) {
+    this.removeListeners.push(cb);
+  }
+  public offRemove(cb: (record: RecordType) => void) {
+    const idx = this.removeListeners.indexOf(cb);
+    if (idx === -1) {
+      throw new Error(`Cannot remove a non-existent callback!`);
+    }
+    this.removeListeners.splice(idx, 1);
+  }
+
+  public onUpdate(record: RecordType, cb: (record: RecordType) => void) {
+    mapPut(this.updateListeners, record, () => []).push(cb);
+  }
+  public offUpdate(record: RecordType, cb: (record: RecordType) => void) {
+    const listeners = this.updateListeners.get(record);
+    if (listeners === undefined) {
+      throw new Error(`Cannot remove a non-existent callback!`);
+    }
+    const idx = listeners.indexOf(cb);
+    if (idx === -1) {
+      throw new Error(`Cannot remove a non-existent callback!`);
+    }
+    listeners.splice(idx, 1);
+  }
+
+  public dispatchAdd(record: RecordType) {
+    for (const listener of this.addListeners) {
+      listener(record);
+    }
+  }
+
+  public dispatchRemove(record: RecordType) {
+    for (const listener of this.removeListeners) {
+      listener(record);
+    }
+  }
+
+  public dispatchUpdate(record: RecordType) {
+    const listeners = this.updateListeners.get(record);
+    if (listeners !== undefined) {
+      for (const listener of listeners) {
+        listener(record);
+      }
+    }
+  }
 }

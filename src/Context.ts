@@ -55,6 +55,10 @@ export class Context {
     return res as T;
   }
 
+  public maybeGet<T>(Type: { new (context: Context): T }): T | undefined {
+    return this.objs.get(Type) as T | undefined;
+  }
+
   public onDestruct(cb: () => Promise<void> | void) {
     this.destructors.push(cb);
   }

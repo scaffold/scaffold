@@ -43,6 +43,8 @@ import { FrontierChainService } from './FrontierChainService.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { retryAbortable } from './util/abortable.ts';
+import { VerifierHelper } from './VerifierHelper.ts';
+import { QaDebugger } from './QaDebugger.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -190,10 +192,9 @@ export class GenerationService {
           const driver = this.makeGenerationDriver(verifier, workerDriver);
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
-            message:
-              `Starting special generator for ${verifier.contractHash.toHex()}:${
-                bin2hex(verifier.params)
-              }`,
+            message: `Starting special generator for ${
+              this.ctx.get(QaDebugger).debugVerifier(verifier)
+            }`,
           });
           try {
             await special.compute(driver, this.ctx);
@@ -226,10 +227,9 @@ export class GenerationService {
           const driver = this.makeGenerationDriver(verifier, workerDriver);
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
-            message:
-              `Starting local generator for ${verifier.contractHash.toHex()}:${
-                bin2hex(verifier.params)
-              }`,
+            message: `Starting local generator for ${
+              this.ctx.get(QaDebugger).debugVerifier(verifier)
+            }`,
           });
           try {
             await localGenerator(driver, this.ctx);
@@ -419,9 +419,7 @@ export class GenerationService {
           }
 
           workerDriver.pauseTimer(
-            `request(${verifier.contractHash.toHex()}, ${
-              bin2hex(verifier.params)
-            })`,
+            `request(${this.ctx.get(QaDebugger).debugVerifier(verifier)})`,
           );
 
           const incentive = inputs.reduce((acc, input) =>
@@ -445,8 +443,13 @@ export class GenerationService {
               // TODO: Handle case when that ref gets replaced and no longer fulfills the verifier.
 
               refs.push(block);
-              workerDriver.resumeTimer();
-              reply(block.bodies[groupIdx]);
+              const body = block.bodies[groupIdx];
+              workerDriver.resumeTimer(
+                `Fetched from ${block.hash.toHex().slice(0, 10)}: ${
+                  bin2hex(body).slice(0, 10)
+                }`,
+              );
+              reply(body);
             },
           });
         }),
@@ -470,7 +473,17 @@ export class GenerationService {
           );
         }
 
-        workerDriver.pauseTimer(`requireInput()`);
+        workerDriver.pauseTimer(
+          `requireInput(${
+            satisfies !== undefined
+              ? this.ctx.get(QaDebugger).debugVerifier(satisfies)
+              : 'undefined'
+          }, ${
+            outputsTo !== undefined
+              ? this.ctx.get(QaDebugger).debugVerifier(outputsTo)
+              : 'undefined'
+          })`,
+        );
 
         let input: InputSpec | undefined;
         if (satisfies === undefined) {
@@ -545,7 +558,12 @@ export class GenerationService {
 
         const output = input.block.outputs[input.outputIdx];
 
-        workerDriver.resumeTimer();
+        workerDriver.resumeTimer(
+          `Linking to ${
+            input.block.hash.toHex().slice(0, 10)
+          }:${input.outputIdx}`,
+        );
+
         return {
           input,
           output,
@@ -602,7 +620,10 @@ export class GenerationService {
       },
 
       finalize: async (err: unknown) => {
-        if (err !== GENERATION_SUCCESS_FLAG) {
+        const isValid = err === GENERATION_SUCCESS_FLAG;
+        workerDriver.pauseTimer(`finalize(${isValid ? 'VALID' : 'INVALID'})`);
+
+        if (!isValid) {
           console.error(`Cannot generate: `, err);
           return;
         }
@@ -616,8 +637,6 @@ export class GenerationService {
         //   console.warn(`Skipping generation of empty block`);
         //   return;
         // }
-
-        workerDriver.pauseTimer(`finalize()`);
 
         if (timestampGte !== undefined) {
           // TODO: There might be a better way to do this?
@@ -660,8 +679,8 @@ export class GenerationService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Creating block...`,
         });
-        this.createBlock(verifier, blockDraft);
-        workerDriver.resumeTimer();
+        const block = await this.createBlock(verifier, blockDraft);
+        workerDriver.resumeTimer(`Created ${block.hash.toHex().slice(0, 10)}`);
       },
     };
   }
@@ -749,21 +768,31 @@ export class GenerationService {
       return fact;
     }
 
-    // console.log('GENERATE', draft);
-    assert(draft.onBlock === undefined);
-    draft.onBlock = (block, groupIdx) => {
-      if (this.ctx.config.dbgVerifyGenerations) {
-        this.ctx.get(VerificationService)
-          .enqueueVerification(block, verifier, [CollateralHint.encode({
-            hint: { CollateralHintVerifier: { groupIdx } },
-          })], 0);
-      }
+    return new Promise<BlockFact>((resolve) => {
+      assert(draft.onBlock === undefined);
+      draft.onBlock = (block, groupIdx) => {
+        debugger;
+        resolve(block);
 
-      if (this.isImmediatelyVerifiable(block) !== true) {
-        this.ctx.get(LitigationService).litigate(block, [], 'VALID_CHALLENGE');
-      }
-    };
-    this.ctx.get(BlockBuilder).publishPersistentDraft(draft);
+        if (this.ctx.config.dbgVerifyGenerations) {
+          this.ctx.get(VerificationService)
+            .enqueueVerification(block, verifier, [CollateralHint.encode({
+              hint: { CollateralHintVerifier: { groupIdx } },
+            })], 0);
+        }
+
+        if (this.isImmediatelyVerifiable(block) !== true) {
+          this.ctx.get(LitigationService).litigate(
+            block,
+            [],
+            'VALID_CHALLENGE',
+          );
+        }
+      };
+
+      debugger;
+      this.ctx.get(BlockBuilder).publishPersistentDraft(draft);
+    });
 
     // answer.difficultyEstimate = BigInt(durationMs) *
     //   this.ctx.config.approxComputePricePerSecond / 1000n;
