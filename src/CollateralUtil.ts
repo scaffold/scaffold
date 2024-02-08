@@ -72,6 +72,7 @@ export interface CollateralDescriptor {
 }
 export type DetailVote = CollateralContractDetail['vote'];
 
+// TODO: Rename to CollateralHelper
 export class CollateralUtil {
   private static makeContest(parent?: Contest): Contest {
     return {

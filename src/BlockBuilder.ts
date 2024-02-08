@@ -20,9 +20,10 @@ import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { WeightService } from './WeightService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
-import { assert, todo } from './util/functional.ts';
+import { assert, error, todo } from './util/functional.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
+import { FrontierHelper } from './FrontierHelper.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -246,6 +247,8 @@ export class BlockBuilder {
       // );
 
       bodies.push(EMPTY_ARR);
+      // TODO: Move all of this logic to FrontierContract
+      // We'll have to make the tree weights NOT include the self weight
       outputs.push({
         verifier: {
           contractHash: frontierHash,
@@ -264,7 +267,12 @@ export class BlockBuilder {
           // block_count: 1,
           // claimed_work: this.computeWork(inputs, outputs),
 
-          ...this.ctx.get(FrontierService2).mergeTreeIo(inputs),
+          ...FrontierHelper.mergeTreeIo(
+            inputs,
+            (hash) =>
+              this.ctx.get(BlockService).get(hash, false) ??
+                error(`Unknown frontier child input!`),
+          ),
         }),
         groupIdx: groupIdx++,
       });

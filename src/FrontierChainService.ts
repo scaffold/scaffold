@@ -5,6 +5,9 @@ import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { FrontierService2 } from './FrontierService2.ts';
+import { FrontierHelper } from './FrontierHelper.ts';
+import { BlockService } from './BlockService.ts';
+import { error } from './util/functional.ts';
 
 const targVoteLevel = 4;
 
@@ -47,7 +50,12 @@ export class FrontierChainService {
     */
 
     try {
-      this.ctx.get(FrontierService2).mergeTreeIo(inputs);
+      FrontierHelper.mergeTreeIo(
+        inputs,
+        (hash) =>
+          this.ctx.get(BlockService).get(hash, false) ??
+            error(`Unknown frontier child input!`),
+      );
     } catch (_err) {
       return undefined;
     }

@@ -29,6 +29,8 @@ export class ContractClassifierService {
 
   private charityContractHashes = new Set<HashPrimitive>(
     [burnHash, jackpotHash].map(toHashPrim),
+    // trueHash? It will be difficult to claim because of the self weight mechanics.
+    // What if we don't even need a jackpot and just trueHash?
   );
 
   constructor(private ctx: Context) {}
@@ -45,6 +47,11 @@ export class ContractClassifierService {
 
   public isCharity({ contractHash }: Verifier) {
     // TODO: Also return true if we're sending the funds back to an input signer, up to the input amount
+    // ^ Actually DON'T do this!!!
+    // Artificially-high-work blocks will lose money because they can be re-written for cheaper.
+    // To ensure a claim, you must output a large amount to the jackpot.
+    // Outputting to the input signer will go right back to the malicious actor & make this attack easy.
+
     return this.charityContractHashes.has(contractHash.toPrimitive());
   }
 }

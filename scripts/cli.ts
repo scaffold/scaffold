@@ -4,6 +4,11 @@ import { readAll } from 'std-latest/streams/read_all.ts';
 
 // TODO: Use https://cliffy.io/
 // Make sure it can be compiled to run on npm
+// Or if not, https://deno.land/std/cli/parse_args.ts
+
+// The command name should be: scf or scaffold
+// scf is shorter but hard to type because the last 2 letters use the same finger.
+// https://smallstep.com/blog/the-poetics-of-cli-command-names/
 
 class DenoInterface {
   public getArgs() {
