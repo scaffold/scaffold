@@ -4,7 +4,7 @@ import { WeightService } from './WeightService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
-import { FrontierService2 } from './FrontierService2.ts';
+import { GenesisService } from './GenesisService.ts';
 import { FrontierHelper } from './FrontierHelper.ts';
 import { BlockService } from './BlockService.ts';
 import { error } from './util/functional.ts';
@@ -74,7 +74,9 @@ export class FrontierChainService {
     const voteLevel = Math.max(targVoteLevel, requireVoteLevel + 1);
 
     // Inputs that are not a tree child of a frontier input
-    const externalInputs = new Set<BlockFact | typeof ZERO_BLOCK>([ZERO_BLOCK]);
+    const externalInputs = new Set<BlockFact>([
+      this.ctx.get(GenesisService).getGenesisBlock(),
+    ]);
 
     for (const { block } of inputs) {
       if (!doesIntersect(frontierInputs, this.getAllParents(block))) {
@@ -86,10 +88,7 @@ export class FrontierChainService {
       if (fi.frontierVoteBlock === undefined) {
         // throw new Error(`Unconnected frontier chain!`);
         return undefined;
-      } else if (
-        fi.frontierVoteBlock !== ZERO_BLOCK &&
-        !frontierInputs.has(fi.frontierVoteBlock)
-      ) {
+      } else if (!frontierInputs.has(fi.frontierVoteBlock)) {
         externalInputs.add(fi.frontierVoteBlock);
       }
     }
@@ -113,9 +112,7 @@ export class FrontierChainService {
     // });
 
     const requireInclusion = [...externalInputs].map((input) =>
-      input === ZERO_BLOCK
-        ? new Set<BlockFact | typeof ZERO_BLOCK>([ZERO_BLOCK])
-        : this.getAllParents(input)
+      this.getAllParents(input)
     );
 
     let res = [...externalInputs].find((input) => {
@@ -123,7 +120,7 @@ export class FrontierChainService {
       return requireInclusion.every((p) => doesIntersect(chain, p));
     });
 
-    if (res === undefined || res === ZERO_BLOCK) {
+    if (res === undefined) {
       // TODO: Descend towards voters?
       return res;
     }
@@ -208,22 +205,16 @@ export class FrontierChainService {
   //   return bestParent;
   // }
 
-  private getFrontierChain(block: BlockFact | typeof ZERO_BLOCK) {
-    const chain = block === ZERO_BLOCK
-      ? new Set<BlockFact | typeof ZERO_BLOCK>()
-      : this.recurse(block, (el, queue) => {
-        switch (el.frontierVoteBlock) {
-          case undefined:
-            // throw new Error(`Unconnected frontier chain!`);
-            break;
-          case ZERO_BLOCK:
-            break;
-          default:
-            queue.push(el.frontierVoteBlock);
-        }
-      });
-    chain.add(ZERO_BLOCK);
-    return chain;
+  public getFrontierChain(block: BlockFact) {
+    return this.recurse(block, (el, queue) => {
+      switch (el.frontierVoteBlock) {
+        case undefined:
+          // throw new Error(`Unconnected frontier chain!`);
+          break;
+        default:
+          queue.push(el.frontierVoteBlock);
+      }
+    });
   }
 
   private getAllParents(block: BlockFact) {

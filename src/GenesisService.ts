@@ -80,17 +80,20 @@ export const createGenesisBlock = (
   return ctx.get(BlockService).create(block);
 };
 
-const generatedGenesisData = createGenesisBlock(initAccounts).data;
-// console.log('Genesis block hex:', bin2hex(generatedGenesisData));
 export const sharedGenesisData = hex2bin(
-  '53424c050000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000853424c00000000000000000000000000000000000000000066726f6e7469657204fe03020a0a02140000000253424c000000000000000000000000000000000000000000006163636f756e744442024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e90640420f000253424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c6790640420f000453424c000000000000000000000000000000000000000000006163636f756e744442022dcf09ad49df279eaf9f3c2ecea2756e46676be80db075618dd372311c2e5f4b0640420f0006000c00000000000000c8a680caad63a2dcfb81e59ceeef40678bc4fed3aa0ff0229d275e30c83fe53150aa0434488f0719f90606ff5a3870a37cf0dab134bc54032898bae14807db907255b1e50cab01',
+  '53424c050000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000853424c00000000000000000000000000000000000000000066726f6e7469657204fe03020a060000000253424c000000000000000000000000000000000000000000006163636f756e744442024148e8772a0a4ba2b8b4da9b609d224fd82b3cee0e7ea669ee6d7c306d7678e90640420f000253424c000000000000000000000000000000000000000000006163636f756e74444202c39ba41bb22646dfd4bc10e1575032db4b7c57bdb34e0e52268f950be817c6790640420f000453424c000000000000000000000000000000000000000000006163636f756e744442022dcf09ad49df279eaf9f3c2ecea2756e46676be80db075618dd372311c2e5f4b0640420f0006000c00000000000000ac89fbafb163ab4c4b7180e73be13ca7619980bf5a8b386014cd8f1882ca873e81a50a7c06744da753e6a53a588fadfb44bfc16143054ee3f2bc084c431aab69880aa1da4b8a01',
 );
-if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
-  console.log('Genesis block hex:', bin2hex(generatedGenesisData));
-  throw new Error(
-    `Shared genesis data isn't the right length! Please update it.`,
-  );
-}
+
+setTimeout(() => {
+  const generatedGenesisData = createGenesisBlock(initAccounts).data;
+  // console.log('Genesis block hex:', bin2hex(generatedGenesisData));
+  if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
+    console.log('Genesis block hex:', bin2hex(generatedGenesisData));
+    throw new Error(
+      `Shared genesis data isn't the right length! Please update it.`,
+    );
+  }
+}, 0);
 
 export class GenesisService {
   constructor(private ctx: Context) {}
@@ -105,9 +108,18 @@ export class GenesisService {
     } catch (err) {
       console.error(err);
       console.error(`You probably need to update the genesis block data!`);
-      console.log('Genesis block hex:', bin2hex(generatedGenesisData));
+      console.log(
+        'Genesis block hex:',
+        bin2hex(createGenesisBlock(initAccounts).data),
+      );
       throw err;
     }
+  }
+
+  public getGenesisBlock() {
+    return this.ctx.get(FactService).hackyGetBlocksMatching((x) =>
+      x.source === FactSource.Genesis
+    )[0];
   }
 
   public getTotalCoins() {

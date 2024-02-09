@@ -771,7 +771,6 @@ export class GenerationService {
     return new Promise<BlockFact>((resolve) => {
       assert(draft.onBlock === undefined);
       draft.onBlock = (block, groupIdx) => {
-        debugger;
         resolve(block);
 
         if (this.ctx.config.dbgVerifyGenerations) {
@@ -790,7 +789,6 @@ export class GenerationService {
         }
       };
 
-      debugger;
       this.ctx.get(BlockBuilder).publishPersistentDraft(draft);
     });
 

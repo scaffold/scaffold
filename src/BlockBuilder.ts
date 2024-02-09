@@ -257,7 +257,7 @@ export class BlockBuilder {
         amount: frontierOutputAmount,
         detail: FrontierTreeDetail.encode({
           treeWeights: this.ctx.get(FrontierService2)
-            .mergeTreeWeights(inputs, outputs, frontierVoteBlock),
+            .mergeTreeWeights(inputs, frontierVoteBlock),
           // input_tree_root: ZERO_HASH,
           // output_tree_root: ZERO_HASH,
 

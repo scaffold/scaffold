@@ -56,8 +56,12 @@ export class RenderService {
   }
 
   private renderBlock(graph: Graph, block: BlockFact, isDeleted = false) {
-    const title = block.hash.toHex().slice(0, 8) + ' ^' +
-      block.frontierParams.level + ' @' + block.visitedAt;
+    // const name = block.hash.toHex().slice(0, 8);
+    const name = block.sillyName;
+
+    const title = name +
+      ' ^' + block.frontierParams.level +
+      ' @' + block.visitedAt;
 
     let props = 'DELETED';
     if (!isDeleted) {
@@ -65,8 +69,10 @@ export class RenderService {
       props = Object.entries({
         self: `${selfWeight.minWeight}-${selfWeight.maxWeight}`,
         anc: this.ctx.get(WeightService).getAncestorWeight(block).minWeight,
-        desc: this.ctx.get(WeightService).getDescendantWeight(block).minWeight,
+        desc: this.ctx.get(WeightService).getDescendant(block).weight,
         tree: block.frontierDetail.treeWeights.join(','),
+        vw: this.ctx.get(WeightService).getVoterWeight(block)
+          .map((x) => x.minWeight).join(','),
         canon: this.ctx.get(WeightService).getCanonicality(block),
       }).map(([key, val]) => `${key}: ${val}`).join('\n');
     }

@@ -131,12 +131,7 @@ export class BlockService {
           (x) => this.get(x.blockHash, false)?.isCanonical !== false,
         ),
 
-      frontierVoteBlock: Hash.equals(block.frontierVote, ZERO_HASH)
-        ? ZERO_BLOCK
-        : undefined,
-      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH)
-        ? 1
-        : undefined,
+      frontierChainDepth: base.source === FactSource.Genesis ? 0 : undefined,
 
       frontierVoters: this.getVoters(base.hash),
 
@@ -368,9 +363,6 @@ export class BlockService {
       frontierParams.level >= NUM_FRONTIER_LEVELS
     ) {
       throw new Error(`Invalid frontier level ${frontierParams.level}!`);
-    }
-    if (frontierDetail.treeWeights.length === 0) {
-      throw new Error(`Not at least one tree weight!`);
     }
     if (frontierDetail.treeWeights.length > NUM_FRONTIER_LEVELS) {
       throw new Error(`Too many tree weights!`);
@@ -825,10 +817,6 @@ export class BlockService {
     }
 
     const treeSize = (2n << BigInt(block.frontierParams.level)) - 1n;
-    if (block.frontierVoteBlock === ZERO_BLOCK) {
-      return { min: treeSize, max: treeSize };
-    }
-
     const voteIdx = this.getBlockIndex(block.frontierVoteBlock);
     return {
       min: voteIdx.min + treeSize,

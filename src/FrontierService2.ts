@@ -79,31 +79,21 @@ export class FrontierService2 {
 
   public mergeTreeWeights(
     inputs: InputSpec[],
-    outputs: BlockOutput[],
     frontierVote: BlockFact | typeof ZERO_BLOCK,
   ): bigint[] {
-    const selfWeight = this.ctx.get(WeightService).getSelfWeight({
-      source: FactSource.Local,
-      inputs: inputs.map((input) => ({
-        blockHash: input.block.hash,
-        outputIdx: input.outputIdx,
-        groupIdx: -1,
-      })),
-      outputs,
-    }).minWeight;
-    const weights = [selfWeight];
+    const weights: bigint[] = [];
 
     for (const input of inputs) {
       if (input.outputIdx === input.block.frontierOutputIdx) {
         const voteDepth = frontierVote === ZERO_BLOCK
-          ? 0
+          ? -1
           : frontierVote.frontierChainDepth ??
             error(`Unconnected frontier chain!`);
         const childDepth = input.block.frontierChainDepth ??
           error(`Unconnected frontier chain!`);
-        const shift = voteDepth - childDepth + 1;
+        const shift = voteDepth - childDepth;
 
-        input.block.frontierDetail.treeWeights.forEach((x, i) => {
+        const addWeight = (x: bigint, i: number) => {
           i += shift;
           if (i < 0) {
             i = 0;
@@ -112,7 +102,14 @@ export class FrontierService2 {
             weights.push(0n);
           }
           weights[i] += x;
-        });
+        };
+
+        input.block.frontierDetail.treeWeights.forEach(addWeight);
+
+        addWeight(
+          this.ctx.get(WeightService).getSelfWeight(input.block).minWeight,
+          0,
+        );
       }
     }
 
