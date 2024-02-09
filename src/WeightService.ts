@@ -37,7 +37,10 @@ When we have multiple claimants of an output, simply choose the highest-scoring 
 interface Cache {
   ancestorWeight: Map<BlockFact, { minWeight: bigint }>;
   selfWeight: Map<BlockFact, { minWeight: bigint; maxWeight: bigint }>;
-  descendant: Map<BlockFact, { block?: BlockFact; weight: bigint }>;
+  descendant: Map<
+    BlockFact,
+    { block?: BlockFact; weight: bigint; isParent: boolean }
+  >;
   canonicality: Map<BlockFact, bigint>;
   canonicalVoter: Map<BlockFact | typeof ZERO_BLOCK, BlockFact | undefined>;
   canonicalParent: Map<BlockFact, BlockFact | undefined>;
@@ -131,10 +134,10 @@ export class WeightService {
       let bestScore = 0n;
       let bestDescendant: BlockFact | undefined;
       let bestDescendantWeight = 0n;
+      let isParent = false;
 
-      const factChain = this.ctx.get(FrontierChainService).getFrontierChain(
-        fact,
-      );
+      const factChain = this.ctx.get(FrontierChainService)
+        .getFrontierChain(fact);
       const voters = this.ctx.get(BlockService).getVoters(fact.hash);
 
       for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
@@ -142,6 +145,7 @@ export class WeightService {
 
         const selfWeight = this.getSelfWeight(claim.block, cache).minWeight;
         const descWeight = this.getDescendant(claim.block, cache).weight;
+        let coneWeight = 0n;
         let siblingWeight = 0n;
         for (const sibling of claim.block.inputs) {
           const siblingBlock = this.ctx.get(BlockService)
@@ -152,36 +156,45 @@ export class WeightService {
           ) {
             let ptr = siblingBlock;
             while (!factChain.has(ptr)) {
-              siblingWeight += this.getSelfWeight(ptr, cache).minWeight;
-              siblingWeight += ptr.frontierDetail.treeWeights
+              coneWeight += this.getSelfWeight(ptr, cache).minWeight;
+              coneWeight += ptr.frontierDetail.treeWeights
                 .reduce((acc, cur) => acc + cur, 0n);
               ptr = ptr.frontierVoteBlock ?? error(`Unlinked sibling votes!`);
             }
+
+            if (siblingBlock.frontierVoteBlock === fact) {
+              siblingWeight +=
+                this.getSelfWeight(siblingBlock, cache).minWeight;
+              siblingWeight +=
+                this.getVoterWeight(siblingBlock, cache)[0].minWeight;
+            }
           }
         }
-        const score = descWeight - selfWeight + siblingWeight;
+        const score = descWeight - selfWeight - coneWeight;
         if (bestDescendant === undefined || score > bestScore) {
           bestScore = score;
           bestDescendant = claim.block;
           bestDescendantWeight = selfWeight + descWeight + siblingWeight;
+          isParent = true;
         }
       }
 
       for (const voter of voters) {
-        const selfWeight = this.getSelfWeight(voter, cache).minWeight;
-        const descWeight = this.getDescendant(voter, cache).weight;
-        // TODO: Do we need this?
-        // const voterWeight = this.getVoterWeight(voter, cache)[0].minWeight;
-        const voterWeight = 0n;
-        const score = descWeight - selfWeight + voterWeight;
-        if (bestDescendant === undefined || score > bestScore) {
-          bestScore = score;
-          bestDescendant = voter;
-          bestDescendantWeight = selfWeight + descWeight + voterWeight;
+        const desc = this.getDescendant(voter, cache);
+        if (!desc.isParent) {
+          const selfWeight = this.getSelfWeight(voter, cache).minWeight;
+          const voterWeight = this.getVoterWeight(voter, cache)[0].minWeight;
+          const score = desc.weight - selfWeight + voterWeight;
+          if (bestDescendant === undefined || score > bestScore) {
+            bestScore = score;
+            bestDescendant = voter;
+            bestDescendantWeight = selfWeight + desc.weight + voterWeight;
+            isParent = false;
+          }
         }
       }
 
-      return { block: bestDescendant, weight: bestDescendantWeight };
+      return { block: bestDescendant, weight: bestDescendantWeight, isParent };
 
       // let minWeight = 0n;
 
@@ -379,12 +392,9 @@ export class WeightService {
    */
   public getVoterWeight(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.voterWeight, fact, () => {
-      const bestDescendant = this.getDescendant(fact, cache).block;
+      const desc = this.getDescendant(fact, cache);
 
-      if (
-        bestDescendant === undefined ||
-        bestDescendant.frontierVoteBlock !== fact
-      ) {
+      if (desc.block === undefined || desc.isParent) {
         const res = fact.frontierDetail.treeWeights
           .map((x) => ({ minWeight: x }));
         if (res.length === 0) {
@@ -393,7 +403,7 @@ export class WeightService {
         return res;
       }
 
-      const subWeight = this.getVoterWeight(bestDescendant, cache);
+      const subWeight = this.getVoterWeight(desc.block, cache);
 
       const res: { minWeight: bigint }[] = [];
       for (let i = 0; true; i++) {

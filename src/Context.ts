@@ -5,25 +5,7 @@ export class Context {
   private destructors: (() => Promise<void> | void)[] = [];
   private isDestructed = false;
 
-  constructor(public config: Config) {
-    // This is for debugging
-    // TODO: Remove
-    (window as any).ctx = this;
-    (window as any).get = (match: string) => {
-      match = match.toLowerCase();
-      const candidates = [...this.objs.entries()].filter(([{ name }]) =>
-        name.toLowerCase().includes(match)
-      );
-      if (candidates.length !== 1) {
-        throw new Error(
-          `Not exactly one candidate module: ${
-            JSON.stringify(candidates.map(([{ name }]) => name))
-          }`,
-        );
-      }
-      return candidates[0][1];
-    };
-  }
+  constructor(public config: Config) {}
 
   public async destruct() {
     if (this.isDestructed) {

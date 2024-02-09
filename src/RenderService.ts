@@ -89,6 +89,7 @@ export class RenderService {
     for (const input of block.inputs) {
       this.renderInput(graph, block, input);
     }
+    this.renderDescendant(graph, block);
   }
 
   private renderFrontierVote(graph: Graph, block: BlockFact) {
@@ -113,6 +114,19 @@ export class RenderService {
     });
 
     graph.lines.push(`  ${bId} -> ${iId} ${attrs};`);
+  }
+
+  private renderDescendant(graph: Graph, block: BlockFact) {
+    const desc = this.ctx.get(WeightService).getDescendant(block);
+
+    const bId = this.getId(graph, block);
+    const dId = this.getId(graph, desc.block);
+    const attrs = this.renderAttrs({
+      color: 'red',
+      constraint: 'false',
+    });
+
+    graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
   }
 
   private getId(graph: Graph, object: Fact | typeof ZERO_BLOCK | undefined) {
