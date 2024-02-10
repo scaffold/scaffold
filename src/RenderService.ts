@@ -71,8 +71,7 @@ export class RenderService {
         anc: this.ctx.get(WeightService).getAncestorWeight(block).minWeight,
         desc: this.ctx.get(WeightService).getDescendant(block).weight,
         tree: block.frontierDetail.treeWeights.join(','),
-        vw: this.ctx.get(WeightService).getVoterWeight(block)
-          .map((x) => x.minWeight).join(','),
+        vw: this.ctx.get(WeightService).getVoterWeight(block).join(','),
         canon: this.ctx.get(WeightService).getCanonicality(block),
       }).map(([key, val]) => `${key}: ${val}`).join('\n');
     }
