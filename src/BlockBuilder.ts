@@ -269,6 +269,7 @@ export class BlockBuilder {
 
           ...FrontierHelper.mergeTreeIo(
             inputs,
+            frontierVoteBlock,
             (hash) =>
               this.ctx.get(BlockService).get(hash, false) ??
                 error(`Unknown frontier child input!`),

@@ -49,17 +49,6 @@ export class FrontierChainService {
     2.
     */
 
-    try {
-      FrontierHelper.mergeTreeIo(
-        inputs,
-        (hash) =>
-          this.ctx.get(BlockService).get(hash, false) ??
-            error(`Unknown frontier child input!`),
-      );
-    } catch (_err) {
-      return undefined;
-    }
-
     const frontierInputs = new Set(
       inputs.flatMap((input) => isFrontier(input) ? [input.block] : []),
     );
@@ -122,7 +111,7 @@ export class FrontierChainService {
 
     if (res === undefined) {
       // TODO: Descend towards voters?
-      return res;
+      return undefined;
     }
 
     if (res.frontierParams.level < voteLevel) {
@@ -146,6 +135,18 @@ export class FrontierChainService {
     }
 
     if (res.frontierParams.level < requireVoteLevel) {
+      return undefined;
+    }
+
+    try {
+      FrontierHelper.mergeTreeIo(
+        inputs,
+        res,
+        (hash) =>
+          this.ctx.get(BlockService).get(hash, false) ??
+            error(`Unknown frontier child input!`),
+      );
+    } catch (_err) {
       return undefined;
     }
 

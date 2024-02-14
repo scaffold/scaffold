@@ -36,7 +36,10 @@ When we have multiple claimants of an output, simply choose the highest-scoring 
 
 interface Cache {
   ancestorWeight: Map<BlockFact, { minWeight: bigint }>;
-  selfWeight: Map<BlockFact, { minWeight: bigint; maxWeight: bigint }>;
+  selfWeight: Map<
+    BlockFact,
+    { minScore: bigint; maxScore: bigint; minWork: bigint; maxWork: bigint }
+  >;
   descendant: Map<
     BlockFact,
     { block?: BlockFact; weight: bigint; isParent: boolean }
@@ -72,7 +75,7 @@ export class WeightService {
 
       const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
       if (block !== undefined) {
-        minWeight += this.getSelfWeight(block, cache).minWeight;
+        minWeight += this.getSelfWeight(block, cache).minWork;
         minWeight += this.getAncestorWeight(block, cache).minWeight;
       }
 
@@ -88,44 +91,95 @@ export class WeightService {
   ) {
     return getOrCreate(cache.selfWeight, fact, () => {
       if (fact.source === FactSource.Genesis) {
-        return { minWeight: BASE_WORK, maxWeight: BASE_WORK };
+        return {
+          minScore: 0,
+          maxScore: 0,
+          minWork: BASE_WORK,
+          maxWork: BASE_WORK,
+        };
       }
 
-      let inputKnownSum = 0n;
-      let inputFreeMarketSum = 0n;
+      let inputPositivePersonal = 0n;
+      let inputPositiveSocial = 0n;
+      let inputPositiveCharity = 0n;
+      let inputNegativePersonal = 0n;
+      let inputNegativeSocial = 0n;
+      let inputNegativeCharity = 0n;
+      let outputPositivePersonal = 0n;
+      let outputPositiveSocial = 0n;
+      let outputPositiveCharity = 0n;
+      let outputNegativePersonal = 0n;
+      let outputNegativeSocial = 0n;
+      let outputNegativeCharity = 0n;
+
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined) {
           const { verifier, amount } = block.outputs[input.outputIdx];
-          inputKnownSum += amount;
-          if (this.ctx.get(ContractClassifierService).isFreeMarket(verifier)) {
-            inputFreeMarketSum += amount;
+          if (this.ctx.get(ContractClassifierService).isCharity(verifier)) {
+            if (amount >= 0n) {
+              inputPositiveCharity += amount;
+            } else {
+              inputNegativeCharity += amount;
+            }
+          } else if (
+            this.ctx.get(ContractClassifierService).isFreeMarket(verifier)
+          ) {
+            if (amount >= 0n) {
+              inputPositiveSocial += amount;
+            } else {
+              inputNegativeSocial += amount;
+            }
+          } else {
+            if (amount >= 0n) {
+              inputPositivePersonal += amount;
+            } else {
+              inputNegativePersonal += amount;
+            }
           }
         }
       }
 
-      let outputSum = 0n;
-      let outputCharitySum = 0n;
-      for (const output of fact.outputs) {
-        outputSum += output.amount;
-        if (
-          this.ctx.get(ContractClassifierService).isCharity(output.verifier)
+      for (const { verifier, amount } of fact.outputs) {
+        if (this.ctx.get(ContractClassifierService).isCharity(verifier)) {
+          if (amount >= 0n) {
+            outputPositiveCharity += amount;
+          } else {
+            outputNegativeCharity += amount;
+          }
+        } else if (
+          this.ctx.get(ContractClassifierService).isFreeMarket(verifier)
         ) {
-          outputCharitySum += output.amount;
+          if (amount >= 0n) {
+            outputPositiveSocial += amount;
+          } else {
+            outputNegativeSocial += amount;
+          }
+        } else {
+          if (amount >= 0n) {
+            outputPositivePersonal += amount;
+          } else {
+            outputNegativePersonal += amount;
+          }
         }
       }
 
-      const minWeight = bigintMax(
-        0n,
-        BASE_WORK + inputFreeMarketSum - outputCharitySum,
-      );
-      const maxWeight = bigintMax(
-        0n,
-        BASE_WORK + inputFreeMarketSum + outputSum - inputKnownSum -
-          outputCharitySum,
-      );
+      const minScore = 0n;
+      const maxScore = 0n;
+      const minWork = BASE_WORK;
+      const maxWork = BASE_WORK;
 
-      return { minWeight, maxWeight };
+      // const minWeight = bigintMax(
+      //   0n,
+      //   BASE_WORK + inputFreeMarketSum - outputCharitySum,
+      // );
+      // const maxWeight = bigintMax(
+      //   0n,
+      //   BASE_WORK + inputFreeMarketSum + outputSum - inputKnownSum -
+      //     outputCharitySum,
+      // );
+
+      return { minScore, maxScore, minWork, maxWork };
     });
   }
 
@@ -136,59 +190,26 @@ export class WeightService {
       let bestDescendantWeight = 0n;
       let isParent = false;
 
-      const factChain = this.ctx.get(FrontierChainService)
-        .getFrontierChain(fact);
-      const voters = this.ctx.get(BlockService).getVoters(fact.hash);
-
       for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
-        const selfWeight = this.getSelfWeight(claim.block, cache).minWeight;
-        const descWeight = this.getDescendant(claim.block, cache).weight;
-        let coneWeight = 0n;
-        let siblingWeight = 0n;
-        for (const sibling of claim.block.inputs) {
-          const siblingBlock = this.ctx.get(BlockService)
-            .get(sibling.blockHash, false);
-          if (
-            siblingBlock !== undefined && siblingBlock !== fact &&
-            siblingBlock.frontierOutputIdx === sibling.outputIdx
-          ) {
-            let ptr = siblingBlock;
-            while (!factChain.has(ptr)) {
-              coneWeight += this.getSelfWeight(ptr, cache).minWeight;
-              coneWeight += ptr.frontierDetail.treeWeights
-                .reduce((acc, cur) => acc + cur, 0n);
-              ptr = ptr.frontierVoteBlock ?? error(`Unlinked sibling votes!`);
-            }
-
-            if (siblingBlock.frontierVoteBlock === fact) {
-              siblingWeight +=
-                this.getSelfWeight(siblingBlock, cache).minWeight;
-              siblingWeight += this.getVoterWeight(siblingBlock, cache)[0] ??
-                0n;
-            }
-          }
-        }
-        const score = descWeight - selfWeight - coneWeight;
+        const { score, weight } = this.getParentScore(fact, claim.block, cache);
         if (bestDescendant === undefined || score > bestScore) {
           bestScore = score;
           bestDescendant = claim.block;
-          bestDescendantWeight = selfWeight + descWeight + siblingWeight;
+          bestDescendantWeight = weight;
           isParent = true;
         }
       }
 
-      for (const voter of voters) {
-        const desc = this.getDescendant(voter, cache);
-        if (!desc.isParent) {
-          const selfWeight = this.getSelfWeight(voter, cache).minWeight;
-          const voterWeight = this.getVoterWeight(voter, cache)[0] ?? 0n;
-          const score = desc.weight - selfWeight + voterWeight;
-          if (bestDescendant === undefined || score > bestScore) {
-            bestScore = score;
-            bestDescendant = voter;
-            bestDescendantWeight = selfWeight + desc.weight + voterWeight;
-            isParent = false;
-          }
+      for (const voter of this.ctx.get(BlockService).getVoters(fact.hash)) {
+        const { score, weight } = this.getVoterScore(fact, voter, cache);
+        if (
+          score !== undefined &&
+          (bestDescendant === undefined || score > bestScore)
+        ) {
+          bestScore = score;
+          bestDescendant = voter;
+          bestDescendantWeight = weight;
+          isParent = false;
         }
       }
 
@@ -218,13 +239,73 @@ export class WeightService {
     });
   }
 
+  private getParentScore(
+    child: BlockFact,
+    parent: BlockFact,
+    cache = this.makeCache(),
+  ) {
+    const factChain = this.ctx.get(FrontierChainService)
+      .getFrontierChain(child);
+
+    const selfWeight = this.getSelfWeight(parent, cache).minWork;
+    const descWeight = this.getDescendant(parent, cache).weight;
+    let coneWeight = 0n;
+    let siblingWeight = 0n;
+    for (const sibling of parent.inputs) {
+      const siblingBlock = this.ctx.get(BlockService)
+        .get(sibling.blockHash, false);
+      if (
+        siblingBlock !== undefined && siblingBlock !== child &&
+        siblingBlock.frontierOutputIdx === sibling.outputIdx
+      ) {
+        let ptr = siblingBlock;
+        while (!factChain.has(ptr)) {
+          coneWeight += this.getSelfWeight(ptr, cache).minWork;
+          coneWeight += ptr.frontierDetail.treeWeights
+            .reduce((acc, cur) => acc + cur, 0n);
+          ptr = ptr.frontierVoteBlock ?? error(`Unlinked sibling votes!`);
+        }
+
+        if (siblingBlock.frontierVoteBlock === child) {
+          siblingWeight += this.getSelfWeight(siblingBlock, cache).minWork;
+          siblingWeight += this.getVoterWeight(siblingBlock, cache)[0] ??
+            0n;
+        }
+      }
+    }
+
+    const score = descWeight - selfWeight - coneWeight;
+    const weight = selfWeight + descWeight + siblingWeight;
+
+    return { score, weight };
+  }
+
+  private getVoterScore(
+    child: BlockFact,
+    voter: BlockFact,
+    cache = this.makeCache(),
+  ) {
+    const desc = this.getDescendant(voter, cache);
+    if (!desc.isParent) {
+      const selfWeight = this.getSelfWeight(voter, cache).minWork;
+      const voterWeight = this.getVoterWeight(voter, cache)[0] ?? 0n;
+
+      const score = desc.weight - selfWeight + voterWeight;
+      const weight = selfWeight + desc.weight + voterWeight;
+
+      return { score, weight };
+    } else {
+      return {};
+    }
+  }
+
   public isCanonical(fact: BlockFact, cache = this.makeCache()) {
     return this.getCanonicality(fact, cache) >= 0n;
   }
 
   public getCanonicality(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.canonicality, fact, () => {
-      const selfWeight = this.getSelfWeight(fact, cache).minWeight;
+      const selfWeight = this.getSelfWeight(fact, cache).minWork;
       const descWeight = this.getDescendant(fact, cache).weight;
       let canonicality = selfWeight + descWeight;
 
@@ -288,7 +369,7 @@ export class WeightService {
       for (const voter of voters) {
         // TODO: Should this be based on the voter weight?
         const score = this.getDescendant(voter, cache).weight +
-          this.getSelfWeight(voter, cache).minWeight;
+          this.getSelfWeight(voter, cache).minWork;
         if (score > bestScore) {
           bestScore = score;
           bestVoter = voter;
@@ -327,7 +408,7 @@ export class WeightService {
 
     return getOrCreate(cache.claimDelta, fact, () => {
       const myDescendantWeight = this.getDescendant(fact, cache).weight;
-      const mySelfWeight = this.getSelfWeight(fact, cache).maxWeight;
+      const mySelfWeight = this.getSelfWeight(fact, cache).maxWork;
       let minDelta = myDescendantWeight;
 
       for (const input of fact.inputs) {
@@ -341,7 +422,7 @@ export class WeightService {
           if (claim.block !== fact) {
             let delta = myDescendantWeight -
               this.getDescendant(claim.block, cache).weight +
-              this.getSelfWeight(claim.block, cache).maxWeight - mySelfWeight;
+              this.getSelfWeight(claim.block, cache).maxWork - mySelfWeight;
             if (delta === 0n) {
               // Resolve ties by locally promoting the block that comes first
               for (const claim2 of claims) {
@@ -374,7 +455,7 @@ export class WeightService {
         if (
           block !== undefined && input.outputIdx === block.frontierOutputIdx
         ) {
-          minWeight += this.getSelfWeight(block, cache).minWeight;
+          minWeight += this.getSelfWeight(block, cache).minWork;
           minWeight += this.getTreeChildrenWeight(block, cache).minWeight;
         }
       }

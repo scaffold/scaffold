@@ -1,4 +1,7 @@
+import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockFact } from './FactMeta.ts';
+import { BlockOutput } from './messages.ts';
+import { BlockInput } from './messages.ts';
 import {
   Block,
   FrontierTreeIoBranch,
@@ -12,6 +15,7 @@ import { mapPut } from './util/map.ts';
 export class FrontierHelper {
   public static mergeTreeIo(
     inputs: { block: BlockFact; outputIdx?: number }[],
+    frontierVote: BlockFact | typeof ZERO_BLOCK,
     fetchBlock: (hash: Hash) => Block,
   ) {
     // left frontier tree -> left frontier input block -> right frontier tree -> right frontier input block
@@ -97,10 +101,43 @@ export class FrontierHelper {
       }
     }
 
+    for (const input of consumedInputs.values()) {
+      if (
+        frontierVote === ZERO_BLOCK || !this.doesOutput(frontierVote, input)
+      ) {
+        throw new Error(`Input does not exist!`);
+      }
+    }
+
     return {
       consumedInputsRoot: { branches: [...consumedInputs.values()] },
       producedOutputsRoot: { branches: [...producedOutputs.values()] },
     };
+  }
+
+  private static doesOutput(
+    block: BlockFact,
+    branch: FrontierTreeIoBranch,
+  ): boolean {
+    if (
+      block.frontierDetail.producedOutputsRoot.branches.some((x) =>
+        x.path === branch.path && Hash.equals(x.childHash, branch.childHash) &&
+        x.outputIdx === branch.outputIdx && x.amount === branch.amount
+      )
+    ) {
+      return true;
+    } else if (
+      block.frontierDetail.consumedInputsRoot.branches.some((x) =>
+        x.path === branch.path && Hash.equals(x.childHash, branch.childHash) &&
+        x.outputIdx === branch.outputIdx && x.amount === branch.amount
+      )
+    ) {
+      return false;
+    } else if (block.frontierVoteBlock === undefined) {
+      return false;
+    } else {
+      return this.doesOutput(block.frontierVoteBlock, branch);
+    }
   }
 
   private static iterateBranches(

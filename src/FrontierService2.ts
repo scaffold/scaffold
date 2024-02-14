@@ -107,7 +107,7 @@ export class FrontierService2 {
         input.block.frontierDetail.treeWeights.forEach(addWeight);
 
         addWeight(
-          this.ctx.get(WeightService).getSelfWeight(input.block).minWeight,
+          this.ctx.get(WeightService).getSelfWeight(input.block).minWork,
           0,
         );
       }

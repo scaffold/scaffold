@@ -66,14 +66,24 @@ export class RenderService {
     let props = 'DELETED';
     if (!isDeleted) {
       const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
-      props = Object.entries({
-        self: `${selfWeight.minWeight}-${selfWeight.maxWeight}`,
-        anc: this.ctx.get(WeightService).getAncestorWeight(block).minWeight,
-        desc: this.ctx.get(WeightService).getDescendant(block).weight,
-        tree: block.frontierDetail.treeWeights.join(','),
-        vw: this.ctx.get(WeightService).getVoterWeight(block).join(','),
-        canon: this.ctx.get(WeightService).getCanonicality(block),
-      }).map(([key, val]) => `${key}: ${val}`).join('\n');
+      const score = selfWeight.minScore !== selfWeight.maxScore
+        ? `${selfWeight.minScore}-${selfWeight.maxScore}`
+        : selfWeight.minScore;
+      const work = selfWeight.minWork !== selfWeight.maxWork
+        ? `${selfWeight.minWork}-${selfWeight.maxWork}`
+        : selfWeight.minWork;
+      const anc =
+        this.ctx.get(WeightService).getAncestorWeight(block).minWeight;
+      const desc = this.ctx.get(WeightService).getDescendant(block).weight;
+      const tree = block.frontierDetail.treeWeights.join(',');
+      const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
+      const canon = this.ctx.get(WeightService).getCanonicality(block);
+      props = [
+        `score: ${score}; work: ${work}`,
+        `anc: ${anc}; desc: ${desc}`,
+        `tree: ${tree}; vw: ${vw}`,
+        `canon: ${canon}`,
+      ].join('\n');
     }
 
     const bId = this.getId(graph, block);
