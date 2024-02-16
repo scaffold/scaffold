@@ -685,9 +685,10 @@ Tap.prototype.readFixed = function (len) {
   if (this.pos > this.buf.length) {
     return;
   }
-  var fixed = POOL.alloc(len);
-  fixed.set(this.buf.subarray(pos, pos + len));
-  return fixed;
+  // var fixed = POOL.alloc(len);
+  // fixed.set(this.buf.subarray(pos, pos + len));
+  // return fixed;
+  return this.buf.subarray(pos, pos + len);
 };
 
 Tap.prototype.skipFixed = function (len) {
@@ -740,7 +741,7 @@ Tap.prototype.readString = function () {
   if (this.pos > buf.length) {
     return;
   }
-  return bufferToString(this.buf.slice(pos, pos + len));
+  return bufferToString(this.buf.subarray(pos, pos + len));
 };
 
 Tap.prototype.skipString = function () {
@@ -839,8 +840,8 @@ Tap.prototype.matchBytes = Tap.prototype.matchString = function (tap) {
   var l2 = tap.readLong();
   var p2 = tap.pos;
   tap.pos += l2;
-  var b1 = this.buf.slice(p1, this.pos);
-  var b2 = tap.buf.slice(p2, tap.pos);
+  var b1 = this.buf.subarray(p1, this.pos);
+  var b2 = tap.buf.subarray(p2, tap.pos);
   return compareBuffers(b1, b2);
 };
 

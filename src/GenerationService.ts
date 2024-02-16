@@ -654,10 +654,8 @@ export class GenerationService {
         // If this property was never retrieved, we can assume the generator created a correct block.
         const isCorrect = emitCorrect ?? true;
 
-        const desiredReward = this.ctx.config.getGenerationReward(
-          verifier,
-          workerDriver.getCpuTime() / 1000,
-        );
+        const desiredReward = this.ctx.config
+          .getGenerationReward(verifier, workerDriver.getCpuTime());
         const depositedReward = inputs.reduce(
           (acc, input) => acc + input.amount,
           0n,

@@ -120,6 +120,8 @@ export class Logger {
         //   } else {
         //     return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
         //   }
+      } else if ('hash' in val && val.hash instanceof Hash) {
+        return { hash: val.hash };
       } else {
         return val;
       }

@@ -9,6 +9,13 @@ import { BlockInput } from './messages.ts';
 import { WeightService } from './WeightService.ts';
 import { FactType } from './FactMeta.ts';
 
+export type RenderConfig = Partial<{
+  renderFrontierVote: boolean;
+  renderFrontierInputs: boolean;
+  renderOtherInputs: boolean;
+  renderPrimaryDescendant: boolean;
+}>;
+
 interface Graph {
   ids: Map<unknown, string>;
   nextId: number;
@@ -29,7 +36,7 @@ export class RenderService {
     );
   }
 
-  public async renderSvg() {
+  public async renderSvg(config: RenderConfig = {}) {
     const graph: Graph = { ids: new Map(), nextId: 1, lines: [] };
 
     graph.lines.push(`digraph G {`);
@@ -38,11 +45,11 @@ export class RenderService {
     graph.lines.push(`  node [shape=box];`);
 
     for (const block of this.ctx.get(FactService).hackyGetBlocksMatching()) {
-      this.renderBlock(graph, block);
+      this.renderBlock(graph, block, false, config);
     }
 
     for (const block of this.extra) {
-      this.renderBlock(graph, block, true);
+      this.renderBlock(graph, block, true, config);
     }
 
     graph.lines.push(`}`);
@@ -55,7 +62,12 @@ export class RenderService {
     return svg;
   }
 
-  private renderBlock(graph: Graph, block: BlockFact, isDeleted = false) {
+  private renderBlock(
+    graph: Graph,
+    block: BlockFact,
+    isDeleted: boolean,
+    config: RenderConfig,
+  ) {
     // const name = block.hash.toHex().slice(0, 8);
     const name = block.sillyName;
 
@@ -66,12 +78,13 @@ export class RenderService {
     let props = 'DELETED';
     if (!isDeleted) {
       const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
-      const score = selfWeight.minScore !== selfWeight.maxScore
-        ? `${selfWeight.minScore}-${selfWeight.maxScore}`
-        : selfWeight.minScore;
-      const work = selfWeight.minWork !== selfWeight.maxWork
-        ? `${selfWeight.minWork}-${selfWeight.maxWork}`
-        : selfWeight.minWork;
+      const work = selfWeight.min !== selfWeight.max
+        ? `${selfWeight.min}-${selfWeight.max}`
+        : selfWeight.min;
+      const selfOffset = this.ctx.get(WeightService).getSelfOffset(block);
+      const offset = selfOffset.min !== selfOffset.max
+        ? `${selfOffset.min}-${selfOffset.max}`
+        : selfOffset.min;
       const anc =
         this.ctx.get(WeightService).getAncestorWeight(block).minWeight;
       const desc = this.ctx.get(WeightService).getDescendant(block).weight;
@@ -79,7 +92,7 @@ export class RenderService {
       const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
       const canon = this.ctx.get(WeightService).getCanonicality(block);
       props = [
-        `score: ${score}; work: ${work}`,
+        `work: ${work}; offset: ${offset}`,
         `anc: ${anc}; desc: ${desc}`,
         `tree: ${tree}; vw: ${vw}`,
         `canon: ${canon}`,
@@ -94,14 +107,20 @@ export class RenderService {
 
     graph.lines.push(`  ${bId} ${attrs};`);
 
-    this.renderFrontierVote(graph, block);
+    this.renderFrontierVote(graph, block, config);
     for (const input of block.inputs) {
-      this.renderInput(graph, block, input);
+      this.renderInput(graph, block, input, config);
     }
-    this.renderDescendant(graph, block);
+    this.renderDescendant(graph, block, config);
   }
 
-  private renderFrontierVote(graph: Graph, block: BlockFact) {
+  private renderFrontierVote(
+    graph: Graph,
+    block: BlockFact,
+    config: RenderConfig,
+  ) {
+    if (config.renderFrontierVote === false) return;
+
     const bId = this.getId(graph, block);
     const vId = this.getId(graph, block.frontierVoteBlock);
     const attrs = this.renderAttrs({
@@ -111,9 +130,20 @@ export class RenderService {
     graph.lines.push(`  ${bId} -> ${vId} ${attrs};`);
   }
 
-  private renderInput(graph: Graph, block: BlockFact, input: BlockInput) {
+  private renderInput(
+    graph: Graph,
+    block: BlockFact,
+    input: BlockInput,
+    config: RenderConfig,
+  ) {
     const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
     const isFrontier = inputBlock?.frontierOutputIdx === input.outputIdx;
+
+    if (
+      isFrontier
+        ? config.renderFrontierInputs === false
+        : config.renderOtherInputs === false
+    ) return;
 
     const bId = this.getId(graph, block);
     const iId = this.getId(graph, inputBlock);
@@ -125,7 +155,13 @@ export class RenderService {
     graph.lines.push(`  ${bId} -> ${iId} ${attrs};`);
   }
 
-  private renderDescendant(graph: Graph, block: BlockFact) {
+  private renderDescendant(
+    graph: Graph,
+    block: BlockFact,
+    config: RenderConfig,
+  ) {
+    if (config.renderPrimaryDescendant === false) return;
+
     const desc = this.ctx.get(WeightService).getDescendant(block);
 
     const bId = this.getId(graph, block);

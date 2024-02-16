@@ -61,8 +61,7 @@ export class FrontierHelper {
       for (const input2 of input.block.inputs) {
         const output2 = fetchBlock(input2.blockHash).outputs[input2.outputIdx];
         const branch = {
-          path: Hash.digest(Verifier.encode(output2.verifier)).toBigint() ^
-            (1n << BigInt(HASH_BITS)),
+          path: this.encodePath(output2.verifier),
           childHash: input2.blockHash,
           outputIdx: input2.outputIdx,
           amount: output2.amount,
@@ -82,8 +81,7 @@ export class FrontierHelper {
       let outputIdx = 0;
       for (const output2 of input.block.outputs) {
         const branch = {
-          path: Hash.digest(Verifier.encode(output2.verifier)).toBigint() ^
-            (1n << BigInt(HASH_BITS)),
+          path: this.encodePath(output2.verifier),
           childHash: input.block.hash,
           outputIdx: outputIdx++,
           amount: output2.amount,
@@ -115,6 +113,11 @@ export class FrontierHelper {
     };
   }
 
+  private static encodePath(verifier: Verifier) {
+    return Hash.digest(Verifier.encode(verifier)).toBigint() ^
+      (1n << BigInt(HASH_BITS));
+  }
+
   private static doesOutput(
     block: BlockFact,
     branch: FrontierTreeIoBranch,
@@ -123,13 +126,20 @@ export class FrontierHelper {
       block.frontierDetail.producedOutputsRoot.branches.some((x) =>
         x.path === branch.path && Hash.equals(x.childHash, branch.childHash) &&
         x.outputIdx === branch.outputIdx && x.amount === branch.amount
-      )
+      ) ||
+      (Hash.equals(block.hash, branch.childHash) &&
+        block.outputs[branch.outputIdx].amount === branch.amount &&
+        this.encodePath(block.outputs[branch.outputIdx].verifier) ===
+          branch.path)
     ) {
       return true;
     } else if (
       block.frontierDetail.consumedInputsRoot.branches.some((x) =>
         x.path === branch.path && Hash.equals(x.childHash, branch.childHash) &&
         x.outputIdx === branch.outputIdx && x.amount === branch.amount
+      ) || block.inputs.some((x) =>
+        Hash.equals(x.blockHash, branch.childHash) &&
+        x.outputIdx === branch.outputIdx
       )
     ) {
       return false;

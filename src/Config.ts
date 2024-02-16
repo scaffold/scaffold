@@ -103,8 +103,10 @@ export interface Config {
 
   approxComputePricePerSecond: bigint; // TODO: I don't think we need this, just getGenerationReward.
 
-  getGenerationReward(verifier: Verifier, computeTimeSeconds: number): bigint;
   getDepositIncentive(verifier: Verifier): bigint;
+  getGenerationReward(verifier: Verifier, computeTimeMs: number): bigint;
+  getWeightLimit(factAgeMs: number): bigint;
+  getNextWeightBreakpoint(weight: bigint): bigint;
 
   // requiredProfitPerComputeRatio: number;
 
@@ -146,7 +148,7 @@ export const makeDefaultConfig = () =>
   ({
     network: defaultNetwork,
     debugName: '',
-    logLevel: log.LogLevels.INFO, // TODO: Set this to LogLevels.Warning
+    logLevel: log.LogLevels.INFO, // TODO: Set this to WARN
     timeProvider: {
       now: Date.now.bind(Date),
       setImmediate: (cb) => setTimeout(cb, 0),
@@ -162,9 +164,12 @@ export const makeDefaultConfig = () =>
     executionProviders: [],
     contractProviders: defaultContractProviders,
     approxComputePricePerSecond: 1000n,
-    getGenerationReward: (_verifier, computeTimeSeconds) => 0n,
-    // BigInt(computeTimeSeconds * 1e6) + 1000n,
     getDepositIncentive: (_verifier) => 10n,
+    getGenerationReward: (_verifier, computeTimeMs) =>
+      BigInt(computeTimeMs * 0) + 5n,
+    getWeightLimit: (factAgeMs) => BigInt(factAgeMs),
+    getNextWeightBreakpoint: (weight) =>
+      weight <= 2n ? 3n : (weight * 3n) >> 1n,
     discardFutureBlocks: false,
     targetFactCount: 1000,
     // limitFactCount: Infinity,

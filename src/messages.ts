@@ -62,14 +62,16 @@ class Uint8ArrayLogicalType extends avro.types.LogicalType {
 
 class BigIntLogicalType extends avro.types.LogicalType {
   public fromBytes(bytes: Uint8Array) {
-    return bin2bigint(bytes);
+    const x = bin2bigint(bytes);
+    return x & 1n ? -(x >> 1n) : x >> 1n;
   }
 
   protected override _fromValue(buf: Uint8Array) {
     return this.fromBytes(buf);
   }
   protected override _toValue(num: bigint) {
-    return bigint2bin(num);
+    const x = num < 0n ? (-num << 1n) | 1n : num << 1n;
+    return bigint2bin(x);
   }
   protected override _resolve(type: any) {
     if (avro.Type.isType(type, 'bytes')) {

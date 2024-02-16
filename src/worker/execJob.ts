@@ -245,7 +245,7 @@ export default async (
       if (err instanceof WasiExit) {
         // If it's a normal WASI exit, we return it directly
         if (err.code !== 0) {
-          logger.warning(
+          logger.warn(
             `Ended with code ${err.code}`,
             { err, code: err.code },
           );
