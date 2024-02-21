@@ -107,6 +107,7 @@ export interface Config {
   getGenerationReward(verifier: Verifier, computeTimeMs: number): bigint;
   getWeightLimit(factAgeMs: number): bigint;
   getNextWeightBreakpoint(weight: bigint): bigint;
+  getOverpaymentPenalty(overpayment: bigint): bigint;
 
   // requiredProfitPerComputeRatio: number;
 
@@ -167,9 +168,11 @@ export const makeDefaultConfig = () =>
     getDepositIncentive: (_verifier) => 10n,
     getGenerationReward: (_verifier, computeTimeMs) =>
       BigInt(computeTimeMs * 0) + 5n,
-    getWeightLimit: (factAgeMs) => BigInt(factAgeMs),
+    // getWeightLimit: (factAgeMs) => BigInt(factAgeMs),
+    getWeightLimit: (_factAgeMs) => 1000000n,
     getNextWeightBreakpoint: (weight) =>
       weight <= 2n ? 3n : (weight * 3n) >> 1n,
+    getOverpaymentPenalty: (overpayment) => overpayment,
     discardFutureBlocks: false,
     targetFactCount: 1000,
     // limitFactCount: Infinity,

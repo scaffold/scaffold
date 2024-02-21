@@ -45,6 +45,7 @@ import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { retryAbortable } from './util/abortable.ts';
 import { VerifierHelper } from './VerifierHelper.ts';
 import { QaDebugger } from './QaDebugger.ts';
+import { WeightService } from './WeightService.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -329,11 +330,12 @@ export class GenerationService {
       //         this.isFrontierMergeable(block, lastBlock)));
       // }
 
-      return this.ctx.get(FrontierChainService).getVote([
-        ...inputs,
-        ...refs.map((ref) => ({ block: ref })),
-        testInput,
-      ]) !== undefined;
+      return this.ctx.get(WeightService).isCanonical(testInput.block) &&
+        this.ctx.get(FrontierChainService).getVote([
+            ...inputs,
+            ...refs.map((ref) => ({ block: ref })),
+            testInput,
+          ]) !== undefined;
     };
 
     const collectInputs = () => {

@@ -3,7 +3,7 @@ import { secp } from './util/secp.ts';
 import { hex2bin } from './util/hex.ts';
 import { makeDefaultConfig } from './Config.ts';
 import { Hash, ZERO_HASH } from './util/Hash.ts';
-import { AccountContractParams } from './messages.ts';
+import { AccountContractParams, Block } from './messages.ts';
 import { BlockBuilder } from './BlockBuilder.ts';
 import { accountHash } from './constants.ts';
 import { BlockService } from './BlockService.ts';
@@ -77,7 +77,7 @@ export const createGenesisBlock = (
     block.bodies.push(EMPTY_ARR);
   }
 
-  return ctx.get(BlockService).create(block);
+  return ctx.get(FactService).compose(block, Block, FactType.Block);
 };
 
 export const sharedGenesisData = hex2bin(
@@ -85,7 +85,7 @@ export const sharedGenesisData = hex2bin(
 );
 
 setTimeout(() => {
-  const generatedGenesisData = createGenesisBlock(initAccounts).data;
+  const generatedGenesisData = createGenesisBlock(initAccounts);
   // console.log('Genesis block hex:', bin2hex(generatedGenesisData));
   if (sharedGenesisData.byteLength !== generatedGenesisData.byteLength) {
     console.log('Genesis block hex:', bin2hex(generatedGenesisData));
@@ -110,16 +110,19 @@ export class GenesisService {
       console.error(`You probably need to update the genesis block data!`);
       console.log(
         'Genesis block hex:',
-        bin2hex(createGenesisBlock(initAccounts).data),
+        bin2hex(createGenesisBlock(initAccounts)),
       );
       throw err;
     }
   }
 
   public getGenesisBlock() {
-    return this.ctx.get(FactService).hackyGetBlocksMatching((x) =>
-      x.source === FactSource.Genesis
-    )[0];
+    const match = this.ctx.get(FactService)
+      .hackyGetBlocksMatching((x) => x.source === FactSource.Genesis);
+    if (match.length !== 1) {
+      throw new Error(`Not exactly one genesis block!`);
+    }
+    return match[0];
   }
 
   public getTotalCoins() {

@@ -49,7 +49,7 @@ export interface Collateralization {
   amount: bigint;
 }
 
-export type FactBase = {
+export interface FactBase {
   // The hash of full data, including header, type, message, and signature.
   hash: Hash;
 
@@ -79,40 +79,30 @@ export type FactBase = {
   references: number;
 
   // Debug properties
+  factIdx: number;
   sillyName: string;
   backtrace?: string;
-};
+}
 
-export type IdentificationFact =
-  & FactBase
-  & { type: FactType.Identification }
-  & Identification;
-export type NodeInfoFact =
-  & FactBase
-  & { type: FactType.NodeInfo }
-  & NodeInfo;
-export type InfoRequestFact =
-  & FactBase
-  & { type: FactType.InfoRequest }
-  & InfoRequest;
-export type ConnectionSignalFact =
-  & FactBase
-  & { type: FactType.ConnectionSignal }
-  & ConnectionSignal
-  & { isSelfInitiator: boolean };
-export type BlockFact =
-  & FactBase
-  & { type: FactType.Block }
-  & Block
-  & BlockMeta;
-export type InvalidFact =
-  & FactBase
-  & { type: FactType.Invalid };
-// export type FrontierFact =
-//   & FactBase
-//   & { type: FactType.Frontier }
-//   & FrontierMessage
-//   & FrontierMeta;
+export interface IdentificationFact extends FactBase, Identification {
+  type: FactType.Identification;
+}
+export interface NodeInfoFact extends FactBase, NodeInfo {
+  type: FactType.NodeInfo;
+}
+export interface InfoRequestFact extends FactBase, InfoRequest {
+  type: FactType.InfoRequest;
+}
+export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
+  type: FactType.ConnectionSignal;
+  isSelfInitiator: boolean;
+}
+export interface BlockFact extends FactBase, Block, BlockMeta {
+  type: FactType.Block;
+}
+export interface InvalidFact extends FactBase {
+  type: FactType.Invalid;
+}
 
 export type Fact =
   | IdentificationFact

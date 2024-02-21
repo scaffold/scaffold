@@ -93,6 +93,8 @@ export class FactService {
     Map<HashPrimitive, DetailVote>
   >();
 
+  private nextFactIdx = 0;
+
   constructor(private ctx: Context) {
     for (let i = 0; i < 256; i++) {
       this.factories.push(() => {
@@ -516,6 +518,7 @@ export class FactService {
       visitedAt: 0,
       references: 0,
 
+      factIdx: this.nextFactIdx++,
       sillyName: this.getSillyName(),
       backtrace: new Error().stack,
     };
@@ -530,9 +533,9 @@ export class FactService {
     if (sortKeys) {
       Object.keys(res).sort().forEach((key) => {
         if (key !== 'type' && key !== 'sillyName') {
-          const val = (res as Record<string, unknown>)[key];
-          delete (res as Record<string, unknown>)[key];
-          (res as Record<string, unknown>)[key] = val;
+          const val = (res as any)[key];
+          delete (res as any)[key];
+          (res as any)[key] = val;
         }
       });
     }

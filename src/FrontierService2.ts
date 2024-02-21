@@ -193,21 +193,15 @@ export class FrontierService2 {
   }
 
   private getTreeRoot(block: BlockFact) {
+    let ptr = block;
     while (true) {
-      let bestScore: bigint | undefined;
-      let bestDescendant: BlockFact | undefined;
-      for (const claim of block.outputClaims[block.frontierOutputIdx]) {
-        const score = this.ctx.get(WeightService).getCanonicality(claim.block);
-        if (bestDescendant === undefined || score > bestScore!) {
-          bestScore = score;
-          bestDescendant = claim.block;
-        }
-      }
+      const { immediate, isParent } = this.ctx.get(WeightService)
+        .getDescendant(ptr);
 
-      if (bestDescendant !== undefined) {
-        block = bestDescendant;
+      if (isParent) {
+        ptr = immediate ?? error(`Internal error!`);
       } else {
-        return block;
+        return ptr;
       }
     }
   }

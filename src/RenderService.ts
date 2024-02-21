@@ -85,15 +85,15 @@ export class RenderService {
       const offset = selfOffset.min !== selfOffset.max
         ? `${selfOffset.min}-${selfOffset.max}`
         : selfOffset.min;
-      const anc =
-        this.ctx.get(WeightService).getAncestorWeight(block).minWeight;
-      const desc = this.ctx.get(WeightService).getDescendant(block).weight;
+      const anc = this.ctx.get(WeightService).getAncestorWeight(block);
+      const total = this.ctx.get(WeightService).getDescendant(block).total;
       const tree = block.frontierDetail.treeWeights.join(',');
-      const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
+      // const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
+      const vw = `?`;
       const canon = this.ctx.get(WeightService).getCanonicality(block);
       props = [
         `work: ${work}; offset: ${offset}`,
-        `anc: ${anc}; desc: ${desc}`,
+        `anc: ${anc}; total: ${total}`,
         `tree: ${tree}; vw: ${vw}`,
         `canon: ${canon}`,
       ].join('\n');
@@ -165,7 +165,7 @@ export class RenderService {
     const desc = this.ctx.get(WeightService).getDescendant(block);
 
     const bId = this.getId(graph, block);
-    const dId = this.getId(graph, desc.block);
+    const dId = this.getId(graph, desc.immediate);
     const attrs = this.renderAttrs({
       color: 'red',
       constraint: 'false',

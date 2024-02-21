@@ -188,11 +188,12 @@ export class BlockBuilder {
       const input = this.ctx.get(UnspentOutputManager).pop(
         this.selfAccountVerifier,
         (accountInput) =>
+          this.ctx.get(WeightService).isCanonical(accountInput.block) &&
           this.ctx.get(FrontierChainService).getVote([
-            ...inputs,
-            ...refBlocks.map((ref) => ({ block: ref })),
-            accountInput,
-          ]) !== undefined,
+              ...inputs,
+              ...refBlocks.map((ref) => ({ block: ref })),
+              accountInput,
+            ]) !== undefined,
       );
       if (input === undefined) {
         break;

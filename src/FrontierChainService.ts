@@ -117,11 +117,11 @@ export class FrontierChainService {
     if (res.frontierParams.level < voteLevel) {
       // Go to parent
       do {
-        const next = this.ctx.get(WeightService).getCanonicalParent(res);
-        if (next === undefined) {
+        const next = this.ctx.get(WeightService).getDescendant(res);
+        if (!next.isParent) {
           break;
         }
-        res = next;
+        res = next.immediate ?? error(`No immediate descendant!`);
       } while (res.frontierParams.level < voteLevel);
     } else if (res.frontierParams.level > voteLevel) {
       // Go to best voter

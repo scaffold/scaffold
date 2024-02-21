@@ -58,6 +58,7 @@ import { neverAbort } from './util/abortable.ts';
 import { GenerationService } from './GenerationService.ts';
 import { raceTruthy } from './util/MaybePromise.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
+import { GenesisService } from './GenesisService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
