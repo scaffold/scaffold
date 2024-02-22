@@ -165,13 +165,19 @@ export class RenderService {
     const desc = this.ctx.get(WeightService).getDescendant(block);
 
     const bId = this.getId(graph, block);
-    const dId = this.getId(graph, desc.immediate);
     const attrs = this.renderAttrs({
       color: 'red',
       constraint: 'false',
     });
 
-    graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
+    if (desc.parent !== undefined) {
+      const dId = this.getId(graph, desc.parent);
+      graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
+    }
+    for (const voter of desc.voters) {
+      const dId = this.getId(graph, voter);
+      graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
+    }
   }
 
   private getId(graph: Graph, object: Fact | typeof ZERO_BLOCK | undefined) {

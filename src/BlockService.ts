@@ -117,7 +117,7 @@ export class BlockService {
 
       // verifiers: block.bodies.map(() => undefined),
 
-      canonicality: -1n,
+      canonicality: 0n,
 
       flags: BlockFlag.None,
       votes: 0n,
@@ -608,10 +608,69 @@ export class BlockService {
       const newCanonicality = this.ctx.get(WeightService)
         .getCanonicality(block, cache);
       if (newCanonicality !== block.canonicality) {
+        if (block.canonicality < 0n && newCanonicality >= 0n) {
+          this.markCanonical(block);
+        } else if (block.canonicality >= 0n && newCanonicality < 0n) {
+          this.markUncanonical(block);
+        }
         block.canonicality = newCanonicality;
         this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
       }
     }
+  }
+
+  private markCanonical(block: BlockFact) {
+    block.inputs.forEach((input, idx) => {
+      const parent = this.get(input.blockHash, false);
+      if (parent) {
+        this.ctx.get(UnspentOutputManager).remove(
+          parent.outputs[input.outputIdx].verifier,
+          (x) => x.block === parent && x.outputIdx === input.outputIdx,
+        );
+      }
+    });
+
+    block.outputs.forEach((output, outputIdx) => {
+      const claims = this.getClaims({ blockHash: block.hash, outputIdx });
+      if (
+        claims.every((x) =>
+          !this.ctx.get(WeightService).isCanonical(x.block)
+        ) && output.amount >= 0n
+      ) {
+        this.ctx.get(UnspentOutputManager)
+          .insert(output.verifier, { block, outputIdx, amount: output.amount });
+        this.ctx.get(GenerationService).ensureRunning(output.verifier);
+      }
+    });
+  }
+
+  private markUncanonical(block: BlockFact) {
+    block.inputs.forEach((input, idx) => {
+      const claims = this.getClaims(input);
+      if (
+        claims.every((x) => !this.ctx.get(WeightService).isCanonical(x.block))
+      ) {
+        const parent = this.get(input.blockHash, false);
+        if (parent) {
+          const output = parent.outputs[input.outputIdx];
+          if (output.amount >= 0n) {
+            this.ctx.get(UnspentOutputManager).insert(output.verifier, {
+              block: parent,
+              outputIdx: input.outputIdx,
+              amount: output.amount,
+            });
+            this.ctx.get(GenerationService).ensureRunning(output.verifier);
+          }
+        }
+      }
+    });
+
+    block.outputs.forEach((output, outputIdx) => {
+      this.ctx.get(UnspentOutputManager).remove(
+        output.verifier,
+        (x) => x.block === block && x.outputIdx === outputIdx,
+      );
+    });
   }
 
   private setCanonicality(block: BlockFact, isCanonical: boolean) {

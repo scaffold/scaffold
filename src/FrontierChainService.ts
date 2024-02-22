@@ -118,10 +118,10 @@ export class FrontierChainService {
       // Go to parent
       do {
         const next = this.ctx.get(WeightService).getDescendant(res);
-        if (!next.isParent) {
+        if (next.parent === undefined) {
           break;
         }
-        res = next.immediate ?? error(`No immediate descendant!`);
+        res = next.parent;
       } while (res.frontierParams.level < voteLevel);
     } else if (res.frontierParams.level > voteLevel) {
       // Go to best voter

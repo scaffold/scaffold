@@ -1,5 +1,8 @@
 {
-  "name": "scaffold",
+  "name": "@scaffold/scaffold",
+  "version": "0.0.1",
+  "exports": "./mod.ts",
+
   "lock": false,
   "compilerOptions": {
     "allowJs": true,

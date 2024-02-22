@@ -9,6 +9,8 @@ import { ZERO_BLOCK } from './BlockMeta.ts';
 import { ZERO_HASH } from './util/Hash.ts';
 import { error, todo } from './util/functional.ts';
 import { GenesisService } from './GenesisService.ts';
+import { FrontierChainService } from './FrontierChainService.ts';
+import { FrontierHelper } from './FrontierHelper.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -35,10 +37,10 @@ When we have multiple claimants of an output, simply choose the highest-scoring 
 // Always propogate weights towards the frontier, which is bounded by log(N)
 
 interface DescendantResult {
-  immediate?: BlockFact;
-  isParent?: boolean;
+  parent?: BlockFact;
+  voters: BlockFact[];
 
-  ultimate: BlockFact;
+  leaves: BlockFact[];
   total: bigint;
 }
 
@@ -48,6 +50,7 @@ interface Cache {
   ancestorWeight: Map<BlockFact, bigint>;
   ancestorOffset: Map<BlockFact, bigint>;
   descendant: Map<BlockFact, DescendantResult>;
+  orphans: Map<BlockFact, BlockFact[]>;
   canonicality: Map<BlockFact, bigint>;
   canonicalVoter: Map<BlockFact | typeof ZERO_BLOCK, BlockFact | undefined>;
   canonicalParent: Map<BlockFact, BlockFact | undefined>;
@@ -67,6 +70,7 @@ export class WeightService {
       ancestorWeight: new Map(),
       ancestorOffset: new Map(),
       descendant: new Map(),
+      orphans: new Map(),
       canonicality: new Map(),
       canonicalVoter: new Map(),
       canonicalParent: new Map(),
@@ -292,26 +296,33 @@ export class WeightService {
    */
   public getDescendant(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.descendant, fact, () => {
+      const selfTotal = this.getSelfWeight(fact, cache).min +
+        this.getSelfOffset(fact, cache).min +
+        this.getAncestorWeight(fact, cache) +
+        this.getAncestorOffset(fact, cache);
       let bestResult: DescendantResult = {
-        ultimate: fact,
-        total: this.getSelfWeight(fact, cache).min +
-          this.getSelfOffset(fact, cache).min +
-          this.getAncestorWeight(fact, cache) +
-          this.getAncestorOffset(fact, cache),
+        voters: [],
+        leaves: [fact],
+        total: selfTotal,
       };
 
       for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
         const candidate = this.getDescendant(claim.block, cache);
         if (candidate.total > bestResult.total) {
-          bestResult = { ...candidate, immediate: claim.block, isParent: true };
+          bestResult = { ...candidate, parent: claim.block, voters: [] };
         }
       }
 
-      for (const voter of fact.frontierVoters) {
+      const voters = fact.frontierVoters.filter((x) => {
+        const candidate = this.getDescendant(x, cache);
+        return candidate.parent === undefined &&
+          candidate.total > bestResult.total;
+      });
+      for (const voter of voters) {
         const candidate = this.getDescendant(voter, cache);
-        if (!candidate.isParent && candidate.total > bestResult.total) {
-          bestResult = { ...candidate, immediate: voter, isParent: false };
-        }
+        bestResult.voters.push(voter);
+        bestResult.leaves.push(...candidate.leaves);
+        bestResult.total += candidate.total - selfTotal;
       }
 
       return bestResult;
@@ -340,6 +351,70 @@ export class WeightService {
     });
   }
 
+  private getDescendantWithOrphans(fact: BlockFact, cache = this.makeCache()) {
+    let result = this.getDescendant(fact, cache);
+
+    // if (result.leaves.length !== 1) {
+    //   throw new Error(`Not exactly one leaf!`);
+    // }
+
+    // const orphans = this.getOrphans(result.leaves[0], cache).sort((a, b) =>
+    //   Number(
+    //     this.getDescendant(b, cache).total -
+    //       this.getDescendant(a, cache).total,
+    //   )
+    // );
+
+    // const canMerge = (inputs: { block: BlockFact }[]) => {
+    //   try {
+    //     FrontierHelper.mergeTreeIo(
+    //       inputs,
+    //       ZERO_BLOCK,
+    //       (hash) =>
+    //         this.ctx.get(BlockService).get(hash, false) ??
+    //           error(`Unknown frontier child input!`),
+    //     );
+    //     return true;
+    //   } catch (_err) {
+    //     return false;
+    //   }
+    // };
+
+    // for (const orphan of orphans) {
+    //   if (
+    //     !this.ctx.get(FrontierChainService).getFrontierChain(result.leaves[0])
+    //       .has(this.getTopParent(orphan, cache)) && canMerge([
+    //         ...result.leaves.map((x) => ({ block: x })),
+    //         { block: orphan },
+    //       ])
+    //   ) {
+    //     result = { ...result, leaves: [...result.leaves, orphan] };
+
+    //     const commonWeight = orphan.frontierVoteBlock !== undefined
+    //       ? this.getSelfWeight(orphan.frontierVoteBlock, cache).min +
+    //         this.getSelfOffset(orphan.frontierVoteBlock, cache).min +
+    //         this.getAncestorWeight(orphan.frontierVoteBlock, cache) +
+    //         this.getAncestorOffset(orphan.frontierVoteBlock, cache)
+    //       : 0n;
+    //     const delta = this.getDescendant(orphan, cache).total - commonWeight;
+    //     result = { ...result, total: result.total + delta };
+    //   }
+    // }
+
+    return result;
+  }
+
+  private getOrphans(fact: BlockFact, cache = this.makeCache()): BlockFact[] {
+    return getOrCreate(cache.orphans, fact, () => {
+      return fact.frontierVoteBlock !== undefined
+        ? [
+          ...this.getOrphans(fact.frontierVoteBlock, cache),
+          ...fact.frontierVoteBlock.frontierVoters.filter((x) => x !== fact),
+        ]
+        : [];
+    });
+  }
+
   public isCanonical(fact: BlockFact, cache = this.makeCache()) {
     return this.getCanonicality(fact, cache) >= 0n;
   }
@@ -347,8 +422,11 @@ export class WeightService {
   public getCanonicality(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.canonicality, fact, () => {
       const genesis = this.ctx.get(GenesisService).getGenesisBlock();
-      return this.getDescendant(fact, cache).total -
-        this.getDescendant(genesis, cache).total;
+      const genesisDesc = this.getDescendant(genesis, cache);
+      const factDesc = this.getDescendant(fact, cache);
+      return factDesc.leaves.every((x) => genesisDesc.leaves.includes(x))
+        ? 0n
+        : factDesc.total - genesisDesc.total;
 
       // return this.getSelfWeight(fact, cache).min +
       //   this.getDescendant(fact, cache).weight +
@@ -447,6 +525,15 @@ export class WeightService {
     });
   }
 
+  public getTopParent(fact: BlockFact, cache = this.makeCache()): BlockFact {
+    const { parent } = this.getDescendant(fact, cache);
+    if (parent !== undefined) {
+      return this.getTopParent(parent, cache);
+    } else {
+      return fact;
+    }
+  }
+
   /**
    * Returns an array of weights, one for each block in fact's frontier vote chain.
    * - result[0] is the weight of blocks in the tree voting for fact.frontierVote
@@ -459,11 +546,12 @@ export class WeightService {
     return getOrCreate(cache.voterWeight, fact, () => {
       const desc = this.getDescendant(fact, cache);
 
-      if (desc.immediate === undefined || desc.isParent) {
+      if (desc.voters.length === 0) {
         return fact.frontierDetail.treeWeights;
       }
 
-      const subWeight = this.getVoterWeight(desc.immediate, cache);
+      // TODO: Handle other voters
+      const subWeight = this.getVoterWeight(desc.voters[0], cache);
 
       const res: bigint[] = [];
       for (let i = 0; true; i++) {

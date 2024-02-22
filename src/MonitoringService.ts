@@ -30,11 +30,13 @@ export class MonitoringService {
   >((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
 
   // TODO: How to manage canonicality and validity here?
+  // TODO: I don't think this is being used - remove it. It's not tracking canonicality properly
   public verifierInputMonitor = new WatchingMonitor<
     Verifier,
     (block: BlockFact, inputIdx: number) => void
   >((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
 
+  // TODO: I don't think this is being used - remove it. It's not tracking canonicality properly
   public claimMonitor = new WatchingMonitor<
     BlockInput,
     (claim: OutputClaim) => void

@@ -826,7 +826,7 @@ export const registry = {
       { name: 'path', type: 'bigint' },
       { name: 'childHash', type: 'hash' }, // Either a block hash or another io entry hash
       { name: 'outputIdx', type: 'int' }, // -1 means the childHash is an entry hash; a non-negative number means it's a block hash
-      { name: 'amount', type: 'bigint' },
+      { name: 'amount', type: 'bigint' }, // Either this output's amount, or the total output amount of all child outputs
     ],
   },
 

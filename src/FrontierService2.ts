@@ -195,11 +195,9 @@ export class FrontierService2 {
   private getTreeRoot(block: BlockFact) {
     let ptr = block;
     while (true) {
-      const { immediate, isParent } = this.ctx.get(WeightService)
-        .getDescendant(ptr);
-
-      if (isParent) {
-        ptr = immediate ?? error(`Internal error!`);
+      const { parent } = this.ctx.get(WeightService).getDescendant(ptr);
+      if (parent) {
+        ptr = parent;
       } else {
         return ptr;
       }
