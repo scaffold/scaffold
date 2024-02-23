@@ -41,7 +41,7 @@ interface DescendantResult {
   voters: BlockFact[];
 
   leaves: BlockFact[];
-  total: bigint;
+  weight: bigint;
 }
 
 interface Cache {
@@ -50,8 +50,8 @@ interface Cache {
   ancestorWeight: Map<BlockFact, bigint>;
   ancestorOffset: Map<BlockFact, bigint>;
   descendant: Map<BlockFact, DescendantResult>;
-  orphans: Map<BlockFact, BlockFact[]>;
   canonicality: Map<BlockFact, bigint>;
+  claimCanonicality: Map<BlockFact, bigint>;
   canonicalVoter: Map<BlockFact | typeof ZERO_BLOCK, BlockFact | undefined>;
   canonicalParent: Map<BlockFact, BlockFact | undefined>;
   claimDelta: Map<BlockFact, bigint>;
@@ -70,8 +70,8 @@ export class WeightService {
       ancestorWeight: new Map(),
       ancestorOffset: new Map(),
       descendant: new Map(),
-      orphans: new Map(),
       canonicality: new Map(),
+      claimCanonicality: new Map(),
       canonicalVoter: new Map(),
       canonicalParent: new Map(),
       claimDelta: new Map(),
@@ -294,38 +294,68 @@ export class WeightService {
    * - block: The most canonical immediate descendant (either a parent or frontier voter), or undefined if none
    * - isParent: Whether the returned descendant is a parent, or false if none
    */
-  public getDescendant(fact: BlockFact, cache = this.makeCache()) {
+  public getDescendant(
+    fact: BlockFact,
+    cache = this.makeCache(),
+  ): DescendantResult {
     return getOrCreate(cache.descendant, fact, () => {
-      const selfTotal = this.getSelfWeight(fact, cache).min +
-        this.getSelfOffset(fact, cache).min +
-        this.getAncestorWeight(fact, cache) +
-        this.getAncestorOffset(fact, cache);
-      let bestResult: DescendantResult = {
-        voters: [],
-        leaves: [fact],
-        total: selfTotal,
-      };
+      // TODO: We might have to look at parent vote's canonicalities
 
-      for (const claim of fact.outputClaims[fact.frontierOutputIdx]) {
-        const candidate = this.getDescendant(claim.block, cache);
-        if (candidate.total > bestResult.total) {
-          bestResult = { ...candidate, parent: claim.block, voters: [] };
+      let selfWeight = this.getSelfWeight(fact, cache).min;
+
+      for (const input of fact.inputs) {
+        const claims = this.ctx.get(BlockService).getClaims(input);
+        const minWeight = claims
+          .map((x) => this.getSelfWeight(x.block, cache).min)
+          .reduce((x, y) => x < y ? x : y);
+        if (minWeight < selfWeight) {
+          selfWeight = minWeight;
         }
+      }
+
+      // TODO: Add in the penalty here?
+
+      const parent = fact.outputClaims[fact.frontierOutputIdx]
+        .find((x) => this.getClaimCanonicality(x.block, cache) >= 0n);
+      if (parent !== undefined) {
+        let siblingWeight = 0n;
+        for (const sibling of parent.block.inputs) {
+          const siblingBlock = this.ctx.get(BlockService)
+            .get(sibling.blockHash, false);
+          if (
+            siblingBlock !== undefined && siblingBlock !== fact &&
+            siblingBlock.frontierOutputIdx === sibling.outputIdx &&
+            siblingBlock.frontierVoteBlock === fact
+          ) {
+            siblingWeight += this.getSelfWeight(siblingBlock, cache).min;
+            siblingWeight += siblingBlock.frontierDetail.treeWeights[0] ?? 0n;
+          }
+        }
+
+        const desc = this.getDescendant(parent.block, cache);
+        return {
+          parent: parent.block,
+          voters: [],
+          leaves: desc.leaves,
+          weight: selfWeight + siblingWeight + desc.weight,
+        };
       }
 
       const voters = fact.frontierVoters.filter((x) => {
         const candidate = this.getDescendant(x, cache);
         return candidate.parent === undefined &&
-          candidate.total > bestResult.total;
+          this.getClaimCanonicality(x, cache) >= 0n;
       });
-      for (const voter of voters) {
-        const candidate = this.getDescendant(voter, cache);
-        bestResult.voters.push(voter);
-        bestResult.leaves.push(...candidate.leaves);
-        bestResult.total += candidate.total - selfTotal;
-      }
-
-      return bestResult;
+      return {
+        voters,
+        leaves: voters.flatMap((x) => this.getDescendant(x, cache).leaves),
+        weight: voters.reduce(
+          (acc, cur) =>
+            acc + (this.getVoterWeight(cur, cache)[0] ?? 0n) +
+            this.getDescendant(cur, cache).weight,
+          selfWeight,
+        ),
+      };
 
       // let minWeight = 0n;
 
@@ -351,83 +381,12 @@ export class WeightService {
     });
   }
 
-  private getDescendantWithOrphans(fact: BlockFact, cache = this.makeCache()) {
-    let result = this.getDescendant(fact, cache);
-
-    // if (result.leaves.length !== 1) {
-    //   throw new Error(`Not exactly one leaf!`);
-    // }
-
-    // const orphans = this.getOrphans(result.leaves[0], cache).sort((a, b) =>
-    //   Number(
-    //     this.getDescendant(b, cache).total -
-    //       this.getDescendant(a, cache).total,
-    //   )
-    // );
-
-    // const canMerge = (inputs: { block: BlockFact }[]) => {
-    //   try {
-    //     FrontierHelper.mergeTreeIo(
-    //       inputs,
-    //       ZERO_BLOCK,
-    //       (hash) =>
-    //         this.ctx.get(BlockService).get(hash, false) ??
-    //           error(`Unknown frontier child input!`),
-    //     );
-    //     return true;
-    //   } catch (_err) {
-    //     return false;
-    //   }
-    // };
-
-    // for (const orphan of orphans) {
-    //   if (
-    //     !this.ctx.get(FrontierChainService).getFrontierChain(result.leaves[0])
-    //       .has(this.getTopParent(orphan, cache)) && canMerge([
-    //         ...result.leaves.map((x) => ({ block: x })),
-    //         { block: orphan },
-    //       ])
-    //   ) {
-    //     result = { ...result, leaves: [...result.leaves, orphan] };
-
-    //     const commonWeight = orphan.frontierVoteBlock !== undefined
-    //       ? this.getSelfWeight(orphan.frontierVoteBlock, cache).min +
-    //         this.getSelfOffset(orphan.frontierVoteBlock, cache).min +
-    //         this.getAncestorWeight(orphan.frontierVoteBlock, cache) +
-    //         this.getAncestorOffset(orphan.frontierVoteBlock, cache)
-    //       : 0n;
-    //     const delta = this.getDescendant(orphan, cache).total - commonWeight;
-    //     result = { ...result, total: result.total + delta };
-    //   }
-    // }
-
-    return result;
-  }
-
-  private getOrphans(fact: BlockFact, cache = this.makeCache()): BlockFact[] {
-    return getOrCreate(cache.orphans, fact, () => {
-      return fact.frontierVoteBlock !== undefined
-        ? [
-          ...this.getOrphans(fact.frontierVoteBlock, cache),
-          ...fact.frontierVoteBlock.frontierVoters.filter((x) => x !== fact),
-        ]
-        : [];
-    });
-  }
-
   public isCanonical(fact: BlockFact, cache = this.makeCache()) {
     return this.getCanonicality(fact, cache) >= 0n;
   }
 
   public getCanonicality(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.canonicality, fact, () => {
-      const genesis = this.ctx.get(GenesisService).getGenesisBlock();
-      const genesisDesc = this.getDescendant(genesis, cache);
-      const factDesc = this.getDescendant(fact, cache);
-      return factDesc.leaves.every((x) => genesisDesc.leaves.includes(x))
-        ? 0n
-        : factDesc.total - genesisDesc.total;
-
       // return this.getSelfWeight(fact, cache).min +
       //   this.getDescendant(fact, cache).weight +
       //   this.getSelfOffset(fact, cache).min +
@@ -435,51 +394,67 @@ export class WeightService {
 
       // const selfWeight = this.getSelfWeight(fact, cache).min;
       // const descWeight = this.getDescendant(fact, cache).weight;
-      // let canonicality = selfWeight + descWeight;
+      let canonicality = this.getClaimCanonicality(fact, cache);
 
-      // const parent = this.ctx.get(BlockService).get(fact.frontierVote, false);
-      // if (parent !== undefined) {
-      //   const parentCanonicality = this.getCanonicality(parent, cache);
-      //   if (parentCanonicality < canonicality) {
-      //     canonicality = parentCanonicality;
-      //   }
-      // }
+      // TODO: Re-add minimization by this.ctx.config.getWeightLimit()
 
-      // for (const input of fact.inputs) {
-      //   const parent = this.ctx.get(BlockService).get(input.blockHash, false);
-      //   if (
-      //     parent !== undefined && parent.frontierOutputIdx === input.outputIdx
-      //   ) {
-      //     const parentCanonicality = this.getCanonicality(parent, cache);
-      //     if (parentCanonicality < canonicality) {
-      //       canonicality = parentCanonicality;
-      //     }
-      //   }
-      // }
+      const parent = this.ctx.get(BlockService).get(fact.frontierVote, false);
+      if (parent !== undefined) {
+        const parentCanonicality = this.getCanonicality(parent, cache);
+        if (parentCanonicality < canonicality) {
+          canonicality = parentCanonicality;
+        }
+      }
 
-      // return canonicality;
+      for (const ref of fact.refs) {
+        const parent = this.ctx.get(BlockService).get(ref, false);
+        if (parent !== undefined) {
+          const parentCanonicality = this.getCanonicality(parent, cache);
+          if (parentCanonicality < canonicality) {
+            canonicality = parentCanonicality;
+          }
+        }
+      }
 
-      // let canonicality = this.getClaimDelta(fact, cache);
+      for (const input of fact.inputs) {
+        const parent = this.ctx.get(BlockService).get(input.blockHash, false);
+        if (parent !== undefined) {
+          const parentCanonicality = this.getCanonicality(parent, cache);
+          if (parentCanonicality < canonicality) {
+            canonicality = parentCanonicality;
+          }
+        }
+      }
 
-      // const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
-      // if (block !== undefined) {
-      //   const delta = this.getClaimDelta(block, cache);
-      //   if (delta < canonicality) {
-      //     canonicality = delta;
-      //   }
-      // }
+      return canonicality;
+    });
+  }
 
-      // for (const input of fact.inputs) {
-      //   const block = this.ctx.get(BlockService).get(input.blockHash, false);
-      //   if (block !== undefined) {
-      //     const delta = this.getClaimDelta(block, cache);
-      //     if (delta < canonicality) {
-      //       canonicality = delta;
-      //     }
-      //   }
-      // }
+  public getClaimCanonicality(fact: BlockFact, cache = this.makeCache()) {
+    return getOrCreate(cache.claimCanonicality, fact, () => {
+      let canonicality = 0n;
 
-      // return canonicality;
+      for (const input of fact.inputs) {
+        const claims = this.ctx.get(BlockService).getClaims(input);
+        const minWeight = claims
+          .map((x) => this.getSelfWeight(x.block, cache).min)
+          .reduce((x, y) => x < y ? x : y);
+        const computeScore = (x: { block: BlockFact }) =>
+          this.getDescendant(x.block, cache).weight -
+          this.ctx.config.getOverpaymentPenalty(
+            this.getSelfWeight(x.block, cache).max - minWeight,
+          );
+        const maxScore = claims
+          .map(computeScore)
+          .reduce((x, y) => x > y ? x : y);
+        const selfScore = computeScore({ block: fact });
+        const claimCanonicality = selfScore - maxScore;
+        if (claimCanonicality < canonicality) {
+          canonicality = claimCanonicality;
+        }
+      }
+
+      return canonicality;
     });
   }
 
@@ -541,41 +516,18 @@ export class WeightService {
    * - result[x] is the weight of blocks in the tree voting for fact.frontierVote.[...].frontierVote
    */
   public getVoterWeight(fact: BlockFact, cache = this.makeCache()) {
-    todo();
-
     return getOrCreate(cache.voterWeight, fact, () => {
       const desc = this.getDescendant(fact, cache);
 
-      if (desc.voters.length === 0) {
-        return fact.frontierDetail.treeWeights;
-      }
-
-      // TODO: Handle other voters
-      const subWeight = this.getVoterWeight(desc.voters[0], cache);
-
-      const res: bigint[] = [];
-      for (let i = 0; true; i++) {
-        const selfEl = fact.frontierDetail.treeWeights[i];
-        const subEl = subWeight[i + 1];
-        if (selfEl !== undefined) {
-          if (subEl !== undefined) {
-            res.push(selfEl + subEl);
-          } else {
-            res.push(selfEl);
-          }
-        } else {
-          if (subEl !== undefined) {
-            res.push(subEl);
-          } else {
-            break;
-          }
+      const res = [...fact.frontierDetail.treeWeights];
+      for (const voter of desc.voters) {
+        const sub = this.getVoterWeight(voter, cache);
+        for (let i = 0; i < sub.length; i++) {
+          const dst = i ? i - 1 : 0;
+          res[dst] ??= 0n;
+          res[dst] += sub[i];
         }
       }
-
-      // if (res.length === 0) {
-      //   res.push(0n);
-      // }
-      // res[0] += subWeight[0];
 
       return res;
 

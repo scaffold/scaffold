@@ -8,6 +8,7 @@ import { NetworkProvider } from './NetworkProvider.ts';
 import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';
 import { defaultContractProviders } from './contracts/defaultContractProviders.ts';
+import { todo } from './util/functional.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -169,7 +170,7 @@ export const makeDefaultConfig = () =>
     getGenerationReward: (_verifier, computeTimeMs) =>
       BigInt(computeTimeMs * 0) + 5n,
     // getWeightLimit: (factAgeMs) => BigInt(factAgeMs),
-    getWeightLimit: (_factAgeMs) => 1000000n,
+    getWeightLimit: (_factAgeMs) => 1000000000n,
     getNextWeightBreakpoint: (weight) =>
       weight <= 2n ? 3n : (weight * 3n) >> 1n,
     getOverpaymentPenalty: (overpayment) => overpayment,

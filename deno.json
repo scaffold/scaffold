@@ -37,6 +37,7 @@
         "no-external-import",
         "no-non-null-asserted-optional-chain",
         "no-self-compare",
+        "no-slow-types",
         "no-sparse-arrays",
         "prefer-ascii",
         "single-var-declarator"
