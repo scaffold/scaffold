@@ -26,6 +26,8 @@ import { MonitoringService } from './MonitoringService.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
+import { BarrierException } from './exceptions.ts';
+import { DataService } from './DataService.ts';
 
 export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
@@ -203,7 +205,7 @@ export class FactService {
       if (fact !== undefined) {
         this.ctx.get(GarbageCollectionService).markVisited(fact);
       } else {
-        // this.ctx.get(DataService).request(hash);
+        this.ctx.get(DataService).request(hash);
       }
     }
     return fact;
@@ -382,7 +384,9 @@ export class FactService {
       this.ctx.get(BlockService).forget(fact);
       this.ctx.maybeGet(BlockRecordSet)?.dispatchRemove(fact);
     }
-    this.ctx.get(NodeService).get(fact.signer)?.producedFacts.delete(fact);
+    if (fact.signer !== undefined) {
+      this.ctx.get(NodeService).get(fact.signer)?.producedFacts.delete(fact);
+    }
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);
   }
@@ -419,13 +423,13 @@ export class FactService {
     // const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
     // return fact.signature !== undefined &&
     //   secp.verify(this.getSignature(fact), hash.toBytes(), publicKey);
-    return arrEquals(fact.signer, publicKey);
+    return fact.signer !== undefined && arrEquals(fact.signer, publicKey);
   }
   public isSignedByMe(fact: Pick<Fact, 'signer'>) {
     return this.verify(fact, this.ctx.get(KeyService).getSelfPublicKey());
   }
   public getPublicKey(fact: Pick<Fact, 'signer'>) {
-    return fact.signer;
+    return fact.signer ?? error(`No signature on fact!`);
   }
 
   private computePublicKey(fact: Pick<Fact, 'data' | 'signature'>) {
@@ -453,7 +457,7 @@ export class FactService {
 
     const type: FactType = data[factMagic.byteLength];
     if (!this.ctx.config.enableBlockIngestion && type === FactType.Block) {
-      throw new Error(`Block ingestion disabled!`);
+      throw new BarrierException(`Block ingestion disabled!`);
     }
 
     const hash = Hash.digest(data);
@@ -498,7 +502,7 @@ export class FactService {
 
       receivedAt: this.ctx.config.timeProvider.now(),
       source,
-      signer: this.computePublicKey({ data, signature }),
+      signer: signed ? this.computePublicKey({ data, signature }) : undefined,
       fromNodes: [],
 
       toNodes: [],
@@ -518,6 +522,8 @@ export class FactService {
       references: 0,
 
       factIdx: this.nextFactIdx++,
+      typeStr: FactType[type],
+      sourceStr: FactSource[source],
       sillyName: this.getSillyName(),
       backtrace: new Error().stack,
     };
@@ -525,13 +531,15 @@ export class FactService {
     const res = this.factories[base.type](base, mutator);
     if (res.type !== base.type) {
       throw new Error(
-        `Factory ${base.type} returned incorrect message type ${res.type}!`,
+        `Factory ${base.type} returned incorrect message type ${
+          FactType[res.type]
+        }!`,
       );
     }
 
     if (sortKeys) {
       Object.keys(res).sort().forEach((key) => {
-        if (key !== 'type' && key !== 'sillyName') {
+        if (key !== 'typeStr' && key !== 'sourceStr' && key !== 'sillyName') {
           const val = (res as any)[key];
           delete (res as any)[key];
           (res as any)[key] = val;
@@ -544,7 +552,7 @@ export class FactService {
       console.log(`Created fact:`, res.hash.toHex(), res);
     } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
       console.log(
-        `Created ${res.type} fact from ${res.source}:`,
+        `Created ${FactType[res.type]} fact from ${FactSource[res.source]}:`,
         res.hash.toHex(),
       );
     }
@@ -568,7 +576,9 @@ export class FactService {
       this.ctx.get(UnspentOutputManager).tick();
     }
 
-    this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);
+    if (res.signer !== undefined) {
+      this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);
+    }
 
     return res;
   }

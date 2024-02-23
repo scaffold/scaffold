@@ -7,6 +7,10 @@ import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
 import { arrEquals } from './util/buffer.ts';
 import { FactService } from './FactService.ts';
+import { FrontierHelper } from './FrontierHelper.ts';
+import { WeightService } from './WeightService.ts';
+import { GenesisService } from './GenesisService.ts';
+import { OutputClaim } from './BlockMeta.ts';
 
 export enum FetchMode {
   // Selects the first valid block satisfying the given verifier.
@@ -118,27 +122,16 @@ export class FetchService {
       }
     }
 
-    let onState: (block?: BlockFact) => boolean;
+    let onState: (claim?: OutputClaim) => boolean;
     let watchItvl: number | undefined;
     if (onBody !== undefined || onResponseBlock !== undefined) {
       let prevBody: Uint8Array | undefined;
-      onState = (block) => {
-        if (block !== undefined) {
-          const input = block.inputs.find((input) => {
-            const inputBlock = this.ctx.get(BlockService)
-              .get(input.blockHash, false);
-            return inputBlock !== undefined &&
-              this.ctx.get(BlockService).areVerifiersEqual(
-                inputBlock.outputs[input.outputIdx].verifier,
-                verifier,
-              );
-          });
-          if (input === undefined) {
-            throw new Error(`Verifier not found!`);
-          }
-          onResponseBlock?.(block, input.groupIdx);
+      onState = (claim) => {
+        if (claim !== undefined) {
+          const input = claim.block.inputs[claim.inputIdx];
+          onResponseBlock?.(claim.block, input.groupIdx);
 
-          const body = block.bodies[input.groupIdx];
+          const body = claim.block.bodies[input.groupIdx];
           if (prevBody === undefined || !arrEquals(body, prevBody)) {
             prevBody = body;
             onBody?.(body);
@@ -157,31 +150,41 @@ export class FetchService {
       // this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
 
       watchItvl = this.ctx.config.timeProvider.setInterval(() => {
-        let bestBlock: BlockFact | undefined;
+        const genesis = this.ctx.get(GenesisService).getGenesisBlock();
+        // TODO: Use all leaves
+        const leaves =
+          this.ctx.get(WeightService).getDescendant(genesis).leaves;
+        const base = leaves[leaves.length - 1];
+        const claims = base !== undefined
+          ? FrontierHelper.findOutputs(base, verifier, false)
+            .flatMap((x) => this.ctx.get(BlockService).getClaims(x))
+            .filter((x) => this.ctx.get(WeightService).isCanonical(x.block))
+          : [];
+        onState(claims[claims.length - 1]);
 
-        const blocks = this.ctx.get(FactService).hackyGetBlocksMatching();
-        for (const block of blocks) {
-          if (
-            block.canonicality >= 0n &&
-            (bestBlock === undefined ||
-              (mode === FetchMode.Latest
-                ? block.canonicality <= bestBlock.canonicality
-                : block.canonicality > bestBlock.canonicality)) &&
-            block.inputs.some((input) => {
-              const inputBlock = this.ctx.get(BlockService)
-                .get(input.blockHash, false);
-              return inputBlock !== undefined &&
-                this.ctx.get(BlockService).areVerifiersEqual(
-                  inputBlock.outputs[input.outputIdx].verifier,
-                  verifier,
-                );
-            })
-          ) {
-            bestBlock = block;
-          }
-        }
+        // const blocks = this.ctx.get(FactService).hackyGetBlocksMatching();
+        // for (const block of blocks) {
+        //   if (
+        //     block.canonicality >= 0n &&
+        //     (bestBlock === undefined ||
+        //       (mode === FetchMode.Latest
+        //         ? block.canonicality <= bestBlock.canonicality
+        //         : block.canonicality > bestBlock.canonicality)) &&
+        //     block.inputs.some((input) => {
+        //       const inputBlock = this.ctx.get(BlockService)
+        //         .get(input.blockHash, false);
+        //       return inputBlock !== undefined &&
+        //         this.ctx.get(BlockService).areVerifiersEqual(
+        //           inputBlock.outputs[input.outputIdx].verifier,
+        //           verifier,
+        //         );
+        //     })
+        //   ) {
+        //     bestBlock = block;
+        //   }
+        // }
 
-        onState(bestBlock);
+        // onState(bestBlock);
       }, 100);
     }
 

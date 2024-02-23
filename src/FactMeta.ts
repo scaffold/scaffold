@@ -62,7 +62,7 @@ export interface FactBase {
   // Reception properties
   receivedAt: number;
   source: FactSource;
-  signer: Uint8Array;
+  signer?: Uint8Array;
   fromNodes: Node[];
 
   // Publication properties
@@ -80,6 +80,8 @@ export interface FactBase {
 
   // Debug properties
   factIdx: number;
+  typeStr: string;
+  sourceStr: string;
   sillyName: string;
   backtrace?: string;
 }

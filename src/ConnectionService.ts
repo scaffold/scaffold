@@ -10,6 +10,8 @@ import { arrEquals } from './util/buffer.ts';
 import { KeyService } from './KeyService.ts';
 import { Identification } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
+import { BarrierException } from './exceptions.ts';
+import { log } from '../deps.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -140,8 +142,14 @@ export class ConnectionService {
           }
         }
       } catch (err) {
-        console.error(err);
-        shutdown();
+        if (err instanceof BarrierException) {
+          if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
+            console.debug(err);
+          }
+        } else {
+          console.error(err);
+          shutdown();
+        }
       }
     });
 

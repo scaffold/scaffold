@@ -88,16 +88,16 @@ export class NodeService {
       this.selfNode,
     );
 
-    // ctx.get(ClockService).setPoissonInterval(
-    //   () =>
-    //     this.ctx.get(FactService).emit(
-    //       this.ctx.get(InfoService).makeInfo(),
-    //       NodeInfo,
-    //       FactType.NodeInfo,
-    //       true,
-    //     ),
-    //   emitInfoIntervalMs,
-    // );
+    ctx.get(ClockService).setPoissonInterval(
+      () =>
+        this.ctx.get(FactService).emit(
+          this.ctx.get(InfoService).makeInfo(),
+          NodeInfo,
+          FactType.NodeInfo,
+          true,
+        ),
+      emitInfoIntervalMs,
+    );
   }
 
   public getSelfNode() {
@@ -125,6 +125,14 @@ export class NodeService {
         altruism: 0,
       };
       this.nodes.set(hash.toPrimitive(), node);
+
+      setTimeout(() =>
+        this.ctx.get(FactService).emit(
+          this.ctx.get(InfoService).makeInfo(),
+          NodeInfo,
+          FactType.NodeInfo,
+          true,
+        ), 0);
     }
     return node;
   }

@@ -36,6 +36,8 @@ When we have multiple claimants of an output, simply choose the highest-scoring 
 // OPTIMIZATION:
 // Always propogate weights towards the frontier, which is bounded by log(N)
 
+const useTreeWeightForChildren = true;
+
 interface DescendantResult {
   parent?: BlockFact;
   voters: BlockFact[];
@@ -348,7 +350,10 @@ export class WeightService {
       });
       return {
         voters,
-        leaves: voters.flatMap((x) => this.getDescendant(x, cache).leaves),
+        leaves: [
+          fact,
+          ...voters.flatMap((x) => this.getDescendant(x, cache).leaves),
+        ],
         weight: voters.reduce(
           (acc, cur) =>
             acc + (this.getVoterWeight(cur, cache)[0] ?? 0n) +
@@ -439,16 +444,18 @@ export class WeightService {
         const minWeight = claims
           .map((x) => this.getSelfWeight(x.block, cache).min)
           .reduce((x, y) => x < y ? x : y);
-        const computeScore = (x: { block: BlockFact }) =>
+
+        const scores = claims.map((x) =>
           this.getDescendant(x.block, cache).weight -
           this.ctx.config.getOverpaymentPenalty(
             this.getSelfWeight(x.block, cache).max - minWeight,
-          );
-        const maxScore = claims
-          .map(computeScore)
-          .reduce((x, y) => x > y ? x : y);
-        const selfScore = computeScore({ block: fact });
-        const claimCanonicality = selfScore - maxScore;
+          )
+        );
+        const maxScore = scores.reduce((x, y) => x > y ? x : y);
+        // Increment the first occurrence of the maximum score so there's no ties.
+        scores[scores.indexOf(maxScore)]++;
+        const selfScore = scores[claims.findIndex((x) => x.block === fact)];
+        const claimCanonicality = selfScore - maxScore - 1n;
         if (claimCanonicality < canonicality) {
           canonicality = claimCanonicality;
         }
@@ -460,6 +467,12 @@ export class WeightService {
 
   private getTreeChildrenWeight(fact: BlockFact, cache = this.makeCache()) {
     return getOrCreate(cache.treeChildrenWeight, fact, () => {
+      const storedWeight = fact.frontierDetail.treeWeights
+        .reduce((acc, cur) => acc + cur, 0n);
+      if (useTreeWeightForChildren) {
+        return storedWeight;
+      }
+
       let weight = 0n;
 
       for (const input of fact.inputs) {
@@ -472,8 +485,6 @@ export class WeightService {
         }
       }
 
-      const storedWeight = fact.frontierDetail.treeWeights
-        .reduce((acc, cur) => acc + cur, 0n);
       if (weight !== storedWeight) {
         throw new Error(`Computed weight is not equal to the stored weight!`);
       }

@@ -1,17 +1,20 @@
-import { log, secp } from '../deps.ts';
+import { log } from '../deps.ts';
 import { Context } from '../src/Context.ts';
 import { makeDefaultConfig } from '../src/Config.ts';
 import { WebsocketServerProvider } from '../plugins/WebsocketServerProvider.ts';
 import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
 import { NetworkService } from '../src/NetworkService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
+import { hex2bin } from '../src/util/hex.ts';
 
 const ctx = new Context({
   ...makeDefaultConfig(),
 
   debugName: 'signaling server',
 
-  selfPrivateKey: secp.utils.randomPrivateKey(),
+  selfPrivateKey: hex2bin(
+    '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
+  ),
 
   logLevel: log.LogLevels.INFO,
 

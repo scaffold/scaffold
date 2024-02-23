@@ -1,7 +1,5 @@
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockFact } from './FactMeta.ts';
-import { BlockOutput } from './messages.ts';
-import { BlockInput } from './messages.ts';
 import {
   Block,
   FrontierTreeIoBranch,
@@ -9,6 +7,7 @@ import {
   Verifier,
 } from './messages.ts';
 import { Hash, HASH_BITS, HashPrimitive } from './util/Hash.ts';
+import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
 import { mapPut } from './util/map.ts';
 
@@ -148,6 +147,66 @@ export class FrontierHelper {
     } else {
       return this.doesOutput(block.frontierVoteBlock, branch);
     }
+  }
+
+  public static findOutputs(
+    base: BlockFact,
+    verifier: Verifier,
+    onlyUnclaimed: boolean,
+    verifierPath = this.encodePath(verifier),
+  ): { blockHash: Hash; outputIdx: number; amount: bigint }[] {
+    let outputs = base.frontierVoteBlock !== undefined
+      ? this.findOutputs(
+        base.frontierVoteBlock,
+        verifier,
+        onlyUnclaimed,
+        verifierPath,
+      )
+      : [];
+
+    if (onlyUnclaimed) {
+      outputs = outputs.filter((output) =>
+        !base.frontierDetail.consumedInputsRoot.branches.some((x) =>
+          x.path === verifierPath &&
+          Hash.equals(x.childHash, output.blockHash) &&
+          x.outputIdx === output.outputIdx && x.amount === output.amount
+        ) && !base.inputs.some((x) =>
+          Hash.equals(x.blockHash, output.blockHash) &&
+          x.outputIdx === output.outputIdx
+        )
+      );
+    }
+
+    for (const branch of base.frontierDetail.producedOutputsRoot.branches) {
+      if (branch.path === verifierPath) {
+        outputs.push({
+          blockHash: branch.childHash,
+          outputIdx: branch.outputIdx,
+          amount: branch.amount,
+        });
+      }
+    }
+
+    let outputIdx = 0;
+    for (const output of base.outputs) {
+      if (this.areVerifiersEqual(output.verifier, verifier)) {
+        outputs.push({
+          blockHash: base.hash,
+          outputIdx,
+          amount: output.amount,
+        });
+      }
+      outputIdx++;
+    }
+
+    return outputs;
+  }
+
+  public static areVerifiersEqual(a: Verifier, b: Verifier) {
+    return (
+      Hash.equals(a.contractHash, b.contractHash) &&
+      arrEquals(a.params, b.params)
+    );
   }
 
   private static iterateBranches(

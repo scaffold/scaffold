@@ -15,3 +15,9 @@ export class ParsingException extends Error {
     super(msg);
   }
 }
+
+export class BarrierException extends Error {
+  constructor(msg: string) {
+    super(msg);
+  }
+}

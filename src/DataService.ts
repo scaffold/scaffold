@@ -32,8 +32,4 @@ export class DataService {
       }, 0);
     }
   }
-
-  private getSignatories(hash: Hash): Fact[] {
-    return [];
-  }
 }
