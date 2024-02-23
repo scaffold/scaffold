@@ -9,9 +9,26 @@ export class UnspentOutputManager extends Queue<Verifier, InputSpec> {
     super((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
 
     const itvl = ctx.config.timeProvider.setInterval(
-      () => this.cleanup(),
+      () => this.tick(),
       1000, // TODO: Make this configurable and disablable
     );
     ctx.onDestruct(() => ctx.config.timeProvider.clearInterval(itvl));
+  }
+
+  public tick() {
+    for (const queue of this.queues.values()) {
+      for (let i = 0; i < queue.pending.length; i++) {
+        for (let j = 0; j < queue.handlers.length; j++) {
+          if (queue.handlers[j].filter(queue.pending[i])) {
+            queue.handlers.splice(j, 1)[0].resolve(
+              queue.pending.splice(i--, 1)[0],
+            );
+            break;
+          }
+        }
+      }
+    }
+
+    this.cleanup();
   }
 }

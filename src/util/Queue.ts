@@ -78,18 +78,6 @@ export class Queue<Key, Value> {
 
   public insert(key: Key, value: Value) {
     const hp = this.keyFn(key);
-    if (
-      hp === '7cc1eb91b604591e2127974fc2834461eafc3e617fc93ae07f434328da50bc48'
-    ) {
-      console.log(`INSERT INPUT`);
-      debugger;
-    }
-    if (
-      hp === 'c535312704b417882416cfb5dec64de3f4df95b5996b12ee970c72fb1a329ae1'
-    ) {
-      console.log(`INSERT STATE`);
-      debugger;
-    }
     const queue = getOrCreate(
       this.queues,
       hp,

@@ -17,7 +17,6 @@ import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
 import { mapPut } from './util/map.ts';
 import { log } from '../deps.ts';
-import { DataService } from './DataService.ts';
 import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
 import { uniqueNamesGenerator } from '../deps.ts';
@@ -25,8 +24,8 @@ import { SignalingService } from './SignalingService.ts';
 import { ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
-import { multimapPop } from './util/map.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
+import { UnspentOutputManager } from './UnspentOutputManager.ts';
 
 export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
 
@@ -565,6 +564,8 @@ export class FactService {
       );
 
       this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(res);
+
+      this.ctx.get(UnspentOutputManager).tick();
     }
 
     this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);

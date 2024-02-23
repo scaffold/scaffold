@@ -8,6 +8,7 @@ import { GenesisService } from './GenesisService.ts';
 import { FrontierHelper } from './FrontierHelper.ts';
 import { BlockService } from './BlockService.ts';
 import { error } from './util/functional.ts';
+import { FactService } from './FactService.ts';
 
 const targVoteLevel = 4;
 
@@ -104,10 +105,18 @@ export class FrontierChainService {
       this.getAllParents(input)
     );
 
-    let res = [...externalInputs].find((input) => {
-      const chain = this.getFrontierChain(input);
-      return requireInclusion.every((p) => doesIntersect(chain, p));
-    });
+    const cache = this.ctx.get(WeightService).makeCache();
+    let res = this.ctx.get(FactService).hackyGetBlocksMatching()
+      .filter((input) => {
+        const chain = this.getFrontierChain(input);
+        return requireInclusion.every((p) => doesIntersect(chain, p));
+      })
+      .sort((a, b) =>
+        Number(
+          this.ctx.get(WeightService).getCanonicality(b, cache) -
+            this.ctx.get(WeightService).getCanonicality(a, cache),
+        )
+      )[0];
 
     if (res === undefined) {
       // TODO: Descend towards voters?
