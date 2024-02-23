@@ -1,7 +1,7 @@
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { Fact, FactSource, FactType } from './FactMeta.ts';
-import { FactService, invalidFact } from './FactService.ts';
+import { FactService, ingestingFact } from './FactService.ts';
 
 export class GarbageCollectionService {
   private tick = 0;
@@ -24,7 +24,7 @@ export class GarbageCollectionService {
   private dropOldFact() {
     const candidates = [...this.ctx.get(FactService).getAll().entries()].filter(
       ([_, fact]) => {
-        if (fact === invalidFact) {
+        if (fact === ingestingFact) {
           return true;
         }
 
@@ -56,7 +56,7 @@ export class GarbageCollectionService {
     let bestCandidate: Fact | undefined;
     for (const [_key, cd] of candidates) {
       if (
-        cd !== invalidFact &&
+        cd !== ingestingFact &&
         (bestCandidate === undefined || cd.visitedAt < bestCandidate.visitedAt)
       ) {
         bestCandidate = cd;
@@ -68,7 +68,7 @@ export class GarbageCollectionService {
 
     // if (candidates.length > 0) {
     //   const sel = candidates[Math.floor(Math.random() * candidates.length)];
-    //   if (sel[1] === invalidFact) {
+    //   if (sel[1] === ingestingFact) {
     //     this.ctx.get(FactService).getAll().delete(sel[0]);
     //   } else {
     //     console.log('DROP', candidates.length, sel[0]);

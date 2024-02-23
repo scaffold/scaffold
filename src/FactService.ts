@@ -29,7 +29,7 @@ import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { BarrierException } from './exceptions.ts';
 import { DataService } from './DataService.ts';
 
-export const invalidFact: unique symbol = Symbol('FactService.invalidFact');
+export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
 export const enum LoadFlags {
   MarkVisited = 1 << 0,
@@ -52,7 +52,7 @@ type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
 // a.push(() => {});
 
 const factMagic = new Uint8Array([83, 66, 76]); // SBL == 0x53424c
-const headerSize = factMagic.byteLength + 1;
+export const headerSize = factMagic.byteLength + 1;
 
 // Version by incrementing factMagic or creating a new FactType
 
@@ -86,7 +86,7 @@ export class FactService {
   private factories: FactFactory[] = [];
   private ingestListeners: ((fact: unknown) => void)[][] = [];
   private forgetListeners: ((fact: unknown) => void)[][] = [];
-  private facts = new Map<HashPrimitive, Fact | typeof invalidFact>();
+  private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
   private validitiesByHash = new Map<
@@ -190,16 +190,16 @@ export class FactService {
 
   public has(hash: Hash) {
     const fact = this.facts.get(hash.toPrimitive());
-    if (fact === invalidFact) {
-      throw new Error(`Testing for existence of an ingesting or invalid fact!`);
+    if (fact === ingestingFact) {
+      throw new Error(`Testing for existence of an ingesting fact!`);
     }
     return fact !== undefined;
   }
 
   public get(hash: Hash, request = true): Fact | undefined {
     const fact = this.facts.get(hash.toPrimitive());
-    if (fact === invalidFact) {
-      throw new Error(`Cannot get an ingesting or invalid fact!`);
+    if (fact === ingestingFact) {
+      throw new Error(`Cannot get an ingesting fact!`);
     }
     if (request) {
       if (fact !== undefined) {
@@ -225,7 +225,7 @@ export class FactService {
     filter: (block: BlockFact) => boolean = () => true,
   ): BlockFact[] {
     return [...this.facts.values()].flatMap((fact) =>
-      fact !== invalidFact && fact.type === FactType.Block && filter(fact)
+      fact !== ingestingFact && fact.type === FactType.Block && filter(fact)
         ? [fact]
         : []
     );
@@ -391,9 +391,9 @@ export class FactService {
     this.deleteFromStorage(fact);
   }
 
-  public publish(fact: Fact) {
-    if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
-      throw new Error(`Trying to publish before publish time!`);
+  public publish(fact: Fact, force = false) {
+    if (fact.publishAt !== undefined && Date.now() < fact.publishAt && !force) {
+      return;
     }
 
     this.ctx.get(NodeService).getAll()
@@ -403,7 +403,7 @@ export class FactService {
   // TODO: RemoteNode
   public sendTo(fact: Fact, nodes: Node | Node[]) {
     if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
-      throw new Error(`Trying to publish before publish time!`);
+      return;
     }
 
     for (const to of Array.isArray(nodes) ? nodes : [nodes]) {
@@ -417,6 +417,10 @@ export class FactService {
         }
       }
     }
+  }
+
+  public replyTo(fact: Fact, reply: Fact) {
+    this.sendTo(reply, fact.fromNodes);
   }
 
   public verify(fact: Pick<Fact, 'signer'>, publicKey: Uint8Array) {
@@ -463,7 +467,7 @@ export class FactService {
     const hash = Hash.digest(data);
     const existing = this.facts.get(hash.toPrimitive());
     if (existing !== undefined) {
-      if (existing === invalidFact) {
+      if (existing === ingestingFact) {
         throw new Error(`Cannot re-ingest an ingesting or invalid fact!`);
       }
       return existing;
@@ -474,68 +478,77 @@ export class FactService {
         `Hit the fact count limit of ${this.ctx.config.limitFactCount}!`,
       );
     }
-    this.facts.set(hash.toPrimitive(), invalidFact);
+    this.facts.set(hash.toPrimitive(), ingestingFact);
 
-    if (data.byteLength < headerSize) {
-      throw new Error(`Message length (${data.byteLength}) is too short!`);
+    let res: Fact;
+    try {
+      if (data.byteLength < headerSize) {
+        throw new Error(`Message length (${data.byteLength}) is too short!`);
+      }
+      if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
+        throw new Error(`Fact doesn't start with the magic bytes!`);
+      }
+
+      const signed = typeHasSignature[type];
+      if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
+        throw new Error(`Message length (${data.byteLength}) is too short!`);
+      }
+      const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
+
+      const base: FactBase = {
+        hash,
+
+        data,
+        type,
+        message: data.subarray(
+          headerSize,
+          signed ? -SIGNATURE_LENGTH : undefined,
+        ),
+        signature,
+
+        receivedAt: this.ctx.config.timeProvider.now(),
+        source,
+        signer: signed ? this.computePublicKey({ data, signature }) : undefined,
+        fromNodes: [],
+
+        toNodes: [],
+
+        collateralizations: mapPut(
+          this.collateralByHash,
+          hash.toPrimitive(),
+          () => [],
+        ),
+        validities: mapPut(
+          this.validitiesByHash,
+          hash.toPrimitive(),
+          () => new Map(),
+        ),
+
+        visitedAt: 0,
+        references: 0,
+
+        factIdx: this.nextFactIdx++,
+        typeStr: FactType[type],
+        sourceStr: FactSource[source],
+        sillyName: this.getSillyName(),
+        backtrace: new Error().stack,
+      };
+
+      res = this.factories[base.type](base, mutator);
+      if (res.type !== base.type) {
+        throw new Error(
+          `Factory ${base.type} returned incorrect message type ${
+            FactType[res.type]
+          }!`,
+        );
+      }
+    } catch (err) {
+      console.info(err);
+      this.facts.delete(hash.toPrimitive());
+      throw err;
     }
-    if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
-      throw new Error(`Fact doesn't start with the magic bytes!`);
-    }
 
-    const signed = typeHasSignature[type];
-    if (signed && data.byteLength < SIGNATURE_LENGTH + headerSize) {
-      throw new Error(`Message length (${data.byteLength}) is too short!`);
-    }
-    const signature = signed ? data.subarray(-SIGNATURE_LENGTH) : undefined;
-
-    const base: FactBase = {
-      hash,
-
-      data,
-      type,
-      message: data.subarray(
-        headerSize,
-        signed ? -SIGNATURE_LENGTH : undefined,
-      ),
-      signature,
-
-      receivedAt: this.ctx.config.timeProvider.now(),
-      source,
-      signer: signed ? this.computePublicKey({ data, signature }) : undefined,
-      fromNodes: [],
-
-      toNodes: [],
-
-      collateralizations: mapPut(
-        this.collateralByHash,
-        hash.toPrimitive(),
-        () => [],
-      ),
-      validities: mapPut(
-        this.validitiesByHash,
-        hash.toPrimitive(),
-        () => new Map(),
-      ),
-
-      visitedAt: 0,
-      references: 0,
-
-      factIdx: this.nextFactIdx++,
-      typeStr: FactType[type],
-      sourceStr: FactSource[source],
-      sillyName: this.getSillyName(),
-      backtrace: new Error().stack,
-    };
-
-    const res = this.factories[base.type](base, mutator);
-    if (res.type !== base.type) {
-      throw new Error(
-        `Factory ${base.type} returned incorrect message type ${
-          FactType[res.type]
-        }!`,
-      );
-    }
+    this.facts.set(hash.toPrimitive(), res);
 
     if (sortKeys) {
       Object.keys(res).sort().forEach((key) => {
@@ -547,7 +560,6 @@ export class FactService {
       });
     }
 
-    this.facts.set(hash.toPrimitive(), res);
     if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
       console.log(`Created fact:`, res.hash.toHex(), res);
     } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
@@ -562,7 +574,7 @@ export class FactService {
 
     this.writeToStorage(res);
 
-    for (const cb of this.ingestListeners[base.type]) {
+    for (const cb of this.ingestListeners[res.type]) {
       cb(res);
     }
 

@@ -307,6 +307,9 @@ export class WeightService {
 
       for (const input of fact.inputs) {
         const claims = this.ctx.get(BlockService).getClaims(input);
+        if (claims.length === 0) {
+          throw new Error(`Input claims is empty!`);
+        }
         const minWeight = claims
           .map((x) => this.getSelfWeight(x.block, cache).min)
           .reduce((x, y) => x < y ? x : y);

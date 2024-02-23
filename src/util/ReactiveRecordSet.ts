@@ -21,6 +21,9 @@ export abstract class ReactiveRecordSet<RecordType> {
     ((record: RecordType) => void)[]
   >();
 
+  private timeout?: number;
+  private debounces: (() => void)[] = [];
+
   abstract getAll(): Iterable<RecordType>;
 
   public onAdd(cb: (record: RecordType) => void) {
@@ -61,23 +64,44 @@ export abstract class ReactiveRecordSet<RecordType> {
   }
 
   public dispatchAdd(record: RecordType) {
-    for (const listener of this.addListeners) {
-      listener(record);
-    }
+    this.debounce(() => {
+      for (const listener of this.addListeners) {
+        listener(record);
+      }
+    });
   }
 
   public dispatchRemove(record: RecordType) {
-    for (const listener of this.removeListeners) {
-      listener(record);
-    }
+    this.debounce(() => {
+      for (const listener of this.removeListeners) {
+        listener(record);
+      }
+    });
   }
 
   public dispatchUpdate(record: RecordType) {
-    const listeners = this.updateListeners.get(record);
-    if (listeners !== undefined) {
-      for (const listener of listeners) {
-        listener(record);
+    this.debounce(() => {
+      const listeners = this.updateListeners.get(record);
+      if (listeners !== undefined) {
+        for (const listener of listeners) {
+          listener(record);
+        }
       }
+    });
+  }
+
+  private debounce(cb: () => void) {
+    this.debounces.push(cb);
+
+    if (this.timeout === undefined) {
+      this.timeout = setTimeout(() => {
+        this.timeout = undefined;
+        const debounces = this.debounces;
+        this.debounces = [];
+        for (const cb of debounces) {
+          cb();
+        }
+      }, 10);
     }
   }
 }

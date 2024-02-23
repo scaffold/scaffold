@@ -37,7 +37,7 @@ import {
   FactSource,
   FactType,
 } from './FactMeta.ts';
-import { FactService } from './FactService.ts';
+import { FactService, headerSize } from './FactService.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { assert, neverPromise, todo } from './util/functional.ts';
 import { LitigationService } from './LitigationService.ts';
@@ -218,12 +218,14 @@ export class BlockService {
           this.linkIo(fact, block, outputIdx, inputIdx)
         );
       } else if (output.amount >= 0n) {
-        this.ctx.get(UnspentOutputManager).insert(output.verifier, {
-          block: fact,
-          outputIdx,
-          amount: output.amount,
-        });
-        this.ctx.get(GenerationService).ensureRunning(output.verifier);
+        this.ctx.config.timeProvider.setTimeout(() => {
+          this.ctx.get(UnspentOutputManager).insert(output.verifier, {
+            block: fact,
+            outputIdx,
+            amount: output.amount,
+          });
+          this.ctx.get(GenerationService).ensureRunning(output.verifier);
+        }, 0);
       } else {
         // TODO: What to do in this case; we still need to make the output available if it's required
         // We should add it anyways, and make sure we filter for an appropriate amount when waiting
@@ -265,17 +267,20 @@ export class BlockService {
     });
 
     if (fact.inputs.length === 0) {
-      this.checkInputAvailability(fact);
+      // this.checkInputAvailability(fact);
     }
 
     for (const body of fact.bodies) {
-      if (body.byteLength > 0) {
-        try {
-          // TODO: Set the fromNode correctly here
-          this.ctx.get(FactService).ingest(body, fact.source);
-        } catch (_err) {
-          // If it fails no worries; it just wasn't a valid block
-        }
+      if (body.byteLength >= headerSize) {
+        this.ctx.config.timeProvider.setTimeout(() => {
+          try {
+            // TODO: Set the fromNode correctly here
+            this.ctx.get(FactService).ingest(body, fact.source);
+          } catch (err) {
+            // If it fails no worries; it just wasn't a valid block
+            console.debug(err);
+          }
+        }, 0);
       }
     }
 
@@ -451,15 +456,19 @@ export class BlockService {
     if (frontierVote.frontierChainDepth !== undefined) {
       this.setFrontierChainDepth(block, frontierVote.frontierChainDepth + 1);
     }
+
+    this.ctx.get(FactService).replyTo(block, frontierVote);
   }
 
   private setFrontierChainDepth(block: BlockFact, depth: number) {
-    if (block.frontierChainDepth !== undefined) {
-      throw new Error(`Internal error`);
-    }
-    block.frontierChainDepth = depth;
-    for (const voter of block.frontierVoters) {
-      this.setFrontierChainDepth(voter, depth + 1);
+    if (block.frontierChainDepth !== depth) {
+      if (block.frontierChainDepth !== undefined) {
+        throw new Error(`Internal error`);
+      }
+      block.frontierChainDepth = depth;
+      for (const voter of block.frontierVoters) {
+        this.setFrontierChainDepth(voter, depth + 1);
+      }
     }
   }
 
@@ -500,7 +509,7 @@ export class BlockService {
     //   }
     // }
 
-    this.checkInputAvailability(child);
+    // this.checkInputAvailability(child);
 
     // TODO: Only do this once per unique verifier foreach block
     const hintPrefix = [
@@ -524,6 +533,8 @@ export class BlockService {
       this.ctx.get(MonitoringService).verifierInputMonitor
         .callAll(verifier, child, childInputIdx);
     }
+
+    this.ctx.get(FactService).replyTo(parent, child);
 
     this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(parent);
     this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(child);

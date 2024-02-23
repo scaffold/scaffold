@@ -732,7 +732,7 @@ export class GenerationService {
   }
 
   private createBlock(verifier: Verifier, draft: BlockDraft) {
-    if (Hash.equals(verifier.contractHash, rootHash)) {
+    if (Hash.equals(verifier.contractHash, rootHash) && false) {
       // Special case for root contracts - don't publish the plaintext immediately.
       // This prevents others from stealing it and re-publishing it in their own block.
       // Instead, wait for a time.
@@ -760,8 +760,9 @@ export class GenerationService {
       }
 
       // TODO: Instead of just waiting for a timeout, wait until the block has been included in a canonical N-level blockset tree.
+      // Or wait for canonicality being greater than some threshold
       this.ctx.get(ClockService).setTimeout(
-        () => this.ctx.get(FactService).publish(fact),
+        () => this.ctx.get(FactService).publish(fact, true),
         publishDelay,
       );
 

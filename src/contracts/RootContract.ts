@@ -37,7 +37,7 @@ export class RootContract implements ContractProvider {
         return driver.requireBody(fact.data);
       }
 
-      driver.ingenerable(`We don't know any data matching the specified hash!`);
+      driver.ingenerable(`We don't know any data matching ${hash.toHex()}!`);
     } else if (driver.type === ComputationType.Contract) {
       const valid = Hash.equals(Hash.digest(driver.getBody()), hash);
       valid
