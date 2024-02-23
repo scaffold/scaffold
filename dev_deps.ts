@@ -1,4 +1,4 @@
-export * as fs from 'https://deno.land/std@0.216.0/fs/mod.ts';
-export * as path from 'https://deno.land/std@0.216.0/path/mod.ts';
-export * as http from 'https://deno.land/std@0.216.0/http/mod.ts';
+export * as fs from 'https://deno.land/std@0.217.0/fs/mod.ts';
+export * as path from 'https://deno.land/std@0.217.0/path/mod.ts';
+export * as http from 'https://deno.land/std@0.217.0/http/mod.ts';
 export * as dnt from 'https://deno.land/x/dnt@0.39.0/mod.ts';
