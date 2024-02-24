@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from '$std/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { accountHash, collateralHash } from '../../src/constants.ts';
@@ -28,20 +28,20 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const incentiveBlock = ctx1.get(BlockBuilder).publish({
+    const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 10n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk1'),
+          publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
         }),
       }],
-    }, 0);
+    });
 
     await waitForVerifiedOutput(ctx1, incentiveBlock, collateralHash, true);
   }),
@@ -58,37 +58,37 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const collateralBlock = ctx1.get(BlockBuilder).publish({
+    const collateralBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 1000n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk1'),
+          publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
         }),
       }, {
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 10n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk2'),
+          publicKey: str2bin('pk2'),
           hints: [str2bin('verifier1')],
           vote: 'FINAL_FAIL',
         }),
       }],
-    }, 0);
+    });
 
     await new Promise<void>((resolve) =>
       ctx1.config.timeProvider.setTimeout(resolve, 5000)
     );
 
-    const validBlock = ctx1.get(BlockBuilder).publish({
+    const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       inputs: [
         { block: collateralBlock, outputIdx: 0, amount: 1000n },
         { block: collateralBlock, outputIdx: 1, amount: 10n },
@@ -96,12 +96,12 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({ public_key: str2bin('pk2') }),
+          params: AccountContractParams.encode({ publicKey: str2bin('pk2') }),
         },
         amount: 1010n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
     assert(await ctx1.get(BlockService).waitForVerification(validBlock));
   }),
@@ -119,33 +119,33 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const collateralBlock = ctx1.get(BlockBuilder).publish({
+    const collateralBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 1000n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk1'),
+          publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
         }),
       }, {
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 10n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk2'),
+          publicKey: str2bin('pk2'),
           hints: [str2bin('verifier1')],
           vote: 'FINAL_FAIL',
         }),
       }],
-    }, 0);
+    });
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       inputs: [
         { block: collateralBlock, outputIdx: 0, amount: 1000n },
         { block: collateralBlock, outputIdx: 1, amount: 10n },
@@ -153,12 +153,12 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({ public_key: str2bin('pk2') }),
+          params: AccountContractParams.encode({ publicKey: str2bin('pk2') }),
         },
         amount: 1010n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));
   }),
@@ -175,37 +175,37 @@ Deno.test(
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
-    const collateralBlock = ctx1.get(BlockBuilder).publish({
+    const collateralBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 1000n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk1'),
+          publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
         }),
       }, {
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ block_hash: EMPTY_HASH }),
+          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
         },
         amount: 10n,
         detail: CollateralContractDetail.encode({
-          public_key: str2bin('pk2'),
+          publicKey: str2bin('pk2'),
           hints: [str2bin('verifier1')],
           vote: 'FINAL_FAIL',
         }),
       }],
-    }, 0);
+    });
 
     await new Promise<void>((resolve) =>
       ctx1.config.timeProvider.setTimeout(resolve, 5000)
     );
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       inputs: [
         { block: collateralBlock, outputIdx: 0, amount: 1000n },
         { block: collateralBlock, outputIdx: 1, amount: 10n },
@@ -213,12 +213,12 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({ public_key: str2bin('pk1') }),
+          params: AccountContractParams.encode({ publicKey: str2bin('pk1') }),
         },
         amount: 1010n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));
   }),

@@ -1,4 +1,4 @@
-import { assert } from '../test_deps.ts';
+import { assertEquals } from '$std/assert/mod.ts';
 import { findOutput, makeTest, provideInitialBalance } from '../tests/util.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { WeightService } from '../src/WeightService.ts';
@@ -11,11 +11,11 @@ Deno.test(
   makeTest({ contractProviders: [] }, (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    assert.assertEquals(
+    assertEquals(
       ctx1.get(WeightService).getSelfWeight(
         ctx1.get(BlockBuilder).publishSingleDraft({}),
       ),
-      { minWeight: BASE_WORK, maxWeight: BASE_WORK },
+      { min: BASE_WORK, max: BASE_WORK },
     );
   }),
 );
@@ -33,13 +33,13 @@ Deno.test(
       }],
     });
 
-    assert.assertEquals(
+    assertEquals(
       ctx1.get(WeightService).getSelfWeight(
         ctx1.get(BlockBuilder).publishSingleDraft({
           inputs: [findOutput(incentiveBlock, trueHash)],
         }),
       ),
-      { minWeight: BASE_WORK + 123n, maxWeight: BASE_WORK + 123n },
+      { min: BASE_WORK + 123n, max: BASE_WORK + 123n },
     );
   }),
 );
@@ -57,13 +57,13 @@ Deno.test(
       }],
     });
 
-    assert.assertEquals(
+    assertEquals(
       ctx1.get(WeightService).getSelfWeight(
         ctx1.get(BlockBuilder).publishSingleDraft({
           inputs: [findOutput(incentiveBlock, trueHash)],
         }),
       ),
-      { minWeight: BASE_WORK, maxWeight: BASE_WORK + 123n },
+      { min: BASE_WORK, max: BASE_WORK + 123n },
     );
   }),
 );

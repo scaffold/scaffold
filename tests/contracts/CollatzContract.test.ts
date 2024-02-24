@@ -1,27 +1,27 @@
-import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from '$std/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { collatzHash } from '../../src/constants.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { CollatzContract } from '../../src/contracts/CollatzContract.ts';
+import * as collatzMessages from '../../src/contracts/collatzMessages.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
 import {
   baseContractProviders,
   waitForVerifiedOutput,
 } from '../../tests/contracts/util.ts';
-import * as collatzMessages from '../../src/contracts/collatzMessages.ts';
 
 const params: collatzMessages.Params = { num: 1n };
-const goodAnswer: collatzMessages.Answer = { stopping_time: 0n, maximum: 1n };
-const badAnswer: collatzMessages.Answer = { stopping_time: 0n, maximum: 123n };
+const goodAnswer: collatzMessages.Answer = { stoppingTime: 0n, maximum: 1n };
+const badAnswer: collatzMessages.Answer = { stoppingTime: 0n, maximum: 123n };
 
 // const params: collatzMessages.Params = { num: 2n };
-// const goodAnswer: collatzMessages.Answer = { stopping_time: 1n, maximum: 2n };
-// const badAnswer: collatzMessages.Answer = { stopping_time: 1n, maximum: 123n };
+// const goodAnswer: collatzMessages.Answer = { stoppingTime: 1n, maximum: 2n };
+// const badAnswer: collatzMessages.Answer = { stoppingTime: 1n, maximum: 123n };
 
 // const params: collatzMessages.Params = { num: 10n };
-// const goodAnswer: collatzMessages.Answer = { stopping_time: 6n, maximum: 16n };
-// const badAnswer: collatzMessages.Answer = { stopping_time: 10n, maximum: 123n };
+// const goodAnswer: collatzMessages.Answer = { stoppingTime: 6n, maximum: 16n };
+// const badAnswer: collatzMessages.Answer = { stoppingTime: 10n, maximum: 123n };
 
 Deno.test(
   {
@@ -35,7 +35,7 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const incentiveBlock = ctx1.get(BlockBuilder).publish({
+    const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: {
           contractHash: collatzHash,
@@ -44,7 +44,7 @@ Deno.test(
         amount: 10n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
     const consumer = await waitForVerifiedOutput(
       ctx1,
@@ -68,13 +68,13 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const validBlock = ctx1.get(BlockBuilder).publish({
+    const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       body: collatzMessages.Answer.encode(goodAnswer),
       satisfies: [{
         contractHash: collatzHash,
         params: collatzMessages.Params.encode(params),
       }],
-    }, 0);
+    });
 
     assert(await ctx1.get(BlockService).waitForVerification(validBlock));
   }),
@@ -92,13 +92,13 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       body: collatzMessages.Answer.encode(badAnswer),
       satisfies: [{
         contractHash: collatzHash,
         params: collatzMessages.Params.encode(params),
       }],
-    }, 0);
+    });
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));
   }),

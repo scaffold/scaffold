@@ -2,11 +2,7 @@ import { AccountContract } from '../../src/contracts/AccountContract.ts';
 import { BlockFact } from '../../src/FactMeta.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { Context } from '../../src/Context.ts';
-import {
-  assert,
-  assertEquals,
-  assertNotEquals,
-} from 'std-latest/assert/mod.ts';
+import { assert, assertEquals, assertNotEquals } from '$std/assert/mod.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { findOutput } from '../util.ts';
 
@@ -22,7 +18,7 @@ export const waitForVerifiedOutput = async (
 
   const controller = new AbortController();
   const consumerPromise = ctx.get(BlockService).waitForConsumption(
-    { block_hash: block.hash, output_idx: outputIdx },
+    { blockHash: block.hash, outputIdx },
     controller.signal,
   );
 
@@ -39,7 +35,14 @@ export const waitForVerifiedOutput = async (
   if (shouldExist) {
     assertNotEquals(consumer, undefined);
     assert(await ctx.get(BlockService).waitForVerification(consumer!));
-    return consumer!;
+    const inputIdx = consumer!.inputs.findIndex((x) =>
+      x.blockHash === block.hash && x.outputIdx === outputIdx
+    );
+    return {
+      block: consumer!,
+      inputIdx,
+      body: consumer!.bodies[consumer!.inputs[inputIdx].groupIdx],
+    };
   } else {
     assertEquals(consumer, undefined);
   }

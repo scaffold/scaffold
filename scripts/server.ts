@@ -1,6 +1,4 @@
-import { fs } from '../dev_deps.ts';
-import { path } from '../dev_deps.ts';
-import { log } from '../deps.ts';
+import * as log from '$std/log/mod.ts';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';

@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from '$std/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { timeHash } from '../../src/constants.ts';
@@ -22,7 +22,7 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const incentiveBlock = ctx1.get(BlockBuilder).publish({
+    const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: {
           contractHash: timeHash,
@@ -31,7 +31,7 @@ Deno.test(
         amount: 10n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
     await waitForVerifiedOutput(ctx1, incentiveBlock, timeHash, true);
   }),
@@ -48,12 +48,12 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const validBlock = ctx1.get(BlockBuilder).publish({
+    const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{
         contractHash: timeHash,
         params: TimeParams.encode({ time: 0n }),
       }],
-    }, 0);
+    });
 
     assert(await ctx1.get(BlockService).waitForVerification(validBlock));
   }),
@@ -70,12 +70,12 @@ Deno.test(
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{
         contractHash: timeHash,
         params: TimeParams.encode({ time: 123n }),
       }],
-    }, 0);
+    });
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));
   }),

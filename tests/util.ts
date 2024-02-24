@@ -1,4 +1,4 @@
-import { async } from '../test_deps.ts';
+import * as async from '$std/async/mod.ts';
 import { secp } from '../src/util/secp.ts';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
@@ -11,7 +11,7 @@ import { ConnectionService } from '../src/ConnectionService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import { NetworkService } from '../src/NetworkService.ts';
 import { KeyService } from '../src/KeyService.ts';
-import { createGenesisBlock } from '../src/GenesisService.ts';
+import { createGenesisBlock, GenesisService } from '../src/GenesisService.ts';
 import { FactService } from '../src/FactService.ts';
 import { BlockFact, FactSource } from '../src/FactMeta.ts';
 import { NodeService } from '../src/NodeService.ts';
@@ -48,7 +48,7 @@ export const makeTest = (
     ...ctx: Context[]
   ) => Promise<void> | void,
 ) =>
-(testCtx: Deno.TestContext) => {
+async (testCtx: Deno.TestContext) => {
   // const config = deepMerge(baseConfig, deepMerge({ log }, partialConfig));
   const ctxs = Array.from(
     { length: func.length - 1 },
@@ -63,8 +63,14 @@ export const makeTest = (
       return ctx;
     },
   );
-  return async.deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000)
-    .finally(() => ctxs.forEach((ctx) => ctx.destruct()));
+
+  try {
+    await async.deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000);
+  } finally {
+    for (const ctx of ctxs) {
+      await ctx.destruct();
+    }
+  }
 };
 
 export const provideInitialBalance = (...ctxs: Context[]) => {
@@ -76,14 +82,10 @@ export const provideInitialBalance = (...ctxs: Context[]) => {
   );
 
   for (const ctx of ctxs) {
-    ctx.get(FactService).ingest(
-      genesis.data,
-      FactSource.Genesis,
-      ctx.get(NodeService).getSelfNode(),
-    );
+    ctx.get(GenesisService).ingestGenesis(genesis);
   }
 
-  return genesis.hash;
+  return Hash.digest(genesis);
 };
 
 const connectPair = (a: Context, b: Context) => {

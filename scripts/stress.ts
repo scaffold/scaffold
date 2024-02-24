@@ -1,4 +1,4 @@
-import { log } from '../deps.ts';
+import * as log from '$std/log/mod.ts';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { hex2bin } from '../src/util/hex.ts';
@@ -17,7 +17,7 @@ const config: Config = {
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
   ),
 
-  logLevel: log.LogLevels.WARNING,
+  logLevel: log.LogLevels.WARN,
 
   networkProviders: [],
 

@@ -1,5 +1,5 @@
 import { build, emptyDir } from 'dnt';
-import { parse } from 'std-latest/flags/mod.ts';
+import { parse } from '$std/flags/mod.ts';
 import { error } from '../src/util/functional.ts';
 
 const flags = parse(Deno.args, {

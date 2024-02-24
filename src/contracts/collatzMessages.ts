@@ -13,7 +13,7 @@ const registry = {
     name: 'Answer',
     type: 'record',
     fields: [
-      { name: 'stopping_time', type: 'long' },
+      { name: 'stoppingTime', type: 'long' },
       { name: 'maximum', type: 'long' },
     ],
   },

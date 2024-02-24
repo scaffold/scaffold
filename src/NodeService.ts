@@ -126,13 +126,16 @@ export class NodeService {
       };
       this.nodes.set(hash.toPrimitive(), node);
 
-      setTimeout(() =>
-        this.ctx.get(FactService).emit(
-          this.ctx.get(InfoService).makeInfo(),
-          NodeInfo,
-          FactType.NodeInfo,
-          true,
-        ), 0);
+      this.ctx.get(ClockService).setTimeout(
+        () =>
+          this.ctx.get(FactService).emit(
+            this.ctx.get(InfoService).makeInfo(),
+            NodeInfo,
+            FactType.NodeInfo,
+            true,
+          ),
+        0,
+      );
     }
     return node;
   }

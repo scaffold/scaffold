@@ -1,21 +1,24 @@
 import { Config } from './Config.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 
 export class Context {
   private objs = new Map<{ new (context: Context): unknown }, unknown>();
-  private destructors: (() => Promise<void> | void)[] = [];
+  private destructors: (() => MaybePromise<void>)[] = [];
   private isDestructed = false;
 
   constructor(public config: Config) {}
 
-  public async destruct() {
+  public destruct(): MaybePromise<void> {
     if (this.isDestructed) {
       throw new Error(`Cannot destruct a context twice!`);
     }
-    await Promise.all(this.destructors.reverse().map((cb) => cb()));
-    await this.config.storageProvider.close();
-    this.objs = new Map();
-    this.destructors = [];
-    this.isDestructed = true;
+    const results = this.destructors.reverse().map((cb) => cb());
+    results.push(this.config.storageProvider.close());
+    if (results.some((x) => x instanceof Promise)) {
+      return Promise.all(results).then(() => this.reset());
+    } else {
+      this.reset();
+    }
   }
 
   public get<T>(Type: { new (context: Context): T }): T {
@@ -41,11 +44,17 @@ export class Context {
     return this.objs.get(Type) as T | undefined;
   }
 
-  public onDestruct(cb: () => Promise<void> | void) {
+  public onDestruct(cb: () => MaybePromise<void>) {
     this.destructors.push(cb);
   }
 
   public debugGetAll() {
     return this.objs;
+  }
+
+  private reset() {
+    this.objs = new Map();
+    this.destructors = [];
+    this.isDestructed = true;
   }
 }

@@ -151,9 +151,9 @@ export class FetchService {
 
       watchItvl = this.ctx.config.timeProvider.setInterval(() => {
         const genesis = this.ctx.get(GenesisService).getGenesisBlock();
-        // TODO: Use all leaves
         const leaves =
           this.ctx.get(WeightService).getDescendant(genesis).leaves;
+        // TODO: Use all leaves
         const base = leaves[leaves.length - 1];
         const claims = base !== undefined
           ? FrontierHelper.findOutputs(base, verifier, false)

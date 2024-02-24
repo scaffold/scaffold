@@ -63,9 +63,15 @@ interface Cache {
 }
 
 export class WeightService {
+  private cache: Cache = this.makeCache();
+
   constructor(private ctx: Context) {}
 
-  public makeCache(): Cache {
+  public resetCache() {
+    this.cache = this.makeCache();
+  }
+
+  private makeCache(): Cache {
     return {
       selfWeight: new Map(),
       selfOffset: new Map(),
@@ -83,7 +89,11 @@ export class WeightService {
     };
   }
 
-  public getSelfWeight(fact: BlockFact, cache = this.makeCache()) {
+  private getCache() {
+    return this.cache;
+  }
+
+  public getSelfWeight(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.selfWeight, fact, () => {
       if (fact.source === FactSource.Genesis) {
         return { min: BASE_WORK, max: BASE_WORK };
@@ -183,7 +193,7 @@ export class WeightService {
     });
   }
 
-  public getSelfOffset(fact: BlockFact, cache = this.makeCache()) {
+  public getSelfOffset(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.selfOffset, fact, () => {
       let minSiblingWeight = this.getSelfWeight(fact, cache).max;
 
@@ -259,7 +269,7 @@ export class WeightService {
     });
   }
 
-  public getAncestorWeight(fact: BlockFact, cache = this.makeCache()) {
+  public getAncestorWeight(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.ancestorWeight, fact, () => {
       let minWeight = 0n;
 
@@ -275,7 +285,7 @@ export class WeightService {
     });
   }
 
-  public getAncestorOffset(fact: BlockFact, cache = this.makeCache()) {
+  public getAncestorOffset(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.ancestorOffset, fact, () => {
       let offset = 0n;
 
@@ -298,7 +308,7 @@ export class WeightService {
    */
   public getDescendant(
     fact: BlockFact,
-    cache = this.makeCache(),
+    cache = this.getCache(),
   ): DescendantResult {
     return getOrCreate(cache.descendant, fact, () => {
       // TODO: We might have to look at parent vote's canonicalities
@@ -389,11 +399,11 @@ export class WeightService {
     });
   }
 
-  public isCanonical(fact: BlockFact, cache = this.makeCache()) {
+  public isCanonical(fact: BlockFact, cache = this.getCache()) {
     return this.getCanonicality(fact, cache) >= 0n;
   }
 
-  public getCanonicality(fact: BlockFact, cache = this.makeCache()) {
+  public getCanonicality(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.canonicality, fact, () => {
       // return this.getSelfWeight(fact, cache).min +
       //   this.getDescendant(fact, cache).weight +
@@ -438,7 +448,7 @@ export class WeightService {
     });
   }
 
-  public getClaimCanonicality(fact: BlockFact, cache = this.makeCache()) {
+  public getClaimCanonicality(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.claimCanonicality, fact, () => {
       let canonicality = 0n;
 
@@ -468,7 +478,7 @@ export class WeightService {
     });
   }
 
-  private getTreeChildrenWeight(fact: BlockFact, cache = this.makeCache()) {
+  private getTreeChildrenWeight(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.treeChildrenWeight, fact, () => {
       const storedWeight = fact.frontierDetail.treeWeights
         .reduce((acc, cur) => acc + cur, 0n);
@@ -496,7 +506,7 @@ export class WeightService {
     });
   }
 
-  private getTreeChildrenOffset(fact: BlockFact, cache = this.makeCache()) {
+  private getTreeChildrenOffset(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.treeChildrenOffset, fact, () => {
       let weight = 0n;
 
@@ -514,7 +524,7 @@ export class WeightService {
     });
   }
 
-  public getTopParent(fact: BlockFact, cache = this.makeCache()): BlockFact {
+  public getTopParent(fact: BlockFact, cache = this.getCache()): BlockFact {
     const { parent } = this.getDescendant(fact, cache);
     if (parent !== undefined) {
       return this.getTopParent(parent, cache);
@@ -529,7 +539,7 @@ export class WeightService {
    * - result[1] is the weight of blocks in the tree voting for fact.frontierVote.frontierVote
    * - result[x] is the weight of blocks in the tree voting for fact.frontierVote.[...].frontierVote
    */
-  public getVoterWeight(fact: BlockFact, cache = this.makeCache()) {
+  public getVoterWeight(fact: BlockFact, cache = this.getCache()) {
     return getOrCreate(cache.voterWeight, fact, () => {
       const desc = this.getDescendant(fact, cache);
 

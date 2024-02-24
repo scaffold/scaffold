@@ -1,6 +1,6 @@
-import { parse } from 'std-latest/flags/mod.ts';
+import { parse } from '$std/flags/mod.ts';
 import { error } from '../src/util/functional.ts';
-import { readAll } from 'std-latest/streams/read_all.ts';
+import { readAll } from '$std/streams/read_all.ts';
 
 // TODO: Use https://cliffy.io/
 // Make sure it can be compiled to run on npm

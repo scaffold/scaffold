@@ -78,7 +78,13 @@ export const createGenesisBlock = (
     block.bodies.push(EMPTY_ARR);
   }
 
-  return ctx.get(FactService).compose(block, Block, FactType.Block);
+  const data = ctx.get(FactService).compose(block, Block, FactType.Block);
+
+  if (ctx.destruct() instanceof Promise) {
+    throw new Error(`We should keep this method sync`);
+  }
+
+  return data;
 };
 
 export const sharedGenesisData = hex2bin(

@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
+import { assertEquals } from '$std/assert/mod.ts';
 import { CollateralUtil, Posting } from '../src/CollateralUtil.ts';
 import { CollateralContractDetail } from '../src/collateralMessages.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
@@ -13,7 +13,7 @@ const makePosting = (
   hints: string[],
 ): Posting => ({
   amount,
-  detail: { public_key: str2bin(publicKey), hints: hints.map(str2bin), vote },
+  detail: { publicKey: str2bin(publicKey), hints: hints.map(str2bin), vote },
 });
 
 const processOutputs = (outputMap: Map<HashPrimitive, BlockOutput>) =>

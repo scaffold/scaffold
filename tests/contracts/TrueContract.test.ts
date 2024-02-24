@@ -1,4 +1,4 @@
-import { assert, assertEquals } from 'std-latest/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from '$std/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { trueHash } from '../../src/constants.ts';
@@ -21,13 +21,13 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const incentiveBlock = ctx1.get(BlockBuilder).publish({
+    const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
         verifier: { contractHash: trueHash, params: EMPTY_ARR },
         amount: 10n,
         detail: EMPTY_ARR,
       }],
-    }, 0);
+    });
 
     await waitForVerifiedOutput(ctx1, incentiveBlock, trueHash, true);
   }),
@@ -44,9 +44,9 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const validBlock = ctx1.get(BlockBuilder).publish({
+    const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{ contractHash: trueHash, params: EMPTY_ARR }],
-    }, 0);
+    });
 
     assert(await ctx1.get(BlockService).waitForVerification(validBlock));
   }),

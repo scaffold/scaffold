@@ -1,6 +1,6 @@
 import { makeTest } from './util.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { assert, assertFalse } from 'std-latest/assert/mod.ts';
+import { assert, assertFalse } from '$std/assert/mod.ts';
 import { VerifiableRandomFunction } from '../src/VerifiableRandomFunction.ts';
 import { KeyService } from '../src/KeyService.ts';
 

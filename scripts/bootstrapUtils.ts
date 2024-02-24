@@ -1,4 +1,4 @@
-import { fs } from '../dev_deps.ts';
+import * as fs from '$std/fs/mod.ts';
 import { MaybePromise } from '../src/util/MaybePromise.ts';
 
 export const bootstrapFromGlobs = async (

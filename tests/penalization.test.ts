@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from 'std-latest/assert/mod.ts';
+import { assertEquals, assertStrictEquals } from '$std/assert/mod.ts';
 import { AccountContract } from '../src/contracts/AccountContract.ts';
 import { RootContract } from '../src/contracts/RootContract.ts';
 import { makeTest, provideInitialBalance } from '../tests/util.ts';
@@ -28,13 +28,13 @@ Deno.test(
 
     assertEquals(ctx1.get(BalanceService).getLiquidBalance(), 1000000n);
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       body: str2bin('bad'),
       satisfies: [{
         contractHash: rootHash,
         params: Hash.digest('good').toBytes(),
       }],
-    }, 0);
+    });
 
     ctx1.get(LitigationService).litigate(invalidBlock, [], 'VALID_CHALLENGE');
 

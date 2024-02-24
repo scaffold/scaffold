@@ -1,4 +1,4 @@
-import { log, secp } from '../deps.ts';
+import * as log from '$std/log/mod.ts';
 import { Context } from '../src/Context.ts';
 import { makeDefaultConfig } from '../src/Config.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';

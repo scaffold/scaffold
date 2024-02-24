@@ -59,6 +59,7 @@ import { GenerationService } from './GenerationService.ts';
 import { raceTruthy } from './util/MaybePromise.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { GenesisService } from './GenesisService.ts';
+import { ClockService } from './ClockService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -218,14 +219,14 @@ export class BlockService {
           this.linkIo(fact, block, outputIdx, inputIdx)
         );
       } else if (output.amount >= 0n) {
-        this.ctx.config.timeProvider.setTimeout(() => {
-          this.ctx.get(UnspentOutputManager).insert(output.verifier, {
-            block: fact,
-            outputIdx,
-            amount: output.amount,
-          });
-          this.ctx.get(GenerationService).ensureRunning(output.verifier);
-        }, 0);
+        // this.ctx.get(ClockService).setTimeout(() => {
+        this.ctx.get(UnspentOutputManager).insert(output.verifier, {
+          block: fact,
+          outputIdx,
+          amount: output.amount,
+        });
+        this.ctx.get(GenerationService).ensureRunning(output.verifier);
+        // }, 0);
       } else {
         // TODO: What to do in this case; we still need to make the output available if it's required
         // We should add it anyways, and make sure we filter for an appropriate amount when waiting
@@ -614,10 +615,11 @@ export class BlockService {
   }
 
   public updateCanonicalities(blocks: BlockFact[]) {
-    const cache = this.ctx.get(WeightService).makeCache();
+    this.ctx.get(WeightService).resetCache();
+
     for (const block of blocks) {
       const newCanonicality = this.ctx.get(WeightService)
-        .getCanonicality(block, cache);
+        .getCanonicality(block);
       if (newCanonicality !== block.canonicality) {
         if (block.canonicality < 0n && newCanonicality >= 0n) {
           this.markCanonical(block);
@@ -998,7 +1000,7 @@ export class BlockService {
       });
   }
 
-  public getBlocksByInput(input: BlockInput) {
+  public getBlocksByInput(input: { blockHash: Hash; outputIdx: number }) {
     return this.ctx
       .get(FactService)
       .hackyGetBlocksMatching((block) =>
@@ -1095,7 +1097,7 @@ export class BlockService {
   }
 
   public async waitForConsumption(
-    input: BlockInput,
+    input: { blockHash: Hash; outputIdx: number },
     cancelSignal = neverAbort,
   ) {
     while (true) {

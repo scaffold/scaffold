@@ -1,15 +1,14 @@
-import { assertEquals } from 'std-latest/assert/mod.ts';
+import { assertEquals, assertStrictEquals } from '$std/assert/mod.ts';
 import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
-import * as collatzMessages from '../ts/collatzMessages.ts';
-import { LocalGeneratorService } from '../src/LocalGeneratorService.ts';
-import * as moduleHashes from '../ts/moduleHashes.ts';
-import { collatzGenerator } from '../ts/collatz.generator.0.ts';
 import { FetchService } from '../src/FetchService.ts';
-import { Block } from '../src/messages.ts';
+import { collatzHash } from '../src/constants.ts';
+import { CollatzContract } from '../src/contracts/CollatzContract.ts';
+import * as collatzMessages from '../src/contracts/collatzMessages.ts';
 import { MockNetworkProvider } from '../plugins/MockNetworkProvider.ts';
 import { MockTimeProvider } from '../tests/MockTimeProvider.ts';
 import { AccountContract } from '../src/contracts/AccountContract.ts';
 import { DataContract } from '../src/contracts/DataContract.ts';
+import { error } from '../src/util/functional.ts';
 
 const timeProvider = new MockTimeProvider();
 const mockNetworkOptions = {
@@ -35,10 +34,7 @@ Deno.test(
     provideInitialBalance(ctx1, ctx2);
 
     // Only add the generator to one of the contexts
-    ctx1.get(LocalGeneratorService).addGenerator(
-      moduleHashes.collatz_wasm_hash,
-      collatzGenerator,
-    );
+    ctx1.config.contractProviders.push(new CollatzContract());
 
     connectCtxs([ctx1, ctx2], 'chain');
 
@@ -47,19 +43,18 @@ Deno.test(
       ctx2.config.timeProvider.setTimeout(resolve, 100)
     );
 
-    const block = await new Promise<Block>((resolve) =>
+    const body = await new Promise<Uint8Array | undefined>((resolve) =>
       ctx2.get(FetchService).fetch(
         {
-          contractHash: moduleHashes.collatz_wasm_hash,
+          contractHash: collatzHash,
           params: collatzMessages.Params.encode({ num: 1n }),
         },
-        {},
-        resolve,
+        { onBody: resolve },
       )
     );
 
-    const answer = collatzMessages.Answer.decode(block.body);
-    assertEquals(answer, { stopping_time: 0n, maximum: 1n });
+    const answer = collatzMessages.Answer.decode(body ?? error(`Empty body!`));
+    assertEquals(answer, { stoppingTime: 0n, maximum: 1n });
   }),
 );
 
@@ -79,10 +74,7 @@ Deno.test(
     provideInitialBalance(ctx1, ctx2);
 
     // Only add the generator to one of the contexts
-    ctx1.get(LocalGeneratorService).addGenerator(
-      moduleHashes.collatz_wasm_hash,
-      collatzGenerator,
-    );
+    ctx1.config.contractProviders.push(new CollatzContract());
 
     connectCtxs([ctx1, ctx2], 'chain');
 
@@ -91,18 +83,17 @@ Deno.test(
       ctx2.config.timeProvider.setTimeout(resolve, 100)
     );
 
-    const block = await new Promise<Block>((resolve) =>
+    const body = await new Promise<Uint8Array | undefined>((resolve) =>
       ctx2.get(FetchService).fetch(
         {
-          contractHash: moduleHashes.collatz_wasm_hash,
+          contractHash: collatzHash,
           params: collatzMessages.Params.encode({ num: 10n }),
         },
-        {},
-        resolve,
+        { onBody: resolve },
       )
     );
 
-    const answer = collatzMessages.Answer.decode(block.body);
-    assertEquals(answer, { stopping_time: 6n, maximum: 16n });
+    const answer = collatzMessages.Answer.decode(body ?? error(`Empty body!`));
+    assertEquals(answer, { stoppingTime: 6n, maximum: 16n });
   }),
 );

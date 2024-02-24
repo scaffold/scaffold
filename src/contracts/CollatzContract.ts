@@ -12,7 +12,7 @@ export class CollatzContract implements ContractProvider {
 
     let answer: collatzMessages.Answer;
     if (num === 1n) {
-      answer = { stopping_time: 0n, maximum: 1n };
+      answer = { stoppingTime: 0n, maximum: 1n };
     } else {
       const prev = collatzMessages.Answer.decode(
         await driver.fetch({
@@ -23,8 +23,7 @@ export class CollatzContract implements ContractProvider {
         }),
       );
       answer = {
-        stopping_time: prev.stopping_time + 1n +
-          (driver.emitCorrect() ? 0n : 1n),
+        stoppingTime: prev.stoppingTime + 1n + (driver.emitCorrect() ? 0n : 1n),
         maximum: num > prev.maximum ? num : prev.maximum,
       };
     }

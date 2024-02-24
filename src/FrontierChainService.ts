@@ -105,7 +105,7 @@ export class FrontierChainService {
       this.getAllParents(input)
     );
 
-    const cache = this.ctx.get(WeightService).makeCache();
+    // const cache = this.ctx.get(WeightService).makeCache();
     let res = this.ctx.get(FactService).hackyGetBlocksMatching()
       .filter((input) => {
         const chain = this.getFrontierChain(input);
@@ -113,8 +113,8 @@ export class FrontierChainService {
       })
       .sort((a, b) =>
         Number(
-          this.ctx.get(WeightService).getCanonicality(b, cache) -
-            this.ctx.get(WeightService).getCanonicality(a, cache),
+          this.ctx.get(WeightService).getCanonicality(b) -
+            this.ctx.get(WeightService).getCanonicality(a),
         )
       )[0];
 

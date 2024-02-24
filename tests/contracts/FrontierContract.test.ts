@@ -4,7 +4,7 @@ import {
   assertFalse,
   assertNotEquals,
   assertStrictEquals,
-} from 'std-latest/assert/mod.ts';
+} from '$std/assert/mod.ts';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { frontierHash } from '../../src/constants.ts';
@@ -55,16 +55,20 @@ Deno.test(
     const incentiveBlocks = Array.from(
       { length: frontierInputCount - 1 },
       () =>
-        ctx1.get(BlockBuilder).publish({
+        ctx1.get(BlockBuilder).publishSingleDraft({
           outputs: [{
             verifier: {
               contractHash: frontierHash,
               params: FrontierTreeParams.encode({ level: 0 }),
             },
             amount: 10n,
-            detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
+            detail: FrontierTreeDetail.encode({
+              treeWeights: [123n],
+              consumedInputsRoot: { branches: [] },
+              producedOutputsRoot: { branches: [] },
+            }),
           }],
-        }, 0),
+        }),
     );
 
     const genesisConsumer = await waitForVerifiedOutput(
@@ -98,14 +102,18 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const validBlock = ctx1.get(BlockBuilder).publish({
+    const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       frontierLevel: 4,
       satisfies: Array.from({ length: frontierInputCount }, () => ({
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
+        detail: FrontierTreeDetail.encode({
+          treeWeights: [123n],
+          consumedInputsRoot: { branches: [] },
+          producedOutputsRoot: { branches: [] },
+        }),
       })),
-    }, 0);
+    });
 
     assert(await ctx1.get(BlockService).waitForVerification(validBlock));
   }),
@@ -123,14 +131,18 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       frontierLevel: 4,
       satisfies: [{
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
+        detail: FrontierTreeDetail.encode({
+          treeWeights: [123n],
+          consumedInputsRoot: { branches: [] },
+          producedOutputsRoot: { branches: [] },
+        }),
       }],
-    }, 0);
+    });
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));
   }),
@@ -148,18 +160,26 @@ Deno.test(
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
-    const invalidBlock = ctx1.get(BlockBuilder).publish({
+    const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       frontierLevel: 5,
       satisfies: [{
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
+        detail: FrontierTreeDetail.encode({
+          treeWeights: [123n],
+          consumedInputsRoot: { branches: [] },
+          producedOutputsRoot: { branches: [] },
+        }),
       }, {
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({ tree_weight: 123n }),
+        detail: FrontierTreeDetail.encode({
+          treeWeights: [123n],
+          consumedInputsRoot: { branches: [] },
+          producedOutputsRoot: { branches: [] },
+        }),
       }],
-    }, 0);
+    });
 
     assertFalse(await ctx1.get(BlockService).waitForVerification(invalidBlock));
   }),
