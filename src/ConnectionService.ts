@@ -1,9 +1,9 @@
 import { Context } from './Context.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
-import { Node, NodeService } from './NodeService.ts';
+import { NodeService, Peer } from './NodeService.ts';
 import { assert, error } from './util/functional.ts';
 import { FactService } from './FactService.ts';
-import { FactBase, FactSource, FactType } from './FactMeta.ts';
+import { Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
 import { NetworkService } from './NetworkService.ts';
 import { SignalingService } from './SignalingService.ts';
 import { arrEquals } from './util/buffer.ts';
@@ -23,7 +23,7 @@ import { log } from '../deps.ts';
 // export type SELF_CONNECTION = typeof SELF_CONNECTION;
 
 export interface Connection {
-  node?: Node;
+  node?: Peer;
 
   protocolName: string;
 
@@ -46,6 +46,8 @@ export interface Connection {
   // Altruism decreases when we send (hopefully helpful) facts to the node
   // We publish to positively altruistic nodes
   altruism: number;
+
+  knownFacts: Set<Fact>;
 }
 
 export class ConnectionService {
@@ -98,6 +100,7 @@ export class ConnectionService {
       lastMsgTimestamp: Date.now(),
       ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       altruism: 0,
+      knownFacts: new Set(),
     };
 
     provider.onClose(shutdown);
@@ -108,7 +111,7 @@ export class ConnectionService {
         conn.lastMsgTimestamp = this.ctx.config.timeProvider.now();
 
         const fact = this.ctx.get(FactService)
-          .ingest(data, FactSource.Remote, conn.node);
+          .ingest(data, FactSource.Remote, conn);
         if (fact.type === FactType.Identification) {
           this.ctx.get(FactService).forget(fact);
 

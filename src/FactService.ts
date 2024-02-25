@@ -9,7 +9,7 @@ import {
   FactType,
 } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
-import { Node, NodeService } from './NodeService.ts';
+import { NodeService, Peer } from './NodeService.ts';
 import { Coder } from './messages.ts';
 import { secp } from './util/secp.ts';
 import { zstd } from '../deps.ts';
@@ -21,7 +21,7 @@ import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
 import { uniqueNamesGenerator } from '../deps.ts';
 import { SignalingService } from './SignalingService.ts';
-import { ConnectionService } from './ConnectionService.ts';
+import { Connection, ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
@@ -293,7 +293,7 @@ export class FactService {
     msg: MsgType,
     coder: Coder<MsgType>,
     type: Type,
-    publish?: boolean | Node | Node[],
+    publish?: boolean | Connection | Connection[],
     mutator?: (fact: Fact) => void,
   ) {
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
@@ -361,16 +361,16 @@ export class FactService {
   public ingest(
     data: Uint8Array,
     source: FactSource,
-    fromNode?: Node,
+    fromConn?: Connection,
     mutator?: (fact: Fact) => void,
   ) {
     const fact = this.create(data, source, mutator);
 
     // TODO: Send back "responses" here?
 
-    if (fromNode !== undefined && fromNode.isRemote) {
-      fromNode.knownFacts.add(fact);
-      fact.fromNodes.push(fromNode);
+    if (fromConn !== undefined) {
+      fromConn.knownFacts.add(fact);
+      fact.fromConnections.push(fromConn);
     }
 
     return fact;
@@ -396,31 +396,32 @@ export class FactService {
       return;
     }
 
-    this.ctx.get(NodeService).getAll()
-      .forEach((node) => this.sendTo(fact, node));
-  }
-
-  // TODO: RemoteNode
-  public sendTo(fact: Fact, nodes: Node | Node[]) {
-    if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
-      return;
-    }
-
-    for (const to of Array.isArray(nodes) ? nodes : [nodes]) {
-      if (
-        to.isRemote && !to.knownFacts.has(fact) && to.connections.size !== 0
-      ) {
-        to.knownFacts.add(fact);
-        fact.toNodes.push(to);
-        for (const conn of to.connections) {
-          conn.sendReliable(fact.data);
+    for (const node of this.ctx.get(NodeService).getAll()) {
+      if (node.isRemote) {
+        for (const conn of node.connections) {
+          this.sendTo(fact, conn);
         }
       }
     }
   }
 
+  // TODO: RemoteNode
+  public sendTo(fact: Fact, conns: Connection | Connection[]) {
+    if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
+      return;
+    }
+
+    for (const conn of Array.isArray(conns) ? conns : [conns]) {
+      if (!conn.knownFacts.has(fact)) {
+        conn.knownFacts.add(fact);
+        fact.toConnections.push(conn);
+        conn.sendReliable(fact.data);
+      }
+    }
+  }
+
   public replyTo(fact: Fact, reply: Fact) {
-    this.sendTo(reply, fact.fromNodes);
+    this.sendTo(reply, fact.fromConnections);
   }
 
   public verify(fact: Pick<Fact, 'signer'>, publicKey: Uint8Array) {
@@ -509,9 +510,9 @@ export class FactService {
         receivedAt: this.ctx.config.timeProvider.now(),
         source,
         signer: signed ? this.computePublicKey({ data, signature }) : undefined,
-        fromNodes: [],
+        fromConnections: [],
 
-        toNodes: [],
+        toConnections: [],
 
         collateralizations: mapPut(
           this.collateralByHash,

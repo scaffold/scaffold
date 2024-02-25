@@ -50,7 +50,7 @@ import { FrontierService2, NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
-import { Node } from './NodeService.ts';
+import { Peer } from './NodeService.ts';
 import { WeightService } from './WeightService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
@@ -60,6 +60,7 @@ import { raceTruthy } from './util/MaybePromise.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { GenesisService } from './GenesisService.ts';
 import { ClockService } from './ClockService.ts';
+import { ConnectionGateway } from './ConnectionGateway.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -630,6 +631,8 @@ export class BlockService {
         this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
       }
     }
+
+    this.ctx.get(ConnectionGateway).updateFrontier();
   }
 
   private markCanonical(block: BlockFact) {

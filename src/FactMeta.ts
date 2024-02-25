@@ -8,7 +8,7 @@ import {
   InfoRequest,
   NodeInfo,
 } from './messages.ts';
-import { Node } from './NodeService.ts';
+import { Connection } from './ConnectionService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
@@ -63,11 +63,11 @@ export interface FactBase {
   receivedAt: number;
   source: FactSource;
   signer?: Uint8Array;
-  fromNodes: Node[];
+  fromConnections: Connection[];
 
   // Publication properties
   publishAt?: number;
-  toNodes: Node[];
+  toConnections: Connection[];
 
   // Validity properties
   collateralizations: Collateralization[];

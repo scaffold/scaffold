@@ -69,7 +69,10 @@ export class SignalingService {
     const node = this.ctx.get(NodeService).get(fact.dstPublicKey);
     if (node !== undefined) {
       if (node.isRemote) {
-        this.ctx.get(FactService).sendTo(fact, node);
+        const conn = this.ctx.get(NodeService).pathTo(node);
+        if (conn !== undefined) {
+          this.ctx.get(FactService).sendTo(fact, conn);
+        }
       } else {
         const fromPublicKey = this.ctx.get(FactService).getPublicKey(fact);
         this.ingestSignal(fromPublicKey, fact);

@@ -3,14 +3,8 @@ import { BlockFact, FactSource } from './FactMeta.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { BASE_WORK, BlockService } from './BlockService.ts';
 import { bigintMax } from './util/bigint.ts';
-import { Hash } from './util/Hash.ts';
-import { getOrCreate } from './util/map.ts';
+import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import { ZERO_HASH } from './util/Hash.ts';
-import { error, todo } from './util/functional.ts';
-import { GenesisService } from './GenesisService.ts';
-import { FrontierChainService } from './FrontierChainService.ts';
-import { FrontierHelper } from './FrontierHelper.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -94,7 +88,7 @@ export class WeightService {
   }
 
   public getSelfWeight(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.selfWeight, fact, () => {
+    return mapPut(cache.selfWeight, fact, () => {
       if (fact.source === FactSource.Genesis) {
         return { min: BASE_WORK, max: BASE_WORK };
       }
@@ -194,7 +188,7 @@ export class WeightService {
   }
 
   public getSelfOffset(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.selfOffset, fact, () => {
+    return mapPut(cache.selfOffset, fact, () => {
       let minSiblingWeight = this.getSelfWeight(fact, cache).max;
 
       let minRecvTime = Infinity;
@@ -270,7 +264,7 @@ export class WeightService {
   }
 
   public getAncestorWeight(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.ancestorWeight, fact, () => {
+    return mapPut(cache.ancestorWeight, fact, () => {
       let minWeight = 0n;
 
       const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
@@ -286,7 +280,7 @@ export class WeightService {
   }
 
   public getAncestorOffset(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.ancestorOffset, fact, () => {
+    return mapPut(cache.ancestorOffset, fact, () => {
       let offset = 0n;
 
       const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
@@ -310,7 +304,7 @@ export class WeightService {
     fact: BlockFact,
     cache = this.getCache(),
   ): DescendantResult {
-    return getOrCreate(cache.descendant, fact, () => {
+    return mapPut(cache.descendant, fact, () => {
       // TODO: We might have to look at parent vote's canonicalities
 
       let selfWeight = this.getSelfWeight(fact, cache).min;
@@ -404,7 +398,7 @@ export class WeightService {
   }
 
   public getCanonicality(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.canonicality, fact, () => {
+    return mapPut(cache.canonicality, fact, () => {
       // return this.getSelfWeight(fact, cache).min +
       //   this.getDescendant(fact, cache).weight +
       //   this.getSelfOffset(fact, cache).min +
@@ -449,7 +443,7 @@ export class WeightService {
   }
 
   public getClaimCanonicality(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.claimCanonicality, fact, () => {
+    return mapPut(cache.claimCanonicality, fact, () => {
       let canonicality = 0n;
 
       for (const input of fact.inputs) {
@@ -479,7 +473,7 @@ export class WeightService {
   }
 
   private getTreeChildrenWeight(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.treeChildrenWeight, fact, () => {
+    return mapPut(cache.treeChildrenWeight, fact, () => {
       const storedWeight = fact.frontierDetail.treeWeights
         .reduce((acc, cur) => acc + cur, 0n);
       if (useTreeWeightForChildren) {
@@ -507,7 +501,7 @@ export class WeightService {
   }
 
   private getTreeChildrenOffset(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.treeChildrenOffset, fact, () => {
+    return mapPut(cache.treeChildrenOffset, fact, () => {
       let weight = 0n;
 
       for (const input of fact.inputs) {
@@ -540,7 +534,7 @@ export class WeightService {
    * - result[x] is the weight of blocks in the tree voting for fact.frontierVote.[...].frontierVote
    */
   public getVoterWeight(fact: BlockFact, cache = this.getCache()) {
-    return getOrCreate(cache.voterWeight, fact, () => {
+    return mapPut(cache.voterWeight, fact, () => {
       const desc = this.getDescendant(fact, cache);
 
       const res = [...fact.frontierDetail.treeWeights];

@@ -9,7 +9,7 @@ export const mapPut = <K, V>(
   key: K,
   creator: () => V,
   mutator?: (v: V) => V,
-) => {
+): V => {
   let val = map.get(key);
   if (val === undefined) {
     val = creator();

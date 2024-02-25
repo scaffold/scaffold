@@ -127,6 +127,8 @@ export interface Config {
 
   maxShutdownTimeMs: number;
 
+  baselineConnSendRate: number; // In units of bytes/ms/connection. Note that this is a baseline - recieving helpful blocks will increase this for that connection.
+
   resourceLimits: Record<Resource, number>;
 
   workScoreThreshold: number; // TODO: Units?
@@ -182,6 +184,7 @@ export const makeDefaultConfig = () =>
     allowSpecifiedFrontierOutputs: false,
     initialWorkerCount: 16,
     maxShutdownTimeMs: 10000,
+    baselineConnSendRate: 1e-3,
     resourceLimits: {
       webWorkerCount: 16,
       cpuUsage: navigator.hardwareConcurrency,
