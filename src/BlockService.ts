@@ -24,7 +24,7 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-import { NodeService } from './NodeService.ts';
+import { PeerManager } from './PeerManager.ts';
 import { QaDebugger } from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
@@ -50,7 +50,7 @@ import { FrontierService2, NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
-import { Peer } from './NodeService.ts';
+import { Peer } from './PeerManager.ts';
 import { WeightService } from './WeightService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';

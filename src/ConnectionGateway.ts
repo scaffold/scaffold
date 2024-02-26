@@ -4,7 +4,7 @@ import { GenesisService } from './GenesisService.ts';
 import { WeightService } from './WeightService.ts';
 import { Connection } from './ConnectionService.ts';
 import { BlockService } from './BlockService.ts';
-import { NodeService } from './NodeService.ts';
+import { PeerManager } from './PeerManager.ts';
 import { mapPut } from './util/map.ts';
 import { FactService } from './FactService.ts';
 
@@ -45,7 +45,7 @@ export class ConnectionGateway {
     }
   }
 
-  public publish(fact: Fact) {
+  public publish(fact: Fact, replaces?: Fact) {
     this.publishQueue.add(fact);
 
     for (const [conn, state] of this.states) {
@@ -160,9 +160,9 @@ export class ConnectionGateway {
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined && block.signer !== undefined) {
-          const node = this.ctx.get(NodeService).get(block.signer);
+          const node = this.ctx.get(PeerManager).get(block.signer);
           if (node !== undefined) {
-            if (this.ctx.get(NodeService).pathTo(node) === conn) {
+            if (this.ctx.get(PeerManager).pathTo(node) === conn) {
               value += Number(block.outputs[input.outputIdx].amount);
             }
           }

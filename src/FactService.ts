@@ -9,7 +9,7 @@ import {
   FactType,
 } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
-import { NodeService, Peer } from './NodeService.ts';
+import { Peer, PeerManager } from './PeerManager.ts';
 import { Coder } from './messages.ts';
 import { secp } from './util/secp.ts';
 import { zstd } from '../deps.ts';
@@ -113,11 +113,11 @@ export class FactService {
     this.factories[FactType.NodeInfo] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
-        : ctx.get(NodeService).createInfoFact(base);
+        : ctx.get(PeerManager).createInfoFact(base);
     this.factories[FactType.InfoRequest] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
-        : ctx.get(NodeService).createRequestFact(base);
+        : ctx.get(PeerManager).createRequestFact(base);
     this.factories[FactType.ConnectionSignal] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
@@ -386,7 +386,7 @@ export class FactService {
       this.ctx.maybeGet(BlockRecordSet)?.dispatchRemove(fact);
     }
     if (fact.signer !== undefined) {
-      this.ctx.get(NodeService).get(fact.signer)?.producedFacts.delete(fact);
+      this.ctx.get(PeerManager).get(fact.signer)?.producedFacts.delete(fact);
     }
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);
@@ -430,9 +430,9 @@ export class FactService {
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined && block.signer !== undefined) {
-          const node = this.ctx.get(NodeService).get(block.signer);
+          const node = this.ctx.get(PeerManager).get(block.signer);
           if (node !== undefined) {
-            const conn = this.ctx.get(NodeService).pathTo(node);
+            const conn = this.ctx.get(PeerManager).pathTo(node);
             if (conn !== undefined) {
               this.ctx.get(ConnectionGateway).notify(reply, conn);
             }
@@ -608,7 +608,7 @@ export class FactService {
     }
 
     if (res.signer !== undefined) {
-      this.ctx.get(NodeService).getOrCreate(res.signer).producedFacts.add(res);
+      this.ctx.get(PeerManager).getOrCreate(res.signer).producedFacts.add(res);
     }
 
     return res;

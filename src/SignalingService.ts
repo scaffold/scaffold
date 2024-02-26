@@ -3,7 +3,7 @@ import { Context } from './Context.ts';
 import { ConnectionSignal } from './messages.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { FactService } from './FactService.ts';
-import { NodeService } from './NodeService.ts';
+import { PeerManager } from './PeerManager.ts';
 import { ClockService } from './ClockService.ts';
 import { SignalingProvider } from './NetworkProvider.ts';
 import { NetworkService } from './NetworkService.ts';
@@ -66,10 +66,10 @@ export class SignalingService {
       { isSelfInitiator: signal.isInitiator === isSignedByMe },
     );
 
-    const node = this.ctx.get(NodeService).get(fact.dstPublicKey);
+    const node = this.ctx.get(PeerManager).get(fact.dstPublicKey);
     if (node !== undefined) {
       if (node.isRemote) {
-        const conn = this.ctx.get(NodeService).pathTo(node);
+        const conn = this.ctx.get(PeerManager).pathTo(node);
         if (conn !== undefined) {
           this.ctx.get(FactService).sendTo(fact, conn);
         }

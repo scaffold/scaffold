@@ -20,7 +20,7 @@ import {
   CollateralContractParams,
   DataContractParams,
 } from '../src/messages.ts';
-import { NodeService } from '../src/NodeService.ts';
+import { PeerManager } from '../src/PeerManager.ts';
 import { KeyService } from '../src/KeyService.ts';
 import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
 import { mapOne } from '../src/util/functional.ts';

@@ -1,6 +1,6 @@
 import { secp } from './util/secp.ts';
 import { Context } from './Context.ts';
-import { NodeService } from './NodeService.ts';
+import { PeerManager } from './PeerManager.ts';
 import { KeyService } from './KeyService.ts';
 import { NodeInfo } from './messages.ts';
 import { FactService } from './FactService.ts';
@@ -26,7 +26,7 @@ export class InfoService {
   }
 
   public makeInfo(): NodeInfo {
-    const neighbors = this.ctx.get(NodeService).getNeighbors();
+    const neighbors = this.ctx.get(PeerManager).getNeighbors();
 
     return {
       timestamp: BigInt(this.ctx.config.timeProvider.now()),

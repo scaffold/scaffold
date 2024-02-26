@@ -1,6 +1,6 @@
 import { Context } from './Context.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
-import { NodeService, Peer } from './NodeService.ts';
+import { Peer, PeerManager } from './PeerManager.ts';
 import { assert, error } from './util/functional.ts';
 import { FactService } from './FactService.ts';
 import { Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
@@ -133,7 +133,7 @@ export class ConnectionService {
             throw new Error(`Incorrect remote identification!`);
           }
 
-          conn.node = this.ctx.get(NodeService).getOrCreate(publicKey);
+          conn.node = this.ctx.get(PeerManager).getOrCreate(publicKey);
           if (!conn.node.isRemote) {
             throw new Error(`Internal error!`);
           }

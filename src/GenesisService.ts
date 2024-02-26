@@ -10,7 +10,7 @@ import { BlockService } from './BlockService.ts';
 import { bin2hex } from './util/hex.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
-import { NodeService } from './NodeService.ts';
+import { PeerManager } from './PeerManager.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import { log } from '../deps.ts';
 import { EMPTY_ARR } from './util/buffer.ts';

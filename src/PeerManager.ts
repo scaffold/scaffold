@@ -27,7 +27,7 @@ const infoExpirationMs = 10 * emitInfoIntervalMs;
 
 // TODO: Convert these to arrays so we can sample from them more easily
 
-interface NodeCommon {
+interface PeerCommon {
   publicKey: Uint8Array;
 
   infoFact?: NodeInfoFact;
@@ -46,7 +46,7 @@ interface NodeCommon {
   producedFacts: Set<Fact>;
 }
 
-export interface RemoteNode extends NodeCommon {
+export interface RemotePeer extends PeerCommon {
   isRemote: true;
 
   // The set of currently connected connections
@@ -58,25 +58,26 @@ export interface RemoteNode extends NodeCommon {
   // Only connect to peers where trust is greater than 0
   trust: number;
 
+  // TODO: Remove this (it should only be on a Connection)
   // Altruism increases when we recieve helpful facts from the node
   // Altruism decreases when we send (hopefully helpful) facts to the node
   // We publish to positively altruistic nodes
   altruism: number;
 }
 
-export interface SelfNode extends NodeCommon {
+export interface SelfPeer extends PeerCommon {
   isRemote: false;
 }
 
 // TODO: Rename to Peer
-export type Peer = SelfNode | RemoteNode;
+export type Peer = SelfPeer | RemotePeer;
 
-export class NodeService {
-  private selfNode: SelfNode;
-  private nodes: Map<HashPrimitive, Peer> = new Map();
+export class PeerManager {
+  private selfPeer: SelfPeer;
+  private peers: Map<HashPrimitive, Peer> = new Map();
 
   constructor(private ctx: Context) {
-    this.selfNode = {
+    this.selfPeer = {
       publicKey: ctx.get(KeyService).getSelfPublicKey(),
       isRemote: false,
       infoRequests: new Set(),
@@ -84,9 +85,9 @@ export class NodeService {
       hops: 0,
       producedFacts: new Set(),
     };
-    this.nodes.set(
+    this.peers.set(
       Hash.digest(ctx.get(KeyService).getSelfPublicKey()).toPrimitive(),
-      this.selfNode,
+      this.selfPeer,
     );
 
     ctx.get(ClockService).setPoissonInterval(
@@ -101,19 +102,19 @@ export class NodeService {
     );
   }
 
-  public getSelfNode() {
-    return this.selfNode;
+  public getSelfPeer() {
+    return this.selfPeer;
   }
 
   public get(publicKey: Uint8Array): Peer | undefined {
-    return this.nodes.get(Hash.digest(publicKey).toPrimitive());
+    return this.peers.get(Hash.digest(publicKey).toPrimitive());
   }
 
   public getOrCreate(publicKey: Uint8Array): Peer {
     const hash = Hash.digest(publicKey);
-    let node = this.nodes.get(hash.toPrimitive());
-    if (node === undefined) {
-      node = {
+    let peer = this.peers.get(hash.toPrimitive());
+    if (peer === undefined) {
+      peer = {
         publicKey,
         isRemote: true,
         infoRequests: new Set(),
@@ -124,7 +125,7 @@ export class NodeService {
         trust: 0,
         altruism: 0,
       };
-      this.nodes.set(hash.toPrimitive(), node);
+      this.peers.set(hash.toPrimitive(), peer);
 
       this.ctx.get(ClockService).setTimeout(
         () =>
@@ -137,15 +138,15 @@ export class NodeService {
         0,
       );
     }
-    return node;
+    return peer;
   }
 
   public getAll() {
-    return [...this.nodes.values()];
+    return [...this.peers.values()];
   }
 
   public getNeighbors() {
-    return [...this.nodes.values()].flatMap((x) =>
+    return [...this.peers.values()].flatMap((x) =>
       x.infoFact !== undefined && this.isInfoValid(x.infoFact)
         ? [x.publicKey]
         : []
@@ -165,14 +166,14 @@ export class NodeService {
   //   }
   // }
 
-  public connectTo(node: RemoteNode) {
-    if (node.connections.size !== 0) {
+  public connectTo(peer: RemotePeer) {
+    if (peer.connections.size !== 0) {
       return;
     }
 
-    if (node.infoFact === undefined || !this.isInfoValid(node.infoFact)) {
+    if (peer.infoFact === undefined || !this.isInfoValid(peer.infoFact)) {
       this.ctx.get(FactService).emit(
-        { path: [node.publicKey] },
+        { path: [peer.publicKey] },
         InfoRequest,
         FactType.InfoRequest,
         true,
@@ -180,7 +181,7 @@ export class NodeService {
       return;
     }
 
-    const protocol = node.infoFact.protocols
+    const protocol = peer.infoFact.protocols
       .map((x) => this.ctx.get(NetworkService).parseProtocol(x))
       .filter((x) => this.ctx.get(NetworkService).findProviderMatching(x))[0];
     if (protocol === undefined) {
@@ -188,12 +189,12 @@ export class NodeService {
     }
 
     if (
-      this.ctx.get(SignalingService).isConnecting(node.publicKey, protocol.name)
+      this.ctx.get(SignalingService).isConnecting(peer.publicKey, protocol.name)
     ) {
       return;
     }
 
-    this.ctx.get(SignalingService).ingestSignal(node.publicKey, {
+    this.ctx.get(SignalingService).ingestSignal(peer.publicKey, {
       protocolName: protocol.name,
       signalIdx: -1,
       signalData: '',
@@ -219,8 +220,8 @@ export class NodeService {
     return best;
   }
 
-  private findBridgeTo(node: Peer) {
-    const bridges = [...node.neighbors].filter((x) =>
+  private findBridgeTo(peer: Peer) {
+    const bridges = [...peer.neighbors].filter((x) =>
       x.isRemote && x.connections.size !== 0
     );
     if (bridges.length === 0) {
@@ -265,35 +266,35 @@ export class NodeService {
     }
 
     const publicKey = this.ctx.get(FactService).getPublicKey(base);
-    const node = this.getOrCreate(publicKey);
-    node.infoFact = fact;
+    const peer = this.getOrCreate(publicKey);
+    peer.infoFact = fact;
 
-    for (const request of node.infoRequests) {
+    for (const request of peer.infoRequests) {
       this.ctx.get(FactService).sendTo(fact, request.fromConnections);
     }
-    node.infoRequests.clear();
+    peer.infoRequests.clear();
 
-    node.neighbors.clear();
-    node.hops = Infinity;
+    peer.neighbors.clear();
+    peer.hops = Infinity;
     for (const neighbor of fact.neighbors) {
       const neighborNode = this.getOrCreate(neighbor);
 
-      neighborNode.neighbors.add(node);
-      node.neighbors.add(neighborNode);
+      neighborNode.neighbors.add(peer);
+      peer.neighbors.add(neighborNode);
 
-      node.hops = Math.min(node.hops, neighborNode.hops + 1);
+      peer.hops = Math.min(peer.hops, neighborNode.hops + 1);
 
       if (neighborNode.isRemote) {
         this.connectTo(neighborNode);
       }
     }
 
-    for (const neighborNode of node.neighbors) {
-      neighborNode.hops = Math.min(neighborNode.hops, node.hops + 1);
+    for (const neighborNode of peer.neighbors) {
+      neighborNode.hops = Math.min(neighborNode.hops, peer.hops + 1);
     }
 
-    if (node.isRemote) {
-      this.connectTo(node);
+    if (peer.isRemote) {
+      this.connectTo(peer);
     }
 
     return fact;
@@ -310,24 +311,24 @@ export class NodeService {
       () => {
         this.ctx.get(FactService).forget(fact);
 
-        let node: Peer | undefined;
+        let peer: Peer | undefined;
         if (fact.path.length === 0) {
-          node = this.selfNode;
+          peer = this.selfPeer;
         } else if (fact.path.length === 1) {
-          node = this.get(fact.path[0]);
+          peer = this.get(fact.path[0]);
         } else {
           // TODO: Handle this case
           todo();
         }
 
-        if (node !== undefined) {
-          if (node.infoFact !== undefined && this.isInfoValid(node.infoFact)) {
+        if (peer !== undefined) {
+          if (peer.infoFact !== undefined && this.isInfoValid(peer.infoFact)) {
             this.ctx.get(FactService).sendTo(
-              node.infoFact,
+              peer.infoFact,
               fact.fromConnections,
             );
           } else {
-            node.infoRequests.add(fact);
+            peer.infoRequests.add(fact);
           }
         }
       },

@@ -14,7 +14,7 @@ import { KeyService } from '../src/KeyService.ts';
 import { createGenesisBlock, GenesisService } from '../src/GenesisService.ts';
 import { FactService } from '../src/FactService.ts';
 import { BlockFact, FactSource } from '../src/FactMeta.ts';
-import { NodeService } from '../src/NodeService.ts';
+import { PeerManager } from '../src/PeerManager.ts';
 import { NotUndefined } from '../src/util/functional.ts';
 import { InputSpec } from '../src/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
