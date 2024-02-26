@@ -12,6 +12,7 @@ import { Identification } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
 import { BarrierException } from './exceptions.ts';
 import { log } from '../deps.ts';
+import { ConnectionGateway } from './ConnectionGateway.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -159,6 +160,8 @@ export class ConnectionService {
     if (requirePublicKey !== undefined) {
       this.sendIdentification(conn, requirePublicKey);
     }
+
+    this.ctx.get(ConnectionGateway).getState(conn);
   }
 
   public createIdentificationFact(base: FactBase) {

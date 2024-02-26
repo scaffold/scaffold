@@ -184,7 +184,7 @@ export const makeDefaultConfig = () =>
     allowSpecifiedFrontierOutputs: false,
     initialWorkerCount: 16,
     maxShutdownTimeMs: 10000,
-    baselineConnSendRate: 1e-3,
+    baselineConnSendRate: 10, // 1 = 1kb / second
     resourceLimits: {
       webWorkerCount: 16,
       cpuUsage: navigator.hardwareConcurrency,

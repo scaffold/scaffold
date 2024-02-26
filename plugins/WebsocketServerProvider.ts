@@ -1,4 +1,4 @@
-import { http } from '../dev_deps.ts';
+import * as http from 'https://deno.land/std@0.217.0/http/mod.ts';
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 
 export class WebsocketServerProvider implements NetworkProvider {

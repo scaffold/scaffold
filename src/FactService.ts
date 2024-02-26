@@ -28,6 +28,7 @@ import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { BarrierException } from './exceptions.ts';
 import { DataService } from './DataService.ts';
+import { ConnectionGateway } from './ConnectionGateway.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -396,13 +397,15 @@ export class FactService {
       return;
     }
 
-    for (const node of this.ctx.get(NodeService).getAll()) {
-      if (node.isRemote) {
-        for (const conn of node.connections) {
-          this.sendTo(fact, conn);
-        }
-      }
-    }
+    // for (const node of this.ctx.get(NodeService).getAll()) {
+    //   if (node.isRemote) {
+    //     for (const conn of node.connections) {
+    //       this.sendTo(fact, conn);
+    //     }
+    //   }
+    // }
+
+    this.ctx.get(ConnectionGateway).publish(fact);
   }
 
   // TODO: RemoteNode
@@ -421,7 +424,22 @@ export class FactService {
   }
 
   public replyTo(fact: Fact, reply: Fact) {
-    this.sendTo(reply, fact.fromConnections);
+    // this.sendTo(reply, fact.fromConnections);
+
+    if (fact.type === FactType.Block) {
+      for (const input of fact.inputs) {
+        const block = this.ctx.get(BlockService).get(input.blockHash, false);
+        if (block !== undefined && block.signer !== undefined) {
+          const node = this.ctx.get(NodeService).get(block.signer);
+          if (node !== undefined) {
+            const conn = this.ctx.get(NodeService).pathTo(node);
+            if (conn !== undefined) {
+              this.ctx.get(ConnectionGateway).notify(reply, conn);
+            }
+          }
+        }
+      }
+    }
   }
 
   public verify(fact: Pick<Fact, 'signer'>, publicKey: Uint8Array) {

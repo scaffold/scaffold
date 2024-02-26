@@ -11,14 +11,16 @@ import { FactService } from './FactService.ts';
 const PACKET_OVERHEAD_BYTES = 256;
 
 interface State {
-  lastTimestamp: number;
-  allowedBytes: number;
+  nextSend: number;
   queue: Set<Fact>;
-  timeout?: number;
+
+  timeoutAt?: number;
+  timeoutHdl?: number;
 }
 
 export class ConnectionGateway {
-  private frontier = new Set<BlockFact>();
+  private frontier = new Set<Fact>();
+  private publishQueue = new Set<Fact>();
 
   private states = new Map<Connection, State>();
 
@@ -37,52 +39,107 @@ export class ConnectionGateway {
     }
 
     this.frontier = frontier;
+
+    for (const [conn, state] of this.states) {
+      this.enqueueSend(conn, state);
+    }
+  }
+
+  public publish(fact: Fact) {
+    this.publishQueue.add(fact);
+
+    for (const [conn, state] of this.states) {
+      this.enqueueSend(conn, state);
+    }
   }
 
   // This should be called whenever the score returned by these arguments would increase
   public notify(fact: Fact, conn: Connection) {
-    const state = mapPut(
+    if (conn.knownFacts.has(fact)) {
+      return;
+    }
+
+    const state = this.getState(conn);
+    state.queue.add(fact);
+
+    this.enqueueSend(conn, state);
+  }
+
+  public getState(conn: Connection) {
+    return mapPut(
       this.states,
       conn,
       (): State => ({
-        lastTimestamp: this.ctx.config.timeProvider.now(),
-        allowedBytes: 0,
+        nextSend: this.ctx.config.timeProvider.now(),
         queue: new Set(),
       }),
     );
-    state.queue.add(fact);
-
-    this.wait(conn, state);
   }
 
-  private wait(conn: Connection, state: State) {
+  private enqueueSend(conn: Connection, state: State) {
     let bestFact: Fact | undefined;
     let bestScore = -Infinity;
+
+    for (const fact of this.frontier) {
+      if (!conn.knownFacts.has(fact)) {
+        const score = this.score(fact, conn);
+        if (score > bestScore) {
+          bestFact = fact;
+          bestScore = score;
+        }
+      }
+    }
+
+    for (const fact of this.publishQueue) {
+      if (!conn.knownFacts.has(fact)) {
+        const score = this.score(fact, conn);
+        if (score > bestScore) {
+          bestFact = fact;
+          bestScore = score;
+        }
+      }
+    }
+
     for (const fact of state.queue) {
       const score = this.score(fact, conn);
-      if (score > bestScore) {
+      if (score <= 0) {
+        state.queue.delete(fact);
+      } else if (score > bestScore) {
         bestFact = fact;
         bestScore = score;
       }
     }
 
     if (bestFact !== undefined) {
-      const timeDelta = this.ctx.config.timeProvider.now() -
-        state.lastTimestamp;
-      const delay = timeDelta * this.ctx.config.baselineConnSendRate -
-        state.allowedBytes;
+      const sendAt =
+        bestFact.data.byteLength / this.ctx.config.baselineConnSendRate +
+        state.nextSend;
+      const now = this.ctx.config.timeProvider.now();
+      const delay = sendAt - now;
 
-      if (delay > 0) {
-        this.ctx.config.timeProvider.setTimeout(
-          () => this.wait(conn, state),
-          delay,
-        );
+      if (delay > 10) {
+        if (sendAt !== state.timeoutAt) {
+          if (state.timeoutHdl !== undefined) {
+            this.ctx.config.timeProvider.clearTimeout(state.timeoutHdl);
+          }
+
+          state.timeoutAt = sendAt;
+          state.timeoutHdl = this.ctx.config.timeProvider.setTimeout(() => {
+            state.timeoutAt = undefined;
+            state.timeoutHdl = undefined;
+            this.enqueueSend(conn, state);
+          }, delay);
+        }
       } else {
-        state.lastTimestamp += timeDelta;
-        state.allowedBytes += timeDelta * this.ctx.config.baselineConnSendRate -
-          bestFact.data.byteLength;
+        state.nextSend += bestFact.data.byteLength /
+          this.ctx.config.baselineConnSendRate;
+        if (state.nextSend < now - 60000) {
+          state.nextSend = now - 60000;
+        }
         this.ctx.get(FactService).sendTo(bestFact, conn);
         state.queue.delete(bestFact);
+
+        this.enqueueSend(conn, state);
       }
     }
   }
@@ -91,6 +148,11 @@ export class ConnectionGateway {
     let value = 0;
 
     if (fact.type === FactType.Block) {
+      if (this.ctx.get(FactService).isSignedByMe(fact)) {
+        value += 256 * Math.pow(0.5, fact.toConnections.length) *
+          Number(this.ctx.get(WeightService).getSelfWeight(fact).min);
+      }
+
       if (this.frontier.has(fact)) {
         value += Number(fact.outputs[fact.frontierOutputIdx].amount);
       }
