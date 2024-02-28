@@ -244,6 +244,7 @@ export class WorkerDriverService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Finished!`,
         });
+        this.ctx.maybeGet(WorkerRecordSet)?.dispatchUpdate(driver);
         done.abort();
         this.allocated.webWorkerCount -= allocation.webWorkerCount;
         this.resume();
@@ -253,6 +254,7 @@ export class WorkerDriverService {
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Failed!`,
         });
+        this.ctx.maybeGet(WorkerRecordSet)?.dispatchUpdate(driver);
         if (err === WORKER_FAIL_FLAG) {
           console.error(
             `WorkerDriverService.run launch failed! Not restarting...`,

@@ -144,6 +144,7 @@ export interface Config {
   enableBlockIngestion: boolean;
   enableValidation: boolean;
   enableWorkerLogging: boolean;
+  enableSignalingLogging: boolean;
 }
 
 export const defaultNetwork = 'main';
@@ -203,4 +204,5 @@ export const makeDefaultConfig = () =>
     enableBlockIngestion: true,
     enableValidation: true,
     enableWorkerLogging: true,
+    enableSignalingLogging: true,
   }) satisfies Partial<Config>;

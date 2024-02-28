@@ -201,13 +201,11 @@ export class PeerManager {
       this.ctx.get(NetworkService).findProvider(undefined, srcProtocol)!
         .providesProtocols[0];
 
-    this.ctx.get(SignalingService).ingestSignal(peer.publicKey, {
+    this.ctx.get(SignalingService).init(
+      peer.publicKey,
       srcProtocol,
       dstProtocol,
-      nonce: Hash.random().toHex(),
-      idx: -1,
-      signal: '',
-    });
+    );
   }
 
   public pathTo(peer: Peer) {

@@ -54,13 +54,15 @@ export class WebsocketServerProvider implements NetworkProvider {
       `ws://127.0.0.1:${port}`,
       fetch('https://api.ipify.org/?format=json').then((resp) => resp.json())
         .then(
-          (body) => body.ip ? `ws://${body.ip}:${port}` : undefined,
+          (body) => body.ip ? `ws://${body.ip}:${port}` : '',
           (err) => {
             console.error(`Could not lookup ip:`, err);
-            return undefined;
+            return '';
           },
         ),
-    ]).then((x) => x.flatMap((x) => x ? [x] : []));
+    ]).then((x) =>
+      x.filter((val, idx, arr) => val && arr.indexOf(val) === idx)
+    );
   }
 
   public createInstance(driver: SignalingDriver) {
