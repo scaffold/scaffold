@@ -1,118 +1,60 @@
 import { Context } from './Context.ts';
 import { NetworkProvider } from './NetworkProvider.ts';
-import { mapPut } from './util/map.ts';
 import { ConnectionService } from './ConnectionService.ts';
 
-const protocolRegex = /^(.+?)(?:\/(\w+))?$/;
-
-interface ParsedProtocol {
-  name: string;
-  subtype?: string;
-}
-
 export class NetworkService {
-  private providers = new Map<
-    string,
-    { provider: NetworkProvider; subtype?: string }[]
-  >();
-  private protocols: string[];
+  constructor(private ctx: Context) {}
 
-  constructor(private ctx: Context) {
-    const protoSet = new Set<string>();
-    for (const provider of ctx.config.networkProviders) {
-      const protocols = provider.protocols === undefined
-        ? []
-        : Array.isArray(provider.protocols)
-        ? provider.protocols
-        : [provider.protocols];
-      for (const protocol of protocols) {
-        const { name, subtype } = this.parseProtocol(protocol);
+  public findProvider(
+    providing: string | undefined,
+    connectingTo: string | undefined,
+  ) {
+    const candidates: NetworkProvider[] = [];
 
-        if (
-          subtype !== undefined && subtype !== 'client' && subtype !== 'server'
-        ) {
-          throw new Error(`Unhandled subtype ${subtype}!`);
-        }
-
-        mapPut(this.providers, name, () => []).push({ provider, subtype });
-
-        protoSet.add(protocol);
+    for (const provider of this.ctx.config.networkProviders) {
+      const matchesProviding = providing === undefined ||
+        provider.providesProtocols.includes(providing);
+      const matchesConnectingTo = connectingTo === undefined ||
+        (provider.connectsToProtocols ?? provider.providesProtocols)
+          .includes(connectingTo);
+      if (matchesProviding && matchesConnectingTo) {
+        candidates.push(provider);
       }
     }
-    this.protocols = Array.from(protoSet);
-  }
 
-  public parseProtocol(protocol: string): ParsedProtocol {
-    const match = protocolRegex.exec(protocol);
-    if (match === null) {
-      throw new Error(`Invalid protocol ${protocol}!`);
+    if (candidates.length !== 0) {
+      return candidates[
+        Math.floor(
+          this.ctx.config.entropyProvider.randomNumber() * candidates.length,
+        )
+      ];
     }
-    return { name: match[1], subtype: match[2] };
-  }
-
-  public findProviderMatching({ name, subtype }: ParsedProtocol) {
-    return this.providers.get(name)
-      ?.find((x) => this.areSubtypesCompatible(subtype, x.subtype))
-      ?.provider;
   }
 
   public getProtocolList() {
-    return this.protocols;
+    return this.ctx.config.networkProviders.flatMap((x) => x.providesProtocols);
   }
 
   public initConnection(
-    protocol: string | ParsedProtocol,
-    requirePublicKey?: Uint8Array,
+    protocol: string,
     sendSignal?: (signal: string) => void,
   ) {
-    const parsed = typeof protocol === 'string'
-      ? this.parseProtocol(protocol)
-      : protocol;
-    const provider = this.findProviderMatching(parsed);
+    const provider = this.findProvider(protocol, undefined);
     if (provider === undefined) {
-      throw new Error(`No provider matching ${parsed.name}/${parsed.subtype}`);
+      throw new Error(`No provider matching ${protocol}`);
     }
 
     return provider.createInstance({
       ctx: this.ctx,
 
-      protocolName: parsed.name,
-      isInitiator: true,
+      protocol,
+      useToken: false,
 
       sendSignal: sendSignal ?? (() => {
-        throw new Error(
-          `No signal sender provided for ${parsed.name}/${parsed.subtype}`,
-        );
+        throw new Error(`No signal sender provided for ${protocol}`);
       }),
       createConnection: (provider) =>
-        this.ctx.get(ConnectionService)
-          .createConnection(parsed.name, provider, requirePublicKey),
+        this.ctx.get(ConnectionService).createConnection(protocol, provider),
     });
   }
-
-  private areSubtypesCompatible(a?: string, b?: string) {
-    if (a === undefined || b === undefined) {
-      return true;
-    } else if (a === 'server' && b === 'client') {
-      return true;
-    } else if (a === 'client' && b === 'server') {
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  // public serve(onListen: (protocol: string, spec: string) => void) {
-  //   for (const provider of this.ctx.config.networkProviders) {
-  //     const protocol = provider.protocolName;
-  //     if (provider.createServer) {
-  //       provider.createServer(
-  //         (spec) => onListen(protocol, spec),
-  //         (provider) =>
-  //           this.ctx.get(ConnectionService).initConnection(protocol, provider),
-  //         this.ctx,
-  //       );
-  //     }
-  //   }
-  // }
 }

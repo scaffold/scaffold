@@ -7,6 +7,7 @@ import {
   Identification,
   InfoRequest,
   NodeInfo,
+  SignalPayload,
 } from './messages.ts';
 import { Connection } from './ConnectionService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
@@ -97,7 +98,6 @@ export interface InfoRequestFact extends FactBase, InfoRequest {
 }
 export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
   type: FactType.ConnectionSignal;
-  isSelfInitiator: boolean;
 }
 export interface BlockFact extends FactBase, Block, BlockMeta {
   type: FactType.Block;

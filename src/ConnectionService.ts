@@ -8,11 +8,12 @@ import { NetworkService } from './NetworkService.ts';
 import { SignalingService } from './SignalingService.ts';
 import { arrEquals } from './util/buffer.ts';
 import { KeyService } from './KeyService.ts';
-import { Identification } from './messages.ts';
+import { Identification, NodeInfo } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
 import { BarrierException } from './exceptions.ts';
 import { log } from '../deps.ts';
 import { ConnectionGateway } from './ConnectionGateway.ts';
+import { InfoService } from './InfoService.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -26,7 +27,7 @@ import { ConnectionGateway } from './ConnectionGateway.ts';
 export interface Connection {
   node?: Peer;
 
-  protocolName: string;
+  protocol: string;
 
   provider: ConnectionProvider;
   sendReliable(data: Uint8Array): void;
@@ -60,7 +61,7 @@ export class ConnectionService {
   constructor(private ctx: Context) {}
 
   public createConnection(
-    protocolName: string,
+    protocol: string,
     provider: ConnectionProvider,
     requirePublicKey?: Uint8Array,
   ) {
@@ -81,7 +82,7 @@ export class ConnectionService {
     };
 
     const conn: Connection = {
-      protocolName,
+      protocol,
       provider,
       sendReliable: (data: Uint8Array) => {
         try {
@@ -113,6 +114,8 @@ export class ConnectionService {
 
         const fact = this.ctx.get(FactService)
           .ingest(data, FactSource.Remote, conn);
+
+        // TODO: We don't have to do this extra authenetication, since we're already creating connections with authenticated peers
         if (fact.type === FactType.Identification) {
           this.ctx.get(FactService).forget(fact);
 
@@ -160,6 +163,13 @@ export class ConnectionService {
     if (requirePublicKey !== undefined) {
       this.sendIdentification(conn, requirePublicKey);
     }
+
+    this.ctx.get(FactService).emit(
+      this.ctx.get(InfoService).makeInfo(),
+      NodeInfo,
+      FactType.NodeInfo,
+      conn,
+    );
 
     this.ctx.get(ConnectionGateway).getState(conn);
   }

@@ -1,18 +1,33 @@
-import * as http from 'https://deno.land/std@0.217.0/http/mod.ts';
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
+import { mapPut } from '../src/util/map.ts';
+import { error } from '../src/util/functional.ts';
+import { Hash } from '../src/util/Hash.ts';
 
 export class WebsocketServerProvider implements NetworkProvider {
-  public protocols = 'websocket@0.0.1/server';
+  public providesProtocols = ['websocket@0.0.1/server'];
+  public connectsToProtocols = ['websocket@0.0.1/client'];
 
-  constructor(private port = 8314) {}
+  private origins: Promise<string[]>;
+  private drivers = new Map<string, SignalingDriver>();
 
-  public createInstance(driver: SignalingDriver) {
-    // Don't await here; I think serve only resolves once the server closes.
-    http.serve(
-      (req: Request) => {
+  constructor(port = 8314) {
+    const listenResolver = Promise.withResolvers<
+      { hostname: string; port: number }
+    >();
+    Deno.serve({
+      port,
+      onListen: listenResolver.resolve,
+      handler: (req) => {
         if (req.headers.get('upgrade') !== 'websocket') {
           return new Response(null, { status: 501 });
         }
+
+        const token = new URL(req.url).searchParams.get('token');
+        const driver = this.drivers.get(token || '');
+        if (driver === undefined) {
+          return new Response(null, { status: 401 });
+        }
+
         const { socket, response } = Deno.upgradeWebSocket(req);
         socket.binaryType = 'arraybuffer';
 
@@ -28,23 +43,41 @@ export class WebsocketServerProvider implements NetworkProvider {
             onClose: (handler: () => void) =>
               socket.addEventListener('close', () => handler()),
           }));
+        // socket.addEventListener('error', (e) => console.error(e));
 
         return response;
       },
-      { port: this.port },
+    });
+
+    this.origins = Promise.all([
+      listenResolver.promise.then((x) => `ws://${x.hostname}:${x.port}`),
+      `ws://127.0.0.1:${port}`,
+      fetch('https://api.ipify.org/?format=json').then((resp) => resp.json())
+        .then(
+          (body) => body.ip ? `ws://${body.ip}:${port}` : undefined,
+          (err) => {
+            console.error(`Could not lookup ip:`, err);
+            return undefined;
+          },
+        ),
+    ]).then((x) => x.flatMap((x) => x ? [x] : []));
+  }
+
+  public createInstance(driver: SignalingDriver) {
+    const token = driver.useToken ? Hash.random().toHex() : '';
+
+    mapPut(
+      this.drivers,
+      token,
+      () => driver,
+      () => error(`Cannot replace driver for token ${token}!`),
     );
 
-    [
-      '127.0.0.1',
-      fetch('https://api.ipify.org/?format=json').then((resp) => resp.json())
-        .then((body) => body.ip, (err) => {
-          console.error(`Could not lookup ip:`, err);
-        }),
-    ].forEach((host) =>
-      Promise.resolve(host).then((host) =>
-        host && driver.sendSignal(`ws://${host}:${this.port}`)
-      )
-    );
+    this.origins.then((origins) => {
+      for (const origin of origins) {
+        driver.sendSignal(token ? `${origin}/?token=${token}` : origin);
+      }
+    });
 
     return {
       recvSignal: () => {

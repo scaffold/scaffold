@@ -1,72 +1,72 @@
 import { ConnectionSignalFact, FactBase, FactType } from './FactMeta.ts';
 import { Context } from './Context.ts';
-import { ConnectionSignal } from './messages.ts';
+import { ConnectionSignal, SignalPayload } from './messages.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { FactService } from './FactService.ts';
 import { PeerManager } from './PeerManager.ts';
 import { ClockService } from './ClockService.ts';
-import { SignalingProvider } from './NetworkProvider.ts';
+import { SignalingDriver, SignalingProvider } from './NetworkProvider.ts';
 import { NetworkService } from './NetworkService.ts';
 import { mapPut } from './util/map.ts';
 import { assert } from './util/functional.ts';
 import { bin2hex } from './util/hex.ts';
+import { CryptoHelper } from './CryptoHelper.ts';
+import { ConnectionService } from './ConnectionService.ts';
+import { arrEquals } from './util/buffer.ts';
 
 const closeTimeoutMs = 30000;
 
 interface SignalingState {
   remotePublicKey: Uint8Array;
-  sentInitSignal: boolean;
-  outgoingSignalIdx: number;
-  incomingSignalIdx: number;
-  incomingSignalBuffer: (string | undefined)[];
-  signalingProvider: SignalingProvider;
-  closeTimeout?: number;
+  nextEmitIdx: number;
+  // sentInitSignal: boolean;
+  // outgoingSignalIdx: number;
+  // incomingSignalIdx: number;
+  // incomingSignalBuffer: (string | undefined)[];
+  // driver: SignalingDriver;
+  provider: SignalingProvider;
+  lastTouchTimestamp: number;
 }
 
-type IngestingSignal = Pick<
-  ConnectionSignalFact,
-  'protocolName' | 'signalIdx' | 'signalData' | 'isSelfInitiator'
->;
-
 export class SignalingService {
-  private states = new Map<HashPrimitive, SignalingState>();
+  private states = new Map<string, SignalingState>();
 
-  constructor(private ctx: Context) {
-    ctx.onDestruct(() => {
-      for (const [_key, state] of this.states) {
-        if (state.closeTimeout !== undefined) {
-          this.ctx.config.timeProvider.clearTimeout(state.closeTimeout);
-        }
+  constructor(private ctx: Context) {}
+
+  public isConnecting(publicKey: Uint8Array) {
+    for (const [_, state] of this.states) {
+      if (arrEquals(state.remotePublicKey, publicKey)) {
+        return true;
       }
-    });
+    }
+    return false;
   }
 
-  public isConnecting(publicKey: Uint8Array, protocolName: string) {
-    return this.states.has(
-      Hash.digestParts(publicKey, protocolName, 0).toPrimitive(),
-    ) || this.states.has(
-      Hash.digestParts(publicKey, protocolName, 1).toPrimitive(),
-    );
-  }
-
-  public emit(signal: ConnectionSignal): ConnectionSignalFact {
-    return this.ctx.get(FactService)
+  public async emit(
+    dstPublicKey: Uint8Array,
+    payload: SignalPayload,
+  ) {
+    const signal = {
+      dstPublicKey,
+      payload: await this.ctx.get(CryptoHelper).encrypt(
+        SignalPayload.encode(payload),
+        dstPublicKey,
+      ),
+    };
+    this.ctx.get(FactService)
       .emit(signal, ConnectionSignal, FactType.ConnectionSignal, true);
   }
 
   public createFact(base: FactBase): ConnectionSignalFact {
     const signal = ConnectionSignal.decode(base.message);
 
-    const isSignedByMe = this.ctx.get(FactService).isSignedByMe(base);
-
     const fact: ConnectionSignalFact = Object.assign(
       base,
       signal,
       { type: FactType.ConnectionSignal as const },
-      { isSelfInitiator: signal.isInitiator === isSignedByMe },
     );
 
-    const node = this.ctx.get(PeerManager).get(fact.dstPublicKey);
+    const node = this.ctx.get(PeerManager).get(signal.dstPublicKey);
     if (node !== undefined) {
       if (node.isRemote) {
         const conn = this.ctx.get(PeerManager).pathTo(node);
@@ -74,8 +74,12 @@ export class SignalingService {
           this.ctx.get(FactService).sendTo(fact, conn);
         }
       } else {
-        const fromPublicKey = this.ctx.get(FactService).getPublicKey(fact);
-        this.ingestSignal(fromPublicKey, fact);
+        const remotePublicKey = this.ctx.get(FactService).getPublicKey(fact);
+        this.ctx.get(CryptoHelper).decrypt(signal.payload, remotePublicKey)
+          .then((data) =>
+            this.ingestSignal(remotePublicKey, SignalPayload.decode(data))
+          )
+          .catch((err) => console.error(err));
       }
     }
 
@@ -87,96 +91,59 @@ export class SignalingService {
     return fact;
   }
 
-  public ingestSignal(publicKey: Uint8Array, signal: IngestingSignal) {
-    console.log(
-      `Ingested signal from ${bin2hex(publicKey)}:`,
-      signal.protocolName,
-      signal.signalIdx,
-      signal.signalData,
-    );
-    const state = this.getSignalingState(publicKey, signal);
-    if (signal.signalIdx >= 0) {
-      state.incomingSignalBuffer[signal.signalIdx] = signal.signalData;
-      while (true) {
-        const sig = state.incomingSignalBuffer[state.incomingSignalIdx];
-        if (sig === undefined) {
-          break;
-        }
-        state.signalingProvider.recvSignal(sig);
-        state.incomingSignalIdx++;
-      }
-    }
+  public ingestSignal(remotePublicKey: Uint8Array, payload: SignalPayload) {
+    console.log(`Ingested signal from ${bin2hex(remotePublicKey)}:`, payload);
 
-    if (
-      !state.sentInitSignal &&
-      state.outgoingSignalIdx === 0 &&
-      state.incomingSignalIdx === 0
-    ) {
-      state.sentInitSignal = true;
-      this.emit({
-        dstPublicKey: publicKey,
-        isInitiator: signal.isSelfInitiator,
-        protocolName: signal.protocolName,
-        signalIdx: -1,
-        signalData: '',
-      });
-    }
-  }
-
-  private getSignalingState(publicKey: Uint8Array, signal: IngestingSignal) {
-    const stateKey = Hash.digestParts(
-      publicKey,
-      signal.protocolName,
-      signal.isSelfInitiator ? 0 : 1,
-    );
     const state = mapPut(
       this.states,
-      stateKey.toPrimitive(),
-      () => this.initSignalingState(publicKey, signal),
-    );
-    if (state.closeTimeout !== undefined) {
-      this.ctx.config.timeProvider.clearTimeout(state.closeTimeout);
-    }
-    state.closeTimeout = this.ctx.config.timeProvider.setTimeout(
-      () => {
-        console.info(`Forgetting signaling state ${stateKey.toHex()}`);
-        assert(this.states.delete(stateKey.toPrimitive()));
+      payload.nonce,
+      () => this.initSignalingState(remotePublicKey, payload),
+      (state) => {
+        state.lastTouchTimestamp = this.ctx.config.timeProvider.now();
+        return state;
       },
-      closeTimeoutMs,
     );
-    return state;
+
+    if (payload.idx >= 0) {
+      state.provider.recvSignal(payload.signal, payload.idx);
+    }
   }
 
   private initSignalingState(
-    publicKey: Uint8Array,
-    signal: IngestingSignal,
+    remotePublicKey: Uint8Array,
+    payload: Pick<SignalPayload, 'srcProtocol' | 'dstProtocol' | 'nonce'>,
   ): SignalingState {
-    const state: Omit<SignalingState, 'signalingProvider'> = {
-      remotePublicKey: publicKey,
-      sentInitSignal: false,
-      outgoingSignalIdx: 0,
-      incomingSignalIdx: 0,
-      incomingSignalBuffer: [],
+    const state: Omit<SignalingState, 'provider'> = {
+      remotePublicKey,
+      nextEmitIdx: 0,
+      lastTouchTimestamp: this.ctx.config.timeProvider.now(),
     };
 
-    const sendSignal = (data: string) =>
-      this.emit({
-        dstPublicKey: publicKey,
-        isInitiator: signal.isSelfInitiator,
-        protocolName: signal.protocolName,
-        signalIdx: state.outgoingSignalIdx++,
-        signalData: data,
-      });
+    const networkProvider = this.ctx.get(NetworkService)
+      .findProvider(payload.dstProtocol, payload.srcProtocol);
+    if (networkProvider === undefined) {
+      throw new Error(`No provider connecting to ${payload.srcProtocol}`);
+    }
 
-    // If we don't have an initial signal from the peer, we need a provider able to send their address
-    const subtype = signal.signalIdx < 0 ? 'client' : undefined;
+    const provider = networkProvider.createInstance({
+      ctx: this.ctx,
 
-    const signalingProvider = this.ctx.get(NetworkService).initConnection(
-      { name: signal.protocolName, subtype },
-      publicKey,
-      sendSignal,
-    );
+      protocol: payload.dstProtocol,
+      useToken: true,
 
-    return Object.assign(state, { signalingProvider });
+      sendSignal: (signal) =>
+        this.emit(remotePublicKey, {
+          srcProtocol: payload.dstProtocol,
+          dstProtocol: payload.srcProtocol,
+          nonce: payload.nonce,
+          idx: state.nextEmitIdx++,
+          signal,
+        }).catch((err) => console.error(err)),
+      createConnection: (provider) =>
+        this.ctx.get(ConnectionService)
+          .createConnection(payload.dstProtocol, provider, remotePublicKey),
+    });
+
+    return Object.assign(state, { provider });
   }
 }

@@ -480,10 +480,18 @@ export const registry = {
     type: 'record',
     fields: [
       { name: 'dstPublicKey', type: 'bytes' },
-      { name: 'protocolName', type: 'string' },
-      { name: 'isInitiator', type: 'boolean' },
-      { name: 'signalIdx', type: 'int' },
-      { name: 'signalData', type: 'string' },
+      { name: 'payload', type: 'bytes' },
+    ],
+  },
+  SignalPayload: {
+    name: 'SignalPayload',
+    type: 'record',
+    fields: [
+      { name: 'srcProtocol', type: 'string' },
+      { name: 'dstProtocol', type: 'string' },
+      { name: 'nonce', type: 'string' },
+      { name: 'idx', type: 'int' },
+      { name: 'signal', type: 'string' },
     ],
   },
   PingMessage: {
@@ -987,6 +995,8 @@ export const InfoRequest = makeMsg(registry, 'InfoRequest');
 export type InfoRequest = MsgType<'InfoRequest'>;
 export const ConnectionSignal = makeMsg(registry, 'ConnectionSignal');
 export type ConnectionSignal = MsgType<'ConnectionSignal'>;
+export const SignalPayload = makeMsg(registry, 'SignalPayload');
+export type SignalPayload = MsgType<'SignalPayload'>;
 export const PingMessage = makeMsg(registry, 'PingMessage');
 export type PingMessage = MsgType<'PingMessage'>;
 export const PongMessage = makeMsg(registry, 'PongMessage');

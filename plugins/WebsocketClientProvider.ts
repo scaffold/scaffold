@@ -1,7 +1,8 @@
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 
 export class WebsocketClientProvider implements NetworkProvider {
-  public protocols = 'websocket@0.0.1/client';
+  public providesProtocols = ['websocket@0.0.1/client'];
+  public connectsToProtocols = ['websocket@0.0.1/server'];
 
   public createInstance(driver: SignalingDriver) {
     const sockets: WebSocket[] = [];

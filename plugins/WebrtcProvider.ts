@@ -1,8 +1,9 @@
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
+import { orderSignals } from './util.ts';
 
 export class WebrtcProvider implements NetworkProvider {
-  public protocols = 'webrtc@0.0.1';
+  public providesProtocols = ['webrtc@0.0.1'];
 
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 
@@ -123,7 +124,7 @@ export class WebrtcProvider implements NetworkProvider {
     })();
 
     return {
-      recvSignal: async (spec: string) => {
+      recvSignal: orderSignals(async (spec: string) => {
         console.log(JSON.parse(spec));
 
         const { orderHex, offer, answer, iceCandidate } = JSON.parse(spec);
@@ -152,7 +153,7 @@ export class WebrtcProvider implements NetworkProvider {
         if (iceCandidate) {
           conn.addIceCandidate(iceCandidate);
         }
-      },
+      }),
     };
   }
 }

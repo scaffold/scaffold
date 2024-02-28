@@ -41,19 +41,21 @@ interface NetworkProviderOld {
 export interface SignalingDriver {
   ctx: Context;
 
-  protocolName: string;
-  isInitiator: boolean;
+  protocol: string;
+  useToken: boolean;
 
   sendSignal(signal: string): void;
   createConnection(conn: ConnectionProvider): void;
 }
 
 export interface SignalingProvider {
-  recvSignal(signal: string): void;
+  recvSignal(signal: string, orderIdx: number): void;
+  dispose?(): void;
 }
 
 export interface NetworkProvider {
-  readonly protocols?: string | string[];
+  readonly providesProtocols: string[];
+  readonly connectsToProtocols?: string[];
 
   createInstance(driver: SignalingDriver): SignalingProvider;
 }

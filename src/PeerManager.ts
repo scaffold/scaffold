@@ -181,24 +181,32 @@ export class PeerManager {
       return;
     }
 
-    const protocol = peer.infoFact.protocols
-      .map((x) => this.ctx.get(NetworkService).parseProtocol(x))
-      .filter((x) => this.ctx.get(NetworkService).findProviderMatching(x))[0];
-    if (protocol === undefined) {
-      throw new Error(`No intersecting protocols!`);
-    }
-
-    if (
-      this.ctx.get(SignalingService).isConnecting(peer.publicKey, protocol.name)
-    ) {
+    if (this.ctx.get(SignalingService).isConnecting(peer.publicKey)) {
       return;
     }
 
+    const candidates = peer.infoFact.protocols
+      .filter((x) =>
+        this.ctx.get(NetworkService).findProvider(undefined, x) !== undefined
+      );
+    if (candidates.length === 0) {
+      throw new Error(`No intersecting protocols!`);
+    }
+    const srcProtocol = candidates[
+      Math.floor(
+        this.ctx.config.entropyProvider.randomNumber() * candidates.length,
+      )
+    ];
+    const dstProtocol =
+      this.ctx.get(NetworkService).findProvider(undefined, srcProtocol)!
+        .providesProtocols[0];
+
     this.ctx.get(SignalingService).ingestSignal(peer.publicKey, {
-      protocolName: protocol.name,
-      signalIdx: -1,
-      signalData: '',
-      isSelfInitiator: true,
+      srcProtocol,
+      dstProtocol,
+      nonce: Hash.random().toHex(),
+      idx: -1,
+      signal: '',
     });
   }
 
