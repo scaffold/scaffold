@@ -11,6 +11,7 @@ const ctx = new Context({
   ...makeDefaultConfig(),
 
   debugName: 'signaling server',
+  userdata: JSON.stringify({ name: 'signaling server' }),
 
   selfPrivateKey: hex2bin(
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',

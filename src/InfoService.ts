@@ -2,7 +2,7 @@ import { secp } from './util/secp.ts';
 import { Context } from './Context.ts';
 import { PeerManager } from './PeerManager.ts';
 import { KeyService } from './KeyService.ts';
-import { NodeInfo } from './messages.ts';
+import { PeerInfo } from './messages.ts';
 import { FactService } from './FactService.ts';
 import { FactType } from './FactMeta.ts';
 import { Hash, ZERO_HASH } from './util/Hash.ts';
@@ -25,7 +25,7 @@ export class InfoService {
     // this.tickItvl = setTimeout(() => this.tick(), 60000 * (Math.random() + 1));
   }
 
-  public makeInfo(): NodeInfo {
+  public makeInfo(): PeerInfo {
     const neighbors = this.ctx.get(PeerManager).getNeighbors();
 
     return {

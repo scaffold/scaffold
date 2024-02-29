@@ -444,26 +444,24 @@ export const registry = {
   },
 
   // TODO: Make a way for small updates (appending/dropping a neighbor, updating the bandwidth, updating userdata, etc.)
-  NodeInfo: {
-    name: 'NodeInfo',
+  // TODO: PeerBrief?
+  PeerInfo: {
+    name: 'PeerInfo',
     type: 'record',
     fields: [
       { name: 'timestamp', type: 'long' },
 
       { name: 'network', type: 'string' },
-
-      { name: 'name', type: 'string' },
-      { name: 'clientName', type: 'string' },
-      { name: 'protocolVersion', type: 'string' },
+      { name: 'version', type: 'int' },
       { name: 'userdata', type: 'string' },
-      { name: 'agePtr', type: 'hash' },
+
+      // { name: 'agePtr', type: 'hash' },
+      // { name: 'ageIdx', type: 'bigint' },
+
+      { name: 'bandwidth', type: 'int' }, // In bytes per second
 
       // TODO: Add persistent signals here?
       { name: 'protocols', type: { type: 'array', items: 'string' } },
-
-      { name: 'neighbors', type: { type: 'array', items: 'bytes' } },
-
-      { name: 'bandwidth', type: 'int' }, // In bytes per second
     ],
   },
   InfoRequest: {
@@ -655,35 +653,6 @@ export const registry = {
       // In general, goodness is additive, so 10 feedback messages of goodness -0.1 are comparable to a message of goodness -1.
       // Positive goodness can be used to signify positive feedback.
       { name: 'goodness', type: 'float' },
-    ],
-  },
-
-  // TODO: What if everything is just a block and we can get rid of packets?
-  // This would allow signatures to be closer to blocks.
-  Packet: {
-    name: 'Packet',
-    type: 'record',
-    fields: [
-      {
-        name: 'message',
-        type: [
-          'BidMessage',
-          'PublicationMessage',
-          'RequestBlockMessage',
-          'NodeInfo',
-          'PingMessage',
-          'PongMessage',
-          'BridgeStartMessage',
-          'BridgeEndMessage',
-          'SubscribeMessage',
-          'UnsubscribeMessage',
-          'PublishMessage',
-          'ForwardingFeedback',
-          'CollateralMessage',
-          'BribeMessage',
-          'DhtJoinMessage',
-        ],
-      },
     ],
   },
 
@@ -989,8 +958,8 @@ export const RequestBlockMessage = makeMsg(registry, 'RequestBlockMessage');
 export type RequestBlockMessage = MsgType<'RequestBlockMessage'>;
 export const Identification = makeMsg(registry, 'Identification');
 export type Identification = MsgType<'Identification'>;
-export const NodeInfo = makeMsg(registry, 'NodeInfo');
-export type NodeInfo = MsgType<'NodeInfo'>;
+export const PeerInfo = makeMsg(registry, 'PeerInfo');
+export type PeerInfo = MsgType<'PeerInfo'>;
 export const InfoRequest = makeMsg(registry, 'InfoRequest');
 export type InfoRequest = MsgType<'InfoRequest'>;
 export const ConnectionSignal = makeMsg(registry, 'ConnectionSignal');
@@ -1027,8 +996,6 @@ export const DhtJoinMessage = makeMsg(registry, 'DhtJoinMessage');
 export type DhtJoinMessage = MsgType<'DhtJoinMessage'>;
 export const FeedbackMessage = makeMsg(registry, 'FeedbackMessage');
 export type FeedbackMessage = MsgType<'FeedbackMessage'>;
-export const Packet = makeMsg(registry, 'Packet');
-export type Packet = MsgType<'Packet'>;
 export const AccountContractParams = makeMsg(registry, 'AccountContractParams');
 export type AccountContractParams = MsgType<'AccountContractParams'>;
 export const DataContractParams = makeMsg(registry, 'DataContractParams');

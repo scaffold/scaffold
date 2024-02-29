@@ -1,9 +1,7 @@
 import {
-  Block,
   EpochInclusionProof,
   FrontierTreeDetail,
   FrontierTreeParams,
-  Verifier,
 } from './messages.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
@@ -36,8 +34,6 @@ export interface OutputClaim {
 export const ZERO_BLOCK = Symbol('ZeroBlock');
 
 export interface BlockMeta {
-  original: Block; // TODO: Remove
-
   // verifiers: (Verifier | undefined)[];
 
   // selfWeightMin: bigint;

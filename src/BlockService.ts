@@ -50,7 +50,6 @@ import { FrontierService2, NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
-import { Peer } from './PeerManager.ts';
 import { WeightService } from './WeightService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
@@ -115,8 +114,6 @@ export class BlockService {
     const frontierVote = this.get(block.frontierVote, false);
 
     const meta: BlockMeta = {
-      original: block,
-
       // verifiers: block.bodies.map(() => undefined),
 
       canonicality: 0n,
@@ -967,6 +964,7 @@ export class BlockService {
     );
   }
 
+  // TODO: Rename to getBlock
   public get(hash: Hash, request = true): BlockFact | undefined {
     // TODO: Instead of calling this, call into FactService
     // TODO: Incentivize network as well

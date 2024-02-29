@@ -3,6 +3,8 @@ import { NetworkProvider } from './NetworkProvider.ts';
 import { ConnectionService } from './ConnectionService.ts';
 
 export class NetworkService {
+  private persistentConnections: { protocol: string; signals: string[] }[] = [];
+
   constructor(private ctx: Context) {}
 
   public findProvider(
@@ -56,5 +58,11 @@ export class NetworkService {
       createConnection: (provider) =>
         this.ctx.get(ConnectionService).createConnection(protocol, provider),
     });
+  }
+
+  public persistConnection(protocol: string, ...signals: string[]) {
+    this.persistentConnections.push({ protocol, signals });
+    const conn = this.initConnection(protocol);
+    signals.forEach((sig, idx) => conn.recvSignal(sig, idx));
   }
 }

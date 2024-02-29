@@ -9,7 +9,7 @@ import {
   FactType,
 } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
-import { Peer, PeerManager } from './PeerManager.ts';
+import { PeerManager } from './PeerManager.ts';
 import { Coder } from './messages.ts';
 import { secp } from './util/secp.ts';
 import { zstd } from '../deps.ts';
@@ -62,7 +62,7 @@ const SIGNATURE_RECOVERY_BIT = 64;
 
 const typeHasSignature: boolean[] = [];
 typeHasSignature[FactType.Identification] = true;
-typeHasSignature[FactType.NodeInfo] = true;
+typeHasSignature[FactType.PeerInfo] = true;
 typeHasSignature[FactType.InfoRequest] = false;
 typeHasSignature[FactType.ConnectionSignal] = true;
 typeHasSignature[FactType.Block] = true;
@@ -110,14 +110,14 @@ export class FactService {
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(ConnectionService).createIdentificationFact(base);
-    this.factories[FactType.NodeInfo] = (base, mutator) =>
+    this.factories[FactType.PeerInfo] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(PeerManager).createInfoFact(base);
-    this.factories[FactType.InfoRequest] = (base, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(PeerManager).createRequestFact(base);
+    // this.factories[FactType.InfoRequest] = (base, mutator) =>
+    //   mutator !== undefined
+    //     ? error(`Unexpected mutator`)
+    //     : ctx.get(PeerManager).createRequestFact(base);
     this.factories[FactType.ConnectionSignal] = (base, mutator) =>
       mutator !== undefined
         ? error(`Unexpected mutator`)
@@ -370,7 +370,7 @@ export class FactService {
     // TODO: Send back "responses" here?
 
     if (fromConn !== undefined) {
-      fromConn.knownFacts.add(fact);
+      fromConn.peer.knownFacts.add(fact);
       fact.fromConnections.push(fromConn);
     }
 
@@ -386,7 +386,9 @@ export class FactService {
       this.ctx.maybeGet(BlockRecordSet)?.dispatchRemove(fact);
     }
     if (fact.signer !== undefined) {
-      this.ctx.get(PeerManager).get(fact.signer)?.producedFacts.delete(fact);
+      this.ctx.get(PeerManager).getPeer(fact.signer)?.producedFacts.delete(
+        fact,
+      );
     }
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);
@@ -415,8 +417,8 @@ export class FactService {
     }
 
     for (const conn of Array.isArray(conns) ? conns : [conns]) {
-      if (!conn.knownFacts.has(fact)) {
-        conn.knownFacts.add(fact);
+      if (!conn.peer.knownFacts.has(fact)) {
+        conn.peer.knownFacts.add(fact);
         fact.toConnections.push(conn);
         conn.sendReliable(fact.data);
       }
@@ -430,7 +432,7 @@ export class FactService {
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined && block.signer !== undefined) {
-          const node = this.ctx.get(PeerManager).get(block.signer);
+          const node = this.ctx.get(PeerManager).getPeer(block.signer);
           if (node !== undefined) {
             const conn = this.ctx.get(PeerManager).pathTo(node);
             if (conn !== undefined) {
@@ -608,7 +610,7 @@ export class FactService {
     }
 
     if (res.signer !== undefined) {
-      this.ctx.get(PeerManager).getOrCreate(res.signer).producedFacts.add(res);
+      this.ctx.get(PeerManager).putPeer(res.signer).producedFacts.add(res);
     }
 
     return res;

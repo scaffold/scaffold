@@ -14,6 +14,7 @@ import { CryptoHelper } from './CryptoHelper.ts';
 import { ConnectionService } from './ConnectionService.ts';
 import { arrEquals } from './util/buffer.ts';
 import { SignalingRecordSet } from './record_sets/SignalingRecordSet.ts';
+import { KeyService } from './KeyService.ts';
 
 const closeTimeoutMs = 30000;
 
@@ -104,21 +105,26 @@ export class SignalingService {
       { type: FactType.ConnectionSignal as const },
     );
 
-    const node = this.ctx.get(PeerManager).get(signal.dstPublicKey);
-    if (node !== undefined) {
-      if (node.isRemote) {
+    if (
+      arrEquals(
+        signal.dstPublicKey,
+        this.ctx.get(KeyService).getSelfPublicKey(),
+      )
+    ) {
+      const remotePublicKey = this.ctx.get(FactService).getPublicKey(fact);
+      this.ctx.get(CryptoHelper).decrypt({
+        ciphertext: signal.payload,
+        remotePublicKey,
+      }).then((data) =>
+        this.ingestSignal(remotePublicKey, SignalPayload.decode(data))
+      ).catch((err) => console.error(err));
+    } else {
+      const node = this.ctx.get(PeerManager).getPeer(signal.dstPublicKey);
+      if (node !== undefined) {
         const conn = this.ctx.get(PeerManager).pathTo(node);
         if (conn !== undefined) {
           this.ctx.get(FactService).sendTo(fact, conn);
         }
-      } else {
-        const remotePublicKey = this.ctx.get(FactService).getPublicKey(fact);
-        this.ctx.get(CryptoHelper).decrypt({
-          ciphertext: signal.payload,
-          remotePublicKey,
-        }).then((data) =>
-          this.ingestSignal(remotePublicKey, SignalPayload.decode(data))
-        ).catch((err) => console.error(err));
       }
     }
 

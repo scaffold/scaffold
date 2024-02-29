@@ -55,7 +55,7 @@ export class ConnectionGateway {
 
   // This should be called whenever the score returned by these arguments would increase
   public notify(fact: Fact, conn: Connection) {
-    if (conn.knownFacts.has(fact)) {
+    if (conn.peer.knownFacts.has(fact)) {
       return;
     }
 
@@ -81,7 +81,7 @@ export class ConnectionGateway {
     let bestScore = -Infinity;
 
     for (const fact of this.frontier) {
-      if (!conn.knownFacts.has(fact)) {
+      if (!conn.peer.knownFacts.has(fact)) {
         const score = this.score(fact, conn);
         if (score > bestScore) {
           bestFact = fact;
@@ -91,7 +91,7 @@ export class ConnectionGateway {
     }
 
     for (const fact of this.publishQueue) {
-      if (!conn.knownFacts.has(fact)) {
+      if (!conn.peer.knownFacts.has(fact)) {
         const score = this.score(fact, conn);
         if (score > bestScore) {
           bestFact = fact;
@@ -160,7 +160,7 @@ export class ConnectionGateway {
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
         if (block !== undefined && block.signer !== undefined) {
-          const node = this.ctx.get(PeerManager).get(block.signer);
+          const node = this.ctx.get(PeerManager).getPeer(block.signer);
           if (node !== undefined) {
             if (this.ctx.get(PeerManager).pathTo(node) === conn) {
               value += Number(block.outputs[input.outputIdx].amount);

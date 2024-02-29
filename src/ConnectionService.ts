@@ -1,19 +1,17 @@
 import { Context } from './Context.ts';
 import { ConnectionProvider } from './NetworkProvider.ts';
-import { Peer, PeerManager } from './PeerManager.ts';
+import { AuthenticatedPeer, PeerManager } from './PeerManager.ts';
 import { assert, error } from './util/functional.ts';
 import { FactService } from './FactService.ts';
 import { Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
-import { NetworkService } from './NetworkService.ts';
-import { SignalingService } from './SignalingService.ts';
 import { arrEquals } from './util/buffer.ts';
 import { KeyService } from './KeyService.ts';
-import { Identification, NodeInfo } from './messages.ts';
+import { Identification, PeerInfo } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
 import { BarrierException } from './exceptions.ts';
 import { log } from '../deps.ts';
 import { ConnectionGateway } from './ConnectionGateway.ts';
-import { InfoService } from './InfoService.ts';
+import { RemotePeer } from './PeerManager.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -24,8 +22,12 @@ import { InfoService } from './InfoService.ts';
 // export const SELF_CONNECTION = Symbol('SELF_CONNECTION');
 // export type SELF_CONNECTION = typeof SELF_CONNECTION;
 
+export interface AnonymousPeer extends RemotePeer {
+  publicKey: undefined;
+}
+
 export interface Connection {
-  node?: Peer;
+  peer: AnonymousPeer | (RemotePeer & AuthenticatedPeer);
 
   protocol: string;
 
@@ -48,8 +50,6 @@ export interface Connection {
   // Altruism decreases when we send (hopefully helpful) facts to the node
   // We publish to positively altruistic nodes
   altruism: number;
-
-  knownFacts: Set<Fact>;
 }
 
 export class ConnectionService {
@@ -63,15 +63,25 @@ export class ConnectionService {
   public createConnection(
     protocol: string,
     provider: ConnectionProvider,
-    requirePublicKey?: Uint8Array,
+    remotePublicKey?: Uint8Array,
   ) {
+    const peer = remotePublicKey !== undefined
+      ? this.ctx.get(PeerManager).putPeer(remotePublicKey)
+      : this.createAnonymousPeer();
+    if (!peer.isRemote) {
+      throw new Error(`Cannot connect to self!`);
+    }
+
     let isOnline = true;
     const shutdown = () => {
       if (isOnline) {
         isOnline = false;
         provider.shutdown();
-        if (conn.node?.isRemote) {
-          assert(conn.node.connections.delete(conn));
+        assert(conn.peer.connections.delete(conn));
+
+        for (const fact of conn.peer.knownFacts) {
+          fact.fromConnections = fact.fromConnections.filter((x) => x !== conn);
+          fact.toConnections = fact.toConnections.filter((x) => x !== conn);
         }
       }
     };
@@ -82,28 +92,33 @@ export class ConnectionService {
     };
 
     const conn: Connection = {
+      peer,
       protocol,
       provider,
       sendReliable: (data: Uint8Array) => {
-        try {
-          provider.sendReliable(data);
-        } catch (err) {
-          onSendError(err);
+        if (isOnline) {
+          try {
+            provider.sendReliable(data);
+          } catch (err) {
+            onSendError(err);
+          }
         }
       },
       sendFast: (data: Uint8Array) => {
-        try {
-          provider.sendFast(data);
-        } catch (err) {
-          onSendError(err);
+        if (isOnline) {
+          try {
+            provider.sendFast(data);
+          } catch (err) {
+            onSendError(err);
+          }
         }
       },
       shutdown,
       lastMsgTimestamp: Date.now(),
       ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       altruism: 0,
-      knownFacts: new Set(),
     };
+    conn.peer.connections.add(conn);
 
     provider.onClose(shutdown);
     this.ctx.onDestruct(shutdown);
@@ -130,21 +145,15 @@ export class ConnectionService {
 
           const publicKey = this.ctx.get(FactService).getPublicKey(fact);
           if (
-            requirePublicKey !== undefined &&
-            !arrEquals(publicKey, requirePublicKey)
+            remotePublicKey !== undefined &&
+            !arrEquals(publicKey, remotePublicKey)
           ) {
             throw new Error(`Incorrect remote identification!`);
           }
 
-          conn.node = this.ctx.get(PeerManager).getOrCreate(publicKey);
-          if (!conn.node.isRemote) {
-            throw new Error(`Internal error!`);
-          }
-          conn.node.connections.add(conn);
-
           console.log(`Connected and authenticated with ${bin2hex(publicKey)}`);
 
-          if (requirePublicKey === undefined) {
+          if (remotePublicKey === undefined) {
             this.sendIdentification(conn, publicKey);
           }
         }
@@ -160,18 +169,18 @@ export class ConnectionService {
       }
     });
 
-    if (requirePublicKey !== undefined) {
-      this.sendIdentification(conn, requirePublicKey);
+    if (remotePublicKey !== undefined) {
+      this.sendIdentification(conn, remotePublicKey);
     }
 
+    this.ctx.get(ConnectionGateway).getState(conn);
+
     this.ctx.get(FactService).emit(
-      this.ctx.get(InfoService).makeInfo(),
-      NodeInfo,
-      FactType.NodeInfo,
+      this.ctx.get(PeerManager).makeInfo(),
+      PeerInfo,
+      FactType.PeerInfo,
       conn,
     );
-
-    this.ctx.get(ConnectionGateway).getState(conn);
   }
 
   public createIdentificationFact(base: FactBase) {
@@ -189,5 +198,16 @@ export class ConnectionService {
       FactType.Identification,
     );
     conn.sendReliable(identData);
+  }
+
+  private createAnonymousPeer(): AnonymousPeer {
+    return {
+      isRemote: true,
+      connections: new Set(),
+      knownFacts: new Set(),
+      trust: 0,
+      altruism: 0,
+      publicKey: undefined,
+    };
   }
 }

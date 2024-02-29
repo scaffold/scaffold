@@ -6,7 +6,7 @@ import {
   ConnectionSignal,
   Identification,
   InfoRequest,
-  NodeInfo,
+  PeerInfo,
   SignalPayload,
 } from './messages.ts';
 import { Connection } from './ConnectionService.ts';
@@ -19,7 +19,7 @@ import { DetailVote } from './CollateralUtil.ts';
 export enum FactType {
   Null = 0, // Reserved
   Identification,
-  NodeInfo,
+  PeerInfo,
   InfoRequest,
   ConnectionSignal,
   Block, // TODO: Rename to bundle or something
@@ -90,8 +90,8 @@ export interface FactBase {
 export interface IdentificationFact extends FactBase, Identification {
   type: FactType.Identification;
 }
-export interface NodeInfoFact extends FactBase, NodeInfo {
-  type: FactType.NodeInfo;
+export interface PeerInfoFact extends FactBase, PeerInfo {
+  type: FactType.PeerInfo;
 }
 export interface InfoRequestFact extends FactBase, InfoRequest {
   type: FactType.InfoRequest;
@@ -108,7 +108,7 @@ export interface InvalidFact extends FactBase {
 
 export type Fact =
   | IdentificationFact
-  | NodeInfoFact
+  | PeerInfoFact
   | InfoRequestFact
   | ConnectionSignalFact
   | BlockFact
