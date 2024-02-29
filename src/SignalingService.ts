@@ -23,6 +23,7 @@ export interface SignalingState {
   nextEmitIdx: number;
   ingestedIndices: bigint;
   lastIngestTimestamp: number;
+  closed: boolean;
 
   log?: { timestamp: number; message: string }[];
 }
@@ -67,6 +68,10 @@ export class SignalingService {
   }
 
   public emit(state: SignalingState, payload: SignalPayload) {
+    if (state.closed) {
+      return;
+    }
+
     state.log?.push({
       timestamp: this.ctx.config.timeProvider.now(),
       message: `Sending signal ${payload.idx}: ${payload.signal}...`,
@@ -124,14 +129,11 @@ export class SignalingService {
         const conn = this.ctx.get(PeerManager).pathTo(node);
         if (conn !== undefined) {
           this.ctx.get(FactService).sendTo(fact, conn);
+        } else {
+          console.error('NO PATH TO', bin2hex(node.publicKey));
         }
       }
     }
-
-    this.ctx.get(ClockService).setTimeout(
-      () => this.ctx.get(FactService).forget(fact),
-      0,
-    );
 
     return fact;
   }
@@ -166,11 +168,13 @@ export class SignalingService {
       this.instances,
       payload.nonce,
       () => this.initSignaling(remotePublicKey, payload),
-      (instance) => {
-        instance.lastIngestTimestamp = this.ctx.config.timeProvider.now();
-        return instance;
-      },
     );
+
+    if (instance.closed) {
+      return instance;
+    }
+
+    instance.lastIngestTimestamp = this.ctx.config.timeProvider.now();
 
     if (payload.idx >= 0) {
       const mask = 1n << BigInt(payload.idx);
@@ -199,6 +203,7 @@ export class SignalingService {
       nextEmitIdx: 0,
       ingestedIndices: 0n,
       lastIngestTimestamp: this.ctx.config.timeProvider.now(),
+      closed: false,
       log: this.ctx.config.enableSignalingLogging
         ? [{
           timestamp: this.ctx.config.timeProvider.now(),
@@ -231,6 +236,10 @@ export class SignalingService {
           signal,
         }),
       createConnection: (provider) => {
+        if (state.closed) {
+          return;
+        }
+
         state.log?.push({
           timestamp: this.ctx.config.timeProvider.now(),
           message: `Creating authenticated connection!`,
@@ -239,6 +248,16 @@ export class SignalingService {
 
         this.ctx.get(ConnectionService)
           .createConnection(payload.dstProtocol, provider, remotePublicKey);
+
+        // Close other instances with the same public key
+        for (const [_, instance] of this.instances) {
+          if (
+            instance !== state &&
+            arrEquals(instance.remotePublicKey, state.remotePublicKey)
+          ) {
+            instance.closed = true;
+          }
+        }
       },
     });
 

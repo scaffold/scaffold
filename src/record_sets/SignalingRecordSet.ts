@@ -1,6 +1,6 @@
 import { Context } from '../Context.ts';
 import { ReactiveRecordSet } from '../util/ReactiveRecordSet.ts';
-import { SignalingState, SignalingService } from '../SignalingService.ts';
+import { SignalingService, SignalingState } from '../SignalingService.ts';
 
 export class SignalingRecordSet extends ReactiveRecordSet<SignalingState> {
   constructor(private ctx: Context) {

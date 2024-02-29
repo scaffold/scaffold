@@ -19,7 +19,6 @@ import { mapPut } from './util/map.ts';
 import { log } from '../deps.ts';
 import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
-import { uniqueNamesGenerator } from '../deps.ts';
 import { SignalingService } from './SignalingService.ts';
 import { Connection, ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
@@ -29,6 +28,7 @@ import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { BarrierException } from './exceptions.ts';
 import { DataService } from './DataService.ts';
 import { ConnectionGateway } from './ConnectionGateway.ts';
+import { generateSillyName } from './util/sillyNameGenerator.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -410,7 +410,6 @@ export class FactService {
     this.ctx.get(ConnectionGateway).publish(fact);
   }
 
-  // TODO: RemoteNode
   public sendTo(fact: Fact, conns: Connection | Connection[]) {
     if (fact.publishAt !== undefined && Date.now() < fact.publishAt) {
       return;
@@ -551,7 +550,7 @@ export class FactService {
         factIdx: this.nextFactIdx++,
         typeStr: FactType[type],
         sourceStr: FactSource[source],
-        sillyName: this.getSillyName(),
+        sillyName: generateSillyName(),
         backtrace: new Error().stack,
       };
 
@@ -652,13 +651,6 @@ export class FactService {
       }
     }
     console.log(`Ingested ${count} facts from storage!`);
-  }
-
-  private getSillyName() {
-    return uniqueNamesGenerator.uniqueNamesGenerator({
-      dictionaries: [uniqueNamesGenerator.colors, uniqueNamesGenerator.animals],
-      separator: '-',
-    });
   }
 
   public snapshot() {

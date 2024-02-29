@@ -9,6 +9,7 @@ import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';
 import { SignalingService } from './SignalingService.ts';
 import { mapPut } from './util/map.ts';
+import { bin2hex } from './util/hex.ts';
 
 const emitInfoIntervalMs = 60000;
 const infoExpirationMs = 10 * emitInfoIntervalMs;
@@ -192,7 +193,9 @@ export class PeerManager {
   public pathTo(peer: Peer) {
     const counter = new Map<Connection, number>();
     for (const fact of peer.producedFacts) {
-      mapPut(counter, fact.fromConnections[0], () => 1, (x) => x + 1);
+      if (fact.fromConnections.length !== 0) {
+        mapPut(counter, fact.fromConnections[0], () => 1, (x) => x + 1);
+      }
     }
 
     let best: Connection | undefined;
@@ -203,6 +206,8 @@ export class PeerManager {
         count = val;
       }
     }
+
+    console.log('PATH TO', bin2hex(peer.publicKey), best?.name);
 
     return best;
   }
