@@ -85,7 +85,7 @@ export class BlockBuilder {
     };
   }
 
-  public buildBlock(drafts: BlockDraft[]): Block {
+  public buildBlock(drafts: BlockDraft[], checkIoBalance = true): Block {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -221,11 +221,8 @@ export class BlockBuilder {
         groupIdx: groupIdx++,
       });
       assert(bodies.length === groupIdx);
-    } else if (ioDelta < 0n) {
-      // TODO: Only output what we actually have
-      if (this.ctx.config.enableValidation) {
-        throw new RetryBuildingException('Insufficient coins');
-      }
+    } else if (ioDelta < 0n && checkIoBalance) {
+      throw new RetryBuildingException('Insufficient coins');
     }
 
     const refs = refBlocks.map((block) => block.hash);
@@ -395,7 +392,7 @@ export class BlockBuilder {
     } catch (err) {
       if (err instanceof RetryBuildingException) {
         await new Promise<void>((resolve) =>
-          this.ctx.config.timeProvider.setImmediate(resolve)
+          this.ctx.config.timeProvider.setTimeout(resolve, 10)
         );
         block = this.buildBlock([draft]);
       } else {

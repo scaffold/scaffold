@@ -123,25 +123,24 @@ export class FrontierChainService {
       return undefined;
     }
 
-    if (res.frontierParams.level < voteLevel) {
-      // Go to parent
-      do {
-        const next = this.ctx.get(WeightService).getDescendant(res);
-        if (next.parent === undefined) {
-          break;
-        }
-        res = next.parent;
-      } while (res.frontierParams.level < voteLevel);
-    } else if (res.frontierParams.level > voteLevel) {
-      // Go to best voter
-      // do {
-      //   const next = this.ctx.get(WeightService).getCanonicalVoter(res);
-      //   if (next === undefined) {
-      //     break;
-      //   }
-      //   res = next;
-      // } while (res.frontierParams.level > voteLevel);
+    while (true) {
+      const next = this.ctx.get(WeightService).getDescendant(res);
+      if (next.parent === undefined) {
+        break;
+      }
+      res = next.parent;
     }
+
+    // if (res.frontierParams.level > voteLevel) {
+    //   // Go to best voter
+    //   do {
+    //     const next = this.ctx.get(WeightService).getDescendant(res);
+    //     if (next.voters.length === 0) {
+    //       break;
+    //     }
+    //     res = next.voters[0];
+    //   } while (res.frontierParams.level > voteLevel);
+    // }
 
     if (res.frontierParams.level < requireVoteLevel) {
       return undefined;
@@ -214,6 +213,13 @@ export class FrontierChainService {
   //   }
   //   return bestParent;
   // }
+
+  public isAncestor(ancestor: BlockFact, descendant: BlockFact) {
+    return doesIntersect(
+      this.getAllParents(ancestor),
+      this.getFrontierChain(descendant),
+    );
+  }
 
   public getFrontierChain(block: BlockFact) {
     return this.recurse(block, (el, queue) => {

@@ -49,14 +49,12 @@ export const createGenesisBlock = (
 
     storageProvider: new NullStorageProvider(),
     contractProviders: [],
-
-    enableValidation: false,
   });
 
   const block = ctx.get(BlockBuilder).buildBlock([{
     frontierVote: ZERO_BLOCK,
     frontierLevel: NUM_FRONTIER_LEVELS - 1,
-  }]);
+  }], false);
 
   let groupIdx = 0;
   block.inputs.push({

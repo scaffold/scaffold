@@ -1,9 +1,12 @@
+const trapRecursion = true;
+
 export interface MapSpec<K, V> {
   get(k: K): V | undefined;
   set(k: K, v: V): void;
   delete(k: K): boolean;
 }
 
+const recursionSentinel = Symbol('mapPut.RecursionSentinel');
 export const mapPut = <K, V>(
   map: MapSpec<K, V>,
   key: K,
@@ -11,11 +14,32 @@ export const mapPut = <K, V>(
   mutator?: (v: V) => V,
 ): V => {
   let val = map.get(key);
-  if (val === undefined) {
-    val = creator();
+  if (trapRecursion && val === recursionSentinel) {
+    map.delete(key);
+    throw new Error(`mapPut called recursively!`);
+  } else if (val === undefined) {
+    if (trapRecursion) {
+      map.set(key, recursionSentinel as never);
+      try {
+        val = creator();
+      } finally {
+        map.delete(key);
+      }
+    } else {
+      val = creator();
+    }
     map.set(key, val);
   } else if (mutator !== undefined) {
-    val = mutator(val);
+    if (trapRecursion) {
+      map.set(key, recursionSentinel as never);
+      try {
+        val = mutator(val);
+      } finally {
+        map.delete(key);
+      }
+    } else {
+      val = mutator(val);
+    }
     map.set(key, val);
   }
   return val;

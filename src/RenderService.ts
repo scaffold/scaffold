@@ -22,6 +22,15 @@ interface Graph {
   lines: string[];
 }
 
+const wrapAccessor = <T>(fn: () => T) => {
+  try {
+    return fn();
+  } catch (err) {
+    console.error(err);
+    return '?';
+  }
+};
+
 export class RenderService {
   private graphviz: ReturnType<typeof Graphviz['load']>;
 
@@ -77,20 +86,30 @@ export class RenderService {
 
     let props = 'DELETED';
     if (!isDeleted) {
-      const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
-      const work = selfWeight.min !== selfWeight.max
-        ? `${selfWeight.min}-${selfWeight.max}`
-        : selfWeight.min;
-      const selfOffset = this.ctx.get(WeightService).getSelfOffset(block);
-      const offset = selfOffset.min !== selfOffset.max
-        ? `${selfOffset.min}-${selfOffset.max}`
-        : selfOffset.min;
-      const anc = this.ctx.get(WeightService).getAncestorWeight(block);
-      const desc = this.ctx.get(WeightService).getDescendant(block).weight;
+      const work = wrapAccessor(() => {
+        const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
+        return selfWeight.min !== selfWeight.max
+          ? `${selfWeight.min}-${selfWeight.max}`
+          : selfWeight.min;
+      });
+      const offset = wrapAccessor(() => {
+        const selfOffset = this.ctx.get(WeightService).getSelfOffset(block);
+        return selfOffset.min !== selfOffset.max
+          ? `${selfOffset.min}-${selfOffset.max}`
+          : selfOffset.min;
+      });
+      const anc = wrapAccessor(() =>
+        this.ctx.get(WeightService).getAncestorWeight(block)
+      );
+      const desc = wrapAccessor(() =>
+        this.ctx.get(WeightService).getDescendant(block).weight
+      );
       const tree = block.frontierDetail.treeWeights.join(',');
       // const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
       const vw = `?`;
-      const canon = this.ctx.get(WeightService).getCanonicality(block);
+      const canon = wrapAccessor(() =>
+        this.ctx.get(WeightService).getCanonicality(block)
+      );
       props = [
         `work: ${work}; offset: ${offset}`,
         `anc: ${anc}; desc: ${desc}`,
@@ -162,7 +181,12 @@ export class RenderService {
   ) {
     if (config.renderPrimaryDescendant === false) return;
 
-    const desc = this.ctx.get(WeightService).getDescendant(block);
+    const desc = wrapAccessor(() =>
+      this.ctx.get(WeightService).getDescendant(block)
+    );
+    if (desc === '?') {
+      return;
+    }
 
     const bId = this.getId(graph, block);
     const attrs = this.renderAttrs({

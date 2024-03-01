@@ -343,8 +343,9 @@ export class PeerManager {
   // }
 
   private isInfoValid(info: PeerInfoFact) {
-    const now = BigInt(this.ctx.config.timeProvider.now());
-    return info.timestamp >= now - BigInt(infoExpirationMs) &&
-      info.timestamp <= now;
+    return true;
+    // const now = BigInt(this.ctx.config.timeProvider.now());
+    // return info.timestamp >= now - BigInt(infoExpirationMs) &&
+    //   info.timestamp <= now;
   }
 }

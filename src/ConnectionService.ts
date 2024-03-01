@@ -50,7 +50,7 @@ export interface Connection {
   lastRecvTimestamp: number;
   isConnected: boolean;
 
-  // Note that this will be shared between multi-connections to the same publicKey+nonce combo.
+  // Note that this will be shared between multi-connections with the same publicKey+nonce combo.
   knownFacts: Set<Fact>;
 
   ping: {
@@ -86,10 +86,6 @@ export class ConnectionService {
     remotePublicKey?: Uint8Array,
     remoteClientNonce?: string,
   ) {
-    const peer = remotePublicKey !== undefined
-      ? this.ctx.get(PeerManager).putPeer(remotePublicKey)
-      : this.createAnonymousPeer();
-
     const shutdown = () => {
       if (conn.isConnected) {
         conn.isConnected = false;
@@ -106,6 +102,8 @@ export class ConnectionService {
           fact.fromConnections = fact.fromConnections.filter((x) => x !== conn);
           fact.toConnections = fact.toConnections.filter((x) => x !== conn);
         }
+
+        this.ctx.get(ConnectionGateway).removeConn(conn);
       }
     };
 
@@ -253,15 +251,5 @@ export class ConnectionService {
       FactType.Identification,
     );
     conn.sendReliable(identData);
-  }
-
-  private createAnonymousPeer(): AnonymousPeer {
-    return {
-      isRemote: true,
-      // connections: new Set(),
-      trust: 0,
-      altruism: 0,
-      publicKey: undefined,
-    };
   }
 }

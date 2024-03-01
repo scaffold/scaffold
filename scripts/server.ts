@@ -308,8 +308,7 @@ bootstrapFromGlobs([
 // ctx.get(EpochContract).get();
 
 ctx.get(NetworkService).initConnection(
-  'websocket@0.0.1',
-  undefined,
+  'websocket@0.0.1/server',
   (signal) => console.log(`Listening on ${signal}`),
 );
 

@@ -69,6 +69,10 @@ export class ConnectionGateway {
     this.enqueueSend(conn, this.getState(conn));
   }
 
+  public removeConn(conn: Connection) {
+    this.states.delete(conn);
+  }
+
   private getState(conn: Connection) {
     return mapPut(
       this.states,
@@ -114,7 +118,7 @@ export class ConnectionGateway {
       }
     }
 
-    if (bestFact !== undefined) {
+    if (bestFact !== undefined && bestScore > 0) {
       const sendAt =
         bestFact.data.byteLength / this.ctx.config.baselineConnSendRate +
         state.nextSend;
@@ -152,6 +156,10 @@ export class ConnectionGateway {
     let value = 0;
 
     if (fact.type === FactType.Block) {
+      if (conn.remotePublicKey === undefined) {
+        return 0;
+      }
+
       if (this.ctx.get(FactService).isSignedByMe(fact)) {
         value += 256 * Math.pow(0.5, fact.toConnections.length) *
           Number(this.ctx.get(WeightService).getSelfWeight(fact).min);

@@ -5,6 +5,7 @@ import { BASE_WORK, BlockService } from './BlockService.ts';
 import { bigintMax } from './util/bigint.ts';
 import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
+import { FrontierChainService } from './FrontierChainService.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -448,6 +449,24 @@ export class WeightService {
 
       for (const input of fact.inputs) {
         const claims = this.ctx.get(BlockService).getClaims(input);
+        if (claims.length === 1) {
+          continue;
+        }
+
+        // // If we have an stack overflow exception, it might be because there was a double-spend.
+        // if (assume !== undefined) {
+        //   const ancestorClaim = claims.find((x) =>
+        //     this.ctx.get(FrontierChainService).isAncestor(x.block, assume)
+        //   );
+        //   if (ancestorClaim !== undefined) {
+        //     if (ancestorClaim.block === fact) {
+        //       throw new Error(`Assume must not be an ancestor of fact!`);
+        //     } else {
+        //       throw new Error(`Merged a double-spend!`);
+        //     }
+        //   }
+        // }
+
         const minWeight = claims
           .map((x) => this.getSelfWeight(x.block, cache).min)
           .reduce((x, y) => x < y ? x : y);
