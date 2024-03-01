@@ -14,6 +14,8 @@ import { ConnectionGateway } from './ConnectionGateway.ts';
 import { RemotePeer } from './PeerManager.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
 import { ConnectionRecordSet } from './record_sets/ConnectionRecordSet.ts';
+import { Hash, HashPrimitive } from './util/Hash.ts';
+import { mapPut } from './util/map.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -31,7 +33,9 @@ export interface AnonymousPeer extends RemotePeer {
 export interface Connection {
   name: string; // TODO: Remove; only for debugging
 
-  peer: AnonymousPeer | (RemotePeer & AuthenticatedPeer);
+  // peer: AnonymousPeer | (RemotePeer & AuthenticatedPeer);
+  remotePublicKey?: Uint8Array;
+  remoteClientNonce?: string;
 
   protocol: string;
 
@@ -45,6 +49,9 @@ export interface Connection {
   recvCount: number;
   lastRecvTimestamp: number;
   isConnected: boolean;
+
+  // Note that this will be shared between multi-connections to the same publicKey+nonce combo.
+  knownFacts: Set<Fact>;
 
   ping: {
     latest: number;
@@ -65,6 +72,7 @@ export class ConnectionService {
   // private anonymousConns: {tryConnect(spec: string): void;}[] = [];
 
   private connections: Connection[] = [];
+  private knownFactsByClient = new Map<HashPrimitive, Set<Fact>>();
 
   constructor(private ctx: Context) {}
 
@@ -76,21 +84,17 @@ export class ConnectionService {
     protocol: string,
     provider: ConnectionProvider,
     remotePublicKey?: Uint8Array,
+    remoteClientNonce?: string,
   ) {
     const peer = remotePublicKey !== undefined
       ? this.ctx.get(PeerManager).putPeer(remotePublicKey)
       : this.createAnonymousPeer();
-    if (!peer.isRemote) {
-      throw new Error(`Cannot connect to self!`);
-    }
 
     const shutdown = () => {
       if (conn.isConnected) {
-        console.log('SHUTDOWN CONNECTION', conn.name);
-
         conn.isConnected = false;
         provider.shutdown();
-        assert(conn.peer.connections.delete(conn));
+        // assert(conn.peer.connections.delete(conn));
         const connIdx = this.connections.indexOf(conn);
         if (connIdx === -1) {
           throw new Error(`Cannot find connection!`);
@@ -98,7 +102,7 @@ export class ConnectionService {
         this.connections.splice(connIdx, 1);
         this.ctx.maybeGet(ConnectionRecordSet)?.dispatchRemove(conn);
 
-        for (const fact of conn.peer.knownFacts) {
+        for (const fact of conn.knownFacts) {
           fact.fromConnections = fact.fromConnections.filter((x) => x !== conn);
           fact.toConnections = fact.toConnections.filter((x) => x !== conn);
         }
@@ -112,7 +116,9 @@ export class ConnectionService {
 
     const conn: Connection = {
       name: generateSillyName(),
-      peer,
+      // peer,
+      remotePublicKey,
+      remoteClientNonce,
       protocol,
       provider,
       sendReliable: (data: Uint8Array) => {
@@ -145,15 +151,21 @@ export class ConnectionService {
       recvCount: 0,
       lastRecvTimestamp: this.ctx.config.timeProvider.now(),
       isConnected: true,
+      knownFacts:
+        remotePublicKey !== undefined && remoteClientNonce !== undefined
+          ? mapPut(
+            this.knownFactsByClient,
+            Hash.digestParts(remotePublicKey, remoteClientNonce).toPrimitive(),
+            () => new Set(),
+          )
+          : new Set(),
       ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       altruism: 0,
     };
 
-    conn.peer.connections.add(conn);
+    // conn.peer.connections.add(conn);
     this.connections.push(conn);
     this.ctx.maybeGet(ConnectionRecordSet)?.dispatchAdd(conn);
-
-    console.log('CREATED CONNECTION', conn.name);
 
     provider.onClose(shutdown);
     this.ctx.onDestruct(shutdown);
@@ -211,11 +223,11 @@ export class ConnectionService {
       this.sendIdentification(conn, remotePublicKey);
     }
 
-    this.ctx.get(ConnectionGateway).getState(conn);
+    this.ctx.get(ConnectionGateway).initConn(conn);
 
     for (const peer of this.ctx.get(PeerManager).getAll()) {
-      if (peer.isRemote && peer.infoFact !== undefined) {
-        this.ctx.get(FactService).sendTo(peer.infoFact, conn);
+      for (const [_, infoFact] of peer.clientInfoFacts) {
+        this.ctx.get(FactService).sendTo(infoFact, conn);
       }
     }
     this.ctx.get(FactService).emit(
@@ -246,8 +258,7 @@ export class ConnectionService {
   private createAnonymousPeer(): AnonymousPeer {
     return {
       isRemote: true,
-      connections: new Set(),
-      knownFacts: new Set(),
+      // connections: new Set(),
       trust: 0,
       altruism: 0,
       publicKey: undefined,

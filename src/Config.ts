@@ -52,6 +52,7 @@ export interface Config {
   debugName: string;
   userdata?: string;
   selfPrivateKey: Uint8Array;
+  clientNonce: string;
 
   logLevel: log.LogLevel;
 
@@ -153,6 +154,7 @@ export const makeDefaultConfig = () =>
   ({
     network: defaultNetwork,
     debugName: '',
+    clientNonce: Math.random().toString(36).slice(2),
     logLevel: log.LogLevels.INFO, // TODO: Set this to WARN
     timeProvider: {
       now: Date.now.bind(Date),

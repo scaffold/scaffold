@@ -65,6 +65,7 @@ typeHasSignature[FactType.Identification] = true;
 typeHasSignature[FactType.PeerInfo] = true;
 typeHasSignature[FactType.InfoRequest] = false;
 typeHasSignature[FactType.ConnectionSignal] = true;
+// typeHasSignature[FactType.SignalPayload] = false;
 typeHasSignature[FactType.Block] = true;
 typeHasSignature[FactType.BlockSet] = true;
 typeHasSignature[FactType.BlockSetTreeNode] = false;
@@ -122,6 +123,9 @@ export class FactService {
       mutator !== undefined
         ? error(`Unexpected mutator`)
         : ctx.get(SignalingService).createFact(base);
+    // this.factories[FactType.SignalPayload] = () => {
+    //   throw new DiscardFactException();
+    // };
     this.factories[FactType.Block] = (base, mutator) =>
       ctx.get(BlockService).createFact(base, mutator);
     this.factories[FactType.BlockSet] = (base, mutator) => todo();
@@ -370,7 +374,7 @@ export class FactService {
     // TODO: Send back "responses" here?
 
     if (fromConn !== undefined) {
-      fromConn.peer.knownFacts.add(fact);
+      fromConn.knownFacts.add(fact);
       fact.fromConnections.push(fromConn);
     }
 
@@ -416,8 +420,8 @@ export class FactService {
     }
 
     for (const conn of Array.isArray(conns) ? conns : [conns]) {
-      if (!conn.peer.knownFacts.has(fact)) {
-        conn.peer.knownFacts.add(fact);
+      if (!conn.knownFacts.has(fact)) {
+        conn.knownFacts.add(fact);
         fact.toConnections.push(conn);
         conn.sendReliable(fact.data);
       }
@@ -430,13 +434,9 @@ export class FactService {
     if (fact.type === FactType.Block) {
       for (const input of fact.inputs) {
         const block = this.ctx.get(BlockService).get(input.blockHash, false);
-        if (block !== undefined && block.signer !== undefined) {
-          const node = this.ctx.get(PeerManager).getPeer(block.signer);
-          if (node !== undefined) {
-            const conn = this.ctx.get(PeerManager).pathTo(node);
-            if (conn !== undefined) {
-              this.ctx.get(ConnectionGateway).notify(reply, conn);
-            }
+        if (block !== undefined) {
+          for (const conn of this.ctx.get(PeerManager).routeTo(block)) {
+            this.ctx.get(ConnectionGateway).notify(reply, conn);
           }
         }
       }
@@ -563,8 +563,8 @@ export class FactService {
         );
       }
     } catch (err) {
-      console.info(err);
       this.facts.delete(hash.toPrimitive());
+      console.info(err);
       throw err;
     }
 

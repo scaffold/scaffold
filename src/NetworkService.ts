@@ -15,9 +15,9 @@ export class NetworkService {
 
     for (const provider of this.ctx.config.networkProviders) {
       const matchesProviding = providing === undefined ||
-        provider.providesProtocols.includes(providing);
+        provider.providesProtocol === providing;
       const matchesConnectingTo = connectingTo === undefined ||
-        (provider.connectsToProtocols ?? provider.providesProtocols)
+        (provider.connectsToProtocols ?? [provider.providesProtocol])
           .includes(connectingTo);
       if (matchesProviding && matchesConnectingTo) {
         candidates.push(provider);
@@ -34,7 +34,7 @@ export class NetworkService {
   }
 
   public getProtocolList() {
-    return this.ctx.config.networkProviders.flatMap((x) => x.providesProtocols);
+    return this.ctx.config.networkProviders.map((x) => x.providesProtocol);
   }
 
   public initConnection(

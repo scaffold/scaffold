@@ -22,6 +22,7 @@ export enum FactType {
   PeerInfo,
   InfoRequest,
   ConnectionSignal,
+  // SignalPayload,
   Block, // TODO: Rename to bundle or something
   BlockSet, // TODO: Rename to bag or something
   BlockSetTreeNode,

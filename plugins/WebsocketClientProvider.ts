@@ -1,7 +1,7 @@
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 
 export class WebsocketClientProvider implements NetworkProvider {
-  public providesProtocols = ['websocket@0.0.1/client'];
+  public providesProtocol = 'websocket@0.0.1/client';
   public connectsToProtocols = ['websocket@0.0.1/server'];
 
   public createInstance(driver: SignalingDriver) {

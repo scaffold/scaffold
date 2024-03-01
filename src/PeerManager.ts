@@ -1,6 +1,6 @@
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { Context } from './Context.ts';
-import { Connection } from './ConnectionService.ts';
+import { Connection, ConnectionService } from './ConnectionService.ts';
 import { KeyService } from './KeyService.ts';
 import { Fact, FactBase, FactType, PeerInfoFact } from './FactMeta.ts';
 import { NetworkService } from './NetworkService.ts';
@@ -8,8 +8,8 @@ import { InfoRequest, PeerInfo } from './messages.ts';
 import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';
 import { SignalingService } from './SignalingService.ts';
-import { mapPut } from './util/map.ts';
-import { bin2hex } from './util/hex.ts';
+import { arrEquals } from './util/buffer.ts';
+import { FactSource } from './FactMeta.ts';
 
 const emitInfoIntervalMs = 60000;
 const infoExpirationMs = 10 * emitInfoIntervalMs;
@@ -34,9 +34,7 @@ export interface RemotePeer {
   isRemote: true;
 
   // The set of currently connected connections
-  connections: Set<Connection>;
-
-  knownFacts: Set<Fact>;
+  // connections: Set<Connection>;
 
   // Trust increases by 1/day
   // Trust decreases when nodes do suspicious things (we should also publish the suspicious things to our peers)
@@ -54,7 +52,7 @@ export interface RemotePeer {
 export interface AuthenticatedPeer {
   publicKey: Uint8Array;
 
-  infoFact?: PeerInfoFact;
+  clientInfoFacts: Map<string, PeerInfoFact>;
 
   // TODO: Filter this by canonicality
   producedFacts: Set<Fact>;
@@ -91,6 +89,7 @@ export class PeerManager {
       {
         isRemote: false,
         publicKey: selfPublicKey,
+        clientInfoFacts: new Map(),
         producedFacts: new Set(),
       } satisfies SelfPeer,
     );
@@ -106,11 +105,11 @@ export class PeerManager {
     if (peer === undefined) {
       peer = {
         isRemote: true,
-        connections: new Set(),
-        knownFacts: new Set(),
+        // connections: new Set(),
         trust: 0,
         altruism: 0,
         publicKey,
+        clientInfoFacts: new Map(),
         producedFacts: new Set(),
       } satisfies RemotePeer & AuthenticatedPeer;
       this.peers.set(hash.toPrimitive(), peer);
@@ -123,15 +122,14 @@ export class PeerManager {
   }
 
   public makeInfo(): PeerInfo {
-    const conns = new Set(
-      this.getAll().flatMap((x) => x.isRemote ? [...x.connections] : []),
-    );
+    const conns = new Set(this.ctx.get(ConnectionService).getAll());
 
     return {
       timestamp: BigInt(this.ctx.config.timeProvider.now()),
       network: this.ctx.config.network,
       version: 1,
       userdata: this.ctx.config.userdata ?? '',
+      clientNonce: this.ctx.config.clientNonce,
       bandwidth: Math.floor(40000 / (conns.size + 1)),
       protocols: this.ctx.get(NetworkService).getProtocolList(),
     };
@@ -150,66 +148,75 @@ export class PeerManager {
   //   }
   // }
 
-  public connectTo(peer: Peer) {
-    if (!peer.isRemote) {
+  public connectTo(fact: PeerInfoFact) {
+    if (fact.source !== FactSource.Remote) {
       return;
     }
 
-    if (peer.connections.size !== 0) {
+    const remotePublicKey = this.ctx.get(FactService).getPublicKey(fact);
+
+    if (
+      this.ctx.get(ConnectionService).getAll().some((x) =>
+        x.remotePublicKey !== undefined &&
+        arrEquals(x.remotePublicKey, remotePublicKey) &&
+        x.remoteClientNonce === fact.clientNonce
+      )
+    ) {
       return;
     }
 
-    if (this.ctx.get(SignalingService).isConnecting(peer.publicKey)) {
+    if (
+      this.ctx.get(SignalingService).isConnecting(
+        remotePublicKey,
+        fact.clientNonce,
+      )
+    ) {
       return;
     }
 
-    if (peer.infoFact === undefined || !this.isInfoValid(peer.infoFact)) {
-      return;
-    }
-
-    const candidates = peer.infoFact.protocols
+    const candidates = fact.protocols
       .filter((x) =>
         this.ctx.get(NetworkService).findProvider(undefined, x) !== undefined
       );
     if (candidates.length === 0) {
       throw new Error(`No intersecting protocols!`);
     }
-    const srcProtocol = candidates[
+    const remoteProtocol = candidates[
       Math.floor(
         this.ctx.config.entropyProvider.randomNumber() * candidates.length,
       )
     ];
-    const dstProtocol =
-      this.ctx.get(NetworkService).findProvider(undefined, srcProtocol)!
-        .providesProtocols[0];
 
     this.ctx.get(SignalingService).init(
-      peer.publicKey,
-      srcProtocol,
-      dstProtocol,
+      remotePublicKey,
+      fact.clientNonce,
+      remoteProtocol,
     );
   }
 
-  public pathTo(peer: Peer) {
-    const counter = new Map<Connection, number>();
-    for (const fact of peer.producedFacts) {
-      if (fact.fromConnections.length !== 0) {
-        mapPut(counter, fact.fromConnections[0], () => 1, (x) => x + 1);
-      }
-    }
+  // public pathTo(peer: Peer) {
+  //   const counter = new Map<Connection, number>();
+  //   for (const fact of peer.producedFacts) {
+  //     if (fact.fromConnections.length !== 0) {
+  //       mapPut(counter, fact.fromConnections[0], () => 1, (x) => x + 1);
+  //     }
+  //   }
 
-    let best: Connection | undefined;
-    let count = 0;
-    for (const [key, val] of counter) {
-      if (val > count) {
-        best = key;
-        count = val;
-      }
-    }
+  //   let bestConn: Connection | undefined;
+  //   let bestScore = 0;
+  //   for (const [conn, count] of counter) {
+  //     const score = count / (conn.recvCount + 1);
+  //     if (score > bestScore) {
+  //       bestConn = conn;
+  //       bestScore = score;
+  //     }
+  //   }
 
-    console.log('PATH TO', bin2hex(peer.publicKey), best?.name);
+  //   return bestConn;
+  // }
 
-    return best;
+  public routeTo(fact: Fact) {
+    return fact.fromConnections.slice(0, 2);
   }
 
   // private findBridgeTo(peer: Peer) {
@@ -260,7 +267,9 @@ export class PeerManager {
 
     const publicKey = this.ctx.get(FactService).getPublicKey(base);
     const peer = this.putPeer(publicKey);
-    peer.infoFact = fact;
+
+    const isNewClient = !peer.clientInfoFacts.has(fact.clientNonce);
+    peer.clientInfoFacts.set(fact.clientNonce, fact);
 
     // for (const request of peer.infoRequests) {
     //   this.ctx.get(FactService).sendTo(fact, request.fromConnections);
@@ -286,7 +295,9 @@ export class PeerManager {
     //   neighborNode.hops = Math.min(neighborNode.hops, peer.hops + 1);
     // }
 
-    this.connectTo(peer);
+    if (isNewClient) {
+      this.connectTo(fact);
+    }
 
     this.ctx.get(FactService).publish(fact);
 

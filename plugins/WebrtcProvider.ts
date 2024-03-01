@@ -3,7 +3,7 @@ import { Hash } from '../src/util/Hash.ts';
 import { orderSignals } from './util.ts';
 
 export class WebrtcProvider implements NetworkProvider {
-  public providesProtocols = ['webrtc@0.0.1'];
+  public providesProtocol = 'webrtc@0.0.1';
 
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 
@@ -34,10 +34,7 @@ export class WebrtcProvider implements NetworkProvider {
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
     const bufferedMsgs: Uint8Array[] = [];
-    const isOpen: { [key: string]: boolean } = {
-      reliable: false,
-      fast: false,
-    };
+    const isOpen: { [key: string]: boolean } = { reliable: false, fast: false };
 
     const dispatchNewConn = (conn: RTCPeerConnection) =>
       driver.createConnection({
@@ -52,13 +49,11 @@ export class WebrtcProvider implements NetworkProvider {
           fastChannel!.onmessage = messageHandler;
         },
         shutdown: () => conn.close(),
-        onClose: (_handler: () => void) =>
-          conn.onconnectionstatechange = (e) =>
-            console.log(
-              'onconnectionstatechange',
-              e,
+        onClose: (handler: () => void) =>
+          conn.onconnectionstatechange = () =>
+            ['disconnected', 'failed', 'closed'].includes(
               conn.connectionState,
-            ),
+            ) && handler(),
       });
     const createChannels = (conn: RTCPeerConnection) => {
       reliableChannel = conn.createDataChannel('reliable', {
@@ -95,18 +90,17 @@ export class WebrtcProvider implements NetworkProvider {
       conn: RTCPeerConnection,
       channel: RTCDataChannel,
     ) => {
-      console.log('READYSTATE', channel.readyState);
       channel.binaryType = 'arraybuffer';
       channel.onopen = (_e) => {
         isOpen[channel.label] = true;
         if (isOpen['reliable'] && isOpen['fast']) {
-          console.log('READY');
           dispatchNewConn(conn);
         }
       };
       channel.onmessage = (e) => bufferedMsgs.push(new Uint8Array(e.data));
       channel.onclose = (_e) => {
         isOpen[channel.label] = false;
+        conn.close();
       };
     };
 
@@ -125,15 +119,13 @@ export class WebrtcProvider implements NetworkProvider {
 
     return {
       recvSignal: orderSignals(async (spec: string) => {
-        console.log(JSON.parse(spec));
-
         const { orderHex, offer, answer, iceCandidate } = JSON.parse(spec);
         const conn = await connPromise;
 
         if (orderHex) {
           const cmp = Hash.compare(orderHash, Hash.fromHex(orderHex));
           if (cmp < 0) {
-            await createChannels(conn);
+            createChannels(conn);
             const offer = await conn.createOffer();
             await conn.setLocalDescription(offer);
             driver.sendSignal(JSON.stringify({ offer: conn.localDescription }));

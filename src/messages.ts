@@ -454,6 +454,7 @@ export const registry = {
       { name: 'network', type: 'string' },
       { name: 'version', type: 'int' },
       { name: 'userdata', type: 'string' },
+      { name: 'clientNonce', type: 'string' },
 
       // { name: 'agePtr', type: 'hash' },
       // { name: 'ageIdx', type: 'bigint' },
@@ -477,7 +478,7 @@ export const registry = {
     name: 'ConnectionSignal',
     type: 'record',
     fields: [
-      { name: 'dstPublicKey', type: 'bytes' },
+      { name: 'replyTo', type: 'hash' },
       { name: 'payload', type: 'bytes' },
     ],
   },
@@ -485,11 +486,12 @@ export const registry = {
     name: 'SignalPayload',
     type: 'record',
     fields: [
+      { name: 'signalingNonce', type: 'bytes' },
+      { name: 'srcClientNonce', type: 'string' },
       { name: 'srcProtocol', type: 'string' },
-      { name: 'dstProtocol', type: 'string' },
-      { name: 'nonce', type: 'string' },
-      { name: 'idx', type: 'int' },
-      { name: 'signal', type: 'string' },
+      { name: 'receivedIdxMask', type: 'bigint' },
+      { name: 'signalIdx', type: 'int' },
+      { name: 'signalData', type: 'string' },
     ],
   },
   PingMessage: {

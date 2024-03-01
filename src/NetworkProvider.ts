@@ -54,7 +54,7 @@ export interface SignalingProvider {
 }
 
 export interface NetworkProvider {
-  readonly providesProtocols: string[];
+  readonly providesProtocol: string;
   readonly connectsToProtocols?: string[];
 
   createInstance(driver: SignalingDriver): SignalingProvider;

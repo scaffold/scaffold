@@ -4,7 +4,7 @@ import { error } from '../src/util/functional.ts';
 import { Hash } from '../src/util/Hash.ts';
 
 export class WebsocketServerProvider implements NetworkProvider {
-  public providesProtocols = ['websocket@0.0.1/server'];
+  public providesProtocol = 'websocket@0.0.1/server';
   public connectsToProtocols = ['websocket@0.0.1/client'];
 
   private origins: Promise<string[]>;

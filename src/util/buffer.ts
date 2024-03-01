@@ -1,5 +1,6 @@
 import { bytes } from '../../deps.ts';
 import { memoize } from './functional.ts';
+import { bin2hex } from './hex.ts';
 
 export const EMPTY_ARR = new Uint8Array();
 
@@ -41,3 +42,5 @@ export const arrFromNumber = (num: number, bytes: number) => {
   }
   return new Uint8Array(arr);
 };
+
+export const bin2prim = bin2hex;
