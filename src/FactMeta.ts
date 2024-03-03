@@ -13,6 +13,7 @@ import { Connection } from './ConnectionService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
+import { SamplerState } from './util/RandomSampler.ts';
 
 // TODO: Rename to packet?
 
@@ -79,6 +80,9 @@ export interface FactBase {
   visitedAt: number;
   visitedBy?: string;
   references: number;
+
+  // Random sampler properties
+  // samplerState: SamplerState;
 
   // Debug properties
   factIdx: number;

@@ -10,7 +10,6 @@ import { Identification, PeerInfo } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
 import { BarrierException } from './exceptions.ts';
 import { log } from '../deps.ts';
-import { ConnectionGateway } from './ConnectionGateway.ts';
 import { RemotePeer } from './PeerManager.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
 import { ConnectionRecordSet } from './record_sets/ConnectionRecordSet.ts';
@@ -48,6 +47,7 @@ export interface Connection {
   sendFastCount: number;
   recvCount: number;
   lastRecvTimestamp: number;
+  reliability: number;
   isConnected: boolean;
 
   // Note that this will be shared between multi-connections with the same publicKey+nonce combo.
@@ -102,8 +102,6 @@ export class ConnectionService {
           fact.fromConnections = fact.fromConnections.filter((x) => x !== conn);
           fact.toConnections = fact.toConnections.filter((x) => x !== conn);
         }
-
-        this.ctx.get(ConnectionGateway).removeConn(conn);
       }
     };
 
@@ -148,6 +146,7 @@ export class ConnectionService {
       sendFastCount: 0,
       recvCount: 0,
       lastRecvTimestamp: this.ctx.config.timeProvider.now(),
+      reliability: 0.75,
       isConnected: true,
       knownFacts:
         remotePublicKey !== undefined && remoteClientNonce !== undefined
@@ -220,8 +219,6 @@ export class ConnectionService {
     if (remotePublicKey !== undefined) {
       this.sendIdentification(conn, remotePublicKey);
     }
-
-    this.ctx.get(ConnectionGateway).initConn(conn);
 
     for (const peer of this.ctx.get(PeerManager).getAll()) {
       for (const [_, infoFact] of peer.clientInfoFacts) {

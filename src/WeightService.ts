@@ -326,7 +326,7 @@ export class WeightService {
       // TODO: Add in the penalty here?
 
       const parent = fact.outputClaims[fact.frontierOutputIdx]
-        .find((x) => this.getClaimCanonicality(x.block, cache) >= 0n);
+        .find((x) => this.getClaimCanonicality(x.block, fact, cache) >= 0n);
       if (parent !== undefined) {
         let siblingWeight = 0n;
         for (const sibling of parent.block.inputs) {
@@ -354,7 +354,7 @@ export class WeightService {
       const voters = fact.frontierVoters.filter((x) => {
         const candidate = this.getDescendant(x, cache);
         return candidate.parent === undefined &&
-          this.getClaimCanonicality(x, cache) >= 0n;
+          this.getClaimCanonicality(x, fact, cache) >= 0n;
       });
       return {
         voters,
@@ -407,7 +407,7 @@ export class WeightService {
 
       // const selfWeight = this.getSelfWeight(fact, cache).min;
       // const descWeight = this.getDescendant(fact, cache).weight;
-      let canonicality = this.getClaimCanonicality(fact, cache);
+      let canonicality = this.getClaimCanonicality(fact, undefined, cache);
 
       // TODO: Re-add minimization by this.ctx.config.getWeightLimit()
 
@@ -443,8 +443,12 @@ export class WeightService {
     });
   }
 
-  public getClaimCanonicality(fact: BlockFact, cache = this.getCache()) {
-    return mapPut(cache.claimCanonicality, fact, () => {
+  public getClaimCanonicality(
+    fact: BlockFact,
+    assume?: BlockFact,
+    cache = this.getCache(),
+  ) {
+    const fn = () => {
       let canonicality = 0n;
 
       for (const input of fact.inputs) {
@@ -453,19 +457,22 @@ export class WeightService {
           continue;
         }
 
-        // // If we have an stack overflow exception, it might be because there was a double-spend.
-        // if (assume !== undefined) {
-        //   const ancestorClaim = claims.find((x) =>
-        //     this.ctx.get(FrontierChainService).isAncestor(x.block, assume)
-        //   );
-        //   if (ancestorClaim !== undefined) {
-        //     if (ancestorClaim.block === fact) {
-        //       throw new Error(`Assume must not be an ancestor of fact!`);
-        //     } else {
-        //       throw new Error(`Merged a double-spend!`);
-        //     }
-        //   }
-        // }
+        if (assume !== undefined) {
+          const ancestorClaim = claims.find((x) =>
+            this.ctx.get(FrontierChainService).isAncestor(x.block, assume)
+          );
+          if (ancestorClaim !== undefined) {
+            if (ancestorClaim.block === fact) {
+              throw new Error(`Assume must not be an ancestor of fact!`);
+            } else {
+              console.warn(`Merged a double-spend!`);
+              if (-1n < canonicality) {
+                canonicality = -1n;
+              }
+              continue;
+            }
+          }
+        }
 
         const minWeight = claims
           .map((x) => this.getSelfWeight(x.block, cache).min)
@@ -488,10 +495,14 @@ export class WeightService {
       }
 
       return canonicality;
-    });
+    };
+
+    return assume !== undefined
+      ? mapPut(cache.claimCanonicality, fact, fn)
+      : fn();
   }
 
-  private getTreeChildrenWeight(fact: BlockFact, cache = this.getCache()) {
+  public getTreeChildrenWeight(fact: BlockFact, cache = this.getCache()) {
     return mapPut(cache.treeChildrenWeight, fact, () => {
       const storedWeight = fact.frontierDetail.treeWeights
         .reduce((acc, cur) => acc + cur, 0n);

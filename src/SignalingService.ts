@@ -14,7 +14,7 @@ import { CryptoHelper } from './CryptoHelper.ts';
 import { ConnectionService } from './ConnectionService.ts';
 import { arrEquals, bin2prim } from './util/buffer.ts';
 import { SignalingRecordSet } from './record_sets/SignalingRecordSet.ts';
-import { KeyService } from './KeyService.ts';
+import { FactEmitter } from './FactEmitter.ts';
 import { FactSource } from './FactMeta.ts';
 
 const closeTimeoutMs = 30000;
@@ -25,9 +25,8 @@ export interface SignalingState {
   localProtocol: string;
 
   nextEmitIdx: number;
-  unackedPayloads: Map<number, Uint8Array>;
-
-  receivedIdxMask: bigint;
+  localReceivedIdxMask: bigint;
+  remoteReceivedIdxMask: bigint;
   lastIngestTimestamp: number;
 
   closed: boolean;
@@ -43,20 +42,20 @@ export class SignalingService {
   private instances = new Map<string, SignalingInstance>();
 
   constructor(private ctx: Context) {
-    // this.ctx.get(ClockService).setPoissonInterval(() => {
-    //   const threshold = this.ctx.config.timeProvider.now() - closeTimeoutMs;
-    //   for (const [key, state] of this.states) {
-    //     if (state.lastIngestTimestamp < threshold) {
-    //       state.provider.dispose?.();
-    //       this.states.delete(key);
-    //       this.ctx.maybeGet(SignalingRecordSet)?.dispatchRemove(state);
-    //     }
-    //   }
-    // }, closeTimeoutMs);
+    this.ctx.get(ClockService).setPoissonInterval(() => {
+      const threshold = this.ctx.config.timeProvider.now() - closeTimeoutMs;
+      for (const [key, inst] of this.instances) {
+        if (inst.lastIngestTimestamp < threshold) {
+          this.close(inst);
+          this.instances.delete(key);
+          this.ctx.maybeGet(SignalingRecordSet)?.dispatchRemove(inst);
+        }
+      }
+    }, closeTimeoutMs);
 
     this.ctx.onDestruct(() => {
-      for (const [_, state] of this.instances) {
-        state.provider.dispose?.();
+      for (const [_, inst] of this.instances) {
+        this.close(inst);
       }
     });
   }
@@ -77,49 +76,81 @@ export class SignalingService {
     return false;
   }
 
-  public emit(state: SignalingState, payload: SignalPayload) {
+  public emit(
+    state: SignalingState,
+    signalingNonce: Uint8Array,
+    signalData: string,
+    signalIdx: number | undefined,
+    priority: number | undefined,
+  ) {
     if (state.closed) {
       return;
     }
 
-    // { name: 'srcClientNonce', type: 'string' },
-    // { name: 'srcProtocol', type: 'string' },
-    // { name: 'dstProtocol', type: 'string' },
-    // { name: 'receivedIdxMask', type: 'bigint' },
-    // { name: 'signalIdx', type: 'int' },
-    // { name: 'signalData', type: 'string' },
+    const payload: SignalPayload = {
+      signalingNonce,
+      srcClientNonce: this.ctx.config.clientNonce,
+      srcProtocol: state.localProtocol,
+      receivedIdxMask: state.localReceivedIdxMask,
+      signalIdx: signalIdx ?? state.nextEmitIdx++,
+      signalData,
+    };
 
-    state.log?.push({
-      timestamp: this.ctx.config.timeProvider.now(),
-      message: `Sending signal ${payload.signalIdx}: ${payload.signalData}...`,
-    });
-    this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
+    const clampedPriority = priority !== undefined
+      ? Math.max(0, Math.min(priority, 1))
+      : 1;
 
-    this.ctx.get(CryptoHelper).encrypt({
-      plaintext: SignalPayload.encode(payload),
-      remotePublicKey: state.remotePublicKey,
-    }).then((payload) => {
-      const infoFact = this.ctx.get(PeerManager).getPeer(state.remotePublicKey)
-        ?.clientInfoFacts.get(state.remoteClientNonce);
+    let lastEmit: number | undefined;
+    let backoff = 2e-3;
 
-      if (infoFact !== undefined) {
-        const signal = { replyTo: infoFact.hash, payload };
-        this.ctx.get(FactService)
-          .emit(signal, ConnectionSignal, FactType.ConnectionSignal, true);
-      }
-    }).then(() => {
-      state.log?.push({
-        timestamp: this.ctx.config.timeProvider.now(),
-        message: `Sent!`,
-      });
-      this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
-    }, (err) => {
-      state.log?.push({
-        timestamp: this.ctx.config.timeProvider.now(),
-        message: `Failed! ${err}`,
-      });
-      this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
-      console.error(err);
+    this.ctx.get(FactEmitter).addGenerator({
+      estimateValue: () => {
+        if (
+          state.closed ||
+          state.remoteReceivedIdxMask & (1n << BigInt(payload.signalIdx))
+        ) {
+          return 0;
+        } else {
+          return 1e6 * clampedPriority;
+        }
+      },
+      estimateSize: () => {
+        return 250 + signalingNonce.byteLength + signalData.length;
+      },
+      generate: async () => {
+        if (lastEmit !== undefined) {
+          const duration = this.ctx.config.timeProvider.now() - lastEmit;
+          const scale = Math.tanh(Math.log(duration * backoff) * 2) * .5 + .5;
+          if (Math.random() > scale) {
+            return undefined;
+          }
+        }
+        lastEmit = this.ctx.config.timeProvider.now();
+        backoff *= 0.5;
+
+        state.log?.push({
+          timestamp: this.ctx.config.timeProvider.now(),
+          message: `Sending signal ${payload.signalIdx}: ${payload.signalData}`,
+        });
+        this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
+
+        payload.receivedIdxMask = state.localReceivedIdxMask;
+        const payloadData = await this.ctx.get(CryptoHelper).encrypt({
+          plaintext: SignalPayload.encode(payload),
+          remotePublicKey: state.remotePublicKey,
+        });
+
+        const infoFact = this.ctx.get(PeerManager)
+          .getPeer(state.remotePublicKey)
+          ?.clientInfoFacts.get(state.remoteClientNonce);
+        if (infoFact === undefined) {
+          throw new Error(`No destination known!`);
+        }
+
+        const signal = { replyTo: infoFact.hash, payload: payloadData };
+        return this.ctx.get(FactService)
+          .emit(signal, ConnectionSignal, FactType.ConnectionSignal);
+      },
     });
   }
 
@@ -172,14 +203,7 @@ export class SignalingService {
     );
 
     if (instance.nextEmitIdx === 0) {
-      this.emit(instance, {
-        signalingNonce,
-        srcClientNonce: this.ctx.config.clientNonce,
-        srcProtocol: instance.localProtocol,
-        receivedIdxMask: instance.receivedIdxMask,
-        signalIdx: -1,
-        signalData: '',
-      });
+      this.emit(instance, signalingNonce, '', -1, 1);
     }
   }
 
@@ -208,23 +232,19 @@ export class SignalingService {
       return instance;
     }
 
-    instance.lastIngestTimestamp = this.ctx.config.timeProvider.now();
+    instance.remoteReceivedIdxMask |= payload.receivedIdxMask;
 
     if (payload.signalIdx >= 0) {
       const mask = 1n << BigInt(payload.signalIdx);
-      if ((instance.receivedIdxMask & mask) === 0n) {
-        instance.receivedIdxMask |= mask;
+      if ((instance.localReceivedIdxMask & mask) === 0n) {
+        instance.lastIngestTimestamp = this.ctx.config.timeProvider.now();
 
-        for (const key of instance.unackedPayloads.keys()) {
-          if ((instance.receivedIdxMask & (1n << BigInt(key))) !== 0n) {
-            instance.unackedPayloads.delete(key);
-          }
-        }
+        instance.localReceivedIdxMask |= mask;
 
         instance.log?.push({
           timestamp: this.ctx.config.timeProvider.now(),
           message:
-            `Receiving signal ${payload.signalIdx}: ${payload.signalData}...`,
+            `Receiving signal ${payload.signalIdx}: ${payload.signalData}`,
         });
         this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(instance);
 
@@ -251,9 +271,8 @@ export class SignalingService {
       localProtocol: networkProvider.providesProtocol,
 
       nextEmitIdx: 0,
-      unackedPayloads: new Map(),
-
-      receivedIdxMask: 0n,
+      localReceivedIdxMask: 0n,
+      remoteReceivedIdxMask: 0n,
       lastIngestTimestamp: this.ctx.config.timeProvider.now(),
       closed: false,
 
@@ -274,15 +293,14 @@ export class SignalingService {
       protocol: state.localProtocol,
       useToken: true,
 
-      sendSignal: (signalData) =>
-        this.emit(state, {
-          signalingNonce: payload.signalingNonce,
-          srcClientNonce: this.ctx.config.clientNonce,
-          srcProtocol: state.localProtocol,
-          receivedIdxMask: state.receivedIdxMask,
-          signalIdx: state.nextEmitIdx++,
+      sendSignal: (signalData, priority) =>
+        this.emit(
+          state,
+          payload.signalingNonce,
           signalData,
-        }),
+          undefined,
+          priority,
+        ),
       createConnection: (provider) => {
         if (state.closed) {
           return;
@@ -304,15 +322,37 @@ export class SignalingService {
         // Close other instances with the same public key
         for (const [_, instance] of this.instances) {
           if (
-            instance !== state &&
-            arrEquals(instance.remotePublicKey, state.remotePublicKey)
+            instance !== state && !instance.closed &&
+            arrEquals(instance.remotePublicKey, state.remotePublicKey) &&
+            instance.remoteClientNonce === state.remoteClientNonce &&
+            instance.localProtocol === state.localProtocol
           ) {
-            instance.closed = true;
+            instance.log?.push({
+              timestamp: this.ctx.config.timeProvider.now(),
+              message:
+                `Aborting because we created another connection to this peer!`,
+            });
+            this.close(instance);
           }
         }
+
+        // Close this instance
+        this.ctx.get(ClockService).setTimeout(() => this.close(state), 0);
       },
     });
 
     return Object.assign(state, { provider });
+  }
+
+  private close(state: SignalingState | SignalingInstance) {
+    if (state.closed) {
+      return;
+    }
+
+    state.closed = true;
+
+    if ('provider' in state) {
+      state.provider.dispose?.();
+    }
   }
 }

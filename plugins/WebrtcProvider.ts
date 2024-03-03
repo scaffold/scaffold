@@ -29,7 +29,7 @@ export class WebrtcProvider implements NetworkProvider {
 
   public createInstance(driver: SignalingDriver) {
     // TODO: Use driver.isInitiator for ordering
-    const orderHash = Hash.random();
+    const myOrderHash = Hash.random();
 
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
@@ -86,10 +86,7 @@ export class WebrtcProvider implements NetworkProvider {
         }
       };
     };
-    const setupChannel = (
-      conn: RTCPeerConnection,
-      channel: RTCDataChannel,
-    ) => {
+    const setupChannel = (conn: RTCPeerConnection, channel: RTCDataChannel) => {
       channel.binaryType = 'arraybuffer';
       channel.onopen = (_e) => {
         isOpen[channel.label] = true;
@@ -105,14 +102,14 @@ export class WebrtcProvider implements NetworkProvider {
     };
 
     const connPromise = (async () => {
-      driver.sendSignal(JSON.stringify({ orderHex: orderHash.toHex() }));
+      driver.sendSignal(JSON.stringify({ orderHex: myOrderHash.toHex() }));
 
       const config = { iceServers: await this.iceServersPromise };
       const conn = new RTCPeerConnection(config);
 
       conn.onicecandidate = (e) =>
         e.candidate &&
-        driver.sendSignal(JSON.stringify({ iceCandidate: e.candidate }));
+        driver.sendSignal(JSON.stringify({ iceCandidate: e.candidate }), 0.25);
 
       return conn;
     })();
@@ -123,7 +120,7 @@ export class WebrtcProvider implements NetworkProvider {
         const conn = await connPromise;
 
         if (orderHex) {
-          const cmp = Hash.compare(orderHash, Hash.fromHex(orderHex));
+          const cmp = Hash.compare(myOrderHash, Hash.fromHex(orderHex));
           if (cmp < 0) {
             createChannels(conn);
             const offer = await conn.createOffer();

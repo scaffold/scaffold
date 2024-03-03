@@ -27,8 +27,8 @@ import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { BarrierException } from './exceptions.ts';
 import { DataService } from './DataService.ts';
-import { ConnectionGateway } from './ConnectionGateway.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
+import { FactEmitter } from './FactEmitter.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -411,7 +411,7 @@ export class FactService {
     //   }
     // }
 
-    this.ctx.get(ConnectionGateway).publish(fact);
+    this.ctx.get(FactEmitter).notify(fact);
   }
 
   public sendTo(fact: Fact, conns: Connection | Connection[]) {
@@ -424,21 +424,6 @@ export class FactService {
         conn.knownFacts.add(fact);
         fact.toConnections.push(conn);
         conn.sendReliable(fact.data);
-      }
-    }
-  }
-
-  public replyTo(fact: Fact, reply: Fact) {
-    // this.sendTo(reply, fact.fromConnections);
-
-    if (fact.type === FactType.Block) {
-      for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.blockHash, false);
-        if (block !== undefined) {
-          for (const conn of this.ctx.get(PeerManager).routeTo(block)) {
-            this.ctx.get(ConnectionGateway).notify(reply, conn);
-          }
-        }
       }
     }
   }

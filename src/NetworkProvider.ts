@@ -44,7 +44,7 @@ export interface SignalingDriver {
   protocol: string;
   useToken: boolean;
 
-  sendSignal(signal: string): void;
+  sendSignal(signal: string, priority?: number): void;
   createConnection(conn: ConnectionProvider): void;
 }
 

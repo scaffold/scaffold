@@ -59,7 +59,7 @@ import { raceTruthy } from './util/MaybePromise.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { GenesisService } from './GenesisService.ts';
 import { ClockService } from './ClockService.ts';
-import { ConnectionGateway } from './ConnectionGateway.ts';
+import { FactEmitter } from './FactEmitter.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -456,7 +456,7 @@ export class BlockService {
       this.setFrontierChainDepth(block, frontierVote.frontierChainDepth + 1);
     }
 
-    this.ctx.get(FactService).replyTo(block, frontierVote);
+    // this.ctx.get(FactEmitter).notify(block);
   }
 
   private setFrontierChainDepth(block: BlockFact, depth: number) {
@@ -533,7 +533,10 @@ export class BlockService {
         .callAll(verifier, child, childInputIdx);
     }
 
-    this.ctx.get(FactService).replyTo(parent, child);
+    this.ctx.config.timeProvider.setTimeout(
+      () => this.ctx.get(FactEmitter).notify(child),
+      0,
+    );
 
     this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(parent);
     this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(child);
@@ -629,7 +632,7 @@ export class BlockService {
       }
     }
 
-    this.ctx.get(ConnectionGateway).updateFrontier();
+    this.ctx.get(FactEmitter).updateFrontier();
   }
 
   private markCanonical(block: BlockFact) {
