@@ -18,8 +18,11 @@ export const emptyPoolSentinel = Symbol('EmptyPoolSentinel');
 export const factGeneratorType = Symbol('FactGenerator');
 
 export interface FactGenerator {
-  name: string;
-  detail: string;
+  describe(): {
+    name: string;
+    detail: string;
+    emits: number;
+  };
   estimateValue(): number;
   estimateSize(): number;
   generate(): MaybePromise<Fact | undefined>;
@@ -141,6 +144,29 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
         return 0;
       }
 
+      for (const block of this.iterateConqueredBlocks(fact)) {
+        for (const conn of block.fromConnections) {
+          if (!conn.knownFacts.has(fact)) {
+            value += Number(
+              this.ctx.get(WeightService).getSelfWeight(fact).min,
+            );
+            value += Number(
+              this.ctx.get(WeightService).getTreeChildrenWeight(fact),
+            );
+          }
+        }
+        for (const conn of block.toConnections) {
+          if (!conn.knownFacts.has(fact)) {
+            value += Number(
+              this.ctx.get(WeightService).getSelfWeight(fact).min,
+            );
+            value += Number(
+              this.ctx.get(WeightService).getTreeChildrenWeight(fact),
+            );
+          }
+        }
+      }
+
       if (this.ctx.get(FactService).isSignedByMe(fact)) {
         value += 256 *
           Number(this.ctx.get(WeightService).getSelfWeight(fact).min);
@@ -208,6 +234,11 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
           conns.push(...this.ctx.get(PeerManager).routeTo(block));
         }
       }
+
+      for (const block of this.iterateConqueredBlocks(fact)) {
+        conns.push(...block.fromConnections, ...block.toConnections);
+      }
+
       return conns.concat(this.ctx.get(ConnectionService).getAll());
     } else if (fact.type === FactType.ConnectionSignal) {
       const dstFact = this.ctx.get(FactService).get(fact.replyTo, false);
@@ -216,6 +247,34 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
         : [];
     } else {
       return this.ctx.get(ConnectionService).getAll();
+    }
+  }
+
+  private *iterateConqueredBlocks(conqueror: BlockFact) {
+    if (!this.ctx.get(WeightService).isCanonical(conqueror)) {
+      return;
+    }
+
+    const queue = new Set<BlockFact>();
+    for (const input of conqueror.inputs) {
+      for (const claim of this.ctx.get(BlockService).getClaims(input)) {
+        if (claim.block !== conqueror) {
+          queue.add(claim.block);
+        }
+      }
+    }
+
+    for (const block of queue) {
+      yield block;
+
+      for (const voter of block.frontierVoters) {
+        queue.add(voter);
+      }
+      for (const claims of block.outputClaims) {
+        for (const claim of claims) {
+          queue.add(claim.block);
+        }
+      }
     }
   }
 }

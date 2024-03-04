@@ -6,6 +6,7 @@ import { bigintMax } from './util/bigint.ts';
 import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
+import { OutputClaim } from './BlockMeta.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -47,8 +48,11 @@ interface Cache {
   ancestorWeight: Map<BlockFact, bigint>;
   ancestorOffset: Map<BlockFact, bigint>;
   descendant: Map<BlockFact, DescendantResult>;
-  canonicality: Map<BlockFact, bigint>;
-  claimCanonicality: Map<BlockFact, bigint>;
+  canonicality: Map<BlockFact, { canonicality: bigint; usurper?: OutputClaim }>;
+  claimCanonicality: Map<
+    BlockFact,
+    { canonicality: bigint; usurper?: OutputClaim }
+  >;
   canonicalVoter: Map<BlockFact | typeof ZERO_BLOCK, BlockFact | undefined>;
   canonicalParent: Map<BlockFact, BlockFact | undefined>;
   claimDelta: Map<BlockFact, bigint>;
@@ -325,8 +329,9 @@ export class WeightService {
 
       // TODO: Add in the penalty here?
 
-      const parent = fact.outputClaims[fact.frontierOutputIdx]
-        .find((x) => this.getClaimCanonicality(x.block, fact, cache) >= 0n);
+      const parent = fact.outputClaims[fact.frontierOutputIdx].find((x) =>
+        this.getClaimCanonicality(x.block, fact, cache).canonicality >= 0n
+      );
       if (parent !== undefined) {
         let siblingWeight = 0n;
         for (const sibling of parent.block.inputs) {
@@ -354,7 +359,7 @@ export class WeightService {
       const voters = fact.frontierVoters.filter((x) => {
         const candidate = this.getDescendant(x, cache);
         return candidate.parent === undefined &&
-          this.getClaimCanonicality(x, fact, cache) >= 0n;
+          this.getClaimCanonicality(x, fact, cache).canonicality >= 0n;
       });
       return {
         voters,
@@ -395,7 +400,11 @@ export class WeightService {
   }
 
   public isCanonical(fact: BlockFact, cache = this.getCache()) {
-    return this.getCanonicality(fact, cache) >= 0n;
+    const { canonicality, usurper } = this.getCanonicality(fact, cache);
+    if ((canonicality >= 0n) !== (usurper === undefined)) {
+      throw new Error(`Invalid response!`);
+    }
+    return canonicality >= 0n;
   }
 
   public getCanonicality(fact: BlockFact, cache = this.getCache()) {
@@ -414,7 +423,7 @@ export class WeightService {
       const parent = this.ctx.get(BlockService).get(fact.frontierVote, false);
       if (parent !== undefined) {
         const parentCanonicality = this.getCanonicality(parent, cache);
-        if (parentCanonicality < canonicality) {
+        if (parentCanonicality.canonicality < canonicality.canonicality) {
           canonicality = parentCanonicality;
         }
       }
@@ -423,7 +432,7 @@ export class WeightService {
         const parent = this.ctx.get(BlockService).get(ref, false);
         if (parent !== undefined) {
           const parentCanonicality = this.getCanonicality(parent, cache);
-          if (parentCanonicality < canonicality) {
+          if (parentCanonicality.canonicality < canonicality.canonicality) {
             canonicality = parentCanonicality;
           }
         }
@@ -433,7 +442,7 @@ export class WeightService {
         const parent = this.ctx.get(BlockService).get(input.blockHash, false);
         if (parent !== undefined) {
           const parentCanonicality = this.getCanonicality(parent, cache);
-          if (parentCanonicality < canonicality) {
+          if (parentCanonicality.canonicality < canonicality.canonicality) {
             canonicality = parentCanonicality;
           }
         }
@@ -450,6 +459,7 @@ export class WeightService {
   ) {
     const fn = () => {
       let canonicality = 0n;
+      let usurper: OutputClaim | undefined;
 
       for (const input of fact.inputs) {
         const claims = this.ctx.get(BlockService).getClaims(input);
@@ -485,16 +495,18 @@ export class WeightService {
           )
         );
         const maxScore = scores.reduce((x, y) => x > y ? x : y);
+        const maxIdx = scores.indexOf(maxScore);
         // Increment the first occurrence of the maximum score so there's no ties.
-        scores[scores.indexOf(maxScore)]++;
+        scores[maxIdx]++;
         const selfScore = scores[claims.findIndex((x) => x.block === fact)];
         const claimCanonicality = selfScore - maxScore - 1n;
         if (claimCanonicality < canonicality) {
           canonicality = claimCanonicality;
+          usurper = claims[maxIdx];
         }
       }
 
-      return canonicality;
+      return { canonicality, usurper };
     };
 
     return assume !== undefined

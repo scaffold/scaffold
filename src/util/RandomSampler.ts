@@ -1,5 +1,7 @@
 import { mapPut } from './map.ts';
 
+const enableViolationCounting = false;
+
 export type SamplerState = number;
 
 export abstract class RandomSampler<
@@ -32,7 +34,9 @@ export abstract class RandomSampler<
       this.updateHeap(idx >>> 1);
       return idx;
     });
-    this.countHeapViolations();
+    if (enableViolationCounting) {
+      this.countHeapViolations();
+    }
   }
 
   public sample(): { item: T; weight: number } | undefined {
@@ -69,7 +73,9 @@ export abstract class RandomSampler<
       // TODO: Check for zero weight here
       this.heap[idx >>> 1] = aWeight + bWeight;
       this.updateHeap(idx >>> 2);
-      this.countHeapViolations();
+      if (enableViolationCounting) {
+        this.countHeapViolations();
+      }
       if (offset < aWeight) {
         return { item: a, weight: aWeight / total };
       } else if (offset < aWeight + bWeight) {
@@ -89,7 +95,9 @@ export abstract class RandomSampler<
       // TODO: Check for zero weight here
       this.heap[idx >>> 1] = aWeight + bWeight;
       this.updateHeap(idx >>> 2);
-      this.countHeapViolations();
+      if (enableViolationCounting) {
+        this.countHeapViolations();
+      }
       if (offset < bWeight) {
         return { item: b, weight: bWeight / total };
       } else {

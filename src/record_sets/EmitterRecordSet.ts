@@ -9,6 +9,7 @@ export interface EmitterRecord {
   size: number;
   throttle?: number;
   weight: number;
+  updates: number;
   skips: number;
   emits: number;
 }
@@ -16,6 +17,7 @@ const recordBase: Omit<EmitterRecord, 'item'> = {
   value: 0,
   size: 0,
   weight: 0,
+  updates: 0,
   skips: 0,
   emits: 0,
 };
@@ -37,7 +39,7 @@ export class EmitterRecordSet extends ReactiveRecordSet<EmitterRecord> {
         Object.assign(rec, update);
         this.dispatchUpdate(rec);
         return rec;
-      });
+      }).updates++;
     } else {
       const found = this.records.get(update.item);
       if (found !== undefined) {

@@ -620,7 +620,7 @@ export class BlockService {
 
     for (const block of blocks) {
       const newCanonicality = this.ctx.get(WeightService)
-        .getCanonicality(block);
+        .getCanonicality(block).canonicality;
       if (newCanonicality !== block.canonicality) {
         if (block.canonicality < 0n && newCanonicality >= 0n) {
           this.markCanonical(block);
@@ -678,6 +678,11 @@ export class BlockService {
             this.ctx.get(GenerationService).ensureRunning(output.verifier);
           }
         }
+      }
+
+      const { usurper } = this.ctx.get(WeightService).getCanonicality(block);
+      if (usurper !== undefined) {
+        this.ctx.get(FactEmitter).notify(usurper.block);
       }
     });
 

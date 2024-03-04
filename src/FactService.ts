@@ -435,6 +435,7 @@ export class FactService {
     return fact.signer !== undefined && arrEquals(fact.signer, publicKey);
   }
   public isSignedByMe(fact: Pick<Fact, 'signer'>) {
+    // TODO: Short-circuit by checking source?
     return this.verify(fact, this.ctx.get(KeyService).getSelfPublicKey());
   }
   public getPublicKey(fact: Pick<Fact, 'signer'>) {

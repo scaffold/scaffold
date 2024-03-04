@@ -101,12 +101,15 @@ export class SignalingService {
       : 1;
 
     let lastEmit: number | undefined;
-    let backoff = 2e-3;
+    let emits = 0;
     const generator: FactGenerator = {
-      name: 'Generator<ConnectionSignal>',
-      detail: `${
-        bin2hex(state.signalingNonce).slice(0, 10)
-      }: ${payload.srcProtocol} #${payload.signalIdx}`,
+      describe: () => ({
+        name: 'Generator<ConnectionSignal>',
+        detail: `${
+          bin2hex(state.signalingNonce).slice(0, 10)
+        }: ${payload.srcProtocol} #${payload.signalIdx}`,
+        emits,
+      }),
       estimateValue: () => {
         if (
           state.closed ||
@@ -118,18 +121,21 @@ export class SignalingService {
           let value = 1e6 * clampedPriority;
           if (lastEmit !== undefined) {
             const duration = this.ctx.config.timeProvider.now() - lastEmit;
-            const scale = Math.tanh(Math.log(duration * backoff) * 2) * .5 + .5;
+            const backoff = 2e-3 * Math.pow(0.5, emits);
+            let scale = Math.tanh(Math.log(duration * backoff) * 2) * .5 + .5;
+            scale *= Math.pow(0.5, emits);
             value *= scale;
           }
           return value;
         }
       },
       estimateSize: () => {
+        // TODO: Figure out what the packet overhead should be
         return 250 + state.signalingNonce.byteLength + signalData.length;
       },
       generate: async () => {
         lastEmit = this.ctx.config.timeProvider.now();
-        backoff *= 0.5;
+        emits++;
 
         state.log?.push({
           timestamp: this.ctx.config.timeProvider.now(),
@@ -189,6 +195,11 @@ export class SignalingService {
         this.ctx.get(FactEmitter).notify(fact);
       }
     }
+
+    this.ctx.get(ClockService).setTimeout(
+      () => this.ctx.get(FactService).forget(fact),
+      10000,
+    );
 
     return fact;
   }

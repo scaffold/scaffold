@@ -113,8 +113,8 @@ export class FrontierChainService {
       })
       .sort((a, b) =>
         Number(
-          this.ctx.get(WeightService).getCanonicality(b) -
-            this.ctx.get(WeightService).getCanonicality(a),
+          this.ctx.get(WeightService).getCanonicality(b).canonicality -
+            this.ctx.get(WeightService).getCanonicality(a).canonicality,
         )
       )[0];
 
