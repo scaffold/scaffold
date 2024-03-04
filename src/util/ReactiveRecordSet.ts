@@ -24,7 +24,7 @@ export abstract class ReactiveRecordSet<RecordType> {
   private timeout?: number;
   private debounces: (() => void)[] = [];
 
-  abstract getAll(): Iterable<RecordType>;
+  public abstract getAll(): Iterable<RecordType>;
 
   public onAdd(cb: (record: RecordType) => void) {
     this.addListeners.push(cb);

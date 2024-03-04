@@ -10,6 +10,10 @@ export abstract class RandomSampler<
 
   protected abstract weight(item: T): number;
 
+  public getAll() {
+    return this.indices.keys();
+  }
+
   public increaseWeight(item: T) {
     mapPut(this.indices, item, () => {
       const idx = this.heap.length;
@@ -28,7 +32,7 @@ export abstract class RandomSampler<
       this.updateHeap(idx >>> 1);
       return idx;
     });
-    this.verifyHeap();
+    this.countHeapViolations();
   }
 
   public sample(): { item: T; weight: number } | undefined {
@@ -65,7 +69,7 @@ export abstract class RandomSampler<
       // TODO: Check for zero weight here
       this.heap[idx >>> 1] = aWeight + bWeight;
       this.updateHeap(idx >>> 2);
-      this.verifyHeap();
+      this.countHeapViolations();
       if (offset < aWeight) {
         return { item: a, weight: aWeight / total };
       } else if (offset < aWeight + bWeight) {
@@ -85,7 +89,7 @@ export abstract class RandomSampler<
       // TODO: Check for zero weight here
       this.heap[idx >>> 1] = aWeight + bWeight;
       this.updateHeap(idx >>> 2);
-      this.verifyHeap();
+      this.countHeapViolations();
       if (offset < bWeight) {
         return { item: b, weight: bWeight / total };
       } else {
@@ -95,19 +99,29 @@ export abstract class RandomSampler<
   }
 
   public cleanup() {
+    if (this.heap.length < 16 || this.estimateZeroRatio() < 0.25) {
+      return;
+    }
+
     // Remove zero-weight branches
   }
 
-  private updateHeap(idx: number) {
-    for (let i = idx; i !== 0; i >>>= 1) {
-      const a = this.heap[i << 1];
-      const b = this.heap[(i << 1) + 1];
-      this.heap[i] = (typeof a === 'number' ? a : this.weight(a)) +
-        (typeof b === 'number' ? b : this.weight(b));
+  public estimateZeroRatio() {
+    const s = this.heap.length >>> 1;
+    let countZeros = 0;
+    for (let i = 1; i < s; i++) {
+      if (this.heap[i] === 0) {
+        countZeros++;
+      }
     }
+    return Math.sqrt(countZeros / (s - 1));
   }
 
-  private verifyHeap() {
+  public getSize() {
+    return this.heap.length >>> 1;
+  }
+
+  public countHeapViolations() {
     const size = this.indices.size;
     if (this.heap.length !== size * 2) {
       throw new Error(`Heap size property violated!`);
@@ -130,6 +144,7 @@ export abstract class RandomSampler<
       }
     }
 
+    let violations = 0;
     for (let i = 1; i < size; i++) {
       const a = this.heap[i << 1];
       const b = this.heap[(i << 1) + 1];
@@ -141,13 +156,19 @@ export abstract class RandomSampler<
         this.heap[i] as number < (typeof a === 'number' ? a : this.weight(a)) +
             (typeof b === 'number' ? b : this.weight(b))
       ) {
-        console.error(
-          `Heap conservation property violated!`,
-          this.heap[i],
-          typeof a === 'number' ? a : this.weight(a),
-          typeof b === 'number' ? b : this.weight(b),
-        );
+        violations++;
       }
+    }
+
+    return violations;
+  }
+
+  private updateHeap(idx: number) {
+    for (let i = idx; i !== 0; i >>>= 1) {
+      const a = this.heap[i << 1];
+      const b = this.heap[(i << 1) + 1];
+      this.heap[i] = (typeof a === 'number' ? a : this.weight(a)) +
+        (typeof b === 'number' ? b : this.weight(b));
     }
   }
 }

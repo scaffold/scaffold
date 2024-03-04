@@ -5,33 +5,34 @@ import { WeightService } from './WeightService.ts';
 import { Connection, ConnectionService } from './ConnectionService.ts';
 import { BlockService } from './BlockService.ts';
 import { PeerManager } from './PeerManager.ts';
-import { mapPut } from './util/map.ts';
 import { FactService } from './FactService.ts';
 import { RandomSampler, SamplerState } from './util/RandomSampler.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { ClockService } from './ClockService.ts';
+import { EmitterRecordSet } from './record_sets/EmitterRecordSet.ts';
 
 const packetOverheadBytes = 256;
-const defaultExcessBytes = 65536;
 
-const emptyPoolSentinel = Symbol('EmptyPoolSentinel');
-const factGeneratorType = Symbol('FactGenerator');
+export const emptyPoolSentinel = Symbol('EmptyPoolSentinel');
+export const factGeneratorType = Symbol('FactGenerator');
 
-interface FactGenerator {
+export interface FactGenerator {
+  name: string;
+  detail: string;
   estimateValue(): number;
   estimateSize(): number;
   generate(): MaybePromise<Fact | undefined>;
 }
 
-type Item =
+export type EmitterItem =
   | Fact
   | ({ type: typeof factGeneratorType } & FactGenerator)
   | typeof emptyPoolSentinel;
 
-export class FactEmitter extends RandomSampler<Item> {
+export class FactEmitter extends RandomSampler<EmitterItem> {
   private frontier = new Set<Fact>();
-  private throttle = new Map<Item, number>();
+  private throttle = new Map<EmitterItem, number>();
 
   constructor(private ctx: Context) {
     super();
@@ -60,16 +61,16 @@ export class FactEmitter extends RandomSampler<Item> {
   }
 
   public addGenerator(generator: FactGenerator) {
-    this.increaseWeight(
-      Object.assign(generator, { type: factGeneratorType } as const),
-    );
+    const item = Object.assign(generator, { type: factGeneratorType } as const);
+    this.increaseWeight(item);
   }
 
   private async emit() {
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 2; i++) {
       const sample = this.sample();
       if (sample !== undefined) {
         if (sample.item === emptyPoolSentinel) {
+          this.ctx.maybeGet(EmitterRecordSet)?.incrementSkip(sample.item);
           break;
         }
 
@@ -83,9 +84,12 @@ export class FactEmitter extends RandomSampler<Item> {
           if (dst !== undefined) {
             this.ctx.get(FactService).sendTo(fact, dst);
             this.throttle.delete(sample.item);
+            this.ctx.maybeGet(EmitterRecordSet)?.incrementEmit(sample.item);
             continue;
           }
         }
+
+        this.ctx.maybeGet(EmitterRecordSet)?.incrementSkip(sample.item);
 
         // mapPut(this.throttle, sample.item, () => 0.5, (x) => {
         //   x *= 0.5;
@@ -96,8 +100,10 @@ export class FactEmitter extends RandomSampler<Item> {
     }
   }
 
-  protected override weight(item: Item) {
+  public override weight(item: EmitterItem) {
     if (item === emptyPoolSentinel) {
+      this.ctx.maybeGet(EmitterRecordSet)
+        ?.update({ item, value: NaN, size: NaN, weight: 1e-3 });
       return 1e-3;
     }
 
@@ -110,11 +116,17 @@ export class FactEmitter extends RandomSampler<Item> {
       value = this.evaluate(item);
       size = item.data.byteLength;
     }
+
     const throttle = this.throttle.get(item);
     if (throttle !== undefined) {
       value *= throttle;
     }
-    return value / (size + packetOverheadBytes);
+
+    const weight = value / (size + packetOverheadBytes);
+    this.ctx.maybeGet(EmitterRecordSet)
+      ?.update({ item, value, size, throttle, weight });
+
+    return weight;
   }
 
   private evaluate(fact: Fact) {
@@ -152,6 +164,20 @@ export class FactEmitter extends RandomSampler<Item> {
           value += Number(block.outputs[input.outputIdx].amount);
         }
       }
+    } else if (fact.type === FactType.ConnectionSignal) {
+      if (fact.toConnections.length >= 2) {
+        return 0;
+      }
+      const dstFact = this.ctx.get(FactService).get(fact.replyTo, false);
+      if (dstFact === undefined || dstFact.source === FactSource.Local) {
+        return 0;
+      }
+
+      value += 1e2;
+    } else if (fact.type === FactType.PeerInfo) {
+      const publicKey = this.ctx.get(FactService).getPublicKey(fact);
+      const peer = this.ctx.get(PeerManager).getPeer(publicKey);
+      return peer?.clientInfoFacts.get(fact.clientNonce) === fact ? 1e2 : 0;
     } else if (this.ctx.get(FactService).isSignedByMe(fact)) {
       value += 1e2;
     } else {
@@ -183,6 +209,11 @@ export class FactEmitter extends RandomSampler<Item> {
         }
       }
       return conns.concat(this.ctx.get(ConnectionService).getAll());
+    } else if (fact.type === FactType.ConnectionSignal) {
+      const dstFact = this.ctx.get(FactService).get(fact.replyTo, false);
+      return dstFact !== undefined
+        ? this.ctx.get(PeerManager).routeTo(dstFact)
+        : [];
     } else {
       return this.ctx.get(ConnectionService).getAll();
     }

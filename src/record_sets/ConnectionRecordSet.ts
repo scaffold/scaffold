@@ -8,7 +8,7 @@ export class ConnectionRecordSet extends ReactiveRecordSet<Connection> {
     super();
   }
 
-  getAll(): Iterable<Connection> {
+  public getAll(): Iterable<Connection> {
     return this.ctx.get(ConnectionService).getAll();
   }
 }

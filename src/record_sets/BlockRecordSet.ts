@@ -8,7 +8,7 @@ export class BlockRecordSet extends ReactiveRecordSet<BlockFact> {
     super();
   }
 
-  getAll(): Iterable<BlockFact> {
+  public getAll(): Iterable<BlockFact> {
     return this.ctx.get(FactService).hackyGetBlocksMatching();
   }
 }

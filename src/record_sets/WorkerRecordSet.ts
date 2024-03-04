@@ -7,7 +7,7 @@ export class WorkerRecordSet extends ReactiveRecordSet<WorkerDriver> {
     super();
   }
 
-  getAll(): Iterable<WorkerDriver> {
+  public getAll(): Iterable<WorkerDriver> {
     return this.ctx.get(WorkerDriverService).getAllWorkers();
   }
 }

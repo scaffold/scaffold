@@ -7,7 +7,7 @@ export class SignalingRecordSet extends ReactiveRecordSet<SignalingState> {
     super();
   }
 
-  getAll(): Iterable<SignalingState> {
+  public getAll(): Iterable<SignalingState> {
     return this.ctx.get(SignalingService).getAllStates();
   }
 }

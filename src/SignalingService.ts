@@ -14,12 +14,13 @@ import { CryptoHelper } from './CryptoHelper.ts';
 import { ConnectionService } from './ConnectionService.ts';
 import { arrEquals, bin2prim } from './util/buffer.ts';
 import { SignalingRecordSet } from './record_sets/SignalingRecordSet.ts';
-import { FactEmitter } from './FactEmitter.ts';
+import { FactEmitter, FactGenerator } from './FactEmitter.ts';
 import { FactSource } from './FactMeta.ts';
 
 const closeTimeoutMs = 30000;
 
 export interface SignalingState {
+  signalingNonce: Uint8Array;
   remotePublicKey: Uint8Array;
   remoteClientNonce: string;
   localProtocol: string;
@@ -78,7 +79,6 @@ export class SignalingService {
 
   public emit(
     state: SignalingState,
-    signalingNonce: Uint8Array,
     signalData: string,
     signalIdx: number | undefined,
     priority: number | undefined,
@@ -88,7 +88,7 @@ export class SignalingService {
     }
 
     const payload: SignalPayload = {
-      signalingNonce,
+      signalingNonce: state.signalingNonce,
       srcClientNonce: this.ctx.config.clientNonce,
       srcProtocol: state.localProtocol,
       receivedIdxMask: state.localReceivedIdxMask,
@@ -102,29 +102,32 @@ export class SignalingService {
 
     let lastEmit: number | undefined;
     let backoff = 2e-3;
-
-    this.ctx.get(FactEmitter).addGenerator({
+    const generator: FactGenerator = {
+      name: 'Generator<ConnectionSignal>',
+      detail: `${
+        bin2hex(state.signalingNonce).slice(0, 10)
+      }: ${payload.srcProtocol} #${payload.signalIdx}`,
       estimateValue: () => {
         if (
           state.closed ||
           state.remoteReceivedIdxMask & (1n << BigInt(payload.signalIdx))
         ) {
+          this.ctx.config.timeProvider.clearInterval(reweighItvl);
           return 0;
         } else {
-          return 1e6 * clampedPriority;
+          let value = 1e6 * clampedPriority;
+          if (lastEmit !== undefined) {
+            const duration = this.ctx.config.timeProvider.now() - lastEmit;
+            const scale = Math.tanh(Math.log(duration * backoff) * 2) * .5 + .5;
+            value *= scale;
+          }
+          return value;
         }
       },
       estimateSize: () => {
-        return 250 + signalingNonce.byteLength + signalData.length;
+        return 250 + state.signalingNonce.byteLength + signalData.length;
       },
       generate: async () => {
-        if (lastEmit !== undefined) {
-          const duration = this.ctx.config.timeProvider.now() - lastEmit;
-          const scale = Math.tanh(Math.log(duration * backoff) * 2) * .5 + .5;
-          if (Math.random() > scale) {
-            return undefined;
-          }
-        }
         lastEmit = this.ctx.config.timeProvider.now();
         backoff *= 0.5;
 
@@ -151,7 +154,13 @@ export class SignalingService {
         return this.ctx.get(FactService)
           .emit(signal, ConnectionSignal, FactType.ConnectionSignal);
       },
-    });
+    };
+
+    const reweighItvl = this.ctx.config.timeProvider.setInterval(
+      () => this.ctx.get(FactEmitter).addGenerator(generator),
+      200,
+    );
+    this.ctx.get(FactEmitter).addGenerator(generator);
   }
 
   public createFact(base: FactBase): ConnectionSignalFact {
@@ -174,9 +183,10 @@ export class SignalingService {
           this.ingestSignal(remotePublicKey, SignalPayload.decode(data))
         ).catch((err) => console.error(err));
       } else {
-        for (const conn of this.ctx.get(PeerManager).routeTo(dstFact)) {
-          this.ctx.get(FactService).sendTo(fact, conn);
-        }
+        // for (const conn of this.ctx.get(PeerManager).routeTo(dstFact)) {
+        //   this.ctx.get(FactService).sendTo(fact, conn);
+        // }
+        this.ctx.get(FactEmitter).notify(fact);
       }
     }
 
@@ -203,7 +213,7 @@ export class SignalingService {
     );
 
     if (instance.nextEmitIdx === 0) {
-      this.emit(instance, signalingNonce, '', -1, 1);
+      this.emit(instance, '', -1, 1);
     }
   }
 
@@ -211,7 +221,8 @@ export class SignalingService {
     const instance = mapPut(
       this.instances,
       bin2prim(payload.signalingNonce),
-      () => this.initSignaling(remotePublicKey, payload),
+      () =>
+        this.initSignaling(payload.signalingNonce, remotePublicKey, payload),
       (inst) => {
         if (
           !arrEquals(inst.remotePublicKey, remotePublicKey) ||
@@ -256,6 +267,7 @@ export class SignalingService {
   }
 
   private initSignaling(
+    signalingNonce: Uint8Array,
     remotePublicKey: Uint8Array,
     payload: SignalPayload,
   ): SignalingInstance {
@@ -266,6 +278,7 @@ export class SignalingService {
     }
 
     const state: SignalingState = {
+      signalingNonce,
       remotePublicKey,
       remoteClientNonce: payload.srcClientNonce,
       localProtocol: networkProvider.providesProtocol,
@@ -294,13 +307,7 @@ export class SignalingService {
       useToken: true,
 
       sendSignal: (signalData, priority) =>
-        this.emit(
-          state,
-          payload.signalingNonce,
-          signalData,
-          undefined,
-          priority,
-        ),
+        this.emit(state, signalData, undefined, priority),
       createConnection: (provider) => {
         if (state.closed) {
           return;
