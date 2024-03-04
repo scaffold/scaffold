@@ -63,14 +63,14 @@ const SIGNATURE_RECOVERY_BIT = 64;
 const typeHasSignature: boolean[] = [];
 typeHasSignature[FactType.Identification] = true;
 typeHasSignature[FactType.PeerInfo] = true;
-typeHasSignature[FactType.InfoRequest] = false;
+// typeHasSignature[FactType.InfoRequest] = false;
 typeHasSignature[FactType.ConnectionSignal] = true;
 // typeHasSignature[FactType.SignalPayload] = false;
 typeHasSignature[FactType.Block] = true;
-typeHasSignature[FactType.BlockSet] = true;
-typeHasSignature[FactType.BlockSetTreeNode] = false;
-typeHasSignature[FactType.MerkleTreeNode] = true;
-typeHasSignature[FactType.Invalid] = true;
+// typeHasSignature[FactType.BlockSet] = true;
+// typeHasSignature[FactType.BlockSetTreeNode] = false;
+// typeHasSignature[FactType.MerkleTreeNode] = true;
+// typeHasSignature[FactType.Invalid] = true;
 
 for (let i = 1; i < FactType._SIZE; i++) {
   if (typeHasSignature[i] === undefined) {
@@ -128,13 +128,13 @@ export class FactService {
     // };
     this.factories[FactType.Block] = (base, mutator) =>
       ctx.get(BlockService).createFact(base, mutator);
-    this.factories[FactType.BlockSet] = (base, mutator) => todo();
-    this.factories[FactType.BlockSetTreeNode] = (base, mutator) => todo();
-    this.factories[FactType.MerkleTreeNode] = todo;
-    this.factories[FactType.Invalid] = (base, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : Object.assign(base, { type: FactType.Invalid as const });
+    // this.factories[FactType.BlockSet] = (base, mutator) => todo();
+    // this.factories[FactType.BlockSetTreeNode] = (base, mutator) => todo();
+    // this.factories[FactType.MerkleTreeNode] = todo;
+    // this.factories[FactType.Invalid] = (base, mutator) =>
+    //   mutator !== undefined
+    //     ? error(`Unexpected mutator`)
+    //     : Object.assign(base, { type: FactType.Invalid as const });
     // this.factories[FactType.Frontier] = (base, _, mutator) =>
     //   mutator !== undefined
     //     ? error(`Unexpected mutator`)

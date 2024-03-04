@@ -1,19 +1,14 @@
 import { BlockMeta } from './BlockMeta.ts';
 import {
   Block,
-  BlockSet,
-  BlockSetTreeNode,
   ConnectionSignal,
   Identification,
-  InfoRequest,
   PeerInfo,
-  SignalPayload,
 } from './messages.ts';
 import { Connection } from './ConnectionService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
-import { SamplerState } from './util/RandomSampler.ts';
 
 // TODO: Rename to packet?
 
@@ -21,14 +16,14 @@ export enum FactType {
   Null = 0, // Reserved
   Identification,
   PeerInfo,
-  InfoRequest,
+  // InfoRequest,
   ConnectionSignal,
   // SignalPayload,
   Block, // TODO: Rename to bundle or something
-  BlockSet, // TODO: Rename to bag or something
-  BlockSetTreeNode,
-  MerkleTreeNode,
-  Invalid,
+  // BlockSet, // TODO: Rename to bag or something
+  // BlockSetTreeNode,
+  // MerkleTreeNode,
+  // Invalid,
   // Frontier,
   // EpochInclusionProof,
   // BridgeStart,
@@ -98,24 +93,15 @@ export interface IdentificationFact extends FactBase, Identification {
 export interface PeerInfoFact extends FactBase, PeerInfo {
   type: FactType.PeerInfo;
 }
-export interface InfoRequestFact extends FactBase, InfoRequest {
-  type: FactType.InfoRequest;
-}
 export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
   type: FactType.ConnectionSignal;
 }
 export interface BlockFact extends FactBase, Block, BlockMeta {
   type: FactType.Block;
 }
-export interface InvalidFact extends FactBase {
-  type: FactType.Invalid;
-}
 
 export type Fact =
   | IdentificationFact
   | PeerInfoFact
-  | InfoRequestFact
   | ConnectionSignalFact
-  | BlockFact
-  | InvalidFact;
-// | FrontierFact;
+  | BlockFact;
