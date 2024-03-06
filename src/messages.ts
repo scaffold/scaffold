@@ -101,7 +101,6 @@ export type ObjectType<
   : S extends 'null' ? null
   : S extends 'boolean' ? boolean
   : S extends 'int' ? number
-  // : S extends 'long' ? never
   : S extends 'long' ? bigint
   : S extends 'float' ? number
   : S extends 'double' ? number
@@ -775,7 +774,8 @@ export const registry = {
       // Item 0 is the weight of blocks in the tree voting for frontierVote.
       // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
       // ...
-      { name: 'treeWeights', type: { type: 'array', items: 'long' } },
+      { name: 'treeWeights', type: { type: 'array', items: 'bigint' } },
+
       // { name: 'input_tree_root', type: 'hash' },
       // { name: 'output_tree_root', type: 'hash' },
 

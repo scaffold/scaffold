@@ -24,6 +24,7 @@ export class WebrtcProvider implements NetworkProvider {
         .filter(Boolean)
         .map((host) => ({ urls: `stun:${host}`, order: Math.random() }))
         .sort((a, b) => a.order - b.order)
+        .slice(0, 2)
     );
   }
 
@@ -34,7 +35,6 @@ export class WebrtcProvider implements NetworkProvider {
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
     const bufferedMsgs: Uint8Array[] = [];
-    const isOpen: { [key: string]: boolean } = { reliable: false, fast: false };
 
     const dispatchNewConn = (conn: RTCPeerConnection) =>
       driver.createConnection({
@@ -57,48 +57,33 @@ export class WebrtcProvider implements NetworkProvider {
       });
     const createChannels = (conn: RTCPeerConnection) => {
       reliableChannel = conn.createDataChannel('reliable', {
+        negotiated: true,
+        id: 0,
         ordered: true,
         maxRetransmits: undefined,
       });
       setupChannel(conn, reliableChannel);
 
       fastChannel = conn.createDataChannel('fast', {
+        negotiated: true,
+        id: 1,
         ordered: false,
         maxRetransmits: 0,
       });
       setupChannel(conn, fastChannel);
     };
-    const listenForChannels = (conn: RTCPeerConnection) => {
-      conn.ondatachannel = (e) => {
-        switch (e.channel.label) {
-          case 'reliable':
-            reliableChannel = e.channel;
-            setupChannel(conn, reliableChannel);
-            break;
-
-          case 'fast':
-            fastChannel = e.channel;
-            setupChannel(conn, fastChannel);
-            break;
-
-          default:
-            throw new Error(`Unexpected channel label ${e.channel.label}`);
-        }
-      };
-    };
     const setupChannel = (conn: RTCPeerConnection, channel: RTCDataChannel) => {
       channel.binaryType = 'arraybuffer';
       channel.onopen = (_e) => {
-        isOpen[channel.label] = true;
-        if (isOpen['reliable'] && isOpen['fast']) {
+        if (
+          reliableChannel?.readyState === 'open' &&
+          fastChannel?.readyState === 'open'
+        ) {
           dispatchNewConn(conn);
         }
       };
       channel.onmessage = (e) => bufferedMsgs.push(new Uint8Array(e.data));
-      channel.onclose = (_e) => {
-        isOpen[channel.label] = false;
-        conn.close();
-      };
+      channel.onclose = (_e) => conn.close();
     };
 
     const connPromise = (async () => {
@@ -120,14 +105,13 @@ export class WebrtcProvider implements NetworkProvider {
         const conn = await connPromise;
 
         if (orderHex) {
+          createChannels(conn);
+
           const cmp = Hash.compare(myOrderHash, Hash.fromHex(orderHex));
           if (cmp < 0) {
-            createChannels(conn);
             const offer = await conn.createOffer();
             await conn.setLocalDescription(offer);
             driver.sendSignal(JSON.stringify({ offer: conn.localDescription }));
-          } else {
-            listenForChannels(conn);
           }
         }
         if (offer) {

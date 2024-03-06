@@ -85,31 +85,32 @@ export class FrontierService2 {
 
     for (const input of inputs) {
       if (input.outputIdx === input.block.frontierOutputIdx) {
+        const selfWeight = this.ctx.get(WeightService)
+          .getSelfWeight(input.block);
+        if (selfWeight.min !== selfWeight.max) {
+          throw new Error(
+            `Cannot merge an input block whose inputs are unknown!`,
+          );
+        }
+
         const voteDepth = frontierVote === ZERO_BLOCK
           ? -1
           : frontierVote.frontierChainDepth ??
             error(`Unconnected frontier chain!`);
         const childDepth = input.block.frontierChainDepth ??
           error(`Unconnected frontier chain!`);
-        const shift = voteDepth - childDepth;
+        const shift = childDepth - voteDepth - 1;
 
         const addWeight = (x: bigint, i: number) => {
-          i += shift;
-          if (i < 0) {
-            i = 0;
-          }
-          while (weights.length <= i) {
+          const idx = i > shift ? i - shift : 0;
+          while (weights.length <= idx) {
             weights.push(0n);
           }
-          weights[i] += x;
+          weights[idx] += x;
         };
 
         input.block.frontierDetail.treeWeights.forEach(addWeight);
-
-        addWeight(
-          this.ctx.get(WeightService).getSelfWeight(input.block).min,
-          0,
-        );
+        addWeight(selfWeight.min, 0);
       }
     }
 

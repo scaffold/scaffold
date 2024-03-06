@@ -217,14 +217,17 @@ export class BlockService {
           this.linkIo(fact, block, outputIdx, inputIdx)
         );
       } else if (output.amount >= 0n) {
-        // this.ctx.get(ClockService).setTimeout(() => {
-        this.ctx.get(UnspentOutputManager).insert(output.verifier, {
-          block: fact,
-          outputIdx,
-          amount: output.amount,
-        });
-        this.ctx.get(GenerationService).ensureRunning(output.verifier);
-        // }, 0);
+        // We set a timeout because ensureRunning gets this block recursively
+        // When we move this to an ingestion method we can remove the timeout.
+        this.ctx.get(ClockService).setTimeout(() => {
+          this.ctx.get(UnspentOutputManager).insert(output.verifier, {
+            block: fact,
+            outputIdx,
+            amount: output.amount,
+          });
+
+          this.ctx.get(GenerationService).ensureRunning(output.verifier);
+        }, 0);
       } else {
         // TODO: What to do in this case; we still need to make the output available if it's required
         // We should add it anyways, and make sure we filter for an appropriate amount when waiting
@@ -510,13 +513,19 @@ export class BlockService {
 
     // this.checkInputAvailability(child);
 
-    // TODO: Only do this once per unique verifier foreach block
-    const hintPrefix = [
-      CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } }),
-    ];
-    this.ctx
-      .get(VerificationService)
-      .enqueueVerification(child, verifier, hintPrefix, 0);
+    // We set a timeout because enqueueVerification gets this block recursively
+    // When we move this to an ingestion method we can remove the timeout.
+    this.ctx.get(ClockService).setTimeout(() => {
+      // TODO: Only do this once per unique verifier foreach block
+      const hintPrefix = [
+        CollateralHint.encode({
+          hint: { CollateralHintVerifier: { groupIdx } },
+        }),
+      ];
+      this.ctx
+        .get(VerificationService)
+        .enqueueVerification(child, verifier, hintPrefix, 0);
+    }, 0);
 
     // if (
     //   child.verifiers[groupIdx] !== undefined &&

@@ -108,7 +108,7 @@ export class RenderService {
       // const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
       const vw = `?`;
       const canon = wrapAccessor(() =>
-        this.ctx.get(WeightService).getCanonicality(block)
+        this.ctx.get(WeightService).getCanonicality(block).canonicality
       );
       props = [
         `work: ${work}; offset: ${offset}`,
