@@ -2,12 +2,6 @@ import { avro } from '../deps.ts';
 import { Hash } from './util/Hash.ts';
 import { bigint2bin, bin2bigint } from './util/bigint.ts';
 
-// declare global {
-//   interface Crypto {
-//     randomUUID: () => string;
-//   }
-// }
-
 class HashLogicalType extends avro.types.LogicalType {
   // constructor(schema: avro.Schema, opts?: any) {
   //   super(schema, opts);
@@ -36,10 +30,6 @@ class HashLogicalType extends avro.types.LogicalType {
       return this._fromValue;
     }
   }
-
-  // random() {
-  //   return new HashLogicalType({ name: 'Hash', type: 'fixed', size: 32 });
-  // }
 }
 
 class Uint8ArrayLogicalType extends avro.types.LogicalType {
@@ -149,7 +139,7 @@ const long = avro.types.LongType.__with({
   },
   fromJSON: BigInt,
   toJSON: Number,
-  isValid: (n: bigint) => typeof n == 'bigint',
+  isValid: (n: bigint) => typeof n === 'bigint',
   compare: (n1: bigint, n2: bigint) => {
     return n1 === n2 ? 0 : n1 < n2 ? -1 : 1;
   },
@@ -290,150 +280,6 @@ export const registry = {
     // Maybe put the verifier on the collateral claim?
   },
 
-  BlockSetTreeEmpty: {
-    name: 'BlockSetTreeEmpty',
-    type: 'record',
-    fields: [],
-  },
-  BlockSetTreeBranch: {
-    name: 'BlockSetTreeBranch',
-    type: 'record',
-    fields: [
-      { name: 'left_child', type: ['null', 'hash'] },
-      { name: 'right_child', type: ['null', 'hash'] },
-    ],
-  },
-  BlockSetTreeIo: {
-    name: 'BlockSetTreeIo',
-    type: 'record',
-    fields: [
-      { name: 'block_hash', type: 'hash' },
-      { name: 'output_idx', type: 'int' },
-
-      // For input trees, this must be -1
-      { name: 'amount', type: 'long' },
-    ],
-  },
-  BlockSetTreeLeaf: {
-    name: 'BlockSetTreeLeaf',
-    type: 'record',
-    fields: [
-      // For the input tree, this is keyed by ???
-      // For the output tree, this is keyed by verifier
-      { name: 'key', type: 'hash' },
-      { name: 'ios', type: { type: 'array', items: 'BlockSetTreeIo' } },
-    ],
-  },
-  BlockSetTreeNode: {
-    name: 'BlockSetTreeNode',
-    type: 'record',
-    fields: [
-      // TODO: Use Verkle trees
-      // https://vitalik.ca/general/2021/06/18/verkle.html
-      {
-        name: 'node',
-        type: [
-          'BlockSetTreeEmpty',
-          'BlockSetTreeBranch',
-          'BlockSetTreeLeaf',
-        ],
-      },
-    ],
-  },
-  BlockSet: {
-    name: 'BlockSet',
-    type: 'record',
-    fields: [
-      { name: 'left_child', type: 'hash' },
-      { name: 'right_child', type: 'hash' },
-
-      { name: 'input_tree_root', type: 'hash' },
-      { name: 'output_tree_root', type: 'hash' },
-
-      { name: 'frontier_vote', type: 'hash' },
-
-      { name: 'input_count', type: 'int' },
-      { name: 'output_count', type: 'int' },
-
-      { name: 'level', type: 'int' },
-      { name: 'score', type: 'int' },
-      { name: 'claimed_work', type: 'long' },
-      { name: 'timestamp', type: 'long' },
-    ],
-  },
-
-  // TODO: Remove this; blocks do the voting
-  // FrontierMessage: {
-  //   name: 'FrontierMessage',
-  //   type: 'record',
-  //   fields: [
-  //     { name: 'public_key', type: 'bytes' },
-  //     { name: 'idx', type: 'int' },
-  //     { name: 'frontier', type: 'hash' },
-  //   ],
-  // },
-
-  BidMessage: {
-    name: 'BidMessage',
-    type: 'record',
-    fields: [
-      { name: 'input', type: 'Verifier' },
-      { name: 'output', type: 'Verifier' },
-      { name: 'amount', type: 'long' },
-    ],
-  },
-  PublicationMessage: {
-    name: 'PublicationMessage',
-    type: 'record',
-    fields: [
-      { name: 'block', type: 'Block' },
-    ],
-  },
-  RequestBlockMessage: {
-    name: 'RequestBlockMessage',
-    type: 'record',
-    fields: [
-      { name: 'hash', type: 'hash' },
-    ],
-  },
-
-  // END Nov 30
-
-  // LoadContract: { name: 'LoadContract', type: 'record', fields: [] },
-  // SelfDurationContract: {
-  //   name: 'SelfDurationContract',
-  //   type: 'record',
-  //   fields: [],
-  // },
-  // SelfInputsContract: {
-  //   name: 'SelfInputsContract',
-  //   type: 'record',
-  //   fields: [],
-  // },
-  // SelfLicensesContract: {
-  //   name: 'SelfLicensesContract',
-  //   type: 'record',
-  //   fields: [],
-  // },
-  // Question: {
-  //   name: 'Verifier',
-  //   type: 'record',
-  //   fields: [
-  //     {
-  //       name: 'contract',
-  //       type: [
-  //         'Verifier',
-  //         'LoadContract',
-  //         'SelfDurationContract',
-  //         'SelfInputsContract',
-  //         'SelfLicensesContract',
-  //       ],
-  //     },
-  //     // { name: 'contractHash', type: 'hash' },
-  //     { name: 'params', type: 'bytes' },
-  //   ],
-  // },
-
   Identification: {
     name: 'Identification',
     type: 'record',
@@ -464,15 +310,7 @@ export const registry = {
       { name: 'protocols', type: { type: 'array', items: 'string' } },
     ],
   },
-  InfoRequest: {
-    name: 'InfoRequest',
-    type: 'record',
-    fields: [
-      // An array of public keys, specifying the path to the node we're looking for.
-      // This request is not signed so it's not prescriptive, just a hint.
-      { name: 'path', type: { type: 'array', items: 'bytes' } },
-    ],
-  },
+
   ConnectionSignal: {
     name: 'ConnectionSignal',
     type: 'record',
@@ -493,167 +331,27 @@ export const registry = {
       { name: 'signalData', type: 'string' },
     ],
   },
-  PingMessage: {
-    name: 'PingMessage',
+
+  Ping: {
+    name: 'Ping',
     type: 'record',
     fields: [{ name: 'secret', type: 'hash' }],
   },
-  PongMessage: {
-    name: 'PongMessage',
+  Pong: {
+    name: 'Pong',
     type: 'record',
     fields: [{ name: 'secret', type: 'hash' }],
   },
-  ConnectionSpec: {
-    name: 'ConnectionSpec',
-    type: 'record',
-    fields: [
-      { name: 'protocol', type: 'string' },
-      { name: 'data', type: 'string' },
-    ],
-  },
-  BridgeStartMessage: {
-    name: 'BridgeStartMessage',
-    type: 'record',
-    fields: [
-      { name: 'dst_node_hash', type: 'hash' },
-      { name: 'connection_spec', type: 'ConnectionSpec' },
-    ],
-  },
-  BridgeEndMessage: {
-    name: 'BridgeEndMessage',
-    type: 'record',
-    fields: [
-      { name: 'src_node_hash', type: 'hash' },
-      { name: 'connection_spec', type: 'ConnectionSpec' },
-    ],
-  },
-  SubscribeMessage: {
-    // This message is purely informational; publishing licenses with BlockOutput, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
-    name: 'SubscribeMessage',
-    type: 'record',
-    fields: [
-      // { name: 'question_hash', type: 'hash' },
-      { name: 'verifier', type: 'Verifier' },
-      // { name: 'child_question', type: 'Verifier' },
-      // // { name: 'destination', type: 'hash' },
-      // { name: 'expected_reward', type: 'long' },
-    ],
-  },
-  UnsubscribeMessage: {
-    // This message is purely informational; publishing licenses with BlockOutput, which can be claimed by an answer to some question is the way to incentivize computation of an answer.
-    name: 'UnsubscribeMessage',
-    type: 'record',
-    fields: [
-      // { name: 'question_hash', type: 'hash' },
-      { name: 'question', type: 'Verifier' },
-      // { name: 'child_question', type: 'Verifier' },
-      // // { name: 'destination', type: 'hash' },
-      // { name: 'expected_reward', type: 'long' },
-    ],
-  },
-  License: {
-    name: 'License',
-    type: 'record',
-    fields: [
-      { name: 'question', type: 'Verifier' },
 
-      // Always positive; specifies BlockOutput that a question is able to BlockInput by using this answer in their inputs.
-      // TODO: Make this Amount; not sure why it's not working yet.
-      { name: 'BlockOutput', type: 'long' },
-    ],
-  },
-  PublishMessage: {
-    name: 'PublishMessage',
-    type: 'record',
-    fields: [
-      // { name: 'question_hash', type: 'hash' },
-      // { name: 'question', type: 'Verifier' }, // I think this can just be the question hash, since subscribers will know it?
-
-      // Note that the answer in here behaves as an input - if it becomes non-canonical, this publication needs to become so as well.
-      // TODO: Perhaps add it as an input? Does it even need to be separate?
-      { name: 'question', type: 'Verifier' },
-
-      // { name: 'author_public_key', type: 'bytes' },
-
-      { name: 'inputs', type: { type: 'array', items: 'hash' } },
-      // { name: 'birth_proof', type: 'HashExpr' },
-      { name: 'data', type: 'bytes' },
-
-      { name: 'licenses', type: { type: 'array', items: 'License' } },
-
-      // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
-      // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
-      // For questions with easy, rewarding answers (like epochs),
-      //   the answer will be created as soon as possible after the required timestamp.
-      { name: 'timestamp', type: 'long' },
-    ],
-  },
   ForwardingFeedback: {
     name: 'ForwardingFeedback',
     type: 'record',
     fields: [
-      { name: 'answer_hash', type: 'hash' },
+      { name: 'hash', type: 'hash' },
 
       // Negative means you were too slow, by N ms.
       // Positive means you were quicker than everyone else by N ms.
-      { name: 'relative_time_ms', type: 'int' },
-    ],
-  },
-  CiteMessage: {
-    name: 'CiteMessage',
-    type: 'record',
-    fields: [{ name: 'payment_proof', type: 'hash' }],
-  },
-  CollateralMessage: {
-    name: 'CollateralMessage',
-    type: 'record',
-    fields: [
-      { name: 'publication_hash', type: 'hash' },
-      { name: 'collateral', type: 'long' },
-    ],
-  },
-  BribeMessage: { name: 'BribeMessage', type: 'record', fields: [] },
-  DerivedWorkMessage: {
-    name: 'DerivedWorkMessage',
-    type: 'record',
-    fields: [
-      { name: 'answer_hash', type: 'hash' },
-      { name: 'work_log2', type: 'int' },
-    ],
-  },
-  HashExpr: {
-    name: 'HashExpr',
-    type: 'record',
-    fields: [
-      { name: 'pre_pad', type: 'bytes' },
-      { name: 'parent', type: ['null', 'HashExpr'] },
-      { name: 'post_pad', type: 'bytes' },
-    ],
-  },
-  DhtJoinMessage: {
-    name: 'DhtJoinMessage',
-    type: 'record',
-    fields: [{ name: 'hash', type: 'hash' }],
-  },
-  FeedbackMessage: {
-    name: 'FeedbackMessage',
-    type: 'record',
-    fields: [
-      // { name: 'code', type: 'hash' },
-      { name: 'msg_phrase', type: 'string' },
-      { name: 'msg_detail', type: 'string' },
-
-      // TODO: Make maps work
-      // { name: 'props', type: 'map', values: 'string' },
-
-      // Goodness is typically from -1 to 0.
-      // 0 is inconsequential, like a debug or info message.
-      // -1 is fatal; you can expect the connection to be severed.
-      // Values lower than -1 mean the peer or connection will be blocked for some time.
-      // Values between -1 and 0 are used for less significant warnings.
-      // In general, goodness is additive, so 10 feedback messages of goodness -0.1 are comparable to a message of goodness -1.
-      // Positive goodness can be used to signify positive feedback.
-      { name: 'goodness', type: 'float' },
+      { name: 'relativeTimeMs', type: 'int' },
     ],
   },
 
@@ -672,34 +370,6 @@ export const registry = {
     fields: [
       { name: 'hash', type: 'hash' },
       { name: 'secret', type: 'bytes' },
-    ],
-  },
-
-  EpochParams: {
-    name: 'EpochParams',
-    type: 'record',
-    fields: [
-      { name: 'height', type: 'long' },
-    ],
-  },
-  EpochInclusionParams: {
-    name: 'EpochInclusionParams',
-    type: 'record',
-    fields: [
-      { name: 'hash', type: 'hash' },
-    ],
-  },
-  EpochBody: {
-    name: 'EpochBody',
-    type: 'record',
-    fields: [
-      // This is the hash of the epoch at `height - 1`.
-      { name: 'prior_hash', type: 'hash' },
-
-      // This is the hash of the epoch at `height - LSB(height)`.
-      { name: 'skip_hash', type: 'hash' },
-
-      { name: 'events', type: { type: 'array', items: 'hash' } },
     ],
   },
 
@@ -926,10 +596,6 @@ type MsgType<Name extends keyof typeof registry> = ObjectType<
   typeof registry
 >;
 
-// export const Hash = makeMsg(registry, 'Hash');
-// export type Hash = MsgType<'Hash'>;
-export const Amount = makeMsg(registry, 'Amount');
-export type Amount = MsgType<'Amount'>;
 export const Verifier = makeMsg(registry, 'Verifier');
 export type Verifier = MsgType<'Verifier'>;
 export const BlockInput = makeMsg(registry, 'BlockInput');
@@ -940,74 +606,24 @@ export const EpochInclusionProof = makeMsg(registry, 'EpochInclusionProof');
 export type EpochInclusionProof = MsgType<'EpochInclusionProof'>;
 export const Block = makeMsg(registry, 'Block');
 export type Block = MsgType<'Block'>;
-export const BlockSetTreeBranch = makeMsg(registry, 'BlockSetTreeBranch');
-export type BlockSetTreeBranch = MsgType<'BlockSetTreeBranch'>;
-export const BlockSetTreeIo = makeMsg(registry, 'BlockSetTreeIo');
-export type BlockSetTreeIo = MsgType<'BlockSetTreeIo'>;
-export const BlockSetTreeLeaf = makeMsg(registry, 'BlockSetTreeLeaf');
-export type BlockSetTreeLeaf = MsgType<'BlockSetTreeLeaf'>;
-export const BlockSetTreeNode = makeMsg(registry, 'BlockSetTreeNode');
-export type BlockSetTreeNode = MsgType<'BlockSetTreeNode'>;
-export const BlockSet = makeMsg(registry, 'BlockSet');
-export type BlockSet = MsgType<'BlockSet'>;
-// export const FrontierMessage = makeMsg(registry, 'FrontierMessage');
-// export type FrontierMessage = MsgType<'FrontierMessage'>;
-export const BidMessage = makeMsg(registry, 'BidMessage');
-export type BidMessage = MsgType<'BidMessage'>;
-export const PublicationMessage = makeMsg(registry, 'PublicationMessage');
-export type PublicationMessage = MsgType<'PublicationMessage'>;
-export const RequestBlockMessage = makeMsg(registry, 'RequestBlockMessage');
-export type RequestBlockMessage = MsgType<'RequestBlockMessage'>;
 export const Identification = makeMsg(registry, 'Identification');
 export type Identification = MsgType<'Identification'>;
 export const PeerInfo = makeMsg(registry, 'PeerInfo');
 export type PeerInfo = MsgType<'PeerInfo'>;
-export const InfoRequest = makeMsg(registry, 'InfoRequest');
-export type InfoRequest = MsgType<'InfoRequest'>;
 export const ConnectionSignal = makeMsg(registry, 'ConnectionSignal');
 export type ConnectionSignal = MsgType<'ConnectionSignal'>;
 export const SignalPayload = makeMsg(registry, 'SignalPayload');
 export type SignalPayload = MsgType<'SignalPayload'>;
-export const PingMessage = makeMsg(registry, 'PingMessage');
-export type PingMessage = MsgType<'PingMessage'>;
-export const PongMessage = makeMsg(registry, 'PongMessage');
-export type PongMessage = MsgType<'PongMessage'>;
-export const ConnectionSpec = makeMsg(registry, 'ConnectionSpec');
-export type ConnectionSpec = MsgType<'ConnectionSpec'>;
-export const BridgeStartMessage = makeMsg(registry, 'BridgeStartMessage');
-export type BridgeStartMessage = MsgType<'BridgeStartMessage'>;
-export const BridgeEndMessage = makeMsg(registry, 'BridgeEndMessage');
-export type BridgeEndMessage = MsgType<'BridgeEndMessage'>;
-export const SubscribeMessage = makeMsg(registry, 'SubscribeMessage');
-export type SubscribeMessage = MsgType<'SubscribeMessage'>;
-export const UnsubscribeMessage = makeMsg(registry, 'UnsubscribeMessage');
-export type UnsubscribeMessage = MsgType<'UnsubscribeMessage'>;
-export const License = makeMsg(registry, 'License');
-export type License = MsgType<'License'>;
-export const PublishMessage = makeMsg(registry, 'PublishMessage');
-export type PublishMessage = MsgType<'PublishMessage'>;
+export const Ping = makeMsg(registry, 'Ping');
+export type Ping = MsgType<'Ping'>;
+export const Pong = makeMsg(registry, 'Pong');
+export type Pong = MsgType<'Pong'>;
 export const ForwardingFeedback = makeMsg(registry, 'ForwardingFeedback');
 export type ForwardingFeedback = MsgType<'ForwardingFeedback'>;
-export const CollateralMessage = makeMsg(registry, 'CollateralMessage');
-export type CollateralMessage = MsgType<'CollateralMessage'>;
-export const BribeMessage = makeMsg(registry, 'BribeMessage');
-export type BribeMessage = MsgType<'BribeMessage'>;
-export const HashExpr = makeMsg(registry, 'HashExpr');
-export type HashExpr = MsgType<'HashExpr'>;
-export const DhtJoinMessage = makeMsg(registry, 'DhtJoinMessage');
-export type DhtJoinMessage = MsgType<'DhtJoinMessage'>;
-export const FeedbackMessage = makeMsg(registry, 'FeedbackMessage');
-export type FeedbackMessage = MsgType<'FeedbackMessage'>;
 export const AccountContractParams = makeMsg(registry, 'AccountContractParams');
 export type AccountContractParams = MsgType<'AccountContractParams'>;
 export const DataContractParams = makeMsg(registry, 'DataContractParams');
 export type DataContractParams = MsgType<'DataContractParams'>;
-export const EpochParams = makeMsg(registry, 'EpochParams');
-export type EpochParams = MsgType<'EpochParams'>;
-export const EpochInclusionParams = makeMsg(registry, 'EpochInclusionParams');
-export type EpochInclusionParams = MsgType<'EpochInclusionParams'>;
-export const EpochBody = makeMsg(registry, 'EpochBody');
-export type EpochBody = MsgType<'EpochBody'>;
 export const TimeParams = makeMsg(registry, 'TimeParams');
 export type TimeParams = MsgType<'TimeParams'>;
 export const JsWasiParams = makeMsg(registry, 'JsWasiParams');
@@ -1022,17 +638,3 @@ export const FrontierTreeIoEntry = makeMsg(registry, 'FrontierTreeIoEntry');
 export type FrontierTreeIoEntry = MsgType<'FrontierTreeIoEntry'>;
 export const FrontierTreeIoBranch = makeMsg(registry, 'FrontierTreeIoBranch');
 export type FrontierTreeIoBranch = MsgType<'FrontierTreeIoBranch'>;
-
-// const buf = Question.encode({
-//   contract: {
-//     Question: {
-//       contract: null,
-//       contractHash: HashClass.digest('abc'),
-//       params: new Uint8Array([4, 5, 6]),
-//     },
-//   },
-//   contractHash: HashClass.digest('abc'),
-//   params: new Uint8Array([1, 2, 3]),
-// });
-// console.log(buf);
-// console.log(Question.decode(buf));

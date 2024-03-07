@@ -13,13 +13,9 @@ import { Context } from './Context.ts';
 import { VerificationService } from './VerificationService.ts';
 import { Logger } from './Logger.ts';
 import {
-  AccountContractParams,
   Block,
   BlockInput,
   BlockOutput,
-  BlockSet,
-  EpochInclusionParams,
-  EpochInclusionProof,
   FrontierTreeDetail,
   FrontierTreeParams,
   Verifier,

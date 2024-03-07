@@ -58,7 +58,6 @@ export const headerSize = factMagic.byteLength + 1;
 // Version by incrementing factMagic or creating a new FactType
 
 const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an implementation detail
-const SIGNATURE_RECOVERY_BIT = 64;
 
 const typeHasSignature: boolean[] = [];
 typeHasSignature[FactType.Identification] = true;

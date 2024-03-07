@@ -4,7 +4,7 @@ import { Connection, ConnectionService } from './ConnectionService.ts';
 import { KeyService } from './KeyService.ts';
 import { Fact, FactBase, FactType, PeerInfoFact } from './FactMeta.ts';
 import { NetworkService } from './NetworkService.ts';
-import { InfoRequest, PeerInfo } from './messages.ts';
+import { PeerInfo } from './messages.ts';
 import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';
 import { SignalingService } from './SignalingService.ts';
