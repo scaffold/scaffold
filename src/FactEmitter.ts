@@ -11,6 +11,7 @@ import { ContractClassifierService } from './ContractClassifierService.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { ClockService } from './ClockService.ts';
 import { EmitterRecordSet } from './record_sets/EmitterRecordSet.ts';
+import { signalPriorityResolution } from './SignalingService.ts';
 
 const packetOverheadBytes = 256;
 
@@ -61,6 +62,11 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
 
   public notify(fact: Fact) {
     this.increaseWeight(fact);
+
+    // TODO: Remove this
+    for (const dst of this.getDestinations(fact)) {
+      this.ctx.get(FactService).sendTo(fact, dst);
+    }
   }
 
   public addGenerator(generator: FactGenerator) {
@@ -199,7 +205,8 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
         return 0;
       }
 
-      value += 1e2;
+      value += 1e2 *
+        Math.pow(2, Math.min(fact.priority, 0) / signalPriorityResolution);
     } else if (fact.type === FactType.PeerInfo) {
       const publicKey = this.ctx.get(FactService).getPublicKey(fact);
       const peer = this.ctx.get(PeerManager).getPeer(publicKey);

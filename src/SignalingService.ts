@@ -18,6 +18,8 @@ import { FactEmitter, FactGenerator } from './FactEmitter.ts';
 import { FactSource } from './FactMeta.ts';
 
 const closeTimeoutMs = 30000;
+const attachPriorityToSignal = false;
+export const signalPriorityResolution = 16;
 
 export interface SignalingState {
   signalingNonce: Uint8Array;
@@ -156,7 +158,16 @@ export class SignalingService {
           throw new Error(`No destination known!`);
         }
 
-        const signal = { replyTo: infoFact.hash, payload: payloadData };
+        const signal: ConnectionSignal = {
+          replyTo: infoFact.hash,
+          priority: attachPriorityToSignal
+            ? Math.max(
+              -0x80000000,
+              Math.round(Math.log2(clampedPriority) * signalPriorityResolution),
+            )
+            : 0,
+          payload: payloadData,
+        };
         return this.ctx.get(FactService)
           .emit(signal, ConnectionSignal, FactType.ConnectionSignal);
       },

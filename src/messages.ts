@@ -316,6 +316,7 @@ export const registry = {
     type: 'record',
     fields: [
       { name: 'replyTo', type: 'hash' },
+      { name: 'priority', type: 'int' },
       { name: 'payload', type: 'bytes' },
     ],
   },

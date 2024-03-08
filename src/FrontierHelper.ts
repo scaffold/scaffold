@@ -17,8 +17,6 @@ export class FrontierHelper {
     frontierVote: BlockFact | typeof ZERO_BLOCK,
     fetchBlock: (hash: Hash) => Block,
   ) {
-    // left frontier tree -> left frontier input block -> right frontier tree -> right frontier input block
-
     const consumedInputs = new Map<HashPrimitive, FrontierTreeIoBranch>();
     const producedOutputs = new Map<HashPrimitive, FrontierTreeIoBranch>();
 

@@ -308,8 +308,9 @@ export class WeightService {
   public getDescendant(
     fact: BlockFact,
     cache = this.getCache(),
+    assume: BlockFact[] = [],
   ): DescendantResult {
-    return mapPut(cache.descendant, fact, () => {
+    const fn = () => {
       // TODO: We might have to look at parent vote's canonicalities
 
       let selfWeight = this.getSelfWeight(fact, cache).min;
@@ -330,7 +331,8 @@ export class WeightService {
       // TODO: Add in the penalty here?
 
       const parent = fact.outputClaims[fact.frontierOutputIdx].find((x) =>
-        this.getClaimCanonicality(x.block, fact, cache).canonicality >= 0n
+        this.getClaimCanonicality(x.block, cache, [...assume, fact])
+          .canonicality >= 0n
       );
       if (parent !== undefined) {
         let siblingWeight = 0n;
@@ -359,7 +361,8 @@ export class WeightService {
       const voters = fact.frontierVoters.filter((x) => {
         const candidate = this.getDescendant(x, cache);
         return candidate.parent === undefined &&
-          this.getClaimCanonicality(x, fact, cache).canonicality >= 0n;
+          this.getClaimCanonicality(x, cache, [...assume, fact]).canonicality >=
+            0n;
       });
       return {
         voters,
@@ -396,7 +399,9 @@ export class WeightService {
       // }
 
       // return { minWeight };
-    });
+    };
+
+    return assume.length === 0 ? mapPut(cache.descendant, fact, fn) : fn();
   }
 
   public isCanonical(fact: BlockFact, cache = this.getCache()) {
@@ -416,7 +421,7 @@ export class WeightService {
 
       // const selfWeight = this.getSelfWeight(fact, cache).min;
       // const descWeight = this.getDescendant(fact, cache).weight;
-      let canonicality = this.getClaimCanonicality(fact, undefined, cache);
+      let canonicality = this.getClaimCanonicality(fact, cache);
 
       // TODO: Re-add minimization by this.ctx.config.getWeightLimit()
 
@@ -454,8 +459,8 @@ export class WeightService {
 
   public getClaimCanonicality(
     fact: BlockFact,
-    assume?: BlockFact,
     cache = this.getCache(),
+    assume: BlockFact[] = [],
   ) {
     const fn = () => {
       let canonicality = 0n;
@@ -467,9 +472,11 @@ export class WeightService {
           continue;
         }
 
-        if (assume !== undefined) {
+        if (assume.length !== 0) {
           const ancestorClaim = claims.find((x) =>
-            this.ctx.get(FrontierChainService).isAncestor(x.block, assume)
+            assume.some((y) =>
+              this.ctx.get(FrontierChainService).isAncestor(x.block, y)
+            )
           );
           if (ancestorClaim !== undefined) {
             if (ancestorClaim.block === fact) {
@@ -493,7 +500,7 @@ export class WeightService {
           .reduce((x, y) => x < y ? x : y);
 
         const scores = claims.map((x) =>
-          this.getDescendant(x.block, cache).weight -
+          this.getDescendant(x.block, cache, assume).weight -
           this.ctx.config.getOverpaymentPenalty(
             this.getSelfWeight(x.block, cache).max - minWeight,
           )
@@ -513,7 +520,7 @@ export class WeightService {
       return { canonicality, usurper };
     };
 
-    return assume !== undefined
+    return assume.length === 0
       ? mapPut(cache.claimCanonicality, fact, fn)
       : fn();
   }
