@@ -1,10 +1,11 @@
 import { InputSpec } from './BlockBuilder.ts';
 import { Context } from './Context.ts';
 import { Verifier } from './messages.ts';
+import { UnspentOutputRecordSet } from './record_sets/UnspentOutputRecordSet.ts';
 import { Hash } from './util/Hash.ts';
-import { Queue } from './util/Queue.ts';
+import { QueueMuxer } from './util/QueueMuxer.ts';
 
-export class UnspentOutputManager extends Queue<Verifier, InputSpec> {
+export class UnspentOutputManager extends QueueMuxer<Verifier, InputSpec> {
   constructor(private ctx: Context) {
     super((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
 
@@ -16,7 +17,7 @@ export class UnspentOutputManager extends Queue<Verifier, InputSpec> {
   }
 
   public tick() {
-    for (const queue of this.queues.values()) {
+    for (const queue of this.getQueues().values()) {
       for (let i = 0; i < queue.pending.length; i++) {
         for (let j = 0; j < queue.handlers.length; j++) {
           if (queue.handlers[j].filter(queue.pending[i])) {
@@ -30,5 +31,9 @@ export class UnspentOutputManager extends Queue<Verifier, InputSpec> {
     }
 
     this.cleanup();
+  }
+
+  protected override getRecordSet() {
+    return this.ctx.maybeGet(UnspentOutputRecordSet);
   }
 }

@@ -1,5 +1,5 @@
 import { Context } from '../Context.ts';
-import { ReactiveRecordSet } from '../util/ReactiveRecordSet.ts';
+import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
 import { WorkerDriver, WorkerDriverService } from '../WorkerDriverService.ts';
 
 export class WorkerRecordSet extends ReactiveRecordSet<WorkerDriver> {

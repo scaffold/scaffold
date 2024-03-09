@@ -1,6 +1,6 @@
 import { Context } from '../Context.ts';
 import { EmitterItem, FactEmitter } from '../FactEmitter.ts';
-import { ReactiveRecordSet } from '../util/ReactiveRecordSet.ts';
+import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
 import { mapPut } from '../util/map.ts';
 
 export interface EmitterRecord {
@@ -29,22 +29,22 @@ export class EmitterRecordSet extends ReactiveRecordSet<EmitterRecord> {
     super();
   }
 
-  public update(update: Partial<EmitterRecord> & Pick<EmitterRecord, 'item'>) {
-    if (update.weight === undefined || update.weight > 0) {
-      mapPut(this.records, update.item, () => {
-        const rec = Object.assign({}, recordBase, update);
+  public update(patch: Partial<EmitterRecord> & Pick<EmitterRecord, 'item'>) {
+    if (patch.weight === undefined || patch.weight > 0) {
+      mapPut(this.records, patch.item, () => {
+        const rec = Object.assign({}, recordBase, patch);
         this.dispatchAdd(rec);
         return rec;
       }, (rec) => {
-        Object.assign(rec, update);
+        Object.assign(rec, patch);
         this.dispatchUpdate(rec);
         return rec;
       }).updates++;
     } else {
-      const found = this.records.get(update.item);
+      const found = this.records.get(patch.item);
       if (found !== undefined) {
         this.dispatchRemove(found);
-        this.records.delete(update.item);
+        this.records.delete(patch.item);
       }
     }
   }

@@ -1,5 +1,5 @@
 import { Context } from '../Context.ts';
-import { ReactiveRecordSet } from '../util/ReactiveRecordSet.ts';
+import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
 import { Connection } from '../ConnectionService.ts';
 import { ConnectionService } from '../ConnectionService.ts';
 

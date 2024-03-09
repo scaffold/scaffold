@@ -1,4 +1,4 @@
-import { mapPut } from './map.ts';
+import { mapPut } from '../util/map.ts';
 
 // export interface ReactiveRecordSet<RecordType> {
 //   getAll(): Iterable<RecordType>;
