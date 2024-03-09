@@ -122,16 +122,15 @@ export class FetchService {
       }
     }
 
-    let onState: (claim?: OutputClaim) => boolean;
+    let onState: (claim?: { block: BlockFact; groupIdx: number }) => boolean;
     let watchItvl: number | undefined;
     if (onBody !== undefined || onResponseBlock !== undefined) {
       let prevBody: Uint8Array | undefined;
       onState = (claim) => {
         if (claim !== undefined) {
-          const input = claim.block.inputs[claim.inputIdx];
-          onResponseBlock?.(claim.block, input.groupIdx);
+          onResponseBlock?.(claim.block, claim.groupIdx);
 
-          const body = claim.block.bodies[input.groupIdx];
+          const body = claim.block.bodies[claim.groupIdx];
           if (prevBody === undefined || !arrEquals(body, prevBody)) {
             prevBody = body;
             onBody?.(body);
@@ -150,17 +149,9 @@ export class FetchService {
       // this.ctx.get(BlockService).satisfactionMonitor.on(verifier, onState);
 
       watchItvl = this.ctx.config.timeProvider.setInterval(() => {
-        const genesis = this.ctx.get(GenesisService).getGenesisBlock();
-        const leaves =
-          this.ctx.get(WeightService).getDescendant(genesis).leaves;
-        // TODO: Use all leaves
-        const base = leaves[leaves.length - 1];
-        const claims = base !== undefined
-          ? FrontierHelper.findOutputs(base, verifier, false)
-            .flatMap((x) => this.ctx.get(BlockService).getClaims(x))
-            .filter((x) => this.ctx.get(WeightService).isCanonical(x.block))
-          : [];
-        onState(claims[claims.length - 1]);
+        const claim = this.ctx.get(BlockService).getBlocksByVerifier(verifier)
+          .findLast((x) => this.ctx.get(WeightService).isCanonical(x.block));
+        onState(claim);
 
         // const blocks = this.ctx.get(FactService).hackyGetBlocksMatching();
         // for (const block of blocks) {

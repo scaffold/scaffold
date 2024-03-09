@@ -482,11 +482,6 @@ export class WeightService {
             if (ancestorClaim.block === fact) {
               throw new Error(`Assume must not be an ancestor of fact!`);
             } else {
-              console.warn(
-                `Merged a double-spend at block ${
-                  fact.hash.toHex().slice(0, 10)
-                }!`,
-              );
               if (-1n < canonicality) {
                 canonicality = -1n;
               }
