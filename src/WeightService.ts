@@ -466,6 +466,19 @@ export class WeightService {
       let canonicality = 0n;
       let usurper: OutputClaim | undefined;
 
+      // if (fact.frontierVoteBlock !== undefined) {
+      //   const desc = this.getDescendant(fact.frontierVoteBlock, cache, assume);
+      //   if (
+      //     desc.parent !== undefined &&
+      //     this.getClaimCanonicality(desc.parent, cache, assume).canonicality >=
+      //       0n
+      //   ) {
+      //     if (-1n < canonicality) {
+      //       canonicality = -1n;
+      //     }
+      //   }
+      // }
+
       for (const input of fact.inputs) {
         const claims = this.ctx.get(BlockService).getClaims(input);
         if (claims.length === 1) {

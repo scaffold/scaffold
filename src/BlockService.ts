@@ -56,6 +56,7 @@ import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { GenesisService } from './GenesisService.ts';
 import { ClockService } from './ClockService.ts';
 import { FactEmitter } from './FactEmitter.ts';
+import { RenderService } from './RenderService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -349,6 +350,8 @@ export class BlockService {
 
       outputIdx++;
     }
+
+    this.ctx.maybeGet(RenderService)?.forget(block);
   }
 
   private getFrontierMeta(block: Block) {

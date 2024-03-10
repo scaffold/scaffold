@@ -4,6 +4,7 @@ import {
   ConnectionSignal,
   Identification,
   PeerInfo,
+  SignalPayload,
 } from './messages.ts';
 import { Connection } from './ConnectionService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
@@ -18,7 +19,7 @@ export enum FactType {
   PeerInfo,
   // InfoRequest,
   ConnectionSignal,
-  // SignalPayload,
+  SignalPayload,
   Block, // TODO: Rename to bundle or something
   // BlockSet, // TODO: Rename to bag or something
   // BlockSetTreeNode,
@@ -53,14 +54,16 @@ export interface FactBase {
 
   // Packet parsing properties
   data: Uint8Array; // The full packet data
-  type: FactType; // The type
+  // type: FactType; // The type
   message: Uint8Array; // The subset of the packet data that will be deserialized into a sub-type.
-  signature?: Uint8Array; // The subset of the packet data that should be used as a signature, if any.
+
+  // Signature properties
+  signature?: Uint8Array; // The subset of the packet data that should be used as a signature
+  signer?: Uint8Array; // The recovered public key of the signature
 
   // Reception properties
   receivedAt: number;
   source: FactSource;
-  signer?: Uint8Array;
   fromConnections: Connection[];
 
   // Publication properties
@@ -87,16 +90,24 @@ export interface FactBase {
   backtrace?: string;
 }
 
-export interface IdentificationFact extends FactBase, Identification {
+export interface SignedFact extends FactBase {
+  signature: Uint8Array; // The subset of the packet data that should be used as a signature
+  signer: Uint8Array; // The recovered public key of the signature
+}
+
+export interface IdentificationFact extends SignedFact, Identification {
   type: FactType.Identification;
 }
-export interface PeerInfoFact extends FactBase, PeerInfo {
+export interface PeerInfoFact extends SignedFact, PeerInfo {
   type: FactType.PeerInfo;
 }
-export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
+export interface ConnectionSignalFact extends SignedFact, ConnectionSignal {
   type: FactType.ConnectionSignal;
 }
-export interface BlockFact extends FactBase, Block, BlockMeta {
+export interface SignalPayloadFact extends FactBase, SignalPayload {
+  type: FactType.SignalPayload;
+}
+export interface BlockFact extends SignedFact, Block, BlockMeta {
   type: FactType.Block;
 }
 
@@ -104,4 +115,5 @@ export type Fact =
   | IdentificationFact
   | PeerInfoFact
   | ConnectionSignalFact
+  | SignalPayloadFact
   | BlockFact;

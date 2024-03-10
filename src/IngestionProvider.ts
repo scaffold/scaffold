@@ -1,4 +1,4 @@
-import { Fact, FactBase, FactType } from './FactMeta.ts';
+import { Fact, FactBase, SignedFact } from './FactMeta.ts';
 
 /*
 Decompress & extract type
@@ -30,24 +30,21 @@ export const enum Invalidities {
   // ...
 }
 
-interface IngestionDriver {
-  save(): void;
-  invalidate(fact: Fact): void;
-}
-
-export interface IngestionProvider<Type extends FactType> {
-  readonly type: FactType;
-  readonly isSigned: boolean;
+export interface IngestionProvider<SubFact extends Fact> {
+  readonly type: SubFact['type'];
+  readonly isPersistent: boolean;
+  readonly isSigned: SubFact extends SignedFact ? true : false;
 
   // Creates the fact. It doesn't exist until this method returns; calls to FactService.get will throw.
-  create(fact: FactBase): Fact & { type: Type };
+  // Note this has to be an arrow declaration to enable contravariant type checking.
+  create: (base: FactBase) => SubFact;
 
-  // Validates the graph after consuming this fact. Every peer should either pass or call invalidate equivalently, given the same graph.
-  // Don't throw; even if this fact is invalid. Invalidate. Other facts could be invalidated too.
-  check(fact: Fact & { type: Type }): void;
+  // // Validates the graph after consuming this fact. Every peer should either pass or call invalidate equivalently, given the same graph.
+  // // Don't throw; even if this fact is invalid. Invalidate. Other facts could be invalidated too.
+  // check(fact: SubFact): void;
 
   // Ingest the fact. Launches generators and other things.
-  ingest(fact: Fact & { type: Type }): void;
+  ingest: (fact: SubFact) => void;
 
-  forget(fact: Fact): void;
+  forget: (fact: SubFact) => void;
 }

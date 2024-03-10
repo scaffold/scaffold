@@ -1,3 +1,4 @@
+import { Context } from './Context.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './WorkerDriverService.ts';
 import { log } from '../deps.ts';
@@ -8,7 +9,8 @@ import { NetworkProvider } from './NetworkProvider.ts';
 import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';
 import { defaultContractProviders } from './contracts/defaultContractProviders.ts';
-import { todo } from './util/functional.ts';
+import { IngestionProvider } from './IngestionProvider.ts';
+import { Fact } from './FactMeta.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -101,6 +103,8 @@ export interface Config {
   // TODO: Split into generation and verification providers
   contractProviders: ContractProvider[];
 
+  ingestionProviders: { new (context: Context): IngestionProvider<Fact> }[];
+
   // appraisalProvider: AppraisalProvider;
 
   approxComputePricePerSecond: bigint; // TODO: I don't think we need this, just getGenerationReward.
@@ -142,7 +146,7 @@ export interface Config {
 
   dbgVerifyGenerations: boolean;
 
-  enableBlockIngestion: boolean;
+  // enableBlockIngestion: boolean;
   enableValidation: boolean;
   enableWorkerLogging: boolean;
   enableSignalingLogging: boolean;
@@ -203,7 +207,6 @@ export const makeDefaultConfig = () =>
     backgroundJobParameters: {},
     testParameters: {},
     dbgVerifyGenerations: false,
-    enableBlockIngestion: true,
     enableValidation: true,
     enableWorkerLogging: true,
     enableSignalingLogging: true,

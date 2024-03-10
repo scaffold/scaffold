@@ -38,11 +38,10 @@ export class RenderService {
 
   constructor(private ctx: Context) {
     this.graphviz = Graphviz.load();
+  }
 
-    ctx.get(FactService).onForget(
-      FactType.Block,
-      (block) => this.extra.push(block),
-    );
+  public forget(block: BlockFact) {
+    this.extra.push(block);
   }
 
   public async renderSvg(config: RenderConfig = {}) {

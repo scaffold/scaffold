@@ -1,6 +1,6 @@
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
-import { Fact, FactSource, FactType } from './FactMeta.ts';
+import { Fact, FactSource, FactType, PersistentFact } from './FactMeta.ts';
 import { FactService, ingestingFact } from './FactService.ts';
 
 export class GarbageCollectionService {
@@ -8,7 +8,7 @@ export class GarbageCollectionService {
 
   constructor(private ctx: Context) {}
 
-  public markVisited(fact: Fact) {
+  public markVisited(fact: PersistentFact) {
     fact.visitedAt = this.tick++;
     fact.visitedBy = new Error().stack;
   }
@@ -24,7 +24,7 @@ export class GarbageCollectionService {
   private dropOldFact() {
     const candidates = [...this.ctx.get(FactService).getAll().entries()].filter(
       ([_, fact]) => {
-        if (fact === ingestingFact) {
+        if (fact === ingestingFact || !('references' in fact)) {
           return true;
         }
 
@@ -53,10 +53,10 @@ export class GarbageCollectionService {
       },
     );
 
-    let bestCandidate: Fact | undefined;
+    let bestCandidate: PersistentFact | undefined;
     for (const [_key, cd] of candidates) {
       if (
-        cd !== ingestingFact &&
+        cd !== ingestingFact && 'references' in cd &&
         (bestCandidate === undefined || cd.visitedAt < bestCandidate.visitedAt)
       ) {
         bestCandidate = cd;
