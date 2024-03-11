@@ -11,6 +11,7 @@ import { ContractProvider } from './SpecialContractManager.ts';
 import { defaultContractProviders } from './contracts/defaultContractProviders.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
 import { Fact } from './FactMeta.ts';
+import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -103,7 +104,9 @@ export interface Config {
   // TODO: Split into generation and verification providers
   contractProviders: ContractProvider[];
 
-  ingestionProviders: { new (context: Context): IngestionProvider<Fact> }[];
+  // Unlike the other providers, these will be managed (created and destroyed) by scaffold.
+  // Pass arguments by binding to the class constructor.
+  ingestionProviders: { new (context: Context): IngestionProvider<any> }[];
 
   // appraisalProvider: AppraisalProvider;
 
@@ -174,6 +177,7 @@ export const makeDefaultConfig = () =>
     },
     executionProviders: [],
     contractProviders: defaultContractProviders,
+    ingestionProviders: defaultIngestionProviders,
     approxComputePricePerSecond: 1000n,
     getDepositIncentive: (_verifier) => 10n,
     getGenerationReward: (_verifier, computeTimeMs) =>

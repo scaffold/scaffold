@@ -1,4 +1,4 @@
-import { Fact, FactBase, SignedFact } from './FactMeta.ts';
+import { Fact, FactBase } from './FactMeta.ts';
 
 /*
 Decompress & extract type
@@ -33,7 +33,7 @@ export const enum Invalidities {
 export interface IngestionProvider<SubFact extends Fact> {
   readonly type: SubFact['type'];
   readonly isPersistent: boolean;
-  readonly isSigned: SubFact extends SignedFact ? true : false;
+  readonly isSigned: boolean;
 
   // Creates the fact. It doesn't exist until this method returns; calls to FactService.get will throw.
   // Note this has to be an arrow declaration to enable contravariant type checking.

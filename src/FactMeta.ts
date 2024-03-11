@@ -90,24 +90,19 @@ export interface FactBase {
   backtrace?: string;
 }
 
-export interface SignedFact extends FactBase {
-  signature: Uint8Array; // The subset of the packet data that should be used as a signature
-  signer: Uint8Array; // The recovered public key of the signature
-}
-
-export interface IdentificationFact extends SignedFact, Identification {
+export interface IdentificationFact extends FactBase, Identification {
   type: FactType.Identification;
 }
-export interface PeerInfoFact extends SignedFact, PeerInfo {
+export interface PeerInfoFact extends FactBase, PeerInfo {
   type: FactType.PeerInfo;
 }
-export interface ConnectionSignalFact extends SignedFact, ConnectionSignal {
+export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
   type: FactType.ConnectionSignal;
 }
 export interface SignalPayloadFact extends FactBase, SignalPayload {
   type: FactType.SignalPayload;
 }
-export interface BlockFact extends SignedFact, Block, BlockMeta {
+export interface BlockFact extends FactBase, Block, BlockMeta {
   type: FactType.Block;
 }
 

@@ -233,14 +233,6 @@ export class ConnectionService {
     );
   }
 
-  public createIdentificationFact(base: FactBase) {
-    return Object.assign(
-      base,
-      Identification.decode(base.message),
-      { type: FactType.Identification as const },
-    );
-  }
-
   private sendIdentification(conn: Connection, remotePublicKey: Uint8Array) {
     const identData = this.ctx.get(FactService).compose(
       { publicKey: remotePublicKey },

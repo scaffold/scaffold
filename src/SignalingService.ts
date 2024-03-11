@@ -222,24 +222,21 @@ export class SignalingService {
   ) {
     const signalingNonce = Hash.random().toBytes();
 
-    const instance = this.ctx.get(SignalingService).ingestSignal(
-      remotePublicKey,
-      {
-        signalingNonce,
-        srcClientNonce: remoteClientNonce,
-        srcProtocol: remoteProtocol,
-        receivedIdxMask: 0n,
-        signalIdx: -1,
-        signalData: '',
-      },
-    );
+    const instance = this.ingestSignal(remotePublicKey, {
+      signalingNonce,
+      srcClientNonce: remoteClientNonce,
+      srcProtocol: remoteProtocol,
+      receivedIdxMask: 0n,
+      signalIdx: -1,
+      signalData: '',
+    });
 
     if (instance.nextEmitIdx === 0) {
       this.emit(instance, '', -1, 1);
     }
   }
 
-  private ingestSignal(remotePublicKey: Uint8Array, payload: SignalPayload) {
+  public ingestSignal(remotePublicKey: Uint8Array, payload: SignalPayload) {
     const instance = mapPut(
       this.instances,
       bin2prim(payload.signalingNonce),

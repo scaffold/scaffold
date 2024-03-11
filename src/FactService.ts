@@ -7,12 +7,7 @@ import {
   FactBase,
   FactSource,
   FactType,
-  PersistentFact,
-  PrstFact,
-  SignedFact,
-  UnsignedFact,
 } from './FactMeta.ts';
-import { BlockService } from './BlockService.ts';
 import { PeerManager } from './PeerManager.ts';
 import { Coder } from './messages.ts';
 import { secp } from './util/secp.ts';
@@ -23,19 +18,15 @@ import { mapPut } from './util/map.ts';
 import { log } from '../deps.ts';
 import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
-import { SignalingService } from './SignalingService.ts';
 import { Connection, ConnectionService } from './ConnectionService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
-import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
-import { UnspentOutputManager } from './UnspentOutputManager.ts';
-import { BarrierException } from './exceptions.ts';
 import { DataService } from './DataService.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
 import { FactEmitter } from './FactEmitter.ts';
 import { ClockService } from './ClockService.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
-import { ProjectivePoint } from 'https://deno.land/x/secp256k1@2.0.0/index.ts';
+import { BarrierException } from './exceptions.ts';
 
 const maxForgetDurationMs = 2500;
 
@@ -47,44 +38,12 @@ export const enum LoadFlags {
   RequestFromRemote = 1 << 2,
 }
 
-// TODO: We might have to update this to a fact-factory and a fact-ingestor
-type FactFactory = (base: FactBase, mutator?: (fact: Fact) => void) => Fact;
-
-// const enum A {
-//   B,
-//   C,
-// }
-// type X = { [x in A]: (y: x) => void } & any[];
-// const a: X = [
-//   (x) => x,
-//   (x) => x,
-// ];
-// a.push(() => {});
-
 const factMagic = new Uint8Array([83, 66, 76]); // SBL == 0x53424c
 export const headerSize = factMagic.byteLength + 1;
 
 // Version by incrementing factMagic or creating a new FactType
 
 const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an implementation detail
-
-const typeHasSignature: boolean[] = [];
-typeHasSignature[FactType.Identification] = true;
-typeHasSignature[FactType.PeerInfo] = true;
-// typeHasSignature[FactType.InfoRequest] = false;
-typeHasSignature[FactType.ConnectionSignal] = true;
-// typeHasSignature[FactType.SignalPayload] = false;
-typeHasSignature[FactType.Block] = true;
-// typeHasSignature[FactType.BlockSet] = true;
-// typeHasSignature[FactType.BlockSetTreeNode] = false;
-// typeHasSignature[FactType.MerkleTreeNode] = true;
-// typeHasSignature[FactType.Invalid] = true;
-
-for (let i = 1; i < FactType._SIZE; i++) {
-  if (typeHasSignature[i] === undefined) {
-    throw new Error(`No typeHasSignature specified for ${i}!`);
-  }
-}
 
 const useZstd = false;
 const zstdMagic = new Uint8Array([40, 181, 47, 253]);
@@ -93,16 +52,9 @@ const zstdMagic = new Uint8Array([40, 181, 47, 253]);
 const sortKeys = true;
 
 export class FactService {
-  private factories:
-    & {
-      [Type in FactType]?: Type extends Fact['type']
-        ? IngestionProvider<Fact & { type: Type }>
-        : undefined;
-    }
-    & { length: number } // Add this so assigning from an array has an overlapping property.
-   = [];
+  private factories: IngestionProvider<Fact>[] = [];
 
-  private facts = new Map<HashPrimitive, PrstFact | typeof ingestingFact>();
+  private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
   private validitiesByHash = new Map<
@@ -110,51 +62,16 @@ export class FactService {
     Map<HashPrimitive, DetailVote>
   >();
 
-  private pendingForgets: {
-    fact: WeakRef<PrstFact>;
-    forgetTimestamp: number;
-  }[] = [];
+  private pendingForgets: { fact: WeakRef<Fact>; forgetTimestamp: number }[] =
+    [];
 
   private nextFactIdx = 0;
 
   constructor(private ctx: Context) {
     for (const Provider of this.ctx.config.ingestionProviders) {
       const provider = this.ctx.get(Provider);
-      (this.factories[provider.type] as IngestionProvider<Fact>) = provider;
+      this.factories[provider.type] = provider;
     }
-
-    this.factories[FactType.Identification] = (base, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(ConnectionService).createIdentificationFact(base);
-    this.factories[FactType.PeerInfo] = (base, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(PeerManager).createInfoFact(base);
-    // this.factories[FactType.InfoRequest] = (base, mutator) =>
-    //   mutator !== undefined
-    //     ? error(`Unexpected mutator`)
-    //     : ctx.get(PeerManager).createRequestFact(base);
-    this.factories[FactType.ConnectionSignal] = (base, mutator) =>
-      mutator !== undefined
-        ? error(`Unexpected mutator`)
-        : ctx.get(SignalingService).createFact(base);
-    // this.factories[FactType.SignalPayload] = () => {
-    //   throw new DiscardFactException();
-    // };
-    this.factories[FactType.Block] = (base, mutator) =>
-      ctx.get(BlockService).createFact(base, mutator);
-    // this.factories[FactType.BlockSet] = (base, mutator) => todo();
-    // this.factories[FactType.BlockSetTreeNode] = (base, mutator) => todo();
-    // this.factories[FactType.MerkleTreeNode] = todo;
-    // this.factories[FactType.Invalid] = (base, mutator) =>
-    //   mutator !== undefined
-    //     ? error(`Unexpected mutator`)
-    //     : Object.assign(base, { type: FactType.Invalid as const });
-    // this.factories[FactType.Frontier] = (base, _, mutator) =>
-    //   mutator !== undefined
-    //     ? error(`Unexpected mutator`)
-    //     : ctx.get(FrontierService).createFact(base);
 
     this.ingestFromStorage();
 
@@ -201,7 +118,7 @@ export class FactService {
     return fact !== undefined;
   }
 
-  public get(hash: Hash, request = true): PrstFact | undefined {
+  public get(hash: Hash, request = true): Fact | undefined {
     const fact = this.facts.get(hash.toPrimitive());
     if (fact === ingestingFact) {
       throw new Error(`Cannot get an ingesting fact!`);
@@ -315,17 +232,14 @@ export class FactService {
     return fact as Fact & { type: Type };
   }
 
-  public compose<MsgType>(
-    msg: MsgType,
-    coder: Coder<MsgType>,
-    type: FactType,
-  ) {
-    const sign = typeHasSignature[type];
+  public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
+    const provider = this.factories[type] ??
+      error(`Invalid message type ${type}!`);
 
     let buf: Uint8Array;
     coder.encode(msg, (size) => {
       buf = new Uint8Array(
-        size + (sign ? SIGNATURE_LENGTH + headerSize : headerSize),
+        size + (provider.isSigned ? SIGNATURE_LENGTH + headerSize : headerSize),
       );
       return buf.subarray(headerSize);
     });
@@ -334,7 +248,7 @@ export class FactService {
     data.set(factMagic);
     data[factMagic.byteLength] = type;
 
-    if (sign) {
+    if (provider.isSigned) {
       const size = data.byteLength - SIGNATURE_LENGTH;
       const sig = secp.sign(
         Hash.digest(data.subarray(0, size)).toBytes(),
@@ -483,8 +397,10 @@ export class FactService {
     }
 
     const type: FactType = data[factMagic.byteLength];
-    const provider = this.factories[type] ??
-      error(`Invalid message type ${type}!`);
+    const provider = this.factories[type];
+    if (provider === undefined) {
+      throw new BarrierException(`Invalid message type ${type}!`);
+    }
 
     if (
       provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount
@@ -496,9 +412,7 @@ export class FactService {
 
     this.facts.set(hash.toPrimitive(), ingestingFact);
 
-    if (
-      provider.isSigned && data.byteLength < SIGNATURE_LENGTH + headerSize
-    ) {
+    if (provider.isSigned && data.byteLength < SIGNATURE_LENGTH + headerSize) {
       throw new Error(`Message length (${data.byteLength}) is too short!`);
     }
     const signature = provider.isSigned

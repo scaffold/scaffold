@@ -243,67 +243,6 @@ export class PeerManager {
   //   return selectedConn;
   // }
 
-  public createInfoFact(base: FactBase): PeerInfoFact {
-    const fact = Object.assign(
-      base,
-      PeerInfo.decode(base.message),
-      { type: FactType.PeerInfo as const },
-    );
-
-    if (fact.network !== this.ctx.config.network) {
-      throw new Error(
-        `Mismatched networks! ${fact.network} !== ${this.ctx.config.network}`,
-      );
-    }
-
-    if (fact.userdata) {
-      // TODO: Store on the fact
-      JSON.parse(fact.userdata);
-    }
-
-    if (!this.isInfoValid(fact)) {
-      throw new Error(`Invalid info fact!`);
-    }
-
-    const publicKey = this.ctx.get(FactService).getPublicKey(base);
-    const peer = this.putPeer(publicKey);
-
-    const isNewClient = !peer.clientInfoFacts.has(fact.clientNonce);
-    peer.clientInfoFacts.set(fact.clientNonce, fact);
-
-    // for (const request of peer.infoRequests) {
-    //   this.ctx.get(FactService).sendTo(fact, request.fromConnections);
-    // }
-    // peer.infoRequests.clear();
-
-    // peer.neighbors.clear();
-    // peer.hops = Infinity;
-    // for (const neighbor of fact.neighbors) {
-    //   const neighborNode = this.getOrCreate(neighbor);
-
-    //   neighborNode.neighbors.add(peer);
-    //   peer.neighbors.add(neighborNode);
-
-    //   peer.hops = Math.min(peer.hops, neighborNode.hops + 1);
-
-    //   if (neighborNode.isRemote) {
-    //     this.connectTo(neighborNode);
-    //   }
-    // }
-
-    // for (const neighborNode of peer.neighbors) {
-    //   neighborNode.hops = Math.min(neighborNode.hops, peer.hops + 1);
-    // }
-
-    if (isNewClient) {
-      this.connectTo(fact);
-    }
-
-    this.ctx.get(FactService).publish(fact);
-
-    return fact;
-  }
-
   // public createRequestFact(base: FactBase): InfoRequestFact {
   //   const fact = Object.assign(
   //     base,
@@ -341,11 +280,4 @@ export class PeerManager {
 
   //   return fact;
   // }
-
-  private isInfoValid(info: PeerInfoFact) {
-    return true;
-    // const now = BigInt(this.ctx.config.timeProvider.now());
-    // return info.timestamp >= now - BigInt(infoExpirationMs) &&
-    //   info.timestamp <= now;
-  }
 }
