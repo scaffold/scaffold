@@ -177,8 +177,6 @@ export class ConnectionService {
 
         // TODO: We don't have to do this extra authenetication, since we're already creating connections with authenticated peers
         if (fact.type === FactType.Identification) {
-          this.ctx.get(FactService).forget(fact);
-
           if (
             !arrEquals(
               fact.publicKey,

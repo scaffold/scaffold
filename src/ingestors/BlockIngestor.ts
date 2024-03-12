@@ -26,6 +26,7 @@ import { ClockService } from '../ClockService.ts';
 import { RenderService } from '../RenderService.ts';
 import { FactEmitter } from '../FactEmitter.ts';
 import { VerificationService } from '../VerificationService.ts';
+import { WeightService } from '../WeightService.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
   type = FactType.Block as const;
@@ -57,6 +58,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     const meta: BlockMeta = {
       // verifiers: block.bodies.map(() => undefined),
 
+      descWeight: 0n,
       canonicality: 0n,
 
       flags: BlockFlag.None,
@@ -275,6 +277,8 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(fact);
 
     this.ctx.get(UnspentOutputManager).tick();
+
+    this.ctx.get(BlockService).updateWeight(fact);
   }
 
   forget(fact: BlockFact) {

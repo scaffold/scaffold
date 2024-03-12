@@ -36,6 +36,10 @@ export const ZERO_BLOCK = Symbol('ZeroBlock');
 export interface BlockMeta {
   // verifiers: (Verifier | undefined)[];
 
+  // This is the sum of the self min weight and all descendant min weights
+  descWeight: bigint;
+  treeParent?: BlockFact;
+
   // selfWeightMin: bigint;
   // selfWeightMax: bigint;
   // descendantWeight: bigint;

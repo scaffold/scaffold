@@ -25,9 +25,7 @@ export class IdentificationIngestor
     );
   }
 
-  ingest(fact: IdentificationFact) {
-    throw new Error(`An identification fact should not be ingested!`);
-  }
+  ingest(fact: IdentificationFact) {}
 
   forget(fact: IdentificationFact) {
     throw new Error(`An identification fact should not be forgotten!`);

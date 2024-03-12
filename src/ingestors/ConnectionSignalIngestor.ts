@@ -36,7 +36,7 @@ export class ConnectionSignalIngestor
         }).then((data) =>
           this.ctx.get(SignalingService).ingestSignal(
             remotePublicKey,
-            SignalPayload.decode(fact.payload),
+            SignalPayload.decode(data),
           )
         ).catch((err) => console.error(err));
       } else {

@@ -57,6 +57,8 @@ import { GenesisService } from './GenesisService.ts';
 import { ClockService } from './ClockService.ts';
 import { FactEmitter } from './FactEmitter.ts';
 import { RenderService } from './RenderService.ts';
+import { bigintMax } from './util/bigint.ts';
+import { bigintMin } from './util/bigint.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -140,6 +142,58 @@ export class BlockService {
 
   public sort(items: { block: BlockFact }[], frontier: never) {
     throw new Error(`Unimplemented`);
+  }
+
+  public updateWeight(block: BlockFact) {
+    let weight = this.ctx.get(WeightService).getSelfWeight(block).min;
+
+    const parentClaims = block.outputClaims[block.frontierOutputIdx];
+    // TODO: Only canonical claims
+
+    block.treeParent=undefined;
+    if (parentClaims.length > 0) {
+      // Add parent weight
+      const minClaimWeight = parentClaims.map((x) =>
+        this.ctx.get(WeightService).getSelfWeight(x.block).min
+      ).reduce(bigintMin);
+
+      const weights = parentClaims.map((x) =>
+        x.block.descWeight -
+        this.ctx.config.getOverpaymentPenalty(
+          this.ctx.get(WeightService).getSelfWeight(x.block).max -
+            minClaimWeight,
+        )
+      );const bestWeight=weights.reduce(bigintMax);
+
+
+      weight += bestWeight;
+      block.treeParent=parentClaims[weights.indexOf(bestWeight)].block;
+
+      // Add sibling weight
+
+    }
+
+    for (const voter of block.frontierVoters){
+      if (block.treeParent!==undefined&&)
+    }
+
+    // TODO: Fuzzy threshold
+    if (weight !== block.descWeight) {
+      block.descWeight = weight;
+
+      this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
+
+      if (block.frontierVoteBlock !== undefined) {
+        this.updateWeight(block.frontierVoteBlock);
+      }
+
+      for (const input of block.inputs) {
+        const inputBlock = this.get(input.blockHash, false);
+        if (inputBlock !== undefined) {
+          this.updateWeight(inputBlock);
+        }
+      }
+    }
   }
 
   private checkInputAvailability(block: BlockFact) {

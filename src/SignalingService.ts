@@ -180,41 +180,6 @@ export class SignalingService {
     this.ctx.get(FactEmitter).addGenerator(generator);
   }
 
-  public createFact(base: FactBase): ConnectionSignalFact {
-    const signal = ConnectionSignal.decode(base.message);
-
-    const fact: ConnectionSignalFact = Object.assign(
-      base,
-      signal,
-      { type: FactType.ConnectionSignal as const },
-    );
-
-    const dstFact = this.ctx.get(FactService).get(signal.replyTo, false);
-    if (dstFact !== undefined) {
-      if (dstFact.source === FactSource.Local) {
-        const remotePublicKey = this.ctx.get(FactService).getPublicKey(fact);
-        this.ctx.get(CryptoHelper).decrypt({
-          ciphertext: signal.payload,
-          remotePublicKey,
-        }).then((data) =>
-          this.ingestSignal(remotePublicKey, SignalPayload.decode(data))
-        ).catch((err) => console.error(err));
-      } else {
-        // for (const conn of this.ctx.get(PeerManager).routeTo(dstFact)) {
-        //   this.ctx.get(FactService).sendTo(fact, conn);
-        // }
-        this.ctx.get(FactEmitter).notify(fact);
-      }
-    }
-
-    this.ctx.get(ClockService).setTimeout(
-      () => this.ctx.get(FactService).forget(fact),
-      10000,
-    );
-
-    return fact;
-  }
-
   public init(
     remotePublicKey: Uint8Array,
     remoteClientNonce: string,

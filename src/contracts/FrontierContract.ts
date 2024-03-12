@@ -43,6 +43,10 @@ export class FrontierContract implements ContractProvider {
 
   public async compute(driver: ComputationDriver) {
     const { level } = FrontierTreeParams.decode(driver.getParams());
+    if (level < 0) {
+      throw new Error(`Level cannot be negative!`);
+    }
+
     for (let i = 0; i < frontierInputCount; i++) {
       await driver.requireInput();
     }

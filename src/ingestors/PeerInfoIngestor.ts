@@ -12,7 +12,7 @@ import { PeerInfo, SignalPayload } from '../messages.ts';
 
 export class PeerInfoIngestor implements IngestionProvider<PeerInfoFact> {
   type = FactType.PeerInfo as const;
-  isPersistent = false;
+  isPersistent = true;
   isSigned = true;
 
   constructor(private ctx: Context) {}

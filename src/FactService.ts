@@ -64,6 +64,7 @@ export class FactService {
 
   private pendingForgets: { fact: WeakRef<Fact>; forgetTimestamp: number }[] =
     [];
+  private forgottenCount = 0;
 
   private nextFactIdx = 0;
 
@@ -76,23 +77,21 @@ export class FactService {
     this.ingestFromStorage();
 
     this.ctx.get(ClockService).setPoissonInterval(() => {
-      const now = this.ctx.config.timeProvider.now();
-
       this.pendingForgets = this.pendingForgets.filter((pf) => {
         const fact = pf.fact.deref();
         if (fact === undefined) {
+          this.forgottenCount++;
           return false;
-        }
-
-        const duration = now - pf.forgetTimestamp;
-        if (duration > maxForgetDurationMs) {
-          console.warn(
-            `Fact ${fact.hash.toHex()} is still around after ${duration} ms!`,
-          );
         }
 
         return true;
       });
+
+      if (this.pendingForgets.length > this.forgottenCount + 256) {
+        console.warn(
+          `There's ${this.pendingForgets.length} pending forgets but only ${this.forgottenCount} successfully forgotten facts!`,
+        );
+      }
     }, 1000);
   }
 
@@ -298,7 +297,7 @@ export class FactService {
   public forget(fact: Fact) {
     const provider = this.factories[fact.type] ??
       error(`Invalid message type ${fact.type}!`);
-    provider.forget(fact as never);
+    provider.forget(fact);
 
     if (fact.signer !== undefined) {
       this.ctx.get(PeerManager).getPeer(fact.signer)
@@ -491,9 +490,9 @@ export class FactService {
       if (fact.signer !== undefined) {
         this.ctx.get(PeerManager).putPeer(fact.signer).producedFacts.add(fact);
       }
-
-      provider.ingest(fact as never);
     }
+
+    provider.ingest(fact);
 
     return fact;
   }

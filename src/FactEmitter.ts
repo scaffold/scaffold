@@ -112,8 +112,8 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
   public override weight(item: EmitterItem) {
     if (item === emptyPoolSentinel) {
       this.ctx.maybeGet(EmitterRecordSet)
-        ?.update({ item, value: NaN, size: NaN, weight: 1e-3 });
-      return 1e-3;
+        ?.update({ item, value: NaN, size: NaN, weight: 1 });
+      return 1;
     }
 
     let value: number;
@@ -205,17 +205,17 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
         return 0;
       }
 
-      value += 1e2 *
+      value += 1e5 *
         Math.pow(2, Math.min(fact.priority, 0) / signalPriorityResolution);
     } else if (fact.type === FactType.PeerInfo) {
       const publicKey = this.ctx.get(FactService).getPublicKey(fact);
       const peer = this.ctx.get(PeerManager).getPeer(publicKey);
-      return peer?.clientInfoFacts.get(fact.clientNonce) === fact ? 1e2 : 0;
+      return peer?.clientInfoFacts.get(fact.clientNonce) === fact ? 1e5 : 0;
     } else if (this.ctx.get(FactService).isSignedByMe(fact)) {
-      value += 1e2;
+      value += 1e5;
     } else {
       // TODO: Time since last identification packet?
-      value += 1e1;
+      value += 1e5;
     }
 
     for (const conn of fact.toConnections) {

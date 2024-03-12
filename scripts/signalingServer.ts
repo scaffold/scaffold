@@ -6,8 +6,8 @@ import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
 import { NetworkService } from '../src/NetworkService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import { hex2bin } from '../src/util/hex.ts';
-import { PeerInfoIngestor } from '../src/ingestors/PeerInfoIngestor.ts';
-import { ConnectionSignalIngestor } from '../src/ingestors/ConnectionSignalIngestor.ts';
+import { BlockIngestor } from '../src/ingestors/BlockIngestor.ts';
+import { defaultIngestionProviders } from '../src/ingestors/defaultIngestionProviders.ts';
 
 const ctx = new Context({
   ...makeDefaultConfig(),
@@ -28,7 +28,9 @@ const ctx = new Context({
 
   storageProvider: new NullStorageProvider(),
 
-  ingestionProviders: [PeerInfoIngestor, ConnectionSignalIngestor],
+  ingestionProviders: defaultIngestionProviders.filter((x) =>
+    x !== BlockIngestor
+  ),
 });
 
 ctx.get(NetworkService).initConnection(
