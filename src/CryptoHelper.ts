@@ -3,7 +3,8 @@ import { Context } from './Context.ts';
 import { Hash } from './util/Hash.ts';
 import { arrConcat, EMPTY_ARR } from './util/buffer.ts';
 
-const IV_LENGTH = 16;
+// TODO: Make sure this is secure against birthday collisions by adding randomness into the shared key
+const IV_LENGTH = 12;
 
 export class CryptoHelper {
   constructor(private ctx: Context) {}

@@ -59,6 +59,7 @@ import { FactEmitter } from './FactEmitter.ts';
 import { RenderService } from './RenderService.ts';
 import { bigintMax } from './util/bigint.ts';
 import { bigintMin } from './util/bigint.ts';
+import { BlockMetrics } from './BlockMetrics.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -150,6 +151,22 @@ export class BlockService {
     const parentClaims = block.outputClaims[block.frontierOutputIdx];
     // TODO: Only canonical claims
 
+    /*
+    Look at all distinct, mergeable, descendant blocks
+    A block B's vote is valid if B and it's vote chain includes all inputs and refs as tree children.
+    The valid descendants (outputs, referrers) of B will have either B or a tree parent of B in their vote chain.
+    The descendants reached by iterating voters are unique
+    Mergeability: Follow frontier votes (don't follow tree parents - if there's parents, we should be merging them instead)
+      In this case, we just need to check for double-claims on the tree inputs
+    Should we pull descendants from the voter(s) or a parent?
+      Whatever is heaviest, potentially both. Order by weight, then use DP to find heaviest mergeable subset.
+    
+    Let's say there's 3 frontier voters of block B with the same level but various weights.
+      The descendant weight of B should be the weight of the mergeable subset with maximum weight
+    
+    
+    */
+
     block.treeParent=undefined;
     if (parentClaims.length > 0) {
       // Add parent weight
@@ -171,10 +188,15 @@ export class BlockService {
 
       // Add sibling weight
 
+
+
+
+
+
     }
 
     for (const voter of block.frontierVoters){
-      if (block.treeParent!==undefined&&)
+      if (block.treeParent!==undefined&&){}
     }
 
     // TODO: Fuzzy threshold
@@ -182,6 +204,8 @@ export class BlockService {
       block.descWeight = weight;
 
       this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
+
+      // TODO: Add to priority queue so we update weights from the deepest to shallowest (genesis)
 
       if (block.frontierVoteBlock !== undefined) {
         this.updateWeight(block.frontierVoteBlock);
@@ -248,6 +272,7 @@ export class BlockService {
 
   public updateCanonicalities(blocks: BlockFact[]) {
     this.ctx.get(WeightService).resetCache();
+    this.ctx.get(BlockMetrics).reset();
 
     for (const block of blocks) {
       const newCanonicality = this.ctx.get(WeightService)
