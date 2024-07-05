@@ -160,14 +160,19 @@ export class BlockService {
       In this case, we just need to check for double-claims on the tree inputs
     Should we pull descendants from the voter(s) or a parent?
       Whatever is heaviest, potentially both. Order by weight, then use DP to find heaviest mergeable subset.
-    
+
     Let's say there's 3 frontier voters of block B with the same level but various weights.
       The descendant weight of B should be the weight of the mergeable subset with maximum weight
-    
-    
+
+
     */
 
-    block.treeParent=undefined;
+    /*
+      In general, if a parent is WORSE by weight than its 2 children, don't even consider it as a valid block
+        It might become valid in the future if stuff is built upon it
+      */
+
+    block.treeParent = undefined;
     if (parentClaims.length > 0) {
       // Add parent weight
       const minClaimWeight = parentClaims.map((x) =>
@@ -180,24 +185,18 @@ export class BlockService {
           this.ctx.get(WeightService).getSelfWeight(x.block).max -
             minClaimWeight,
         )
-      );const bestWeight=weights.reduce(bigintMax);
-
+      );
+      const bestWeight = weights.reduce(bigintMax);
 
       weight += bestWeight;
-      block.treeParent=parentClaims[weights.indexOf(bestWeight)].block;
+      block.treeParent = parentClaims[weights.indexOf(bestWeight)].block;
 
       // Add sibling weight
-
-
-
-
-
-
     }
 
-    for (const voter of block.frontierVoters){
-      if (block.treeParent!==undefined&&){}
-    }
+    // for (const voter of block.frontierVoters){
+    //   if (block.treeParent!==undefined&&){}
+    // }
 
     // TODO: Fuzzy threshold
     if (weight !== block.descWeight) {
