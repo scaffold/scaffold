@@ -12,7 +12,7 @@ import {
   FrontierTreeParams,
 } from '../messages.ts';
 import { BlockFlag, BlockMeta } from '../BlockMeta.ts';
-import { Hash } from '../util/Hash.ts';
+import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { collateralHash, frontierHash } from '../constants.ts';
 import { NUM_FRONTIER_LEVELS } from '../FrontierService2.ts';
 import { MonitoringService } from '../MonitoringService.ts';
@@ -51,6 +51,21 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     //   } -> ${trunc(bin2hex(block.body), 100)}`,
     // );
     // console.log(block);
+
+    if (
+      !this.ctx.config.enableFrontierVote &&
+      !Hash.equals(block.frontierVote, ZERO_HASH)
+    ) {
+      throw new Error(`Cannot ingest a block with a frontier vote!`);
+    }
+
+    if (
+      !this.ctx.config.enableBlockThroughput &&
+      base.source !== FactSource.Genesis &&
+      block.outputs.some((x) => x.amount !== 0n)
+    ) {
+      throw new Error(`Cannot ingest a block with coin throughput!`);
+    }
 
     const frontierVote = this.ctx.get(BlockService)
       .get(block.frontierVote, false);
@@ -172,7 +187,13 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       } else if (output.amount >= 0n) {
         // We set a timeout because ensureRunning gets this block recursively
         // When we move this to an ingestion method we can remove the timeout.
+
         this.ctx.get(ClockService).setTimeout(() => {
+          // Also need to consider the fact that this might be a stub block that's immediately going to be claimed (created in BlockBuilder)
+          if (claims.length) {
+            return;
+          }
+
           this.ctx.get(UnspentOutputManager).insert(output.verifier, {
             block: fact,
             outputIdx,
@@ -279,6 +300,10 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     this.ctx.get(UnspentOutputManager).tick();
 
     this.ctx.get(BlockService).updateWeight(fact);
+
+    if (fact.source === FactSource.Remote) {
+      setTimeout(() => this.ctx.get(FactService).forget(fact), 1000);
+    }
   }
 
   forget(fact: BlockFact) {

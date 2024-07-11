@@ -12,6 +12,7 @@ import { defaultContractProviders } from './contracts/defaultContractProviders.t
 import { IngestionProvider } from './IngestionProvider.ts';
 import { Fact } from './FactMeta.ts';
 import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
+import { FrontierContract } from './contracts/FrontierContract.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -153,12 +154,18 @@ export interface Config {
   enableValidation: boolean;
   enableWorkerLogging: boolean;
   enableSignalingLogging: boolean;
+
+  enableFrontierVote: boolean;
+  enableBlockThroughput: boolean;
+  enableCollateralization: boolean;
+  enableTreeAggregation: boolean;
+  enableOptimisticHandling: boolean; // Don't validate blocks before returning them
 }
 
 export const defaultNetwork = 'main';
 
-export const makeDefaultConfig = () =>
-  ({
+export const makeDefaultConfig = () => {
+  const config = {
     network: defaultNetwork,
     debugName: '',
     clientNonce: Math.random().toString(36).slice(2),
@@ -214,4 +221,23 @@ export const makeDefaultConfig = () =>
     enableValidation: true,
     enableWorkerLogging: true,
     enableSignalingLogging: true,
-  }) satisfies Partial<Config>;
+
+    enableFrontierVote: false,
+    enableBlockThroughput: false,
+    enableCollateralization: false,
+    enableTreeAggregation: false,
+    enableOptimisticHandling: false,
+  } satisfies Partial<Config>;
+
+  if (!config.enableBlockThroughput) {
+    config.getDepositIncentive = () => 0n;
+    config.getGenerationReward = () => 0n;
+  }
+  if (!config.enableTreeAggregation) {
+    config.contractProviders = config.contractProviders.filter((x) =>
+      !(x instanceof FrontierContract)
+    );
+  }
+
+  return config;
+};

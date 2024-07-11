@@ -6,6 +6,7 @@ import { ContractProvider } from '../SpecialContractManager.ts';
 import { rootHash } from '../constants.ts';
 import { mapPut } from '../util/map.ts';
 import { arrEquals } from '../util/buffer.ts';
+import { BlockService } from '../BlockService.ts';
 
 export class RootContract implements ContractProvider {
   public contractHash = rootHash;
@@ -35,6 +36,12 @@ export class RootContract implements ContractProvider {
       const fact = ctx.get(FactService).get(hash, false);
       if (fact) {
         return driver.requireBody(fact.data);
+      }
+
+      const got = ctx.get(BlockService)
+        .getBlocksByVerifier(driver.getVerifier());
+      if (got.length > 0) {
+        return driver.requireBody(got[0].block.bodies[got[0].groupIdx]);
       }
 
       driver.ingenerable(`We don't know any data matching ${hash.toHex()}!`);

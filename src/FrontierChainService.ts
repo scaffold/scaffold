@@ -34,6 +34,10 @@ export class FrontierChainService {
   constructor(private ctx: Context) {}
 
   public getVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
+    if (!this.ctx.config.enableFrontierVote) {
+      return ZERO_BLOCK;
+    }
+
     // try {
     //   const hash = this.ctx.get(FrontierService2).getBlockVote(inputs);
     //   return this.ctx.get(BlockService).get(hash, false)!;

@@ -31,6 +31,8 @@ type Metrics = {
   selfPenalty: bigint;
   treePenalty: bigint;
   totalPenalty: bigint;
+
+  canonicality: bigint;
 };
 
 export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
@@ -95,6 +97,9 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         (block.frontierVoteBlock !== undefined
           ? this.get(block.frontierVoteBlock, 'totalPenalty')
           : 0n),
+
+      canonicality: (block) =>
+        this.get(block, 'totalWeight') - this.get(block, 'totalPenalty'),
     });
   }
 

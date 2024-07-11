@@ -112,6 +112,10 @@ export class WebrtcProvider implements NetworkProvider {
             const offer = await conn.createOffer();
             await conn.setLocalDescription(offer);
             driver.sendSignal(JSON.stringify({ offer: conn.localDescription }));
+          } else if (cmp === 0) {
+            console.error(
+              `Error negotiating WebRTC connection ordering assignment: Hash equality`,
+            );
           }
         }
         if (offer) {

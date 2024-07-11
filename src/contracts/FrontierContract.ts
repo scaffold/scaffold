@@ -3,6 +3,7 @@ import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { frontierHash } from '../constants.ts';
+import { ComputationType } from '../ComputationMeta.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -41,7 +42,7 @@ export const frontierInputCount = 2;
 export class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
-  public async compute(driver: ComputationDriver) {
+  public async compute(driver: ComputationDriver, ctx: Context) {
     const { level } = FrontierTreeParams.decode(driver.getParams());
     if (level < 0) {
       throw new Error(`Level cannot be negative!`);

@@ -24,6 +24,7 @@ import { assert, error, todo } from './util/functional.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierHelper } from './FrontierHelper.ts';
+import { GenesisService } from './GenesisService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -97,9 +98,10 @@ export class BlockBuilder {
     //   Number(b.body !== undefined) - Number(a.body !== undefined)
     // );
 
-    let frontierVoteBlock: BlockFact | typeof ZERO_BLOCK | undefined;
+    let frontierVoteBlock: BlockFact | typeof ZERO_BLOCK | undefined =
+      this.ctx.config.enableFrontierVote ? undefined : ZERO_BLOCK;
     let frontierLevel: number | undefined;
-    let frontierOutputAmount = 10n;
+    let frontierOutputAmount = this.ctx.config.enableBlockThroughput ? 10n : 0n;
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
@@ -183,6 +185,21 @@ export class BlockBuilder {
 
     ioDelta += inputs.reduce((acc, cur) => acc + cur.amount, 0n);
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
+
+    if (!this.ctx.config.enableBlockThroughput) {
+      if (frontierOutputAmount !== 0n) {
+        throw new Error(`Invalid frontier output amount!`);
+      }
+      if (inputs.some((x) => x.amount !== 0n)) {
+        throw new Error(`Invalid input amount!`);
+      }
+      if (outputs.some((x) => x.amount !== 0n)) {
+        throw new Error(`Invalid output amount!`);
+      }
+      if (ioDelta !== 0n) {
+        throw new Error(`Invalid throughput!`);
+      }
+    }
 
     while (ioDelta < 0n) {
       const input = this.ctx.get(UnspentOutputManager).pop(

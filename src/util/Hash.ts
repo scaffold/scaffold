@@ -38,6 +38,7 @@ const hasher = {
 
 export const HASH_SIZE = 32;
 export const HASH_BITS = HASH_SIZE * 8;
+export const HASH_REGEX = /^[a-fA-F0-9]{64}$/;
 
 const nonPrintableRegex = /[^\u0020-\u007E]/g;
 
