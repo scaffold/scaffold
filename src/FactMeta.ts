@@ -65,6 +65,7 @@ export interface FactBase {
   receivedAt: number;
   source: FactSource;
   fromConnections: Connection[];
+  usefulness: number;
 
   // Publication properties
   publishAt?: number;

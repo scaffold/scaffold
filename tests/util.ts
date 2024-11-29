@@ -38,6 +38,12 @@ const makeConfig = (
 
   limitFactCount: 10,
 
+  enableFrontierVote: false,
+  enableBlockThroughput: false,
+  enableCollateralization: false,
+  enableTreeAggregation: false,
+  enableOptimisticHandling: false,
+
   ...partialConfig,
 } satisfies Config);
 
@@ -92,22 +98,23 @@ const connectPair = (a: Context, b: Context) => {
   let bProvider: SignalingProvider | undefined;
   const bMessages: string[] = [];
 
+  let aIdx = 0;
+  let bIdx = 0;
+
   const aProvider = a.get(NetworkService).initConnection(
     'mock',
-    undefined,
     (signal) =>
       bProvider !== undefined
-        ? bProvider.recvSignal(signal)
+        ? bProvider.recvSignal(signal, bIdx++)
         : bMessages.push(signal),
   );
 
   bProvider = b.get(NetworkService).initConnection(
     'mock',
-    undefined,
-    (signal) => aProvider.recvSignal(signal),
+    (signal) => aProvider.recvSignal(signal, aIdx++),
   );
   for (const msg of bMessages) {
-    bProvider.recvSignal(msg);
+    bProvider.recvSignal(msg, bIdx++);
   }
 };
 

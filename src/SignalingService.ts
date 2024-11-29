@@ -17,7 +17,8 @@ import { SignalingRecordSet } from './record_sets/SignalingRecordSet.ts';
 import { FactEmitter, FactGenerator } from './FactEmitter.ts';
 import { FactSource } from './FactMeta.ts';
 
-const closeTimeoutMs = 30000;
+// const closeTimeoutMs = 30000;
+const closeTimeoutMs = Infinity;
 const attachPriorityToSignal = false;
 export const signalPriorityResolution = 16;
 

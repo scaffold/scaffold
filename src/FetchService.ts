@@ -103,6 +103,7 @@ export class FetchService {
     if (got.length > 0) {
       if (onBody !== undefined) {
         const last = got[got.length - 1];
+        this.ctx.get(FactService).increaseUsefulness(last.block, 1);
         onBody(last.block.bodies[last.groupIdx]);
       }
     } else {
@@ -129,6 +130,8 @@ export class FetchService {
       onState = (claim) => {
         if (claim !== undefined) {
           onResponseBlock?.(claim.block, claim.groupIdx);
+
+          this.ctx.get(FactService).increaseUsefulness(claim.block, 1);
 
           const body = claim.block.bodies[claim.groupIdx];
           if (prevBody === undefined || !arrEquals(body, prevBody)) {

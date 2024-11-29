@@ -1,5 +1,6 @@
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
+import { MessageJoiner, MessageSplitter } from './MessageSplitter.ts';
 import { orderSignals } from './util.ts';
 
 export class WebrtcProvider implements NetworkProvider {
@@ -34,17 +35,36 @@ export class WebrtcProvider implements NetworkProvider {
 
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
-    const bufferedMsgs: Uint8Array[] = [];
+    const reliableSplitter = new MessageSplitter(1024);
+    const fastSplitter = new MessageSplitter(1024);
+    const joiner = new MessageJoiner();
+    const bufferedPackets: ArrayBuffer[] = [];
 
     const dispatchNewConn = (conn: RTCPeerConnection) =>
       driver.createConnection({
-        sendReliable: (data: Uint8Array) => reliableChannel!.send(data),
-        sendFast: (data: Uint8Array) => fastChannel!.send(data),
+        sendReliable: (data: Uint8Array) => {
+          for (const packet of reliableSplitter.send(data)) {
+            reliableChannel!.send(packet);
+          }
+        },
+        sendFast: (data: Uint8Array) => {
+          for (const packet of fastSplitter.send(data)) {
+            fastChannel!.send(packet);
+          }
+        },
         onRecv: (handler: (data: Uint8Array) => void) => {
-          bufferedMsgs.forEach(handler);
-          bufferedMsgs.length = 0;
-          const messageHandler = (e: MessageEvent<ArrayBuffer>) =>
-            handler(new Uint8Array(e.data));
+          for (const packet of bufferedPackets) {
+            for (const msg of joiner.recv(packet)) {
+              handler(msg);
+            }
+          }
+          bufferedPackets.length = 0;
+
+          const messageHandler = (e: MessageEvent<ArrayBuffer>) => {
+            for (const msg of joiner.recv(e.data)) {
+              handler(msg);
+            }
+          };
           reliableChannel!.onmessage = messageHandler;
           fastChannel!.onmessage = messageHandler;
         },
@@ -82,7 +102,8 @@ export class WebrtcProvider implements NetworkProvider {
           dispatchNewConn(conn);
         }
       };
-      channel.onmessage = (e) => bufferedMsgs.push(new Uint8Array(e.data));
+      channel.onmessage = (e) => bufferedPackets.push(e.data);
+      channel.onerror = (e) => console.error(`WebRTC error:`, e);
       channel.onclose = (_e) => conn.close();
     };
 

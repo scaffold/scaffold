@@ -65,6 +65,8 @@ export interface Connection {
   // Altruism decreases when we send (hopefully helpful) facts to the node
   // We publish to positively altruistic nodes
   altruism: number;
+
+  earnedBandwidth: number;
 }
 
 export class ConnectionService {
@@ -158,6 +160,7 @@ export class ConnectionService {
           : new Set(),
       ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       altruism: 0,
+      earnedBandwidth: 0,
     };
 
     // conn.peer.connections.add(conn);

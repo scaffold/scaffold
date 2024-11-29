@@ -300,10 +300,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     this.ctx.get(UnspentOutputManager).tick();
 
     this.ctx.get(BlockService).updateWeight(fact);
-
-    if (fact.source === FactSource.Remote) {
-      setTimeout(() => this.ctx.get(FactService).forget(fact), 1000);
-    }
   }
 
   forget(fact: BlockFact) {

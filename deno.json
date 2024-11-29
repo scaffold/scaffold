@@ -62,7 +62,7 @@
     "run-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/server.ts",
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/signalingServer.ts",
     "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-ops tests/",
-    "test-avro": "# mocha --ui tdd --reporter dot"
+    "test-avro": "mocha --ui tdd --reporter dot"
   },
   "imports": {
     "$std/": "https://deno.land/std@0.217.0/",

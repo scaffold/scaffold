@@ -30,7 +30,7 @@ interface Server extends ConnectionProvider {
 }
 
 export class MockNetworkProvider implements NetworkProvider {
-  public providesProtocols = ['mock'];
+  public providesProtocol = 'mock';
 
   private servers = new Map<string, Server>();
 

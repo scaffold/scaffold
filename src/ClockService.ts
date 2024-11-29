@@ -26,8 +26,8 @@ export class ClockService {
   }
 
   // TODO: Make this a little more efficient & less predictable
-  public setPoissonInterval(func: () => void, wait?: number) {
-    if (wait === undefined) {
+  public setPoissonInterval(func: () => void, wait: number) {
+    if (wait === Infinity) {
       return;
     }
 

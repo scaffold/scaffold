@@ -33,12 +33,18 @@ export class ConnectionSignalIngestor
         this.ctx.get(CryptoHelper).decrypt({
           ciphertext: fact.payload,
           remotePublicKey,
-        }).then((data) =>
+        }).then((data) => {
+          console.log(
+            `Decrypted signal`,
+            fact.hash.toHex().slice(0, 10),
+            SignalPayload.decode(data),
+          );
+
           this.ctx.get(SignalingService).ingestSignal(
             remotePublicKey,
             SignalPayload.decode(data),
-          )
-        ).catch((err) => console.error(err));
+          );
+        }).catch((err) => console.error(err));
       } else {
         // for (const conn of this.ctx.get(PeerManager).routeTo(dstFact)) {
         //   this.ctx.get(FactService).sendTo(fact, conn);

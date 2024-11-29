@@ -168,6 +168,16 @@ export class FactService {
     }
   }
 
+  public increaseUsefulness(fact: Fact, usefulness: number) {
+    if (usefulness > fact.usefulness && fact.fromConnections.length !== 0) {
+      fact.fromConnections[0].earnedBandwidth +=
+        (usefulness - fact.usefulness) *
+        this.ctx.config.bandwidthReciprocationUtilityFactor *
+        fact.data.byteLength;
+      fact.usefulness = usefulness;
+    }
+  }
+
   public getValidity(
     blockHash: Hash,
     hints: Uint8Array[],
@@ -289,6 +299,10 @@ export class FactService {
     if (fromConn !== undefined) {
       fromConn.knownFacts.add(fact);
       fact.fromConnections.push(fromConn);
+
+      fromConn.earnedBandwidth +=
+        this.ctx.config.bandwidthReciprocationBaseFactor *
+        fact.data.byteLength;
     }
 
     return fact;
@@ -434,6 +448,7 @@ export class FactService {
       receivedAt: this.ctx.config.timeProvider.now(),
       source,
       fromConnections: [],
+      usefulness: 0,
 
       toConnections: [],
 

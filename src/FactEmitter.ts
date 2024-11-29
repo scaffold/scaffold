@@ -65,6 +65,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
 
     // TODO: Remove this
     for (const dst of this.getDestinations(fact)) {
+      console.log(`Sending ${fact.hash.toHex()} to ${dst.name}`);
       this.ctx.get(FactService).sendTo(fact, dst);
     }
   }

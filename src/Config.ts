@@ -23,7 +23,7 @@ export interface GraphParameters {
 }
 
 export interface BackgroundJobParameters {
-  frontierMergeIntervalMs?: number;
+  frontierMergeIntervalMs: number;
 }
 
 export interface TestParameters {}
@@ -119,6 +119,9 @@ export interface Config {
   getNextWeightBreakpoint(weight: bigint): bigint;
   getOverpaymentPenalty(overpayment: bigint): bigint;
 
+  bandwidthReciprocationBaseFactor: number;
+  bandwidthReciprocationUtilityFactor: number;
+
   // requiredProfitPerComputeRatio: number;
 
   discardFutureBlocks: boolean;
@@ -194,6 +197,8 @@ export const makeDefaultConfig = () => {
     getNextWeightBreakpoint: (weight) =>
       weight <= 2n ? 3n : (weight * 3n) >> 1n,
     getOverpaymentPenalty: (overpayment) => overpayment,
+    bandwidthReciprocationBaseFactor: 1,
+    bandwidthReciprocationUtilityFactor: 1,
     discardFutureBlocks: false,
     // targetFactCount: 1000,
     targetFactCount: Infinity,
@@ -215,7 +220,9 @@ export const makeDefaultConfig = () => {
       minimumGenerationTime: 1n,
       minimumCollateral: (work, _time) => work * 1000n,
     },
-    backgroundJobParameters: {},
+    backgroundJobParameters: {
+      frontierMergeIntervalMs: Infinity,
+    },
     testParameters: {},
     dbgVerifyGenerations: false,
     enableValidation: true,
