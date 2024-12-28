@@ -21,6 +21,16 @@ import {
 import { FrontierTreeDetail, FrontierTreeParams } from '../../src/messages.ts';
 import { FactService } from '../../src/FactService.ts';
 
+const baseTreeDetail: FrontierTreeDetail = {
+  treeWeights: [123n],
+  frontierVoteOutputIdxs: [],
+  frontierVoteOutputMask: EMPTY_ARR,
+  frontierVoteOutputCount: 0,
+  subtreeOutputCount: 0,
+  consumedInputsRoot: { branches: [] },
+  producedOutputsRoot: { branches: [] },
+}
+
 Deno.test(
   {
     name: `frontier contract no generation test`,
@@ -62,11 +72,7 @@ Deno.test(
               params: FrontierTreeParams.encode({ level: 0 }),
             },
             amount: 10n,
-            detail: FrontierTreeDetail.encode({
-              treeWeights: [123n],
-              consumedInputsRoot: { branches: [] },
-              producedOutputsRoot: { branches: [] },
-            }),
+            detail: FrontierTreeDetail.encode(baseTreeDetail),
           }],
         }),
     );
@@ -84,7 +90,7 @@ Deno.test(
         frontierHash,
         true,
       );
-      assertStrictEquals(genesisConsumer, incentiveConsumer);
+      assertStrictEquals(genesisConsumer!.block, incentiveConsumer!.block);
     }
     assertEquals(ctx1.get(FactService).getSize(), frontierInputCount + 1);
   }),
@@ -107,11 +113,7 @@ Deno.test(
       satisfies: Array.from({ length: frontierInputCount }, () => ({
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({
-          treeWeights: [123n],
-          consumedInputsRoot: { branches: [] },
-          producedOutputsRoot: { branches: [] },
-        }),
+        detail: FrontierTreeDetail.encode(baseTreeDetail),
       })),
     });
 
@@ -136,11 +138,7 @@ Deno.test(
       satisfies: [{
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({
-          treeWeights: [123n],
-          consumedInputsRoot: { branches: [] },
-          producedOutputsRoot: { branches: [] },
-        }),
+        detail: FrontierTreeDetail.encode(baseTreeDetail),
       }],
     });
 
@@ -165,19 +163,11 @@ Deno.test(
       satisfies: [{
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({
-          treeWeights: [123n],
-          consumedInputsRoot: { branches: [] },
-          producedOutputsRoot: { branches: [] },
-        }),
+        detail: FrontierTreeDetail.encode(baseTreeDetail),
       }, {
         contractHash: frontierHash,
         params: FrontierTreeParams.encode({ level: 3 }),
-        detail: FrontierTreeDetail.encode({
-          treeWeights: [123n],
-          consumedInputsRoot: { branches: [] },
-          producedOutputsRoot: { branches: [] },
-        }),
+        detail: FrontierTreeDetail.encode(baseTreeDetail),
       }],
     });
 

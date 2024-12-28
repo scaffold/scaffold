@@ -9,22 +9,17 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-// import { IncentiveCalculator } from './IncentiveCalculator.ts';
 import { BlockService } from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './constants.ts';
 import { KeyService } from './KeyService.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
-import { MaybePromise } from './util/MaybePromise.ts';
-import { FrontierService2 } from './FrontierService2.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
-import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { WeightService } from './WeightService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import { FrontierHelper } from './FrontierHelper.ts';
-import { GenesisService } from './GenesisService.ts';
+import { FrontierService } from './FrontierService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -146,6 +141,13 @@ export class BlockBuilder {
           this.collectInputs(
             satisfaction,
             true,
+            (input) =>
+              this.ctx.get(WeightService).isCanonical(input.block) &&
+              this.ctx.get(FrontierChainService).getVote([
+                  ...inputs,
+                  ...refBlocks.map((ref) => ({ block: ref })),
+                  input,
+                ]) !== undefined,
             (input) =>
               inputs.push({ ...input, blockHash: input.block.hash, groupIdx }),
           );
@@ -270,26 +272,27 @@ export class BlockBuilder {
           params: FrontierTreeParams.encode({ level }),
         },
         amount: frontierOutputAmount,
-        detail: FrontierTreeDetail.encode({
-          treeWeights: this.ctx.get(FrontierService2)
-            .mergeTreeWeights(inputs, frontierVoteBlock),
-          // input_tree_root: ZERO_HASH,
-          // output_tree_root: ZERO_HASH,
+        detail: FrontierTreeDetail.encode(this.ctx.get(FrontierService).create(inputs, frontierVoteBlock)),
+        // detail: FrontierTreeDetail.encode({
+        //   treeWeights: this.ctx.get(FrontierService2)
+        //     .mergeTreeWeights(inputs, frontierVoteBlock),
+        //   // input_tree_root: ZERO_HASH,
+        //   // output_tree_root: ZERO_HASH,
 
-          // input_count: 0,
-          // output_count: 0,
+        //   // input_count: 0,
+        //   // output_count: 0,
 
-          // block_count: 1,
-          // claimed_work: this.computeWork(inputs, outputs),
+        //   // block_count: 1,
+        //   // claimed_work: this.computeWork(inputs, outputs),
 
-          ...FrontierHelper.mergeTreeIo(
-            inputs,
-            frontierVoteBlock,
-            (hash) =>
-              this.ctx.get(BlockService).get(hash, false) ??
-                error(`Unknown frontier child input!`),
-          ),
-        }),
+        //   ...FrontierHelper.mergeTreeIo(
+        //     inputs,
+        //     frontierVoteBlock,
+        //     (hash) =>
+        //       this.ctx.get(BlockService).get(hash, false) ??
+        //         error(`Unknown frontier child input!`),
+        //   ),
+        // }),
         groupIdx: groupIdx++,
       });
       assert(bodies.length === groupIdx);
@@ -326,6 +329,7 @@ export class BlockBuilder {
   private collectInputs(
     satisfaction: Verifier & { detail?: Uint8Array },
     publishStub: boolean,
+    testInput: (input: InputSpec) => boolean,
     addInput: (input: InputSpec) => void,
   ) {
     for (
@@ -334,7 +338,8 @@ export class BlockBuilder {
     ) {
       if (
         block.outputClaims[idx].length === 0 &&
-        block.outputs[idx].amount >= 0n
+        block.outputs[idx].amount >= 0n &&
+        testInput({ block, outputIdx: idx, amount: block.outputs[idx].amount })
       ) {
         addInput({ block, outputIdx: idx, amount: block.outputs[idx].amount });
         publishStub = false;

@@ -1,4 +1,4 @@
-import { Hash, ZERO_HASH } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { WeightService } from './WeightService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
@@ -34,6 +34,15 @@ export class FrontierChainService {
   constructor(private ctx: Context) {}
 
   public getVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
+    const uniqueInputs = new Set<HashPrimitive>();
+    for (const input of inputs) {
+      const key = input.block.hash.toPrimitive() + input.outputIdx;
+      if (uniqueInputs.has(key)) {
+        return undefined;
+      }
+      uniqueInputs.add(key);
+    }
+
     if (!this.ctx.config.enableFrontierVote) {
       return ZERO_BLOCK;
     }
@@ -237,7 +246,7 @@ export class FrontierChainService {
     });
   }
 
-  private getAllParents(block: BlockFact) {
+  public getAllParents(block: BlockFact) {
     return this.recurse(block, (el, queue) => {
       for (const claim of el.outputClaims[el.frontierOutputIdx]) {
         queue.push(claim.block);

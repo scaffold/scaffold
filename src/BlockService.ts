@@ -733,9 +733,11 @@ export class BlockService {
     block: BlockFact,
     cancelSignal = neverAbort,
   ) {
-    for (let i = 0; i < block.bodies.length; i++) {
+    const groupIdxs = new Set(block.inputs.map((x) => x.groupIdx));
+
+    for (const groupIdx of groupIdxs) {
       const hint = CollateralHint.encode({
-        hint: { CollateralHintVerifier: { groupIdx: i } },
+        hint: { CollateralHintVerifier: { groupIdx } },
       });
 
       while (

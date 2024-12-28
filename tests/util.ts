@@ -39,7 +39,7 @@ const makeConfig = (
   limitFactCount: 10,
 
   enableFrontierVote: false,
-  enableBlockThroughput: false,
+  enableBlockThroughput: true,
   enableCollateralization: false,
   enableTreeAggregation: false,
   enableOptimisticHandling: false,

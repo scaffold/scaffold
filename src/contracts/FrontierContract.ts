@@ -48,6 +48,7 @@ export class FrontierContract implements ContractProvider {
       throw new Error(`Level cannot be negative!`);
     }
 
+    // Ensure there's exactly frontierInputCount frontier inputs
     for (let i = 0; i < frontierInputCount; i++) {
       await driver.requireInput();
     }

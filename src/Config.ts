@@ -8,9 +8,8 @@ import { MaybePromise } from './util/MaybePromise.ts';
 import { NetworkProvider } from './NetworkProvider.ts';
 import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';
-import { defaultContractProviders } from './contracts/defaultContractProviders.ts';
+import { makeDefaultContractProviders } from './contracts/defaultContractProviders.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
-import { Fact } from './FactMeta.ts';
 import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
 import { FrontierContract } from './contracts/FrontierContract.ts';
 
@@ -176,17 +175,17 @@ export const makeDefaultConfig = () => {
     timeProvider: {
       now: Date.now.bind(Date),
       setImmediate: (cb) => setTimeout(cb, 0),
-      setTimeout: setTimeout.bind(window),
-      clearTimeout: clearTimeout.bind(window),
-      setInterval: setInterval.bind(window),
-      clearInterval: clearInterval.bind(window),
+      setTimeout: (cb, delayMs) => setTimeout(cb, delayMs),
+      clearTimeout: (idx) => clearTimeout(idx),
+      setInterval: (cb, delayMs) => setInterval(cb, delayMs),
+      clearInterval: (idx) => clearInterval(idx),
     },
     entropyProvider: {
       randomNumber: Math.random.bind(Math),
       randomBytes: secp.etc.randomBytes,
     },
     executionProviders: [],
-    contractProviders: defaultContractProviders,
+    contractProviders: makeDefaultContractProviders(),
     ingestionProviders: defaultIngestionProviders,
     approxComputePricePerSecond: 1000n,
     getDepositIncentive: (_verifier) => 10n,
@@ -230,7 +229,7 @@ export const makeDefaultConfig = () => {
     enableSignalingLogging: true,
 
     enableFrontierVote: false,
-    enableBlockThroughput: false,
+    enableBlockThroughput: true,
     enableCollateralization: false,
     enableTreeAggregation: false,
     enableOptimisticHandling: false,

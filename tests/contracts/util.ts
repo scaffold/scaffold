@@ -36,7 +36,7 @@ export const waitForVerifiedOutput = async (
     assertNotEquals(consumer, undefined);
     assert(await ctx.get(BlockService).waitForVerification(consumer!));
     const inputIdx = consumer!.inputs.findIndex((x) =>
-      x.blockHash === block.hash && x.outputIdx === outputIdx
+      Hash.equals(x.blockHash, block.hash) && x.outputIdx === outputIdx
     );
     return {
       block: consumer!,

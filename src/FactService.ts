@@ -47,7 +47,6 @@ const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an impl
 
 const useZstd = false;
 const zstdMagic = new Uint8Array([40, 181, 47, 253]);
-(window as any).zstd = zstd;
 
 const sortKeys = true;
 

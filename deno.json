@@ -4,6 +4,7 @@
   "exports": "./mod.ts",
 
   "lock": false,
+  "vendor": true,
   "compilerOptions": {
     "allowJs": true,
     "useUnknownInCatchVariables": true,
@@ -61,7 +62,7 @@
     "bundle-worker": "deno bundle $DENO_FLAGS --check src/worker/worker.ts dist/worker.js",
     "run-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/server.ts",
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/signalingServer.ts",
-    "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-ops tests/",
+    "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
     "test-avro": "mocha --ui tdd --reporter dot"
   },
   "imports": {

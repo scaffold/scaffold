@@ -19,6 +19,7 @@ import { mapPut } from './util/map.ts';
 
 const targLevel = 0;
 
+// I don't think we need this
 export const NUM_FRONTIER_LEVELS = 256;
 
 if (frontierInputCount !== 2) {

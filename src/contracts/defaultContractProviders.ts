@@ -9,7 +9,7 @@ import { BurnContract } from './BurnContract.ts';
 import { TrueContract } from './TrueContract.ts';
 import { CollatzContract } from './CollatzContract.ts';
 
-export const defaultContractProviders: ContractProvider[] = [
+export const makeDefaultContractProviders = (): ContractProvider[] => [
   new BurnContract(),
   new RootContract(),
   new DataContract(),

@@ -418,10 +418,15 @@ export class VerificationService {
         workerDriver.pauseTimer(`finalize(${isValid ? 'VALID' : 'INVALID'})`);
 
         if (isValid) {
-          if (nextInputIdx > 0 && nextInputIdx !== block.inputs.length) {
-            throw new VerificationException(
-              `finalize(...) failed - there's too many inputs matching the contract's specification!`,
-            );
+          if (nextInputIdx > 0) {
+            while (nextInputIdx < block.inputs.length) {
+              const input = block.inputs[nextInputIdx++];
+              if (input.groupIdx === groupIdx) {
+                throw new VerificationException(
+                  `finalize(...) failed - there's too many inputs matching the contract's specification!`,
+                );
+              }
+            }
           }
         } else {
           console.error(`Verification failed:`, err);
