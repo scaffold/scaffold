@@ -1,16 +1,11 @@
+export { assert } from '@std/assert';
+
 // deno-lint-ignore ban-types
 export type NotUndefined = {} | null;
 
 export const error = (msg: string): never => {
   throw new Error(msg);
 };
-
-export const assert = (cond: boolean, msg?: string) => {
-  if (!cond) {
-    throw new Error(msg ?? 'Assertion failed!');
-  }
-};
-// export const assert = (_cond: boolean, _msg?: string) => {};
 
 export const todo = () => {
   throw new Error(`Unimplemented!`);

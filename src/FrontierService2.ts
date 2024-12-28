@@ -85,34 +85,35 @@ export class FrontierService2 {
     const weights: bigint[] = [];
 
     for (const input of inputs) {
-      if (input.outputIdx === input.block.frontierOutputIdx) {
-        const selfWeight = this.ctx.get(WeightService)
-          .getSelfWeight(input.block);
-        if (selfWeight.min !== selfWeight.max) {
-          throw new Error(
-            `Cannot merge an input block whose inputs are unknown!`,
-          );
-        }
-
-        const voteDepth = frontierVote === ZERO_BLOCK
-          ? -1
-          : frontierVote.frontierChainDepth ??
-            error(`Unconnected frontier chain!`);
-        const childDepth = input.block.frontierChainDepth ??
-          error(`Unconnected frontier chain!`);
-        const shift = childDepth - voteDepth - 1;
-
-        const addWeight = (x: bigint, i: number) => {
-          const idx = i > shift ? i - shift : 0;
-          while (weights.length <= idx) {
-            weights.push(0n);
-          }
-          weights[idx] += x;
-        };
-
-        input.block.frontierDetail.treeWeights.forEach(addWeight);
-        addWeight(selfWeight.min, 0);
+      if (input.outputIdx !== input.block.frontierOutputIdx) {
+        continue;
       }
+
+      const selfWeight = this.ctx.get(WeightService).getSelfWeight(input.block);
+      if (selfWeight.min !== selfWeight.max) {
+        throw new Error(
+          `Cannot merge an input block whose inputs are unknown!`,
+        );
+      }
+
+      const voteDepth = frontierVote === ZERO_BLOCK
+        ? -1
+        : frontierVote.frontierChainDepth ??
+          error(`Unconnected frontier chain!`);
+      const childDepth = input.block.frontierChainDepth ??
+        error(`Unconnected frontier chain!`);
+      const shift = childDepth - voteDepth - 1;
+
+      const addWeight = (x: bigint, i: number) => {
+        const idx = i > shift ? i - shift : 0;
+        while (weights.length <= idx) {
+          weights.push(0n);
+        }
+        weights[idx] += x;
+      };
+
+      input.block.frontierDetail.treeWeights.forEach(addWeight);
+      addWeight(selfWeight.min, 0);
     }
 
     return weights;

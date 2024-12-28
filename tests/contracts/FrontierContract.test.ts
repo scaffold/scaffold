@@ -23,9 +23,8 @@ import { FactService } from '../../src/FactService.ts';
 
 const baseTreeDetail: FrontierTreeDetail = {
   treeWeights: [123n],
-  frontierVoteOutputIdxs: [],
-  frontierVoteOutputMask: EMPTY_ARR,
   frontierVoteOutputCount: 0,
+  subtreeSpentIdxs: [],
   subtreeOutputCount: 0,
   consumedInputsRoot: { branches: [] },
   producedOutputsRoot: { branches: [] },
