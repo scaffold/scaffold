@@ -1,19 +1,15 @@
 import { Context } from './Context.ts';
-import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
-import { popcount } from './util/bitwise.ts';
-import { todo } from './util/functional.ts';
-import { FrontierTreeDetail } from './messages.ts';
-import { assert } from '@std/assert';
+import { ZERO_BLOCK } from './BlockMeta.ts';
 
 export class WalkerService {
   constructor(private ctx: Context) {}
 
   // Returns the path from descendant (inclusive) to ancestor (inclusive)
   public getPath(
-    ancestor: BlockFact,
+    ancestor: BlockFact | typeof ZERO_BLOCK,
     descendant: BlockFact,
   ): BlockFact[] | undefined {
     const chain: BlockFact[] = [descendant];
@@ -21,11 +17,13 @@ export class WalkerService {
       return chain;
     }
 
-    const ancestorParents = this.ctx.get(FrontierChainService).getAllParents(
-      ancestor,
-    );
+    const ancestorParents = this.ctx.get(FrontierChainService)
+      .getAllParents(ancestor);
     while (!ancestorParents.has(descendant)) {
-      if (descendant.frontierVoteBlock === undefined) {
+      if (
+        descendant.frontierVoteBlock === undefined ||
+        descendant.frontierVoteBlock === ZERO_BLOCK
+      ) {
         return undefined;
       }
       descendant = descendant.frontierVoteBlock;

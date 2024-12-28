@@ -1,4 +1,4 @@
-import { OutputClaim } from './BlockMeta.ts';
+import { OutputClaim, ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
@@ -94,7 +94,8 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
 
       totalPenalty: (block) =>
         this.get(block, 'treePenalty') +
-        (block.frontierVoteBlock !== undefined
+        (block.frontierVoteBlock !== undefined &&
+            block.frontierVoteBlock !== ZERO_BLOCK
           ? this.get(block.frontierVoteBlock, 'totalPenalty')
           : 0n),
 

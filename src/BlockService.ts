@@ -206,7 +206,10 @@ export class BlockService {
 
       // TODO: Add to priority queue so we update weights from the deepest to shallowest (genesis)
 
-      if (block.frontierVoteBlock !== undefined) {
+      if (
+        block.frontierVoteBlock !== undefined &&
+        block.frontierVoteBlock !== ZERO_BLOCK
+      ) {
         this.updateWeight(block.frontierVoteBlock);
       }
 
@@ -550,6 +553,10 @@ export class BlockService {
     // Walk up towards frontier; computing the unique index that this block is aiming to be included at
     if (block.frontierVoteBlock === undefined) {
       throw new Error(`Unconnected block!`);
+    }
+
+    if (block.frontierVoteBlock === ZERO_BLOCK) {
+      return todo();
     }
 
     const treeSize = (2n << BigInt(block.frontierParams.level)) - 1n;

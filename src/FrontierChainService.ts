@@ -7,7 +7,7 @@ import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { GenesisService } from './GenesisService.ts';
 import { FrontierHelper } from './FrontierHelper.ts';
 import { BlockService } from './BlockService.ts';
-import { error } from './util/functional.ts';
+import { error, todo } from './util/functional.ts';
 import { FactService } from './FactService.ts';
 
 const targVoteLevel = 4;
@@ -91,6 +91,8 @@ export class FrontierChainService {
       if (fi.frontierVoteBlock === undefined) {
         // throw new Error(`Unconnected frontier chain!`);
         return undefined;
+      } else if (fi.frontierVoteBlock === ZERO_BLOCK) {
+        todo();
       } else if (!frontierInputs.has(fi.frontierVoteBlock)) {
         externalInputs.add(fi.frontierVoteBlock);
       }
@@ -240,13 +242,20 @@ export class FrontierChainService {
         case undefined:
           // throw new Error(`Unconnected frontier chain!`);
           break;
+        case ZERO_BLOCK:
+          break;
         default:
           queue.push(el.frontierVoteBlock);
       }
     });
   }
 
-  public getAllParents(block: BlockFact) {
+  public getAllParents(
+    block: BlockFact | typeof ZERO_BLOCK,
+  ): Set<BlockFact | typeof ZERO_BLOCK> {
+    if (block === ZERO_BLOCK) {
+      return new Set([ZERO_BLOCK]);
+    }
     return this.recurse(block, (el, queue) => {
       for (const claim of el.outputClaims[el.frontierOutputIdx]) {
         queue.push(claim.block);

@@ -12,6 +12,7 @@ import { MaybePromise } from './util/MaybePromise.ts';
 import { ClockService } from './ClockService.ts';
 import { EmitterRecordSet } from './record_sets/EmitterRecordSet.ts';
 import { signalPriorityResolution } from './SignalingService.ts';
+import { ZERO_BLOCK } from './BlockMeta.ts';
 
 const packetOverheadBytes = 256;
 
@@ -52,7 +53,9 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
     this.frontier = new Set(queue);
     for (let i = 0; i < queue.length; i++) {
       const vote = queue[i].frontierVoteBlock;
-      if (vote !== undefined && !this.frontier.has(vote)) {
+      if (
+        vote !== undefined && vote !== ZERO_BLOCK && !this.frontier.has(vote)
+      ) {
         this.frontier.add(vote);
         this.increaseWeight(vote);
         queue.push(vote);

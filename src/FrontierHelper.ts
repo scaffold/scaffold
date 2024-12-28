@@ -140,7 +140,10 @@ export class FrontierHelper {
       )
     ) {
       return false;
-    } else if (block.frontierVoteBlock === undefined) {
+    } else if (
+      block.frontierVoteBlock === undefined ||
+      block.frontierVoteBlock === ZERO_BLOCK
+    ) {
       return false;
     } else {
       return this.doesOutput(block.frontierVoteBlock, branch);
@@ -153,7 +156,8 @@ export class FrontierHelper {
     onlyUnclaimed: boolean,
     verifierPath = this.encodePath(verifier),
   ): { blockHash: Hash; outputIdx: number; amount: bigint }[] {
-    let outputs = base.frontierVoteBlock !== undefined
+    let outputs = base.frontierVoteBlock !== undefined &&
+        base.frontierVoteBlock !== ZERO_BLOCK
       ? this.findOutputs(
         base.frontierVoteBlock,
         verifier,

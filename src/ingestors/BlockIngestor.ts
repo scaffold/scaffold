@@ -11,7 +11,7 @@ import {
   FrontierTreeDetail,
   FrontierTreeParams,
 } from '../messages.ts';
-import { BlockFlag, BlockMeta } from '../BlockMeta.ts';
+import { BlockFlag, BlockMeta, ZERO_BLOCK } from '../BlockMeta.ts';
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { collateralHash, frontierHash } from '../constants.ts';
 import { NUM_FRONTIER_LEVELS } from '../FrontierService2.ts';
@@ -67,8 +67,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       throw new Error(`Cannot ingest a block with coin throughput!`);
     }
 
-    const frontierVote = this.ctx.get(BlockService)
-      .get(block.frontierVote, false);
+    const frontierVote = Hash.equals(block.frontierVote, ZERO_HASH)
+      ? ZERO_BLOCK
+      : this.ctx.get(BlockService).get(block.frontierVote, false);
 
     const meta: BlockMeta = {
       // verifiers: block.bodies.map(() => undefined),
@@ -87,7 +88,12 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         })
       ),
 
-      isCanonical: frontierVote?.isCanonical !== false &&
+      isCanonical:
+        (frontierVote === undefined
+          ? false
+          : frontierVote === ZERO_BLOCK
+          ? true
+          : frontierVote.isCanonical) &&
         block.inputs.every(
           (x) =>
             this.ctx.get(BlockService).get(x.blockHash, false)?.isCanonical !==
@@ -131,7 +137,10 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     this.ctx.get(BlockService).getVoters(fact.frontierVote).push(fact);
 
-    if (fact.frontierVoteBlock !== undefined) {
+    if (
+      fact.frontierVoteBlock !== undefined &&
+      fact.frontierVoteBlock !== ZERO_BLOCK
+    ) {
       this.linkFrontier(fact.frontierVoteBlock, fact);
     }
 
@@ -251,7 +260,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     for (const body of fact.bodies) {
       if (body.byteLength >= headerSize) {
-        this.ctx.config.timeProvider.setTimeout(() => {
+        this.ctx.get(ClockService).setTimeout(() => {
           try {
             // TODO: Set the fromNode correctly here
             this.ctx.get(FactService).ingest(body, fact.source);
@@ -474,7 +483,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         .callAll(verifier, child, childInputIdx);
     }
 
-    this.ctx.config.timeProvider.setTimeout(
+    this.ctx.get(ClockService).setTimeout(
       () => this.ctx.get(FactEmitter).notify(child),
       0,
     );

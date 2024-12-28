@@ -199,6 +199,7 @@ export class WeightService {
       let minRecvTime = Infinity;
       if (
         fact.frontierVoteBlock !== undefined &&
+        fact.frontierVoteBlock !== ZERO_BLOCK &&
         fact.frontierVoteBlock.receivedAt < minRecvTime
       ) {
         minRecvTime = fact.frontierVoteBlock.receivedAt;

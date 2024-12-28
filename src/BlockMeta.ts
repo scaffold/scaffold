@@ -59,7 +59,7 @@ export interface BlockMeta {
 
   isCanonical: boolean;
 
-  frontierVoteBlock?: BlockFact;
+  frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
   frontierChainDepth?: number;
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
