@@ -8,11 +8,16 @@ export const popcount = (n: number) => {
 };
 
 // Src gets filled into the zeros of mask. The ones of mask get set to zero.
-export const bitScatter = (dst: Uint8Array, mask: Uint8Array, src: Uint8Array, offset: number = 0) => {
+export const bitScatter = (
+  dst: Uint8Array,
+  mask: Uint8Array,
+  src: Uint8Array,
+  offset: number = 0,
+) => {
   for (let i = 0; i < mask.byteLength * 8; i++) {
     const m = mask[i >> 3] & (1 << (i & 7));
     if (!m) {
-      dst[i >> 3] |= (src[offset >> 3] & (1 << (offset & 7)));
+      dst[i >> 3] |= src[offset >> 3] & (1 << (offset & 7));
       offset++;
     }
   }

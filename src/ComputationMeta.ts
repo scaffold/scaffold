@@ -2,7 +2,7 @@ import { WorkerDriver } from './WorkerDriverService.ts';
 import { BlockInput, BlockOutput } from './messages.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
-import { OutputSpec, InputSpec } from './BlockBuilder.ts';
+import { InputSpec, OutputSpec } from './BlockBuilder.ts';
 import { Verifier } from './messages.ts';
 
 // TODO: ComputationProvider?

@@ -96,7 +96,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
       frontierVoteBlock: frontierVote,
       // frontierChainDepth: base.source === FactSource.Genesis ? 0 : undefined,
-      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH) ? 0 : undefined,
+      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH)
+        ? 0
+        : undefined,
 
       frontierVoters: this.ctx.get(BlockService).getVoters(base.hash),
 
@@ -190,18 +192,18 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         // When we move this to an ingestion method we can remove the timeout.
 
         // this.ctx.get(ClockService).setTimeout(() => {
-          // Also need to consider the fact that this might be a stub block that's immediately going to be claimed (created in BlockBuilder)
-          if (claims.length) {
-            return;
-          }
+        // Also need to consider the fact that this might be a stub block that's immediately going to be claimed (created in BlockBuilder)
+        if (claims.length) {
+          return;
+        }
 
-          this.ctx.get(UnspentOutputManager).insert(output.verifier, {
-            block: fact,
-            outputIdx,
-            amount: output.amount,
-          });
+        this.ctx.get(UnspentOutputManager).insert(output.verifier, {
+          block: fact,
+          outputIdx,
+          amount: output.amount,
+        });
 
-          this.ctx.get(GenerationService).ensureRunning(output.verifier);
+        this.ctx.get(GenerationService).ensureRunning(output.verifier);
         // }, 0);
       } else {
         // TODO: What to do in this case; we still need to make the output available if it's required
@@ -447,14 +449,14 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     // We set a timeout because enqueueVerification gets this block recursively
     // When we move this to an ingestion method we can remove the timeout.
     // this.ctx.get(ClockService).setTimeout(() => {
-      // TODO: Only do this once per unique verifier foreach block
-      const hintPrefix = [
-        CollateralHint.encode({
-          hint: { CollateralHintVerifier: { groupIdx } },
-        }),
-      ];
-      this.ctx.get(VerificationService)
-        .enqueueVerification(child, verifier, hintPrefix, 0);
+    // TODO: Only do this once per unique verifier foreach block
+    const hintPrefix = [
+      CollateralHint.encode({
+        hint: { CollateralHintVerifier: { groupIdx } },
+      }),
+    ];
+    this.ctx.get(VerificationService)
+      .enqueueVerification(child, verifier, hintPrefix, 0);
     // }, 0);
 
     // if (

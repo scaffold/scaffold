@@ -22,8 +22,7 @@ interface NetworkProviderOld {
   createServer?(
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
-    ctx: Context // TODO: Maybe move this parameter first; we don't want it to be ignored?
-    ,
+    ctx: Context, // TODO: Maybe move this parameter first; we don't want it to be ignored?
   ): void;
 
   // Only call onNewConn once the connection is established and data can be sent.
@@ -33,8 +32,7 @@ interface NetworkProviderOld {
     // onListen events will be transmitted to the remote node via tryConnect
     onListen: (spec: string) => void,
     onNewConn: (conn: ConnectionProvider) => void,
-    ctx: Context // TODO: Maybe move this parameter first; we don't want it to be ignored?
-    ,
+    ctx: Context, // TODO: Maybe move this parameter first; we don't want it to be ignored?
   ): {
     tryConnect(spec: string): void;
   };

@@ -272,7 +272,9 @@ export class BlockBuilder {
           params: FrontierTreeParams.encode({ level }),
         },
         amount: frontierOutputAmount,
-        detail: FrontierTreeDetail.encode(this.ctx.get(FrontierService).create(inputs, frontierVoteBlock)),
+        detail: FrontierTreeDetail.encode(
+          this.ctx.get(FrontierService).create(inputs, frontierVoteBlock),
+        ),
         // detail: FrontierTreeDetail.encode({
         //   treeWeights: this.ctx.get(FrontierService2)
         //     .mergeTreeWeights(inputs, frontierVoteBlock),

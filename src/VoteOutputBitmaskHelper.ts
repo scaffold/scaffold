@@ -20,27 +20,30 @@ export class VoteOutputBitmaskHelper {
 
   public static assertDisjoint(a: MaskDetail, b: MaskDetail) {
     assert(a.frontierVoteOutputCount === b.frontierVoteOutputCount);
-    assert(a.frontierVoteOutputMask.byteLength === b.frontierVoteOutputMask.byteLength);
+    assert(
+      a.frontierVoteOutputMask.byteLength ===
+        b.frontierVoteOutputMask.byteLength,
+    );
 
     for (let i = 0; i < a.frontierVoteOutputMask.byteLength; i++) {
       const c = a.frontierVoteOutputMask[i] & b.frontierVoteOutputMask[i];
       if (c !== 0) {
-        const j = range(8).findIndex(j => (c >>> j) & 1);
+        const j = range(8).findIndex((j) => (c >>> j) & 1);
         throw new Error(`Masks intersect at index ${i * 8 + j}!`);
       }
     }
   }
-  
+
   public static merge(masks: MaskDetail[]): MaskDetail {
     // 1. Outputs of last child
     // 2. Outputs of first child that weren't consumed by the last child
     // 3. Outputs of the frontier vote that weren't consumed by either child
 
     const count = masks[0].frontierVoteOutputCount;
-    assert(masks.every(x => x.frontierVoteOutputCount === count));
+    assert(masks.every((x) => x.frontierVoteOutputCount === count));
 
     const len = masks[0].frontierVoteOutputMask.byteLength;
-    assert(masks.every(x => x.frontierVoteOutputMask.byteLength === len));
+    assert(masks.every((x) => x.frontierVoteOutputMask.byteLength === len));
 
     const out = new Uint8Array(masks[0].frontierVoteOutputMask);
     for (let i = 1; i < len; i++) {

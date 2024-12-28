@@ -13,12 +13,15 @@ export class FrontierService {
     frontierVote: BlockFact | typeof ZERO_BLOCK,
   ): FrontierTreeDetail {
     return {
-      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(inputs, frontierVote),
+      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(
+        inputs,
+        frontierVote,
+      ),
       frontierVoteOutputIdxs: [],
       frontierVoteOutputMask: new Uint8Array(0),
       frontierVoteOutputCount: 0,
       subtreeOutputCount: 0,
-      
+
       consumedInputsRoot: { branches: [] },
       producedOutputsRoot: { branches: [] },
     };

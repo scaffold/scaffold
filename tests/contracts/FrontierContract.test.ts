@@ -29,7 +29,7 @@ const baseTreeDetail: FrontierTreeDetail = {
   subtreeOutputCount: 0,
   consumedInputsRoot: { branches: [] },
   producedOutputsRoot: { branches: [] },
-}
+};
 
 Deno.test(
   {
