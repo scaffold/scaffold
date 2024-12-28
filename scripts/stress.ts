@@ -1,4 +1,4 @@
-import * as log from '$std/log/mod.ts';
+import * as log from '@std/log';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { hex2bin } from '../src/util/hex.ts';

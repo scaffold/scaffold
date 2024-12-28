@@ -4,7 +4,7 @@ import {
   assertFalse,
   assertNotEquals,
   assertStrictEquals,
-} from '$std/assert/mod.ts';
+} from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { frontierHash } from '../../src/constants.ts';

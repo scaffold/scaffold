@@ -6,7 +6,7 @@ import { FrontierChainService } from './FrontierChainService.ts';
 import { popcount } from './util/bitwise.ts';
 import { todo } from './util/functional.ts';
 import { FrontierTreeDetail } from './messages.ts';
-import { assert } from '$std/assert/assert.ts';
+import { assert } from '@std/assert';
 
 export class WalkerService {
   constructor(private ctx: Context) {}

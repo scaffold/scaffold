@@ -15,7 +15,7 @@ import { zstd } from '../deps.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
 import { mapPut } from './util/map.ts';
-import { log } from '../deps.ts';
+import * as log from '@std/log';
 import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
 import { Connection, ConnectionService } from './ConnectionService.ts';

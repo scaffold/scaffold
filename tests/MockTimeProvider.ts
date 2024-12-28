@@ -1,5 +1,5 @@
 import { TimeProvider } from '../src/Config.ts';
-import * as dataStructures from '$std/data_structures/mod.ts';
+import { RedBlackTree } from '@std/data-structures';
 
 // TODO: Use this instead? https://deno.land/std@0.208.0/testing/time.ts?s=FakeTime
 
@@ -12,9 +12,9 @@ interface Entry {
 }
 
 export class MockTimeProvider implements TimeProvider {
-  private queue: dataStructures.RedBlackTree<Entry> = new dataStructures
-    .RedBlackTree((a, b) =>
-    a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.idx - b.idx);
+  private queue: RedBlackTree<Entry> = new RedBlackTree((a, b) =>
+    a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.idx - b.idx
+  );
   private entries: (Entry | undefined)[] = [undefined];
 
   constructor(private curTimestamp = 0) {}

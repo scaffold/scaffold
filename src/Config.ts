@@ -1,7 +1,7 @@
 import { Context } from './Context.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './WorkerDriverService.ts';
-import { log } from '../deps.ts';
+import * as log from '@std/log';
 import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';

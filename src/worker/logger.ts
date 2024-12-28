@@ -1,4 +1,4 @@
-import { log } from '../../deps.ts';
+import * as log from '@std/log';
 
 // const logger: Logger = {
 //   info: (data, msg) => console.log(data, msg),

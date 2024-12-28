@@ -1,4 +1,4 @@
-import { assertEquals, assertStrictEquals } from '$std/assert/mod.ts';
+import { assertEquals, assertStrictEquals } from '@std/assert';
 import { AccountContract } from '../src/contracts/AccountContract.ts';
 import { RootContract } from '../src/contracts/RootContract.ts';
 import { makeTest, provideInitialBalance } from '../tests/util.ts';

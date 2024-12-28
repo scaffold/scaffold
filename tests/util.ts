@@ -1,4 +1,4 @@
-import * as async from '$std/async/mod.ts';
+import { deadline } from '@std/async';
 import { secp } from '../src/util/secp.ts';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
@@ -71,7 +71,7 @@ async (testCtx: Deno.TestContext) => {
   );
 
   try {
-    await async.deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000);
+    await deadline(Promise.resolve(func(testCtx, ...ctxs)), 1000);
   } finally {
     for (const ctx of ctxs) {
       await ctx.destruct();

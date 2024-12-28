@@ -2,7 +2,7 @@ import { AccountContract } from '../../src/contracts/AccountContract.ts';
 import { BlockFact } from '../../src/FactMeta.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { Context } from '../../src/Context.ts';
-import { assert, assertEquals, assertNotEquals } from '$std/assert/mod.ts';
+import { assert, assertEquals, assertNotEquals } from '@std/assert';
 import { BlockService } from '../../src/BlockService.ts';
 import { findOutput } from '../util.ts';
 

@@ -1,8 +1,8 @@
 import { build, emptyDir } from 'dnt';
-import { parse } from '$std/flags/mod.ts';
+import { parseArgs } from '@std/cli/parse-args';
 import { error } from '../src/util/functional.ts';
 
-const flags = parse(Deno.args, {
+const flags = parseArgs(Deno.args, {
   string: ['version'],
 });
 

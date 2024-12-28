@@ -1,4 +1,4 @@
-import { bytes } from '../../deps.ts';
+import * as bytes from '@std/bytes';
 import { memoize } from './functional.ts';
 import { bin2hex } from './hex.ts';
 

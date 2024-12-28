@@ -1,7 +1,7 @@
 import { secp } from './util/secp.ts';
 import { Context } from './Context.ts';
 import { bin2hex } from './util/hex.ts';
-import { log } from '../deps.ts';
+import * as log from '@std/log';
 
 export class KeyService {
   private selfPublicKey: Uint8Array;

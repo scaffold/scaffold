@@ -1,4 +1,4 @@
-import { assertEquals, assertStrictEquals } from '$std/assert/mod.ts';
+import { assertEquals, assertStrictEquals } from '@std/assert';
 import { findOutput, makeTest, provideInitialBalance } from './util.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { WeightService } from '../src/WeightService.ts';

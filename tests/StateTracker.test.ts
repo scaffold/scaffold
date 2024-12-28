@@ -1,4 +1,4 @@
-import { assertEquals } from '$std/assert/mod.ts';
+import { assertEquals } from '@std/assert';
 import { makeTest } from './util.ts';
 import { StateTracker } from '../src/util/StateTracker.ts';
 

@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from '$std/assert/mod.ts';
+import { assert, assertEquals, assertFalse } from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { rootHash } from '../../src/constants.ts';

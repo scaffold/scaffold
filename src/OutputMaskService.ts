@@ -5,7 +5,7 @@ import { BlockService } from './BlockService.ts';
 import { bitScatter, popcount } from './util/bitwise.ts';
 import { todo } from './util/functional.ts';
 import { FrontierTreeDetail } from './messages.ts';
-import { assert } from '$std/assert/assert.ts';
+import { assert } from '@std/assert';
 import { WalkerService } from './WalkerService.ts';
 import { BarrierException } from './exceptions.ts';
 

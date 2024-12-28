@@ -1,4 +1,4 @@
-import { secp } from '../deps.ts';
+import * as secp from '@noble/secp256k1';
 import { Context } from './Context.ts';
 import { Hash } from './util/Hash.ts';
 import { arrConcat, EMPTY_ARR } from './util/buffer.ts';

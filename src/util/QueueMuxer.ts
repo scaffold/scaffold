@@ -1,7 +1,7 @@
 import { HashPrimitive } from './Hash.ts';
 import { mapPut } from './map.ts';
 import { QueueRecordSet } from '../record_sets/QueueRecordSet.ts';
-import { assert } from '$std/assert/assert.ts';
+import { assert } from '@std/assert';
 
 export interface Queue<Key, Value> {
   key: Key; // TODO: Remove; it's just for debugging

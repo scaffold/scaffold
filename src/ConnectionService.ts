@@ -9,7 +9,7 @@ import { KeyService } from './KeyService.ts';
 import { Identification, PeerInfo } from './messages.ts';
 import { bin2hex } from './util/hex.ts';
 import { BarrierException } from './exceptions.ts';
-import { log } from '../deps.ts';
+import * as log from '@std/log';
 import { RemotePeer } from './PeerManager.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
 import { ConnectionRecordSet } from './record_sets/ConnectionRecordSet.ts';

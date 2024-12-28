@@ -12,7 +12,7 @@ import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
 import { PeerManager } from './PeerManager.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
-import { log } from '../deps.ts';
+import * as log from '@std/log';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { NUM_FRONTIER_LEVELS } from './FrontierService2.ts';

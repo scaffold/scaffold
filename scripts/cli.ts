@@ -1,6 +1,6 @@
-import { parse } from '$std/flags/mod.ts';
+import { parseArgs } from '@std/cli/parse-args';
 import { error } from '../src/util/functional.ts';
-import { readAll } from '$std/streams/read_all.ts';
+import { readAll } from '@std/io';
 
 // TODO: Use https://cliffy.io/
 // Make sure it can be compiled to run on npm
@@ -40,7 +40,7 @@ const world = 'Deno' in globalThis
   ? new NodeJsInterface()
   : error('Cannot find cli args');
 
-const flags = parse(world.getArgs(), {
+const flags = parseArgs(world.getArgs(), {
   boolean: ['help'],
   alias: {},
   collect: ['private-keys', 'connect-to'],

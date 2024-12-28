@@ -1,6 +1,6 @@
 import { bitScatter } from './util/bitwise.ts';
 import { range } from './util/functional.ts';
-import { assert } from '$std/assert/assert.ts';
+import { assert } from '@std/assert';
 
 // 0: output is unspent
 // 1: output is spent

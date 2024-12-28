@@ -1,4 +1,4 @@
-import { assertEquals, assertStrictEquals } from '$std/assert/mod.ts';
+import { assertEquals, assertStrictEquals } from '@std/assert';
 import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
 import { FetchService } from '../src/FetchService.ts';
 import { collatzHash } from '../src/constants.ts';
