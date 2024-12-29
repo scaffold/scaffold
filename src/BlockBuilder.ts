@@ -38,6 +38,7 @@ export type OutputSpec = Omit<BlockOutput, 'groupIdx'>;
 // }
 
 export interface BlockDraft {
+  groupIdx?: number;
   frontierVote?: BlockFact | typeof ZERO_BLOCK;
   frontierLevel?: number;
   frontierOutputAmount?: bigint;
@@ -102,8 +103,27 @@ export class BlockBuilder {
     const outputs: BlockOutput[] = [];
     const bodies: Uint8Array[] = [];
 
-    let groupIdx = 0;
+    const groupIdxArr = drafts.map((x) => x.groupIdx).filter((x) => x !== undefined);
+    const takenGroupIdxs = new Set(groupIdxArr);
+    if (groupIdxArr.length !== takenGroupIdxs.size) {
+      throw new Error(`Duplicate group idxs specified!`);
+    }
+
+    let groupIdx = -1;
+    const nextGroupIdx = () => {
+      do {
+        groupIdx++;
+      } while (takenGroupIdxs.has(groupIdx));
+      return groupIdx;
+    };
+
     for (const draft of drafts) {
+      const groupIdx = draft.groupIdx ?? nextGroupIdx();
+      while (bodies.length <= groupIdx) {
+        bodies.push(EMPTY_ARR);
+      }
+      bodies[groupIdx] = draft.body ?? EMPTY_ARR;
+
       if (draft.frontierVote !== undefined) {
         if (frontierVoteBlock === undefined) {
           frontierVoteBlock = draft.frontierVote;
@@ -158,10 +178,6 @@ export class BlockBuilder {
           outputs.push({ ...output, groupIdx });
         }
       }
-
-      bodies.push(draft.body ?? EMPTY_ARR);
-
-      groupIdx++;
     }
 
     let ioDelta = 0n;
@@ -219,26 +235,22 @@ export class BlockBuilder {
 
       if (input.amount > 0n) {
         // TODO: Handle groups without any result
-        bodies.push(EMPTY_ARR);
         inputs.push({
           ...input,
           blockHash: input.block.hash,
-          groupIdx: groupIdx++,
+          groupIdx: nextGroupIdx(),
         });
-        assert(bodies.length === groupIdx);
         ioDelta += input.amount;
       }
     }
 
     if (ioDelta > 0n) {
-      bodies.push(EMPTY_ARR);
       outputs.push({
         verifier: this.selfAccountVerifier,
         amount: ioDelta,
         detail: EMPTY_ARR,
-        groupIdx: groupIdx++,
+        groupIdx: nextGroupIdx(),
       });
-      assert(bodies.length === groupIdx);
     } else if (ioDelta < 0n && checkIoBalance) {
       throw new RetryBuildingException('Insufficient coins');
     }
@@ -260,7 +272,6 @@ export class BlockBuilder {
       //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
       // );
 
-      bodies.push(EMPTY_ARR);
       // TODO: Move all of this logic to FrontierContract
       // We'll have to make the tree weights NOT include the self weight
       outputs.push({
@@ -292,9 +303,12 @@ export class BlockBuilder {
         //         error(`Unknown frontier child input!`),
         //   ),
         // }),
-        groupIdx: groupIdx++,
+        groupIdx: nextGroupIdx(),
       });
-      assert(bodies.length === groupIdx);
+    }
+
+    while (bodies.length <= groupIdx) {
+      bodies.push(EMPTY_ARR);
     }
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
@@ -391,7 +405,7 @@ export class BlockBuilder {
     const block = this.ctx.get(BlockService).create(this.buildBlock([draft]));
     if (draft.onBlock !== undefined) {
       // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
-      draft.onBlock(block, 0);
+      draft.onBlock(block, draft.groupIdx ?? 0);
     }
 
     return block;
@@ -432,7 +446,7 @@ export class BlockBuilder {
     );
     if (draft.onBlock !== undefined) {
       // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
-      draft.onBlock(fact, 0);
+      draft.onBlock(fact, draft.groupIdx ?? 0);
     }
   }
 

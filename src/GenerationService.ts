@@ -639,6 +639,7 @@ export class GenerationService {
         );
 
         const blockDraft: BlockDraft = {
+          groupIdx: Hash.equals(verifier.contractHash, frontierHash) ? 0 : undefined,
           refs,
           inputs,
           outputs,

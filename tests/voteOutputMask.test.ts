@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertObjectMatch } from '@std/assert';
+import { assert, assertEquals, assertObjectMatch, assertThrows } from '@std/assert';
 import { findOutput, makeTest, provideInitialBalance } from '../tests/util.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { error } from '../src/util/functional.ts';
@@ -83,7 +83,8 @@ Deno.test(
     assertObjectMatch(block2.frontierDetail, {
       frontierVoteOutputCount: 0,
       subtreeSpentIdxs: [],
-      subtreeOutputCount: genesis.outputs.length + block1.outputs.length -
+      subtreeOutputCount: genesis.outputs.length +
+        block1.outputs.length -
         genesis.inputs.length -
         block1.inputs.length,
     });
@@ -131,5 +132,49 @@ Deno.test(
       subtreeSpentIdxs: [],
       subtreeOutputCount: 0,
     });
+  }),
+);
+
+Deno.test(
+  {
+    name: `a double-spend should not be mergeable`,
+    sanitizeOps: false, // TODO: Turn this on
+    sanitizeResources: false,
+    only: true,
+  },
+  makeTest({
+    contractProviders: [],
+    enableFrontierVote: true,
+  }, (_testCtx, ctx) => {
+    const genesisHash = provideInitialBalance(ctx);
+    const genesis = ctx.get(BlockService).get(genesisHash, false) ??
+      error(`Missing genesis block!`);
+
+    const contractHash = Hash.random();
+    const emitter = ctx.get(BlockBuilder).publishSingleDraft({
+      frontierVote: genesis,
+      outputs: [
+        { verifier: { contractHash, params: EMPTY_ARR }, amount: 100n, detail: EMPTY_ARR },
+      ],
+    });
+
+    const claimer1 = ctx.get(BlockBuilder).publishSingleDraft({
+      frontierVote: emitter,
+      inputs: [findOutput(emitter, contractHash)],
+    });
+    const claimer2 = ctx.get(BlockBuilder).publishSingleDraft({
+      frontierVote: emitter,
+      inputs: [findOutput(emitter, contractHash)],
+    });
+
+    assertThrows(() =>
+      ctx.get(BlockBuilder).publishSingleDraft({
+        frontierVote: emitter,
+        inputs: [
+          findOutput(claimer1, frontierHash),
+          findOutput(claimer2, frontierHash),
+        ],
+      })
+    );
   }),
 );

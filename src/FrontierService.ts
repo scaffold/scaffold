@@ -1,16 +1,19 @@
 import { InputSpec } from './BlockBuilder.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
+import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
+import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { BlockFact } from './FactMeta.ts';
 import { FrontierService2 } from './FrontierService2.ts';
 import { FrontierTreeDetail } from './messages.ts';
 import { assert, todo } from './util/functional.ts';
+import { Hash } from './util/Hash.ts';
 import { WalkerService } from './WalkerService.ts';
 
 interface RebasedBlock {
-  frontierVoteOutputCount: number;
-  subtreeSpentIdxs: number[];
-  subtreeOutputCount: number;
+  // frontierVoteOutputCount: number;
+  treeSpentIdxs: number[];
+  subtreeOutputCount: number[];
   omittedSpendCount: number;
 }
 
@@ -23,17 +26,45 @@ export class FrontierService {
   ): FrontierTreeDetail {
     const treeChildren = inputs
       .filter((input) => input.block.frontierOutputIdx === input.outputIdx)
-      .map((input) => ({
-        ...input,
-        ...this.rebase(input.block, frontierVote),
-      }));
+      .map((input) => ({ ...input, ...this.rebase(input.block, frontierVote) }));
 
-    let subtreeOutputCount = 0;
+    let offset = 0;
     for (const child of treeChildren) {
-      subtreeOutputCount += child.subtreeOutputCount -
+      offset += child.subtreeOutputCount.reduce((acc, x) => acc + x, 0) +
+        child.block.outputs.length;
+    }
+
+    // child2.outputs.length, child2.subtreeOutputCount, child1.outputs.length, child1.subtreeOutputCount
+
+    let subtreeOutputCount: number[] = [];
+    for (const child of treeChildren) {
+      const inputIdxs: number[] = [];
+      for (const input of child.block.inputs) {
+        // TODO: Request from network
+        const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
+        if (inputBlock === undefined) {
+          return undefined;
+        }
+      }
+
+      // block.frontierDetail.frontierVoteOutputCount -
+      //   block.frontierDetail.subtreeSpentIdxs.length +
+      //   block.frontierDetail.subtreeOutputCount -
+      //   block.inputs.length +
+      //   block.outputs.length;
+
+      const newSpentIdxs: number[] = [];
+      for (const idx of child.subtreeSpentIdxs) {
+        newSpentIdxs.push(offset + idx);
+      }
+      child.subtreeSpentIdxs = newSpentIdxs;
+
+      const outputCount = child.subtreeOutputCount.reduce((acc, x) => acc + x, 0) -
         child.block.inputs.length +
         child.block.outputs.length -
         child.omittedSpendCount;
+      assert(outputCount >= 0, 'outputCount < 0');
+      subtreeOutputCount.push(outputCount);
 
       // TODO: Remove this once we've verified it works correctly
       if (treeChildren.some((x) => x.block === child.block.frontierVoteBlock)) {
@@ -43,38 +74,29 @@ export class FrontierService {
         assert(vote !== undefined && vote !== ZERO_BLOCK);
 
         const threshold = vote.outputs.length +
-          vote.frontierDetail.subtreeOutputCount;
-        const count = child.subtreeSpentIdxs.findIndex((x) => x >= threshold);
-        const omitCount = count === -1 ? child.subtreeSpentIdxs.length : count;
-        assert(child.omittedSpendCount === omitCount);
+          vote.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0);
+        assert(child.omittedSpendCount === this.countLt(child.subtreeSpentIdxs, threshold));
       } else {
         assert(child.omittedSpendCount === 0);
       }
     }
-    assert(subtreeOutputCount >= 0, 'subtreeOutputCount < 0');
 
     // TODO: Merge indices instead of sorting them
     // That should be faster since they're already sorted
-    const subtreeSpentIdxs = treeChildren.flatMap((x) => x.subtreeSpentIdxs)
-      .sort();
+    const subtreeSpentIdxs = treeChildren.flatMap((x) => x.subtreeSpentIdxs).sort();
 
     // Assert there's no duplicates
     let prev = -1;
     for (const idx of subtreeSpentIdxs) {
       assert(idx >= prev, `Subtree spent indices aren't sorted!`);
       if (idx === prev) {
-        throw new Error(
-          `Can't merge subtrees because an output is spent twice!`,
-        );
+        throw new Error(`Can't merge subtrees because an output is spent twice!`);
       }
       prev = idx;
     }
 
     return {
-      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(
-        inputs,
-        frontierVote,
-      ),
+      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(inputs, frontierVote),
 
       frontierVoteOutputCount: this.getTotalOutputCount(frontierVote),
       subtreeSpentIdxs,
@@ -92,7 +114,7 @@ export class FrontierService {
 
     return block.frontierDetail.frontierVoteOutputCount -
       block.frontierDetail.subtreeSpentIdxs.length +
-      block.frontierDetail.subtreeOutputCount -
+      block.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) -
       block.inputs.length +
       block.outputs.length;
   }
@@ -118,10 +140,7 @@ export class FrontierService {
     }
 
     // Try rebasing by moving the vote backwards (towards ancestors)
-    let path = this.ctx.get(WalkerService).getPath(
-      toVote,
-      block.frontierVoteBlock,
-    );
+    let path = this.ctx.get(WalkerService).getPath(toVote, block.frontierVoteBlock);
     if (path !== undefined) {
       path.pop();
       // Path is from block.frontierVoteBlock (inclusive) to toVote (exclusive)
@@ -130,7 +149,8 @@ export class FrontierService {
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
         if (it === prev.frontierVoteBlock) {
-          let offset = it.frontierDetail.subtreeOutputCount + it.outputs.length;
+          let offset = it.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) +
+            it.outputs.length;
           let j = 0;
           const newIdxs: number[] = [];
           for (const idx of rebase.subtreeSpentIdxs) {
@@ -186,14 +206,15 @@ export class FrontierService {
     if (path !== undefined) {
       let prev = path.pop()!;
       path.reverse();
-      // Path is from block.frontierVoteBlock (inclusive) to toVote (exclusive)
+      // Path is from block.frontierVoteBlock (exclusive) to toVote (inclusive)
 
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
         assert(it !== block);
 
         if (it.frontierVoteBlock === prev) {
-          let offset = it.frontierDetail.subtreeOutputCount + it.outputs.length;
+          let offset = it.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) +
+            it.outputs.length;
           let j = 0;
           const newIdxs: number[] = [];
           for (const idx of rebase.subtreeSpentIdxs) {
@@ -206,9 +227,7 @@ export class FrontierService {
             }
 
             if (it.frontierDetail.subtreeSpentIdxs[j] === idx) {
-              throw new Error(
-                `Can't rebase through block because an output is spent twice!`,
-              );
+              throw new Error(`Can't rebase through block because an output is spent twice!`);
             }
 
             newIdxs.push(idx + offset);
@@ -227,5 +246,58 @@ export class FrontierService {
     }
 
     throw Error(`Rebase failed; no path from A to B`);
+  }
+
+  private traceOutput(block: BlockFact, outputIdx: number) {
+    const path = this.ctx.get(WalkerService).getPath(block, toVote);
+    if (path !== undefined) {
+      let prev = path.pop()!;
+      assert(prev !== ZERO_BLOCK);
+      path.reverse();
+      // Path is from block (exclusive) to toVote (inclusive)
+
+      for (const it of path) {
+        assert(it !== ZERO_BLOCK);
+
+        const spentIdx = this.countLt(it.frontierDetail.subtreeSpentIdxs, outputIdx);
+        if (it.frontierDetail.subtreeSpentIdxs[spentIdx] === outputIdx) {
+          throw new Error(`Can't trace output because it's spent twice!`);
+        }
+
+        if (it.frontierVoteBlock === prev) {
+          // Frontier voter
+          outputIdx = it.frontierDetail.subtreeSpentIdxs.length +
+            it.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) -
+            it.inputs.length +
+            it.outputs.length +
+            outputIdx -
+            spentIdx;
+        } else {
+          // Parent
+          outputIdx = prev.outputs.length;
+
+          // Tree children always have a group index of zero
+          const treeChildren = it.inputs.filter((input) => input.groupIdx === 0);
+          assert(treeChildren.length === frontierInputCount);
+
+          const child = prev;
+          const childIdx = treeChildren.findIndex((input) =>
+            input.outputIdx === child.frontierOutputIdx && Hash.equals(input.blockHash, child.hash)
+          );
+          assert(childIdx !== -1);
+
+          outputIdx += it.frontierDetail.subtreeOutputCount.slice(childIdx + 1)
+            .reduce((acc, x) => acc + x, 0);
+        }
+
+        prev = it;
+      }
+    }
+  }
+
+  private countLt(arr: number[], y: number) {
+    // TODO: Binary search
+    const idx = arr.findIndex((x) => x >= y);
+    return idx === -1 ? arr.length : idx;
   }
 }
