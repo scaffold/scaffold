@@ -4,17 +4,14 @@ import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { FrontierService2 } from './FrontierService2.ts';
 import { FrontierTreeDetail } from './messages.ts';
-import { EMPTY_ARR } from './util/buffer.ts';
-import { assert } from './util/functional.ts';
+import { assert, todo } from './util/functional.ts';
 import { WalkerService } from './WalkerService.ts';
 
 interface RebasedBlock {
-  block: BlockFact;
-  frontierVoteBlock: BlockFact;
-
   frontierVoteOutputCount: number;
   subtreeSpentIdxs: number[];
   subtreeOutputCount: number;
+  omittedSpendCount: number;
 }
 
 export class FrontierService {
@@ -26,32 +23,61 @@ export class FrontierService {
   ): FrontierTreeDetail {
     const treeChildren = inputs
       .filter((input) => input.block.frontierOutputIdx === input.outputIdx)
-      .map((input) => this.rebase(input.block, frontierVote));
+      .map((input) => ({
+        ...input,
+        ...this.rebase(input.block, frontierVote),
+      }));
 
     let subtreeOutputCount = 0;
     for (const child of treeChildren) {
-      subtreeOutputCount += child.block.outputs.length +
-        child.subtreeOutputCount;
+      subtreeOutputCount += child.subtreeOutputCount -
+        child.block.inputs.length +
+        child.block.outputs.length -
+        child.omittedSpendCount;
 
-      if (treeChildren.some((x) => x.block === child.frontierVoteBlock)) {
+      // TODO: Remove this once we've verified it works correctly
+      if (treeChildren.some((x) => x.block === child.block.frontierVoteBlock)) {
         // We have to subtract any outputs we consume from another tree child
         // This only really works for two tree children
-        const vote = child.frontierVoteBlock!;
-        const spentIdxs = child.subtreeSpentIdxs;
+        const vote = child.block.frontierVoteBlock;
+        assert(vote !== undefined && vote !== ZERO_BLOCK);
+
         const threshold = vote.outputs.length +
           vote.frontierDetail.subtreeOutputCount;
-        const count = spentIdxs.findIndex((x) => x >= threshold);
-        subtreeOutputCount -= count === -1 ? spentIdxs.length : count;
+        const count = child.subtreeSpentIdxs.findIndex((x) => x >= threshold);
+        const omitCount = count === -1 ? child.subtreeSpentIdxs.length : count;
+        assert(child.omittedSpendCount === omitCount);
+      } else {
+        assert(child.omittedSpendCount === 0);
       }
     }
     assert(subtreeOutputCount >= 0, 'subtreeOutputCount < 0');
 
+    // TODO: Merge indices instead of sorting them
+    // That should be faster since they're already sorted
+    const subtreeSpentIdxs = treeChildren.flatMap((x) => x.subtreeSpentIdxs)
+      .sort();
+
+    // Assert there's no duplicates
+    let prev = -1;
+    for (const idx of subtreeSpentIdxs) {
+      assert(idx >= prev, `Subtree spent indices aren't sorted!`);
+      if (idx === prev) {
+        throw new Error(
+          `Can't merge subtrees because an output is spent twice!`,
+        );
+      }
+      prev = idx;
+    }
+
     return {
-      treeWeights: this.ctx.get(FrontierService2)
-        .mergeTreeWeights(inputs, frontierVote),
+      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(
+        inputs,
+        frontierVote,
+      ),
 
       frontierVoteOutputCount: this.getTotalOutputCount(frontierVote),
-      subtreeSpentIdxs: [],
+      subtreeSpentIdxs,
       subtreeOutputCount,
 
       consumedInputsRoot: { branches: [] },
@@ -66,13 +92,15 @@ export class FrontierService {
 
     return block.frontierDetail.frontierVoteOutputCount -
       block.frontierDetail.subtreeSpentIdxs.length +
-      block.frontierDetail.subtreeOutputCount +
+      block.frontierDetail.subtreeOutputCount -
+      block.inputs.length +
       block.outputs.length;
   }
 
-  // Returns a mask where each bit corresponds to a vote output.
-  // A bit is set if the output is spent by (1) the block itself, or (2) the block subtree.
-  private rebase(
+  // Returns the frontier detail that would have been created if the block had a different frontier vote
+  // Spent indices will be remapped to the output space of the new vote
+  // Spent indices of outputs not present on the new vote will be omitted
+  public rebase(
     block: BlockFact,
     toVote: BlockFact | typeof ZERO_BLOCK,
   ): RebasedBlock {
@@ -81,79 +109,125 @@ export class FrontierService {
     }
 
     const rebase: RebasedBlock = {
-      block,
-      frontierVoteBlock: block.frontierVoteBlock,
       ...block.frontierDetail,
+      omittedSpendCount: 0,
     };
 
     if (block.frontierVoteBlock === toVote) {
       return rebase;
     }
 
-    let path = this.ctx.get(WalkerService)
-      .getPath(toVote, block.frontierVoteBlock);
-    if (path !== undefined) {
-      // Path is from block.frontierVoteBlock to toVote
-
-      let prev = block;
-      for (const next of path) {
-        if (next === prev.frontierVoteBlock) {
-          detail.frontierVoteOutputMask = this.remap(
-            next,
-            detail.frontierVoteOutputMask,
-          );
-        } else {
-          throw Error(`Rebasing to a child is not implemented!`);
-        }
-        prev = next;
-      }
-
-      return detail;
-    }
-
-    path = this.ctx.get(WalkerService).getPath(block.frontierVoteBlock, toVote);
+    // Try rebasing by moving the vote backwards (towards ancestors)
+    let path = this.ctx.get(WalkerService).getPath(
+      toVote,
+      block.frontierVoteBlock,
+    );
     if (path !== undefined) {
       path.pop();
-      path.reverse();
-      // Path is from block.frontierVoteBlock to toVote
+      // Path is from block.frontierVoteBlock (inclusive) to toVote (exclusive)
 
-      let prev = block.frontierVoteBlock;
-      for (const next of path) {
-        if (next.frontierVoteBlock === prev) {
-          assert(
-            next.frontierDetail.frontierVoteOutputCount ===
-              detail.frontierVoteOutputCount,
-          );
-          assert(
-            next.frontierDetail.frontierVoteOutputMask.byteLength ===
-              detail.frontierVoteOutputMask.byteLength,
-          );
-
-          for (
-            let i = 0;
-            i < next.frontierDetail.frontierVoteOutputMask.byteLength;
-            i++
-          ) {
-            if (
-              next.frontierDetail.frontierVoteOutputMask[i] &
-              detail.frontierVoteOutputMask[i]
-            ) {
-              throw new Error(`Cannot merge masks with overlap!`);
+      let prev = block;
+      for (const it of path) {
+        assert(it !== ZERO_BLOCK);
+        if (it === prev.frontierVoteBlock) {
+          let offset = it.frontierDetail.subtreeOutputCount + it.outputs.length;
+          let j = 0;
+          const newIdxs: number[] = [];
+          for (const idx of rebase.subtreeSpentIdxs) {
+            if (idx < offset) {
+              rebase.omittedSpendCount++;
+              continue;
             }
+
+            while (
+              j < it.frontierDetail.subtreeSpentIdxs.length &&
+              it.frontierDetail.subtreeSpentIdxs[j] <= idx - offset
+            ) {
+              j++;
+              offset--;
+            }
+
+            newIdxs.push(idx - offset);
           }
 
-          // ???
-          detail.frontierVoteOutputMask = this.remap(
-            detail.frontierVoteOutputMask,
-            next.frontierDetail.frontierVoteOutputMask,
-          );
+          rebase.frontierVoteOutputCount =
+            it.frontierDetail.frontierVoteOutputCount;
+          rebase.subtreeSpentIdxs = newIdxs;
         } else {
-          throw Error(`Rebasing to a parent is not implemented!`);
+          todo(`Rebasing to a child is not implemented!`);
         }
-        prev = next;
+
+        prev = it;
       }
 
-      return detail;
+      return rebase;
     }
+
+    /*
+    block = X
+    toVote = C
+
+    A <- B <- C <- D
+         B <- X
+
+    path = getPath()
+    path = [C, B]
+
+    prev = path.pop()
+    prev = B
+
+    path.reverse()
+    path = [C]
+
+    it = C
+    */
+
+    // Try rebasing by moving the vote forwards (towards descendants)
+    path = this.ctx.get(WalkerService).getPath(block.frontierVoteBlock, toVote);
+    if (path !== undefined) {
+      let prev = path.pop()!;
+      path.reverse();
+      // Path is from block.frontierVoteBlock (inclusive) to toVote (exclusive)
+
+      for (const it of path) {
+        assert(it !== ZERO_BLOCK);
+        assert(it !== block);
+
+        if (it.frontierVoteBlock === prev) {
+          let offset = it.frontierDetail.subtreeOutputCount + it.outputs.length;
+          let j = 0;
+          const newIdxs: number[] = [];
+          for (const idx of rebase.subtreeSpentIdxs) {
+            while (
+              j < it.frontierDetail.subtreeSpentIdxs.length &&
+              it.frontierDetail.subtreeSpentIdxs[j] < idx
+            ) {
+              j++;
+              offset--;
+            }
+
+            if (it.frontierDetail.subtreeSpentIdxs[j] === idx) {
+              throw new Error(
+                `Can't rebase through block because an output is spent twice!`,
+              );
+            }
+
+            newIdxs.push(idx + offset);
+          }
+
+          rebase.frontierVoteOutputCount =
+            it.frontierDetail.frontierVoteOutputCount;
+          rebase.subtreeSpentIdxs = newIdxs;
+        } else {
+          todo(`Rebasing to a parent is not implemented!`);
+        }
+
+        prev = it;
+      }
+
+      return rebase;
+    }
+
+    throw Error(`Rebase failed; no path from A to B`);
   }
 }

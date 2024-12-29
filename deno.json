@@ -52,7 +52,8 @@
       "avro",
       "dist"
     ],
-    "singleQuote": true
+    "singleQuote": true,
+    "lineWidth": 80
   },
   "tasks": {
     "dev": "export DENO_FLAGS=--watch ; deno task fmt & deno task run-server",

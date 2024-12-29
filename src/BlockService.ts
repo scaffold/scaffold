@@ -309,7 +309,8 @@ export class BlockService {
       if (
         claims.every((x) =>
           !this.ctx.get(WeightService).isCanonical(x.block)
-        ) && output.amount >= 0n
+        ) &&
+        output.amount >= 0n
       ) {
         this.ctx.get(UnspentOutputManager)
           .insert(output.verifier, { block, outputIdx, amount: output.amount });

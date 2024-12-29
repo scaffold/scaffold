@@ -9,23 +9,9 @@ import { FrontierHelper } from './FrontierHelper.ts';
 import { BlockService } from './BlockService.ts';
 import { error, todo } from './util/functional.ts';
 import { FactService } from './FactService.ts';
+import { setsIntersect } from './util/set.ts';
 
 const targVoteLevel = 4;
-
-// TODO: Move to set util
-const doesIntersect = <T>(a: Set<T>, b: Set<T>) => {
-  if (a.size > b.size) {
-    const t = a;
-    a = b;
-    b = t;
-  }
-  for (const x of a) {
-    if (b.has(x)) {
-      return true;
-    }
-  }
-  return false;
-};
 
 const isFrontier = (input: { block: BlockFact; outputIdx?: number }) =>
   input.outputIdx === input.block.frontierOutputIdx;
@@ -82,7 +68,7 @@ export class FrontierChainService {
     ]);
 
     for (const { block } of inputs) {
-      if (!doesIntersect(frontierInputs, this.getAllParents(block))) {
+      if (!setsIntersect(frontierInputs, this.getAllParents(block))) {
         externalInputs.add(block);
       }
     }
@@ -124,7 +110,7 @@ export class FrontierChainService {
     let res = this.ctx.get(FactService).hackyGetBlocksMatching()
       .filter((input) => {
         const chain = this.getFrontierChain(input);
-        return requireInclusion.every((p) => doesIntersect(chain, p));
+        return requireInclusion.every((p) => setsIntersect(chain, p));
       })
       .sort((a, b) =>
         Number(
@@ -230,7 +216,7 @@ export class FrontierChainService {
   // }
 
   public isAncestor(ancestor: BlockFact, descendant: BlockFact) {
-    return doesIntersect(
+    return setsIntersect(
       this.getAllParents(ancestor),
       this.getFrontierChain(descendant),
     );

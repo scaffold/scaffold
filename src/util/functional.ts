@@ -1,14 +1,10 @@
-export { assert } from '@std/assert';
+export { assert, unimplemented as todo } from '@std/assert';
 
 // deno-lint-ignore ban-types
 export type NotUndefined = {} | null;
 
 export const error = (msg: string): never => {
   throw new Error(msg);
-};
-
-export const todo = () => {
-  throw new Error(`Unimplemented!`);
 };
 
 export const neverPromise = new Promise<never>(() => {});
