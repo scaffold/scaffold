@@ -9,8 +9,7 @@ import { IngestionProvider } from '../IngestionProvider.ts';
 import { SignalingService } from '../SignalingService.ts';
 import { Identification, SignalPayload } from '../messages.ts';
 
-export class IdentificationIngestor
-  implements IngestionProvider<IdentificationFact> {
+export class IdentificationIngestor implements IngestionProvider<IdentificationFact> {
   type = FactType.Identification as const;
   isPersistent = false;
   isSigned = true;

@@ -1,18 +1,10 @@
 import { connectCtxs, makeTest, waitFor } from './util.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { Hash } from '../src/util/Hash.ts';
-import {
-  accountHash,
-  collateralHash,
-  rootHash,
-  trueHash,
-} from '../src/constants.ts';
+import { accountHash, collateralHash, rootHash, trueHash } from '../src/constants.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
-import {
-  AccountContractParams,
-  CollateralContractParams,
-} from '../src/messages.ts';
+import { AccountContractParams, CollateralContractParams } from '../src/messages.ts';
 import { PeerManager } from '../src/PeerManager.ts';
 import { KeyService } from '../src/KeyService.ts';
 import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
@@ -23,9 +15,7 @@ Deno.test(
   { name: `an invalid body should have collateral posted against` },
   makeTest({}, async (testCtx, ctx1, ctx2) => {
     connectCtxs([ctx1, ctx2], 'mesh');
-    await new Promise<void>((resolve) =>
-      ctx2.config.timeProvider.setTimeout(resolve, 100)
-    );
+    await new Promise<void>((resolve) => ctx2.config.timeProvider.setTimeout(resolve, 100));
 
     const incentiveBlock = ctx1.get(BlockService).create({
       inputs: [{ block_hash: Hash.random(), output_idx: 123 }],

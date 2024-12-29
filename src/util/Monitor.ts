@@ -32,8 +32,7 @@ class Monitor<Key, Callback extends (...args: never[]) => void> {
   }
 }
 
-export class ResolvingMonitor<Key, Value>
-  extends Monitor<Key, (arg: Value) => boolean> {
+export class ResolvingMonitor<Key, Value> extends Monitor<Key, (arg: Value) => boolean> {
   public waitFor(
     key: Key,
     until: AbortSignal,

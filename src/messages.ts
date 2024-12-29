@@ -130,8 +130,7 @@ export const rawCoder: Coder<Uint8Array> = {
 };
 
 const long = avro.types.LongType.__with({
-  fromBuffer: (buf: Uint8Array) =>
-    new DataView(buf.buffer).getBigInt64(0, true),
+  fromBuffer: (buf: Uint8Array) => new DataView(buf.buffer).getBigInt64(0, true),
   toBuffer: (n: bigint) => {
     const buf = new Uint8Array(8);
     new DataView(buf.buffer).setBigInt64(0, n, true);
@@ -532,8 +531,7 @@ export const makeMsg = <
     decode: (src: Uint8Array): ObjectType<Name, R> => type.decode(src).value,
     encode: (
       msg: ObjectType<Name, R>,
-      allocator: (size: number) => Uint8Array = (size: number) =>
-        new Uint8Array(size),
+      allocator: (size: number) => Uint8Array = (size: number) => new Uint8Array(size),
     ) => {
       // Method 1
       const buf = type.toBuffer(msg);

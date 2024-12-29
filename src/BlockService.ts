@@ -25,14 +25,7 @@ import { QaDebugger } from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate } from './util/map.ts';
-import {
-  BlockFact,
-  Collateralization,
-  Fact,
-  FactBase,
-  FactSource,
-  FactType,
-} from './FactMeta.ts';
+import { BlockFact, Collateralization, Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
 import { FactService, headerSize } from './FactService.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { assert, neverPromise, todo } from './util/functional.ts';
@@ -69,9 +62,7 @@ export class BlockService {
   private claimsByOutput = new Map<HashPrimitive, OutputClaim[]>();
   private frontierVoters = new Map<HashPrimitive, BlockFact[]>();
 
-  public blockMonitor = new ResolvingMonitor<Hash, BlockFact>((h) =>
-    h.toPrimitive()
-  ); // Key is block hash
+  public blockMonitor = new ResolvingMonitor<Hash, BlockFact>((h) => h.toPrimitive()); // Key is block hash
   public satisfactionMonitor = new WatchingMonitor<
     Verifier,
     (block: BlockFact) => void
@@ -256,9 +247,7 @@ export class BlockService {
 
       const outputCharitySum = block.outputs.reduce(
         (acc, { amount, verifier }) =>
-          this.ctx.get(ContractClassifierService).isCharity(verifier)
-            ? acc + amount
-            : acc,
+          this.ctx.get(ContractClassifierService).isCharity(verifier) ? acc + amount : acc,
         0n,
       );
 
@@ -307,9 +296,7 @@ export class BlockService {
     block.outputs.forEach((output, outputIdx) => {
       const claims = this.getClaims({ blockHash: block.hash, outputIdx });
       if (
-        claims.every((x) =>
-          !this.ctx.get(WeightService).isCanonical(x.block)
-        ) &&
+        claims.every((x) => !this.ctx.get(WeightService).isCanonical(x.block)) &&
         output.amount >= 0n
       ) {
         this.ctx.get(UnspentOutputManager)
@@ -449,9 +436,7 @@ export class BlockService {
       for (const claim of claims) {
         if (claim.block.canonicalityOld > 0) {
           sum += claim.block.derivedWorkValue /
-            claim.block.inputs.filter(({ blockHash }) =>
-              this.get(blockHash, false)
-            ).length;
+            claim.block.inputs.filter(({ blockHash }) => this.get(blockHash, false)).length;
         }
       }
     }
@@ -592,9 +577,7 @@ export class BlockService {
   }
 
   public getImplicitClaimAgainst(initialClaimFor: bigint) {
-    return initialClaimFor > CHALLENGE_PRICE
-      ? initialClaimFor - CHALLENGE_PRICE
-      : 0n;
+    return initialClaimFor > CHALLENGE_PRICE ? initialClaimFor - CHALLENGE_PRICE : 0n;
   }
 
   private getSamplesPerWork() {
@@ -833,8 +816,7 @@ export class BlockService {
 
     // TODO: Cache unused abort controllers
     const controller = new AbortController();
-    const promises: { inputPromise: Promise<BlockFact>; input: BlockInput }[] =
-      [];
+    const promises: { inputPromise: Promise<BlockFact>; input: BlockInput }[] = [];
     for (const input of block.inputs) {
       const inputPromise = this.ctx
         .get(BlockService)

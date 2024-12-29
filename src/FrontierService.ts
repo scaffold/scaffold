@@ -150,8 +150,7 @@ export class FrontierService {
             newIdxs.push(idx - offset);
           }
 
-          rebase.frontierVoteOutputCount =
-            it.frontierDetail.frontierVoteOutputCount;
+          rebase.frontierVoteOutputCount = it.frontierDetail.frontierVoteOutputCount;
           rebase.subtreeSpentIdxs = newIdxs;
         } else {
           todo(`Rebasing to a child is not implemented!`);
@@ -215,8 +214,7 @@ export class FrontierService {
             newIdxs.push(idx + offset);
           }
 
-          rebase.frontierVoteOutputCount =
-            it.frontierDetail.frontierVoteOutputCount;
+          rebase.frontierVoteOutputCount = it.frontierDetail.frontierVoteOutputCount;
           rebase.subtreeSpentIdxs = newIdxs;
         } else {
           todo(`Rebasing to a parent is not implemented!`);

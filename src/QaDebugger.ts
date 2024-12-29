@@ -17,9 +17,7 @@ export class QaDebugger {
   private debuggers: Map<HashPrimitive, Debugger> = new Map();
 
   constructor(private ctx: Context) {
-    Object.entries(hashes).forEach(([name, hash]) =>
-      this.addDebugger(name, hash)
-    );
+    Object.entries(hashes).forEach(([name, hash]) => this.addDebugger(name, hash));
   }
 
   public addDebugger(

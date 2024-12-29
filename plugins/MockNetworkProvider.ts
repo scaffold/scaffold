@@ -1,8 +1,4 @@
-import {
-  ConnectionProvider,
-  NetworkProvider,
-  SignalingDriver,
-} from '../src/NetworkProvider.ts';
+import { ConnectionProvider, NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { TimeProvider } from '../src/Config.ts';
 

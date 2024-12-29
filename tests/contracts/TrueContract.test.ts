@@ -5,10 +5,7 @@ import { trueHash } from '../../src/constants.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { TrueContract } from '../../src/contracts/TrueContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
-import {
-  baseContractProviders,
-  waitForVerifiedOutput,
-} from '../../tests/contracts/util.ts';
+import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 Deno.test(
   {

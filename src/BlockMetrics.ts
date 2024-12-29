@@ -38,8 +38,7 @@ type Metrics = {
 export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
   constructor(private ctx: Context) {
     super({
-      selfWeight: (block) =>
-        this.ctx.get(WeightService).getSelfWeight(block).min,
+      selfWeight: (block) => this.ctx.get(WeightService).getSelfWeight(block).min,
 
       voterWeight: (block) => {
         const res = [0n];
@@ -99,8 +98,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
           ? this.get(block.frontierVoteBlock, 'totalPenalty')
           : 0n),
 
-      canonicality: (block) =>
-        this.get(block, 'totalWeight') - this.get(block, 'totalPenalty'),
+      canonicality: (block) => this.get(block, 'totalWeight') - this.get(block, 'totalPenalty'),
     });
   }
 
@@ -151,9 +149,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
 
     return voters.filter((block) =>
       block.frontierParams.level >= levelThreshold &&
-      block.outputClaims[block.frontierOutputIdx].every((claim) =>
-        !voters.includes(claim.block)
-      )
+      block.outputClaims[block.frontierOutputIdx].every((claim) => !voters.includes(claim.block))
     );
   }
 }

@@ -4,14 +4,10 @@ import { bin2hex } from './hex.ts';
 
 export const EMPTY_ARR = new Uint8Array();
 
-export const bin2str = memoize((bin: Uint8Array): string =>
-  new TextDecoder().decode(bin)
-);
-export const str2bin = (str: string): Uint8Array =>
-  new TextEncoder().encode(str);
+export const bin2str = memoize((bin: Uint8Array): string => new TextDecoder().decode(bin));
+export const str2bin = (str: string): Uint8Array => new TextEncoder().encode(str);
 
-export const arrEquals = (a: Uint8Array, b: Uint8Array) =>
-  a === b || bytes.equals(a, b);
+export const arrEquals = (a: Uint8Array, b: Uint8Array) => a === b || bytes.equals(a, b);
 
 export const arrCompare = (a: Uint8Array, b: Uint8Array) => {
   const len = Math.min(a.length, b.length);

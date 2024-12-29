@@ -91,9 +91,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
           ? await sample.item.generate()
           : sample.item;
         if (fact !== undefined) {
-          const dst = this.getDestinations(fact).find((x) =>
-            !x.knownFacts.has(fact)
-          );
+          const dst = this.getDestinations(fact).find((x) => !x.knownFacts.has(fact));
           if (dst !== undefined) {
             this.ctx.get(FactService).sendTo(fact, dst);
             this.throttle.delete(sample.item);
@@ -253,9 +251,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
       return conns.concat(this.ctx.get(ConnectionService).getAll());
     } else if (fact.type === FactType.ConnectionSignal) {
       const dstFact = this.ctx.get(FactService).get(fact.replyTo, false);
-      return dstFact !== undefined
-        ? this.ctx.get(PeerManager).routeTo(dstFact)
-        : [];
+      return dstFact !== undefined ? this.ctx.get(PeerManager).routeTo(dstFact) : [];
     } else {
       return this.ctx.get(ConnectionService).getAll();
     }

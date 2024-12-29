@@ -22,9 +22,7 @@ export class BalanceService {
     const leaves = this.ctx.get(WeightService).getDescendant(genesis).leaves;
     // TODO: Use all leaves
     const base = leaves[leaves.length - 1];
-    const outputs = base !== undefined
-      ? FrontierHelper.findOutputs(base, verifier, true)
-      : [];
+    const outputs = base !== undefined ? FrontierHelper.findOutputs(base, verifier, true) : [];
 
     let amount = 0n;
     for (const output of outputs) {

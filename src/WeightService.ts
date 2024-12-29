@@ -488,9 +488,7 @@ export class WeightService {
 
         if (assume.length !== 0) {
           const ancestorClaim = claims.find((x) =>
-            assume.some((y) =>
-              this.ctx.get(FrontierChainService).isAncestor(x.block, y)
-            )
+            assume.some((y) => this.ctx.get(FrontierChainService).isAncestor(x.block, y))
           );
           if (ancestorClaim !== undefined) {
             if (ancestorClaim.block === fact) {
@@ -529,9 +527,7 @@ export class WeightService {
       return { canonicality, usurper };
     };
 
-    return assume.length === 0
-      ? mapPut(cache.claimCanonicality, fact, fn)
-      : fn();
+    return assume.length === 0 ? mapPut(cache.claimCanonicality, fact, fn) : fn();
   }
 
   public getTreeChildrenWeight(fact: BlockFact, cache = this.getCache()) {

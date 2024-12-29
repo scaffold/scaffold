@@ -1,11 +1,5 @@
 import { BlockMeta } from './BlockMeta.ts';
-import {
-  Block,
-  ConnectionSignal,
-  Identification,
-  PeerInfo,
-  SignalPayload,
-} from './messages.ts';
+import { Block, ConnectionSignal, Identification, PeerInfo, SignalPayload } from './messages.ts';
 import { Connection } from './ConnectionService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';

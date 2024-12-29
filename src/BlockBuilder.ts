@@ -148,8 +148,7 @@ export class BlockBuilder {
                   ...refBlocks.map((ref) => ({ block: ref })),
                   input,
                 ]) !== undefined,
-            (input) =>
-              inputs.push({ ...input, blockHash: input.block.hash, groupIdx }),
+            (input) => inputs.push({ ...input, blockHash: input.block.hash, groupIdx }),
           );
         }
       }
@@ -253,9 +252,7 @@ export class BlockBuilder {
     if (frontierVoteBlock === undefined) {
       throw new Error(`Unmergeable inputs!`);
     }
-    const frontierVote = frontierVoteBlock !== ZERO_BLOCK
-      ? frontierVoteBlock.hash
-      : ZERO_HASH;
+    const frontierVote = frontierVoteBlock !== ZERO_BLOCK ? frontierVoteBlock.hash : ZERO_HASH;
 
     if (addFrontierOutput) {
       const level = frontierLevel ?? 0;
@@ -415,9 +412,7 @@ export class BlockBuilder {
       block = this.buildBlock([draft]);
     } catch (err) {
       if (err instanceof RetryBuildingException) {
-        await new Promise<void>((resolve) =>
-          this.ctx.config.timeProvider.setTimeout(resolve, 10)
-        );
+        await new Promise<void>((resolve) => this.ctx.config.timeProvider.setTimeout(resolve, 10));
         block = this.buildBlock([draft]);
       } else {
         throw err;

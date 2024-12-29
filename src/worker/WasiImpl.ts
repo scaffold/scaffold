@@ -98,8 +98,7 @@ const throwWasiErr = (code: number): never => {
 };
 
 const wrapWasi =
-  <T extends (...args: any[]) => number>(f: T) =>
-  (...args: Parameters<T>): number => {
+  <T extends (...args: any[]) => number>(f: T) => (...args: Parameters<T>): number => {
     try {
       return f(...args);
     } catch (err) {
@@ -398,9 +397,7 @@ export class WasiImpl {
   private getIovs(iovs: number, iovsLen: number) {
     if (iovs + iovsLen * 8 > this.memory!.buffer.byteLength) {
       throw new Error(
-        `Trying to read up to ${iovs} but memory is only ${
-          this.memory!.buffer.byteLength
-        } bytes`,
+        `Trying to read up to ${iovs} but memory is only ${this.memory!.buffer.byteLength} bytes`,
       );
     }
     this.logger.info('max', { max: this.memory!.buffer.byteLength });
@@ -521,9 +518,7 @@ export class WasiImpl {
       case wc.WASI_CLOCK_MONOTONIC:
       case wc.WASI_CLOCK_PROCESS_CPUTIME_ID:
       case wc.WASI_CLOCK_THREAD_CPUTIME_ID: {
-        const val = enableTime
-          ? BigInt(Math.round(performance.now() * 1e9))
-          : 0n;
+        const val = enableTime ? BigInt(Math.round(performance.now() * 1e9)) : 0n;
         view.setBigUint64(time, val, true);
         break;
       }
@@ -922,8 +917,7 @@ export class WasiImpl {
     const key = new Uint8Array(this.memory!.buffer, pathPtr, pathLen);
     hdl.dirMutEntry(
       key,
-      (node) =>
-        node ? throwWasiErr(wc.WASI_EEXIST) : hdl.node.getFs().createDirNode(),
+      (node) => node ? throwWasiErr(wc.WASI_EEXIST) : hdl.node.getFs().createDirNode(),
     );
     return wc.WASI_ESUCCESS;
   }
@@ -1149,9 +1143,7 @@ export class WasiImpl {
 
       return (
         val ||
-        (has(oflags, wc.WASI_O_CREAT)
-          ? dirHdl.node.getFs().createFileNode()
-          : undefined)
+        (has(oflags, wc.WASI_O_CREAT) ? dirHdl.node.getFs().createFileNode() : undefined)
       );
     }) || throwWasiErr(wc.WASI_ENOENT);
 

@@ -9,8 +9,7 @@ const formatter: log.FormatterFunction = (logRecord) =>
   `${logRecord.levelName} ${logRecord.msg} ${
     logRecord.args
       .map((a) =>
-        JSON.stringify(a, (_key, value) =>
-          typeof value === 'bigint' ? value.toString() : value)
+        JSON.stringify(a, (_key, value) => typeof value === 'bigint' ? value.toString() : value)
       )
       .join(',')
   }`;

@@ -6,10 +6,7 @@ import { BlockService } from '../../src/BlockService.ts';
 import { TimeParams } from '../../src/messages.ts';
 import { TimeContract } from '../../src/contracts/TimeContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
-import {
-  baseContractProviders,
-  waitForVerifiedOutput,
-} from '../../tests/contracts/util.ts';
+import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 Deno.test(
   {

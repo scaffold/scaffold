@@ -104,9 +104,7 @@ const connectPair = (a: Context, b: Context) => {
   const aProvider = a.get(NetworkService).initConnection(
     'mock',
     (signal) =>
-      bProvider !== undefined
-        ? bProvider.recvSignal(signal, bIdx++)
-        : bMessages.push(signal),
+      bProvider !== undefined ? bProvider.recvSignal(signal, bIdx++) : bMessages.push(signal),
   );
 
   bProvider = b.get(NetworkService).initConnection(
@@ -153,9 +151,7 @@ export const waitFor = async <T extends NotUndefined>(
       return res;
     }
 
-    await new Promise<void>((resolve) =>
-      ctx.config.timeProvider.setTimeout(resolve, intervalMs)
-    );
+    await new Promise<void>((resolve) => ctx.config.timeProvider.setTimeout(resolve, intervalMs));
   }
 };
 

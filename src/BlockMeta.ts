@@ -1,8 +1,4 @@
-import {
-  EpochInclusionProof,
-  FrontierTreeDetail,
-  FrontierTreeParams,
-} from './messages.ts';
+import { EpochInclusionProof, FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';

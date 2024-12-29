@@ -59,5 +59,4 @@ export const mapOne = <T, R>(
   return res;
 };
 
-export const range = (size: number) =>
-  Array.from({ length: size }, (_, i) => i);
+export const range = (size: number) => Array.from({ length: size }, (_, i) => i);

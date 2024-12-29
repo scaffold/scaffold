@@ -35,8 +35,7 @@ export class WebsocketClientProvider implements NetworkProvider {
                 (e) => handler(new Uint8Array(e.data)),
               ),
             shutdown: () => socket.close(),
-            onClose: (handler: () => void) =>
-              socket.addEventListener('close', () => handler()),
+            onClose: (handler: () => void) => socket.addEventListener('close', () => handler()),
           });
         });
       },

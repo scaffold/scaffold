@@ -8,8 +8,7 @@ export interface QueueRecord<Key, Value> {
   throughputCount: number;
 }
 
-export class QueueRecordSet<Key, Value>
-  extends ReactiveRecordSet<QueueRecord<Key, Value>> {
+export class QueueRecordSet<Key, Value> extends ReactiveRecordSet<QueueRecord<Key, Value>> {
   private records = new Map<HashPrimitive, QueueRecord<Key, Value>>();
 
   constructor(private muxer: QueueMuxer<Key, Value>) {

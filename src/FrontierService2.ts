@@ -4,11 +4,7 @@ import { Hash, HASH_BITS, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BlockService } from './BlockService.ts';
 import { InputSpec } from './BlockBuilder.ts';
 import { WeightService } from './WeightService.ts';
-import {
-  BlockOutput,
-  FrontierTreeIoBranch,
-  FrontierTreeIoEntry,
-} from './messages.ts';
+import { BlockOutput, FrontierTreeIoBranch, FrontierTreeIoEntry } from './messages.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { todo } from './util/functional.ts';
 import { ClockService } from './ClockService.ts';
@@ -96,10 +92,8 @@ export class FrontierService2 {
         );
       }
 
-      const voteDepth = frontierVote === ZERO_BLOCK
-        ? -1
-        : frontierVote.frontierChainDepth ??
-          error(`Unconnected frontier chain!`);
+      const voteDepth = frontierVote === ZERO_BLOCK ? -1 : frontierVote.frontierChainDepth ??
+        error(`Unconnected frontier chain!`);
       const childDepth = input.block.frontierChainDepth ??
         error(`Unconnected frontier chain!`);
       const shift = childDepth - voteDepth - 1;
@@ -145,9 +139,7 @@ export class FrontierService2 {
     const ensureInChain = (vote: Hash) => {
       if (frontierInputs !== undefined) {
         while (true) {
-          const fi = frontierInputs.find((input) =>
-            Hash.equals(input.block.hash, vote)
-          );
+          const fi = frontierInputs.find((input) => Hash.equals(input.block.hash, vote));
           if (fi !== undefined) {
             vote = fi.block.frontierVote;
           } else {

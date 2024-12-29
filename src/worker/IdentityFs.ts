@@ -9,8 +9,7 @@ import {
   FsNode,
 } from './fsTypes.ts';
 
-const IDENTITYFS_DEFAULT_CAP_MASK: FsCapabilityMask =
-  FS_CAPABILITY_DIR_READ_ENTRY |
+const IDENTITYFS_DEFAULT_CAP_MASK: FsCapabilityMask = FS_CAPABILITY_DIR_READ_ENTRY |
   FS_CAPABILITY_FILE_READ;
 
 export class IdentityFs implements Fs {

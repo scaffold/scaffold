@@ -12,23 +12,20 @@ const trim = (str: string, maxLen: number) =>
   str.length > maxLen ? `${str.substring(0, maxLen)}... [${str.length}]` : str;
 
 const formatter: log.FormatterFunction = (logRecord) =>
-  `${logRecord.levelName} ${logRecord.loggerName} ${logRecord.msg} ${
-    logRecord.args[0]
-  }`;
+  `${logRecord.levelName} ${logRecord.loggerName} ${logRecord.msg} ${logRecord.args[0]}`;
 
-const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } =
-  {
-    handlers: {
-      console: new log.ConsoleHandler('DEBUG', { formatter }),
-      // file: new log.handlers.FileHandler('DEBUG', {
-      //   filename: `/tmp/sbl_${Date.now()}_${
-      //     Math.random().toString(36).slice(2)
-      //   }.log`,
-      //   formatter,
-      // }),
-    },
-    loggers: {},
-  };
+const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } = {
+  handlers: {
+    console: new log.ConsoleHandler('DEBUG', { formatter }),
+    // file: new log.handlers.FileHandler('DEBUG', {
+    //   filename: `/tmp/sbl_${Date.now()}_${
+    //     Math.random().toString(36).slice(2)
+    //   }.log`,
+    //   formatter,
+    // }),
+  },
+  loggers: {},
+};
 
 export class Logger {
   private setupPromise: void; // Promise<void>;

@@ -15,10 +15,8 @@ export const search = <T>(arr: T[], test: (x: T) => boolean) => {
   return i;
 };
 
-export const lowerBound = <T>(arr: T[], cmp: (x: T) => number) =>
-  search(arr, (x) => cmp(x) <= 0);
-export const upperBound = <T>(arr: T[], cmp: (x: T) => number) =>
-  search(arr, (x) => cmp(x) < 0);
+export const lowerBound = <T>(arr: T[], cmp: (x: T) => number) => search(arr, (x) => cmp(x) <= 0);
+export const upperBound = <T>(arr: T[], cmp: (x: T) => number) => search(arr, (x) => cmp(x) < 0);
 
 assert(lowerBound([1, 2, 4, 5, 5, 6], (x) => 0 - x) === 0);
 assert(lowerBound([1, 2, 4, 5, 5, 6], (x) => 1 - x) === 0);

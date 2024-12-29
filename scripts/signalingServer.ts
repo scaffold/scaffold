@@ -28,9 +28,7 @@ const ctx = new Context({
 
   storageProvider: new NullStorageProvider(),
 
-  ingestionProviders: defaultIngestionProviders.filter((x) =>
-    x !== BlockIngestor
-  ),
+  ingestionProviders: defaultIngestionProviders.filter((x) => x !== BlockIngestor),
 });
 
 ctx.get(NetworkService).initConnection(

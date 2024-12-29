@@ -102,9 +102,7 @@ export class FrontierChainService {
     //   return ptr;
     // });
 
-    const requireInclusion = [...externalInputs].map((input) =>
-      this.getAllParents(input)
-    );
+    const requireInclusion = [...externalInputs].map((input) => this.getAllParents(input));
 
     // const cache = this.ctx.get(WeightService).makeCache();
     let res = this.ctx.get(FactService).hackyGetBlocksMatching()

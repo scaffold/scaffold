@@ -90,9 +90,7 @@ export class MessageJoiner {
 
       if (msg.packets.size === msg.total) {
         this.messages.delete(key);
-        const parts = range(msg.total).map((i) =>
-          new Uint8Array(msg.packets.get(i), headerSize)
-        );
+        const parts = range(msg.total).map((i) => new Uint8Array(msg.packets.get(i), headerSize));
         yield arrConcat(...parts);
       }
     }

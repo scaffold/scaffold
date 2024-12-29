@@ -215,8 +215,7 @@ export default async (
     const imports: WebAssembly.Imports = {
       scaffold: {
         getParamSize: () => wrapperParams.byteLength,
-        writeParams: (dst: number) =>
-          new Uint8Array(memory!.buffer, dst).set(wrapperParams),
+        writeParams: (dst: number) => new Uint8Array(memory!.buffer, dst).set(wrapperParams),
       },
     };
     for (const buf of linkExports) {

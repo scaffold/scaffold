@@ -9,8 +9,7 @@ import { IngestionProvider } from '../IngestionProvider.ts';
 import { SignalingService } from '../SignalingService.ts';
 import { ConnectionSignal, SignalPayload } from '../messages.ts';
 
-export class ConnectionSignalIngestor
-  implements IngestionProvider<ConnectionSignalFact> {
+export class ConnectionSignalIngestor implements IngestionProvider<ConnectionSignalFact> {
   type = FactType.ConnectionSignal as const;
   isPersistent = true;
   isSigned = true;

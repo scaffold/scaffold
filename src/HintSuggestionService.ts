@@ -52,8 +52,7 @@ export class HintSuggestionService {
       }
     } else if ('CollateralHintVerifier' in hint) {
       return block.inputs.flatMap((input) => {
-        const verifier =
-          input.groupIdx === hint.CollateralHintVerifier.groupIdx &&
+        const verifier = input.groupIdx === hint.CollateralHintVerifier.groupIdx &&
           this.ctx.get(BlockService).get(input.blockHash, false)
             ?.outputs[input.outputIdx].verifier;
         return verifier

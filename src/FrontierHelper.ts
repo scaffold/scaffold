@@ -1,11 +1,6 @@
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockFact } from './FactMeta.ts';
-import {
-  Block,
-  FrontierTreeIoBranch,
-  FrontierTreeIoEntry,
-  Verifier,
-} from './messages.ts';
+import { Block, FrontierTreeIoBranch, FrontierTreeIoEntry, Verifier } from './messages.ts';
 import { Hash, HASH_BITS, HashPrimitive } from './util/Hash.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';

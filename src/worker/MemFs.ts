@@ -1,12 +1,5 @@
 import { bin2hex } from '../util/hex.ts';
-import {
-  Fs,
-  FsCapabilityMask,
-  FsDirEntry,
-  FsDirNode,
-  FsFileNode,
-  FsNode,
-} from './fsTypes.ts';
+import { Fs, FsCapabilityMask, FsDirEntry, FsDirNode, FsFileNode, FsNode } from './fsTypes.ts';
 
 export class MemFs implements Fs {
   constructor(private inodeSource: { nextInode: number }) {}

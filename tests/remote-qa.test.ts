@@ -39,9 +39,7 @@ Deno.test(
     connectCtxs([ctx1, ctx2], 'chain');
 
     // TODO: We shouldn't need this
-    await new Promise<void>((resolve) =>
-      ctx2.config.timeProvider.setTimeout(resolve, 100)
-    );
+    await new Promise<void>((resolve) => ctx2.config.timeProvider.setTimeout(resolve, 100));
 
     const body = await new Promise<Uint8Array | undefined>((resolve) =>
       ctx2.get(FetchService).fetch(
@@ -79,9 +77,7 @@ Deno.test(
     connectCtxs([ctx1, ctx2], 'chain');
 
     // TODO: We shouldn't need this
-    await new Promise<void>((resolve) =>
-      ctx2.config.timeProvider.setTimeout(resolve, 100)
-    );
+    await new Promise<void>((resolve) => ctx2.config.timeProvider.setTimeout(resolve, 100));
 
     const body = await new Promise<Uint8Array | undefined>((resolve) =>
       ctx2.get(FetchService).fetch(

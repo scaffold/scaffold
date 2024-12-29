@@ -4,10 +4,7 @@ import { makeTest } from './util.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { assertSnapshot } from 'std-latest/testing/snapshot.ts';
 import { FetchService } from '../src/FetchService.ts';
-import {
-  LocalGenerator,
-  LocalGeneratorService,
-} from '../src/LocalGeneratorService.ts';
+import { LocalGenerator, LocalGeneratorService } from '../src/LocalGeneratorService.ts';
 import { ExecutorDriverService } from '../sbl/ExecutorDriverService.ts';
 import { ExecutorLauncherService } from '../sbl/ExecutorLauncherService.ts';
 

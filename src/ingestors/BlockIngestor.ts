@@ -5,12 +5,7 @@ import { FactService, headerSize } from '../FactService.ts';
 import { IngestionProvider } from '../IngestionProvider.ts';
 import { UnspentOutputManager } from '../UnspentOutputManager.ts';
 import { BlockRecordSet } from '../record_sets/BlockRecordSet.ts';
-import {
-  Block,
-  BlockOutput,
-  FrontierTreeDetail,
-  FrontierTreeParams,
-} from '../messages.ts';
+import { Block, BlockOutput, FrontierTreeDetail, FrontierTreeParams } from '../messages.ts';
 import { BlockFlag, BlockMeta, ZERO_BLOCK } from '../BlockMeta.ts';
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { collateralHash, frontierHash } from '../constants.ts';
@@ -102,9 +97,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
       frontierVoteBlock: frontierVote,
       // frontierChainDepth: base.source === FactSource.Genesis ? 0 : undefined,
-      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH)
-        ? 0
-        : undefined,
+      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH) ? 0 : undefined,
 
       frontierVoters: this.ctx.get(BlockService).getVoters(base.hash),
 
@@ -193,9 +186,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         outputIdx,
       });
       if (claims.length) {
-        claims.forEach(({ block, inputIdx }) =>
-          this.linkIo(fact, block, outputIdx, inputIdx)
-        );
+        claims.forEach(({ block, inputIdx }) => this.linkIo(fact, block, outputIdx, inputIdx));
       } else if (output.amount >= 0n) {
         // We set a timeout because ensureRunning gets this block recursively
         // When we move this to an ingestion method we can remove the timeout.
@@ -353,8 +344,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
   }
 
   private getFrontierMeta(block: Block) {
-    const cb = (output: BlockOutput) =>
-      Hash.equals(output.verifier.contractHash, frontierHash);
+    const cb = (output: BlockOutput) => Hash.equals(output.verifier.contractHash, frontierHash);
     const idx = block.outputs.findIndex(cb);
     if (idx === -1 || block.outputs.findLastIndex(cb) !== idx) {
       throw new Error(`Not exactly one frontier output!`);

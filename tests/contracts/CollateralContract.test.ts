@@ -6,10 +6,7 @@ import { KeyService } from '../../src/KeyService.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { CollateralContract } from '../../src/contracts/CollateralContract.ts';
 import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
-import {
-  baseContractProviders,
-  waitForVerifiedOutput,
-} from '../../tests/contracts/util.ts';
+import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 import {
   CollateralContractDetail,
   CollateralContractParams,
@@ -84,9 +81,7 @@ Deno.test(
       }],
     });
 
-    await new Promise<void>((resolve) =>
-      ctx1.config.timeProvider.setTimeout(resolve, 5000)
-    );
+    await new Promise<void>((resolve) => ctx1.config.timeProvider.setTimeout(resolve, 5000));
 
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       inputs: [
@@ -201,9 +196,7 @@ Deno.test(
       }],
     });
 
-    await new Promise<void>((resolve) =>
-      ctx1.config.timeProvider.setTimeout(resolve, 5000)
-    );
+    await new Promise<void>((resolve) => ctx1.config.timeProvider.setTimeout(resolve, 5000));
 
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       inputs: [

@@ -2,11 +2,7 @@ import { Context } from '../Context.ts';
 import { FactService } from '../FactService.ts';
 import { DataContractParams } from '../messages.ts';
 import { Hash, HASH_SIZE } from '../util/Hash.ts';
-import {
-  BurdenOfProof,
-  ComputationDriver,
-  ComputationType,
-} from '../ComputationMeta.ts';
+import { BurdenOfProof, ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { dataHash } from '../constants.ts';
 import { KeyService } from '../KeyService.ts';
@@ -54,9 +50,7 @@ export class DataContract implements ContractProvider {
           ),
           Hash.fromBytes(body),
         );
-      valid
-        ? driver.pass()
-        : driver.fail(`Given data doesn't hash to the correct value!`);
+      valid ? driver.pass() : driver.fail(`Given data doesn't hash to the correct value!`);
     } else {
       throw new Error(`Invalid driver type!`);
     }

@@ -62,9 +62,7 @@ export const parsePath = (str: string): Uint8Array[] => {
 const multibasePrefixCode = MULTIBASE_PREFIX.charCodeAt(0);
 export const decodePathEntry = memoize(
   (entry: Uint8Array): Uint8Array =>
-    entry[0] === multibasePrefixCode
-      ? decodeMultibase(bin2str(entry.subarray(1)))
-      : entry,
+    entry[0] === multibasePrefixCode ? decodeMultibase(bin2str(entry.subarray(1))) : entry,
 );
 
 const isCharPrintableRegex = /^[A-Za-z0-9_\-~.]$/;

@@ -3,10 +3,7 @@ import { collateralHash } from './constants.ts';
 import { Context } from './Context.ts';
 import { Fact } from './FactMeta.ts';
 import { KeyService } from './KeyService.ts';
-import {
-  CollateralContractDetail,
-  CollateralContractParams,
-} from './collateralMessages.ts';
+import { CollateralContractDetail, CollateralContractParams } from './collateralMessages.ts';
 import { FactService } from './FactService.ts';
 import { CollateralUtil, DetailVote, Posting } from './CollateralUtil.ts';
 
@@ -28,9 +25,7 @@ export class LitigationService {
   public rectify(fact: Fact, extraPostings?: Posting[]) {
     CollateralUtil.applyAllBeliefs(
       CollateralUtil.buildTree(
-        extraPostings
-          ? [...fact.collateralizations, ...extraPostings]
-          : fact.collateralizations,
+        extraPostings ? [...fact.collateralizations, ...extraPostings] : fact.collateralizations,
       ),
       (hints) => this.ctx.get(FactService).getValidity(fact.hash, hints),
       (hints, vote, amount) =>

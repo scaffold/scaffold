@@ -1,26 +1,10 @@
-import {
-  BlockBuilder,
-  BlockDraft,
-  InputSpec,
-  OutputSpec,
-} from './BlockBuilder.ts';
+import { BlockBuilder, BlockDraft, InputSpec, OutputSpec } from './BlockBuilder.ts';
 import { BlockService } from './BlockService.ts';
-import {
-  accountHash,
-  frontierHash,
-  generatorHash,
-  rootHash,
-  trueHash,
-} from './constants.ts';
+import { accountHash, frontierHash, generatorHash, rootHash, trueHash } from './constants.ts';
 import { Context } from './Context.ts';
 import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
 import { LocalGeneratorService } from './LocalGeneratorService.ts';
-import {
-  AccountContractParams,
-  Block,
-  BlockOutput,
-  Verifier,
-} from './messages.ts';
+import { AccountContractParams, Block, BlockOutput, Verifier } from './messages.ts';
 import { arrConcat, arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
@@ -247,8 +231,7 @@ export class GenerationService {
         params: verifier.contractHash.toBytes(),
       });
       if (generatorBlocks.length) {
-        const generatorCode =
-          generatorBlocks[0].block.bodies[generatorBlocks[0].groupIdx];
+        const generatorCode = generatorBlocks[0].block.bodies[generatorBlocks[0].groupIdx];
 
         return this.ctx.get(WorkerDriverService).run(
           async (workerDriver) => {
@@ -256,10 +239,9 @@ export class GenerationService {
             const driver = this.makeGenerationDriver(verifier, workerDriver);
             workerDriver.log?.push({
               timestamp: this.ctx.config.timeProvider.now(),
-              message:
-                `Starting worker generator for ${verifier.contractHash.toHex()}:${
-                  bin2hex(verifier.params)
-                }`,
+              message: `Starting worker generator for ${verifier.contractHash.toHex()}:${
+                bin2hex(verifier.params)
+              }`,
             });
             try {
               await this.ctx.get(WorkerExecutor).run(
@@ -389,8 +371,7 @@ export class GenerationService {
           timestampGte = timestamp;
         }
       },
-      isSignedBy: (publicKey) =>
-        arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey()),
+      isSignedBy: (publicKey) => arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey()),
       requireSignature: (publicKey) => {
         // TODO: If we don't call this, maybe we don't necessarily need to sign the block?
         const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKey();
@@ -424,8 +405,7 @@ export class GenerationService {
             `request(${this.ctx.get(QaDebugger).debugVerifier(verifier)})`,
           );
 
-          const incentive = inputs.reduce((acc, input) =>
-            acc + input.amount, 0n) * 15n / 16n;
+          const incentive = inputs.reduce((acc, input) => acc + input.amount, 0n) * 15n / 16n;
 
           // TODO: Check isMergeable() here
 
@@ -447,9 +427,7 @@ export class GenerationService {
               refs.push(block);
               const body = block.bodies[groupIdx];
               workerDriver.resumeTimer(
-                `Fetched from ${block.hash.toHex().slice(0, 10)}: ${
-                  bin2hex(body).slice(0, 10)
-                }`,
+                `Fetched from ${block.hash.toHex().slice(0, 10)}: ${bin2hex(body).slice(0, 10)}`,
               );
               reply(body);
             },
@@ -508,8 +486,7 @@ export class GenerationService {
                     return false;
                   }
 
-                  const groupIdx =
-                    input.block.outputs[input.outputIdx].groupIdx;
+                  const groupIdx = input.block.outputs[input.outputIdx].groupIdx;
                   return input.block.inputs.some((input) => {
                     if (input.groupIdx !== groupIdx) {
                       return false;
@@ -561,9 +538,7 @@ export class GenerationService {
         const output = input.block.outputs[input.outputIdx];
 
         workerDriver.resumeTimer(
-          `Linking to ${
-            input.block.hash.toHex().slice(0, 10)
-          }:${input.outputIdx}`,
+          `Linking to ${input.block.hash.toHex().slice(0, 10)}:${input.outputIdx}`,
         );
 
         return {

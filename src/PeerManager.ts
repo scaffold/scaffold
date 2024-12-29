@@ -175,9 +175,7 @@ export class PeerManager {
     }
 
     const candidates = fact.protocols
-      .filter((x) =>
-        this.ctx.get(NetworkService).findProvider(undefined, x) !== undefined
-      );
+      .filter((x) => this.ctx.get(NetworkService).findProvider(undefined, x) !== undefined);
     if (candidates.length === 0) {
       throw new Error(`No intersecting protocols!`);
     }

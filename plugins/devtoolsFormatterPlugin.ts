@@ -20,7 +20,6 @@ export const enableDevtoolsFormatter = () => {
     header: (obj: DevtoolsFormattable, config: unknown) =>
       '_devtoolsFormatHeader' in obj ? obj._devtoolsFormatHeader(config) : null,
     hasBody: (obj: DevtoolsFormattable) => '_devtoolsFormatBody' in obj,
-    body: (obj: DevtoolsFormattable, config: unknown) =>
-      obj._devtoolsFormatBody!(config),
+    body: (obj: DevtoolsFormattable, config: unknown) => obj._devtoolsFormatBody!(config),
   });
 };

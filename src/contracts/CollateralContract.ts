@@ -1,12 +1,5 @@
-import {
-  ComputationDriver,
-  ComputationType,
-  InputSource,
-} from '../ComputationMeta.ts';
-import {
-  CollateralContractDetail,
-  CollateralContractParams,
-} from '../collateralMessages.ts';
+import { ComputationDriver, ComputationType, InputSource } from '../ComputationMeta.ts';
+import { CollateralContractDetail, CollateralContractParams } from '../collateralMessages.ts';
 import { accountHash, collateralHash } from '../constants.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { CollateralUtil, Posting } from '../CollateralUtil.ts';
@@ -50,8 +43,7 @@ export class CollateralContract implements ContractProvider {
       for (let i = 1; i < postings.length; i++) {
         const a = postings[i - 1];
         const b = postings[i];
-        const cmp =
-          driver.compareBlockOrder(a.input.block.hash, b.input.block.hash) ||
+        const cmp = driver.compareBlockOrder(a.input.block.hash, b.input.block.hash) ||
           a.input.outputIdx - b.input.outputIdx;
         if (cmp >= 0) {
           driver.fail(`Collateral inputs aren't sorted!`);

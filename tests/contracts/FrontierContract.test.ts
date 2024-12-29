@@ -9,15 +9,9 @@ import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { frontierHash } from '../../src/constants.ts';
 import { BlockService } from '../../src/BlockService.ts';
-import {
-  FrontierContract,
-  frontierInputCount,
-} from '../../src/contracts/FrontierContract.ts';
+import { FrontierContract, frontierInputCount } from '../../src/contracts/FrontierContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
-import {
-  baseContractProviders,
-  waitForVerifiedOutput,
-} from '../../tests/contracts/util.ts';
+import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 import { FrontierTreeDetail, FrontierTreeParams } from '../../src/messages.ts';
 import { FactService } from '../../src/FactService.ts';
 

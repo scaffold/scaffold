@@ -36,12 +36,9 @@ export class WebsocketServerProvider implements NetworkProvider {
             sendReliable: (data: Uint8Array) => socket.send(data),
             sendFast: (data: Uint8Array) => socket.send(data),
             onRecv: (handler: (data: Uint8Array) => void) =>
-              socket.addEventListener('message', (e) =>
-                handler(new Uint8Array(e.data))),
-            shutdown: () =>
-              socket.close(),
-            onClose: (handler: () => void) =>
-              socket.addEventListener('close', () => handler()),
+              socket.addEventListener('message', (e) => handler(new Uint8Array(e.data))),
+            shutdown: () => socket.close(),
+            onClose: (handler: () => void) => socket.addEventListener('close', () => handler()),
           }));
         // socket.addEventListener('error', (e) => console.error(e));
 
@@ -60,9 +57,7 @@ export class WebsocketServerProvider implements NetworkProvider {
             return '';
           },
         ),
-    ]).then((x) =>
-      x.filter((val, idx, arr) => val && arr.indexOf(val) === idx)
-    );
+    ]).then((x) => x.filter((val, idx, arr) => val && arr.indexOf(val) === idx));
   }
 
   public createInstance(driver: SignalingDriver) {

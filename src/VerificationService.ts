@@ -14,11 +14,7 @@ import { MaybePromise } from './util/MaybePromise.ts';
 import { bin2hex } from './util/hex.ts';
 import { DetailVote } from './CollateralUtil.ts';
 import { HintSuggestionService } from './HintSuggestionService.ts';
-import {
-  BurdenOfProof,
-  ComputationDriver,
-  ComputationType,
-} from './ComputationMeta.ts';
+import { BurdenOfProof, ComputationDriver, ComputationType } from './ComputationMeta.ts';
 import { CollateralHint } from './collateralMessages.ts';
 import { VerifierHelper } from './VerifierHelper.ts';
 import { QaDebugger } from './QaDebugger.ts';
@@ -90,8 +86,7 @@ export class VerificationService {
       params: verifier.contractHash.toBytes(),
     });
     if (contractBlocks.length) {
-      const contractCode =
-        contractBlocks[0].block.bodies[contractBlocks[0].groupIdx];
+      const contractCode = contractBlocks[0].block.bodies[contractBlocks[0].groupIdx];
 
       this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
@@ -233,8 +228,7 @@ export class VerificationService {
           );
         }
       },
-      isSignedBy: (publicKey) =>
-        this.ctx.get(FactService).verify(block, publicKey),
+      isSignedBy: (publicKey) => this.ctx.get(FactService).verify(block, publicKey),
       requireSignature: (publicKey) => {
         if (!this.ctx.get(FactService).verify(block, publicKey)) {
           throw new VerificationException(
@@ -264,9 +258,7 @@ export class VerificationService {
           if (groupIdx !== undefined) {
             const body = ref.bodies[groupIdx];
             workerDriver.resumeTimer(
-              `Read from ${ref.hash.toHex().slice(0, 10)}: ${
-                bin2hex(body).slice(0, 10)
-              }`,
+              `Read from ${ref.hash.toHex().slice(0, 10)}: ${bin2hex(body).slice(0, 10)}`,
             );
             return body;
           }
@@ -351,9 +343,7 @@ export class VerificationService {
           }
 
           workerDriver.resumeTimer(
-            `Linked to ${
-              inputBlock.hash.toHex().slice(0, 10)
-            }:${input.outputIdx}`,
+            `Linked to ${inputBlock.hash.toHex().slice(0, 10)}:${input.outputIdx}`,
           );
 
           return {

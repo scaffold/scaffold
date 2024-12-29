@@ -6,10 +6,7 @@ import { BlockService } from '../../src/BlockService.ts';
 import { CollatzContract } from '../../src/contracts/CollatzContract.ts';
 import * as collatzMessages from '../../src/contracts/collatzMessages.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
-import {
-  baseContractProviders,
-  waitForVerifiedOutput,
-} from '../../tests/contracts/util.ts';
+import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 const params: collatzMessages.Params = { num: 1n };
 const goodAnswer: collatzMessages.Answer = { stoppingTime: 0n, maximum: 1n };

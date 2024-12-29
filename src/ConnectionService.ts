@@ -150,14 +150,13 @@ export class ConnectionService {
       lastRecvTimestamp: this.ctx.config.timeProvider.now(),
       reliability: 0.75,
       isConnected: true,
-      knownFacts:
-        remotePublicKey !== undefined && remoteClientNonce !== undefined
-          ? mapPut(
-            this.knownFactsByClient,
-            Hash.digestParts(remotePublicKey, remoteClientNonce).toPrimitive(),
-            () => new Set(),
-          )
-          : new Set(),
+      knownFacts: remotePublicKey !== undefined && remoteClientNonce !== undefined
+        ? mapPut(
+          this.knownFactsByClient,
+          Hash.digestParts(remotePublicKey, remoteClientNonce).toPrimitive(),
+          () => new Set(),
+        )
+        : new Set(),
       ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       altruism: 0,
       earnedBandwidth: 0,

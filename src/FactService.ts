@@ -1,13 +1,6 @@
 import { Context } from './Context.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
-import {
-  BlockFact,
-  Collateralization,
-  Fact,
-  FactBase,
-  FactSource,
-  FactType,
-} from './FactMeta.ts';
+import { BlockFact, Collateralization, Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
 import { PeerManager } from './PeerManager.ts';
 import { Coder } from './messages.ts';
 import { secp } from './util/secp.ts';
@@ -61,8 +54,7 @@ export class FactService {
     Map<HashPrimitive, DetailVote>
   >();
 
-  private pendingForgets: { fact: WeakRef<Fact>; forgetTimestamp: number }[] =
-    [];
+  private pendingForgets: { fact: WeakRef<Fact>; forgetTimestamp: number }[] = [];
   private forgottenCount = 0;
 
   private nextFactIdx = 0;
@@ -145,9 +137,7 @@ export class FactService {
     filter: (block: BlockFact) => boolean = () => true,
   ): BlockFact[] {
     return [...this.facts.values()].flatMap((fact) =>
-      fact !== ingestingFact && fact.type === FactType.Block && filter(fact)
-        ? [fact]
-        : []
+      fact !== ingestingFact && fact.type === FactType.Block && filter(fact) ? [fact] : []
     );
   }
 
@@ -159,9 +149,7 @@ export class FactService {
   }
   public forgetCollateral(hash: Hash, collateralBlock: BlockFact) {
     const colls = mapPut(this.collateralByHash, hash.toPrimitive(), () => []);
-    const idx = colls.findIndex((coll) =>
-      coll.collateralBlock === collateralBlock
-    );
+    const idx = colls.findIndex((coll) => coll.collateralBlock === collateralBlock);
     if (idx !== -1) {
       colls.splice(idx, 1);
     }
@@ -169,8 +157,7 @@ export class FactService {
 
   public increaseUsefulness(fact: Fact, usefulness: number) {
     if (usefulness > fact.usefulness && fact.fromConnections.length !== 0) {
-      fact.fromConnections[0].earnedBandwidth +=
-        (usefulness - fact.usefulness) *
+      fact.fromConnections[0].earnedBandwidth += (usefulness - fact.usefulness) *
         this.ctx.config.bandwidthReciprocationUtilityFactor *
         fact.data.byteLength;
       fact.usefulness = usefulness;
@@ -299,8 +286,7 @@ export class FactService {
       fromConn.knownFacts.add(fact);
       fact.fromConnections.push(fromConn);
 
-      fromConn.earnedBandwidth +=
-        this.ctx.config.bandwidthReciprocationBaseFactor *
+      fromConn.earnedBandwidth += this.ctx.config.bandwidthReciprocationBaseFactor *
         fact.data.byteLength;
     }
 
@@ -427,9 +413,7 @@ export class FactService {
     if (provider.isSigned && data.byteLength < SIGNATURE_LENGTH + headerSize) {
       throw new Error(`Message length (${data.byteLength}) is too short!`);
     }
-    const signature = provider.isSigned
-      ? data.subarray(-SIGNATURE_LENGTH)
-      : undefined;
+    const signature = provider.isSigned ? data.subarray(-SIGNATURE_LENGTH) : undefined;
 
     const fact = provider.create({
       hash,
@@ -440,9 +424,7 @@ export class FactService {
       ),
 
       signature,
-      signer: provider.isSigned
-        ? this.computePublicKey({ data, signature })
-        : undefined,
+      signer: provider.isSigned ? this.computePublicKey({ data, signature }) : undefined,
 
       receivedAt: this.ctx.config.timeProvider.now(),
       source,

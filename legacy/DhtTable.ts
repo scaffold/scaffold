@@ -26,9 +26,7 @@ export class DhtTable {
 
   public remove(entry: DhtEntry) {
     const bucket = this.getBucketFor(entry.answer);
-    const idx = bucket.findIndex(({ answer }) =>
-      Hash.equals(answer, entry.answer)
-    );
+    const idx = bucket.findIndex(({ answer }) => Hash.equals(answer, entry.answer));
     if (idx !== -1) {
       bucket.splice(idx, 1);
     }

@@ -5,10 +5,7 @@ import { burnHash } from '../../src/constants.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { BurnContract } from '../../src/contracts/BurnContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
-import {
-  baseContractProviders,
-  waitForVerifiedOutput,
-} from '../../tests/contracts/util.ts';
+import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 Deno.test(
   {

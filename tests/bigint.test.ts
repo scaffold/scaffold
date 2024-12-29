@@ -1,9 +1,5 @@
 import { assertEquals } from '@std/assert';
-import {
-  bigint2bin,
-  bin2bigint,
-  countTrailingZeros,
-} from '../src/util/bigint.ts';
+import { bigint2bin, bin2bigint, countTrailingZeros } from '../src/util/bigint.ts';
 
 Deno.test({ name: `count trailing zeros` }, () => {
   assertEquals(countTrailingZeros(5n), 0);

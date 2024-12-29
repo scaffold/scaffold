@@ -97,12 +97,8 @@ export class RenderService {
           ? `${selfOffset.min}-${selfOffset.max}`
           : selfOffset.min;
       });
-      const anc = wrapAccessor(() =>
-        this.ctx.get(WeightService).getAncestorWeight(block)
-      );
-      const desc = wrapAccessor(() =>
-        this.ctx.get(WeightService).getDescendant(block).weight
-      );
+      const anc = wrapAccessor(() => this.ctx.get(WeightService).getAncestorWeight(block));
+      const desc = wrapAccessor(() => this.ctx.get(WeightService).getDescendant(block).weight);
       const tree = block.frontierDetail.treeWeights.join(',');
       // const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
       const vw = `?`;
@@ -158,9 +154,7 @@ export class RenderService {
     const isFrontier = inputBlock?.frontierOutputIdx === input.outputIdx;
 
     if (
-      isFrontier
-        ? config.renderFrontierInputs === false
-        : config.renderOtherInputs === false
+      isFrontier ? config.renderFrontierInputs === false : config.renderOtherInputs === false
     ) return;
 
     const bId = this.getId(graph, block);
@@ -180,9 +174,7 @@ export class RenderService {
   ) {
     if (config.renderPrimaryDescendant === false) return;
 
-    const desc = wrapAccessor(() =>
-      this.ctx.get(WeightService).getDescendant(block)
-    );
+    const desc = wrapAccessor(() => this.ctx.get(WeightService).getDescendant(block));
     if (desc === '?') {
       return;
     }
@@ -216,8 +208,6 @@ export class RenderService {
   }
 
   private renderAttrs(attrs: { [key: string]: string }) {
-    return `[${
-      Object.entries(attrs).map(([key, val]) => `${key}="${val}"`).join(', ')
-    }]`;
+    return `[${Object.entries(attrs).map(([key, val]) => `${key}="${val}"`).join(', ')}]`;
   }
 }

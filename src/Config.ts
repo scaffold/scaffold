@@ -189,12 +189,10 @@ export const makeDefaultConfig = () => {
     ingestionProviders: defaultIngestionProviders,
     approxComputePricePerSecond: 1000n,
     getDepositIncentive: (_verifier) => 10n,
-    getGenerationReward: (_verifier, computeTimeMs) =>
-      BigInt(computeTimeMs * 0) + 5n,
+    getGenerationReward: (_verifier, computeTimeMs) => BigInt(computeTimeMs * 0) + 5n,
     // getWeightLimit: (factAgeMs) => BigInt(factAgeMs),
     getWeightLimit: (_factAgeMs) => 1000000000n,
-    getNextWeightBreakpoint: (weight) =>
-      weight <= 2n ? 3n : (weight * 3n) >> 1n,
+    getNextWeightBreakpoint: (weight) => weight <= 2n ? 3n : (weight * 3n) >> 1n,
     getOverpaymentPenalty: (overpayment) => overpayment,
     bandwidthReciprocationBaseFactor: 1,
     bandwidthReciprocationUtilityFactor: 1,

@@ -53,7 +53,7 @@
       "dist"
     ],
     "singleQuote": true,
-    "lineWidth": 80
+    "lineWidth": 100
   },
   "tasks": {
     "dev": "export DENO_FLAGS=--watch ; deno task fmt & deno task run-server",

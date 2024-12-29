@@ -99,9 +99,7 @@ export class SignalingService {
       signalData,
     };
 
-    const clampedPriority = priority !== undefined
-      ? Math.max(0, Math.min(priority, 1))
-      : 1;
+    const clampedPriority = priority !== undefined ? Math.max(0, Math.min(priority, 1)) : 1;
 
     let lastEmit: number | undefined;
     let emits = 0;
@@ -206,8 +204,7 @@ export class SignalingService {
     const instance = mapPut(
       this.instances,
       bin2prim(payload.signalingNonce),
-      () =>
-        this.initSignaling(payload.signalingNonce, remotePublicKey, payload),
+      () => this.initSignaling(payload.signalingNonce, remotePublicKey, payload),
       (inst) => {
         if (
           !arrEquals(inst.remotePublicKey, remotePublicKey) ||
@@ -239,8 +236,7 @@ export class SignalingService {
 
         instance.log?.push({
           timestamp: this.ctx.config.timeProvider.now(),
-          message:
-            `Receiving signal ${payload.signalIdx}: ${payload.signalData}`,
+          message: `Receiving signal ${payload.signalIdx}: ${payload.signalData}`,
         });
         this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(instance);
 
@@ -291,8 +287,7 @@ export class SignalingService {
       protocol: state.localProtocol,
       useToken: true,
 
-      sendSignal: (signalData, priority) =>
-        this.emit(state, signalData, undefined, priority),
+      sendSignal: (signalData, priority) => this.emit(state, signalData, undefined, priority),
       createConnection: (provider) => {
         if (state.closed) {
           return;
@@ -321,8 +316,7 @@ export class SignalingService {
           ) {
             instance.log?.push({
               timestamp: this.ctx.config.timeProvider.now(),
-              message:
-                `Aborting because we created another connection to this peer!`,
+              message: `Aborting because we created another connection to this peer!`,
             });
             this.close(instance);
           }

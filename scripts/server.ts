@@ -6,10 +6,7 @@ import { BlockService } from '../src/BlockService.ts';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { QaDebugger } from '../src/QaDebugger.ts';
 import { error } from '../src/util/functional.ts';
-import {
-  LocalGenerator,
-  LocalGeneratorService,
-} from '../src/LocalGeneratorService.ts';
+import { LocalGenerator, LocalGeneratorService } from '../src/LocalGeneratorService.ts';
 // import { epochStartTime } from '~/server/epochStartTime.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { accountHash, generatorHash, rootHash } from '../src/constants.ts';
@@ -81,9 +78,7 @@ bootstrapFromGlobs([
   const hash = rootContract.addData(data);
   console.log(`Bootstrapped ${name}: ${hash.toHex()}`);
   ctx.get(QaDebugger).addDebugger(name, hash);
-}).then(({ count }) =>
-  console.log(`Bootstrapping done! Loaded ${count} datas.`)
-);
+}).then(({ count }) => console.log(`Bootstrapping done! Loaded ${count} datas.`));
 
 // ctx.get(Logger).registerAttribute('worker', {
 //   preposition: 'on',

@@ -176,9 +176,7 @@ export class CollateralUtil {
         if (contest.resultWinner === undefined) {
           // If the type is valid (true), payments come from INVALID_CHALLENGE if lt the threshold, or [] if gte
           // If the type is invalid (false), payments are []
-          contest.resultWinner = type
-            ? contest.invalidChallenge < challengeThreshold
-            : true;
+          contest.resultWinner = type ? contest.invalidChallenge < challengeThreshold : true;
         }
       }
     }
@@ -342,30 +340,18 @@ export class CollateralUtil {
     switch (this.getContestTypeWinner(contest)) {
       case false:
         ctWinAmt = contest.validChallenge + contest.allValidContest;
-        resultWinAmt = this.getResultWinner(contest)
-          ? contest.validChallenge
-          : 0n;
-        resultLossAmt = this.getResultWinner(contest)
-          ? 0n
-          : contest.validChallenge;
+        resultWinAmt = this.getResultWinner(contest) ? contest.validChallenge : 0n;
+        resultLossAmt = this.getResultWinner(contest) ? 0n : contest.validChallenge;
         break;
       case true:
         ctWinAmt = contest.oneValidContest + contest.invalidChallenge;
-        resultWinAmt = this.getResultWinner(contest)
-          ? 0n
-          : contest.invalidChallenge;
-        resultLossAmt = this.getResultWinner(contest)
-          ? contest.invalidChallenge
-          : 0n;
+        resultWinAmt = this.getResultWinner(contest) ? 0n : contest.invalidChallenge;
+        resultLossAmt = this.getResultWinner(contest) ? contest.invalidChallenge : 0n;
         break;
       case CONTEST_TYPE_FINAL:
         ctWinAmt = contest.finalPass + contest.finalFail + contest.finalContest;
-        resultWinAmt = this.getResultWinner(contest)
-          ? contest.finalPass
-          : contest.finalFail;
-        resultLossAmt = this.getResultWinner(contest)
-          ? contest.finalFail
-          : contest.finalPass;
+        resultWinAmt = this.getResultWinner(contest) ? contest.finalPass : contest.finalFail;
+        resultLossAmt = this.getResultWinner(contest) ? contest.finalFail : contest.finalPass;
         break;
     }
 

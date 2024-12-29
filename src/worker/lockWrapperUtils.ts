@@ -51,9 +51,7 @@ const oldWasiPathOpen = (
 
     return (
       val ||
-      (has(oflags, wc.WASI_O_CREAT)
-        ? dirHdl.node.getFs().createFileNode()
-        : undefined)
+      (has(oflags, wc.WASI_O_CREAT) ? dirHdl.node.getFs().createFileNode() : undefined)
     );
   }) || throwWasiErr(wc.WASI_ENOENT);
 

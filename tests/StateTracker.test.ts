@@ -42,9 +42,7 @@ Deno.test(
 
     const onIdx: ((idx: bigint) => void)[] = [];
     const waitFor = (filter: (idx: bigint) => boolean) =>
-      new Promise<void>((resolve) =>
-        onIdx.push((idx) => filter(idx) && resolve())
-      );
+      new Promise<void>((resolve) => onIdx.push((idx) => filter(idx) && resolve()));
 
     const tracker = st.track(
       (idx) => ({ idx }),

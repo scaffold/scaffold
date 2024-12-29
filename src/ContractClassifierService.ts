@@ -13,8 +13,7 @@ import {
 } from './constants.ts';
 import { Verifier } from './messages.ts';
 
-const toHashPrim = (x: string | Hash) =>
-  (x instanceof Hash ? x : Hash.fromHex(x)).toPrimitive();
+const toHashPrim = (x: string | Hash) => (x instanceof Hash ? x : Hash.fromHex(x)).toPrimitive();
 
 export class ContractClassifierService {
   private immediatelyVerifiableContractHashes = new Set<HashPrimitive>(
