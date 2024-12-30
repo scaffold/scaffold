@@ -80,13 +80,7 @@ export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
 
 export const CollateralHint = base.makeMsg(registry, 'CollateralHint');
 export type CollateralHint = MsgType<'CollateralHint'>;
-export const CollateralContractParams = base.makeMsg(
-  registry,
-  'CollateralContractParams',
-);
+export const CollateralContractParams = base.makeMsg(registry, 'CollateralContractParams');
 export type CollateralContractParams = MsgType<'CollateralContractParams'>;
-export const CollateralContractDetail = base.makeMsg(
-  registry,
-  'CollateralContractDetail',
-);
+export const CollateralContractDetail = base.makeMsg(registry, 'CollateralContractDetail');
 export type CollateralContractDetail = MsgType<'CollateralContractDetail'>;

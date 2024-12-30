@@ -20,6 +20,7 @@ import { assert, error, todo } from './util/functional.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
+import { WalkerService } from './WalkerService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -152,7 +153,12 @@ export class BlockBuilder {
 
       if (draft.inputs !== undefined) {
         for (const input of draft.inputs) {
-          inputs.push({ ...input, blockHash: input.block.hash, groupIdx });
+          inputs.push({
+            ...input,
+            blockHash: input.block.hash,
+            groupIdx,
+            utxoIdx: -1,
+          });
         }
       }
 
@@ -168,7 +174,13 @@ export class BlockBuilder {
                   ...refBlocks.map((ref) => ({ block: ref })),
                   input,
                 ]) !== undefined,
-            (input) => inputs.push({ ...input, blockHash: input.block.hash, groupIdx }),
+            (input) =>
+              inputs.push({
+                ...input,
+                blockHash: input.block.hash,
+                groupIdx,
+                utxoIdx: -1,
+              }),
           );
         }
       }
@@ -239,6 +251,7 @@ export class BlockBuilder {
           ...input,
           blockHash: input.block.hash,
           groupIdx: nextGroupIdx(),
+          utxoIdx: -1,
         });
         ioDelta += input.amount;
       }
@@ -307,6 +320,11 @@ export class BlockBuilder {
       });
     }
 
+    for (const input of inputs) {
+      input.utxoIdx = this.ctx.get(FrontierService)
+        .getUtxoIdx(input.block, input.outputIdx, { frontierVoteBlock, inputs, outputs });
+    }
+
     while (bodies.length <= groupIdx) {
       bodies.push(EMPTY_ARR);
     }
@@ -360,6 +378,7 @@ export class BlockBuilder {
     }
 
     if (publishStub) {
+      // TODO: Create stubs via setting the utxoIdx property
       let published = false;
       this.publishSingleDraft({
         outputs: [{

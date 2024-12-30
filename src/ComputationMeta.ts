@@ -45,10 +45,7 @@ export interface ComputationDriver extends WorkerDriver {
   fetch(verifier: Verifier): Promise<Uint8Array>;
 
   collectInputs(): MaybePromise<InputSource[]>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
-  requireInput(
-    satisfies?: Verifier,
-    outputsTo?: Verifier,
-  ): MaybePromise<InputSource>; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.
+  requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<InputSource>; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.
   // TODO: Maybe make multiple getters for each property so we don't have to re-generate if, for example, only the block hash changes.
 
   // TODO: Implement this to allow contracts to provide plaintext data that might be requested as a hint or hash inversion in the future?

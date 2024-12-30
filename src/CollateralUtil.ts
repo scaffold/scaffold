@@ -6,6 +6,7 @@ import { accountHash, burnHash } from './constants.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { error } from './util/functional.ts';
 import { bigintMax, bigintMin } from './util/bigint.ts';
+import { assert } from './util/functional.ts';
 
 export const challengeThreshold = 10n;
 export const finalVoteAmount = 100n;
@@ -373,9 +374,8 @@ export class CollateralUtil {
 
     const outputKeys = new Map<string, BlockOutput>();
     const addOutput = (dst: Uint8Array, amount: bigint) => {
-      if (dst.byteLength === 0) {
-        throw new Error(`Empty output dst!`);
-      }
+      assert(dst.byteLength !== 0);
+      assert(amount >= 0n);
       if (amount > 0n) {
         mapPut(outputKeys, bin2hex(dst), () => ({
           verifier: {
@@ -391,6 +391,7 @@ export class CollateralUtil {
       }
     };
     const addBurn = (amount: bigint) => {
+      assert(amount >= 0n);
       if (amount > 0n) {
         mapPut(outputKeys, '', () => ({
           verifier: { contractHash: burnHash, params: EMPTY_ARR },

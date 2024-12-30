@@ -22,6 +22,12 @@ export const enum BlockFlag {
 
 // type BlockIO = Pick<Block, 'frontier_vote' | 'inputs' | 'outputs'>;
 
+export interface InputDetail {
+  block?: BlockFact;
+  frontierVoteOutputIdx?: number;
+  subtreeIdx?: number;
+}
+
 export interface OutputClaim {
   block: BlockFact;
   inputIdx: number;
@@ -49,6 +55,12 @@ export interface BlockMeta {
   // derivedWork: bigint;
   derivedWork: number;
   mergeableProbability: number;
+
+  // TODO: Remove; unused
+  // For each input, the index of the referenced output in the frontier vote output space.
+  // If it comes from a subtree, the number will be negative. It will be the bitwise complement of the subtree index.
+  // Undefined if unknown
+  inputOutputIdxs: (number | undefined)[];
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
   outputClaims: OutputClaim[][];

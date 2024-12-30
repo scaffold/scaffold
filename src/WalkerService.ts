@@ -4,46 +4,54 @@ import { BlockService } from './BlockService.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { assert } from './util/functional.ts';
+import { Hash } from './util/Hash.ts';
+
+export interface MockBlock {
+  frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
+  inputs: ({ blockHash: Hash; outputIdx: number } | { block: BlockFact; outputIdx: number })[];
+}
 
 export class WalkerService {
   constructor(private ctx: Context) {}
 
   // Returns the path from descendant (inclusive) to ancestor (inclusive)
-  public getPath(
+  public getPath<DescType extends MockBlock>(
     ancestor: BlockFact | typeof ZERO_BLOCK,
-    descendant: BlockFact | typeof ZERO_BLOCK,
-  ): (BlockFact | typeof ZERO_BLOCK)[] | undefined {
-    const chain: (BlockFact | typeof ZERO_BLOCK)[] = [descendant];
+    descendant: DescType | typeof ZERO_BLOCK,
+  ): (DescType | BlockFact | typeof ZERO_BLOCK)[] | undefined {
+    const chain: (DescType | BlockFact | typeof ZERO_BLOCK)[] = [descendant];
     if (ancestor === descendant) {
       return chain;
     }
 
-    const ancestorParents = this.ctx.get(FrontierChainService).getAllParents(
-      ancestor,
-    );
-    while (!ancestorParents.has(descendant)) {
-      if (
-        descendant === ZERO_BLOCK || descendant.frontierVoteBlock === undefined
-      ) {
+    const ancestorParents: Set<unknown> = this.ctx.get(FrontierChainService)
+      .getAllParents(ancestor);
+    let it: DescType | BlockFact | typeof ZERO_BLOCK = descendant;
+    while (!ancestorParents.has(it)) {
+      if (it === ZERO_BLOCK || it.frontierVoteBlock === undefined) {
         return undefined;
       }
-      descendant = descendant.frontierVoteBlock;
-      chain.push(descendant);
+      it = it.frontierVoteBlock;
+      chain.push(it);
     }
 
-    while (descendant !== ancestor) {
-      assert(descendant !== ZERO_BLOCK);
-      for (const input of descendant.inputs) {
-        const child = this.ctx.get(BlockService).get(input.blockHash, false);
+    outerLoop: while (it !== ancestor) {
+      assert(it !== ZERO_BLOCK);
+      for (const input of it.inputs) {
+        const child = 'block' in input
+          ? input.block
+          : this.ctx.get(BlockService).get(input.blockHash, false);
         if (
           child !== undefined && input.outputIdx === child.frontierOutputIdx &&
           ancestorParents.has(child)
         ) {
-          descendant = child;
-          chain.push(descendant);
-          break;
+          it = child;
+          chain.push(it);
+          continue outerLoop;
         }
       }
+
+      throw new Error(`No tree child found in the ancestor parents set`);
     }
 
     return chain;

@@ -234,9 +234,7 @@ export class FrontierChainService {
     });
   }
 
-  public getAllParents(
-    block: BlockFact | typeof ZERO_BLOCK,
-  ): Set<BlockFact | typeof ZERO_BLOCK> {
+  public getAllParents(block: BlockFact | typeof ZERO_BLOCK): Set<BlockFact | typeof ZERO_BLOCK> {
     if (block === ZERO_BLOCK) {
       return new Set([ZERO_BLOCK]);
     }

@@ -76,6 +76,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       votes: 0n,
       derivedWork: 0,
       mergeableProbability: 0,
+
+      inputOutputIdxs: block.inputs.map(() => undefined),
+
       outputClaims: block.outputs.map((_, idx) =>
         this.ctx.get(BlockService).getClaims({
           blockHash: base.hash,

@@ -8,35 +8,38 @@ import { FrontierService2 } from './FrontierService2.ts';
 import { FrontierTreeDetail } from './messages.ts';
 import { assert, todo } from './util/functional.ts';
 import { Hash } from './util/Hash.ts';
-import { WalkerService } from './WalkerService.ts';
+import { MockBlock, WalkerService } from './WalkerService.ts';
 
 interface RebasedBlock {
-  // frontierVoteOutputCount: number;
-  treeSpentIdxs: number[];
-  subtreeOutputCount: number[];
+  // frontierVoteUtxoCount: number;
+  subtreeSpentUtxoIdxs: number[];
+  subtreeNewUtxoCount: number[];
   omittedSpendCount: number;
+}
+
+const enum OutputSource {
+  FrontierVote,
+  Subtree,
+  Self,
 }
 
 export class FrontierService {
   constructor(private ctx: Context) {}
 
-  create(
-    inputs: InputSpec[],
-    frontierVote: BlockFact | typeof ZERO_BLOCK,
-  ): FrontierTreeDetail {
+  create(inputs: InputSpec[], frontierVote: BlockFact | typeof ZERO_BLOCK): FrontierTreeDetail {
     const treeChildren = inputs
       .filter((input) => input.block.frontierOutputIdx === input.outputIdx)
       .map((input) => ({ ...input, ...this.rebase(input.block, frontierVote) }));
 
     let offset = 0;
     for (const child of treeChildren) {
-      offset += child.subtreeOutputCount.reduce((acc, x) => acc + x, 0) +
+      offset += child.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) +
         child.block.outputs.length;
     }
 
-    // child2.outputs.length, child2.subtreeOutputCount, child1.outputs.length, child1.subtreeOutputCount
+    // child2.outputs.length, child2.subtreeNewUtxoCount, child1.outputs.length, child1.subtreeNewUtxoCount
 
-    let subtreeOutputCount: number[] = [];
+    const subtreeNewUtxoCount: number[] = [];
     for (const child of treeChildren) {
       const inputIdxs: number[] = [];
       for (const input of child.block.inputs) {
@@ -47,24 +50,24 @@ export class FrontierService {
         }
       }
 
-      // block.frontierDetail.frontierVoteOutputCount -
-      //   block.frontierDetail.subtreeSpentIdxs.length +
-      //   block.frontierDetail.subtreeOutputCount -
+      // block.frontierDetail.frontierVoteUtxoCount -
+      //   block.frontierDetail.subtreeSpentUtxoIdxs.length +
+      //   block.frontierDetail.subtreeNewUtxoCount -
       //   block.inputs.length +
       //   block.outputs.length;
 
       const newSpentIdxs: number[] = [];
-      for (const idx of child.subtreeSpentIdxs) {
+      for (const idx of child.subtreeSpentUtxoIdxs) {
         newSpentIdxs.push(offset + idx);
       }
-      child.subtreeSpentIdxs = newSpentIdxs;
+      child.subtreeSpentUtxoIdxs = newSpentIdxs;
 
-      const outputCount = child.subtreeOutputCount.reduce((acc, x) => acc + x, 0) -
+      const outputCount = child.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) -
         child.block.inputs.length +
         child.block.outputs.length -
         child.omittedSpendCount;
       assert(outputCount >= 0, 'outputCount < 0');
-      subtreeOutputCount.push(outputCount);
+      subtreeNewUtxoCount.push(outputCount);
 
       // TODO: Remove this once we've verified it works correctly
       if (treeChildren.some((x) => x.block === child.block.frontierVoteBlock)) {
@@ -74,8 +77,8 @@ export class FrontierService {
         assert(vote !== undefined && vote !== ZERO_BLOCK);
 
         const threshold = vote.outputs.length +
-          vote.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0);
-        assert(child.omittedSpendCount === this.countLt(child.subtreeSpentIdxs, threshold));
+          vote.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0);
+        assert(child.omittedSpendCount === this.countLt(child.subtreeSpentUtxoIdxs, threshold));
       } else {
         assert(child.omittedSpendCount === 0);
       }
@@ -83,11 +86,11 @@ export class FrontierService {
 
     // TODO: Merge indices instead of sorting them
     // That should be faster since they're already sorted
-    const subtreeSpentIdxs = treeChildren.flatMap((x) => x.subtreeSpentIdxs).sort();
+    const subtreeSpentUtxoIdxs = treeChildren.flatMap((x) => x.subtreeSpentUtxoIdxs).sort();
 
     // Assert there's no duplicates
     let prev = -1;
-    for (const idx of subtreeSpentIdxs) {
+    for (const idx of subtreeSpentUtxoIdxs) {
       assert(idx >= prev, `Subtree spent indices aren't sorted!`);
       if (idx === prev) {
         throw new Error(`Can't merge subtrees because an output is spent twice!`);
@@ -98,9 +101,9 @@ export class FrontierService {
     return {
       treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(inputs, frontierVote),
 
-      frontierVoteOutputCount: this.getTotalOutputCount(frontierVote),
-      subtreeSpentIdxs,
-      subtreeOutputCount,
+      frontierVoteUtxoCount: this.getTotalOutputCount(frontierVote),
+      subtreeSpentUtxoIdxs,
+      subtreeNewUtxoCount,
 
       consumedInputsRoot: { branches: [] },
       producedOutputsRoot: { branches: [] },
@@ -112,9 +115,26 @@ export class FrontierService {
       return 0;
     }
 
-    return block.frontierDetail.frontierVoteOutputCount -
-      block.frontierDetail.subtreeSpentIdxs.length +
-      block.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) -
+    return block.frontierDetail.frontierVoteUtxoCount -
+      block.frontierDetail.subtreeSpentUtxoIdxs.length +
+      block.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) -
+      block.inputs.length +
+      block.outputs.length;
+  }
+
+  private getOutputCount(
+    block: BlockFact | typeof ZERO_BLOCK,
+    frontierVote: boolean,
+    subtrees: number,
+    self: boolean,
+  ) {
+    if (block === ZERO_BLOCK) {
+      return 0;
+    }
+
+    return block.frontierDetail.frontierVoteUtxoCount -
+      block.frontierDetail.subtreeSpentUtxoIdxs.length +
+      block.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) -
       block.inputs.length +
       block.outputs.length;
   }
@@ -149,19 +169,20 @@ export class FrontierService {
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
         if (it === prev.frontierVoteBlock) {
-          let offset = it.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) +
+          // Rebase towards frontier vote
+          let offset = it.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) +
             it.outputs.length;
           let j = 0;
           const newIdxs: number[] = [];
-          for (const idx of rebase.subtreeSpentIdxs) {
+          for (const idx of rebase.subtreeSpentUtxoIdxs) {
             if (idx < offset) {
               rebase.omittedSpendCount++;
               continue;
             }
 
             while (
-              j < it.frontierDetail.subtreeSpentIdxs.length &&
-              it.frontierDetail.subtreeSpentIdxs[j] <= idx - offset
+              j < it.frontierDetail.subtreeSpentUtxoIdxs.length &&
+              it.frontierDetail.subtreeSpentUtxoIdxs[j] <= idx - offset
             ) {
               j++;
               offset--;
@@ -170,9 +191,9 @@ export class FrontierService {
             newIdxs.push(idx - offset);
           }
 
-          rebase.frontierVoteOutputCount = it.frontierDetail.frontierVoteOutputCount;
-          rebase.subtreeSpentIdxs = newIdxs;
+          rebase.subtreeSpentUtxoIdxs = newIdxs;
         } else {
+          // Rebase towards child
           todo(`Rebasing to a child is not implemented!`);
         }
 
@@ -213,29 +234,30 @@ export class FrontierService {
         assert(it !== block);
 
         if (it.frontierVoteBlock === prev) {
-          let offset = it.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) +
+          // Rebase towards frontier voter
+          let offset = it.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) +
             it.outputs.length;
           let j = 0;
           const newIdxs: number[] = [];
-          for (const idx of rebase.subtreeSpentIdxs) {
+          for (const idx of rebase.subtreeSpentUtxoIdxs) {
             while (
-              j < it.frontierDetail.subtreeSpentIdxs.length &&
-              it.frontierDetail.subtreeSpentIdxs[j] < idx
+              j < it.frontierDetail.subtreeSpentUtxoIdxs.length &&
+              it.frontierDetail.subtreeSpentUtxoIdxs[j] < idx
             ) {
               j++;
               offset--;
             }
 
-            if (it.frontierDetail.subtreeSpentIdxs[j] === idx) {
+            if (it.frontierDetail.subtreeSpentUtxoIdxs[j] === idx) {
               throw new Error(`Can't rebase through block because an output is spent twice!`);
             }
 
             newIdxs.push(idx + offset);
           }
 
-          rebase.frontierVoteOutputCount = it.frontierDetail.frontierVoteOutputCount;
-          rebase.subtreeSpentIdxs = newIdxs;
+          rebase.subtreeSpentUtxoIdxs = newIdxs;
         } else {
+          // Rebase towards parent
           todo(`Rebasing to a parent is not implemented!`);
         }
 
@@ -248,8 +270,8 @@ export class FrontierService {
     throw Error(`Rebase failed; no path from A to B`);
   }
 
-  private traceOutput(block: BlockFact, outputIdx: number) {
-    const path = this.ctx.get(WalkerService).getPath(block, toVote);
+  public getUtxoIdx(block: BlockFact, outputIdx: number, to: MockBlock & { outputs: unknown[] }) {
+    const path = this.ctx.get(WalkerService).getPath(block, to);
     if (path !== undefined) {
       let prev = path.pop()!;
       assert(prev !== ZERO_BLOCK);
@@ -258,16 +280,17 @@ export class FrontierService {
 
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
+        assert('hash' in it);
 
-        const spentIdx = this.countLt(it.frontierDetail.subtreeSpentIdxs, outputIdx);
-        if (it.frontierDetail.subtreeSpentIdxs[spentIdx] === outputIdx) {
+        const spentIdx = this.countLt(it.frontierDetail.subtreeSpentUtxoIdxs, outputIdx);
+        if (it.frontierDetail.subtreeSpentUtxoIdxs[spentIdx] === outputIdx) {
           throw new Error(`Can't trace output because it's spent twice!`);
         }
 
         if (it.frontierVoteBlock === prev) {
           // Frontier voter
-          outputIdx = it.frontierDetail.subtreeSpentIdxs.length +
-            it.frontierDetail.subtreeOutputCount.reduce((acc, x) => acc + x, 0) -
+          outputIdx = it.frontierDetail.subtreeSpentUtxoIdxs.length +
+            it.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) -
             it.inputs.length +
             it.outputs.length +
             outputIdx -
@@ -286,7 +309,7 @@ export class FrontierService {
           );
           assert(childIdx !== -1);
 
-          outputIdx += it.frontierDetail.subtreeOutputCount.slice(childIdx + 1)
+          outputIdx += it.frontierDetail.subtreeNewUtxoCount.slice(childIdx + 1)
             .reduce((acc, x) => acc + x, 0);
         }
 
