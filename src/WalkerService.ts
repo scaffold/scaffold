@@ -8,7 +8,11 @@ import { Hash } from './util/Hash.ts';
 
 export interface MockBlock {
   frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
-  inputs: ({ blockHash: Hash; outputIdx: number } | { block: BlockFact; outputIdx: number })[];
+  inputs: ({ blockHash: Hash; outputIdx: number; groupIdx: number } | {
+    block: BlockFact;
+    outputIdx: number;
+    groupIdx: number;
+  })[];
 }
 
 export class WalkerService {

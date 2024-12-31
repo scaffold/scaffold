@@ -140,7 +140,6 @@ Deno.test(
     name: `a double-spend should not be mergeable`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
-    only: true,
   },
   makeTest({
     contractProviders: [],

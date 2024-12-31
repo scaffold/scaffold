@@ -320,9 +320,20 @@ export class BlockBuilder {
       });
     }
 
+    const frontierOutputIdx = outputs.findIndex((x) =>
+      Hash.equals(x.verifier.contractHash, frontierHash)
+    );
+    assert(frontierOutputIdx !== -1);
+    const frontierDetail = FrontierTreeDetail.decode(outputs[frontierOutputIdx].detail);
     for (const input of inputs) {
       input.utxoIdx = this.ctx.get(FrontierService)
-        .getUtxoIdx(input.block, input.outputIdx, { frontierVoteBlock, inputs, outputs });
+        .getUtxoIdx(input.block, input.outputIdx, {
+          frontierVoteBlock,
+          inputs,
+          outputs,
+          frontierOutputIdx,
+          frontierDetail,
+        });
     }
 
     while (bodies.length <= groupIdx) {
