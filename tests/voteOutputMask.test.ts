@@ -7,6 +7,7 @@ import { Hash } from '../src/util/Hash.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
 import { frontierHash } from '../src/constants.ts';
 import { ZERO_BLOCK } from '../src/BlockMeta.ts';
+import { FrontierService } from '../src/FrontierService.ts';
 
 Deno.test(
   {
@@ -21,10 +22,10 @@ Deno.test(
     const genesis = ctx.get(BlockService).get(genesisHash, false) ??
       error(`Missing genesis block!`);
 
+    assertEquals(ctx.get(FrontierService).getTotalUtxoCount(genesis), genesis.outputs.length);
     assertObjectMatch(genesis.frontierDetail, {
-      frontierVoteOutputCount: 0,
-      subtreeSpentIdxs: [],
-      subtreeOutputCount: 0,
+      spentUtxoIdxs: [],
+      subtreeNewUtxoCount: [],
     });
   }),
 );
@@ -47,10 +48,13 @@ Deno.test(
       frontierVote: genesis,
     });
 
+    assertEquals(
+      ctx.get(FrontierService).getTotalUtxoCount(block),
+      genesis.outputs.length - block.inputs.length + block.outputs.length,
+    );
     assertObjectMatch(block.frontierDetail, {
-      frontierVoteOutputCount: genesis.outputs.length,
-      subtreeSpentIdxs: [],
-      subtreeOutputCount: 0,
+      spentUtxoIdxs: [],
+      subtreeNewUtxoCount: [],
     });
   }),
 );
@@ -74,19 +78,22 @@ Deno.test(
     });
     const block2 = ctx.get(BlockBuilder).publishSingleDraft({
       frontierVote: ZERO_BLOCK,
+      groupIdx: 0,
       inputs: [
         findOutput(genesis, frontierHash),
         findOutput(block1, frontierHash),
       ],
     });
 
+    assertEquals(
+      ctx.get(FrontierService).getTotalUtxoCount(block2),
+      genesis.outputs.length -
+        block1.inputs.length + block1.outputs.length -
+        block2.inputs.length + block2.outputs.length,
+    );
     assertObjectMatch(block2.frontierDetail, {
-      frontierVoteOutputCount: 0,
-      subtreeSpentIdxs: [],
-      subtreeOutputCount: genesis.outputs.length +
-        block1.outputs.length -
-        genesis.inputs.length -
-        block1.inputs.length,
+      spentUtxoIdxs: [],
+      subtreeNewUtxoCount: [genesis.outputs.length - block1.inputs.length, block1.outputs.length],
     });
   }),
 );
@@ -110,6 +117,7 @@ Deno.test(
     });
     const block2 = ctx.get(BlockBuilder).publishSingleDraft({
       frontierVote: ZERO_BLOCK,
+      groupIdx: 0,
       inputs: [
         findOutput(genesis, frontierHash),
         findOutput(block1, frontierHash),
@@ -118,19 +126,22 @@ Deno.test(
 
     const treeBlocks = [genesis, block1, block2];
     const inputCount = treeBlocks.reduce((acc, x) => acc + x.inputs.length, 0);
-    const outputCount = treeBlocks.reduce(
-      (acc, x) => acc + x.outputs.length,
-      0,
-    );
+    const outputCount = treeBlocks.reduce((acc, x) => acc + x.outputs.length, 0);
 
     const block3 = ctx.get(BlockBuilder).publishSingleDraft({
       frontierVote: block2,
     });
 
+    assertEquals(
+      ctx.get(FrontierService).getTotalUtxoCount(block3),
+      genesis.outputs.length -
+        block1.inputs.length + block1.outputs.length -
+        block2.inputs.length + block2.outputs.length -
+        block3.inputs.length + block3.outputs.length,
+    );
     assertObjectMatch(block3.frontierDetail, {
-      frontierVoteOutputCount: outputCount - inputCount,
-      subtreeSpentIdxs: [],
-      subtreeOutputCount: 0,
+      spentUtxoIdxs: [],
+      subtreeNewUtxoCount: [],
     });
   }),
 );

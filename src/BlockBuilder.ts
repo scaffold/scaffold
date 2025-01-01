@@ -110,7 +110,9 @@ export class BlockBuilder {
       throw new Error(`Duplicate group idxs specified!`);
     }
 
-    let groupIdx = -1;
+    let groupIdx = 0;
+    // The first group index will be 1
+    // This ensures only frontier tree children will have a group index of 0
     const nextGroupIdx = () => {
       do {
         groupIdx++;
@@ -316,7 +318,7 @@ export class BlockBuilder {
         //         error(`Unknown frontier child input!`),
         //   ),
         // }),
-        groupIdx: nextGroupIdx(),
+        groupIdx: 0,
       });
     }
 
@@ -324,16 +326,16 @@ export class BlockBuilder {
       Hash.equals(x.verifier.contractHash, frontierHash)
     );
     assert(frontierOutputIdx !== -1);
+    assert(outputs[frontierOutputIdx].groupIdx === 0);
     const frontierDetail = FrontierTreeDetail.decode(outputs[frontierOutputIdx].detail);
     for (const input of inputs) {
-      input.utxoIdx = this.ctx.get(FrontierService)
-        .getUtxoIdx(input.block, input.outputIdx, {
-          frontierVoteBlock,
-          inputs,
-          outputs,
-          frontierOutputIdx,
-          frontierDetail,
-        });
+      input.utxoIdx = this.ctx.get(FrontierService).getUtxoIdx(input.block, input.outputIdx, {
+        frontierVoteBlock,
+        inputs,
+        outputs,
+        frontierOutputIdx,
+        frontierDetail,
+      });
     }
 
     while (bodies.length <= groupIdx) {

@@ -73,6 +73,8 @@ export interface BlockMeta {
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
   frontierVoters: BlockFact[];
 
+  utxoCount?: number; // Pre-inputs
+
   propagationMask: number;
 
   derivedWorkValue: number;

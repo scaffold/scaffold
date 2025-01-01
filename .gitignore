@@ -2,4 +2,6 @@
 Thumbs.db
 vendor/
 dist/
+coverage/
+lcov.info
 render.svg

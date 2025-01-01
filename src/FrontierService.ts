@@ -11,6 +11,8 @@ import { Hash } from './util/Hash.ts';
 import { mapPop, mapPut } from './util/map.ts';
 import { MockBlock as WalkerMockBlock, WalkerService } from './WalkerService.ts';
 
+const enableChecks = true;
+
 interface MockBlock extends WalkerMockBlock {
   frontierOutputIdx: number;
   frontierDetail: FrontierTreeDetail;
@@ -25,27 +27,22 @@ export class FrontierService {
 
     const treeChildren = inputs
       .filter((input) => input.block.frontierOutputIdx === input.outputIdx)
-      .map((input) => ({
+      .map((input, i, arr) => ({
         ...input,
-        rebasedSpentUtxoIdxs: this.rebase(input.block, frontierVote, omittedOutputCount),
+        rebasedSpentUtxoIdxs: this.rebase(
+          input.block,
+          frontierVote,
+          i === arr.length - 1, // Add inputs to the last tree child
+          omittedOutputCount,
+        ),
       }));
 
-    // TODO: Merge indices instead of sorting them
-    // That should be faster since they're already sorted
-    const spentUtxoIdxs = treeChildren
-      .flatMap((x) => x.rebasedSpentUtxoIdxs)
-      .concat(frontierVote === ZERO_BLOCK ? [] : frontierVote.inputs.map((x) => x.utxoIdx))
-      .sort();
+    assert(treeChildren.length === 0 || treeChildren.length === frontierInputCount);
 
-    // Assert there's no duplicates
-    let prev = -1;
-    for (const idx of spentUtxoIdxs) {
-      assert(idx >= prev, `Subtree spent indices aren't sorted!`);
-      if (idx === prev) {
-        throw new Error(`Can't merge subtrees because an output is spent twice!`);
-      }
-      prev = idx;
-    }
+    const spentUtxoIdxs = this.mergeSortedIndices(
+      // frontierVote === ZERO_BLOCK ? [] : frontierVote.inputs.map((x) => x.utxoIdx),
+      ...treeChildren.map((x) => x.rebasedSpentUtxoIdxs),
+    );
 
     const subtreeNewUtxoCount = treeChildren.map((child) => {
       const omittedSpendCount = mapPop(omittedOutputCount, child.block) ?? 0;
@@ -61,7 +58,7 @@ export class FrontierService {
     return {
       treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(inputs, frontierVote),
 
-      // frontierVoteUtxoCount: this.getTotalOutputCount(frontierVote),
+      // frontierVoteUtxoCount: this.getTotalUtxoCount(frontierVote),
       spentUtxoIdxs,
       subtreeNewUtxoCount,
 
@@ -70,16 +67,20 @@ export class FrontierService {
     };
   }
 
-  private getTotalOutputCount(block: BlockFact | typeof ZERO_BLOCK): number {
+  public getTotalUtxoCount(block: BlockFact | typeof ZERO_BLOCK): number | undefined {
     if (block === ZERO_BLOCK) {
       return 0;
     }
 
-    return this.getTotalOutputCount(block.frontierVoteBlock ?? error(`Unlinked`)) -
-      block.frontierDetail.spentUtxoIdxs.length +
-      block.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) -
-      block.inputs.length +
-      block.outputs.length;
+    if (block.utxoCount === undefined && block.frontierVoteBlock !== undefined) {
+      const voteCount = this.getTotalUtxoCount(block.frontierVoteBlock);
+      if (voteCount !== undefined) {
+        block.utxoCount = voteCount - block.frontierDetail.spentUtxoIdxs.length +
+          this.getNewUtxoCount(block);
+      }
+    }
+
+    return block.utxoCount !== undefined ? block.utxoCount - block.inputs.length : undefined;
   }
 
   // Returns the frontier detail that would have been created if the block had a different frontier vote
@@ -88,6 +89,7 @@ export class FrontierService {
   public rebase(
     block: BlockFact,
     toVote: BlockFact | typeof ZERO_BLOCK,
+    withInputs: boolean,
     omittedOutputCount: Map<BlockFact, number>,
   ): number[] {
     if (block.frontierVoteBlock === undefined) {
@@ -100,10 +102,23 @@ export class FrontierService {
       return rebasedSpentUtxoIdxs;
     }
 
+    if (withInputs) {
+      rebasedSpentUtxoIdxs = this.rebaseLeft(
+        rebasedSpentUtxoIdxs,
+        block.inputs.map((x) => x.utxoIdx),
+        this.getNewUtxoCount(block),
+      );
+
+      const omittedCount = block.inputs.length - rebasedSpentUtxoIdxs.length;
+      assert(omittedCount >= 0);
+      mapPut(omittedOutputCount, block, () => omittedCount, (x) => x + omittedCount);
+    }
+
     // Try rebasing by moving the vote backwards (towards ancestors)
     let path = this.ctx.get(WalkerService).getPath(toVote, block.frontierVoteBlock);
     if (path !== undefined) {
       path.pop();
+      assert(path.length);
       // Path is from block.frontierVoteBlock (inclusive) to toVote (exclusive)
 
       let prev = block;
@@ -119,7 +134,7 @@ export class FrontierService {
             this.getNewUtxoCount(it),
           );
 
-          const omittedCount = rebasedSpentUtxoIdxs.length - prevCount;
+          const omittedCount = prevCount - rebasedSpentUtxoIdxs.length;
           assert(omittedCount >= 0);
           mapPut(omittedOutputCount, it, () => omittedCount, (x) => x + omittedCount);
         } else {
@@ -156,8 +171,22 @@ export class FrontierService {
     path = this.ctx.get(WalkerService).getPath(block.frontierVoteBlock, toVote);
     if (path !== undefined) {
       let prev = path.pop()!;
+      assert(prev === block.frontierVoteBlock);
+
       path.reverse();
+      assert(path.length);
       // Path is from block.frontierVoteBlock (exclusive) to toVote (inclusive)
+
+      // Both block.frontierDetail.spentUtxoIdxs and path[0].frontierDetail.spentUtxoIdxs both include block.frontierVoteBlock's inputs
+      // So let's remove them from rebasedSpentUtxoIdxs
+      if (prev !== ZERO_BLOCK) {
+        const removeIdxs = new Set(prev.inputs.map((x) => x.utxoIdx));
+        const prevSize = rebasedSpentUtxoIdxs.length;
+        rebasedSpentUtxoIdxs = rebasedSpentUtxoIdxs.filter((x) => !removeIdxs.has(x));
+        if (rebasedSpentUtxoIdxs.length - prevSize !== removeIdxs.size) {
+          throw new Error(`Not exactly ${removeIdxs.size} utxo indices were removed!`);
+        }
+      }
 
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
@@ -221,13 +250,31 @@ export class FrontierService {
     return result;
   }
 
+  private mergeSortedIndices(...arrs: number[][]) {
+    // TODO: Merge indices instead of sorting them
+    // That should be faster since they're already sorted
+    const result = arrs.flat().sort();
+
+    // Assert there's no duplicates
+    let prev = -1;
+    for (const idx of result) {
+      assert(idx >= prev, `Subtree spent indices aren't sorted!`);
+      if (idx === prev) {
+        throw new Error(`Can't merge subtrees because an output is spent twice!`);
+      }
+      prev = idx;
+    }
+
+    return result;
+  }
+
   private getNewUtxoCount(block: { frontierDetail: FrontierTreeDetail; outputs: unknown[] }) {
     return block.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) +
       block.outputs.length;
   }
 
-  public getUtxoIdx(block: BlockFact, outputIdx: number, to: MockBlock) {
-    const path = this.ctx.get(WalkerService).getPath(block, to);
+  public getUtxoIdx(block: BlockFact, outputIdx: number, at: MockBlock) {
+    const path = this.ctx.get(WalkerService).getPath(block, at);
     if (path === undefined) {
       throw new Error('Cannot get utxo index because no path found to the block');
     }

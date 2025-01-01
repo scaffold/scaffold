@@ -17,9 +17,8 @@ import { FactService } from '../../src/FactService.ts';
 
 const baseTreeDetail: FrontierTreeDetail = {
   treeWeights: [123n],
-  frontierVoteOutputCount: 0,
-  subtreeSpentIdxs: [],
-  subtreeOutputCount: 0,
+  spentUtxoIdxs: [],
+  subtreeNewUtxoCount: [],
   consumedInputsRoot: { branches: [] },
   producedOutputsRoot: { branches: [] },
 };

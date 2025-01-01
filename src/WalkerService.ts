@@ -8,11 +8,10 @@ import { Hash } from './util/Hash.ts';
 
 export interface MockBlock {
   frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
-  inputs: ({ blockHash: Hash; outputIdx: number; groupIdx: number } | {
-    block: BlockFact;
-    outputIdx: number;
-    groupIdx: number;
-  })[];
+  inputs: (
+    | { blockHash: Hash; outputIdx: number; groupIdx: number }
+    | { block: BlockFact; outputIdx: number; groupIdx: number }
+  )[];
 }
 
 export class WalkerService {
@@ -30,6 +29,21 @@ export class WalkerService {
 
     const ancestorParents: Set<unknown> = this.ctx.get(FrontierChainService)
       .getAllParents(ancestor);
+    if (
+      descendant !== ZERO_BLOCK &&
+      !('hash' in descendant) &&
+      descendant.inputs.some((input) =>
+        input.groupIdx === 0 &&
+        ancestorParents.has(
+          'block' in input ? input.block : this.ctx.get(BlockService).get(input.blockHash, false),
+        )
+      )
+    ) {
+      // If we passed a mock descendant, it won't be linked as a parent.
+      // Check here if it should be linked. If so, add it.
+      ancestorParents.add(descendant);
+    }
+
     let it: DescType | BlockFact | typeof ZERO_BLOCK = descendant;
     while (!ancestorParents.has(it)) {
       if (it === ZERO_BLOCK || it.frontierVoteBlock === undefined) {
@@ -42,6 +56,9 @@ export class WalkerService {
     outerLoop: while (it !== ancestor) {
       assert(it !== ZERO_BLOCK);
       for (const input of it.inputs) {
+        if (input.groupIdx !== 0) {
+          continue;
+        }
         const child = 'block' in input
           ? input.block
           : this.ctx.get(BlockService).get(input.blockHash, false);

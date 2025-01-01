@@ -64,7 +64,8 @@
     "run-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/server.ts",
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all --unstable scripts/signalingServer.ts",
     "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
-    "test-avro": "mocha --ui tdd --reporter dot"
+    "test-avro": "mocha --ui tdd --reporter dot",
+    "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info"
   },
   "imports": {
     "@noble/secp256k1": "jsr:@noble/secp256k1@^2.1.0",
