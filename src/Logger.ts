@@ -11,7 +11,7 @@ const sortKeys = (obj: { [key: string]: any }) =>
 const trim = (str: string, maxLen: number) =>
   str.length > maxLen ? `${str.substring(0, maxLen)}... [${str.length}]` : str;
 
-const formatter: log.FormatterFunction = (logRecord) =>
+const formatter: log.FormatterFunction = (logRecord: log.LogRecord) =>
   `${logRecord.levelName} ${logRecord.loggerName} ${logRecord.msg} ${logRecord.args[0]}`;
 
 const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } = {

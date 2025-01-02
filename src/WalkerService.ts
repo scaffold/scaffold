@@ -3,8 +3,8 @@ import { BlockFact } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import { assert } from './util/functional.ts';
 import { Hash } from './util/Hash.ts';
+import { unreachable } from '@std/assert';
 
 export interface MockBlock {
   frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
@@ -54,7 +54,7 @@ export class WalkerService {
     }
 
     outerLoop: while (it !== ancestor) {
-      assert(it !== ZERO_BLOCK);
+      if (it === ZERO_BLOCK) return unreachable();
       for (const input of it.inputs) {
         if (input.groupIdx !== 0) {
           continue;

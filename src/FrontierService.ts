@@ -1,3 +1,4 @@
+import { unreachable } from '@std/assert';
 import { InputSpec } from './BlockBuilder.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
@@ -123,7 +124,8 @@ export class FrontierService {
 
       let prev = block;
       for (const it of path) {
-        assert(it !== ZERO_BLOCK);
+        if (it === ZERO_BLOCK) return unreachable();
+
         if (it === prev.frontierVoteBlock) {
           // Rebase towards frontier vote
 
@@ -189,7 +191,7 @@ export class FrontierService {
       }
 
       for (const it of path) {
-        assert(it !== ZERO_BLOCK);
+        if (it === ZERO_BLOCK) return unreachable();
         assert(it !== block);
 
         if (it.frontierVoteBlock === prev) {
@@ -280,13 +282,13 @@ export class FrontierService {
     }
 
     let prev = path.pop()!;
-    assert(prev !== ZERO_BLOCK);
+    if (prev === ZERO_BLOCK) return unreachable();
     path.reverse();
     // Path is from block (exclusive) to toVote (inclusive)
 
     for (const it of path) {
-      assert(it !== ZERO_BLOCK);
-      assert('hash' in prev);
+      if (it === ZERO_BLOCK) return unreachable();
+      if (!('hash' in prev)) return unreachable();
 
       const spentIdx = this.countLt(it.frontierDetail.spentUtxoIdxs, outputIdx);
       if (it.frontierDetail.spentUtxoIdxs[spentIdx] === outputIdx) {

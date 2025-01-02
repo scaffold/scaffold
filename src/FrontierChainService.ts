@@ -10,16 +10,18 @@ import { BlockService } from './BlockService.ts';
 import { error, todo } from './util/functional.ts';
 import { FactService } from './FactService.ts';
 import { setsIntersect } from './util/set.ts';
+import { assert } from '@std/assert/assert';
+import { WalkerService } from './WalkerService.ts';
+import { MockBlock } from './WalkerService.ts';
 
 const targVoteLevel = 4;
-
-const isFrontier = (input: { block: BlockFact; outputIdx?: number }) =>
-  input.outputIdx === input.block.frontierOutputIdx;
 
 export class FrontierChainService {
   constructor(private ctx: Context) {}
 
-  public getVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
+  public getVote(
+    inputs: { block: BlockFact; outputIdx?: number }[],
+  ): BlockFact | typeof ZERO_BLOCK | undefined {
     const uniqueInputs = new Set<HashPrimitive>();
     for (const input of inputs) {
       const key = input.block.hash.toPrimitive() + input.outputIdx;
@@ -50,7 +52,9 @@ export class FrontierChainService {
     */
 
     const frontierInputs = new Set(
-      inputs.flatMap((input) => isFrontier(input) ? [input.block] : []),
+      inputs.flatMap((input) =>
+        input.outputIdx === input.block.frontierOutputIdx ? [input.block] : []
+      ),
     );
 
     if (frontierInputs.size > frontierInputCount) {
@@ -63,9 +67,7 @@ export class FrontierChainService {
     const voteLevel = Math.max(targVoteLevel, requireVoteLevel + 1);
 
     // Inputs that are not a tree child of a frontier input
-    const externalInputs = new Set<BlockFact>([
-      this.ctx.get(GenesisService).getGenesisBlock(),
-    ]);
+    const externalInputs = new Set<BlockFact>();
 
     for (const { block } of inputs) {
       if (!setsIntersect(frontierInputs, this.getAllParents(block))) {
@@ -76,10 +78,9 @@ export class FrontierChainService {
     for (const fi of frontierInputs) {
       if (fi.frontierVoteBlock === undefined) {
         // throw new Error(`Unconnected frontier chain!`);
+        console.warn(`Unconnected frontier chain!`);
         return undefined;
-      } else if (fi.frontierVoteBlock === ZERO_BLOCK) {
-        todo();
-      } else if (!frontierInputs.has(fi.frontierVoteBlock)) {
+      } else if (fi.frontierVoteBlock !== ZERO_BLOCK && !frontierInputs.has(fi.frontierVoteBlock)) {
         externalInputs.add(fi.frontierVoteBlock);
       }
     }
@@ -102,11 +103,18 @@ export class FrontierChainService {
     //   return ptr;
     // });
 
+    if (externalInputs.size === 0) {
+      return ZERO_BLOCK;
+    }
+
     const requireInclusion = [...externalInputs].map((input) => this.getAllParents(input));
 
     // const cache = this.ctx.get(WeightService).makeCache();
     let res = this.ctx.get(FactService).hackyGetBlocksMatching()
       .filter((input) => {
+        if (input.frontierParams.level < requireVoteLevel) {
+          return false;
+        }
         const chain = this.getFrontierChain(input);
         return requireInclusion.every((p) => setsIntersect(chain, p));
       })
@@ -116,6 +124,10 @@ export class FrontierChainService {
             this.ctx.get(WeightService).getCanonicality(a).canonicality,
         )
       )[0];
+
+    if (Math.random() < 2) {
+      return res;
+    }
 
     if (res === undefined) {
       // TODO: Descend towards voters?

@@ -466,9 +466,9 @@ export class FactService {
       });
     }
 
-    if (log.LogLevels.DEBUG >= this.ctx.config.logLevel) {
+    if (this.ctx.config.logLevel <= log.LogLevels.DEBUG) {
       console.log(`Created fact:`, fact.hash.toHex(), fact);
-    } else if (log.LogLevels.INFO >= this.ctx.config.logLevel) {
+    } else if (this.ctx.config.logLevel <= log.LogLevels.INFO) {
       console.log(
         `Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}:`,
         fact.hash.toHex(),

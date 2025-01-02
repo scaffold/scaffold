@@ -58,6 +58,7 @@ Deno.test(
       { length: frontierInputCount - 1 },
       () =>
         ctx1.get(BlockBuilder).publishSingleDraft({
+          groupIdx: 0,
           outputs: [{
             verifier: {
               contractHash: frontierHash,
@@ -69,19 +70,9 @@ Deno.test(
         }),
     );
 
-    const genesisConsumer = await waitForVerifiedOutput(
-      ctx1,
-      genesisBlock,
-      frontierHash,
-      true,
-    );
+    const genesisConsumer = await waitForVerifiedOutput(ctx1, genesisBlock, frontierHash, true);
     for (const block of incentiveBlocks) {
-      const incentiveConsumer = await waitForVerifiedOutput(
-        ctx1,
-        block,
-        frontierHash,
-        true,
-      );
+      const incentiveConsumer = await waitForVerifiedOutput(ctx1, block, frontierHash, true);
       assertStrictEquals(genesisConsumer!.block, incentiveConsumer!.block);
     }
     assertEquals(ctx1.get(FactService).getSize(), frontierInputCount + 1);
@@ -93,6 +84,7 @@ Deno.test(
     name: `frontier contract validation test`,
     sanitizeOps: false, // TODO: Turn this on
     sanitizeResources: false,
+    only: true,
   },
   makeTest({
     contractProviders: [...baseContractProviders, new FrontierContract()],

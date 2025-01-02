@@ -21,6 +21,7 @@ import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
 import { WalkerService } from './WalkerService.ts';
+import { ClockService } from './ClockService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -83,7 +84,10 @@ export class BlockBuilder {
     };
   }
 
-  public buildBlock(drafts: BlockDraft[], checkIoBalance = true): Block {
+  public buildBlock(
+    drafts: BlockDraft[],
+    checkIoBalance = true,
+  ): Block & { draftGroupIdxs: number[] } {
     // 1. Gather all satisfying (positive?) inputs that someone else could claim (which doesn't include signature satisfaction).
     // 2. For remaining output value, input to/from account balance (signature satisfaction).
 
@@ -120,8 +124,12 @@ export class BlockBuilder {
       return groupIdx;
     };
 
+    const draftGroupIdxs: number[] = [];
+
     for (const draft of drafts) {
       const groupIdx = draft.groupIdx ?? nextGroupIdx();
+      draftGroupIdxs.push(groupIdx);
+
       while (bodies.length <= groupIdx) {
         bodies.push(EMPTY_ARR);
       }
@@ -367,7 +375,7 @@ export class BlockBuilder {
       }
     }
 
-    return { frontierVote, refs, inputs, outputs, bodies, timestamp };
+    return { frontierVote, refs, inputs, outputs, bodies, timestamp, draftGroupIdxs };
   }
 
   private collectInputs(
@@ -394,6 +402,7 @@ export class BlockBuilder {
       // TODO: Create stubs via setting the utxoIdx property
       let published = false;
       this.publishSingleDraft({
+        groupIdx: Hash.equals(satisfaction.contractHash, frontierHash) ? 0 : undefined,
         outputs: [{
           verifier: satisfaction,
           amount: 0n,
@@ -434,13 +443,17 @@ export class BlockBuilder {
       );
     }
 
-    const block = this.ctx.get(BlockService).create(this.buildBlock([draft]));
+    const block = this.buildBlock([draft]);
+    const fact = this.ctx.get(BlockService).create(block);
     if (draft.onBlock !== undefined) {
       // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
-      draft.onBlock(block, draft.groupIdx ?? 0);
+      draft.onBlock(
+        fact,
+        block.draftGroupIdxs[0] ?? error(`BlockBuilder.buildBlock did not set groupIdx!`),
+      );
     }
 
-    return block;
+    return fact;
   }
 
   public async publishPersistentDraft(draft: BlockDraft) {
@@ -453,12 +466,12 @@ export class BlockBuilder {
       }
     }
 
-    let block: Block;
+    let block: Block & { draftGroupIdxs: number[] };
     try {
       block = this.buildBlock([draft]);
     } catch (err) {
       if (err instanceof RetryBuildingException) {
-        await new Promise<void>((resolve) => this.ctx.config.timeProvider.setTimeout(resolve, 10));
+        await new Promise<void>((resolve) => this.ctx.get(ClockService).setTimeout(resolve, 10));
         block = this.buildBlock([draft]);
       } else {
         throw err;
@@ -478,7 +491,10 @@ export class BlockBuilder {
     );
     if (draft.onBlock !== undefined) {
       // TODO: Make the groupIdx more robust; it shouldn't depend on the internals of buildBlock
-      draft.onBlock(fact, draft.groupIdx ?? 0);
+      draft.onBlock(
+        fact,
+        block.draftGroupIdxs[0] ?? error(`BlockBuilder.buildBlock did not set groupIdx!`),
+      );
     }
   }
 

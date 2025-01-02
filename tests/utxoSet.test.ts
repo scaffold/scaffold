@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertObjectMatch, assertThrows } from '@std/assert';
-import { findOutput, makeTest, provideInitialBalance } from '../tests/util.ts';
+import { findOutput, makeTest, provideInitialBalance } from './util.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { error } from '../src/util/functional.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';

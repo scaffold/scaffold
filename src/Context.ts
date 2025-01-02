@@ -1,8 +1,10 @@
+import { assert } from '@std/assert/assert';
 import { Config } from './Config.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 
 export class Context {
   private objs = new Map<{ new (context: Context): unknown }, unknown>();
+  private constructing = new Set<{ new (context: Context): unknown }>();
   private destructors: (() => MaybePromise<void>)[] = [];
   private isDestructed = false;
 
@@ -12,7 +14,8 @@ export class Context {
     if (this.isDestructed) {
       throw new Error(`Cannot destruct a context twice!`);
     }
-    const results = this.destructors.reverse().map((cb) => cb());
+    this.isDestructed = true;
+    const results = this.destructors.toReversed().map((cb) => cb());
     results.push(this.config.storageProvider.close());
     if (results.some((x) => x instanceof Promise)) {
       return Promise.all(results).then(() => this.reset());
@@ -27,17 +30,18 @@ export class Context {
         throw new Error(`Cannot use a context after it's been destructed!`);
       }
 
-      this.objs.set(Type, null);
-      // First set it to null, so if the constructor recursively calls itself inside the following line, we'll know.
+      // Catch recursive constructors
+      if (this.constructing.has(Type)) {
+        throw new Error(`Constructor for ${Type.name} is probably recursive`);
+      }
+      this.constructing.add(Type);
+
       this.objs.set(Type, new Type(this));
+
+      this.constructing.delete(Type);
     }
 
-    const res = this.objs.get(Type);
-    if (res === null) {
-      throw new Error(`Constructor for ${Type.name} is probably recursive`);
-    }
-
-    return res as T;
+    return this.objs.get(Type) as T;
   }
 
   public maybeGet<T>(Type: { new (context: Context): T }): T | undefined {
@@ -53,8 +57,9 @@ export class Context {
   }
 
   private reset() {
+    assert(this.isDestructed);
+    assert(this.constructing.size === 0);
     this.objs = new Map();
     this.destructors = [];
-    this.isDestructed = true;
   }
 }

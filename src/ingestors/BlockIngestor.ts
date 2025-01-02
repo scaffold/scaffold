@@ -146,8 +146,16 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     }
 
     fact.inputs.forEach((input, idx) => {
+      if (input.outputIdx < 0) {
+        throw new Error(`Invalid outputIdx ${input.outputIdx}`);
+      }
+
+      if (input.utxoIdx < 0) {
+        throw new Error(`Invalid utxoIdx ${input.utxoIdx}`);
+      }
+
       // TODO: Make this case work; just plugin an EMPTY_ARR or an undefined body
-      if (fact.bodies[input.groupIdx] === undefined) {
+      if (input.groupIdx < 0 || fact.bodies[input.groupIdx] === undefined) {
         throw new Error(
           `Invalid groupIdx ${input.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
         );
@@ -173,7 +181,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     fact.outputs.forEach((output, outputIdx) => {
       // TODO: Make this case work; just plugin an EMPTY_ARR or an undefined body
-      if (fact.bodies[output.groupIdx] === undefined) {
+      if (output.groupIdx < 0 || fact.bodies[output.groupIdx] === undefined) {
         throw new Error(
           `Invalid groupIdx ${output.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
         );

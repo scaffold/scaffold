@@ -6,7 +6,6 @@
   "lock": false,
   "vendor": true,
   "compilerOptions": {
-    "allowJs": true,
     "useUnknownInCatchVariables": true,
     "noImplicitOverride": true,
     "strict": true,
