@@ -226,10 +226,10 @@ export const makeDefaultConfig = () => {
     enableWorkerLogging: true,
     enableSignalingLogging: true,
 
-    enableFrontierVote: false,
+    enableFrontierVote: true,
     enableBlockThroughput: true,
     enableCollateralization: false,
-    enableTreeAggregation: false,
+    enableTreeAggregation: true,
     enableOptimisticHandling: false,
   } satisfies Partial<Config>;
 

@@ -4,7 +4,6 @@
   "exports": "./mod.ts",
 
   "lock": false,
-  "vendor": true,
   "compilerOptions": {
     "useUnknownInCatchVariables": true,
     "noImplicitOverride": true,
@@ -27,7 +26,7 @@
       ],
       "include": [
         "ban-untagged-todo",
-        "camelCase",
+        "camelcase",
         "default-param-last",
         "eqeqeq",
         "guard-for-in",

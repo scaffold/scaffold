@@ -1,4 +1,3 @@
-import { unreachable } from '@std/assert';
 import { InputSpec } from './BlockBuilder.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
@@ -6,7 +5,7 @@ import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { BlockFact } from './FactMeta.ts';
 import { FrontierService2 } from './FrontierService2.ts';
-import { FrontierTreeDetail } from './messages.ts';
+import { BlockOutput, FrontierTreeDetail } from './messages.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { Hash } from './util/Hash.ts';
 import { mapPop, mapPut } from './util/map.ts';
@@ -28,21 +27,16 @@ export class FrontierService {
 
     const treeChildren = inputs
       .filter((input) => input.block.frontierOutputIdx === input.outputIdx)
-      .map((input, i, arr) => ({
+      .map((input) => ({
         ...input,
-        rebasedSpentUtxoIdxs: this.rebase(
-          input.block,
-          frontierVote,
-          i === arr.length - 1, // Add inputs to the last tree child
-          omittedOutputCount,
-        ),
+        rebasedSpentUtxoIdxs: this.rebase(input.block, frontierVote, omittedOutputCount),
       }));
 
     assert(treeChildren.length === 0 || treeChildren.length === frontierInputCount);
 
     const spentUtxoIdxs = this.mergeSortedIndices(
-      // frontierVote === ZERO_BLOCK ? [] : frontierVote.inputs.map((x) => x.utxoIdx),
-      ...treeChildren.map((x) => x.rebasedSpentUtxoIdxs),
+      frontierVote === ZERO_BLOCK ? [] : frontierVote.inputs.map((x) => x.utxoIdx),
+      ...treeChildren.map((x) => x.rebasedSpentUtxoIdxs), // Remove frontierVote inputs from all these sets
     );
 
     const subtreeNewUtxoCount = treeChildren.map((child) => {
@@ -84,13 +78,128 @@ export class FrontierService {
     return block.utxoCount !== undefined ? block.utxoCount - block.inputs.length : undefined;
   }
 
+  public getUtxoIdx(block: BlockFact, outputIdx: number, at: MockBlock) {
+    const path = this.ctx.get(WalkerService).getPath(block, at);
+    if (path === undefined) {
+      throw new Error('Cannot get utxo index because no path found to the block');
+    }
+
+    let prev = path.pop()!;
+    assert(prev !== ZERO_BLOCK);
+    path.reverse();
+    // Path is from block (exclusive) to toVote (inclusive)
+
+    let utxoIdx = outputIdx;
+
+    for (const it of path) {
+      assert(it !== ZERO_BLOCK);
+      assert('hash' in prev);
+
+      if (it.frontierVoteBlock === prev) {
+        // Frontier voter
+
+        utxoIdx -= this.countLt(it.frontierDetail.spentUtxoIdxs, utxoIdx);
+        utxoIdx += this.getNewUtxoCount(it);
+      } else {
+        // Parent
+
+        // Tree children always have a group index of zero
+        const treeChildren = it.inputs.filter((input) => input.groupIdx === 0);
+        assert(treeChildren.length === frontierInputCount);
+
+        const prevCpy = prev;
+        const childIdx = treeChildren.findIndex((input) =>
+          input.outputIdx === prevCpy.frontierOutputIdx &&
+          ('block' in input ? input.block === prevCpy : Hash.equals(input.blockHash, prevCpy.hash))
+        );
+        assert(childIdx !== -1);
+
+        let spentLt = this.countLt(prev.inputs.map((x) => x.utxoIdx), utxoIdx);
+        for (const input of treeChildren) {
+          const child = 'block' in input
+            ? input.block
+            : this.ctx.get(BlockService).get(input.blockHash, false);
+          if (child === undefined) {
+            throw new Error(`Missing tree child!`);
+          }
+
+          if (child.frontierVoteBlock === prev) {
+            spentLt += this.countLt(child.frontierDetail.spentUtxoIdxs, utxoIdx);
+            spentLt -= this.countLt(prev.inputs.map((x) => x.utxoIdx), utxoIdx);
+          }
+        }
+
+        utxoIdx += it.frontierDetail.subtreeNewUtxoCount.slice(childIdx + 1)
+          .reduce((acc, x) => acc + x, it.outputs.length) - spentLt;
+      }
+
+      prev = it;
+    }
+
+    if (enableChecks) {
+      const spec = this.getOutput(at, utxoIdx);
+      if (spec.block !== block || spec.outputIdx !== outputIdx) {
+        debugger;
+        this.getUtxoIdx(block, outputIdx, at);
+      }
+      assert(spec.block === block);
+      assert(spec.outputIdx === outputIdx);
+    }
+
+    return utxoIdx;
+  }
+
+  public getOutput(
+    block: MockBlock,
+    utxoIdx: number,
+    allowFrontierVote = true,
+  ): { block: MockBlock; outputIdx: number } {
+    if (utxoIdx < block.outputs.length) {
+      return { block, outputIdx: utxoIdx };
+    }
+    utxoIdx -= block.outputs.length;
+
+    const treeChildren = block.inputs.filter((input) => input.groupIdx === 0);
+    assert(treeChildren.length === frontierInputCount || treeChildren.length === 0);
+
+    const outputCounts = block.frontierDetail.subtreeNewUtxoCount;
+    assert(outputCounts.length === treeChildren.length);
+
+    for (let i = treeChildren.length; i-- > 0;) {
+      if (utxoIdx < outputCounts[i]) {
+        const input = treeChildren[i];
+        const child = 'block' in input
+          ? input.block
+          : this.ctx.get(BlockService).get(input.blockHash, false);
+        if (child === undefined) {
+          throw new Error(`Missing tree child!`);
+        }
+        return this.getOutput(child, utxoIdx, false);
+      }
+      utxoIdx -= outputCounts[i];
+    }
+
+    if (!allowFrontierVote) {
+      throw new Error(`Invalid tree!`);
+    }
+
+    if (block.frontierVoteBlock === undefined) {
+      throw new Error(`Missing frontier vote!`);
+    }
+    if (block.frontierVoteBlock === ZERO_BLOCK) {
+      throw new Error(`Invalid utxoIdx!`);
+    }
+
+    return this.getOutput(block.frontierVoteBlock, utxoIdx, true);
+  }
+
   // Returns the frontier detail that would have been created if the block had a different frontier vote
   // Spent indices will be remapped to the output space of the new vote
-  // Spent indices of outputs not present on the new vote will be omitted
+  // Spent indices of outputs not present on the new vote will be omitted and counted in the omittedOutputCount map
+  // Also, add block's inputs and remove the frontier vote's inputs
   public rebase(
     block: BlockFact,
     toVote: BlockFact | typeof ZERO_BLOCK,
-    withInputs: boolean,
     omittedOutputCount: Map<BlockFact, number>,
   ): number[] {
     if (block.frontierVoteBlock === undefined) {
@@ -99,20 +208,15 @@ export class FrontierService {
 
     let rebasedSpentUtxoIdxs = block.frontierDetail.spentUtxoIdxs;
 
+    rebasedSpentUtxoIdxs = this.addSelfInputUtxos(rebasedSpentUtxoIdxs, block, omittedOutputCount);
+
+    rebasedSpentUtxoIdxs = this.removeFrontierVoteInputUtxos(
+      rebasedSpentUtxoIdxs,
+      block.frontierVoteBlock,
+    );
+
     if (block.frontierVoteBlock === toVote) {
       return rebasedSpentUtxoIdxs;
-    }
-
-    if (withInputs) {
-      rebasedSpentUtxoIdxs = this.rebaseLeft(
-        rebasedSpentUtxoIdxs,
-        block.inputs.map((x) => x.utxoIdx),
-        this.getNewUtxoCount(block),
-      );
-
-      const omittedCount = block.inputs.length - rebasedSpentUtxoIdxs.length;
-      assert(omittedCount >= 0);
-      mapPut(omittedOutputCount, block, () => omittedCount, (x) => x + omittedCount);
     }
 
     // Try rebasing by moving the vote backwards (towards ancestors)
@@ -124,7 +228,7 @@ export class FrontierService {
 
       let prev = block;
       for (const it of path) {
-        if (it === ZERO_BLOCK) return unreachable();
+        assert(it !== ZERO_BLOCK);
 
         if (it === prev.frontierVoteBlock) {
           // Rebase towards frontier vote
@@ -179,19 +283,8 @@ export class FrontierService {
       assert(path.length);
       // Path is from block.frontierVoteBlock (exclusive) to toVote (inclusive)
 
-      // Both block.frontierDetail.spentUtxoIdxs and path[0].frontierDetail.spentUtxoIdxs both include block.frontierVoteBlock's inputs
-      // So let's remove them from rebasedSpentUtxoIdxs
-      if (prev !== ZERO_BLOCK) {
-        const removeIdxs = new Set(prev.inputs.map((x) => x.utxoIdx));
-        const prevSize = rebasedSpentUtxoIdxs.length;
-        rebasedSpentUtxoIdxs = rebasedSpentUtxoIdxs.filter((x) => !removeIdxs.has(x));
-        if (rebasedSpentUtxoIdxs.length - prevSize !== removeIdxs.size) {
-          throw new Error(`Not exactly ${removeIdxs.size} utxo indices were removed!`);
-        }
-      }
-
       for (const it of path) {
-        if (it === ZERO_BLOCK) return unreachable();
+        assert(it !== ZERO_BLOCK);
         assert(it !== block);
 
         if (it.frontierVoteBlock === prev) {
@@ -204,7 +297,44 @@ export class FrontierService {
           );
         } else {
           // Rebase towards parent
-          todo(`Rebasing to a parent is not implemented!`);
+
+          assert(prev !== ZERO_BLOCK);
+
+          // Tree children always have a group index of zero
+          const treeChildren = it.inputs.filter((input) => input.groupIdx === 0);
+          assert(treeChildren.length === frontierInputCount);
+
+          const prevCpy = prev;
+          const childIdx = treeChildren.findIndex((input) =>
+            input.outputIdx === prevCpy.frontierOutputIdx &&
+            ('block' in input
+              ? input.block === prevCpy
+              : Hash.equals(input.blockHash, prevCpy.hash))
+          );
+          assert(childIdx !== -1);
+
+          const voterSpends: number[][] = [prev.inputs.map((x) => x.utxoIdx)];
+          for (const input of treeChildren) {
+            const child = this.ctx.get(BlockService).get(input.blockHash, false);
+            if (child === undefined) {
+              throw new Error(`Missing tree child!`);
+            }
+
+            if (child.frontierVoteBlock === prev) {
+              voterSpends.push(
+                this.removeFrontierVoteInputUtxos(child.frontierDetail.spentUtxoIdxs, prev),
+              );
+            }
+          }
+
+          const offset = it.frontierDetail.subtreeNewUtxoCount.slice(childIdx + 1)
+            .reduce((acc, x) => acc + x, it.outputs.length);
+
+          rebasedSpentUtxoIdxs = this.rebaseRight(
+            rebasedSpentUtxoIdxs,
+            this.mergeSortedIndices(...voterSpends),
+            offset,
+          );
         }
 
         prev = it;
@@ -252,7 +382,47 @@ export class FrontierService {
     return result;
   }
 
+  private removeFrontierVoteInputUtxos(
+    utxoIdxs: number[],
+    frontierVote: BlockFact | typeof ZERO_BLOCK,
+  ) {
+    if (frontierVote !== ZERO_BLOCK) {
+      const removeIdxs = new Set(frontierVote.inputs.map((x) => x.utxoIdx));
+      const prevSize = utxoIdxs.length;
+      utxoIdxs = utxoIdxs.filter((x) => !removeIdxs.has(x));
+      if (prevSize - utxoIdxs.length !== removeIdxs.size) {
+        throw new Error(`Not exactly ${removeIdxs.size} utxo indices were removed!`);
+      }
+    }
+
+    return utxoIdxs;
+  }
+
+  private addSelfInputUtxos(
+    utxoIdxs: number[],
+    block: BlockFact,
+    omittedOutputCount: Map<BlockFact, number>,
+  ) {
+    const rebasedInputs = this.rebaseLeft(
+      utxoIdxs,
+      block.inputs.map((x) => x.utxoIdx),
+      this.getNewUtxoCount(block),
+    );
+
+    const omittedCount = block.inputs.length - rebasedInputs.length;
+    assert(omittedCount >= 0);
+    mapPut(omittedOutputCount, block, () => omittedCount, (x) => x + omittedCount);
+
+    return this.mergeSortedIndices(rebasedInputs, utxoIdxs);
+  }
+
   private mergeSortedIndices(...arrs: number[][]) {
+    if (arrs.length === 0) {
+      return [];
+    } else if (arrs.length === 1) {
+      return arrs[0];
+    }
+
     // TODO: Merge indices instead of sorting them
     // That should be faster since they're already sorted
     const result = arrs.flat().sort();
@@ -262,7 +432,7 @@ export class FrontierService {
     for (const idx of result) {
       assert(idx >= prev, `Subtree spent indices aren't sorted!`);
       if (idx === prev) {
-        throw new Error(`Can't merge subtrees because an output is spent twice!`);
+        throw new Error(`Can't merge subtrees because an output (${idx}) is spent twice!`);
       }
       prev = idx;
     }
@@ -275,57 +445,16 @@ export class FrontierService {
       block.outputs.length;
   }
 
-  public getUtxoIdx(block: BlockFact, outputIdx: number, at: MockBlock) {
-    const path = this.ctx.get(WalkerService).getPath(block, at);
-    if (path === undefined) {
-      throw new Error('Cannot get utxo index because no path found to the block');
-    }
-
-    let prev = path.pop()!;
-    if (prev === ZERO_BLOCK) return unreachable();
-    path.reverse();
-    // Path is from block (exclusive) to toVote (inclusive)
-
-    for (const it of path) {
-      if (it === ZERO_BLOCK) return unreachable();
-      if (!('hash' in prev)) return unreachable();
-
-      const spentIdx = this.countLt(it.frontierDetail.spentUtxoIdxs, outputIdx);
-      if (it.frontierDetail.spentUtxoIdxs[spentIdx] === outputIdx) {
-        throw new Error(`Can't trace output because it's already spent!`);
-      }
-      outputIdx -= spentIdx;
-
-      if (it.frontierVoteBlock === prev) {
-        // Frontier voter
-        outputIdx += this.getNewUtxoCount(it);
-      } else {
-        // Parent
-
-        // Tree children always have a group index of zero
-        const treeChildren = it.inputs.filter((input) => input.groupIdx === 0);
-        assert(treeChildren.length === frontierInputCount);
-
-        const prevCpy = prev;
-        const childIdx = treeChildren.findIndex((input) =>
-          input.outputIdx === prevCpy.frontierOutputIdx &&
-          Hash.equals('blockHash' in input ? input.blockHash : input.block.hash, prevCpy.hash)
-        );
-        assert(childIdx !== -1);
-
-        outputIdx += it.frontierDetail.subtreeNewUtxoCount.slice(childIdx + 1)
-          .reduce((acc, x) => acc + x, 0);
-      }
-
-      prev = it;
-    }
-
-    return outputIdx;
-  }
-
   private countLt(arr: number[], y: number) {
     // TODO: Binary search
     const idx = arr.findIndex((x) => x >= y);
-    return idx === -1 ? arr.length : idx;
+    if (idx === -1) {
+      return arr.length;
+    } else {
+      if (arr[idx] === y) {
+        throw new Error(`Can't trace output because it's already spent!`);
+      }
+      return idx;
+    }
   }
 }
