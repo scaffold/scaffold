@@ -66,6 +66,27 @@ export class FrontierChainService {
     ) + 1;
     const voteLevel = Math.max(targVoteLevel, requireVoteLevel + 1);
 
+    if (Math.random() < 2) {
+      const requireInclusion = inputs.flatMap((input) => {
+        if (input.outputIdx === input.block.frontierOutputIdx) {
+          // Tree child / frontier input
+          const frontierVote = input.block.frontierVoteBlock ??
+            error(`Unconnected frontier chain!`);
+          return frontierVote === ZERO_BLOCK ? [] : [new Set([frontierVote])];
+        }
+        const parents = this.getAllParents(input.block);
+        return setsIntersect(frontierInputs, parents) ? [] : [parents];
+      });
+
+      return this.ctx.get(FactService).hackyGetBlocksMatching().find((input) => {
+        if (input.frontierParams.level < requireVoteLevel) {
+          return false;
+        }
+        const chain = this.getFrontierChain(input);
+        return requireInclusion.every((p) => setsIntersect(chain, p));
+      }) ?? (requireInclusion.length === 0 ? ZERO_BLOCK : undefined);
+    }
+
     // Inputs that are not a tree child of a frontier input
     const externalInputs = new Set<BlockFact>();
 

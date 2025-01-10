@@ -60,7 +60,7 @@ export const createGenesisBlock = (
     frontierLevel: 0,
   }], false);
 
-  let groupIdx = 0;
+  let groupIdx = 1;
   for (const { publicKey, amount } of accounts) {
     block.outputs.push({
       verifier: {

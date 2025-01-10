@@ -124,10 +124,6 @@ Deno.test(
       ],
     });
 
-    const treeBlocks = [genesis, block1, block2];
-    const inputCount = treeBlocks.reduce((acc, x) => acc + x.inputs.length, 0);
-    const outputCount = treeBlocks.reduce((acc, x) => acc + x.outputs.length, 0);
-
     const block3 = ctx.get(BlockBuilder).publishSingleDraft({
       frontierVote: block2,
     });
