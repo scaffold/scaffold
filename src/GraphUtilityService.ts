@@ -2,7 +2,7 @@ import { BlockBuilder } from './BlockBuilder.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
-import { trueHash } from './constants.ts';
+import { trueHash } from './hashes.ts';
 import { FrontierTreeParams } from './messages.ts';
 import { Hash } from './util/Hash.ts';
 import { EMPTY_ARR } from './util/buffer.ts';

@@ -52,7 +52,7 @@ export interface ComputationDriver extends WorkerDriver {
   // register(data: Uint8Array): void;
 
   // TODO: Remove this and call requireOutput({ contractHash: frontierHash, ... }) instead?
-  requireFrontierLevel(level: number): void;
+  // requireFrontierLevel(level: number): void;
 
   compareBlockOrder(hashA: Hash, hashB: Hash): number; // Clamps the frontier vote
 

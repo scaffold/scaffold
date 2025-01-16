@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
-import { rootHash } from '../../src/constants.ts';
+import { rootHash } from '../../src/hashes.ts';
 import { KeyService } from '../../src/KeyService.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { AccountContractParams } from '../../src/messages.ts';

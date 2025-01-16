@@ -136,12 +136,12 @@ export class FrontierHelper {
     ) {
       return false;
     } else if (
-      block.frontierVoteBlock === undefined ||
-      block.frontierVoteBlock === ZERO_BLOCK
+      block.parentBlock === undefined ||
+      block.parentBlock === ZERO_BLOCK
     ) {
       return false;
     } else {
-      return this.doesOutput(block.frontierVoteBlock, branch);
+      return this.doesOutput(block.parentBlock, branch);
     }
   }
 
@@ -151,10 +151,10 @@ export class FrontierHelper {
     onlyUnclaimed: boolean,
     verifierPath = this.encodePath(verifier),
   ): { blockHash: Hash; outputIdx: number; amount: bigint }[] {
-    let outputs = base.frontierVoteBlock !== undefined &&
-        base.frontierVoteBlock !== ZERO_BLOCK
+    let outputs = base.parentBlock !== undefined &&
+        base.parentBlock !== ZERO_BLOCK
       ? this.findOutputs(
-        base.frontierVoteBlock,
+        base.parentBlock,
         verifier,
         onlyUnclaimed,
         verifierPath,

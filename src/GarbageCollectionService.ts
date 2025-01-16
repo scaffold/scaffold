@@ -40,7 +40,7 @@ export class GarbageCollectionService {
           return false;
         }
 
-        if (fact.frontierVoters.length > 0) {
+        if (fact.children.length > 0) {
           return false;
         }
 

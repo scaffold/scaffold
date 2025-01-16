@@ -20,7 +20,6 @@ export enum FactType {
   // MerkleTreeNode,
   // Invalid,
   // Frontier,
-  // EpochInclusionProof,
   // BridgeStart,
   // BridgeEnd,
   _SIZE,

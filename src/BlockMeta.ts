@@ -1,4 +1,4 @@
-import { EpochInclusionProof, FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
+import { FrontierTreeDetail, FrontierTreeParams } from './messages.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
@@ -33,6 +33,11 @@ export interface OutputClaim {
   inputIdx: number;
 }
 
+// TODO: Make ZERO_BLOCK be a mock block with properties
+interface ZeroBlock {
+  frontierChainRoot: ZeroBlock;
+  frontierChainDepth: 0;
+}
 export const ZERO_BLOCK = Symbol('ZeroBlock');
 
 export interface BlockMeta {
@@ -67,11 +72,13 @@ export interface BlockMeta {
 
   isCanonical: boolean;
 
-  frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
-  frontierChainDepth?: number;
+  parentBlock?: BlockFact | typeof ZERO_BLOCK;
+
+  parentChainRoot: BlockFact | typeof ZERO_BLOCK;
+  parentChainDepth: number;
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
-  frontierVoters: BlockFact[];
+  children: BlockFact[];
 
   utxoCount?: number; // Pre-inputs
 
@@ -94,12 +101,13 @@ export interface BlockMeta {
   // invalidatedInputs: bigint; // All inputs claims that have called invalidate() (which covers ALL hints)
   // verificationResult?: CollateralClaim;
 
-  // Map from an epoch hash to the best proof from it
-  epochInclusionProofs: Map<HashPrimitive, EpochInclusionProof>;
-
+  // TODO: Remove
+  frontierVote: Hash;
   frontierOutputIdx: number;
   frontierParams: FrontierTreeParams;
   frontierDetail: FrontierTreeDetail;
+
+  squashers: BlockFact[];
 
   // Only republish a draft if the canonicality of the new block will be higher.
   // If, for example, we're just building on an uncanonical input, there's nothing we can do but ignore the source until/unless that changes.

@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
-import { timeHash } from '../../src/constants.ts';
+import { timeHash } from '../../src/hashes.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { TimeParams } from '../../src/messages.ts';
 import { TimeContract } from '../../src/contracts/TimeContract.ts';

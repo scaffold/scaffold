@@ -5,7 +5,7 @@ import { error } from '../src/util/functional.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
-import { frontierHash } from '../src/constants.ts';
+import { frontierHash } from '../src/hashes.ts';
 import { ZERO_BLOCK } from '../src/BlockMeta.ts';
 import { FrontierService } from '../src/FrontierService.ts';
 

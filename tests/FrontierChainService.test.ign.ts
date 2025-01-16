@@ -4,7 +4,7 @@ import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { WeightService } from '../src/WeightService.ts';
 import { BASE_WORK } from '../src/BlockService.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
-import { accountHash, frontierHash, trueHash } from '../src/constants.ts';
+import { accountHash, frontierHash, trueHash } from '../src/hashes.ts';
 import { BlockFact } from '../src/FactMeta.ts';
 import { ZERO_BLOCK } from '../src/BlockMeta.ts';
 import { FrontierChainService } from '../src/FrontierChainService.ts';

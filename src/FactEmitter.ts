@@ -52,7 +52,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
     const queue = this.ctx.get(WeightService).getDescendant(genesis).leaves;
     this.frontier = new Set(queue);
     for (let i = 0; i < queue.length; i++) {
-      const vote = queue[i].frontierVoteBlock;
+      const vote = queue[i].parentBlock;
       if (
         vote !== undefined && vote !== ZERO_BLOCK && !this.frontier.has(vote)
       ) {
@@ -274,7 +274,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
     for (const block of queue) {
       yield block;
 
-      for (const voter of block.frontierVoters) {
+      for (const voter of block.children) {
         queue.add(voter);
       }
       for (const claims of block.outputClaims) {

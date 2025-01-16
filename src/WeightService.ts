@@ -198,11 +198,11 @@ export class WeightService {
 
       let minRecvTime = Infinity;
       if (
-        fact.frontierVoteBlock !== undefined &&
-        fact.frontierVoteBlock !== ZERO_BLOCK &&
-        fact.frontierVoteBlock.receivedAt < minRecvTime
+        fact.parentBlock !== undefined &&
+        fact.parentBlock !== ZERO_BLOCK &&
+        fact.parentBlock.receivedAt < minRecvTime
       ) {
-        minRecvTime = fact.frontierVoteBlock.receivedAt;
+        minRecvTime = fact.parentBlock.receivedAt;
       }
 
       // const voters = this.ctx.get(BlockService).getVoters(fact.frontierVote);
@@ -343,10 +343,10 @@ export class WeightService {
           if (
             siblingBlock !== undefined && siblingBlock !== fact &&
             siblingBlock.frontierOutputIdx === sibling.outputIdx &&
-            siblingBlock.frontierVoteBlock === fact
+            siblingBlock.parentBlock === fact
           ) {
             siblingWeight += this.getSelfWeight(siblingBlock, cache).min;
-            siblingWeight += siblingBlock.frontierDetail.treeWeights[0] ?? 0n;
+            siblingWeight += siblingBlock.treeWeights[0] ?? 0n;
           }
         }
 
@@ -359,7 +359,7 @@ export class WeightService {
         };
       }
 
-      const voters = fact.frontierVoters.filter((x) => {
+      const voters = fact.children.filter((x) => {
         const candidate = this.getDescendant(x, cache);
         return candidate.parent === undefined &&
           this.getClaimCanonicality(x, cache, [...assume, fact]).canonicality >=
@@ -532,8 +532,7 @@ export class WeightService {
 
   public getTreeChildrenWeight(fact: BlockFact, cache = this.getCache()) {
     return mapPut(cache.treeChildrenWeight, fact, () => {
-      const storedWeight = fact.frontierDetail.treeWeights
-        .reduce((acc, cur) => acc + cur, 0n);
+      const storedWeight = fact.treeWeights.reduce((acc, cur) => acc + cur, 0n);
       if (useTreeWeightForChildren) {
         return storedWeight;
       }
@@ -595,7 +594,7 @@ export class WeightService {
     return mapPut(cache.voterWeight, fact, () => {
       const desc = this.getDescendant(fact, cache);
 
-      const res = [...fact.frontierDetail.treeWeights];
+      const res = [...fact.treeWeights];
       for (const voter of desc.voters) {
         const sub = this.getVoterWeight(voter, cache);
         for (let i = 0; i < sub.length; i++) {

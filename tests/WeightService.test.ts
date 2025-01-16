@@ -4,7 +4,7 @@ import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { WeightService } from '../src/WeightService.ts';
 import { BASE_WORK } from '../src/BlockService.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
-import { trueHash } from '../src/constants.ts';
+import { trueHash } from '../src/hashes.ts';
 
 Deno.test(
   { name: `self weight of an empty block`, ignore: true },

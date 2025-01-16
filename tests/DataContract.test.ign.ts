@@ -8,7 +8,7 @@
 import { makeTest, waitForBlock } from './util.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { collateralHash, dataHash, rootHash, trueHash } from '../src/constants.ts';
+import { collateralHash, dataHash, rootHash, trueHash } from '../src/hashes.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
 import { CollateralContractParams, DataContractParams } from '../src/messages.ts';

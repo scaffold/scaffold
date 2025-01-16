@@ -4,7 +4,7 @@ import { WorkerChannelServer } from './worker/WorkerChannel.ts';
 import { InitialMessage, JobMessage, WorkerComm } from './worker/workerTypes.ts';
 import { Hash } from './util/Hash.ts';
 import { Block, Verifier } from './messages.ts';
-import { rootHash } from './constants.ts';
+import { rootHash } from './hashes.ts';
 import { error } from './util/functional.ts';
 import { WorkerDebugger, WorkerDebuggerManager } from './WorkerDebuggerManager.ts';
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';

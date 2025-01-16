@@ -3,7 +3,7 @@ import { Hash, HASH_SIZE, HashPrimitive } from '../util/Hash.ts';
 import { FactService } from '../FactService.ts';
 import { ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { rootHash } from '../constants.ts';
+import { rootHash } from '../hashes.ts';
 import { mapPut } from '../util/map.ts';
 import { arrEquals } from '../util/buffer.ts';
 import { BlockService } from '../BlockService.ts';

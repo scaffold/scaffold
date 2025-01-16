@@ -10,7 +10,7 @@ import {
   rootHash,
   timeHash,
   trueHash,
-} from './constants.ts';
+} from './hashes.ts';
 import { Verifier } from './messages.ts';
 
 const toHashPrim = (x: string | Hash) => (x instanceof Hash ? x : Hash.fromHex(x)).toPrimitive();

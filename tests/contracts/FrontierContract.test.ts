@@ -7,7 +7,7 @@ import {
 } from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
-import { frontierHash } from '../../src/constants.ts';
+import { frontierHash } from '../../src/hashes.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { FrontierContract, frontierInputCount } from '../../src/contracts/FrontierContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';

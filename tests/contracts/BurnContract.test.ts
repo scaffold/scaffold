@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
-import { burnHash } from '../../src/constants.ts';
+import { burnHash } from '../../src/hashes.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { BurnContract } from '../../src/contracts/BurnContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';

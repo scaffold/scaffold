@@ -8,7 +8,7 @@ import {
   frontierHash,
   rootHash,
   timeHash,
-} from './constants.ts';
+} from './hashes.ts';
 import { Context } from './Context.ts';
 import { VerificationService } from './VerificationService.ts';
 import { Logger } from './Logger.ts';
@@ -61,6 +61,7 @@ export const BASE_WORK = 10n;
 export class BlockService {
   private claimsByOutput = new Map<HashPrimitive, OutputClaim[]>();
   private frontierVoters = new Map<HashPrimitive, BlockFact[]>();
+  private squashers = new Map<HashPrimitive, BlockFact[]>();
 
   public blockMonitor = new ResolvingMonitor<Hash, BlockFact>((h) => h.toPrimitive()); // Key is block hash
   public satisfactionMonitor = new WatchingMonitor<
@@ -198,10 +199,10 @@ export class BlockService {
       // TODO: Add to priority queue so we update weights from the deepest to shallowest (genesis)
 
       if (
-        block.frontierVoteBlock !== undefined &&
-        block.frontierVoteBlock !== ZERO_BLOCK
+        block.parentBlock !== undefined &&
+        block.parentBlock !== ZERO_BLOCK
       ) {
-        this.updateWeight(block.frontierVoteBlock);
+        this.updateWeight(block.parentBlock);
       }
 
       for (const input of block.inputs) {
@@ -211,6 +212,20 @@ export class BlockService {
         }
       }
     }
+  }
+
+  public compareFrontierChainDepth(
+    lhs: BlockFact | typeof ZERO_BLOCK,
+    rhs: BlockFact | typeof ZERO_BLOCK,
+  ) {
+    const lhsRoot = lhs === ZERO_BLOCK ? ZERO_BLOCK : lhs.parentChainRoot;
+    const rhsRoot = rhs === ZERO_BLOCK ? ZERO_BLOCK : rhs.parentChainRoot;
+    if (lhsRoot !== rhsRoot) {
+      throw Error(`Unconnected frontier chain!`);
+    }
+    const lhsDepth = lhs === ZERO_BLOCK ? 0 : lhs.parentChainDepth;
+    const rhsDepth = rhs === ZERO_BLOCK ? 0 : rhs.parentChainDepth;
+    return lhsDepth - rhsDepth;
   }
 
   private checkInputAvailability(block: BlockFact) {
@@ -537,34 +552,34 @@ export class BlockService {
 
   public getBlockIndex(block: BlockFact): { min: bigint; max: bigint } {
     // Walk up towards frontier; computing the unique index that this block is aiming to be included at
-    if (block.frontierVoteBlock === undefined) {
+    if (block.parentBlock === undefined) {
       throw new Error(`Unconnected block!`);
     }
 
-    if (block.frontierVoteBlock === ZERO_BLOCK) {
+    if (block.parentBlock === ZERO_BLOCK) {
       return todo();
     }
 
     const treeSize = (2n << BigInt(block.frontierParams.level)) - 1n;
-    const voteIdx = this.getBlockIndex(block.frontierVoteBlock);
+    const voteIdx = this.getBlockIndex(block.parentBlock);
     return {
       min: voteIdx.min + treeSize,
       max: voteIdx.max +
-        (2n << BigInt(block.frontierVoteBlock.frontierParams.level)) -
+        (2n << BigInt(block.parentBlock.frontierParams.level)) -
         1n -
         BigInt(
-          block.frontierVoteBlock.frontierParams.level -
+          block.parentBlock.frontierParams.level -
             block.frontierParams.level,
         ),
     };
   }
 
   public getVoters(frontierVote: Hash) {
-    return getOrCreate(
-      this.frontierVoters,
-      frontierVote.toPrimitive(),
-      () => [],
-    );
+    return getOrCreate(this.frontierVoters, frontierVote.toPrimitive(), () => []);
+  }
+
+  public getSquashers(squashed: Hash) {
+    return getOrCreate(this.squashers, squashed.toPrimitive(), () => []);
   }
 
   public getClaims(input: { blockHash: Hash; outputIdx: number }) {

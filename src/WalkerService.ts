@@ -1,17 +1,13 @@
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
-import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import { Hash } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { unreachable } from '@std/assert';
 
 export interface MockBlock {
-  frontierVoteBlock?: BlockFact | typeof ZERO_BLOCK;
-  inputs: (
-    | { blockHash: Hash; outputIdx: number; groupIdx: number }
-    | { block: BlockFact; outputIdx: number; groupIdx: number }
-  )[];
+  parentBlock?: BlockFact | typeof ZERO_BLOCK;
+  squashes: { blockHash: Hash }[];
 }
 
 export class WalkerService {
@@ -27,45 +23,36 @@ export class WalkerService {
       return chain;
     }
 
-    const ancestorParents: Set<unknown> = this.ctx.get(FrontierChainService)
-      .getAllParents(ancestor);
+    const squashers = new Set<DescType | BlockFact | typeof ZERO_BLOCK | undefined>(
+      ancestor === ZERO_BLOCK ? [ZERO_BLOCK] : this.getSquasherChain(ancestor),
+    );
+
     if (
       descendant !== ZERO_BLOCK &&
       !('hash' in descendant) &&
-      descendant.inputs.some((input) =>
-        input.groupIdx === 0 &&
-        ancestorParents.has(
-          'block' in input ? input.block : this.ctx.get(BlockService).get(input.blockHash, false),
-        )
+      descendant.squashes.some((squash) =>
+        squashers.has(this.ctx.get(BlockService).get(squash.blockHash, false))
       )
     ) {
       // If we passed a mock descendant, it won't be linked as a parent.
       // Check here if it should be linked. If so, add it.
-      ancestorParents.add(descendant);
+      squashers.add(descendant);
     }
 
     let it: DescType | BlockFact | typeof ZERO_BLOCK = descendant;
-    while (!ancestorParents.has(it)) {
-      if (it === ZERO_BLOCK || it.frontierVoteBlock === undefined) {
+    while (!squashers.has(it)) {
+      if (it === ZERO_BLOCK || it.parentBlock === undefined) {
         return undefined;
       }
-      it = it.frontierVoteBlock;
+      it = it.parentBlock;
       chain.push(it);
     }
 
     outerLoop: while (it !== ancestor) {
       if (it === ZERO_BLOCK) return unreachable();
-      for (const input of it.inputs) {
-        if (input.groupIdx !== 0) {
-          continue;
-        }
-        const child = 'block' in input
-          ? input.block
-          : this.ctx.get(BlockService).get(input.blockHash, false);
-        if (
-          child !== undefined && input.outputIdx === child.frontierOutputIdx &&
-          ancestorParents.has(child)
-        ) {
+      for (const squash of it.squashes) {
+        const child = this.ctx.get(BlockService).get(squash.blockHash, false);
+        if (child !== undefined && squashers.has(child)) {
           it = child;
           chain.push(it);
           continue outerLoop;
@@ -76,5 +63,21 @@ export class WalkerService {
     }
 
     return chain;
+  }
+
+  public getSquasherChain(block: BlockFact): BlockFact[] {
+    return this.recurse(block, (el, queue) => {
+      for (const squasher of el.squashers) {
+        queue.push(squasher);
+      }
+    });
+  }
+
+  private recurse(block: BlockFact, pusher: (el: BlockFact, queue: BlockFact[]) => void) {
+    const queue = [block];
+    for (let i = 0; i < queue.length; i++) {
+      pusher(queue[i], queue);
+    }
+    return queue;
   }
 }

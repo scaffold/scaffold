@@ -2,7 +2,7 @@ import { CollateralContractDetail } from './collateralMessages.ts';
 import { mapPop, mapPut } from './util/map.ts';
 import { AccountContractParams, BlockOutput } from './messages.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
-import { accountHash, burnHash } from './constants.ts';
+import { accountHash, burnHash } from './hashes.ts';
 import { EMPTY_ARR } from './util/buffer.ts';
 import { error } from './util/functional.ts';
 import { bigintMax, bigintMin } from './util/bigint.ts';

@@ -2,7 +2,7 @@ import { Context } from '../Context.ts';
 import { FrontierTreeParams } from '../messages.ts';
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { frontierHash } from '../constants.ts';
+import { frontierHash } from '../hashes.ts';
 import { ComputationType } from '../ComputationMeta.ts';
 
 // export interface FrontierMeta {
@@ -43,17 +43,17 @@ export class FrontierContract implements ContractProvider {
   public contractHash = frontierHash;
 
   public async compute(driver: ComputationDriver, ctx: Context) {
-    const { level } = FrontierTreeParams.decode(driver.getParams());
-    if (level < 0) {
-      throw new Error(`Level cannot be negative!`);
-    }
+    // const { level } = FrontierTreeParams.decode(driver.getParams());
+    // if (level < 0) {
+    //   throw new Error(`Level cannot be negative!`);
+    // }
 
-    // Ensure there's exactly frontierInputCount frontier inputs
-    for (let i = 0; i < frontierInputCount; i++) {
-      await driver.requireInput();
-    }
+    // // Ensure there's exactly frontierInputCount frontier inputs
+    // for (let i = 0; i < frontierInputCount; i++) {
+    //   await driver.requireInput();
+    // }
 
-    // A little hacky, because if replaced with requireOutput, we wouldn't have the detail yet (because it requires weighing the block).
-    driver.requireFrontierLevel(level + 1);
+    // // A little hacky, because if replaced with requireOutput, we wouldn't have the detail yet (because it requires weighing the block).
+    // driver.requireFrontierLevel(level + 1);
   }
 }

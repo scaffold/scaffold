@@ -241,25 +241,45 @@ export const registry = {
       { name: 'groupIdx', type: 'int' },
     ],
   },
-  EpochInclusionProof: {
-    name: 'EpochInclusionProof',
+  Squash: {
+    // TODO: Array of AND-filters joined with OR?
+    //   This allows timeouts: (verifier == X OR (timestamp > Y AND author == Z))
+    name: 'Squash',
     type: 'record',
     fields: [
-      { name: 'block_hash', type: 'hash' },
-      { name: 'epoch_hash', type: 'hash' },
-      { name: 'input_indices', type: { type: 'array', items: 'int' } },
+      { name: 'blockHash', type: 'hash' },
+
+      // The output count that's not consumed by a following squash
+      // If the blocks's inputs consume it, it's still counted here
+      { name: 'newUtxoCount', type: 'int' },
     ],
   },
   Block: {
     name: 'Block',
     type: 'record',
     fields: [
-      { name: 'frontierVote', type: 'hash' },
+      { name: 'parent', type: 'hash' },
+      { name: 'squashes', type: { type: 'array', items: 'Squash' } },
+
+      // This is the volume of self and all squashes.
+      { name: 'volume', type: 'int' },
+
+      // These indices are in the parent's post-output, pre-input utxo space
+      // It does not include the parent's inputs, nor self's inputs
+      { name: 'squashedUtxoIdxs', type: { type: 'array', items: 'int' } },
+
+      // Item 0 is the weight of blocks in the tree voting for frontierVote.
+      // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
+      // ...
+      { name: 'treeWeights', type: { type: 'array', items: 'bigint' } },
+
+      // TODO: Enable this?
+      // For now just use an output
+      // { name: 'squashIncentive', type: 'bigint' },
 
       // Blocks we depend upon but aren't inputting anything from
       { name: 'refs', type: { type: 'array', items: 'hash' } },
 
-      // TODO: Rename to predecessors / successors?
       { name: 'inputs', type: { type: 'array', items: 'BlockInput' } },
       { name: 'outputs', type: { type: 'array', items: 'BlockOutput' } },
       // NO: The difference between the output amount sum and input amount sum is the unassigned output that must be claimed for any derived block to be canonical.
@@ -451,6 +471,7 @@ export const registry = {
     name: 'FrontierTreeDetail',
     type: 'record',
     fields: [
+      /*
       // Item 0 is the weight of blocks in the tree voting for frontierVote.
       // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
       // ...
@@ -481,6 +502,7 @@ export const registry = {
       // TODO: Remove, since we now have a frontierVoteOutputMask
       { name: 'consumedInputsRoot', type: 'FrontierTreeIoEntry' },
       { name: 'producedOutputsRoot', type: 'FrontierTreeIoEntry' },
+       */
     ],
   },
 
@@ -625,8 +647,8 @@ export const BlockInput = makeMsg(registry, 'BlockInput');
 export type BlockInput = MsgType<'BlockInput'>;
 export const BlockOutput = makeMsg(registry, 'BlockOutput');
 export type BlockOutput = MsgType<'BlockOutput'>;
-export const EpochInclusionProof = makeMsg(registry, 'EpochInclusionProof');
-export type EpochInclusionProof = MsgType<'EpochInclusionProof'>;
+export const Squash = makeMsg(registry, 'Squash');
+export type Squash = MsgType<'Squash'>;
 export const Block = makeMsg(registry, 'Block');
 export type Block = MsgType<'Block'>;
 export const Identification = makeMsg(registry, 'Identification');

@@ -43,10 +43,10 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
       voterWeight: (block) => {
         const res = [0n];
 
-        for (const voter of this.uniqueVoters(block.frontierVoters)) {
-          for (let i = 0; i < voter.frontierDetail.treeWeights.length; i++) {
+        for (const voter of this.uniqueVoters(block.children)) {
+          for (let i = 0; i < voter.treeWeights.length; i++) {
             res[i] ??= 0n;
-            res[i] += voter.frontierDetail.treeWeights[i];
+            res[i] += voter.treeWeights[i];
           }
 
           res[0] += this.get(voter, 'selfWeight');
@@ -93,9 +93,9 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
 
       totalPenalty: (block) =>
         this.get(block, 'treePenalty') +
-        (block.frontierVoteBlock !== undefined &&
-            block.frontierVoteBlock !== ZERO_BLOCK
-          ? this.get(block.frontierVoteBlock, 'totalPenalty')
+        (block.parentBlock !== undefined &&
+            block.parentBlock !== ZERO_BLOCK
+          ? this.get(block.parentBlock, 'totalPenalty')
           : 0n),
 
       canonicality: (block) => this.get(block, 'totalWeight') - this.get(block, 'totalPenalty'),

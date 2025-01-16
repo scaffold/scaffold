@@ -1,7 +1,7 @@
 import { assertEquals, assertStrictEquals } from '@std/assert';
 import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
 import { FetchService } from '../src/FetchService.ts';
-import { collatzHash } from '../src/constants.ts';
+import { collatzHash } from '../src/hashes.ts';
 import { CollatzContract } from '../src/contracts/CollatzContract.ts';
 import * as collatzMessages from '../src/contracts/collatzMessages.ts';
 import { MockNetworkProvider } from '../plugins/MockNetworkProvider.ts';

@@ -1,7 +1,7 @@
 import { connectCtxs, makeTest, waitFor } from './util.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { accountHash, collateralHash, rootHash, trueHash } from '../src/constants.ts';
+import { accountHash, collateralHash, rootHash, trueHash } from '../src/hashes.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
 import { AccountContractParams, CollateralContractParams } from '../src/messages.ts';

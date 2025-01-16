@@ -5,7 +5,7 @@ import { error } from '../src/util/functional.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
-import { frontierHash, trueHash } from '../src/constants.ts';
+import { frontierHash, trueHash } from '../src/hashes.ts';
 import { ZERO_BLOCK } from '../src/BlockMeta.ts';
 import { FrontierService } from '../src/FrontierService.ts';
 import { BlockFact } from '../src/FactMeta.ts';
@@ -49,7 +49,6 @@ Deno.test(
 
       const drafts: BlockDraft[] = [
         {
-          frontierVote,
           groupIdx: 0,
           inputs: entry.tc.map((tc) =>
             findOutput(blocks.get(tc) ?? error(`Invalid tc ${tc}`), frontierHash)

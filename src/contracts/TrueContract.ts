@@ -1,6 +1,6 @@
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { trueHash } from '../constants.ts';
+import { trueHash } from '../hashes.ts';
 
 export class TrueContract implements ContractProvider {
   public contractHash = trueHash;

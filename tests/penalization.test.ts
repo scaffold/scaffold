@@ -5,7 +5,7 @@ import { makeTest, provideInitialBalance } from '../tests/util.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import { CollateralContract } from '../src/contracts/CollateralContract.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
-import { collateralHash, rootHash } from '../src/constants.ts';
+import { collateralHash, rootHash } from '../src/hashes.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { BalanceService } from '../src/BalanceService.ts';
 import { LitigationService } from '../src/LitigationService.ts';

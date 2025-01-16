@@ -1,6 +1,6 @@
 import { BlockBuilder, BlockDraft, InputSpec, OutputSpec } from './BlockBuilder.ts';
 import { BlockService } from './BlockService.ts';
-import { accountHash, frontierHash, generatorHash, rootHash, trueHash } from './constants.ts';
+import { accountHash, frontierHash, generatorHash, rootHash, trueHash } from './hashes.ts';
 import { Context } from './Context.ts';
 import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
 import { LocalGeneratorService } from './LocalGeneratorService.ts';
@@ -285,7 +285,7 @@ export class GenerationService {
     const refs: BlockFact[] = [];
     // const satisfies:Verifier=[];
     const outputs: OutputSpec[] = [];
-    let frontierLevel: number | undefined;
+    // let frontierLevel: number | undefined;
     let timestampGte: bigint | undefined;
 
     const isMergeable = (
@@ -549,19 +549,19 @@ export class GenerationService {
         };
       },
 
-      requireFrontierLevel(level) {
-        if (workerDriver.done.signal.aborted) {
-          return;
-        }
-        if (frontierLevel === undefined) {
-          frontierLevel = level;
-        } else if (frontierLevel !== level) {
-          // Ingenerable
-          throw new GenerationException(
-            `requireFrontierLevel(...) called multiple times with different levels!`,
-          );
-        }
-      },
+      // requireFrontierLevel(level) {
+      //   if (workerDriver.done.signal.aborted) {
+      //     return;
+      //   }
+      //   if (frontierLevel === undefined) {
+      //     frontierLevel = level;
+      //   } else if (frontierLevel !== level) {
+      //     // Ingenerable
+      //     throw new GenerationException(
+      //       `requireFrontierLevel(...) called multiple times with different levels!`,
+      //     );
+      //   }
+      // },
 
       compareBlockOrder(hashA: Hash, hashB: Hash) {
         // TODO: Lock frontier hash and return an ordering wrt. the frontier
@@ -644,8 +644,8 @@ export class GenerationService {
           inputs,
           outputs,
           body,
-          frontierLevel,
-          frontierOutputAmount: depositedReward < desiredReward
+          // frontierLevel,
+          squashOutputAmount: depositedReward < desiredReward
             ? depositedReward - desiredReward
             : 0n,
           // timestampGte,
@@ -661,6 +661,7 @@ export class GenerationService {
     };
   }
 
+  /*
   private isFrontierMergeable(a: BlockFact, b: BlockFact) {
     const used = new Set<HashPrimitive>();
 
@@ -695,6 +696,7 @@ export class GenerationService {
 
     return true;
   }
+  */
 
   private shouldEmitCorrect(verifier: Verifier) {
     return Hash.compare(
@@ -751,10 +753,9 @@ export class GenerationService {
         resolve(block);
 
         if (this.ctx.config.dbgVerifyGenerations) {
-          this.ctx.get(VerificationService)
-            .enqueueVerification(block, verifier, [CollateralHint.encode({
-              hint: { CollateralHintVerifier: { groupIdx } },
-            })], 0);
+          this.ctx.get(VerificationService).enqueueVerification(block, verifier, [
+            CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } }),
+          ], 0);
         }
 
         if (this.isImmediatelyVerifiable(block) !== true) {

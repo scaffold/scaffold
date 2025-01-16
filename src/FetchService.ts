@@ -7,7 +7,6 @@ import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
 import { arrEquals } from './util/buffer.ts';
 import { FactService } from './FactService.ts';
-import { FrontierHelper } from './FrontierHelper.ts';
 import { WeightService } from './WeightService.ts';
 import { GenesisService } from './GenesisService.ts';
 import { OutputClaim } from './BlockMeta.ts';

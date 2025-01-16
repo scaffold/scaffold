@@ -79,9 +79,7 @@ export class RenderService {
     // const name = block.hash.toHex().slice(0, 8);
     const name = block.sillyName;
 
-    const title = name +
-      ' ^' + block.frontierParams.level +
-      ' @' + block.visitedAt;
+    const title = name + ' ^' + block.volume + ' @' + block.visitedAt;
 
     let props = 'DELETED';
     if (!isDeleted) {
@@ -99,7 +97,7 @@ export class RenderService {
       });
       const anc = wrapAccessor(() => this.ctx.get(WeightService).getAncestorWeight(block));
       const desc = wrapAccessor(() => this.ctx.get(WeightService).getDescendant(block).weight);
-      const tree = block.frontierDetail.treeWeights.join(',');
+      const tree = block.treeWeights.join(',');
       // const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
       const vw = `?`;
       const canon = wrapAccessor(() =>
@@ -136,7 +134,7 @@ export class RenderService {
     if (config.renderFrontierVote === false) return;
 
     const bId = this.getId(graph, block);
-    const vId = this.getId(graph, block.frontierVoteBlock);
+    const vId = this.getId(graph, block.parentBlock);
     const attrs = this.renderAttrs({
       color: 'green',
     });

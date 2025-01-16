@@ -10,7 +10,7 @@ import {
   Verifier,
 } from './messages.ts';
 import { BlockService } from './BlockService.ts';
-import { accountHash, collateralHash, frontierHash } from './constants.ts';
+import { accountHash, collateralHash, frontierHash } from './hashes.ts';
 import { KeyService } from './KeyService.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
@@ -20,8 +20,9 @@ import { assert, error, todo } from './util/functional.ts';
 import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
-import { WalkerService } from './WalkerService.ts';
 import { ClockService } from './ClockService.ts';
+import { FrontierService2 } from './FrontierService2.ts';
+import { FrontierService3, VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -41,9 +42,7 @@ export type OutputSpec = Omit<BlockOutput, 'groupIdx'>;
 
 export interface BlockDraft {
   groupIdx?: number;
-  frontierVote?: BlockFact | typeof ZERO_BLOCK;
-  frontierLevel?: number;
-  frontierOutputAmount?: bigint;
+  squashOutputAmount?: bigint;
   refs?: BlockFact[];
   inputs?: InputSpec[];
   satisfies?: (Verifier & { detail?: Uint8Array })[];
@@ -99,10 +98,7 @@ export class BlockBuilder {
     //   Number(b.body !== undefined) - Number(a.body !== undefined)
     // );
 
-    let frontierVoteBlock: BlockFact | typeof ZERO_BLOCK | undefined =
-      this.ctx.config.enableFrontierVote ? undefined : ZERO_BLOCK;
-    let frontierLevel: number | undefined;
-    let frontierOutputAmount = this.ctx.config.enableBlockThroughput ? 10n : 0n;
+    let squashOutputAmount = this.ctx.config.enableBlockThroughput ? 10n : 0n;
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
@@ -135,24 +131,8 @@ export class BlockBuilder {
       }
       bodies[groupIdx] = draft.body ?? EMPTY_ARR;
 
-      if (draft.frontierVote !== undefined) {
-        if (frontierVoteBlock === undefined) {
-          frontierVoteBlock = draft.frontierVote;
-        } else if (frontierVoteBlock !== draft.frontierVote) {
-          throw new Error(`Cannot merge different frontier votes!`);
-        }
-      }
-
-      if (draft.frontierLevel !== undefined) {
-        if (frontierLevel === undefined) {
-          frontierLevel = draft.frontierLevel;
-        } else if (frontierLevel !== draft.frontierLevel) {
-          throw new Error(`Cannot merge different frontier levels!`);
-        }
-      }
-
-      if (draft.frontierOutputAmount !== undefined) {
-        frontierOutputAmount += draft.frontierOutputAmount;
+      if (draft.squashOutputAmount !== undefined) {
+        squashOutputAmount += draft.squashOutputAmount;
       }
 
       if (draft.refs !== undefined) {
@@ -204,29 +184,16 @@ export class BlockBuilder {
 
     let ioDelta = 0n;
 
-    const addFrontierOutput = !outputs.some((output) =>
-      Hash.equals(output.verifier.contractHash, frontierHash)
-    );
-
+    const addFrontierOutput = false;
     if (addFrontierOutput) {
-      ioDelta -= frontierOutputAmount;
-    } else {
-      // We can't really add a frontier output in the draft because the frontier output detail needs the tree weights,
-      // which need to be computed from the full inputs and outputs of the block (from multiple BlockDrafts).
-      // If we decide to remove the self weight from the tree weights, this can change and we can pass the frontier output as a normal output.
-      // See https://github.com/orgs/scaffold/projects/1/views/2?pane=issue&itemId=50902340
-      if (this.ctx.config.allowSpecifiedFrontierOutputs) {
-        console.warn(`Unexpected frontier output on an unfinished block!`);
-      } else {
-        throw new Error(`Unexpected frontier output on an unfinished block!`);
-      }
+      ioDelta -= squashOutputAmount;
     }
 
     ioDelta += inputs.reduce((acc, cur) => acc + cur.amount, 0n);
     ioDelta -= outputs.reduce((acc, cur) => acc + cur.amount, 0n);
 
     if (!this.ctx.config.enableBlockThroughput) {
-      if (frontierOutputAmount !== 0n) {
+      if (squashOutputAmount !== 0n) {
         throw new Error(`Invalid frontier output amount!`);
       }
       if (inputs.some((x) => x.amount !== 0n)) {
@@ -280,17 +247,21 @@ export class BlockBuilder {
 
     const refs = refBlocks.map((block) => block.hash);
 
-    frontierVoteBlock ??= this.ctx.get(FrontierChainService).getVote([
-      ...inputs,
-      ...refBlocks.map((ref) => ({ block: ref })),
+    // frontierVoteBlock ??= this.ctx.get(FrontierChainService).getVote([
+    //   ...inputs,
+    //   ...refBlocks.map((ref) => ({ block: ref })),
+    // ]);
+    // if (frontierVoteBlock === undefined) {
+    //   throw new Error(`Unmergeable inputs!`);
+    // }
+
+    const links = this.ctx.get(FrontierService3).create([
+      ...inputs.map((x) => x.block),
+      ...refBlocks,
     ]);
-    if (frontierVoteBlock === undefined) {
-      throw new Error(`Unmergeable inputs!`);
-    }
-    const frontierVote = frontierVoteBlock !== ZERO_BLOCK ? frontierVoteBlock.hash : ZERO_HASH;
+    const blockLinks = this.ctx.get(FrontierService).build(links);
 
     if (addFrontierOutput) {
-      const level = frontierLevel ?? 0;
       // const amount = BigInt(
       //   Math.round(10 * Math.pow(frontierInputCount * 0.75, level)),
       // );
@@ -300,12 +271,10 @@ export class BlockBuilder {
       outputs.push({
         verifier: {
           contractHash: frontierHash,
-          params: FrontierTreeParams.encode({ level }),
+          params: FrontierTreeParams.encode({ level: -1 }),
         },
-        amount: frontierOutputAmount,
-        detail: FrontierTreeDetail.encode(
-          this.ctx.get(FrontierService).create(inputs, frontierVoteBlock),
-        ),
+        amount: squashOutputAmount,
+        detail: FrontierTreeDetail.encode({}),
         // detail: FrontierTreeDetail.encode({
         //   treeWeights: this.ctx.get(FrontierService2)
         //     .mergeTreeWeights(inputs, frontierVoteBlock),
@@ -330,19 +299,18 @@ export class BlockBuilder {
       });
     }
 
-    const frontierOutputIdx = outputs.findIndex((x) =>
-      Hash.equals(x.verifier.contractHash, frontierHash)
-    );
-    assert(frontierOutputIdx !== -1);
-    assert(outputs[frontierOutputIdx].groupIdx === 0);
-    const frontierDetail = FrontierTreeDetail.decode(outputs[frontierOutputIdx].detail);
+    // const frontierOutputIdx = outputs.findIndex((x) =>
+    //   Hash.equals(x.verifier.contractHash, frontierHash)
+    // );
+    // assert(frontierOutputIdx !== -1);
+    // assert(outputs[frontierOutputIdx].groupIdx === 0);
+
     for (const input of inputs) {
       input.utxoIdx = this.ctx.get(FrontierService).getUtxoIdx(input.block, input.outputIdx, {
-        frontierVoteBlock,
-        inputs,
+        parentBlock: links.parent,
+        squashes: blockLinks.squashes,
         outputs,
-        frontierOutputIdx,
-        frontierDetail,
+        squashedUtxoIdxs: blockLinks.squashedUtxoIdxs,
       });
     }
 
@@ -352,8 +320,8 @@ export class BlockBuilder {
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
     if (this.ctx.config.graphParameters.enforceTimestampMonotonicity) {
-      if (frontierVoteBlock !== undefined && frontierVoteBlock !== ZERO_BLOCK) {
-        const inputTs = frontierVoteBlock.timestamp +
+      if (links.parent !== undefined && links.parent !== ZERO_BLOCK) {
+        const inputTs = links.parent.timestamp +
           this.ctx.config.graphParameters.minimumGenerationTime;
         if (inputTs > timestamp) {
           timestamp = inputTs;
@@ -375,7 +343,7 @@ export class BlockBuilder {
       }
     }
 
-    return { frontierVote, refs, inputs, outputs, bodies, timestamp, draftGroupIdxs };
+    return { ...blockLinks, refs, inputs, outputs, bodies, timestamp, draftGroupIdxs };
   }
 
   private collectInputs(

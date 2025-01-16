@@ -4,7 +4,7 @@ import { DataContractParams } from '../messages.ts';
 import { Hash, HASH_SIZE } from '../util/Hash.ts';
 import { BurdenOfProof, ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { dataHash } from '../constants.ts';
+import { dataHash } from '../hashes.ts';
 import { KeyService } from '../KeyService.ts';
 
 // For easy-to-verify contracts in general:

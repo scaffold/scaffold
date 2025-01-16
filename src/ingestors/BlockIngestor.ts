@@ -8,8 +8,8 @@ import { BlockRecordSet } from '../record_sets/BlockRecordSet.ts';
 import { Block, BlockOutput, FrontierTreeDetail, FrontierTreeParams } from '../messages.ts';
 import { BlockFlag, BlockMeta, ZERO_BLOCK } from '../BlockMeta.ts';
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { collateralHash, frontierHash } from '../constants.ts';
-import { NUM_FRONTIER_LEVELS } from '../FrontierService2.ts';
+import { collateralHash, frontierHash, squashHash } from '../hashes.ts';
+import { FrontierService2, NUM_FRONTIER_LEVELS } from '../FrontierService2.ts';
 import { MonitoringService } from '../MonitoringService.ts';
 import {
   CollateralContractDetail,
@@ -21,7 +21,14 @@ import { ClockService } from '../ClockService.ts';
 import { RenderService } from '../RenderService.ts';
 import { FactEmitter } from '../FactEmitter.ts';
 import { VerificationService } from '../VerificationService.ts';
-import { WeightService } from '../WeightService.ts';
+import { assert } from '@std/assert/assert';
+import { VOLUME_INCLUDES_SELF } from '../FrontierService3.ts';
+import { FrontierService } from '../FrontierService.ts';
+import { FrontierChainService } from '../FrontierChainService.ts';
+import { error } from '../util/functional.ts';
+import { SQUASH_MIN_VOLUME_RATIO } from '../constants.ts';
+import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
+import { LitigationService } from '../LitigationService.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
   type = FactType.Block as const;
@@ -30,7 +37,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
   constructor(private ctx: Context) {}
 
-  create(base: FactBase) {
+  create(base: FactBase): BlockFact {
     const block = Block.decode(base.message);
 
     if (
@@ -49,9 +56,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     if (
       !this.ctx.config.enableFrontierVote &&
-      !Hash.equals(block.frontierVote, ZERO_HASH)
+      !Hash.equals(block.parent, ZERO_HASH)
     ) {
-      throw new Error(`Cannot ingest a block with a frontier vote!`);
+      throw new Error(`Cannot ingest a block with a parent!`);
     }
 
     if (
@@ -62,9 +69,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       throw new Error(`Cannot ingest a block with coin throughput!`);
     }
 
-    const frontierVote = Hash.equals(block.frontierVote, ZERO_HASH)
+    const parentBlock = Hash.equals(block.parent, ZERO_HASH)
       ? ZERO_BLOCK
-      : this.ctx.get(BlockService).get(block.frontierVote, false);
+      : this.ctx.get(BlockService).get(block.parent, false);
 
     const meta: BlockMeta = {
       // verifiers: block.bodies.map(() => undefined),
@@ -87,22 +94,30 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       ),
 
       isCanonical:
-        (frontierVote === undefined
+        (parentBlock === undefined
           ? false
-          : frontierVote === ZERO_BLOCK
+          : parentBlock === ZERO_BLOCK
           ? true
-          : frontierVote.isCanonical) &&
+          : parentBlock.isCanonical) &&
         block.inputs.every(
           (x) =>
             this.ctx.get(BlockService).get(x.blockHash, false)?.isCanonical !==
               false,
         ),
 
-      frontierVoteBlock: frontierVote,
-      // frontierChainDepth: base.source === FactSource.Genesis ? 0 : undefined,
-      frontierChainDepth: Hash.equals(block.frontierVote, ZERO_HASH) ? 0 : undefined,
+      parentBlock,
+      parentChainRoot: parentBlock === undefined
+        ? base as BlockFact
+        : parentBlock === ZERO_BLOCK
+        ? ZERO_BLOCK
+        : parentBlock.parentChainRoot,
+      parentChainDepth: parentBlock === undefined
+        ? 0
+        : parentBlock === ZERO_BLOCK
+        ? 1
+        : parentBlock.parentChainDepth + 1,
 
-      frontierVoters: this.ctx.get(BlockService).getVoters(base.hash),
+      children: this.ctx.get(BlockService).getVoters(base.hash),
 
       propagationMask: 0,
 
@@ -114,9 +129,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       canonicalityOld: 0,
       collateral: 0,
 
-      epochInclusionProofs: new Map(),
-
       ...this.getFrontierMeta(block),
+
+      squashers: this.ctx.get(BlockService).getSquashers(base.hash),
 
       persistentSources: [],
     };
@@ -127,22 +142,35 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
   }
 
   ingest(fact: BlockFact) {
-    this.ctx.get(BlockService).blockMonitor.resolveAll(fact.hash, fact);
-
-    // this.ctx.get(EpochInclusionProofService).popEips(fact);
-
-    this.ctx.get(BlockService).getVoters(fact.frontierVote).push(fact);
-
-    if (
-      fact.frontierVoteBlock !== undefined &&
-      fact.frontierVoteBlock !== ZERO_BLOCK
-    ) {
-      this.linkFrontier(fact.frontierVoteBlock, fact);
+    const squashHashPrims = new Set(fact.squashes.map((x) => x.blockHash.toPrimitive()));
+    if (squashHashPrims.size !== fact.squashes.length) {
+      throw new Error(`Duplicate squash hash!`);
     }
 
-    for (const voter of fact.frontierVoters) {
-      voter.frontierVoteBlock = fact;
+    if (fact.treeWeights.length > NUM_FRONTIER_LEVELS) {
+      throw new Error(`Too many tree weights!`);
+    }
+    for (const weight of fact.treeWeights) {
+      if (weight < 0n) {
+        throw new Error(`Invalid tree weight ${weight}!`);
+      }
+    }
+
+    this.ctx.get(BlockService).blockMonitor.resolveAll(fact.hash, fact);
+
+    this.ctx.get(BlockService).getVoters(fact.parent).push(fact);
+
+    if (fact.parentBlock !== undefined && fact.parentBlock !== ZERO_BLOCK) {
+      this.linkFrontier(fact.parentBlock, fact);
+    }
+
+    for (const voter of fact.children) {
+      voter.parentBlock = fact;
       this.linkFrontier(fact, voter);
+    }
+
+    if (fact.inputs.length === 0 && fact.source !== FactSource.Genesis) {
+      throw new Error(`Blocks must have at least one input!`);
     }
 
     fact.inputs.forEach((input, idx) => {
@@ -186,7 +214,8 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
           `Invalid groupIdx ${output.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
         );
       }
-      if (output.amount < 0n && outputIdx !== fact.frontierOutputIdx) {
+
+      if (output.amount < 0n && !Hash.equals(output.verifier.contractHash, frontierHash)) {
         throw new Error(
           `Negative output amounts are only allowed on frontier outputs!`,
         );
@@ -277,10 +306,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     // this.ctx.get(BlockSetService).getVoters(block.frontier_vote, -1).push(fact);
     // this.ctx.get(FrontierService).ingestBlock(fact);
 
-    // fact.epochInclusionProofs.forEach((eip) =>
-    //   this.ctx.get(EpochInclusionProofService).propagate(fact, eip)
-    // );
-
     // this.updateDerivedWork(fact);
 
     // const samples = PoissonDistribution.sample(
@@ -317,11 +342,11 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
   }
 
   forget(fact: BlockFact) {
-    for (const voter of fact.frontierVoters) {
-      voter.frontierVoteBlock = undefined;
+    for (const voter of fact.children) {
+      voter.parentBlock = undefined;
     }
 
-    const voters = this.ctx.get(BlockService).getVoters(fact.frontierVote);
+    const voters = this.ctx.get(BlockService).getVoters(fact.parent);
     const idx = voters.indexOf(fact);
     if (idx !== -1) {
       voters.splice(idx, 1);
@@ -358,28 +383,26 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     const cb = (output: BlockOutput) => Hash.equals(output.verifier.contractHash, frontierHash);
     const idx = block.outputs.findIndex(cb);
     if (idx === -1 || block.outputs.findLastIndex(cb) !== idx) {
-      throw new Error(`Not exactly one frontier output!`);
+      // throw new Error(`Not exactly one frontier output!`);
+      return {
+        frontierVote: block.parent,
+        frontierOutputIdx: -1,
+        frontierParams: { level: 0 },
+        frontierDetail: {},
+      };
     }
     const output = block.outputs[idx];
     const frontierParams = FrontierTreeParams.decode(output.verifier.params);
     const frontierDetail = FrontierTreeDetail.decode(output.detail);
 
-    if (
-      frontierParams.level < 0 ||
-      frontierParams.level >= NUM_FRONTIER_LEVELS
-    ) {
-      throw new Error(`Invalid frontier level ${frontierParams.level}!`);
-    }
-    if (frontierDetail.treeWeights.length > NUM_FRONTIER_LEVELS) {
-      throw new Error(`Too many tree weights!`);
-    }
-    for (const weight of frontierDetail.treeWeights) {
-      if (weight < 0n) {
-        throw new Error(`Invalid tree weight ${weight}!`);
-      }
-    }
+    // if (
+    //   frontierParams.level < 0 ||
+    //   frontierParams.level >= NUM_FRONTIER_LEVELS
+    // ) {
+    //   throw new Error(`Invalid frontier level ${frontierParams.level}!`);
+    // }
 
-    return { frontierOutputIdx: idx, frontierParams, frontierDetail };
+    return { frontierVote: block.parent, frontierOutputIdx: idx, frontierParams, frontierDetail };
   }
 
   private linkFrontier(frontierVote: BlockFact, block: BlockFact) {
@@ -392,27 +415,82 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       throw new Error(`Generation time is too short!`);
     }
 
-    if (frontierVote.frontierParams.level < block.frontierParams.level) {
-      throw new Error(
-        `Invalid frontier vote! The voted block's level must be greater than or equal to the voter level!`,
-      );
-    }
+    // if (frontierVote.frontierParams.level < block.frontierParams.level) {
+    //   throw new Error(
+    //     `Invalid frontier vote! The voted block's level must be greater than or equal to the voter level!`,
+    //   );
+    // }
 
-    if (frontierVote.frontierChainDepth !== undefined) {
-      this.setFrontierChainDepth(block, frontierVote.frontierChainDepth + 1);
-    }
+    this.setFrontierChainDepth(
+      block,
+      frontierVote.parentChainRoot,
+      frontierVote.parentChainDepth + 1,
+    );
 
     // this.ctx.get(FactEmitter).notify(block);
   }
 
-  private setFrontierChainDepth(block: BlockFact, depth: number) {
-    if (block.frontierChainDepth !== depth) {
-      if (block.frontierChainDepth !== undefined) {
-        throw new Error(`Internal error`);
+  private setFrontierChainDepth(
+    block: BlockFact,
+    root: BlockFact | typeof ZERO_BLOCK,
+    depth: number,
+  ) {
+    if (block.parentChainRoot !== root) {
+      block.parentChainRoot = root;
+      block.parentChainDepth = depth;
+      for (const voter of block.children) {
+        this.setFrontierChainDepth(voter, root, depth + 1);
       }
-      block.frontierChainDepth = depth;
-      for (const voter of block.frontierVoters) {
-        this.setFrontierChainDepth(voter, depth + 1);
+    }
+  }
+
+  private checkSquashability(block: BlockFact) {
+    // Squashing must increase the total size of the tree by at least some factor of the largest squashed size. This can be by:
+    //   1. Moving the FV to include more descendants, or
+    //   2. Adding another child tree (squash)
+    // In case (1) the volume doesn't increase
+
+    const squashes = block.squashes.map((x) => this.ctx.get(BlockService).get(x.blockHash));
+
+    const expectedVolume = squashes.reduce(
+      (acc, x) => x === undefined ? acc : acc + x.volume,
+      VOLUME_INCLUDES_SELF ? 1 : squashes.length,
+    );
+
+    if (squashes.includes(undefined)) {
+      if (block.volume < expectedVolume) {
+        throw new Error('Invalid volume!');
+      }
+
+      return;
+    } else {
+      if (block.volume !== expectedVolume) {
+        throw new Error('Invalid volume!');
+      }
+    }
+
+    if (squashes.some((x) => x!.parentChainRoot !== block.parentChainRoot)) {
+      return;
+    }
+
+    if (squashes.length > 0) {
+      let largestSquash: BlockFact = squashes[0]!;
+      for (const squash of squashes) {
+        if (squash!.volume > largestSquash.volume) {
+          largestSquash = squash!;
+        }
+      }
+
+      let totalVolume = 0;
+      let parent: BlockFact | typeof ZERO_BLOCK = block;
+      do {
+        assert(parent !== ZERO_BLOCK);
+        totalVolume += parent.volume;
+        parent = parent.parentBlock ?? error('Internal error!');
+      } while (parent !== largestSquash.parentBlock);
+
+      if (totalVolume < largestSquash.volume * SQUASH_MIN_VOLUME_RATIO) {
+        throw new Error('Invalid squash!');
       }
     }
   }
@@ -460,13 +538,18 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     // When we move this to an ingestion method we can remove the timeout.
     // this.ctx.get(ClockService).setTimeout(() => {
     // TODO: Only do this once per unique verifier foreach block
-    const hintPrefix = [
-      CollateralHint.encode({
-        hint: { CollateralHintVerifier: { groupIdx } },
-      }),
-    ];
-    this.ctx.get(VerificationService)
-      .enqueueVerification(child, verifier, hintPrefix, 0);
+    const hintPrefix = [CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } })];
+    if (Hash.equals(verifier.contractHash, squashHash) && arrEquals(verifier.params, EMPTY_ARR)) {
+      const isValid = child.squashes.some((x) => Hash.equals(x.blockHash, parent.hash));
+      const vote = isValid ? 'FINAL_PASS' : 'FINAL_FAIL';
+      try {
+        this.ctx.get(LitigationService).litigate(child, hintPrefix, vote);
+      } catch (err) {
+        console.error(`Litigation failed:`, err);
+      }
+    } else {
+      this.ctx.get(VerificationService).enqueueVerification(child, verifier, hintPrefix, 0);
+    }
     // }, 0);
 
     // if (

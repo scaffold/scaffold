@@ -1,7 +1,7 @@
 import { Context } from './Context.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { Verifier } from './messages.ts';
-import * as hashes from './constants.ts';
+import * as hashes from './hashes.ts';
 import { bin2hex } from './util/hex.ts';
 import { BlockFact } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';

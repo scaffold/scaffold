@@ -1,7 +1,7 @@
 import { ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { AccountContractParams } from '../messages.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { accountHash } from '../constants.ts';
+import { accountHash } from '../hashes.ts';
 
 export class AccountContract implements ContractProvider {
   public contractHash = accountHash;

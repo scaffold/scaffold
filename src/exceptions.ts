@@ -28,6 +28,12 @@ export class NoBlockPathFound extends Error {
   }
 }
 
+export class RetryException extends Error {
+  constructor(msg: string, public shouldRetry: (fact: Fact) => boolean) {
+    super(msg);
+  }
+}
+
 // TODO: Use better ingestion flow so we don't need this
 // export class DiscardFactException extends Error {
 //   constructor(public fact: Fact) {

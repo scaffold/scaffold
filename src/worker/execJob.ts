@@ -4,7 +4,7 @@ import { JobMessage, WorkerComm } from './workerTypes.ts';
 import { Hash } from '../util/Hash.ts';
 import { makeClientUtils } from './clientUtils.ts';
 import { makeWasi } from './jsWasiUtils.ts';
-import { jsLockHash, jsWasiHash, rootHash } from '../constants.ts';
+import { jsLockHash, jsWasiHash, rootHash } from '../hashes.ts';
 import logger from './logger.ts';
 import { WasiExit } from './WasiImpl.ts';
 import { JsWasiParams } from '../messages.ts';

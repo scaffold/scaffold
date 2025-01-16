@@ -1,6 +1,6 @@
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { collatzHash } from '../constants.ts';
+import { collatzHash } from '../hashes.ts';
 import * as collatzMessages from './collatzMessages.ts';
 
 export class CollatzContract implements ContractProvider {

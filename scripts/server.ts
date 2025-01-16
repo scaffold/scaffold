@@ -9,7 +9,7 @@ import { error } from '../src/util/functional.ts';
 import { LocalGenerator, LocalGeneratorService } from '../src/LocalGeneratorService.ts';
 // import { epochStartTime } from '~/server/epochStartTime.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
-import { accountHash, generatorHash, rootHash } from '../src/constants.ts';
+import { accountHash, generatorHash, rootHash } from '../src/hashes.ts';
 import { AccountContractParams, JsWasiParams } from '../src/messages.ts';
 import { KeyService } from '../src/KeyService.ts';
 import { GenesisService, sharedGenesisData } from '../src/GenesisService.ts';

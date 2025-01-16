@@ -1,4 +1,3 @@
-import { InputSpec } from './BlockBuilder.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
@@ -6,42 +5,42 @@ import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { NoBlockPathFound } from './exceptions.ts';
 import { BlockFact } from './FactMeta.ts';
 import { FrontierService2 } from './FrontierService2.ts';
-import { BlockOutput, FrontierTreeDetail } from './messages.ts';
+import { VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
+import { Block, BlockOutput, FrontierTreeDetail, Squash } from './messages.ts';
 import { assert, error, todo } from './util/functional.ts';
-import { Hash } from './util/Hash.ts';
+import { Hash, ZERO_HASH } from './util/Hash.ts';
 import { mapPop, mapPut } from './util/map.ts';
 import { MockBlock as WalkerMockBlock, WalkerService } from './WalkerService.ts';
 
 const enableChecks = true;
 
+export type BlockLinks = {
+  parent: BlockFact | typeof ZERO_BLOCK;
+  squashes: BlockFact[];
+};
+
 interface MockBlock extends WalkerMockBlock {
-  frontierOutputIdx: number;
-  frontierDetail: FrontierTreeDetail;
+  squashes: Squash[];
   outputs: unknown[];
+  squashedUtxoIdxs: number[];
 }
 
 export class FrontierService {
   constructor(private ctx: Context) {}
 
-  create(inputs: InputSpec[], frontierVote: BlockFact | typeof ZERO_BLOCK): FrontierTreeDetail {
-    const treeChildren = inputs.filter((input) =>
-      input.block.frontierOutputIdx === input.outputIdx
-    );
-    assert(treeChildren.length === 0 || treeChildren.length === frontierInputCount);
-
-    const fvLevel = frontierVote === ZERO_BLOCK ? Infinity : frontierVote.frontierParams.level;
-    assert(treeChildren.every((input) => fvLevel > input.block.frontierParams.level));
-
+  build(
+    links: BlockLinks,
+  ): Pick<Block, 'parent' | 'squashes' | 'volume' | 'squashedUtxoIdxs' | 'treeWeights'> {
     const omittedOutputCount = new Map<BlockFact, number>();
-    const spentUtxoIdxs = this.mergeSortedIndices(
-      ...treeChildren.map((input) => this.rebase(input.block, frontierVote, omittedOutputCount)),
+    const squashedUtxoIdxs = this.mergeSortedIndices(
+      ...links.squashes.map((squash) => this.rebase(squash, links.parent, omittedOutputCount)),
     );
 
-    const subtreeNewUtxoCount = treeChildren.map((child) => {
-      const omittedSpendCount = mapPop(omittedOutputCount, child.block) ?? 0;
-      const outputCount = this.getNewUtxoCount(child.block) - omittedSpendCount;
-      assert(outputCount >= 0, 'outputCount < 0');
-      return outputCount;
+    const squashes = links.squashes.map((squash) => {
+      const omittedSpendCount = mapPop(omittedOutputCount, squash) ?? 0;
+      const newUtxoCount = this.getNewUtxoCount(squash) - omittedSpendCount;
+      assert(newUtxoCount >= 0, 'newUtxoCount < 0');
+      return { blockHash: squash.hash, newUtxoCount };
     });
 
     if (omittedOutputCount.size) {
@@ -49,14 +48,14 @@ export class FrontierService {
     }
 
     return {
-      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(inputs, frontierVote),
-
-      // frontierVoteUtxoCount: this.getTotalUtxoCount(frontierVote),
-      spentUtxoIdxs,
-      subtreeNewUtxoCount,
-
-      consumedInputsRoot: { branches: [] },
-      producedOutputsRoot: { branches: [] },
+      parent: links.parent === ZERO_BLOCK ? ZERO_HASH : links.parent.hash,
+      squashes: squashes,
+      volume: links.squashes.reduce(
+        (acc, x) => acc + x.volume,
+        VOLUME_INCLUDES_SELF ? 1 : links.squashes.length,
+      ),
+      squashedUtxoIdxs,
+      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(links),
     };
   }
 
@@ -65,11 +64,10 @@ export class FrontierService {
       return 0;
     }
 
-    if (block.utxoCount === undefined && block.frontierVoteBlock !== undefined) {
-      const voteCount = this.getTotalUtxoCount(block.frontierVoteBlock);
+    if (block.utxoCount === undefined && block.parentBlock !== undefined) {
+      const voteCount = this.getTotalUtxoCount(block.parentBlock);
       if (voteCount !== undefined) {
-        block.utxoCount = voteCount - block.frontierDetail.spentUtxoIdxs.length +
-          this.getNewUtxoCount(block);
+        block.utxoCount = voteCount - block.squashedUtxoIdxs.length + this.getNewUtxoCount(block);
       }
     }
 
@@ -95,40 +93,33 @@ export class FrontierService {
 
       let offset = -this.countLt(prev.inputs.map((x) => x.utxoIdx), utxoIdx);
 
-      if (it.frontierVoteBlock === prev) {
+      if (it.parentBlock === prev) {
         // Frontier voter
 
-        offset -= this.countLt(it.frontierDetail.spentUtxoIdxs, utxoIdx);
+        offset -= this.countLt(it.squashedUtxoIdxs, utxoIdx);
         offset += this.getNewUtxoCount(it);
       } else {
         // Parent
 
-        // Tree children always have a group index of zero
-        const treeChildren = it.inputs.filter((input) => input.groupIdx === 0);
-        assert(treeChildren.length === frontierInputCount);
-
         const prevCpy = prev;
-        const childIdx = treeChildren.findIndex((input) =>
-          input.outputIdx === prevCpy.frontierOutputIdx &&
-          ('block' in input ? input.block === prevCpy : Hash.equals(input.blockHash, prevCpy.hash))
+        const childIdx = it.squashes.findIndex((squash) =>
+          Hash.equals(squash.blockHash, prevCpy.hash)
         );
         assert(childIdx !== -1);
 
-        for (const input of treeChildren) {
-          const child = 'block' in input
-            ? input.block
-            : this.ctx.get(BlockService).get(input.blockHash, false);
+        for (const squash of it.squashes) {
+          const child = this.ctx.get(BlockService).get(squash.blockHash, false);
           if (child === undefined) {
             throw new Error(`Missing tree child!`);
           }
 
-          if (child.frontierVoteBlock === prev) {
-            offset -= this.countLt(child.frontierDetail.spentUtxoIdxs, utxoIdx);
+          if (child.parentBlock === prev) {
+            offset -= this.countLt(child.squashedUtxoIdxs, utxoIdx);
           }
         }
 
-        offset += it.frontierDetail.subtreeNewUtxoCount.slice(childIdx + 1)
-          .reduce((acc, x) => acc + x, it.outputs.length);
+        offset += it.squashes.slice(childIdx + 1)
+          .reduce((acc, x) => acc + x.newUtxoCount, it.outputs.length);
       }
 
       utxoIdx += offset;
@@ -155,38 +146,29 @@ export class FrontierService {
     }
     utxoIdx -= block.outputs.length;
 
-    const treeChildren = block.inputs.filter((input) => input.groupIdx === 0);
-    assert(treeChildren.length === frontierInputCount || treeChildren.length === 0);
-
-    const outputCounts = block.frontierDetail.subtreeNewUtxoCount;
-    assert(outputCounts.length === treeChildren.length);
-
-    for (let i = treeChildren.length; i-- > 0;) {
-      if (utxoIdx < outputCounts[i]) {
-        const input = treeChildren[i];
-        const child = 'block' in input
-          ? input.block
-          : this.ctx.get(BlockService).get(input.blockHash, false);
+    for (const squash of block.squashes.toReversed()) {
+      if (utxoIdx < squash.newUtxoCount) {
+        const child = this.ctx.get(BlockService).get(squash.blockHash, false);
         if (child === undefined) {
           throw new Error(`Missing tree child!`);
         }
         return this.getOutput(child, utxoIdx, false);
       }
-      utxoIdx -= outputCounts[i];
+      utxoIdx -= squash.newUtxoCount;
     }
 
     if (!allowFrontierVote) {
       throw new Error(`Invalid tree!`);
     }
 
-    if (block.frontierVoteBlock === undefined) {
+    if (block.parentBlock === undefined) {
       throw new Error(`Missing frontier vote!`);
     }
-    if (block.frontierVoteBlock === ZERO_BLOCK) {
+    if (block.parentBlock === ZERO_BLOCK) {
       throw new Error(`Invalid utxoIdx!`);
     }
 
-    return this.getOutput(block.frontierVoteBlock, utxoIdx, true);
+    return this.getOutput(block.parentBlock, utxoIdx, true);
   }
 
   // Returns the frontier detail that would have been created if the block had a different frontier vote
@@ -200,46 +182,45 @@ export class FrontierService {
   ): number[] {
     assert(block !== toVote);
 
-    if (block.frontierVoteBlock === undefined) {
+    if (block.parentBlock === undefined) {
       throw new Error(`Cannot rebase an orphaned block`);
     }
 
-    let rebasedSpentUtxoIdxs = block.frontierDetail.spentUtxoIdxs;
-
-    rebasedSpentUtxoIdxs = this.addSelfInputUtxos(rebasedSpentUtxoIdxs, block, omittedOutputCount);
+    let rebasedSpentUtxoIdxs = this.addSelfInputUtxos(
+      block.squashedUtxoIdxs,
+      block,
+      omittedOutputCount,
+    );
 
     // rebasedSpentUtxoIdxs = this.removeFrontierVoteInputUtxos(
     //   rebasedSpentUtxoIdxs,
-    //   block.frontierVoteBlock,
+    //   block.parentBlock,
     // );
 
-    if (block.frontierVoteBlock === toVote) {
+    if (block.parentBlock === toVote) {
       return rebasedSpentUtxoIdxs;
     }
 
     // Try rebasing by moving the vote backwards (towards ancestors)
-    let path = this.ctx.get(WalkerService).getPath(toVote, block.frontierVoteBlock);
+    let path = this.ctx.get(WalkerService).getPath(toVote, block.parentBlock);
     if (path !== undefined) {
       path.pop();
       assert(path.length);
-      // Path is from block.frontierVoteBlock (inclusive) to toVote (exclusive)
+      // Path is from block.parentBlock (inclusive) to toVote (exclusive)
 
       let prev = block;
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
 
-        if (it === prev.frontierVoteBlock) {
+        if (it === prev.parentBlock) {
           // Rebase towards frontier vote
 
           const prevCount = rebasedSpentUtxoIdxs.length;
 
-          const vote = it.frontierVoteBlock ?? error(`Unconnected frontier vote!`);
+          const vote = it.parentBlock ?? error(`Unconnected frontier vote!`);
           const spentUtxoIdxs = vote === ZERO_BLOCK
-            ? it.frontierDetail.spentUtxoIdxs
-            : this.mergeSortedIndices(
-              it.frontierDetail.spentUtxoIdxs,
-              vote.inputs.map((x) => x.utxoIdx),
-            );
+            ? it.squashedUtxoIdxs
+            : this.mergeSortedIndices(it.squashedUtxoIdxs, vote.inputs.map((x) => x.utxoIdx));
 
           rebasedSpentUtxoIdxs = this.rebaseLeft(
             spentUtxoIdxs,
@@ -281,28 +262,25 @@ export class FrontierService {
     */
 
     // Try rebasing by moving the vote forwards (towards descendants)
-    path = this.ctx.get(WalkerService).getPath(block.frontierVoteBlock, toVote);
+    path = this.ctx.get(WalkerService).getPath(block.parentBlock, toVote);
     if (path !== undefined) {
       let prev = path.pop()!;
-      assert(prev === block.frontierVoteBlock);
+      assert(prev === block.parentBlock);
 
       path.reverse();
       assert(path.length);
-      // Path is from block.frontierVoteBlock (exclusive) to toVote (inclusive)
+      // Path is from block.parentBlock (exclusive) to toVote (inclusive)
 
       for (const it of path) {
         assert(it !== ZERO_BLOCK);
         assert(it !== block);
 
-        if (it.frontierVoteBlock === prev) {
+        if (it.parentBlock === prev) {
           // Rebase towards frontier voter
 
           const spentUtxoIdxs = prev === ZERO_BLOCK
-            ? it.frontierDetail.spentUtxoIdxs
-            : this.mergeSortedIndices(
-              it.frontierDetail.spentUtxoIdxs,
-              prev.inputs.map((x) => x.utxoIdx),
-            );
+            ? it.squashedUtxoIdxs
+            : this.mergeSortedIndices(it.squashedUtxoIdxs, prev.inputs.map((x) => x.utxoIdx));
 
           rebasedSpentUtxoIdxs = this.rebaseRight(
             rebasedSpentUtxoIdxs,
@@ -334,16 +312,16 @@ export class FrontierService {
               throw new Error(`Missing tree child!`);
             }
 
-            if (child.frontierVoteBlock === prev) {
+            if (child.parentBlock === prev) {
               // voterSpends.push(
               //   this.removeFrontierVoteInputUtxos(child.frontierDetail.spentUtxoIdxs, prev),
               // );
-              voterSpends.push(child.frontierDetail.spentUtxoIdxs);
+              voterSpends.push(child.squashedUtxoIdxs);
             }
           }
 
-          const offset = it.frontierDetail.subtreeNewUtxoCount.slice(childIdx + 1)
-            .reduce((acc, x) => acc + x, it.outputs.length);
+          const offset = it.squashes.slice(childIdx + 1)
+            .reduce((acc, x) => acc + x.newUtxoCount, it.outputs.length);
 
           rebasedSpentUtxoIdxs = this.rebaseRight(
             rebasedSpentUtxoIdxs,
@@ -455,9 +433,8 @@ export class FrontierService {
     return result;
   }
 
-  private getNewUtxoCount(block: { frontierDetail: FrontierTreeDetail; outputs: unknown[] }) {
-    return block.frontierDetail.subtreeNewUtxoCount.reduce((acc, x) => acc + x, 0) +
-      block.outputs.length;
+  private getNewUtxoCount(block: { squashes: Squash[]; outputs: unknown[] }) {
+    return block.squashes.reduce((acc, x) => acc + x.newUtxoCount, block.outputs.length);
   }
 
   private countLt(arr: number[], y: number) {

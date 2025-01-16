@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { makeTest, provideInitialBalance } from '../util.ts';
 import { BlockBuilder } from '../../src/BlockBuilder.ts';
-import { collatzHash } from '../../src/constants.ts';
+import { collatzHash } from '../../src/hashes.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { CollatzContract } from '../../src/contracts/CollatzContract.ts';
 import * as collatzMessages from '../../src/contracts/collatzMessages.ts';

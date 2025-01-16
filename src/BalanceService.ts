@@ -1,11 +1,11 @@
 import { Context } from './Context.ts';
 import { KeyService } from './KeyService.ts';
 import { BlockService } from './BlockService.ts';
-import { accountHash } from './constants.ts';
-import { AccountContractParams } from './messages.ts';
+import { accountHash } from './hashes.ts';
+import { AccountContractParams, BlockOutput } from './messages.ts';
 import { WeightService } from './WeightService.ts';
 import { GenesisService } from './GenesisService.ts';
-import { FrontierHelper } from './FrontierHelper.ts';
+import { Hash } from './util/Hash.ts';
 
 export class BalanceService {
   constructor(private ctx: Context) {}
@@ -22,7 +22,7 @@ export class BalanceService {
     const leaves = this.ctx.get(WeightService).getDescendant(genesis).leaves;
     // TODO: Use all leaves
     const base = leaves[leaves.length - 1];
-    const outputs = base !== undefined ? FrontierHelper.findOutputs(base, verifier, true) : [];
+    const outputs: { blockHash: Hash; amount: bigint }[] = base !== undefined ? [] : [];
 
     let amount = 0n;
     for (const output of outputs) {

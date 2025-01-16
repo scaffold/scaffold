@@ -1,5 +1,5 @@
 import { BlockBuilder } from './BlockBuilder.ts';
-import { collateralHash } from './constants.ts';
+import { collateralHash } from './hashes.ts';
 import { Context } from './Context.ts';
 import { Fact } from './FactMeta.ts';
 import { KeyService } from './KeyService.ts';

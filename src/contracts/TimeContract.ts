@@ -1,7 +1,7 @@
 import { TimeParams } from '../messages.ts';
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
-import { timeHash } from '../constants.ts';
+import { timeHash } from '../hashes.ts';
 
 // Only used in tests,
 // Used to make sure that generating time contracts "out-of-spec" never wins.

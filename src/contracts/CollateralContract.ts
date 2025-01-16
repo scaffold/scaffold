@@ -1,6 +1,6 @@
 import { ComputationDriver, ComputationType, InputSource } from '../ComputationMeta.ts';
 import { CollateralContractDetail, CollateralContractParams } from '../collateralMessages.ts';
-import { accountHash, collateralHash } from '../constants.ts';
+import { accountHash, collateralHash } from '../hashes.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { CollateralUtil, Posting } from '../CollateralUtil.ts';
 

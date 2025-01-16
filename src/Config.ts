@@ -131,9 +131,6 @@ export interface Config {
   // Only use this for tests; it'll simply throw an error when we try to ingest one too many facts.
   limitFactCount: number;
 
-  // Only use this for tests; it allows frontier outputs to be specified on block specs. This can easily make emitted blocks invalid.
-  allowSpecifiedFrontierOutputs: boolean;
-
   initialWorkerCount: number;
 
   maxShutdownTimeMs: number;
@@ -201,7 +198,6 @@ export const makeDefaultConfig = () => {
     targetFactCount: Infinity,
     // limitFactCount: Infinity,
     limitFactCount: 10000,
-    allowSpecifiedFrontierOutputs: false,
     initialWorkerCount: 16,
     maxShutdownTimeMs: 10000,
     baselineConnSendRate: 10, // 1 = 1kb / second

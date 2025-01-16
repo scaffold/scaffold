@@ -1,5 +1,5 @@
 import { BlockService } from './BlockService.ts';
-import { frontierHash, rootHash } from './constants.ts';
+import { frontierHash, rootHash } from './hashes.ts';
 import { Context } from './Context.ts';
 import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
 import { BlockOutput, FrontierTreeParams, Verifier } from './messages.ts';
@@ -57,12 +57,7 @@ export class VerificationService {
       this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-          const driver = this.makeVerificationDriver(
-            block,
-            verifier,
-            hintPrefix,
-            workerDriver,
-          );
+          const driver = this.makeVerificationDriver(block, verifier, hintPrefix, workerDriver);
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message: `Starting special verifier for ${
@@ -91,12 +86,7 @@ export class VerificationService {
       this.ctx.get(WorkerDriverService).run(
         async (workerDriver) => {
           await workerDriver.setAllocation({});
-          const driver = this.makeVerificationDriver(
-            block,
-            verifier,
-            hintPrefix,
-            workerDriver,
-          );
+          const driver = this.makeVerificationDriver(block, verifier, hintPrefix, workerDriver);
           workerDriver.log?.push({
             timestamp: this.ctx.config.timeProvider.now(),
             message: `Starting worker verifier for ${
@@ -363,13 +353,13 @@ export class VerificationService {
         );
       },
 
-      requireFrontierLevel(level) {
-        if (block.frontierParams.level !== level) {
-          throw new VerificationException(
-            `requireFrontierLevel(...) failed - the block's frontier level does not match the contract's specification!`,
-          );
-        }
-      },
+      // requireFrontierLevel(level) {
+      //   if (block.frontierParams.level !== level) {
+      //     throw new VerificationException(
+      //       `requireFrontierLevel(...) failed - the block's frontier level does not match the contract's specification!`,
+      //     );
+      //   }
+      // },
 
       compareBlockOrder(hashA: Hash, hashB: Hash) {
         // TODO: Lock frontier hash and return an ordering wrt. the frontier

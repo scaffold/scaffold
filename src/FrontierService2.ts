@@ -12,6 +12,7 @@ import { ZERO_BLOCK } from './BlockMeta.ts';
 import { error } from './util/functional.ts';
 import { Verifier } from './messages.ts';
 import { mapPut } from './util/map.ts';
+import { BlockLinks } from './FrontierService.ts';
 
 const targLevel = 0;
 
@@ -74,29 +75,18 @@ export class FrontierService2 {
     }
   }
 
-  public mergeTreeWeights(
-    inputs: InputSpec[],
-    frontierVote: BlockFact | typeof ZERO_BLOCK,
-  ): bigint[] {
+  public mergeTreeWeights(links: BlockLinks): bigint[] {
     const weights: bigint[] = [];
 
-    for (const input of inputs) {
-      if (input.outputIdx !== input.block.frontierOutputIdx) {
-        continue;
-      }
-
-      const selfWeight = this.ctx.get(WeightService).getSelfWeight(input.block);
+    for (const squash of links.squashes) {
+      const selfWeight = this.ctx.get(WeightService).getSelfWeight(squash);
       if (selfWeight.min !== selfWeight.max) {
         throw new Error(
           `Cannot merge an input block whose inputs are unknown!`,
         );
       }
 
-      const voteDepth = frontierVote === ZERO_BLOCK ? -1 : frontierVote.frontierChainDepth ??
-        error(`Unconnected frontier chain!`);
-      const childDepth = input.block.frontierChainDepth ??
-        error(`Unconnected frontier chain!`);
-      const shift = childDepth - voteDepth - 1;
+      const shift = this.ctx.get(BlockService).compareFrontierChainDepth(squash, links.parent) - 1;
 
       const addWeight = (x: bigint, i: number) => {
         const idx = i > shift ? i - shift : 0;
@@ -106,7 +96,7 @@ export class FrontierService2 {
         weights[idx] += x;
       };
 
-      input.block.frontierDetail.treeWeights.forEach(addWeight);
+      squash.treeWeights.forEach(addWeight);
       addWeight(selfWeight.min, 0);
     }
 
