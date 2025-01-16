@@ -5,7 +5,7 @@ import { FactService } from './FactService.ts';
 import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
-import { BlockInput } from './messages.ts';
+import { BlockInput, Squash } from './messages.ts';
 import { WeightService } from './WeightService.ts';
 import { FactType } from './FactMeta.ts';
 
@@ -120,8 +120,11 @@ export class RenderService {
     graph.lines.push(`  ${bId} ${attrs};`);
 
     this.renderFrontierVote(graph, block, config);
+    for (const squash of block.squashes) {
+      this.renderInput(graph, block, squash, config, false);
+    }
     for (const input of block.inputs) {
-      this.renderInput(graph, block, input, config);
+      this.renderInput(graph, block, input, config, false);
     }
     this.renderDescendant(graph, block, config);
   }
@@ -145,21 +148,21 @@ export class RenderService {
   private renderInput(
     graph: Graph,
     block: BlockFact,
-    input: BlockInput,
+    input: BlockInput | Squash,
     config: RenderConfig,
+    isSquash: boolean,
   ) {
     const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
-    const isFrontier = inputBlock?.frontierOutputIdx === input.outputIdx;
 
-    if (
-      isFrontier ? config.renderFrontierInputs === false : config.renderOtherInputs === false
-    ) return;
+    if (isSquash ? config.renderFrontierInputs === false : config.renderOtherInputs === false) {
+      return;
+    }
 
     const bId = this.getId(graph, block);
     const iId = this.getId(graph, inputBlock);
     const attrs = this.renderAttrs({
-      color: isFrontier ? 'blue' : 'gray',
-      label: `$${inputBlock?.outputs[input.outputIdx].amount ?? '?'}`,
+      color: isSquash ? 'blue' : 'gray',
+      label: 'outputIdx' in input ? `$${inputBlock?.outputs[input.outputIdx].amount ?? '?'}` : '',
     });
 
     graph.lines.push(`  ${bId} -> ${iId} ${attrs};`);

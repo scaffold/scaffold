@@ -4,14 +4,9 @@ import { WeightService } from './WeightService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
-import { GenesisService } from './GenesisService.ts';
-import { BlockService } from './BlockService.ts';
 import { error, todo } from './util/functional.ts';
 import { FactService } from './FactService.ts';
 import { setsIntersect } from './util/set.ts';
-import { assert } from '@std/assert/assert';
-import { WalkerService } from './WalkerService.ts';
-import { MockBlock } from './WalkerService.ts';
 
 const targVoteLevel = 4;
 

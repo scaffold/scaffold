@@ -14,8 +14,6 @@ import { PeerManager } from './PeerManager.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import * as log from '@std/log';
 import { EMPTY_ARR } from './util/buffer.ts';
-import { ZERO_BLOCK } from './BlockMeta.ts';
-import { NUM_FRONTIER_LEVELS } from './FrontierService2.ts';
 
 // bin2hex(secp.utils.randomPrivateKey())
 const genesisPrivateKey = hex2bin(

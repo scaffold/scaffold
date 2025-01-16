@@ -75,34 +75,6 @@ export class FrontierService2 {
     }
   }
 
-  public mergeTreeWeights(links: BlockLinks): bigint[] {
-    const weights: bigint[] = [];
-
-    for (const squash of links.squashes) {
-      const selfWeight = this.ctx.get(WeightService).getSelfWeight(squash);
-      if (selfWeight.min !== selfWeight.max) {
-        throw new Error(
-          `Cannot merge an input block whose inputs are unknown!`,
-        );
-      }
-
-      const shift = this.ctx.get(BlockService).compareFrontierChainDepth(squash, links.parent) - 1;
-
-      const addWeight = (x: bigint, i: number) => {
-        const idx = i > shift ? i - shift : 0;
-        while (weights.length <= idx) {
-          weights.push(0n);
-        }
-        weights[idx] += x;
-      };
-
-      squash.treeWeights.forEach(addWeight);
-      addWeight(selfWeight.min, 0);
-    }
-
-    return weights;
-  }
-
   public getBlockVote(inputs: { block: BlockFact; outputIdx?: number }[]) {
     if (inputs.length === 0) {
       // TODO: Choose a frontier at random; ZERO_HASH means that it can never be merged

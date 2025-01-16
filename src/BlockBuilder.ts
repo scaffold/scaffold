@@ -21,7 +21,6 @@ import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
 import { ClockService } from './ClockService.ts';
-import { FrontierService2 } from './FrontierService2.ts';
 import { FrontierService3, VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
 
 const defaultTimeout = 100; // Enable block chunking

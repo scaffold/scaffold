@@ -4,13 +4,13 @@ import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { NoBlockPathFound } from './exceptions.ts';
 import { BlockFact } from './FactMeta.ts';
-import { FrontierService2 } from './FrontierService2.ts';
 import { VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
 import { Block, BlockOutput, FrontierTreeDetail, Squash } from './messages.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { Hash, ZERO_HASH } from './util/Hash.ts';
 import { mapPop, mapPut } from './util/map.ts';
 import { MockBlock as WalkerMockBlock, WalkerService } from './WalkerService.ts';
+import { WeightService } from './WeightService.ts';
 
 const enableChecks = true;
 
@@ -55,8 +55,36 @@ export class FrontierService {
         VOLUME_INCLUDES_SELF ? 1 : links.squashes.length,
       ),
       squashedUtxoIdxs,
-      treeWeights: this.ctx.get(FrontierService2).mergeTreeWeights(links),
+      treeWeights: this.mergeTreeWeights(links),
     };
+  }
+
+  private mergeTreeWeights(links: BlockLinks): bigint[] {
+    const weights: bigint[] = [];
+
+    for (const squash of links.squashes) {
+      const selfWeight = this.ctx.get(WeightService).getSelfWeight(squash);
+      if (selfWeight.min !== selfWeight.max) {
+        throw new Error(
+          `Cannot merge an input block whose inputs are unknown!`,
+        );
+      }
+
+      const shift = this.ctx.get(BlockService).compareFrontierChainDepth(squash, links.parent) - 1;
+
+      const addWeight = (x: bigint, i: number) => {
+        const idx = i > shift ? i - shift : 0;
+        while (weights.length <= idx) {
+          weights.push(0n);
+        }
+        weights[idx] += x;
+      };
+
+      squash.treeWeights.forEach(addWeight);
+      addWeight(selfWeight.min, 0);
+    }
+
+    return weights;
   }
 
   public getTotalUtxoCount(block: BlockFact | typeof ZERO_BLOCK): number | undefined {

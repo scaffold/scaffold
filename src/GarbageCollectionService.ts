@@ -44,12 +44,15 @@ export class GarbageCollectionService {
           return false;
         }
 
-        return !fact.inputs.some((input) => {
-          const inputBlock = this.ctx.get(BlockService)
-            .get(input.blockHash, false);
-          return inputBlock !== undefined &&
-            input.outputIdx === inputBlock.frontierOutputIdx;
-        });
+        if (
+          fact.squashes.some((squash) =>
+            this.ctx.get(BlockService).get(squash.blockHash, false) !== undefined
+          )
+        ) {
+          return false;
+        }
+
+        return true;
       },
     );
 

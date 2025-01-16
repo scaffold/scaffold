@@ -5,8 +5,8 @@ import { BASE_WORK, BlockService } from './BlockService.ts';
 import { bigintMax } from './util/bigint.ts';
 import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import { FrontierChainService } from './FrontierChainService.ts';
 import { OutputClaim } from './BlockMeta.ts';
+import { WalkerService } from './WalkerService.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -273,7 +273,7 @@ export class WeightService {
     return mapPut(cache.ancestorWeight, fact, () => {
       let minWeight = 0n;
 
-      const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
+      const block = this.ctx.get(BlockService).get(fact.parent, false);
       if (block !== undefined) {
         minWeight += this.getSelfWeight(block, cache).min;
         minWeight += this.getAncestorWeight(block, cache);
@@ -289,7 +289,7 @@ export class WeightService {
     return mapPut(cache.ancestorOffset, fact, () => {
       let offset = 0n;
 
-      const block = this.ctx.get(BlockService).get(fact.frontierVote, false);
+      const block = this.ctx.get(BlockService).get(fact.parent, false);
       if (block !== undefined) {
         offset += this.getSelfOffset(block, cache).min;
         offset += this.getAncestorOffset(block, cache);
@@ -331,18 +331,15 @@ export class WeightService {
 
       // TODO: Add in the penalty here?
 
-      const parent = fact.outputClaims[fact.frontierOutputIdx].find((x) =>
-        this.getClaimCanonicality(x.block, cache, [...assume, fact])
-          .canonicality >= 0n
+      const parent = fact.squashers.find((x) =>
+        this.getClaimCanonicality(x, cache, [...assume, fact]).canonicality >= 0n
       );
       if (parent !== undefined) {
         let siblingWeight = 0n;
-        for (const sibling of parent.block.inputs) {
-          const siblingBlock = this.ctx.get(BlockService)
-            .get(sibling.blockHash, false);
+        for (const sibling of parent.squashes) {
+          const siblingBlock = this.ctx.get(BlockService).get(sibling.blockHash, false);
           if (
             siblingBlock !== undefined && siblingBlock !== fact &&
-            siblingBlock.frontierOutputIdx === sibling.outputIdx &&
             siblingBlock.parentBlock === fact
           ) {
             siblingWeight += this.getSelfWeight(siblingBlock, cache).min;
@@ -350,9 +347,9 @@ export class WeightService {
           }
         }
 
-        const desc = this.getDescendant(parent.block, cache);
+        const desc = this.getDescendant(parent, cache);
         return {
-          parent: parent.block,
+          parent: parent,
           voters: [],
           leaves: desc.leaves,
           weight: selfWeight + siblingWeight + desc.weight,
@@ -426,7 +423,7 @@ export class WeightService {
 
       // TODO: Re-add minimization by this.ctx.config.getWeightLimit()
 
-      const parent = this.ctx.get(BlockService).get(fact.frontierVote, false);
+      const parent = this.ctx.get(BlockService).get(fact.parent, false);
       if (parent !== undefined) {
         const parentCanonicality = this.getCanonicality(parent, cache);
         if (parentCanonicality.canonicality < canonicality.canonicality) {
@@ -488,7 +485,7 @@ export class WeightService {
 
         if (assume.length !== 0) {
           const ancestorClaim = claims.find((x) =>
-            assume.some((y) => this.ctx.get(FrontierChainService).isAncestor(x.block, y))
+            assume.some((y) => this.ctx.get(WalkerService).getPath(x.block, y) !== undefined)
           );
           if (ancestorClaim !== undefined) {
             if (ancestorClaim.block === fact) {
@@ -539,11 +536,9 @@ export class WeightService {
 
       let weight = 0n;
 
-      for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.blockHash, false);
-        if (
-          block !== undefined && input.outputIdx === block.frontierOutputIdx
-        ) {
+      for (const squash of fact.squashes) {
+        const block = this.ctx.get(BlockService).get(squash.blockHash, false);
+        if (block !== undefined) {
           weight += this.getSelfWeight(block, cache).min;
           weight += this.getTreeChildrenWeight(block, cache);
         }
@@ -561,11 +556,9 @@ export class WeightService {
     return mapPut(cache.treeChildrenOffset, fact, () => {
       let weight = 0n;
 
-      for (const input of fact.inputs) {
-        const block = this.ctx.get(BlockService).get(input.blockHash, false);
-        if (
-          block !== undefined && input.outputIdx === block.frontierOutputIdx
-        ) {
+      for (const squash of fact.squashes) {
+        const block = this.ctx.get(BlockService).get(squash.blockHash, false);
+        if (block !== undefined) {
           weight += this.getSelfOffset(block, cache).min;
           weight += this.getTreeChildrenOffset(block, cache);
         }

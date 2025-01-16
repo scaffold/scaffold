@@ -102,10 +102,10 @@ export interface BlockMeta {
   // verificationResult?: CollateralClaim;
 
   // TODO: Remove
-  frontierVote: Hash;
-  frontierOutputIdx: number;
-  frontierParams: FrontierTreeParams;
-  frontierDetail: FrontierTreeDetail;
+  // frontierVote: Hash;
+  // frontierOutputIdx: number;
+  // frontierParams: FrontierTreeParams;
+  // frontierDetail: FrontierTreeDetail;
 
   squashers: BlockFact[];
 

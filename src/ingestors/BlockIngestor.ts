@@ -9,7 +9,6 @@ import { Block, BlockOutput, FrontierTreeDetail, FrontierTreeParams } from '../m
 import { BlockFlag, BlockMeta, ZERO_BLOCK } from '../BlockMeta.ts';
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { collateralHash, frontierHash, squashHash } from '../hashes.ts';
-import { FrontierService2, NUM_FRONTIER_LEVELS } from '../FrontierService2.ts';
 import { MonitoringService } from '../MonitoringService.ts';
 import {
   CollateralContractDetail,
@@ -24,7 +23,6 @@ import { VerificationService } from '../VerificationService.ts';
 import { assert } from '@std/assert/assert';
 import { VOLUME_INCLUDES_SELF } from '../FrontierService3.ts';
 import { FrontierService } from '../FrontierService.ts';
-import { FrontierChainService } from '../FrontierChainService.ts';
 import { error } from '../util/functional.ts';
 import { SQUASH_MIN_VOLUME_RATIO } from '../constants.ts';
 import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
@@ -129,7 +127,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       canonicalityOld: 0,
       collateral: 0,
 
-      ...this.getFrontierMeta(block),
+      // ...this.getFrontierMeta(block),
 
       squashers: this.ctx.get(BlockService).getSquashers(base.hash),
 
@@ -147,7 +145,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       throw new Error(`Duplicate squash hash!`);
     }
 
-    if (fact.treeWeights.length > NUM_FRONTIER_LEVELS) {
+    if (fact.treeWeights.length > 256) {
       throw new Error(`Too many tree weights!`);
     }
     for (const weight of fact.treeWeights) {
@@ -383,13 +381,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     const cb = (output: BlockOutput) => Hash.equals(output.verifier.contractHash, frontierHash);
     const idx = block.outputs.findIndex(cb);
     if (idx === -1 || block.outputs.findLastIndex(cb) !== idx) {
-      // throw new Error(`Not exactly one frontier output!`);
-      return {
-        frontierVote: block.parent,
-        frontierOutputIdx: -1,
-        frontierParams: { level: 0 },
-        frontierDetail: {},
-      };
+      throw new Error(`Not exactly one frontier output!`);
     }
     const output = block.outputs[idx];
     const frontierParams = FrontierTreeParams.decode(output.verifier.params);
