@@ -139,7 +139,6 @@ export class BlockService {
   public updateWeight(block: BlockFact) {
     let weight = this.ctx.get(WeightService).getSelfWeight(block).min;
 
-    const parentClaims = block.outputClaims[block.frontierOutputIdx];
     // TODO: Only canonical claims
 
     /*
@@ -164,23 +163,22 @@ export class BlockService {
       */
 
     block.treeParent = undefined;
-    if (parentClaims.length > 0) {
+    if (block.squashers.length > 0) {
       // Add parent weight
-      const minClaimWeight = parentClaims.map((x) =>
-        this.ctx.get(WeightService).getSelfWeight(x.block).min
+      const minClaimWeight = block.squashers.map((x) =>
+        this.ctx.get(WeightService).getSelfWeight(x).min
       ).reduce(bigintMin);
 
-      const weights = parentClaims.map((x) =>
-        x.block.descWeight -
+      const weights = block.squashers.map((x) =>
+        x.descWeight -
         this.ctx.config.getOverpaymentPenalty(
-          this.ctx.get(WeightService).getSelfWeight(x.block).max -
-            minClaimWeight,
+          this.ctx.get(WeightService).getSelfWeight(x).max - minClaimWeight,
         )
       );
       const bestWeight = weights.reduce(bigintMax);
 
       weight += bestWeight;
-      block.treeParent = parentClaims[weights.indexOf(bestWeight)].block;
+      block.treeParent = block.squashers[weights.indexOf(bestWeight)];
 
       // Add sibling weight
     }
@@ -363,10 +361,9 @@ export class BlockService {
           if (isCanonical) {
             this.setCanonicality(
               claim.block,
-              this.get(claim.block.frontierVote, false)?.isCanonical !==
-                  false &&
-                claim.block.inputs.every(
-                  (x) => this.get(x.blockHash, false)?.isCanonical !== false,
+              this.get(claim.block.parent, false)?.isCanonical !== false &&
+                claim.block.inputs.every((x) =>
+                  this.get(x.blockHash, false)?.isCanonical !== false
                 ),
             );
           } else {
@@ -549,29 +546,29 @@ export class BlockService {
     */
   }
 
-  public getBlockIndex(block: BlockFact): { min: bigint; max: bigint } {
-    // Walk up towards frontier; computing the unique index that this block is aiming to be included at
-    if (block.parentBlock === undefined) {
-      throw new Error(`Unconnected block!`);
-    }
+  // public getBlockIndex(block: BlockFact): { min: bigint; max: bigint } {
+  //   // Walk up towards frontier; computing the unique index that this block is aiming to be included at
+  //   if (block.parentBlock === undefined) {
+  //     throw new Error(`Unconnected block!`);
+  //   }
 
-    if (block.parentBlock === ZERO_BLOCK) {
-      return todo();
-    }
+  //   if (block.parentBlock === ZERO_BLOCK) {
+  //     return todo();
+  //   }
 
-    const treeSize = (2n << BigInt(block.frontierParams.level)) - 1n;
-    const voteIdx = this.getBlockIndex(block.parentBlock);
-    return {
-      min: voteIdx.min + treeSize,
-      max: voteIdx.max +
-        (2n << BigInt(block.parentBlock.frontierParams.level)) -
-        1n -
-        BigInt(
-          block.parentBlock.frontierParams.level -
-            block.frontierParams.level,
-        ),
-    };
-  }
+  //   const treeSize = (2n << BigInt(block.frontierParams.level)) - 1n;
+  //   const voteIdx = this.getBlockIndex(block.parentBlock);
+  //   return {
+  //     min: voteIdx.min + treeSize,
+  //     max: voteIdx.max +
+  //       (2n << BigInt(block.parentBlock.frontierParams.level)) -
+  //       1n -
+  //       BigInt(
+  //         block.parentBlock.frontierParams.level -
+  //           block.frontierParams.level,
+  //       ),
+  //   };
+  // }
 
   public getVoters(frontierVote: Hash) {
     return getOrCreate(this.frontierVoters, frontierVote.toPrimitive(), () => []);

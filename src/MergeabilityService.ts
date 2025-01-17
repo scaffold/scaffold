@@ -1,30 +1,29 @@
 import { assert } from '@std/assert/assert';
 import { ZERO_BLOCK } from './BlockMeta.ts';
-import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { error } from './util/functional.ts';
 import { WalkerService } from './WalkerService.ts';
-import { mapPop } from './util/map.ts';
-import { mapPut } from './util/map.ts';
-import { PARENT_MIN_VOLUME_RATIO } from './constants.ts';
-import { BlockLinks } from './FrontierService.ts';
+import { mapPop, mapPut } from './util/map.ts';
 
 export class MergeabilityService {
   constructor(private ctx: Context) {}
 
-  public isMergeable(blocks: BlockFact[]) {
-    if (blocks.length === 0) {
+  // This method can detect double-spends even where counting output claims might not.
+  public isMergeable(refs: BlockFact[], inputs: { block: BlockFact; utxoIdxs: number[] }[] = []) {
+    refs = [...new Set([...refs, ...inputs.map((x) => x.block)])];
+
+    if (refs.length === 0) {
       return true;
     }
 
-    const roots = new Set(blocks.map((x) => x.parentChainRoot));
+    const roots = new Set(refs.map((x) => x.parentChainRoot));
     if (roots.size !== 1) {
       throw new Error('Unconnected chains');
     }
     const [root] = roots;
 
-    const paths = blocks.flatMap((x) => {
+    const paths = refs.flatMap((x) => {
       const path = this.ctx.get(WalkerService).getPath(root, x) ?? error('Internal error!');
       assert(path.pop() === root);
       return path;
@@ -32,7 +31,9 @@ export class MergeabilityService {
     paths.sort((a, b) => (b as BlockFact).parentChainDepth - (a as BlockFact).parentChainDepth);
     paths.push(root);
 
-    const spends = new Map<BlockFact | typeof ZERO_BLOCK, number[]>();
+    const spends = new Map<BlockFact | typeof ZERO_BLOCK, number[]>(
+      inputs.map((x) => [x.block, x.utxoIdxs]),
+    );
 
     for (const entry of new Set(paths)) {
       const descSpends = mapPop(spends, entry) ?? [];

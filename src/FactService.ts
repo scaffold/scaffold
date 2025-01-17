@@ -233,9 +233,7 @@ export class FactService {
 
     let buf: Uint8Array;
     coder.encode(msg, (size) => {
-      buf = new Uint8Array(
-        size + (provider.isSigned ? SIGNATURE_LENGTH + headerSize : headerSize),
-      );
+      buf = new Uint8Array(size + (provider.isSigned ? SIGNATURE_LENGTH + headerSize : headerSize));
       return buf.subarray(headerSize);
     });
     const data = buf!;
@@ -248,10 +246,7 @@ export class FactService {
       const sig = secp.sign(
         Hash.digest(data.subarray(0, size)).toBytes(),
         this.ctx.config.selfPrivateKey,
-        {
-          lowS: true,
-          extraEntropy: this.ctx.config.entropyProvider.randomBytes(32),
-        },
+        { lowS: true, extraEntropy: this.ctx.config.entropyProvider.randomBytes(32) },
       );
       const sigBytes = sig.toCompactRawBytes();
       if (sigBytes.byteLength !== SIGNATURE_LENGTH - 1) {
@@ -357,23 +352,17 @@ export class FactService {
 
   private computePublicKey(fact: Pick<Fact, 'data' | 'signature'>) {
     const hash = Hash.digest(fact.data.subarray(0, -SIGNATURE_LENGTH));
-    return this.getSignature(fact)
-      .recoverPublicKey(hash.toBytes()).toRawBytes();
+    return this.getSignature(fact).recoverPublicKey(hash.toBytes()).toRawBytes();
   }
   private getSignature(fact: Pick<Fact, 'signature'>) {
     if (fact.signature === undefined) {
       throw new Error(`No signature on fact!`);
     }
-    return secp.Signature.fromCompact(
-      fact.signature.subarray(0, SIGNATURE_LENGTH - 1),
-    ).addRecoveryBit(fact.signature[SIGNATURE_LENGTH - 1]);
+    return secp.Signature.fromCompact(fact.signature.subarray(0, SIGNATURE_LENGTH - 1))
+      .addRecoveryBit(fact.signature[SIGNATURE_LENGTH - 1]);
   }
 
-  private create(
-    data: Uint8Array,
-    source: FactSource,
-    mutator?: (fact: Fact) => void,
-  ): Fact {
+  private create(data: Uint8Array, source: FactSource, mutator?: (fact: Fact) => void): Fact {
     if (arrEquals(data.subarray(0, 4), zstdMagic)) {
       data = new Uint8Array(zstd.decompress(data));
     }
@@ -400,12 +389,8 @@ export class FactService {
       throw new BarrierException(`Invalid message type ${type}!`);
     }
 
-    if (
-      provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount
-    ) {
-      throw new Error(
-        `Hit the fact count limit of ${this.ctx.config.limitFactCount}!`,
-      );
+    if (provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount) {
+      throw new Error(`Hit the fact count limit of ${this.ctx.config.limitFactCount}!`);
     }
 
     this.facts.set(hash.toPrimitive(), ingestingFact);
@@ -418,10 +403,7 @@ export class FactService {
     const fact = provider.create({
       hash,
       data,
-      message: data.subarray(
-        headerSize,
-        provider.isSigned ? -SIGNATURE_LENGTH : undefined,
-      ),
+      message: data.subarray(headerSize, provider.isSigned ? -SIGNATURE_LENGTH : undefined),
 
       signature,
       signer: provider.isSigned ? this.computePublicKey({ data, signature }) : undefined,
@@ -433,16 +415,8 @@ export class FactService {
 
       toConnections: [],
 
-      collateralizations: mapPut(
-        this.collateralByHash,
-        hash.toPrimitive(),
-        () => [],
-      ),
-      validities: mapPut(
-        this.validitiesByHash,
-        hash.toPrimitive(),
-        () => new Map(),
-      ),
+      collateralizations: mapPut(this.collateralByHash, hash.toPrimitive(), () => []),
+      validities: mapPut(this.validitiesByHash, hash.toPrimitive(), () => new Map()),
 
       visitedAt: 0,
       references: 0,
@@ -497,10 +471,7 @@ export class FactService {
     try {
       this.ctx.config.storageProvider.set(0, fact.hash, fact.data);
     } catch (err) {
-      console.error(
-        `Could not save fact ${fact.hash.toHex()} to storage:`,
-        err,
-      );
+      console.error(`Could not save fact ${fact.hash.toHex()} to storage:`, err);
     }
   }
 
@@ -508,10 +479,7 @@ export class FactService {
     try {
       this.ctx.config.storageProvider.set(0, fact.hash);
     } catch (err) {
-      console.error(
-        `Could not delete fact ${fact.hash.toHex()} from storage:`,
-        err,
-      );
+      console.error(`Could not delete fact ${fact.hash.toHex()} from storage:`, err);
     }
   }
 
@@ -522,10 +490,7 @@ export class FactService {
         this.create(entry.value, FactSource.Storage);
         count++;
       } catch (err) {
-        console.error(
-          `Could not ingest fact ${entry.key.toHex()} from storage:`,
-          err,
-        );
+        console.error(`Could not ingest fact ${entry.key.toHex()} from storage:`, err);
       }
     }
     console.log(`Ingested ${count} facts from storage!`);

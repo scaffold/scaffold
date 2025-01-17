@@ -22,14 +22,11 @@ import { ContractClassifierService } from './ContractClassifierService.ts';
 import { CollateralHint } from './collateralMessages.ts';
 import { ComputationDriver, ComputationType } from './ComputationMeta.ts';
 import { VerificationService } from './VerificationService.ts';
-import { mapPut } from './util/map.ts';
-import { FrontierChainService } from './FrontierChainService.ts';
-import { frontierInputCount } from './contracts/FrontierContract.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { retryAbortable } from './util/abortable.ts';
-import { VerifierHelper } from './VerifierHelper.ts';
 import { QaDebugger } from './QaDebugger.ts';
 import { WeightService } from './WeightService.ts';
+import { MergeabilityService } from './MergeabilityService.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -313,11 +310,11 @@ export class GenerationService {
       // }
 
       return this.ctx.get(WeightService).isCanonical(testInput.block) &&
-        this.ctx.get(FrontierChainService).getVote([
-            ...inputs,
-            ...refs.map((ref) => ({ block: ref })),
-            testInput,
-          ]) !== undefined;
+        this.ctx.get(MergeabilityService).isMergeable([
+          ...inputs.map((x) => x.block),
+          ...refs,
+          testInput.block,
+        ]);
     };
 
     const collectInputs = () => {

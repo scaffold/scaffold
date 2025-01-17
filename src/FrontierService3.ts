@@ -90,9 +90,9 @@ export class FrontierService3 {
   private mergeSortedHeads(heads: BlockFact[]): BlockLinks {
     assert(heads.length > 0);
 
-    if (heads.length === 1) {
-      return { parent: heads[0], squashes: [] };
-    }
+    // if (heads.length === 1) {
+    //   return { parent: heads[0], squashes: [] };
+    // }
 
     let parent: BlockFact | typeof ZERO_BLOCK = heads.pop()!;
     let mergedSize = heads.reduce(
@@ -101,7 +101,7 @@ export class FrontierService3 {
     );
 
     // Squash all heads, including parents until we find a parent large enough to merge into
-    while (parent !== ZERO_BLOCK && parent.volume < mergedSize * PARENT_MIN_VOLUME_RATIO) {
+    while (parent !== ZERO_BLOCK && parent.volume <= mergedSize * PARENT_MIN_VOLUME_RATIO) {
       heads.push(parent);
       mergedSize += parent.volume + (VOLUME_INCLUDES_SELF ? 0 : 1);
       parent = parent.parentBlock ?? error('Unconnected chain');

@@ -320,22 +320,15 @@ export class FrontierService {
 
           assert(prev !== ZERO_BLOCK);
 
-          // Tree children always have a group index of zero
-          const treeChildren = it.inputs.filter((input) => input.groupIdx === 0);
-          assert(treeChildren.length === frontierInputCount);
-
           const prevCpy = prev;
-          const childIdx = treeChildren.findIndex((input) =>
-            input.outputIdx === prevCpy.frontierOutputIdx &&
-            ('block' in input
-              ? input.block === prevCpy
-              : Hash.equals(input.blockHash, prevCpy.hash))
+          const childIdx = it.squashes.findIndex((squash) =>
+            Hash.equals(squash.blockHash, prevCpy.hash)
           );
           assert(childIdx !== -1);
 
           const voterSpends: number[][] = [prev.inputs.map((x) => x.utxoIdx)];
-          for (const input of treeChildren) {
-            const child = this.ctx.get(BlockService).get(input.blockHash, false);
+          for (const squash of it.squashes) {
+            const child = this.ctx.get(BlockService).get(squash.blockHash, false);
             if (child === undefined) {
               throw new Error(`Missing tree child!`);
             }

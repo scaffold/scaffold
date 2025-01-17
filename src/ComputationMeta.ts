@@ -32,6 +32,11 @@ export interface ComputationDriver extends WorkerDriver {
   getContractHash(): Hash;
   getParams(): Uint8Array;
 
+  // TODO: Implement this
+  // It locks the parent and squashes, and returns a hash including both of them
+  // getAncestorHash(): Hash;
+  // getAuthorHash(): Hash;
+
   getHint(idx: number, bop: BurdenOfProof): Uint8Array; // Only valid if this is a contract
   getBody(): Uint8Array; // Only valid if this is a contract
   requireBody(data: Uint8Array): void; // Provide body if generator, require body equals if contract. Fast-path valid if pointer equals getBody().

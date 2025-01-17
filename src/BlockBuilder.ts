@@ -17,11 +17,11 @@ import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { WeightService } from './WeightService.ts';
 import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { assert, error, todo } from './util/functional.ts';
-import { FrontierChainService } from './FrontierChainService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
 import { ClockService } from './ClockService.ts';
 import { FrontierService3, VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
+import { MergeabilityService } from './MergeabilityService.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -158,11 +158,11 @@ export class BlockBuilder {
             true,
             (input) =>
               this.ctx.get(WeightService).isCanonical(input.block) &&
-              this.ctx.get(FrontierChainService).getVote([
-                  ...inputs,
-                  ...refBlocks.map((ref) => ({ block: ref })),
-                  input,
-                ]) !== undefined,
+              this.ctx.get(MergeabilityService).isMergeable([
+                ...inputs.map((x) => x.block),
+                ...refBlocks,
+                input.block,
+              ]),
             (input) =>
               inputs.push({
                 ...input,
@@ -206,18 +206,21 @@ export class BlockBuilder {
       }
     }
 
-    while (ioDelta < 0n) {
+    while (ioDelta < 0n || inputs.length === 0) {
       const input = this.ctx.get(UnspentOutputManager).pop(
         this.selfAccountVerifier,
         (accountInput) =>
           this.ctx.get(WeightService).isCanonical(accountInput.block) &&
-          this.ctx.get(FrontierChainService).getVote([
-              ...inputs,
-              ...refBlocks.map((ref) => ({ block: ref })),
-              accountInput,
-            ]) !== undefined,
+          this.ctx.get(MergeabilityService).isMergeable([
+            ...inputs.map((x) => x.block),
+            ...refBlocks,
+            accountInput.block,
+          ]),
       );
       if (input === undefined) {
+        if (checkIoBalance) {
+          throw new RetryBuildingException('Insufficient coins');
+        }
         break;
       }
 
@@ -240,8 +243,6 @@ export class BlockBuilder {
         detail: EMPTY_ARR,
         groupIdx: nextGroupIdx(),
       });
-    } else if (ioDelta < 0n && checkIoBalance) {
-      throw new RetryBuildingException('Insufficient coins');
     }
 
     const refs = refBlocks.map((block) => block.hash);

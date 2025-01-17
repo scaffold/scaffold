@@ -64,8 +64,8 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
 
       totalWeight: (block) => {
         let maxParentWeight = 0n;
-        for (const claim of block.outputClaims[block.frontierOutputIdx]) {
-          const weight = this.get(claim.block, 'totalWeight');
+        for (const squasher of block.squashers) {
+          const weight = this.get(squasher, 'totalWeight');
           if (weight > maxParentWeight) {
             maxParentWeight = weight;
           }
@@ -108,13 +108,10 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
   ) {
     let res = 0n;
 
-    for (const input of block.inputs) {
-      const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
-      if (
-        inputBlock !== undefined &&
-        input.outputIdx === inputBlock.frontierOutputIdx
-      ) {
-        res += extractor(inputBlock);
+    for (const squash of block.squashes) {
+      const squashBlock = this.ctx.get(BlockService).get(squash.blockHash, false);
+      if (squashBlock !== undefined) {
+        res += extractor(squashBlock);
       }
     }
 
@@ -129,13 +126,13 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
 
   private uniqueVoters(voters: BlockFact[]) {
     /*
-    Simply filter by blocks who have no parents also in the voter set
+    Simply filter by blocks who have no squashers also in the voter set
     Parents at level L eliminate their children from the voter set, and a missing child eliminates ALL voters with level >= L-2, since they might be a grandchild
     */
 
-    const isValidParent = (block: BlockFact) => true;
-    voters = voters.filter(isValidParent);
+    return voters.filter((x) => !x.squashers.some((squasher) => voters.includes(squasher)));
 
+    /*
     let maxMissingChildLevel = 0;
     for (const voter of voters) {
       if (
@@ -151,5 +148,6 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
       block.frontierParams.level >= levelThreshold &&
       block.outputClaims[block.frontierOutputIdx].every((claim) => !voters.includes(claim.block))
     );
+    */
   }
 }

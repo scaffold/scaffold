@@ -167,8 +167,11 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       this.linkFrontier(fact, voter);
     }
 
-    if (fact.inputs.length === 0 && fact.source !== FactSource.Genesis) {
-      throw new Error(`Blocks must have at least one input!`);
+    if (
+      !fact.inputs.some((x) => x.utxoIdx >= fact.outputs.length) &&
+      fact.source !== FactSource.Genesis
+    ) {
+      throw new Error(`Blocks must have at least one external input!`);
     }
 
     fact.inputs.forEach((input, idx) => {

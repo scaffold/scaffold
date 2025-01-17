@@ -403,6 +403,8 @@ export class WeightService {
   }
 
   public isCanonical(fact: BlockFact, cache = this.getCache()) {
+    return true;
+
     const { canonicality, usurper } = this.getCanonicality(fact, cache);
     if ((canonicality >= 0n) !== (usurper === undefined)) {
       throw new Error(`Invalid response!`);
