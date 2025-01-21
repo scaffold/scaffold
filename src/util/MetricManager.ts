@@ -7,17 +7,10 @@ type MetricState<Metrics> = {
   [Key in keyof Metrics]?: Metrics[Key] | typeof recursionSentinel;
 };
 
-export class MetricManager<
-  Entity,
-  Metrics extends { [key: string]: NotUndefined },
-> {
+export class MetricManager<Entity, Metrics extends { [key: string]: NotUndefined }> {
   private data = new Map<Entity, MetricState<Metrics>>();
 
-  constructor(
-    private generator: {
-      [Key in keyof Metrics]: (entity: Entity) => Metrics[Key];
-    },
-  ) {}
+  constructor(private generator: { [Key in keyof Metrics]: (entity: Entity) => Metrics[Key] }) {}
 
   reset() {
     this.data.clear();

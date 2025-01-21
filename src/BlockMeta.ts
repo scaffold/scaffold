@@ -43,6 +43,13 @@ export const ZERO_BLOCK = Symbol('ZeroBlock');
 export interface BlockMeta {
   // verifiers: (Verifier | undefined)[];
 
+  weight: bigint;
+
+  newOutputSpends: Map<number, BlockFact[]>;
+
+  // Note this will include squashers and squashes since they will likely spend the same utxos
+  conflicts: Set<BlockFact>;
+
   // This is the sum of the self min weight and all descendant min weights
   descWeight: bigint;
   treeParent?: BlockFact;
@@ -68,6 +75,7 @@ export interface BlockMeta {
   inputOutputIdxs: (number | undefined)[];
 
   // Note that when using this, we also need to consider (1) currently-running generators, and (2) generated but not yet emitted BlockSpecs.
+  // TODO: Remove; sometimes an output will be claimed by a tree but we don't know the exact block yet.
   outputClaims: OutputClaim[][];
 
   isCanonical: boolean;

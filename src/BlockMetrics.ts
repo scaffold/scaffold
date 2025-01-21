@@ -3,6 +3,8 @@ import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { WeightService } from './WeightService.ts';
+import { frontierHash } from './hashes.ts';
+import { Hash } from './util/Hash.ts';
 import { MetricManager } from './util/MetricManager.ts';
 
 /*
@@ -24,6 +26,9 @@ In general, if a parent is WORSE by weight than its 2 children, don't even consi
 */
 
 type Metrics = {
+  charityOutput: bigint;
+  workOutput: bigint;
+
   selfWeight: bigint;
   voterWeight: bigint[];
   totalWeight: bigint;
@@ -38,6 +43,19 @@ type Metrics = {
 export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
   constructor(private ctx: Context) {
     super({
+      charityOutput: (block) =>
+        block.outputs.reduce(
+          (acc, cur) =>
+            Hash.equals(cur.verifier.contractHash, frontierHash) ? acc + cur.amount : acc,
+          0n,
+        ),
+      workOutput: (block) =>
+        block.outputs.reduce(
+          (acc, cur) =>
+            Hash.equals(cur.verifier.contractHash, frontierHash) ? acc : acc + cur.amount,
+          0n,
+        ),
+
       selfWeight: (block) => this.ctx.get(WeightService).getSelfWeight(block).min,
 
       voterWeight: (block) => {

@@ -24,7 +24,7 @@ import { PeerManager } from './PeerManager.ts';
 import { QaDebugger } from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
-import { getOrCreate } from './util/map.ts';
+import { getOrCreate, mapPut } from './util/map.ts';
 import { BlockFact, Collateralization, Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
 import { FactService, headerSize } from './FactService.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
@@ -52,6 +52,7 @@ import { RenderService } from './RenderService.ts';
 import { bigintMax } from './util/bigint.ts';
 import { bigintMin } from './util/bigint.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
+import { FrontierService } from './FrontierService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -134,6 +135,134 @@ export class BlockService {
 
   public sort(items: { block: BlockFact }[], frontier: never) {
     throw new Error(`Unimplemented`);
+  }
+
+  public propagateSpends(
+    block: BlockFact | typeof ZERO_BLOCK,
+    utxoIdxs: number[],
+    fromBlock: BlockFact,
+  ) {
+    if (utxoIdxs.length === 0) {
+      return;
+    }
+    if (block === ZERO_BLOCK) {
+      throw new Error(`Block ${fromBlock.hash.toHex()} spends utxos from the zero block!`);
+    }
+
+    let offset = this.ctx.get(FrontierService).getNewUtxoCount(block);
+
+    const rebasedUtxoIdxs: number[] = [];
+    let j = 0;
+    for (const idx of utxoIdxs) {
+      if (idx < offset) {
+        mapPut(block.newOutputSpends, idx, () => [fromBlock], (arr) => {
+          for (const x of arr) {
+            x.conflicts.add(fromBlock);
+            fromBlock.conflicts.add(x);
+          }
+          arr.push(fromBlock);
+          return arr;
+        });
+        continue;
+      }
+
+      while (j < block.squashedUtxoIdxs.length && block.squashedUtxoIdxs[j] <= idx - offset) {
+        j++;
+        offset--;
+      }
+
+      rebasedUtxoIdxs.push(idx - offset);
+    }
+
+    assert(block.parentBlock !== undefined);
+    this.propagateSpends(block.parentBlock, rebasedUtxoIdxs, fromBlock);
+  }
+
+  private getTotalOutput(block: BlockFact) {
+    return block.outputs.reduce((acc, cur) => acc + cur.amount, 0n);
+  }
+
+  private getFreeMarketOutput(block: BlockFact) {
+    return block.outputs.reduce(
+      (acc, cur) => Hash.equals(cur.verifier.contractHash, frontierHash) ? acc + cur.amount : acc,
+      0n,
+    );
+  }
+
+  private getSelfishOutput(block: BlockFact) {
+    return block.outputs.reduce(
+      (acc, cur) => Hash.equals(cur.verifier.contractHash, frontierHash) ? acc : acc + cur.amount,
+      0n,
+    );
+  }
+
+  public getSelfWork(block: BlockFact) {
+    let work = 1n;
+
+    for (const input of block.inputs) {
+      const inputBlock = this.get(input.blockHash, false);
+      if (inputBlock !== undefined) {
+        const output = inputBlock.outputs[input.outputIdx];
+        if (Hash.equals(output.verifier.contractHash, frontierHash)) {
+          work += output.amount;
+        }
+      }
+    }
+
+    for (const output of block.outputs) {
+      if (Hash.equals(output.verifier.contractHash, frontierHash)) {
+        work -= output.amount;
+      }
+    }
+
+    return work;
+  }
+
+  public getConflictScore(block: BlockFact) {
+    return block.children.reduce(
+      (acc, cur) => acc + this.getWeight(cur),
+      -this.getSelfWork(block),
+    );
+  }
+
+  private isConflictWinner(block: BlockFact) {
+    const score = this.getConflictScore(block);
+
+    for (const conflict of block.conflicts) {
+      const conflictScore = this.getConflictScore(conflict);
+      if (
+        conflictScore > score ||
+        (conflictScore === score && Hash.compare(conflict.hash, block.hash) > 0)
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  public getWeight(block: BlockFact): bigint {
+    if (this.isConflictWinner(block)) {
+      block.weight = block.children.reduce(
+        (acc, cur) => acc + this.getWeight(cur),
+        this.getSelfWork(block),
+      );
+    } else {
+      block.weight = 0n;
+    }
+
+    return block.weight;
+  }
+
+  private getChildWeight(block: BlockFact) {
+    const selfishOutput = this.getSelfishOutput(block);
+
+    // Propagate back toward parents
+    // For each parent in the chain, if that parent is in the parent chain of a squashed block, decrement the update by the squashed work.
+    // Stop propagating at the squasher's parent. How does this work with multiple squashers?
+  }
+
+  private getChildSpends(block: BlockFact) {
   }
 
   public updateWeight(block: BlockFact) {

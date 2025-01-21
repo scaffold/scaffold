@@ -27,6 +27,7 @@ import { error } from '../util/functional.ts';
 import { SQUASH_MIN_VOLUME_RATIO } from '../constants.ts';
 import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
 import { LitigationService } from '../LitigationService.ts';
+import { mergeSorted } from '../util/sorted.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
   type = FactType.Block as const;
@@ -73,6 +74,12 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     const meta: BlockMeta = {
       // verifiers: block.bodies.map(() => undefined),
+
+      weight: 0n,
+
+      newOutputSpends: new Map(),
+
+      conflicts: new Set(),
 
       descWeight: 0n,
       canonicality: 0n,
@@ -340,6 +347,8 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     this.ctx.get(UnspentOutputManager).tick();
 
     this.ctx.get(BlockService).updateWeight(fact);
+
+    this.initSpendPropagation(fact);
   }
 
   forget(fact: BlockFact) {
@@ -436,6 +445,23 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       for (const voter of block.children) {
         this.setFrontierChainDepth(voter, root, depth + 1);
       }
+
+      this.initSpendPropagation(block);
+    }
+  }
+
+  private initSpendPropagation(block: BlockFact) {
+    if (block.parentChainRoot === ZERO_BLOCK) {
+      this.ctx.get(BlockService).propagateSpends(
+        block,
+        block.inputs.map((x) => x.utxoIdx),
+        block,
+      );
+      this.ctx.get(BlockService).propagateSpends(
+        block.parentBlock ?? error('Internal error!'),
+        block.squashedUtxoIdxs,
+        block,
+      );
     }
   }
 

@@ -454,7 +454,7 @@ export class FrontierService {
     return result;
   }
 
-  private getNewUtxoCount(block: { squashes: Squash[]; outputs: unknown[] }) {
+  public getNewUtxoCount(block: { squashes: Squash[]; outputs: unknown[] }) {
     return block.squashes.reduce((acc, x) => acc + x.newUtxoCount, block.outputs.length);
   }
 

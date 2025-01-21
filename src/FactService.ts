@@ -20,6 +20,7 @@ import { FactEmitter } from './FactEmitter.ts';
 import { ClockService } from './ClockService.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
 import { BarrierException } from './exceptions.ts';
+import { assert } from '@std/assert/assert';
 
 const maxForgetDurationMs = 2500;
 
@@ -58,6 +59,8 @@ export class FactService {
   private forgottenCount = 0;
 
   private nextFactIdx = 0;
+
+  private isCreating = false;
 
   constructor(private ctx: Context) {
     for (const Provider of this.ctx.config.ingestionProviders) {
@@ -363,108 +366,117 @@ export class FactService {
   }
 
   private create(data: Uint8Array, source: FactSource, mutator?: (fact: Fact) => void): Fact {
-    if (arrEquals(data.subarray(0, 4), zstdMagic)) {
-      data = new Uint8Array(zstd.decompress(data));
+    if (this.isCreating) {
+      throw new Error(`Cannot create facts recursively!`);
     }
-
-    if (data.byteLength < headerSize) {
-      throw new Error(`Message length (${data.byteLength}) is too short!`);
-    }
-    if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
-      throw new Error(`Fact doesn't start with the magic bytes!`);
-    }
-
-    const hash = Hash.digest(data);
-    const existing = this.facts.get(hash.toPrimitive());
-    if (existing !== undefined) {
-      if (existing === ingestingFact) {
-        throw new Error(`Cannot re-ingest an ingesting or invalid fact!`);
+    this.isCreating = true;
+    try {
+      if (arrEquals(data.subarray(0, 4), zstdMagic)) {
+        data = new Uint8Array(zstd.decompress(data));
       }
-      return existing;
-    }
 
-    const type: FactType = data[factMagic.byteLength];
-    const provider = this.factories[type];
-    if (provider === undefined) {
-      throw new BarrierException(`Invalid message type ${type}!`);
-    }
+      if (data.byteLength < headerSize) {
+        throw new Error(`Message length (${data.byteLength}) is too short!`);
+      }
+      if (!arrEquals(data.subarray(0, factMagic.byteLength), factMagic)) {
+        throw new Error(`Fact doesn't start with the magic bytes!`);
+      }
 
-    if (provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount) {
-      throw new Error(`Hit the fact count limit of ${this.ctx.config.limitFactCount}!`);
-    }
-
-    this.facts.set(hash.toPrimitive(), ingestingFact);
-
-    if (provider.isSigned && data.byteLength < SIGNATURE_LENGTH + headerSize) {
-      throw new Error(`Message length (${data.byteLength}) is too short!`);
-    }
-    const signature = provider.isSigned ? data.subarray(-SIGNATURE_LENGTH) : undefined;
-
-    const fact = provider.create({
-      hash,
-      data,
-      message: data.subarray(headerSize, provider.isSigned ? -SIGNATURE_LENGTH : undefined),
-
-      signature,
-      signer: provider.isSigned ? this.computePublicKey({ data, signature }) : undefined,
-
-      receivedAt: this.ctx.config.timeProvider.now(),
-      source,
-      fromConnections: [],
-      usefulness: 0,
-
-      toConnections: [],
-
-      collateralizations: mapPut(this.collateralByHash, hash.toPrimitive(), () => []),
-      validities: mapPut(this.validitiesByHash, hash.toPrimitive(), () => new Map()),
-
-      visitedAt: 0,
-      references: 0,
-
-      factIdx: this.nextFactIdx++,
-      typeStr: FactType[type],
-      sourceStr: FactSource[source],
-      sillyName: generateSillyName(),
-      backtrace: new Error().stack,
-    });
-
-    mutator?.(fact);
-
-    if (sortKeys) {
-      Object.keys(fact).sort().forEach((key) => {
-        if (key !== 'typeStr' && key !== 'sourceStr' && key !== 'sillyName') {
-          const val = (fact as any)[key];
-          delete (fact as any)[key];
-          (fact as any)[key] = val;
+      const hash = Hash.digest(data);
+      const existing = this.facts.get(hash.toPrimitive());
+      if (existing !== undefined) {
+        if (existing === ingestingFact) {
+          throw new Error(`Cannot re-ingest an ingesting or invalid fact!`);
         }
-      });
-    }
-
-    if (this.ctx.config.logLevel <= log.LogLevels.DEBUG) {
-      console.log(`Created fact:`, fact.hash.toHex(), fact);
-    } else if (this.ctx.config.logLevel <= log.LogLevels.INFO) {
-      console.log(
-        `Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}:`,
-        fact.hash.toHex(),
-      );
-    }
-
-    if (provider.isPersistent) {
-      this.facts.set(hash.toPrimitive(), fact);
-
-      this.ctx.get(GarbageCollectionService).markVisited(fact);
-      this.ctx.get(GarbageCollectionService).collect();
-
-      this.writeToStorage(fact);
-
-      if (fact.signer !== undefined) {
-        this.ctx.get(PeerManager).putPeer(fact.signer).producedFacts.add(fact);
+        return existing;
       }
+
+      const type: FactType = data[factMagic.byteLength];
+      const provider = this.factories[type];
+      if (provider === undefined) {
+        throw new BarrierException(`Invalid message type ${type}!`);
+      }
+
+      if (provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount) {
+        throw new Error(`Hit the fact count limit of ${this.ctx.config.limitFactCount}!`);
+      }
+
+      this.facts.set(hash.toPrimitive(), ingestingFact);
+
+      if (provider.isSigned && data.byteLength < SIGNATURE_LENGTH + headerSize) {
+        throw new Error(`Message length (${data.byteLength}) is too short!`);
+      }
+      const signature = provider.isSigned ? data.subarray(-SIGNATURE_LENGTH) : undefined;
+
+      const fact = provider.create({
+        hash,
+        data,
+        message: data.subarray(headerSize, provider.isSigned ? -SIGNATURE_LENGTH : undefined),
+
+        signature,
+        signer: provider.isSigned ? this.computePublicKey({ data, signature }) : undefined,
+
+        receivedAt: this.ctx.config.timeProvider.now(),
+        source,
+        fromConnections: [],
+        usefulness: 0,
+
+        toConnections: [],
+
+        collateralizations: mapPut(this.collateralByHash, hash.toPrimitive(), () => []),
+        validities: mapPut(this.validitiesByHash, hash.toPrimitive(), () => new Map()),
+
+        visitedAt: 0,
+        references: 0,
+
+        factIdx: this.nextFactIdx++,
+        typeStr: FactType[type],
+        sourceStr: FactSource[source],
+        sillyName: generateSillyName(),
+        backtrace: new Error().stack,
+      });
+
+      mutator?.(fact);
+
+      if (sortKeys) {
+        Object.keys(fact).sort().forEach((key) => {
+          if (key !== 'typeStr' && key !== 'sourceStr' && key !== 'sillyName') {
+            const val = (fact as any)[key];
+            delete (fact as any)[key];
+            (fact as any)[key] = val;
+          }
+        });
+      }
+
+      if (this.ctx.config.logLevel <= log.LogLevels.DEBUG) {
+        console.log(`Created fact:`, fact.hash.toHex(), fact);
+      } else if (this.ctx.config.logLevel <= log.LogLevels.INFO) {
+        console.log(
+          `Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}:`,
+          fact.hash.toHex(),
+        );
+      }
+
+      if (provider.isPersistent) {
+        this.facts.set(hash.toPrimitive(), fact);
+
+        this.ctx.get(GarbageCollectionService).markVisited(fact);
+        this.ctx.get(GarbageCollectionService).collect();
+
+        this.writeToStorage(fact);
+
+        if (fact.signer !== undefined) {
+          this.ctx.get(PeerManager).putPeer(fact.signer).producedFacts.add(fact);
+        }
+      }
+
+      provider.ingest(fact);
+
+      return fact;
+    } finally {
+      assert(this.isCreating);
+      this.isCreating = false;
     }
-
-    provider.ingest(fact);
-
-    return fact;
   }
 
   private writeToStorage(fact: Fact) {
