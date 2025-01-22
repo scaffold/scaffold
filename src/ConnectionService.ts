@@ -113,7 +113,7 @@ export class ConnectionService {
     };
 
     const conn: Connection = {
-      name: generateSillyName(),
+      name: generateSillyName(this.ctx.config.entropyProvider),
       // peer,
       remotePublicKey,
       remoteClientNonce,
@@ -121,26 +121,26 @@ export class ConnectionService {
       provider,
       sendReliable: (data: Uint8Array) => {
         if (conn.isConnected) {
-          conn.sendReliableCount++;
-          this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(conn);
-
           try {
             provider.sendReliable(data);
           } catch (err) {
             onSendError(err);
           }
+
+          conn.sendReliableCount++;
+          this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(conn);
         }
       },
       sendFast: (data: Uint8Array) => {
         if (conn.isConnected) {
-          conn.sendFastCount++;
-          this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(conn);
-
           try {
             provider.sendFast(data);
           } catch (err) {
             onSendError(err);
           }
+
+          conn.sendFastCount++;
+          this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(conn);
         }
       },
       shutdown,

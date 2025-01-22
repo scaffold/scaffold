@@ -76,6 +76,7 @@
     "@std/fs": "jsr:@std/fs@^1.0.8",
     "@std/io": "jsr:@std/io@^0.225.0",
     "@std/log": "jsr:@std/log@^0.224.12",
+    "@std/random": "jsr:@std/random@^0.1.0",
     "dnt": "https://deno.land/x/dnt@0.39.0/mod.ts"
   }
 }

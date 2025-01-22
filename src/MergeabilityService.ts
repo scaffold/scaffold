@@ -5,12 +5,17 @@ import { BlockFact } from './FactMeta.ts';
 import { error } from './util/functional.ts';
 import { WalkerService } from './WalkerService.ts';
 import { mapPop, mapPut } from './util/map.ts';
+import { BlockService } from './BlockService.ts';
 
 export class MergeabilityService {
   constructor(private ctx: Context) {}
 
-  // This method can detect double-spends even where counting output claims might not.
   public isMergeable(refs: BlockFact[], inputs: { block: BlockFact; utxoIdxs: number[] }[] = []) {
+    return this.ctx.get(BlockService).isMergeable(refs, inputs);
+  }
+
+  // This method only propagates towards parents, so will not consider double-spends of a squashed block
+  public isMergeableOld(refs: BlockFact[], inputs: { block: BlockFact; utxoIdxs: number[] }[]) {
     refs = [...new Set([...refs, ...inputs.map((x) => x.block)])];
 
     if (refs.length === 0) {

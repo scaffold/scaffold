@@ -7,6 +7,10 @@ import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { OutputClaim } from './BlockMeta.ts';
 import { WalkerService } from './WalkerService.ts';
+import { Hash } from './util/Hash.ts';
+import { frontierHash } from './hashes.ts';
+import { assert } from './util/functional.ts';
+import { Verifier } from './messages.ts';
 
 // When choosing an input, we compare blocks by D-(A+C), where D is the canonical derived work if C were canonical.
 
@@ -90,6 +94,103 @@ export class WeightService {
 
   private getCache() {
     return this.cache;
+  }
+
+  public isFreeMarketOutput(verifier: Verifier) {
+    return Hash.equals(verifier.contractHash, frontierHash);
+  }
+
+  public getSelfWork(block: BlockFact) {
+    let work = 1n;
+
+    for (const input of block.inputs) {
+      const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
+      if (inputBlock !== undefined) {
+        const output = inputBlock.outputs[input.outputIdx];
+        if (this.isFreeMarketOutput(output.verifier)) {
+          work += output.amount;
+        }
+      }
+    }
+
+    for (const output of block.outputs) {
+      if (this.isFreeMarketOutput(output.verifier)) {
+        work -= output.amount;
+      }
+    }
+
+    return work;
+  }
+
+  public getConflictScore(block: BlockFact) {
+    return block.children.reduce(
+      (acc, cur) => acc + cur.childWeight,
+      -this.getSelfWork(block),
+    );
+  }
+
+  public isConflictWinner(block: BlockFact) {
+    const score = this.getConflictScore(block);
+
+    for (const conflict of block.conflicts) {
+      const conflictScore = this.getConflictScore(conflict);
+      if (
+        conflictScore > score ||
+        (conflictScore === score && Hash.compare(conflict.hash, block.hash) > 0)
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  public updateChildWeight(block: BlockFact) {
+    if (this.isConflictWinner(block)) {
+      const weight = block.children.reduce(
+        (acc, cur) => acc + cur.childWeight,
+        this.getSelfWork(block),
+      );
+      assert(weight > 0n);
+
+      if (weight !== block.childWeight) {
+        const wasZero = block.childWeight === 0n;
+        block.childWeight = weight;
+
+        if (wasZero) {
+          for (const conflict of block.conflicts) {
+            if (conflict.childWeight !== 0n) {
+              this.updateChildWeight(conflict);
+              assert(conflict.childWeight === 0n);
+            }
+          }
+        }
+
+        if (block.parentBlock !== undefined && block.parentBlock !== ZERO_BLOCK) {
+          this.updateChildWeight(block.parentBlock);
+        }
+      }
+    } else if (block.childWeight !== 0n) {
+      block.childWeight = 0n;
+
+      for (const conflict of block.conflicts) {
+        this.updateChildWeight(conflict);
+      }
+
+      if (block.parentBlock !== undefined && block.parentBlock !== ZERO_BLOCK) {
+        this.updateChildWeight(block.parentBlock);
+      }
+    }
+  }
+
+  public getWeight(block: BlockFact): bigint {
+    return block.squashers.reduce((acc, cur) => acc + this.getWeight(cur), block.childWeight);
+  }
+
+  public isCanonical(block: BlockFact): boolean {
+    return this.getWeight(block) > 0n &&
+      (block.parentBlock === undefined || block.parentBlock === ZERO_BLOCK ||
+        this.isCanonical(block.parentBlock));
   }
 
   public getSelfWeight(fact: BlockFact, cache = this.getCache()) {
@@ -402,9 +503,7 @@ export class WeightService {
     return assume.length === 0 ? mapPut(cache.descendant, fact, fn) : fn();
   }
 
-  public isCanonical(fact: BlockFact, cache = this.getCache()) {
-    return true;
-
+  public isCanonical2(fact: BlockFact, cache = this.getCache()) {
     const { canonicality, usurper } = this.getCanonicality(fact, cache);
     if ((canonicality >= 0n) !== (usurper === undefined)) {
       throw new Error(`Invalid response!`);

@@ -12,6 +12,7 @@ import { makeDefaultContractProviders } from './contracts/defaultContractProvide
 import { IngestionProvider } from './IngestionProvider.ts';
 import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
 import { FrontierContract } from './contracts/FrontierContract.ts';
+import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -162,6 +163,7 @@ export interface Config {
 }
 
 export const defaultNetwork = 'main';
+const rngSeed = 123n;
 
 export const makeDefaultConfig = () => {
   const config = {
@@ -170,15 +172,15 @@ export const makeDefaultConfig = () => {
     clientNonce: Math.random().toString(36).slice(2),
     logLevel: log.LogLevels.INFO, // TODO: Set this to WARN
     timeProvider: {
-      now: Date.now.bind(Date),
+      now: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),
       setTimeout: (cb, delayMs) => setTimeout(cb, delayMs),
       clearTimeout: (idx) => clearTimeout(idx),
       setInterval: (cb, delayMs) => setInterval(cb, delayMs),
       clearInterval: (idx) => clearInterval(idx),
     },
-    entropyProvider: {
-      randomNumber: Math.random.bind(Math),
+    entropyProvider: rngSeed !== undefined ? new SeededEntropyProvider(rngSeed) : {
+      randomNumber: () => Math.random(),
       randomBytes: secp.etc.randomBytes,
     },
     executionProviders: [],

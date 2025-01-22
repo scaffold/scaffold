@@ -429,10 +429,11 @@ export class FactService {
         visitedAt: 0,
         references: 0,
 
+        // Debugging stuff
         factIdx: this.nextFactIdx++,
         typeStr: FactType[type],
         sourceStr: FactSource[source],
-        sillyName: generateSillyName(),
+        sillyName: generateSillyName(this.ctx.config.entropyProvider),
         backtrace: new Error().stack,
       });
 

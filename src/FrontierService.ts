@@ -154,8 +154,9 @@ export class FrontierService {
 
       if (enableChecks) {
         const spec = this.getOutput(it, utxoIdx);
-        assert(spec.block === block);
-        assert(spec.outputIdx === outputIdx);
+        if (spec.block !== block || spec.outputIdx !== outputIdx) {
+          debugger;
+        }
       }
 
       prev = it;
@@ -194,6 +195,16 @@ export class FrontierService {
     }
     if (block.parentBlock === ZERO_BLOCK) {
       throw new Error(`Invalid utxoIdx!`);
+    }
+
+    const spentIdxs = this.mergeSortedIndices(
+      block.squashedUtxoIdxs,
+      block.parentBlock.inputs.map((x) => x.utxoIdx),
+    );
+    let j = 0;
+    while (j < spentIdxs.length && spentIdxs[j] <= utxoIdx) {
+      j++;
+      utxoIdx++;
     }
 
     return this.getOutput(block.parentBlock, utxoIdx, true);

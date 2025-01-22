@@ -28,6 +28,7 @@ import { SQUASH_MIN_VOLUME_RATIO } from '../constants.ts';
 import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
 import { LitigationService } from '../LitigationService.ts';
 import { mergeSorted } from '../util/sorted.ts';
+import { WeightService } from '../WeightService.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
   type = FactType.Block as const;
@@ -75,9 +76,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     const meta: BlockMeta = {
       // verifiers: block.bodies.map(() => undefined),
 
-      weight: 0n,
+      childWeight: 0n,
 
-      newOutputSpends: new Map(),
+      claims: new Map(),
 
       conflicts: new Set(),
 
@@ -172,6 +173,10 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     for (const voter of fact.children) {
       voter.parentBlock = fact;
       this.linkFrontier(fact, voter);
+    }
+
+    for (const squash of fact.squashes) {
+      this.ctx.get(BlockService).getSquashers(squash.blockHash).push(fact);
     }
 
     if (
@@ -291,6 +296,12 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       //   const { hash } = EpochInclusionParams.decode(verifier.params);
       //   this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
       // }
+
+      if (this.ctx.get(WeightService).isFreeMarketOutput(output.verifier)) {
+        for (const claim of claims) {
+          this.ctx.get(WeightService).updateChildWeight(claim.block);
+        }
+      }
     });
 
     if (fact.inputs.length === 0) {
@@ -346,9 +357,13 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     this.ctx.get(UnspentOutputManager).tick();
 
-    this.ctx.get(BlockService).updateWeight(fact);
-
     this.initSpendPropagation(fact);
+
+    this.ctx.get(WeightService).updateChildWeight(fact);
+
+    for (const block of this.ctx.get(FactService).hackyGetBlocksMatching()) {
+      this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
+    }
   }
 
   forget(fact: BlockFact) {

@@ -21,7 +21,11 @@ export class FrontierService3 {
     return 0;
   }
 
-  private findBestDescendants(refs: BlockFact[], step: (block: BlockFact) => BlockFact[]) {
+  private findBestDescendants(
+    refs: BlockFact[],
+    inputs: { block: BlockFact; utxoIdxs: number[] }[],
+    step: (block: BlockFact) => BlockFact[],
+  ) {
     const result = [...refs];
 
     let options = result.flatMap((ref, idx) =>
@@ -39,7 +43,7 @@ export class FrontierService3 {
       const prev = result[best.idx];
       result[best.idx] = best.block;
 
-      if (this.ctx.get(MergeabilityService).isMergeable(result)) {
+      if (this.ctx.get(MergeabilityService).isMergeable(result, inputs)) {
         options = options.filter((x) => x.idx !== best.idx);
         for (const block of step(best.block)) {
           options.push({ idx: best.idx, block, score: this.score(block) });
@@ -53,16 +57,16 @@ export class FrontierService3 {
     return result;
   }
 
-  public create(refs: BlockFact[]): BlockLinks {
+  public create(refs: BlockFact[], inputs: { block: BlockFact; utxoIdxs: number[] }[]): BlockLinks {
     if (refs.length === 0) {
       return { parent: ZERO_BLOCK, squashes: [] };
     }
 
-    if (!this.ctx.get(MergeabilityService).isMergeable(refs)) {
+    if (!this.ctx.get(MergeabilityService).isMergeable(refs, inputs)) {
       throw new Error(`Unmergeable refs!`);
     }
 
-    let roots = this.findBestDescendants(refs, (block) => block.squashers);
+    let roots = this.findBestDescendants(refs, inputs, (block) => block.squashers);
     roots = [...new Set(roots)];
 
     const heads = roots.filter((a) =>

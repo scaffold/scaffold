@@ -43,9 +43,11 @@ export const ZERO_BLOCK = Symbol('ZeroBlock');
 export interface BlockMeta {
   // verifiers: (Verifier | undefined)[];
 
-  weight: bigint;
+  // The weight of self and all children, recursively.
+  // Zero if this block is losing a conflict with another block.
+  childWeight: bigint;
 
-  newOutputSpends: Map<number, BlockFact[]>;
+  claims: Map<number, BlockFact[]>;
 
   // Note this will include squashers and squashes since they will likely spend the same utxos
   conflicts: Set<BlockFact>;

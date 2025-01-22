@@ -258,7 +258,7 @@ export class BlockBuilder {
     const links = this.ctx.get(FrontierService3).create([
       ...inputs.map((x) => x.block),
       ...refBlocks,
-    ]);
+    ], inputs.map((x) => ({ block: x.block, utxoIdxs: [x.outputIdx] })));
     const blockLinks = this.ctx.get(FrontierService).build(links);
 
     if (addFrontierOutput) {
@@ -352,10 +352,7 @@ export class BlockBuilder {
     testInput: (input: InputSpec) => boolean,
     addInput: (input: InputSpec) => void,
   ) {
-    for (
-      const { block, idx } of this.ctx.get(BlockService)
-        .getBlocksByOutput(satisfaction)
-    ) {
+    for (const { block, idx } of this.ctx.get(BlockService).getBlocksByOutput(satisfaction)) {
       if (
         block.outputClaims[idx].length === 0 &&
         block.outputs[idx].amount >= 0n &&

@@ -137,135 +137,131 @@ export class BlockService {
     throw new Error(`Unimplemented`);
   }
 
-  public propagateSpends(
+  public scatterSpends(
     block: BlockFact | typeof ZERO_BLOCK,
     utxoIdxs: number[],
-    fromBlock: BlockFact,
+    cb: (block: BlockFact, utxoIdx: number) => void,
   ) {
     if (utxoIdxs.length === 0) {
       return;
     }
     if (block === ZERO_BLOCK) {
-      throw new Error(`Block ${fromBlock.hash.toHex()} spends utxos from the zero block!`);
+      throw new Error(`Attempting to spend utxos from the zero block!`);
     }
 
-    let offset = this.ctx.get(FrontierService).getNewUtxoCount(block);
+    let offset = 0;
+    let limit = block.outputs.length;
+    let squashIdx = block.squashes.length;
 
-    const rebasedUtxoIdxs: number[] = [];
-    let j = 0;
+    let propagateTo: BlockFact | typeof ZERO_BLOCK | undefined;
+    let rebasedUtxoIdxs: number[] = [];
+
+    let spentIdx = 0;
     for (const idx of utxoIdxs) {
-      if (idx < offset) {
-        mapPut(block.newOutputSpends, idx, () => [fromBlock], (arr) => {
-          for (const x of arr) {
-            x.conflicts.add(fromBlock);
-            fromBlock.conflicts.add(x);
-          }
-          arr.push(fromBlock);
-          return arr;
-        });
-        continue;
-      }
+      while (idx >= limit) {
+        if (propagateTo !== undefined && rebasedUtxoIdxs.length > 0) {
+          this.scatterSpends(propagateTo, rebasedUtxoIdxs, cb);
+          rebasedUtxoIdxs = [];
+        }
+        assert(rebasedUtxoIdxs.length === 0);
 
-      while (j < block.squashedUtxoIdxs.length && block.squashedUtxoIdxs[j] <= idx - offset) {
-        j++;
-        offset--;
-      }
+        if (--squashIdx >= 0) {
+          const squash = block.squashes[squashIdx];
+          propagateTo = this.get(squash.blockHash, false);
 
-      rebasedUtxoIdxs.push(idx - offset);
-    }
-
-    assert(block.parentBlock !== undefined);
-    this.propagateSpends(block.parentBlock, rebasedUtxoIdxs, fromBlock);
-  }
-
-  private getTotalOutput(block: BlockFact) {
-    return block.outputs.reduce((acc, cur) => acc + cur.amount, 0n);
-  }
-
-  private getFreeMarketOutput(block: BlockFact) {
-    return block.outputs.reduce(
-      (acc, cur) => Hash.equals(cur.verifier.contractHash, frontierHash) ? acc + cur.amount : acc,
-      0n,
-    );
-  }
-
-  private getSelfishOutput(block: BlockFact) {
-    return block.outputs.reduce(
-      (acc, cur) => Hash.equals(cur.verifier.contractHash, frontierHash) ? acc : acc + cur.amount,
-      0n,
-    );
-  }
-
-  public getSelfWork(block: BlockFact) {
-    let work = 1n;
-
-    for (const input of block.inputs) {
-      const inputBlock = this.get(input.blockHash, false);
-      if (inputBlock !== undefined) {
-        const output = inputBlock.outputs[input.outputIdx];
-        if (Hash.equals(output.verifier.contractHash, frontierHash)) {
-          work += output.amount;
+          offset = limit;
+          limit += squash.newUtxoCount;
+        } else {
+          propagateTo = block.parentBlock;
+          offset = limit;
+          limit = Infinity;
         }
       }
-    }
 
-    for (const output of block.outputs) {
-      if (Hash.equals(output.verifier.contractHash, frontierHash)) {
-        work -= output.amount;
+      if (squashIdx < 0) {
+        while (
+          spentIdx < block.squashedUtxoIdxs.length &&
+          block.squashedUtxoIdxs[spentIdx] <= idx - offset
+        ) {
+          spentIdx++;
+          offset--;
+        }
+      }
+
+      if (propagateTo === undefined) {
+        cb(block, idx - offset);
+      } else {
+        rebasedUtxoIdxs.push(idx - offset);
       }
     }
 
-    return work;
+    if (propagateTo !== undefined && rebasedUtxoIdxs.length > 0) {
+      this.scatterSpends(propagateTo, rebasedUtxoIdxs, cb);
+    }
   }
 
-  public getConflictScore(block: BlockFact) {
-    return block.children.reduce(
-      (acc, cur) => acc + this.getWeight(cur),
-      -this.getSelfWork(block),
-    );
+  public propagateSpends(
+    block: BlockFact | typeof ZERO_BLOCK,
+    utxoIdxs: number[],
+    fromBlock: BlockFact,
+  ) {
+    this.scatterSpends(block, utxoIdxs, (block, utxoIdx) => {
+      mapPut(block.claims, utxoIdx, () => [fromBlock], (claims) => {
+        for (const claim of claims) {
+          claim.conflicts.add(fromBlock);
+          fromBlock.conflicts.add(claim);
+        }
+        claims.push(fromBlock);
+        return claims;
+      });
+    });
   }
 
-  private isConflictWinner(block: BlockFact) {
-    const score = this.getConflictScore(block);
+  public getConflictSet(block: BlockFact): Set<BlockFact> {
+    if (block.parentBlock === undefined) {
+      throw new Error(`Unconnected parent chain`);
+    } else if (block.parentBlock === ZERO_BLOCK) {
+      return block.conflicts;
+    } else {
+      return this.getConflictSet(block.parentBlock).union(block.conflicts);
+    }
+  }
 
-    for (const conflict of block.conflicts) {
-      const conflictScore = this.getConflictScore(conflict);
-      if (
-        conflictScore > score ||
-        (conflictScore === score && Hash.compare(conflict.hash, block.hash) > 0)
-      ) {
-        return false;
+  // TODO: Short-circuit true when all refs + inputs are canonical
+  public isMergeable(refs: BlockFact[], inputs: { block: BlockFact; utxoIdxs: number[] }[]) {
+    let conflicts = new Set<BlockFact>();
+
+    for (const { block, utxoIdxs } of inputs) {
+      this.scatterSpends(block, utxoIdxs, (block, utxoIdx) => {
+        for (const claim of block.claims.get(utxoIdx) ?? []) {
+          conflicts.add(claim);
+        }
+      });
+    }
+
+    for (const ref of refs) {
+      if (conflicts.size > 0) {
+        let ptr: BlockFact | typeof ZERO_BLOCK = ref;
+        do {
+          if (conflicts.has(ptr)) {
+            return false;
+          }
+
+          if (ptr.parentBlock === undefined) {
+            throw new Error(`Unconnected parent chain`);
+          } else {
+            ptr = ptr.parentBlock;
+          }
+        } while (ptr !== ZERO_BLOCK);
       }
+
+      conflicts = conflicts.union(this.getConflictSet(ref));
     }
 
     return true;
   }
 
-  public getWeight(block: BlockFact): bigint {
-    if (this.isConflictWinner(block)) {
-      block.weight = block.children.reduce(
-        (acc, cur) => acc + this.getWeight(cur),
-        this.getSelfWork(block),
-      );
-    } else {
-      block.weight = 0n;
-    }
-
-    return block.weight;
-  }
-
-  private getChildWeight(block: BlockFact) {
-    const selfishOutput = this.getSelfishOutput(block);
-
-    // Propagate back toward parents
-    // For each parent in the chain, if that parent is in the parent chain of a squashed block, decrement the update by the squashed work.
-    // Stop propagating at the squasher's parent. How does this work with multiple squashers?
-  }
-
-  private getChildSpends(block: BlockFact) {
-  }
-
-  public updateWeight(block: BlockFact) {
+  private updateWeight2(block: BlockFact) {
     let weight = this.ctx.get(WeightService).getSelfWeight(block).min;
 
     // TODO: Only canonical claims
@@ -328,13 +324,13 @@ export class BlockService {
         block.parentBlock !== undefined &&
         block.parentBlock !== ZERO_BLOCK
       ) {
-        this.updateWeight(block.parentBlock);
+        this.updateWeight2(block.parentBlock);
       }
 
       for (const input of block.inputs) {
         const inputBlock = this.get(input.blockHash, false);
         if (inputBlock !== undefined) {
-          this.updateWeight(inputBlock);
+          this.updateWeight2(inputBlock);
         }
       }
     }
