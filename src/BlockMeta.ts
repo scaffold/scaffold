@@ -50,7 +50,7 @@ export interface BlockMeta {
   claims: Map<number, BlockFact[]>;
 
   // Note this will include squashers and squashes since they will likely spend the same utxos
-  conflicts: Set<BlockFact>;
+  conflicts: Map<BlockFact, number>;
 
   // This is the sum of the self min weight and all descendant min weights
   descWeight: bigint;

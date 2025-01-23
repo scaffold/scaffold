@@ -80,7 +80,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
       claims: new Map(),
 
-      conflicts: new Set(),
+      conflicts: new Map(),
 
       descWeight: 0n,
       canonicality: 0n,
@@ -467,12 +467,12 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
   private initSpendPropagation(block: BlockFact) {
     if (block.parentChainRoot === ZERO_BLOCK) {
-      this.ctx.get(BlockService).propagateSpends(
+      this.ctx.get(BlockService).propagateClaims(
         block,
         block.inputs.map((x) => x.utxoIdx),
         block,
       );
-      this.ctx.get(BlockService).propagateSpends(
+      this.ctx.get(BlockService).propagateClaims(
         block.parentBlock ?? error('Internal error!'),
         block.squashedUtxoIdxs,
         block,

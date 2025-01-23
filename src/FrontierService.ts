@@ -63,13 +63,6 @@ export class FrontierService {
     const weights: bigint[] = [];
 
     for (const squash of links.squashes) {
-      const selfWeight = this.ctx.get(WeightService).getSelfWeight(squash);
-      if (selfWeight.min !== selfWeight.max) {
-        throw new Error(
-          `Cannot merge an input block whose inputs are unknown!`,
-        );
-      }
-
       const shift = this.ctx.get(BlockService).compareFrontierChainDepth(squash, links.parent) - 1;
 
       const addWeight = (x: bigint, i: number) => {
@@ -81,7 +74,7 @@ export class FrontierService {
       };
 
       squash.treeWeights.forEach(addWeight);
-      addWeight(selfWeight.min, 0);
+      addWeight(this.ctx.get(WeightService).getSelfWork(squash), 0);
     }
 
     return weights;

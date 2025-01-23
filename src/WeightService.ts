@@ -2,7 +2,7 @@ import { Context } from './Context.ts';
 import { BlockFact, FactSource } from './FactMeta.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
 import { BASE_WORK, BlockService } from './BlockService.ts';
-import { bigintMax } from './util/bigint.ts';
+import { bigintMax, bigintMin } from './util/bigint.ts';
 import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { OutputClaim } from './BlockMeta.ts';
@@ -100,6 +100,7 @@ export class WeightService {
     return Hash.equals(verifier.contractHash, frontierHash);
   }
 
+  // This can only increase
   public getSelfWork(block: BlockFact) {
     let work = 1n;
 
@@ -122,17 +123,85 @@ export class WeightService {
     return work;
   }
 
+  public getFreeMarketOutput(block: BlockFact) {
+    let sum = 0n;
+    for (const output of block.outputs) {
+      if (this.isFreeMarketOutput(output.verifier)) {
+        sum += output.amount;
+      }
+    }
+    return sum;
+  }
+
+  public getConservativeSelfWork(block: BlockFact) {
+    let minWork = this.getSelfWork(block);
+    for (const conflict of block.conflicts.keys()) {
+      minWork = bigintMin(minWork, this.getSelfWork(conflict));
+    }
+    return minWork;
+  }
+
+  // TODO: Cache this, should be easy
+  public getAncestorWeight(block: BlockFact) {
+    let sum = 0n;
+    if (block.parentBlock !== undefined && block.parentBlock !== ZERO_BLOCK) {
+      sum += this.getSelfWork(block.parentBlock);
+      sum += this.getAncestorWeight(block.parentBlock);
+    }
+    for (const tw of block.treeWeights) {
+      sum += tw;
+    }
+    return sum;
+  }
+
+  public getDescendantWeight(block: BlockFact): bigint {
+    let sum = 0n;
+    sum += block.childWeight;
+    sum -= this.getSelfWork(block);
+
+    let bestSquasher: BlockFact | undefined;
+    let bestSquashScore = 0n;
+
+    for (const squash of block.squashers) {
+      const score = this.getConflictScore(squash);
+      if (
+        bestSquasher === undefined || score > bestSquashScore ||
+        (score === bestSquashScore && Hash.compare(bestSquasher.hash, block.hash) > 0)
+      ) {
+        bestSquasher = squash;
+        bestSquashScore = score;
+      }
+    }
+
+    if (bestSquasher !== undefined) {
+      sum += this.getSelfWork(bestSquasher);
+      sum += this.getDescendantWeight(bestSquasher);
+    }
+
+    return sum;
+  }
+
   public getConflictScore(block: BlockFact) {
-    return block.children.reduce(
-      (acc, cur) => acc + cur.childWeight,
-      -this.getSelfWork(block),
-    );
+    let sum = 0n;
+    sum += this.getConservativeSelfWork(block);
+    sum += this.getFreeMarketOutput(block);
+    sum += this.getAncestorWeight(block);
+    sum += this.getDescendantWeight(block);
+    return sum;
   }
 
   public isConflictWinner(block: BlockFact) {
+    // if (block.squashers.length) {
+    //   return false;
+    // }
+
     const score = this.getConflictScore(block);
 
-    for (const conflict of block.conflicts) {
+    for (const conflict of block.conflicts.keys()) {
+      // if (conflict.squashers.length) {
+      //   continue;
+      // }
+
       const conflictScore = this.getConflictScore(conflict);
       if (
         conflictScore > score ||
@@ -147,10 +216,18 @@ export class WeightService {
 
   public updateChildWeight(block: BlockFact) {
     if (this.isConflictWinner(block)) {
-      const weight = block.children.reduce(
-        (acc, cur) => acc + cur.childWeight,
-        this.getSelfWork(block),
-      );
+      let weight = this.getSelfWork(block);
+      for (const child of block.children) {
+        weight += child.childWeight;
+      }
+
+      // TODO: Use only first item and propagate rest towards parents
+      // I think we'll need to make BlockFact.childWeight an array
+      // weight += block.treeWeights[0] ?? 0n;
+      // for (const treeWeight of block.treeWeights) {
+      //   weight += treeWeight;
+      // }
+
       assert(weight > 0n);
 
       if (weight !== block.childWeight) {
@@ -158,7 +235,7 @@ export class WeightService {
         block.childWeight = weight;
 
         if (wasZero) {
-          for (const conflict of block.conflicts) {
+          for (const conflict of block.conflicts.keys()) {
             if (conflict.childWeight !== 0n) {
               this.updateChildWeight(conflict);
               assert(conflict.childWeight === 0n);
@@ -173,7 +250,7 @@ export class WeightService {
     } else if (block.childWeight !== 0n) {
       block.childWeight = 0n;
 
-      for (const conflict of block.conflicts) {
+      for (const conflict of block.conflicts.keys()) {
         this.updateChildWeight(conflict);
       }
 
@@ -184,11 +261,15 @@ export class WeightService {
   }
 
   public getWeight(block: BlockFact): bigint {
-    return block.squashers.reduce((acc, cur) => acc + this.getWeight(cur), block.childWeight);
+    let sum = 0n;
+    sum += this.getSelfWork(block);
+    sum += this.getAncestorWeight(block);
+    sum += this.getDescendantWeight(block);
+    return sum;
   }
 
   public isCanonical(block: BlockFact): boolean {
-    return this.getWeight(block) > 0n &&
+    return this.isConflictWinner(block) &&
       (block.parentBlock === undefined || block.parentBlock === ZERO_BLOCK ||
         this.isCanonical(block.parentBlock));
   }
@@ -370,14 +451,14 @@ export class WeightService {
     });
   }
 
-  public getAncestorWeight(fact: BlockFact, cache = this.getCache()) {
+  public getAncestorWeight2(fact: BlockFact, cache = this.getCache()) {
     return mapPut(cache.ancestorWeight, fact, () => {
       let minWeight = 0n;
 
       const block = this.ctx.get(BlockService).get(fact.parent, false);
       if (block !== undefined) {
         minWeight += this.getSelfWeight(block, cache).min;
-        minWeight += this.getAncestorWeight(block, cache);
+        minWeight += this.getAncestorWeight2(block, cache);
       }
 
       minWeight += this.getTreeChildrenWeight(fact, cache);

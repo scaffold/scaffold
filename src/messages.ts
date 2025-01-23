@@ -271,6 +271,7 @@ export const registry = {
       // Item 0 is the weight of blocks in the tree voting for frontierVote.
       // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
       // ...
+      // TODO: Rename to squashedWeights
       { name: 'treeWeights', type: { type: 'array', items: 'bigint' } },
 
       // TODO: Enable this?

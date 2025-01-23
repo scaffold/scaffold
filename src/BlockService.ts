@@ -24,7 +24,7 @@ import { PeerManager } from './PeerManager.ts';
 import { QaDebugger } from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
-import { getOrCreate, mapPut } from './util/map.ts';
+import { getOrCreate, mapDec, mapInc, mapPut } from './util/map.ts';
 import { BlockFact, Collateralization, Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
 import { FactService, headerSize } from './FactService.ts';
 import { ContractClassifierService } from './ContractClassifierService.ts';
@@ -53,6 +53,7 @@ import { bigintMax } from './util/bigint.ts';
 import { bigintMin } from './util/bigint.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
 import { FrontierService } from './FrontierService.ts';
+import { assertUnique, mergeSorted } from './util/sorted.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -154,9 +155,10 @@ export class BlockService {
     let squashIdx = block.squashes.length;
 
     let propagateTo: BlockFact | typeof ZERO_BLOCK | undefined;
+    let spentUtxoIdxs: number[] | undefined;
+    let spentIdx = 0;
     let rebasedUtxoIdxs: number[] = [];
 
-    let spentIdx = 0;
     for (const idx of utxoIdxs) {
       while (idx >= limit) {
         if (propagateTo !== undefined && rebasedUtxoIdxs.length > 0) {
@@ -173,15 +175,20 @@ export class BlockService {
           limit += squash.newUtxoCount;
         } else {
           propagateTo = block.parentBlock;
+          spentUtxoIdxs = propagateTo !== undefined && propagateTo !== ZERO_BLOCK
+            ? mergeSorted(block.squashedUtxoIdxs, propagateTo.inputs.map((x) => x.utxoIdx))
+            : block.squashedUtxoIdxs;
+          assertUnique(spentUtxoIdxs);
+
           offset = limit;
           limit = Infinity;
         }
       }
 
-      if (squashIdx < 0) {
+      if (spentUtxoIdxs !== undefined) {
         while (
-          spentIdx < block.squashedUtxoIdxs.length &&
-          block.squashedUtxoIdxs[spentIdx] <= idx - offset
+          spentIdx < spentUtxoIdxs.length &&
+          spentUtxoIdxs[spentIdx] <= idx - offset
         ) {
           spentIdx++;
           offset--;
@@ -200,20 +207,72 @@ export class BlockService {
     }
   }
 
-  public propagateSpends(
+  private getRecursiveSquashers(block: BlockFact, dst = new Set<BlockFact>()): Set<BlockFact> {
+    for (const squasher of block.squashers) {
+      dst.add(squasher);
+      this.getRecursiveSquashers(squasher, dst);
+    }
+    return dst;
+  }
+
+  public propagateClaims(
+    block: BlockFact | typeof ZERO_BLOCK,
+    utxoIdxs: number[],
+    fromBlock: BlockFact,
+  ) {
+    const remove = this.getRecursiveSquashers(fromBlock);
+
+    this.scatterSpends(block, utxoIdxs, (block, utxoIdx) => {
+      mapPut(block.claims, utxoIdx, () => [fromBlock], (claims) => {
+        for (let i = 0; i < claims.length; i++) {
+          const el = claims[i];
+          assert(el !== fromBlock);
+
+          if (remove.has(el)) {
+            claims[i] = claims[claims.length - 1];
+            claims.pop();
+
+            for (const claim of claims) {
+              mapDec(claim.conflicts, el);
+              mapDec(el.conflicts, claim);
+            }
+          }
+        }
+
+        if (!claims.some((x) => this.getRecursiveSquashers(x).has(fromBlock))) {
+          for (const claim of claims) {
+            mapInc(claim.conflicts, fromBlock);
+            mapInc(fromBlock.conflicts, claim);
+          }
+
+          assert(!claims.includes(fromBlock));
+          claims.push(fromBlock);
+        }
+
+        return claims;
+      });
+    });
+  }
+
+  public removeClaims(
     block: BlockFact | typeof ZERO_BLOCK,
     utxoIdxs: number[],
     fromBlock: BlockFact,
   ) {
     this.scatterSpends(block, utxoIdxs, (block, utxoIdx) => {
-      mapPut(block.claims, utxoIdx, () => [fromBlock], (claims) => {
+      const claims = block.claims.get(utxoIdx);
+      if (claims !== undefined) {
+        const idx = claims.indexOf(fromBlock);
+        assert(idx !== -1);
+
+        claims[idx] = claims[claims.length - 1];
+        claims.pop();
+
         for (const claim of claims) {
-          claim.conflicts.add(fromBlock);
-          fromBlock.conflicts.add(claim);
+          mapDec(claim.conflicts, fromBlock);
+          mapDec(fromBlock.conflicts, claim);
         }
-        claims.push(fromBlock);
-        return claims;
-      });
+      }
     });
   }
 
@@ -221,7 +280,7 @@ export class BlockService {
     if (block.parentBlock === undefined) {
       throw new Error(`Unconnected parent chain`);
     } else if (block.parentBlock === ZERO_BLOCK) {
-      return block.conflicts;
+      return new Set([...block.conflicts.keys()]);
     } else {
       return this.getConflictSet(block.parentBlock).union(block.conflicts);
     }

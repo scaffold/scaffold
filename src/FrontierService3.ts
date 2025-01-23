@@ -10,6 +10,7 @@ import { mapPut } from './util/map.ts';
 import { PARENT_MIN_VOLUME_RATIO } from './constants.ts';
 import { BlockLinks } from './FrontierService.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
+import { WeightService } from './WeightService.ts';
 
 export const VOLUME_INCLUDES_SELF = false;
 
@@ -17,8 +18,7 @@ export class FrontierService3 {
   constructor(private ctx: Context) {}
 
   private score(block: BlockFact) {
-    // TODO: Returns some canonicality metric like descendantWeight - selfWeight
-    return 0;
+    return this.ctx.get(WeightService).getWeight(block);
   }
 
   private findBestDescendants(

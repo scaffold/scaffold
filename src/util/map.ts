@@ -1,3 +1,5 @@
+import { error } from './functional.ts';
+
 const trapRecursion = true;
 
 export interface MapSpec<K, V> {
@@ -51,6 +53,19 @@ export const mapPop = <K, V>(map: MapSpec<K, V>, key: K) => {
     map.delete(key);
   }
   return val;
+};
+
+export const mapInc = <K>(map: MapSpec<K, number>, key: K) =>
+  mapPut(map, key, () => 1, (x) => x + 1);
+
+export const mapDec = <K>(map: MapSpec<K, number>, key: K) => {
+  let count = map.get(key) ?? error(`Cannot decrement key ${key}; already zero!`);
+  if (--count) {
+    map.set(key, count);
+  } else {
+    map.delete(key);
+  }
+  return count;
 };
 
 export const multimapPut = <K, V>(map: MapSpec<K, V[]>, key: K, val: V) => {

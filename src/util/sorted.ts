@@ -42,3 +42,18 @@ export const mergeSorted = (a: number[], b: number[]): number[] => {
   // TODO: Implement this
   return [...a, ...b].sort();
 };
+
+export const assertUnique = (arr: number[]) => {
+  // Assert there's no duplicates
+  let prev = -1;
+  for (const idx of arr) {
+    if (idx <= prev) {
+      if (idx === prev) {
+        throw new Error(`Arr isn't unique; ${idx} is duplicated!`);
+      } else {
+        throw new Error(`Arr isn't sorted; ${idx} < ${prev}!`);
+      }
+    }
+    prev = idx;
+  }
+};
