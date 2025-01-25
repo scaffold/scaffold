@@ -11,6 +11,7 @@ import { PARENT_MIN_VOLUME_RATIO } from './constants.ts';
 import { BlockLinks } from './FrontierService.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
 import { WeightService } from './WeightService.ts';
+import { BlockMetrics } from './BlockMetrics.ts';
 
 export const VOLUME_INCLUDES_SELF = false;
 
@@ -18,7 +19,7 @@ export class FrontierService3 {
   constructor(private ctx: Context) {}
 
   private score(block: BlockFact) {
-    return this.ctx.get(WeightService).getWeight(block);
+    return this.ctx.get(BlockMetrics).get(block, 'conflictScore');
   }
 
   private findBestDescendants(

@@ -22,11 +22,11 @@ import { ContractClassifierService } from './ContractClassifierService.ts';
 import { CollateralHint } from './collateralMessages.ts';
 import { ComputationDriver, ComputationType } from './ComputationMeta.ts';
 import { VerificationService } from './VerificationService.ts';
-import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { retryAbortable } from './util/abortable.ts';
 import { QaDebugger } from './QaDebugger.ts';
 import { WeightService } from './WeightService.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
+import { AvailableOutputManager } from './AvailableOutputManager.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -321,7 +321,7 @@ export class GenerationService {
       if (!inputsAreFixed) {
         for (const verifier of fulfillsVerifiers) {
           inputs = inputs.concat(
-            this.ctx.get(UnspentOutputManager).popAll(verifier, isMergeable),
+            this.ctx.get(AvailableOutputManager).popAll(verifier, isMergeable),
           );
         }
         inputsAreFixed = true;
@@ -464,7 +464,7 @@ export class GenerationService {
 
         let input: InputSpec | undefined;
         if (satisfies === undefined) {
-          input = await this.ctx.get(UnspentOutputManager).waitFor(
+          input = await this.ctx.get(AvailableOutputManager).waitFor(
             outputsTo ?? verifier,
             workerDriver.done.signal,
             isMergeable,
@@ -475,7 +475,7 @@ export class GenerationService {
         } else {
           input = await retryAbortable(
             (abort) =>
-              this.ctx.get(UnspentOutputManager).waitFor(
+              this.ctx.get(AvailableOutputManager).waitFor(
                 outputsTo ?? verifier,
                 abort,
                 (input) => {

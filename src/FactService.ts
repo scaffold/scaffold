@@ -50,10 +50,7 @@ export class FactService {
   private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
-  private validitiesByHash = new Map<
-    HashPrimitive,
-    Map<HashPrimitive, DetailVote>
-  >();
+  private validitiesByHash = new Map<HashPrimitive, Map<HashPrimitive, DetailVote>>();
 
   private pendingForgets: { fact: WeakRef<Fact>; forgetTimestamp: number }[] = [];
   private forgottenCount = 0;

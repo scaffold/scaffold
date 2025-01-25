@@ -272,6 +272,7 @@ export const registry = {
       // Item 1 is the weight of blocks in the tree voting for frontierVote.frontierVote.
       // ...
       // TODO: Rename to squashedWeights
+      // TODO: Should this include the self weight? If so, the ancestor weight can be 100% known.
       { name: 'treeWeights', type: { type: 'array', items: 'bigint' } },
 
       // TODO: Enable this?

@@ -21,6 +21,7 @@ export const match = <T, R>(
   }
 };
 
+// TODO: Move to decorators.ts
 export const memoize = <ArgType extends Object, ReturnType>(
   func: (arg: ArgType) => ReturnType,
 ) => {

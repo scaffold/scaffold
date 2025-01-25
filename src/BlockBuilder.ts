@@ -15,13 +15,13 @@ import { KeyService } from './KeyService.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import { WeightService } from './WeightService.ts';
-import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
 import { ClockService } from './ClockService.ts';
 import { FrontierService3, VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
+import { AvailableOutputManager } from './AvailableOutputManager.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -207,7 +207,7 @@ export class BlockBuilder {
     }
 
     while (ioDelta < 0n || inputs.length === 0) {
-      const input = this.ctx.get(UnspentOutputManager).pop(
+      const input = this.ctx.get(AvailableOutputManager).pop(
         this.selfAccountVerifier,
         (accountInput) =>
           this.ctx.get(WeightService).isCanonical(accountInput.block) &&

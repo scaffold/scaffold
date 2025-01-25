@@ -3,7 +3,6 @@ import { Context } from '../Context.ts';
 import { BlockFact, FactBase, FactSource, FactType } from '../FactMeta.ts';
 import { FactService, headerSize } from '../FactService.ts';
 import { IngestionProvider } from '../IngestionProvider.ts';
-import { UnspentOutputManager } from '../UnspentOutputManager.ts';
 import { BlockRecordSet } from '../record_sets/BlockRecordSet.ts';
 import { Block, BlockOutput, FrontierTreeDetail, FrontierTreeParams } from '../messages.ts';
 import { BlockFlag, BlockMeta, ZERO_BLOCK } from '../BlockMeta.ts';
@@ -29,6 +28,7 @@ import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
 import { LitigationService } from '../LitigationService.ts';
 import { mergeSorted } from '../util/sorted.ts';
 import { WeightService } from '../WeightService.ts';
+import { BlockMetrics } from '../BlockMetrics.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
   type = FactType.Block as const;
@@ -99,17 +99,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         })
       ),
 
-      isCanonical:
-        (parentBlock === undefined
-          ? false
-          : parentBlock === ZERO_BLOCK
-          ? true
-          : parentBlock.isCanonical) &&
-        block.inputs.every(
-          (x) =>
-            this.ctx.get(BlockService).get(x.blockHash, false)?.isCanonical !==
-              false,
-        ),
+      isCanonical: false,
 
       parentBlock,
       parentChainRoot: parentBlock === undefined
@@ -148,6 +138,8 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
   }
 
   ingest(fact: BlockFact) {
+    this.ctx.get(BlockMetrics).reset();
+
     const squashHashPrims = new Set(fact.squashes.map((x) => x.blockHash.toPrimitive()));
     if (squashHashPrims.size !== fact.squashes.length) {
       throw new Error(`Duplicate squash hash!`);
@@ -207,16 +199,9 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       claims.push(claim);
       this.ctx.get(MonitoringService).claimMonitor.callAll(input, claim);
 
-      const parent = this.ctx.get(BlockService).get(input.blockHash, false);
-      if (parent) {
-        this.linkIo(parent, fact, input.outputIdx, idx);
-
-        if (claims.length === 1) {
-          this.ctx.get(UnspentOutputManager).remove(
-            parent.outputs[input.outputIdx].verifier,
-            (x) => x.block === parent && x.outputIdx === input.outputIdx,
-          );
-        }
+      const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
+      if (inputBlock) {
+        this.linkIo(inputBlock, fact, input.outputIdx, idx);
       }
     });
 
@@ -250,12 +235,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
           return;
         }
 
-        this.ctx.get(UnspentOutputManager).insert(output.verifier, {
-          block: fact,
-          outputIdx,
-          amount: output.amount,
-        });
-
+        // TODO: Move this to the CanonicalityService
         this.ctx.get(GenerationService).ensureRunning(output.verifier);
         // }, 0);
       } else {
@@ -355,8 +335,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(fact);
 
-    this.ctx.get(UnspentOutputManager).tick();
-
     this.initSpendPropagation(fact);
 
     this.ctx.get(WeightService).updateChildWeight(fact);
@@ -391,11 +369,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         const params = CollateralContractParams.decode(output.verifier.params);
         this.ctx.get(FactService).forgetCollateral(params.blockHash, fact);
       }
-
-      this.ctx.get(UnspentOutputManager).remove(
-        output.verifier,
-        (x) => x.block === fact && x.outputIdx === outputIdx,
-      );
 
       outputIdx++;
     }
@@ -543,10 +516,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         parent.timestamp + this.ctx.config.graphParameters.minimumGenerationTime
     ) {
       throw new Error(`Generation time is too short!`);
-    }
-
-    if (!parent.isCanonical) {
-      // this.ctx.get(BlockService).setCanonicality(child, false);
     }
 
     const verifier = parent.outputs[parentOutputIdx].verifier;

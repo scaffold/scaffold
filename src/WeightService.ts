@@ -157,7 +157,6 @@ export class WeightService {
   public getDescendantWeight(block: BlockFact): bigint {
     let sum = 0n;
     sum += block.childWeight;
-    sum -= this.getSelfWork(block);
 
     let bestSquasher: BlockFact | undefined;
     let bestSquashScore = 0n;
@@ -215,44 +214,16 @@ export class WeightService {
   }
 
   public updateChildWeight(block: BlockFact) {
-    if (this.isConflictWinner(block)) {
-      let weight = this.getSelfWork(block);
-      for (const child of block.children) {
+    let weight = 0n;
+    for (const child of block.children) {
+      if (this.isConflictWinner(child)) {
+        weight += this.getSelfWork(child);
         weight += child.childWeight;
       }
+    }
 
-      // TODO: Use only first item and propagate rest towards parents
-      // I think we'll need to make BlockFact.childWeight an array
-      // weight += block.treeWeights[0] ?? 0n;
-      // for (const treeWeight of block.treeWeights) {
-      //   weight += treeWeight;
-      // }
-
-      assert(weight > 0n);
-
-      if (weight !== block.childWeight) {
-        const wasZero = block.childWeight === 0n;
-        block.childWeight = weight;
-
-        if (wasZero) {
-          for (const conflict of block.conflicts.keys()) {
-            if (conflict.childWeight !== 0n) {
-              this.updateChildWeight(conflict);
-              assert(conflict.childWeight === 0n);
-            }
-          }
-        }
-
-        if (block.parentBlock !== undefined && block.parentBlock !== ZERO_BLOCK) {
-          this.updateChildWeight(block.parentBlock);
-        }
-      }
-    } else if (block.childWeight !== 0n) {
-      block.childWeight = 0n;
-
-      for (const conflict of block.conflicts.keys()) {
-        this.updateChildWeight(conflict);
-      }
+    if (weight !== block.childWeight) {
+      block.childWeight = weight;
 
       if (block.parentBlock !== undefined && block.parentBlock !== ZERO_BLOCK) {
         this.updateChildWeight(block.parentBlock);

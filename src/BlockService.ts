@@ -40,7 +40,6 @@ import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
 import { WeightService } from './WeightService.ts';
 import { MonitoringService } from './MonitoringService.ts';
-import { UnspentOutputManager } from './UnspentOutputManager.ts';
 import { neverAbort } from './util/abortable.ts';
 import { GenerationService } from './GenerationService.ts';
 import { raceTruthy } from './util/MaybePromise.ts';
@@ -54,6 +53,7 @@ import { bigintMin } from './util/bigint.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
 import { FrontierService } from './FrontierService.ts';
 import { assertUnique, mergeSorted } from './util/sorted.ts';
+import { CanonicalityService } from './CanonicalityService.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -458,104 +458,21 @@ export class BlockService {
   }
 
   public updateCanonicalities(blocks: BlockFact[]) {
-    this.ctx.get(WeightService).resetCache();
-    this.ctx.get(BlockMetrics).reset();
-
     for (const block of blocks) {
-      const newCanonicality = this.ctx.get(WeightService)
-        .getCanonicality(block).canonicality;
-      if (newCanonicality !== block.canonicality) {
-        if (block.canonicality < 0n && newCanonicality >= 0n) {
-          this.markCanonical(block);
-        } else if (block.canonicality >= 0n && newCanonicality < 0n) {
-          this.markUncanonical(block);
+      const isCanonical = this.ctx.get(BlockMetrics).get(block, 'isCanonical');
+      if (isCanonical !== block.isCanonical) {
+        block.isCanonical = isCanonical;
+        if (isCanonical) {
+          this.ctx.get(CanonicalityService).onCanonical(block);
+        } else {
+          this.ctx.get(CanonicalityService).offCanonical(block);
         }
-        block.canonicality = newCanonicality;
+
         this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
       }
     }
 
     this.ctx.get(FactEmitter).updateFrontier();
-  }
-
-  private markCanonical(block: BlockFact) {
-    block.inputs.forEach((input, idx) => {
-      const parent = this.get(input.blockHash, false);
-      if (parent) {
-        this.ctx.get(UnspentOutputManager).remove(
-          parent.outputs[input.outputIdx].verifier,
-          (x) => x.block === parent && x.outputIdx === input.outputIdx,
-        );
-      }
-    });
-
-    block.outputs.forEach((output, outputIdx) => {
-      const claims = this.getClaims({ blockHash: block.hash, outputIdx });
-      if (
-        claims.every((x) => !this.ctx.get(WeightService).isCanonical(x.block)) &&
-        output.amount >= 0n
-      ) {
-        this.ctx.get(UnspentOutputManager)
-          .insert(output.verifier, { block, outputIdx, amount: output.amount });
-        this.ctx.get(GenerationService).ensureRunning(output.verifier);
-      }
-    });
-  }
-
-  private markUncanonical(block: BlockFact) {
-    block.inputs.forEach((input, idx) => {
-      const claims = this.getClaims(input);
-      if (
-        claims.every((x) => !this.ctx.get(WeightService).isCanonical(x.block))
-      ) {
-        const parent = this.get(input.blockHash, false);
-        if (parent) {
-          const output = parent.outputs[input.outputIdx];
-          if (output.amount >= 0n) {
-            this.ctx.get(UnspentOutputManager).insert(output.verifier, {
-              block: parent,
-              outputIdx: input.outputIdx,
-              amount: output.amount,
-            });
-            this.ctx.get(GenerationService).ensureRunning(output.verifier);
-          }
-        }
-      }
-
-      const { usurper } = this.ctx.get(WeightService).getCanonicality(block);
-      if (usurper !== undefined) {
-        this.ctx.get(FactEmitter).notify(usurper.block);
-      }
-    });
-
-    block.outputs.forEach((output, outputIdx) => {
-      this.ctx.get(UnspentOutputManager).remove(
-        output.verifier,
-        (x) => x.block === block && x.outputIdx === outputIdx,
-      );
-    });
-  }
-
-  private setCanonicality(block: BlockFact, isCanonical: boolean) {
-    if (isCanonical !== block.isCanonical) {
-      block.isCanonical = isCanonical;
-
-      for (const output of block.outputClaims) {
-        for (const claim of output) {
-          if (isCanonical) {
-            this.setCanonicality(
-              claim.block,
-              this.get(claim.block.parent, false)?.isCanonical !== false &&
-                claim.block.inputs.every((x) =>
-                  this.get(x.blockHash, false)?.isCanonical !== false
-                ),
-            );
-          } else {
-            this.setCanonicality(claim.block, false);
-          }
-        }
-      }
-    }
   }
 
   public linkNewAncestor(parent: BlockFact, child: BlockFact) {}

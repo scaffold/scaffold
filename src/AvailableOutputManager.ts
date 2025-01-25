@@ -3,13 +3,13 @@ import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { FactService } from './FactService.ts';
 import { Verifier } from './messages.ts';
-import { UnspentOutputRecordSet } from './record_sets/UnspentOutputRecordSet.ts';
+import { AvailableOutputRecordSet } from './record_sets/AvailableOutputRecordSet.ts';
 import { Hash } from './util/Hash.ts';
 import { QueueMuxer } from './util/QueueMuxer.ts';
 import { WeightService } from './WeightService.ts';
 
 // TODO: Rename to AvailableOutputManager to reflect including outputs claimed by uncanonical blocks
-export class UnspentOutputManager extends QueueMuxer<Verifier, InputSpec> {
+export class AvailableOutputManager extends QueueMuxer<Verifier, InputSpec> {
   constructor(private ctx: Context) {
     super((verifier) => Hash.digest(Verifier.encode(verifier)).toPrimitive());
 
@@ -56,6 +56,6 @@ export class UnspentOutputManager extends QueueMuxer<Verifier, InputSpec> {
   }
 
   protected override getRecordSet() {
-    return this.ctx.maybeGet(UnspentOutputRecordSet);
+    return this.ctx.maybeGet(AvailableOutputRecordSet);
   }
 }

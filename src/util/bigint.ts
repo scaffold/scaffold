@@ -23,7 +23,7 @@ export const bigint2bin = (num: bigint, size?: number) => {
     throw new Error(`Cannot convert a negative bigint to binary!`);
   }
 
-  if (size) {
+  if (size !== undefined) {
     const arr = new Uint8Array(size);
     for (let i = 0; i < size; i++) {
       arr[i] = Number(num & 0xFFn);
