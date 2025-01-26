@@ -138,8 +138,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
   }
 
   ingest(fact: BlockFact) {
-    this.ctx.get(BlockMetrics).reset();
-
     const squashHashPrims = new Set(fact.squashes.map((x) => x.blockHash.toPrimitive()));
     if (squashHashPrims.size !== fact.squashes.length) {
       throw new Error(`Duplicate squash hash!`);
@@ -329,15 +327,17 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
-    this.ctx.get(BlockService).updateCanonicalities(
-      this.ctx.get(FactService).hackyGetBlocksMatching(),
-    );
-
     this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(fact);
 
     this.initSpendPropagation(fact);
 
     this.ctx.get(WeightService).updateChildWeight(fact);
+
+    // This must come after the conflict sets are updated
+    this.ctx.get(BlockMetrics).reset();
+    this.ctx.get(BlockService).updateCanonicalities(
+      this.ctx.get(FactService).hackyGetBlocksMatching(),
+    );
 
     for (const block of this.ctx.get(FactService).hackyGetBlocksMatching()) {
       this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);

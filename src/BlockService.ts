@@ -54,6 +54,8 @@ import { BlockMetrics } from './BlockMetrics.ts';
 import { FrontierService } from './FrontierService.ts';
 import { assertUnique, mergeSorted } from './util/sorted.ts';
 import { CanonicalityService } from './CanonicalityService.ts';
+import { assertMatch } from '@std/assert/match';
+import { assertEquals } from '@std/assert/equals';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -159,6 +161,8 @@ export class BlockService {
     let spentIdx = 0;
     let rebasedUtxoIdxs: number[] = [];
 
+    console.log('SCATTER', block.sillyName, utxoIdxs);
+
     for (const idx of utxoIdxs) {
       while (idx >= limit) {
         if (propagateTo !== undefined && rebasedUtxoIdxs.length > 0) {
@@ -170,6 +174,9 @@ export class BlockService {
         if (--squashIdx >= 0) {
           const squash = block.squashes[squashIdx];
           propagateTo = this.get(squash.blockHash, false);
+          spentUtxoIdxs = propagateTo !== undefined
+            ? propagateTo.inputs.map((x) => x.utxoIdx)
+            : undefined;
 
           offset = limit;
           limit += squash.newUtxoCount;
@@ -183,7 +190,29 @@ export class BlockService {
           offset = limit;
           limit = Infinity;
         }
+
+        console.log(
+          'SCATTER while',
+          idx,
+          offset,
+          limit,
+          squashIdx,
+          propagateTo === undefined || propagateTo === ZERO_BLOCK
+            ? propagateTo
+            : propagateTo.sillyName,
+        );
       }
+
+      console.log(
+        'SCATTER do',
+        idx,
+        offset,
+        limit,
+        squashIdx,
+        propagateTo === undefined || propagateTo === ZERO_BLOCK
+          ? propagateTo
+          : propagateTo.sillyName,
+      );
 
       if (spentUtxoIdxs !== undefined) {
         while (
@@ -202,12 +231,18 @@ export class BlockService {
       }
     }
 
+    console.log(
+      'SCATTER end',
+      propagateTo === undefined || propagateTo === ZERO_BLOCK ? propagateTo : propagateTo.sillyName,
+      rebasedUtxoIdxs,
+    );
+
     if (propagateTo !== undefined && rebasedUtxoIdxs.length > 0) {
       this.scatterSpends(propagateTo, rebasedUtxoIdxs, cb);
     }
   }
 
-  private getRecursiveSquashers(block: BlockFact, dst = new Set<BlockFact>()): Set<BlockFact> {
+  public getRecursiveSquashers(block: BlockFact, dst = new Set<BlockFact>()): Set<BlockFact> {
     for (const squasher of block.squashers) {
       dst.add(squasher);
       this.getRecursiveSquashers(squasher, dst);
@@ -220,34 +255,45 @@ export class BlockService {
     utxoIdxs: number[],
     fromBlock: BlockFact,
   ) {
-    const remove = this.getRecursiveSquashers(fromBlock);
+    const squashers = this.getRecursiveSquashers(fromBlock);
 
-    this.scatterSpends(block, utxoIdxs, (block, utxoIdx) => {
-      mapPut(block.claims, utxoIdx, () => [fromBlock], (claims) => {
-        for (let i = 0; i < claims.length; i++) {
-          const el = claims[i];
-          assert(el !== fromBlock);
+    console.log(
+      'PROPAGATE',
+      block === undefined || block === ZERO_BLOCK ? block : block.sillyName,
+      utxoIdxs,
+      fromBlock.sillyName,
+    );
 
-          if (remove.has(el)) {
-            claims[i] = claims[claims.length - 1];
-            claims.pop();
+    if (block === ZERO_BLOCK) {
+      return;
+    }
+    const expectedOutput = utxoIdxs.map((x) => this.ctx.get(FrontierService).getOutput(block, x));
 
-            for (const claim of claims) {
-              mapDec(claim.conflicts, el);
-              mapDec(el.conflicts, claim);
-            }
-          }
-        }
+    this.scatterSpends(block, utxoIdxs, (dst, outputIdx) => {
+      const nextOut = expectedOutput.shift();
+      if (dst !== nextOut?.block || outputIdx !== nextOut.outputIdx) {
+        debugger;
+      }
 
-        if (!claims.some((x) => this.getRecursiveSquashers(x).has(fromBlock))) {
-          for (const claim of claims) {
+      console.log(
+        'PROPAGATE push',
+        dst.sillyName,
+        outputIdx,
+        dst.claims.get(outputIdx),
+        fromBlock.sillyName,
+      );
+
+      mapPut(dst.claims, outputIdx, () => [fromBlock], (claims) => {
+        assert(!claims.includes(fromBlock));
+
+        for (const claim of claims) {
+          if (!squashers.has(claim) && !this.getRecursiveSquashers(claim).has(fromBlock)) {
             mapInc(claim.conflicts, fromBlock);
             mapInc(fromBlock.conflicts, claim);
           }
-
-          assert(!claims.includes(fromBlock));
-          claims.push(fromBlock);
         }
+
+        claims.push(fromBlock);
 
         return claims;
       });

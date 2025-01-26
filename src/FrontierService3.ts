@@ -19,7 +19,12 @@ export class FrontierService3 {
   constructor(private ctx: Context) {}
 
   private score(block: BlockFact) {
-    return this.ctx.get(BlockMetrics).get(block, 'conflictScore');
+    let sum = 0n;
+    sum += this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork');
+    sum += this.ctx.get(BlockMetrics).get(block, 'freeMarketOutput');
+    sum += this.ctx.get(BlockMetrics).get(block, 'ancestorWeight');
+    // sum += this.ctx.get(BlockMetrics).get(block, 'descendantWeight');
+    return sum;
   }
 
   private findBestDescendants(

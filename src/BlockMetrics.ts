@@ -33,6 +33,8 @@ type Metrics = {
   conservativeSelfWork: bigint;
 
   childWeight: bigint;
+  childWeight1: bigint;
+  childWeights2: bigint[];
 
   ancestorWeight: bigint;
   descendantWeight: bigint;
@@ -87,10 +89,23 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
       },
 
       childWeight: (block: BlockFact) => {
+        const childWeight1 = this.get(block, 'childWeight1');
+        const childWeights2 = this.get(block, 'childWeights2');
+        if (childWeight1 !== (childWeights2[0] ?? 0n)) {
+          console.warn(
+            `Inconsistent child weights for block ${block.sillyName}! ${childWeight1} !== ${
+              JSON.stringify(childWeights2.map(Number))
+            }[0]`,
+          );
+        }
+        return childWeight1;
+      },
+
+      childWeight1: (block: BlockFact) => {
         let weight = 0n;
         for (const child of block.children) {
           if (this.get(child, 'isConflictWinner')) {
-            weight += this.get(child, 'selfWork');
+            weight += this.get(child, 'conservativeSelfWork');
             weight += this.get(child, 'childWeight');
           }
         }
@@ -103,6 +118,38 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         //     this.updateChildWeight(block.parentBlock);
         //   }
         // }
+      },
+
+      childWeights2: (block: BlockFact) => {
+        const weights: bigint[] = [];
+        const addWeight = (inc: bigint, idx: number) => {
+          while (weights.length <= idx) {
+            weights.push(0n);
+          }
+          weights[idx] += inc;
+        };
+
+        const winningChildren = block.children.filter((x) => this.get(x, 'isConflictWinner'));
+        for (const child of winningChildren) {
+          const squashers = this.ctx.get(BlockService).getRecursiveSquashers(child);
+          if (!winningChildren.some((x) => squashers.has(x))) {
+            addWeight(this.get(child, 'conservativeSelfWork'), 0);
+
+            const childWeights = this.get(child, 'childWeights2');
+            for (let i = 0; i < childWeights.length; i++) {
+              addWeight(childWeights[i], i > 0 ? i - 1 : 0);
+            }
+
+            for (let i = 0; i < child.treeWeights.length; i++) {
+              addWeight(child.treeWeights[i], i);
+            }
+          }
+        }
+
+        // weights[0] is the work attributable to block
+        // weights[1] is the work attributable to block.parent, but not block
+        // ...
+        return weights;
       },
 
       // TODO: Cache this on the block, should be easy cuz it never changes.
@@ -137,7 +184,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         }
 
         if (bestSquasher !== undefined) {
-          sum += this.get(bestSquasher, 'selfWork');
+          sum += this.get(bestSquasher, 'conservativeSelfWork');
           sum += this.get(bestSquasher, 'descendantWeight');
         }
 
@@ -157,6 +204,14 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         // if (block.squashers.length) {
         //   return false;
         // }
+
+        // This is super-linear recursion but we'll refactor it into just updating the squasher
+        for (const squash of block.squashes) {
+          const squashBlock = this.ctx.get(BlockService).get(squash.blockHash, false);
+          if (squashBlock !== undefined && !this.get(squashBlock, 'isConflictWinner')) {
+            return false;
+          }
+        }
 
         const score = this.get(block, 'conflictScore');
 

@@ -33,7 +33,31 @@ export class FrontierService {
   ): Pick<Block, 'parent' | 'squashes' | 'volume' | 'squashedUtxoIdxs' | 'treeWeights'> {
     const omittedOutputCount = new Map<BlockFact, number>();
     const squashedUtxoIdxs = this.mergeSortedIndices(
-      ...links.squashes.map((squash) => this.rebase(squash, links.parent, omittedOutputCount)),
+      ...links.squashes.map((squash) => {
+        const utxoIdxs = this.rebase(squash, links.parent, omittedOutputCount);
+
+        const originals = new Set([
+          ...squash.inputs.map((x) => this.getOutput(squash, x.utxoIdx)),
+          ...squash.squashedUtxoIdxs.map((x) => {
+            assert(squash.parentBlock !== undefined);
+            assert(squash.parentBlock !== ZERO_BLOCK);
+            return this.getOutput(squash.parentBlock, x);
+          }),
+        ].map((x) => `${x.block.hash.toHex()}-${x.outputIdx}`));
+
+        for (const idx of utxoIdxs) {
+          assert(links.parent !== ZERO_BLOCK);
+          const output = this.getOutput(links.parent, idx);
+          const key = `${output.block.hash.toHex()}-${output.outputIdx}`;
+          if (!originals.has(key)) {
+            debugger;
+            this.rebase(squash, links.parent, omittedOutputCount);
+          }
+          assert(originals.has(key));
+        }
+
+        return utxoIdxs;
+      }),
     );
 
     const squashes = links.squashes.map((squash) => {
@@ -148,6 +172,7 @@ export class FrontierService {
       if (enableChecks) {
         const spec = this.getOutput(it, utxoIdx);
         if (spec.block !== block || spec.outputIdx !== outputIdx) {
+          console.error(`Incorrect utxo idx generated!`);
           debugger;
         }
       }
@@ -158,11 +183,11 @@ export class FrontierService {
     return utxoIdx;
   }
 
-  public getOutput(
-    block: MockBlock,
+  public getOutput<BlockType extends MockBlock>(
+    block: BlockType | BlockFact,
     utxoIdx: number,
     allowFrontierVote = true,
-  ): { block: MockBlock; outputIdx: number } {
+  ): { block: BlockType | BlockFact; outputIdx: number } {
     if (utxoIdx < block.outputs.length) {
       return { block, outputIdx: utxoIdx };
     }
@@ -174,6 +199,13 @@ export class FrontierService {
         if (child === undefined) {
           throw new Error(`Missing tree child!`);
         }
+
+        let j = 0;
+        while (j < child.inputs.length && child.inputs[j].utxoIdx <= utxoIdx) {
+          j++;
+          utxoIdx++;
+        }
+
         return this.getOutput(child, utxoIdx, false);
       }
       utxoIdx -= squash.newUtxoCount;
@@ -218,11 +250,7 @@ export class FrontierService {
       throw new Error(`Cannot rebase an orphaned block`);
     }
 
-    let rebasedSpentUtxoIdxs = this.addSelfInputUtxos(
-      block.squashedUtxoIdxs,
-      block,
-      omittedOutputCount,
-    );
+    let rebasedSpentUtxoIdxs = this.addSelfInputUtxos(block, omittedOutputCount);
 
     // rebasedSpentUtxoIdxs = this.removeFrontierVoteInputUtxos(
     //   rebasedSpentUtxoIdxs,
@@ -416,13 +444,18 @@ export class FrontierService {
     return utxoIdxs;
   }
 
-  private addSelfInputUtxos(
-    utxoIdxs: number[],
-    block: BlockFact,
-    omittedOutputCount: Map<BlockFact, number>,
-  ) {
+  private addSelfInputUtxos(block: BlockFact, omittedOutputCount: Map<BlockFact, number>) {
+    assert(block.parentBlock);
+
+    const spentIdxs = block.parentBlock !== ZERO_BLOCK
+      ? this.mergeSortedIndices(
+        block.squashedUtxoIdxs,
+        block.parentBlock.inputs.map((x) => x.utxoIdx),
+      )
+      : block.squashedUtxoIdxs;
+
     const rebasedInputs = this.rebaseLeft(
-      utxoIdxs,
+      spentIdxs,
       block.inputs.map((x) => x.utxoIdx),
       this.getNewUtxoCount(block),
     );
@@ -431,7 +464,7 @@ export class FrontierService {
     assert(omittedCount >= 0);
     mapPut(omittedOutputCount, block, () => omittedCount, (x) => x + omittedCount);
 
-    return this.mergeSortedIndices(rebasedInputs, utxoIdxs);
+    return this.mergeSortedIndices(rebasedInputs, block.squashedUtxoIdxs);
   }
 
   private mergeSortedIndices(...arrs: number[][]) {
