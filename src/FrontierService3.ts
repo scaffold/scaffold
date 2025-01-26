@@ -10,7 +10,6 @@ import { mapPut } from './util/map.ts';
 import { PARENT_MIN_VOLUME_RATIO } from './constants.ts';
 import { BlockLinks } from './FrontierService.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
-import { WeightService } from './WeightService.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
 
 export const VOLUME_INCLUDES_SELF = false;

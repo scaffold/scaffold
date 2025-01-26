@@ -2,7 +2,6 @@ import { OutputClaim, ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
-import { WeightService } from './WeightService.ts';
 import { frontierHash } from './hashes.ts';
 import { Verifier } from './messages.ts';
 import { Hash } from './util/Hash.ts';

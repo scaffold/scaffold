@@ -7,7 +7,6 @@ import { EMPTY_ARR } from './util/buffer.ts';
 import { Collateralization } from './FactMeta.ts';
 import { arrEquals } from './util/buffer.ts';
 import { FactService } from './FactService.ts';
-import { WeightService } from './WeightService.ts';
 import { GenesisService } from './GenesisService.ts';
 import { OutputClaim } from './BlockMeta.ts';
 
@@ -152,7 +151,7 @@ export class FetchService {
 
       watchItvl = this.ctx.config.timeProvider.setInterval(() => {
         const claim = this.ctx.get(BlockService).getBlocksByVerifier(verifier)
-          .findLast((x) => this.ctx.get(WeightService).isCanonical(x.block));
+          .findLast((x) => x.block.isCanonical);
         onState(claim);
 
         // const blocks = this.ctx.get(FactService).hackyGetBlocksMatching();

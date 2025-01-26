@@ -24,7 +24,6 @@ import { ComputationDriver, ComputationType } from './ComputationMeta.ts';
 import { VerificationService } from './VerificationService.ts';
 import { retryAbortable } from './util/abortable.ts';
 import { QaDebugger } from './QaDebugger.ts';
-import { WeightService } from './WeightService.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
 
@@ -309,12 +308,11 @@ export class GenerationService {
       //         this.isFrontierMergeable(block, lastBlock)));
       // }
 
-      return this.ctx.get(WeightService).isCanonical(testInput.block) &&
-        this.ctx.get(MergeabilityService).isMergeable([
-          ...inputs.map((x) => x.block),
-          ...refs,
-          testInput.block,
-        ]);
+      return testInput.block.isCanonical && this.ctx.get(MergeabilityService).isMergeable([
+        ...inputs.map((x) => x.block),
+        ...refs,
+        testInput.block,
+      ]);
     };
 
     const collectInputs = () => {

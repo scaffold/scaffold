@@ -6,7 +6,6 @@ import { Verifier } from './messages.ts';
 import { AvailableOutputRecordSet } from './record_sets/AvailableOutputRecordSet.ts';
 import { Hash } from './util/Hash.ts';
 import { QueueMuxer } from './util/QueueMuxer.ts';
-import { WeightService } from './WeightService.ts';
 
 // TODO: Rename to AvailableOutputManager to reflect including outputs claimed by uncanonical blocks
 export class AvailableOutputManager extends QueueMuxer<Verifier, InputSpec> {
@@ -20,23 +19,21 @@ export class AvailableOutputManager extends QueueMuxer<Verifier, InputSpec> {
     ctx.onDestruct(() => ctx.config.timeProvider.clearInterval(itvl));
   }
 
-  // TODO: Remove this hacky method and add/remove outputs to the manager
-  public override popAll(key: Verifier, filter: (value: InputSpec) => boolean) {
-    return this.ctx.get(FactService).hackyGetBlocksMatching().flatMap((block) =>
-      block.outputs
-        .map((x, outputIdx) => ({ block, outputIdx, verifier: x.verifier, amount: x.amount }))
-        .filter((x) =>
-          this.ctx.get(BlockService).areVerifiersEqual(key, x.verifier) &&
-          !block.claims.get(x.outputIdx)?.some((claim) =>
-            this.ctx.get(WeightService).isCanonical(claim)
-          ) && filter(x)
-        )
-    );
-  }
+  // // TODO: Remove this hacky method and add/remove outputs to the manager
+  // public override popAll(key: Verifier, filter: (value: InputSpec) => boolean) {
+  //   return this.ctx.get(FactService).hackyGetBlocksMatching().flatMap((block) =>
+  //     block.outputs
+  //       .map((x, outputIdx) => ({ block, outputIdx, verifier: x.verifier, amount: x.amount }))
+  //       .filter((x) =>
+  //         this.ctx.get(BlockService).areVerifiersEqual(key, x.verifier) &&
+  //         !block.claims.get(x.outputIdx)?.some((claim) => claim.isCanonical) && filter(x)
+  //       )
+  //   );
+  // }
 
-  public override pop(key: Verifier, filter: (value: InputSpec) => boolean) {
-    return this.popAll(key, filter)[0];
-  }
+  // public override pop(key: Verifier, filter: (value: InputSpec) => boolean) {
+  //   return this.popAll(key, filter)[0];
+  // }
 
   public tick() {
     for (const queue of this.getQueues().values()) {

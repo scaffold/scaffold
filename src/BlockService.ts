@@ -38,7 +38,6 @@ import {
 import { ResolvingMonitor, WatchingMonitor } from './util/Monitor.ts';
 import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
-import { WeightService } from './WeightService.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { neverAbort } from './util/abortable.ts';
 import { GenerationService } from './GenerationService.ts';
@@ -364,81 +363,6 @@ export class BlockService {
     }
 
     return true;
-  }
-
-  private updateWeight2(block: BlockFact) {
-    let weight = this.ctx.get(WeightService).getSelfWeight(block).min;
-
-    // TODO: Only canonical claims
-
-    /*
-    Look at all distinct, mergeable, descendant blocks
-    A block B's vote is valid if B and it's vote chain includes all inputs and refs as tree children.
-    The valid descendants (outputs, referrers) of B will have either B or a tree parent of B in their vote chain.
-    The descendants reached by iterating voters are unique
-    Mergeability: Follow frontier votes (don't follow tree parents - if there's parents, we should be merging them instead)
-      In this case, we just need to check for double-claims on the tree inputs
-    Should we pull descendants from the voter(s) or a parent?
-      Whatever is heaviest, potentially both. Order by weight, then use DP to find heaviest mergeable subset.
-
-    Let's say there's 3 frontier voters of block B with the same level but various weights.
-      The descendant weight of B should be the weight of the mergeable subset with maximum weight
-
-
-    */
-
-    /*
-      In general, if a parent is WORSE by weight than its 2 children, don't even consider it as a valid block
-        It might become valid in the future if stuff is built upon it
-      */
-
-    block.treeParent = undefined;
-    if (block.squashers.length > 0) {
-      // Add parent weight
-      const minClaimWeight = block.squashers.map((x) =>
-        this.ctx.get(WeightService).getSelfWeight(x).min
-      ).reduce(bigintMin);
-
-      const weights = block.squashers.map((x) =>
-        x.descWeight -
-        this.ctx.config.getOverpaymentPenalty(
-          this.ctx.get(WeightService).getSelfWeight(x).max - minClaimWeight,
-        )
-      );
-      const bestWeight = weights.reduce(bigintMax);
-
-      weight += bestWeight;
-      block.treeParent = block.squashers[weights.indexOf(bestWeight)];
-
-      // Add sibling weight
-    }
-
-    // for (const voter of block.frontierVoters){
-    //   if (block.treeParent!==undefined&&){}
-    // }
-
-    // TODO: Fuzzy threshold
-    if (weight !== block.descWeight) {
-      block.descWeight = weight;
-
-      this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
-
-      // TODO: Add to priority queue so we update weights from the deepest to shallowest (genesis)
-
-      if (
-        block.parentBlock !== undefined &&
-        block.parentBlock !== ZERO_BLOCK
-      ) {
-        this.updateWeight2(block.parentBlock);
-      }
-
-      for (const input of block.inputs) {
-        const inputBlock = this.get(input.blockHash, false);
-        if (inputBlock !== undefined) {
-          this.updateWeight2(inputBlock);
-        }
-      }
-    }
   }
 
   public compareFrontierChainDepth(

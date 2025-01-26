@@ -1,4 +1,5 @@
 import { ZERO_BLOCK } from './BlockMeta.ts';
+import { BlockMetrics } from './BlockMetrics.ts';
 import { BlockService } from './BlockService.ts';
 import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';
@@ -10,7 +11,6 @@ import { assert, error, todo } from './util/functional.ts';
 import { Hash, ZERO_HASH } from './util/Hash.ts';
 import { mapPop, mapPut } from './util/map.ts';
 import { MockBlock as WalkerMockBlock, WalkerService } from './WalkerService.ts';
-import { WeightService } from './WeightService.ts';
 
 const enableChecks = true;
 
@@ -98,7 +98,7 @@ export class FrontierService {
       };
 
       squash.treeWeights.forEach(addWeight);
-      addWeight(this.ctx.get(WeightService).getSelfWork(squash), 0);
+      addWeight(this.ctx.get(BlockMetrics).get(squash, 'selfWork'), 0);
     }
 
     return weights;

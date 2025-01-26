@@ -14,7 +14,6 @@ import { accountHash, collateralHash, frontierHash } from './hashes.ts';
 import { KeyService } from './KeyService.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
-import { WeightService } from './WeightService.ts';
 import { assert, error, todo } from './util/functional.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { FrontierService } from './FrontierService.ts';
@@ -157,8 +156,7 @@ export class BlockBuilder {
             satisfaction,
             true,
             (input) =>
-              this.ctx.get(WeightService).isCanonical(input.block) &&
-              this.ctx.get(MergeabilityService).isMergeable([
+              input.block.isCanonical && this.ctx.get(MergeabilityService).isMergeable([
                 ...inputs.map((x) => x.block),
                 ...refBlocks,
                 input.block,
@@ -210,8 +208,7 @@ export class BlockBuilder {
       const input = this.ctx.get(AvailableOutputManager).pop(
         this.selfAccountVerifier,
         (accountInput) =>
-          this.ctx.get(WeightService).isCanonical(accountInput.block) &&
-          this.ctx.get(MergeabilityService).isMergeable([
+          accountInput.block.isCanonical && this.ctx.get(MergeabilityService).isMergeable([
             ...inputs.map((x) => x.block),
             ...refBlocks,
             accountInput.block,

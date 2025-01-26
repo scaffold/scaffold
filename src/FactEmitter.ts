@@ -1,7 +1,6 @@
 import { Context } from './Context.ts';
 import { BlockFact, Fact, FactSource, FactType } from './FactMeta.ts';
 import { GenesisService } from './GenesisService.ts';
-import { WeightService } from './WeightService.ts';
 import { Connection, ConnectionService } from './ConnectionService.ts';
 import { BlockService } from './BlockService.ts';
 import { PeerManager } from './PeerManager.ts';
@@ -13,6 +12,7 @@ import { ClockService } from './ClockService.ts';
 import { EmitterRecordSet } from './record_sets/EmitterRecordSet.ts';
 import { signalPriorityResolution } from './SignalingService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
+import { BlockMetrics } from './BlockMetrics.ts';
 
 const packetOverheadBytes = 256;
 
@@ -48,19 +48,19 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
   }
 
   public updateFrontier() {
-    const genesis = this.ctx.get(GenesisService).getGenesisBlock();
-    const queue = this.ctx.get(WeightService).getDescendant(genesis).leaves;
-    this.frontier = new Set(queue);
-    for (let i = 0; i < queue.length; i++) {
-      const vote = queue[i].parentBlock;
-      if (
-        vote !== undefined && vote !== ZERO_BLOCK && !this.frontier.has(vote)
-      ) {
-        this.frontier.add(vote);
-        this.increaseWeight(vote);
-        queue.push(vote);
-      }
-    }
+    // const genesis = this.ctx.get(GenesisService).getGenesisBlock();
+    // const queue = this.ctx.get(BlockMetrics).getDescendant(genesis).leaves;
+    // this.frontier = new Set(queue);
+    // for (let i = 0; i < queue.length; i++) {
+    //   const vote = queue[i].parentBlock;
+    //   if (
+    //     vote !== undefined && vote !== ZERO_BLOCK && !this.frontier.has(vote)
+    //   ) {
+    //     this.frontier.add(vote);
+    //     this.increaseWeight(vote);
+    //     queue.push(vote);
+    //   }
+    // }
   }
 
   public notify(fact: Fact) {
@@ -155,36 +155,25 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
       for (const block of this.iterateConqueredBlocks(fact)) {
         for (const conn of block.fromConnections) {
           if (!conn.knownFacts.has(fact)) {
-            value += Number(
-              this.ctx.get(WeightService).getSelfWeight(fact).min,
-            );
-            value += Number(
-              this.ctx.get(WeightService).getTreeChildrenWeight(fact),
-            );
+            value += Number(this.ctx.get(BlockMetrics).get(fact, 'selfWork'));
+            // value += Number(this.ctx.get(BlockMetrics).getTreeChildrenWeight(fact));
           }
         }
         for (const conn of block.toConnections) {
           if (!conn.knownFacts.has(fact)) {
-            value += Number(
-              this.ctx.get(WeightService).getSelfWeight(fact).min,
-            );
-            value += Number(
-              this.ctx.get(WeightService).getTreeChildrenWeight(fact),
-            );
+            value += Number(this.ctx.get(BlockMetrics).get(fact, 'selfWork'));
+            // value += Number(this.ctx.get(BlockMetrics).getTreeChildrenWeight(fact));
           }
         }
       }
 
       if (this.ctx.get(FactService).isSignedByMe(fact)) {
-        value += 256 *
-          Number(this.ctx.get(WeightService).getSelfWeight(fact).min);
+        value += 256 * Number(this.ctx.get(BlockMetrics).get(fact, 'selfWork'));
       }
 
       if (this.frontier.has(fact)) {
-        value += Number(this.ctx.get(WeightService).getSelfWeight(fact).min);
-        value += Number(
-          this.ctx.get(WeightService).getTreeChildrenWeight(fact),
-        );
+        value += Number(this.ctx.get(BlockMetrics).get(fact, 'selfWork'));
+        // value += Number(this.ctx.get(BlockMetrics).getTreeChildrenWeight(fact));
       }
 
       for (const input of fact.inputs) {
@@ -258,7 +247,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
   }
 
   private *iterateConqueredBlocks(conqueror: BlockFact) {
-    if (!this.ctx.get(WeightService).isCanonical(conqueror)) {
+    if (!conqueror.isCanonical) {
       return;
     }
 

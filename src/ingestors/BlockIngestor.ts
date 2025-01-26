@@ -26,8 +26,6 @@ import { error } from '../util/functional.ts';
 import { SQUASH_MIN_VOLUME_RATIO } from '../constants.ts';
 import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
 import { LitigationService } from '../LitigationService.ts';
-import { mergeSorted } from '../util/sorted.ts';
-import { WeightService } from '../WeightService.ts';
 import { BlockMetrics } from '../BlockMetrics.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
@@ -274,12 +272,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
       //   const { hash } = EpochInclusionParams.decode(verifier.params);
       //   this.ctx.get(EpochContract).addInclusionHash(fact, outputIdx, hash);
       // }
-
-      if (this.ctx.get(WeightService).isFreeMarketOutput(output.verifier)) {
-        for (const claim of claims) {
-          this.ctx.get(WeightService).updateChildWeight(claim.block);
-        }
-      }
     });
 
     if (fact.inputs.length === 0) {
@@ -330,8 +322,6 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
     this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(fact);
 
     this.initSpendPropagation(fact);
-
-    this.ctx.get(WeightService).updateChildWeight(fact);
 
     // This must come after the conflict sets are updated
     this.ctx.get(BlockMetrics).reset();

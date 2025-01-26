@@ -6,8 +6,8 @@ import { mapPut } from './util/map.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { BlockInput, Squash } from './messages.ts';
-import { WeightService } from './WeightService.ts';
 import { FactType } from './FactMeta.ts';
+import { BlockMetrics } from './BlockMetrics.ts';
 
 export type RenderConfig = Partial<{
   renderFrontierVote: boolean;
@@ -83,31 +83,23 @@ export class RenderService {
 
     let props = 'DELETED';
     if (!isDeleted) {
-      const work = wrapAccessor(() => {
-        const selfWeight = this.ctx.get(WeightService).getSelfWeight(block);
-        return selfWeight.min !== selfWeight.max
-          ? `${selfWeight.min}-${selfWeight.max}`
-          : selfWeight.min;
-      });
-      const offset = wrapAccessor(() => {
-        const selfOffset = this.ctx.get(WeightService).getSelfOffset(block);
-        return selfOffset.min !== selfOffset.max
-          ? `${selfOffset.min}-${selfOffset.max}`
-          : selfOffset.min;
-      });
-      const anc = wrapAccessor(() => this.ctx.get(WeightService).getAncestorWeight(block));
-      const desc = wrapAccessor(() => this.ctx.get(WeightService).getDescendant(block).weight);
-      const tree = block.treeWeights.join(',');
-      // const vw = this.ctx.get(WeightService).getVoterWeight(block).join(',');
-      const vw = `?`;
-      const canon = wrapAccessor(() =>
-        this.ctx.get(WeightService).getCanonicality(block).canonicality
+      const conservativeWork = wrapAccessor(() =>
+        this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
       );
+      const workOffset = wrapAccessor(() =>
+        this.ctx.get(BlockMetrics).get(block, 'selfWork') -
+        this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
+      );
+      const anc = wrapAccessor(() => this.ctx.get(BlockMetrics).get(block, 'ancestorWeight'));
+      const desc = wrapAccessor(() => this.ctx.get(BlockMetrics).get(block, 'descendantWeight'));
+      const tree = block.treeWeights.join(',');
+      // const vw = this.ctx.get(BlockMetrics).getVoterWeight(block).join(',');
+      const vw = `?`;
       props = [
-        `work: ${work}; offset: ${offset}`,
+        `work: ${conservativeWork}+${workOffset}`,
         `anc: ${anc}; desc: ${desc}`,
         `tree: ${tree}; vw: ${vw}`,
-        `canon: ${canon}`,
+        `canon: ${block.isCanonical ? 'Y' : 'N'}`,
       ].join('\n');
     }
 
@@ -126,7 +118,7 @@ export class RenderService {
     for (const input of block.inputs) {
       this.renderInput(graph, block, input, config, false);
     }
-    this.renderDescendant(graph, block, config);
+    // this.renderDescendant(graph, block, config);
   }
 
   private renderFrontierVote(
@@ -168,33 +160,33 @@ export class RenderService {
     graph.lines.push(`  ${bId} -> ${iId} ${attrs};`);
   }
 
-  private renderDescendant(
-    graph: Graph,
-    block: BlockFact,
-    config: RenderConfig,
-  ) {
-    if (config.renderPrimaryDescendant === false) return;
+  // private renderDescendant(
+  //   graph: Graph,
+  //   block: BlockFact,
+  //   config: RenderConfig,
+  // ) {
+  //   if (config.renderPrimaryDescendant === false) return;
 
-    const desc = wrapAccessor(() => this.ctx.get(WeightService).getDescendant(block));
-    if (desc === '?') {
-      return;
-    }
+  //   const desc = wrapAccessor(() => this.ctx.get(BlockMetrics).getDescendant(block));
+  //   if (desc === '?') {
+  //     return;
+  //   }
 
-    const bId = this.getId(graph, block);
-    const attrs = this.renderAttrs({
-      color: 'red',
-      constraint: 'false',
-    });
+  //   const bId = this.getId(graph, block);
+  //   const attrs = this.renderAttrs({
+  //     color: 'red',
+  //     constraint: 'false',
+  //   });
 
-    if (desc.parent !== undefined) {
-      const dId = this.getId(graph, desc.parent);
-      graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
-    }
-    for (const voter of desc.voters) {
-      const dId = this.getId(graph, voter);
-      graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
-    }
-  }
+  //   if (desc.parent !== undefined) {
+  //     const dId = this.getId(graph, desc.parent);
+  //     graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
+  //   }
+  //   for (const voter of desc.voters) {
+  //     const dId = this.getId(graph, voter);
+  //     graph.lines.push(`  ${bId} -> ${dId} ${attrs};`);
+  //   }
+  // }
 
   private getId(graph: Graph, object: Fact | typeof ZERO_BLOCK | undefined) {
     if (object === undefined) {

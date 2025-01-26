@@ -1,7 +1,6 @@
 import { assertEquals, assertStrictEquals } from '@std/assert';
 import { findOutput, makeTest, provideInitialBalance } from './util.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
-import { WeightService } from '../src/WeightService.ts';
 import { BASE_WORK } from '../src/BlockService.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
 import { accountHash, frontierHash, trueHash } from '../src/hashes.ts';
