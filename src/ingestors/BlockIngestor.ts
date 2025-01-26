@@ -97,7 +97,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         })
       ),
 
-      isCanonical: false,
+      isCanonical: undefined,
 
       parentBlock,
       parentChainRoot: parentBlock === undefined

@@ -441,8 +441,6 @@ export class BlockService {
         this.ctx.maybeGet(BlockRecordSet)?.dispatchUpdate(block);
       }
     }
-
-    this.ctx.get(FactEmitter).updateFrontier();
   }
 
   public linkNewAncestor(parent: BlockFact, child: BlockFact) {}
