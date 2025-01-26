@@ -3,6 +3,8 @@ import { Hash } from '../src/util/Hash.ts';
 import { MessageJoiner, MessageSplitter } from './MessageSplitter.ts';
 import { orderSignals } from './util.ts';
 
+const defaultMaxMsgSize = 65536;
+
 export class WebrtcProvider implements NetworkProvider {
   public providesProtocol = 'webrtc@0.0.1';
 
@@ -35,12 +37,22 @@ export class WebrtcProvider implements NetworkProvider {
 
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
-    const reliableSplitter = new MessageSplitter(1024);
-    const fastSplitter = new MessageSplitter(1024);
     const joiner = new MessageJoiner();
     const bufferedPackets: ArrayBuffer[] = [];
 
-    const dispatchNewConn = (conn: RTCPeerConnection) =>
+    const dispatchNewConn = (conn: RTCPeerConnection) => {
+      let msgSize;
+      if (conn.sctp !== null) {
+        msgSize = conn.sctp.maxMessageSize;
+        console.info(`Using a max message size of ${msgSize}`);
+      } else {
+        msgSize = defaultMaxMsgSize;
+        console.warn(`No WebRTC sctp property set! Using a default max message size of ${msgSize}`);
+      }
+
+      const reliableSplitter = new MessageSplitter(msgSize);
+      const fastSplitter = new MessageSplitter(msgSize);
+
       driver.createConnection({
         sendReliable: (data: Uint8Array) => {
           for (const packet of reliableSplitter.send(data)) {
@@ -75,6 +87,8 @@ export class WebrtcProvider implements NetworkProvider {
               conn.connectionState,
             ) && handler(),
       });
+    };
+
     const createChannels = (conn: RTCPeerConnection) => {
       reliableChannel = conn.createDataChannel('reliable', {
         negotiated: true,
@@ -92,6 +106,7 @@ export class WebrtcProvider implements NetworkProvider {
       });
       setupChannel(conn, fastChannel);
     };
+
     const setupChannel = (conn: RTCPeerConnection, channel: RTCDataChannel) => {
       channel.binaryType = 'arraybuffer';
       channel.onopen = (_e) => {

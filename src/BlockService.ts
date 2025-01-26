@@ -263,17 +263,7 @@ export class BlockService {
       fromBlock.sillyName,
     );
 
-    if (block === ZERO_BLOCK) {
-      return;
-    }
-    const expectedOutput = utxoIdxs.map((x) => this.ctx.get(FrontierService).getOutput(block, x));
-
     this.scatterSpends(block, utxoIdxs, (dst, outputIdx) => {
-      const nextOut = expectedOutput.shift();
-      if (dst !== nextOut?.block || outputIdx !== nextOut.outputIdx) {
-        debugger;
-      }
-
       console.log(
         'PROPAGATE push',
         dst.sillyName,

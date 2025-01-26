@@ -36,9 +36,11 @@ export class Context {
       }
       this.constructing.add(Type);
 
-      this.objs.set(Type, new Type(this));
-
-      this.constructing.delete(Type);
+      try {
+        this.objs.set(Type, new Type(this));
+      } finally {
+        this.constructing.delete(Type);
+      }
     }
 
     return this.objs.get(Type) as T;

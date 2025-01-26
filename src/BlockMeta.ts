@@ -80,7 +80,7 @@ export interface BlockMeta {
   // TODO: Remove; sometimes an output will be claimed by a tree but we don't know the exact block yet.
   outputClaims: OutputClaim[][];
 
-  isCanonical?: boolean;
+  isCanonical: boolean;
 
   parentBlock?: BlockFact | typeof ZERO_BLOCK;
 

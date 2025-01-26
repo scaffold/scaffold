@@ -10,6 +10,7 @@ export abstract class RandomSampler<
   private indices = new Map<T, number>();
   private heap: (T | number)[] = [];
 
+  protected abstract randomNumber(): number;
   protected abstract weight(item: T): number;
 
   public getAll() {
@@ -51,7 +52,7 @@ export abstract class RandomSampler<
       return;
     }
 
-    let offset = total * Math.random();
+    let offset = total * this.randomNumber();
     let idx = 1;
     let a: T | number;
     while (true) {

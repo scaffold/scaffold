@@ -13,6 +13,7 @@ import { EmitterRecordSet } from './record_sets/EmitterRecordSet.ts';
 import { signalPriorityResolution } from './SignalingService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
+import { EntropyProvider } from './Config.ts';
 
 const packetOverheadBytes = 256;
 
@@ -109,6 +110,10 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
         // });
       }
     }
+  }
+
+  protected override randomNumber() {
+    return this.ctx.config.entropyProvider.randomNumber();
   }
 
   public override weight(item: EmitterItem) {

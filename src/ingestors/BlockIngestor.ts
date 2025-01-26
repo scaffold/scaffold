@@ -27,6 +27,7 @@ import { SQUASH_MIN_VOLUME_RATIO } from '../constants.ts';
 import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
 import { LitigationService } from '../LitigationService.ts';
 import { BlockMetrics } from '../BlockMetrics.ts';
+import { CanonicalityService } from '../CanonicalityService.ts';
 
 export class BlockIngestor implements IngestionProvider<BlockFact> {
   type = FactType.Block as const;
@@ -97,7 +98,7 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
         })
       ),
 
-      isCanonical: undefined,
+      isCanonical: false,
 
       parentBlock,
       parentChainRoot: parentBlock === undefined
@@ -325,6 +326,12 @@ export class BlockIngestor implements IngestionProvider<BlockFact> {
 
     // This must come after the conflict sets are updated
     this.ctx.get(BlockMetrics).reset();
+    fact.isCanonical = this.ctx.get(BlockMetrics).get(fact, 'isCanonical');
+    if (fact.isCanonical) {
+      this.ctx.get(CanonicalityService).onCanonical(fact);
+    } else {
+      this.ctx.get(CanonicalityService).offCanonical(fact);
+    }
     this.ctx.get(BlockService).updateCanonicalities(
       this.ctx.get(FactService).hackyGetBlocksMatching(),
     );

@@ -1,10 +1,7 @@
 import { Context } from './Context.ts';
 import { KeyService } from './KeyService.ts';
-import { BlockService } from './BlockService.ts';
 import { accountHash } from './hashes.ts';
 import { AccountContractParams, BlockOutput } from './messages.ts';
-import { GenesisService } from './GenesisService.ts';
-import { Hash } from './util/Hash.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
 
 export class BalanceService {
