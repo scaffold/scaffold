@@ -38,6 +38,8 @@
         "no-self-compare",
         "no-slow-types",
         "no-sparse-arrays",
+        "no-throw-literal",
+        "no-undef",
         "prefer-ascii",
         "single-var-declarator"
       ],

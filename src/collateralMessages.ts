@@ -1,7 +1,7 @@
-import * as base from './messages.ts';
+import { makeMsg, ObjectType, registry as baseRegistry } from './protocol/base.ts';
 
 const registry = {
-  ...base.registry,
+  ...baseRegistry,
 
   CollateralHintFrontierHash: {
     name: 'CollateralHintFrontierHash',
@@ -73,14 +73,11 @@ const registry = {
   },
 } as const;
 
-export type MsgType<Name extends keyof typeof registry> = base.ObjectType<
-  Name,
-  typeof registry
->;
+export type MsgType<Name extends keyof typeof registry> = ObjectType<Name, typeof registry>;
 
-export const CollateralHint = base.makeMsg(registry, 'CollateralHint');
+export const CollateralHint = makeMsg(registry, 'CollateralHint');
 export type CollateralHint = MsgType<'CollateralHint'>;
-export const CollateralContractParams = base.makeMsg(registry, 'CollateralContractParams');
+export const CollateralContractParams = makeMsg(registry, 'CollateralContractParams');
 export type CollateralContractParams = MsgType<'CollateralContractParams'>;
-export const CollateralContractDetail = base.makeMsg(registry, 'CollateralContractDetail');
+export const CollateralContractDetail = makeMsg(registry, 'CollateralContractDetail');
 export type CollateralContractDetail = MsgType<'CollateralContractDetail'>;
