@@ -5,7 +5,7 @@ import * as hashes from './hashes.ts';
 import { bin2hex } from './util/hex.ts';
 import { BlockFact } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
-import { Logger } from './Logger.ts';
+import { Logger } from './Logger3.ts';
 
 interface Debugger {
   contractName: string;

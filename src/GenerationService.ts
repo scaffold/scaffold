@@ -10,7 +10,7 @@ import { assert, error, todo } from './util/functional.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { WorkerExecutor } from './WorkerExecutor.ts';
 import { LitigationService } from './LitigationService.ts';
-import { Logger } from './Logger.ts';
+import { Logger } from './Logger3.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';

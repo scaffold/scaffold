@@ -11,7 +11,7 @@ import {
 } from './hashes.ts';
 import { Context } from './Context.ts';
 import { VerificationService } from './VerificationService.ts';
-import { Logger } from './Logger.ts';
+import { Logger } from './Logger3.ts';
 import {
   Block,
   BlockInput,

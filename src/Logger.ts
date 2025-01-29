@@ -1,128 +1,58 @@
+import { LogSystem } from './Config.ts';
 import { Context } from './Context.ts';
-import { Hash } from './util/Hash.ts';
-import { bin2hex } from './util/hex.ts';
-import * as log from '@std/log';
 
-const sortKeys = (obj: { [key: string]: any }) =>
-  Object.fromEntries(
-    Object.entries(obj).sort((a, b) => a[0].localeCompare(b[0])),
-  );
+export const enum LogLevel {
+  DEBUG = 10,
+  INFO = 20,
+  WARN = 30,
+  ERROR = 40,
+  CRITICAL = 50,
+}
 
-const trim = (str: string, maxLen: number) =>
-  str.length > maxLen ? `${str.substring(0, maxLen)}... [${str.length}]` : str;
-
-const formatter: log.FormatterFunction = (logRecord: log.LogRecord) =>
-  `${logRecord.levelName} ${logRecord.loggerName} ${logRecord.msg} ${logRecord.args[0]}`;
-
-const logConfig: log.LogConfig & { loggers: Record<string, log.LoggerConfig> } = {
-  handlers: {
-    console: new log.ConsoleHandler('DEBUG', { formatter }),
-    // file: new log.handlers.FileHandler('DEBUG', {
-    //   filename: `/tmp/sbl_${Date.now()}_${
-    //     Math.random().toString(36).slice(2)
-    //   }.log`,
-    //   formatter,
-    // }),
-  },
-  loggers: {},
-};
+export interface LogEvent {
+  timestamp: number;
+  level: LogLevel;
+  message: string;
+  data: { [key: string]: unknown };
+}
 
 export class Logger {
-  private setupPromise: void; // Promise<void>;
-  constructor(private ctx: Context) {
-    logConfig.loggers[`sbl_${ctx.config.debugName}`] = {
-      level: log.getLevelName(ctx.config.logLevel),
-      handlers: [
-        'console',
-        // 'file',
-      ],
-    };
+  public events: LogEvent[] = [];
 
-    this.setupPromise = log.setup(logConfig);
+  private constructor(private ctx: Context, private minLevel: LogLevel) {}
+
+  static create(ctx: Context, system: LogSystem) {
+    const level = ctx.config.logLevels[system];
+    return level !== undefined ? new Logger(ctx, level) : undefined;
   }
 
-  private get() {
-    return log.getLogger(`sbl_${this.ctx.config.debugName}`);
+  debug(message: string, data?: { [key: string]: unknown }) {
+    this.log(LogLevel.DEBUG, message, data);
   }
 
-  public async debug(msg: string, params: { [key: string]: any }) {
-    console.log('DEBUG', this.ctx.config.debugName, msg, params);
-    // const serializedParams = this.serialize(params);
-    // await this.setupPromise;
-    // return this.get().debug(msg, serializedParams);
-  }
-  public async info(msg: string, params: { [key: string]: any }) {
-    console.log('INFO', this.ctx.config.debugName, msg, params);
-    // const serializedParams = this.serialize(params);
-    // await this.setupPromise;
-    // return this.get().info(msg, serializedParams);
-  }
-  public async warning(msg: string, params: { [key: string]: any }) {
-    console.log('WARNING', this.ctx.config.debugName, msg, params);
-    // const serializedParams = this.serialize(params);
-    // await this.setupPromise;
-    // return this.get().warning(msg, serializedParams);
-  }
-  public async error(msg: string, params: { [key: string]: any }) {
-    console.log('ERROR', this.ctx.config.debugName, msg, params);
-    // const serializedParams = this.serialize(params);
-    // await this.setupPromise;
-    // return this.get().error(msg, serializedParams);
-  }
-  public async critical(msg: string, params: { [key: string]: any }) {
-    console.log('CRITICAL', this.ctx.config.debugName, msg, params);
-    // const serializedParams = this.serialize(params);
-    // await this.setupPromise;
-    // return this.get().critical(msg, serializedParams);
+  info(message: string, data?: { [key: string]: unknown }) {
+    this.log(LogLevel.INFO, message, data);
   }
 
-  public serialize(
-    obj: any,
-    n?: number,
-    maxStrLen = 64,
-  ): string {
-    // val = sortKeys(val);
-    return JSON.stringify(obj, (key, val) => {
-      if (key === 'defaultConn') {
-        return;
+  warn(message: string, data?: { [key: string]: unknown }) {
+    this.log(LogLevel.WARN, message, data);
+  }
+
+  error(message: string, data?: { [key: string]: unknown }) {
+    this.log(LogLevel.ERROR, message, data);
+  }
+
+  critical(message: string, data?: { [key: string]: unknown }) {
+    this.log(LogLevel.CRITICAL, message, data);
+  }
+
+  private log(level: LogLevel, message: string, data: { [key: string]: unknown } = {}) {
+    if (level >= this.minLevel) {
+      const event = { timestamp: this.ctx.config.timeProvider.now(), level, message, data };
+      for (const provider of this.ctx.config.loggingProviders) {
+        provider.handler(event);
       }
-
-      if (typeof val === 'bigint') {
-        return trim(val.toString(), maxStrLen);
-      } else if (typeof val === 'string') {
-        return trim(val, maxStrLen);
-      } else if (val instanceof Hash) {
-        return trim(val.toHex(), maxStrLen);
-      } else if (val instanceof Uint8Array) {
-        return trim(bin2hex(val), maxStrLen);
-      } else if (
-        typeof val === 'object' && val !== null && val.type === 'Buffer'
-      ) {
-        return trim(bin2hex(new Uint8Array(val.data)), maxStrLen);
-        // } else if (
-        //   typeof val === 'object' && val !== null &&
-        //   'contractHash' in val &&
-        //   'params' in val
-        // ) {
-        //   return { ...val, ...this.ctx.get(QaDebugger).debugQuestion(val) };
-        // } else if (
-        //   typeof val === 'object' && val !== null &&
-        //   'verifiers' in val &&
-        //   'body' in val
-        // ) {
-        //   if (val !== obj && 'hash' in val && val.hash instanceof Hash) {
-        //     return { hash: trim(val.hash.toHex(), maxStrLen) };
-        //   } else {
-        //     return { ...val, ...this.ctx.get(QaDebugger).debugAnswer(val) };
-        //   }
-      } else if (
-        key && typeof val === 'object' && val !== null &&
-        'hash' in val && val.hash instanceof Hash
-      ) {
-        return { hash: val.hash };
-      } else {
-        return val;
-      }
-    }, n);
+      this.events.push(event);
+    }
   }
 }

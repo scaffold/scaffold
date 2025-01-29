@@ -16,6 +16,8 @@ import { arrEquals, bin2prim } from './util/buffer.ts';
 import { SignalingRecordSet } from './record_sets/SignalingRecordSet.ts';
 import { FactEmitter, FactGenerator } from './FactEmitter.ts';
 import { FactSource } from './FactMeta.ts';
+import { Logger } from './Logger.ts';
+import { LogSystem } from './Config.ts';
 
 // const closeTimeoutMs = 30000;
 const closeTimeoutMs = Infinity;
@@ -35,7 +37,7 @@ export interface SignalingState {
 
   closed: boolean;
 
-  log?: { timestamp: number; message: string }[];
+  log?: Logger;
 }
 
 interface SignalingInstance extends SignalingState {
@@ -138,10 +140,7 @@ export class SignalingService {
         lastEmit = this.ctx.config.timeProvider.now();
         emits++;
 
-        state.log?.push({
-          timestamp: this.ctx.config.timeProvider.now(),
-          message: `Sending signal ${payload.signalIdx}: ${payload.signalData}`,
-        });
+        state.log?.info(`Sending signal ${payload.signalIdx}: ${payload.signalData}`);
         this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
 
         payload.receivedIdxMask = state.localReceivedIdxMask;
@@ -234,10 +233,7 @@ export class SignalingService {
 
         instance.localReceivedIdxMask |= mask;
 
-        instance.log?.push({
-          timestamp: this.ctx.config.timeProvider.now(),
-          message: `Receiving signal ${payload.signalIdx}: ${payload.signalData}`,
-        });
+        instance.log?.info(`Receiving signal ${payload.signalIdx}: ${payload.signalData}`);
         this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(instance);
 
         instance.provider.recvSignal(payload.signalData, payload.signalIdx);
@@ -270,15 +266,14 @@ export class SignalingService {
       lastIngestTimestamp: this.ctx.config.timeProvider.now(),
       closed: false,
 
-      log: this.ctx.config.enableSignalingLogging
-        ? [{
-          timestamp: this.ctx.config.timeProvider.now(),
-          message: `Initialized signaling state: publicKey=${
-            bin2hex(remotePublicKey)
-          }, nonce=${payload.srcClientNonce}, remoteProtocol=${payload.srcProtocol}`,
-        }]
-        : undefined,
+      log: Logger.create(this.ctx, LogSystem.Signaler),
     };
+
+    state.log?.info(
+      `Initialized signaling state: nonce=${bin2hex(signalingNonce)}, publicKey=${
+        bin2hex(remotePublicKey)
+      }, nonce=${payload.srcClientNonce}, remoteProtocol=${payload.srcProtocol}`,
+    );
     this.ctx.maybeGet(SignalingRecordSet)?.dispatchAdd(state);
 
     const provider = networkProvider.createInstance({
@@ -293,10 +288,7 @@ export class SignalingService {
           return;
         }
 
-        state.log?.push({
-          timestamp: this.ctx.config.timeProvider.now(),
-          message: `Creating authenticated connection!`,
-        });
+        state.log?.info(`Creating authenticated connection!`);
         this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
 
         this.ctx.get(ConnectionService).createConnection(
@@ -314,10 +306,7 @@ export class SignalingService {
             instance.remoteClientNonce === state.remoteClientNonce &&
             instance.localProtocol === state.localProtocol
           ) {
-            instance.log?.push({
-              timestamp: this.ctx.config.timeProvider.now(),
-              message: `Aborting because we created another connection to this peer!`,
-            });
+            instance.log?.info(`Aborting because we created another connection to this peer!`);
             this.close(instance);
           }
         }

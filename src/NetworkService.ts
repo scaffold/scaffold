@@ -37,10 +37,7 @@ export class NetworkService {
     return this.ctx.config.networkProviders.map((x) => x.providesProtocol);
   }
 
-  public initConnection(
-    protocol: string,
-    sendSignal?: (signal: string) => void,
-  ) {
+  public initConnection(protocol: string, sendSignal?: (signal: string) => void) {
     const provider = this.findProvider(protocol, undefined);
     if (provider === undefined) {
       throw new Error(`No provider matching ${protocol}`);

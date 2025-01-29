@@ -13,8 +13,20 @@ import { IngestionProvider } from './IngestionProvider.ts';
 import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
 import { FrontierContract } from './contracts/FrontierContract.ts';
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
+import { LogEvent, LogLevel } from './Logger.ts';
+import { ConsoleLoggingProvider } from '../plugins/ConsoleLoggingProvider.ts';
 
 // TODO: Reorder, rename, reorganize config
+
+export enum LogSystem {
+  Main = 'main',
+  Block = 'block',
+  Signaler = 'signaler',
+}
+
+export interface LoggingProvider {
+  handler(event: LogEvent): void;
+}
 
 export interface GraphParameters {
   enforceTimestampMonotonicity: boolean;
@@ -60,6 +72,8 @@ export interface Config {
 
   logLevel: log.LogLevel;
 
+  logLevels: { [key in LogSystem]?: LogLevel };
+
   // initialPublicMetadata: {
   //   name: string;
   //   implName: string;
@@ -97,6 +111,7 @@ export interface Config {
 
   workerPath?: string;
 
+  loggingProviders: LoggingProvider[];
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
   storageProvider: StorageProvider;
@@ -171,6 +186,12 @@ export const makeDefaultConfig = () => {
     debugName: '',
     clientNonce: Math.random().toString(36).slice(2),
     logLevel: log.LogLevels.INFO, // TODO: Set this to WARN
+    logLevels: {
+      [LogSystem.Main]: LogLevel.DEBUG,
+      [LogSystem.Block]: LogLevel.DEBUG,
+      [LogSystem.Signaler]: LogLevel.DEBUG,
+    },
+    loggingProviders: [new ConsoleLoggingProvider()],
     timeProvider: {
       now: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),

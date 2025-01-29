@@ -174,8 +174,7 @@ export class ConnectionService {
       conn.lastRecvTimestamp = this.ctx.config.timeProvider.now();
 
       try {
-        const fact = this.ctx.get(FactService)
-          .ingest(data, FactSource.Remote, conn);
+        const fact = this.ctx.get(FactService).ingest(data, FactSource.Remote, conn);
 
         // TODO: We don't have to do this extra authenetication, since we're already creating connections with authenticated peers
         if (fact.type === FactType.Identification) {
