@@ -19,6 +19,7 @@ import { FactSource } from './FactMeta.ts';
 import { Logger } from './Logger.ts';
 import { LogSystem } from './Config.ts';
 import { secp } from './util/secp.ts';
+import { KeyService } from './KeyService.ts';
 
 // const closeTimeoutMs = 30000;
 const closeTimeoutMs = Infinity;
@@ -283,9 +284,9 @@ export class SignalingService {
     this.ctx.maybeGet(SignalingRecordSet)?.dispatchAdd(state);
 
     const myToken = Hash.digestParts(
+      this.ctx.get(KeyService).getSelfPublicKey(),
       secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
       signalingNonce,
-      isInitiator ? 0 : 1,
     );
 
     const provider = networkProvider.createInstance({
@@ -298,18 +299,9 @@ export class SignalingService {
       sendSignal: (signalData, priority) => this.emit(state, signalData, undefined, priority),
       createConnection: (remoteToken, provider) => {
         const expectedToken = Hash.digestParts(
+          remotePublicKey,
           secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
           signalingNonce,
-          isInitiator ? 1 : 0,
-        );
-
-        console.log(
-          secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
-          signalingNonce,
-          isInitiator ? 1 : 0,
-          myToken,
-          expectedToken,
-          remoteToken,
         );
 
         if (remoteToken === undefined || !Hash.equals(remoteToken, expectedToken)) {
@@ -318,7 +310,8 @@ export class SignalingService {
 
         // TODO: Handle closed state?
         if (state.closed) {
-          throw new Error(`Signaling state is closed!`);
+          provider.shutdown();
+          return { recvData: () => {}, close: () => {} };
         }
 
         state.log?.info(`Creating authenticated connection!`);

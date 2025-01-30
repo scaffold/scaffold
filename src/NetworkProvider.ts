@@ -12,7 +12,7 @@ export interface SignalingDriver {
   ctx: Context;
 
   protocol: string;
-  isInitiator: boolean;
+  isInitiator: boolean; // TODO: Fix this property - it isn't set correctly for some reason.
   myToken?: Hash;
 
   sendSignal(signal: string, priority?: number): void;
