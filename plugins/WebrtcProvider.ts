@@ -31,9 +31,11 @@ export class WebrtcProvider implements NetworkProvider {
     );
   }
 
-  public createInstance(driver: SignalingDriver) {
+  public createInstance(signalingDriver: SignalingDriver) {
     // TODO: Use driver.isInitiator for ordering
     const myOrderHash = Hash.random();
+
+    let remoteToken: Hash | undefined;
 
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
@@ -53,7 +55,7 @@ export class WebrtcProvider implements NetworkProvider {
       const reliableSplitter = new MessageSplitter(msgSize);
       const fastSplitter = new MessageSplitter(msgSize);
 
-      driver.createConnection({
+      const connDriver = signalingDriver.createConnection(remoteToken, {
         sendReliable: (data: Uint8Array) => {
           for (const packet of reliableSplitter.send(data)) {
             reliableChannel!.send(packet);
@@ -64,29 +66,29 @@ export class WebrtcProvider implements NetworkProvider {
             fastChannel!.send(packet);
           }
         },
-        onRecv: (handler: (data: Uint8Array) => void) => {
-          for (const packet of bufferedPackets) {
-            for (const msg of joiner.recv(packet)) {
-              handler(msg);
-            }
-          }
-          bufferedPackets.length = 0;
-
-          const messageHandler = (e: MessageEvent<ArrayBuffer>) => {
-            for (const msg of joiner.recv(e.data)) {
-              handler(msg);
-            }
-          };
-          reliableChannel!.onmessage = messageHandler;
-          fastChannel!.onmessage = messageHandler;
-        },
         shutdown: () => conn.close(),
-        onClose: (handler: () => void) =>
-          conn.onconnectionstatechange = () =>
-            ['disconnected', 'failed', 'closed'].includes(
-              conn.connectionState,
-            ) && handler(),
       });
+
+      for (const packet of bufferedPackets) {
+        for (const msg of joiner.recv(packet)) {
+          connDriver.recvData(msg);
+        }
+      }
+      bufferedPackets.length = 0;
+
+      const messageHandler = (e: MessageEvent<ArrayBuffer>) => {
+        for (const msg of joiner.recv(e.data)) {
+          connDriver.recvData(msg);
+        }
+      };
+      reliableChannel!.onmessage = messageHandler;
+      fastChannel!.onmessage = messageHandler;
+
+      conn.onconnectionstatechange = () => {
+        if (['disconnected', 'failed', 'closed'].includes(conn.connectionState)) {
+          connDriver.close();
+        }
+      };
     };
 
     const createChannels = (conn: RTCPeerConnection) => {
@@ -123,23 +125,29 @@ export class WebrtcProvider implements NetworkProvider {
     };
 
     const connPromise = (async () => {
-      driver.sendSignal(JSON.stringify({ orderHex: myOrderHash.toHex() }));
+      signalingDriver.sendSignal(JSON.stringify({
+        token: signalingDriver.myToken?.toHex(),
+        orderHex: myOrderHash.toHex(),
+      }));
 
       const config = { iceServers: await this.iceServersPromise };
       const conn = new RTCPeerConnection(config);
 
       conn.onicecandidate = (e) =>
         e.candidate &&
-        driver.sendSignal(JSON.stringify({ iceCandidate: e.candidate }), 0.25);
+        signalingDriver.sendSignal(JSON.stringify({ iceCandidate: e.candidate }), 0.25);
 
       return conn;
     })();
 
     return {
       recvSignal: orderSignals(async (spec: string) => {
-        const { orderHex, offer, answer, iceCandidate } = JSON.parse(spec);
+        const { token, orderHex, offer, answer, iceCandidate } = JSON.parse(spec);
         const conn = await connPromise;
 
+        if (token) {
+          remoteToken = Hash.fromHex(token);
+        }
         if (orderHex) {
           createChannels(conn);
 
@@ -147,7 +155,7 @@ export class WebrtcProvider implements NetworkProvider {
           if (cmp < 0) {
             const offer = await conn.createOffer();
             await conn.setLocalDescription(offer);
-            driver.sendSignal(JSON.stringify({ offer: conn.localDescription }));
+            signalingDriver.sendSignal(JSON.stringify({ offer: conn.localDescription }));
           } else if (cmp === 0) {
             console.error(
               `Error negotiating WebRTC connection ordering assignment: Hash equality`,
@@ -158,7 +166,7 @@ export class WebrtcProvider implements NetworkProvider {
           await conn.setRemoteDescription(offer);
           const answer = await conn.createAnswer();
           await conn.setLocalDescription(answer);
-          driver.sendSignal(JSON.stringify({ answer: conn.localDescription }));
+          signalingDriver.sendSignal(JSON.stringify({ answer: conn.localDescription }));
         }
         if (answer) {
           await conn.setRemoteDescription(answer);

@@ -18,6 +18,7 @@ import { FactEmitter, FactGenerator } from './FactEmitter.ts';
 import { FactSource } from './FactMeta.ts';
 import { Logger } from './Logger.ts';
 import { LogSystem } from './Config.ts';
+import { secp } from './util/secp.ts';
 
 // const closeTimeoutMs = 30000;
 const closeTimeoutMs = Infinity;
@@ -26,6 +27,7 @@ export const signalPriorityResolution = 16;
 
 export interface SignalingState {
   signalingNonce: Uint8Array;
+  isInitiator: boolean;
   remotePublicKey: Uint8Array;
   remoteClientNonce: string;
   localProtocol: string;
@@ -192,18 +194,18 @@ export class SignalingService {
       receivedIdxMask: 0n,
       signalIdx: -1,
       signalData: '',
-    });
+    }, true);
 
     if (instance.nextEmitIdx === 0) {
       this.emit(instance, '', -1, 1);
     }
   }
 
-  public ingestSignal(remotePublicKey: Uint8Array, payload: SignalPayload) {
+  public ingestSignal(remotePublicKey: Uint8Array, payload: SignalPayload, isInitiator: boolean) {
     const instance = mapPut(
       this.instances,
       bin2prim(payload.signalingNonce),
-      () => this.initSignaling(payload.signalingNonce, remotePublicKey, payload),
+      () => this.initSignaling(payload.signalingNonce, remotePublicKey, payload, isInitiator),
       (inst) => {
         if (
           !arrEquals(inst.remotePublicKey, remotePublicKey) ||
@@ -215,6 +217,8 @@ export class SignalingService {
             } has a different public key or client nonce!`,
           );
         }
+
+        assert(inst.isInitiator === isInitiator);
 
         return inst;
       },
@@ -247,6 +251,7 @@ export class SignalingService {
     signalingNonce: Uint8Array,
     remotePublicKey: Uint8Array,
     payload: SignalPayload,
+    isInitiator: boolean,
   ): SignalingInstance {
     const networkProvider = this.ctx.get(NetworkService)
       .findProvider(undefined, payload.srcProtocol);
@@ -256,6 +261,7 @@ export class SignalingService {
 
     const state: SignalingState = {
       signalingNonce,
+      isInitiator,
       remotePublicKey,
       remoteClientNonce: payload.srcClientNonce,
       localProtocol: networkProvider.providesProtocol,
@@ -276,22 +282,40 @@ export class SignalingService {
     );
     this.ctx.maybeGet(SignalingRecordSet)?.dispatchAdd(state);
 
+    const myToken = Hash.digestParts(
+      secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
+      signalingNonce,
+      isInitiator ? 0 : 1,
+    );
+
     const provider = networkProvider.createInstance({
       ctx: this.ctx,
 
       protocol: state.localProtocol,
-      useToken: true,
+      isInitiator,
+      myToken,
 
       sendSignal: (signalData, priority) => this.emit(state, signalData, undefined, priority),
-      createConnection: (provider) => {
+      createConnection: (remoteToken, provider) => {
+        const expectedToken = Hash.digestParts(
+          secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
+          signalingNonce,
+          isInitiator ? 1 : 0,
+        );
+
+        if (remoteToken === undefined || !Hash.equals(remoteToken, expectedToken)) {
+          throw new Error(`Invalid remote token!`);
+        }
+
+        // TODO: Handle closed state?
         if (state.closed) {
-          return;
+          throw new Error(`Signaling state is closed!`);
         }
 
         state.log?.info(`Creating authenticated connection!`);
         this.ctx.maybeGet(SignalingRecordSet)?.dispatchUpdate(state);
 
-        this.ctx.get(ConnectionService).createConnection(
+        const connDriver = this.ctx.get(ConnectionService).createConnection(
           state.localProtocol,
           provider,
           remotePublicKey,
@@ -313,6 +337,8 @@ export class SignalingService {
 
         // Close this instance
         this.ctx.get(ClockService).setTimeout(() => this.close(state), 0);
+
+        return connDriver;
       },
     });
 

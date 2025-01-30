@@ -34,6 +34,4 @@ export class LocalStorageProvider implements StorageProvider {
       }
     }
   }
-
-  public close() {}
 }

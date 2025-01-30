@@ -1,10 +1,11 @@
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
+import { Hash } from '../src/util/Hash.ts';
 
 export class WebsocketClientProvider implements NetworkProvider {
   public providesProtocol = 'websocket@0.0.1/client';
   public connectsToProtocols = ['websocket@0.0.1/server'];
 
-  public createInstance(driver: SignalingDriver) {
+  public createInstance(signalingDriver: SignalingDriver) {
     const sockets: WebSocket[] = [];
     let isOpen = false;
 
@@ -14,10 +15,18 @@ export class WebsocketClientProvider implements NetworkProvider {
           return;
         }
 
-        const socket = new WebSocket(signal);
+        const url = new URL(signal);
+        const serverToken = url.searchParams.get('serverToken');
+        const remoteToken = serverToken ? Hash.fromHex(serverToken) : undefined;
+
+        if (signalingDriver.myToken !== undefined) {
+          url.searchParams.set('clientToken', signalingDriver.myToken.toHex());
+        }
+
+        const socket = new WebSocket(url.toString());
         socket.binaryType = 'arraybuffer';
-        sockets.push(socket);
-        socket.addEventListener('open', () => {
+
+        socket.onopen = () => {
           if (isOpen) {
             return;
           }
@@ -26,18 +35,17 @@ export class WebsocketClientProvider implements NetworkProvider {
           sockets.forEach((s) => s !== socket && s.close());
           isOpen = true;
 
-          driver.createConnection({
+          const connDriver = signalingDriver.createConnection(remoteToken, {
             sendReliable: (data: Uint8Array) => socket.send(data),
             sendFast: (data: Uint8Array) => socket.send(data),
-            onRecv: (handler: (data: Uint8Array) => void) =>
-              socket.addEventListener(
-                'message',
-                (e) => handler(new Uint8Array(e.data)),
-              ),
             shutdown: () => socket.close(),
-            onClose: (handler: () => void) => socket.addEventListener('close', () => handler()),
           });
-        });
+
+          socket.onmessage = (e) => connDriver.recvData(new Uint8Array(e.data));
+          socket.onclose = () => connDriver.close();
+        };
+
+        sockets.push(socket);
       },
     };
   }

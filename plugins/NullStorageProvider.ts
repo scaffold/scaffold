@@ -9,6 +9,4 @@ export class NullStorageProvider implements StorageProvider {
   }
 
   public async *list(_namespace: number) {}
-
-  public close() {}
 }

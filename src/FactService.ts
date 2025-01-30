@@ -2,7 +2,7 @@ import { Context } from './Context.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { BlockFact, Collateralization, Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
 import { PeerManager } from './PeerManager.ts';
-import { Coder } from './messages.ts';
+import { Coder } from './protocol/base.ts';
 import { secp } from './util/secp.ts';
 import { zstd } from '../deps.ts';
 import { arrEquals } from './util/buffer.ts';
@@ -21,6 +21,7 @@ import { ClockService } from './ClockService.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
 import { BarrierException } from './exceptions.ts';
 import { assert } from '@std/assert/assert';
+import { RoutingService2 } from './RoutingService2.ts';
 
 const maxForgetDurationMs = 2500;
 
@@ -270,19 +271,23 @@ export class FactService {
   public ingest(
     data: Uint8Array,
     source: FactSource,
-    fromConn?: Connection,
+    from?: Connection,
     mutator?: (fact: Fact) => void,
   ) {
     const fact = this.create(data, source, mutator);
 
     // TODO: Send back "responses" here?
 
-    if (fromConn !== undefined) {
-      fromConn.knownFacts.add(fact);
-      fact.fromConnections.push(fromConn);
+    if (from !== undefined) {
+      from.knownFacts.add(fact);
+      fact.fromConnections.push(from);
 
-      fromConn.earnedBandwidth += this.ctx.config.bandwidthReciprocationBaseFactor *
+      this.ctx.get(RoutingService2).routeIncoming(from, fact);
+
+      from.earnedBandwidth += this.ctx.config.bandwidthReciprocationBaseFactor *
         fact.data.byteLength;
+    } else {
+      this.ctx.get(RoutingService2).routeOutgoing(fact);
     }
 
     return fact;
@@ -294,8 +299,7 @@ export class FactService {
     provider.forget(fact);
 
     if (fact.signer !== undefined) {
-      this.ctx.get(PeerManager).getPeer(fact.signer)
-        ?.producedFacts.delete(fact);
+      this.ctx.get(PeerManager).getPeer(fact.signer)?.producedFacts.delete(fact);
     }
     this.facts.delete(fact.hash.toPrimitive());
     this.deleteFromStorage(fact);

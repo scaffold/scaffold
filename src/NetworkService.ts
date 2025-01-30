@@ -1,6 +1,7 @@
 import { Context } from './Context.ts';
 import { NetworkProvider } from './NetworkProvider.ts';
 import { ConnectionService } from './ConnectionService.ts';
+import { error } from './util/functional.ts';
 
 export class NetworkService {
   private persistentConnections: { protocol: string; signals: string[] }[] = [];
@@ -37,7 +38,11 @@ export class NetworkService {
     return this.ctx.config.networkProviders.map((x) => x.providesProtocol);
   }
 
-  public initConnection(protocol: string, sendSignal?: (signal: string) => void) {
+  public initConnection(
+    protocol: string,
+    sendSignal: (signal: string) => void,
+    isInitiator = true,
+  ) {
     const provider = this.findProvider(protocol, undefined);
     if (provider === undefined) {
       throw new Error(`No provider matching ${protocol}`);
@@ -47,19 +52,26 @@ export class NetworkService {
       ctx: this.ctx,
 
       protocol,
-      useToken: false,
+      isInitiator,
 
-      sendSignal: sendSignal ?? (() => {
-        throw new Error(`No signal sender provided for ${protocol}`);
-      }),
-      createConnection: (provider) =>
-        this.ctx.get(ConnectionService).createConnection(protocol, provider),
+      sendSignal,
+      createConnection: (remoteToken, provider) => {
+        if (remoteToken !== undefined) {
+          throw new Error(`Unexpected remote token on unauthenticated connection!`);
+        }
+
+        return this.ctx.get(ConnectionService).createConnection(protocol, provider);
+      },
     });
   }
 
   public persistConnection(protocol: string, ...signals: string[]) {
     this.persistentConnections.push({ protocol, signals });
-    const conn = this.initConnection(protocol);
+    const conn = this.initConnection(
+      protocol,
+      () => error(`No signal sender provided for ${protocol}`),
+      false,
+    );
     signals.forEach((sig, idx) => conn.recvSignal(sig, idx));
   }
 }

@@ -11,9 +11,8 @@ export class WebsocketServerProvider implements NetworkProvider {
   private drivers = new Map<string, SignalingDriver>();
 
   constructor(port = 8314) {
-    const listenResolver = Promise.withResolvers<
-      { hostname: string; port: number }
-    >();
+    const listenResolver = Promise.withResolvers<{ hostname: string; port: number }>();
+
     Deno.serve({
       port,
       onListen: listenResolver.resolve,
@@ -22,25 +21,30 @@ export class WebsocketServerProvider implements NetworkProvider {
           return new Response(null, { status: 501 });
         }
 
-        const token = new URL(req.url).searchParams.get('token');
-        const driver = this.drivers.get(token || '');
-        if (driver === undefined) {
+        const url = new URL(req.url);
+        const clientToken = url.searchParams.get('clientToken');
+        const remoteToken = clientToken ? Hash.fromHex(clientToken) : undefined;
+
+        const signalingDriver = this.drivers.get(url.searchParams.get('serverToken') ?? '');
+        if (signalingDriver === undefined) {
           return new Response(null, { status: 401 });
         }
 
         const { socket, response } = Deno.upgradeWebSocket(req);
         socket.binaryType = 'arraybuffer';
 
-        socket.addEventListener('open', () =>
-          driver.createConnection({
+        socket.onopen = () => {
+          const connDriver = signalingDriver.createConnection(remoteToken, {
             sendReliable: (data: Uint8Array) => socket.send(data),
             sendFast: (data: Uint8Array) => socket.send(data),
-            onRecv: (handler: (data: Uint8Array) => void) =>
-              socket.addEventListener('message', (e) => handler(new Uint8Array(e.data))),
             shutdown: () => socket.close(),
-            onClose: (handler: () => void) => socket.addEventListener('close', () => handler()),
-          }));
-        // socket.addEventListener('error', (e) => console.error(e));
+          });
+
+          socket.onmessage = (e) => connDriver.recvData(new Uint8Array(e.data));
+          socket.onclose = () => connDriver.close();
+
+          // socket.onerror = (e) => console.error(e);
+        };
 
         return response;
       },
@@ -61,18 +65,18 @@ export class WebsocketServerProvider implements NetworkProvider {
   }
 
   public createInstance(driver: SignalingDriver) {
-    const token = driver.useToken ? Hash.random().toHex() : '';
+    const serverToken = driver.myToken !== undefined ? driver.myToken.toHex() : '';
 
     mapPut(
       this.drivers,
-      token,
+      serverToken,
       () => driver,
-      () => error(`Cannot replace driver for token ${token}!`),
+      () => error(`Cannot replace driver for token ${serverToken}!`),
     );
 
     this.origins.then((origins) => {
       for (const origin of origins) {
-        driver.sendSignal(token ? `${origin}/?token=${token}` : origin);
+        driver.sendSignal(serverToken ? `${origin}/?serverToken=${serverToken}` : origin);
       }
     });
 

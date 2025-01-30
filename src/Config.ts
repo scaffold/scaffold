@@ -21,6 +21,7 @@ import { ConsoleLoggingProvider } from '../plugins/ConsoleLoggingProvider.ts';
 export enum LogSystem {
   Main = 'main',
   Block = 'block',
+  Connection = 'connection',
   Signaler = 'signaler',
 }
 
@@ -58,7 +59,6 @@ export interface StorageProvider {
   set(namespace: number, key: Hash, value?: Uint8Array): void;
   get(namespace: number, key: Hash): MaybePromise<Uint8Array | undefined>;
   list(namespace: number): AsyncIterable<{ key: Hash; value: Uint8Array }>;
-  close(): MaybePromise<void>;
 }
 
 // You can modify the Config by mutating ctx.config
@@ -189,6 +189,7 @@ export const makeDefaultConfig = () => {
     logLevels: {
       [LogSystem.Main]: LogLevel.DEBUG,
       [LogSystem.Block]: LogLevel.DEBUG,
+      [LogSystem.Connection]: LogLevel.DEBUG,
       [LogSystem.Signaler]: LogLevel.DEBUG,
     },
     loggingProviders: [new ConsoleLoggingProvider()],

@@ -185,11 +185,7 @@ export class PeerManager {
       )
     ];
 
-    this.ctx.get(SignalingService).init(
-      remotePublicKey,
-      fact.clientNonce,
-      remoteProtocol,
-    );
+    this.ctx.get(SignalingService).init(remotePublicKey, fact.clientNonce, remoteProtocol);
   }
 
   // public pathTo(peer: Peer) {

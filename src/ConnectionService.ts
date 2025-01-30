@@ -1,5 +1,5 @@
 import { Context } from './Context.ts';
-import { ConnectionProvider } from './NetworkProvider.ts';
+import { ConnectionDriver, ConnectionProvider } from './NetworkProvider.ts';
 import { AuthenticatedPeer, PeerManager } from './PeerManager.ts';
 import { assert, error } from './util/functional.ts';
 import { FactService } from './FactService.ts';
@@ -15,6 +15,9 @@ import { generateSillyName } from './util/sillyNameGenerator.ts';
 import { ConnectionRecordSet } from './record_sets/ConnectionRecordSet.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { mapPut } from './util/map.ts';
+import { Logger } from './Logger.ts';
+import { LogSystem } from './Config.ts';
+import { FingerprintSet } from './FingerprintSet.ts';
 
 // Private key length: 32 bytes
 // Full public key length: 65 bytes
@@ -36,6 +39,8 @@ export interface Connection {
   remotePublicKey?: Uint8Array;
   remoteClientNonce?: string;
 
+  sharedSecret?: Hash;
+
   protocol: string;
 
   provider: ConnectionProvider;
@@ -53,6 +58,10 @@ export interface Connection {
   // Note that this will be shared between multi-connections with the same publicKey+nonce combo.
   knownFacts: Set<Fact>;
 
+  // Note that this will be shared between multi-connections with the same publicKey+nonce combo.
+  knownFacts2: FingerprintSet;
+  sendFingerprintQueue: Hash[];
+
   ping: {
     latest: number;
     min: number;
@@ -67,6 +76,8 @@ export interface Connection {
   altruism: number;
 
   earnedBandwidth: number;
+
+  log?: Logger;
 }
 
 export class ConnectionService {
@@ -87,7 +98,12 @@ export class ConnectionService {
     provider: ConnectionProvider,
     remotePublicKey?: Uint8Array,
     remoteClientNonce?: string,
-  ) {
+  ): ConnectionDriver {
+    const buffer: Uint8Array[] = [];
+
+    provider.onRecv((data) => {
+    });
+
     const shutdown = () => {
       if (conn.isConnected) {
         conn.isConnected = false;
@@ -160,6 +176,8 @@ export class ConnectionService {
       ping: { latest: Infinity, min: Infinity, sum: 0, sqSum: 0, count: 0 },
       altruism: 0,
       earnedBandwidth: 0,
+
+      log: Logger.create(this.ctx, LogSystem.Connection),
     };
 
     // conn.peer.connections.add(conn);
@@ -230,6 +248,17 @@ export class ConnectionService {
       FactType.PeerInfo,
       conn,
     );
+
+    return { recvData: () => {}, close: () => {} };
+  }
+
+  removeConnection(conn: Connection) {
+    // assert(conn.peer.connections.delete(conn));
+    const connIdx = this.connections.indexOf(conn);
+    if (connIdx === -1) {
+      throw new Error(`Cannot find connection!`);
+    }
+    this.connections.splice(connIdx, 1);
   }
 
   private sendIdentification(conn: Connection, remotePublicKey: Uint8Array) {

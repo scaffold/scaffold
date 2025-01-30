@@ -19,7 +19,7 @@ export interface LogEvent {
 export class Logger {
   public events: LogEvent[] = [];
 
-  private constructor(private ctx: Context, private minLevel: LogLevel) {}
+  private constructor(private ctx: Context, public minLevel: LogLevel) {}
 
   static create(ctx: Context, system: LogSystem) {
     const level = ctx.config.logLevels[system];

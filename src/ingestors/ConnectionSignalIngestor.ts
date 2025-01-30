@@ -42,6 +42,7 @@ export class ConnectionSignalIngestor implements IngestionProvider<ConnectionSig
           this.ctx.get(SignalingService).ingestSignal(
             remotePublicKey,
             SignalPayload.decode(data),
+            false,
           );
         }).catch((err) => console.error(err));
       } else {

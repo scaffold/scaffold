@@ -201,8 +201,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
         return 0;
       }
 
-      value += 1e5 *
-        Math.pow(2, Math.min(fact.priority, 0) / signalPriorityResolution);
+      value += 1e5 * Math.pow(2, Math.min(fact.priority, 0) / signalPriorityResolution);
     } else if (fact.type === FactType.PeerInfo) {
       const publicKey = this.ctx.get(FactService).getPublicKey(fact);
       const peer = this.ctx.get(PeerManager).getPeer(publicKey);
