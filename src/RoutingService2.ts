@@ -1,4 +1,5 @@
-import { Connection, ConnectionService } from './ConnectionService.ts';
+import { Connection } from './Connection.ts';
+import { ConnectionService } from './ConnectionService.ts';
 import { Context } from './Context.ts';
 import { Fact } from './FactMeta.ts';
 import { FactService } from './FactService.ts';

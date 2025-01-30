@@ -38,6 +38,7 @@ export class NetworkService {
     return this.ctx.config.networkProviders.map((x) => x.providesProtocol);
   }
 
+  // TODO: Rename to listen
   public initConnection(
     protocol: string,
     sendSignal: (signal: string) => void,
@@ -65,6 +66,7 @@ export class NetworkService {
     });
   }
 
+  // TODO: Rename to connect
   public persistConnection(protocol: string, ...signals: string[]) {
     this.persistentConnections.push({ protocol, signals });
     const conn = this.initConnection(

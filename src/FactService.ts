@@ -11,7 +11,7 @@ import { mapPut } from './util/map.ts';
 import * as log from '@std/log';
 import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
-import { Connection, ConnectionService } from './ConnectionService.ts';
+import { Connection } from './Connection.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { GarbageCollectionService } from './GarbageCollectionService.ts';
 import { DataService } from './DataService.ts';

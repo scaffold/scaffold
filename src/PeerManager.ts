@@ -1,6 +1,6 @@
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { Context } from './Context.ts';
-import { Connection, ConnectionService } from './ConnectionService.ts';
+import { ConnectionService } from './ConnectionService.ts';
 import { KeyService } from './KeyService.ts';
 import { Fact, FactBase, FactType, PeerInfoFact } from './FactMeta.ts';
 import { NetworkService } from './NetworkService.ts';
@@ -166,10 +166,7 @@ export class PeerManager {
     }
 
     if (
-      this.ctx.get(SignalingService).isConnecting(
-        remotePublicKey,
-        fact.clientNonce,
-      )
+      this.ctx.get(SignalingService).isConnecting(remotePublicKey, fact.clientNonce)
     ) {
       return;
     }

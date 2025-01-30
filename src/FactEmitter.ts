@@ -1,7 +1,7 @@
 import { Context } from './Context.ts';
 import { BlockFact, Fact, FactSource, FactType } from './FactMeta.ts';
 import { GenesisService } from './GenesisService.ts';
-import { Connection, ConnectionService } from './ConnectionService.ts';
+import { ConnectionService } from './ConnectionService.ts';
 import { BlockService } from './BlockService.ts';
 import { PeerManager } from './PeerManager.ts';
 import { FactService } from './FactService.ts';
@@ -14,6 +14,7 @@ import { signalPriorityResolution } from './SignalingService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
 import { EntropyProvider } from './Config.ts';
+import { Connection } from './Connection.ts';
 
 const packetOverheadBytes = 256;
 
@@ -69,7 +70,7 @@ export class FactEmitter extends RandomSampler<EmitterItem> {
 
     // TODO: Remove this
     for (const dst of this.getDestinations(fact)) {
-      console.log(`Sending ${fact.hash.toHex()} to ${dst.name}`);
+      console.log(`Sending ${fact.hash.toHex()} to ${dst.sillyName}`);
       this.ctx.get(FactService).sendTo(fact, dst);
     }
   }

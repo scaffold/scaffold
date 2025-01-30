@@ -1,6 +1,6 @@
 import { BlockMeta } from './BlockMeta.ts';
-import { Block, ConnectionSignal, Identification, PeerInfo, SignalPayload } from './messages.ts';
-import { Connection } from './ConnectionService.ts';
+import { Block, ConnectionSignal, PeerInfo } from './messages.ts';
+import { Connection } from './Connection.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
@@ -9,7 +9,6 @@ import { DetailVote } from './CollateralUtil.ts';
 
 export enum FactType {
   Null = 0, // Reserved
-  Identification,
   PeerInfo,
   // InfoRequest,
   ConnectionSignal,
@@ -84,9 +83,6 @@ export interface FactBase {
   backtrace?: string;
 }
 
-export interface IdentificationFact extends FactBase, Identification {
-  type: FactType.Identification;
-}
 export interface PeerInfoFact extends FactBase, PeerInfo {
   type: FactType.PeerInfo;
 }
@@ -101,7 +97,6 @@ export interface BlockFact extends FactBase, Block, BlockMeta {
 }
 
 export type Fact =
-  | IdentificationFact
   | PeerInfoFact
   | ConnectionSignalFact
   // | SignalPayloadFact

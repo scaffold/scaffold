@@ -303,6 +303,15 @@ export class SignalingService {
           isInitiator ? 1 : 0,
         );
 
+        console.log(
+          secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
+          signalingNonce,
+          isInitiator ? 1 : 0,
+          myToken,
+          expectedToken,
+          remoteToken,
+        );
+
         if (remoteToken === undefined || !Hash.equals(remoteToken, expectedToken)) {
           throw new Error(`Invalid remote token!`);
         }
