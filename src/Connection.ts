@@ -6,11 +6,11 @@ import { BarrierException } from './exceptions.ts';
 import { Fact, FactSource } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
 import { Logger } from './Logger.ts';
-import { ConnectionProvider } from './NetworkProvider.ts';
+import { ConnectionDriver, ConnectionProvider } from './NetworkProvider.ts';
 import { ConnectionRecordSet } from './record_sets/ConnectionRecordSet.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
 
-export class Connection extends BaseContext<Connection> {
+export class Connection extends BaseContext<Connection> implements ConnectionDriver {
   // TODO: Remove
   public sillyName: string;
 
@@ -30,19 +30,19 @@ export class Connection extends BaseContext<Connection> {
   private log?: Logger;
 
   constructor(
-    public baseCtx: Context,
+    public ctx: Context,
     private provider: ConnectionProvider,
     public remotePublicKey?: Uint8Array,
     public remoteClientNonce?: string,
   ) {
     super();
 
-    this.sillyName = generateSillyName(this.baseCtx.config.entropyProvider),
-      this.lastRecvTimestamp = this.baseCtx.config.timeProvider.now();
+    this.sillyName = generateSillyName(this.ctx.config.entropyProvider);
+    this.lastRecvTimestamp = this.ctx.config.timeProvider.now();
 
-    this.log = Logger.create(this.baseCtx, LogSystem.Connection);
+    this.log = Logger.create(this.ctx, LogSystem.Connection);
 
-    this.baseCtx.maybeGet(ConnectionRecordSet)?.dispatchAdd(this);
+    this.ctx.maybeGet(ConnectionRecordSet)?.dispatchAdd(this);
   }
 
   protected override getThis() {
@@ -59,7 +59,7 @@ export class Connection extends BaseContext<Connection> {
       }
 
       this.sendReliableCount++;
-      this.baseCtx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(this);
+      this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(this);
     }
   }
 
@@ -73,7 +73,7 @@ export class Connection extends BaseContext<Connection> {
       }
 
       this.sendFastCount++;
-      this.baseCtx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(this);
+      this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(this);
     }
   }
 
@@ -82,8 +82,8 @@ export class Connection extends BaseContext<Connection> {
       this.isConnected = false;
       this.provider.shutdown();
 
-      this.baseCtx.get(ConnectionService).removeConnection(this);
-      this.baseCtx.maybeGet(ConnectionRecordSet)?.dispatchRemove(this);
+      this.ctx.get(ConnectionService).removeConnection(this);
+      this.ctx.maybeGet(ConnectionRecordSet)?.dispatchRemove(this);
 
       // for (const fact of this.knownFacts) {
       //   fact.fromConnections = fact.fromConnections.filter((x) => x !== conn);
@@ -94,10 +94,10 @@ export class Connection extends BaseContext<Connection> {
 
   recvData(data: Uint8Array) {
     this.recvCount++;
-    this.lastRecvTimestamp = this.baseCtx.config.timeProvider.now();
+    this.lastRecvTimestamp = this.ctx.config.timeProvider.now();
 
     try {
-      this.baseCtx.get(FactService).ingest(data, FactSource.Remote, this);
+      this.ctx.get(FactService).ingest(data, FactSource.Remote, this);
     } catch (err) {
       if (err instanceof BarrierException) {
         this.log?.debug(`Caught BarrierException ingesting fact: ${err}`, { err });
@@ -107,6 +107,6 @@ export class Connection extends BaseContext<Connection> {
       }
     }
 
-    this.baseCtx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(this);
+    this.ctx.maybeGet(ConnectionRecordSet)?.dispatchUpdate(this);
   }
 }

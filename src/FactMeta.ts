@@ -14,6 +14,7 @@ export enum FactType {
   ConnectionSignal,
   // SignalPayload,
   Block, // TODO: Rename to bundle or something
+  Knowledge,
   // BlockSet, // TODO: Rename to bag or something
   // BlockSetTreeNode,
   // MerkleTreeNode,
@@ -95,9 +96,13 @@ export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
 export interface BlockFact extends FactBase, Block, BlockMeta {
   type: FactType.Block;
 }
+export interface KnowledgeFact extends FactBase {
+  type: FactType.Knowledge;
+}
 
 export type Fact =
   | PeerInfoFact
   | ConnectionSignalFact
   // | SignalPayloadFact
-  | BlockFact;
+  | BlockFact
+  | KnowledgeFact;

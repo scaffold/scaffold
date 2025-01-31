@@ -5,3 +5,4 @@ dist/
 coverage/
 lcov.info
 render.svg
+.aider*

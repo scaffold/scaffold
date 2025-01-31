@@ -209,7 +209,7 @@ export class FactService {
 
   public emit<Type extends FactType, MsgType>(
     msg: MsgType,
-    coder: Coder<MsgType>,
+    coder: Pick<Coder<MsgType>, 'encode'>,
     type: Type,
     publish?: boolean | Connection | Connection[],
     mutator?: (fact: Fact) => void,
@@ -228,7 +228,7 @@ export class FactService {
     return fact as Fact & { type: Type };
   }
 
-  public compose<MsgType>(msg: MsgType, coder: Coder<MsgType>, type: FactType) {
+  public compose<MsgType>(msg: MsgType, coder: Pick<Coder<MsgType>, 'encode'>, type: FactType) {
     const provider = this.factories[type] ??
       error(`Invalid message type ${type}!`);
 
