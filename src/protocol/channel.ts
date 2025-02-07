@@ -6,6 +6,24 @@ const registry = {
 
   Verifier: msgRegistry.Verifier,
 
+  HashInfo: {
+    name: 'HashInfo',
+    type: 'record',
+    fields: [
+      { name: 'hash', type: 'hash' },
+      // { name: 'outputValues', type: { type: 'array', items: 'float' } },
+      { name: 'lagMs', type: 'int' },
+    ],
+  },
+
+  Index: {
+    name: 'Index',
+    type: 'record',
+    fields: [
+      { name: 'hashes', type: { type: 'array', items: 'HashInfo' } },
+    ],
+  },
+
   PeerInit: {
     name: 'PeerInit',
     type: 'record',
@@ -129,6 +147,8 @@ const registry = {
 
 export type MsgType<Name extends keyof typeof registry> = ObjectType<Name, typeof registry>;
 
+export const Index = makeMsg(registry, 'Index');
+export type Index = MsgType<'Index'>;
 export const PeerInit = makeMsg(registry, 'PeerInit');
 export type PeerInit = MsgType<'PeerInit'>;
 export const PeerUpdateUserData = makeMsg(registry, 'PeerUpdateUserData');

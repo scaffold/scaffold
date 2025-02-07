@@ -10,8 +10,9 @@ import { PeerManager } from '../PeerManager.ts';
 import { SignalingService } from '../SignalingService.ts';
 import { PeerInfo, SignalPayload } from '../messages.ts';
 
-export class PeerInfoIngestor implements IngestionProvider<PeerInfoFact> {
+export class PeerInfoIngestor implements IngestionProvider<FactType.PeerInfo> {
   type = FactType.PeerInfo as const;
+  isTransient = false as const;
   isPersistent = true;
   isSigned = true;
 

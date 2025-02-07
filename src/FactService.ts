@@ -1,6 +1,14 @@
 import { Context } from './Context.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
-import { BlockFact, Collateralization, Fact, FactBase, FactSource, FactType } from './FactMeta.ts';
+import {
+  BlockFact,
+  Collateralization,
+  Fact,
+  FactBase,
+  FactRef,
+  FactSource,
+  FactType,
+} from './FactMeta.ts';
 import { PeerManager } from './PeerManager.ts';
 import { Coder } from './protocol/base.ts';
 import { secp } from './util/secp.ts';
@@ -22,8 +30,8 @@ import { IngestionProvider } from './IngestionProvider.ts';
 import { BarrierException } from './exceptions.ts';
 import { assert } from '@std/assert/assert';
 import { RoutingService2 } from './RoutingService2.ts';
-
-const maxForgetDurationMs = 2500;
+import { QaService } from './QaService.ts';
+import { ReceptionProvider } from './IngestionProvider.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -33,10 +41,10 @@ export const enum LoadFlags {
   RequestFromRemote = 1 << 2,
 }
 
-const factMagic = new Uint8Array([83, 66, 76]); // SBL == 0x53424c
+const factMagic = new Uint8Array([83, 67, 70]); // SCF == 0x534346
 export const headerSize = factMagic.byteLength + 1;
 
-// Version by incrementing factMagic or creating a new FactType
+// Version by creating a new FactType
 
 const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an implementation detail
 
@@ -46,9 +54,11 @@ const zstdMagic = new Uint8Array([40, 181, 47, 253]);
 const sortKeys = true;
 
 export class FactService {
-  private factories: IngestionProvider<Fact>[] = [];
+  private factories: (IngestionProvider<FactType> | ReceptionProvider<FactType>)[] = Array.from({
+    length: FactType._SIZE,
+  });
 
-  private facts = new Map<HashPrimitive, Fact | typeof ingestingFact>();
+  private facts = new Map<HashPrimitive, Fact | FactRef | typeof ingestingFact>();
 
   private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
   private validitiesByHash = new Map<HashPrimitive, Map<HashPrimitive, DetailVote>>();
@@ -63,6 +73,9 @@ export class FactService {
   constructor(private ctx: Context) {
     for (const Provider of this.ctx.config.ingestionProviders) {
       const provider = this.ctx.get(Provider);
+      if (this.factories[provider.type] !== undefined) {
+        throw new Error(`Multiple ingestors registered with type ${provider.type}!`);
+      }
       this.factories[provider.type] = provider;
     }
 
@@ -110,9 +123,12 @@ export class FactService {
   }
 
   public get(hash: Hash, request = true): Fact | undefined {
-    const fact = this.facts.get(hash.toPrimitive());
+    let fact = this.facts.get(hash.toPrimitive());
     if (fact === ingestingFact) {
       throw new Error(`Cannot get an ingesting fact!`);
+    }
+    if (fact?.type === FactType.Ref) {
+      fact = undefined;
     }
     if (request) {
       if (fact !== undefined) {
@@ -123,10 +139,20 @@ export class FactService {
     }
     return fact;
   }
-  public getAs<Type extends FactType>(
-    hash: Hash,
-    type: Type,
-  ): Fact & { type: Type } {
+
+  public getRef(hash: Hash): Fact | FactRef {
+    const ref = mapPut(
+      this.facts,
+      hash.toPrimitive(),
+      () => ({ type: FactType.Ref as const, hash, receptions: [] }),
+    );
+    if (ref === ingestingFact) {
+      throw new Error(`Cannot get an ingesting fact!`);
+    }
+    return ref;
+  }
+
+  public getAs<Type extends FactType>(hash: Hash, type: Type): Fact & { type: Type } {
     const fact = this.get(hash);
     if (fact?.type !== type) {
       throw new Error(`Invalid type ${fact?.type}`);
@@ -217,8 +243,8 @@ export class FactService {
     // I know we're encoding/decoding redundantly here, and we can possibly make this faster later, but for now let's make everything go through the same code path
     const data = this.compose(msg, coder, type);
     const fact = this.ingest(data, FactSource.Local, undefined, mutator);
-    if (fact.type !== type) {
-      throw new Error(`Internal error! Invalid fact type ${fact.type}`);
+    if (fact === undefined || fact.type !== type) {
+      throw new Error(`Internal error! Invalid fact type ${fact?.type}`);
     }
     if (publish === true) {
       this.publish(fact);
@@ -229,12 +255,12 @@ export class FactService {
   }
 
   public compose<MsgType>(msg: MsgType, coder: Pick<Coder<MsgType>, 'encode'>, type: FactType) {
-    const provider = this.factories[type] ??
-      error(`Invalid message type ${type}!`);
+    const provider = this.factories[type] ?? error(`Invalid message type ${type}!`);
+    const isSigned = !provider.isTransient && provider.isSigned;
 
     let buf: Uint8Array;
     coder.encode(msg, (size) => {
-      buf = new Uint8Array(size + (provider.isSigned ? SIGNATURE_LENGTH + headerSize : headerSize));
+      buf = new Uint8Array(size + (isSigned ? SIGNATURE_LENGTH + headerSize : headerSize));
       return buf.subarray(headerSize);
     });
     const data = buf!;
@@ -242,7 +268,7 @@ export class FactService {
     data.set(factMagic);
     data[factMagic.byteLength] = type;
 
-    if (provider.isSigned) {
+    if (isSigned) {
       const size = data.byteLength - SIGNATURE_LENGTH;
       const sig = secp.sign(
         Hash.digest(data.subarray(0, size)).toBytes(),
@@ -273,30 +299,35 @@ export class FactService {
     source: FactSource,
     from?: Connection,
     mutator?: (fact: Fact) => void,
-  ) {
-    const fact = this.create(data, source, mutator);
+  ): Fact | undefined {
+    const fact = this.create(data, source, from, mutator);
 
-    // TODO: Send back "responses" here?
+    if (fact !== undefined) {
+      // TODO: Send back "responses" here?
 
-    if (from !== undefined) {
-      from.knownFacts.add(fact);
-      fact.fromConnections.push(from);
+      if (from !== undefined) {
+        fact.receptions.push({
+          timestamp: this.ctx.config.timeProvider.now(),
+          conn: from,
+          full: true,
+        });
 
-      this.ctx.get(RoutingService2).routeIncoming(from, fact);
+        from.knownFacts.add(fact);
+        fact.fromConnections.push(from);
 
-      from.earnedBandwidth += this.ctx.config.bandwidthReciprocationBaseFactor *
-        fact.data.byteLength;
-    } else {
-      this.ctx.get(RoutingService2).routeOutgoing(fact);
+        from.earnedBandwidth += this.ctx.config.bandwidthReciprocationBaseFactor *
+          fact.data.byteLength;
+      }
     }
 
     return fact;
   }
 
   public forget(fact: Fact) {
-    const provider = this.factories[fact.type] ??
-      error(`Invalid message type ${fact.type}!`);
-    provider.forget(fact);
+    const provider = this.factories[fact.type] ?? error(`Invalid message type ${fact.type}!`);
+    if (!provider.isTransient) {
+      provider.forget(fact);
+    }
 
     if (fact.signer !== undefined) {
       this.ctx.get(PeerManager).getPeer(fact.signer)?.producedFacts.delete(fact);
@@ -366,7 +397,12 @@ export class FactService {
       .addRecoveryBit(fact.signature[SIGNATURE_LENGTH - 1]);
   }
 
-  private create(data: Uint8Array, source: FactSource, mutator?: (fact: Fact) => void): Fact {
+  private create(
+    data: Uint8Array,
+    source: FactSource,
+    from?: Connection,
+    mutator?: (fact: Fact) => void,
+  ): Fact | undefined {
     if (this.isCreating) {
       throw new Error(`Cannot create facts recursively!`);
     }
@@ -383,19 +419,28 @@ export class FactService {
         throw new Error(`Fact doesn't start with the magic bytes!`);
       }
 
+      const type: FactType = data[factMagic.byteLength];
+      const provider = this.factories[type];
+      if (provider === undefined) {
+        throw new BarrierException(`Invalid message type ${type}!`);
+      }
+
+      if (provider.isTransient) {
+        if (from === undefined) {
+          throw new Error(`Cannot an ingest a transient fact locally!`);
+        }
+        provider.handle(from, data.subarray(headerSize));
+        return;
+      }
+
       const hash = Hash.digest(data);
       const existing = this.facts.get(hash.toPrimitive());
       if (existing !== undefined) {
         if (existing === ingestingFact) {
           throw new Error(`Cannot re-ingest an ingesting or invalid fact!`);
+        } else if (existing.type !== FactType.Ref) {
+          return existing;
         }
-        return existing;
-      }
-
-      const type: FactType = data[factMagic.byteLength];
-      const provider = this.factories[type];
-      if (provider === undefined) {
-        throw new BarrierException(`Invalid message type ${type}!`);
       }
 
       if (provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount) {
@@ -419,6 +464,7 @@ export class FactService {
 
         receivedAt: this.ctx.config.timeProvider.now(),
         source,
+        receptions: existing !== undefined ? existing.receptions : [],
         fromConnections: [],
         usefulness: 0,
 
@@ -473,6 +519,17 @@ export class FactService {
       }
 
       provider.ingest(fact);
+
+      for (const answer of this.ctx.get(QaService).getAnswers(fact)) {
+        this.ctx.get(RoutingService2).replyTo(fact, answer.fact);
+      }
+      if (fact.type !== FactType.Block) {
+        for (const question of this.ctx.get(QaService).getQuestions(fact)) {
+          this.ctx.get(RoutingService2).replyTo(question.fact, fact);
+        }
+      } else {
+        // Block facts are only sent when they become canonical
+      }
 
       return fact;
     } finally {

@@ -9,6 +9,8 @@ import { Logger } from './Logger.ts';
 import { ConnectionDriver, ConnectionProvider } from './NetworkProvider.ts';
 import { ConnectionRecordSet } from './record_sets/ConnectionRecordSet.ts';
 import { generateSillyName } from './util/sillyNameGenerator.ts';
+import { MessageJoiner, MessageSplitter } from '../src/util/MessageSplitter.ts';
+import { HashPrimitive } from './util/Hash.ts';
 
 export class Connection extends BaseContext<Connection> implements ConnectionDriver {
   // TODO: Remove
@@ -22,10 +24,18 @@ export class Connection extends BaseContext<Connection> implements ConnectionDri
 
   private lastRecvTimestamp: number;
 
+  private msgSplitter: MessageSplitter;
+  private msgJoiner: MessageJoiner;
+
+  // Facts we've sent to them
+  public knownFacts = new Set<Fact>();
+
+  // Hashes they've sent to us
+  public knownHashes = new Set<HashPrimitive>();
+
   // TODO: Remove
   public reliability = 1;
-  public earnedBandwidth = 0;
-  public knownFacts = new Set<Fact>();
+  public earnedBandwidth = Infinity;
 
   private log?: Logger;
 
@@ -40,6 +50,10 @@ export class Connection extends BaseContext<Connection> implements ConnectionDri
     this.sillyName = generateSillyName(this.ctx.config.entropyProvider);
     this.lastRecvTimestamp = this.ctx.config.timeProvider.now();
 
+    // We create a MessageSplitter even when we don't need to, so the remote can assume it needs to use a MessageJoiner
+    this.msgSplitter = new MessageSplitter(provider.maxMsgSize ?? Infinity);
+    this.msgJoiner = new MessageJoiner();
+
     this.log = Logger.create(this.ctx, LogSystem.Connection);
 
     this.ctx.maybeGet(ConnectionRecordSet)?.dispatchAdd(this);
@@ -52,7 +66,9 @@ export class Connection extends BaseContext<Connection> implements ConnectionDri
   sendReliable(data: Uint8Array) {
     if (this.isConnected) {
       try {
-        this.provider.sendReliable(data);
+        for (const packet of this.msgSplitter.send(data)) {
+          this.provider.sendReliable(packet);
+        }
       } catch (err) {
         this.log?.error(`Caught error sending packet; closing connection: ${err}`, { err });
         this.close();
@@ -66,7 +82,9 @@ export class Connection extends BaseContext<Connection> implements ConnectionDri
   sendFast(data: Uint8Array) {
     if (this.isConnected) {
       try {
-        this.provider.sendFast(data);
+        for (const packet of this.msgSplitter.send(data)) {
+          this.provider.sendFast(packet);
+        }
       } catch (err) {
         this.log?.error(`Caught error sending packet; closing connection: ${err}`, { err });
         this.close();
@@ -97,7 +115,9 @@ export class Connection extends BaseContext<Connection> implements ConnectionDri
     this.lastRecvTimestamp = this.ctx.config.timeProvider.now();
 
     try {
-      this.ctx.get(FactService).ingest(data, FactSource.Remote, this);
+      for (const msg of this.msgJoiner.recv(data)) {
+        this.ctx.get(FactService).ingest(msg, FactSource.Remote, this);
+      }
     } catch (err) {
       if (err instanceof BarrierException) {
         this.log?.debug(`Caught BarrierException ingesting fact: ${err}`, { err });

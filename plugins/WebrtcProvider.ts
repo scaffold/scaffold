@@ -1,6 +1,5 @@
 import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { MessageJoiner, MessageSplitter } from './MessageSplitter.ts';
 import { orderSignals } from './util.ts';
 
 const defaultMaxMsgSize = 65536;
@@ -39,48 +38,35 @@ export class WebrtcProvider implements NetworkProvider {
 
     let reliableChannel: RTCDataChannel | undefined;
     let fastChannel: RTCDataChannel | undefined;
-    const joiner = new MessageJoiner();
     const bufferedPackets: ArrayBuffer[] = [];
 
     const dispatchNewConn = (conn: RTCPeerConnection) => {
-      let msgSize;
+      let maxMsgSize;
       if (conn.sctp !== null) {
-        msgSize = conn.sctp.maxMessageSize;
-        console.info(`Using a max message size of ${msgSize}`);
+        maxMsgSize = conn.sctp.maxMessageSize;
+        console.info(`Using a max message size of ${maxMsgSize}`);
       } else {
-        msgSize = defaultMaxMsgSize;
-        console.warn(`No WebRTC sctp property set! Using a default max message size of ${msgSize}`);
+        maxMsgSize = defaultMaxMsgSize;
+        console.warn(
+          `No WebRTC sctp property set! Using a default max message size of ${maxMsgSize}`,
+        );
       }
 
-      const reliableSplitter = new MessageSplitter(msgSize);
-      const fastSplitter = new MessageSplitter(msgSize);
-
       const connDriver = signalingDriver.createConnection(remoteToken, {
-        sendReliable: (data: Uint8Array) => {
-          for (const packet of reliableSplitter.send(data)) {
-            reliableChannel!.send(packet);
-          }
-        },
-        sendFast: (data: Uint8Array) => {
-          for (const packet of fastSplitter.send(data)) {
-            fastChannel!.send(packet);
-          }
-        },
+        maxMsgSize,
+
+        sendReliable: (data: Uint8Array) => reliableChannel!.send(data),
+        sendFast: (data: Uint8Array) => fastChannel!.send(data),
         shutdown: () => conn.close(),
       });
 
       for (const packet of bufferedPackets) {
-        for (const msg of joiner.recv(packet)) {
-          connDriver.recvData(msg);
-        }
+        connDriver.recvData(new Uint8Array(packet));
       }
       bufferedPackets.length = 0;
 
-      const messageHandler = (e: MessageEvent<ArrayBuffer>) => {
-        for (const msg of joiner.recv(e.data)) {
-          connDriver.recvData(msg);
-        }
-      };
+      const messageHandler = (e: MessageEvent<ArrayBuffer>) =>
+        connDriver.recvData(new Uint8Array(e.data));
       reliableChannel!.onmessage = messageHandler;
       fastChannel!.onmessage = messageHandler;
 

@@ -4,17 +4,21 @@ import { Connection } from './Connection.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
+import { Index } from './protocol/channel.ts';
 
 // TODO: Rename to packet?
 
 export enum FactType {
-  Null = 0, // Reserved
+  // Private facts can only be created locally
+  Ref = -1,
+
+  // Public facts can be created by remote data
+  Block = 0, // TODO: Rename to bundle or something
   PeerInfo,
   // InfoRequest,
   ConnectionSignal,
   // SignalPayload,
-  Block, // TODO: Rename to bundle or something
-  Knowledge,
+  Index,
   // BlockSet, // TODO: Rename to bag or something
   // BlockSetTreeNode,
   // MerkleTreeNode,
@@ -32,6 +36,12 @@ export enum FactSource {
   Local,
   Remote,
   Storage,
+}
+
+export interface Reception {
+  timestamp: number;
+  conn: Connection;
+  full: boolean;
 }
 
 export interface Collateralization {
@@ -57,6 +67,7 @@ export interface FactBase {
   // Reception properties
   receivedAt: number;
   source: FactSource;
+  receptions: Reception[];
   fromConnections: Connection[];
   usefulness: number;
 
@@ -84,6 +95,12 @@ export interface FactBase {
   backtrace?: string;
 }
 
+export interface FactRef extends Pick<FactBase, 'hash' | 'receptions'> {
+  type: FactType.Ref;
+}
+export interface BlockFact extends FactBase, Block, BlockMeta {
+  type: FactType.Block;
+}
 export interface PeerInfoFact extends FactBase, PeerInfo {
   type: FactType.PeerInfo;
 }
@@ -93,16 +110,13 @@ export interface ConnectionSignalFact extends FactBase, ConnectionSignal {
 // export interface SignalPayloadFact extends FactBase, SignalPayload {
 //   type: FactType.SignalPayload;
 // }
-export interface BlockFact extends FactBase, Block, BlockMeta {
-  type: FactType.Block;
-}
-export interface KnowledgeFact extends FactBase {
-  type: FactType.Knowledge;
+export interface IndexFact extends FactBase, Index {
+  type: FactType.Index;
 }
 
 export type Fact =
+  | BlockFact
   | PeerInfoFact
   | ConnectionSignalFact
   // | SignalPayloadFact
-  | BlockFact
-  | KnowledgeFact;
+  | IndexFact;

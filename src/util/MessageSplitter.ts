@@ -1,6 +1,6 @@
-import { arrConcat } from '../src/util/buffer.ts';
-import { range } from '../src/util/functional.ts';
-import { mapPut } from '../src/util/map.ts';
+import { arrConcat } from './buffer.ts';
+import { range } from './functional.ts';
+import { mapPut } from './map.ts';
 
 const magicWord = 57;
 const headerSize = 16;
@@ -28,12 +28,7 @@ export class MessageSplitter {
     }
     const chunkCount = Math.ceil(packet.byteLength / splitSize);
 
-    const header32 = new Uint32Array([
-      magicWord,
-      this.nextIdx++,
-      chunkCount,
-      0,
-    ]);
+    const header32 = new Uint32Array([magicWord, this.nextIdx++, chunkCount, 0]);
     const header8 = new Uint8Array(header32.buffer);
     if (header8.byteLength !== headerSize) {
       throw new Error(`Invalid header length!`);
@@ -41,43 +36,41 @@ export class MessageSplitter {
 
     for (let i = 0; i < chunkCount; i++) {
       header32[3] = i;
-      yield arrConcat(
-        header8,
-        packet.subarray(i * splitSize, (i + 1) * splitSize),
-      );
+      yield arrConcat(header8, packet.subarray(i * splitSize, (i + 1) * splitSize));
     }
   }
 }
 
+interface Message {
+  total: number;
+  lastUpdate: number;
+  packets: Map<number, Uint8Array>;
+}
+
 export class MessageJoiner {
-  private messages = new Map<
-    string,
-    { total: number; lastUpdate: number; packets: Map<number, ArrayBuffer> }
-  >();
+  private messages = new Map<string, Message>();
 
   constructor() {
     setInterval(() => {
       const threshold = Date.now() - 30000;
       for (const [key, val] of this.messages) {
         if (val.lastUpdate < threshold) {
-          console.warn(
-            `Dropping incomplete message with ${val.packets.size}/${val.total} parts`,
-          );
+          console.warn(`Dropping incomplete message with ${val.packets.size}/${val.total} parts`);
           this.messages.delete(key);
         }
       }
     }, 10000);
   }
 
-  public *recv(packet: ArrayBuffer) {
-    const words = new Uint32Array(packet, 0, 4);
+  public *recv(packet: Uint8Array) {
+    const words = new Uint32Array(packet.buffer, packet.byteOffset, 4);
     if (words[0] !== magicWord) {
-      yield new Uint8Array(packet);
+      yield packet;
       return;
     }
 
     const key = `${words[1]}_${words[2]}`;
-    const msg = mapPut(
+    const msg = mapPut<string, Message>(
       this.messages,
       key,
       () => ({ total: words[2], lastUpdate: 0, packets: new Map() }),
@@ -90,7 +83,7 @@ export class MessageJoiner {
 
       if (msg.packets.size === msg.total) {
         this.messages.delete(key);
-        const parts = range(msg.total).map((i) => new Uint8Array(msg.packets.get(i), headerSize));
+        const parts = range(msg.total).map((i) => msg.packets.get(i)!.subarray(headerSize));
         yield arrConcat(...parts);
       }
     }

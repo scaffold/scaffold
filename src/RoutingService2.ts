@@ -37,13 +37,19 @@ export class RoutingService2 {
 
   constructor(private ctx: Context) {}
 
+  replyTo(toFact: Fact, withFact: Fact) {
+    for (const conn of toFact.fromConnections) {
+      conn.sendReliable(withFact.data);
+    }
+  }
+
   routeIncoming(from: Connection, fact: Fact) {
-    const delay = this.ctx.config.timeProvider.now() - fact.receivedAt;
-    this.ctx.get(FactService).sendTo(fact, this.ctx.get(ConnectionService).getAll());
+    // const delay = this.ctx.config.timeProvider.now() - fact.receivedAt;
+    // this.ctx.get(FactService).sendTo(fact, this.ctx.get(ConnectionService).getAll());
   }
 
   routeOutgoing(fact: Fact) {
-    this.ctx.get(FactService).sendTo(fact, this.ctx.get(ConnectionService).getAll());
+    // this.ctx.get(FactService).sendTo(fact, this.ctx.get(ConnectionService).getAll());
   }
 
   test(from: Connection, fact: Fact) {

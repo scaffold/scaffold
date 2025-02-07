@@ -4,6 +4,9 @@ import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';
 import { BlockService } from './BlockService.ts';
 import { bin2hex } from './util/hex.ts';
+import { QaService } from './QaService.ts';
+import { RoutingService } from './RoutingService.ts';
+import { RoutingService2 } from './RoutingService2.ts';
 
 // An input should be in the AvailableOutputManager if the output is canonical and there's no canonical claims.
 
@@ -64,6 +67,12 @@ export class CanonicalityService {
 
       // TODO
       // this.ctx.get(GenerationService).ensureRunning(output.verifier);
+    }
+
+    for (const question of this.ctx.get(QaService).getQuestions(block)) {
+      for (const from of question.fact.fromConnections) {
+        from.get(RoutingService).enqueue(block);
+      }
     }
   }
 

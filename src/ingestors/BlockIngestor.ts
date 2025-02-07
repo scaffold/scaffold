@@ -28,9 +28,12 @@ import { arrEquals, EMPTY_ARR } from '../util/buffer.ts';
 import { LitigationService } from '../LitigationService.ts';
 import { BlockMetrics } from '../BlockMetrics.ts';
 import { CanonicalityService } from '../CanonicalityService.ts';
+import { QaService } from '../QaService.ts';
+import { RoutingService2 } from '../RoutingService2.ts';
 
-export class BlockIngestor implements IngestionProvider<BlockFact> {
+export class BlockIngestor implements IngestionProvider<FactType.Block> {
   type = FactType.Block as const;
+  isTransient = false as const;
   isPersistent = true;
   isSigned = true;
 

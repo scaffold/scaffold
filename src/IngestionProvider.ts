@@ -1,4 +1,5 @@
-import { Fact, FactBase } from './FactMeta.ts';
+import { Connection } from './Connection.ts';
+import { Fact, FactBase, FactType } from './FactMeta.ts';
 
 /*
 Invalidities:
@@ -20,17 +21,25 @@ export const enum Invalidities {
   // ...
 }
 
-export interface IngestionProvider<SubFact extends Fact> {
-  readonly type: SubFact['type'];
+export interface IngestionProvider<Type extends FactType> {
+  readonly type: Type;
+  readonly isTransient: false;
   readonly isPersistent: boolean;
   readonly isSigned: boolean;
 
   // Creates the fact. It doesn't exist until this method returns; calls to FactService.get will throw.
   // Note this has to be an arrow declaration to enable contravariant type checking.
-  create: (base: FactBase) => SubFact;
+  create(base: FactBase): Fact & { type: Type };
 
   // Ingest the fact. Launches generators and other things.
-  ingest: (fact: SubFact) => void;
+  ingest(fact: Fact & { type: Type }): void;
 
-  forget: (fact: SubFact) => void;
+  forget(fact: Fact & { type: Type }): void;
+}
+
+export interface ReceptionProvider<Type extends FactType> {
+  readonly type: Type;
+  readonly isTransient: true;
+
+  handle(from: Connection, data: Uint8Array): void;
 }

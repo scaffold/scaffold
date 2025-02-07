@@ -9,12 +9,13 @@ import { NetworkProvider } from './NetworkProvider.ts';
 import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';
 import { makeDefaultContractProviders } from './contracts/defaultContractProviders.ts';
-import { IngestionProvider } from './IngestionProvider.ts';
+import { IngestionProvider, ReceptionProvider } from './IngestionProvider.ts';
 import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
 import { FrontierContract } from './contracts/FrontierContract.ts';
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 import { LogEvent, LogLevel } from './Logger.ts';
 import { ConsoleLoggingProvider } from '../plugins/ConsoleLoggingProvider.ts';
+import { Fact, FactType } from './FactMeta.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -122,7 +123,9 @@ export interface Config {
 
   // Unlike the other providers, these will be managed (created and destroyed) by scaffold.
   // Pass arguments by binding to the class constructor.
-  ingestionProviders: { new (context: Context): IngestionProvider<any> }[];
+  ingestionProviders: {
+    new (context: Context): IngestionProvider<FactType> | ReceptionProvider<FactType>;
+  }[];
 
   // appraisalProvider: AppraisalProvider;
 
