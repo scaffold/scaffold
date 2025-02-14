@@ -12,7 +12,7 @@ export class SeededEntropyProvider implements EntropyProvider {
     return this.rng();
   }
 
-  randomBytes(size: number) {
+  cryptoRandomBytes(size: number) {
     const arr = new Uint8Array(size);
     for (let i = 0; i < size; i++) {
       arr[i] = Math.floor(this.rng() * 256);

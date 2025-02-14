@@ -29,9 +29,11 @@ import { ClockService } from './ClockService.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
 import { BarrierException } from './exceptions.ts';
 import { assert } from '@std/assert/assert';
-import { RoutingService2 } from './RoutingService2.ts';
 import { QaService } from './QaService.ts';
 import { ReceptionProvider } from './IngestionProvider.ts';
+import { LogSystem } from './Config.ts';
+import { Logger } from './Logger.ts';
+import { RoutingService } from './RoutingService.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -144,7 +146,7 @@ export class FactService {
     const ref = mapPut(
       this.facts,
       hash.toPrimitive(),
-      () => ({ type: FactType.Ref as const, hash, receptions: [] }),
+      () => this.createRef(hash),
     );
     if (ref === ingestingFact) {
       throw new Error(`Cannot get an ingesting fact!`);
@@ -273,7 +275,7 @@ export class FactService {
       const sig = secp.sign(
         Hash.digest(data.subarray(0, size)).toBytes(),
         this.ctx.config.selfPrivateKey,
-        { lowS: true, extraEntropy: this.ctx.config.entropyProvider.randomBytes(32) },
+        { lowS: true, extraEntropy: this.ctx.config.entropyProvider.cryptoRandomBytes(32) },
       );
       const sigBytes = sig.toCompactRawBytes();
       if (sigBytes.byteLength !== SIGNATURE_LENGTH - 1) {
@@ -306,11 +308,9 @@ export class FactService {
       // TODO: Send back "responses" here?
 
       if (from !== undefined) {
-        fact.receptions.push({
-          timestamp: this.ctx.config.timeProvider.now(),
-          conn: from,
-          full: true,
-        });
+        fact.requesting.add(from);
+
+        from.get(RoutingService).addReception(fact, true);
 
         from.knownFacts.add(fact);
         fact.fromConnections.push(from);
@@ -455,7 +455,6 @@ export class FactService {
       const signature = provider.isSigned ? data.subarray(-SIGNATURE_LENGTH) : undefined;
 
       const fact = provider.create({
-        hash,
         data,
         message: data.subarray(headerSize, provider.isSigned ? -SIGNATURE_LENGTH : undefined),
 
@@ -464,7 +463,6 @@ export class FactService {
 
         receivedAt: this.ctx.config.timeProvider.now(),
         source,
-        receptions: existing !== undefined ? existing.receptions : [],
         fromConnections: [],
         usefulness: 0,
 
@@ -482,6 +480,8 @@ export class FactService {
         sourceStr: FactSource[source],
         sillyName: generateSillyName(this.ctx.config.entropyProvider),
         backtrace: new Error().stack,
+
+        ...existing ?? this.createRef(hash),
       });
 
       mutator?.(fact);
@@ -521,11 +521,15 @@ export class FactService {
       provider.ingest(fact);
 
       for (const answer of this.ctx.get(QaService).getAnswers(fact)) {
-        this.ctx.get(RoutingService2).replyTo(fact, answer.fact);
+        for (const conn of fact.requesting) {
+          conn.get(RoutingService).enqueue(answer.fact);
+        }
       }
       if (fact.type !== FactType.Block) {
         for (const question of this.ctx.get(QaService).getQuestions(fact)) {
-          this.ctx.get(RoutingService2).replyTo(question.fact, fact);
+          for (const conn of question.fact.requesting) {
+            conn.get(RoutingService).enqueue(fact);
+          }
         }
       } else {
         // Block facts are only sent when they become canonical
@@ -536,6 +540,16 @@ export class FactService {
       assert(this.isCreating);
       this.isCreating = false;
     }
+  }
+
+  private createRef(hash: Hash): FactRef {
+    return {
+      type: FactType.Ref as const,
+      hash,
+      receptions: [],
+      requesting: new Set(),
+      log: Logger.create(this.ctx, LogSystem.Fact),
+    };
   }
 
   private writeToStorage(fact: Fact) {

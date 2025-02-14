@@ -65,7 +65,7 @@ export class WebsocketServerProvider implements NetworkProvider {
   }
 
   public createInstance(driver: SignalingDriver) {
-    const serverToken = driver.myToken !== undefined ? driver.myToken.toHex() : '';
+    const serverToken = driver.myToken?.toHex() ?? '';
 
     mapPut(
       this.drivers,

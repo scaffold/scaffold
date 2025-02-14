@@ -70,7 +70,7 @@ export class CanonicalityService {
     }
 
     for (const question of this.ctx.get(QaService).getQuestions(block)) {
-      for (const from of question.fact.fromConnections) {
+      for (const from of question.fact.requesting) {
         from.get(RoutingService).enqueue(block);
       }
     }

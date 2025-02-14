@@ -54,7 +54,7 @@ export class GenerationService {
   private running = new Set<HashPrimitive>();
 
   constructor(private ctx: Context) {
-    this.secret = ctx.config.entropyProvider.randomBytes(32);
+    this.secret = ctx.config.entropyProvider.cryptoRandomBytes(32);
   }
 
   public ensureRunning(verifier: Verifier) {

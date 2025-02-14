@@ -5,6 +5,7 @@ import { Hash, HashPrimitive } from './util/Hash.ts';
 import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
 import { Index } from './protocol/channel.ts';
+import { Logger } from './Logger.ts';
 
 // TODO: Rename to packet?
 
@@ -75,6 +76,8 @@ export interface FactBase {
   publishAt?: number;
   toConnections: Connection[];
 
+  requesting: Set<Connection>;
+
   // Validity properties
   collateralizations: Collateralization[];
   validities: Map<HashPrimitive, DetailVote>;
@@ -87,6 +90,9 @@ export interface FactBase {
   // Random sampler properties
   // samplerState: SamplerState;
 
+  // Logger
+  log?: Logger;
+
   // Debug properties
   factIdx: number;
   typeStr: string;
@@ -95,7 +101,7 @@ export interface FactBase {
   backtrace?: string;
 }
 
-export interface FactRef extends Pick<FactBase, 'hash' | 'receptions'> {
+export interface FactRef extends Pick<FactBase, 'hash' | 'receptions' | 'requesting' | 'log'> {
   type: FactType.Ref;
 }
 export interface BlockFact extends FactBase, Block, BlockMeta {

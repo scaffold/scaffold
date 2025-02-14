@@ -1,18 +1,17 @@
 import { assert } from '@std/assert/assert';
 import { Connection } from './Connection.ts';
-import { Fact } from './FactMeta.ts';
+import { Fact, FactRef, FactType, Reception } from './FactMeta.ts';
 import { PoissonInterval } from './PoissonInterval.ts';
 import { FactService } from './FactService.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { mapPop, mapPut } from './util/map.ts';
 import { error } from './util/functional.ts';
+import { HashInfo, Index } from './protocol/channel.ts';
 
 // TODO: This is about 18 hours; increase it
 const SAMPLE_EMIT_INIT = 0x4000000;
 
 interface Sample {
-  // Delays are offsets from the first reception of the Fact.
-
   // How long can we wait and still be first?
   // This is populated via peer's feedback.
   // sentAt - recvAt - feebackDelay
@@ -22,18 +21,6 @@ interface Sample {
   // This is populated when we receive a Hash or Fact from the peer.
   recvDelay: number;
 }
-
-/*
-If we emit a fact/hash to a peer, we need to make a feedback entry to update the emitDelay sample
-
-Only send Facts/hashes to peers who are interested in the data
-If a fact is interesting
-
-When we get a Fact:
-  If it's not the first,
-When we get a hash:
-When we get feedback:
-*/
 
 class Route {
   private samples: Sample[] = [];
@@ -120,8 +107,31 @@ export class RoutingService {
     }
   }
 
-  // Called whenever we receive an index hash or the full fact from a peer
-  recvIndex(hash: Hash) {
+  addReception(fact: Fact | FactRef, full: boolean) {
+    const timestamp = this.conn.ctx.config.timeProvider.now();
+
+    if (full) {
+      if (!fact.receptions.some((x) => x.full)) {
+        for (const earlier of fact.receptions) {
+          earlier.conn.get(RoutingService).sendIndex({
+            hash: fact.hash,
+            isRequest: null,
+            lagMs: { int: earlier.timestamp - timestamp },
+          });
+        }
+      }
+    } else {
+      const full = fact.receptions.find((x) => x.full);
+      if (full !== undefined) {
+        this.conn.get(RoutingService).sendIndex({
+          hash: fact.hash,
+          isRequest: null,
+          lagMs: { int: timestamp - full.timestamp },
+        });
+      }
+    }
+
+    fact.receptions.push({ timestamp, conn: this.conn, full });
   }
 
   recvFeedback(hash: Hash, lagMs: number) {
@@ -198,14 +208,16 @@ export class RoutingService {
   }
 
   private send(fact: Fact, now: number, full: boolean) {
+    assert(!this.conn.knownFacts.has(fact));
+
     if (full) {
       this.conn.ctx.get(FactService).sendTo(fact, this.conn);
     } else {
-      // Send hash index
-      // this.conn.sendReliable()
+      this.sendIndex({ hash: fact.hash, isRequest: { boolean: true }, lagMs: null });
     }
 
-    const sample: Sample = { emitDelay: SAMPLE_EMIT_INIT + now - fact.receivedAt, recvDelay: 0 };
+    const firstRecvAt = fact.receptions[0].timestamp;
+    const sample: Sample = { emitDelay: SAMPLE_EMIT_INIT + now - firstRecvAt, recvDelay: 0 };
 
     const route = mapPut(this.incomingRoutes, fact.fromConnections[0], () => new Route());
     route.addSample(sample);
@@ -216,5 +228,14 @@ export class RoutingService {
       () => sample,
       () => error(`Send called twice on the same hash!`),
     );
+
+    fact.log?.info(
+      `Sent ${full ? 'full' : 'index'} fact ${fact.hash.toHex()} to conn ${this.conn.sillyName}`,
+    );
+  }
+
+  private sendIndex(info: HashInfo) {
+    const data = this.conn.ctx.get(FactService).compose({ hashes: [info] }, Index, FactType.Index);
+    this.conn.sendReliable(data);
   }
 }

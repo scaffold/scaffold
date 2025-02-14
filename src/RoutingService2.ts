@@ -38,7 +38,7 @@ export class RoutingService2 {
   constructor(private ctx: Context) {}
 
   replyTo(toFact: Fact, withFact: Fact) {
-    for (const conn of toFact.fromConnections) {
+    for (const conn of toFact.requesting) {
       conn.sendReliable(withFact.data);
     }
   }

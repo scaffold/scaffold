@@ -11,8 +11,10 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'hash', type: 'hash' },
+      { name: 'isRequest', type: ['null', 'boolean'] },
+      // { name: 'value', type: 'float' },
       // { name: 'outputValues', type: { type: 'array', items: 'float' } },
-      { name: 'lagMs', type: 'int' },
+      { name: 'lagMs', type: ['null', 'int'] },
     ],
   },
 
@@ -147,6 +149,8 @@ const registry = {
 
 export type MsgType<Name extends keyof typeof registry> = ObjectType<Name, typeof registry>;
 
+export const HashInfo = makeMsg(registry, 'HashInfo');
+export type HashInfo = MsgType<'HashInfo'>;
 export const Index = makeMsg(registry, 'Index');
 export type Index = MsgType<'Index'>;
 export const PeerInit = makeMsg(registry, 'PeerInit');

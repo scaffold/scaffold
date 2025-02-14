@@ -15,13 +15,14 @@ import { FrontierContract } from './contracts/FrontierContract.ts';
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 import { LogEvent, LogLevel } from './Logger.ts';
 import { ConsoleLoggingProvider } from '../plugins/ConsoleLoggingProvider.ts';
+import { WebsocketLoggingProvider } from '../plugins/WebsocketLoggingProvider.ts';
 import { Fact, FactType } from './FactMeta.ts';
 
 // TODO: Reorder, rename, reorganize config
 
 export enum LogSystem {
   Main = 'main',
-  Block = 'block',
+  Fact = 'fact',
   Connection = 'connection',
   Signaler = 'signaler',
 }
@@ -53,7 +54,7 @@ export interface TimeProvider {
 
 export interface EntropyProvider {
   randomNumber(): number;
-  randomBytes(size: number): Uint8Array;
+  cryptoRandomBytes(size: number): Uint8Array;
 }
 
 export interface StorageProvider {
@@ -191,11 +192,14 @@ export const makeDefaultConfig = () => {
     logLevel: log.LogLevels.INFO, // TODO: Set this to WARN
     logLevels: {
       [LogSystem.Main]: LogLevel.DEBUG,
-      [LogSystem.Block]: LogLevel.DEBUG,
+      [LogSystem.Fact]: LogLevel.DEBUG,
       [LogSystem.Connection]: LogLevel.DEBUG,
       [LogSystem.Signaler]: LogLevel.DEBUG,
     },
-    loggingProviders: [new ConsoleLoggingProvider()],
+    loggingProviders: [
+      new ConsoleLoggingProvider(),
+      new WebsocketLoggingProvider('ws://localhost:9001/pub?stream=scaffold'),
+    ],
     timeProvider: {
       now: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),
@@ -206,7 +210,7 @@ export const makeDefaultConfig = () => {
     },
     entropyProvider: rngSeed !== undefined ? new SeededEntropyProvider(rngSeed) : {
       randomNumber: () => Math.random(),
-      randomBytes: secp.etc.randomBytes,
+      cryptoRandomBytes: secp.etc.randomBytes,
     },
     executionProviders: [],
     contractProviders: makeDefaultContractProviders(),

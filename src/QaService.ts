@@ -1,7 +1,7 @@
 import { BlockService } from './BlockService.ts';
 import { Connection } from './Connection.ts';
 import { Context } from './Context.ts';
-import { Fact, FactType } from './FactMeta.ts';
+import { Fact, FactRef, FactType } from './FactMeta.ts';
 import { BinaryHeap } from '@std/data-structures';
 
 interface Link {
@@ -12,7 +12,7 @@ interface Link {
 export class QaService {
   constructor(private ctx: Context) {}
 
-  *getAnswers(fact: Fact): Generator<Link, void, unknown> {
+  *getAnswers(fact: Fact | FactRef): Generator<Link, void, unknown> {
     if (fact.type === FactType.Block) {
       for (let i = 0; i < fact.outputs.length; i++) {
         for (const claim of fact.outputClaims[i]) {

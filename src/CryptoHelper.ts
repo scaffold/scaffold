@@ -16,7 +16,7 @@ export class CryptoHelper {
       authenticatedData?: Uint8Array;
     },
   ) {
-    const iv = this.ctx.config.entropyProvider.randomBytes(IV_LENGTH);
+    const iv = this.ctx.config.entropyProvider.cryptoRandomBytes(IV_LENGTH);
     const enc = await crypto.subtle.encrypt(
       { name: 'AES-GCM', iv, additionalData: authenticatedData ?? EMPTY_ARR },
       await this.getSharedKey(remotePublicKey),
@@ -47,10 +47,9 @@ export class CryptoHelper {
   }
 
   private getSharedKey(remotePublicKey: Uint8Array) {
-    const sharedKey = Hash.digest(secp.getSharedSecret(
-      this.ctx.config.selfPrivateKey,
-      remotePublicKey,
-    )).toBytes();
+    const sharedKey = Hash.digest(
+      secp.getSharedSecret(this.ctx.config.selfPrivateKey, remotePublicKey),
+    ).toBytes();
 
     return crypto.subtle.importKey(
       'raw',
