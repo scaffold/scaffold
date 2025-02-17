@@ -28,12 +28,13 @@ import { FactEmitter } from './FactEmitter.ts';
 import { ClockService } from './ClockService.ts';
 import { IngestionProvider } from './IngestionProvider.ts';
 import { BarrierException } from './exceptions.ts';
-import { assert } from '@std/assert/assert';
+import { assert } from './util/functional.ts';
 import { QaService } from './QaService.ts';
 import { ReceptionProvider } from './IngestionProvider.ts';
 import { LogSystem } from './Config.ts';
 import { Logger } from './Logger.ts';
 import { RoutingService } from './RoutingService.ts';
+import { FactRecordSet } from './record_sets/FactRecordSet.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -106,8 +107,17 @@ export class FactService {
     return this.facts.size;
   }
 
-  public getAll() {
+  public getMap() {
     return this.facts;
+  }
+
+  public getAll() {
+    const arr: (Fact | FactRef)[] = [];
+    for (const fact of this.facts.values()) {
+      assert(fact !== ingestingFact);
+      arr.push(fact);
+    }
+    return arr;
   }
 
   // public async init() {
@@ -143,11 +153,11 @@ export class FactService {
   }
 
   public getRef(hash: Hash): Fact | FactRef {
-    const ref = mapPut(
-      this.facts,
-      hash.toPrimitive(),
-      () => this.createRef(hash),
-    );
+    const ref = mapPut(this.facts, hash.toPrimitive(), () => {
+      const ref = this.createRef(hash);
+      this.ctx.maybeGet(FactRecordSet)?.dispatchAdd(ref);
+      return ref;
+    });
     if (ref === ingestingFact) {
       throw new Error(`Cannot get an ingesting fact!`);
     }
@@ -441,6 +451,7 @@ export class FactService {
         } else if (existing.type !== FactType.Ref) {
           return existing;
         }
+        this.ctx.maybeGet(FactRecordSet)?.dispatchRemove(existing);
       }
 
       if (provider.isPersistent && this.facts.size >= this.ctx.config.limitFactCount) {
@@ -534,6 +545,8 @@ export class FactService {
       } else {
         // Block facts are only sent when they become canonical
       }
+
+      this.ctx.maybeGet(FactRecordSet)?.dispatchAdd(fact);
 
       return fact;
     } finally {

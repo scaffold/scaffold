@@ -9,6 +9,7 @@ import { arrEquals } from './util/buffer.ts';
 import { FactService } from './FactService.ts';
 import { GenesisService } from './GenesisService.ts';
 import { OutputClaim } from './BlockMeta.ts';
+import { Timeout } from './Config.ts';
 
 export enum FetchMode {
   // Selects the first valid block satisfying the given verifier.
@@ -122,7 +123,7 @@ export class FetchService {
     }
 
     let onState: (claim?: { block: BlockFact; groupIdx: number }) => boolean;
-    let watchItvl: number | undefined;
+    let watchItvl: Timeout | undefined;
     if (onBody !== undefined || onResponseBlock !== undefined) {
       let prevBody: Uint8Array | undefined;
       onState = (claim) => {

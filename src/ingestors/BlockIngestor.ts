@@ -19,7 +19,7 @@ import { ClockService } from '../ClockService.ts';
 import { RenderService } from '../RenderService.ts';
 import { FactEmitter } from '../FactEmitter.ts';
 import { VerificationService } from '../VerificationService.ts';
-import { assert } from '@std/assert/assert';
+import { assert } from '../util/functional.ts';
 import { VOLUME_INCLUDES_SELF } from '../FrontierService3.ts';
 import { FrontierService } from '../FrontierService.ts';
 import { error } from '../util/functional.ts';

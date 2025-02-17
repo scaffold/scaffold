@@ -4,8 +4,8 @@ import { Connection } from '../Connection.ts';
 import { ConnectionService } from '../ConnectionService.ts';
 
 export class ConnectionRecordSet extends ReactiveRecordSet<Connection> {
-  constructor(private ctx: Context) {
-    super();
+  constructor(ctx: Context) {
+    super(ctx);
   }
 
   public getAll(): Iterable<Connection> {

@@ -1,4 +1,4 @@
-import { assert } from '@std/assert/assert';
+import { assert } from './util/functional.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
 import { BlockFact } from './FactMeta.ts';

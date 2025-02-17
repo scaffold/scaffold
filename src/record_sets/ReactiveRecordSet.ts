@@ -1,3 +1,5 @@
+import { Timeout } from '../Config.ts';
+import { Context } from '../Context.ts';
 import { mapPut } from '../util/map.ts';
 
 // export interface ReactiveRecordSet<RecordType> {
@@ -21,8 +23,10 @@ export abstract class ReactiveRecordSet<RecordType> {
     ((record: RecordType) => void)[]
   >();
 
-  private timeout?: number;
+  private timeout?: Timeout;
   private debounces: (() => void)[] = [];
+
+  constructor(protected ctx: Context) {}
 
   public abstract getAll(): Iterable<RecordType>;
 
@@ -94,7 +98,7 @@ export abstract class ReactiveRecordSet<RecordType> {
     this.debounces.push(cb);
 
     if (this.timeout === undefined) {
-      this.timeout = setTimeout(() => {
+      this.timeout = this.ctx.config.timeProvider.setTimeout(() => {
         this.timeout = undefined;
         const debounces = this.debounces;
         this.debounces = [];

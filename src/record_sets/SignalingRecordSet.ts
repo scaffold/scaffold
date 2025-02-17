@@ -3,8 +3,8 @@ import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
 import { SignalingService, SignalingState } from '../SignalingService.ts';
 
 export class SignalingRecordSet extends ReactiveRecordSet<SignalingState> {
-  constructor(private ctx: Context) {
-    super();
+  constructor(ctx: Context) {
+    super(ctx);
   }
 
   public getAll(): Iterable<SignalingState> {

@@ -4,8 +4,8 @@ import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
 import { FactService } from '../FactService.ts';
 
 export class BlockRecordSet extends ReactiveRecordSet<BlockFact> {
-  constructor(private ctx: Context) {
-    super();
+  constructor(ctx: Context) {
+    super(ctx);
   }
 
   public getAll(): Iterable<BlockFact> {

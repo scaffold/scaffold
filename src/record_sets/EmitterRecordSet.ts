@@ -25,8 +25,8 @@ const recordBase: Omit<EmitterRecord, 'item'> = {
 export class EmitterRecordSet extends ReactiveRecordSet<EmitterRecord> {
   private records = new Map<EmitterItem, EmitterRecord>();
 
-  constructor(private ctx: Context) {
-    super();
+  constructor(ctx: Context) {
+    super(ctx);
   }
 
   public update(patch: Partial<EmitterRecord> & Pick<EmitterRecord, 'item'>) {

@@ -1,4 +1,4 @@
-import { assert } from '@std/assert/assert';
+import { assert } from './util/functional.ts';
 import { Connection } from './Connection.ts';
 import { Context } from './Context.ts';
 import { Fact, FactType } from './FactMeta.ts';

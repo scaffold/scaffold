@@ -28,7 +28,7 @@ export enum LogSystem {
 }
 
 export interface LoggingProvider {
-  handler(event: LogEvent): void;
+  handler(event: LogEvent, ctx: Context): void;
 }
 
 export interface GraphParameters {
@@ -43,13 +43,14 @@ export interface BackgroundJobParameters {
 
 export interface TestParameters {}
 
+export type Timeout = ReturnType<typeof globalThis.setTimeout>;
 export interface TimeProvider {
   now(): number;
   setImmediate(cb: () => void): void;
-  setTimeout(cb: () => void, delayMs: number): number;
-  clearTimeout(idx: number): void;
-  setInterval(cb: () => void, delayMs: number): number;
-  clearInterval(idx: number): void;
+  setTimeout(cb: () => void, delayMs: number): Timeout;
+  clearTimeout(idx: Timeout): void;
+  setInterval(cb: () => void, delayMs: number): Timeout;
+  clearInterval(idx: Timeout): void;
 }
 
 export interface EntropyProvider {

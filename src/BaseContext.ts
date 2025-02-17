@@ -1,4 +1,4 @@
-import { assert } from '@std/assert/assert';
+import { assert } from './util/functional.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 
 export abstract class BaseContext<DerivedType> {

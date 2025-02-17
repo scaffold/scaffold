@@ -1,4 +1,4 @@
-import { assert } from '@std/assert/assert';
+import { assert } from './util/functional.ts';
 
 export const maxClique = <T extends { weight: number }>(
   arr: T[],

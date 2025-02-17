@@ -1,9 +1,10 @@
-import { type React } from '../deps.ts';
+// export { type default as React } from 'https://esm.sh/react@18.2.0?target=esnext&pin=v135';
 
 // From https://docs.google.com/document/d/1FTascZXT9cxfetuPRT2eXPQKXui4nWFivUnS_335T3U/preview
 export type JsonMl = readonly [
   'div' | 'span' | 'ol' | 'li' | 'table' | 'tr' | 'td',
-  React.HTMLAttributes<HTMLElement>,
+  // React.HTMLAttributes<HTMLElement>,
+  { [key: string]: unknown },
   ...(JsonMl | string | ['object', { object: unknown; config: unknown }])[],
 ];
 

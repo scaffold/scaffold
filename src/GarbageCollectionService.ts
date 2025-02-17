@@ -22,13 +22,13 @@ export class GarbageCollectionService {
   }
 
   private dropOldFact() {
-    const candidates = [...this.ctx.get(FactService).getAll().entries()].filter(
+    const candidates = [...this.ctx.get(FactService).getMap().entries()].filter(
       ([_, fact]) => {
         if (fact === ingestingFact) {
           return true;
         }
 
-        if (fact.references > 0) {
+        if (fact.type !== FactType.Ref && fact.references > 0) {
           return false;
         }
 
@@ -59,7 +59,7 @@ export class GarbageCollectionService {
     let bestCandidate: Fact | undefined;
     for (const [_key, cd] of candidates) {
       if (
-        cd !== ingestingFact &&
+        cd !== ingestingFact && cd.type !== FactType.Ref &&
         (bestCandidate === undefined || cd.visitedAt < bestCandidate.visitedAt)
       ) {
         bestCandidate = cd;

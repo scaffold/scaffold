@@ -50,7 +50,7 @@ export class Logger {
     if (level >= this.minLevel) {
       const event = { timestamp: this.ctx.config.timeProvider.now(), level, message, data };
       for (const provider of this.ctx.config.loggingProviders) {
-        provider.handler(event);
+        provider.handler(event, this.ctx);
       }
       this.events.push(event);
     }

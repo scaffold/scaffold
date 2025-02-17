@@ -1,9 +1,10 @@
+import { Timeout } from './Config.ts';
 import { Context } from './Context.ts';
 import { PoissonDistribution } from './util/PoissonDistribution.ts';
 
 export class ClockService {
-  private timeouts = new Set<number>();
-  private intervals = new Set<number>();
+  private timeouts = new Set<Timeout>();
+  private intervals = new Set<Timeout>();
 
   constructor(private ctx: Context) {
     ctx.onDestruct(() => {

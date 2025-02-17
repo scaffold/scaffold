@@ -3196,7 +3196,7 @@ function isJsonBuffer(obj) {
  *
  * @param path {Array} Passed from hook, but unused (because empty where this
  * function is used, since we aren't keeping track of it for effiency).
- * @param val {...} The object to reject.
+ * @param val {object} The object to reject.
  * @param type {Type} The type to check against.
  *
  * This method is mostly used from `_write` to signal an invalid object for a
@@ -3462,14 +3462,29 @@ function combineObjects(types, opts) {
 }
 
 export default {
+  /**
+   * @type Class
+   */
   Type: Type,
+  
   getTypeBucket: getTypeBucket,
   getValueBucket: getValueBucket,
   isPrimitive: isPrimitive,
   builtins: (function () {
     var types = {
+      /**
+       * @type Class
+       */
       LogicalType: LogicalType,
+
+      /**
+       * @type Class
+       */
       UnwrappedUnionType: UnwrappedUnionType,
+
+      /**
+       * @type Class
+       */
       WrappedUnionType: WrappedUnionType,
     };
     var typeNames = Object.keys(TYPES);

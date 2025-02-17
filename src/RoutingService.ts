@@ -1,4 +1,4 @@
-import { assert } from '@std/assert/assert';
+import { assert } from './util/functional.ts';
 import { Connection } from './Connection.ts';
 import { Fact, FactRef, FactType, Reception } from './FactMeta.ts';
 import { PoissonInterval } from './PoissonInterval.ts';
@@ -199,12 +199,14 @@ export class RoutingService {
   }
 
   private canSend(fact: Fact, now: number, evaluation?: number) {
-    if (fact.data.byteLength > this.conn.earnedBandwidth) {
-      return false;
-    }
+    return true;
 
-    evaluation ??= this.evaluate(fact, now);
-    return evaluation >= 0.5;
+    // if (fact.data.byteLength > this.conn.earnedBandwidth) {
+    //   return false;
+    // }
+
+    // evaluation ??= this.evaluate(fact, now);
+    // return evaluation >= 0.5;
   }
 
   private send(fact: Fact, now: number, full: boolean) {

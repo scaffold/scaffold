@@ -2,6 +2,7 @@ import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
 import { mapPut } from '../util/map.ts';
 import { Queue, QueueMuxer } from '../util/QueueMuxer.ts';
 import { HashPrimitive } from '../util/Hash.ts';
+import { Context } from '../Context.ts';
 
 export interface QueueRecord<Key, Value> {
   queue: Queue<Key, Value>;
@@ -11,8 +12,8 @@ export interface QueueRecord<Key, Value> {
 export class QueueRecordSet<Key, Value> extends ReactiveRecordSet<QueueRecord<Key, Value>> {
   private records = new Map<HashPrimitive, QueueRecord<Key, Value>>();
 
-  constructor(private muxer: QueueMuxer<Key, Value>) {
-    super();
+  constructor(ctx: Context, private muxer: QueueMuxer<Key, Value>) {
+    super(ctx);
   }
 
   public update(

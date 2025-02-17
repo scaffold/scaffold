@@ -1,4 +1,4 @@
-import { build, emptyDir } from 'dnt';
+import { build, emptyDir } from '@deno/dnt';
 import { parseArgs } from '@std/cli/parse-args';
 import { error } from '../src/util/functional.ts';
 
@@ -9,20 +9,22 @@ const flags = parseArgs(Deno.args, {
 await emptyDir('./npm');
 
 await build({
+  importMap: 'deno.json',
   entryPoints: [
-    './app.tsx',
-    './server/main.ts',
+    './mod.ts',
+    // './server/main.ts',
   ],
   outDir: './npm',
-  importMap: 'import_map.json',
-  compilerOptions: {},
+  compilerOptions: {
+    lib: ['DOM', 'ESNext'],
+  },
   shims: {
     // see JS docs for overview and more options
-    // deno: true,
+    deno: true,
   },
   test: false,
-  // typeCheck: "both",
-  scriptModule: false,
+  typeCheck: 'both',
+  // scriptModule: false,
   package: {
     name: 'scaffold.io',
     version: flags.version || error(`Please specify a version!`),
@@ -42,7 +44,9 @@ await build({
     },
     homepage: 'https://github.com/SublimeNet/sublime#readme',
   },
-});
 
-// Deno.copyFileSync("LICENSE", "npm/LICENSE");
-Deno.copyFileSync('README.md', 'npm/README.md');
+  postBuild() {
+    // Deno.copyFileSync("LICENSE", "npm/LICENSE");
+    Deno.copyFileSync('README.md', 'npm/README.md');
+  },
+});

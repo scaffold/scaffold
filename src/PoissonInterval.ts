@@ -1,7 +1,8 @@
+import { Timeout } from './Config.ts';
 import { Context } from './Context.ts';
 
 export class PoissonInterval {
-  private hdl?: number;
+  private hdl?: Timeout;
 
   constructor(private ctx: Context, private func: () => void, private itvlMs: number) {
     ctx.onDestruct(() => {

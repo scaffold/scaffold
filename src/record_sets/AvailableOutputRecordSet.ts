@@ -5,7 +5,7 @@ import { QueueRecordSet } from './QueueRecordSet.ts';
 import { AvailableOutputManager } from '../AvailableOutputManager.ts';
 
 export class AvailableOutputRecordSet extends QueueRecordSet<Verifier, InputSpec> {
-  constructor(private ctx: Context) {
-    super(ctx.get(AvailableOutputManager));
+  constructor(ctx: Context) {
+    super(ctx, ctx.get(AvailableOutputManager));
   }
 }
