@@ -1,4 +1,3 @@
-import * as log from '@std/log';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
@@ -14,9 +13,9 @@ import { AccountContractParams, JsWasiParams } from '../src/messages.ts';
 import { KeyService } from '../src/KeyService.ts';
 import { GenesisService, sharedGenesisData } from '../src/GenesisService.ts';
 import { WorkerExecutor } from '../src/WorkerExecutor.ts';
-import { WebsocketServerProvider } from '../plugins/WebsocketServerProvider.ts';
+import { WebsocketServerProvider } from '../plugins/deno/WebsocketServerProvider.ts';
 import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
-import { DenoKvStorageProvider } from '../plugins/DenoKvStorageProvider.ts';
+import { DenoKvStorageProvider } from '../plugins/deno/DenoKvStorageProvider.ts';
 import { FilterAction, Logger, LogLevel } from '../src/Logger2.ts';
 import { NetworkService } from '../src/NetworkService.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
@@ -48,8 +47,6 @@ const config: Config = {
   selfPrivateKey: hex2bin(
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
   ),
-
-  logLevel: log.LogLevels.INFO,
 
   workerPath: new URL('./worker/worker.ts', import.meta.url).href,
 

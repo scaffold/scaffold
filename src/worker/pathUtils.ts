@@ -1,4 +1,4 @@
-import { multiformats } from '../../deps.ts';
+import * as multiformats from 'https://cdn.skypack.dev/multiformats@13.1.0/basics';
 import { memoize } from '../util/functional.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 

@@ -1,7 +1,6 @@
-import * as log from '@std/log';
 import { Context } from '../src/Context.ts';
 import { makeDefaultConfig } from '../src/Config.ts';
-import { WebsocketServerProvider } from '../plugins/WebsocketServerProvider.ts';
+import { WebsocketServerProvider } from '../plugins/deno/WebsocketServerProvider.ts';
 import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
 import { NetworkService } from '../src/NetworkService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
@@ -18,8 +17,6 @@ const ctx = new Context({
   selfPrivateKey: hex2bin(
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
   ),
-
-  logLevel: log.LogLevels.INFO,
 
   networkProviders: [
     new WebsocketServerProvider(),

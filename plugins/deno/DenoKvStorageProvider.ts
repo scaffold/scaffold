@@ -1,5 +1,5 @@
-import { Hash } from '../src/util/Hash.ts';
-import { StorageProvider } from '../src/Config.ts';
+import { Hash } from '../../src/util/Hash.ts';
+import { StorageProvider } from '../../src/Config.ts';
 
 export class DenoKvStorageProvider implements StorageProvider {
   private kv = Deno.openKv();

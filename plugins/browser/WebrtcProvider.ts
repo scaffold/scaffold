@@ -1,6 +1,6 @@
-import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
-import { Hash } from '../src/util/Hash.ts';
-import { orderSignals } from './util.ts';
+import { NetworkProvider, SignalingDriver } from '../../src/NetworkProvider.ts';
+import { Hash } from '../../src/util/Hash.ts';
+import { orderSignals } from '../util.ts';
 
 const defaultMaxMsgSize = 65536;
 

@@ -1,5 +1,5 @@
 import { Context } from './Context.ts';
-import { Graphviz } from 'https://esm.sh/@hpcc-js/wasm@2.15.3?target=esnext&pin=v135';
+import { Graphviz } from '@hpcc-js/wasm';
 import { BlockFact, Fact } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
 import { mapPut } from './util/map.ts';

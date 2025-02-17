@@ -1,5 +1,7 @@
+import { Timeout } from '../Config.ts';
+
 export const watchClass = (cls: any, watchKeys: string[], then: () => void) => {
-  let timeout: number | undefined;
+  let timeout: Timeout | undefined;
   for (const key of watchKeys) {
     const orig = cls[key];
     if (orig instanceof Function) {

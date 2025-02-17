@@ -1,7 +1,7 @@
-import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
-import { mapPut } from '../src/util/map.ts';
-import { error } from '../src/util/functional.ts';
-import { Hash } from '../src/util/Hash.ts';
+import { NetworkProvider, SignalingDriver } from '../../src/NetworkProvider.ts';
+import { mapPut } from '../../src/util/map.ts';
+import { error } from '../../src/util/functional.ts';
+import { Hash } from '../../src/util/Hash.ts';
 
 export class WebsocketServerProvider implements NetworkProvider {
   public providesProtocol = 'websocket@0.0.1/server';

@@ -1,9 +1,9 @@
 import { ConnectionProvider, NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { TimeProvider } from '../src/Config.ts';
+import { Timeout, TimeProvider } from '../src/Config.ts';
 
 class TimerSet {
-  private timeouts = new Set<number>();
+  private timeouts = new Set<Timeout>();
 
   constructor(private timeProvider: TimeProvider) {}
 
@@ -58,27 +58,15 @@ export class MockNetworkProvider implements NetworkProvider {
           () => remote!.recvHandler!(data),
           (Math.random() + 0.5) * this.opts.sendFastLatencyMs,
         ),
-      onRecv: (handler: (data: Uint8Array) => void) => {
-        if (server.onRecv !== undefined) {
-          throw new Error(`Cannot call onRecv multiple times!`);
-        }
-        server.recvHandler = handler;
-      },
       shutdown: () => {
         server.closeHandler!();
         // console.log('CLOSE', timeouts);
         timerSet.clearAll();
       },
-      onClose: (handler: () => void) => {
-        if (server.closeHandler !== undefined) {
-          throw new Error(`Cannot call onClose multiple times!`);
-        }
-        server.closeHandler = handler;
-      },
     };
 
     this.servers.set(addr, server);
-    driver.sendSignal(addr);
+    driver.sendSignal(JSON.stringify({ addr, token: driver.myToken?.toHex() }));
 
     return {
       recvSignal: (signal: string) => {
@@ -86,13 +74,27 @@ export class MockNetworkProvider implements NetworkProvider {
           throw new Error(`Extra signal ${signal}`);
         }
 
-        remote = this.servers.get(signal);
+        const { addr, token } = JSON.parse(signal);
+
+        remote = this.servers.get(addr);
         if (remote === undefined) {
-          throw new Error(`Unable to connect to ${signal}`);
+          throw new Error(`Unable to connect to ${addr}`);
         }
 
         timerSet.set(
-          () => driver.createConnection(server),
+          () => {
+            const connDriver = driver.createConnection(Hash.fromHex(token), server);
+
+            if (server.recvHandler !== undefined) {
+              throw new Error(`Cannot call onRecv multiple times!`);
+            }
+            server.recvHandler = connDriver.recvData;
+
+            if (server.closeHandler !== undefined) {
+              throw new Error(`Cannot call onClose multiple times!`);
+            }
+            server.closeHandler = connDriver.close;
+          },
           (Math.random() + 0.5) * this.opts.connectLatencyMs,
         );
       },

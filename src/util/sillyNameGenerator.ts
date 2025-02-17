@@ -1,9 +1,9 @@
-import { uniqueNamesGenerator } from '../../deps.ts';
+import { animals, colors, uniqueNamesGenerator } from 'unique-names-generator';
 import { EntropyProvider } from '../Config.ts';
 
 export const generateSillyName = (entropyProvider: EntropyProvider) =>
-  uniqueNamesGenerator.uniqueNamesGenerator({
-    dictionaries: [uniqueNamesGenerator.colors, uniqueNamesGenerator.animals],
+  uniqueNamesGenerator({
+    dictionaries: [colors, animals],
     separator: '-',
     seed: Math.floor(entropyProvider.randomNumber() * (2 ** 32)),
   });

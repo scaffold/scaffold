@@ -1,6 +1,5 @@
 import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
-import { WeightService } from './WeightService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
 import { frontierInputCount } from './contracts/FrontierContract.ts';

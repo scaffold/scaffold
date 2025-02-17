@@ -7,7 +7,7 @@ import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
 import { bin2hex, hex2bin } from './hex.ts';
 import { arrConcat, arrFromNumber, bin2str, str2bin } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
-import { DevtoolsFormattable } from '../../plugins/devtoolsFormatterPlugin.ts';
+import { DevtoolsFormattable } from '../../plugins/browser/devtoolsFormatterPlugin.ts';
 import { assert } from './functional.ts';
 import { bin2bigint } from './bigint.ts';
 

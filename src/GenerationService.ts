@@ -10,7 +10,6 @@ import { assert, error, todo } from './util/functional.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { WorkerExecutor } from './WorkerExecutor.ts';
 import { LitigationService } from './LitigationService.ts';
-import { Logger } from './Logger3.ts';
 import { BlockFact, FactSource, FactType } from './FactMeta.ts';
 import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';
@@ -26,6 +25,7 @@ import { retryAbortable } from './util/abortable.ts';
 import { QaDebugger } from './QaDebugger.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
+import { LogSystem } from './Config.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -409,7 +409,7 @@ export class GenerationService {
             abortSignal: workerDriver.done.signal,
             incentive,
             onResponseBlock: (block, groupIdx) => {
-              this.ctx.get(Logger).info('got req', { verifier, block });
+              console.log('got req', { verifier, block });
 
               // TODO: If we get a non-canonical block (canonicality <= 0), we have to check if it's mergeable with the other inputs (positive and negative).
               // If it's not, or maybe just in any case of not having a canonical input:

@@ -12,11 +12,9 @@ import {
 import { PeerManager } from './PeerManager.ts';
 import { Coder } from './protocol/base.ts';
 import { secp } from './util/secp.ts';
-import { zstd } from '../deps.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
 import { mapPut } from './util/map.ts';
-import * as log from '@std/log';
 import { KeyService } from './KeyService.ts';
 import { CollateralUtil, DetailVote } from './CollateralUtil.ts';
 import { Connection } from './Connection.ts';
@@ -32,9 +30,10 @@ import { assert } from './util/functional.ts';
 import { QaService } from './QaService.ts';
 import { ReceptionProvider } from './IngestionProvider.ts';
 import { LogSystem } from './Config.ts';
-import { Logger } from './Logger.ts';
+import { Logger, LogLevel } from './Logger.ts';
 import { RoutingService } from './RoutingService.ts';
 import { FactRecordSet } from './record_sets/FactRecordSet.ts';
+import * as zstd from '@bokuweb/zstd-wasm';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -507,14 +506,9 @@ export class FactService {
         });
       }
 
-      if (this.ctx.config.logLevel <= log.LogLevels.DEBUG) {
-        console.log(`Created fact:`, fact.hash.toHex(), fact);
-      } else if (this.ctx.config.logLevel <= log.LogLevels.INFO) {
-        console.log(
-          `Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}:`,
-          fact.hash.toHex(),
-        );
-      }
+      fact.log?.info(`Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}:`, {
+        hex: fact.hash.toHex(),
+      });
 
       if (provider.isPersistent) {
         this.facts.set(hash.toPrimitive(), fact);

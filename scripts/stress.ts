@@ -1,4 +1,3 @@
-import * as log from '@std/log';
 import { Context } from '../src/Context.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { hex2bin } from '../src/util/hex.ts';
@@ -16,8 +15,6 @@ const config: Config = {
   selfPrivateKey: hex2bin(
     '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
   ),
-
-  logLevel: log.LogLevels.WARN,
 
   networkProviders: [],
 

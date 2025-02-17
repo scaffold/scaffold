@@ -1,26 +1,46 @@
-import { build, emptyDir } from '@deno/dnt';
+import { build, emptyDir, EntryPoint } from '@deno/dnt';
 import { parseArgs } from '@std/cli/parse-args';
 import { error } from '../src/util/functional.ts';
+import { walk } from '@std/fs/walk';
+import { expandGlob } from '@std/fs/expand-glob';
+import { relative } from '@std/path/relative';
 
 const flags = parseArgs(Deno.args, {
   string: ['version'],
 });
 
+const entryPoints: EntryPoint[] = [
+  { kind: 'export', name: '.', 'path': './mod.ts' },
+];
+
+for await (
+  const entry of expandGlob('./{src,plugins}/**/*.ts', {
+    includeDirs: false,
+    globstar: true,
+    exclude: [
+      './plugins/deno/**/*.ts',
+      './src/worker/**/*.ts',
+    ],
+  })
+) {
+  let rel = relative('.', entry.path);
+  if (rel.startsWith('src/')) rel = rel.slice(4);
+  rel = rel.startsWith('.') ? rel : `./${rel}`;
+
+  entryPoints.push({ kind: 'export', name: rel, path: entry.path });
+}
+
 await emptyDir('./npm');
 
 await build({
   importMap: 'deno.json',
-  entryPoints: [
-    './mod.ts',
-    // './server/main.ts',
-  ],
+  entryPoints,
   outDir: './npm',
   compilerOptions: {
     lib: ['DOM', 'ESNext'],
   },
   shims: {
-    // see JS docs for overview and more options
-    deno: true,
+    // deno: true,
   },
   test: false,
   typeCheck: 'both',

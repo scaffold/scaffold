@@ -1,7 +1,6 @@
 import { Context } from './Context.ts';
 import { Verifier } from './messages.ts';
 import { Resource } from './WorkerDriverService.ts';
-import * as log from '@std/log';
 import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
@@ -72,8 +71,6 @@ export interface Config {
   userdata?: string;
   selfPrivateKey: Uint8Array;
   clientNonce: string;
-
-  logLevel: log.LogLevel;
 
   logLevels: { [key in LogSystem]?: LogLevel };
 
@@ -190,7 +187,6 @@ export const makeDefaultConfig = () => {
     network: defaultNetwork,
     debugName: '',
     clientNonce: Math.random().toString(36).slice(2),
-    logLevel: log.LogLevels.INFO, // TODO: Set this to WARN
     logLevels: {
       [LogSystem.Main]: LogLevel.DEBUG,
       [LogSystem.Fact]: LogLevel.DEBUG,

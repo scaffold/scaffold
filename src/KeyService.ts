@@ -1,7 +1,8 @@
 import { secp } from './util/secp.ts';
 import { Context } from './Context.ts';
 import { bin2hex } from './util/hex.ts';
-import * as log from '@std/log';
+import { Logger } from './Logger.ts';
+import { LogSystem } from './Config.ts';
 
 export class KeyService {
   private selfPublicKey: Uint8Array;
@@ -13,9 +14,8 @@ export class KeyService {
         `Invalid public key length: ${this.selfPublicKey.byteLength}`,
       );
     }
-    if (log.LogLevels.INFO >= ctx.config.logLevel) {
-      console.log(`Public key:`, bin2hex(this.selfPublicKey));
-    }
+
+    Logger.create(ctx, LogSystem.Main)?.info(`Public key: ${bin2hex(this.selfPublicKey)}`);
   }
 
   public getSelfPublicKey() {

@@ -1,4 +1,6 @@
-import { avro } from '../../deps.ts';
+// @deno-types="../../avro/index.d.ts"
+import * as avro from '../../avro/index.js';
+
 import { Hash } from '../util/Hash.ts';
 import { bigint2bin, bin2bigint } from '../util/bigint.ts';
 
