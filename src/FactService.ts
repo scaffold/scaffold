@@ -10,7 +10,7 @@ import {
   FactType,
 } from './FactMeta.ts';
 import { PeerManager } from './PeerManager.ts';
-import { Coder } from './protocol/base.ts';
+import { BytesTree, Coder } from './protocol/base.ts';
 import { secp } from './util/secp.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
@@ -34,6 +34,7 @@ import { Logger, LogLevel } from './Logger.ts';
 import { RoutingService } from './RoutingService.ts';
 import { FactRecordSet } from './record_sets/FactRecordSet.ts';
 import * as zstd from '@bokuweb/zstd-wasm';
+import { digestTree } from './BytesTreeHelper.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -211,7 +212,7 @@ export class FactService {
   }
   public updateValidity(
     blockHash: Hash,
-    hints: Uint8Array[],
+    hints: BytesTree[],
     vote: DetailVote,
   ): DetailVote {
     return mapPut(
@@ -220,7 +221,7 @@ export class FactService {
         blockHash.toPrimitive(),
         () => new Map<HashPrimitive, DetailVote>(),
       ),
-      Hash.digestParts(...hints).toPrimitive(),
+      Hash.digestParts(...hints.map(digestTree)).toPrimitive(),
       () => vote,
       (priorVote) => {
         const priorType = CollateralUtil.getContestType(priorVote);
@@ -464,7 +465,7 @@ export class FactService {
       }
       const signature = provider.isSigned ? data.subarray(-SIGNATURE_LENGTH) : undefined;
 
-      const fact = provider.create({
+      const fact = provider.create(Object.assign(existing ?? this.createRef(hash), {
         data,
         message: data.subarray(headerSize, provider.isSigned ? -SIGNATURE_LENGTH : undefined),
 
@@ -490,9 +491,7 @@ export class FactService {
         sourceStr: FactSource[source],
         sillyName: generateSillyName(this.ctx.config.entropyProvider),
         backtrace: new Error().stack,
-
-        ...existing ?? this.createRef(hash),
-      });
+      }));
 
       mutator?.(fact);
 
@@ -506,7 +505,7 @@ export class FactService {
         });
       }
 
-      fact.log?.info(`Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}:`, {
+      fact.log?.info(`Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}`, {
         hex: fact.hash.toHex(),
       });
 

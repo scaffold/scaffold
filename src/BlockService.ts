@@ -54,6 +54,8 @@ import { assertUnique, mergeSorted } from './util/sorted.ts';
 import { CanonicalityService } from './CanonicalityService.ts';
 import { assertMatch } from '@std/assert/match';
 import { assertEquals } from '@std/assert/equals';
+import { areTreesEqual, encodeBytesTree } from './BytesTreeHelper.ts';
+import { BytesTree } from './protocol/base.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -683,7 +685,7 @@ export class BlockService {
   public areVerifiersEqual(a: Verifier, b: Verifier) {
     return (
       Hash.equals(a.contractHash, b.contractHash) &&
-      arrEquals(a.params, b.params)
+      areTreesEqual(a.params, b.params)
     );
   }
 
@@ -743,7 +745,7 @@ export class BlockService {
       .flatMap((block) =>
         block.outputs.flatMap((y, idx) =>
           Hash.equals(y.verifier.contractHash, verifier.contractHash) &&
-            arrEquals(y.verifier.params, verifier.params)
+            areTreesEqual(y.verifier.params, verifier.params)
             ? [{ block, idx }]
             : []
         )
@@ -752,7 +754,7 @@ export class BlockService {
 
   public getBlocksByOutputFilter(
     contractHash: Hash,
-    cond: (params: Uint8Array) => boolean,
+    cond: (params: BytesTree) => boolean,
   ) {
     return this.ctx
       .get(FactService)
@@ -782,7 +784,7 @@ export class BlockService {
   public async getSelfVerification(block: BlockFact) {
     const myCollateral = this.getBlocksByOutput({
       contractHash: collateralHash,
-      params: CollateralContractParams.encode({ blockHash: block.hash }),
+      params: encodeBytesTree(block.hash),
     }).filter(({ block }) => block.source === FactSource.Local); // TODO: Filter by signature so we get our blocks even if someone else sent them to us
 
     // myCollateral

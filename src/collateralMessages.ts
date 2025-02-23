@@ -44,7 +44,7 @@ const registry = {
     type: 'record',
     fields: [
       { name: 'publicKey', type: 'bytes' }, // 33 bytes
-      { name: 'hints', type: { type: 'array', items: 'bytes' } },
+      { name: 'hints', type: { type: 'array', items: 'BytesTree' } },
 
       // When running a contract, hints are requested via getHint().
       // After getHint() calls returning the above sequence of hints, the vote signifies the next getHint() or finalize() call.

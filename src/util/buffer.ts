@@ -4,8 +4,13 @@ import { bin2hex } from './hex.ts';
 
 export const EMPTY_ARR = new Uint8Array();
 
-export const bin2str = memoize((bin: Uint8Array): string => new TextDecoder().decode(bin));
-export const str2bin = (str: string): Uint8Array => new TextEncoder().encode(str);
+export const isAscii = (bin: Uint8Array) => bin.every((x) => x >= 32 && x < 127);
+
+const decoder = new TextDecoder();
+export const bin2str = memoize((bin: Uint8Array): string => decoder.decode(bin));
+
+const encoder = new TextEncoder();
+export const str2bin = (str: string): Uint8Array => encoder.encode(str);
 
 export const arrEquals = (a: Uint8Array, b: Uint8Array) => a === b || bytes.equals(a, b);
 

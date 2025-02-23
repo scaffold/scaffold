@@ -9,6 +9,7 @@ import { error } from './util/functional.ts';
 import { WorkerDebugger, WorkerDebuggerManager } from './WorkerDebuggerManager.ts';
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
+import { bin2str } from './util/buffer.ts';
 
 interface OpenFile {
   // TODO: Remove these, just used for debugging
@@ -158,7 +159,7 @@ export class WorkerExecutor {
     const getBodyHash = (file: OpenFile) =>
       file.verifier.then(({ contractHash, params }) =>
         Hash.equals(contractHash, rootHash)
-          ? Hash.fromBytes(params)
+          ? Hash.fromBytes(params.value!.bytes)
           : getBody(file).then(Hash.digest)
       );
 
@@ -190,6 +191,10 @@ export class WorkerExecutor {
       },
       exit(err): undefined {
         exit(err);
+      },
+
+      paramsJsonSchema(jsonSchema): undefined {
+        console.log(bin2str(jsonSchema));
       },
 
       // Each of these returns the TOTAL size of the source buffer; irrespective of the dstBuf size or offset.
@@ -234,7 +239,7 @@ export class WorkerExecutor {
           path: [],
           verifier: Promise.resolve({
             contractHash: rootHash,
-            params: hash.toBytes(),
+            params: { value: { bytes: hash.toBytes() }, entries: [] },
           }),
         });
       },
@@ -252,8 +257,12 @@ export class WorkerExecutor {
         inodes.set(subInode, {
           path,
           verifier: getBodyHash(baseFile).then((contractHash) => {
-            driver.notify({ contractHash, params });
-            return { contractHash: contractHash, params };
+            const verifier: Verifier = {
+              contractHash,
+              params: { value: { bytes: params }, entries: [] },
+            };
+            driver.notify(verifier);
+            return verifier;
           }),
         });
       },

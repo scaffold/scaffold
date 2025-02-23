@@ -26,6 +26,20 @@ In general, if a parent is WORSE by weight than its 2 children, don't even consi
   It might become valid in the future if stuff is built upon it
 */
 
+// type MeteredBlock = Pick<
+//   BlockFact,
+//   | 'inputs'
+//   | 'outputs'
+//   | 'conflicts'
+//   | 'children'
+//   | 'sillyName'
+//   | 'parentBlock'
+//   | 'squashes'
+//   | 'treeWeights'
+//   | 'squashers'
+// >;
+type MeteredBlock = BlockFact;
+
 type Metrics = {
   selfWork: bigint;
   freeMarketOutput: bigint;
@@ -43,7 +57,7 @@ type Metrics = {
   isCanonical: boolean;
 };
 
-export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
+export class BlockMetrics extends MetricManager<MeteredBlock, Metrics> {
   constructor(private ctx: Context) {
     super({
       // This can only increase as we know more inputs
@@ -69,7 +83,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return work;
       },
 
-      freeMarketOutput: (block: BlockFact) => {
+      freeMarketOutput: (block: MeteredBlock) => {
         let sum = 0n;
         for (const output of block.outputs) {
           if (this.isFreeMarketOutput(output.verifier)) {
@@ -79,7 +93,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return sum;
       },
 
-      conservativeSelfWork: (block: BlockFact) => {
+      conservativeSelfWork: (block: MeteredBlock) => {
         let minWork = this.get(block, 'selfWork');
         for (const conflict of block.conflicts.keys()) {
           minWork = bigintMin(minWork, this.get(conflict, 'selfWork'));
@@ -87,7 +101,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return minWork;
       },
 
-      childWeight: (block: BlockFact) => {
+      childWeight: (block: MeteredBlock) => {
         const childWeight1 = this.get(block, 'childWeight1');
         const childWeights2 = this.get(block, 'childWeights2');
         if (childWeight1 !== (childWeights2[0] ?? 0n)) {
@@ -100,7 +114,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return childWeight1;
       },
 
-      childWeight1: (block: BlockFact) => {
+      childWeight1: (block: MeteredBlock) => {
         let weight = 0n;
         for (const child of block.children) {
           if (this.get(child, 'isConflictWinner')) {
@@ -119,7 +133,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         // }
       },
 
-      childWeights2: (block: BlockFact) => {
+      childWeights2: (block: MeteredBlock) => {
         const weights: bigint[] = [];
         const addWeight = (inc: bigint, idx: number) => {
           while (weights.length <= idx) {
@@ -152,7 +166,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
       },
 
       // TODO: Cache this on the block, should be easy cuz it never changes.
-      ancestorWeight: (block: BlockFact) => {
+      ancestorWeight: (block: MeteredBlock) => {
         let sum = 0n;
         if (block.parentBlock !== undefined && block.parentBlock !== ZERO_BLOCK) {
           sum += this.get(block.parentBlock, 'selfWork');
@@ -164,7 +178,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return sum;
       },
 
-      descendantWeight: (block: BlockFact) => {
+      descendantWeight: (block: MeteredBlock) => {
         let sum = 0n;
         sum += this.get(block, 'childWeight');
 
@@ -190,7 +204,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return sum;
       },
 
-      conflictScore: (block: BlockFact) => {
+      conflictScore: (block: MeteredBlock) => {
         let sum = 0n;
         sum += this.get(block, 'conservativeSelfWork');
         sum += this.get(block, 'freeMarketOutput');
@@ -199,7 +213,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return sum;
       },
 
-      isConflictWinner: (block: BlockFact) => {
+      isConflictWinner: (block: MeteredBlock) => {
         // if (block.squashers.length) {
         //   return false;
         // }
@@ -231,7 +245,7 @@ export class BlockMetrics extends MetricManager<BlockFact, Metrics> {
         return true;
       },
 
-      isCanonical: (block: BlockFact) => {
+      isCanonical: (block: MeteredBlock) => {
         return this.get(block, 'isConflictWinner') &&
           (block.parentBlock === undefined || block.parentBlock === ZERO_BLOCK ||
             this.get(block.parentBlock, 'isCanonical'));

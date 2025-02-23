@@ -19,15 +19,14 @@ export class CollateralContract implements ContractProvider {
   public contractHash = collateralHash;
 
   public async compute(driver: ComputationDriver) {
-    // Just verify that the params decode
-    CollateralContractParams.decode(driver.getParams());
+    await driver.params.getHash();
 
     const postings: (InputSource & Posting)[] = [];
     for (const input of await driver.collectInputs()) {
       await driver.requireTimestampGte(input.timestamp + resolutionDelay);
       postings.push({
         ...input,
-        detail: CollateralContractDetail.decode(input.output.detail),
+        detail: CollateralContractDetail.decode(input.output.detail.value!.bytes),
         amount: input.output.amount,
       });
     }

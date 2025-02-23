@@ -9,6 +9,7 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
+import { BytesTree } from './protocol/base.ts';
 import { BlockService } from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './hashes.ts';
 import { KeyService } from './KeyService.ts';
@@ -75,9 +76,14 @@ export class BlockBuilder {
   constructor(private ctx: Context) {
     this.selfAccountVerifier = {
       contractHash: accountHash,
-      params: AccountContractParams.encode({
-        publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
-      }),
+      params: {
+        value: {
+          bytes: AccountContractParams.encode({
+            publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
+          }),
+        },
+        entries: [],
+      },
     };
   }
 
@@ -100,7 +106,7 @@ export class BlockBuilder {
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
-    const bodies: Uint8Array[] = [];
+    const bodies: BytesTree[] = [];
 
     const groupIdxArr = drafts.map((x) => x.groupIdx).filter((x) => x !== undefined);
     const takenGroupIdxs = new Set(groupIdxArr);
@@ -125,9 +131,12 @@ export class BlockBuilder {
       draftGroupIdxs.push(groupIdx);
 
       while (bodies.length <= groupIdx) {
-        bodies.push(EMPTY_ARR);
+        bodies.push({ value: null, entries: [] });
       }
-      bodies[groupIdx] = draft.body ?? EMPTY_ARR;
+      bodies[groupIdx] = {
+        value: draft.body !== undefined ? { bytes: draft.body } : null,
+        entries: [],
+      };
 
       if (draft.squashOutputAmount !== undefined) {
         squashOutputAmount += draft.squashOutputAmount;
@@ -237,7 +246,7 @@ export class BlockBuilder {
       outputs.push({
         verifier: this.selfAccountVerifier,
         amount: ioDelta,
-        detail: EMPTY_ARR,
+        detail: { value: null, entries: [] },
         groupIdx: nextGroupIdx(),
       });
     }
@@ -268,10 +277,10 @@ export class BlockBuilder {
       outputs.push({
         verifier: {
           contractHash: frontierHash,
-          params: FrontierTreeParams.encode({ level: -1 }),
+          params: { value: { bytes: FrontierTreeParams.encode({ level: -1 }) }, entries: [] },
         },
         amount: squashOutputAmount,
-        detail: FrontierTreeDetail.encode({}),
+        detail: { value: { bytes: FrontierTreeDetail.encode({}) }, entries: [] },
         // detail: FrontierTreeDetail.encode({
         //   treeWeights: this.ctx.get(FrontierService2)
         //     .mergeTreeWeights(inputs, frontierVoteBlock),
@@ -312,7 +321,7 @@ export class BlockBuilder {
     }
 
     while (bodies.length <= groupIdx) {
-      bodies.push(EMPTY_ARR);
+      bodies.push({ value: null, entries: [] });
     }
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
@@ -368,7 +377,10 @@ export class BlockBuilder {
         outputs: [{
           verifier: satisfaction,
           amount: 0n,
-          detail: satisfaction.detail ?? EMPTY_ARR,
+          detail: {
+            value: satisfaction.detail !== undefined ? { bytes: satisfaction.detail } : null,
+            entries: [],
+          },
         }],
         onBlock: (block, groupIdx) => {
           if (published) {

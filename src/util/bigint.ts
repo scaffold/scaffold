@@ -10,7 +10,9 @@ export const countTrailingZeros = (num: bigint) => {
   return str.length - 1 - str.lastIndexOf('1');
 };
 
-export const bin2bigint = (arr: Uint8Array) => {
+// Little endian
+
+export const bin2bigintLe = (arr: Uint8Array) => {
   let res = 0n;
   for (let i = 0; i < arr.byteLength; i++) {
     res |= BigInt(arr[i]) << BigInt(i << 3);
@@ -18,7 +20,7 @@ export const bin2bigint = (arr: Uint8Array) => {
   return res;
 };
 
-export const bigint2bin = (num: bigint, size?: number) => {
+export const bigint2binLe = (num: bigint, size?: number) => {
   if (num < 0n) {
     throw new Error(`Cannot convert a negative bigint to binary!`);
   }
@@ -40,5 +42,40 @@ export const bigint2bin = (num: bigint, size?: number) => {
       num >>= 8n;
     }
     return new Uint8Array(arr);
+  }
+};
+
+// Big endian
+
+export const bin2bigintBe = (arr: Uint8Array) => {
+  let res = 0n;
+  for (let i = 0; i < arr.byteLength; i++) {
+    res |= BigInt(arr[i]) << BigInt((arr.byteLength - 1 - i) << 3);
+  }
+  return res;
+};
+
+export const bigint2binBe = (num: bigint, size?: number) => {
+  if (num < 0n) {
+    throw new Error(`Cannot convert a negative bigint to binary!`);
+  }
+
+  if (size !== undefined) {
+    const arr = new Uint8Array(size);
+    for (let i = 0; i < size; i++) {
+      arr[size - 1 - i] = Number(num & 0xFFn);
+      num >>= 8n;
+    }
+    if (num !== 0n) {
+      throw new Error(`Bigint exceeds ${size} bytes!`);
+    }
+    return arr;
+  } else {
+    const arr: number[] = [];
+    while (num !== 0n) {
+      arr.push(Number(num & 0xFFn));
+      num >>= 8n;
+    }
+    return new Uint8Array(arr.reverse());
   }
 };

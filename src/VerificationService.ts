@@ -78,7 +78,7 @@ export class VerificationService {
 
     const contractBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
       contractHash: rootHash,
-      params: verifier.contractHash.toBytes(),
+      params: { value: { bytes: verifier.contractHash.toBytes() }, entries: [] },
     });
     if (contractBlocks.length) {
       const contractCode = contractBlocks[0].block.bodies[contractBlocks[0].groupIdx];
@@ -96,7 +96,8 @@ export class VerificationService {
           try {
             await this.ctx.get(WorkerExecutor).run(
               {
-                code: contractCode,
+                code: contractCode.value!.bytes,
+                readParamsJsonSchema: true,
                 // contractHash: verifier.contractHash.toBytes(),
                 // params: verifier.params,
                 // body: block.body,
@@ -145,7 +146,7 @@ export class VerificationService {
 
       getVerifier: () => verifier,
       getContractHash: () => verifier.contractHash,
-      getParams: () => verifier.params,
+      getParams: () => verifier.params.value!.bytes,
       getHint: (idx, bop) => {
         idx++;
 
@@ -186,12 +187,12 @@ export class VerificationService {
 
         return readHints[idx];
       },
-      getBody: () => block.bodies[groupIdx],
+      getBody: () => block.bodies[groupIdx].value!.bytes,
       requireBody: (data) => {
         if (workerDriver.done.signal.aborted) {
           return;
         }
-        if (!arrEquals(block.bodies[groupIdx], data)) {
+        if (!arrEquals(block.bodies[groupIdx].value!.bytes, data)) {
           throw new VerificationException(
             `requireBody(...) failed - the block's body does not match the contract's specification!`,
           );
@@ -246,7 +247,7 @@ export class VerificationService {
           const groupIdx = await this.ctx.get(BlockService)
             .getGroupIndex(ref, verifier, workerDriver.done.signal);
           if (groupIdx !== undefined) {
-            const body = ref.bodies[groupIdx];
+            const body = ref.bodies[groupIdx].value!.bytes;
             workerDriver.resumeTimer(
               `Read from ${ref.hash.toHex().slice(0, 10)}: ${bin2hex(body).slice(0, 10)}`,
             );
@@ -276,7 +277,7 @@ export class VerificationService {
                   amount: output.amount,
                 },
                 output,
-                body: inputBlock.bodies[output.groupIdx],
+                body: inputBlock.bodies[output.groupIdx].value!.bytes,
                 timestamp: inputBlock.timestamp,
               };
             },
@@ -343,7 +344,7 @@ export class VerificationService {
               amount: output.amount,
             },
             output,
-            body: inputBlock.bodies[output.groupIdx],
+            body: inputBlock.bodies[output.groupIdx].value!.bytes,
             timestamp: inputBlock.timestamp,
           };
         }
@@ -458,9 +459,9 @@ export class VerificationService {
 
   private areOutputsEqual(a: BlockOutput, b: BlockOutput) {
     return Hash.equals(a.verifier.contractHash, b.verifier.contractHash) &&
-      arrEquals(a.verifier.params, b.verifier.params) &&
+      arrEquals(a.verifier.params.value!.bytes, b.verifier.params.value!.bytes) &&
       a.amount === b.amount &&
-      arrEquals(a.detail, b.detail);
+      arrEquals(a.detail.value!.bytes, b.detail.value!.bytes);
   }
 
   public snapshot() {

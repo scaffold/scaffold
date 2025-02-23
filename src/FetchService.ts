@@ -10,6 +10,8 @@ import { FactService } from './FactService.ts';
 import { GenesisService } from './GenesisService.ts';
 import { OutputClaim } from './BlockMeta.ts';
 import { Timeout } from './Config.ts';
+import { BytesTree } from './protocol/base.ts';
+import { areTreesEqual } from './BytesTreeHelper.ts';
 
 export enum FetchMode {
   // Selects the first valid block satisfying the given verifier.
@@ -69,7 +71,7 @@ export interface FetchOptions {
   // The total derived work / canonicality
 
   // This is called whenever we generate or receive a more up-to-date body, subject to debouncing and the canonicality threshold.
-  onBody?: (body?: Uint8Array) => void;
+  onBody?: (body?: BytesTree) => void;
 }
 
 export class FetchService {
@@ -109,7 +111,7 @@ export class FetchService {
       const amount = incentive ?? this.ctx.config.getDepositIncentive(verifier);
       if (amount >= 0n) {
         this.ctx.get(BlockBuilder).publishPersistentDraft({
-          outputs: [{ verifier, amount, detail: EMPTY_ARR }],
+          outputs: [{ verifier, amount, detail: { value: null, entries: [] } }],
           timeout: 0,
           onBlock: onIncentiveBlock !== undefined
             ? (block, groupIdx) =>
@@ -125,7 +127,7 @@ export class FetchService {
     let onState: (claim?: { block: BlockFact; groupIdx: number }) => boolean;
     let watchItvl: Timeout | undefined;
     if (onBody !== undefined || onResponseBlock !== undefined) {
-      let prevBody: Uint8Array | undefined;
+      let prevBody: BytesTree | undefined;
       onState = (claim) => {
         if (claim !== undefined) {
           onResponseBlock?.(claim.block, claim.groupIdx);
@@ -133,7 +135,7 @@ export class FetchService {
           this.ctx.get(FactService).increaseUsefulness(claim.block, 1);
 
           const body = claim.block.bodies[claim.groupIdx];
-          if (prevBody === undefined || !arrEquals(body, prevBody)) {
+          if (prevBody === undefined || !areTreesEqual(body, prevBody)) {
             prevBody = body;
             onBody?.(body);
           }

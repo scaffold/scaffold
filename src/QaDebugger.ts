@@ -39,7 +39,7 @@ export class QaDebugger {
     const dbgr = this.debuggers.get(verifier.contractHash.toPrimitive());
     const contractStr = dbgr?.contractName ??
       verifier.contractHash.toHex().slice(0, 10);
-    const paramsStr = this.serialize(dbgr?.paramDebugger?.(verifier.params)) ??
+    const paramsStr = this.serialize(dbgr?.paramDebugger?.(verifier.params.value!.bytes)) ??
       bin2hex(verifier.params).slice(0, 10);
     return `${contractStr}/${paramsStr}`;
   }
@@ -54,7 +54,7 @@ export class QaDebugger {
         if (inputBlock !== undefined) {
           const verifier = inputBlock.outputs[input.outputIdx].verifier;
           const dbgr = this.debuggers.get(verifier.contractHash.toPrimitive());
-          const str = this.serialize(dbgr?.bodyDebugger?.(body));
+          const str = this.serialize(dbgr?.bodyDebugger?.(body.value!.bytes));
           if (str !== undefined) {
             return str;
           }

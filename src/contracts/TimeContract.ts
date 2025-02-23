@@ -12,8 +12,8 @@ export const enum TimeGeneratorModifier {
 export class TimeContract implements ContractProvider {
   public contractHash = timeHash;
 
-  public compute(driver: ComputationDriver) {
-    const { time } = TimeParams.decode(driver.getParams());
+  public async compute(driver: ComputationDriver) {
+    const time = await driver.params.open('time').getBigInt();
     driver.requireTimestampGte(time);
   }
 }

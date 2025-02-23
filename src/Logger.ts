@@ -1,7 +1,7 @@
 import { LogSystem } from './Config.ts';
 import { Context } from './Context.ts';
 
-export const enum LogLevel {
+export enum LogLevel {
   DEBUG = 10,
   INFO = 20,
   WARN = 30,

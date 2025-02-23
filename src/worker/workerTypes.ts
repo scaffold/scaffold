@@ -5,6 +5,8 @@ export interface InitialMessage {
 export interface JobMessage {
   code: Uint8Array;
 
+  readParamsJsonSchema: boolean;
+
   // TODO: Send getter values as optimizations
   // // These are just sent as optimizations; they're the same as what the driver would return if asked.
   // contractHash: Uint8Array;
@@ -30,6 +32,8 @@ export interface JsMessage {
 export interface WorkerComm {
   ready(): undefined;
   exit(err?: any): undefined;
+
+  paramsJsonSchema(jsonSchema: Uint8Array): undefined;
 
   // Each of these returns the TOTAL size of the source buffer; irrespective of the dstBuf size or offset.
   readContractHash(dstBuf: Uint8Array, offset: number): Promise<number>;

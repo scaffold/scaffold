@@ -1,9 +1,15 @@
 import { assert } from './util/functional.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 
+interface Disposable {
+  [Symbol.dispose]?(): void;
+  [Symbol.asyncDispose]?(): Promise<void>;
+}
+
 export abstract class BaseContext<DerivedType> {
   private objs = new Map<{ new (context: DerivedType): unknown }, unknown>();
   private constructing = new Set<{ new (context: DerivedType): unknown }>();
+  // TODO: AsyncDisposableStack
   private destructors: (() => MaybePromise<void>)[] = [];
   private isDestructed = false;
 
@@ -20,7 +26,7 @@ export abstract class BaseContext<DerivedType> {
     }
   }
 
-  public get<T>(Type: { new (context: DerivedType): T }): T {
+  public get<T extends object & Disposable>(Type: { new (context: DerivedType): T }): T {
     if (!this.objs.has(Type)) {
       if (this.isDestructed) {
         throw new Error(`Cannot use a context after it's been destructed!`);
@@ -33,7 +39,18 @@ export abstract class BaseContext<DerivedType> {
       this.constructing.add(Type);
 
       try {
-        this.objs.set(Type, new Type(this.getThis()));
+        const obj = new Type(this.getThis());
+        this.objs.set(Type, obj);
+
+        const disposer = obj[Symbol.dispose];
+        if (disposer !== undefined) {
+          this.destructors.push(disposer);
+        }
+
+        const asyncDisposer = obj[Symbol.asyncDispose];
+        if (asyncDisposer !== undefined) {
+          this.destructors.push(asyncDisposer);
+        }
       } finally {
         this.constructing.delete(Type);
       }

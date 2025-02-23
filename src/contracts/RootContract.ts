@@ -24,29 +24,28 @@ export class RootContract implements ContractProvider {
     return hash;
   }
 
-  public compute(driver: ComputationDriver, ctx: Context) {
+  public async compute(driver: ComputationDriver, ctx: Context) {
     // TODO: How are errors handled here?
-    const hash = Hash.fromBytes(driver.getParams());
+    const hash = await driver.params.getHash();
     if (driver.type === ComputationType.Generator) {
       const data = this.registry.get(hash.toPrimitive());
       if (data !== undefined) {
-        return driver.requireBody(data);
+        return driver.body.setBytes(data);
       }
 
       const fact = ctx.get(FactService).get(hash, false);
       if (fact) {
-        return driver.requireBody(fact.data);
+        return driver.body.setBytes(fact.data);
       }
 
-      const got = ctx.get(BlockService)
-        .getBlocksByVerifier(driver.getVerifier());
-      if (got.length > 0) {
-        return driver.requireBody(got[0].block.bodies[got[0].groupIdx]);
-      }
+      // const got = ctx.get(BlockService).getBlocksByVerifier(driver.getVerifier());
+      // if (got.length > 0) {
+      //   return driver.requireBody(got[0].block.bodies[got[0].groupIdx].value!.bytes);
+      // }
 
       driver.ingenerable(`We don't know any data matching ${hash.toHex()}!`);
     } else if (driver.type === ComputationType.Contract) {
-      const valid = Hash.equals(Hash.digest(driver.getBody()), hash);
+      const valid = Hash.equals(Hash.digest(await driver.body.getBytes()), hash);
       valid ? driver.pass() : driver.fail(`Given data doesn't hash to the correct value!`);
     }
   }

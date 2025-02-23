@@ -157,6 +157,20 @@ export default async (
       memory = instance.exports.memory;
     }
 
+    if (
+      job.readParamsJsonSchema &&
+      'SCAFFOLD_PARAMS_JSON_SCHEMA_PTR' in instance.exports &&
+      'SCAFFOLD_PARAMS_JSON_SCHEMA_LEN' in instance.exports
+    ) {
+      client.inform('paramsJsonSchema', [
+        new Uint8Array(
+          memory!.buffer,
+          instance.exports.SCAFFOLD_PARAMS_JSON_SCHEMA_PTR as unknown as number,
+          instance.exports.SCAFFOLD_PARAMS_JSON_SCHEMA_LEN as unknown as number,
+        ),
+      ], []);
+    }
+
     const entryFuncs = WebAssembly.Module.customSections(
       mod,
       'scaffold_v0_entry_funcs',

@@ -9,7 +9,6 @@ import { arrConcat, arrFromNumber, bin2str, str2bin } from './buffer.ts';
 // import { sha256 } from '@noble/hashes/sha256';
 import { DevtoolsFormattable } from '../../plugins/browser/devtoolsFormatterPlugin.ts';
 import { assert } from './functional.ts';
-import { bin2bigint } from './bigint.ts';
 
 // TODO: Try blake?
 

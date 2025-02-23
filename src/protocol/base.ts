@@ -2,7 +2,7 @@
 import * as avro from '../../avro/index.js';
 
 import { Hash } from '../util/Hash.ts';
-import { bigint2bin, bin2bigint } from '../util/bigint.ts';
+import { bigint2binLe, bin2bigintLe } from '../util/bigint.ts';
 
 class HashLogicalType extends avro.types.LogicalType {
   // constructor(schema: avro.Schema, opts?: any) {
@@ -54,7 +54,7 @@ class Uint8ArrayLogicalType extends avro.types.LogicalType {
 
 class BigIntLogicalType extends avro.types.LogicalType {
   public fromBytes(bytes: Uint8Array) {
-    const x = bin2bigint(bytes);
+    const x = bin2bigintLe(bytes);
     return x & 1n ? -(x >> 1n) : x >> 1n;
   }
 
@@ -63,7 +63,7 @@ class BigIntLogicalType extends avro.types.LogicalType {
   }
   protected override _toValue(num: bigint) {
     const x = num < 0n ? (-num << 1n) | 1n : num << 1n;
-    return bigint2bin(x);
+    return bigint2binLe(x);
   }
   protected override _resolve(type: any) {
     if (avro.Type.isType(type, 'bytes')) {
@@ -98,7 +98,6 @@ export type ObjectType<
   : S extends 'double' ? number
   : S extends 'bytes' ? Uint8Array
   : S extends 'string' ? string
-  : S extends avro.types.LongType ? bigint
   : S extends { logicalType: keyof typeof logicalTypes } ? ReturnType<
       InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']
     >
@@ -108,6 +107,7 @@ export type ObjectType<
         R
       >;
     }
+  : S extends avro.types.LongType ? bigint
   : S extends avro.schema.EnumType ? S['symbols'][number]
   : S extends avro.schema.ArrayType ? ObjectType<S['items'], R>[]
   : S extends avro.schema.MapType ? Record<string, ObjectType<S['values'], R>>
@@ -187,6 +187,24 @@ export const registry = {
     fields: [
       { name: 'significand', type: 'long' },
       { name: 'exponent', type: 'long' },
+    ],
+  },
+
+  BytesTreeEntry: {
+    name: 'BytesTreeEntry',
+    type: 'record',
+    fields: [
+      { name: 'key', type: 'bytes' },
+      { name: 'node', type: 'BytesTree' },
+    ],
+  },
+
+  BytesTree: {
+    name: 'BytesTree',
+    type: 'record',
+    fields: [
+      { name: 'value', 'type': ['null', 'bytes'] },
+      { name: 'entries', 'type': { type: 'array', items: 'BytesTreeEntry' } },
     ],
   },
 
@@ -300,3 +318,8 @@ export const makeMsg = <
   },
 });
 */
+
+type MsgType<Name extends keyof typeof registry> = ObjectType<Name, typeof registry>;
+
+export const BytesTree = makeMsg(registry, 'BytesTree');
+export type BytesTree = MsgType<'BytesTree'>;

@@ -244,12 +244,11 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
       }
 
       if (Hash.equals(output.verifier.contractHash, collateralHash)) {
-        const params = CollateralContractParams.decode(output.verifier.params);
-        const detailDec = CollateralContractDetail.decode(output.detail);
+        const params = CollateralContractParams.decode(output.verifier.params.value!.bytes);
+        const detailDec = CollateralContractDetail.decode(output.detail.value!.bytes);
 
         if (this.ctx.get(FactService).isSignedByMe(fact)) {
-          this.ctx
-            .get(FactService)
+          this.ctx.get(FactService)
             .updateValidity(params.blockHash, detailDec.hints, detailDec.vote);
         }
 
@@ -283,11 +282,11 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
     }
 
     for (const body of fact.bodies) {
-      if (body.byteLength >= headerSize) {
+      if (body.value!.bytes.byteLength >= headerSize) {
         this.ctx.get(ClockService).setTimeout(() => {
           try {
             // TODO: Set the fromNode correctly here
-            this.ctx.get(FactService).ingest(body, fact.source);
+            this.ctx.get(FactService).ingest(body.value!.bytes, fact.source);
           } catch (err) {
             // If it fails no worries; it just wasn't a valid block
             console.debug(err);
@@ -366,7 +365,7 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
     let outputIdx = 0;
     for (const output of fact.outputs) {
       if (Hash.equals(output.verifier.contractHash, collateralHash)) {
-        const params = CollateralContractParams.decode(output.verifier.params);
+        const params = CollateralContractParams.decode(output.verifier.params.value!.bytes);
         this.ctx.get(FactService).forgetCollateral(params.blockHash, fact);
       }
 
@@ -384,8 +383,8 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
       throw new Error(`Not exactly one frontier output!`);
     }
     const output = block.outputs[idx];
-    const frontierParams = FrontierTreeParams.decode(output.verifier.params);
-    const frontierDetail = FrontierTreeDetail.decode(output.detail);
+    const frontierParams = FrontierTreeParams.decode(output.verifier.params.value!.bytes);
+    const frontierDetail = FrontierTreeDetail.decode(output.detail.value!.bytes);
 
     // if (
     //   frontierParams.level < 0 ||
@@ -544,7 +543,10 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
     // this.ctx.get(ClockService).setTimeout(() => {
     // TODO: Only do this once per unique verifier foreach block
     const hintPrefix = [CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } })];
-    if (Hash.equals(verifier.contractHash, squashHash) && arrEquals(verifier.params, EMPTY_ARR)) {
+    if (
+      Hash.equals(verifier.contractHash, squashHash) &&
+      arrEquals(verifier.params.value!.bytes, EMPTY_ARR)
+    ) {
       const isValid = child.squashes.some((x) => Hash.equals(x.blockHash, parent.hash));
       const vote = isValid ? 'FINAL_PASS' : 'FINAL_FAIL';
       try {

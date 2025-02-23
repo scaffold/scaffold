@@ -19,7 +19,7 @@ import { WorkerRecordSet } from './record_sets/WorkerRecordSet.ts';
 export const WORKER_FAIL_FLAG = Symbol('WorkerDriver.Fail');
 export const WORKER_RETRY_FLAG = Symbol('WorkerDriver.Retry');
 
-export const enum Resource {
+export enum Resource {
   WebWorkerCount = 'webWorkerCount',
   CpuUsage = 'cpuUsage',
   MemoryMb = 'memoryMb',
@@ -28,20 +28,6 @@ export const enum Resource {
 export interface LogEntry {
   timestamp: number;
   message: string;
-}
-
-export interface WorkerDriver {
-  setAllocation(resources: Partial<Record<Resource, number>>): Promise<void>;
-
-  log?: LogEntry[];
-
-  done: AbortController;
-
-  pauseTimer(why: string): void;
-  resumeTimer(why: string): void;
-
-  getTotalTime(): number;
-  getCpuTime(): number;
 }
 
 interface WorkEntry {

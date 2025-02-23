@@ -224,7 +224,7 @@ export class GenerationService {
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
         contractHash: generatorHash,
-        params: verifier.contractHash.toBytes(),
+        params: { value: { bytes: verifier.contractHash.toBytes() }, entries: [] },
       });
       if (generatorBlocks.length) {
         const generatorCode = generatorBlocks[0].block.bodies[generatorBlocks[0].groupIdx];
@@ -242,7 +242,8 @@ export class GenerationService {
             try {
               await this.ctx.get(WorkerExecutor).run(
                 {
-                  code: generatorCode,
+                  code: generatorCode.value!.bytes,
+                  readParamsJsonSchema: true,
                   // contractHash: verifier.contractHash.toBytes(),
                   // params: verifier.params,
                   // emitCorrect: this.shouldEmitCorrect(verifier),
@@ -333,7 +334,7 @@ export class GenerationService {
 
       getVerifier: () => verifier,
       getContractHash: () => verifier.contractHash,
-      getParams: () => verifier.params,
+      getParams: () => verifier.params.value!.bytes,
       getHint: () => {
         throw new Error(`Cannot call getHint() inside a generator!`);
       },
@@ -420,7 +421,7 @@ export class GenerationService {
               // TODO: Handle case when that ref gets replaced and no longer fulfills the verifier.
 
               refs.push(block);
-              const body = block.bodies[groupIdx];
+              const body = block.bodies[groupIdx].value!.bytes;
               workerDriver.resumeTimer(
                 `Fetched from ${block.hash.toHex().slice(0, 10)}: ${bin2hex(body).slice(0, 10)}`,
               );
@@ -436,7 +437,7 @@ export class GenerationService {
           return {
             input,
             output,
-            body: input.block.bodies[output.groupIdx],
+            body: input.block.bodies[output.groupIdx].value!.bytes,
             timestamp: input.block.timestamp,
           };
         });
@@ -539,7 +540,7 @@ export class GenerationService {
         return {
           input,
           output,
-          body: input.block.bodies[output.groupIdx],
+          body: input.block.bodies[output.groupIdx].value!.bytes,
           timestamp: input.block.timestamp,
         };
       },
@@ -698,7 +699,7 @@ export class GenerationService {
       Hash.digest(arrConcat(
         this.secret,
         verifier.contractHash.toBytes(),
-        verifier.params,
+        verifier.params.value!.bytes,
       )),
       this.attemptDupeFraction,
     ) === 1;

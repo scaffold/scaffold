@@ -24,6 +24,7 @@ export enum LogSystem {
   Fact = 'fact',
   Connection = 'connection',
   Signaler = 'signaler',
+  Worker = 'worker',
 }
 
 export interface LoggingProvider {
@@ -169,8 +170,8 @@ export interface Config {
 
   // enableBlockIngestion: boolean;
   enableValidation: boolean;
-  enableWorkerLogging: boolean;
-  enableSignalingLogging: boolean;
+  enableWorkerLogging: boolean; // TODO: Remove
+  enableSignalingLogging: boolean; // TODO: Remove
 
   enableFrontierVote: boolean;
   enableBlockThroughput: boolean;
@@ -192,6 +193,7 @@ export const makeDefaultConfig = () => {
       [LogSystem.Fact]: LogLevel.DEBUG,
       [LogSystem.Connection]: LogLevel.DEBUG,
       [LogSystem.Signaler]: LogLevel.DEBUG,
+      [LogSystem.Worker]: LogLevel.DEBUG,
     },
     loggingProviders: [
       new ConsoleLoggingProvider(),

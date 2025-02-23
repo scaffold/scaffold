@@ -17,8 +17,10 @@ import { KeyService } from '../KeyService.ts';
 export class DataContract implements ContractProvider {
   public contractHash = dataHash;
 
-  public compute(driver: ComputationDriver, ctx: Context) {
-    const { hash, secret } = DataContractParams.decode(driver.getParams());
+  public async compute(driver: ComputationDriver, ctx: Context) {
+    const hash = await driver.params.open('hash').getHash();
+    const secret = await driver.params.open('secret').getBytes();
+
     if (driver.type === ComputationType.Generator) {
       const fact = ctx.get(FactService).get(hash);
       if (fact) {
@@ -28,9 +30,9 @@ export class DataContract implements ContractProvider {
             secret,
             ctx.get(KeyService).getSelfPublicKey(),
           );
-          driver.requireBody(commitment.toBytes());
+          driver.body.setHash(commitment);
         } else {
-          driver.requireBody(Hash.random().toBytes());
+          driver.body.setHash(Hash.random());
         }
       } else {
         driver.ingenerable(
@@ -38,16 +40,12 @@ export class DataContract implements ContractProvider {
         );
       }
     } else if (driver.type === ComputationType.Contract) {
-      const body = driver.getBody();
-      const hint = driver.getHint(0, BurdenOfProof.Validation);
+      const body = await driver.body.getBytes();
+      const hint = await driver.getHint(0, BurdenOfProof.Validation).getBytes();
       const valid = body.byteLength === HASH_SIZE &&
         Hash.equals(Hash.digest(hint), hash) &&
         Hash.equals(
-          Hash.digestParts(
-            hint,
-            secret,
-            ctx.get(KeyService).getSelfPublicKey(),
-          ),
+          Hash.digestParts(hint, secret, ctx.get(KeyService).getSelfPublicKey()),
           Hash.fromBytes(body),
         );
       valid ? driver.pass() : driver.fail(`Given data doesn't hash to the correct value!`);

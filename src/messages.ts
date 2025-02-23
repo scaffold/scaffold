@@ -8,9 +8,11 @@ export const registry = {
     type: 'record',
     fields: [
       { name: 'contractHash', type: 'hash' },
-      { name: 'params', type: 'bytes' },
+      { name: 'params', type: 'BytesTree' },
     ],
   },
+
+  // TODO: Rename to Claim
   BlockInput: {
     name: 'BlockInput',
     type: 'record',
@@ -31,9 +33,12 @@ export const registry = {
       // This means it can spend a self output.
       { name: 'utxoIdx', type: 'int' },
 
+      // TODO: Rename to txIdx
       { name: 'groupIdx', type: 'int' },
     ],
   },
+
+  // TODO: Rename to Output
   BlockOutput: {
     // TODO: Array of AND-filters joined with OR?
     //   This allows timeouts: (verifier == X OR (timestamp > Y AND author == Z))
@@ -51,7 +56,7 @@ export const registry = {
       { name: 'amount', type: 'bigint' },
 
       // Provides per-input data for a generator consuming a number of outputs with the same verifier
-      { name: 'detail', type: 'bytes' },
+      { name: 'detail', type: 'BytesTree' },
 
       { name: 'groupIdx', type: 'int' },
     ],
@@ -109,7 +114,7 @@ export const registry = {
       // TODO: Accomplish this via hints? Add a requireHint() call? Allow collateral and/or hints to be embedded on the target block itself?
       // { name: 'body', type: 'bytes' },
 
-      { name: 'bodies', type: { type: 'array', items: 'bytes' } },
+      { name: 'bodies', type: { type: 'array', items: 'BytesTree' } },
 
       // Maybe make this a hash of the remote generator, and optionally the RNG state?
       // { name: 'is_free_market', type: 'boolean' },
