@@ -6,6 +6,7 @@ import { BurdenOfProof, ComputationDriver, ComputationType } from '../Computatio
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { dataHash } from '../hashes.ts';
 import { KeyService } from '../KeyService.ts';
+import { encodeBytesTree } from '../BytesTreeHelper.ts';
 
 // For easy-to-verify contracts in general:
 //   Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
@@ -17,20 +18,21 @@ import { KeyService } from '../KeyService.ts';
 export class DataContract implements ContractProvider {
   public contractHash = dataHash;
 
-  public async compute(driver: ComputationDriver, ctx: Context) {
+  public async compute(driver: ComputationDriver) {
     const hash = await driver.params.open('hash').getHash();
     const secret = await driver.params.open('secret').getBytes();
 
     if (driver.type === ComputationType.Generator) {
-      const fact = ctx.get(FactService).get(hash);
+      const fact = driver.ctx.get(FactService).get(hash);
       if (fact) {
         if (driver.emitCorrect()) {
           const commitment = Hash.digestParts(
             fact.data,
             secret,
-            ctx.get(KeyService).getSelfPublicKey(),
+            driver.ctx.get(KeyService).getSelfPublicKey(),
           );
           driver.body.setHash(commitment);
+          driver.emitHint(0, encodeBytesTree(fact.data));
         } else {
           driver.body.setHash(Hash.random());
         }
@@ -45,7 +47,7 @@ export class DataContract implements ContractProvider {
       const valid = body.byteLength === HASH_SIZE &&
         Hash.equals(Hash.digest(hint), hash) &&
         Hash.equals(
-          Hash.digestParts(hint, secret, ctx.get(KeyService).getSelfPublicKey()),
+          Hash.digestParts(hint, secret, driver.ctx.get(KeyService).getSelfPublicKey()),
           Hash.fromBytes(body),
         );
       valid ? driver.pass() : driver.fail(`Given data doesn't hash to the correct value!`);

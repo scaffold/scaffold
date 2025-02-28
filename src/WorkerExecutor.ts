@@ -10,18 +10,8 @@ import { WorkerDebugger, WorkerDebuggerManager } from './WorkerDebuggerManager.t
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { bin2str } from './util/buffer.ts';
-
-interface OpenFile {
-  // TODO: Remove these, just used for debugging
-  path: Uint8Array[];
-
-  verifier: Promise<Verifier>;
-  body?: Promise<Uint8Array>;
-
-  // question: Question;
-  // readerStream: Promise<IncentivizedStream<Uint8Array>>;
-  // exposedData?: Promise<Uint8Array>;
-}
+import { Resource } from './WorkerDriver.ts';
+import { TreeNode } from './BytesTreeOverlay.ts';
 
 const writeBuf = (dstBuf: Uint8Array, src: Uint8Array, offset: number) => {
   dstBuf.set(src.subarray(offset, offset + dstBuf.byteLength));
@@ -49,10 +39,12 @@ export class WorkerExecutor {
     }
   }
 
-  public run(job: JobMessage, driver: ComputationDriver): MaybePromise<void> {
-    if (driver.done.signal.aborted) {
+  public async run(job: JobMessage, driver: ComputationDriver): Promise<void> {
+    if (driver.getDoneSignal().aborted) {
       return;
     }
+
+    using _allocation = await driver.allocate(Resource.WebWorkerCount, 1);
 
     const worker = new Worker(this.ctx.config.workerPath!, {
       type: 'module',
@@ -81,7 +73,7 @@ export class WorkerExecutor {
 
     const terminateFn = (_err?: unknown) => worker.terminate();
     let cancelCb = terminateFn;
-    driver.done.signal.addEventListener('abort', () => cancelCb());
+    driver.getDoneSignal().addEventListener('abort', () => cancelCb());
 
     let codeHash: Hash | undefined;
     const getDebugger = (): WorkerDebugger => {
@@ -98,7 +90,7 @@ export class WorkerExecutor {
       return dbgr;
     };
 
-    const inodes = new Map<number, OpenFile>();
+    const inodes = new Map<number, TreeNode>();
     const outputs: Record<string, { size: number; chunks: Uint8Array[] }> = {};
 
     const exitResolver = Promise.withResolvers<void>();
@@ -129,7 +121,7 @@ export class WorkerExecutor {
       );
       console.log('Outputs:', outputBufs);
       if ('stdout' in outputBufs) {
-        driver.requireBody(outputBufs.stdout);
+        driver.body.setBytes(outputBufs.stdout);
       }
       if ('fail' in outputBufs) {
         driver.fail();
@@ -145,11 +137,12 @@ export class WorkerExecutor {
           new Promise((resolve, reject) => {
             if (cancelCb !== terminateFn) throw new Error('Internal error');
             cancelCb = reject;
-            driver.fetch(verifier).then((body) => {
-              if (cancelCb !== reject) throw new Error('Internal error');
-              cancelCb = terminateFn;
-              resolve(body);
-            });
+            Promise.resolve(driver.fetch(verifier.contractHash, verifier.params).getBytes())
+              .then((body) => {
+                if (cancelCb !== reject) throw new Error('Internal error');
+                cancelCb = terminateFn;
+                resolve(body);
+              });
           })
         );
       }
@@ -341,6 +334,6 @@ export class WorkerExecutor {
       },
     });
 
-    return exitResolver.promise;
+    await exitResolver.promise;
   }
 }

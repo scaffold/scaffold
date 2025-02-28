@@ -1,4 +1,5 @@
 import { Context } from './Context.ts';
+import { error } from './util/functional.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 
 export interface WorkerDebugger {
@@ -28,6 +29,7 @@ export class WorkerDebuggerManager {
   }
 
   public getDebugger(wasmHash: Hash) {
-    return this.dbgrs.get(wasmHash.toPrimitive());
+    return this.dbgrs.get(wasmHash.toPrimitive()) ??
+      error(`No debugger configured for ${wasmHash.toHex()}`);
   }
 }

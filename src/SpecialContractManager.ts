@@ -6,7 +6,7 @@ import { ComputationDriver } from './ComputationMeta.ts';
 export interface ContractProvider {
   readonly contractHash: Hash;
 
-  compute(driver: ComputationDriver, ctx: Context): MaybePromise<void>;
+  compute(driver: ComputationDriver): MaybePromise<void>;
 }
 
 // export class SpecialContractManager {

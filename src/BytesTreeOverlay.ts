@@ -6,10 +6,12 @@ import { MaybePromise } from './util/MaybePromise.ts';
 import { BYTES_FALSE, BYTES_TRUE, TreeObj } from './BytesTreeHelper.ts';
 
 export interface TreeNode {
+  isMutable: boolean;
+
   open(key: number | string | Uint8Array): TreeNode;
   annotate(desc: string, mimeType?: string): void;
   // exists(): MaybePromise<boolean>;
-  size(): MaybePromise<number | undefined>;
+  size(): MaybePromise<number | undefined>; // Returns the total size
   read(dst: Uint8Array, offset: number): MaybePromise<number | undefined>;
 
   getBool(): MaybePromise<boolean>;
@@ -22,6 +24,8 @@ export interface TreeNode {
 }
 
 export interface MutableTreeNode extends TreeNode {
+  isMutable: true;
+
   open(key: number | string | Uint8Array): MutableTreeNode;
   copyFrom(src: TreeNode): void;
   write(buf: Uint8Array, offset: number): void;
@@ -38,6 +42,8 @@ export interface MutableTreeNode extends TreeNode {
 }
 
 export class BytesTreeNode implements TreeNode {
+  readonly isMutable = false;
+
   constructor(private src?: BytesTree) {}
 
   open(key: number | string | Uint8Array): TreeNode {
@@ -109,5 +115,78 @@ export class BytesTreeNode implements TreeNode {
     assert(this.src !== undefined);
     assert(this.src.value !== null);
     return this.src.value.bytes;
+  }
+}
+
+export class MutableBytesTreeNode implements MutableTreeNode {
+  readonly isMutable = true;
+
+  constructor() {}
+
+  open(key: number | string | Uint8Array): MutableTreeNode {
+    throw new Error('Method not implemented.');
+  }
+  copyFrom(src: TreeNode): void {
+    throw new Error('Method not implemented.');
+  }
+  write(buf: Uint8Array, offset: number): void {
+    throw new Error('Method not implemented.');
+  }
+  delete(): void {
+    throw new Error('Method not implemented.');
+  }
+  set(tree: TreeObj): void {
+    throw new Error('Method not implemented.');
+  }
+  setBool(value: boolean): void {
+    throw new Error('Method not implemented.');
+  }
+  setInt(value: number): void {
+    throw new Error('Method not implemented.');
+  }
+  setBigInt(value: bigint): void {
+    throw new Error('Method not implemented.');
+  }
+  setFloat(value: number): void {
+    throw new Error('Method not implemented.');
+  }
+  setString(value: string): void {
+    throw new Error('Method not implemented.');
+  }
+  setHash(value: Hash): void {
+    throw new Error('Method not implemented.');
+  }
+  setBytes(value: Uint8Array): void {
+    throw new Error('Method not implemented.');
+  }
+  annotate(desc: string, mimeType?: string): void {
+    throw new Error('Method not implemented.');
+  }
+  size(): MaybePromise<number | undefined> {
+    throw new Error('Method not implemented.');
+  }
+  read(dst: Uint8Array, offset: number): MaybePromise<number | undefined> {
+    throw new Error('Method not implemented.');
+  }
+  getBool(): MaybePromise<boolean> {
+    throw new Error('Method not implemented.');
+  }
+  getInt(): MaybePromise<number> {
+    throw new Error('Method not implemented.');
+  }
+  getBigInt(): MaybePromise<bigint> {
+    throw new Error('Method not implemented.');
+  }
+  getFloat(): MaybePromise<number> {
+    throw new Error('Method not implemented.');
+  }
+  getString(): MaybePromise<string> {
+    throw new Error('Method not implemented.');
+  }
+  getHash(): MaybePromise<Hash> {
+    throw new Error('Method not implemented.');
+  }
+  getBytes(): MaybePromise<Uint8Array> {
+    throw new Error('Method not implemented.');
   }
 }

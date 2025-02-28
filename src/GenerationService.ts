@@ -2,7 +2,6 @@ import { BlockBuilder, BlockDraft, InputSpec, OutputSpec } from './BlockBuilder.
 import { BlockService } from './BlockService.ts';
 import { accountHash, frontierHash, generatorHash, rootHash, trueHash } from './hashes.ts';
 import { Context } from './Context.ts';
-import { WorkerDriver, WorkerDriverService } from './WorkerDriverService.ts';
 import { LocalGeneratorService } from './LocalGeneratorService.ts';
 import { AccountContractParams, Block, BlockOutput, Verifier } from './messages.ts';
 import { arrConcat, arrEquals, EMPTY_ARR } from './util/buffer.ts';
@@ -26,6 +25,7 @@ import { QaDebugger } from './QaDebugger.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
 import { LogSystem } from './Config.ts';
+import { GENERATION_SUCCESS_FLAG, GenerationDriver } from './GenerationDriver.ts';
 
 interface RunState {
   verifierState: VerifierState;
@@ -39,7 +39,6 @@ interface VerifierState {
   running: RunState[];
 }
 
-const GENERATION_SUCCESS_FLAG = Symbol('GenerationService.Success');
 class GenerationException extends Error {
   constructor(msg: string) {
     super(msg);
@@ -167,24 +166,13 @@ export class GenerationService {
 
     const special = this.getGenerator(verifier.contractHash);
     if (special) {
-      return this.ctx.get(WorkerDriverService).run(
-        async (workerDriver) => {
-          await workerDriver.setAllocation({});
-          const driver = this.makeGenerationDriver(verifier, workerDriver);
-          workerDriver.log?.push({
-            timestamp: this.ctx.config.timeProvider.now(),
-            message: `Starting special generator for ${
-              this.ctx.get(QaDebugger).debugVerifier(verifier)
-            }`,
-          });
-          try {
-            await special.compute(driver, this.ctx);
-            await driver.finalize(GENERATION_SUCCESS_FLAG);
-          } catch (err) {
-            await driver.finalize(err);
-          }
-        },
-        () => 0,
+      const driver = new GenerationDriver(this.ctx, verifier, () => 0);
+      driver.log?.info(`Starting special generator for ${verifier.contractHash.toHex()}`, {
+        params: verifier.params,
+      });
+      Promise.resolve(special.compute(driver)).then(
+        () => driver.finish(GENERATION_SUCCESS_FLAG),
+        (err) => driver.finish(err),
       );
     }
 
@@ -199,27 +187,15 @@ export class GenerationService {
             : acc;
         }, 0);
 
-    const localGenerator = this.ctx.get(LocalGeneratorService)
-      .getGenerator(verifier.contractHash);
+    const localGenerator = this.ctx.get(LocalGeneratorService).getGenerator(verifier.contractHash);
     if (localGenerator) {
-      return this.ctx.get(WorkerDriverService).run(
-        async (workerDriver) => {
-          await workerDriver.setAllocation({});
-          const driver = this.makeGenerationDriver(verifier, workerDriver);
-          workerDriver.log?.push({
-            timestamp: this.ctx.config.timeProvider.now(),
-            message: `Starting local generator for ${
-              this.ctx.get(QaDebugger).debugVerifier(verifier)
-            }`,
-          });
-          try {
-            await localGenerator(driver, this.ctx);
-            await driver.finalize(GENERATION_SUCCESS_FLAG);
-          } catch (err) {
-            await driver.finalize(err);
-          }
-        },
-        getScore,
+      const driver = new GenerationDriver(this.ctx, verifier, getScore);
+      driver.log?.info(`Starting local generator for ${verifier.contractHash.toHex()}`, {
+        params: verifier.params,
+      });
+      Promise.resolve(localGenerator(driver)).then(
+        () => driver.finish(GENERATION_SUCCESS_FLAG),
+        (err) => driver.finish(err),
       );
     } else {
       const generatorBlocks = this.ctx.get(BlockService).getBlocksByVerifier({
@@ -229,33 +205,22 @@ export class GenerationService {
       if (generatorBlocks.length) {
         const generatorCode = generatorBlocks[0].block.bodies[generatorBlocks[0].groupIdx];
 
-        return this.ctx.get(WorkerDriverService).run(
-          async (workerDriver) => {
-            await workerDriver.setAllocation({ webWorkerCount: 1 });
-            const driver = this.makeGenerationDriver(verifier, workerDriver);
-            workerDriver.log?.push({
-              timestamp: this.ctx.config.timeProvider.now(),
-              message: `Starting worker generator for ${verifier.contractHash.toHex()}:${
-                bin2hex(verifier.params)
-              }`,
-            });
-            try {
-              await this.ctx.get(WorkerExecutor).run(
-                {
-                  code: generatorCode.value!.bytes,
-                  readParamsJsonSchema: true,
-                  // contractHash: verifier.contractHash.toBytes(),
-                  // params: verifier.params,
-                  // emitCorrect: this.shouldEmitCorrect(verifier),
-                },
-                driver,
-              );
-              await driver.finalize(GENERATION_SUCCESS_FLAG);
-            } catch (err) {
-              await driver.finalize(err);
-            }
+        const driver = new GenerationDriver(this.ctx, verifier, getScore);
+        driver.log?.info(`Starting worker generator for ${verifier.contractHash.toHex()}`, {
+          params: verifier.params,
+        });
+        this.ctx.get(WorkerExecutor).run(
+          {
+            code: generatorCode.value!.bytes,
+            readParamsJsonSchema: true,
+            // contractHash: verifier.contractHash.toBytes(),
+            // params: verifier.params,
+            // emitCorrect: this.shouldEmitCorrect(verifier),
           },
-          getScore,
+          driver,
+        ).then(
+          () => driver.finish(GENERATION_SUCCESS_FLAG),
+          (err) => driver.finish(err),
         );
       }
     }
@@ -269,6 +234,7 @@ export class GenerationService {
     }
   }
 
+  /*
   private makeGenerationDriver(
     verifier: Verifier,
     workerDriver: WorkerDriver,
@@ -656,6 +622,7 @@ export class GenerationService {
       },
     };
   }
+    */
 
   /*
   private isFrontierMergeable(a: BlockFact, b: BlockFact) {

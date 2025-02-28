@@ -1,6 +1,6 @@
 import { Context } from './Context.ts';
 import { Verifier } from './messages.ts';
-import { Resource } from './WorkerDriverService.ts';
+import { Resource } from './WorkerDriver.ts';
 import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
@@ -156,7 +156,7 @@ export interface Config {
 
   baselineConnSendRate: number; // In units of bytes/ms/connection. Note that this is a baseline - recieving helpful blocks will increase this for that connection.
 
-  resourceLimits: Record<Resource, number>;
+  resourceLimits: { [key in Resource]: number };
 
   workScoreThreshold: number; // TODO: Units?
 

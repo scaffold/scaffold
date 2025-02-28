@@ -29,10 +29,7 @@ import { ComputationDriver } from './ComputationMeta.ts';
 //   fulfills(block: BlockFact, outputIdx: number): void;
 // }
 
-export type LocalGenerator = (
-  driver: ComputationDriver,
-  ctx: Context,
-) => MaybePromise<void>;
+export type LocalGenerator = (driver: ComputationDriver) => MaybePromise<void>;
 
 export class LocalGeneratorService {
   private registry: Map<HashPrimitive, LocalGenerator> = new Map();

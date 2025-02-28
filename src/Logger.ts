@@ -46,7 +46,7 @@ export class Logger {
     this.log(LogLevel.CRITICAL, message, data);
   }
 
-  private log(level: LogLevel, message: string, data: { [key: string]: unknown } = {}) {
+  log(level: LogLevel, message: string, data: { [key: string]: unknown } = {}) {
     if (level >= this.minLevel) {
       const event = { timestamp: this.ctx.config.timeProvider.now(), level, message, data };
       for (const provider of this.ctx.config.loggingProviders) {

@@ -19,17 +19,6 @@ import { WorkerRecordSet } from './record_sets/WorkerRecordSet.ts';
 export const WORKER_FAIL_FLAG = Symbol('WorkerDriver.Fail');
 export const WORKER_RETRY_FLAG = Symbol('WorkerDriver.Retry');
 
-export enum Resource {
-  WebWorkerCount = 'webWorkerCount',
-  CpuUsage = 'cpuUsage',
-  MemoryMb = 'memoryMb',
-}
-
-export interface LogEntry {
-  timestamp: number;
-  message: string;
-}
-
 interface WorkEntry {
   // After a while of having a non-canonical input (or maybe some other weight-based threshold), remove from queue
   // inputs: InputSpec[];
