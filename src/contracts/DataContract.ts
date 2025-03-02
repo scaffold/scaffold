@@ -1,12 +1,11 @@
 import { Context } from '../Context.ts';
 import { FactService } from '../FactService.ts';
-import { DataContractParams } from '../messages.ts';
 import { Hash, HASH_SIZE } from '../util/Hash.ts';
 import { BurdenOfProof, ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { dataHash } from '../hashes.ts';
 import { KeyService } from '../KeyService.ts';
-import { encodeBytesTree } from '../BytesTreeHelper.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
 
 // For easy-to-verify contracts in general:
 //   Requestor asks for commitments. C(h, s) = c <-> HASH(plaintext) == h && HASH(plaintext | s | provider_public_key_hash) == c
@@ -15,10 +14,13 @@ import { encodeBytesTree } from '../BytesTreeHelper.ts';
 //   In order to not lose his collateral, he must provide the plaintext as a hint.
 //   It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
-export class DataContract implements ContractProvider {
-  public contractHash = dataHash;
+export const DataContract: ContractProvider<{ hash: Hash; secret: Uint8Array }> = {
+  name: 'data',
+  contractHash: dataHash,
 
-  public async compute(driver: ComputationDriver) {
+  encodeParams: encodeDataTree,
+
+  async compute(driver: ComputationDriver) {
     const hash = await driver.params.open('hash').getHash();
     const secret = await driver.params.open('secret').getBytes();
 
@@ -32,7 +34,7 @@ export class DataContract implements ContractProvider {
             driver.ctx.get(KeyService).getSelfPublicKey(),
           );
           driver.body.setHash(commitment);
-          driver.emitHint(0, encodeBytesTree(fact.data));
+          driver.emitHint(0, encodeDataTree(fact.data));
         } else {
           driver.body.setHash(Hash.random());
         }
@@ -54,5 +56,5 @@ export class DataContract implements ContractProvider {
     } else {
       throw new Error(`Invalid driver type!`);
     }
-  }
-}
+  },
+};

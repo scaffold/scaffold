@@ -1,25 +1,50 @@
 import {
-  BytesTreeNode,
-  MutableBytesTreeNode,
+  DataTreeNode,
+  ImmutableTreeNode,
+  MutableDataTreeNode,
   MutableTreeNode,
   TreeNode,
-} from './BytesTreeOverlay.ts';
+} from './DataTreeOverlay.ts';
 import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { LogLevel } from './Logger.ts';
 import { error } from './util/functional.ts';
-import { FsName, WorkerComm } from './worker/workerTypes.ts';
+import { FsName, RunnerComm, WorkerComm } from './worker/workerTypes.ts';
 import { Job } from './WorkerManager.ts';
-import { encodeBytesTree } from './BytesTreeHelper.ts';
-import { trueHash } from './hashes.ts';
+import { encodeDataTree } from './DataTreeHelper.ts';
+import { rootHash, trueHash } from './hashes.ts';
+import { assert } from '@std/assert/assert';
+import { DataTree } from './protocol/base.ts';
 
 export class JobDriver implements WorkerComm {
-  private handles = new Map<number, TreeNode | MutableTreeNode>();
+  private handles = new Map<number, ImmutableTreeNode | MutableTreeNode>();
+  private pongHandler?: () => void;
 
-  constructor(private worker: Worker, private driver: ComputationDriver) {}
+  constructor(
+    private runner: RunnerComm,
+    private instanceId: number,
+    private driver: ComputationDriver,
+    private getResult: () => DataTree,
+  ) {}
 
-  public async run(job: Job): Promise<void> {
-    // Initialize filesystems (params, scratch, body, hint) on the worker
-    // Only go to the main thread if there's nothing set.
+  public async run(job: Job): Promise<DataTree> {
+    this.runner.postMessage({
+      type: 'instantiate_wasm',
+      instanceId: this.instanceId,
+      module: job.wasmModule,
+    });
+
+    for (const method of job.calls) {
+      this.runner.postMessage({ type: 'call_method', instanceId: this.instanceId, method });
+    }
+
+    this.runner.postMessage({ type: 'ping', instanceId: this.instanceId });
+
+    await new Promise<void>((resolve) => {
+      assert(this.pongHandler === undefined);
+      this.pongHandler = resolve;
+    });
+
+    return this.getResult();
   }
 
   ready(): undefined {
@@ -31,11 +56,11 @@ export class JobDriver implements WorkerComm {
   }
 
   init(name: FsName, hdl: number): undefined {
-    let node: TreeNode | MutableTreeNode;
+    let node: ImmutableTreeNode | MutableTreeNode;
 
     switch (name) {
       case FsName.ContractHash:
-        node = new BytesTreeNode(encodeBytesTree(this.driver.contractHash));
+        node = new DataTreeNode(encodeDataTree(this.driver.contractHash));
         break;
       case FsName.Params:
         node = this.driver.params;
@@ -47,16 +72,16 @@ export class JobDriver implements WorkerComm {
         node = this.driver.body;
         break;
       case FsName.EmitCorrect:
-        node = new BytesTreeNode(encodeBytesTree(this.driver.emitCorrect()));
+        node = new DataTreeNode(encodeDataTree(this.driver.emitCorrect()));
         break;
       case FsName.Ext:
-        node = this.driver.fetch(trueHash, encodeBytesTree({}));
+        node = this.driver.fetch(trueHash, encodeDataTree({}));
         break;
       case FsName.Output:
-        node = new MutableBytesTreeNode();
+        node = new MutableDataTreeNode();
         break;
       case FsName.Log:
-        node = new MutableBytesTreeNode();
+        node = new MutableDataTreeNode();
         break;
     }
 
@@ -87,7 +112,22 @@ export class JobDriver implements WorkerComm {
   }
 
   write(hdl: number, offset: number, srcBufs: Uint8Array[]): undefined {
-    throw new Error('Method not implemented.');
+    const node = this.handles.get(hdl) ?? error(`Invalid handle ${hdl}`);
+    if (!node.isMutable) {
+      throw new Error(`Cannot write a read-only fs node!`);
+    }
+    for (const buf of srcBufs) {
+      node.write(buf, offset);
+      offset += buf.byteLength;
+    }
+  }
+
+  pong(): undefined {
+    const handler = this.pongHandler;
+    assert(handler !== undefined);
+
+    this.pongHandler = undefined;
+    handler();
   }
 
   log(level: LogLevel, message: string, data: { [key: string]: unknown }): undefined {

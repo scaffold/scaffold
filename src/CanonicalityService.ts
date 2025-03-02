@@ -32,7 +32,7 @@ export class CanonicalityService {
           block.hash.toHex(),
           'remove',
           inputBlock.outputs[input.outputIdx].verifier.contractHash.toHex(),
-          bin2hex(inputBlock.outputs[input.outputIdx].verifier.params),
+          inputBlock.outputs[input.outputIdx].verifier.params,
         );
         this.ctx.get(AvailableOutputManager).remove(
           inputBlock.outputs[input.outputIdx].verifier,
@@ -57,7 +57,7 @@ export class CanonicalityService {
           block.hash.toHex(),
           'insert',
           output.verifier.contractHash.toHex(),
-          bin2hex(output.verifier.params),
+          output.verifier.params,
         );
         this.ctx.get(AvailableOutputManager).insert(
           output.verifier,
@@ -88,7 +88,7 @@ export class CanonicalityService {
         block.hash.toHex(),
         'remove',
         output.verifier.contractHash.toHex(),
-        bin2hex(output.verifier.params),
+        output.verifier.params,
       );
       this.ctx.get(AvailableOutputManager).remove(output.verifier, (x) => x.block === block);
     }
@@ -111,7 +111,7 @@ export class CanonicalityService {
           block.hash.toHex(),
           'insert',
           inputBlock.outputs[input.outputIdx].verifier.contractHash.toHex(),
-          bin2hex(inputBlock.outputs[input.outputIdx].verifier.params),
+          inputBlock.outputs[input.outputIdx].verifier.params,
         );
         const output = inputBlock.outputs[input.outputIdx];
         this.ctx.get(AvailableOutputManager).insert(

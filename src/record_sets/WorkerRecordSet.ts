@@ -1,6 +1,8 @@
 import { Context } from '../Context.ts';
 import { ReactiveRecordSet } from './ReactiveRecordSet.ts';
-import { WorkerDriver, WorkerDriverService } from '../WorkerDriverService.ts';
+import { Runner, WorkerManager } from '../WorkerManager.ts';
+import { WorkerDriver } from '../WorkerDriver.ts';
+import { unimplemented } from '@std/assert/unimplemented';
 
 export class WorkerRecordSet extends ReactiveRecordSet<WorkerDriver> {
   constructor(ctx: Context) {
@@ -8,6 +10,6 @@ export class WorkerRecordSet extends ReactiveRecordSet<WorkerDriver> {
   }
 
   public getAll(): Iterable<WorkerDriver> {
-    return this.ctx.get(WorkerDriverService).getAllWorkers();
+    unimplemented();
   }
 }

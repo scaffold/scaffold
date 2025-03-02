@@ -5,17 +5,35 @@ import { BlockBuilder } from './BlockBuilder.ts';
 import { rootHash } from './hashes.ts';
 import { FactService } from './FactService.ts';
 import { ClockService } from './ClockService.ts';
-import { EMPTY_ARR } from './util/buffer.ts';
+import { arrEquals, EMPTY_ARR } from './util/buffer.ts';
 import * as hashes from './hashes.ts';
+import { mapPut } from './util/map.ts';
+import { EMPTY_DATA_TREE, encodeDataTree } from './DataTreeHelper.ts';
 
 export class DataService {
+  private registry = new Map<HashPrimitive, Uint8Array>();
   private requesting = new Set<HashPrimitive>(
     Object.values(hashes).map((x) => x.toPrimitive()),
   );
 
   constructor(private ctx: Context) {}
 
-  public request(hash: Hash) {
+  addData(data: Uint8Array) {
+    const hash = Hash.digest(data);
+    mapPut(this.registry, hash.toPrimitive(), () => data, (prevData) => {
+      if (!arrEquals(prevData, data)) {
+        throw new Error(`Internal error!`);
+      }
+      return prevData;
+    });
+    return hash;
+  }
+
+  getData(hash: Hash) {
+    return this.registry.get(hash.toPrimitive());
+  }
+
+  request(hash: Hash) {
     if (!this.requesting.has(hash.toPrimitive())) {
       this.requesting.add(hash.toPrimitive());
       this.ctx.get(ClockService).setTimeout(() => {
@@ -23,9 +41,9 @@ export class DataService {
           // TODO: Once we get the data, we don't need to keep publishing anymore
           this.ctx.get(BlockBuilder).publishPersistentDraft({
             outputs: [{
-              verifier: { contractHash: rootHash, params: hash.toBytes() },
+              verifier: { contractHash: rootHash, params: encodeDataTree(hash) },
               amount: 0n,
-              detail: EMPTY_ARR,
+              detail: EMPTY_DATA_TREE,
             }],
           });
         }

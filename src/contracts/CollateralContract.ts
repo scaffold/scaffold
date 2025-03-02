@@ -3,6 +3,8 @@ import { CollateralContractDetail, CollateralContractParams } from '../collatera
 import { accountHash, collateralHash } from '../hashes.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { CollateralUtil, Posting } from '../CollateralUtil.ts';
+import { Hash } from '../util/Hash.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
 
 // Only used in tests,
 // Used to make sure that generating collateral contracts "out-of-spec" never wins.
@@ -15,10 +17,13 @@ export const enum CollateralGeneratorModifier {
 const DEBUG = true;
 const resolutionDelay = 5000n;
 
-export class CollateralContract implements ContractProvider {
-  public contractHash = collateralHash;
+export const CollateralContract: ContractProvider<Hash> = {
+  name: 'collateral',
+  contractHash: collateralHash,
 
-  public async compute(driver: ComputationDriver) {
+  encodeParams: encodeDataTree,
+
+  async compute(driver: ComputationDriver) {
     await driver.params.getHash();
 
     const postings: (InputSource & Posting)[] = [];
@@ -70,5 +75,5 @@ export class CollateralContract implements ContractProvider {
     }
 
     // TODO: Do something, maybe involving the fronteir vote, frontier level, or timestamp, to block resolution at least until the block is included in a frontier tree parent?
-  }
-}
+  },
+};

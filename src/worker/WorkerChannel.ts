@@ -93,12 +93,17 @@ export class WorkerChannelServer<T> {
     };
   }
 
-  createChannel(cid: number, handler: T) {
-    mapPut(this.channels, cid, () => handler, () => error(`Cannot create duplicate channels!`));
+  createChannel(channelId: number, handler: T) {
+    mapPut(
+      this.channels,
+      channelId,
+      () => handler,
+      () => error(`Cannot create duplicate channels!`),
+    );
   }
 
-  closeChannel(cid: number) {
-    const deleted = this.channels.delete(cid);
+  closeChannel(channelId: number) {
+    const deleted = this.channels.delete(channelId);
     assert(deleted);
   }
 }

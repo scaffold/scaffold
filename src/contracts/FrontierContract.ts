@@ -4,6 +4,7 @@ import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { frontierHash } from '../hashes.ts';
 import { ComputationType } from '../ComputationMeta.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
 
 // export interface FrontierMeta {
 //   // { name: 'left_child', type: 'Hash' },
@@ -39,10 +40,13 @@ import { ComputationType } from '../ComputationMeta.ts';
 
 export const frontierInputCount = 2;
 
-export class FrontierContract implements ContractProvider {
-  public contractHash = frontierHash;
+export const FrontierContract: ContractProvider<{}> = {
+  name: 'frontier',
+  contractHash: frontierHash,
 
-  public async compute(driver: ComputationDriver, ctx: Context) {
+  encodeParams: encodeDataTree,
+
+  async compute(driver: ComputationDriver) {
     // const { level } = FrontierTreeParams.decode(driver.getParams());
     // if (level < 0) {
     //   throw new Error(`Level cannot be negative!`);
@@ -55,5 +59,5 @@ export class FrontierContract implements ContractProvider {
 
     // // A little hacky, because if replaced with requireOutput, we wouldn't have the detail yet (because it requires weighing the block).
     // driver.requireFrontierLevel(level + 1);
-  }
-}
+  },
+};

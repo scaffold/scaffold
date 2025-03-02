@@ -1,9 +1,13 @@
 import { ComputationDriver } from '../ComputationMeta.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { trueHash } from '../hashes.ts';
 
-export class TrueContract implements ContractProvider {
-  public contractHash = trueHash;
+export const TrueContract: ContractProvider<{}> = {
+  name: 'true',
+  contractHash: trueHash,
 
-  public compute(_driver: ComputationDriver) {}
-}
+  encodeParams: encodeDataTree,
+
+  compute(_driver: ComputationDriver) {},
+};

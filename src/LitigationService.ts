@@ -3,14 +3,15 @@ import { collateralHash } from './hashes.ts';
 import { Context } from './Context.ts';
 import { Fact } from './FactMeta.ts';
 import { KeyService } from './KeyService.ts';
-import { CollateralContractDetail, CollateralContractParams } from './collateralMessages.ts';
 import { FactService } from './FactService.ts';
 import { CollateralUtil, DetailVote, Posting } from './CollateralUtil.ts';
+import { encodeDataTree } from './DataTreeHelper.ts';
+import { DataTree } from './protocol/base.ts';
 
 export class LitigationService {
   constructor(private ctx: Context) {}
 
-  public litigate(fact: Fact, hints: Uint8Array[], vote: DetailVote) {
+  public litigate(fact: Fact, hints: DataTree[], vote: DetailVote) {
     vote = this.ctx.get(FactService).updateValidity(fact.hash, hints, vote);
     this.rectify(fact, [{
       detail: {
@@ -33,10 +34,10 @@ export class LitigationService {
           outputs: [{
             verifier: {
               contractHash: collateralHash,
-              params: CollateralContractParams.encode({ blockHash: fact.hash }),
+              params: encodeDataTree({ blockHash: fact.hash }),
             },
             amount,
-            detail: CollateralContractDetail.encode({
+            detail: encodeDataTree({
               publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
               hints,
               vote,

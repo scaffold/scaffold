@@ -10,7 +10,7 @@ import {
   FactType,
 } from './FactMeta.ts';
 import { PeerManager } from './PeerManager.ts';
-import { BytesTree, Coder } from './protocol/base.ts';
+import { Coder, DataTree } from './protocol/base.ts';
 import { secp } from './util/secp.ts';
 import { arrEquals } from './util/buffer.ts';
 import { error, todo } from './util/functional.ts';
@@ -34,7 +34,7 @@ import { Logger, LogLevel } from './Logger.ts';
 import { RoutingService } from './RoutingService.ts';
 import { FactRecordSet } from './record_sets/FactRecordSet.ts';
 import * as zstd from '@bokuweb/zstd-wasm';
-import { digestTree } from './BytesTreeHelper.ts';
+import { digestTree } from './DataTreeHelper.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -203,18 +203,11 @@ export class FactService {
     }
   }
 
-  public getValidity(
-    blockHash: Hash,
-    hints: Uint8Array[],
-  ): DetailVote | undefined {
+  public getValidity(blockHash: Hash, hints: Uint8Array[]): DetailVote | undefined {
     return this.validitiesByHash.get(blockHash.toPrimitive())
       ?.get(Hash.digestParts(...hints).toPrimitive());
   }
-  public updateValidity(
-    blockHash: Hash,
-    hints: BytesTree[],
-    vote: DetailVote,
-  ): DetailVote {
+  public updateValidity(blockHash: Hash, hints: DataTree[], vote: DetailVote): DetailVote {
     return mapPut(
       mapPut(
         this.validitiesByHash,

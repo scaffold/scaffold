@@ -31,9 +31,16 @@ self.onmessage = async (msg: MessageEvent<JobSpec>) => {
         getInstance(msg.data.instanceId).call(msg.data);
         break;
 
+      case 'ping':
+        getInstance(msg.data.instanceId).ping();
+        break;
+
       case 'exit':
         self.close();
         break;
+
+      default:
+        msg.data satisfies never;
     }
   } catch (err) {
     console.error(err);

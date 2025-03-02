@@ -11,7 +11,7 @@ import { BurdenOfProof, ComputationDriver } from './ComputationMeta.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { bin2str } from './util/buffer.ts';
 import { Resource } from './WorkerDriver.ts';
-import { TreeNode } from './BytesTreeOverlay.ts';
+import { TreeNode } from './DataTreeOverlay.ts';
 
 const writeBuf = (dstBuf: Uint8Array, src: Uint8Array, offset: number) => {
   dstBuf.set(src.subarray(offset, offset + dstBuf.byteLength));

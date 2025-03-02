@@ -10,7 +10,6 @@ import {
   timeHash,
 } from './hashes.ts';
 import { Context } from './Context.ts';
-import { VerificationService } from './VerificationService.ts';
 import {
   Block,
   BlockInput,
@@ -20,7 +19,6 @@ import {
   Verifier,
 } from './messages.ts';
 import { PeerManager } from './PeerManager.ts';
-import { QaDebugger } from './QaDebugger.ts';
 import { arrEquals } from './util/buffer.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { getOrCreate, mapDec, mapInc, mapPut } from './util/map.ts';
@@ -39,7 +37,6 @@ import { MaybePromise, maybeThen } from './util/MaybePromise.ts';
 import { CollateralUtil, CONTEST_TYPE_FINAL } from './CollateralUtil.ts';
 import { MonitoringService } from './MonitoringService.ts';
 import { neverAbort } from './util/abortable.ts';
-import { GenerationService } from './GenerationService.ts';
 import { raceTruthy } from './util/MaybePromise.ts';
 import { BlockRecordSet } from './record_sets/BlockRecordSet.ts';
 import { GenesisService } from './GenesisService.ts';
@@ -54,8 +51,8 @@ import { assertUnique, mergeSorted } from './util/sorted.ts';
 import { CanonicalityService } from './CanonicalityService.ts';
 import { assertMatch } from '@std/assert/match';
 import { assertEquals } from '@std/assert/equals';
-import { areTreesEqual, encodeBytesTree } from './BytesTreeHelper.ts';
-import { BytesTree } from './protocol/base.ts';
+import { areTreesEqual, encodeDataTree } from './DataTreeHelper.ts';
+import { DataTree } from './protocol/base.ts';
 
 export const CHALLENGE_PRICE = 10n;
 
@@ -754,7 +751,7 @@ export class BlockService {
 
   public getBlocksByOutputFilter(
     contractHash: Hash,
-    cond: (params: BytesTree) => boolean,
+    cond: (params: DataTree) => boolean,
   ) {
     return this.ctx
       .get(FactService)
@@ -784,7 +781,7 @@ export class BlockService {
   public async getSelfVerification(block: BlockFact) {
     const myCollateral = this.getBlocksByOutput({
       contractHash: collateralHash,
-      params: encodeBytesTree(block.hash),
+      params: encodeDataTree(block.hash),
     }).filter(({ block }) => block.source === FactSource.Local); // TODO: Filter by signature so we get our blocks even if someone else sent them to us
 
     // myCollateral

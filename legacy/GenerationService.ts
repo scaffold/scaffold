@@ -234,7 +234,6 @@ export class GenerationService {
     }
   }
 
-  /*
   private makeGenerationDriver(
     verifier: Verifier,
     workerDriver: WorkerDriver,
@@ -622,7 +621,6 @@ export class GenerationService {
       },
     };
   }
-    */
 
   /*
   private isFrontierMergeable(a: BlockFact, b: BlockFact) {

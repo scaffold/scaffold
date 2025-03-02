@@ -1,3 +1,11 @@
+export const setPut = <T>(set: Set<T>, val: T) => {
+  const put = !set.has(val);
+  if (put) {
+    set.add(val);
+  }
+  return put;
+};
+
 export const setsIntersect = <T>(a: Set<T>, b: Set<T>) => {
   if (a.size > b.size) {
     const t = a;

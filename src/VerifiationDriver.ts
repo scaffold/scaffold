@@ -5,6 +5,7 @@ import {
   MutableDataTreeNode,
   MutableTreeNode,
 } from './DataTreeOverlay.ts';
+import { CollateralHint } from './collateralMessages.ts';
 import {
   BurdenOfProof,
   ComputationDriver,
@@ -20,19 +21,17 @@ import { arrConcat, arrEquals } from './util/buffer.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { WorkerDriver } from './WorkerDriver.ts';
-import { digestTree } from './DataTreeHelper.ts';
+import { encodeDataTree } from './DataTreeHelper.ts';
 
-export const GENERATION_SUCCESS_FLAG = Symbol('GenerationService.Success');
-class GenerationException extends Error {
+export const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
+class VerificationException extends Error {
   constructor(msg: string) {
     super(msg);
   }
 }
 
-const attemptDupeFraction = Hash.fromFraction(0, 8);
-
-export class GenerationDriver extends WorkerDriver implements ComputationDriver {
-  type = ComputationType.Generator;
+export class VerificationDriver extends WorkerDriver implements ComputationDriver {
+  type = ComputationType.Contract;
 
   contractHash: Hash;
   params: ImmutableTreeNode;
@@ -40,37 +39,37 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
 
   // Make these super-private so js generators can't see them
 
-  #emitCorrect: boolean;
+  #block: BlockFact;
 
-  #body: MutableDataTreeNode;
-  #fulfillsVerifiers: Verifier[];
-  #inputs: InputSpec[] = [];
-  #inputsAreFixed = false;
-  #refs: BlockFact[] = [];
-  // #satisfies:Verifier=[];
-  #outputs: OutputSpec[] = [];
-  // #frontierLevel: number | undefined;
-  #timestampGte: bigint | undefined;
+  #groupIdx: number;
 
-  constructor(ctx: Context, verifier: Verifier, scoreFn: () => number) {
+  #readHints: DataTree[];
+
+  #nextInputIdx = 0;
+  #nextOutputIdx = 0;
+
+  constructor(
+    ctx: Context,
+    block: BlockFact,
+    verifier: Verifier,
+    hintPrefix: DataTree[],
+    scoreFn: () => number,
+  ) {
     super(ctx, scoreFn);
 
     this.contractHash = verifier.contractHash;
     this.params = new DataTreeNode(verifier.params);
+    this.body = new MutableDataTreeNode();
 
-    this.#body = new MutableDataTreeNode();
-    this.body = this.#body;
+    this.#block = block;
 
-    this.#emitCorrect = Hash.compare(
-      Hash.digest(arrConcat(
-        ctx.config.entropyProvider.cryptoRandomBytes(32),
-        verifier.contractHash.toBytes(),
-        digestTree(verifier.params).toBytes(),
-      )),
-      attemptDupeFraction,
-    ) === 1;
+    const rootHint = CollateralHint.decode(hintPrefix[0].value!.bytes).hint;
+    if (!('CollateralHintVerifier' in rootHint)) {
+      throw new Error(`Invalid root hint ${JSON.stringify(rootHint)}`);
+    }
+    this.#groupIdx = rootHint.CollateralHintVerifier.groupIdx;
 
-    this.#fulfillsVerifiers = [verifier];
+    this.#readHints = hintPrefix.slice(0, 1);
   }
 
   emitHint(idx: number, hint: DataTree): void {
@@ -78,38 +77,27 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
   }
 
   getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode {
-    throw new Error(`Cannot call getHint() inside a generator!`);
+    throw new Error('Method not implemented.');
   }
 
   requireOutput(output: OutputSpec): void {
-    if (this.getDoneSignal().aborted) {
-      return;
-    }
-    this.#outputs.push(output);
+    throw new Error('Method not implemented.');
   }
 
   requireTimestampGte(timestamp: bigint): MaybePromise<void> {
-    if (this.#timestampGte === undefined || timestamp > this.#timestampGte) {
-      this.#timestampGte = timestamp;
-    }
+    throw new Error('Method not implemented.');
   }
 
   isSignedBy(publicKey: Uint8Array): boolean {
-    return arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey());
+    throw new Error('Method not implemented.');
   }
 
   requireSignature(publicKey: Uint8Array): void {
-    // TODO: If we don't call this, maybe we don't necessarily need to sign the block?
-    const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKey();
-    if (!arrEquals(publicKey, selfPublicKey)) {
-      throw new GenerationException(
-        `requireSignature(...) called with an unknown public key!`,
-      );
-    }
+    throw new Error('Method not implemented.');
   }
 
   emitCorrect(): boolean {
-    return this.#emitCorrect;
+    return true;
   }
 
   fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode {
@@ -137,8 +125,8 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     throw new Error('Method not implemented.');
   }
 
-  override finish(err?: typeof GENERATION_SUCCESS_FLAG | Error): MaybePromise<void> {
-    if (err === GENERATION_SUCCESS_FLAG) {
+  override finish(err?: typeof VERIFICATION_SUCCESS_FLAG | Error): MaybePromise<void> {
+    if (err === VERIFICATION_SUCCESS_FLAG) {
       err = undefined;
     }
 
@@ -146,6 +134,6 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
   }
 
   getResult() {
-    return this.#body.toDataTree();
+    return encodeDataTree(true);
   }
 }

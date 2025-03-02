@@ -3,10 +3,10 @@ import { mapPop, mapPut } from './util/map.ts';
 import { AccountContractParams, BlockOutput } from './messages.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
 import { accountHash, burnHash } from './hashes.ts';
-import { EMPTY_ARR } from './util/buffer.ts';
 import { error } from './util/functional.ts';
 import { bigintMax, bigintMin } from './util/bigint.ts';
 import { assert } from './util/functional.ts';
+import { digestTree, EMPTY_DATA_TREE, encodeDataTree } from './DataTreeHelper.ts';
 
 export const challengeThreshold = 10n;
 export const finalVoteAmount = 100n;
@@ -98,7 +98,7 @@ export class CollateralUtil {
     for (const posting of postings) {
       let ptr = root;
       for (const hint of posting.detail.hints) {
-        ptr = mapPut(ptr.children, bin2hex(hint), () => this.makeContest(ptr));
+        ptr = mapPut(ptr.children, digestTree(hint).toPrimitive(), () => this.makeContest(ptr));
       }
       ptr.postings.push(posting);
 
@@ -380,10 +380,10 @@ export class CollateralUtil {
         mapPut(outputKeys, bin2hex(dst), () => ({
           verifier: {
             contractHash: accountHash,
-            params: AccountContractParams.encode({ publicKey: dst }),
+            params: encodeDataTree({ publicKey: dst }),
           },
           amount,
-          detail: EMPTY_ARR,
+          detail: EMPTY_DATA_TREE,
         }), (output) => {
           output.amount += amount;
           return output;
@@ -394,9 +394,9 @@ export class CollateralUtil {
       assert(amount >= 0n);
       if (amount > 0n) {
         mapPut(outputKeys, '', () => ({
-          verifier: { contractHash: burnHash, params: EMPTY_ARR },
+          verifier: { contractHash: burnHash, params: EMPTY_DATA_TREE },
           amount,
-          detail: EMPTY_ARR,
+          detail: EMPTY_DATA_TREE,
         }), (output) => {
           output.amount += amount;
           return output;

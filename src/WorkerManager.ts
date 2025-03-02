@@ -1,18 +1,24 @@
 import { assert } from '@std/assert/assert';
 import { Context } from './Context.ts';
 import { WorkerChannelServer } from './worker/WorkerChannel.ts';
-import { InitialMsg, JobSpec, WorkerComm } from './worker/workerTypes.ts';
+import { InitialMsg, JobSpec, RunnerComm, WorkerComm } from './worker/workerTypes.ts';
+import { DataTree } from './protocol/base.ts';
 
 export interface Job {
-  spec: JobSpec;
+  wasmModule: WebAssembly.Module;
+  calls: string[];
+
   score(): number;
 }
 
 export interface InstanceFactory {
-  createDriver(worker: Worker): WorkerComm & { run(job: Job): Promise<void> };
+  createDriver(
+    runner: RunnerComm,
+    instanceId: number,
+  ): WorkerComm & { run(job: Job): Promise<DataTree> };
 }
 
-interface Runner {
+export interface Runner {
   worker: Worker;
   server: WorkerChannelServer<WorkerComm>;
   isReady: boolean;
@@ -30,7 +36,7 @@ interface Instance {
 interface EnqueuedJob {
   job: Job;
   instanceFactory: InstanceFactory;
-  resolve(): void;
+  resolve(tree: DataTree): void;
   reject(): void;
 }
 
@@ -39,7 +45,7 @@ export class WorkerManager {
   private instances: Instance[] = [];
   private enqueuedJobs: EnqueuedJob[] = [];
 
-  private nextChannelId = 0;
+  private nextInstanceId = 0;
 
   constructor(private ctx: Context) {
     if (this.ctx.config.workerPath === undefined) {
@@ -55,7 +61,7 @@ export class WorkerManager {
       if (this.runners.length < 4) {
         runner = this.startRunner();
       } else {
-        const { promise, resolve, reject } = Promise.withResolvers<void>();
+        const { promise, resolve, reject } = Promise.withResolvers<DataTree>();
         this.enqueuedJobs.push({ job, instanceFactory, resolve, reject });
         return promise;
       }
@@ -97,8 +103,8 @@ export class WorkerManager {
   private launchJob(runner: Runner, instanceFactory: InstanceFactory, job: Job) {
     assert(runner.isReady);
 
-    const driver = instanceFactory.createDriver(runner.worker);
-    runner.server.createChannel(this.nextChannelId++, driver);
+    const driver = instanceFactory.createDriver(runner.worker, this.nextInstanceId);
+    runner.server.createChannel(this.nextInstanceId++, driver);
 
     runner.isReady = false;
     return driver.run(job).finally(() => {

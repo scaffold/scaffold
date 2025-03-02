@@ -9,7 +9,7 @@ import {
   FrontierTreeParams,
   Verifier,
 } from './messages.ts';
-import { BytesTree } from './protocol/base.ts';
+import { DataTree } from './protocol/base.ts';
 import { BlockService } from './BlockService.ts';
 import { accountHash, collateralHash, frontierHash } from './hashes.ts';
 import { KeyService } from './KeyService.ts';
@@ -106,7 +106,7 @@ export class BlockBuilder {
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
-    const bodies: BytesTree[] = [];
+    const bodies: DataTree[] = [];
 
     const groupIdxArr = drafts.map((x) => x.groupIdx).filter((x) => x !== undefined);
     const takenGroupIdxs = new Set(groupIdxArr);

@@ -3,7 +3,6 @@ import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { QaDebugger } from '../src/QaDebugger.ts';
 import { error } from '../src/util/functional.ts';
 import { LocalGenerator, LocalGeneratorService } from '../src/LocalGeneratorService.ts';
 // import { epochStartTime } from '~/server/epochStartTime.ts';
@@ -12,7 +11,6 @@ import { accountHash, generatorHash, rootHash } from '../src/hashes.ts';
 import { AccountContractParams, JsWasiParams } from '../src/messages.ts';
 import { KeyService } from '../src/KeyService.ts';
 import { GenesisService, sharedGenesisData } from '../src/GenesisService.ts';
-import { WorkerExecutor } from '../src/WorkerExecutor.ts';
 import { WebsocketServerProvider } from '../plugins/deno/WebsocketServerProvider.ts';
 import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
 import { DenoKvStorageProvider } from '../plugins/deno/DenoKvStorageProvider.ts';
@@ -74,7 +72,6 @@ bootstrapFromGlobs([
 ], (name, data) => {
   const hash = rootContract.addData(data);
   console.log(`Bootstrapped ${name}: ${hash.toHex()}`);
-  ctx.get(QaDebugger).addDebugger(name, hash);
 }).then(({ count }) => console.log(`Bootstrapping done! Loaded ${count} datas.`));
 
 // ctx.get(Logger).registerAttribute('worker', {

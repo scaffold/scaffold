@@ -1,5 +1,4 @@
 import { LogLevel } from '../Logger.ts';
-import { BytesTree } from '../protocol/base.ts';
 
 export interface InitialMsg {
   type: 'init';
@@ -18,10 +17,18 @@ export interface CallMethodMsg {
   instanceId: number;
   method: string;
 }
+export interface PingMsg {
+  type: 'ping';
+  instanceId: number;
+}
 export interface ExitMsg {
   type: 'exit';
 }
-export type JobSpec = InitialMsg | InstantiateWasmMsg | CallMethodMsg | ExitMsg;
+export type JobSpec = InitialMsg | InstantiateWasmMsg | CallMethodMsg | PingMsg | ExitMsg;
+
+export interface RunnerComm {
+  postMessage(msg: JobSpec): void;
+}
 
 // Each of these roots have different fs-level permissions, which the worker should set up
 export enum FsName {
@@ -48,6 +55,8 @@ export interface WorkerComm {
   size(hdl: number): Promise<number>;
   read(hdl: number, offset: number, dstBufs: Uint8Array[]): Promise<number>;
   write(hdl: number, offset: number, srcBufs: Uint8Array[]): undefined;
+
+  pong(): undefined;
 
   log(level: LogLevel, message: string, data: { [key: string]: unknown }): undefined;
 

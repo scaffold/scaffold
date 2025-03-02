@@ -10,8 +10,8 @@ import { FactService } from './FactService.ts';
 import { GenesisService } from './GenesisService.ts';
 import { OutputClaim } from './BlockMeta.ts';
 import { Timeout } from './Config.ts';
-import { BytesTree } from './protocol/base.ts';
-import { areTreesEqual } from './BytesTreeHelper.ts';
+import { DataTree } from './protocol/base.ts';
+import { areTreesEqual } from './DataTreeHelper.ts';
 
 export enum FetchMode {
   // Selects the first valid block satisfying the given verifier.
@@ -71,7 +71,7 @@ export interface FetchOptions {
   // The total derived work / canonicality
 
   // This is called whenever we generate or receive a more up-to-date body, subject to debouncing and the canonicality threshold.
-  onBody?: (body?: BytesTree) => void;
+  onBody?: (body?: DataTree) => void;
 }
 
 export class FetchService {
@@ -127,7 +127,7 @@ export class FetchService {
     let onState: (claim?: { block: BlockFact; groupIdx: number }) => boolean;
     let watchItvl: Timeout | undefined;
     if (onBody !== undefined || onResponseBlock !== undefined) {
-      let prevBody: BytesTree | undefined;
+      let prevBody: DataTree | undefined;
       onState = (claim) => {
         if (claim !== undefined) {
           onResponseBlock?.(claim.block, claim.groupIdx);

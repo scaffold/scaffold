@@ -1,8 +1,8 @@
 import { Context } from './Context.ts';
 import { KeyService } from './KeyService.ts';
 import { accountHash } from './hashes.ts';
-import { AccountContractParams, BlockOutput } from './messages.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
+import { AccountContract } from './contracts/AccountContract.ts';
 
 export class BalanceService {
   constructor(private ctx: Context) {}
@@ -13,7 +13,7 @@ export class BalanceService {
     publicKey = this.ctx.get(KeyService).getSelfPublicKey(),
   ) {
     this.ctx.get(AvailableOutputManager).watch(
-      { contractHash: accountHash, params: AccountContractParams.encode({ publicKey }) },
+      { contractHash: accountHash, params: AccountContract.encodeParams({ publicKey }) },
       until,
       (outputs) => cb(outputs.reduce((acc, cur) => acc + cur.amount, 0n)),
     );

@@ -190,21 +190,21 @@ export const registry = {
     ],
   },
 
-  BytesTreeEntry: {
-    name: 'BytesTreeEntry',
+  DataTreeEntry: {
+    name: 'DataTreeEntry',
     type: 'record',
     fields: [
       { name: 'key', type: 'bytes' },
-      { name: 'node', type: 'BytesTree' },
+      { name: 'node', type: 'DataTree' },
     ],
   },
 
-  BytesTree: {
-    name: 'BytesTree',
+  DataTree: {
+    name: 'DataTree',
     type: 'record',
     fields: [
       { name: 'value', 'type': ['null', 'bytes'] },
-      { name: 'entries', 'type': { type: 'array', items: 'BytesTreeEntry' } },
+      { name: 'entries', 'type': { type: 'array', items: 'DataTreeEntry' } },
     ],
   },
 
@@ -321,5 +321,5 @@ export const makeMsg = <
 
 type MsgType<Name extends keyof typeof registry> = ObjectType<Name, typeof registry>;
 
-export const BytesTree = makeMsg(registry, 'BytesTree');
-export type BytesTree = MsgType<'BytesTree'>;
+export const DataTree = makeMsg(registry, 'DataTree');
+export type DataTree = MsgType<'DataTree'>;

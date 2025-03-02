@@ -5,17 +5,16 @@ import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { NetworkProvider } from './NetworkProvider.ts';
-import { ExecutionProvider } from './ExecutionProvider.ts';
 import { ContractProvider } from './SpecialContractManager.ts';
 import { makeDefaultContractProviders } from './contracts/defaultContractProviders.ts';
 import { IngestionProvider, ReceptionProvider } from './IngestionProvider.ts';
 import { defaultIngestionProviders } from './ingestors/defaultIngestionProviders.ts';
-import { FrontierContract } from './contracts/FrontierContract.ts';
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 import { LogEvent, LogLevel } from './Logger.ts';
 import { ConsoleLoggingProvider } from '../plugins/ConsoleLoggingProvider.ts';
 import { WebsocketLoggingProvider } from '../plugins/WebsocketLoggingProvider.ts';
 import { Fact, FactType } from './FactMeta.ts';
+import { frontierHash } from './hashes.ts';
 
 // TODO: Reorder, rename, reorganize config
 
@@ -117,9 +116,8 @@ export interface Config {
   entropyProvider: EntropyProvider;
   storageProvider: StorageProvider;
   networkProviders: NetworkProvider[];
-  executionProviders: ExecutionProvider[];
   // TODO: Split into generation and verification providers
-  contractProviders: ContractProvider[];
+  contractProviders: ContractProvider<unknown>[];
 
   // Unlike the other providers, these will be managed (created and destroyed) by scaffold.
   // Pass arguments by binding to the class constructor.
@@ -211,7 +209,6 @@ export const makeDefaultConfig = () => {
       randomNumber: () => Math.random(),
       cryptoRandomBytes: secp.etc.randomBytes,
     },
-    executionProviders: [],
     contractProviders: makeDefaultContractProviders(),
     ingestionProviders: defaultIngestionProviders,
     approxComputePricePerSecond: 1000n,
@@ -235,6 +232,7 @@ export const makeDefaultConfig = () => {
       webWorkerCount: 16,
       cpuUsage: navigator.hardwareConcurrency,
       memoryMb: 1024,
+      time: 30000,
     },
     workScoreThreshold: 10,
     selfIncentiveMultiplier: 1.5,
@@ -265,7 +263,7 @@ export const makeDefaultConfig = () => {
   }
   if (!config.enableTreeAggregation) {
     config.contractProviders = config.contractProviders.filter((x) =>
-      !(x instanceof FrontierContract)
+      !Hash.equals(x.contractHash, frontierHash)
     );
   }
 

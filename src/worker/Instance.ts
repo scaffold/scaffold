@@ -1,5 +1,5 @@
 import { WorkerChannel } from './WorkerChannel.ts';
-import { CallMethodMsg, FsName, InstantiateWasmMsg, WorkerComm } from './workerTypes.ts';
+import { CallMethodMsg, FsName, InstantiateWasmMsg, PingMsg, WorkerComm } from './workerTypes.ts';
 import { error } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
 import { makeWasi } from './jsWasiUtils.ts';
@@ -106,6 +106,10 @@ export class Instance {
         throw err;
       }
     }
+  }
+
+  ping() {
+    this.channel.inform('pong', [], []);
   }
 
   private getImports(module: WebAssembly.Module) {

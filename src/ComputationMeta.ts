@@ -4,9 +4,9 @@ import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { InputSpec, OutputSpec } from './BlockBuilder.ts';
 import { Verifier } from './messages.ts';
-import { TreeObj } from './BytesTreeHelper.ts';
-import { MutableTreeNode, TreeNode } from './BytesTreeOverlay.ts';
-import { BytesTree } from './protocol/base.ts';
+import { TreeObj } from './DataTreeHelper.ts';
+import { ImmutableTreeNode, MutableTreeNode, TreeNode } from './DataTreeOverlay.ts';
+import { DataTree } from './protocol/base.ts';
 
 // TODO: ComputationProvider?
 
@@ -32,7 +32,7 @@ export interface ComputationDriver extends WorkerDriver {
   type: ComputationType;
 
   contractHash: Hash;
-  params: TreeNode;
+  params: ImmutableTreeNode;
 
   // If a contract writes a body, then at the end, the body is compared to the block body
   body: MutableTreeNode;
@@ -42,15 +42,15 @@ export interface ComputationDriver extends WorkerDriver {
   // getAncestorHash(): Hash;
   // getAuthorHash(): Hash;
 
-  emitHint(idx: number, hint: BytesTree): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
-  getHint(idx: number, bop: BurdenOfProof): TreeNode; // Only valid if this is a contract
+  emitHint(idx: number, hint: DataTree): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
+  getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode; // Only valid if this is a contract
   requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: bigint): MaybePromise<void>;
   isSignedBy(publicKey: Uint8Array): boolean;
   requireSignature(publicKey: Uint8Array): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
-  fetch(contractHash: Hash, params: BytesTree): TreeNode;
+  fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode;
 
   collectInputs(): MaybePromise<InputSource[]>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
   requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<InputSource>; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.

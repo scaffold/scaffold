@@ -1,39 +1,27 @@
-import { Context } from '../Context.ts';
-import { Hash, HASH_SIZE, HashPrimitive } from '../util/Hash.ts';
 import { FactService } from '../FactService.ts';
 import { ComputationDriver, ComputationType } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { rootHash } from '../hashes.ts';
-import { mapPut } from '../util/map.ts';
-import { arrEquals } from '../util/buffer.ts';
-import { BlockService } from '../BlockService.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
+import { DataService } from '../DataService.ts';
+import { Hash } from '../util/Hash.ts';
 
-export class RootContract implements ContractProvider {
-  public contractHash = rootHash;
+export const RootContract: ContractProvider<Hash> = {
+  name: 'root',
+  contractHash: rootHash,
 
-  private registry = new Map<HashPrimitive, Uint8Array>();
+  encodeParams: encodeDataTree,
 
-  public addData(data: Uint8Array) {
-    const hash = Hash.digest(data);
-    mapPut(this.registry, hash.toPrimitive(), () => data, (prevData) => {
-      if (!arrEquals(prevData, data)) {
-        throw new Error(`Internal error!`);
-      }
-      return prevData;
-    });
-    return hash;
-  }
-
-  public async compute(driver: ComputationDriver, ctx: Context) {
+  async compute(driver: ComputationDriver) {
     // TODO: How are errors handled here?
     const hash = await driver.params.getHash();
     if (driver.type === ComputationType.Generator) {
-      const data = this.registry.get(hash.toPrimitive());
+      const data = driver.ctx.get(DataService).getData(hash);
       if (data !== undefined) {
         return driver.body.setBytes(data);
       }
 
-      const fact = ctx.get(FactService).get(hash, false);
+      const fact = driver.ctx.get(FactService).get(hash, false);
       if (fact) {
         return driver.body.setBytes(fact.data);
       }
@@ -48,5 +36,5 @@ export class RootContract implements ContractProvider {
       const valid = Hash.equals(Hash.digest(await driver.body.getBytes()), hash);
       valid ? driver.pass() : driver.fail(`Given data doesn't hash to the correct value!`);
     }
-  }
-}
+  },
+};

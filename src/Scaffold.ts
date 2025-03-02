@@ -3,10 +3,11 @@ import { Context } from './Context.ts';
 import { FetchOptions, FetchService } from './FetchService.ts';
 import { Query } from './Query.ts';
 import { Resource } from './Query.ts';
-import { Hash } from './util/Hash.ts';
+import { Verifier } from './messages.ts';
+import { DataTree } from './protocol/base.ts';
 import { todo } from './util/functional.ts';
 
-export type FetchCallback = (body?: Uint8Array) => void;
+export type FetchCallback = (body?: DataTree) => void;
 
 export class Scaffold {
   private ctx: Context;
@@ -20,7 +21,7 @@ export class Scaffold {
   }
 
   public fetch(
-    resource: Resource,
+    verifier: Verifier,
     optionsOrCallback: FetchOptions | FetchCallback,
     callback?: FetchCallback,
   ) {
@@ -35,10 +36,7 @@ export class Scaffold {
       optionsOrCallback.onBody = callback;
     }
 
-    return this.ctx.get(FetchService).fetch(
-      Query.fromResource(resource).toVerifier(),
-      optionsOrCallback,
-    );
+    return this.ctx.get(FetchService).fetch(verifier, optionsOrCallback);
   }
 
   public put(resource: Resource, body: Uint8Array) {

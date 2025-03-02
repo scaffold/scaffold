@@ -1,11 +1,14 @@
-import { ComputationDriver } from '../ComputationMeta.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { burnHash } from '../hashes.ts';
 
-export class BurnContract implements ContractProvider {
-  public contractHash = burnHash;
+export const BurnContract: ContractProvider<{}> = {
+  name: 'burn',
+  contractHash: burnHash,
 
-  public compute(driver: ComputationDriver) {
+  encodeParams: encodeDataTree,
+
+  compute(driver) {
     driver.fail(`A burn output cannot be spent`);
-  }
-}
+  },
+};

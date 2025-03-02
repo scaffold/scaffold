@@ -8,15 +8,19 @@ import { CollateralContract } from './CollateralContract.ts';
 import { BurnContract } from './BurnContract.ts';
 import { TrueContract } from './TrueContract.ts';
 import { CollatzContract } from './CollatzContract.ts';
+import { GeneratorContract } from './GeneratorContract.ts';
+import { NameContract } from './NameContract.ts';
 
-export const makeDefaultContractProviders = (): ContractProvider[] => [
-  new BurnContract(),
-  new RootContract(),
-  new DataContract(),
-  new AccountContract(),
-  new TimeContract(),
-  new FrontierContract(),
-  new CollateralContract(),
-  new TrueContract(),
-  new CollatzContract(),
+export const makeDefaultContractProviders = (): ContractProvider<unknown>[] => [
+  BurnContract,
+  RootContract,
+  DataContract,
+  AccountContract,
+  TimeContract,
+  FrontierContract,
+  CollateralContract,
+  TrueContract,
+  CollatzContract,
+  GeneratorContract,
+  NameContract,
 ];

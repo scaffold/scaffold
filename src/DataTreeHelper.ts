@@ -1,31 +1,35 @@
 import { assert } from '@std/assert/assert';
-import { BytesTree } from './protocol/base.ts';
+import { DataTree } from './protocol/base.ts';
 import { arrEquals, bin2str, isAscii, str2bin } from './util/buffer.ts';
 import { Hash, HashPrimitive } from './util/Hash.ts';
 import { bin2hex, hex2bin } from './util/hex.ts';
 import { ZERO_HASH } from './util/Hash.ts';
 
-export const BTO_VALUE = Symbol('BytesTreeObjValue');
+export const BTO_VALUE = Symbol('DataTreeObjValue');
 
 export type TreeObj =
   | { [BTO_VALUE]?: Uint8Array; [key: string]: TreeObj } & { [Key in `$${string}`]: never }
   | { '$hex': string }
   | Map<TreeObj, TreeObj>
+  | TreeObj[]
   | Hash
   | Uint8Array
   | string
   | bigint
   | number
   | boolean
+  | null
   | undefined;
 
 export const BYTES_FALSE = str2bin('false');
 export const BYTES_TRUE = str2bin('true');
 
-export const encodeBytesTree = (obj: TreeObj): BytesTree => {
+export const EMPTY_DATA_TREE: DataTree = { value: null, entries: [] };
+
+export const encodeDataTree = (obj: TreeObj): DataTree => {
   switch (typeof obj) {
     case 'undefined':
-      return { value: null, entries: [] };
+      return EMPTY_DATA_TREE;
     case 'boolean':
       return { value: { bytes: obj ? BYTES_TRUE : BYTES_FALSE }, entries: [] };
     case 'number':
@@ -35,19 +39,29 @@ export const encodeBytesTree = (obj: TreeObj): BytesTree => {
     case 'string':
       return { value: { bytes: str2bin(obj) }, entries: [] };
     case 'object':
-      if (obj instanceof Uint8Array) {
+      if (obj === null) {
+        return EMPTY_DATA_TREE;
+      } else if (obj instanceof Uint8Array) {
         return { value: { bytes: obj }, entries: [] };
+      } else if (Array.isArray(obj)) {
+        return {
+          value: null,
+          entries: obj.map((val, idx) => ({
+            key: str2bin(idx.toString()),
+            node: encodeDataTree(val),
+          })),
+        };
       } else if (obj instanceof Hash) {
         return { value: { bytes: obj.toBytes() }, entries: [] };
       } else if (obj instanceof Map) {
         return {
           value: null,
           entries: [...obj.entries()].map(([key, val]) => {
-            const keyTree = encodeBytesTree(key);
+            const keyTree = encodeDataTree(key);
             assert(keyTree.value !== null && keyTree.entries.length === 0);
             return {
               key: keyTree.value.bytes,
-              node: encodeBytesTree(val),
+              node: encodeDataTree(val),
             };
           }),
         };
@@ -60,7 +74,7 @@ export const encodeBytesTree = (obj: TreeObj): BytesTree => {
           value: value !== undefined ? { bytes: value } : null,
           entries: Object.entries(obj).map(([key, val]) => ({
             key: str2bin(key),
-            node: encodeBytesTree(val),
+            node: encodeDataTree(val),
           })),
         };
       }
@@ -73,17 +87,17 @@ export const encodeBytesTree = (obj: TreeObj): BytesTree => {
 // We shouldn't use this because bytes trees should be queried, not walked or inspected.
 // Also it's lossy
 
-export type BytesTreeObj = { [key: string]: BytesTreeObj } | string | undefined;
+export type DataTreeObj = { [key: string]: DataTreeObj } | string | undefined;
 
 const maybeToStr = (bytes: Uint8Array) =>
   isAscii(bytes) ? bin2str(bytes) : { $hex: bin2hex(bytes) };
 
-export const bytesTreeToJson = (tree: BytesTree): BytesTreeObj => {
+export const dataTreeToJson = (tree: DataTree): DataTreeObj => {
   if (tree.entries.length === 0) {
     return tree.value !== null ? maybeToStr(tree.value.bytes) : undefined;
   } else {
-    const obj: BytesTreeObj = Object.fromEntries(
-      tree.entries.map((entry) => [bin2str(entry.key), bytesTreeToJson(entry.node)]),
+    const obj: DataTreeObj = Object.fromEntries(
+      tree.entries.map((entry) => [bin2str(entry.key), dataTreeToJson(entry.node)]),
     );
     if (tree.value !== null) {
       obj.$self = maybeToStr(tree.value.bytes);
@@ -92,7 +106,7 @@ export const bytesTreeToJson = (tree: BytesTree): BytesTreeObj => {
   }
 };
 
-export const areTreesEqual = (lhs: BytesTree, rhs: BytesTree): boolean => {
+export const areTreesEqual = (lhs: DataTree, rhs: DataTree): boolean => {
   if (lhs.entries.length !== rhs.entries.length) return false;
 
   if (lhs.value !== null) {
@@ -110,7 +124,7 @@ export const areTreesEqual = (lhs: BytesTree, rhs: BytesTree): boolean => {
   return true;
 };
 
-export const digestTree = (tree: BytesTree): Hash => {
+export const digestTree = (tree: DataTree): Hash => {
   return Hash.digestParts(
     tree.value !== null ? tree.value.bytes : ZERO_HASH,
     ...tree.entries.flatMap((x) => [x.key, digestTree(x.node)]),

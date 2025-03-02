@@ -1,12 +1,16 @@
 import { ComputationDriver } from '../ComputationMeta.ts';
 import { ContractProvider } from '../SpecialContractManager.ts';
 import { nameHash } from '../hashes.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
 
-export class NameContract implements ContractProvider {
-  public contractHash = nameHash;
+export const NameContract: ContractProvider<{ name: string }> = {
+  name: 'name',
+  contractHash: nameHash,
 
-  public async compute(driver: ComputationDriver) {
+  encodeParams: encodeDataTree,
+
+  async compute(driver: ComputationDriver) {
     const name = await driver.params.open('name').getString();
     driver.body.setString(`Hello ${name}!`);
-  }
-}
+  },
+};

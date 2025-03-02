@@ -1,6 +1,15 @@
 import { Hash } from '../../src/util/Hash.ts';
 import { StorageProvider } from '../../src/Config.ts';
 
+declare global {
+  interface FileSystemDirectoryHandle {
+    entries(): [string, FileSystemFileHandle][];
+  }
+  interface File {
+    bytes(): Promise<Uint8Array>;
+  }
+}
+
 export class OpfsStorageProvider implements StorageProvider {
   private root: Promise<FileSystemDirectoryHandle>;
 

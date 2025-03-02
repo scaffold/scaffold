@@ -14,11 +14,9 @@ import {
   CollateralContractParams,
   CollateralHint,
 } from '../collateralMessages.ts';
-import { GenerationService } from '../GenerationService.ts';
 import { ClockService } from '../ClockService.ts';
 import { RenderService } from '../RenderService.ts';
 import { FactEmitter } from '../FactEmitter.ts';
-import { VerificationService } from '../VerificationService.ts';
 import { assert } from '../util/functional.ts';
 import { VOLUME_INCLUDES_SELF } from '../FrontierService3.ts';
 import { FrontierService } from '../FrontierService.ts';
@@ -30,6 +28,9 @@ import { BlockMetrics } from '../BlockMetrics.ts';
 import { CanonicalityService } from '../CanonicalityService.ts';
 import { QaService } from '../QaService.ts';
 import { RoutingService2 } from '../RoutingService2.ts';
+import { OrchestrationService } from '../OrchestrationService.ts';
+import { encodeDataTree } from '../DataTreeHelper.ts';
+import { ContractRecordSet } from '../record_sets/ContractRecordSet.ts';
 
 export class BlockIngestor implements IngestionProvider<FactType.Block> {
   type = FactType.Block as const;
@@ -236,7 +237,7 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
         }
 
         // TODO: Move this to the CanonicalityService
-        this.ctx.get(GenerationService).ensureRunning(output.verifier);
+        this.ctx.get(OrchestrationService).launchGenerator(output.verifier);
         // }, 0);
       } else {
         // TODO: What to do in this case; we still need to make the output available if it's required
@@ -282,7 +283,7 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
     }
 
     for (const body of fact.bodies) {
-      if (body.value!.bytes.byteLength >= headerSize) {
+      if (body.value !== null && body.value.bytes.byteLength >= headerSize) {
         this.ctx.get(ClockService).setTimeout(() => {
           try {
             // TODO: Set the fromNode correctly here
@@ -323,6 +324,7 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
     // console.log('Publishing block...', this.ctx.get(Logger).serialize(block));
 
     this.ctx.maybeGet(BlockRecordSet)?.dispatchAdd(fact);
+    this.ctx.maybeGet(ContractRecordSet)?.ingestBlock(fact);
 
     this.initSpendPropagation(fact);
 
@@ -542,7 +544,9 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
     // When we move this to an ingestion method we can remove the timeout.
     // this.ctx.get(ClockService).setTimeout(() => {
     // TODO: Only do this once per unique verifier foreach block
-    const hintPrefix = [CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } })];
+    const hintPrefix = [
+      encodeDataTree(CollateralHint.encode({ hint: { CollateralHintVerifier: { groupIdx } } })),
+    ];
     if (
       Hash.equals(verifier.contractHash, squashHash) &&
       arrEquals(verifier.params.value!.bytes, EMPTY_ARR)
@@ -555,7 +559,7 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
         console.error(`Litigation failed:`, err);
       }
     } else {
-      this.ctx.get(VerificationService).enqueueVerification(child, verifier, hintPrefix, 0);
+      this.ctx.get(OrchestrationService).launchVerifier(child, verifier, hintPrefix);
     }
     // }, 0);
 

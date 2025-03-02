@@ -5,9 +5,11 @@ import { CollateralHint } from './collateralMessages.ts';
 import { FactService } from './FactService.ts';
 import { mapPut } from './util/map.ts';
 import { BlockService } from './BlockService.ts';
+import { DataTree } from './protocol/base.ts';
+import { encodeDataTree } from './DataTreeHelper.ts';
 
 export interface HintProvider {
-  suggestNext(params: Uint8Array, hints: Uint8Array[]): Uint8Array[];
+  suggestNext(params: DataTree, hints: DataTree[]): DataTree[];
 }
 
 export class HintSuggestionService {
@@ -19,34 +21,34 @@ export class HintSuggestionService {
     mapPut(this.providers, contractHash.toPrimitive(), () => []).push(provider);
   }
 
-  public suggest(block: BlockFact, hints: Uint8Array[]): Uint8Array[] {
+  public suggest(block: BlockFact, hints: DataTree[]): DataTree[] {
     if (hints.length === 0) {
       return [
         ...Array.from(
           { length: block.inputs.length },
           (_, i) =>
-            CollateralHint.encode({
+            encodeDataTree(CollateralHint.encode({
               hint: { CollateralHintInputHash: { inputIdx: i } },
-            }),
+            })),
         ),
         ...Array.from(
           { length: block.bodies.length },
           (_, i) =>
-            CollateralHint.encode({
+            encodeDataTree(CollateralHint.encode({
               hint: { CollateralHintVerifier: { groupIdx: i } },
-            }),
+            })),
         ),
       ];
     }
 
     const [first, ...rest] = hints;
 
-    const { hint } = CollateralHint.decode(first);
+    const { hint } = CollateralHint.decode(first.value!.bytes);
     if ('CollateralHintInputHash' in hint) {
       if (rest.length === 0) {
         const input = block.inputs[hint.CollateralHintInputHash.inputIdx];
         const inBlock = this.ctx.get(FactService).get(input.blockHash);
-        return inBlock !== undefined ? [inBlock.data] : [];
+        return inBlock !== undefined ? [encodeDataTree(inBlock.data)] : [];
       } else {
         throw new Error(`Invalid request!`);
       }
