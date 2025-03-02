@@ -20,7 +20,7 @@ export const DataContract: ContractProvider<{ hash: Hash; secret: Uint8Array }> 
 
   encodeParams: encodeDataTree,
 
-  async compute(driver: ComputationDriver) {
+  async compute(driver) {
     const hash = await driver.params.open('hash').getHash();
     const secret = await driver.params.open('secret').getBytes();
 
@@ -34,7 +34,7 @@ export const DataContract: ContractProvider<{ hash: Hash; secret: Uint8Array }> 
             driver.ctx.get(KeyService).getSelfPublicKey(),
           );
           driver.body.setHash(commitment);
-          driver.emitHint(0, encodeDataTree(fact.data));
+          driver.emitHint(0, fact.data);
         } else {
           driver.body.setHash(Hash.random());
         }

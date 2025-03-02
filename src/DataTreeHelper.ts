@@ -27,6 +27,7 @@ export const BYTES_TRUE = str2bin('true');
 export const EMPTY_DATA_TREE: DataTree = { value: null, entries: [] };
 
 export const encodeDataTree = (obj: TreeObj): DataTree => {
+  console.log(obj);
   switch (typeof obj) {
     case 'undefined':
       return EMPTY_DATA_TREE;

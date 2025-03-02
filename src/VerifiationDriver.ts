@@ -21,7 +21,7 @@ import { arrConcat, arrEquals } from './util/buffer.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { WorkerDriver } from './WorkerDriver.ts';
-import { encodeDataTree } from './DataTreeHelper.ts';
+import { encodeDataTree, TreeObj } from './DataTreeHelper.ts';
 
 export const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
 class VerificationException extends Error {
@@ -72,7 +72,7 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     this.#readHints = hintPrefix.slice(0, 1);
   }
 
-  emitHint(idx: number, hint: DataTree): void {
+  emitHint(idx: number, hint: TreeObj): void {
     throw new Error('Method not implemented.');
   }
 
@@ -88,11 +88,11 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     throw new Error('Method not implemented.');
   }
 
-  isSignedBy(publicKey: Uint8Array): boolean {
+  isSignedBy(publicKeyHash: Hash): boolean {
     throw new Error('Method not implemented.');
   }
 
-  requireSignature(publicKey: Uint8Array): void {
+  requireSignature(publicKeyHash: Hash): void {
     throw new Error('Method not implemented.');
   }
 
@@ -100,7 +100,10 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     return true;
   }
 
-  fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode {
+  lookup(hash: Hash): ImmutableTreeNode {
+    throw new Error('Method not implemented.');
+  }
+  fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode {
     throw new Error('Method not implemented.');
   }
   collectInputs(): MaybePromise<InputSource[]> {

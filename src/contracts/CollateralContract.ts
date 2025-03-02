@@ -23,7 +23,7 @@ export const CollateralContract: ContractProvider<Hash> = {
 
   encodeParams: encodeDataTree,
 
-  async compute(driver: ComputationDriver) {
+  async compute(driver) {
     await driver.params.getHash();
 
     const postings: (InputSource & Posting)[] = [];

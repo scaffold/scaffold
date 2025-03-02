@@ -3,6 +3,7 @@ import { Context } from './Context.ts';
 import { bin2hex } from './util/hex.ts';
 import { Logger } from './Logger.ts';
 import { LogSystem } from './Config.ts';
+import { Hash } from './util/Hash.ts';
 
 export class KeyService {
   private selfPublicKey: Uint8Array;
@@ -20,6 +21,11 @@ export class KeyService {
 
   public getSelfPublicKey() {
     return this.selfPublicKey;
+  }
+
+  public getSelfPublicKeyHash() {
+    // TODO: Cache
+    return Hash.digest(this.selfPublicKey);
   }
 
   public static makeRandomPublicKey() {

@@ -9,7 +9,7 @@ export const NameContract: ContractProvider<{ name: string }> = {
 
   encodeParams: encodeDataTree,
 
-  async compute(driver: ComputationDriver) {
+  async compute(driver) {
     const name = await driver.params.open('name').getString();
     driver.body.setString(`Hello ${name}!`);
   },

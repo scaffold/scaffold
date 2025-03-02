@@ -9,5 +9,5 @@ export const TrueContract: ContractProvider<{}> = {
 
   encodeParams: encodeDataTree,
 
-  compute(_driver: ComputationDriver) {},
+  compute(_driver) {},
 };

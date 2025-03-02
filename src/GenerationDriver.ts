@@ -20,7 +20,7 @@ import { arrConcat, arrEquals } from './util/buffer.ts';
 import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { WorkerDriver } from './WorkerDriver.ts';
-import { digestTree } from './DataTreeHelper.ts';
+import { digestTree, TreeObj } from './DataTreeHelper.ts';
 
 export const GENERATION_SUCCESS_FLAG = Symbol('GenerationService.Success');
 class GenerationException extends Error {
@@ -73,7 +73,7 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     this.#fulfillsVerifiers = [verifier];
   }
 
-  emitHint(idx: number, hint: DataTree): void {
+  emitHint(idx: number, hint: TreeObj): void {
     throw new Error('Method not implemented.');
   }
 
@@ -94,14 +94,14 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     }
   }
 
-  isSignedBy(publicKey: Uint8Array): boolean {
-    return arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey());
+  isSignedBy(publicKeyHash: Hash): boolean {
+    return Hash.equals(publicKeyHash, this.ctx.get(KeyService).getSelfPublicKeyHash());
   }
 
-  requireSignature(publicKey: Uint8Array): void {
+  requireSignature(publicKeyHash: Hash): void {
     // TODO: If we don't call this, maybe we don't necessarily need to sign the block?
-    const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKey();
-    if (!arrEquals(publicKey, selfPublicKey)) {
+    const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKeyHash();
+    if (!Hash.equals(publicKeyHash, selfPublicKey)) {
       throw new GenerationException(
         `requireSignature(...) called with an unknown public key!`,
       );
@@ -112,7 +112,10 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     return this.#emitCorrect;
   }
 
-  fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode {
+  lookup(hash: Hash): ImmutableTreeNode {
+    throw new Error('Method not implemented.');
+  }
+  fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode {
     throw new Error('Method not implemented.');
   }
   collectInputs(): MaybePromise<InputSource[]> {

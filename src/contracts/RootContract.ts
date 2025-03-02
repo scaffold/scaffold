@@ -12,7 +12,7 @@ export const RootContract: ContractProvider<Hash> = {
 
   encodeParams: encodeDataTree,
 
-  async compute(driver: ComputationDriver) {
+  async compute(driver) {
     // TODO: How are errors handled here?
     const hash = await driver.params.getHash();
     if (driver.type === ComputationType.Generator) {

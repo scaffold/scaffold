@@ -3,6 +3,7 @@ import { Hash, HashPrimitive } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { ComputationDriver } from './ComputationMeta.ts';
 import { DataTree } from './protocol/base.ts';
+import { ImmutableTreeNode } from './DataTreeOverlay.ts';
 
 export interface ContractProvider<ParamsType = unknown> {
   readonly name: string;

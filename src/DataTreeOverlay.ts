@@ -21,7 +21,7 @@ export interface TreeNode {
   isMutable: boolean;
 
   open(key: number | string | Uint8Array): ImmutableTreeNode | MutableTreeNode;
-  annotate(annotation: Annotation): void;
+  annotate(annotation: Annotation): TreeNode; // Returns self for chainability
   // exists(): MaybePromise<boolean>;
   size(): MaybePromise<number | undefined>; // Returns the total size
   read(dst: Uint8Array, offset: number): MaybePromise<number | undefined>;
@@ -47,7 +47,7 @@ export interface MutableTreeNode extends TreeNode {
   write(buf: Uint8Array, offset: number): void;
   delete(): void;
 
-  set(tree: DataTree): void;
+  set(tree: TreeObj): void;
   setBool(value: boolean): void;
   setInt(value: number): void;
   setBigInt(value: bigint): void;
@@ -80,6 +80,7 @@ export class DataTreeNode implements ImmutableTreeNode {
 
   annotate(annotation: Annotation) {
     console.log('Annotate', annotation);
+    return this;
   }
 
   // exists(): MaybePromise<boolean> {
@@ -143,10 +144,14 @@ export class MutableDataTreeNode implements MutableTreeNode {
   readonly isMutable = true;
 
   #value?: Uint8Array;
-  #entries: { key: Uint8Array; node: MutableDataTreeNode }[] = [];
+  #entries: { key: Uint8Array; node: MutableDataTreeNode }[];
 
   constructor(init: DataTree = EMPTY_DATA_TREE) {
-    this.set(init);
+    this.#value = init.value !== null ? init.value.bytes : undefined;
+    this.#entries = init.entries.map((x) => ({
+      key: x.key,
+      node: new MutableDataTreeNode(x.node),
+    }));
   }
 
   toDataTree(): DataTree {
@@ -197,7 +202,8 @@ export class MutableDataTreeNode implements MutableTreeNode {
     throw new Error('Method not implemented.');
   }
 
-  set(tree: DataTree): void {
+  set(obj: TreeObj): void {
+    const tree = encodeDataTree(obj);
     this.#value = tree.value !== null ? tree.value.bytes : undefined;
     this.#entries = tree.entries.map((x) => ({
       key: x.key,
@@ -233,8 +239,9 @@ export class MutableDataTreeNode implements MutableTreeNode {
     this.#value = value;
   }
 
-  annotate(annotation: Annotation): void {
+  annotate(annotation: Annotation) {
     throw new Error('Method not implemented.');
+    return this;
   }
 
   size(): MaybePromise<number | undefined> {

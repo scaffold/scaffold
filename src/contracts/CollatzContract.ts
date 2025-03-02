@@ -9,7 +9,7 @@ export const CollatzContract: ContractProvider<{ num: bigint }> = {
 
   encodeParams: encodeDataTree,
 
-  async compute(driver: ComputationDriver) {
+  async compute(driver) {
     driver.params.open('num').annotate({
       description: 'The *number* we want the collatz sequence to start from',
       mimeType: 'text/prim/numeric/int',
@@ -34,6 +34,6 @@ export const CollatzContract: ContractProvider<{ num: bigint }> = {
       };
     }
 
-    driver.body.set(encodeDataTree(answer));
+    driver.body.set(answer);
   },
 };

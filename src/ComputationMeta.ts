@@ -4,19 +4,18 @@ import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { InputSpec, OutputSpec } from './BlockBuilder.ts';
 import { Verifier } from './messages.ts';
-import { TreeObj } from './DataTreeHelper.ts';
 import { ImmutableTreeNode, MutableTreeNode, TreeNode } from './DataTreeOverlay.ts';
-import { DataTree } from './protocol/base.ts';
+import { TreeObj } from './DataTreeHelper.ts';
 
 // TODO: ComputationProvider?
 
-export const enum ComputationType {
+export enum ComputationType {
   Contract,
   Generator,
 }
 
 // https://docs.google.com/spreadsheets/d/1y3f2oqYwDaLRqoLnz4Jr1Ws7oO_muBPrv4ro9DQaIYw/edit
-export const enum BurdenOfProof {
+export enum BurdenOfProof {
   Invalidation, // Used for most things; one hint proving invalidation makes the contract invalid. Self-votes are VALID, and a single INVALID child vote invalidates.
   Validation, // Used for things like hash inversions; one hint proving validation makes the hash valid. Self-votes are INVALID, and a single VALID child vote validates.
 }
@@ -42,15 +41,16 @@ export interface ComputationDriver extends WorkerDriver {
   // getAncestorHash(): Hash;
   // getAuthorHash(): Hash;
 
-  emitHint(idx: number, hint: DataTree): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
+  emitHint(idx: number, hint: TreeObj): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
   getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode; // Only valid if this is a contract
   requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: bigint): MaybePromise<void>;
-  isSignedBy(publicKey: Uint8Array): boolean;
-  requireSignature(publicKey: Uint8Array): void;
+  isSignedBy(publicKeyHash: Hash): boolean;
+  requireSignature(publicKeyHash: Hash): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
-  fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode;
+  lookup(hash: Hash): ImmutableTreeNode;
+  fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode;
 
   collectInputs(): MaybePromise<InputSource[]>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
   requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<InputSource>; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.

@@ -46,7 +46,7 @@ export const FrontierContract: ContractProvider<{}> = {
 
   encodeParams: encodeDataTree,
 
-  async compute(driver: ComputationDriver) {
+  async compute(_driver) {
     // const { level } = FrontierTreeParams.decode(driver.getParams());
     // if (level < 0) {
     //   throw new Error(`Level cannot be negative!`);
