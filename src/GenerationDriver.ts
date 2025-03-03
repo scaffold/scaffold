@@ -1,4 +1,4 @@
-import { InputSpec, OutputSpec } from './BlockBuilder.ts';
+import { BlockBuilder, InputSpec, OutputSpec } from './BlockBuilder.ts';
 import {
   DataTreeNode,
   ImmutableTreeNode,
@@ -12,7 +12,7 @@ import {
   InputSource,
 } from './ComputationMeta.ts';
 import { Context } from './Context.ts';
-import { BlockFact } from './FactMeta.ts';
+import { BlockFact, FactType } from './FactMeta.ts';
 import { KeyService } from './KeyService.ts';
 import { Verifier } from './messages.ts';
 import { DataTree } from './protocol/base.ts';
@@ -21,6 +21,10 @@ import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { WorkerDriver } from './WorkerDriver.ts';
 import { digestTree, TreeObj } from './DataTreeHelper.ts';
+import { FactService } from './FactService.ts';
+import { todo } from './util/functional.ts';
+import { AvailableOutputManager } from './AvailableOutputManager.ts';
+import { MergeabilityService } from './MergeabilityService.ts';
 
 export const GENERATION_SUCCESS_FLAG = Symbol('GenerationService.Success');
 class GenerationException extends Error {
@@ -36,23 +40,22 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
 
   contractHash: Hash;
   params: ImmutableTreeNode;
-  body: MutableTreeNode;
+  body: MutableDataTreeNode;
 
   // Make these super-private so js generators can't see them
 
-  #emitCorrect: boolean;
+  private shouldEmitCorrect: boolean;
 
-  #body: MutableDataTreeNode;
-  #fulfillsVerifiers: Verifier[];
-  #inputs: InputSpec[] = [];
-  #inputsAreFixed = false;
-  #refs: BlockFact[] = [];
-  // #satisfies:Verifier=[];
-  #outputs: OutputSpec[] = [];
-  // #frontierLevel: number | undefined;
-  #timestampGte: bigint | undefined;
+  private fulfillsVerifiers: Verifier[];
+  private inputs: InputSpec[] = [];
+  private inputsAreFixed = false;
+  private refs: BlockFact[] = [];
+  // private satisfies:Verifier=[];
+  private outputs: OutputSpec[] = [];
+  // private frontierLevel: number | undefined;
+  private timestampGte: number | undefined;
 
-  #claimWeightBoost = 0n;
+  private claimWeightBoost = 0n;
 
   constructor(ctx: Context, verifier: Verifier, scoreFn: () => number) {
     super(ctx, scoreFn);
@@ -60,10 +63,9 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     this.contractHash = verifier.contractHash;
     this.params = new DataTreeNode(verifier.params);
 
-    this.#body = new MutableDataTreeNode();
-    this.body = this.#body;
+    this.body = new MutableDataTreeNode();
 
-    this.#emitCorrect = Hash.compare(
+    this.shouldEmitCorrect = Hash.compare(
       Hash.digest(arrConcat(
         ctx.config.entropyProvider.cryptoRandomBytes(32),
         verifier.contractHash.toBytes(),
@@ -72,7 +74,7 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
       attemptDupeFraction,
     ) === 1;
 
-    this.#fulfillsVerifiers = [verifier];
+    this.fulfillsVerifiers = [verifier];
   }
 
   emitHint(idx: number, hint: TreeObj): void {
@@ -87,12 +89,12 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     if (this.getDoneSignal().aborted) {
       return;
     }
-    this.#outputs.push(output);
+    this.outputs.push(output);
   }
 
-  requireTimestampGte(timestamp: bigint): MaybePromise<void> {
-    if (this.#timestampGte === undefined || timestamp > this.#timestampGte) {
-      this.#timestampGte = timestamp;
+  requireTimestampGte(timestamp: number): MaybePromise<void> {
+    if (this.timestampGte === undefined || timestamp > this.timestampGte) {
+      this.timestampGte = timestamp;
     }
   }
 
@@ -111,18 +113,42 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
   }
 
   emitCorrect(): boolean {
-    return this.#emitCorrect;
+    return this.shouldEmitCorrect;
   }
 
   lookup(hash: Hash): ImmutableTreeNode {
-    throw new Error('Method not implemented.');
+    const fact = this.ctx.get(FactService).get(hash, false);
+    if (fact !== undefined && fact.type === FactType.Block) {
+      return new DataTreeNode(fact.body);
+    }
+    todo();
   }
   fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode {
     throw new Error('Method not implemented.');
   }
+
   collectInputs(): MaybePromise<InputSource[]> {
-    throw new Error('Method not implemented.');
+    let inputsAreFixed = false;
+    if (!inputsAreFixed) {
+      for (const verifier of this.fulfillsVerifiers) {
+        this.inputs = this.inputs.concat(
+          this.ctx.get(AvailableOutputManager).popAll(verifier, (test) => this.isMergeable(test)),
+        );
+      }
+      inputsAreFixed = true;
+    }
+
+    return this.inputs.map((input) => {
+      const output = input.block.outputs[input.outputIdx];
+      return {
+        input,
+        output,
+        body: input.block.body,
+        timestamp: input.block.timestamp,
+      };
+    });
   }
+
   requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<InputSource> {
     throw new Error('Method not implemented.');
   }
@@ -136,7 +162,7 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     throw new Error('Method not implemented.');
   }
   boostClaimWeight(offset: bigint): void {
-    this.#claimWeightBoost += offset;
+    this.claimWeightBoost += offset;
   }
   ingenerable(msg?: string): void {
     throw new Error('Method not implemented.');
@@ -147,10 +173,52 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
       err = undefined;
     }
 
+    if (err === undefined) {
+      this.collectInputs();
+      const draft = {
+        body: this.body.toDataTree(),
+        inputs: this.inputs,
+        outputs: this.outputs,
+        refs: this.refs,
+        claimWeightBoost: this.claimWeightBoost,
+      };
+
+      this.ctx.get(BlockBuilder).publishSingleDraft(draft);
+    }
+
     super.finish(err);
   }
 
   getResult() {
-    return this.#body.toDataTree();
+    return this.body.toDataTree();
+  }
+
+  private isMergeable(testInput: { block: BlockFact; outputIdx?: number }) {
+    // if (
+    //   false &&
+    //   outputIdx !== undefined && verifierInputs.length > 0 &&
+    //   Hash.equals(state.verifierState.verifier.contractHash, frontierHash)
+    // ) {
+    //   const frontierCount = verifierInputs.filter((x) =>
+    //     x.outputIdx === x.block.frontierOutputIdx
+    //   ).length;
+    //   if (frontierCount > frontierInputCount) {
+    //     throw new Error(`Internal error!`);
+    //   } else if (frontierCount === frontierInputCount) {
+    //     return false;
+    //   }
+
+    //   const lastBlock = verifierInputs[verifierInputs.length - 1].block;
+    //   return block.frontierVoteBlock !== undefined &&
+    //     (block.frontierVoteBlock === lastBlock ||
+    //       (block.frontierVoteBlock === lastBlock.frontierVoteBlock &&
+    //         this.isFrontierMergeable(block, lastBlock)));
+    // }
+
+    return testInput.block.isCanonical && this.ctx.get(MergeabilityService).isMergeable([
+      ...this.inputs.map((x) => x.block),
+      ...this.refs,
+      testInput.block,
+    ]);
   }
 }

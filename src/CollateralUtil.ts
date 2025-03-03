@@ -7,6 +7,7 @@ import { error } from './util/functional.ts';
 import { bigintMax, bigintMin } from './util/bigint.ts';
 import { assert } from './util/functional.ts';
 import { digestTree, EMPTY_DATA_TREE, encodeDataTree } from './DataTreeHelper.ts';
+import { AccountContract } from './contracts/AccountContract.ts';
 
 export const challengeThreshold = 10n;
 export const finalVoteAmount = 100n;
@@ -379,8 +380,8 @@ export class CollateralUtil {
       if (amount > 0n) {
         mapPut(outputKeys, bin2hex(dst), () => ({
           verifier: {
-            contractHash: accountHash,
-            params: encodeDataTree({ publicKey: dst }),
+            contractHash: AccountContract.contractHash,
+            params: AccountContract.encodeParams({ publicKey: dst }),
           },
           amount,
           detail: EMPTY_DATA_TREE,

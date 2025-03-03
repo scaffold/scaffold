@@ -13,7 +13,7 @@ export interface LogEvent {
   timestamp: number;
   level: LogLevel;
   message: string;
-  data: { [key: string]: unknown };
+  data: unknown;
 }
 
 export class Logger {
@@ -26,27 +26,27 @@ export class Logger {
     return level !== undefined ? new Logger(ctx, level) : undefined;
   }
 
-  debug(message: string, data?: { [key: string]: unknown }) {
+  debug(message: string, data?: unknown) {
     this.log(LogLevel.DEBUG, message, data);
   }
 
-  info(message: string, data?: { [key: string]: unknown }) {
+  info(message: string, data?: unknown) {
     this.log(LogLevel.INFO, message, data);
   }
 
-  warn(message: string, data?: { [key: string]: unknown }) {
+  warn(message: string, data?: unknown) {
     this.log(LogLevel.WARN, message, data);
   }
 
-  error(message: string, data?: { [key: string]: unknown }) {
+  error(message: string, data?: unknown) {
     this.log(LogLevel.ERROR, message, data);
   }
 
-  critical(message: string, data?: { [key: string]: unknown }) {
+  critical(message: string, data?: unknown) {
     this.log(LogLevel.CRITICAL, message, data);
   }
 
-  log(level: LogLevel, message: string, data: { [key: string]: unknown } = {}) {
+  log(level: LogLevel, message: string, data?: unknown) {
     if (level >= this.minLevel) {
       const event = { timestamp: this.ctx.config.timeProvider.now(), level, message, data };
       for (const provider of this.ctx.config.loggingProviders) {

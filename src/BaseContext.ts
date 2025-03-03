@@ -1,7 +1,7 @@
 import { assert } from './util/functional.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 
-interface Disposable {
+interface MaybeDisposable {
   [Symbol.dispose]?(): void;
   [Symbol.asyncDispose]?(): Promise<void>;
 }
@@ -26,7 +26,7 @@ export abstract class BaseContext<DerivedType> {
     }
   }
 
-  public get<T extends object & Disposable>(Type: { new (context: DerivedType): T }): T {
+  public get<T extends object & MaybeDisposable>(Type: { new (context: DerivedType): T }): T {
     if (!this.objs.has(Type)) {
       if (this.isDestructed) {
         throw new Error(`Cannot use a context after it's been destructed!`);

@@ -37,6 +37,7 @@ const hasher = {
 }.sha3;
 
 export const HASH_SIZE = 32;
+export const HASH_HEX_SIZE = HASH_SIZE * 2;
 export const HASH_BITS = HASH_SIZE * 8;
 export const HASH_REGEX = /^[a-fA-F0-9]{64}$/;
 

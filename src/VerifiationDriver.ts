@@ -13,7 +13,7 @@ import {
   InputSource,
 } from './ComputationMeta.ts';
 import { Context } from './Context.ts';
-import { BlockFact } from './FactMeta.ts';
+import { BlockFact, FactType } from './FactMeta.ts';
 import { KeyService } from './KeyService.ts';
 import { Verifier } from './messages.ts';
 import { DataTree } from './protocol/base.ts';
@@ -23,6 +23,8 @@ import { MaybePromise } from './util/MaybePromise.ts';
 import { WorkerDriver } from './WorkerDriver.ts';
 import { encodeDataTree, TreeObj } from './DataTreeHelper.ts';
 import { assert } from '@std/assert/assert';
+import { todo } from './util/functional.ts';
+import { FactService } from './FactService.ts';
 
 export const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
 class VerificationException extends Error {
@@ -40,16 +42,16 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
 
   // Make these super-private so js generators can't see them
 
-  #block: BlockFact;
+  private block: BlockFact;
 
-  #groupIdx: number;
+  private groupIdx: number;
 
-  #readHints: DataTree[];
+  private readHints: DataTree[];
 
-  #nextInputIdx = 0;
-  #nextOutputIdx = 0;
+  private nextInputIdx = 0;
+  private nextOutputIdx = 0;
 
-  #claimWeightBoost = 0n;
+  private claimWeightBoost = 0n;
 
   constructor(
     ctx: Context,
@@ -64,15 +66,15 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     this.params = new DataTreeNode(verifier.params);
     this.body = new MutableDataTreeNode();
 
-    this.#block = block;
+    this.block = block;
 
     const rootHint = CollateralHint.decode(hintPrefix[0].value!.bytes).hint;
     if (!('CollateralHintVerifier' in rootHint)) {
       throw new Error(`Invalid root hint ${JSON.stringify(rootHint)}`);
     }
-    this.#groupIdx = rootHint.CollateralHintVerifier.groupIdx;
+    this.groupIdx = rootHint.CollateralHintVerifier.groupIdx;
 
-    this.#readHints = hintPrefix.slice(0, 1);
+    this.readHints = hintPrefix.slice(0, 1);
   }
 
   emitHint(idx: number, hint: TreeObj): void {
@@ -87,7 +89,7 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     throw new Error('Method not implemented.');
   }
 
-  requireTimestampGte(timestamp: bigint): MaybePromise<void> {
+  requireTimestampGte(timestamp: number): MaybePromise<void> {
     throw new Error('Method not implemented.');
   }
 
@@ -96,7 +98,9 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   }
 
   requireSignature(publicKeyHash: Hash): void {
-    throw new Error('Method not implemented.');
+    assert(
+      this.block.signer !== undefined && Hash.equals(Hash.digest(this.block.signer), publicKeyHash),
+    );
   }
 
   emitCorrect(): boolean {
@@ -104,7 +108,12 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   }
 
   lookup(hash: Hash): ImmutableTreeNode {
-    throw new Error('Method not implemented.');
+    // TODO: Check that the hash is present in the refs array
+    const fact = this.ctx.get(FactService).get(hash, false);
+    if (fact !== undefined && fact.type === FactType.Block) {
+      return new DataTreeNode(fact.body);
+    }
+    todo();
   }
   fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode {
     throw new Error('Method not implemented.');
@@ -125,7 +134,7 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     throw new Error('Method not implemented.');
   }
   boostClaimWeight(offset: bigint): void {
-    this.#claimWeightBoost += offset;
+    this.claimWeightBoost += offset;
   }
   ingenerable(msg?: string): void {
     throw new Error('Method not implemented.');
@@ -136,7 +145,7 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
       err = undefined;
     }
 
-    assert(this.#block.claimWeightBoost === this.#claimWeightBoost);
+    assert(this.block.claimWeightBoost === this.claimWeightBoost);
 
     super.finish(err);
   }

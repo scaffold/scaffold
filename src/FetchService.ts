@@ -105,10 +105,11 @@ export class FetchService {
       if (onBody !== undefined) {
         const last = got[got.length - 1];
         this.ctx.get(FactService).increaseUsefulness(last.block, 1);
-        onBody(last.block.bodies[last.groupIdx]);
+        onBody(last.block.body);
       }
     } else {
       const amount = incentive ?? this.ctx.config.getDepositIncentive(verifier);
+      console.log({ amount });
       if (amount >= 0n) {
         this.ctx.get(BlockBuilder).publishPersistentDraft({
           outputs: [{ verifier, amount, detail: { value: null, entries: [] } }],
@@ -129,12 +130,13 @@ export class FetchService {
     if (onBody !== undefined || onResponseBlock !== undefined) {
       let prevBody: DataTree | undefined;
       onState = (claim) => {
+        console.log(claim, verifier);
         if (claim !== undefined) {
           onResponseBlock?.(claim.block, claim.groupIdx);
 
           this.ctx.get(FactService).increaseUsefulness(claim.block, 1);
 
-          const body = claim.block.bodies[claim.groupIdx];
+          const body = claim.block.body;
           if (prevBody === undefined || !areTreesEqual(body, prevBody)) {
             prevBody = body;
             onBody?.(body);

@@ -23,7 +23,7 @@ export enum BurdenOfProof {
 export interface InputSource {
   input: InputSpec;
   output: BlockOutput;
-  body: Uint8Array;
+  body: DataTree;
   timestamp: bigint;
 }
 
@@ -44,12 +44,16 @@ export interface ComputationDriver extends WorkerDriver {
   emitHint(idx: number, hint: DataTree): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
   getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode; // Only valid if this is a contract
   requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
-  requireTimestampGte(timestamp: bigint): MaybePromise<void>;
+  requireTimestampGte(timestamp: number): MaybePromise<void>;
   isSignedBy(publicKeyHash: Hash): boolean;
   requireSignature(publicKeyHash: Hash): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
   lookup(hash: Hash): ImmutableTreeNode;
+
+  // In WASM, typically inter-contract communication should be binary and use solo-bytearray params. /ext/contract_hash/binary_params/ is the query.
+  // However, if you want to query using a data tree, there's another interface.
+  // fetch(contractHash: Hash, params: FsFd)
   fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode;
 
   collectInputs(): MaybePromise<InputSource[]>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.

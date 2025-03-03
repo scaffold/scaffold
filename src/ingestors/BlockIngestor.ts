@@ -189,10 +189,8 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
       }
 
       // TODO: Make this case work; just plugin an EMPTY_ARR or an undefined body
-      if (input.groupIdx < 0 || fact.bodies[input.groupIdx] === undefined) {
-        throw new Error(
-          `Invalid groupIdx ${input.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
-        );
+      if (input.groupIdx < 0) {
+        throw new Error(`Invalid groupIdx ${input.groupIdx} on input!`);
       }
 
       const claims = this.ctx.get(BlockService).getClaims(input);
@@ -208,10 +206,8 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
 
     fact.outputs.forEach((output, outputIdx) => {
       // TODO: Make this case work; just plugin an EMPTY_ARR or an undefined body
-      if (output.groupIdx < 0 || fact.bodies[output.groupIdx] === undefined) {
-        throw new Error(
-          `Invalid groupIdx ${output.groupIdx} on input; only ${fact.bodies.length} bodies present!`,
-        );
+      if (output.groupIdx < 0) {
+        throw new Error(`Invalid groupIdx ${output.groupIdx} on input!`);
       }
 
       if (output.amount < 0n && !Hash.equals(output.verifier.contractHash, frontierHash)) {
@@ -282,18 +278,16 @@ export class BlockIngestor implements IngestionProvider<FactType.Block> {
       // this.checkInputAvailability(fact);
     }
 
-    for (const body of fact.bodies) {
-      if (body.value !== null && body.value.bytes.byteLength >= headerSize) {
-        this.ctx.get(ClockService).setTimeout(() => {
-          try {
-            // TODO: Set the fromNode correctly here
-            this.ctx.get(FactService).ingest(body.value!.bytes, fact.source);
-          } catch (err) {
-            // If it fails no worries; it just wasn't a valid block
-            console.debug(err);
-          }
-        }, 0);
-      }
+    if (fact.body.value !== null && fact.body.value.bytes.byteLength >= headerSize) {
+      this.ctx.get(ClockService).setTimeout(() => {
+        try {
+          // TODO: Set the fromNode correctly here
+          this.ctx.get(FactService).ingest(fact.body.value!.bytes, fact.source);
+        } catch (err) {
+          // If it fails no worries; it just wasn't a valid block
+          console.debug(err);
+        }
+      }, 0);
     }
 
     // this.ctx.get(BlockSetService).getVoters(block.frontier_vote, -1).push(fact);

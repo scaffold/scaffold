@@ -710,17 +710,16 @@ export class BlockService {
     return this.ctx
       .get(FactService)
       .hackyGetBlocksMatching()
-      .flatMap((block) => {
-        const input = block.inputs.find((input) => {
+      .flatMap((block) =>
+        block.inputs.filter((input) => {
           const inputBlock = this.get(input.blockHash, false);
           return inputBlock !== undefined &&
             this.areVerifiersEqual(
               inputBlock.outputs[input.outputIdx].verifier,
               verifier,
             );
-        });
-        return input !== undefined ? [{ block, groupIdx: input.groupIdx }] : [];
-      });
+        }).map((input) => ({ block, groupIdx: input.groupIdx }))
+      );
   }
 
   public getBlocksByInput(input: { blockHash: Hash; outputIdx: number }) {

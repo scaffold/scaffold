@@ -498,9 +498,7 @@ export class FactService {
         });
       }
 
-      fact.log?.info(`Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}`, {
-        hex: fact.hash.toHex(),
-      });
+      fact.log?.info(`Created ${FactType[fact.type]} fact from ${FactSource[fact.source]}`, fact);
 
       if (provider.isPersistent) {
         this.facts.set(hash.toPrimitive(), fact);

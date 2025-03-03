@@ -15,7 +15,7 @@ export const enum CollateralGeneratorModifier {
 }
 
 const DEBUG = true;
-const resolutionDelay = 5000n;
+const resolutionDelayMs = 5000;
 
 export const CollateralContract: ContractProvider<Hash> = {
   name: 'collateral',
@@ -28,7 +28,7 @@ export const CollateralContract: ContractProvider<Hash> = {
 
     const postings: (InputSource & Posting)[] = [];
     for (const input of await driver.collectInputs()) {
-      await driver.requireTimestampGte(input.timestamp + resolutionDelay);
+      await driver.requireTimestampGte(Number(input.timestamp) + resolutionDelayMs);
       postings.push({
         ...input,
         detail: CollateralContractDetail.decode(input.output.detail.value!.bytes),

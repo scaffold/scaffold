@@ -31,13 +31,13 @@ export class HintSuggestionService {
               hint: { CollateralHintInputHash: { inputIdx: i } },
             })),
         ),
-        ...Array.from(
-          { length: block.bodies.length },
-          (_, i) =>
-            encodeDataTree(CollateralHint.encode({
-              hint: { CollateralHintVerifier: { groupIdx: i } },
-            })),
-        ),
+        // ...Array.from(
+        //   { length: block.bodies.length },
+        //   (_, i) =>
+        //     encodeDataTree(CollateralHint.encode({
+        //       hint: { CollateralHintVerifier: { groupIdx: i } },
+        //     })),
+        // ),
       ];
     }
 

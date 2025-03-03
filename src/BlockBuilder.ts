@@ -22,6 +22,8 @@ import { ClockService } from './ClockService.ts';
 import { FrontierService3, VOLUME_INCLUDES_SELF } from './FrontierService3.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
+import { EMPTY_DATA_TREE } from './DataTreeHelper.ts';
+import { AccountContract } from './contracts/AccountContract.ts';
 
 const defaultTimeout = 100; // Enable block chunking
 // const defaultTimeout = 0; // Disable block chunking
@@ -46,7 +48,7 @@ export interface BlockDraft {
   inputs?: InputSpec[];
   satisfies?: (Verifier & { detail?: Uint8Array })[];
   outputs?: OutputSpec[];
-  body?: Uint8Array;
+  body?: DataTree;
   claimWeightBoost?: bigint;
   // frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
@@ -76,15 +78,10 @@ export class BlockBuilder {
 
   constructor(private ctx: Context) {
     this.selfAccountVerifier = {
-      contractHash: accountHash,
-      params: {
-        value: {
-          bytes: AccountContractParams.encode({
-            publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
-          }),
-        },
-        entries: [],
-      },
+      contractHash: AccountContract.contractHash,
+      params: AccountContract.encodeParams({
+        publicKey: this.ctx.get(KeyService).getSelfPublicKey(),
+      }),
     };
   }
 
@@ -107,7 +104,7 @@ export class BlockBuilder {
     const refBlocks: BlockFact[] = [];
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
-    const bodies: DataTree[] = [];
+    let body: DataTree | undefined;
     let claimWeightBoost = 0n;
 
     const groupIdxArr = drafts.map((x) => x.groupIdx).filter((x) => x !== undefined);
@@ -132,13 +129,12 @@ export class BlockBuilder {
       const groupIdx = draft.groupIdx ?? nextGroupIdx();
       draftGroupIdxs.push(groupIdx);
 
-      while (bodies.length <= groupIdx) {
-        bodies.push({ value: null, entries: [] });
+      if (draft.body !== undefined) {
+        if (body !== undefined) {
+          throw new Error(`Cannot build a block with multiple bodies!`);
+        }
+        body = draft.body;
       }
-      bodies[groupIdx] = {
-        value: draft.body !== undefined ? { bytes: draft.body } : null,
-        entries: [],
-      };
 
       if (draft.squashOutputAmount !== undefined) {
         squashOutputAmount += draft.squashOutputAmount;
@@ -324,9 +320,7 @@ export class BlockBuilder {
       });
     }
 
-    while (bodies.length <= groupIdx) {
-      bodies.push({ value: null, entries: [] });
-    }
+    body ??= EMPTY_DATA_TREE;
 
     let timestamp = BigInt(this.ctx.config.timeProvider.now());
     if (this.ctx.config.graphParameters.enforceTimestampMonotonicity) {
@@ -358,7 +352,7 @@ export class BlockBuilder {
       refs,
       inputs,
       outputs,
-      bodies,
+      body,
       claimWeightBoost,
       timestamp,
       draftGroupIdxs,

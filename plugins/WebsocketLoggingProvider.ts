@@ -2,6 +2,7 @@ import { LoggingProvider } from '../src/Config.ts';
 import { Context } from '../src/Context.ts';
 import { LogEvent } from '../src/Logger.ts';
 import { str2bin } from '../src/util/buffer.ts';
+import { jsonSafeStringify } from '../src/util/json.ts';
 
 export class WebsocketLoggingProvider implements LoggingProvider {
   private ws: WebSocket;
@@ -20,7 +21,7 @@ export class WebsocketLoggingProvider implements LoggingProvider {
 
   handler(event: LogEvent, ctx: Context) {
     const packet = str2bin(
-      JSON.stringify({
+      jsonSafeStringify({
         source: ctx.config.debugName,
         ...event,
         timestamp: new Date(event.timestamp).toISOString(),

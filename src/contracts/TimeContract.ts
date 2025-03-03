@@ -16,7 +16,7 @@ export const TimeContract: ContractProvider<{ time: bigint }> = {
   encodeParams: encodeDataTree,
 
   async compute(driver) {
-    const time = await driver.params.open('time').getBigInt();
+    const time = await driver.params.open('time').getInt();
     driver.requireTimestampGte(time);
   },
 };
