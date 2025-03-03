@@ -52,6 +52,8 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
   // #frontierLevel: number | undefined;
   #timestampGte: bigint | undefined;
 
+  #claimWeightBoost = 0n;
+
   constructor(ctx: Context, verifier: Verifier, scoreFn: () => number) {
     super(ctx, scoreFn);
 
@@ -133,8 +135,8 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
   fail(msg?: string): never {
     throw new Error('Method not implemented.');
   }
-  offsetCanonicality(offset: bigint): void {
-    throw new Error('Method not implemented.');
+  boostClaimWeight(offset: bigint): void {
+    this.#claimWeightBoost += offset;
   }
   ingenerable(msg?: string): void {
     throw new Error('Method not implemented.');

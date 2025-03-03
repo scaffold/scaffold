@@ -6,10 +6,7 @@ const NEVER: () => void = () => {
 
 export class StateTracker<Key, State> {
   constructor(
-    private getter: (
-      key: Key,
-      onState: (state: State) => void,
-    ) => { release(): void },
+    private getter: (key: Key, onState: (state: State) => void) => { release(): void },
     private timeProvider: TimeProvider,
   ) {}
 

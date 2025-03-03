@@ -121,6 +121,8 @@ export const registry = {
 
       // { name: 'claimed_work', type: 'long' },
 
+      { name: 'claimWeightBoost', type: 'long' },
+
       // If the timestamp is too far back, nothing really happens, but it must be greater than all the input timestamps.
       // If timestamp is in the future, it will be rejected and it won't be useful for proving first.
       // For questions with easy, rewarding answers (like epochs),

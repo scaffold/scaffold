@@ -24,7 +24,7 @@ export const CollatzContract: ContractProvider<{ num: bigint }> = {
     } else {
       const prev = driver.fetch(
         driver.contractHash,
-        CollatzContract.encodeParams({ num: num % 2n ? num * 3n + 1n : num / 2n }),
+        this.encodeParams({ num: num % 2n ? num * 3n + 1n : num / 2n }),
       );
       const prevStoppingTime = await prev.open('stoppingTime').getBigInt();
       const prevMaximum = await prev.open('maximum').getBigInt();

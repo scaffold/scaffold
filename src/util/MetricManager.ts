@@ -25,7 +25,7 @@ export class MetricManager<Entity, Metrics extends { [key: string]: NotUndefined
       entry[key] = val;
       return val;
     } else if (val === recursionSentinel) {
-      throw new Error(`Recursion detected!`);
+      throw new Error(`Cyclic recursion detected!`);
     } else {
       return val as Metrics[Key];
     }

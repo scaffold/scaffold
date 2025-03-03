@@ -5,7 +5,7 @@ import { MaybePromise } from './util/MaybePromise.ts';
 import { InputSpec, OutputSpec } from './BlockBuilder.ts';
 import { Verifier } from './messages.ts';
 import { ImmutableTreeNode, MutableTreeNode, TreeNode } from './DataTreeOverlay.ts';
-import { TreeObj } from './DataTreeHelper.ts';
+import { DataTree } from './protocol/base.ts';
 
 // TODO: ComputationProvider?
 
@@ -41,7 +41,7 @@ export interface ComputationDriver extends WorkerDriver {
   // getAncestorHash(): Hash;
   // getAuthorHash(): Hash;
 
-  emitHint(idx: number, hint: TreeObj): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
+  emitHint(idx: number, hint: DataTree): void; // Can be emitted from anywhere, and the hint at idx is a BOP.Validation
   getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode; // Only valid if this is a contract
   requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: bigint): MaybePromise<void>;
@@ -50,7 +50,7 @@ export interface ComputationDriver extends WorkerDriver {
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
   lookup(hash: Hash): ImmutableTreeNode;
-  fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode;
+  fetch(contractHash: Hash, params: DataTree): ImmutableTreeNode;
 
   collectInputs(): MaybePromise<InputSource[]>; // Returns the number of inputs matching this contractHash & params. When this is called, the value is fixed, and the return values from getInputSource() should be fixed.
   requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<InputSource>; // Adds an input if generator, returns it if contract. If getInputCount() hasn't been called, block until we have another input.
@@ -72,7 +72,7 @@ export interface ComputationDriver extends WorkerDriver {
   pass(): never;
   fail(msg?: string): never;
 
-  offsetCanonicality(offset: bigint): void;
+  boostClaimWeight(offset: bigint): void;
 
   ingenerable(msg?: string): void; // TODO: Maybe just throw an exception instead?
 }

@@ -22,6 +22,7 @@ import { Hash } from './util/Hash.ts';
 import { MaybePromise } from './util/MaybePromise.ts';
 import { WorkerDriver } from './WorkerDriver.ts';
 import { encodeDataTree, TreeObj } from './DataTreeHelper.ts';
+import { assert } from '@std/assert/assert';
 
 export const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
 class VerificationException extends Error {
@@ -47,6 +48,8 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
 
   #nextInputIdx = 0;
   #nextOutputIdx = 0;
+
+  #claimWeightBoost = 0n;
 
   constructor(
     ctx: Context,
@@ -121,8 +124,8 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   fail(msg?: string): never {
     throw new Error('Method not implemented.');
   }
-  offsetCanonicality(offset: bigint): void {
-    throw new Error('Method not implemented.');
+  boostClaimWeight(offset: bigint): void {
+    this.#claimWeightBoost += offset;
   }
   ingenerable(msg?: string): void {
     throw new Error('Method not implemented.');
@@ -132,6 +135,8 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     if (err === VERIFICATION_SUCCESS_FLAG) {
       err = undefined;
     }
+
+    assert(this.#block.claimWeightBoost === this.#claimWeightBoost);
 
     super.finish(err);
   }

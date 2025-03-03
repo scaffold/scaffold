@@ -210,6 +210,7 @@ export class BlockMetrics extends MetricManager<MeteredBlock, Metrics> {
         sum += this.get(block, 'freeMarketOutput');
         sum += this.get(block, 'ancestorWeight');
         sum += this.get(block, 'descendantWeight');
+        sum += block.claimWeightBoost;
         return sum;
       },
 

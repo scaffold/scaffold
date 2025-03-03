@@ -89,8 +89,7 @@ type UnionType<
 export type ObjectType<
   S extends avro.Schema,
   R extends { [name: string]: avro.Schema },
-> = S extends keyof R ? ObjectType<R[S], R>
-  : S extends 'null' ? null
+> = S extends 'null' ? null
   : S extends 'boolean' ? boolean
   : S extends 'int' ? number
   : S extends 'long' ? bigint
@@ -98,20 +97,17 @@ export type ObjectType<
   : S extends 'double' ? number
   : S extends 'bytes' ? Uint8Array
   : S extends 'string' ? string
+  : S extends keyof R ? ObjectType<R[S], R>
   : S extends { logicalType: keyof typeof logicalTypes } ? ReturnType<
       InstanceType<typeof logicalTypes[S['logicalType']]>['fromBytes']
     >
-  : S extends avro.schema.RecordType ? {
-      [K in S['fields'][number]['name']]: ObjectType<
-        Extract<S['fields'][number], { name: K }>['type'],
-        R
-      >;
+  : S extends { type: 'record'; fields: readonly { name: string; type: avro.Schema }[] } ? {
+      [K in S['fields'][number] as K['name']]: ObjectType<K['type'], R>;
     }
-  : S extends avro.types.LongType ? bigint
-  : S extends avro.schema.EnumType ? S['symbols'][number]
-  : S extends avro.schema.ArrayType ? ObjectType<S['items'], R>[]
-  : S extends avro.schema.MapType ? Record<string, ObjectType<S['values'], R>>
-  : S extends avro.schema.FixedType ? Uint8Array
+  : S extends { type: 'enum'; symbols: readonly string[] } ? S['symbols'][number]
+  : S extends { type: 'array'; items: avro.Schema } ? ObjectType<S['items'], R>[]
+  : S extends { type: 'map'; values: avro.Schema } ? Record<string, ObjectType<S['values'], R>>
+  : S extends { type: 'fixed'; size: number } ? Uint8Array
   : S extends readonly avro.schema.DefinedType[] ? UnionType<S[number], R>
   : never;
 

@@ -47,6 +47,7 @@ export interface BlockDraft {
   satisfies?: (Verifier & { detail?: Uint8Array })[];
   outputs?: OutputSpec[];
   body?: Uint8Array;
+  claimWeightBoost?: bigint;
   // frontierSpec?: FrontierSpec;
   // timestampGte?: bigint;
 
@@ -107,6 +108,7 @@ export class BlockBuilder {
     const inputs: (InputSpec & BlockInput)[] = [];
     const outputs: BlockOutput[] = [];
     const bodies: DataTree[] = [];
+    let claimWeightBoost = 0n;
 
     const groupIdxArr = drafts.map((x) => x.groupIdx).filter((x) => x !== undefined);
     const takenGroupIdxs = new Set(groupIdxArr);
@@ -186,6 +188,8 @@ export class BlockBuilder {
           outputs.push({ ...output, groupIdx });
         }
       }
+
+      claimWeightBoost += draft.claimWeightBoost ?? 0n;
     }
 
     let ioDelta = 0n;
@@ -349,7 +353,16 @@ export class BlockBuilder {
       }
     }
 
-    return { ...blockLinks, refs, inputs, outputs, bodies, timestamp, draftGroupIdxs };
+    return {
+      ...blockLinks,
+      refs,
+      inputs,
+      outputs,
+      bodies,
+      claimWeightBoost,
+      timestamp,
+      draftGroupIdxs,
+    };
   }
 
   private collectInputs(

@@ -34,7 +34,7 @@ export const DataContract: ContractProvider<{ hash: Hash; secret: Uint8Array }> 
             driver.ctx.get(KeyService).getSelfPublicKey(),
           );
           driver.body.setHash(commitment);
-          driver.emitHint(0, fact.data);
+          driver.emitHint(0, encodeDataTree(fact.data));
         } else {
           driver.body.setHash(Hash.random());
         }
