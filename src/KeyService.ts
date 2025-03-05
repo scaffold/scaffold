@@ -5,15 +5,18 @@ import { Logger } from './Logger.ts';
 import { LogSystem } from './Config.ts';
 import { Hash } from './util/Hash.ts';
 
+// TODO: Move this to Context
 export class KeyService {
   private selfPublicKey: Uint8Array;
 
   constructor(private ctx: Context) {
+    if (ctx.config.selfPrivateKey.byteLength !== 32) {
+      throw new Error(`Invalid private key length: ${ctx.config.selfPrivateKey.byteLength}`);
+    }
+
     this.selfPublicKey = secp.getPublicKey(ctx.config.selfPrivateKey);
     if (this.selfPublicKey.byteLength !== 33) {
-      throw new Error(
-        `Invalid public key length: ${this.selfPublicKey.byteLength}`,
-      );
+      throw new Error(`Invalid public key length: ${this.selfPublicKey.byteLength}`);
     }
 
     Logger.create(ctx, LogSystem.Main)?.info(`Public key: ${bin2hex(this.selfPublicKey)}`);

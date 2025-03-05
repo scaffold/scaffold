@@ -2,6 +2,13 @@ import { ConnectionProvider, NetworkProvider, SignalingDriver } from '../src/Net
 import { Hash } from '../src/util/Hash.ts';
 import { Timeout, TimeProvider } from '../src/Config.ts';
 
+export interface MockNetworkOptions {
+  connectLatencyMs: number;
+  sendReliableLatencyMs: number;
+  sendFastLatencyMs: number;
+  sendFastDropRatio: number;
+}
+
 class TimerSet {
   private timeouts = new Set<Timeout>();
 
@@ -30,18 +37,10 @@ export class MockNetworkProvider implements NetworkProvider {
 
   private servers = new Map<string, Server>();
 
-  constructor(
-    private opts: {
-      timeProvider: TimeProvider;
-      connectLatencyMs: number;
-      sendReliableLatencyMs: number;
-      sendFastLatencyMs: number;
-      sendFastDropRatio: number;
-    },
-  ) {}
+  constructor(private timeProvider: TimeProvider, private opts: MockNetworkOptions) {}
 
   public createInstance(driver: SignalingDriver) {
-    const timerSet = new TimerSet(this.opts.timeProvider);
+    const timerSet = new TimerSet(this.timeProvider);
 
     let remote: Server | undefined;
 
