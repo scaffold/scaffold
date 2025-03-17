@@ -1,4 +1,4 @@
-import { BlockBuilder, InputSpec, OutputSpec } from './BlockBuilder.ts';
+import { BlockBuilder, BlockDraft, InputSpec, OutputSpec } from './BlockBuilder.ts';
 import {
   DataTreeNode,
   ImmutableTreeNode,
@@ -25,6 +25,7 @@ import { FactService } from './FactService.ts';
 import { todo } from './util/functional.ts';
 import { AvailableOutputManager } from './AvailableOutputManager.ts';
 import { MergeabilityService } from './MergeabilityService.ts';
+import { ClockService } from './ClockService.ts';
 
 export const GENERATION_SUCCESS_FLAG = Symbol('GenerationService.Success');
 class GenerationException extends Error {
@@ -93,22 +94,25 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
   }
 
   requireTimestampGte(timestamp: number): MaybePromise<void> {
-    if (this.timestampGte === undefined || timestamp > this.timestampGte) {
-      this.timestampGte = timestamp;
+    const wait = timestamp - this.ctx.config.timeProvider.now();
+    if (wait > 0) {
+      return new Promise<void>((resolve) => this.ctx.get(ClockService).setTimeout(resolve, wait));
     }
+
+    // if (this.timestampGte === undefined || timestamp > this.timestampGte) {
+    //   this.timestampGte = timestamp;
+    // }
   }
 
-  isSignedBy(publicKeyHash: Hash): boolean {
-    return Hash.equals(publicKeyHash, this.ctx.get(KeyService).getSelfPublicKeyHash());
+  isSignedBy(publicKey: Uint8Array): boolean {
+    return arrEquals(publicKey, this.ctx.get(KeyService).getSelfPublicKey());
   }
 
-  requireSignature(publicKeyHash: Hash): void {
+  requireSignature(publicKey: Uint8Array): void {
     // TODO: If we don't call this, maybe we don't necessarily need to sign the block?
-    const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKeyHash();
-    if (!Hash.equals(publicKeyHash, selfPublicKey)) {
-      throw new GenerationException(
-        `requireSignature(...) called with an unknown public key!`,
-      );
+    const selfPublicKey = this.ctx.get(KeyService).getSelfPublicKey();
+    if (!arrEquals(publicKey, selfPublicKey)) {
+      this.ingenerable(`requireSignature() called with an unknown public key!`);
     }
   }
 
@@ -165,17 +169,17 @@ export class GenerationDriver extends WorkerDriver implements ComputationDriver 
     this.claimWeightBoost += offset;
   }
   ingenerable(msg?: string): void {
-    throw new Error('Method not implemented.');
+    throw new GenerationException(msg ?? `ingenerable() called!`);
   }
 
-  override finish(err?: typeof GENERATION_SUCCESS_FLAG | Error): MaybePromise<void> {
+  override async finish(err?: typeof GENERATION_SUCCESS_FLAG | Error): Promise<void> {
     if (err === GENERATION_SUCCESS_FLAG) {
       err = undefined;
     }
 
     if (err === undefined) {
       this.collectInputs();
-      const draft = {
+      const draft: BlockDraft = {
         body: this.body.toDataTree(),
         inputs: this.inputs,
         outputs: this.outputs,

@@ -63,9 +63,6 @@ export class FactService {
 
   private facts = new Map<HashPrimitive, Fact | FactRef | typeof ingestingFact>();
 
-  private collateralByHash = new Map<HashPrimitive, Collateralization[]>();
-  private validitiesByHash = new Map<HashPrimitive, Map<HashPrimitive, DetailVote>>();
-
   private pendingForgets: { fact: WeakRef<Fact>; forgetTimestamp: number }[] = [];
   private forgottenCount = 0;
 
@@ -181,13 +178,11 @@ export class FactService {
   }
 
   public addCollateral(hash: Hash, collateralization: Collateralization) {
-    mapPut(this.collateralByHash, hash.toPrimitive(), () => [])
-      .push(collateralization);
-    this.ctx.get(MonitoringService).collateralMonitor
-      .callAll(hash, collateralization);
+    this.getRef(hash).collateralizations.push(collateralization);
+    this.ctx.get(MonitoringService).collateralMonitor.callAll(hash, collateralization);
   }
   public forgetCollateral(hash: Hash, collateralBlock: BlockFact) {
-    const colls = mapPut(this.collateralByHash, hash.toPrimitive(), () => []);
+    const colls = this.getRef(hash).collateralizations;
     const idx = colls.findIndex((coll) => coll.collateralBlock === collateralBlock);
     if (idx !== -1) {
       colls.splice(idx, 1);
@@ -203,39 +198,38 @@ export class FactService {
     }
   }
 
-  public getValidity(blockHash: Hash, hints: Uint8Array[]): DetailVote | undefined {
-    return this.validitiesByHash.get(blockHash.toPrimitive())
-      ?.get(Hash.digestParts(...hints).toPrimitive());
+  public getValidity(blockHash: Hash, hints: DataTree[]): DetailVote | undefined {
+    const fact = this.facts.get(blockHash.toPrimitive());
+    if (fact === ingestingFact) {
+      throw new Error(`Cannot get an ingesting fact!`);
+    }
+    return fact?.validities.get(Hash.digestParts(...hints.map(digestTree)).toPrimitive())?.vote;
   }
   public updateValidity(blockHash: Hash, hints: DataTree[], vote: DetailVote): DetailVote {
     return mapPut(
-      mapPut(
-        this.validitiesByHash,
-        blockHash.toPrimitive(),
-        () => new Map<HashPrimitive, DetailVote>(),
-      ),
+      this.getRef(blockHash).validities,
       Hash.digestParts(...hints.map(digestTree)).toPrimitive(),
-      () => vote,
-      (priorVote) => {
-        const priorType = CollateralUtil.getContestType(priorVote);
+      () => ({ path: hints, vote }),
+      (prior) => {
+        const priorType = CollateralUtil.getContestType(prior.vote);
         const newType = CollateralUtil.getContestType(vote);
         if (priorType !== newType) {
           throw new Error(`Cannot change the contest type!`);
         }
 
-        if (priorVote.endsWith('_CONTEST')) {
-          return vote;
+        if (prior.vote.endsWith('_CONTEST')) {
+          return { ...prior, vote };
         } else if (vote.endsWith('_CONTEST')) {
-          return priorVote;
-        } else if (vote !== priorVote) {
+          return prior;
+        } else if (vote !== prior.vote) {
           throw new Error(
-            `Cannot change a leaf result from ${priorVote} to ${vote}!`,
+            `Cannot change a leaf result from ${prior.vote} to ${vote}!`,
           );
         } else {
-          return vote;
+          return { ...prior, vote };
         }
       },
-    );
+    ).vote;
   }
 
   public emit<Type extends FactType, MsgType>(
@@ -472,9 +466,6 @@ export class FactService {
 
         toConnections: [],
 
-        collateralizations: mapPut(this.collateralByHash, hash.toPrimitive(), () => []),
-        validities: mapPut(this.validitiesByHash, hash.toPrimitive(), () => new Map()),
-
         visitedAt: 0,
         references: 0,
 
@@ -541,10 +532,12 @@ export class FactService {
 
   private createRef(hash: Hash): FactRef {
     return {
-      type: FactType.Ref as const,
+      type: FactType.Ref,
       hash,
       receptions: [],
       requesting: new Set(),
+      collateralizations: [],
+      validities: new Map(),
       log: Logger.create(this.ctx, LogSystem.Fact),
     };
   }

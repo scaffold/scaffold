@@ -109,7 +109,6 @@ export class FetchService {
       }
     } else {
       const amount = incentive ?? this.ctx.config.getDepositIncentive(verifier);
-      console.log({ amount });
       if (amount >= 0n) {
         this.ctx.get(BlockBuilder).publishPersistentDraft({
           outputs: [{ verifier, amount, detail: { value: null, entries: [] } }],
@@ -130,7 +129,6 @@ export class FetchService {
     if (onBody !== undefined || onResponseBlock !== undefined) {
       let prevBody: DataTree | undefined;
       onState = (claim) => {
-        console.log(claim, verifier);
         if (claim !== undefined) {
           onResponseBlock?.(claim.block, claim.groupIdx);
 

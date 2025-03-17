@@ -45,8 +45,8 @@ export interface ComputationDriver extends WorkerDriver {
   getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode; // Only valid if this is a contract
   requireOutput(output: OutputSpec): void; // Same kind of thing as requireBody. Note that order matters here; the generator and contract must require outputs in the same order.
   requireTimestampGte(timestamp: number): MaybePromise<void>;
-  isSignedBy(publicKeyHash: Hash): boolean;
-  requireSignature(publicKeyHash: Hash): void;
+  isSignedBy(publicKey: Uint8Array): boolean;
+  requireSignature(publicKey: Uint8Array): void;
   emitCorrect(): boolean; // Whether to emit a correct answer or not; returns true if contract
 
   lookup(hash: Hash): ImmutableTreeNode;

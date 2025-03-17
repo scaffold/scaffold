@@ -6,6 +6,7 @@ import { CollateralContractDetail } from './collateralMessages.ts';
 import { DetailVote } from './CollateralUtil.ts';
 import { Index } from './protocol/channel.ts';
 import { Logger } from './Logger.ts';
+import { DataTree } from './protocol/base.ts';
 
 // TODO: Rename to packet?
 
@@ -52,7 +53,22 @@ export interface Collateralization {
   amount: bigint;
 }
 
-export interface FactBase {
+export interface RefBase {
+  hash: Hash;
+
+  // Reception properties
+  receptions: Reception[];
+  requesting: Set<Connection>;
+
+  // Validity properties
+  collateralizations: Collateralization[];
+  validities: Map<HashPrimitive, { path: DataTree[]; vote: DetailVote }>;
+
+  // Logger
+  log?: Logger;
+}
+
+export interface FactBase extends RefBase {
   // The hash of full data, including header, type, message, and signature.
   hash: Hash;
 
@@ -68,19 +84,12 @@ export interface FactBase {
   // Reception properties
   receivedAt: number;
   source: FactSource;
-  receptions: Reception[];
   fromConnections: Connection[];
   usefulness: number;
 
   // Publication properties
   publishAt?: number;
   toConnections: Connection[];
-
-  requesting: Set<Connection>;
-
-  // Validity properties
-  collateralizations: Collateralization[];
-  validities: Map<HashPrimitive, DetailVote>;
 
   // GC properties
   visitedAt: number;
@@ -90,9 +99,6 @@ export interface FactBase {
   // Random sampler properties
   // samplerState: SamplerState;
 
-  // Logger
-  log?: Logger;
-
   // Debug properties
   factIdx: number;
   typeStr: string;
@@ -101,7 +107,7 @@ export interface FactBase {
   backtrace?: string;
 }
 
-export interface FactRef extends Pick<FactBase, 'hash' | 'receptions' | 'requesting' | 'log'> {
+export interface FactRef extends RefBase {
   type: FactType.Ref;
 }
 export interface BlockFact extends FactBase, Block, BlockMeta {

@@ -12,11 +12,7 @@ export const AccountContract: ContractProvider<{ publicKey: Uint8Array }> = {
   encodeParams: encodeDataTree,
 
   async compute(driver) {
-    if (driver.type === ComputationType.Generator) {
-      return;
-    }
-
     const publicKey = await driver.params.open('publicKey').getBytes();
-    driver.requireSignature(Hash.digest(publicKey));
+    driver.requireSignature(publicKey);
   },
 };

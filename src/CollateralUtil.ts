@@ -8,6 +8,7 @@ import { bigintMax, bigintMin } from './util/bigint.ts';
 import { assert } from './util/functional.ts';
 import { digestTree, EMPTY_DATA_TREE, encodeDataTree } from './DataTreeHelper.ts';
 import { AccountContract } from './contracts/AccountContract.ts';
+import { DataTree } from './protocol/base.ts';
 
 export const challengeThreshold = 10n;
 export const finalVoteAmount = 100n;
@@ -53,6 +54,7 @@ export interface Contest {
   postings: Posting[];
 
   parent?: Contest;
+  key: DataTree;
   children: Map<string, Contest>;
 
   validChallenge: bigint;
@@ -76,11 +78,12 @@ export type DetailVote = CollateralContractDetail['vote'];
 
 // TODO: Rename to CollateralHelper
 export class CollateralUtil {
-  private static makeContest(parent?: Contest): Contest {
+  private static makeContest(parent?: Contest, key: DataTree = EMPTY_DATA_TREE): Contest {
     return {
       postings: [],
 
       parent,
+      key,
       children: new Map(),
 
       validChallenge: 0n,
@@ -99,7 +102,11 @@ export class CollateralUtil {
     for (const posting of postings) {
       let ptr = root;
       for (const hint of posting.detail.hints) {
-        ptr = mapPut(ptr.children, digestTree(hint).toPrimitive(), () => this.makeContest(ptr));
+        ptr = mapPut(
+          ptr.children,
+          digestTree(hint).toPrimitive(),
+          () => this.makeContest(ptr, hint),
+        );
       }
       ptr.postings.push(posting);
 
@@ -226,18 +233,18 @@ export class CollateralUtil {
 
   public static applyAllBeliefs(
     descriptor: CollateralDescriptor,
-    evaluator: (hints: Uint8Array[]) => DetailVote | undefined,
-    rectifier?: (hints: Uint8Array[], vote: DetailVote, amount: bigint) => void,
+    evaluator: (hints: DataTree[]) => DetailVote | undefined,
+    rectifier?: (hints: DataTree[], vote: DetailVote, amount: bigint) => void,
   ) {
-    const apply = (contest: Contest, hints: Uint8Array[]) => {
+    const apply = (contest: Contest, hints: DataTree[]) => {
       const vote = evaluator(hints);
       if (vote !== undefined) {
         // It's hacky doing this twice, but we need to do it here to have the parent contest type for children determining their threshold
         this.applyBelief(contest, vote);
       }
 
-      for (const [key, child] of contest.children) {
-        hints.push(hex2bin(key));
+      for (const child of contest.children.values()) {
+        hints.push(child.key);
         apply(child, hints);
         hints.pop();
       }

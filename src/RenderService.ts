@@ -10,8 +10,8 @@ import { FactType } from './FactMeta.ts';
 import { BlockMetrics } from './BlockMetrics.ts';
 
 export type RenderConfig = Partial<{
-  renderFrontierVote: boolean;
-  renderFrontierInputs: boolean;
+  renderParent: boolean;
+  renderSquashInputs: boolean;
   renderOtherInputs: boolean;
   renderPrimaryDescendant: boolean;
 }>;
@@ -22,14 +22,17 @@ interface Graph {
   lines: string[];
 }
 
-const wrapAccessor = <T>(fn: () => T) => {
-  try {
-    return fn();
-  } catch (err) {
-    console.error(err);
-    return '?';
-  }
-};
+const fields: ((block: BlockFact, ctx: Context) => string)[] = [
+  (block) => block.isCanonical ? 'canonical' : 'non-canonical',
+  (block) => `[${block.inputs.map((x) => x.utxoIdx).join(',')}] inputs`,
+  (block) => `${block.outputs.length} outputs`,
+  (block) => `[${block.squashes.map((x) => x.newUtxoCount).join(',')}] squashes`,
+  (block) => `${block.conflicts.size} conflicts`,
+  (block, ctx) => `${ctx.get(BlockMetrics).get(block, 'ancestorWeight')} anc`,
+  (block, ctx) => `${ctx.get(BlockMetrics).get(block, 'descendantWeight')} desc`,
+  (block) => `[${block.treeWeights.join(',')}] tw`,
+  (block) => `[${block.squashedUtxoIdxs.join(',')}] sui`,
+];
 
 export class RenderService {
   private graphviz: ReturnType<typeof Graphviz['load']>;
@@ -76,57 +79,63 @@ export class RenderService {
     isDeleted: boolean,
     config: RenderConfig,
   ) {
-    // const name = block.hash.toHex().slice(0, 8);
-    const name = block.sillyName;
-
-    const title = name + ' ^' + block.volume + ' @' + block.visitedAt;
-
     let props = 'DELETED';
     if (!isDeleted) {
-      const conservativeWork = wrapAccessor(() =>
-        this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
-      );
-      const workOffset = wrapAccessor(() =>
-        this.ctx.get(BlockMetrics).get(block, 'selfWork') -
-        this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
-      );
-      const anc = wrapAccessor(() => this.ctx.get(BlockMetrics).get(block, 'ancestorWeight'));
-      const desc = wrapAccessor(() => this.ctx.get(BlockMetrics).get(block, 'descendantWeight'));
-      const tree = block.treeWeights.join(',');
-      // const vw = this.ctx.get(BlockMetrics).getVoterWeight(block).join(',');
-      const vw = `?`;
-      props = [
-        `work: ${conservativeWork}+${workOffset}`,
-        `anc: ${anc}; desc: ${desc}`,
-        `tree: ${tree}; vw: ${vw}`,
-        `canon: ${block.isCanonical ? 'Y' : 'N'}`,
-      ].join('\n');
+      // const conservativeWork = wrapAccessor(() =>
+      //   this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
+      // );
+      // const workOffset = wrapAccessor(() =>
+      //   this.ctx.get(BlockMetrics).get(block, 'selfWork') -
+      //   this.ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
+      // );
+      // const anc = wrapAccessor(() => this.ctx.get(BlockMetrics).get(block, 'ancestorWeight'));
+      // const desc = wrapAccessor(() => this.ctx.get(BlockMetrics).get(block, 'descendantWeight'));
+      // const tree = block.treeWeights.join(',');
+      // // const vw = this.ctx.get(BlockMetrics).getVoterWeight(block).join(',');
+      // const vw = `?`;
+      // props = [
+      //   `work: ${conservativeWork}+${workOffset}`,
+      //   `anc: ${anc}; desc: ${desc}`,
+      //   `tree: ${tree}; vw: ${vw}`,
+      //   `canon: ${block.isCanonical ? 'Y' : 'N'}`,
+      // ].join('\n');
+
+      props = fields.map((f) => {
+        try {
+          return f(block, this.ctx);
+        } catch (err) {
+          console.error(err);
+          return '?';
+        }
+        // }).join(' \u00b7 ');
+      }).join(' \n ');
     }
 
     const bId = this.getId(graph, block);
     const attrs = this.renderAttrs({
-      label: `${title}\n${props}`,
+      label: `${block.sillyName}\n${props}`,
       color: isDeleted ? 'red' : 'black',
     });
 
     graph.lines.push(`  ${bId} ${attrs};`);
 
-    this.renderFrontierVote(graph, block, config);
+    this.renderParent(graph, block, config);
+    let squashIdx = 0;
     for (const squash of block.squashes) {
-      this.renderInput(graph, block, squash, config, false);
+      this.renderSquash(graph, block, squash, config, squashIdx++);
     }
     for (const input of block.inputs) {
-      this.renderInput(graph, block, input, config, false);
+      this.renderInput(graph, block, input, config);
     }
     // this.renderDescendant(graph, block, config);
   }
 
-  private renderFrontierVote(
+  private renderParent(
     graph: Graph,
     block: BlockFact,
     config: RenderConfig,
   ) {
-    if (config.renderFrontierVote === false) return;
+    if (config.renderParent === false) return;
 
     const bId = this.getId(graph, block);
     const vId = this.getId(graph, block.parentBlock);
@@ -137,24 +146,42 @@ export class RenderService {
     graph.lines.push(`  ${bId} -> ${vId} ${attrs};`);
   }
 
+  private renderSquash(
+    graph: Graph,
+    block: BlockFact,
+    squash: Squash,
+    config: RenderConfig,
+    squashIdx: number,
+  ) {
+    const squashBlock = this.ctx.get(BlockService).get(squash.blockHash, false);
+
+    if (config.renderSquashInputs === false) return;
+
+    const bId = this.getId(graph, block);
+    const sId = this.getId(graph, squashBlock);
+    const attrs = this.renderAttrs({
+      color: 'blue',
+      label: `${squashIdx}; +${squash.newUtxoCount}`,
+    });
+
+    graph.lines.push(`  ${bId} -> ${sId} ${attrs};`);
+  }
+
   private renderInput(
     graph: Graph,
     block: BlockFact,
-    input: BlockInput | Squash,
+    input: BlockInput,
     config: RenderConfig,
-    isSquash: boolean,
   ) {
     const inputBlock = this.ctx.get(BlockService).get(input.blockHash, false);
 
-    if (isSquash ? config.renderFrontierInputs === false : config.renderOtherInputs === false) {
-      return;
-    }
+    if (config.renderOtherInputs === false) return;
 
     const bId = this.getId(graph, block);
     const iId = this.getId(graph, inputBlock);
     const attrs = this.renderAttrs({
-      color: isSquash ? 'blue' : 'gray',
-      label: 'outputIdx' in input ? `$${inputBlock?.outputs[input.outputIdx].amount ?? '?'}` : '',
+      color: 'gray',
+      label: `$${inputBlock?.outputs[input.outputIdx].amount ?? '?'}`,
     });
 
     graph.lines.push(`  ${bId} -> ${iId} ${attrs};`);
@@ -194,7 +221,7 @@ export class RenderService {
       graph.lines.push(`	${id} [shape=plain, label="?"];`);
       return id;
     } else if (object === ZERO_BLOCK) {
-      return mapPut(graph.ids, object, () => `ZERO`);
+      return mapPut(graph.ids, object, () => `GENESIS`);
     } else {
       return mapPut(graph.ids, object, () => `v${graph.nextId++}`);
     }

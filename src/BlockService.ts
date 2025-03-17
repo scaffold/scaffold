@@ -794,13 +794,11 @@ export class BlockService {
     const groupIdxs = new Set(block.inputs.map((x) => x.groupIdx));
 
     for (const groupIdx of groupIdxs) {
-      const hint = CollateralHint.encode({
+      const hint = encodeDataTree(CollateralHint.encode({
         hint: { CollateralHintVerifier: { groupIdx } },
-      });
+      }));
 
-      while (
-        this.ctx.get(FactService).getValidity(block.hash, [hint]) === undefined
-      ) {
+      while (this.ctx.get(FactService).getValidity(block.hash, [hint]) === undefined) {
         if (cancelSignal.aborted) {
           return neverPromise;
         }

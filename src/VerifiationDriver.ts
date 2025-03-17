@@ -64,7 +64,7 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
 
     this.contractHash = verifier.contractHash;
     this.params = new DataTreeNode(verifier.params);
-    this.body = new MutableDataTreeNode();
+    this.body = new MutableDataTreeNode(block.body);
 
     this.block = block;
 
@@ -90,17 +90,23 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   }
 
   requireTimestampGte(timestamp: number): MaybePromise<void> {
-    throw new Error('Method not implemented.');
+    if (this.block.timestamp < timestamp) {
+      throw new VerificationException(
+        `requireTimestampGte(...) failed - the block's timestamp is less than the contract's specification!`,
+      );
+    }
   }
 
-  isSignedBy(publicKeyHash: Hash): boolean {
-    throw new Error('Method not implemented.');
+  isSignedBy(publicKey: Uint8Array): boolean {
+    return this.ctx.get(FactService).verify(this.block, publicKey);
   }
 
-  requireSignature(publicKeyHash: Hash): void {
-    assert(
-      this.block.signer !== undefined && Hash.equals(Hash.digest(this.block.signer), publicKeyHash),
-    );
+  requireSignature(publicKey: Uint8Array): void {
+    if (!this.ctx.get(FactService).verify(this.block, publicKey)) {
+      throw new VerificationException(
+        `requireSignature(...) failed - the block's signature does not match the contract's specification!`,
+      );
+    }
   }
 
   emitCorrect(): boolean {

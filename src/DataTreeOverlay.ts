@@ -143,12 +143,12 @@ export class DataTreeNode implements ImmutableTreeNode {
 export class MutableDataTreeNode implements MutableTreeNode {
   readonly isMutable = true;
 
-  #value?: Uint8Array;
-  #entries: { key: Uint8Array; node: MutableDataTreeNode }[];
+  private value?: Uint8Array;
+  private entries: { key: Uint8Array; node: MutableDataTreeNode }[];
 
   constructor(init: DataTree = EMPTY_DATA_TREE) {
-    this.#value = init.value !== null ? init.value.bytes : undefined;
-    this.#entries = init.entries.map((x) => ({
+    this.value = init.value !== null ? init.value.bytes : undefined;
+    this.entries = init.entries.map((x) => ({
       key: x.key,
       node: new MutableDataTreeNode(x.node),
     }));
@@ -156,21 +156,21 @@ export class MutableDataTreeNode implements MutableTreeNode {
 
   toDataTree(): DataTree {
     return {
-      value: this.#value !== undefined ? { bytes: this.#value } : null,
-      entries: this.#entries.map((x) => ({ key: x.key, node: x.node.toDataTree() })),
+      value: this.value !== undefined ? { bytes: this.value } : null,
+      entries: this.entries.map((x) => ({ key: x.key, node: x.node.toDataTree() })),
     };
   }
 
   open(key: number | string | Uint8Array): MutableTreeNode {
     key = keyToBin(key);
-    for (const entry of this.#entries) {
+    for (const entry of this.entries) {
       if (arrEquals(entry.key, key)) {
         return entry.node;
       }
     }
 
     const node = new MutableDataTreeNode();
-    this.#entries.push({ key, node });
+    this.entries.push({ key, node });
     return node;
   }
 
@@ -180,21 +180,21 @@ export class MutableDataTreeNode implements MutableTreeNode {
 
   write(buf: Uint8Array, offset: number): void {
     const minLen = offset + buf.byteLength;
-    if (this.#value === undefined) {
-      this.#value = new Uint8Array(minLen);
-    } else if (minLen > this.#value.byteLength) {
-      if (minLen > this.#value.buffer.byteLength) {
-        const newSize = Math.max((this.#value.buffer.byteLength * 3) >>> 1, minLen);
+    if (this.value === undefined) {
+      this.value = new Uint8Array(minLen);
+    } else if (minLen > this.value.byteLength) {
+      if (minLen > this.value.buffer.byteLength) {
+        const newSize = Math.max((this.value.buffer.byteLength * 3) >>> 1, minLen);
         const newArr = new Uint8Array(newSize);
-        newArr.set(this.#value);
+        newArr.set(this.value);
         newArr.set(buf, offset);
-        this.#value = newArr;
+        this.value = newArr;
       } else {
-        this.#value = new Uint8Array(this.#value.buffer, 0, minLen);
-        this.#value.set(buf, offset);
+        this.value = new Uint8Array(this.value.buffer, 0, minLen);
+        this.value.set(buf, offset);
       }
     } else {
-      this.#value.set(buf, offset);
+      this.value.set(buf, offset);
     }
   }
 
@@ -204,15 +204,15 @@ export class MutableDataTreeNode implements MutableTreeNode {
 
   set(obj: TreeObj): void {
     const tree = encodeDataTree(obj);
-    this.#value = tree.value !== null ? tree.value.bytes : undefined;
-    this.#entries = tree.entries.map((x) => ({
+    this.value = tree.value !== null ? tree.value.bytes : undefined;
+    this.entries = tree.entries.map((x) => ({
       key: x.key,
       node: new MutableDataTreeNode(x.node),
     }));
   }
 
   setBool(value: boolean): void {
-    this.#value = value ? BYTES_TRUE : BYTES_FALSE;
+    this.value = value ? BYTES_TRUE : BYTES_FALSE;
   }
 
   setInt(value: number): void {
@@ -228,15 +228,15 @@ export class MutableDataTreeNode implements MutableTreeNode {
   }
 
   setString(value: string): void {
-    this.#value = str2bin(value);
+    this.value = str2bin(value);
   }
 
   setHash(value: Hash): void {
-    this.#value = value.toBytes();
+    this.value = value.toBytes();
   }
 
   setBytes(value: Uint8Array): void {
-    this.#value = value;
+    this.value = value;
   }
 
   annotate(annotation: Annotation) {
@@ -280,7 +280,7 @@ export class MutableDataTreeNode implements MutableTreeNode {
   }
 
   getBytes() {
-    assert(this.#value !== undefined);
-    return this.#value;
+    assert(this.value !== undefined);
+    return this.value;
   }
 }
