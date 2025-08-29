@@ -61,18 +61,18 @@ const config: Config = {
 
 const ctx = new Context(config);
 
-const rootContract =
-  ctx.config.contractProviders.find((provider): provider is RootContract =>
-    provider instanceof RootContract
-  ) ?? error(`No root contract added!`);
+// const rootContract =
+//   ctx.config.contractProviders.find((provider): provider is RootContract =>
+//     provider instanceof RootContract
+//   ) ?? error(`No root contract added!`);
 
-rootContract.addData(str2bin('my secret'));
-bootstrapFromGlobs([
-  '../examples/*/target/wasm32-unknown-unknown/release/scaffold_rust.wasm',
-], (name, data) => {
-  const hash = rootContract.addData(data);
-  console.log(`Bootstrapped ${name}: ${hash.toHex()}`);
-}).then(({ count }) => console.log(`Bootstrapping done! Loaded ${count} datas.`));
+// rootContract.addData(str2bin('my secret'));
+// bootstrapFromGlobs([
+//   '../examples/*/target/wasm32-unknown-unknown/release/scaffold_rust.wasm',
+// ], (name, data) => {
+//   const hash = rootContract.addData(data);
+//   console.log(`Bootstrapped ${name}: ${hash.toHex()}`);
+// }).then(({ count }) => console.log(`Bootstrapping done! Loaded ${count} datas.`));
 
 // ctx.get(Logger).registerAttribute('worker', {
 //   preposition: 'on',

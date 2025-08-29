@@ -5,6 +5,7 @@ import { bin2str, str2bin } from '../src/util/buffer.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
 import { HashPrimitive } from '../src/util/Hash.ts';
 import { BlockOutput } from '../src/messages.ts';
+import { encodeDataTree } from '../src/DataTreeHelper.ts';
 
 const makePosting = (
   publicKey: string,
@@ -13,7 +14,11 @@ const makePosting = (
   hints: string[],
 ): Posting => ({
   amount,
-  detail: { publicKey: str2bin(publicKey), hints: hints.map(str2bin), vote },
+  detail: {
+    publicKey: str2bin(publicKey),
+    hints: hints.map((h) => encodeDataTree(str2bin(h))),
+    vote,
+  },
 });
 
 const processOutputs = (outputMap: Map<HashPrimitive, BlockOutput>) =>

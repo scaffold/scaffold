@@ -6,6 +6,7 @@ import { BlockService } from '../../src/BlockService.ts';
 import { TimeParams } from '../../src/messages.ts';
 import { TimeContract } from '../../src/contracts/TimeContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 Deno.test(
@@ -15,7 +16,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new TimeContract()],
+    contractProviders: [...baseContractProviders, TimeContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -26,7 +27,7 @@ Deno.test(
           params: TimeParams.encode({ time: 123n }),
         },
         amount: 10n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -41,7 +42,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new TimeContract()],
+    contractProviders: [...baseContractProviders, TimeContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -63,7 +64,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new TimeContract()],
+    contractProviders: [...baseContractProviders, TimeContract],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 

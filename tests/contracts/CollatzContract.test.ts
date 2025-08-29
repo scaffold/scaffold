@@ -6,6 +6,7 @@ import { BlockService } from '../../src/BlockService.ts';
 import { CollatzContract } from '../../src/contracts/CollatzContract.ts';
 import * as collatzMessages from '../../src/contracts/collatzMessages.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 const params: collatzMessages.Params = { num: 1n };
@@ -27,7 +28,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollatzContract()],
+    contractProviders: [...baseContractProviders, CollatzContract],
     limitFactCount: 100,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
@@ -39,7 +40,7 @@ Deno.test(
           params: collatzMessages.Params.encode(params),
         },
         amount: 10n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -60,7 +61,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollatzContract()],
+    contractProviders: [...baseContractProviders, CollatzContract],
     limitFactCount: 100,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
@@ -84,7 +85,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollatzContract()],
+    contractProviders: [...baseContractProviders, CollatzContract],
     limitFactCount: 100,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);

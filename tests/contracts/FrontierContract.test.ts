@@ -30,7 +30,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new FrontierContract()],
+    contractProviders: [...baseContractProviders, FrontierContract],
     allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     const genesisHash = provideInitialBalance(ctx1);
@@ -48,7 +48,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new FrontierContract()],
+    contractProviders: [...baseContractProviders, FrontierContract],
     allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     const genesisHash = provideInitialBalance(ctx1);
@@ -87,7 +87,7 @@ Deno.test(
     only: true,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new FrontierContract()],
+    contractProviders: [...baseContractProviders, FrontierContract],
     allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
@@ -112,7 +112,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new FrontierContract()],
+    contractProviders: [...baseContractProviders, FrontierContract],
     allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
@@ -137,7 +137,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new FrontierContract()],
+    contractProviders: [...baseContractProviders, FrontierContract],
     allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);

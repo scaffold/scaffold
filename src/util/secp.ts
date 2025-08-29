@@ -11,8 +11,8 @@ import * as secp from '@noble/secp256k1';
 import { HmacSha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
 
 secp.etc.hmacSha256Sync = (key: Uint8Array, ...msgs: Uint8Array[]) => {
-  const algo = new HmacSha256(key);
-  msgs.forEach((msg) => algo.update(msg));
+  const algo = new HmacSha256(key as never); // We need this cast because Message doesn't include the Uint8Array type, but it should (I think).
+  msgs.forEach((msg) => algo.update(msg as never));
   return new Uint8Array(algo.digest());
 };
 

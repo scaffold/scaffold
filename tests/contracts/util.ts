@@ -6,7 +6,7 @@ import { assert, assertEquals, assertNotEquals } from '@std/assert';
 import { BlockService } from '../../src/BlockService.ts';
 import { findOutput } from '../util.ts';
 
-export const baseContractProviders = [new AccountContract()];
+export const baseContractProviders = [AccountContract];
 
 export const waitForVerifiedOutput = async (
   ctx: Context,

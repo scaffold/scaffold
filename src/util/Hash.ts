@@ -21,17 +21,17 @@ const hasher = {
   // },
   'sha2': (data: Uint8Array) => {
     const algo = new Sha256();
-    algo.update(data);
+    algo.update(data as never); // We need this cast because Message doesn't include the Uint8Array type, but it should (I think).
     return new Uint8Array(algo.digest());
   },
   'sha3': (data: Uint8Array) => {
     const algo = new Sha3_256();
-    algo.update(data);
+    algo.update(data as never);
     return new Uint8Array(algo.digest());
   },
   'shake': (data: Uint8Array) => {
     const algo = new Shake256(256);
-    algo.update(data);
+    algo.update(data as never);
     return new Uint8Array(algo.digest());
   },
 }.sha3;

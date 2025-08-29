@@ -5,6 +5,7 @@ import { error } from '../src/util/functional.ts';
 import { BlockBuilder } from '../src/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
+import { encodeDataTree } from '../src/DataTreeHelper.ts';
 import { frontierHash, trueHash } from '../src/hashes.ts';
 import { ZERO_BLOCK } from '../src/BlockMeta.ts';
 import { FrontierService } from '../src/FrontierService.ts';
@@ -71,9 +72,9 @@ Deno.test(
           { length: entry.out },
           () => ({
             outputs: [{
-              verifier: { contractHash: trueHash, params: EMPTY_ARR },
+              verifier: { contractHash: trueHash, params: encodeDataTree(EMPTY_ARR) },
               amount: 1n,
-              detail: EMPTY_ARR,
+              detail: encodeDataTree(EMPTY_ARR),
             }],
           }),
         ),

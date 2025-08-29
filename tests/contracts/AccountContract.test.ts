@@ -7,6 +7,7 @@ import { BlockService } from '../../src/BlockService.ts';
 import { AccountContractParams } from '../../src/messages.ts';
 import { AccountContract } from '../../src/contracts/AccountContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 Deno.test(
@@ -16,7 +17,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new AccountContract()],
+    contractProviders: [...baseContractProviders, AccountContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -29,7 +30,7 @@ Deno.test(
           }),
         },
         amount: 10n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -44,7 +45,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new AccountContract()],
+    contractProviders: [...baseContractProviders, AccountContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -68,7 +69,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new AccountContract()],
+    contractProviders: [...baseContractProviders, AccountContract],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 

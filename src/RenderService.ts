@@ -28,8 +28,14 @@ const fields: ((block: BlockFact, ctx: Context) => string)[] = [
   (block) => `${block.outputs.length} outputs`,
   (block) => `[${block.squashes.map((x) => x.newUtxoCount).join(',')}] squashes`,
   (block) => `${block.conflicts.size} conflicts`,
-  (block, ctx) => `${ctx.get(BlockMetrics).get(block, 'ancestorWeight')} anc`,
-  (block, ctx) => `${ctx.get(BlockMetrics).get(block, 'descendantWeight')} desc`,
+  (block, ctx) =>
+    `${ctx.get(BlockMetrics).get(block, 'ancestorWeight')}/${
+      ctx.get(BlockMetrics).get(block, 'descendantWeight')
+    } anc/desc`,
+  (block, ctx) =>
+    `${ctx.get(BlockMetrics).get(block, 'selfWork')}/${
+      ctx.get(BlockMetrics).get(block, 'conservativeSelfWork')
+    }/${ctx.get(BlockMetrics).get(block, 'freeMarketOutput')} sw/csw/fmo`,
   (block) => `[${block.treeWeights.join(',')}] tw`,
   (block) => `[${block.squashedUtxoIdxs.join(',')}] sui`,
 ];

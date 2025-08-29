@@ -6,6 +6,7 @@ import { KeyService } from '../../src/KeyService.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { CollateralContract } from '../../src/contracts/CollateralContract.ts';
 import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 import {
   CollateralContractDetail,
@@ -21,7 +22,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollateralContract()],
+    contractProviders: [...baseContractProviders, CollateralContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -51,7 +52,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollateralContract()],
+    contractProviders: [...baseContractProviders, CollateralContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -75,7 +76,7 @@ Deno.test(
         amount: 10n,
         detail: CollateralContractDetail.encode({
           publicKey: str2bin('pk2'),
-          hints: [str2bin('verifier1')],
+          hints: [encodeDataTree(str2bin('verifier1'))],
           vote: 'FINAL_FAIL',
         }),
       }],
@@ -94,7 +95,7 @@ Deno.test(
           params: AccountContractParams.encode({ publicKey: str2bin('pk2') }),
         },
         amount: 1010n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -110,7 +111,7 @@ Deno.test(
     ignore: true, // TODO: I don't know why this is failing
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollateralContract()],
+    contractProviders: [...baseContractProviders, CollateralContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -134,7 +135,7 @@ Deno.test(
         amount: 10n,
         detail: CollateralContractDetail.encode({
           publicKey: str2bin('pk2'),
-          hints: [str2bin('verifier1')],
+          hints: [encodeDataTree(str2bin('verifier1'))],
           vote: 'FINAL_FAIL',
         }),
       }],
@@ -151,7 +152,7 @@ Deno.test(
           params: AccountContractParams.encode({ publicKey: str2bin('pk2') }),
         },
         amount: 1010n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -166,7 +167,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new CollateralContract()],
+    contractProviders: [...baseContractProviders, CollateralContract],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
@@ -190,7 +191,7 @@ Deno.test(
         amount: 10n,
         detail: CollateralContractDetail.encode({
           publicKey: str2bin('pk2'),
-          hints: [str2bin('verifier1')],
+          hints: [encodeDataTree(str2bin('verifier1'))],
           vote: 'FINAL_FAIL',
         }),
       }],
@@ -209,7 +210,7 @@ Deno.test(
           params: AccountContractParams.encode({ publicKey: str2bin('pk1') }),
         },
         amount: 1010n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 

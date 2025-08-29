@@ -5,6 +5,7 @@ import { trueHash } from '../../src/hashes.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { TrueContract } from '../../src/contracts/TrueContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 
 Deno.test(
@@ -14,15 +15,15 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new TrueContract()],
+    contractProviders: [...baseContractProviders, TrueContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
-        verifier: { contractHash: trueHash, params: EMPTY_ARR },
+        verifier: { contractHash: trueHash, params: encodeDataTree(EMPTY_ARR) },
         amount: 10n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -37,12 +38,12 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new TrueContract()],
+    contractProviders: [...baseContractProviders, TrueContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      satisfies: [{ contractHash: trueHash, params: EMPTY_ARR }],
+      satisfies: [{ contractHash: trueHash, params: encodeDataTree(EMPTY_ARR) }],
     });
 
     assert(await ctx1.get(BlockService).waitForVerification(validBlock));

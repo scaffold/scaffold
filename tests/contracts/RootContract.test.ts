@@ -7,6 +7,7 @@ import { BlockService } from '../../src/BlockService.ts';
 import { AccountContractParams } from '../../src/messages.ts';
 import { RootContract } from '../../src/contracts/RootContract.ts';
 import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 import { Hash } from '../../src/util/Hash.ts';
 
@@ -17,7 +18,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new RootContract()],
+    contractProviders: [...baseContractProviders, RootContract],
   }, async (_testCtx, ctx1) => {
     const genesisHash = provideInitialBalance(ctx1);
 
@@ -25,7 +26,7 @@ Deno.test(
       outputs: [{
         verifier: { contractHash: rootHash, params: genesisHash.toBytes() },
         amount: 10n,
-        detail: EMPTY_ARR,
+        detail: encodeDataTree(EMPTY_ARR),
       }],
     });
 
@@ -40,7 +41,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new RootContract()],
+    contractProviders: [...baseContractProviders, RootContract],
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
@@ -63,7 +64,7 @@ Deno.test(
     sanitizeResources: false,
   },
   makeTest({
-    contractProviders: [...baseContractProviders, new RootContract()],
+    contractProviders: [...baseContractProviders, RootContract],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
