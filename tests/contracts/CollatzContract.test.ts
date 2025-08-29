@@ -37,7 +37,7 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: collatzHash,
-          params: collatzMessages.Params.encode(params),
+          params: encodeDataTree(collatzMessages.Params.encode(params)),
         },
         amount: 10n,
         detail: encodeDataTree(EMPTY_ARR),
@@ -50,7 +50,7 @@ Deno.test(
       collatzHash,
       true,
     );
-    assertEquals(collatzMessages.Answer.decode(consumer!.body), goodAnswer);
+    assertEquals(collatzMessages.Answer.decode(consumer!.body.value!.bytes), goodAnswer);
   }),
 );
 
@@ -67,10 +67,10 @@ Deno.test(
     provideInitialBalance(ctx1);
 
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      body: collatzMessages.Answer.encode(goodAnswer),
+      body: encodeDataTree(collatzMessages.Answer.encode(goodAnswer)),
       satisfies: [{
         contractHash: collatzHash,
-        params: collatzMessages.Params.encode(params),
+        params: encodeDataTree(collatzMessages.Params.encode(params)),
       }],
     });
 
@@ -91,10 +91,10 @@ Deno.test(
     provideInitialBalance(ctx1);
 
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      body: collatzMessages.Answer.encode(badAnswer),
+      body: encodeDataTree(collatzMessages.Answer.encode(badAnswer)),
       satisfies: [{
         contractHash: collatzHash,
-        params: collatzMessages.Params.encode(params),
+        params: encodeDataTree(collatzMessages.Params.encode(params)),
       }],
     });
 

@@ -11,6 +11,7 @@ import { frontierHash } from '../../src/hashes.ts';
 import { BlockService } from '../../src/BlockService.ts';
 import { FrontierContract, frontierInputCount } from '../../src/contracts/FrontierContract.ts';
 import { EMPTY_ARR } from '../../src/util/buffer.ts';
+import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';
 import { FrontierTreeDetail, FrontierTreeParams } from '../../src/messages.ts';
 import { FactService } from '../../src/FactService.ts';
@@ -31,7 +32,7 @@ Deno.test(
   },
   makeTest({
     contractProviders: [...baseContractProviders, FrontierContract],
-    allowSpecifiedFrontierOutputs: true,
+    // allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     const genesisHash = provideInitialBalance(ctx1);
     const genesisBlock = ctx1.get(BlockService).get(genesisHash)!;
@@ -49,7 +50,7 @@ Deno.test(
   },
   makeTest({
     contractProviders: [...baseContractProviders, FrontierContract],
-    allowSpecifiedFrontierOutputs: true,
+    // allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     const genesisHash = provideInitialBalance(ctx1);
     const genesisBlock = ctx1.get(BlockService).get(genesisHash)!;
@@ -62,10 +63,10 @@ Deno.test(
           outputs: [{
             verifier: {
               contractHash: frontierHash,
-              params: FrontierTreeParams.encode({ level: 0 }),
+              params: encodeDataTree(FrontierTreeParams.encode({ level: 0 })),
             },
             amount: 10n,
-            detail: FrontierTreeDetail.encode(baseTreeDetail),
+            detail: encodeDataTree(FrontierTreeDetail.encode(baseTreeDetail)),
           }],
         }),
     );
@@ -88,15 +89,14 @@ Deno.test(
   },
   makeTest({
     contractProviders: [...baseContractProviders, FrontierContract],
-    allowSpecifiedFrontierOutputs: true,
+    // allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      frontierLevel: 4,
       satisfies: Array.from({ length: frontierInputCount }, () => ({
         contractHash: frontierHash,
-        params: FrontierTreeParams.encode({ level: 3 }),
+        params: encodeDataTree(FrontierTreeParams.encode({ level: 3 })),
         detail: FrontierTreeDetail.encode(baseTreeDetail),
       })),
     });
@@ -113,15 +113,14 @@ Deno.test(
   },
   makeTest({
     contractProviders: [...baseContractProviders, FrontierContract],
-    allowSpecifiedFrontierOutputs: true,
+    // allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      frontierLevel: 4,
       satisfies: [{
         contractHash: frontierHash,
-        params: FrontierTreeParams.encode({ level: 3 }),
+        params: encodeDataTree(FrontierTreeParams.encode({ level: 3 })),
         detail: FrontierTreeDetail.encode(baseTreeDetail),
       }],
     });
@@ -138,19 +137,18 @@ Deno.test(
   },
   makeTest({
     contractProviders: [...baseContractProviders, FrontierContract],
-    allowSpecifiedFrontierOutputs: true,
+    // allowSpecifiedFrontierOutputs: true,
   }, async (_testCtx, ctx1) => {
     provideInitialBalance(ctx1);
 
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      frontierLevel: 5,
       satisfies: [{
         contractHash: frontierHash,
-        params: FrontierTreeParams.encode({ level: 3 }),
+        params: encodeDataTree(FrontierTreeParams.encode({ level: 3 })),
         detail: FrontierTreeDetail.encode(baseTreeDetail),
       }, {
         contractHash: frontierHash,
-        params: FrontierTreeParams.encode({ level: 3 }),
+        params: encodeDataTree(FrontierTreeParams.encode({ level: 3 })),
         detail: FrontierTreeDetail.encode(baseTreeDetail),
       }],
     });

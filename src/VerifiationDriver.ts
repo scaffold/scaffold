@@ -25,6 +25,8 @@ import { encodeDataTree, TreeObj } from './DataTreeHelper.ts';
 import { assert } from '@std/assert/assert';
 import { todo } from './util/functional.ts';
 import { FactService } from './FactService.ts';
+import { Logger } from './Logger.ts';
+import { LogSystem } from './Config.ts';
 
 export const VERIFICATION_SUCCESS_FLAG = Symbol('VerificationService.Success');
 class VerificationException extends Error {
@@ -40,8 +42,6 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   params: ImmutableTreeNode;
   body: MutableTreeNode;
 
-  // Make these super-private so js generators can't see them
-
   private block: BlockFact;
 
   private groupIdx: number;
@@ -52,6 +52,8 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   private nextOutputIdx = 0;
 
   private claimWeightBoost = 0n;
+
+  #log?: Logger;
 
   constructor(
     ctx: Context,
@@ -75,21 +77,27 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     this.groupIdx = rootHint.CollateralHintVerifier.groupIdx;
 
     this.readHints = hintPrefix.slice(0, 1);
+
+    this.#log = Logger.create(ctx, LogSystem.Verification);
   }
 
   emitHint(idx: number, hint: TreeObj): void {
+    this.#log?.info(`emitHint`, { idx, hint });
     throw new Error('Method not implemented.');
   }
 
   getHint(idx: number, bop: BurdenOfProof): ImmutableTreeNode {
+    this.#log?.info(`getHint`, { idx, bop });
     throw new Error('Method not implemented.');
   }
 
   requireOutput(output: OutputSpec): void {
+    this.#log?.info(`requireOutput`, { output });
     throw new Error('Method not implemented.');
   }
 
   requireTimestampGte(timestamp: number): MaybePromise<void> {
+    this.#log?.info(`requireTimestampGte`, { timestamp });
     if (this.block.timestamp < timestamp) {
       throw new VerificationException(
         `requireTimestampGte(...) failed - the block's timestamp is less than the contract's specification!`,
@@ -98,10 +106,12 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   }
 
   isSignedBy(publicKey: Uint8Array): boolean {
+    this.#log?.info(`isSignedBy`, { publicKey });
     return this.ctx.get(FactService).verify(this.block, publicKey);
   }
 
   requireSignature(publicKey: Uint8Array): void {
+    this.#log?.info(`requireSignature`, { publicKey });
     if (!this.ctx.get(FactService).verify(this.block, publicKey)) {
       throw new VerificationException(
         `requireSignature(...) failed - the block's signature does not match the contract's specification!`,
@@ -110,10 +120,12 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   }
 
   emitCorrect(): boolean {
+    this.#log?.info(`emitCorrect`);
     return true;
   }
 
   lookup(hash: Hash): ImmutableTreeNode {
+    this.#log?.info(`lookup`, { hash });
     // TODO: Check that the hash is present in the refs array
     const fact = this.ctx.get(FactService).get(hash, false);
     if (fact !== undefined && fact.type === FactType.Block) {
@@ -122,31 +134,40 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
     todo();
   }
   fetch(contractHash: Hash, params: TreeObj): ImmutableTreeNode {
+    this.#log?.info(`fetch`, { contractHash, params });
     throw new Error('Method not implemented.');
   }
   collectInputs(): MaybePromise<InputSource[]> {
+    this.#log?.info(`collectInputs`);
     throw new Error('Method not implemented.');
   }
   requireInput(satisfies?: Verifier, outputsTo?: Verifier): MaybePromise<InputSource> {
+    this.#log?.info(`requireInput`, { satisfies, outputsTo });
     throw new Error('Method not implemented.');
   }
   compareBlockOrder(hashA: Hash, hashB: Hash): number {
+    this.#log?.info(`compareBlockOrder`, { hashA, hashB });
     throw new Error('Method not implemented.');
   }
   pass(): never {
+    this.#log?.info(`pass`);
     throw new Error('Method not implemented.');
   }
   fail(msg?: string): never {
+    this.#log?.info(`fail`, { msg });
     throw new Error('Method not implemented.');
   }
   boostClaimWeight(offset: bigint): void {
+    this.#log?.info(`boostClaimWeight`, { offset });
     this.claimWeightBoost += offset;
   }
   ingenerable(msg?: string): void {
+    this.#log?.info(`ingenerable`, { msg });
     throw new Error('Method not implemented.');
   }
 
   override finish(err?: typeof VERIFICATION_SUCCESS_FLAG | Error): MaybePromise<void> {
+    this.#log?.info(`finish`, { err });
     if (err === VERIFICATION_SUCCESS_FLAG) {
       err = undefined;
     }
@@ -157,6 +178,7 @@ export class VerificationDriver extends WorkerDriver implements ComputationDrive
   }
 
   getResult() {
+    this.#log?.info(`getResult`);
     return encodeDataTree(true);
   }
 }

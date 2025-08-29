@@ -30,14 +30,14 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 10n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
-        }),
+        })),
       }],
     });
 
@@ -60,25 +60,25 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 1000n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
-        }),
+        })),
       }, {
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 10n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk2'),
           hints: [encodeDataTree(str2bin('verifier1'))],
           vote: 'FINAL_FAIL',
-        }),
+        })),
       }],
     });
 
@@ -92,7 +92,7 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({ publicKey: str2bin('pk2') }),
+          params: encodeDataTree(AccountContractParams.encode({ publicKey: str2bin('pk2') })),
         },
         amount: 1010n,
         detail: encodeDataTree(EMPTY_ARR),
@@ -119,25 +119,25 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 1000n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
-        }),
+        })),
       }, {
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 10n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk2'),
           hints: [encodeDataTree(str2bin('verifier1'))],
           vote: 'FINAL_FAIL',
-        }),
+        })),
       }],
     });
 
@@ -149,7 +149,7 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({ publicKey: str2bin('pk2') }),
+          params: encodeDataTree(AccountContractParams.encode({ publicKey: str2bin('pk2') })),
         },
         amount: 1010n,
         detail: encodeDataTree(EMPTY_ARR),
@@ -175,25 +175,25 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 1000n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk1'),
           hints: [],
           vote: 'VALID_CHALLENGE',
-        }),
+        })),
       }, {
         verifier: {
           contractHash: collateralHash,
-          params: CollateralContractParams.encode({ blockHash: EMPTY_HASH }),
+          params: encodeDataTree(CollateralContractParams.encode({ blockHash: EMPTY_HASH })),
         },
         amount: 10n,
-        detail: CollateralContractDetail.encode({
+        detail: encodeDataTree(CollateralContractDetail.encode({
           publicKey: str2bin('pk2'),
           hints: [encodeDataTree(str2bin('verifier1'))],
           vote: 'FINAL_FAIL',
-        }),
+        })),
       }],
     });
 
@@ -207,7 +207,7 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({ publicKey: str2bin('pk1') }),
+          params: encodeDataTree(AccountContractParams.encode({ publicKey: str2bin('pk1') })),
         },
         amount: 1010n,
         detail: encodeDataTree(EMPTY_ARR),

@@ -24,6 +24,8 @@ export enum LogSystem {
   Connection = 'connection',
   Signaler = 'signaler',
   Worker = 'worker',
+  Verification = 'verification',
+  Generation = 'generation',
 }
 
 export interface LoggingProvider {

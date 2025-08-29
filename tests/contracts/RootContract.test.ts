@@ -24,7 +24,7 @@ Deno.test(
 
     const incentiveBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       outputs: [{
-        verifier: { contractHash: rootHash, params: genesisHash.toBytes() },
+        verifier: { contractHash: rootHash, params: encodeDataTree(genesisHash.toBytes()) },
         amount: 10n,
         detail: encodeDataTree(EMPTY_ARR),
       }],
@@ -46,10 +46,10 @@ Deno.test(
     provideInitialBalance(ctx1);
 
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      body: str2bin('good'),
+      body: encodeDataTree(str2bin('good')),
       satisfies: [{
         contractHash: rootHash,
-        params: Hash.digest('good').toBytes(),
+        params: encodeDataTree(Hash.digest('good').toBytes()),
       }],
     });
 
@@ -69,10 +69,10 @@ Deno.test(
     provideInitialBalance(ctx1, ctx2);
 
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
-      body: str2bin('bad'),
+      body: encodeDataTree(str2bin('bad')),
       satisfies: [{
         contractHash: rootHash,
-        params: Hash.digest('good').toBytes(),
+        params: encodeDataTree(Hash.digest('good').toBytes()),
       }],
     });
 

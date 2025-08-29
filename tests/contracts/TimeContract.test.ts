@@ -24,7 +24,7 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: timeHash,
-          params: TimeParams.encode({ time: 123n }),
+          params: encodeDataTree(TimeParams.encode({ time: 123n })),
         },
         amount: 10n,
         detail: encodeDataTree(EMPTY_ARR),
@@ -49,7 +49,7 @@ Deno.test(
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{
         contractHash: timeHash,
-        params: TimeParams.encode({ time: 0n }),
+        params: encodeDataTree(TimeParams.encode({ time: 0n })),
       }],
     });
 
@@ -71,7 +71,7 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{
         contractHash: timeHash,
-        params: TimeParams.encode({ time: 123n }),
+        params: encodeDataTree(TimeParams.encode({ time: 123n })),
       }],
     });
 

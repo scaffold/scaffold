@@ -25,9 +25,9 @@ Deno.test(
       outputs: [{
         verifier: {
           contractHash: accountHash,
-          params: AccountContractParams.encode({
+          params: encodeDataTree(AccountContractParams.encode({
             publicKey: ctx1.get(KeyService).getSelfPublicKey(),
-          }),
+          })),
         },
         amount: 10n,
         detail: encodeDataTree(EMPTY_ARR),
@@ -52,9 +52,9 @@ Deno.test(
     const validBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{
         contractHash: accountHash,
-        params: AccountContractParams.encode({
+        params: encodeDataTree(AccountContractParams.encode({
           publicKey: ctx1.get(KeyService).getSelfPublicKey(),
-        }),
+        })),
       }],
     });
 
@@ -76,9 +76,9 @@ Deno.test(
     const invalidBlock = ctx1.get(BlockBuilder).publishSingleDraft({
       satisfies: [{
         contractHash: accountHash,
-        params: AccountContractParams.encode({
+        params: encodeDataTree(AccountContractParams.encode({
           publicKey: ctx2.get(KeyService).getSelfPublicKey(),
-        }),
+        })),
       }],
     });
 

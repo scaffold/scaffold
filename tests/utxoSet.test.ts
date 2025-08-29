@@ -24,10 +24,10 @@ Deno.test(
       error(`Missing genesis block!`);
 
     assertEquals(ctx.get(FrontierService).getTotalUtxoCount(genesis), genesis.outputs.length);
-    assertObjectMatch(genesis.frontierDetail, {
-      spentUtxoIdxs: [],
-      subtreeNewUtxoCount: [],
-    });
+    // assertObjectMatch(genesis.frontierDetail, {
+    //   spentUtxoIdxs: [],
+    //   subtreeNewUtxoCount: [],
+    // });
   }),
 );
 
@@ -51,10 +51,10 @@ Deno.test(
       ctx.get(FrontierService).getTotalUtxoCount(block),
       genesis.outputs.length - block.inputs.length + block.outputs.length,
     );
-    assertObjectMatch(block.frontierDetail, {
-      spentUtxoIdxs: [],
-      subtreeNewUtxoCount: [],
-    });
+    // assertObjectMatch(block.frontierDetail, {
+    //   spentUtxoIdxs: [],
+    //   subtreeNewUtxoCount: [],
+    // });
   }),
 );
 

@@ -1,12 +1,14 @@
 import { deadline } from '@std/async';
 import { secp } from '../src/util/secp.ts';
-import { Context } from '../src/Context.ts';
+import { TestContext } from '../src/TestContext.ts';
 import { Config, makeDefaultConfig } from '../src/Config.ts';
 import { BlockService } from '../src/BlockService.ts';
 import { BlockInput } from '../src/messages.ts';
 import { bin2hex } from '../src/util/hex.ts';
 // import { DefaultAppraisalProvider } from '../../sbl/DefaultAppraisalProvider.ts';
 import { MockTimeProvider } from './MockTimeProvider.ts';
+import { areTreesEqual } from '../src/DataTreeHelper.ts';
+import { DataTree } from '../src/protocol/base.ts';
 import { ConnectionService } from '../src/ConnectionService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import { NetworkService } from '../src/NetworkService.ts';
@@ -20,6 +22,7 @@ import { InputSpec } from '../src/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { arrEquals } from '../src/util/buffer.ts';
 import { SignalingProvider } from '../src/NetworkProvider.ts';
+import { Context } from '../src/Context.ts';
 
 const makeConfig = (
   ctxIdx: number,
@@ -48,10 +51,15 @@ const makeConfig = (
 } satisfies Config);
 
 export const makeTest = (
-  partialConfig: Partial<Config & { timeProvider: MockTimeProvider }>,
+  partialConfig: Partial<
+    Config & {
+      timeProvider: MockTimeProvider;
+      allow: { new (context: Context): unknown }[];
+    }
+  >,
   func: (
     testCtx: Deno.TestContext,
-    ...ctx: Context[]
+    ...ctx: TestContext[]
   ) => Promise<void> | void,
 ) =>
 async (testCtx: Deno.TestContext) => {
@@ -61,7 +69,7 @@ async (testCtx: Deno.TestContext) => {
     (_, i) => {
       const config = makeConfig(i, partialConfig);
       const stepperIdx = setInterval(() => config.timeProvider.stepTime(), 0);
-      const ctx = new Context(config);
+      const ctx = new TestContext(config, partialConfig.allow ?? []);
       ctx.onDestruct(() => {
         clearInterval(stepperIdx);
         config.timeProvider.destruct();
@@ -158,12 +166,12 @@ export const waitFor = async <T extends NotUndefined>(
 export const findOutput = (
   block: BlockFact,
   contractHash: Hash,
-  params?: Uint8Array,
+  params?: DataTree,
 ): InputSpec => {
   for (const [idx, output] of block.outputs.entries()) {
     if (
       Hash.equals(output.verifier.contractHash, contractHash) &&
-      (params === undefined || arrEquals(output.verifier.params, params))
+      (params === undefined || areTreesEqual(output.verifier.params, params))
     ) {
       return { block, outputIdx: idx, amount: output.amount };
     }

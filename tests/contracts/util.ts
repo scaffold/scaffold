@@ -41,7 +41,7 @@ export const waitForVerifiedOutput = async (
     return {
       block: consumer!,
       inputIdx,
-      body: consumer!.bodies[consumer!.inputs[inputIdx].groupIdx],
+      body: consumer!.body,
     };
   } else {
     assertEquals(consumer, undefined);

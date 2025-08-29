@@ -4,6 +4,7 @@ import { FetchService } from '../src/FetchService.ts';
 import { collatzHash } from '../src/hashes.ts';
 import { CollatzContract } from '../src/contracts/CollatzContract.ts';
 import * as collatzMessages from '../src/contracts/collatzMessages.ts';
+import { encodeDataTree } from '../src/DataTreeHelper.ts';
 import { MockNetworkProvider } from '../plugins/MockNetworkProvider.ts';
 import { MockTimeProvider } from '../tests/MockTimeProvider.ts';
 import { AccountContract } from '../src/contracts/AccountContract.ts';
@@ -28,13 +29,13 @@ Deno.test(
   },
   makeTest({
     timeProvider,
-    networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
-    contractProviders: [new AccountContract(), new DataContract()],
+    networkProviders: [new MockNetworkProvider(timeProvider, mockNetworkOptions)],
+    contractProviders: [AccountContract, DataContract],
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
     // Only add the generator to one of the contexts
-    ctx1.config.contractProviders.push(new CollatzContract());
+    ctx1.config.contractProviders.push(CollatzContract);
 
     connectCtxs([ctx1, ctx2], 'chain');
 
@@ -45,9 +46,9 @@ Deno.test(
       ctx2.get(FetchService).fetch(
         {
           contractHash: collatzHash,
-          params: collatzMessages.Params.encode({ num: 1n }),
+          params: encodeDataTree(collatzMessages.Params.encode({ num: 1n })),
         },
-        { onBody: resolve },
+        { onBody: (dataTree) => resolve(dataTree?.value?.bytes) },
       )
     );
 
@@ -65,14 +66,14 @@ Deno.test(
   },
   makeTest({
     timeProvider,
-    networkProviders: [new MockNetworkProvider(mockNetworkOptions)],
-    contractProviders: [new AccountContract(), new DataContract()],
+    networkProviders: [new MockNetworkProvider(timeProvider, mockNetworkOptions)],
+    contractProviders: [AccountContract, DataContract],
     limitFactCount: 100,
   }, async (_testCtx, ctx1, ctx2) => {
     provideInitialBalance(ctx1, ctx2);
 
     // Only add the generator to one of the contexts
-    ctx1.config.contractProviders.push(new CollatzContract());
+    ctx1.config.contractProviders.push(CollatzContract);
 
     connectCtxs([ctx1, ctx2], 'chain');
 
@@ -83,9 +84,9 @@ Deno.test(
       ctx2.get(FetchService).fetch(
         {
           contractHash: collatzHash,
-          params: collatzMessages.Params.encode({ num: 10n }),
+          params: encodeDataTree(collatzMessages.Params.encode({ num: 10n })),
         },
-        { onBody: resolve },
+        { onBody: (dataTree) => resolve(dataTree?.value?.bytes) },
       )
     );
 

@@ -73,6 +73,17 @@ export abstract class BaseContext<DerivedType> {
 
   protected abstract getThis(): DerivedType;
 
+  protected mock<T extends object & MaybeDisposable>(
+    Type: { new (context: DerivedType): T },
+    mock: T,
+  ): void {
+    if (this.objs.has(Type)) {
+      throw new Error(`Cannot mock ${Type.name} after it's been constructed!`);
+    }
+
+    this.objs.set(Type, mock);
+  }
+
   private reset() {
     assert(this.isDestructed);
     assert(this.constructing.size === 0);
