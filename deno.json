@@ -82,6 +82,7 @@
     "@std/io": "jsr:@std/io@^0.225.0",
     "@std/path": "jsr:@std/path@^1.0.8",
     "@std/random": "jsr:@std/random@^0.1.0",
+    "jsondiffpatch": "npm:jsondiffpatch@^0.7.3",
     "unique-names-generator": "npm:unique-names-generator@^4.7.1"
   }
 }

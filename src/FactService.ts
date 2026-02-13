@@ -35,6 +35,8 @@ import { RoutingService } from './RoutingService.ts';
 import { FactRecordSet } from './record_sets/FactRecordSet.ts';
 import * as zstd from '@bokuweb/zstd-wasm';
 import { digestTree } from './DataTreeHelper.ts';
+import { Snapshot, SnapshotService } from './SnapshotService.ts';
+import { SnapshotHelper } from './SnapshotHelper.ts';
 
 export const ingestingFact: unique symbol = Symbol('FactService.ingestingFact');
 
@@ -98,6 +100,8 @@ export class FactService {
         );
       }
     }, 1000);
+
+    this.ctx.get(SnapshotService).register('facts', this);
   }
 
   public getSize() {
@@ -527,6 +531,8 @@ export class FactService {
     } finally {
       assert(this.isCreating);
       this.isCreating = false;
+
+      this.ctx.get(SnapshotService).snapshot();
     }
   }
 
@@ -571,7 +577,12 @@ export class FactService {
     console.log(`Ingested ${count} facts from storage!`);
   }
 
-  public snapshot() {
-    return { facts: this.facts };
+  public snapshot(): Snapshot {
+    const facts: { [key: string]: Snapshot } = {};
+    for (const fact of this.facts.values()) {
+      assert(fact !== ingestingFact);
+      facts[fact.hash.toHex()] = this.ctx.get(SnapshotHelper).snapshotFact(fact);
+    }
+    return { facts };
   }
 }

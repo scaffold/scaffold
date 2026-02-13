@@ -10,6 +10,7 @@ export enum LogLevel {
 }
 
 export interface LogEvent {
+  system: LogSystem;
   timestamp: number;
   level: LogLevel;
   message: string;
@@ -17,13 +18,17 @@ export interface LogEvent {
 }
 
 export class Logger {
-  public events: LogEvent[] = [];
+  // private events: LogEvent[] = [];
 
-  private constructor(private ctx: Context, public minLevel: LogLevel) {}
+  private constructor(
+    private ctx: Context,
+    private system: LogSystem,
+    private minLevel: LogLevel,
+  ) {}
 
   static create(ctx: Context, system: LogSystem) {
     const level = ctx.config.logLevels[system];
-    return level !== undefined ? new Logger(ctx, level) : undefined;
+    return level !== undefined ? new Logger(ctx, system, level) : undefined;
   }
 
   debug(message: string, data?: unknown) {
@@ -48,11 +53,17 @@ export class Logger {
 
   log(level: LogLevel, message: string, data?: unknown) {
     if (level >= this.minLevel) {
-      const event = { timestamp: this.ctx.config.timeProvider.now(), level, message, data };
+      const event = {
+        system: this.system,
+        timestamp: this.ctx.config.timeProvider.now(),
+        level,
+        message,
+        data,
+      };
       for (const provider of this.ctx.config.loggingProviders) {
         provider.handler(event, this.ctx);
       }
-      this.events.push(event);
+      // this.events.push(event);
     }
   }
 }

@@ -26,6 +26,9 @@ export enum LogSystem {
   Worker = 'worker',
   Verification = 'verification',
   Generation = 'generation',
+  Constraint = 'constraint',
+  SnapshotState = 'snapshot_state',
+  SnapshotDiff = 'snapshot_diff',
 }
 
 export interface LoggingProvider {
@@ -194,6 +197,11 @@ export const makeDefaultConfig = () => {
       [LogSystem.Connection]: LogLevel.DEBUG,
       [LogSystem.Signaler]: LogLevel.DEBUG,
       [LogSystem.Worker]: LogLevel.DEBUG,
+      [LogSystem.Verification]: LogLevel.DEBUG,
+      [LogSystem.Generation]: LogLevel.DEBUG,
+      [LogSystem.Constraint]: LogLevel.DEBUG,
+      [LogSystem.SnapshotState]: LogLevel.DEBUG,
+      [LogSystem.SnapshotDiff]: LogLevel.DEBUG,
     },
     loggingProviders: [
       new ConsoleLoggingProvider(),
