@@ -8,12 +8,13 @@ Use one vocabulary everywhere:
 - `squashes` = merged heads
 - `utxoIdx` = rebased spend index
 
-Avoid parallel legacy names (`frontier child`, `frontier output idx`, legacy detail roots) in active code paths.
+Avoid parallel legacy names (`frontier child`, `frontier output idx`, legacy detail roots) in active
+code paths.
 
 ## 2. One scoring engine
 
-Keep exactly one canonical score function in production.
-If experimentation is needed, version score functions and tag blocks by score-version.
+Keep exactly one canonical score function in production. If experimentation is needed, version score
+functions and tag blocks by score-version.
 
 ## 3. Separate protocol from policy
 
@@ -33,8 +34,8 @@ This separation will make both reasoning and testing much easier.
 
 ## 4. Commit to a compact spend proof format
 
-The current structure already supports path-local transforms.
-Add one compact commitment for each block’s spend transform and standardize proof verification API.
+The current structure already supports path-local transforms. Add one compact commitment for each
+block’s spend transform and standardize proof verification API.
 
 This unlocks:
 

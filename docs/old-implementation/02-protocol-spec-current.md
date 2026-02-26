@@ -56,7 +56,8 @@ At ingest time, the code enforces:
 - unique squash block hashes,
 - `treeWeights.length <= 256`,
 - each tree weight is non-negative,
-- non-genesis block must have at least one external input (`utxoIdx >= outputs.length` on some input),
+- non-genesis block must have at least one external input (`utxoIdx >= outputs.length` on some
+  input),
 - each input has `outputIdx >= 0`, `utxoIdx >= 0`, `groupIdx >= 0`,
 - each output has `groupIdx >= 0`,
 - negative output amounts only allowed for `frontierHash`,
@@ -89,13 +90,16 @@ This model is built by:
 
 ## 7. Verification group model
 
-`groupIdx` couples related inputs/outputs so verifier execution can be scoped to the right contract group.
+`groupIdx` couples related inputs/outputs so verifier execution can be scoped to the right contract
+group.
 
-During ingest, linking an input to a parent output triggers verifier launch with a hint prefix identifying the verifier group.
+During ingest, linking an input to a parent output triggers verifier launch with a hint prefix
+identifying the verifier group.
 
 ## 8. Collateral/validity model
 
-Validity is keyed by `(blockHash, hint-path-hash)` and stores vote outcomes. Votes are constrained to not switch contest type after first assignment, and not flip resolved leaf results.
+Validity is keyed by `(blockHash, hint-path-hash)` and stores vote outcomes. Votes are constrained
+to not switch contest type after first assignment, and not flip resolved leaf results.
 
 Collateral postings are separate outputs with `collateralHash` verifier and detail containing:
 

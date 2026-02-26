@@ -29,7 +29,8 @@ Outcome is computed in two stages:
 1. contest-type winner,
 2. result winner.
 
-Payout redistributes loser stake to winning postings (with caps/eligibility rules); remainder is burned.
+Payout redistributes loser stake to winning postings (with caps/eligibility rules); remainder is
+burned.
 
 ## 4. Strategic properties (good)
 
@@ -40,7 +41,8 @@ Payout redistributes loser stake to winning postings (with caps/eligibility rule
 
 ## 5. Strategic weak points (current)
 
-- Some verification driver APIs are still stubs, so advanced contracts cannot be fully adjudicated yet.
+- Some verification driver APIs are still stubs, so advanced contracts cannot be fully adjudicated
+  yet.
 - Frontier contract execution is effectively placeholder.
 - Canonical winner logic and collateral validity are not fully fused into one hard acceptance rule.
 - Some guardrails rely on conventions/comments rather than strict reject-on-ingest.

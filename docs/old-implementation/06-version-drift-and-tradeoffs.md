@@ -46,9 +46,10 @@ Adopt Variant B as the canonical base model, then add one proof-friendly auxilia
 - add committed compact spend/index metadata per block (mask root or rank/select digest),
 - drop redundant legacy frontier-detail fields from v1 wire format.
 
-This keeps implementation simple while preserving a path to succinct verification and efficient remote syncing.
+This keeps implementation simple while preserving a path to succinct verification and efficient
+remote syncing.
 
 ## 4. Test-suite drift notes
 
-Some tests and comments still reference older frontier-level/output detail semantics.
-The spec should explicitly mark those as historical context and avoid mixing them into v1 acceptance rules.
+Some tests and comments still reference older frontier-level/output detail semantics. The spec
+should explicitly mark those as historical context and avoid mixing them into v1 acceptance rules.

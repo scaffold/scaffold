@@ -18,11 +18,13 @@ A block is structurally valid iff all conditions hold:
    - strict zero-sum, or
    - explicit bounded mint/burn policy declared in protocol constants.
 
-Blocks failing hard rules are rejected. Unresolved dependencies can be held only in quarantine, never canonical.
+Blocks failing hard rules are rejected. Unresolved dependencies can be held only in quarantine,
+never canonical.
 
 ## 2. Deterministic mergeability
 
-Two references are mergeable iff their spend projections are disjoint after recursive scatter through parent/squash transforms.
+Two references are mergeable iff their spend projections are disjoint after recursive scatter
+through parent/squash transforms.
 
 Duplicate spends in any transformed space are invalid.
 
@@ -67,7 +69,8 @@ For a graph respecting volume-growth constraints:
 - output/index mapping should be `O(log N)` path depth with `O(log k)` local rank operations,
 - merge/disjoint checks should be near-linear in touched indices.
 
-The protocol must define auxiliary commitments needed to verify these transforms without full graph replay.
+The protocol must define auxiliary commitments needed to verify these transforms without full graph
+replay.
 
 ## 7. Conformance suite
 

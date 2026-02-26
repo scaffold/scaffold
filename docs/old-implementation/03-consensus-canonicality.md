@@ -8,7 +8,8 @@ Conflicts are output-claim conflicts, not chain-height conflicts.
 - Conflict relations are propagated through aggregation links.
 - Squasher relationships suppress false conflicts between ancestor/squash-equivalent claims.
 
-The key primitive is `scatterSpends`, which maps a set of UTXO indices through nested squashes/parents to concrete originating outputs.
+The key primitive is `scatterSpends`, which maps a set of UTXO indices through nested
+squashes/parents to concrete originating outputs.
 
 ## 2. Mergeability
 
@@ -56,7 +57,8 @@ This fits the stated design goal: fast optimistic usability with later repair.
 
 ## 6. Risks in current state
 
-- Missing strict validation in some paths allows malformed but parseable structures to live temporarily.
+- Missing strict validation in some paths allows malformed but parseable structures to live
+  temporarily.
 - Verification outcomes are not yet a fully hard gate for canonicality in all cases.
 - Multiple historical scoring approaches coexist; one v1 scoring model should be frozen.
 

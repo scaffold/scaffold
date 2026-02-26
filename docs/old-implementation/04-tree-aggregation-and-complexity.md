@@ -9,8 +9,8 @@ Given a block graph with parent/squash links, map between:
 - a concrete origin output `(block, outputIdx)`,
 - and its rebased `utxoIdx` inside an aggregate block’s UTXO space.
 
-If this mapping requires scanning all prior blocks, cost is `O(N)`.
-Scaffold’s structure tries to make it path-local.
+If this mapping requires scanning all prior blocks, cost is `O(N)`. Scaffold’s structure tries to
+make it path-local.
 
 ## 2. Current structure
 
@@ -21,7 +21,8 @@ Each block contains:
 - `squashedUtxoIdxs[]` in parent’s post-output/pre-input space,
 - per-input `utxoIdx` in the new aggregate space.
 
-`FrontierService.build` synthesizes these fields by rebasing each squashed subtree into the chosen parent space.
+`FrontierService.build` synthesizes these fields by rebasing each squashed subtree into the chosen
+parent space.
 
 ## 3. Key algorithms
 
@@ -51,7 +52,8 @@ Depth control heuristics use volume growth ratios (`~phi`):
 - `PARENT_MIN_VOLUME_RATIO`
 - `SQUASH_MIN_VOLUME_RATIO`
 
-If these are enforced and honest volume tracks subtree size, ancestry volume grows geometrically, so path depth is logarithmic in represented work/volume.
+If these are enforced and honest volume tracks subtree size, ancestry volume grows geometrically, so
+path depth is logarithmic in represented work/volume.
 
 That is the intended reason nodes can load path slices instead of full history.
 
@@ -60,7 +62,8 @@ That is the intended reason nodes can load path slices instead of full history.
 Path-local does not automatically mean logarithmic in implementation:
 
 - spent-index counting uses linear search (`countLt`) where binary search is noted as TODO,
-- sorted index merges are sometimes done via flatten+sort (`O(m log m)`) rather than linear k-way merge,
+- sorted index merges are sometimes done via flatten+sort (`O(m log m)`) rather than linear k-way
+  merge,
 - path discovery can still expand broad squasher sets depending on graph shape.
 
 So practical complexity today is closer to:
@@ -76,12 +79,15 @@ Use one committed index model and optimize around it:
 2. Replace linear count with binary rank queries.
 3. Replace flatten+sort merges with streaming k-way merges.
 4. Maintain subtree prefix counters (rank/select friendly bitset or Fenwick-like structure).
-5. Commit subtree index metadata in block detail so remote peers can verify index transforms without replaying full subtrees.
+5. Commit subtree index metadata in block detail so remote peers can verify index transforms without
+   replaying full subtrees.
 
 ## 7. Suggested v1 invariant
 
 For any block `B`, for every input `i`:
 
-- `getOutput(B, B.inputs[i].utxoIdx)` must resolve to `(B.inputs[i].blockHash, B.inputs[i].outputIdx)` after path/link completion.
+- `getOutput(B, B.inputs[i].utxoIdx)` must resolve to
+  `(B.inputs[i].blockHash, B.inputs[i].outputIdx)` after path/link completion.
 
-Treat that as a property-test invariant and reject blocks failing it once all dependencies are available.
+Treat that as a property-test invariant and reject blocks failing it once all dependencies are
+available.

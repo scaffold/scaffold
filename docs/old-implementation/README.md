@@ -1,6 +1,7 @@
 # Scaffold Protocol Specification Notes
 
-This directory is a code-derived specification and design notebook for the core library in `scaffold/src`.
+This directory is a code-derived specification and design notebook for the core library in
+`scaffold/src`.
 
 It has three goals:
 
@@ -8,7 +9,8 @@ It has three goals:
 2. Separate implemented behavior from incomplete or competing designs.
 3. Propose a concrete path to finish the protocol with simpler, stronger guarantees.
 
-These notes are based on the current source tree (services, ingestors, contracts, and tests), not on external docs.
+These notes are based on the current source tree (services, ingestors, contracts, and tests), not on
+external docs.
 
 ## Reading order
 
