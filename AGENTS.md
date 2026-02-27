@@ -34,6 +34,9 @@ Executions are eventually committed to a global block graph. Finalization should
 - Most code in `src/` is reference material only; primarily look at `docs/protocol/` for the latest and greatest.
 - Use `camelCase` for TypeScript properties and interface fields. `snake_case` is allowed in pseudocode/math notation inside docs.
 
+## Queued Work
+See `TODO.md` for the current backlog of protocol modules and concepts to document and implement, roughly in priority order.
+
 ## Ways of Working
 Planning -> Documentation -> Testing -> Coding
 
