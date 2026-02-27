@@ -50,7 +50,7 @@ The output vector is ordered newest-first. Recent outputs cluster at the front, 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `claimMask` | Bit vector (length N) | Which anchor outputs the subtrees collectively claim |
+| `claimMask` | Merkle root (of bit vector, length N) | Which anchor outputs the subtrees collectively claim. The block header stores only the merkle root; chunks of the full bit vector are distributed separately (see Partial Knowledge). |
 | `aggregateOutputCounts` | Integer vector | Number of outputs each subtree contributes |
 | `claims` | Block's own claims | Outputs this block itself spends from the current vector |
 | `outputs` | Block's own outputs | New outputs this block itself produces |
@@ -106,7 +106,9 @@ Rebasing can also detect conflicts with the chain itself — if T1 claims an out
 
 ## Partial Knowledge and Monotonic Discovery
 
-A tree root's claim mask can be large. When a block is first received, its claim mask may only be **partially known**. The claim mask is split into chunks for merkle tree purposes — some chunks may be loaded and others missing.
+A tree root's claim mask can be large. A block's header contains only the **merkle root** of its claim mask, not the full bit vector. The full vector is split into chunks that form the leaves of this merkle tree. These chunks are distributed separately — typically within collateral postings, which are themselves blocks. A peer may receive a block header (with the merkle root) long before it has any chunks of the actual claim mask.
+
+When a block is first received, its claim mask is therefore only **partially known** — some chunks may be loaded and others missing.
 
 ### Default Assumption
 
