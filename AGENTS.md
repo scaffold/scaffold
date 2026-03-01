@@ -50,6 +50,7 @@ Planning -> Documentation -> Testing -> Coding
 - Protocol documentation is the highest-priority artifact.
 - Maintain living docs with full ownership: add/update/delete as needed to keep docs aligned with intended protocol behavior.
 - Target: docs should be sufficient for a conforming implementation without relying on undocumented assumptions.
+- When adding a new module doc, update the module map in `docs/protocol/overview.md` to include it.
 
 ### Testing
 - Favor state-machine and transition-based tests.
