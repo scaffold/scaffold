@@ -30,7 +30,7 @@ Only applies if the block aggregates subtrees. Subtrees are applied sequentially
 
 ### Phase 2 — Block's Own Effects
 
-The block itself claims from the current output vector (which now includes subtree outputs and surviving anchor outputs), then prepends its own new outputs.
+The block prepends its own new outputs to the current output vector, then claims from the extended vector. Because outputs are prepended before claims are applied, the block can claim its own outputs (**self-claiming**).
 
 ```
 start:       [anchor outputs: o_0 .. o_{N-1}]
@@ -38,21 +38,26 @@ subtree 1:   remove s1.claims, prepend s1.outputs
 subtree 2:   remove s2.claims, prepend s2.outputs
 ...
 subtree K:   remove sK.claims, prepend sK.outputs
-self:        remove own claims, prepend own outputs
+self:        prepend own outputs, THEN remove own claims
 end:         block's output vector
 ```
 
+Claims in the block's `claims` field are indices into the extended vector (`[own outputs..., post-subtree outputs...]`). Claims with index < `ownOutputCount` are **self-claims** — they reference the block's own outputs. Self-claimed outputs are produced and immediately consumed atomically; they never appear in the block's final output vector or the UTXO set.
+
+Self-claims serve contract fulfillment: a spending condition may require the existence of a specific output type. The block produces that output to satisfy the condition while consuming it in the same step, avoiding unnecessary pollution of the output set. Self-claims are economically neutral — they add and subtract the same value, netting to zero in the throughput balance.
+
 The output vector is ordered newest-first. Recent outputs cluster at the front, improving claim mask compression since recent outputs are claimed more frequently.
 
-`claimMask` and `aggregateOutputCounts` exist purely for navigating the merkle tree — they let a peer locate which subtree produced or claimed a given output without loading the entire tree. The block's own claims and outputs are separate fields, not included in these.
+`claimMask` records which anchor outputs are claimed by any source within the block — subtrees and the block's own non-self claims. It is used both for conflict detection (bitwise intersection) and for merkle tree navigation (locating which subtree produced or claimed a given output). `aggregateOutputCounts` records per-subtree output counts for navigation. The block's own claims and outputs are separate fields.
 
 ### Block Header Fields (Conflict-Relevant)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `claimMask` | Merkle root (of bit vector, length N) | Which anchor outputs the subtrees collectively claim. The block header stores only the merkle root; chunks of the full bit vector are distributed separately (see Partial Knowledge). |
+| `claimMask` | Merkle root (of bit vector, length N) | Which anchor outputs are claimed (from subtrees and block's own non-self claims). The block header stores only the merkle root; chunks of the full bit vector are distributed separately (see Partial Knowledge). |
 | `aggregateOutputCounts` | Integer vector | Number of outputs each subtree contributes |
-| `claims` | Block's own claims | Outputs this block itself spends from the current vector |
+| `ownOutputCount` | Integer | Number of outputs the block itself produces (before claims). Claims with index < `ownOutputCount` are self-claims. |
+| `claims` | Block's own claims | Indices into the extended vector (`[own outputs..., post-subtree outputs...]`). Includes both self-claims (index < `ownOutputCount`) and shared-resource claims. |
 | `outputs` | Block's own outputs | New outputs this block itself produces |
 | `outputCount` | Integer | Total output count after full transformation |
 
@@ -66,10 +71,24 @@ Block A anchors to block X (which has 10 outputs). A aggregates subtrees S1 and 
 2. **S2** claims output {0} (which is `s1_0`, one of S1's outputs), produces 1 new output.
    Vector: `[s2_0, s1_1, s1_2, x_0, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (11 entries)
 
-3. **A itself** claims output {3} (which is `x_0`), produces 2 new outputs.
-   Vector: `[a_0, a_1, s2_0, s1_1, s1_2, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (12 entries)
+3. **A itself** (`ownOutputCount = 2`) — first prepend A's outputs, then apply claims.
+   After prepend: `[a_0, a_1, s2_0, s1_1, s1_2, x_0, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (13 entries)
+   A claims {5} (index 5 = `x_0`, since 5 >= `ownOutputCount` of 2, this is a shared-resource claim).
+   Final vector: `[a_0, a_1, s2_0, s1_1, s1_2, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (12 entries)
 
-A's conflict-relevant header: `claimMask = 0b0000100100` (bits 2 and 5), `aggregateOutputCounts = [3, 1]`.
+A's conflict-relevant header: `claimMask = 0b0000100101` (bit 0 from A's own claim of `x_0`, bits 2 and 5 from subtrees), `aggregateOutputCounts = [3, 1]`, `ownOutputCount = 2`.
+
+### Self-Claiming Example
+
+Block B anchors to block X (which has 10 outputs). B has no subtrees. B produces 3 outputs and has `claims = {1, 5}`.
+
+1. Prepend B's outputs: `[b_0, b_1, b_2, x_0, x_1, ..., x_9]` (13 entries)
+2. Apply claims:
+   - Claim {1}: index 1 < `ownOutputCount` (3), so this is a **self-claim**. B claims its own `b_1`. This output is produced and immediately consumed — it never appears in the final output vector. It may serve to satisfy a spending condition on another claimed output (e.g., a contract that requires a proof output to exist).
+   - Claim {5}: index 5 >= `ownOutputCount` (3), so this is a shared-resource claim. Maps to anchor index 2 (`x_2`). Recorded in `claimMask` at bit 2.
+3. Final vector: `[b_0, b_2, x_0, x_1, x_3, ..., x_9]` (11 entries)
+
+B's header: `claimMask = 0b0000000100` (bit 2 only — the self-claim is excluded), `ownOutputCount = 3`.
 
 ---
 
@@ -86,6 +105,8 @@ conflicts(T1, T2) = (T1.claimMask & T2.claimMask) != 0
 ```
 
 This is a bitwise AND — one CPU instruction per word of the bit vector.
+
+**Self-claims are excluded** from `claimMask`. Two blocks at the same anchor that both self-claim their own index 0 are not conflicting — each references its own internal output, not a shared resource. Only claims against anchor outputs (indices >= `ownOutputCount` in the block's `claims` field, mapped back to anchor positions) appear in `claimMask` and participate in conflict detection.
 
 ### Different-Anchor Case (Rebasing)
 

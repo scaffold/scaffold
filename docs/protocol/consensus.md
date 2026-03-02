@@ -14,7 +14,7 @@ At this module, a block is:
 Block {
     anchor:      Hash?        // the chain block this builds on (optional; genesis has none)
     weight:      Number[]     // weight vector indexed by anchor chain depth
-    supersedes:  Set<Hash>    // blocks this block replaces (implies conflict + inheritance)
+    aggregates:  Set<Hash>    // blocks this block replaces (implies conflict + inheritance)
 }
 ```
 
@@ -39,25 +39,25 @@ A block's **weight vector** is an array of non-negative numbers, indexed by anch
 - `weight[2]` = work this block contributes as a descendant of two levels up
 - ... and so on back to genesis
 
-The weight vector allows a single block to correctly attribute work to multiple levels of the chain. For example, a block that supersedes (aggregates) work referencing different chain levels declares exactly how much weight applies to each level.
+The weight vector allows a single block to correctly attribute work to multiple levels of the chain. For example, a block that aggregates work referencing different chain levels declares exactly how much weight applies to each level.
 
 A simple leaf block typically has `weight = [w, 0, 0, ...]` — all its work derives from its direct anchor's state.
 
 The total declared weight of a block is `sum(weight)`.
 
-### Supersedes
+### Aggregates
 
-A block's **supersedes** set contains the hashes of blocks it replaces. This is the consensus module's representation of aggregation: when block C supersedes blocks A1 and A2, it means "C is a rolled-up replacement for A1 and A2."
+A block's **aggregates** set contains the hashes of blocks it replaces. This is the consensus module's representation of aggregation: when block C aggregates blocks A1 and A2, it means "C is a rolled-up replacement for A1 and A2."
 
-Supersession implies:
-1. **Conflict**: C conflicts with every block in its supersedes set. They can never coexist in the canonical view.
-2. **Conflict inheritance**: C inherits all conflicts from every block it supersedes, recursively. If A1 conflicts with B, and C supersedes A1, then C also conflicts with B.
+Aggregation implies:
+1. **Conflict**: C conflicts with every block in its aggregates set. They can never coexist in the canonical view.
+2. **Conflict inheritance**: C inherits all conflicts from every block it aggregates, recursively. If A1 conflicts with B, and C aggregates A1, then C also conflicts with B.
 
 Conflict inheritance is dynamic: if a new conflict involving A1 is discovered after C was created, C automatically inherits it.
 
 ### Genesis
 
-The **genesis block** has no anchor, an empty weight vector, and no supersedes. It has zero weight and no conflicts. All other blocks eventually anchor back to genesis.
+The **genesis block** has no anchor, an empty weight vector, and an empty aggregates set. It has zero weight and no conflicts. All other blocks eventually anchor back to genesis.
 
 ### Ancestors and Descendants
 
@@ -78,7 +78,7 @@ Multiple blocks can anchor to the same block, creating a DAG:
     [C3] [C3']  [C3'']
 ```
 
-C2a and C2b both anchor to C1. They may or may not conflict. Non-conflicting blocks at the same level can be superseded by a single block, consolidating their weight.
+C2a and C2b both anchor to C1. They may or may not conflict. Non-conflicting blocks at the same level can be aggregated by a single block, consolidating their weight.
 
 ---
 
@@ -89,8 +89,8 @@ C2a and C2b both anchor to C1. They may or may not conflict. Non-conflicting blo
 Conflicts come from three sources:
 
 1. **Direct conflicts**: Declared by other modules (e.g., "A and B both claim the same resource").
-2. **Supersession conflicts**: A block conflicts with every block it supersedes.
-3. **Inherited conflicts**: A block inherits all conflicts from blocks it supersedes, recursively.
+2. **Aggregation conflicts**: A block conflicts with every block it aggregates.
+3. **Inherited conflicts**: A block inherits all conflicts from blocks it aggregates, recursively.
 
 ### Properties
 
@@ -116,20 +116,20 @@ This does **not** propagate backward: if X conflicts with Y, and Y anchors to W,
      X ⚡ Y  ↛  X ⚡ W
 ```
 
-### Supersession and Inheritance Example
+### Aggregation and Inheritance Example
 
 ```
-    [C] supersedes [A]        [B]
-         C ⚡ A  (from supersession)
+    [C] aggregates [A]        [B]
+         C ⚡ A  (from aggregation)
          A ⚡ B  (from another module)
-         ∴ C ⚡ B  (inherited via supersession)
+         ∴ C ⚡ B  (inherited via aggregation)
 ```
 
 Without inheritance, C could "launder" A's contested work by rolling it up. Inheritance prevents this: if A is bad, C (which claims A's work) is also considered bad.
 
 ### Conflict Re-evaluation
 
-When a new conflict is discovered, the consensus module re-evaluates all affected branches. A previously winning branch may lose if its effective weight is now contested. Because inheritance is dynamic, a new conflict involving a superseded block immediately affects the superseding block too.
+When a new conflict is discovered, the consensus module re-evaluates all affected branches. A previously winning branch may lose if its effective weight is now contested. Because inheritance is dynamic, a new conflict involving an aggregated block immediately affects the aggregating block too.
 
 ---
 
@@ -250,9 +250,9 @@ There is no explicit finality or time preference. However, earlier blocks are na
 
 ### Work Laundering Attack
 
-**Attack**: Supersede a contested block to inherit its work without inheriting its conflicts.
+**Attack**: Aggregate a contested block to inherit its work without inheriting its conflicts.
 
-**Defense**: Conflict inheritance. Superseding a block means inheriting all its conflicts. If A is contested, any block that supersedes A is also contested.
+**Defense**: Conflict inheritance. Aggregating a block means inheriting all its conflicts. If A is contested, any block that aggregates A is also contested.
 
 ### Sampling Manipulation
 
@@ -302,13 +302,13 @@ After verification: D's work is real (200), E's work is real (50).
 
 **B overtakes A.** A and E are excluded from canonical view. D and everything built on D are included.
 
-### Supersession Example
+### Aggregation Example
 
-Block S supersedes A and E: `supersedes = {A, E}`, `weight = [90, 50]` (90 attributed to G level via A's anchor, 50 attributed to G level via E being built on A).
+Block S aggregates A and E: `aggregates = {A, E}`, `weight = [90, 50]` (90 attributed to G level via A's anchor, 50 attributed to G level via E being built on A).
 
-S conflicts with A and E (supersession). S also inherits A's conflict with B. So S conflicts with B.
+S conflicts with A and E (aggregation). S also inherits A's conflict with B. So S conflicts with B.
 
-S's effective weight = 90 + 50 = 140. B's effective weight = 280. B still wins. S and its superseded blocks are excluded.
+S's effective weight = 90 + 50 = 140. B's effective weight = 280. B still wins. S and its aggregated blocks are excluded.
 
 ### Fraud Detection
 
@@ -328,7 +328,7 @@ A's branch is at 140. B still wins, but the gap has narrowed. If more real work 
 | Input | Source | Description |
 |-------|--------|-------------|
 | Block anchor + weight vector | Block creation module | Where the block attaches and how much work it claims at each chain level |
-| Supersedes set | Block creation module | Which blocks this block replaces |
+| Aggregates set | Block creation module | Which blocks this block replaces |
 | Direct conflict declarations | Validity/execution modules | "Block X conflicts with block Y" |
 | Verified weight vectors | Verification module | Component-by-component verified weights |
 

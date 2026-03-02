@@ -11,8 +11,8 @@ export interface ConsensusProvider<BlockType> {
   /** Return the anchor hash (parent in the anchor chain), or undefined for genesis. */
   getAnchor(block: BlockType): Hash | undefined;
 
-  /** Return the hashes of blocks this block supersedes (replaces), or empty array. */
-  getSupersedes(block: BlockType): Hash[];
+  /** Return the hashes of blocks this block aggregates (replaces), or empty array. */
+  getAggregates(block: BlockType): Hash[];
 
   /** Return the declared weight vector for this block. */
   getWeightVector(block: BlockType): number[];
@@ -36,11 +36,11 @@ export class ConsensusModule<BlockType> {
   /** Direct conflicts declared by external layers. Stored symmetrically. */
   private directConflicts = new Map<HashPrimitive, Set<HashPrimitive>>();
 
-  /** Block -> set of block hash primitives it supersedes. */
-  private supersedesMap = new Map<HashPrimitive, Set<HashPrimitive>>();
+  /** Block -> set of block hash primitives it aggregates. */
+  private aggregatesMap = new Map<HashPrimitive, Set<HashPrimitive>>();
 
-  /** Reverse: block -> set of blocks that supersede it. */
-  private supersededByMap = new Map<HashPrimitive, Set<HashPrimitive>>();
+  /** Reverse: block -> set of blocks that aggregate it. */
+  private aggregatedByMap = new Map<HashPrimitive, Set<HashPrimitive>>();
 
   /** Verified weight vectors per block. Defaults to empty (zero weight). */
   private verifiedWeights = new Map<HashPrimitive, number[]>();
@@ -66,7 +66,7 @@ export class ConsensusModule<BlockType> {
 
   // -- Mutations --------------------------------------------------
 
-  /** Register a block. Automatically registers supersession relationships. */
+  /** Register a block. Automatically registers aggregation relationships. */
   addBlock(hash: Hash): void {
     const key = hash.toPrimitive();
     if (this.blocks.has(key)) return;
@@ -83,16 +83,16 @@ export class ConsensusModule<BlockType> {
       this.getOrCreateSet(this.children, anchorKey).add(key);
     }
 
-    // Register supersession
-    const supersedes = this.provider.getSupersedes(block);
-    if (supersedes.length > 0) {
+    // Register aggregation
+    const aggregates = this.provider.getAggregates(block);
+    if (aggregates.length > 0) {
       const sSet = new Set<HashPrimitive>();
-      for (const s of supersedes) {
+      for (const s of aggregates) {
         const sKey = s.toPrimitive();
         sSet.add(sKey);
-        this.getOrCreateSet(this.supersededByMap, sKey).add(key);
+        this.getOrCreateSet(this.aggregatedByMap, sKey).add(key);
       }
-      this.supersedesMap.set(key, sSet);
+      this.aggregatesMap.set(key, sSet);
     }
 
     // Register chain contributions for weight-vector-aware descendant weight
@@ -181,7 +181,7 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
-   * Full conflict set for a block: direct + supersession + inherited +
+   * Full conflict set for a block: direct + aggregation + inherited +
    * propagated via anchor chains. Excludes the block itself.
    */
   getConflicts(hash: Hash): ReadonlySet<HashPrimitive> {
@@ -250,8 +250,8 @@ export class ConsensusModule<BlockType> {
    * Compute the full conflict set for a block.
    *
    * Phase 1 (base): Walk the anchor chain to build the lineage. For each
-   *   block in the lineage, BFS through the supersession graph collecting
-   *   direct + supersession conflicts + reverse supersession.
+   *   block in the lineage, BFS through the aggregation graph collecting
+   *   direct + aggregation conflicts + reverse aggregation.
    *
    * Phase 2 (propagation): BFS forward along anchor children. If X
    *   conflicts with Y, then X also conflicts with every descendant
@@ -270,7 +270,7 @@ export class ConsensusModule<BlockType> {
 
     // Phase 1: For each block in lineage, collect base conflicts
     for (const source of lineage) {
-      // BFS through supersession graph from source
+      // BFS through aggregation graph from source
       const visited = new Set<HashPrimitive>();
       const queue: HashPrimitive[] = [source];
 
@@ -279,7 +279,7 @@ export class ConsensusModule<BlockType> {
         if (visited.has(current)) continue;
         visited.add(current);
 
-        // Supersession conflict: current is superseded by source's BFS
+        // Aggregation conflict: current is aggregated by source's BFS
         if (current !== source) {
           result.add(current);
         }
@@ -292,8 +292,8 @@ export class ConsensusModule<BlockType> {
           }
         }
 
-        // Recurse into blocks that current supersedes
-        const ss = this.supersedesMap.get(current);
+        // Recurse into blocks that current aggregates
+        const ss = this.aggregatesMap.get(current);
         if (ss) {
           for (const s of ss) {
             queue.push(s);
@@ -301,8 +301,8 @@ export class ConsensusModule<BlockType> {
         }
       }
 
-      // Reverse supersession: blocks that supersede this lineage member
-      const sb = this.supersededByMap.get(source);
+      // Reverse aggregation: blocks that aggregate this lineage member
+      const sb = this.aggregatedByMap.get(source);
       if (sb) {
         for (const s of sb) {
           result.add(s);

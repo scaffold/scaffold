@@ -143,7 +143,7 @@ See [Trust Module](trust.md) for the full specification.
 
 Left alone, the block graph would grow without bound — every small computation producing its own block forever. **Aggregation** is the mechanism for consolidating work.
 
-An **aggregator** creates a new block that **supersedes** (replaces) multiple existing blocks. The aggregation block rolls up the effects of its subtrees into a single summary: one claim mask, one output set, one weight declaration. The superseded blocks are no longer needed individually — the aggregation block represents their collective contribution.
+An **aggregator** creates a new block that **aggregates** (replaces) multiple existing blocks. The aggregation block rolls up the effects of its subtrees into a single summary: one claim mask, one output set, one weight declaration. The aggregated blocks are no longer needed individually — the aggregation block represents their collective contribution.
 
 Aggregation serves several purposes:
 - **Compression**: reduces the number of blocks peers need to track.
@@ -197,5 +197,8 @@ The protocol is specified across several module documents, each responsible for 
 | [Sampling](sampling.md) | Verification priority | Which blocks should we spot-check next? |
 | [Trust](trust.md) | Economic incentives | What happens if a block is fraudulent? |
 | [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
+| [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
+| [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
+| [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.

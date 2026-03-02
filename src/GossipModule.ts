@@ -83,7 +83,7 @@ export interface GossipProvider {
    */
   getCollateralTarget(block: Hash): Hash | undefined;
 
-  /** Blocks this block aggregates (supersedes). */
+  /** Blocks this block aggregates (replaces). */
   getAggregatedBlocks(block: Hash): Hash[];
 
   /**

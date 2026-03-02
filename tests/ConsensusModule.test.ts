@@ -7,7 +7,7 @@ import { ConsensusModule, ConsensusProvider } from '../src/ConsensusModule.ts';
 interface TestBlock {
   hash: Hash;
   anchor?: Hash;
-  supersedes: Hash[];
+  aggregates: Hash[];
   weight: number[];
 }
 
@@ -30,8 +30,8 @@ class TestProvider implements ConsensusProvider<TestBlock> {
     return block.anchor;
   }
 
-  getSupersedes(block: TestBlock): Hash[] {
-    return block.supersedes;
+  getAggregates(block: TestBlock): Hash[] {
+    return block.aggregates;
   }
 
   getWeightVector(block: TestBlock): number[] {
@@ -59,7 +59,7 @@ function setup(...blocks: TestBlock[]): {
 // -- Tests -------------------------------------------------------
 
 Deno.test({ name: 'genesis only: single block is canonical with zero weight' }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const { layer } = setup(G);
 
   assert(layer.isCanonical(G.hash));
@@ -69,17 +69,17 @@ Deno.test({ name: 'genesis only: single block is canonical with zero weight' }, 
 });
 
 Deno.test({ name: 'simple chain with no conflicts: all blocks canonical' }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: A.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [30],
   };
   const { layer } = setup(G, A, B);
@@ -94,17 +94,17 @@ Deno.test({ name: 'simple chain with no conflicts: all blocks canonical' }, () =
 });
 
 Deno.test({ name: 'basic conflict: higher verified weight wins' }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [80],
   };
   const { layer } = setup(G, A, B);
@@ -122,29 +122,29 @@ Deno.test({ name: 'basic conflict: higher verified weight wins' }, () => {
 Deno.test({
   name: 'descendant weight flips conflict winner',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [90],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [80],
   };
   const D: TestBlock = {
     hash: h('D'),
     anchor: B.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [200],
   };
   const E: TestBlock = {
     hash: h('E'),
     anchor: A.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const { layer } = setup(G, A, B, D, E);
@@ -162,18 +162,18 @@ Deno.test({
   assertEquals(layer.getEffectiveWeight(A.hash), 140);
 });
 
-Deno.test({ name: 'supersession creates conflict with superseded block' }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+Deno.test({ name: 'aggregation creates conflict with aggregated block' }, () => {
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const C: TestBlock = {
     hash: h('C'),
     anchor: G.hash,
-    supersedes: [A.hash],
+    aggregates: [A.hash],
     weight: [60],
   };
   const { layer } = setup(G, A, C);
@@ -181,7 +181,7 @@ Deno.test({ name: 'supersession creates conflict with superseded block' }, () =>
   layer.setVerifiedWeight(A.hash, [50]);
   layer.setVerifiedWeight(C.hash, [60]);
 
-  // C supersedes A -> C conflicts with A
+  // C aggregates A -> C conflicts with A
   const conflicts = layer.getConflicts(C.hash);
   assert(conflicts.has(A.hash.toPrimitive()));
 
@@ -191,58 +191,58 @@ Deno.test({ name: 'supersession creates conflict with superseded block' }, () =>
 });
 
 Deno.test({
-  name: 'supersession inherits conflicts from superseded block',
+  name: 'aggregation inherits conflicts from aggregated block',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [40],
   };
   const C: TestBlock = {
     hash: h('C'),
     anchor: G.hash,
-    supersedes: [A.hash],
+    aggregates: [A.hash],
     weight: [70],
   };
   const { layer } = setup(G, A, B, C);
 
   // A conflicts with B (direct)
   layer.addConflict(A.hash, B.hash);
-  // C supersedes A -> C inherits A's conflict with B
+  // C aggregates A -> C inherits A's conflict with B
   layer.setVerifiedWeight(C.hash, [70]);
   layer.setVerifiedWeight(B.hash, [40]);
 
   const cConflicts = layer.getConflicts(C.hash);
   assert(cConflicts.has(B.hash.toPrimitive()), 'C should inherit conflict with B');
-  assert(cConflicts.has(A.hash.toPrimitive()), 'C should conflict with A (supersession)');
+  assert(cConflicts.has(A.hash.toPrimitive()), 'C should conflict with A (aggregation)');
 });
 
 Deno.test({ name: 'conflict propagates forward along anchor chain' }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const X: TestBlock = {
     hash: h('X'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const Y: TestBlock = {
     hash: h('Y'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const Z: TestBlock = {
     hash: h('Z'),
     anchor: Y.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [30],
   };
   const { layer } = setup(G, X, Y, Z);
@@ -260,17 +260,17 @@ Deno.test({ name: 'conflict propagates forward along anchor chain' }, () => {
 Deno.test({
   name: 'conflict does NOT propagate backward through anchor',
 }, () => {
-  const W: TestBlock = { hash: h('W'), supersedes: [], weight: [] };
+  const W: TestBlock = { hash: h('W'), aggregates: [], weight: [] };
   const Y: TestBlock = {
     hash: h('Y'),
     anchor: W.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const X: TestBlock = {
     hash: h('X'),
     anchor: W.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const { layer } = setup(W, Y, X);
@@ -288,23 +288,23 @@ Deno.test({
 Deno.test({
   name: 'conflict losers and their descendants excluded from canonical view',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const F: TestBlock = {
     hash: h('F'),
     anchor: B.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [30],
   };
   const { layer } = setup(G, A, B, F);
@@ -322,23 +322,23 @@ Deno.test({
 });
 
 Deno.test({ name: 'uncontested block always canonical' }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [80],
   };
   const C: TestBlock = {
     hash: h('C'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   const { layer } = setup(G, A, B, C);
@@ -354,17 +354,17 @@ Deno.test({ name: 'uncontested block always canonical' }, () => {
 
 Deno.test({ name: 'tie-breaking: equal weight, lower hash wins' }, () => {
   // Create two blocks with predictable hash ordering
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const { layer } = setup(G, A, B);
@@ -387,17 +387,17 @@ Deno.test({ name: 'tie-breaking: equal weight, lower hash wins' }, () => {
 Deno.test({
   name: 'setting verified weight changes conflict outcome',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [200],
   };
   const { layer } = setup(G, A, B);
@@ -429,17 +429,17 @@ Deno.test({
 Deno.test({
   name: 'removeConflict makes both blocks canonical',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [80],
   };
   const { layer } = setup(G, A, B);
@@ -460,11 +460,11 @@ Deno.test({
 Deno.test({
   name: 'unverified blocks have zero effective weight',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const { layer } = setup(G, A);
@@ -476,23 +476,23 @@ Deno.test({
 Deno.test({
   name: 'deep chain: descendant weight contributes to ancestor effective weight',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [10],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: A.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [20],
   };
   const C: TestBlock = {
     hash: h('C'),
     anchor: B.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [30],
   };
   const { layer } = setup(G, A, B, C);
@@ -509,37 +509,37 @@ Deno.test({
 });
 
 Deno.test({
-  name: 'multiple supersedes with inheritance from both',
+  name: 'multiple aggregates with inheritance from both',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A1: TestBlock = {
     hash: h('A1'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [10],
   };
   const A2: TestBlock = {
     hash: h('A2'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [20],
   };
   const B1: TestBlock = {
     hash: h('B1'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [5],
   };
   const B2: TestBlock = {
     hash: h('B2'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [8],
   };
   const S: TestBlock = {
     hash: h('S'),
     anchor: G.hash,
-    supersedes: [A1.hash, A2.hash],
+    aggregates: [A1.hash, A2.hash],
     weight: [30],
   };
   const { layer } = setup(G, A1, A2, B1, B2, S);
@@ -549,7 +549,7 @@ Deno.test({
 
   const sConflicts = layer.getConflicts(S.hash);
 
-  // S supersedes A1 and A2 -> conflicts with both
+  // S aggregates A1 and A2 -> conflicts with both
   assert(sConflicts.has(A1.hash.toPrimitive()));
   assert(sConflicts.has(A2.hash.toPrimitive()));
 
@@ -561,23 +561,23 @@ Deno.test({
 Deno.test({
   name: 'full spec example: genesis, 3 blocks, descendants, weight changes',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [80],
   };
   const C: TestBlock = {
     hash: h('C'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
 
@@ -600,13 +600,13 @@ Deno.test({
   const D: TestBlock = {
     hash: h('D'),
     anchor: B.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [200],
   };
   const E: TestBlock = {
     hash: h('E'),
     anchor: A.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [50],
   };
   provider.add(D);
@@ -635,17 +635,17 @@ Deno.test({
 Deno.test({
   name: 'weight vector with multiple depths: sum for effective weight',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const C1: TestBlock = {
     hash: h('C1'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [5],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: C1.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [10, 20, 30],
   };
   const { layer } = setup(G, C1, B);
@@ -659,17 +659,17 @@ Deno.test({
 Deno.test({
   name: 'getDescendantWeight: weight vector attributes to correct chain level',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const C1: TestBlock = {
     hash: h('C1'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [5],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: C1.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [10, 20, 30],
   };
   const { layer } = setup(G, C1, B);
@@ -689,17 +689,17 @@ Deno.test({
 Deno.test({
   name: 'dynamic conflict discovery updates canonical view',
 }, () => {
-  const G: TestBlock = { hash: h('G'), supersedes: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [100],
   };
   const B: TestBlock = {
     hash: h('B'),
     anchor: G.hash,
-    supersedes: [],
+    aggregates: [],
     weight: [80],
   };
   const { layer } = setup(G, A, B);

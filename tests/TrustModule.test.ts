@@ -18,7 +18,7 @@ interface TestBlock {
 
 class TestProvider implements TrustProvider<TestBlock> {
   private blocks = new Map<HashPrimitive, TestBlock>();
-  private superseded = new Set<HashPrimitive>();
+  private aggregated = new Set<HashPrimitive>();
   private canonical = new Set<HashPrimitive>();
   private ancestorPairs = new Set<string>();
 
@@ -28,8 +28,8 @@ class TestProvider implements TrustProvider<TestBlock> {
     this.canonical.add(block.hash.toPrimitive());
   }
 
-  setSuperseded(hash: Hash): void {
-    this.superseded.add(hash.toPrimitive());
+  setAggregated(hash: Hash): void {
+    this.aggregated.add(hash.toPrimitive());
   }
 
   setNonCanonical(hash: Hash): void {
@@ -57,8 +57,8 @@ class TestProvider implements TrustProvider<TestBlock> {
     return block.childWeights[childIndex] ?? 0;
   }
 
-  isSuperseded(hash: Hash): boolean {
-    return this.superseded.has(hash.toPrimitive());
+  isAggregated(hash: Hash): boolean {
+    return this.aggregated.has(hash.toPrimitive());
   }
 
   isCanonical(hash: Hash): boolean {
@@ -183,7 +183,7 @@ Deno.test('redeem collateral after target is aggregated', () => {
   module.addCollateral(C.hash, H.hash, CollateralSide.For, [], 50);
 
   // H gets aggregated
-  provider.setSuperseded(H.hash);
+  provider.setAggregated(H.hash);
 
   assert(module.redeemCollateral(C.hash));
   assertEquals(module.getPlacement(C.hash)!.status, CollateralStatus.Redeemed);
@@ -211,7 +211,7 @@ Deno.test('reject redemption of already redeemed collateral', () => {
   provider.add(C);
 
   module.addCollateral(C.hash, H.hash, CollateralSide.For, [], 50);
-  provider.setSuperseded(H.hash);
+  provider.setAggregated(H.hash);
   module.redeemCollateral(C.hash);
 
   assertFalse(module.redeemCollateral(C.hash));
@@ -468,7 +468,7 @@ Deno.test('getTrustState excludes redeemed/claimed placements', () => {
   module.addCollateral(C2.hash, H.hash, CollateralSide.For, [], 30);
 
   // Redeem C1
-  provider.setSuperseded(H.hash);
+  provider.setAggregated(H.hash);
   module.redeemCollateral(C1.hash);
 
   const state = module.getTrustState(H.hash);

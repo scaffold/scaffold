@@ -40,7 +40,7 @@ A collateral block C is a block that vouches for the validity of a target block 
 ### Structural Rules
 
 - C references H by hash only — H is not an input or ancestor of C.
-- C must not be a descendant of H — this ensures C remains valid even if H is found invalid.
+- **C must not be H itself, and C must not be a descendant of H.** If H is found invalid and removed from the canonical view, any block that is H or descends from H is also removed — including its outputs. Collateral outputs inside such a block would vanish, making it impossible for verifiers to claim fraud rewards. Collateral must exist independently of the block it vouches for.
 - C can anchor anywhere else in the DAG.
 
 ### Collateral as Output
@@ -91,7 +91,7 @@ FOR and AGAINST collateral at the relevant path forms the pool. The winning side
 
 ## Aggregation Risk Model
 
-Aggregation is inherently risky. When an aggregator creates a block that supersedes a subtree, it vouches for that subtree's validity with its own collateral. If any block in the subtree is later found invalid, the aggregator's collateral is at risk.
+Aggregation is inherently risky. When an aggregator creates a block that aggregates a subtree, it vouches for that subtree's validity with its own collateral. If any block in the subtree is later found invalid, the aggregator's collateral is at risk.
 
 Aggregation is also profitable. All blocks incentivize aggregation by paying some amount to their aggregator. The aggregator's challenge is to balance this profit against the expected loss from undetected fraud.
 
@@ -138,7 +138,7 @@ The aggregator places its own collateral on the aggregation block. This transfer
 | Dispute outcome | Dispute module | Which side (FOR/AGAINST) won for a given path |
 | Block validity verdict | Verification module | Whether a specific block is valid or invalid |
 | Canonical view updates | Consensus module | Whether H is canonical or non-canonical |
-| Aggregation events | Block creation module | When H is superseded by an aggregator |
+| Aggregation events | Block creation module | When H is aggregated by an aggregator |
 
 ### This Module Provides
 

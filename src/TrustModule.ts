@@ -54,8 +54,8 @@ export interface TrustProvider<BlockType> {
    */
   getChildDeclaredWeight(block: BlockType, childIndex: number): number;
 
-  /** Return whether H has been superseded (aggregated) by another block. */
-  isSuperseded(hash: Hash): boolean;
+  /** Return whether H has been aggregated by another block. */
+  isAggregated(hash: Hash): boolean;
 
   /** Return whether H is in the current canonical view. */
   isCanonical(hash: Hash): boolean;
@@ -149,7 +149,7 @@ export class TrustModule<BlockType> {
 
   /**
    * Redeem collateral (happy path). Publisher reclaims their stake after
-   * the target block has been aggregated (superseded).
+   * the target block has been aggregated.
    *
    * Returns true if redeemed, false if conditions not met.
    */
@@ -157,7 +157,7 @@ export class TrustModule<BlockType> {
     const record = this.placements.get(collateralHash.toPrimitive());
     if (!record) return false;
     if (record.status !== CollateralStatus.Active) return false;
-    if (!this.provider.isSuperseded(record.targetHash)) return false;
+    if (!this.provider.isAggregated(record.targetHash)) return false;
 
     record.status = CollateralStatus.Redeemed;
     return true;
