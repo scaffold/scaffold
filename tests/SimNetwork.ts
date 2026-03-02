@@ -1,0 +1,123 @@
+import { Hash } from '../src/util/Hash.ts';
+import { Block, BlockStore } from '../src/Block.ts';
+import { ProtocolContext } from '../src/ProtocolContext.ts';
+import { ConflictService } from '../src/ConflictService.ts';
+import { ConsensusService } from '../src/ConsensusService.ts';
+import { SamplingService } from '../src/SamplingService.ts';
+import { TrustService } from '../src/TrustService.ts';
+import { GossipService } from '../src/GossipService.ts';
+import { BlockCreationService } from '../src/BlockCreationService.ts';
+import { Coordinator, BlockReceivedResult } from '../src/Coordinator.ts';
+import { BlockAwareness, PushAction } from '../src/GossipModule.ts';
+
+/** Simple set-based block awareness tracker. */
+class SetAwareness implements BlockAwareness {
+  private readonly known = new Set<string>();
+
+  has(hash: Hash): boolean {
+    return this.known.has(hash.toPrimitive());
+  }
+
+  add(hash: Hash): void {
+    this.known.add(hash.toPrimitive());
+  }
+}
+
+/** A simulated node running the full protocol stack. */
+export class SimNode {
+  readonly id: string;
+  readonly ctx: ProtocolContext;
+  readonly store: BlockStore;
+  readonly coordinator: Coordinator;
+  readonly conflict: ConflictService;
+  readonly consensus: ConsensusService;
+  readonly sampling: SamplingService;
+  readonly trust: TrustService;
+  readonly gossip: GossipService;
+  readonly blockCreation: BlockCreationService;
+
+  constructor(id: string) {
+    this.id = id;
+    this.ctx = new ProtocolContext();
+
+    // Eagerly initialize all services so they're wired up
+    this.store = this.ctx.get(BlockStore);
+    this.conflict = this.ctx.get(ConflictService);
+    this.consensus = this.ctx.get(ConsensusService);
+    this.sampling = this.ctx.get(SamplingService);
+    this.trust = this.ctx.get(TrustService);
+    this.gossip = this.ctx.get(GossipService);
+    this.blockCreation = this.ctx.get(BlockCreationService);
+    this.coordinator = this.ctx.get(Coordinator);
+  }
+
+  /** Process a received block. */
+  receiveBlock(block: Block, fromPeer: string | null): BlockReceivedResult {
+    return this.coordinator.blockReceived(block, fromPeer);
+  }
+}
+
+/** In-memory multi-node simulation network. */
+export class SimNetwork {
+  private readonly nodes = new Map<string, SimNode>();
+
+  /** Create and register a new node. */
+  addNode(id: string): SimNode {
+    const node = new SimNode(id);
+    this.nodes.set(id, node);
+
+    // Connect all nodes to each other via gossip
+    for (const [otherId, otherNode] of this.nodes) {
+      if (otherId === id) continue;
+      node.gossip.addPeer(otherId, otherId, new SetAwareness());
+      otherNode.gossip.addPeer(id, id, new SetAwareness());
+    }
+
+    return node;
+  }
+
+  /** Get a node by id. */
+  getNode(id: string): SimNode | undefined {
+    return this.nodes.get(id);
+  }
+
+  /**
+   * Broadcast a block to all nodes.
+   * The source node receives it as self-originated (fromPeer=null).
+   * All other nodes receive it from the source node.
+   */
+  deliverToAll(block: Block, sourceNodeId: string): Map<string, BlockReceivedResult> {
+    const results = new Map<string, BlockReceivedResult>();
+
+    for (const [nodeId, node] of this.nodes) {
+      const fromPeer = nodeId === sourceNodeId ? null : sourceNodeId;
+      const result = node.receiveBlock(block, fromPeer);
+      results.set(nodeId, result);
+    }
+
+    return results;
+  }
+
+  /**
+   * Process push actions from a block received result.
+   * Delivers the block to each target peer.
+   */
+  processPushActions(
+    sourceNodeId: string,
+    block: Block,
+    pushActions: PushAction[],
+  ): Map<string, BlockReceivedResult> {
+    const results = new Map<string, BlockReceivedResult>();
+
+    for (const action of pushActions) {
+      const targetNode = this.nodes.get(action.peer);
+      if (!targetNode) continue;
+      if (targetNode.store.has(block.hash)) continue;
+
+      const result = targetNode.receiveBlock(block, sourceNodeId);
+      results.set(action.peer, result);
+    }
+
+    return results;
+  }
+}

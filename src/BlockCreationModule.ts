@@ -51,6 +51,7 @@ export interface BlockBlueprint {
   anchor: Hash;
   aggregates: Hash[];
   claimMask: BitVector;
+  subtreeClaimMask: BitVector | null;
   aggregateOutputCounts: number[];
   ownOutputCount: number;
   claims: number[];
@@ -246,6 +247,7 @@ export class BlockCreationModule<BlockType> {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
       claimMask: claimMask.mask,
+      subtreeClaimMask: spec.aggregates.length > 0 ? mergedSubtreeMask : null,
       aggregateOutputCounts,
       ownOutputCount,
       claims: spec.claims.map((c) => c.index),
