@@ -1,11 +1,13 @@
 import { Hash, HashPrimitive } from './util/Hash.ts';
-import { Block, BlockStore } from './Block.ts';
+import { Block, BlockStore, createBlock } from './Block.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
 import { GossipService } from './GossipService.ts';
+import { BlockCreationService } from './BlockCreationService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
+import { Output } from './BlockCreationModule.ts';
 
 /** Result of processing a block received event. */
 export interface BlockReceivedResult {
@@ -26,6 +28,7 @@ export class Coordinator {
   private readonly consensus: ConsensusService;
   private readonly sampling: SamplingService;
   private readonly gossip: GossipService;
+  private readonly blockCreation: BlockCreationService;
 
   constructor(ctx: ProtocolContext) {
     this.store = ctx.get(BlockStore);
@@ -33,6 +36,7 @@ export class Coordinator {
     this.consensus = ctx.get(ConsensusService);
     this.sampling = ctx.get(SamplingService);
     this.gossip = ctx.get(GossipService);
+    this.blockCreation = ctx.get(BlockCreationService);
   }
 
   /**
@@ -94,5 +98,67 @@ export class Coordinator {
     }
 
     return { pushActions, canonicalityChanges, newConflicts };
+  }
+
+  /**
+   * Find canonical, non-aggregated leaf blocks that share an anchor, build an
+   * aggregation block, and submit it. Returns the new block or null if no
+   * aggregation opportunity exists.
+   *
+   * @param output  Output to include in the aggregation block.
+   * @param declaredWeight  Declared weight (default 1).
+   * @param maxChildren  Maximum blocks to aggregate at once (default 3).
+   */
+  attemptAggregation(
+    output: Output,
+    declaredWeight = 1,
+    maxChildren = 3,
+  ): { block: Block; result: BlockReceivedResult } | null {
+    const canonical = this.consensus.getCanonicalView();
+
+    // Group canonical leaf blocks by anchor
+    const byAnchor = new Map<HashPrimitive, Hash[]>();
+    for (const key of canonical) {
+      const block = this.store.get(Hash.fromPrimitive(key));
+      if (!block || !block.anchor) continue;
+      // Skip already-aggregated blocks
+      if (this.store.isAggregated(block.hash)) continue;
+      // Skip blocks that are themselves aggregations
+      if (block.aggregates.length > 0) continue;
+
+      const anchorKey = block.anchor.toPrimitive();
+      let arr = byAnchor.get(anchorKey);
+      if (!arr) {
+        arr = [];
+        byAnchor.set(anchorKey, arr);
+      }
+      arr.push(block.hash);
+    }
+
+    // Find a group with 2+ blocks
+    for (const [anchorKey, hashes] of byAnchor) {
+      if (hashes.length < 2) continue;
+
+      const toAggregate = hashes.slice(0, maxChildren);
+      const anchorHash = Hash.fromPrimitive(anchorKey);
+
+      const buildResult = this.blockCreation.buildBlock({
+        anchor: anchorHash,
+        outputs: [output],
+        claims: [],
+        declaredWeight,
+        aggregates: toAggregate,
+      });
+      if (!buildResult.ok) continue;
+
+      const anchorBlock = this.store.get(anchorHash);
+      if (!anchorBlock) continue;
+
+      const block = createBlock(buildResult.blueprint, anchorBlock);
+      const result = this.blockReceived(block, null);
+      return { block, result };
+    }
+
+    return null;
   }
 }

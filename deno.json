@@ -18,7 +18,8 @@
     "exclude": [
       "avro",
       "dist",
-      "tests/avro"
+      "tests/avro",
+      "viz"
     ],
     "rules": {
       "tags": [
@@ -65,7 +66,9 @@
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all scripts/signalingServer.ts",
     "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
     "test-avro": "mocha --ui tdd --reporter dot",
-    "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info"
+    "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info",
+    "viz:build": "deno run --allow-all viz/build.ts",
+    "viz:serve": "deno run --allow-all viz/serve.ts"
   },
   "imports": {
     "@bokuweb/zstd-wasm": "npm:@bokuweb/zstd-wasm@^0.0.27",

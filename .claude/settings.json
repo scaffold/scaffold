@@ -1,5 +1,12 @@
 {
   "enabledPlugins": {
     "commit-commands@claude-plugins-official": true
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "filesystem": {
+      "allowWrite": ["//tmp/"]
+    }
   }
 }

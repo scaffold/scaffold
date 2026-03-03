@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Scaffold Protocol Visualization</title>
+    <style>
+      :root {
+        --bg: #1a1a2e;
+        --panel: #16213e;
+        --text: #e0e0e0;
+        --muted: #666680;
+        --border: #2a2a4a;
+        --node-0: #e06c75;
+        --node-1: #e5c07b;
+        --node-2: #56b6c2;
+        --node-3: #61afef;
+        --node-4: #c678dd;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+        font-size: 13px;
+        overflow: hidden;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Controls bar */
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 10px 16px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+        flex-wrap: wrap;
+      }
+
+      #controls label {
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      #controls select,
+      #controls button {
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-family: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      #controls button:hover {
+        border-color: var(--text);
+      }
+
+      #controls input[type='range'] {
+        width: 100px;
+        accent-color: #61afef;
+      }
+
+      #speed-label {
+        color: var(--muted);
+        font-size: 11px;
+        min-width: 36px;
+      }
+
+      #rate-sliders {
+        display: flex;
+        gap: 10px;
+        margin-left: auto;
+      }
+
+      .rate-slider {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .rate-slider label {
+        font-size: 10px;
+        min-width: 54px;
+      }
+
+      .rate-slider input[type='range'] {
+        width: 50px;
+        accent-color: #61afef;
+      }
+
+      .rate-slider span {
+        color: var(--muted);
+        font-size: 10px;
+        min-width: 16px;
+        text-align: right;
+      }
+
+      /* Legend */
+      #legend {
+        color: var(--muted);
+        font-size: 10px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      #legend .letter {
+        font-weight: bold;
+      }
+
+      /* Main panels */
+      #main {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+
+      #dag-panel {
+        flex: 2;
+        border-right: 1px solid var(--border);
+        position: relative;
+        overflow: auto;
+        background: var(--bg);
+      }
+
+      #dag-panel svg {
+        display: block;
+        min-width: 100%;
+        min-height: 100%;
+      }
+
+      #net-panel {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <button id="play-btn">&#x23f8;</button>
+
+      <label for="speed-slider">Speed</label>
+      <input id="speed-slider" type="range" min="1" max="20" value="4">
+      <span id="speed-label">4 t/s</span>
+
+      <div id="legend">
+        Labels:
+        <span><span class="letter" style="color: var(--node-0)">A</span>ntelope</span>
+        <span><span class="letter" style="color: var(--node-1)">B</span>adger</span>
+        <span><span class="letter" style="color: var(--node-2)">C</span>rane</span>
+        <span><span class="letter" style="color: var(--node-3)">D</span>olphin</span>
+        <span><span class="letter" style="color: var(--node-4)">E</span>agle</span>
+        | UPPER=canonical lower=known
+      </div>
+
+      <div id="rate-sliders"></div>
+    </div>
+
+    <div id="main">
+      <div id="dag-panel"></div>
+      <div id="net-panel">
+        <canvas id="net-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- Load graphviz WASM from CDN before the bundle -->
+    <script type="module">
+      import { Graphviz } from 'https://cdn.jsdelivr.net/npm/@hpcc-js/wasm@2.22.4/dist/graphviz.js';
+      globalThis.__graphviz = await Graphviz.load();
+    </script>
+    <script type="module" src="dist/bundle.js"></script>
+  </body>
+</html>
