@@ -7,3 +7,4 @@ npm/
 coverage/
 lcov.info
 render.svg
+.claude/worktrees/
