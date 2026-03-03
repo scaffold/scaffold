@@ -12,7 +12,7 @@ At this module, a block is:
 
 ```
 Block {
-    anchor:      Hash?        // the chain block this builds on (optional; genesis has none)
+    anchor:      Hash         // the chain block this builds on (genesis uses the zero hash)
     weight:      Number[]     // weight vector indexed by anchor chain depth
     aggregates:  Set<Hash>    // blocks this block replaces (implies conflict + inheritance)
 }
@@ -57,7 +57,9 @@ Conflict inheritance is dynamic: if a new conflict involving A1 is discovered af
 
 ### Genesis
 
-The **genesis block** has no anchor, an empty weight vector, and an empty aggregates set. It has zero weight and no conflicts. All other blocks eventually anchor back to genesis.
+The **genesis block** anchors to the **zero hash** (`anchor: 0x0000...`), has an empty weight vector, and an empty aggregates set. It has a very high `declaredWeight` — larger than any tree will ever accumulate — reflecting its role as the permanent, immovable root of the DAG. The zero hash is a reserved value that no real block can have, keeping the `anchor` field uniformly typed as `Hash`. Its weight vector is empty because the zero hash does not correspond to a real block. Genesis has no conflicts. All other blocks eventually anchor back to genesis.
+
+See [DAG Structure](dag.md) for the full description of genesis and the chain-of-trees topology.
 
 ### Ancestors and Descendants
 

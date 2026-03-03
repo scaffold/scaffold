@@ -76,7 +76,9 @@ Blocks form a **directed acyclic graph** (DAG). Each block points backward to an
 
 Multiple blocks can anchor to the same parent, creating branches. Branches are normal — they represent parallel work happening across the network. Most branches are compatible (they don't conflict). When branches do conflict, the consensus mechanism resolves them.
 
-This structure means there is no single chain of blocks — it's a graph. The graph grows as peers create new blocks, and each peer maintains its own view of the graph based on which blocks it has received so far.
+This structure means there is no single chain of blocks — it's a graph. At the global level, the graph forms a **chain of trees**: a linear anchor chain where each link is the root of an aggregation tree. Blocks within a tree anchor to the root's anchor or an ancestor of it, and aggregation progressively rolls them up into a single root, which becomes the anchor for the next level. See [DAG Structure](dag.md) for the full topology.
+
+The graph grows as peers create new blocks, and each peer maintains its own view of the graph based on which blocks it has received so far.
 
 ---
 
@@ -149,6 +151,7 @@ Aggregation serves several purposes:
 - **Compression**: reduces the number of blocks peers need to track.
 - **Weight consolidation**: combines scattered weight into a single block with clear attribution.
 - **Risk transfer**: the aggregator stakes their own collateral on the rolled-up work, allowing the original publishers to reclaim theirs.
+- **Chain extension**: aggregation is what advances the anchor chain. When all work at a level is rolled up into a single root, that root becomes the anchor for the next level. See [DAG Structure](dag.md).
 
 Aggregation has a natural economic dynamic. Aggregators earn fees (the blocks they aggregate incentivize being rolled up) but take on risk (if any subtree is fraudulent, the aggregator's collateral is at stake). This creates a speed-vs-safety tradeoff: aggregate quickly to capture fees, but probe subtrees first to bound fraud exposure.
 
@@ -199,6 +202,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
+| [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.

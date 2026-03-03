@@ -25,7 +25,7 @@ A block is the fundamental unit of work. It represents a claim: "given these inp
 ```
 Block {
     // -- Structural --
-    anchor:               Hash?           // parent in the anchor chain (none for genesis)
+    anchor:               Hash            // parent in the anchor chain (genesis uses the zero hash)
     aggregates:           Set<Hash>       // blocks this block replaces
     claimMask:            MerkleRoot      // all claims against anchor outputs (subtree + own)
     aggregateOutputCounts: Number[]       // per-subtree output counts
@@ -173,6 +173,7 @@ The anchor determines the block's position in the graph and which outputs are av
 1. **Availability**: All required inputs (functional and economic) must exist in the UTXO set at the anchor.
 2. **Depth**: Prefer the deepest anchor that satisfies (1). Deeper anchors are more stable — they have more descendant weight and are harder to overturn.
 3. **Aggregation compatibility**: For aggregation blocks, the anchor must be a descendant of all subtrees' anchors (so all subtrees can be rebased forward).
+4. **Genesis exclusion**: Genesis cannot be aggregated. Its declared weight is far larger than any tree's, so the weight-ratio balancing constraint always rejects it as an aggregation target. Additionally, an aggregator of genesis would need an anchor that is a descendant of the zero hash, and no such block exists. See [DAG Structure](dag.md).
 
 ---
 
@@ -248,7 +249,7 @@ The full reactive strategy system (conditional draft generators that respond to 
 
 The structural verification module checks block-specific properties that are computable from the block itself (and its inputs), without running contract WASM. A block is **structurally valid** if:
 
-1. **Anchor reference**: The anchor exists and is well-formed (or absent for genesis).
+1. **Anchor reference**: The anchor exists and is well-formed (genesis anchors to the zero hash).
 2. **Claim indices**: All claim indices are valid — self-claims have index < `ownOutputCount`, shared-resource claims have index < `ownOutputCount` + post-subtree vector length.
 3. **Claim mask consistency**: `claimMask` correctly represents all claims against anchor outputs (from subtrees and own non-self claims).
 4. **Output count**: `outputCount` equals the actual count after full transformation.
