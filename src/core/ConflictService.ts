@@ -1,4 +1,4 @@
-import { Hash } from './util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 import { Block, BlockStore } from './Block.ts';
 import { ConflictModule, ConflictProvider } from './ConflictModule.ts';

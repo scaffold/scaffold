@@ -1,4 +1,4 @@
-import { NetworkProvider, SignalingDriver } from '../src/NetworkProvider.ts';
+import { NetworkProvider, SignalingDriver } from '../legacy2/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
 
 export class WebsocketClientProvider implements NetworkProvider {

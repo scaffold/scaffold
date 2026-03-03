@@ -3,8 +3,8 @@ import { DemoNode } from '../../src/demo/DemoNode.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { signBlock } from '../../src/demo/SignedBlock.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
-import { BlockSpec } from '../../src/BlockCreationModule.ts';
-import { createBlock } from '../../src/Block.ts';
+import { BlockSpec } from '../../src/core/BlockCreationModule.ts';
+import { createBlock } from '../../src/core/Block.ts';
 
 Deno.test('DemoNode: publish valid status update', () => {
   const node = new DemoNode('eagle');

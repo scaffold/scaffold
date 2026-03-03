@@ -1,18 +1,18 @@
 import { assert, assertEquals, assertObjectMatch, assertThrows } from '@std/assert';
 import { findOutput, makeTest, provideInitialBalance } from './util.ts';
-import { BlockService } from '../src/BlockService.ts';
+import { BlockService } from '../legacy2/BlockService.ts';
 import { error } from '../src/util/functional.ts';
-import { BlockBuilder } from '../src/BlockBuilder.ts';
+import { BlockBuilder } from '../legacy2/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
-import { encodeDataTree } from '../src/DataTreeHelper.ts';
-import { frontierHash, trueHash } from '../src/hashes.ts';
-import { ZERO_BLOCK } from '../src/BlockMeta.ts';
-import { FrontierService } from '../src/FrontierService.ts';
-import { BlockFact } from '../src/FactMeta.ts';
-import { BlockDraft } from '../src/BlockBuilder.ts';
-import { NoBlockPathFound } from '../src/exceptions.ts';
-import { WalkerService } from '../src/WalkerService.ts';
+import { encodeDataTree } from '../legacy2/DataTreeHelper.ts';
+import { frontierHash, trueHash } from '../legacy2/hashes.ts';
+import { ZERO_BLOCK } from '../legacy2/BlockMeta.ts';
+import { FrontierService } from '../legacy2/FrontierService.ts';
+import { BlockFact } from '../legacy2/FactMeta.ts';
+import { BlockDraft } from '../legacy2/BlockBuilder.ts';
+import { NoBlockPathFound } from '../legacy2/exceptions.ts';
+import { WalkerService } from '../legacy2/WalkerService.ts';
 
 const sequence: { key: string; fv: string; tc: string[]; in: string[]; out: number }[] = [
   { key: 'a', fv: 'G', tc: [], in: [], out: 2 },

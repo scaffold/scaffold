@@ -1,4 +1,4 @@
-import { BaseContext } from './BaseContext.ts';
+import { BaseContext } from '../util/BaseContext.ts';
 
 /** Lean DI container for the protocol layer. Services register via ctx.get(ServiceClass). */
 export class ProtocolContext extends BaseContext<ProtocolContext> {

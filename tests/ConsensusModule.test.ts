@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { ConsensusModule, ConsensusProvider } from '../src/ConsensusModule.ts';
+import { ConsensusModule, ConsensusProvider } from '../src/core/ConsensusModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

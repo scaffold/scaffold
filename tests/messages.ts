@@ -1,4 +1,4 @@
-import * as base from '../src/messages.ts';
+import * as base from '../legacy2/messages.ts';
 
 const registry = {
   ...base.registry,

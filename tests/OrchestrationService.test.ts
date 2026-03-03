@@ -1,10 +1,10 @@
 import { assertEquals } from '@std/assert';
 import { makeTest } from './util.ts';
-import { OrchestrationService } from '../src/OrchestrationService.ts';
-import { encodeDataTree } from '../src/DataTreeHelper.ts';
+import { OrchestrationService } from '../legacy2/OrchestrationService.ts';
+import { encodeDataTree } from '../legacy2/DataTreeHelper.ts';
 import { NameContract } from '../src/contracts/NameContract.ts';
-import { AvailableOutputManager } from '../src/AvailableOutputManager.ts';
-import { BlockBuilder } from '../src/BlockBuilder.ts';
+import { AvailableOutputManager } from '../legacy2/AvailableOutputManager.ts';
+import { BlockBuilder } from '../legacy2/BlockBuilder.ts';
 
 Deno.test(
   { name: `OrchestrationService test` },

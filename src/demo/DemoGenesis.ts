@@ -1,4 +1,4 @@
-import { Block, createGenesisBlock } from '../Block.ts';
+import { Block, createGenesisBlock } from '../core/Block.ts';
 import { ANIMALS, deriveIdentity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
 

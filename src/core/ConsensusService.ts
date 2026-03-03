@@ -1,4 +1,4 @@
-import { Hash } from './util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore } from './Block.ts';
 import { ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';

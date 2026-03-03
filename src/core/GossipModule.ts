@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 
 // --- Constants ---
 

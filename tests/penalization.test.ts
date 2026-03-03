@@ -3,13 +3,13 @@ import { AccountContract } from '../src/contracts/AccountContract.ts';
 import { RootContract } from '../src/contracts/RootContract.ts';
 import { makeTest, provideInitialBalance } from '../tests/util.ts';
 import { str2bin } from '../src/util/buffer.ts';
-import { encodeDataTree } from '../src/DataTreeHelper.ts';
+import { encodeDataTree } from '../legacy2/DataTreeHelper.ts';
 import { CollateralContract } from '../src/contracts/CollateralContract.ts';
-import { BlockBuilder } from '../src/BlockBuilder.ts';
-import { collateralHash, rootHash } from '../src/hashes.ts';
+import { BlockBuilder } from '../legacy2/BlockBuilder.ts';
+import { collateralHash, rootHash } from '../legacy2/hashes.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { BalanceService } from '../src/BalanceService.ts';
-import { LitigationService } from '../src/LitigationService.ts';
+import { BalanceService } from '../legacy2/BalanceService.ts';
+import { LitigationService } from '../legacy2/LitigationService.ts';
 
 Deno.test(
   {

@@ -14,7 +14,7 @@ import {
   GossipModule,
   GossipProvider,
   PushAction,
-} from '../src/GossipModule.ts';
+} from '../src/core/GossipModule.ts';
 
 // -- Test Helpers ---------------------------------------------------
 

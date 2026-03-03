@@ -1,16 +1,16 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { BitVector } from '../src/BitVector.ts';
-import { Block, BlockStore, createBlock, createGenesisBlock } from '../src/Block.ts';
-import { Output, BlockSpec } from '../src/BlockCreationModule.ts';
-import { ProtocolContext } from '../src/ProtocolContext.ts';
-import { ConflictService } from '../src/ConflictService.ts';
-import { ConsensusService } from '../src/ConsensusService.ts';
-import { SamplingService } from '../src/SamplingService.ts';
-import { TrustService } from '../src/TrustService.ts';
-import { GossipService } from '../src/GossipService.ts';
-import { BlockCreationService } from '../src/BlockCreationService.ts';
-import { Coordinator } from '../src/Coordinator.ts';
+import { BitVector } from '../src/core/BitVector.ts';
+import { Block, BlockStore, createBlock, createGenesisBlock } from '../src/core/Block.ts';
+import { Output, BlockSpec } from '../src/core/BlockCreationModule.ts';
+import { ProtocolContext } from '../src/core/ProtocolContext.ts';
+import { ConflictService } from '../src/core/ConflictService.ts';
+import { ConsensusService } from '../src/core/ConsensusService.ts';
+import { SamplingService } from '../src/core/SamplingService.ts';
+import { TrustService } from '../src/core/TrustService.ts';
+import { GossipService } from '../src/core/GossipService.ts';
+import { BlockCreationService } from '../src/core/BlockCreationService.ts';
+import { Coordinator } from '../src/core/Coordinator.ts';
 import { SimNode, SimNetwork } from './SimNetwork.ts';
 
 // -- Helpers --------------------------------------------------------

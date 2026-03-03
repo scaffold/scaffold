@@ -1,8 +1,8 @@
 import { makeTest } from './util.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { assert, assertFalse } from '@std/assert';
-import { VerifiableRandomFunction } from '../src/VerifiableRandomFunction.ts';
-import { KeyService } from '../src/KeyService.ts';
+import { VerifiableRandomFunction } from '../legacy2/VerifiableRandomFunction.ts';
+import { KeyService } from '../legacy2/KeyService.ts';
 
 Deno.test(
   { name: `created output passes verification` },

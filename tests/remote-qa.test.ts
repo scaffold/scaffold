@@ -1,10 +1,10 @@
 import { assertEquals, assertStrictEquals } from '@std/assert';
 import { connectCtxs, makeTest, provideInitialBalance } from './util.ts';
-import { FetchService } from '../src/FetchService.ts';
-import { collatzHash } from '../src/hashes.ts';
+import { FetchService } from '../legacy2/FetchService.ts';
+import { collatzHash } from '../legacy2/hashes.ts';
 import { CollatzContract } from '../src/contracts/CollatzContract.ts';
 import * as collatzMessages from '../src/contracts/collatzMessages.ts';
-import { encodeDataTree } from '../src/DataTreeHelper.ts';
+import { encodeDataTree } from '../legacy2/DataTreeHelper.ts';
 import { MockNetworkProvider } from '../plugins/MockNetworkProvider.ts';
 import { MockTimeProvider } from '../tests/MockTimeProvider.ts';
 import { AccountContract } from '../src/contracts/AccountContract.ts';

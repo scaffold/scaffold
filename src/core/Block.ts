@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 

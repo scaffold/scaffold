@@ -1,14 +1,14 @@
 import { Hash } from '../src/util/Hash.ts';
-import { Block, BlockStore } from '../src/Block.ts';
-import { ProtocolContext } from '../src/ProtocolContext.ts';
-import { ConflictService } from '../src/ConflictService.ts';
-import { ConsensusService } from '../src/ConsensusService.ts';
-import { SamplingService } from '../src/SamplingService.ts';
-import { TrustService } from '../src/TrustService.ts';
-import { GossipService } from '../src/GossipService.ts';
-import { BlockCreationService } from '../src/BlockCreationService.ts';
-import { Coordinator, BlockReceivedResult } from '../src/Coordinator.ts';
-import { BlockAwareness, PushAction } from '../src/GossipModule.ts';
+import { Block, BlockStore } from '../src/core/Block.ts';
+import { ProtocolContext } from '../src/core/ProtocolContext.ts';
+import { ConflictService } from '../src/core/ConflictService.ts';
+import { ConsensusService } from '../src/core/ConsensusService.ts';
+import { SamplingService } from '../src/core/SamplingService.ts';
+import { TrustService } from '../src/core/TrustService.ts';
+import { GossipService } from '../src/core/GossipService.ts';
+import { BlockCreationService } from '../src/core/BlockCreationService.ts';
+import { Coordinator, BlockReceivedResult } from '../src/core/Coordinator.ts';
+import { BlockAwareness, PushAction } from '../src/core/GossipModule.ts';
 
 /** Simple set-based block awareness tracker. */
 class SetAwareness implements BlockAwareness {

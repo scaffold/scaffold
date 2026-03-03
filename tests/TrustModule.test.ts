@@ -5,7 +5,7 @@ import {
   CollateralStatus,
   TrustModule,
   TrustProvider,
-} from '../src/TrustModule.ts';
+} from '../src/core/TrustModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

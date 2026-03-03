@@ -1,5 +1,5 @@
 import { assert, assertFalse } from '@std/assert';
-import { createGenesisBlock } from '../../src/Block.ts';
+import { createGenesisBlock } from '../../src/core/Block.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
 import {

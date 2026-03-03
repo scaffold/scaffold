@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { BitVector } from '../src/BitVector.ts';
-import { ConflictModule, ConflictProvider } from '../src/ConflictModule.ts';
+import { BitVector } from '../src/core/BitVector.ts';
+import { ConflictModule, ConflictProvider } from '../src/core/ConflictModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

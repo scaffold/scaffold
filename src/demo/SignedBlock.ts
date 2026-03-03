@@ -1,5 +1,5 @@
 import { secp } from '../util/secp.ts';
-import { Block } from '../Block.ts';
+import { Block } from '../core/Block.ts';
 
 export interface SignedBlock {
   block: Block;

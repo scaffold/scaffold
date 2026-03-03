@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector, RebaseResult } from './BitVector.ts';
 
 /**

@@ -6,20 +6,20 @@
 //   It doesn't matter who steals/provides the plaintext, because the requestor claim payment always goes to the provider.
 
 import { makeTest, waitForBlock } from './util.ts';
-import { BlockService } from '../src/BlockService.ts';
+import { BlockService } from '../legacy2/BlockService.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { collateralHash, dataHash, rootHash, trueHash } from '../src/hashes.ts';
+import { collateralHash, dataHash, rootHash, trueHash } from '../legacy2/hashes.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals, assertObjectMatch } from 'std-latest/testing/asserts.ts';
-import { CollateralContractParams, DataContractParams } from '../src/messages.ts';
-import { PeerManager } from '../src/PeerManager.ts';
-import { KeyService } from '../src/KeyService.ts';
+import { CollateralContractParams, DataContractParams } from '../legacy2/messages.ts';
+import { PeerManager } from '../legacy2/PeerManager.ts';
+import { KeyService } from '../legacy2/KeyService.ts';
 import { COLLATERAL_INPUT_IDX_INITIAL } from '../sbl/CollateralContract.ts';
 import { mapOne } from '../src/util/functional.ts';
 import { HashInversionService } from '../sbl/HashInversionService.ts';
-import { FetchService } from '../src/FetchService.ts';
-import { BlockExt } from '../src/BlockMeta.ts';
-import { LitigationService } from '../src/LitigationService.ts';
+import { FetchService } from '../legacy2/FetchService.ts';
+import { BlockExt } from '../legacy2/BlockMeta.ts';
+import { LitigationService } from '../legacy2/LitigationService.ts';
 
 Deno.test(
   { name: `an invalid body should have collateral posted against` },

@@ -4,7 +4,7 @@ import {
   SamplingModule,
   SamplingProvider,
   WorkDistribution,
-} from '../src/SamplingModule.ts';
+} from '../src/core/SamplingModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

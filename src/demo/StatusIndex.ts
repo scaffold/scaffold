@@ -1,6 +1,6 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore } from '../Block.ts';
-import { Output } from '../BlockCreationModule.ts';
+import { Block, BlockStore } from '../core/Block.ts';
+import { Output } from '../core/BlockCreationModule.ts';
 import { ANIMALS, AnimalName, deriveIdentity } from './Identity.ts';
 import { statusHash, decodeStatusData } from './StatusContract.ts';
 

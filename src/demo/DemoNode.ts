@@ -1,13 +1,13 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { Block, BlockStore, createBlock } from '../Block.ts';
-import { BlockSpec } from '../BlockCreationModule.ts';
-import { ProtocolContext } from '../ProtocolContext.ts';
-import { Coordinator, BlockReceivedResult } from '../Coordinator.ts';
-import { ConsensusService } from '../ConsensusService.ts';
-import { BlockCreationService } from '../BlockCreationService.ts';
-import { GossipService } from '../GossipService.ts';
-import { BlockAwareness } from '../GossipModule.ts';
-import { serialize, deserialize } from '../BlockSerializer.ts';
+import { Block, BlockStore, createBlock } from '../core/Block.ts';
+import { BlockSpec } from '../core/BlockCreationModule.ts';
+import { ProtocolContext } from '../core/ProtocolContext.ts';
+import { Coordinator, BlockReceivedResult } from '../core/Coordinator.ts';
+import { ConsensusService } from '../core/ConsensusService.ts';
+import { BlockCreationService } from '../core/BlockCreationService.ts';
+import { GossipService } from '../core/GossipService.ts';
+import { BlockAwareness } from '../core/GossipModule.ts';
+import { serialize, deserialize } from '../core/BlockSerializer.ts';
 
 import { AnimalName, Identity, deriveIdentity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';

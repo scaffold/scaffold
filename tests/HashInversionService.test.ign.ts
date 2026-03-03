@@ -1,5 +1,5 @@
 import { makeTest } from './util.ts';
-import { BlockService } from '../src/BlockService.ts';
+import { BlockService } from '../legacy2/BlockService.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { str2bin } from '../sbl/pathUtils.ts';
 import { assertEquals } from 'std-latest/testing/asserts.ts';

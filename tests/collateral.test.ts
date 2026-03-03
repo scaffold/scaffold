@@ -1,11 +1,11 @@
 import { assertEquals } from '@std/assert';
-import { CollateralUtil, Posting } from '../src/CollateralUtil.ts';
-import { CollateralContractDetail } from '../src/collateralMessages.ts';
+import { CollateralUtil, Posting } from '../legacy2/CollateralUtil.ts';
+import { CollateralContractDetail } from '../legacy2/collateralMessages.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
 import { HashPrimitive } from '../src/util/Hash.ts';
-import { BlockOutput } from '../src/messages.ts';
-import { encodeDataTree } from '../src/DataTreeHelper.ts';
+import { BlockOutput } from '../legacy2/messages.ts';
+import { encodeDataTree } from '../legacy2/DataTreeHelper.ts';
 
 const makePosting = (
   publicKey: string,

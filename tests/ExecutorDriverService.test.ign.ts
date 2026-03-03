@@ -1,10 +1,10 @@
 import * as msg from './messages.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { makeTest } from './util.ts';
-import { BlockService } from '../src/BlockService.ts';
+import { BlockService } from '../legacy2/BlockService.ts';
 import { assertSnapshot } from 'std-latest/testing/snapshot.ts';
-import { FetchService } from '../src/FetchService.ts';
-import { LocalGenerator, LocalGeneratorService } from '../src/LocalGeneratorService.ts';
+import { FetchService } from '../legacy2/FetchService.ts';
+import { LocalGenerator, LocalGeneratorService } from '../legacy2/LocalGeneratorService.ts';
 import { ExecutorDriverService } from '../sbl/ExecutorDriverService.ts';
 import { ExecutorLauncherService } from '../sbl/ExecutorLauncherService.ts';
 

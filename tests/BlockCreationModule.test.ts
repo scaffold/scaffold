@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { BitVector } from '../src/BitVector.ts';
+import { BitVector } from '../src/core/BitVector.ts';
 import {
   BlockCreationModule,
   BlockCreationProvider,
@@ -8,7 +8,7 @@ import {
   ClaimEntry,
   Output,
   SubtreeInfo,
-} from '../src/BlockCreationModule.ts';
+} from '../src/core/BlockCreationModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

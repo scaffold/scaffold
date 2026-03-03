@@ -1,13 +1,13 @@
 import { assert, assertFalse } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
-import { Block, BlockStore, createBlock, createGenesisBlock } from '../../src/Block.ts';
-import { BitVector } from '../../src/BitVector.ts';
-import { Output, BlockSpec } from '../../src/BlockCreationModule.ts';
-import { BlockCreationService } from '../../src/BlockCreationService.ts';
-import { ProtocolContext } from '../../src/ProtocolContext.ts';
-import { ConflictService } from '../../src/ConflictService.ts';
-import { ConsensusService } from '../../src/ConsensusService.ts';
-import { Coordinator } from '../../src/Coordinator.ts';
+import { Block, BlockStore, createBlock, createGenesisBlock } from '../../src/core/Block.ts';
+import { BitVector } from '../../src/core/BitVector.ts';
+import { Output, BlockSpec } from '../../src/core/BlockCreationModule.ts';
+import { BlockCreationService } from '../../src/core/BlockCreationService.ts';
+import { ProtocolContext } from '../../src/core/ProtocolContext.ts';
+import { ConflictService } from '../../src/core/ConflictService.ts';
+import { ConsensusService } from '../../src/core/ConsensusService.ts';
+import { Coordinator } from '../../src/core/Coordinator.ts';
 
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';

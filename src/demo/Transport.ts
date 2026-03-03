@@ -1,5 +1,5 @@
-import { Block } from '../Block.ts';
-import { deserialize } from '../BlockSerializer.ts';
+import { Block } from '../core/Block.ts';
+import { deserialize } from '../core/BlockSerializer.ts';
 import { DemoNode, WireMessage, base64ToUint8 } from './DemoNode.ts';
 import { SignedBlock } from './SignedBlock.ts';
 

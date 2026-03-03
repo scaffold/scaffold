@@ -1,5 +1,5 @@
-import { assert } from './util/functional.ts';
-import { MaybePromise } from './util/MaybePromise.ts';
+import { assert } from './functional.ts';
+import { MaybePromise } from './MaybePromise.ts';
 
 export interface MaybeDisposable {
   [Symbol.dispose]?(): void;

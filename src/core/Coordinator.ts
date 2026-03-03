@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore, createBlock } from './Block.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';

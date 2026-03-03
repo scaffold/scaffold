@@ -1,5 +1,5 @@
 import { Hash } from '../util/Hash.ts';
-import { Output } from '../BlockCreationModule.ts';
+import { Output } from '../core/BlockCreationModule.ts';
 
 const SBL = Hash.fromLiteralStr('SBL'.padEnd(32, '\0'));
 

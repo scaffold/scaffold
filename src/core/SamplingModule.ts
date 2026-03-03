@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 
 /** Provider interface for the sampling module to access tree data. */
 export interface SamplingProvider<BlockType> {

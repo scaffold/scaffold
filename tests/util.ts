@@ -1,28 +1,28 @@
 import { deadline } from '@std/async';
 import { secp } from '../src/util/secp.ts';
-import { TestContext } from '../src/TestContext.ts';
-import { Config, makeDefaultConfig } from '../src/Config.ts';
-import { BlockService } from '../src/BlockService.ts';
-import { BlockInput } from '../src/messages.ts';
+import { TestContext } from '../legacy2/TestContext.ts';
+import { Config, makeDefaultConfig } from '../legacy2/Config.ts';
+import { BlockService } from '../legacy2/BlockService.ts';
+import { BlockInput } from '../legacy2/messages.ts';
 import { bin2hex } from '../src/util/hex.ts';
 // import { DefaultAppraisalProvider } from '../../sbl/DefaultAppraisalProvider.ts';
 import { MockTimeProvider } from './MockTimeProvider.ts';
-import { areTreesEqual } from '../src/DataTreeHelper.ts';
+import { areTreesEqual } from '../legacy2/DataTreeHelper.ts';
 import { DataTree } from '../src/protocol/base.ts';
-import { ConnectionService } from '../src/ConnectionService.ts';
+import { ConnectionService } from '../legacy2/ConnectionService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
-import { NetworkService } from '../src/NetworkService.ts';
-import { KeyService } from '../src/KeyService.ts';
-import { createGenesisBlock, GenesisService } from '../src/GenesisService.ts';
+import { NetworkService } from '../legacy2/NetworkService.ts';
+import { KeyService } from '../legacy2/KeyService.ts';
+import { createGenesisBlock, GenesisService } from '../legacy2/GenesisService.ts';
 import { FactService } from '../src/FactService.ts';
-import { BlockFact, FactSource } from '../src/FactMeta.ts';
-import { PeerManager } from '../src/PeerManager.ts';
+import { BlockFact, FactSource } from '../legacy2/FactMeta.ts';
+import { PeerManager } from '../legacy2/PeerManager.ts';
 import { NotUndefined } from '../src/util/functional.ts';
-import { InputSpec } from '../src/BlockBuilder.ts';
+import { InputSpec } from '../legacy2/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { arrEquals } from '../src/util/buffer.ts';
-import { SignalingProvider } from '../src/NetworkProvider.ts';
-import { Context } from '../src/Context.ts';
+import { SignalingProvider } from '../legacy2/NetworkProvider.ts';
+import { Context } from '../legacy2/Context.ts';
 
 const makeConfig = (
   ctxIdx: number,

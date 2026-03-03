@@ -1,6 +1,6 @@
-import { LoggingProvider } from '../src/Config.ts';
-import { Context } from '../src/Context.ts';
-import { LogEvent } from '../src/Logger.ts';
+import { LoggingProvider } from '../legacy2/Config.ts';
+import { Context } from '../legacy2/Context.ts';
+import { LogEvent } from '../legacy2/Logger.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import { jsonSafeStringify } from '../src/util/json.ts';
 

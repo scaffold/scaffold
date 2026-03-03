@@ -1,4 +1,4 @@
-import { Hash } from './util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { BitVector, CHUNK_BYTES } from './BitVector.ts';
 
 // -- Helpers --------------------------------------------------------

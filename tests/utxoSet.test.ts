@@ -1,14 +1,14 @@
 import { assert, assertEquals, assertObjectMatch, assertThrows } from '@std/assert';
 import { findOutput, makeTest, provideInitialBalance } from './util.ts';
-import { BlockService } from '../src/BlockService.ts';
+import { BlockService } from '../legacy2/BlockService.ts';
 import { error } from '../src/util/functional.ts';
-import { BlockBuilder } from '../src/BlockBuilder.ts';
+import { BlockBuilder } from '../legacy2/BlockBuilder.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { EMPTY_ARR } from '../src/util/buffer.ts';
-import { encodeDataTree } from '../src/DataTreeHelper.ts';
-import { frontierHash } from '../src/hashes.ts';
-import { ZERO_BLOCK } from '../src/BlockMeta.ts';
-import { FrontierService } from '../src/FrontierService.ts';
+import { encodeDataTree } from '../legacy2/DataTreeHelper.ts';
+import { frontierHash } from '../legacy2/hashes.ts';
+import { ZERO_BLOCK } from '../legacy2/BlockMeta.ts';
+import { FrontierService } from '../legacy2/FrontierService.ts';
 
 Deno.test(
   {
