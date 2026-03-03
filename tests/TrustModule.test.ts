@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Hash, HashPrimitive } from '../src/util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import {
   CollateralSide,
   CollateralStatus,
@@ -11,7 +11,7 @@ import {
 
 interface TestBlock {
   hash: Hash;
-  anchor?: Hash;
+  anchor: Hash;
   declaredWeight: number;
   childWeights: number[]; // declared weight contribution per child index
 }
@@ -45,7 +45,7 @@ class TestProvider implements TrustProvider<TestBlock> {
     return this.blocks.get(hash.toPrimitive());
   }
 
-  getAnchor(block: TestBlock): Hash | undefined {
+  getAnchor(block: TestBlock): Hash {
     return block.anchor;
   }
 
@@ -87,7 +87,7 @@ function block(
 ): TestBlock {
   return {
     hash: h(name),
-    anchor: opts?.anchor,
+    anchor: opts?.anchor ?? ZERO_HASH,
     declaredWeight,
     childWeights: opts?.childWeights ?? [],
   };

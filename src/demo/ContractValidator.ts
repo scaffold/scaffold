@@ -1,4 +1,4 @@
-import { Hash } from '../util/Hash.ts';
+import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore } from '../Block.ts';
 import { Output } from '../BlockCreationModule.ts';
 import { SignedBlock, verifyBlockSignature } from './SignedBlock.ts';
@@ -20,7 +20,7 @@ export function validateSignedBlock(sb: SignedBlock, store: BlockStore): Validat
   const block = sb.block;
 
   // Genesis is always valid
-  if (!block.anchor) {
+  if (Hash.equals(block.anchor, ZERO_HASH)) {
     return { ok: true };
   }
 
@@ -116,7 +116,7 @@ function resolveClaimedOutputs(block: Block, anchorBlock: Block, store: BlockSto
 function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   const result: Output[] = [...block.outputs];
 
-  if (!block.anchor) {
+  if (Hash.equals(block.anchor, ZERO_HASH)) {
     // Genesis — only own outputs
     return result;
   }

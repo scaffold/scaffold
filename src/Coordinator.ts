@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { Block, BlockStore, createBlock } from './Block.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
@@ -120,7 +120,7 @@ export class Coordinator {
     const byAnchor = new Map<HashPrimitive, Hash[]>();
     for (const key of canonical) {
       const block = this.store.get(Hash.fromPrimitive(key));
-      if (!block || !block.anchor) continue;
+      if (!block || Hash.equals(block.anchor, ZERO_HASH)) continue;
       // Skip already-aggregated blocks
       if (this.store.isAggregated(block.hash)) continue;
       // Skip blocks that are themselves aggregations

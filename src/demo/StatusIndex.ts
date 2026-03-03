@@ -1,4 +1,4 @@
-import { Hash } from '../util/Hash.ts';
+import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore } from '../Block.ts';
 import { Output } from '../BlockCreationModule.ts';
 import { ANIMALS, AnimalName, deriveIdentity } from './Identity.ts';
@@ -90,7 +90,7 @@ export class StatusIndex {
 function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   const result: Output[] = [...block.outputs];
 
-  if (!block.anchor) {
+  if (Hash.equals(block.anchor, ZERO_HASH)) {
     return result;
   }
 

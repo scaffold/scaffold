@@ -88,8 +88,8 @@ export interface BlockCreationProvider<BlockType> {
   /** Return the hash of a block. */
   getHash(block: BlockType): Hash;
 
-  /** Return the anchor hash, or undefined for genesis. */
-  getAnchor(block: BlockType): Hash | undefined;
+  /** Return the anchor hash. ZERO_HASH for genesis. */
+  getAnchor(block: BlockType): Hash;
 
   /** Return the total output count after all transformations. */
   getOutputCount(block: BlockType): number;

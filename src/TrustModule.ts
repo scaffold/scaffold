@@ -41,8 +41,8 @@ export interface TrustProvider<BlockType> {
   /** Return the block for a given hash, or undefined if unknown. */
   getBlock(hash: Hash): BlockType | undefined;
 
-  /** Return the anchor hash, or undefined for genesis. */
-  getAnchor(block: BlockType): Hash | undefined;
+  /** Return the anchor hash. ZERO_HASH for genesis. */
+  getAnchor(block: BlockType): Hash;
 
   /** Return the declared weight of the block. */
   getDeclaredWeight(block: BlockType): number;

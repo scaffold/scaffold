@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BitVector, RebaseResult } from './BitVector.ts';
 
 /**
@@ -13,8 +13,8 @@ export interface ConflictProvider<BlockType> {
   /** Return the hash of a block. */
   getHash(block: BlockType): Hash;
 
-  /** Return the anchor hash, or undefined for genesis. */
-  getAnchor(block: BlockType): Hash | undefined;
+  /** Return the anchor hash. ZERO_HASH for genesis. */
+  getAnchor(block: BlockType): Hash;
 
   /**
    * Return the subtree claim mask: a bit vector of length anchorOutputCount
@@ -99,7 +99,7 @@ export class ConflictModule<BlockType> {
 
     // Register in anchor children
     const anchorHash = this.provider.getAnchor(block);
-    if (anchorHash) {
+    if (!Hash.equals(anchorHash, ZERO_HASH)) {
       const anchorKey = anchorHash.toPrimitive();
       this.getOrCreateSet(this.anchorChildren, anchorKey).add(key);
     }
@@ -112,7 +112,7 @@ export class ConflictModule<BlockType> {
 
     // Check conflicts with siblings (same anchor)
     const newConflicts: [Hash, Hash][] = [];
-    if (anchorHash && netMask) {
+    if (!Hash.equals(anchorHash, ZERO_HASH) && netMask) {
       const siblings = this.anchorChildren.get(anchorHash.toPrimitive());
       if (siblings) {
         for (const sibKey of siblings) {

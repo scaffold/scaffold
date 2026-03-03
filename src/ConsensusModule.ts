@@ -1,4 +1,4 @@
-import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 
 /** Provider interface for the consensus module to access block data. */
 export interface ConsensusProvider<BlockType> {
@@ -8,8 +8,8 @@ export interface ConsensusProvider<BlockType> {
   /** Return the hash of a block. */
   getHash(block: BlockType): Hash;
 
-  /** Return the anchor hash (parent in the anchor chain), or undefined for genesis. */
-  getAnchor(block: BlockType): Hash | undefined;
+  /** Return the anchor hash (parent in the anchor chain). ZERO_HASH for genesis. */
+  getAnchor(block: BlockType): Hash;
 
   /** Return the hashes of blocks this block aggregates (replaces), or empty array. */
   getAggregates(block: BlockType): Hash[];
@@ -78,7 +78,7 @@ export class ConsensusModule<BlockType> {
 
     // Register in children map (anchor -> this block)
     const anchorHash = this.provider.getAnchor(block);
-    if (anchorHash) {
+    if (!Hash.equals(anchorHash, ZERO_HASH)) {
       const anchorKey = anchorHash.toPrimitive();
       this.getOrCreateSet(this.children, anchorKey).add(key);
     }
@@ -98,7 +98,7 @@ export class ConsensusModule<BlockType> {
     // Register chain contributions for weight-vector-aware descendant weight
     let current = anchorHash;
     let depth = 0;
-    while (current) {
+    while (!Hash.equals(current, ZERO_HASH)) {
       const cKey = current.toPrimitive();
       if (!this.chainContributions.has(cKey)) {
         this.chainContributions.set(cKey, []);
@@ -243,7 +243,8 @@ export class ConsensusModule<BlockType> {
     const block = this.provider.getBlock(hash);
     if (!block) return undefined;
     const anchor = this.provider.getAnchor(block);
-    return anchor?.toPrimitive();
+    if (Hash.equals(anchor, ZERO_HASH)) return undefined;
+    return anchor.toPrimitive();
   }
 
   /**

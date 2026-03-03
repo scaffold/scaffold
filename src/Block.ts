@@ -1,6 +1,9 @@
-import { Hash, HashPrimitive } from './util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
+
+/** Genesis blocks use this as their declared weight (very high). */
+export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
 
 // -- Block interface ------------------------------------------------
 
@@ -8,7 +11,7 @@ import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 export interface Block {
   // Structural
   readonly hash: Hash;
-  readonly anchor: Hash | undefined;
+  readonly anchor: Hash;
   readonly aggregates: Hash[];
   readonly claimMask: BitVector;
   readonly subtreeClaimMask: BitVector | null;
@@ -64,9 +67,9 @@ export class BlockStore {
   /** Walk anchor chain to determine if `ancestor` is an ancestor of `descendant`. */
   isAncestor(ancestor: Hash, descendant: Hash): boolean {
     const ancestorKey = ancestor.toPrimitive();
-    let current: Hash | undefined = descendant;
+    let current: Hash = descendant;
 
-    while (current) {
+    while (!Hash.equals(current, ZERO_HASH)) {
       if (current.toPrimitive() === ancestorKey) return true;
       const block = this.blocks.get(current.toPrimitive());
       if (!block) return false;
@@ -83,10 +86,10 @@ export class BlockStore {
    */
   getAnchorDepth(from: Hash, ancestor: Hash): number | undefined {
     const ancestorKey = ancestor.toPrimitive();
-    let current: Hash | undefined = from;
+    let current: Hash = from;
     let depth = 0;
 
-    while (current) {
+    while (!Hash.equals(current, ZERO_HASH)) {
       if (current.toPrimitive() === ancestorKey) return depth;
       const block = this.blocks.get(current.toPrimitive());
       if (!block) return undefined;
@@ -191,7 +194,7 @@ export function createGenesisBlock(outputs: Output[]): Block {
 
   return {
     hash,
-    anchor: undefined,
+    anchor: ZERO_HASH,
     aggregates: [],
     claimMask: BitVector.empty(0),
     subtreeClaimMask: null,
@@ -201,8 +204,8 @@ export function createGenesisBlock(outputs: Output[]): Block {
     aggregateOutputCounts: [],
     claims: [],
     outputs,
-    declaredWeight: 0,
-    weightVector: [0],
+    declaredWeight: GENESIS_WEIGHT,
+    weightVector: [],
     size,
     collateralTarget: undefined,
     paymentTarget: undefined,

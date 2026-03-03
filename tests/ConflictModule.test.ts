@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Hash, HashPrimitive } from '../src/util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { BitVector } from '../src/BitVector.ts';
 import { ConflictModule, ConflictProvider } from '../src/ConflictModule.ts';
 
@@ -7,7 +7,7 @@ import { ConflictModule, ConflictProvider } from '../src/ConflictModule.ts';
 
 interface TestBlock {
   hash: Hash;
-  anchor?: Hash;
+  anchor: Hash;
   /** Subtree claim mask against anchor outputs. Null = no subtrees. */
   claimMask: BitVector | null;
   /** Per-subtree output counts. */
@@ -39,7 +39,7 @@ class TestProvider implements ConflictProvider<TestBlock> {
     return block.hash;
   }
 
-  getAnchor(block: TestBlock): Hash | undefined {
+  getAnchor(block: TestBlock): Hash {
     return block.anchor;
   }
 
@@ -107,6 +107,7 @@ function leaf(opts: {
 function genesis(hash: Hash): TestBlock {
   return {
     hash,
+    anchor: ZERO_HASH,
     claimMask: null,
     aggregateOutputCounts: [],
     ownClaims: BitVector.empty(0),

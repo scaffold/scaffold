@@ -14,7 +14,7 @@ class ConsensusProviderAdapter implements ConsensusProvider<Block> {
     return block.hash;
   }
 
-  getAnchor(block: Block): Hash | undefined {
+  getAnchor(block: Block): Hash {
     return block.anchor;
   }
 

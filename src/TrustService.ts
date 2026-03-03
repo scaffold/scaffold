@@ -14,7 +14,7 @@ class TrustProviderAdapter implements TrustProvider<Block> {
     return this.store.get(hash);
   }
 
-  getAnchor(block: Block): Hash | undefined {
+  getAnchor(block: Block): Hash {
     return block.anchor;
   }
 

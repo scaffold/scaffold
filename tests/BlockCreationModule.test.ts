@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Hash, HashPrimitive } from '../src/util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { BitVector } from '../src/BitVector.ts';
 import {
   BlockCreationModule,
@@ -14,7 +14,7 @@ import {
 
 interface TestBlock {
   hash: Hash;
-  anchor?: Hash;
+  anchor: Hash;
   outputCount: number;
   weightVector: number[];
 }
@@ -46,7 +46,7 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     return block.hash;
   }
 
-  getAnchor(block: TestBlock): Hash | undefined {
+  getAnchor(block: TestBlock): Hash {
     return block.anchor;
   }
 
@@ -342,7 +342,7 @@ Deno.test('computeClaimMask: multiple anchor claims map correctly', () => {
 Deno.test('buildBlock: simple leaf block', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -374,7 +374,7 @@ Deno.test('buildBlock: simple leaf block', () => {
 Deno.test('buildBlock: leaf block with self-claim', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 3, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 3, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -407,7 +407,7 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
   const subtree1 = h('subtree1');
   const subtree2 = h('subtree2');
 
-  provider.add({ hash: genesis, outputCount: 10, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 10, weightVector: [] });
   provider.add({
     hash: subtree1,
     anchor: genesis,
@@ -467,7 +467,7 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
   // Genesis → A → (our block)
   // subtree1 anchors to genesis (depth 1 from A)
   // subtree2 anchors to A (depth 0 from A)
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
   provider.add({ hash: blockA, anchor: genesis, outputCount: 8, weightVector: [10] });
   provider.add({
     hash: subtree1,
@@ -532,7 +532,7 @@ Deno.test('buildBlock: fails on missing anchor', () => {
 Deno.test('buildBlock: fails on missing aggregated block', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -550,7 +550,7 @@ Deno.test('buildBlock: fails on missing aggregated block', () => {
 Deno.test('buildBlock: fails on throughput imbalance', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -573,7 +573,7 @@ Deno.test('buildBlock: fails on inter-subtree conflict', () => {
   const subtree1 = h('subtree1');
   const subtree2 = h('subtree2');
 
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
   provider.add({ hash: subtree1, anchor: genesis, outputCount: 2, weightVector: [10] });
   provider.add({ hash: subtree2, anchor: genesis, outputCount: 2, weightVector: [10] });
 
@@ -599,7 +599,7 @@ Deno.test('buildBlock: fails on inter-subtree conflict', () => {
 Deno.test('buildBlock: fails on claim index out of range', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 3, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 3, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -619,7 +619,7 @@ Deno.test('buildBlock: fails on claim index out of range', () => {
 Deno.test('buildBlock: block with only self-claims (no anchor claims)', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 3, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 3, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -646,7 +646,7 @@ Deno.test('buildBlock: block with only self-claims (no anchor claims)', () => {
 Deno.test('buildBlock: block with no outputs and no claims', () => {
   const { provider, module } = setupModule();
   const genesis = h('genesis');
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -671,7 +671,7 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
   const genesis = h('genesis');
   const subtree = h('subtree');
 
-  provider.add({ hash: genesis, outputCount: 8, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 8, weightVector: [] });
   provider.add({ hash: subtree, anchor: genesis, outputCount: 3, weightVector: [15] });
 
   provider.setAnchorDepth(genesis, genesis, 0);
@@ -710,7 +710,7 @@ Deno.test('buildBlock: fails when subtree rebase returns null', () => {
   const genesis = h('genesis');
   const subtree = h('subtree');
 
-  provider.add({ hash: genesis, outputCount: 5, weightVector: [] });
+  provider.add({ hash: genesis, anchor: ZERO_HASH, outputCount: 5, weightVector: [] });
   provider.add({ hash: subtree, anchor: genesis, outputCount: 2, weightVector: [10] });
 
   provider.setAnchorDepth(genesis, genesis, 0);

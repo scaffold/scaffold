@@ -1,12 +1,12 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Hash, HashPrimitive } from '../src/util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { ConsensusModule, ConsensusProvider } from '../src/ConsensusModule.ts';
 
 // -- Test helpers ------------------------------------------------
 
 interface TestBlock {
   hash: Hash;
-  anchor?: Hash;
+  anchor: Hash;
   aggregates: Hash[];
   weight: number[];
 }
@@ -26,7 +26,7 @@ class TestProvider implements ConsensusProvider<TestBlock> {
     return block.hash;
   }
 
-  getAnchor(block: TestBlock): Hash | undefined {
+  getAnchor(block: TestBlock): Hash {
     return block.anchor;
   }
 
@@ -59,7 +59,7 @@ function setup(...blocks: TestBlock[]): {
 // -- Tests -------------------------------------------------------
 
 Deno.test({ name: 'genesis only: single block is canonical with zero weight' }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const { layer } = setup(G);
 
   assert(layer.isCanonical(G.hash));
@@ -69,7 +69,7 @@ Deno.test({ name: 'genesis only: single block is canonical with zero weight' }, 
 });
 
 Deno.test({ name: 'simple chain with no conflicts: all blocks canonical' }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -94,7 +94,7 @@ Deno.test({ name: 'simple chain with no conflicts: all blocks canonical' }, () =
 });
 
 Deno.test({ name: 'basic conflict: higher verified weight wins' }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -122,7 +122,7 @@ Deno.test({ name: 'basic conflict: higher verified weight wins' }, () => {
 Deno.test({
   name: 'descendant weight flips conflict winner',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -163,7 +163,7 @@ Deno.test({
 });
 
 Deno.test({ name: 'aggregation creates conflict with aggregated block' }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -193,7 +193,7 @@ Deno.test({ name: 'aggregation creates conflict with aggregated block' }, () => 
 Deno.test({
   name: 'aggregation inherits conflicts from aggregated block',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -226,7 +226,7 @@ Deno.test({
 });
 
 Deno.test({ name: 'conflict propagates forward along anchor chain' }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const X: TestBlock = {
     hash: h('X'),
     anchor: G.hash,
@@ -260,7 +260,7 @@ Deno.test({ name: 'conflict propagates forward along anchor chain' }, () => {
 Deno.test({
   name: 'conflict does NOT propagate backward through anchor',
 }, () => {
-  const W: TestBlock = { hash: h('W'), aggregates: [], weight: [] };
+  const W: TestBlock = { hash: h('W'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const Y: TestBlock = {
     hash: h('Y'),
     anchor: W.hash,
@@ -288,7 +288,7 @@ Deno.test({
 Deno.test({
   name: 'conflict losers and their descendants excluded from canonical view',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -322,7 +322,7 @@ Deno.test({
 });
 
 Deno.test({ name: 'uncontested block always canonical' }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -354,7 +354,7 @@ Deno.test({ name: 'uncontested block always canonical' }, () => {
 
 Deno.test({ name: 'tie-breaking: equal weight, lower hash wins' }, () => {
   // Create two blocks with predictable hash ordering
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -387,7 +387,7 @@ Deno.test({ name: 'tie-breaking: equal weight, lower hash wins' }, () => {
 Deno.test({
   name: 'setting verified weight changes conflict outcome',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -429,7 +429,7 @@ Deno.test({
 Deno.test({
   name: 'removeConflict makes both blocks canonical',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -460,7 +460,7 @@ Deno.test({
 Deno.test({
   name: 'unverified blocks have zero effective weight',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -476,7 +476,7 @@ Deno.test({
 Deno.test({
   name: 'deep chain: descendant weight contributes to ancestor effective weight',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -511,7 +511,7 @@ Deno.test({
 Deno.test({
   name: 'multiple aggregates with inheritance from both',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A1: TestBlock = {
     hash: h('A1'),
     anchor: G.hash,
@@ -561,7 +561,7 @@ Deno.test({
 Deno.test({
   name: 'full spec example: genesis, 3 blocks, descendants, weight changes',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
@@ -635,7 +635,7 @@ Deno.test({
 Deno.test({
   name: 'weight vector with multiple depths: sum for effective weight',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const C1: TestBlock = {
     hash: h('C1'),
     anchor: G.hash,
@@ -659,7 +659,7 @@ Deno.test({
 Deno.test({
   name: 'getDescendantWeight: weight vector attributes to correct chain level',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const C1: TestBlock = {
     hash: h('C1'),
     anchor: G.hash,
@@ -689,7 +689,7 @@ Deno.test({
 Deno.test({
   name: 'dynamic conflict discovery updates canonical view',
 }, () => {
-  const G: TestBlock = { hash: h('G'), aggregates: [], weight: [] };
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
     anchor: G.hash,
