@@ -38,7 +38,7 @@ export class FetchNotifyStrategy implements Strategy {
         if (!this.fetchManager.hasSubscription(key)) continue;
 
         if (change.canonical) {
-          const result: FetchResult = { data: output.data };
+          const result: FetchResult = { block, data: output.data };
           actions.push({ type: 'notifyFetch', verifier: key, result });
         } else {
           actions.push({ type: 'notifyFetch', verifier: key, result: null });

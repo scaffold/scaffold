@@ -2,6 +2,8 @@ import { Block, createBlock } from './core/Block.ts';
 import { Output } from './core/BlockCreationModule.ts';
 import { NodeContext, NodeConfig } from './node/NodeContext.ts';
 import { PutManager, PutRequest, PutResult, BlockProcessor } from './node/PutManager.ts';
+import { FetchManager, Verifier, FetchOptions, FetchHandle } from './node/FetchManager.ts';
+import { FetchNotifyStrategy } from './node/strategies/FetchNotifyStrategy.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 
 export interface ScaffoldConfig {
@@ -14,16 +16,30 @@ export interface ScaffoldConfig {
 export class Scaffold {
   private readonly nodeContext: NodeContext;
   private readonly putManager: PutManager;
+  private readonly fetchManager: FetchManager;
 
   constructor(config: ScaffoldConfig) {
+    // 1. Create FetchManager and the strategy that notifies it
+    this.fetchManager = new FetchManager();
+    const fetchNotifyStrategy = new FetchNotifyStrategy(this.fetchManager);
+
+    // 2. Prepend FetchNotifyStrategy to user-provided strategies
+    const strategies: Strategy[] = [
+      fetchNotifyStrategy,
+      ...(config.strategies ?? []),
+    ];
+
+    // 3. Create NodeContext with notifyFetch wired to FetchManager
+    const fetchManager = this.fetchManager;
     this.nodeContext = new NodeContext({
       genesis: config.genesis,
-      strategies: config.strategies,
+      strategies,
+      onNotifyFetch: (verifierKey, result) => {
+        fetchManager.notify(verifierKey, result);
+      },
     });
 
-    // Create PutManager with a BlockProcessor that delegates to NodeContext.
-    // The BlockProcessor resolves the anchor (PutManager uses a placeholder)
-    // and builds the block via BlockCreationService + createBlock.
+    // 4. Create PutManager with a BlockProcessor that delegates to NodeContext.
     const nodeContext = this.nodeContext;
     const processor: BlockProcessor = {
       buildBlock: (spec) => {
@@ -47,6 +63,11 @@ export class Scaffold {
     };
 
     this.putManager = new PutManager(processor);
+  }
+
+  /** Request a computation result and subscribe to canonical state changes. */
+  fetch(verifier: Verifier, options: FetchOptions): FetchHandle {
+    return this.fetchManager.fetch(verifier, options);
   }
 
   /** Put data into the network */

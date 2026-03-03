@@ -1,19 +1,18 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Block, BlockStore, createBlock } from '../core/Block.ts';
 import { BlockSpec } from '../core/BlockCreationModule.ts';
-import { ProtocolContext } from '../core/ProtocolContext.ts';
-import { Coordinator, BlockReceivedResult } from '../core/Coordinator.ts';
+import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { BlockAwareness } from '../core/GossipModule.ts';
 import { serialize, deserialize } from '../core/BlockSerializer.ts';
+import { Scaffold } from '../Scaffold.ts';
 
-import { AnimalName, Identity, deriveIdentity } from './Identity.ts';
+import { AnimalName, ANIMALS, Identity, deriveIdentity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
 import { SignedBlock, signBlock } from './SignedBlock.ts';
 import { validateSignedBlock, ValidationResult } from './ContractValidator.ts';
-import { createDemoGenesis } from './DemoGenesis.ts';
 import { StatusIndex } from './StatusIndex.ts';
 
 /** Wire message sent over WebSocket. */
@@ -38,12 +37,7 @@ class SetAwareness implements BlockAwareness {
 
 export class DemoNode {
   readonly identity: Identity;
-  readonly ctx: ProtocolContext;
-  readonly store: BlockStore;
-  readonly coordinator: Coordinator;
-  readonly consensus: ConsensusService;
-  readonly blockCreation: BlockCreationService;
-  readonly gossip: GossipService;
+  readonly scaffold: Scaffold;
   readonly statusIndex: StatusIndex;
   readonly signatureStore = new Map<HashPrimitive, Uint8Array>();
   readonly peers = new Map<string, WebSocket>();
@@ -52,23 +46,31 @@ export class DemoNode {
 
   constructor(animalName: AnimalName) {
     this.identity = deriveIdentity(animalName);
-    this.ctx = new ProtocolContext();
     this.statusIndex = new StatusIndex();
 
-    // Initialize protocol stack
-    this.store = this.ctx.get(BlockStore);
-    this.consensus = this.ctx.get(ConsensusService);
-    this.blockCreation = this.ctx.get(BlockCreationService);
-    this.gossip = this.ctx.get(GossipService);
-    this.coordinator = this.ctx.get(Coordinator);
-
-    // Process genesis
-    const genesis = createDemoGenesis();
-    this.tip = genesis;
-    this.coordinator.blockReceived(genesis, null);
+    // Initialize via Scaffold
+    const genesisOutputs = ANIMALS.map(name => makeStatusOutput(deriveIdentity(name).publicKey, ''));
+    this.scaffold = new Scaffold({ genesis: { outputs: genesisOutputs } });
+    this.tip = this.scaffold.context.store.get(this.scaffold.context.genesisHash)!;
 
     // Rebuild status index from genesis
-    this.statusIndex.rebuild([genesis]);
+    this.statusIndex.rebuild([this.tip]);
+  }
+
+  get store(): BlockStore {
+    return this.scaffold.context.store;
+  }
+
+  get consensus(): ConsensusService {
+    return this.scaffold.context.consensus;
+  }
+
+  get blockCreation(): BlockCreationService {
+    return this.scaffold.context.blockCreation;
+  }
+
+  get gossip(): GossipService {
+    return this.scaffold.context.gossip;
   }
 
   /** Receive a signed block from a peer. Validate, accept if valid, forward to other peers. */
@@ -83,12 +85,12 @@ export class DemoNode {
       return;
     }
 
-    // Accept: store signature, process through coordinator
+    // Accept: store signature, process through reactive layer
     this.signatureStore.set(sb.block.hash.toPrimitive(), sb.signature);
-    const result = this.coordinator.blockReceived(sb.block, fromPeer);
+    this.scaffold.context.processBlock(sb.block, fromPeer);
 
     // Update tip
-    this.updateTip(result);
+    this.updateTipFromStore();
 
     // Rebuild status index
     this.rebuildStatusIndex();
@@ -146,8 +148,8 @@ export class DemoNode {
     if (validation.ok) {
       // Accept locally
       this.signatureStore.set(block.hash.toPrimitive(), sb.signature);
-      const result = this.coordinator.blockReceived(block, null);
-      this.updateTip(result);
+      this.scaffold.context.processBlock(block);
+      this.updateTipFromStore();
       this.rebuildStatusIndex();
     }
 
@@ -200,21 +202,23 @@ export class DemoNode {
     ws.send(JSON.stringify(msg));
   }
 
-  /** Update tip to the canonical block with greatest depth. */
-  private updateTip(result: BlockReceivedResult): void {
-    for (const change of result.canonicalityChanges) {
-      if (change.canonical) {
-        const block = this.store.get(change.hash);
-        if (block) {
-          // Check if this block is deeper than current tip
-          const depth = this.getDepth(block);
-          const tipDepth = this.getDepth(this.tip);
-          if (depth > tipDepth) {
-            this.tip = block;
-          }
+  /** Update tip to the deepest block in the canonical chain. */
+  private updateTipFromStore(): void {
+    const canonical = this.consensus.getCanonicalView();
+    let bestBlock = this.tip;
+    let bestDepth = this.getDepth(this.tip);
+
+    for (const key of canonical) {
+      const block = this.store.get(Hash.fromPrimitive(key));
+      if (block) {
+        const depth = this.getDepth(block);
+        if (depth > bestDepth) {
+          bestDepth = depth;
+          bestBlock = block;
         }
       }
     }
+    this.tip = bestBlock;
   }
 
   /** Get the depth of a block (length of anchor chain). */

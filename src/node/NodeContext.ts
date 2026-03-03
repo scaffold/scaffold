@@ -1,7 +1,7 @@
 import { Block, BlockStore, createBlock, createGenesisBlock } from '../core/Block.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
-import { ReactiveLayer, Strategy, BlockCreator } from './ReactiveLayer.ts';
+import { ReactiveLayer, Strategy, BlockCreator, VerifierKey, FetchResult } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { ConflictService } from '../core/ConflictService.ts';
@@ -16,6 +16,8 @@ export interface NodeConfig {
   genesis: { outputs: Output[] };
   /** Strategies to register with the reactive layer */
   strategies?: Strategy[];
+  /** Callback when a notifyFetch action is dispatched */
+  onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
 }
 
 /**
@@ -78,6 +80,7 @@ export class NodeContext {
       sampling: this.sampling,
       strategies: config.strategies ?? [],
       blockCreator,
+      onNotifyFetch: config.onNotifyFetch,
     });
 
     // 7. Process genesis block through coordinator directly

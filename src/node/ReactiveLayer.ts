@@ -14,6 +14,7 @@ export type VerifierKey = string;
 
 /** Result of a fetch operation. */
 export interface FetchResult {
+  readonly block: Block;
   readonly data: Uint8Array;
 }
 
@@ -76,6 +77,8 @@ export class ReactiveLayer {
   private readonly strategies: Strategy[];
   private readonly blockCreator: BlockCreator;
 
+  private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
+
   constructor(deps: {
     coordinator: Coordinator;
     store: BlockStore;
@@ -84,6 +87,7 @@ export class ReactiveLayer {
     sampling: SamplingService;
     strategies: Strategy[];
     blockCreator: BlockCreator;
+    onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
   }) {
     this.coordinator = deps.coordinator;
     this.store = deps.store;
@@ -92,6 +96,7 @@ export class ReactiveLayer {
     this.sampling = deps.sampling;
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
+    this.onNotifyFetch = deps.onNotifyFetch;
   }
 
   /**
@@ -163,7 +168,9 @@ export class ReactiveLayer {
           // Async: started but does not block.
           break;
         case 'notifyFetch':
-          // Async: notification sent but does not block.
+          if (this.onNotifyFetch) {
+            this.onNotifyFetch(action.verifier, action.result);
+          }
           break;
       }
     }

@@ -1,4 +1,4 @@
-import { Block } from '../src/Block.ts';
+import { Block } from '../src/core/Block.ts';
 
 /** Metadata tracked per block across the visualization. */
 export interface BlockInfo {

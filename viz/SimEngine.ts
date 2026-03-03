@@ -1,15 +1,12 @@
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
-import { Block, BlockStore, createBlock, createGenesisBlock } from '../src/Block.ts';
-import { ProtocolContext } from '../src/ProtocolContext.ts';
-import { ConflictService } from '../src/ConflictService.ts';
-import { ConsensusService } from '../src/ConsensusService.ts';
-import { SamplingService } from '../src/SamplingService.ts';
-import { TrustService } from '../src/TrustService.ts';
-import { GossipService } from '../src/GossipService.ts';
-import { BlockCreationService } from '../src/BlockCreationService.ts';
-import { Coordinator } from '../src/Coordinator.ts';
-import { BlockAwareness } from '../src/GossipModule.ts';
-import { BlockSpec, Output } from '../src/BlockCreationModule.ts';
+import { Block, BlockStore } from '../src/core/Block.ts';
+import { Output } from '../src/core/BlockCreationModule.ts';
+import { BlockAwareness } from '../src/core/GossipModule.ts';
+import { ConsensusService } from '../src/core/ConsensusService.ts';
+import { BlockCreationService } from '../src/core/BlockCreationService.ts';
+import { GossipService } from '../src/core/GossipService.ts';
+import { Coordinator } from '../src/core/Coordinator.ts';
+import { Scaffold } from '../src/Scaffold.ts';
 import { BlockInfo, InFlightMessage } from './types.ts';
 import { NODE_NAMES } from './colors.ts';
 
@@ -40,22 +37,30 @@ function nonceOutput(nodeIdx: number, seqNum: number): Output {
 // -- SimNode --
 
 class SimNode {
-  readonly store: BlockStore;
-  readonly coordinator: Coordinator;
-  readonly consensus: ConsensusService;
-  readonly blockCreation: BlockCreationService;
-  readonly gossip: GossipService;
+  readonly scaffold: Scaffold;
 
   constructor(_id: string) {
-    const ctx = new ProtocolContext();
-    this.store = ctx.get(BlockStore);
-    ctx.get(ConflictService);
-    this.consensus = ctx.get(ConsensusService);
-    ctx.get(SamplingService);
-    ctx.get(TrustService);
-    this.gossip = ctx.get(GossipService);
-    this.blockCreation = ctx.get(BlockCreationService);
-    this.coordinator = ctx.get(Coordinator);
+    this.scaffold = new Scaffold({ genesis: { outputs: [nonceOutput(999, 0)] } });
+  }
+
+  get store(): BlockStore {
+    return this.scaffold.context.store;
+  }
+
+  get coordinator(): Coordinator {
+    return this.scaffold.context.coordinator;
+  }
+
+  get consensus(): ConsensusService {
+    return this.scaffold.context.consensus;
+  }
+
+  get gossip(): GossipService {
+    return this.scaffold.context.gossip;
+  }
+
+  get blockCreation(): BlockCreationService {
+    return this.scaffold.context.blockCreation;
   }
 }
 
@@ -151,11 +156,9 @@ export class SimEngine {
       this.connect(i, j);
     }
 
-    // Create and distribute genesis
-    this.genesis = createGenesisBlock([nonceOutput(999, 0)]);
-    for (const node of this.nodes) {
-      node.coordinator.blockReceived(this.genesis, null);
-    }
+    // Get genesis from the first node's store (all nodes share the same genesis)
+    const ctx = this.nodes[0].scaffold.context;
+    this.genesis = ctx.store.get(ctx.genesisHash)!;
     this.blockInfos.set(this.genesis.hash.toPrimitive(), {
       block: this.genesis,
       creator: -1,
@@ -277,37 +280,25 @@ export class SimEngine {
     const tip = this.getTip(nodeIdx);
     const seq = this.seqNums[nodeIdx]++;
 
-    const spec: BlockSpec = {
+    const result = node.scaffold.put({
       anchor: tip,
       outputs: [nonceOutput(nodeIdx, seq)],
-      claims: [],
-      declaredWeight: 1,
-      aggregates: [],
-    };
-
-    const result = node.blockCreation.buildBlock(spec);
-    if (!result.ok) return;
-
-    const anchorBlock = node.store.get(tip);
-    if (!anchorBlock) return;
-
-    const block = createBlock(result.blueprint, anchorBlock);
+    });
 
     // Determine depth
     const anchorInfo = this.blockInfos.get(tip.toPrimitive());
     const depth = (anchorInfo?.depth ?? 0) + 1;
 
     // Register block
-    node.coordinator.blockReceived(block, null);
-    this.blockInfos.set(block.hash.toPrimitive(), {
-      block,
+    this.blockInfos.set(result.hash.toPrimitive(), {
+      block: result.block,
       creator: nodeIdx,
       depth,
       seqNum: seq,
     });
 
     // Own blocks: always deliver to all connected peers (initial publication)
-    this.enqueueToConnected(block, nodeIdx);
+    this.enqueueToConnected(result.block, nodeIdx);
   }
 
   /** Attempt aggregation via the core Coordinator method. */
@@ -370,7 +361,7 @@ export class SimEngine {
     if (node.store.has(msg.block.hash)) return;
     if (!this.blockInfos.has(msg.block.hash.toPrimitive())) return;
 
-    node.coordinator.blockReceived(msg.block, this.nodeNames[msg.from]);
+    node.scaffold.context.processBlock(msg.block, this.nodeNames[msg.from]);
 
     // Weight-gated forwarding to further connected peers
     const weightSum = msg.block.weightVector.reduce((a, b) => a + b, 0);

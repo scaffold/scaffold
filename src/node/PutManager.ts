@@ -6,6 +6,8 @@ import { BlockSpec, ClaimEntry, Output } from '../core/BlockCreationModule.ts';
 export interface PutRequest {
   /** Outputs to include in the block */
   outputs: Output[];
+  /** Optional: anchor block hash. When provided, overrides the default pending anchor. */
+  anchor?: Hash;
   /** Optional: claim to satisfy a verifier (the incentive block hash) */
   satisfies?: Hash;
   /** Optional: declared weight for the block */
@@ -44,8 +46,7 @@ export class PutManager {
     }
 
     const spec: BlockSpec = {
-      // Anchor is determined by the block processor; PutManager does not choose it.
-      anchor: Hash.digest('pending'),
+      anchor: request.anchor ?? Hash.digest('pending'),
       outputs: request.outputs,
       claims,
       declaredWeight: request.declaredWeight ?? 1,

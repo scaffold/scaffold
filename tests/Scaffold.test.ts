@@ -79,6 +79,50 @@ Deno.test('Scaffold: put() creates and processes a block', () => {
   assert(ctx.consensus.isCanonical(result.hash));
 });
 
+Deno.test('Scaffold: fetch() returns a handle with close()', () => {
+  const scaffold = new Scaffold(defaultConfig());
+
+  const results: unknown[] = [];
+  const handle = scaffold.fetch(
+    { contractHash: Hash.digest('test-contract'), params: new Uint8Array([1, 2, 3]) },
+    { onResult: (result) => results.push(result) },
+  );
+
+  assert(handle);
+  assert(typeof handle.close === 'function');
+
+  // Close should not throw
+  handle.close();
+});
+
+Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', () => {
+  const scaffold = new Scaffold(defaultConfig());
+
+  const contractHash = Hash.digest('fetch-contract');
+  const params = new Uint8Array([10, 20]);
+
+  const results: unknown[] = [];
+  const handle = scaffold.fetch(
+    { contractHash, params },
+    { onResult: (result) => results.push(result) },
+  );
+
+  // Put a block whose output matches the verifier (contract + params as data)
+  scaffold.put({
+    outputs: [{
+      contract: contractHash,
+      value: 0,
+      data: params,
+    }],
+  });
+
+  // The FetchNotifyStrategy should have noticed the canonical block and notified
+  assertEquals(results.length, 1);
+  assert(results[0] !== null);
+
+  handle.close();
+});
+
 Deno.test('Scaffold: close() does not throw', async () => {
   const scaffold = new Scaffold(defaultConfig());
   await scaffold.close();
