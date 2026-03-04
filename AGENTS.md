@@ -65,6 +65,6 @@ Planning -> Documentation -> Testing -> Coding
 
 ## 4-Step Development Sequence
 1. Build `docs/protocol/` as markdown documents covering protocol concepts and mechanics.
-2. Write a skeleton in `scaffold/src/`. Create the classes and interfaces you're going to need.
+2. Write a skeleton in `src/core/`. Create the classes and interfaces you're going to need. If you're building a module, keep it very encapsulated, don't use any Context or assume anything about the BlockType except what you can access through the provider.
 3. Write tests around protocol/state transition behavior. You can run them like this: `deno test --allow-all tests/ModuleName.test.ts`
 4. Implement and iterate with documentation and tests as the controlling spec, until you're satisfied with your implementation.

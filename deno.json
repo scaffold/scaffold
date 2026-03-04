@@ -14,6 +14,9 @@
       "deno.unstable"
     ]
   },
+  "exclude": [
+    "dist/","coverage/",".claude/"
+  ],
   "lint": {
     "exclude": [
       "avro",

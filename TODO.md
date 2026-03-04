@@ -4,22 +4,14 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 
 ## Core Protocol
 
-### Block Creation Module — ✅ done
-Documented in `docs/protocol/block-creation.md`. Implemented in `src/BlockCreationModule.ts` and `src/BlockCreationService.ts`.
+### Block weight
+How is the weight of a block determined and verified?
 
 ### Execution Module
 Define what it means to execute a block. Deterministic WASM computation semantics, how work is declared, how inputs map to outputs, and what constitutes a valid execution. The consensus module references "validity/execution modules" as the source of direct conflict declarations.
 
 ### Verification Module
 The bridge between sampling and execution. Sampling selects what to verify; this module defines how to check if declared work is real — the spot-check procedure, how to request and re-execute a unit of work, and how results feed back into the sampling module's success/failure tracking. Referenced by consensus, sampling, and trust.
-
-### Reactive Strategy System — designed, see `docs/plans/02-reactive-layer.md`
-Strategies evaluate on every canonicality change and produce actions. See individual strategy plans: `docs/plans/05-fetch-notify-strategy.md`, `08-generation-strategy.md`, `09-aggregation-strategy.md`, `14-sampling-strategy.md`, `16-dispute-strategy.md`.
-
-Open design questions (deferred):
-- Draft composition: can multiple strategies contribute claims to the same block?
-- Anchor selection: strategies may constrain anchor choice (must see certain outputs)
-- Efficiency: should strategies register interest in specific state transitions instead of re-evaluating on every change?
 
 ### Dispute Module
 Resolution mechanism for FOR/AGAINST collateral stakes. The trust module explicitly defers to this: given competing collateral placements, how is a winner determined? Defines the voting/evidence mechanism, evidence requirements, escalation, and how dispute outcomes flow back to the trust module for collateral redistribution.
@@ -28,9 +20,6 @@ Resolution mechanism for FOR/AGAINST collateral stakes. The trust module explici
 
 ### Peer Module
 Peer discovery, connection management, and disconnection of useless peers. The gossip module exports per-peer quality scores and consumes the peer set + transport metrics (latency, throughput). This module decides who to connect to, how to find new peers, and when to drop unproductive connections.
-
-### Request/Response Protocol — partially designed, see `docs/client-interface.md`
-The client-facing request path: `fetch(verifier)` publishes an incentive block, peers race to respond, correct work is rewarded. The client interface is designed; the wire protocol for request routing remains open.
 
 #### Request Routing (Open Problem)
 How do incentive blocks reach peers who can fulfill them? Options to explore:
