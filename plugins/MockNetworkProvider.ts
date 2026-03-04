@@ -1,4 +1,8 @@
-import { ConnectionProvider, NetworkProvider, SignalingDriver } from '../legacy2/NetworkProvider.ts';
+import {
+  ConnectionProvider,
+  NetworkProvider,
+  SignalingDriver,
+} from '../legacy2/NetworkProvider.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { Timeout, TimeProvider } from '../legacy2/Config.ts';
 

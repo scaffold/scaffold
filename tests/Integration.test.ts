@@ -2,7 +2,7 @@ import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import { Block, BlockStore, createBlock, createGenesisBlock } from '../src/core/Block.ts';
-import { Output, BlockSpec } from '../src/core/BlockCreationModule.ts';
+import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConflictService } from '../src/core/ConflictService.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
@@ -11,7 +11,7 @@ import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
-import { SimNode, SimNetwork } from './SimNetwork.ts';
+import { SimNetwork, SimNode } from './SimNetwork.ts';
 
 // -- Helpers --------------------------------------------------------
 
@@ -44,7 +44,8 @@ function makeLeafBlock(
     }
   }
 
-  const outputCount = anchorOutputCount - claimMask.popcount() + outputs.length - claims.filter(i => i < outputs.length).length;
+  const outputCount = anchorOutputCount - claimMask.popcount() + outputs.length -
+    claims.filter((i) => i < outputs.length).length;
 
   // Compute hash
   const hashParts: Uint8Array[] = [

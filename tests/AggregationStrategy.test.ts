@@ -76,9 +76,7 @@ function makeEvent(
     newConflicts: [],
   };
   // Use the first block from canonicality changes as the event block, or a stub.
-  const eventBlockHash = canonicalityChanges.length > 0
-    ? canonicalityChanges[0].hash
-    : h('stub');
+  const eventBlockHash = canonicalityChanges.length > 0 ? canonicalityChanges[0].hash : h('stub');
   const block = store.get(eventBlockHash) ?? makeBlock('stub');
 
   return {
@@ -186,9 +184,7 @@ Deno.test('maxChildren limit is respected', () => {
   store.put(genesis);
 
   // Four leaf blocks sharing the same anchor.
-  const blocks = ['A', 'B', 'C', 'D'].map((name) =>
-    makeBlock(name, { anchorHash: genesis.hash })
-  );
+  const blocks = ['A', 'B', 'C', 'D'].map((name) => makeBlock(name, { anchorHash: genesis.hash }));
   for (const block of blocks) {
     store.put(block);
     consensus.addCanonical(block.hash);

@@ -2,8 +2,16 @@ import { Hash } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 
 export const ANIMALS = [
-  'antelope', 'badger', 'crane', 'dolphin', 'eagle',
-  'falcon', 'gecko', 'hawk', 'ibis', 'jackal',
+  'antelope',
+  'badger',
+  'crane',
+  'dolphin',
+  'eagle',
+  'falcon',
+  'gecko',
+  'hawk',
+  'ibis',
+  'jackal',
 ] as const;
 
 export type AnimalName = typeof ANIMALS[number];

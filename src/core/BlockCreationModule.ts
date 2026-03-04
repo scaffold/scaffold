@@ -187,12 +187,16 @@ export class BlockCreationModule<BlockType> {
     // Check for inter-subtree conflicts (two subtrees claim same anchor output)
     const subtreeClaimTotal = subtreeClaimMasks.reduce((s, m) => s + m.popcount(), 0);
     if (subtreeClaimTotal !== mergedSubtreeMask.popcount()) {
-      return { ok: false, error: 'subtrees have overlapping anchor claims (inter-subtree conflict)' };
+      return {
+        ok: false,
+        error: 'subtrees have overlapping anchor claims (inter-subtree conflict)',
+      };
     }
 
     // 4. Validate and classify claims
     const ownOutputCount = spec.outputs.length;
-    const extendedVectorLength = ownOutputCount + (anchorOutputCount - subtreeAnchorClaims + totalSubtreeOutputs);
+    const extendedVectorLength = ownOutputCount +
+      (anchorOutputCount - subtreeAnchorClaims + totalSubtreeOutputs);
     const selfClaims: number[] = [];
     const anchorClaims: number[] = [];
 
@@ -201,7 +205,11 @@ export class BlockCreationModule<BlockType> {
         return { ok: false, error: `invalid claim index: ${claim.index}` };
       }
       if (claim.index >= extendedVectorLength) {
-        return { ok: false, error: `claim index ${claim.index} out of range (extended vector length: ${extendedVectorLength})` };
+        return {
+          ok: false,
+          error:
+            `claim index ${claim.index} out of range (extended vector length: ${extendedVectorLength})`,
+        };
       }
       if (claim.index < ownOutputCount) {
         selfClaims.push(claim.index);
@@ -335,7 +343,8 @@ export class BlockCreationModule<BlockType> {
     if (selfClaimTotal !== selfClaimedOutputTotal) {
       return {
         ok: false,
-        error: `self-claim value mismatch: claimed ${selfClaimTotal}, output ${selfClaimedOutputTotal}`,
+        error:
+          `self-claim value mismatch: claimed ${selfClaimTotal}, output ${selfClaimedOutputTotal}`,
       };
     }
 

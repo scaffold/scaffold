@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import { Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
-import { Output, BlockSpec } from '../src/core/BlockCreationModule.ts';
+import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConflictService } from '../src/core/ConflictService.ts';
@@ -177,7 +177,12 @@ Deno.test('ReactiveLayer: collects actions from multiple strategies', () => {
 
   const strategy1 = new RecordingStrategy();
   strategy1.actionsToReturn = [
-    { type: 'verify', block: Hash.digest('b1'), contract: Hash.digest('c1'), params: new Uint8Array([1]) },
+    {
+      type: 'verify',
+      block: Hash.digest('b1'),
+      contract: Hash.digest('c1'),
+      params: new Uint8Array([1]),
+    },
   ];
 
   const strategy2 = new RecordingStrategy();
@@ -542,7 +547,12 @@ Deno.test('ReactiveLayer: non-createBlock actions do not trigger block creator',
 
   const strategy = new RecordingStrategy();
   strategy.actionsToReturn = [
-    { type: 'verify', block: Hash.digest('v1'), contract: Hash.digest('c1'), params: new Uint8Array([]) },
+    {
+      type: 'verify',
+      block: Hash.digest('v1'),
+      contract: Hash.digest('c1'),
+      params: new Uint8Array([]),
+    },
     { type: 'dispute', block: Hash.digest('d1'), side: 'for' },
     { type: 'notifyFetch', verifier: 'vk1', result: null },
   ];

@@ -1,8 +1,8 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
-import { ANIMALS, AnimalName, deriveIdentity } from './Identity.ts';
-import { statusHash, decodeStatusData } from './StatusContract.ts';
+import { AnimalName, ANIMALS, deriveIdentity } from './Identity.ts';
+import { decodeStatusData, statusHash } from './StatusContract.ts';
 
 /**
  * UTXO tracker for status messages.

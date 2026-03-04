@@ -2,7 +2,7 @@ import { assert, assertFalse } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
 import { Block, BlockStore, createBlock, createGenesisBlock } from '../../src/core/Block.ts';
 import { BitVector } from '../../src/core/BitVector.ts';
-import { Output, BlockSpec } from '../../src/core/BlockCreationModule.ts';
+import { BlockSpec, Output } from '../../src/core/BlockCreationModule.ts';
 import { BlockCreationService } from '../../src/core/BlockCreationService.ts';
 import { ProtocolContext } from '../../src/core/ProtocolContext.ts';
 import { ConflictService } from '../../src/core/ConflictService.ts';
@@ -16,7 +16,12 @@ import { validateSignedBlock } from '../../src/demo/ContractValidator.ts';
 import { createDemoGenesis } from '../../src/demo/DemoGenesis.ts';
 
 /** Set up a minimal protocol context with a block store. */
-function setupStore(): { store: BlockStore; ctx: ProtocolContext; coordinator: Coordinator; blockCreation: BlockCreationService } {
+function setupStore(): {
+  store: BlockStore;
+  ctx: ProtocolContext;
+  coordinator: Coordinator;
+  blockCreation: BlockCreationService;
+} {
   const ctx = new ProtocolContext();
   const store = ctx.get(BlockStore);
   const coordinator = ctx.get(Coordinator);

@@ -6,20 +6,20 @@ import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { BlockAwareness } from '../core/GossipModule.ts';
-import { serialize, deserialize } from '../core/BlockSerializer.ts';
+import { deserialize, serialize } from '../core/BlockSerializer.ts';
 import { Scaffold } from '../Scaffold.ts';
 
-import { AnimalName, ANIMALS, Identity, deriveIdentity } from './Identity.ts';
+import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
-import { SignedBlock, signBlock } from './SignedBlock.ts';
+import { signBlock, SignedBlock } from './SignedBlock.ts';
 import { validateSignedBlock, ValidationResult } from './ContractValidator.ts';
 import { StatusIndex } from './StatusIndex.ts';
 
 /** Wire message sent over WebSocket. */
 export interface WireMessage {
   type: 'block';
-  data: string;       // serialize(block)
-  signature: string;  // base64-encoded 64-byte signature
+  data: string; // serialize(block)
+  signature: string; // base64-encoded 64-byte signature
 }
 
 /** Simple set-based block awareness tracker for gossip. */
@@ -49,7 +49,9 @@ export class DemoNode {
     this.statusIndex = new StatusIndex();
 
     // Initialize via Scaffold
-    const genesisOutputs = ANIMALS.map(name => makeStatusOutput(deriveIdentity(name).publicKey, ''));
+    const genesisOutputs = ANIMALS.map((name) =>
+      makeStatusOutput(deriveIdentity(name).publicKey, '')
+    );
     this.scaffold = new Scaffold({ genesis: { outputs: genesisOutputs } });
     this.tip = this.scaffold.context.store.get(this.scaffold.context.genesisHash)!;
 

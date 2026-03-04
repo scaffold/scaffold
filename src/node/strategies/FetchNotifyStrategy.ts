@@ -1,4 +1,4 @@
-import { Strategy, ReactiveEvent, Action, VerifierKey, FetchResult } from '../ReactiveLayer.ts';
+import { Action, FetchResult, ReactiveEvent, Strategy, VerifierKey } from '../ReactiveLayer.ts';
 import { FetchManager } from '../FetchManager.ts';
 
 /**

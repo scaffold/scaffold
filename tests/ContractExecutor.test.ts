@@ -1,10 +1,6 @@
 import { assert, assertEquals, assertRejects } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import {
-  ContractExecutor,
-  ContractFn,
-  ExecutionResult,
-} from '../src/node/ContractExecutor.ts';
+import { ContractExecutor, ContractFn, ExecutionResult } from '../src/node/ContractExecutor.ts';
 
 // -- Helpers ----------------------------------------------------------
 

@@ -2,7 +2,7 @@ import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { SignedBlock, verifyBlockSignature } from './SignedBlock.ts';
-import { statusHash, decodeStatusData } from './StatusContract.ts';
+import { decodeStatusData, statusHash } from './StatusContract.ts';
 
 export type ValidationResult =
   | { ok: true }
@@ -55,7 +55,10 @@ export function validateSignedBlock(sb: SignedBlock, store: BlockStore): Validat
       const { publicKey } = decodeStatusData(output.data);
       if (requiredPublicKey) {
         if (!bytesEqual(requiredPublicKey, publicKey)) {
-          return { ok: false, reason: 'produced status output publicKey does not match claimed output' };
+          return {
+            ok: false,
+            reason: 'produced status output publicKey does not match claimed output',
+          };
         }
       } else {
         requiredPublicKey = publicKey;

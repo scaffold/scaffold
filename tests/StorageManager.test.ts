@@ -2,15 +2,8 @@ import { assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block } from '../src/core/Block.ts';
 import { BitVector } from '../src/core/BitVector.ts';
-import {
-  BlockSerializer,
-  StorageManager,
-  StoragePlugin,
-} from '../src/node/StorageManager.ts';
-import {
-  deserialize,
-  serialize,
-} from '../src/core/BlockSerializer.ts';
+import { BlockSerializer, StorageManager, StoragePlugin } from '../src/node/StorageManager.ts';
+import { deserialize, serialize } from '../src/core/BlockSerializer.ts';
 
 // -- Mock storage plugin -------------------------------------------
 

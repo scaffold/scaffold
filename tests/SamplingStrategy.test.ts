@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
 import { SamplingModule, SamplingProvider } from '../src/core/SamplingModule.ts';
-import { ReactiveEvent, Action } from '../src/node/ReactiveLayer.ts';
+import { Action, ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { SamplingStrategy } from '../src/node/strategies/SamplingStrategy.ts';
 

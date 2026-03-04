@@ -43,7 +43,7 @@ function replacer(_key: string, value: unknown): unknown {
           if (globalBit < value.length && value.get(globalBit)) {
             const byteIdx = Math.floor(bit / 8);
             const bitOffset = bit % 8;
-            chunkBytes[byteIdx] |= (1 << bitOffset);
+            chunkBytes[byteIdx] |= 1 << bitOffset;
           }
         }
         chunks.push(uint8ToBase64(chunkBytes));

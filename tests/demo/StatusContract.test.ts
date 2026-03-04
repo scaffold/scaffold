@@ -1,10 +1,10 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
 import {
-  statusHash,
-  encodeStatusData,
   decodeStatusData,
+  encodeStatusData,
   makeStatusOutput,
+  statusHash,
 } from '../../src/demo/StatusContract.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 

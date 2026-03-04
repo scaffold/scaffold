@@ -7,7 +7,7 @@ import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
-import { Coordinator, BlockReceivedResult } from '../src/core/Coordinator.ts';
+import { BlockReceivedResult, Coordinator } from '../src/core/Coordinator.ts';
 import { BlockAwareness, PushAction } from '../src/core/GossipModule.ts';
 
 /** Simple set-based block awareness tracker. */

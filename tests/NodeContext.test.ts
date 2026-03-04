@@ -3,8 +3,8 @@ import { Hash } from '../src/util/Hash.ts';
 import { Block } from '../src/core/Block.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { NodeContext, NodeConfig } from '../src/node/NodeContext.ts';
-import { Strategy, ReactiveEvent, Action } from '../src/node/ReactiveLayer.ts';
+import { NodeConfig, NodeContext } from '../src/node/NodeContext.ts';
+import { Action, ReactiveEvent, Strategy } from '../src/node/ReactiveLayer.ts';
 
 // -- Helpers --------------------------------------------------------
 

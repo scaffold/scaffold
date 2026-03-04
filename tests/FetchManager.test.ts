@@ -2,11 +2,7 @@ import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block } from '../src/core/Block.ts';
 import { BitVector } from '../src/core/BitVector.ts';
-import {
-  FetchManager,
-  FetchResult,
-  Verifier,
-} from '../src/node/FetchManager.ts';
+import { FetchManager, FetchResult, Verifier } from '../src/node/FetchManager.ts';
 
 // -- Test helpers ------------------------------------------------
 

@@ -185,11 +185,11 @@ Deno.test('validateThroughput: balanced with self-claims', () => {
   // 2 outputs, ownOutputCount = 2
   // Self-claim on index 0 (value 50), anchor claim on index 2 (value 100)
   const claims: ClaimEntry[] = [
-    { index: 0, value: 50 },  // self-claim
+    { index: 0, value: 50 }, // self-claim
     { index: 2, value: 100 }, // anchor claim
   ];
   const outputs: Output[] = [
-    makeOutput(50),  // self-claimed → nets to zero
+    makeOutput(50), // self-claimed → nets to zero
     makeOutput(100), // non-self-claimed → must balance with anchor claims
   ];
   const result = module.validateThroughput(claims, outputs, 2);
@@ -226,10 +226,10 @@ Deno.test('validateThroughput: no claims no outputs', () => {
 Deno.test('validateThroughput: self-claim value mismatch', () => {
   const { module } = setupModule();
   const claims: ClaimEntry[] = [
-    { index: 0, value: 50 },  // self-claim
+    { index: 0, value: 50 }, // self-claim
   ];
   const outputs: Output[] = [
-    makeOutput(30),  // self-claimed but different value
+    makeOutput(30), // self-claimed but different value
   ];
   const result = module.validateThroughput(claims, outputs, 1);
   assertFalse(result.ok);
@@ -273,7 +273,7 @@ Deno.test('computeClaimMask: no subtrees, single anchor claim', () => {
   const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [1], 1, 0);
   assert(result.ok);
   if (result.ok) {
-    assert(result.mask.get(0));   // anchor index 0 claimed
+    assert(result.mask.get(0)); // anchor index 0 claimed
     assertFalse(result.mask.get(1));
     assertFalse(result.mask.get(2));
   }
@@ -293,9 +293,9 @@ Deno.test('computeClaimMask: with subtree claims, own anchor claim skips claimed
   const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [5], 2, 3);
   assert(result.ok);
   if (result.ok) {
-    assert(result.mask.get(0));   // our claim maps to anchor[0]
-    assert(result.mask.get(1));   // subtree claim
-    assert(result.mask.get(3));   // subtree claim
+    assert(result.mask.get(0)); // our claim maps to anchor[0]
+    assert(result.mask.get(1)); // subtree claim
+    assert(result.mask.get(3)); // subtree claim
     assertFalse(result.mask.get(2));
     assertFalse(result.mask.get(4));
   }
@@ -328,9 +328,9 @@ Deno.test('computeClaimMask: multiple anchor claims map correctly', () => {
   const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [3, 5], 1, 2);
   assert(result.ok);
   if (result.ok) {
-    assert(result.mask.get(0));   // our claim
-    assert(result.mask.get(2));   // subtree claim
-    assert(result.mask.get(3));   // our claim
+    assert(result.mask.get(0)); // our claim
+    assert(result.mask.get(2)); // subtree claim
+    assert(result.mask.get(3)); // our claim
     assertFalse(result.mask.get(1));
     assertFalse(result.mask.get(4));
     assertFalse(result.mask.get(5));
@@ -348,7 +348,7 @@ Deno.test('buildBlock: simple leaf block', () => {
     anchor: genesis,
     outputs: [makeOutput(80), makeOutput(20)],
     claims: [
-      { index: 2, value: 100 },  // non-self: targets anchor output
+      { index: 2, value: 100 }, // non-self: targets anchor output
     ],
     declaredWeight: 10,
     aggregates: [],
@@ -380,8 +380,8 @@ Deno.test('buildBlock: leaf block with self-claim', () => {
     anchor: genesis,
     outputs: [makeOutput(50), makeOutput(100)],
     claims: [
-      { index: 0, value: 50 },   // self-claim
-      { index: 2, value: 100 },  // anchor claim
+      { index: 0, value: 50 }, // self-claim
+      { index: 2, value: 100 }, // anchor claim
     ],
     declaredWeight: 5,
     aggregates: [],
@@ -430,10 +430,10 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
 
   const spec: BlockSpec = {
     anchor: genesis,
-    outputs: [makeOutput(10)],   // aggregation incentive output
+    outputs: [makeOutput(10)], // aggregation incentive output
     claims: [
-      { index: 1, value: 5 },   // claim subtree1's output (inside subtree range)
-      { index: 5, value: 5 },   // claim subtree2's output (inside subtree range)
+      { index: 1, value: 5 }, // claim subtree1's output (inside subtree range)
+      { index: 5, value: 5 }, // claim subtree2's output (inside subtree range)
     ],
     declaredWeight: 2,
     aggregates: [subtree1, subtree2],
@@ -494,8 +494,8 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
     anchor: blockA,
     outputs: [makeOutput(10)],
     claims: [
-      { index: 1, value: 5 },   // subtree output
-      { index: 4, value: 5 },   // subtree output
+      { index: 1, value: 5 }, // subtree output
+      { index: 4, value: 5 }, // subtree output
     ],
     declaredWeight: 3,
     aggregates: [subtree1, subtree2],
@@ -625,8 +625,8 @@ Deno.test('buildBlock: block with only self-claims (no anchor claims)', () => {
     anchor: genesis,
     outputs: [makeOutput(50), makeOutput(25)],
     claims: [
-      { index: 0, value: 50 },  // self-claim
-      { index: 1, value: 25 },  // self-claim
+      { index: 0, value: 50 }, // self-claim
+      { index: 1, value: 25 }, // self-claim
     ],
     declaredWeight: 7,
     aggregates: [],

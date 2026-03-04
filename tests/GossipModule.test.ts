@@ -848,7 +848,11 @@ Deno.test({
   const smallPriority = smallActions.find((a) => a.peer === 'alice')?.priority ?? 0;
   const largePriority = largeActions.find((a) => a.peer === 'alice')?.priority ?? 0;
 
-  assertGreater(smallPriority, largePriority, 'smaller blocks should have higher priority per byte');
+  assertGreater(
+    smallPriority,
+    largePriority,
+    'smaller blocks should have higher priority per byte',
+  );
 });
 
 // === Integration: Full Gossip Flow ===

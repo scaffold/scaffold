@@ -1,4 +1,4 @@
-import { Strategy, ReactiveEvent, Action } from '../ReactiveLayer.ts';
+import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 import { Hash, HashPrimitive } from '../../util/Hash.ts';
 import { Block } from '../../core/Block.ts';
 import { ContractExecutor } from '../ContractExecutor.ts';
@@ -69,9 +69,7 @@ export class GenerationStrategy implements Strategy {
 
       // Determine if this is an incentive block: at least one output whose
       // contract hash is registered in the executor.
-      const matchedOutput = block.outputs.find((out) =>
-        this.executor.hasContract(out.contract),
-      );
+      const matchedOutput = block.outputs.find((out) => this.executor.hasContract(out.contract));
       if (!matchedOutput) {
         continue;
       }

@@ -3,9 +3,9 @@ import { createGenesisBlock } from '../../src/core/Block.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
 import {
+  recoverSignerPublicKey,
   signBlock,
   verifyBlockSignature,
-  recoverSignerPublicKey,
 } from '../../src/demo/SignedBlock.ts';
 
 function makeTestBlock() {

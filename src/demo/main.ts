@@ -1,6 +1,6 @@
-import { ANIMALS, AnimalName } from './Identity.ts';
+import { AnimalName, ANIMALS } from './Identity.ts';
 import { DemoNode } from './DemoNode.ts';
-import { startServer, connectToPeer } from './Transport.ts';
+import { connectToPeer, startServer } from './Transport.ts';
 
 // -- Argument parsing --
 
@@ -134,7 +134,12 @@ async function main(): Promise<void> {
           if (result.ok) {
             emit(node, { type: 'published', identity: targetName, message });
           } else {
-            emit(node, { type: 'publish_error', identity: targetName, message, error: result.error });
+            emit(node, {
+              type: 'publish_error',
+              identity: targetName,
+              message,
+              error: result.error,
+            });
           }
           break;
         }

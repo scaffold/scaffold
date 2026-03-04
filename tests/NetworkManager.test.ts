@@ -1,12 +1,8 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Block } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { TransportConnection, BlockSerializer } from '../src/node/PeerConnection.ts';
-import {
-  NetworkDriver,
-  NetworkManager,
-  NetworkPlugin,
-} from '../src/node/NetworkManager.ts';
+import { BlockSerializer, TransportConnection } from '../src/node/PeerConnection.ts';
+import { NetworkDriver, NetworkManager, NetworkPlugin } from '../src/node/NetworkManager.ts';
 
 // -- Mock helpers -----------------------------------------------------
 

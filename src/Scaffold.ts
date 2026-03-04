@@ -1,8 +1,8 @@
 import { Block, createBlock } from './core/Block.ts';
 import { Output } from './core/BlockCreationModule.ts';
-import { NodeContext, NodeConfig } from './node/NodeContext.ts';
-import { PutManager, PutRequest, PutResult, BlockProcessor } from './node/PutManager.ts';
-import { FetchManager, Verifier, FetchOptions, FetchHandle } from './node/FetchManager.ts';
+import { NodeConfig, NodeContext } from './node/NodeContext.ts';
+import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
+import { FetchHandle, FetchManager, FetchOptions, Verifier } from './node/FetchManager.ts';
 import { FetchNotifyStrategy } from './node/strategies/FetchNotifyStrategy.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 

@@ -1,6 +1,6 @@
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore } from './Block.ts';
-import { GossipModule, GossipConfig, GossipProvider } from './GossipModule.ts';
+import { GossipConfig, GossipModule, GossipProvider } from './GossipModule.ts';
 import { TrustService } from './TrustService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 

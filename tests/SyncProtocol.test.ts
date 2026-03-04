@@ -3,10 +3,10 @@ import { Hash } from '../src/util/Hash.ts';
 import { Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
 import { SyncProtocol } from '../src/node/SyncProtocol.ts';
 import {
-  PeerConnection,
-  TransportConnection,
   BlockSerializer,
+  PeerConnection,
   PeerMessage,
+  TransportConnection,
 } from '../src/node/PeerConnection.ts';
 
 // -- Test Helpers ---------------------------------------------------

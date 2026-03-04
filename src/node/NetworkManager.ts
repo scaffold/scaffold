@@ -1,5 +1,5 @@
 import { Block } from '../core/Block.ts';
-import { PeerConnection, BlockSerializer, TransportConnection } from './PeerConnection.ts';
+import { BlockSerializer, PeerConnection, TransportConnection } from './PeerConnection.ts';
 
 /** Network plugin interface - what the user provides. */
 export interface NetworkPlugin {

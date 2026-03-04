@@ -1,4 +1,4 @@
-import { Strategy, ReactiveEvent, Action } from '../ReactiveLayer.ts';
+import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 import { Hash, HashPrimitive } from '../../util/Hash.ts';
 
 /** Configuration for the sampling strategy. */

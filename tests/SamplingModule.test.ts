@@ -1,10 +1,6 @@
-import { assertEquals, assertAlmostEquals } from '@std/assert';
+import { assertAlmostEquals, assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
-import {
-  SamplingModule,
-  SamplingProvider,
-  WorkDistribution,
-} from '../src/core/SamplingModule.ts';
+import { SamplingModule, SamplingProvider, WorkDistribution } from '../src/core/SamplingModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

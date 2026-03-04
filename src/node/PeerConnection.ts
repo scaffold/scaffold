@@ -1,8 +1,8 @@
 import { Block } from '../core/Block.ts';
 import { Hash } from '../util/Hash.ts';
 import {
-  serialize as blockSerialize,
   deserialize as blockDeserialize,
+  serialize as blockSerialize,
 } from '../core/BlockSerializer.ts';
 
 // -- Wire message types -----------------------------------------------

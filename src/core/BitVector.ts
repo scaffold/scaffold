@@ -110,7 +110,7 @@ export class BitVector {
     const byteIdx = Math.floor(bitIdx / 8);
     const bitOffset = bitIdx % 8;
     if (value) {
-      chunk[byteIdx] |= (1 << bitOffset);
+      chunk[byteIdx] |= 1 << bitOffset;
     } else {
       chunk[byteIdx] &= ~(1 << bitOffset);
     }

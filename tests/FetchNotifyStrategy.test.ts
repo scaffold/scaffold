@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
-import { ReactiveEvent, FetchResult, VerifierKey } from '../src/node/ReactiveLayer.ts';
+import { FetchResult, ReactiveEvent, VerifierKey } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { FetchNotifyStrategy } from '../src/node/strategies/FetchNotifyStrategy.ts';
 import { FetchManager, Verifier } from '../src/node/FetchManager.ts';

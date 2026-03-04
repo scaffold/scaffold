@@ -15,15 +15,13 @@
     ]
   },
   "exclude": [
-    "dist/","coverage/",".claude/"
+    "dist/",
+    "coverage/",
+    ".claude/",
+    "avro/"
   ],
   "lint": {
-    "exclude": [
-      "avro",
-      "dist",
-      "tests/avro",
-      "viz"
-    ],
+    "exclude": ["viz"],
     "rules": {
       "tags": [
         "recommended"
@@ -51,11 +49,7 @@
     }
   },
   "fmt": {
-    "exclude": [
-      "README.md",
-      "avro",
-      "dist"
-    ],
+    "exclude": ["**/*.md"],
     "singleQuote": true,
     "lineWidth": 100
   },

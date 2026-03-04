@@ -1,7 +1,13 @@
 import { Block, BlockStore, createBlock, createGenesisBlock } from '../core/Block.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
-import { ReactiveLayer, Strategy, BlockCreator, VerifierKey, FetchResult } from './ReactiveLayer.ts';
+import {
+  BlockCreator,
+  FetchResult,
+  ReactiveLayer,
+  Strategy,
+  VerifierKey,
+} from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { ConflictService } from '../core/ConflictService.ts';
