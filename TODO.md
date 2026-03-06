@@ -36,8 +36,8 @@ Likely best starting point: option 4 (gossip-only, with peerInfo contract intere
 
 ## Structural
 
-### Block Header Schema
-Formal unified specification of block structure. Currently scattered: consensus sees weight vectors and aggregates sets, conflict sees claim masks and output counts, gossip sees size, trust sees collateral references. Should be one canonical schema that all modules reference.
+### ~~Block Header Schema~~ ✓
+Addressed: the block wire format now carries only structural primitives (anchor, aggregates, claims, outputs, declaredWeight, creator, signature). Domain-specific data (aggregation state, collateral targets, payment targets) lives in contract outputs. See [contracts.md](docs/protocol/contracts.md) and [block-creation.md](docs/protocol/block-creation.md).
 
 ## Computation DAG
 

@@ -6,7 +6,6 @@ import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ContractExecutor, ContractFn } from '../src/node/ContractExecutor.ts';
 import { GenerationStrategy } from '../src/node/strategies/GenerationStrategy.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { ZERO_HASH } from '../src/util/Hash.ts';
 
 // -- Test helpers ------------------------------------------------
@@ -29,20 +28,9 @@ function stubBlock(blockHash: Hash, outputs: Output[] = []): Block {
     hash: blockHash,
     anchor: ZERO_HASH,
     aggregates: [],
-    claimMask: BitVector.empty(0),
-    subtreeClaimMask: null,
-    ownOutputCount: outputs.length,
-    outputCount: outputs.length,
-    anchorOutputCount: 0,
-    aggregateOutputCounts: [],
     claims: [],
     outputs,
     declaredWeight: 1,
-    weightVector: [1],
-    size: 64,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 }
 

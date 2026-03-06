@@ -1,6 +1,5 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
@@ -36,29 +35,15 @@ function makeLeafBlock(
   outputs: Output[],
   declaredWeight: number,
 ): Block {
-  const anchorOutputCount = anchor.outputCount;
-  const claimMask = BitVector.empty(anchorOutputCount);
-  const outputCount = anchorOutputCount + outputs.length;
   const hash = Hash.digest(name);
 
   return {
     hash,
     anchor: anchor.hash,
     aggregates: [],
-    claimMask,
-    subtreeClaimMask: null,
-    ownOutputCount: outputs.length,
-    outputCount,
-    anchorOutputCount,
-    aggregateOutputCounts: [],
     claims: [],
     outputs,
     declaredWeight,
-    weightVector: [declaredWeight],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 }
 

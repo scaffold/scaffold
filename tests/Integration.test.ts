@@ -1,7 +1,15 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
+import {
+  AGGREGATION_CONTRACT,
+  Block,
+  BlockStore,
+  createBlock,
+  createGenesisBlock,
+  encodeAggregationData,
+  getBlockWeightVector,
+} from '../src/core/Block.ts';
 import { BitVector } from '../src/core/BitVector.ts';
-import { Block, BlockStore, createBlock, createGenesisBlock } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConflictService } from '../src/core/ConflictService.ts';
@@ -32,21 +40,6 @@ function makeLeafBlock(
   declaredWeight: number,
   claims: number[] = [],
 ): Block {
-  const anchorOutputCount = anchor.outputCount;
-  const claimMask = BitVector.empty(anchorOutputCount);
-  for (const idx of claims) {
-    // Map claim indices >= outputs.length to anchor space
-    if (idx >= outputs.length) {
-      const anchorIdx = idx - outputs.length;
-      if (anchorIdx < anchorOutputCount) {
-        claimMask.set(anchorIdx, true);
-      }
-    }
-  }
-
-  const outputCount = anchorOutputCount - claimMask.popcount() + outputs.length -
-    claims.filter((i) => i < outputs.length).length;
-
   // Compute hash
   const hashParts: Uint8Array[] = [
     anchor.hash.toBytes(),
@@ -63,20 +56,9 @@ function makeLeafBlock(
     hash,
     anchor: anchor.hash,
     aggregates: [],
-    claimMask,
-    subtreeClaimMask: null,
-    ownOutputCount: outputs.length,
-    outputCount,
-    anchorOutputCount,
-    aggregateOutputCounts: [],
     claims,
     outputs,
     declaredWeight,
-    weightVector: [declaredWeight],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 }
 
@@ -146,45 +128,23 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
   node.receiveBlock(genesis, null);
 
   // Two blocks anchored to genesis, both claiming output 0
-  // Block A: claims output index 1 (which maps to anchor index 0 since ownOutputCount=1)
+  // Block A: claims output index 1 (which maps to anchor index 0 since outputs.length=1)
   const blockA: Block = {
     hash: Hash.digest('blockA'),
     anchor: genesis.hash,
     aggregates: [],
-    claimMask: BitVector.fromIndices(2, [0]), // claims anchor output 0
-    subtreeClaimMask: null,
-    ownOutputCount: 1,
-    outputCount: 2, // 2 (anchor) - 1 (claimed) + 1 (new) = 2
-    anchorOutputCount: 2,
-    aggregateOutputCounts: [],
     claims: [1], // claim index 1 in extended vector = anchor output 0
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 50,
-    weightVector: [50],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 
   const blockB: Block = {
     hash: Hash.digest('blockB'),
     anchor: genesis.hash,
     aggregates: [],
-    claimMask: BitVector.fromIndices(2, [0]), // claims same anchor output 0
-    subtreeClaimMask: null,
-    ownOutputCount: 1,
-    outputCount: 2,
-    anchorOutputCount: 2,
-    aggregateOutputCounts: [],
     claims: [1], // same claim
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 30,
-    weightVector: [30],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 
   node.receiveBlock(blockA, null);
@@ -212,20 +172,9 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     hash: Hash.digest('flipA'),
     anchor: genesis.hash,
     aggregates: [],
-    claimMask: BitVector.fromIndices(2, [0]),
-    subtreeClaimMask: null,
-    ownOutputCount: 1,
-    outputCount: 2,
-    anchorOutputCount: 2,
-    aggregateOutputCounts: [],
     claims: [1],
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
-    weightVector: [10],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 
   // Block B: weight 15, claims same output 0
@@ -233,20 +182,9 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     hash: Hash.digest('flipB'),
     anchor: genesis.hash,
     aggregates: [],
-    claimMask: BitVector.fromIndices(2, [0]),
-    subtreeClaimMask: null,
-    ownOutputCount: 1,
-    outputCount: 2,
-    anchorOutputCount: 2,
-    aggregateOutputCounts: [],
     claims: [1],
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
-    weightVector: [15],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 
   node.receiveBlock(blockA, null);
@@ -261,20 +199,9 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     hash: Hash.digest('childA'),
     anchor: blockA.hash,
     aggregates: [],
-    claimMask: BitVector.empty(blockA.outputCount),
-    subtreeClaimMask: null,
-    ownOutputCount: 0,
-    outputCount: blockA.outputCount,
-    anchorOutputCount: blockA.outputCount,
-    aggregateOutputCounts: [],
     claims: [],
     outputs: [],
     declaredWeight: 100,
-    weightVector: [100],
-    size: 100,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 
   const result = node.receiveBlock(childA, null);
@@ -334,20 +261,9 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     hash: Hash.digest('subtreeA'),
     anchor: genesis.hash,
     aggregates: [],
-    claimMask: BitVector.fromIndices(4, [0]),
-    subtreeClaimMask: null,
-    ownOutputCount: 1,
-    outputCount: 4, // 4 - 1 + 1 = 4
-    anchorOutputCount: 4,
-    aggregateOutputCounts: [],
     claims: [1], // claims extended idx 1 = anchor output 0
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
-    weightVector: [10],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
   node.receiveBlock(subtreeA, null);
 
@@ -356,45 +272,34 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     hash: Hash.digest('subtreeB'),
     anchor: genesis.hash,
     aggregates: [],
-    claimMask: BitVector.fromIndices(4, [1]),
-    subtreeClaimMask: null,
-    ownOutputCount: 1,
-    outputCount: 4,
-    anchorOutputCount: 4,
-    aggregateOutputCounts: [],
     claims: [1], // claims extended idx 1 = anchor output 1
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
-    weightVector: [15],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
   node.receiveBlock(subtreeB, null);
 
   // Aggregation block: aggregates both subtrees, anchored to genesis
-  // Its claim mask against genesis should include both output 0 and 1
+  // Must include aggregation contract output with the aggregation data
   const mergedClaimMask = BitVector.fromIndices(4, [0, 1]);
+  const aggData = encodeAggregationData({
+    claimMask: mergedClaimMask,
+    outputCount: 10, // 4 (anchor) - 2 (subtree claims) + 4 + 4 + 0 - 0 = 10
+    aggregateOutputCounts: [4, 4],
+    chainWeights: [25], // subtreeA(10) + subtreeB(15) = 25
+    aggregateWeights: [10, 15],
+  });
+
   const aggBlock: Block = {
     hash: Hash.digest('aggBlock'),
     anchor: genesis.hash,
     aggregates: [subtreeA.hash, subtreeB.hash],
-    claimMask: mergedClaimMask,
-    subtreeClaimMask: mergedClaimMask,
-    ownOutputCount: 0,
-    // 4 (anchor) - 2 (subtree anchor claims) + 4 (subtreeA outputs) + 4 (subtreeB outputs) + 0 (own) - 0 (own claims) = 10
-    outputCount: 10,
-    anchorOutputCount: 4,
-    aggregateOutputCounts: [4, 4],
     claims: [],
-    outputs: [],
+    outputs: [{
+      contract: AGGREGATION_CONTRACT,
+      value: 0,
+      data: aggData,
+    }],
     declaredWeight: 5,
-    weightVector: [5, 10, 15], // [own, subtreeA at depth 1, subtreeB at depth 1]
-    size: 300,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [10, 15],
   };
 
   const result = node.receiveBlock(aggBlock, null);
@@ -402,13 +307,12 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
   // Aggregation block should be canonical
   assert(node.consensus.isCanonical(aggBlock.hash));
 
-  // Subtrees are aggregated by aggBlock, so they conflict with it
-  // (aggregation implies conflict in consensus) and aggBlock wins
-  // due to effective weight including descendant weight
+  // Subtrees are aggregated by aggBlock
   assert(node.store.has(aggBlock.hash));
 
-  // Weight vector has 3 elements
-  assertEquals(aggBlock.weightVector.length, 3);
+  // Weight vector should be reconstructed: [5 + 25] = [30]
+  const wv = getBlockWeightVector(aggBlock);
+  assertEquals(wv, [30]);
 });
 
 Deno.test('Integration: block creation through stack — BlockCreationService.buildBlock → createBlock → coordinator', () => {
@@ -437,7 +341,7 @@ Deno.test('Integration: block creation through stack — BlockCreationService.bu
   if (result.ok) {
     const blueprint = result.blueprint;
     assertEquals(blueprint.anchor.toPrimitive(), genesis.hash.toPrimitive());
-    assertEquals(blueprint.ownOutputCount, 1);
+    assertEquals(blueprint.outputs.length, 1);
     assertEquals(blueprint.declaredWeight, 25);
 
     // Create concrete block from blueprint

@@ -3,7 +3,6 @@ import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockProcessor, PutManager, PutRequest } from '../src/node/PutManager.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 
 // -- Test helpers ------------------------------------------------
 
@@ -20,20 +19,9 @@ function makeBlock(overrides?: Partial<Block>): Block {
     hash: Hash.random(),
     anchor: ZERO_HASH,
     aggregates: [],
-    claimMask: BitVector.empty(0),
-    subtreeClaimMask: null,
-    ownOutputCount: 0,
-    outputCount: 0,
-    anchorOutputCount: 0,
-    aggregateOutputCounts: [],
     claims: [],
     outputs: [],
     declaredWeight: 1,
-    weightVector: [1],
-    size: 0,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
     ...overrides,
   };
 }

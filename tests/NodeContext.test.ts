@@ -1,7 +1,6 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { Block } from '../src/core/Block.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { NodeConfig, NodeContext } from '../src/node/NodeContext.ts';
 import { Action, ReactiveEvent, Strategy } from '../src/node/ReactiveLayer.ts';
@@ -22,10 +21,6 @@ function makeLeafBlock(
   outputs: Output[],
   declaredWeight: number,
 ): Block {
-  const anchorOutputCount = anchor.outputCount;
-  const claimMask = BitVector.empty(anchorOutputCount);
-  const outputCount = anchorOutputCount + outputs.length;
-
   const hashParts: Uint8Array[] = [
     anchor.hash.toBytes(),
     new Uint8Array(new Float64Array([declaredWeight]).buffer),
@@ -41,20 +36,9 @@ function makeLeafBlock(
     hash,
     anchor: anchor.hash,
     aggregates: [],
-    claimMask,
-    subtreeClaimMask: null,
-    ownOutputCount: outputs.length,
-    outputCount,
-    anchorOutputCount,
-    aggregateOutputCounts: [],
     claims: [],
     outputs,
     declaredWeight,
-    weightVector: [declaredWeight],
-    size: 200,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 }
 

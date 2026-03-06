@@ -1,5 +1,5 @@
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore } from './Block.ts';
+import { Block, BlockStore, getAggregationData } from './Block.ts';
 import { TrustModule, TrustProvider } from './TrustModule.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
@@ -23,7 +23,8 @@ class TrustProviderAdapter implements TrustProvider<Block> {
   }
 
   getChildDeclaredWeight(block: Block, childIndex: number): number {
-    return block.childDeclaredWeights[childIndex] ?? 0;
+    const aggData = getAggregationData(block);
+    return aggData?.aggregateWeights[childIndex] ?? 0;
   }
 
   isAggregated(hash: Hash): boolean {

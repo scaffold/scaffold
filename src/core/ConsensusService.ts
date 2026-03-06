@@ -1,5 +1,5 @@
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore } from './Block.ts';
+import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
@@ -23,7 +23,7 @@ class ConsensusProviderAdapter implements ConsensusProvider<Block> {
   }
 
   getWeightVector(block: Block): number[] {
-    return block.weightVector;
+    return getBlockWeightVector(block);
   }
 }
 

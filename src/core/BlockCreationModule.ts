@@ -1,4 +1,4 @@
-// Protocol spec: docs/protocol/block-creation.md
+// Protocol spec: docs/protocol/block-creation.md, docs/protocol/contracts.md
 
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
@@ -19,9 +19,9 @@ export interface Output {
 export interface ClaimEntry {
   /**
    * Index into the extended output vector:
-   *   [own outputs (0..ownOutputCount-1), post-subtree surviving anchor outputs...]
+   *   [own outputs (0..outputs.length-1), post-subtree surviving anchor outputs...]
    *
-   * Indices < ownOutputCount are self-claims (produced and consumed atomically).
+   * Indices < outputs.length are self-claims (produced and consumed atomically).
    */
   index: number;
   /** Economic value of the claimed output. */
@@ -47,20 +47,15 @@ export interface BlockSpec {
 
 /**
  * Fully computed block ready for signing and distribution.
- * All structural fields are derived from the BlockSpec.
+ * Contains the wire-format fields plus any generated contract outputs.
  */
 export interface BlockBlueprint {
   anchor: Hash;
   aggregates: Hash[];
-  claimMask: BitVector;
-  subtreeClaimMask: BitVector | null;
-  aggregateOutputCounts: number[];
-  ownOutputCount: number;
   claims: number[];
+  /** All outputs: user-specified outputs + any generated contract outputs (e.g., aggregation). */
   outputs: Output[];
-  outputCount: number;
   declaredWeight: number;
-  weight: number[];
 }
 
 /** Result of attempting to build a block. */
@@ -111,6 +106,9 @@ export interface BlockCreationProvider<BlockType> {
    * Returns null if rebasing fails (chain broken, etc).
    */
   getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null;
+
+  /** Return the aggregation contract hash for generated outputs. */
+  getAggregationContract(): Hash;
 }
 
 // -- Module -------------------------------------------------------
@@ -121,6 +119,9 @@ export interface BlockCreationProvider<BlockType> {
  * It derives all structural fields: claim masks, weight vectors, output counts,
  * and aggregate output counts. It validates throughput balancing (value
  * conservation) and structural constraints.
+ *
+ * For aggregation blocks, it produces an aggregation contract output containing
+ * the computed AggregationData (claim mask, output count, chain weights, etc.).
  *
  * Fully self-contained — depends only on BlockCreationProvider, BitVector, and Hash.
  */
@@ -149,6 +150,7 @@ export class BlockCreationModule<BlockType> {
     const subtreeInfos: SubtreeInfo[] = [];
     const aggregateOutputCounts: number[] = [];
     const subtreeClaimMasks: BitVector[] = [];
+    const aggregateWeights: number[] = [];
     let totalSubtreeOutputs = 0;
     let subtreeAnchorClaims = 0;
 
@@ -176,6 +178,7 @@ export class BlockCreationModule<BlockType> {
       subtreeInfos.push({ anchorDepth: depth, weightVector: subtreeWeightVector });
       aggregateOutputCounts.push(subtreeOutputCount);
       subtreeClaimMasks.push(rebasedMask);
+      aggregateWeights.push(subtreeWeightVector[0] ?? 0);
       totalSubtreeOutputs += subtreeOutputCount;
       subtreeAnchorClaims += rebasedMask.popcount();
     }
@@ -243,28 +246,46 @@ export class BlockCreationModule<BlockType> {
       ownClaimCount,
     );
 
-    // 8. Derive weight vector
+    // 7. Derive weight vector
     const weight = this.deriveWeightVector(spec.declaredWeight, subtreeInfos);
 
-    // 9. Validate throughput
+    // 8. Validate throughput
     const throughputResult = this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
     if (!throughputResult.ok) {
       return { ok: false, error: throughputResult.error };
+    }
+
+    // 9. Build outputs array — user outputs + aggregation contract output (if aggregating)
+    const allOutputs = [...spec.outputs];
+
+    if (spec.aggregates.length > 0) {
+      // Compute chainWeights (weight vector without own declaredWeight)
+      const chainWeights = [...weight];
+      chainWeights[0] -= spec.declaredWeight;
+
+      // Encode aggregation data into a contract output
+      const aggDataJson = JSON.stringify({
+        claimMask: claimMask.mask.toJSON(),
+        outputCount,
+        aggregateOutputCounts,
+        chainWeights,
+        aggregateWeights,
+      });
+
+      allOutputs.push({
+        contract: this.provider.getAggregationContract(),
+        value: 0,
+        data: new TextEncoder().encode(aggDataJson),
+      });
     }
 
     // 10. Build blueprint
     const blueprint: BlockBlueprint = {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
-      claimMask: claimMask.mask,
-      subtreeClaimMask: spec.aggregates.length > 0 ? mergedSubtreeMask : null,
-      aggregateOutputCounts,
-      ownOutputCount,
       claims: spec.claims.map((c) => c.index),
-      outputs: spec.outputs,
-      outputCount,
+      outputs: allOutputs,
       declaredWeight: spec.declaredWeight,
-      weight,
     };
 
     return { ok: true, blueprint };

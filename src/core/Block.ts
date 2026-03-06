@@ -1,4 +1,4 @@
-// Protocol spec: docs/protocol/block-creation.md (block structure), docs/protocol/dag.md (graph topology)
+// Protocol spec: docs/protocol/block-creation.md (block structure), docs/protocol/contracts.md (standard contracts), docs/protocol/dag.md (graph topology)
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
@@ -7,34 +7,137 @@ import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 /** Genesis blocks use this as their declared weight (very high). */
 export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
 
+/** Well-known contract hash for aggregation contract outputs. */
+export const AGGREGATION_CONTRACT = Hash.digest('aggregation-contract');
+
+/** Well-known contract hash for collateral contract outputs. */
+export const COLLATERAL_CONTRACT = Hash.digest('collateral-contract');
+
+/** Well-known contract hash for signature (payment) contract outputs. */
+export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
+
+// -- AggregationData -----------------------------------------------
+
+/**
+ * Aggregation summary carried in an aggregation contract output's data field.
+ * Contains the cached UTXO transformation state computed from subtrees.
+ */
+export interface AggregationData {
+  /** Composed claim mask from subtrees (rebased + merged + own claims). */
+  claimMask: BitVector;
+  /** Total outputs after full transformation. */
+  outputCount: number;
+  /** Per-subtree output counts. */
+  aggregateOutputCounts: number[];
+  /** Weight vector from subtrees only (excludes own declaredWeight). */
+  chainWeights: number[];
+  /** Per-subtree declared weights. */
+  aggregateWeights: number[];
+}
+
+/** Encode AggregationData to a Uint8Array for use in Output.data. */
+export function encodeAggregationData(data: AggregationData): Uint8Array {
+  const json = JSON.stringify({
+    claimMask: data.claimMask.toJSON(),
+    outputCount: data.outputCount,
+    aggregateOutputCounts: data.aggregateOutputCounts,
+    chainWeights: data.chainWeights,
+    aggregateWeights: data.aggregateWeights,
+  });
+  return new TextEncoder().encode(json);
+}
+
+/** Decode AggregationData from an Output.data Uint8Array. */
+export function decodeAggregationData(bytes: Uint8Array): AggregationData {
+  const json = JSON.parse(new TextDecoder().decode(bytes));
+  return {
+    claimMask: BitVector.fromJSON(json.claimMask),
+    outputCount: json.outputCount,
+    aggregateOutputCounts: json.aggregateOutputCounts,
+    chainWeights: json.chainWeights,
+    aggregateWeights: json.aggregateWeights,
+  };
+}
+
+/**
+ * Find and decode the aggregation contract output from a block's outputs.
+ * Returns null if the block has no aggregation contract output (leaf block).
+ */
+export function getAggregationData(block: Block): AggregationData | null {
+  for (const output of block.outputs) {
+    if (Hash.equals(output.contract, AGGREGATION_CONTRACT)) {
+      return decodeAggregationData(output.data);
+    }
+  }
+  return null;
+}
+
+/**
+ * Get the claim mask for a block: from aggregation data if present,
+ * otherwise computed from claims for leaf blocks.
+ * For leaf blocks, requires the anchor block to determine the anchor output count.
+ * Returns null if insufficient data is available.
+ */
+export function getBlockClaimMask(block: Block, anchorOutputCount: number): BitVector {
+  const aggData = getAggregationData(block);
+  if (aggData) return aggData.claimMask;
+  // Leaf block: compute from own claims
+  const ownOutputCount = block.outputs.length;
+  const mask = BitVector.empty(anchorOutputCount);
+  for (const claimIdx of block.claims) {
+    if (claimIdx >= ownOutputCount) {
+      // Map to anchor output index: claim targets surviving anchor output
+      const anchorIdx = claimIdx - ownOutputCount;
+      if (anchorIdx < anchorOutputCount) {
+        mask.set(anchorIdx, true);
+      }
+    }
+  }
+  return mask;
+}
+
+/**
+ * Get the output count for a block: from aggregation data if present,
+ * otherwise derived as a leaf block.
+ */
+export function getBlockOutputCount(block: Block): number {
+  const aggData = getAggregationData(block);
+  if (aggData) return aggData.outputCount;
+  // Leaf block or genesis: anchor's output count - own claims + own outputs
+  // For genesis: outputs.length
+  // For leaf blocks without aggregation data, we need the anchor's output count
+  // which we don't have here. This function is only valid when aggData exists
+  // or for genesis blocks.
+  return block.outputs.length;
+}
+
+/**
+ * Get the weight vector for a block: reconstructed from declaredWeight + chainWeights.
+ */
+export function getBlockWeightVector(block: Block): number[] {
+  const aggData = getAggregationData(block);
+  if (aggData && aggData.chainWeights.length > 0) {
+    const result = [...aggData.chainWeights];
+    result[0] += block.declaredWeight;
+    return result;
+  }
+  return [block.declaredWeight];
+}
+
 // -- Block interface ------------------------------------------------
 
-/** Concrete block type with all fields needed by every provider. */
+/**
+ * Concrete block type: wire format + computed hash.
+ * Domain-specific data (aggregation state, collateral, payment) is
+ * carried in contract outputs within the outputs array.
+ */
 export interface Block {
-  // Structural
   readonly hash: Hash;
   readonly anchor: Hash;
   readonly aggregates: Hash[];
-  readonly claimMask: BitVector;
-  readonly subtreeClaimMask: BitVector | null;
-  readonly ownOutputCount: number;
-  readonly outputCount: number;
-  readonly anchorOutputCount: number;
-  readonly aggregateOutputCounts: number[];
   readonly claims: number[];
   readonly outputs: Output[];
-
-  // Weight
   readonly declaredWeight: number;
-  readonly weightVector: number[];
-
-  // Gossip
-  readonly size: number;
-  readonly collateralTarget: Hash | undefined;
-  readonly paymentTarget: string | undefined;
-
-  // Trust
-  readonly childDeclaredWeights: number[];
 }
 
 // -- BlockStore -----------------------------------------------------
@@ -106,30 +209,18 @@ export class BlockStore {
 // -- Factory functions ----------------------------------------------
 
 /**
- * Create a Block from a BlockBlueprint, the resolved anchor block, and extras.
+ * Create a Block from a BlockBlueprint and the resolved anchor block.
  * Computes the hash by digesting a canonical representation of the block data.
  */
 export function createBlock(
   blueprint: BlockBlueprint,
   anchorBlock: Block,
-  extras?: {
-    collateralTarget?: Hash;
-    paymentTarget?: string;
-  },
 ): Block {
-  const anchorOutputCount = anchorBlock.outputCount;
-
-  // Compute child declared weights from aggregates
-  const childDeclaredWeights: number[] = [];
-  // For now, each aggregate's weight[0] is its declared weight contribution
-  // The parent stores what it claims each child contributes
-
   // Compute a deterministic hash from block contents
   const hashParts: Uint8Array[] = [
     blueprint.anchor.toBytes(),
     ...blueprint.aggregates.map((a) => a.toBytes()),
     new Uint8Array(new Float64Array([blueprint.declaredWeight]).buffer),
-    new Uint8Array(new Float64Array([blueprint.outputCount]).buffer),
   ];
   for (const out of blueprint.outputs) {
     hashParts.push(out.contract.toBytes());
@@ -142,33 +233,13 @@ export function createBlock(
 
   const hash = Hash.digestParts(...hashParts);
 
-  // Estimate size (rough serialization size)
-  let size = 32 + 32; // hash + anchor
-  size += blueprint.aggregates.length * 32; // aggregate hashes
-  size += blueprint.claims.length * 4; // claim indices
-  for (const out of blueprint.outputs) {
-    size += 32 + 8 + out.data.length; // contract hash + value + data
-  }
-  size += blueprint.weight.length * 8; // weight vector
-
   const block: Block = {
     hash,
     anchor: blueprint.anchor,
     aggregates: blueprint.aggregates,
-    claimMask: blueprint.claimMask,
-    subtreeClaimMask: blueprint.subtreeClaimMask,
-    ownOutputCount: blueprint.ownOutputCount,
-    outputCount: blueprint.outputCount,
-    anchorOutputCount,
-    aggregateOutputCounts: blueprint.aggregateOutputCounts,
     claims: blueprint.claims,
     outputs: blueprint.outputs,
     declaredWeight: blueprint.declaredWeight,
-    weightVector: blueprint.weight,
-    size,
-    collateralTarget: extras?.collateralTarget,
-    paymentTarget: extras?.paymentTarget,
-    childDeclaredWeights,
   };
 
   return block;
@@ -189,28 +260,12 @@ export function createGenesisBlock(outputs: Output[]): Block {
   }
   const hash = Hash.digestParts(...hashParts);
 
-  let size = 32;
-  for (const out of outputs) {
-    size += 32 + 8 + out.data.length;
-  }
-
   return {
     hash,
     anchor: ZERO_HASH,
     aggregates: [],
-    claimMask: BitVector.empty(0),
-    subtreeClaimMask: null,
-    ownOutputCount: outputs.length,
-    outputCount: outputs.length,
-    anchorOutputCount: 0,
-    aggregateOutputCounts: [],
     claims: [],
     outputs,
     declaredWeight: GENESIS_WEIGHT,
-    weightVector: [],
-    size,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 }

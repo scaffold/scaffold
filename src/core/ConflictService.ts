@@ -1,6 +1,6 @@
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
-import { Block, BlockStore } from './Block.ts';
+import { Block, BlockStore, getAggregationData, getBlockOutputCount } from './Block.ts';
 import { ConflictModule, ConflictProvider } from './ConflictModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
@@ -20,30 +20,45 @@ class ConflictProviderAdapter implements ConflictProvider<Block> {
   }
 
   getClaimMask(block: Block): BitVector | null {
-    return block.subtreeClaimMask;
+    if (block.aggregates.length === 0) return null;
+    const aggData = getAggregationData(block);
+    return aggData?.claimMask ?? null;
   }
 
   getAggregateOutputCounts(block: Block): number[] {
-    return block.aggregateOutputCounts;
+    const aggData = getAggregationData(block);
+    return aggData?.aggregateOutputCounts ?? [];
   }
 
   getOwnClaims(block: Block): BitVector {
+    const outputCount = this.getOutputCount(block);
     return BitVector.fromIndices(
-      block.outputCount,
+      outputCount,
       block.claims,
     );
   }
 
   getOwnOutputCount(block: Block): number {
-    return block.ownOutputCount;
+    return block.outputs.length;
   }
 
   getOutputCount(block: Block): number {
-    return block.outputCount;
+    const aggData = getAggregationData(block);
+    if (aggData) return aggData.outputCount;
+    // Leaf block: need anchor's output count to compute
+    const anchorBlock = this.store.get(block.anchor);
+    if (!anchorBlock) return block.outputs.length; // genesis
+    const anchorOutputCount = this.getOutputCount(anchorBlock);
+    // Leaf: anchorOutputCount - own anchor claims + own outputs
+    const ownAnchorClaims = block.claims.filter((c) => c >= block.outputs.length).length;
+    return anchorOutputCount - ownAnchorClaims + block.outputs.length -
+      block.claims.filter((c) => c < block.outputs.length).length;
   }
 
   getAnchorOutputCount(block: Block): number {
-    return block.anchorOutputCount;
+    const anchorBlock = this.store.get(block.anchor);
+    if (!anchorBlock) return 0; // genesis
+    return this.getOutputCount(anchorBlock);
   }
 
   getChildren(block: Block): Hash[] {

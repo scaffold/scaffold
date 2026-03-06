@@ -1,7 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { AggregationStrategy } from '../src/node/strategies/AggregationStrategy.ts';
@@ -25,20 +24,9 @@ function makeBlock(
     hash,
     anchor,
     aggregates,
-    claimMask: BitVector.empty(0),
-    subtreeClaimMask: null,
-    ownOutputCount: 0,
-    outputCount: 0,
-    anchorOutputCount: 0,
-    aggregateOutputCounts: [],
     claims: [],
     outputs: [],
     declaredWeight: 1,
-    weightVector: [1],
-    size: 64,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   } satisfies Block;
 }
 

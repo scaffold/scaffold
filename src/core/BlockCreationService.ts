@@ -1,6 +1,12 @@
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
-import { Block, BlockStore } from './Block.ts';
+import {
+  AGGREGATION_CONTRACT,
+  Block,
+  BlockStore,
+  getBlockOutputCount,
+  getBlockWeightVector,
+} from './Block.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
@@ -24,11 +30,11 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
   }
 
   getOutputCount(block: Block): number {
-    return block.outputCount;
+    return getBlockOutputCount(block);
   }
 
   getWeightVector(block: Block): number[] {
-    return block.weightVector;
+    return getBlockWeightVector(block);
   }
 
   getAnchorDepth(from: Hash, ancestor: Hash): number | undefined {
@@ -39,6 +45,10 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
     const result = this.conflict.rebase(blockHash, targetAnchor);
     if (!result) return null;
     return result.mask;
+  }
+
+  getAggregationContract(): Hash {
+    return AGGREGATION_CONTRACT;
   }
 }
 

@@ -1,5 +1,5 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore } from '../core/Block.ts';
+import { Block, BlockStore, getBlockClaimMask } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { SignedBlock, verifyBlockSignature } from './SignedBlock.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
@@ -84,24 +84,25 @@ export function validateSignedBlock(sb: SignedBlock, store: BlockStore): Validat
  * extended output vector.
  *
  * Extended vector layout from the claiming block's perspective:
- *   [own outputs (0..ownOutputCount-1), surviving anchor outputs...]
+ *   [own outputs (0..outputs.length-1), surviving anchor outputs...]
  *
- * For non-self claims (index >= ownOutputCount), we need to find the actual
+ * For non-self claims (index >= outputs.length), we need to find the actual
  * Output object from the anchor's extended vector.
  */
 function resolveClaimedOutputs(block: Block, anchorBlock: Block, store: BlockStore): Output[] {
   const results: Output[] = [];
   const anchorExtended = collectExtendedOutputs(anchorBlock, store);
+  const ownOutputCount = block.outputs.length;
 
   for (const claimIndex of block.claims) {
-    if (claimIndex < block.ownOutputCount) {
+    if (claimIndex < ownOutputCount) {
       // Self-claim — claims own output, skip
       continue;
     }
 
     // Map from extended vector index to anchor's extended outputs
     // Index into anchor extended = claimIndex - ownOutputCount
-    const anchorIdx = claimIndex - block.ownOutputCount;
+    const anchorIdx = claimIndex - ownOutputCount;
     if (anchorIdx < anchorExtended.length) {
       results.push(anchorExtended[anchorIdx]);
     }
@@ -128,10 +129,11 @@ function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   if (!anchorBlock) return result;
 
   const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
+  const claimMask = getBlockClaimMask(block, anchorOutputs.length);
 
   // Add surviving anchor outputs (those not claimed by this block)
   for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!block.claimMask.get(i)) {
+    if (!claimMask.get(i)) {
       result.push(anchorOutputs[i]);
     }
   }

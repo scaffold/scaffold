@@ -22,29 +22,23 @@ This module is **not** responsible for:
 
 A block is the fundamental unit of work. It represents a claim: "given these inputs, running this computation produces these outputs," anchored to a specific position in the block graph.
 
+The wire format carries only structural primitives:
+
 ```
 Block {
-    // -- Structural --
-    anchor:               Hash            // parent in the anchor chain (genesis uses the zero hash)
-    aggregates:           Set<Hash>       // blocks this block replaces
-    claimMask:            MerkleRoot      // all claims against anchor outputs (subtree + own)
-    aggregateOutputCounts: Number[]       // per-subtree output counts
-    ownOutputCount:       Number          // outputs this block itself produces
-    claims:               Index[]         // indices into extended vector (own outputs + post-subtree)
-    outputs:              Output[]        // new outputs this block produces
-    outputCount:          Number          // total outputs after full transformation
-
-    // -- Weight --
-    declaredWeight:       Number          // work this block itself contributes
-    weight:               Number[]        // weight vector, structurally derived (see Weight Vector)
-
-    // -- Identity --
-    creator:              PublicKey       // block creator
-    signature:            Signature       // creator's signature over the block
+    anchor:         Hash         // parent in the anchor chain (genesis uses the zero hash)
+    aggregates:     Hash[]       // blocks this block replaces
+    claims:         Index[]      // indices into extended vector (own outputs + post-subtree)
+    outputs:        Output[]     // new outputs this block produces
+    declaredWeight: Number       // work this block itself contributes
+    creator:        PublicKey    // block creator
+    signature:      Signature    // creator's signature over the block
 }
 ```
 
-Blocks are identified by their hash. Once created, a block is immutable.
+Blocks are identified by their hash, computed from the signed serialized bytes. `outputs.length` gives the block's own output count. Serialization length gives the block size. These are not wire fields.
+
+Domain-specific data — aggregation state (claim masks, weight vectors, output counts), collateral targets, payment targets — is carried in [contract outputs](contracts.md), not block-level fields. Protocol modules access this data through their provider interfaces.
 
 ---
 
@@ -101,30 +95,31 @@ For the full specification of output transformation, conflict detection, and reb
 
 ## Weight Vector
 
-The weight vector attributes work to the correct levels of the anchor chain. It is **structurally derived** — deterministically computable from the block's `declaredWeight` and its subtrees' weight vectors.
+The weight vector attributes work to the correct levels of the anchor chain. It is deterministically computable from the block's `declaredWeight` and its subtrees' weight vectors.
 
 ### Leaf Block (no subtrees)
 
-```
-weight = [declaredWeight, 0, 0, ...]
-```
-
-All work is attributed to the direct anchor.
+A leaf block has only `declaredWeight`, attributed at depth 0. Its weight vector is `[declaredWeight]`.
 
 ### Aggregation Block
+
+Aggregation blocks carry `chainWeights` in their [aggregation contract](contracts.md) output. The `chainWeights` vector captures weight from subtrees only — it excludes the block's own `declaredWeight`.
 
 Each subtree Si is anchored at some depth di relative to this block's anchor (di = 0 means same anchor, di = 1 means the subtree anchors to this block's anchor's anchor, etc.).
 
 ```
-weight[d] = (d == 0 ? declaredWeight : 0)
-           + sum(Si.weight[d - di] for each subtree Si where d >= di)
+chainWeights[d] = sum(Si.weight[d - di] for each subtree Si where d >= di)
 ```
 
-The aggregation block's own `declaredWeight` contributes at depth 0. Each subtree's weight vector is shifted by its anchor depth and added in.
+The full weight vector for consensus is reconstructed as:
+
+```
+weightVector = [declaredWeight + chainWeights[0], chainWeights[1], ...]
+```
 
 ### Verification
 
-The structural verification module checks that `weight` is correctly derived from the block's `declaredWeight` and its subtrees. It does **not** verify that `declaredWeight` is honest — that is an open design question documented in [weight.md](weight.md).
+Weight derivation is verified through the [aggregation contract](contracts.md) — the `chainWeights` in the contract output are checked against the subtrees' weight vectors. This makes weight verification disputable through the same sampling/collateral mechanism as any other computation. The protocol does **not** verify that `declaredWeight` is honest — that is an open design question documented in [weight.md](weight.md).
 
 ---
 
@@ -195,12 +190,14 @@ Typical aggregation block I/O:
 2. **Rebase subtrees**: For each subtree, rebase its claim mask from its anchor to the aggregation anchor (see [conflict module](conflict.md) rebasing). If rebasing detects a conflict (subtree claims an output already spent by the chain), exclude that subtree.
 3. **Merge claim masks**: Union all rebased claim masks. If two subtrees claim the same anchor output, they conflict and cannot be aggregated together.
 4. **Add own claims**: The aggregation block claims the aggregation incentive outputs from its subtrees.
-5. **Compute weight vector**: Attribute each subtree's weight to the correct chain depth based on its anchor position relative to the aggregation anchor.
+5. **Compute weight and aggregation data**: Attribute each subtree's weight to the correct chain depth based on its anchor position relative to the aggregation anchor. Store the result as an [aggregation contract](contracts.md) output with claim mask, output counts, and chain weights.
 6. **Set aggregates**: The set of block hashes being replaced.
 
 ### Contracts Satisfied
 
 An aggregation block satisfies the aggregation contracts on its subtrees' incentive outputs. These contracts verify that the claiming block aggregates (replaces) the block that produced the output. The aggregation block should claim all available aggregation incentive outputs from its subtrees.
+
+The aggregation block itself produces an aggregation contract output carrying the aggregation summary (claim mask, output count, weight attribution). This data is consumed by the conflict, consensus, and trust modules through their provider interfaces.
 
 ---
 
@@ -250,13 +247,11 @@ The full reactive strategy system (conditional draft generators that respond to 
 The structural verification module checks block-specific properties that are computable from the block itself (and its inputs), without running contract WASM. A block is **structurally valid** if:
 
 1. **Anchor reference**: The anchor exists and is well-formed (genesis anchors to the zero hash).
-2. **Claim indices**: All claim indices are valid — self-claims have index < `ownOutputCount`, shared-resource claims have index < `ownOutputCount` + post-subtree vector length.
-3. **Claim mask consistency**: `claimMask` correctly represents all claims against anchor outputs (from subtrees and own non-self claims).
-4. **Output count**: `outputCount` equals the actual count after full transformation.
-5. **Weight vector**: `weight` is correctly derived from `declaredWeight` and subtrees' weight vectors (see Weight Vector).
-6. **Throughput balance**: `sum(input_values) == sum(output_values)` (value conservation).
-7. **Signature**: The block's signature is valid for the declared creator.
-8. **Aggregation structure**: `aggregateOutputCounts` matches the subtrees. Subtree ordering is consistent.
+2. **Claim indices**: All claim indices are valid — self-claims have index < `outputs.length`, shared-resource claims have index < `outputs.length` + post-subtree vector length.
+3. **Throughput balance**: `sum(input_values) == sum(output_values)` (value conservation).
+4. **Signature**: The block's signature is valid for the declared creator.
+
+Checks that were previously structural — claim mask consistency, output count, weight vector derivation, aggregate output counts — are now [contractual verification](contracts.md). The aggregation contract output carries this data, and its correctness is verified (and disputable) through the same sampling/collateral mechanism as any other contract.
 
 Structural verification does **not** check:
 - Whether `declaredWeight` is honest (see [weight.md](weight.md)).
@@ -268,6 +263,8 @@ Structural verification does **not** check:
 ## Collateral Separation
 
 Work and collateral must be in separate blocks. If a work block H is found invalid and removed from the canonical view, any collateral output inside H would also be removed — making it impossible for verifiers to claim fraud rewards. The [trust module](trust.md) enforces this: collateral block C must not be H itself, and must not be a descendant of H.
+
+The separation rule is a property of the [collateral contract's](contracts.md) spending conditions — not a block-level structural constraint.
 
 ---
 
@@ -301,10 +298,10 @@ Work and collateral must be in separate blocks. If a work block H is found inval
 
 1. **Value conservation**: Every block balances input and output throughput exactly.
 2. **Anchor validity**: All claimed outputs exist in the UTXO set at the anchor point.
-3. **Weight derivation**: The weight vector is deterministically derived from `declaredWeight` and subtrees.
-4. **Claim mask completeness**: `claimMask` includes all claims against anchor outputs from any source within the block.
-5. **Self-claim exclusion**: Self-claims (index < `ownOutputCount`) never appear in `claimMask`.
-6. **Collateral independence**: Collateral blocks are never the same block as the work they vouch for, and never descendants of it.
+3. **Weight derivation**: The weight vector is deterministically derived from `declaredWeight` and subtrees (verified via the [aggregation contract](contracts.md)).
+4. **Claim mask completeness**: The claim mask (in the aggregation contract output) includes all claims against anchor outputs from any source within the block.
+5. **Self-claim exclusion**: Self-claims (index < `outputs.length`) never appear in the claim mask.
+6. **Collateral independence**: Collateral blocks are never the same block as the work they vouch for, and never descendants of it (enforced by the [collateral contract](contracts.md)).
 7. **Aggregation minimality**: Aggregation blocks have minimal I/O — only what's needed to collect fees and incentivize further aggregation.
 
 ---

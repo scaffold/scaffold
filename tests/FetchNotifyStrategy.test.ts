@@ -7,7 +7,6 @@ import { FetchNotifyStrategy } from '../src/node/strategies/FetchNotifyStrategy.
 import { FetchManager, Verifier } from '../src/node/FetchManager.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { ZERO_HASH } from '../src/util/Hash.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 
 // -- Test helpers ------------------------------------------------
 
@@ -33,20 +32,9 @@ function stubBlock(blockHash: Hash, outputs: Output[]): Block {
     hash: blockHash,
     anchor: ZERO_HASH,
     aggregates: [],
-    claimMask: BitVector.empty(0),
-    subtreeClaimMask: null,
-    ownOutputCount: outputs.length,
-    outputCount: outputs.length,
-    anchorOutputCount: 0,
-    aggregateOutputCounts: [],
     claims: [],
     outputs,
     declaredWeight: 1,
-    weightVector: [],
-    size: 0,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   } satisfies Block;
 }
 

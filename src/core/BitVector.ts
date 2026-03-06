@@ -175,6 +175,22 @@ export class BitVector {
     return new BitVector(this._length, newChunks);
   }
 
+  /** Serialize to a JSON-safe representation. */
+  toJSON(): { length: number; chunks: (number[] | null)[] } {
+    return {
+      length: this._length,
+      chunks: this.chunks.map((c) => c ? Array.from(c) : null),
+    };
+  }
+
+  /** Deserialize from a JSON representation. */
+  static fromJSON(json: { length: number; chunks: (number[] | null)[] }): BitVector {
+    const chunks = json.chunks.map(
+      (c) => c ? new Uint8Array(c) : null,
+    );
+    return new BitVector(json.length, chunks);
+  }
+
   /** Bitwise OR: merge another bit vector's set bits into this one. */
   or(other: BitVector): void {
     const minChunks = Math.min(this.chunks.length, other.chunks.length);

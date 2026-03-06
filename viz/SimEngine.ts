@@ -1,5 +1,5 @@
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
-import { Block, BlockStore } from '../src/core/Block.ts';
+import { Block, BlockStore, getBlockWeightVector } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { BlockAwareness } from '../src/core/GossipModule.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
@@ -364,7 +364,7 @@ export class SimEngine {
     node.scaffold.context.processBlock(msg.block, this.nodeNames[msg.from]);
 
     // Weight-gated forwarding to further connected peers
-    const weightSum = msg.block.weightVector.reduce((a, b) => a + b, 0);
+    const weightSum = getBlockWeightVector(msg.block).reduce((a, b) => a + b, 0);
     const forwardProb = Math.min(1, weightSum / this.forwardThreshold);
 
     for (let i = 0; i < this.nodes.length; i++) {

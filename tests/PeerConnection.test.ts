@@ -133,8 +133,6 @@ Deno.test('block round-trip preserves block fields', () => {
   assertEquals(received.hash.toHex(), block.hash.toHex());
   assertEquals(received.anchor, block.anchor);
   assertEquals(received.aggregates.length, block.aggregates.length);
-  assertEquals(received.ownOutputCount, block.ownOutputCount);
-  assertEquals(received.outputCount, block.outputCount);
   assertEquals(received.declaredWeight, block.declaredWeight);
   assertEquals(received.outputs.length, block.outputs.length);
 });

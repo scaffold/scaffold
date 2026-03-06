@@ -1,5 +1,5 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore } from '../core/Block.ts';
+import { Block, BlockStore, getBlockClaimMask } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { AnimalName, ANIMALS, deriveIdentity } from './Identity.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
@@ -98,9 +98,10 @@ function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   if (!anchorBlock) return result;
 
   const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
+  const claimMask = getBlockClaimMask(block, anchorOutputs.length);
 
   for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!block.claimMask.get(i)) {
+    if (!claimMask.get(i)) {
       result.push(anchorOutputs[i]);
     }
   }

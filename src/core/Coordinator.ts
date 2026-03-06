@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/overview.md (module orchestration)
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, createBlock } from './Block.ts';
+import { Block, BlockStore, createBlock, getBlockWeightVector } from './Block.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
@@ -67,8 +67,9 @@ export class Coordinator {
       this.consensus.addConflict(a, b);
     }
 
-    // Trust declared weight initially
-    this.consensus.setVerifiedWeight(block.hash, block.weightVector);
+    // Trust declared weight initially — reconstruct weight vector from block
+    const weightVector = getBlockWeightVector(block);
+    this.consensus.setVerifiedWeight(block.hash, weightVector);
 
     // 4. Gossip
     const pushActions = this.gossip.blockReceived(block.hash, fromPeer);

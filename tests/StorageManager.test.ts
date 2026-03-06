@@ -1,7 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block } from '../src/core/Block.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { BlockSerializer, StorageManager, StoragePlugin } from '../src/node/StorageManager.ts';
 import { deserialize, serialize } from '../src/core/BlockSerializer.ts';
 
@@ -48,20 +47,9 @@ function makeBlock(name: string): Block {
     hash,
     anchor: ZERO_HASH,
     aggregates: [],
-    claimMask: BitVector.empty(0),
-    subtreeClaimMask: null,
-    ownOutputCount: 0,
-    outputCount: 0,
-    anchorOutputCount: 0,
-    aggregateOutputCounts: [],
     claims: [],
     outputs: [],
     declaredWeight: 1,
-    weightVector: [1],
-    size: 32,
-    collateralTarget: undefined,
-    paymentTarget: undefined,
-    childDeclaredWeights: [],
   };
 }
 
@@ -159,16 +147,7 @@ Deno.test('StorageManager: serialization roundtrip through save/restore', async 
 
   assertEquals(restored.hash.toHex(), original.hash.toHex());
   assertEquals(restored.declaredWeight, original.declaredWeight);
-  assertEquals(restored.weightVector, original.weightVector);
-  assertEquals(restored.size, original.size);
-  assertEquals(restored.ownOutputCount, original.ownOutputCount);
-  assertEquals(restored.outputCount, original.outputCount);
-  assertEquals(restored.anchorOutputCount, original.anchorOutputCount);
-  assertEquals(restored.aggregateOutputCounts, original.aggregateOutputCounts);
   assertEquals(restored.claims, original.claims);
   assertEquals(restored.outputs, original.outputs);
-  assertEquals(restored.childDeclaredWeights, original.childDeclaredWeights);
   assertEquals(restored.anchor, original.anchor);
-  assertEquals(restored.collateralTarget, original.collateralTarget);
-  assertEquals(restored.paymentTarget, original.paymentTarget);
 });

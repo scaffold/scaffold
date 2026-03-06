@@ -201,6 +201,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Trust](trust.md) | Economic incentives | What happens if a block is fraudulent? |
 | [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
+| [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
 | [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
