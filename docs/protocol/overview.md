@@ -204,6 +204,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
 | [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
+| [Output Data](output-data.md) | Data format | How is output data encoded and inspected? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.
