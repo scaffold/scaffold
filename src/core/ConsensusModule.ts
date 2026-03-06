@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/consensus.md
+
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 
 /** Provider interface for the consensus module to access block data. */

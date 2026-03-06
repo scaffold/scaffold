@@ -67,3 +67,9 @@ This is a rational economic strategy, not an attack. It serves the network by ma
 3. **Reputation effects**: Nodes caught publishing invalid blocks may be deprioritized by peers in the gossip module. Does this create a secondary cost that suppresses the fraud rate below the healthy equilibrium?
 4. **Spiral risk**: Could the fraud rate spiral upward? Likely self-limiting — higher fraud → more verification → more catching → lower fraud. But worth modeling formally.
 5. **Verification cartels**: Can verifiers and publishers collude (publisher tips off verifier, they split the reward)? This may not be harmful — the collateral still gets claimed, and the verification still happens. The "victim" is the aggregator who should have probed more carefully.
+
+---
+
+## Implementation
+
+No implementation yet — this is a future consideration pending the dispute module.

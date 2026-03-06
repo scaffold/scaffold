@@ -182,3 +182,15 @@ Many blocks can anchor to the same block simultaneously. Most are compatible (no
 **Sampling**: Descends aggregation trees to select units of work for verification. Balanced trees ensure this descent is O(log N). See [sampling.md](sampling.md).
 
 **Trust**: Collateral is placed on blocks within trees. Aggregators take on the fraud risk of their subtrees. The tree structure determines the scope of collateral claims. See [trust.md](trust.md).
+
+---
+
+## Implementation
+
+DAG topology is an emergent property of the block and consensus structures rather than a standalone module.
+
+| File | Description |
+|------|-------------|
+| [`src/core/Block.ts`](../../src/core/Block.ts) | Block data structure (anchor, aggregates), `BlockStore`, genesis creation |
+| [`src/core/ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | Anchor chain traversal, descendant weight accumulation |
+| [`src/core/Coordinator.ts`](../../src/core/Coordinator.ts) | Orchestrates all modules; processes blocks through the full pipeline |

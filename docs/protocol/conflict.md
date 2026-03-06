@@ -184,3 +184,13 @@ Peers should prioritize loading claim mask chunks where potential conflicts are 
 3. **Completeness**: With full knowledge of all claim masks, all double-spend conflicts are detected.
 4. **Optimistic partial knowledge**: Missing data never produces false conflicts.
 5. **Upward inference**: A known claim in a subtree implies the corresponding claim in all ancestor aggregators.
+
+---
+
+## Implementation
+
+| File | Description |
+|------|-------------|
+| [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Core algorithm: claim mask comparison, rebasing, conflict detection |
+| [`src/core/ConflictService.ts`](../../src/core/ConflictService.ts) | Wired adapter using concrete `Block` type |
+| [`src/core/BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector with partial knowledge support |

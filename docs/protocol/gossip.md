@@ -350,3 +350,12 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 3. **Monotonic awareness**: Once a peer is known to have a block, that knowledge is never retracted.
 4. **Source integrity**: `receivedFirst` only contains blocks where the peer was genuinely upstream, never echoes of our own pushes.
 5. **Reciprocity floor**: Every peer receives at least `BASE_RATE` bandwidth regardless of reciprocity score.
+
+---
+
+## Implementation
+
+| File | Description |
+|------|-------------|
+| [`src/core/GossipModule.ts`](../../src/core/GossipModule.ts) | Core algorithm: utility scoring, delivery matrix, bandwidth budgeting |
+| [`src/core/GossipService.ts`](../../src/core/GossipService.ts) | Wired adapter using concrete `Block` type |

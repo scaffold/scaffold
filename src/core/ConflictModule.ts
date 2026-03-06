@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/conflict.md
+
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector, RebaseResult } from './BitVector.ts';
 

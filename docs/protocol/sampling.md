@@ -180,3 +180,12 @@ Priority has dropped from 167 to 12. Verified weight is zero — Tree A loses al
 |--------|----------|-------------|
 | Work distribution per tree | Consensus module | `Beta(n, f + 1)` representing belief about fraction of real work |
 | Sample requests | Network/peer layer | Which tree and unit of work to fetch and verify |
+
+---
+
+## Implementation
+
+| File | Description |
+|------|-------------|
+| [`src/core/SamplingModule.ts`](../../src/core/SamplingModule.ts) | Core algorithm: Beta distributions, priority scoring, tree selection |
+| [`src/core/SamplingService.ts`](../../src/core/SamplingService.ts) | Wired adapter using concrete `Block` type |

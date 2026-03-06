@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/conflict.md (Partial Knowledge and Monotonic Discovery)
+
 /**
  * A chunked bit vector supporting partial knowledge.
  *

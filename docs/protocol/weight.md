@@ -150,3 +150,14 @@ The choice depends on what the dominant block types turn out to be. If most bloc
 **Structural verification module**: Checks that the weight vector is correctly computed from subtrees and `declaredWeight`. May additionally check `declaredWeight` against a derivation rule (economic throughput, contract weight function, etc.) once one is chosen.
 
 **Trust module**: Collateral incentivizes honest weight declaration (if weight is declared rather than derived). Inflated weight that fails verification results in collateral loss.
+
+---
+
+## Implementation
+
+Weight derivation is an open design question. Current implementation uses trusted `declaredWeight`.
+
+| File | Description |
+|------|-------------|
+| [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Weight vector derivation from `declaredWeight` and subtrees |
+| [`src/core/ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | Verified vs declared weight, effective weight computation |

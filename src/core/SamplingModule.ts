@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/sampling.md
+
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 
 /** Provider interface for the sampling module to access tree data. */

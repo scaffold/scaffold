@@ -206,3 +206,27 @@ The protocol is specified across several module documents, each responsible for 
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.
+
+---
+
+## Implementation
+
+All modules live in `src/core/` and follow a provider pattern: pure logic in `*Module.ts`, wired adapters in `*Service.ts`.
+
+| Module | Core File | Service File |
+|--------|-----------|-------------|
+| Consensus | [`ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | [`ConsensusService.ts`](../../src/core/ConsensusService.ts) |
+| Conflict | [`ConflictModule.ts`](../../src/core/ConflictModule.ts) | [`ConflictService.ts`](../../src/core/ConflictService.ts) |
+| Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
+| Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
+| Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
+| Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
+
+Supporting files:
+
+| File | Description |
+|------|-------------|
+| [`Block.ts`](../../src/core/Block.ts) | Concrete block type, `BlockStore`, genesis creation |
+| [`BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector for claim masks (used by conflict module) |
+| [`Coordinator.ts`](../../src/core/Coordinator.ts) | Orchestrates all modules: block received → conflict → consensus → gossip → sampling |
+| [`ProtocolContext.ts`](../../src/core/ProtocolContext.ts) | Dependency injection container wiring all services together |

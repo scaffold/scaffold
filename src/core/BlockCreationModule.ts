@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/block-creation.md
+
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 

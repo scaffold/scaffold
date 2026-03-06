@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/trust.md
+
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 
 /** Which side of a validity dispute this collateral supports. */

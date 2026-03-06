@@ -342,3 +342,12 @@ A's branch is at 140. B still wins, but the gap has narrowed. If more real work 
 | Conflict winners | All modules | For each conflict set, which block currently wins |
 | Effective weight estimates | Verification module | Current weights, to inform verification priority |
 | Descendant weight per chain block | All modules | How much verified work has been built on each chain block |
+
+---
+
+## Implementation
+
+| File | Description |
+|------|-------------|
+| [`src/core/ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | Core algorithm: effective weight, conflict resolution, canonical view |
+| [`src/core/ConsensusService.ts`](../../src/core/ConsensusService.ts) | Wired adapter using concrete `Block` type |

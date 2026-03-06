@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/gossip.md
+
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 
 // --- Constants ---

@@ -306,3 +306,13 @@ Work and collateral must be in separate blocks. If a work block H is found inval
 5. **Self-claim exclusion**: Self-claims (index < `ownOutputCount`) never appear in `claimMask`.
 6. **Collateral independence**: Collateral blocks are never the same block as the work they vouch for, and never descendants of it.
 7. **Aggregation minimality**: Aggregation blocks have minimal I/O — only what's needed to collect fees and incentivize further aggregation.
+
+---
+
+## Implementation
+
+| File | Description |
+|------|-------------|
+| [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Core algorithm: block construction, weight vector derivation, claim masks |
+| [`src/core/BlockCreationService.ts`](../../src/core/BlockCreationService.ts) | Wired adapter using concrete `Block` type |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | Block data structure, `BlockStore`, genesis creation |

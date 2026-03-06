@@ -34,6 +34,23 @@ Executions are eventually committed to a global block graph. Finalization should
 - Most code in `src/` is reference material only; primarily look at `docs/protocol/` for the latest and greatest.
 - Use `camelCase` for TypeScript properties and interface fields. `snake_case` is allowed in pseudocode/math notation inside docs.
 
+## Source ↔ Documentation Map
+
+Each protocol module has a spec in `docs/protocol/` and an implementation in `src/core/`. Both directions are cross-linked. When adding, renaming, or removing modules or source files, update the links in both directions: the `// Protocol spec:` comment in the source file and the `## Implementation` table in the doc.
+
+| Protocol Doc | Core Module | Service Adapter | Supporting Files |
+|-------------|-------------|-----------------|-----------------|
+| [overview.md](docs/protocol/overview.md) | — | — | [Coordinator.ts](src/core/Coordinator.ts), [ProtocolContext.ts](src/core/ProtocolContext.ts) |
+| [consensus.md](docs/protocol/consensus.md) | [ConsensusModule.ts](src/core/ConsensusModule.ts) | [ConsensusService.ts](src/core/ConsensusService.ts) | |
+| [conflict.md](docs/protocol/conflict.md) | [ConflictModule.ts](src/core/ConflictModule.ts) | [ConflictService.ts](src/core/ConflictService.ts) | [BitVector.ts](src/core/BitVector.ts) |
+| [sampling.md](docs/protocol/sampling.md) | [SamplingModule.ts](src/core/SamplingModule.ts) | [SamplingService.ts](src/core/SamplingService.ts) | |
+| [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
+| [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/core/GossipModule.ts) | [GossipService.ts](src/core/GossipService.ts) | |
+| [block-creation.md](docs/protocol/block-creation.md) | [BlockCreationModule.ts](src/core/BlockCreationModule.ts) | [BlockCreationService.ts](src/core/BlockCreationService.ts) | [Block.ts](src/core/Block.ts) |
+| [dag.md](docs/protocol/dag.md) | — (structural, spans modules) | — | [Block.ts](src/core/Block.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
+| [weight.md](docs/protocol/weight.md) | — (design discussion) | — | [BlockCreationModule.ts](src/core/BlockCreationModule.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
+| [deception.md](docs/protocol/deception.md) | — (not yet implemented) | — | |
+
 ## Queued Work
 See `TODO.md` for the current backlog of protocol modules and concepts to document and implement, roughly in priority order.
 

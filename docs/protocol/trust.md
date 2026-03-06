@@ -157,3 +157,12 @@ The aggregator places its own collateral on the aggregation block. This transfer
 3. **Monotonic fraud**: Once fraud is proven at a path, it cannot be retracted.
 4. **Bounded claims**: Total claimable collateral per fraud event never exceeds encapsulated_weight * N.
 5. **Risk transfer**: Once H is aggregated, the aggregator's collateral replaces the publisher's as the active trust signal.
+
+---
+
+## Implementation
+
+| File | Description |
+|------|-------------|
+| [`src/core/TrustModule.ts`](../../src/core/TrustModule.ts) | Core algorithm: collateral placement, redemption, encapsulated weight |
+| [`src/core/TrustService.ts`](../../src/core/TrustService.ts) | Wired adapter using concrete `Block` type |

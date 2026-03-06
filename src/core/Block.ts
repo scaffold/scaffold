@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/block-creation.md (block structure), docs/protocol/dag.md (graph topology)
+
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
