@@ -7,14 +7,23 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 ### Block weight
 How is the weight of a block determined and verified?
 
-### Execution Module
-Define what it means to execute a block. Deterministic WASM computation semantics, how work is declared, how inputs map to outputs, and what constitutes a valid execution. The consensus module references "validity/execution modules" as the source of direct conflict declarations.
+### ~~Execution Module~~ ✓
+Implemented: `ExecutionModule.ts` with mock contract registry, `HostContext` host functions (setData, addOutput, requireSignature, cross-block refs), and `ExecutionService` adapter. See [computation.md](docs/protocol/computation.md).
 
-### Verification Module
-The bridge between sampling and execution. Sampling selects what to verify; this module defines how to check if declared work is real — the spot-check procedure, how to request and re-execute a unit of work, and how results feed back into the sampling module's success/failure tracking. Referenced by consensus, sampling, and trust.
+### ~~Verification Module~~ ✓
+Implemented: `VerificationModule.ts` bridges SamplingModule (selectNext) with ExecutionModule (verifyBlock), reporting results back to sampling. See [computation.md](docs/protocol/computation.md).
 
-### Dispute Module
-Resolution mechanism for FOR/AGAINST collateral stakes. The trust module explicitly defers to this: given competing collateral placements, how is a winner determined? Defines the voting/evidence mechanism, evidence requirements, escalation, and how dispute outcomes flow back to the trust module for collateral redistribution.
+### ~~Dispute Module~~ ✓
+Implemented: `DisputeModule.ts` resolves FOR/AGAINST collateral stakes using majority-by-stake with proportional payouts. See [computation.md](docs/protocol/computation.md).
+
+### WASM Contract Runtime
+The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same — only the contract dispatch changes.
+
+### Deception Module
+Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (now done) and economic equilibrium analysis.
+
+### Query and Promise Mechanism
+Design the offline state mechanism from [computation.md](docs/protocol/computation.md#query-and-promise-mechanism): promise outputs committing to data, query outputs requesting specific data, and weight reduction for unanswered queries.
 
 ## Infrastructure
 
@@ -39,6 +48,9 @@ Likely best starting point: option 4 (gossip-only, with peerInfo contract intere
 ### ~~Block Header Schema~~ ✓
 Addressed: the block wire format now carries only structural primitives (anchor, aggregates, claims, outputs, declaredWeight, creator, signature). Domain-specific data (aggregation state, collateral targets, payment targets) lives in contract outputs. See [contracts.md](docs/protocol/contracts.md) and [block-creation.md](docs/protocol/block-creation.md).
 
+### ~~Output Schema Migration~~ ✓
+Addressed: Output migrated from `{ contract, value, data }` to `{ verifier: { contract, params }, value, detail }`. Block gained `refs: Hash[]` for cross-block references. `SELF_CONTRACT` added for self-claimed key-value outputs. See [computation.md](docs/protocol/computation.md).
+
 ## Computation DAG
 
 When a contract calls `ctx.request(otherVerifier)`, it resolves to a Promise for the first canonical response. This creates an input dependency: the generated block specifies the requested block as an input. If the requested result later becomes non-canonical, the dependent block is affected — generation should be cancelled (if still running) and restarted with the new canonical input.
@@ -54,7 +66,7 @@ Key design questions:
 These sit on top of the core protocol and can be specified later.
 
 ### Game State Contracts
-Deterministic WASM execution for serverless game-state consensus. Dispute/penalty mechanics for incorrect state transitions.
+Deterministic WASM execution for serverless game-state consensus. Dispute/penalty mechanics for incorrect state transitions. The ExecutionModule's HostContext already supports the full host function interface needed (setData, addOutput, cross-block refs).
 
 ### Content Distribution
 Social content from peers with signatures and globally consistent latest-state resolution.
