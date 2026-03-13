@@ -38,19 +38,20 @@ export type Action =
   | { type: 'dispute'; block: Hash; side: 'for' | 'against' }
   | { type: 'notifyFetch'; verifier: VerifierKey; result: FetchResult | null };
 
+// -- Block creator interface ----------------------------------------
+
 /** A strategy evaluates reactive events and produces actions. */
 export interface Strategy {
   evaluate(event: ReactiveEvent): Action[];
 }
 
-// -- Block creator interface ----------------------------------------
-
 /**
  * Interface for creating blocks from specs.
  * The ReactiveLayer uses this to execute createBlock actions.
+ * Pass a privateKey to sign the block, or null for unsigned.
  */
 export interface BlockCreator {
-  createBlock(spec: BlockSpec, sign: boolean): Block | null;
+  createBlock(spec: BlockSpec, privateKey: Uint8Array | null): Block | null;
 }
 
 // -- ReactiveLayer --------------------------------------------------
@@ -76,6 +77,7 @@ export class ReactiveLayer {
   private readonly sampling: SamplingService;
   private readonly strategies: Strategy[];
   private readonly blockCreator: BlockCreator;
+  private readonly privateKey: Uint8Array | null;
 
   private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
 
@@ -87,6 +89,7 @@ export class ReactiveLayer {
     sampling: SamplingService;
     strategies: Strategy[];
     blockCreator: BlockCreator;
+    privateKey?: Uint8Array | null;
     onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
   }) {
     this.coordinator = deps.coordinator;
@@ -96,6 +99,7 @@ export class ReactiveLayer {
     this.sampling = deps.sampling;
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
+    this.privateKey = deps.privateKey ?? null;
     this.onNotifyFetch = deps.onNotifyFetch;
   }
 
@@ -152,7 +156,8 @@ export class ReactiveLayer {
     for (const action of actions) {
       switch (action.type) {
         case 'createBlock': {
-          const newBlock = this.blockCreator.createBlock(action.spec, action.sign);
+          const key = action.sign ? this.privateKey : null;
+          const newBlock = this.blockCreator.createBlock(action.spec, key);
           if (newBlock) {
             // Mark as created in this cycle so strategies don't re-evaluate it
             cycleCreated.add(newBlock.hash.toPrimitive());

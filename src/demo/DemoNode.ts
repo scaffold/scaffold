@@ -1,26 +1,22 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { Block, BlockStore, createBlock } from '../core/Block.ts';
+import { Block, BlockPayload, BlockStore, createBlockFromPacket } from '../core/Block.ts';
 import { BlockSpec } from '../core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { BlockAwareness } from '../core/GossipModule.ts';
-import { deserialize, serialize } from '../core/BlockSerializer.ts';
 import { Scaffold } from '../Scaffold.ts';
 
 import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
-import { signBlock, SignedBlock } from './SignedBlock.ts';
-import { validateSignedBlock, ValidationResult } from './ContractValidator.ts';
+import {
+  composeBlockPacket,
+  Packet,
+  parsePacket,
+} from '../core/Packet.ts';
+import { validateBlockPacket, ValidationResult } from './ContractValidator.ts';
 import { StatusIndex } from './StatusIndex.ts';
-
-/** Wire message sent over WebSocket. */
-export interface WireMessage {
-  type: 'block';
-  data: string; // serialize(block)
-  signature: string; // base64-encoded 64-byte signature
-}
 
 /** Simple set-based block awareness tracker for gossip. */
 class SetAwareness implements BlockAwareness {
@@ -39,7 +35,7 @@ export class DemoNode {
   readonly identity: Identity;
   readonly scaffold: Scaffold;
   readonly statusIndex: StatusIndex;
-  readonly signatureStore = new Map<HashPrimitive, Uint8Array>();
+  readonly packetStore = new Map<HashPrimitive, Uint8Array>();
   readonly peers = new Map<string, WebSocket>();
 
   tip: Block;
@@ -75,21 +71,22 @@ export class DemoNode {
     return this.scaffold.context.gossip;
   }
 
-  /** Receive a signed block from a peer. Validate, accept if valid, forward to other peers. */
-  receiveSignedBlock(sb: SignedBlock, fromPeer: string): void {
+  /** Receive a packet from a peer. Validate, accept if valid, forward to other peers. */
+  receivePacket(packet: Packet<BlockPayload>, fromPeer: string): void {
     // Skip if already known
-    if (this.store.has(sb.block.hash)) return;
+    if (this.store.has(packet.hash)) return;
 
     // Validate
-    const validation = validateSignedBlock(sb, this.store);
+    const validation = validateBlockPacket(packet, this.store);
     if (!validation.ok) {
       // Reject invalid blocks from peers
       return;
     }
 
-    // Accept: store signature, process through reactive layer
-    this.signatureStore.set(sb.block.hash.toPrimitive(), sb.signature);
-    this.scaffold.context.processBlock(sb.block, fromPeer);
+    // Accept: store raw packet, process block through reactive layer
+    const block = createBlockFromPacket(packet.payload, packet.hash);
+    this.packetStore.set(packet.hash.toPrimitive(), packet.raw);
+    this.scaffold.context.processBlock(block, fromPeer);
 
     // Update tip
     this.updateTipFromStore();
@@ -101,7 +98,7 @@ export class DemoNode {
     for (const [peerId, ws] of this.peers) {
       if (peerId === fromPeer) continue;
       if (ws.readyState === WebSocket.OPEN) {
-        this.sendSignedBlock(ws, sb);
+        this.sendPacket(ws, packet.raw);
       }
     }
   }
@@ -142,15 +139,14 @@ export class DemoNode {
       return { ok: false, error: buildResult.error };
     }
 
-    const block = createBlock(buildResult.blueprint, this.tip);
-    const sb = signBlock(block, this.identity.privateKey);
+    const { block, packet } = composeBlockPacket(buildResult.blueprint, this.identity.privateKey);
 
     // Validate locally
-    const validation = validateSignedBlock(sb, this.store);
+    const validation = validateBlockPacket(packet, this.store);
 
     if (validation.ok) {
       // Accept locally
-      this.signatureStore.set(block.hash.toPrimitive(), sb.signature);
+      this.packetStore.set(block.hash.toPrimitive(), packet.raw);
       this.scaffold.context.processBlock(block);
       this.updateTipFromStore();
       this.rebuildStatusIndex();
@@ -159,7 +155,7 @@ export class DemoNode {
     // Send to all peers regardless of local validation
     for (const [_peerId, ws] of this.peers) {
       if (ws.readyState === WebSocket.OPEN) {
-        this.sendSignedBlock(ws, sb);
+        this.sendPacket(ws, packet.raw);
       }
     }
 
@@ -178,9 +174,9 @@ export class DemoNode {
     // Sync: send all blocks in chain order (excluding genesis, peers compute it themselves)
     const chain = this.getCanonicalChain();
     for (const block of chain.slice(1)) { // skip genesis
-      const sig = this.signatureStore.get(block.hash.toPrimitive());
-      if (sig) {
-        this.sendSignedBlock(ws, { block, signature: sig });
+      const raw = this.packetStore.get(block.hash.toPrimitive());
+      if (raw) {
+        this.sendPacket(ws, raw);
       }
     }
   }
@@ -195,14 +191,9 @@ export class DemoNode {
     return this.peers.size;
   }
 
-  /** Send a signed block over WebSocket. */
-  private sendSignedBlock(ws: WebSocket, sb: SignedBlock): void {
-    const msg: WireMessage = {
-      type: 'block',
-      data: serialize(sb.block),
-      signature: uint8ToBase64(sb.signature),
-    };
-    ws.send(JSON.stringify(msg));
+  /** Send raw packet bytes over WebSocket. */
+  private sendPacket(ws: WebSocket, raw: Uint8Array): void {
+    ws.send(raw);
   }
 
   /** Update tip to the deepest block in the canonical chain. */
@@ -256,21 +247,4 @@ export class DemoNode {
     const chain = this.getCanonicalChain();
     this.statusIndex.rebuild(chain);
   }
-}
-
-function uint8ToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-export function base64ToUint8(b64: string): Uint8Array {
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
 }

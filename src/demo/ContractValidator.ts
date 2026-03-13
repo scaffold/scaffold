@@ -1,7 +1,7 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, getBlockClaimMask } from '../core/Block.ts';
+import { Block, BlockStore, BlockPayload, getBlockClaimMask } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
-import { SignedBlock, verifyBlockSignature } from './SignedBlock.ts';
+import { Packet, verifyPacketSignature } from '../core/Packet.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
 
 export type ValidationResult =
@@ -9,15 +9,18 @@ export type ValidationResult =
   | { ok: false; reason: string };
 
 /**
- * Validate a signed block's authorization.
+ * Validate a block packet's authorization.
  *
  * Rules:
  * - Genesis (no anchor): always valid
  * - Blocks not claiming status outputs: always valid
  * - Blocks claiming status outputs: signature must match the publicKey in the claimed output data
  */
-export function validateSignedBlock(sb: SignedBlock, store: BlockStore): ValidationResult {
-  const block = sb.block;
+export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockStore): ValidationResult {
+  const block: Block = {
+    hash: packet.hash,
+    ...packet.payload,
+  };
 
   // Genesis is always valid
   if (Hash.equals(block.anchor, ZERO_HASH)) {
@@ -72,7 +75,7 @@ export function validateSignedBlock(sb: SignedBlock, store: BlockStore): Validat
   }
 
   // Verify signature matches the required publicKey
-  if (!verifyBlockSignature(sb, requiredPublicKey)) {
+  if (!verifyPacketSignature(packet, requiredPublicKey)) {
     return { ok: false, reason: 'signature does not match status output owner' };
   }
 

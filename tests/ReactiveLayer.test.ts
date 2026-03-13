@@ -92,15 +92,15 @@ class OnceStrategy implements Strategy {
 
 /** A mock block creator that records calls and returns pre-configured blocks. */
 class MockBlockCreator implements BlockCreator {
-  readonly calls: { spec: BlockSpec; sign: boolean }[] = [];
+  readonly calls: { spec: BlockSpec; privateKey: Uint8Array | null }[] = [];
   private blocksToReturn: (Block | null)[] = [];
 
   queueBlock(block: Block | null): void {
     this.blocksToReturn.push(block);
   }
 
-  createBlock(spec: BlockSpec, sign: boolean): Block | null {
-    this.calls.push({ spec, sign });
+  createBlock(spec: BlockSpec, privateKey: Uint8Array | null): Block | null {
+    this.calls.push({ spec, privateKey });
     return this.blocksToReturn.shift() ?? null;
   }
 }
@@ -240,7 +240,8 @@ Deno.test('ReactiveLayer: createBlock action triggers recursion', () => {
 
   // Creator should have been called once (for the createBlock action)
   assertEquals(creator.calls.length, 1);
-  assertEquals(creator.calls[0].sign, true);
+  // sign=true but no privateKey on layer → null passed
+  assertEquals(creator.calls[0].privateKey, null);
 
   // Both genesis and child should be in store
   assert(store.has(genesis.hash));

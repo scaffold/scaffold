@@ -1,4 +1,5 @@
-import { Block, createGenesisBlock } from '../core/Block.ts';
+import { Block } from '../core/Block.ts';
+import { composeGenesisPacket } from '../core/Packet.ts';
 import { ANIMALS, deriveIdentity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
 
@@ -7,12 +8,12 @@ import { makeStatusOutput } from './StatusContract.ts';
  * All nodes compute the identical genesis independently because:
  * - Fixed animal order (ANIMALS array)
  * - Deterministic key derivation (Hash.digest of name)
- * - Deterministic hashing in createGenesisBlock
+ * - Deterministic hashing via packet serialization
  */
 export function createDemoGenesis(): Block {
   const outputs = ANIMALS.map((name) => {
     const identity = deriveIdentity(name);
     return makeStatusOutput(identity.publicKey, '');
   });
-  return createGenesisBlock(outputs);
+  return composeGenesisPacket(outputs).block;
 }

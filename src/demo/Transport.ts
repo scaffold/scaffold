@@ -1,11 +1,10 @@
-import { Block } from '../core/Block.ts';
-import { deserialize } from '../core/BlockSerializer.ts';
-import { base64ToUint8, DemoNode, WireMessage } from './DemoNode.ts';
-import { SignedBlock } from './SignedBlock.ts';
+import { BlockPayload } from '../core/Block.ts';
+import { parsePacket } from '../core/Packet.ts';
+import { DemoNode } from './DemoNode.ts';
 
 /**
  * Start a WebSocket server for a DemoNode.
- * Peers connect to ws://localhost:{port} and exchange signed blocks.
+ * Peers connect to ws://localhost:{port} and exchange raw packets.
  */
 export function startServer(node: DemoNode, port: number): Deno.HttpServer {
   return Deno.serve({ port, onListen: () => {} }, (req) => {
@@ -21,7 +20,7 @@ export function startServer(node: DemoNode, port: number): Deno.HttpServer {
     };
 
     socket.onmessage = (event) => {
-      handleMessage(node, peerId, event.data as string);
+      handleMessage(node, peerId, event.data);
     };
 
     socket.onclose = () => {
@@ -42,6 +41,7 @@ export function startServer(node: DemoNode, port: number): Deno.HttpServer {
 export function connectToPeer(node: DemoNode, port: number): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${port}`);
+    ws.binaryType = 'arraybuffer';
     const peerId = `outgoing:${port}`;
 
     ws.onopen = () => {
@@ -50,7 +50,7 @@ export function connectToPeer(node: DemoNode, port: number): Promise<WebSocket> 
     };
 
     ws.onmessage = (event) => {
-      handleMessage(node, peerId, event.data as string);
+      handleMessage(node, peerId, event.data);
     };
 
     ws.onclose = () => {
@@ -64,17 +64,22 @@ export function connectToPeer(node: DemoNode, port: number): Promise<WebSocket> 
   });
 }
 
-/** Handle an incoming wire message. */
-function handleMessage(node: DemoNode, peerId: string, raw: string): void {
+/** Handle an incoming raw packet message. */
+function handleMessage(node: DemoNode, peerId: string, data: unknown): void {
   try {
-    const msg: WireMessage = JSON.parse(raw);
-    if (msg.type !== 'block') return;
+    let raw: Uint8Array;
+    if (data instanceof ArrayBuffer) {
+      raw = new Uint8Array(data);
+    } else if (data instanceof Uint8Array) {
+      raw = data;
+    } else {
+      return; // Ignore non-binary messages
+    }
 
-    const block = deserialize<Block>(msg.data);
-    const signature = base64ToUint8(msg.signature);
-    const sb: SignedBlock = { block, signature };
+    const packet = parsePacket<BlockPayload>(raw);
+    if (!packet) return;
 
-    node.receiveSignedBlock(sb, peerId);
+    node.receivePacket(packet, peerId);
   } catch {
     // Ignore malformed messages
   }

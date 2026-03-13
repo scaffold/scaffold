@@ -1,4 +1,5 @@
-import { Block, createBlock } from './core/Block.ts';
+import { Block } from './core/Block.ts';
+import { composeUnsignedBlockPacket } from './core/Packet.ts';
 import { Output } from './core/BlockCreationModule.ts';
 import { NodeConfig, NodeContext } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
@@ -53,9 +54,7 @@ export class Scaffold {
 
         const result = nodeContext.blockCreation.buildBlock(resolvedSpec);
         if (!result.ok) return null;
-        const anchor = nodeContext.store.get(anchorHash);
-        if (!anchor) return null;
-        return createBlock(result.blueprint, anchor);
+        return composeUnsignedBlockPacket(result.blueprint).block;
       },
       processBlock: (block) => {
         nodeContext.processBlock(block);

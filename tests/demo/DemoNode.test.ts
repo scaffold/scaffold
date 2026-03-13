@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { DemoNode } from '../../src/demo/DemoNode.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
-import { signBlock } from '../../src/demo/SignedBlock.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
 import { BlockSpec } from '../../src/core/BlockCreationModule.ts';
-import { createBlock } from '../../src/core/Block.ts';
+import { BlockPayload } from '../../src/core/Block.ts';
+import { composeBlockPacket, parsePacket } from '../../src/core/Packet.ts';
 
 Deno.test('DemoNode: publish valid status update', () => {
   const node = new DemoNode('eagle');
@@ -22,13 +22,16 @@ Deno.test('DemoNode: two nodes — valid status propagates via method call', () 
   const result = nodeA.publishStatus('eagle', 'Eagle says hi');
   assert(result.ok);
 
-  // Manually propagate the block from A to B
+  // Manually propagate the block from A to B via raw packet
   const chain = nodeA.getCanonicalChain();
   const latestBlock = chain[chain.length - 1];
-  const sig = nodeA.signatureStore.get(latestBlock.hash.toPrimitive());
-  assert(sig, 'Signature should be stored');
+  const raw = nodeA.packetStore.get(latestBlock.hash.toPrimitive());
+  assert(raw, 'Raw packet should be stored');
 
-  nodeB.receiveSignedBlock({ block: latestBlock, signature: sig! }, 'nodeA');
+  const packet = parsePacket<BlockPayload>(raw!);
+  assert(packet, 'Packet should parse');
+
+  nodeB.receivePacket(packet!, 'nodeA');
 
   assertEquals(nodeB.statusIndex.getStatus('eagle'), 'Eagle says hi');
 });
@@ -42,10 +45,7 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
   assertFalse(result.ok);
   assert(result.error?.includes('signature'));
 
-  // Even though the block was "sent" (in production it would go over WS),
-  // let's manually try to deliver it to nodeB — it should be rejected
-  // Since publishStatus doesn't accept locally on failure, the block isn't in the chain.
-  // But we can construct the invalid block directly:
+  // Construct the invalid block directly and try to deliver to nodeB
   const badger = deriveIdentity('badger');
   const eagle = deriveIdentity('eagle');
 
@@ -65,12 +65,11 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
   assert(buildResult.ok);
   if (!buildResult.ok) return;
 
-  const block = createBlock(buildResult.blueprint, nodeA.tip);
-  const sb = signBlock(block, eagle.privateKey); // signed by eagle, not badger!
+  const { block, packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey); // signed by eagle, not badger!
 
   // nodeB should reject this
   const beforeTip = nodeB.tip.hash.toPrimitive();
-  nodeB.receiveSignedBlock(sb, 'nodeA');
+  nodeB.receivePacket(packet, 'nodeA');
   // Tip should not have changed (block rejected)
   assertEquals(nodeB.tip.hash.toPrimitive(), beforeTip);
   // Badger's status should not be updated
@@ -135,10 +134,9 @@ Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject',
   assert(buildResult.ok);
   if (!buildResult.ok) return;
 
-  const block = createBlock(buildResult.blueprint, eagleNode.tip);
-  const sb = signBlock(block, eagle.privateKey);
+  const { block, packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey);
 
   // badgerNode should reject this impersonation
-  badgerNode.receiveSignedBlock(sb, 'eagle');
+  badgerNode.receivePacket(packet, 'eagle');
   assertFalse(badgerNode.store.has(block.hash));
 });

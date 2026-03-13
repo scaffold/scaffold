@@ -1,7 +1,8 @@
 // Protocol spec: docs/protocol/overview.md (module orchestration)
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, createBlock, getBlockWeightVector } from './Block.ts';
+import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
+import { composeUnsignedBlockPacket } from './Packet.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
@@ -163,10 +164,7 @@ export class Coordinator {
       });
       if (!buildResult.ok) continue;
 
-      const anchorBlock = this.store.get(anchorHash);
-      if (!anchorBlock) continue;
-
-      const block = createBlock(buildResult.blueprint, anchorBlock);
+      const block = composeUnsignedBlockPacket(buildResult.blueprint).block;
       const result = this.blockReceived(block, null);
       return { block, result };
     }

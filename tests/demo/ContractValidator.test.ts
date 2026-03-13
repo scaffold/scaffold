@@ -1,18 +1,15 @@
 import { assert, assertFalse } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
-import { Block, BlockStore, createBlock, createGenesisBlock } from '../../src/core/Block.ts';
-import { BitVector } from '../../src/core/BitVector.ts';
+import { BlockStore } from '../../src/core/Block.ts';
 import { BlockSpec, Output } from '../../src/core/BlockCreationModule.ts';
 import { BlockCreationService } from '../../src/core/BlockCreationService.ts';
 import { ProtocolContext } from '../../src/core/ProtocolContext.ts';
-import { ConflictService } from '../../src/core/ConflictService.ts';
-import { ConsensusService } from '../../src/core/ConsensusService.ts';
 import { Coordinator } from '../../src/core/Coordinator.ts';
 
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
-import { signBlock, SignedBlock } from '../../src/demo/SignedBlock.ts';
-import { validateSignedBlock } from '../../src/demo/ContractValidator.ts';
+import { composeBlockPacket } from '../../src/core/Packet.ts';
+import { validateBlockPacket } from '../../src/demo/ContractValidator.ts';
 import { createDemoGenesis } from '../../src/demo/DemoGenesis.ts';
 
 /** Set up a minimal protocol context with a block store. */
@@ -35,9 +32,21 @@ Deno.test('ContractValidator: genesis is always valid', () => {
   store.put(genesis);
 
   const eagle = deriveIdentity('eagle');
-  const sb = signBlock(genesis, eagle.privateKey);
+  // Genesis is unsigned, but for this test we compose a signed packet just to have a packet
+  // Genesis blocks always pass validation regardless
+  const { packet } = composeBlockPacket(
+    {
+      anchor: genesis.anchor,
+      aggregates: genesis.aggregates,
+      claims: genesis.claims,
+      outputs: genesis.outputs,
+      declaredWeight: genesis.declaredWeight,
+      refs: genesis.refs,
+    },
+    eagle.privateKey,
+  );
 
-  const result = validateSignedBlock(sb, store);
+  const result = validateBlockPacket(packet, store);
   assert(result.ok);
 });
 
@@ -64,10 +73,9 @@ Deno.test('ContractValidator: correct signer passes', () => {
   assert(buildResult.ok);
   if (!buildResult.ok) return;
 
-  const block = createBlock(buildResult.blueprint, genesis);
-  const sb = signBlock(block, eagle.privateKey);
+  const { packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey);
 
-  const result = validateSignedBlock(sb, store);
+  const result = validateBlockPacket(packet, store);
   assert(result.ok, `Expected valid but got: ${!result.ok ? result.reason : ''}`);
 });
 
@@ -94,10 +102,9 @@ Deno.test('ContractValidator: wrong signer (eagle signs badger output) fails', (
   assert(buildResult.ok);
   if (!buildResult.ok) return;
 
-  const block = createBlock(buildResult.blueprint, genesis);
-  const sb = signBlock(block, eagle.privateKey); // eagle signs badger's output!
+  const { packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey); // eagle signs badger's output!
 
-  const result = validateSignedBlock(sb, store);
+  const result = validateBlockPacket(packet, store);
   assertFalse(result.ok);
   if (!result.ok) {
     assert(result.reason.includes('signature'));
@@ -130,11 +137,10 @@ Deno.test('ContractValidator: block without status outputs passes without signat
   assert(buildResult.ok);
   if (!buildResult.ok) return;
 
-  const block = createBlock(buildResult.blueprint, genesis);
   // Sign with any key — doesn't matter since no status outputs
   const eagle = deriveIdentity('eagle');
-  const sb = signBlock(block, eagle.privateKey);
+  const { packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey);
 
-  const result = validateSignedBlock(sb, store);
+  const result = validateBlockPacket(packet, store);
   assert(result.ok);
 });

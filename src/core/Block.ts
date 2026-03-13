@@ -263,6 +263,24 @@ export function getRefOutputs(block: Block, refIndex: number, store: BlockStore)
   return refBlock.outputs;
 }
 
+// -- BlockPayload ---------------------------------------------------
+
+/** Block fields minus hash — the payload carried in a Packet. */
+export type BlockPayload = Omit<Block, 'hash'>;
+
+/** Construct a Block from a deserialized packet payload and a precomputed hash. */
+export function createBlockFromPacket(payload: BlockPayload, hash: Hash): Block {
+  return {
+    hash,
+    anchor: payload.anchor,
+    aggregates: payload.aggregates,
+    claims: payload.claims,
+    outputs: payload.outputs,
+    declaredWeight: payload.declaredWeight,
+    refs: payload.refs,
+  };
+}
+
 // -- Factory functions ----------------------------------------------
 
 /**

@@ -1,4 +1,5 @@
-import { Block, BlockStore, createBlock, createGenesisBlock } from '../core/Block.ts';
+import { Block, BlockStore } from '../core/Block.ts';
+import { composeBlockPacket, composeGenesisPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 import {
@@ -66,14 +67,14 @@ export class NodeContext {
 
     // 5. Create a BlockCreator that uses BlockCreationService
     const blockCreationService = this.blockCreation;
-    const store = this.store;
     const blockCreator: BlockCreator = {
-      createBlock: (spec) => {
+      createBlock: (spec, privateKey) => {
         const result = blockCreationService.buildBlock(spec);
         if (!result.ok) return null;
-        const anchorBlock = store.get(spec.anchor);
-        if (!anchorBlock) return null;
-        return createBlock(result.blueprint, anchorBlock);
+        if (privateKey) {
+          return composeBlockPacket(result.blueprint, privateKey).block;
+        }
+        return composeUnsignedBlockPacket(result.blueprint).block;
       },
     };
 
@@ -91,7 +92,7 @@ export class NodeContext {
 
     // 7. Process genesis block through coordinator directly
     //    (not through reactive layer, since strategies should not fire on genesis)
-    const genesis = createGenesisBlock(config.genesis.outputs);
+    const { block: genesis } = composeGenesisPacket(config.genesis.outputs);
     this.coordinator.blockReceived(genesis, null);
     this._genesisHash = genesis.hash;
   }

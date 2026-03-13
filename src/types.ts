@@ -10,6 +10,7 @@ export type { Block } from './core/Block.ts';
 export {
   BlockStore,
   createBlock,
+  createBlockFromPacket,
   createGenesisBlock,
   createSelfClaimedOutput,
   findSelfClaimedOutput,
@@ -18,6 +19,17 @@ export {
   isSelfClaimed,
   SELF_CONTRACT,
 } from './core/Block.ts';
+export type { BlockPayload } from './core/Block.ts';
+export {
+  composeBlockPacket,
+  composeGenesisPacket,
+  composeUnsignedBlockPacket,
+  parsePacket,
+  recoverPacketSigner,
+  verifyPacketSignature,
+  PacketType,
+} from './core/Packet.ts';
+export type { Packet } from './core/Packet.ts';
 export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
 export { BitVector } from './core/BitVector.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';

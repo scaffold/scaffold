@@ -37,7 +37,7 @@ Block {
 }
 ```
 
-Blocks are identified by their hash, computed from the signed serialized bytes. `outputs.length` gives the block's own output count. Serialization length gives the block size. These are not wire fields.
+Blocks are identified by their hash, which is the SHA3-256 digest of the entire serialized [packet](wire-format.md) — including the magic header, type byte, JSON payload, and signature (if present). `outputs.length` gives the block's own output count. Serialization length gives the block size. These are not wire fields.
 
 The `refs` field lists blocks whose outputs this block's contracts may read during execution. References are read-only and do not consume outputs. See [computation](computation.md#cross-block-references).
 
@@ -261,7 +261,7 @@ The structural verification module checks block-specific properties that are com
 1. **Anchor reference**: The anchor exists and is well-formed (genesis anchors to the zero hash).
 2. **Claim indices**: All claim indices are valid — self-claims have index < `outputs.length`, shared-resource claims have index < `outputs.length` + post-subtree vector length.
 3. **Throughput balance**: `sum(input_values) == sum(output_values)` (value conservation).
-4. **Signature**: The block's signature is valid for the declared creator.
+4. **Signature**: The block's [packet-level signature](wire-format.md) is valid for the declared creator. Signature verification uses the secp256k1 signature embedded in the packet envelope, verified against the hash of the header+payload portion.
 
 Checks that were previously structural — claim mask consistency, output count, weight vector derivation, aggregate output counts — are now [contractual verification](contracts.md). The aggregation contract output carries this data, and its correctness is verified (and disputable) through the same sampling/collateral mechanism as any other contract.
 
