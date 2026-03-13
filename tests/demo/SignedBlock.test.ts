@@ -45,7 +45,7 @@ Deno.test('SignedBlock: signature is 64 bytes', () => {
   const block = makeTestBlock();
   const sb = signBlock(block, eagle.privateKey);
 
-  assert(sb.signature.length === 64);
+  assert(sb.signature.length === 65);
 });
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

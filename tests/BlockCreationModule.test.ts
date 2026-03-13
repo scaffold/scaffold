@@ -78,9 +78,9 @@ const h = (name: string): Hash => Hash.digest(name);
 
 function makeOutput(value: number, contractName?: string): Output {
   return {
-    contract: contractName ? h(contractName) : h('default-contract'),
+    verifier: { contract: contractName ? h(contractName) : h('default-contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array(),
+    detail: new Uint8Array(),
   };
 }
 
@@ -92,9 +92,9 @@ function setupModule(): { provider: TestProvider; module: BlockCreationModule<Te
 
 /** Extract aggregation data from a blueprint's outputs. */
 function getAggData(outputs: Output[]) {
-  const aggOutput = outputs.find((o) => Hash.equals(o.contract, AGGREGATION_CONTRACT));
+  const aggOutput = outputs.find((o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT));
   if (!aggOutput) return null;
-  return decodeAggregationData(aggOutput.data);
+  return decodeAggregationData(aggOutput.detail);
 }
 
 // -- deriveWeightVector tests ------------------------------------
@@ -340,6 +340,7 @@ Deno.test('buildBlock: simple leaf block', () => {
     ],
     declaredWeight: 10,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -367,6 +368,7 @@ Deno.test('buildBlock: leaf block with self-claim', () => {
     ],
     declaredWeight: 5,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -413,6 +415,7 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
     ],
     declaredWeight: 2,
     aggregates: [subtree1, subtree2],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -475,6 +478,7 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
     ],
     declaredWeight: 3,
     aggregates: [subtree1, subtree2],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -499,6 +503,7 @@ Deno.test('buildBlock: fails on missing anchor', () => {
     claims: [],
     declaredWeight: 0,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -517,6 +522,7 @@ Deno.test('buildBlock: fails on missing aggregated block', () => {
     claims: [],
     declaredWeight: 0,
     aggregates: [h('missing')],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -537,6 +543,7 @@ Deno.test('buildBlock: fails on throughput imbalance', () => {
     ],
     declaredWeight: 0,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -566,6 +573,7 @@ Deno.test('buildBlock: fails on inter-subtree conflict', () => {
     claims: [],
     declaredWeight: 0,
     aggregates: [subtree1, subtree2],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -586,6 +594,7 @@ Deno.test('buildBlock: fails on claim index out of range', () => {
     ],
     declaredWeight: 0,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -607,6 +616,7 @@ Deno.test('buildBlock: block with only self-claims (no anchor claims)', () => {
     ],
     declaredWeight: 7,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -628,6 +638,7 @@ Deno.test('buildBlock: block with no outputs and no claims', () => {
     claims: [],
     declaredWeight: 10,
     aggregates: [],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -656,6 +667,7 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
     ],
     declaredWeight: 5,
     aggregates: [subtree],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);
@@ -690,6 +702,7 @@ Deno.test('buildBlock: fails when subtree rebase returns null', () => {
     claims: [],
     declaredWeight: 0,
     aggregates: [subtree],
+    refs: [],
   };
 
   const result = module.buildBlock(spec);

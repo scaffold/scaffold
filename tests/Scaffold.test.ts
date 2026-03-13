@@ -8,9 +8,9 @@ import { NodeContext } from '../src/node/NodeContext.ts';
 
 function makeOutput(value: number, label?: string): Output {
   return {
-    contract: Hash.digest(label ?? 'contract'),
+    verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array([]),
+    detail: new Uint8Array([]),
   };
 }
 
@@ -110,9 +110,9 @@ Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', ()
   // Put a block whose output matches the verifier (contract + params as data)
   scaffold.put({
     outputs: [{
-      contract: contractHash,
+      verifier: { contract: contractHash, params },
       value: 0,
-      data: params,
+      detail: new Uint8Array(0),
     }],
   });
 

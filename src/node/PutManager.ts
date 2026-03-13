@@ -51,6 +51,7 @@ export class PutManager {
       claims,
       declaredWeight: request.declaredWeight ?? 1,
       aggregates: [],
+      refs: [],
     };
 
     const block = this.processor.buildBlock(spec);

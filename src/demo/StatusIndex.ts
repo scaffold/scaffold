@@ -19,8 +19,8 @@ export class StatusIndex {
 
     for (const block of canonicalChain) {
       for (const output of block.outputs) {
-        if (Hash.equals(output.contract, statusHash)) {
-          const { publicKey, message } = decodeStatusData(output.data);
+        if (Hash.equals(output.verifier.contract, statusHash)) {
+          const { publicKey, message } = decodeStatusData(output.detail);
           const name = publicKeyToAnimalName(publicKey);
           if (name) {
             const oldMessage = this.statuses.get(name);
@@ -46,8 +46,8 @@ export class StatusIndex {
     const extended = collectExtendedOutputs(tipBlock, store);
 
     for (let i = 0; i < extended.length; i++) {
-      if (Hash.equals(extended[i].contract, statusHash)) {
-        const { publicKey } = decodeStatusData(extended[i].data);
+      if (Hash.equals(extended[i].verifier.contract, statusHash)) {
+        const { publicKey } = decodeStatusData(extended[i].detail);
         if (bytesEqual(publicKey, identity.publicKey)) {
           return i;
         }

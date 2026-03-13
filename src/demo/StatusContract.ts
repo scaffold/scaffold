@@ -25,8 +25,8 @@ export function decodeStatusData(data: Uint8Array): { publicKey: Uint8Array; mes
 
 export function makeStatusOutput(publicKey: Uint8Array, message: string): Output {
   return {
-    contract: statusHash,
+    verifier: { contract: statusHash, params: new Uint8Array(0) },
     value: 1,
-    data: encodeStatusData(publicKey, message),
+    detail: encodeStatusData(publicKey, message),
   };
 }

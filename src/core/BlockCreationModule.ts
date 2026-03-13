@@ -5,14 +5,22 @@ import { BitVector } from './BitVector.ts';
 
 // -- Types --------------------------------------------------------
 
+/** Verification contract reference: identifies the WASM contract and its parameters. */
+export interface Verifier {
+  /** Hash of the contract WASM. */
+  contract: Hash;
+  /** Contract-specific parameters. */
+  params: Uint8Array;
+}
+
 /** A resource produced by a block. */
 export interface Output {
-  /** Spending condition (hash of contract WASM). */
-  contract: Hash;
+  /** Verification contract that governs this output. */
+  verifier: Verifier;
   /** Economic value. */
   value: number;
   /** Application-specific payload. */
-  data: Uint8Array;
+  detail: Uint8Array;
 }
 
 /** A claim against an output in the extended vector. */
@@ -43,6 +51,8 @@ export interface BlockSpec {
   declaredWeight: number;
   /** Block hashes to aggregate (empty for leaf blocks). */
   aggregates: Hash[];
+  /** Cross-block references for read-only data access. */
+  refs: Hash[];
 }
 
 /**
@@ -56,6 +66,8 @@ export interface BlockBlueprint {
   /** All outputs: user-specified outputs + any generated contract outputs (e.g., aggregation). */
   outputs: Output[];
   declaredWeight: number;
+  /** Cross-block references for read-only data access. */
+  refs: Hash[];
 }
 
 /** Result of attempting to build a block. */
@@ -273,9 +285,9 @@ export class BlockCreationModule<BlockType> {
       });
 
       allOutputs.push({
-        contract: this.provider.getAggregationContract(),
+        verifier: { contract: this.provider.getAggregationContract(), params: new Uint8Array(0) },
         value: 0,
-        data: new TextEncoder().encode(aggDataJson),
+        detail: new TextEncoder().encode(aggDataJson),
       });
     }
 
@@ -286,6 +298,7 @@ export class BlockCreationModule<BlockType> {
       claims: spec.claims.map((c) => c.index),
       outputs: allOutputs,
       declaredWeight: spec.declaredWeight,
+      refs: spec.refs,
     };
 
     return { ok: true, blueprint };

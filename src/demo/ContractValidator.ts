@@ -36,8 +36,8 @@ export function validateSignedBlock(sb: SignedBlock, store: BlockStore): Validat
   // Check if any claimed output is a status output
   let requiredPublicKey: Uint8Array | undefined;
   for (const output of claimedOutputs) {
-    if (Hash.equals(output.contract, statusHash)) {
-      const { publicKey } = decodeStatusData(output.data);
+    if (Hash.equals(output.verifier.contract, statusHash)) {
+      const { publicKey } = decodeStatusData(output.detail);
       if (requiredPublicKey) {
         // Multiple status claims — they must all be for the same identity
         if (!bytesEqual(requiredPublicKey, publicKey)) {
@@ -51,8 +51,8 @@ export function validateSignedBlock(sb: SignedBlock, store: BlockStore): Validat
 
   // Also check produced status outputs — their publicKey must match the signer
   for (const output of block.outputs) {
-    if (Hash.equals(output.contract, statusHash)) {
-      const { publicKey } = decodeStatusData(output.data);
+    if (Hash.equals(output.verifier.contract, statusHash)) {
+      const { publicKey } = decodeStatusData(output.detail);
       if (requiredPublicKey) {
         if (!bytesEqual(requiredPublicKey, publicKey)) {
           return {

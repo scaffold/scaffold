@@ -16,6 +16,9 @@ export const COLLATERAL_CONTRACT = Hash.digest('collateral-contract');
 /** Well-known contract hash for signature (payment) contract outputs. */
 export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 
+/** Well-known contract hash for self-claimed outputs (key-value store). */
+export const SELF_CONTRACT = Hash.digest('self-contract');
+
 // -- AggregationData -----------------------------------------------
 
 /**
@@ -35,7 +38,7 @@ export interface AggregationData {
   aggregateWeights: number[];
 }
 
-/** Encode AggregationData to a Uint8Array for use in Output.data. */
+/** Encode AggregationData to a Uint8Array for use in Output.detail. */
 export function encodeAggregationData(data: AggregationData): Uint8Array {
   const json = JSON.stringify({
     claimMask: data.claimMask.toJSON(),
@@ -47,7 +50,7 @@ export function encodeAggregationData(data: AggregationData): Uint8Array {
   return new TextEncoder().encode(json);
 }
 
-/** Decode AggregationData from an Output.data Uint8Array. */
+/** Decode AggregationData from an Output.detail Uint8Array. */
 export function decodeAggregationData(bytes: Uint8Array): AggregationData {
   const json = JSON.parse(new TextDecoder().decode(bytes));
   return {
@@ -65,8 +68,8 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
  */
 export function getAggregationData(block: Block): AggregationData | null {
   for (const output of block.outputs) {
-    if (Hash.equals(output.contract, AGGREGATION_CONTRACT)) {
-      return decodeAggregationData(output.data);
+    if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
+      return decodeAggregationData(output.detail);
     }
   }
   return null;
@@ -138,6 +141,8 @@ export interface Block {
   readonly claims: number[];
   readonly outputs: Output[];
   readonly declaredWeight: number;
+  /** Cross-block references for read-only data access. */
+  readonly refs: Hash[];
 }
 
 // -- BlockStore -----------------------------------------------------
@@ -206,6 +211,58 @@ export class BlockStore {
   }
 }
 
+// -- Self-claim and ref helpers -------------------------------------
+
+/**
+ * Create a self-claimed output. Self-claimed outputs use the SELF_CONTRACT
+ * verifier with the key encoded in params. They act as a key-value store
+ * within a block.
+ */
+export function createSelfClaimedOutput(key: string | Uint8Array, value: Uint8Array): Output {
+  const params = typeof key === 'string' ? new TextEncoder().encode(key) : key;
+  return {
+    verifier: { contract: SELF_CONTRACT, params },
+    value: 0,
+    detail: value,
+  };
+}
+
+/** Check whether an output is a self-claimed output (uses SELF_CONTRACT). */
+export function isSelfClaimed(output: Output): boolean {
+  return Hash.equals(output.verifier.contract, SELF_CONTRACT);
+}
+
+/** Get the key from a self-claimed output's verifier params. */
+export function getSelfClaimKey(output: Output): Uint8Array {
+  return output.verifier.params;
+}
+
+/** Find the first self-claimed output in a block matching the given key. */
+export function findSelfClaimedOutput(block: Block, key: string | Uint8Array): Output | undefined {
+  const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
+  for (const output of block.outputs) {
+    if (!isSelfClaimed(output)) continue;
+    const params = output.verifier.params;
+    if (params.length === keyBytes.length && params.every((b, i) => b === keyBytes[i])) {
+      return output;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Get the outputs of a referenced block at the given ref index.
+ * Returns undefined if the ref index is out of bounds or the referenced
+ * block is not in the store.
+ */
+export function getRefOutputs(block: Block, refIndex: number, store: BlockStore): Output[] | undefined {
+  if (refIndex < 0 || refIndex >= block.refs.length) return undefined;
+  const refHash = block.refs[refIndex];
+  const refBlock = store.get(refHash);
+  if (!refBlock) return undefined;
+  return refBlock.outputs;
+}
+
 // -- Factory functions ----------------------------------------------
 
 /**
@@ -223,12 +280,16 @@ export function createBlock(
     new Uint8Array(new Float64Array([blueprint.declaredWeight]).buffer),
   ];
   for (const out of blueprint.outputs) {
-    hashParts.push(out.contract.toBytes());
+    hashParts.push(out.verifier.contract.toBytes());
+    hashParts.push(out.verifier.params);
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    hashParts.push(out.data);
+    hashParts.push(out.detail);
   }
   for (const idx of blueprint.claims) {
     hashParts.push(new Uint8Array(new Float64Array([idx]).buffer));
+  }
+  for (const ref of blueprint.refs) {
+    hashParts.push(ref.toBytes());
   }
 
   const hash = Hash.digestParts(...hashParts);
@@ -240,6 +301,7 @@ export function createBlock(
     claims: blueprint.claims,
     outputs: blueprint.outputs,
     declaredWeight: blueprint.declaredWeight,
+    refs: blueprint.refs,
   };
 
   return block;
@@ -254,9 +316,10 @@ export function createGenesisBlock(outputs: Output[]): Block {
     new Uint8Array([0]), // genesis marker
   ];
   for (const out of outputs) {
-    hashParts.push(out.contract.toBytes());
+    hashParts.push(out.verifier.contract.toBytes());
+    hashParts.push(out.verifier.params);
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    hashParts.push(out.data);
+    hashParts.push(out.detail);
   }
   const hash = Hash.digestParts(...hashParts);
 
@@ -267,5 +330,6 @@ export function createGenesisBlock(outputs: Output[]): Block {
     claims: [],
     outputs,
     declaredWeight: GENESIS_WEIGHT,
+    refs: [],
   };
 }

@@ -8,9 +8,9 @@ import { BlockProcessor, PutManager, PutRequest } from '../src/node/PutManager.t
 
 function makeOutput(value: number, contractName?: string): Output {
   return {
-    contract: contractName ? Hash.digest(contractName) : Hash.digest('default-contract'),
+    verifier: { contract: contractName ? Hash.digest(contractName) : Hash.digest('default-contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array(),
+    detail: new Uint8Array(),
   };
 }
 
@@ -22,6 +22,7 @@ function makeBlock(overrides?: Partial<Block>): Block {
     claims: [],
     outputs: [],
     declaredWeight: 1,
+    refs: [],
     ...overrides,
   };
 }

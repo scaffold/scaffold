@@ -7,6 +7,9 @@ import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
+import { ExecutionService } from '../src/core/ExecutionService.ts';
+import { VerificationService } from '../src/core/VerificationService.ts';
+import { DisputeService } from '../src/core/DisputeService.ts';
 import { BlockReceivedResult, Coordinator } from '../src/core/Coordinator.ts';
 import { BlockAwareness, PushAction } from '../src/core/GossipModule.ts';
 
@@ -35,6 +38,9 @@ export class SimNode {
   readonly trust: TrustService;
   readonly gossip: GossipService;
   readonly blockCreation: BlockCreationService;
+  readonly execution: ExecutionService;
+  readonly verification: VerificationService;
+  readonly dispute: DisputeService;
 
   constructor(id: string) {
     this.id = id;
@@ -48,6 +54,9 @@ export class SimNode {
     this.trust = this.ctx.get(TrustService);
     this.gossip = this.ctx.get(GossipService);
     this.blockCreation = this.ctx.get(BlockCreationService);
+    this.execution = this.ctx.get(ExecutionService);
+    this.verification = this.ctx.get(VerificationService);
+    this.dispute = this.ctx.get(DisputeService);
     this.coordinator = this.ctx.get(Coordinator);
   }
 

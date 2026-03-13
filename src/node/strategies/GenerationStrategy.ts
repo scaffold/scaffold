@@ -69,7 +69,7 @@ export class GenerationStrategy implements Strategy {
 
       // Determine if this is an incentive block: at least one output whose
       // contract hash is registered in the executor.
-      const matchedOutput = block.outputs.find((out) => this.executor.hasContract(out.contract));
+      const matchedOutput = block.outputs.find((out) => this.executor.hasContract(out.verifier.contract));
       if (!matchedOutput) {
         continue;
       }
@@ -82,14 +82,15 @@ export class GenerationStrategy implements Strategy {
         anchor: block.hash,
         outputs: [
           {
-            contract: matchedOutput.contract,
+            verifier: { contract: matchedOutput.verifier.contract, params: new Uint8Array(0) },
             value: 0,
-            data: new Uint8Array(),
+            detail: new Uint8Array(),
           },
         ],
         claims: [],
         declaredWeight: 1,
         aggregates: [],
+        refs: [],
       };
 
       actions.push({ type: 'createBlock', spec, sign: true });

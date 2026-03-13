@@ -23,9 +23,9 @@ import {
 
 function makeOutput(value: number, label?: string): Output {
   return {
-    contract: Hash.digest(label ?? 'contract'),
+    verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array([]),
+    detail: new Uint8Array([]),
   };
 }
 
@@ -44,6 +44,7 @@ function makeLeafBlock(
     claims: [],
     outputs,
     declaredWeight,
+    refs: [],
   };
 }
 
@@ -216,6 +217,7 @@ Deno.test('ReactiveLayer: createBlock action triggers recursion', () => {
         claims: [],
         declaredWeight: 10,
         aggregates: [],
+        refs: [],
       },
       sign: true,
     },
@@ -266,6 +268,7 @@ Deno.test('ReactiveLayer: recursion guard prevents strategies from evaluating cy
         claims: [],
         declaredWeight: 10,
         aggregates: [],
+        refs: [],
       },
       sign: false,
     },
@@ -312,6 +315,7 @@ Deno.test('ReactiveLayer: createBlock action with null return from creator does 
         claims: [],
         declaredWeight: 0,
         aggregates: [],
+        refs: [],
       },
       sign: false,
     },
@@ -433,6 +437,7 @@ Deno.test('ReactiveLayer: multiple createBlock actions in one evaluation', () =>
         claims: [],
         declaredWeight: 5,
         aggregates: [],
+        refs: [],
       },
       sign: true,
     },
@@ -444,6 +449,7 @@ Deno.test('ReactiveLayer: multiple createBlock actions in one evaluation', () =>
         claims: [],
         declaredWeight: 3,
         aggregates: [],
+        refs: [],
       },
       sign: false,
     },
@@ -497,6 +503,7 @@ Deno.test('ReactiveLayer: recursive block creation with chained strategies', () 
         claims: [],
         declaredWeight: 10,
         aggregates: [],
+        refs: [],
       },
       sign: false,
     },

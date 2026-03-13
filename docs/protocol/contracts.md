@@ -2,7 +2,7 @@
 
 Contracts are general-purpose spending conditions. Any valid WASM program that accepts or rejects a block can serve as a contract. The protocol does not privilege specific contracts — but the protocol's own modules (conflict, consensus, trust, gossip) know how to interpret the standard contracts defined here.
 
-Standard contracts are **conventions**, not protocol primitives. They carry domain-specific data in the output's `data` field that the protocol's modules consume through their provider interfaces.
+Standard contracts are **conventions**, not protocol primitives. They carry domain-specific data in the output's `detail` field that the protocol's modules consume through their provider interfaces. Each output has a **verifier** (contract hash + params) that defines its spending condition, separate from the `detail` payload. See [computation](computation.md) for the full schema.
 
 ---
 
@@ -10,14 +10,11 @@ Standard contracts are **conventions**, not protocol primitives. They carry doma
 
 **Purpose**: Balance ownership. The simplest spending condition.
 
-**Verification**: The claiming block's signature matches the public key embedded in the output data.
+**Verification**: The claiming block's signature matches the public key in the verifier params.
 
-**Output data**:
-```
-SignatureData {
-    publicKey:   PublicKey    // owner who can spend this output
-}
-```
+**Verifier params**: The owner's public key.
+
+**Detail**: Empty (or application-specific metadata).
 
 This is the "payment contract" — an output spendable only by the holder of a specific private key. Used for balance transfers, fee collection, and any case where ownership is the spending condition.
 
@@ -55,12 +52,14 @@ The `chainWeights` vector excludes the block's own `declaredWeight`. The full we
 
 **Verification**: Spending conditions depend on the dispute outcome for the target block.
 
-**Output data**:
+**Verifier params**: The target block hash.
+
+**Detail**:
 ```
-CollateralData {
-    target:   Hash         // block whose validity is at stake
+CollateralDetail {
     path:     Number[]     // dispute path within the target
-    side:     "for" | "against"
+    side:     "valid" | "invalid"
+    pubkey:   PublicKey    // where to remit funds on resolution
 }
 ```
 
@@ -69,19 +68,29 @@ CollateralData {
 - **Non-canonical reclaim**: target block becomes non-canonical (consensus race lost, no fault).
 - **Fraud claim**: dispute resolved against the target — the opposing side claims the stake.
 
+Resolution: a collateral resolution block claims all collateral outputs for a target, sums VALID and INVALID stakes, and distributes funds to the winning side. See [computation](computation.md#collateral-and-dispute-resolution) for the resolution mechanism.
+
 The [trust module](trust.md) already describes collateral as "a regular output with restricted spending conditions." The collateral contract makes this literal — no special block-level field needed. The separation rule (collateral block C must not be the target H or a descendant of H) is a property of the collateral contract's spending conditions.
 
 ---
 
 ## Computation Contract
 
-**Purpose**: Require a valid WASM execution result to claim.
+Any application-specific WASM that exports `verify()` is a computation contract. The contract defines its own verification logic — game tick simulation, hash checking, proof verification, etc. The contract WASM hash identifies the contract.
 
-**Verification**: Re-execute the computation with the declared inputs and check that the result matches the claimed output.
+See [computation](computation.md) for the full specification: dual-mode execution, self-claimed outputs, cross-block references, the WASM host interface, and examples.
 
-**Output data**: Application-specific. Contains the computation inputs, the declared result, and a reference to the WASM program.
+## Self Contract
 
-This contract is the foundation for serverless computation: a block declares work, and the spending condition ensures the work is correct. See the [verification module](../../TODO.md) (future work) for how spot-checking validates computations.
+**Purpose**: Mark outputs as self-claimed — produced and consumed atomically by the same block.
+
+**Verification**: The claiming block must be the producing block.
+
+**Verifier params**: A key (arbitrary bytes) identifying this entry in the block's key-value store.
+
+**Detail**: The value (arbitrary bytes) associated with the key.
+
+Self-claimed outputs store computation results. Other blocks read them via [cross-block references](computation.md#cross-block-references). See [computation](computation.md#self-claimed-outputs).
 
 ---
 
@@ -91,12 +100,14 @@ This contract is the foundation for serverless computation: a block declares wor
 
 **Verification**: The claiming block's anchor chain includes the timelocked block's anchor at depth ≥ D.
 
-**Output data**:
+**Verifier params**:
 ```
-TimelockData {
+TimelockParams {
     minDepth:   Number     // minimum anchor chain depth before spending is allowed
 }
 ```
+
+**Detail**: Application-specific or empty.
 
 Used for delayed spending, vesting schedules, and cases where finality confidence requires waiting.
 

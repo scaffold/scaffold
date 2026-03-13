@@ -12,18 +12,19 @@ import { ZERO_HASH } from '../src/util/Hash.ts';
 
 const h = (name: string): Hash => Hash.digest(name);
 
-/** Create an Output with a given contract name and data string. */
+/** Create an Output with a given contract name and params string. */
 function makeOutput(contractName: string, dataStr: string): Output {
+  const encoded = new TextEncoder().encode(dataStr);
   return {
-    contract: h(contractName),
+    verifier: { contract: h(contractName), params: encoded },
     value: 0,
-    data: new TextEncoder().encode(dataStr),
+    detail: encoded,
   };
 }
 
-/** Build a Verifier from an Output (contract -> contractHash, data -> params). */
+/** Build a Verifier from an Output (verifier.contract -> contractHash, verifier.params -> params). */
 function outputVerifier(output: Output): Verifier {
-  return { contractHash: output.contract, params: output.data };
+  return { contractHash: output.verifier.contract, params: output.verifier.params };
 }
 
 /** Create a minimal Block with the given hash and outputs. */
@@ -35,6 +36,7 @@ function stubBlock(blockHash: Hash, outputs: Output[]): Block {
     claims: [],
     outputs,
     declaredWeight: 1,
+    refs: [],
   } satisfies Block;
 }
 
@@ -91,7 +93,7 @@ Deno.test('canonical block matching a subscription triggers notifyFetch', () => 
   if (actions[0].type === 'notifyFetch') {
     assertEquals(actions[0].verifier, key);
     assertEquals(actions[0].result !== null, true);
-    assertEquals((actions[0].result as FetchResult).data, output.data);
+    assertEquals((actions[0].result as FetchResult).data, output.detail);
   }
 });
 
@@ -261,7 +263,7 @@ Deno.test('multiple canonicality changes across different blocks', () => {
   assertEquals(a1 !== undefined, true);
   if (a1 && a1.type === 'notifyFetch') {
     assertEquals(a1.result !== null, true);
-    assertEquals((a1.result as FetchResult).data, output1.data);
+    assertEquals((a1.result as FetchResult).data, output1.detail);
   }
 
   // block2 lost canonicality => result is null

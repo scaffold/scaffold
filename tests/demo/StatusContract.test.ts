@@ -55,10 +55,10 @@ Deno.test('StatusContract: makeStatusOutput produces correct structure', () => {
   const identity = deriveIdentity('falcon');
   const output = makeStatusOutput(identity.publicKey, 'test');
 
-  assert(Hash.equals(output.contract, statusHash));
+  assert(Hash.equals(output.verifier.contract, statusHash));
   assertEquals(output.value, 1);
 
-  const decoded = decodeStatusData(output.data);
+  const decoded = decodeStatusData(output.detail);
   assertEquals(decoded.publicKey, identity.publicKey);
   assertEquals(decoded.message, 'test');
 });

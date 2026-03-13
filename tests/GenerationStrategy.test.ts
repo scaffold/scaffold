@@ -31,15 +31,16 @@ function stubBlock(blockHash: Hash, outputs: Output[] = []): Block {
     claims: [],
     outputs,
     declaredWeight: 1,
+    refs: [],
   };
 }
 
 /** Create an output with the given contract hash. */
 function makeOutput(contractName: string, value = 0): Output {
   return {
-    contract: h(contractName),
+    verifier: { contract: h(contractName), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array(),
+    detail: new Uint8Array(),
   };
 }
 
@@ -92,7 +93,7 @@ Deno.test('canonical incentive block triggers createBlock action', () => {
   assertEquals(actions[0].type, 'createBlock');
   if (actions[0].type === 'createBlock') {
     assertEquals(Hash.equals(actions[0].spec.anchor, block.hash), true);
-    assertEquals(Hash.equals(actions[0].spec.outputs[0].contract, h('myContract')), true);
+    assertEquals(Hash.equals(actions[0].spec.outputs[0].verifier.contract, h('myContract')), true);
     assertEquals(actions[0].sign, true);
   }
 });
@@ -291,7 +292,7 @@ Deno.test('uses first matching output contract', () => {
   assertEquals(actions.length, 1);
   if (actions[0].type === 'createBlock') {
     assertEquals(
-      Hash.equals(actions[0].spec.outputs[0].contract, h('contractX')),
+      Hash.equals(actions[0].spec.outputs[0].verifier.contract, h('contractX')),
       true,
     );
   }

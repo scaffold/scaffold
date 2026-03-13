@@ -58,6 +58,7 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
     claims: [{ index: 1 + claimIdx!, value: 1 }],
     declaredWeight: 1,
     aggregates: [],
+    refs: [],
   };
 
   const buildResult = nodeA.blockCreation.buildBlock(spec);
@@ -127,6 +128,7 @@ Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject',
     claims: [{ index: 1 + claimIdx!, value: 1 }],
     declaredWeight: 1,
     aggregates: [],
+    refs: [],
   };
 
   const buildResult = eagleNode.blockCreation.buildBlock(spec);

@@ -13,6 +13,7 @@ function makeBlock(overrides?: Partial<Block>): Block {
     claims: [],
     outputs: [],
     declaredWeight: 1,
+    refs: [],
     ...overrides,
   };
 }

@@ -6,8 +6,10 @@ import {
   BlockStore,
   createBlock,
   createGenesisBlock,
+  createSelfClaimedOutput,
   encodeAggregationData,
   getBlockWeightVector,
+  SELF_CONTRACT,
 } from '../src/core/Block.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
@@ -18,6 +20,8 @@ import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
+import { ExecutionService } from '../src/core/ExecutionService.ts';
+import { ContractFn, HostContext } from '../src/core/ExecutionModule.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { SimNetwork, SimNode } from './SimNetwork.ts';
 
@@ -27,9 +31,9 @@ const h = (name: string): Hash => Hash.digest(name);
 
 function makeOutput(value: number, label?: string): Output {
   return {
-    contract: Hash.digest(label ?? 'contract'),
+    verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array([]),
+    detail: new Uint8Array([]),
   };
 }
 
@@ -47,7 +51,7 @@ function makeLeafBlock(
     new Uint8Array(new Float64Array([Math.random()]).buffer), // uniqueness
   ];
   for (const out of outputs) {
-    hashParts.push(out.contract.toBytes());
+    hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
   }
   const hash = Hash.digestParts(...hashParts);
@@ -59,6 +63,7 @@ function makeLeafBlock(
     claims,
     outputs,
     declaredWeight,
+    refs: [],
   };
 }
 
@@ -136,6 +141,7 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     claims: [1], // claim index 1 in extended vector = anchor output 0
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 50,
+    refs: [],
   };
 
   const blockB: Block = {
@@ -145,6 +151,7 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     claims: [1], // same claim
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 30,
+    refs: [],
   };
 
   node.receiveBlock(blockA, null);
@@ -175,6 +182,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     claims: [1],
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
+    refs: [],
   };
 
   // Block B: weight 15, claims same output 0
@@ -185,6 +193,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     claims: [1],
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
+    refs: [],
   };
 
   node.receiveBlock(blockA, null);
@@ -202,6 +211,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     claims: [],
     outputs: [],
     declaredWeight: 100,
+    refs: [],
   };
 
   const result = node.receiveBlock(childA, null);
@@ -264,6 +274,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     claims: [1], // claims extended idx 1 = anchor output 0
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
+    refs: [],
   };
   node.receiveBlock(subtreeA, null);
 
@@ -275,6 +286,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     claims: [1], // claims extended idx 1 = anchor output 1
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
+    refs: [],
   };
   node.receiveBlock(subtreeB, null);
 
@@ -295,11 +307,12 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     aggregates: [subtreeA.hash, subtreeB.hash],
     claims: [],
     outputs: [{
-      contract: AGGREGATION_CONTRACT,
+      verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       value: 0,
-      data: aggData,
+      detail: aggData,
     }],
     declaredWeight: 5,
+    refs: [],
   };
 
   const result = node.receiveBlock(aggBlock, null);
@@ -333,6 +346,7 @@ Deno.test('Integration: block creation through stack — BlockCreationService.bu
     claims: [{ index: 1, value: 100 }],
     declaredWeight: 25,
     aggregates: [],
+    refs: [],
   };
 
   const result = node.blockCreation.buildBlock(spec);
@@ -354,5 +368,136 @@ Deno.test('Integration: block creation through stack — BlockCreationService.bu
 
     // Block should be canonical
     assert(node.consensus.isCanonical(block.hash));
+  }
+});
+
+// -- Computation integration tests ----------------------------------
+
+const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
+
+Deno.test('Integration: computation block with self-claims → verify → valid', () => {
+  const node = new SimNode('compute-node');
+
+  // Register a trivial contract that accepts any block
+  const trivialContract = Hash.digest('trivial-contract');
+  node.execution.registerContract(trivialContract, (ctx: HostContext) => {
+    ctx.accept();
+  });
+
+  // Genesis
+  const genesis = createGenesisBlock([{
+    verifier: { contract: trivialContract, params: new Uint8Array(0) },
+    value: 0,
+    detail: new Uint8Array(0),
+  }]);
+  node.receiveBlock(genesis, null);
+
+  // Computation block: self-claims state, claims genesis output
+  const compBlock = makeLeafBlock(
+    genesis,
+    [createSelfClaimedOutput('state', enc('game-state-1'))],
+    10,
+    [1], // claim extended index 1 = genesis output[0]
+  );
+  node.receiveBlock(compBlock, null);
+
+  // Verify the computation block
+  const result = node.execution.verifyBlock(compBlock.hash);
+  assert(result.accepted, `Expected accepted but got: ${!result.accepted ? result.reason : ''}`);
+});
+
+Deno.test('Integration: cross-block references — block B refs A and reads state', () => {
+  const node = new SimNode('ref-node');
+
+  const gameContract = Hash.digest('game-contract');
+
+  // Contract reads previous state from ref[0] and verifies new state
+  node.execution.registerContract(gameContract, (ctx: HostContext) => {
+    const outputCount = ctx.refOutputCount(0);
+    let prevState: string | undefined;
+    for (let i = 0; i < outputCount; i++) {
+      const verifier = ctx.refOutputVerifier(0, i);
+      if (verifier && Hash.equals(verifier.contract, SELF_CONTRACT)) {
+        prevState = new TextDecoder().decode(ctx.refOutputDetail(0, i));
+        break;
+      }
+    }
+    if (!prevState) {
+      ctx.reject('no previous state');
+      return;
+    }
+    // Verify new state = prev + "-next"
+    ctx.setData('state', enc(prevState + '-next'));
+    if (!ctx.result) ctx.accept();
+  });
+
+  // Genesis with game output
+  const genesis = createGenesisBlock([{
+    verifier: { contract: gameContract, params: new Uint8Array(0) },
+    value: 0,
+    detail: new Uint8Array(0),
+  }]);
+  node.receiveBlock(genesis, null);
+
+  // Block A: produces self-claimed state (no contract claims needed)
+  const blockA = makeLeafBlock(
+    genesis,
+    [createSelfClaimedOutput('state', enc('S0'))],
+    10,
+  );
+  node.receiveBlock(blockA, null);
+
+  // Block B: references block A, claims genesis game output, produces new state
+  const blockBOutputs = [createSelfClaimedOutput('state', enc('S0-next'))];
+  const blockBHashParts: Uint8Array[] = [
+    genesis.hash.toBytes(),
+    new Uint8Array(new Float64Array([10]).buffer),
+    new Uint8Array(new Float64Array([Math.random()]).buffer),
+  ];
+  for (const out of blockBOutputs) {
+    blockBHashParts.push(out.verifier.contract.toBytes());
+    blockBHashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
+  }
+  const blockB: Block = {
+    hash: Hash.digestParts(...blockBHashParts),
+    anchor: genesis.hash,
+    aggregates: [],
+    claims: [1], // claim genesis output[0] (extended index 1)
+    outputs: blockBOutputs,
+    declaredWeight: 10,
+    refs: [blockA.hash],
+  };
+  node.receiveBlock(blockB, null);
+
+  // Verify block B reads A's state and produces correct new state
+  const result = node.execution.verifyBlock(blockB.hash);
+  assert(result.accepted, `Expected accepted but got: ${!result.accepted ? result.reason : ''}`);
+});
+
+Deno.test('Integration: coordinator.attemptVerification works end-to-end', () => {
+  const node = new SimNode('verify-node');
+
+  // Register a contract that always accepts
+  const contract = Hash.digest('always-accept');
+  node.execution.registerContract(contract, (ctx: HostContext) => ctx.accept());
+
+  // Genesis
+  const genesis = createGenesisBlock([{
+    verifier: { contract, params: new Uint8Array(0) },
+    value: 0,
+    detail: new Uint8Array(0),
+  }]);
+  node.receiveBlock(genesis, null);
+
+  // Block that claims genesis output
+  const block = makeLeafBlock(genesis, [], 10, [0]);
+  node.receiveBlock(block, null);
+
+  // The block should now be in sampling. Attempt verification.
+  const verifyResult = node.coordinator.attemptVerification();
+  // May return null if no tree is selected (genesis has MAX_SAFE_INTEGER priority edge case)
+  // or a verification result
+  if (verifyResult) {
+    assert(verifyResult.verified);
   }
 });

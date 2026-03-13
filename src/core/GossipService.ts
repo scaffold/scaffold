@@ -24,7 +24,7 @@ class GossipProviderAdapter implements GossipProvider {
     size += block.aggregates.length * 32;
     size += block.claims.length * 4;
     for (const out of block.outputs) {
-      size += 32 + 8 + out.data.length;
+      size += 32 + out.verifier.params.length + 8 + out.detail.length;
     }
     return size;
   }
@@ -50,9 +50,9 @@ class GossipProviderAdapter implements GossipProvider {
     if (!block) return undefined;
     // Scan outputs for collateral contract
     for (const output of block.outputs) {
-      if (Hash.equals(output.contract, COLLATERAL_CONTRACT)) {
+      if (Hash.equals(output.verifier.contract, COLLATERAL_CONTRACT)) {
         try {
-          const data = JSON.parse(new TextDecoder().decode(output.data));
+          const data = JSON.parse(new TextDecoder().decode(output.detail));
           return Hash.fromHex(data.target);
         } catch {
           continue;
@@ -72,9 +72,9 @@ class GossipProviderAdapter implements GossipProvider {
     if (!block) return undefined;
     // Scan outputs for signature contract
     for (const output of block.outputs) {
-      if (Hash.equals(output.contract, SIGNATURE_CONTRACT)) {
+      if (Hash.equals(output.verifier.contract, SIGNATURE_CONTRACT)) {
         try {
-          const data = JSON.parse(new TextDecoder().decode(output.data));
+          const data = JSON.parse(new TextDecoder().decode(output.detail));
           return data.publicKey;
         } catch {
           continue;

@@ -9,9 +9,9 @@ import { Action, ReactiveEvent, Strategy } from '../src/node/ReactiveLayer.ts';
 
 function makeOutput(value: number, label?: string): Output {
   return {
-    contract: Hash.digest(label ?? 'contract'),
+    verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array([]),
+    detail: new Uint8Array([]),
   };
 }
 
@@ -27,7 +27,7 @@ function makeLeafBlock(
     new Uint8Array(new Float64Array([Math.random()]).buffer),
   ];
   for (const out of outputs) {
-    hashParts.push(out.contract.toBytes());
+    hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
   }
   const hash = Hash.digestParts(...hashParts);
@@ -39,6 +39,7 @@ function makeLeafBlock(
     claims: [],
     outputs,
     declaredWeight,
+    refs: [],
   };
 }
 

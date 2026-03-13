@@ -50,6 +50,7 @@ function makeBlock(name: string): Block {
     claims: [],
     outputs: [],
     declaredWeight: 1,
+    refs: [],
   };
 }
 

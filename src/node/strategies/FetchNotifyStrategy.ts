@@ -31,14 +31,14 @@ export class FetchNotifyStrategy implements Strategy {
 
       for (const output of block.outputs) {
         const key: VerifierKey = FetchManager.verifierKey({
-          contractHash: output.contract,
-          params: output.data,
+          contractHash: output.verifier.contract,
+          params: output.verifier.params,
         });
 
         if (!this.fetchManager.hasSubscription(key)) continue;
 
         if (change.canonical) {
-          const result: FetchResult = { block, data: output.data };
+          const result: FetchResult = { block, data: output.detail };
           actions.push({ type: 'notifyFetch', verifier: key, result });
         } else {
           actions.push({ type: 'notifyFetch', verifier: key, result: null });

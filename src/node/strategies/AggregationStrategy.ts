@@ -89,6 +89,7 @@ export class AggregationStrategy implements Strategy {
         claims: [],
         declaredWeight: 1,
         aggregates: toAggregate,
+        refs: [],
       };
 
       actions.push({ type: 'createBlock', spec, sign: false });

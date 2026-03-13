@@ -27,6 +27,7 @@ function makeBlock(
     claims: [],
     outputs: [],
     declaredWeight: 1,
+    refs: [],
   } satisfies Block;
 }
 

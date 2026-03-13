@@ -7,7 +7,17 @@
 
 export { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 export type { Block } from './core/Block.ts';
-export { BlockStore, createBlock, createGenesisBlock } from './core/Block.ts';
-export type { BlockBlueprint, BlockSpec, Output } from './core/BlockCreationModule.ts';
+export {
+  BlockStore,
+  createBlock,
+  createGenesisBlock,
+  createSelfClaimedOutput,
+  findSelfClaimedOutput,
+  getRefOutputs,
+  getSelfClaimKey,
+  isSelfClaimed,
+  SELF_CONTRACT,
+} from './core/Block.ts';
+export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
 export { BitVector } from './core/BitVector.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';

@@ -57,6 +57,7 @@ Deno.test('ContractValidator: correct signer passes', () => {
     claims: [{ index: 1 + 4, value: 1 }], // ownOutputCount(1) + genesis index(4) = 5
     declaredWeight: 1,
     aggregates: [],
+    refs: [],
   };
 
   const buildResult = blockCreation.buildBlock(spec);
@@ -86,6 +87,7 @@ Deno.test('ContractValidator: wrong signer (eagle signs badger output) fails', (
     claims: [{ index: 1 + 1, value: 1 }], // ownOutputCount(1) + genesis index(1) = 2
     declaredWeight: 1,
     aggregates: [],
+    refs: [],
   };
 
   const buildResult = blockCreation.buildBlock(spec);
@@ -110,9 +112,9 @@ Deno.test('ContractValidator: block without status outputs passes without signat
 
   // A block that produces a non-status output and claims nothing
   const nonStatusOutput: Output = {
-    contract: Hash.digest('other-contract'),
+    verifier: { contract: Hash.digest('other-contract'), params: new Uint8Array(0) },
     value: 0,
-    data: new Uint8Array([]),
+    detail: new Uint8Array([]),
   };
 
   const spec: BlockSpec = {
@@ -121,6 +123,7 @@ Deno.test('ContractValidator: block without status outputs passes without signat
     claims: [],
     declaredWeight: 1,
     aggregates: [],
+    refs: [],
   };
 
   const buildResult = blockCreation.buildBlock(spec);

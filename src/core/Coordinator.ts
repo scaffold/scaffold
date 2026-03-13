@@ -7,9 +7,15 @@ import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
 import { GossipService } from './GossipService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
+import { ExecutionService } from './ExecutionService.ts';
+import { VerificationService } from './VerificationService.ts';
+import { DisputeService } from './DisputeService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
 import { Output } from './BlockCreationModule.ts';
+import { ExecutionResult } from './ExecutionModule.ts';
+import { VerificationResult } from './VerificationModule.ts';
+import { ResolutionResult } from './DisputeModule.ts';
 
 /** Result of processing a block received event. */
 export interface BlockReceivedResult {
@@ -25,6 +31,7 @@ export interface BlockReceivedResult {
  * Event 2: canonicality changes — derived from diffing before/after canonical views.
  */
 export class Coordinator {
+  private readonly ctx: ProtocolContext;
   private readonly store: BlockStore;
   private readonly conflict: ConflictService;
   private readonly consensus: ConsensusService;
@@ -33,6 +40,7 @@ export class Coordinator {
   private readonly blockCreation: BlockCreationService;
 
   constructor(ctx: ProtocolContext) {
+    this.ctx = ctx;
     this.store = ctx.get(BlockStore);
     this.conflict = ctx.get(ConflictService);
     this.consensus = ctx.get(ConsensusService);
@@ -151,6 +159,7 @@ export class Coordinator {
         claims: [],
         declaredWeight,
         aggregates: toAggregate,
+        refs: [],
       });
       if (!buildResult.ok) continue;
 
@@ -163,5 +172,27 @@ export class Coordinator {
     }
 
     return null;
+  }
+
+  // -- Computation methods -------------------------------------------
+
+  /**
+   * Run verification on the next highest-priority tree.
+   * Requires ExecutionService and VerificationService to be registered.
+   */
+  attemptVerification(): VerificationResult | null {
+    const verification = this.ctx.maybeGet(VerificationService);
+    if (!verification) return null;
+    return verification.verifyNext();
+  }
+
+  /**
+   * Resolve a dispute for a target block.
+   * Requires DisputeService to be registered.
+   */
+  resolveDispute(targetHash: Hash): ResolutionResult | null {
+    const dispute = this.ctx.maybeGet(DisputeService);
+    if (!dispute) return null;
+    return dispute.resolve(targetHash);
   }
 }

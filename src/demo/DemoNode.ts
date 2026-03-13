@@ -133,6 +133,7 @@ export class DemoNode {
       claims: [{ index: ownOutputCount + claimIdx, value: 1 }],
       declaredWeight: 1,
       aggregates: [],
+      refs: [],
     };
 
     // Build block through protocol stack

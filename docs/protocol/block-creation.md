@@ -29,6 +29,7 @@ Block {
     anchor:         Hash         // parent in the anchor chain (genesis uses the zero hash)
     aggregates:     Hash[]       // blocks this block replaces
     claims:         Index[]      // indices into extended vector (own outputs + post-subtree)
+    refs:           Hash[]       // blocks referenced for read-only data access
     outputs:        Output[]     // new outputs this block produces
     declaredWeight: Number       // work this block itself contributes
     creator:        PublicKey    // block creator
@@ -37,6 +38,8 @@ Block {
 ```
 
 Blocks are identified by their hash, computed from the signed serialized bytes. `outputs.length` gives the block's own output count. Serialization length gives the block size. These are not wire fields.
+
+The `refs` field lists blocks whose outputs this block's contracts may read during execution. References are read-only and do not consume outputs. See [computation](computation.md#cross-block-references).
 
 Domain-specific data — aggregation state (claim masks, weight vectors, output counts), collateral targets, payment targets — is carried in [contract outputs](contracts.md), not block-level fields. Protocol modules access this data through their provider interfaces.
 
@@ -48,24 +51,33 @@ An **output** is a resource produced by a block:
 
 ```
 Output {
-    contract:   Hash      // spending condition (hash of contract WASM)
+    verifier:   Verifier  // spending condition
     value:      Number    // economic value
-    data:       Bytes     // application-specific payload
+    detail:     Bytes     // application-specific payload
+}
+
+Verifier {
+    contract:   Hash      // WASM binary hash
+    params:     Bytes     // parameters to the contract
 }
 ```
 
-A **contract** defines the spending condition for an output. It is identified by the hash of its WASM code. When a block claims an output, the contract WASM is executed on the block — it accepts or rejects the claim. This is **contractual verification**, distinct from structural verification.
+A **verifier** defines the spending condition for an output. It combines a contract (identified by its WASM hash) with parameters that configure the condition. For example, a signature contract's params contain the owner's public key. When a block claims an output, the contract WASM is executed with the verifier's params — it accepts or rejects the claim. This is **contractual verification**, distinct from structural verification.
+
+The separation of `params` from `detail` is deliberate: `params` parameterizes the spending condition (who/how can claim), while `detail` carries the output's data payload. See [computation](computation.md#schema) for details.
 
 Contracts are general-purpose. Example contract types:
 
 | Contract | Condition | Use |
 |----------|-----------|-----|
-| Signature | Block is signed by key K | Balance, ownership |
+| Signature | Block is signed by key in params | Balance, ownership |
 | Computation | Block produces valid WASM execution result | Game state, request/response |
+| Self | Block is the producing block | Self-claimed key-value data |
 | Aggregation | Block aggregates the parent block | Aggregation incentive fees |
+| Collateral | Dispute outcome for target block | Validity stakes |
 | Timelock | Block's anchor is past depth D | Delayed spending |
 
-The protocol does not define a fixed set of contracts. Any valid WASM that accepts or rejects a block can serve as a contract. The spending condition is entirely determined by the contract code.
+The protocol does not define a fixed set of contracts. Any valid WASM that accepts or rejects a block can serve as a contract. The spending condition is entirely determined by the contract code. See [computation](computation.md) for the full computation and verification model.
 
 ---
 
