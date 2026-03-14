@@ -5,7 +5,7 @@
  * into core/ or util/ directly.
  */
 
-export { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
+export { Hash, type HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 export type { Block } from './core/Block.ts';
 export {
   BlockStore,

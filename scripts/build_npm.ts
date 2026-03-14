@@ -19,6 +19,7 @@ for await (
     globstar: true,
     exclude: [
       './plugins/deno/**/*.ts',
+      './src/demo/**/*.ts',
       './src/worker/**/*.ts',
       './src/contracts/**/*.ts',
       './src/util/QueueMuxer.ts',
