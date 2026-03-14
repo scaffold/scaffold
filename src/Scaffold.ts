@@ -1,11 +1,11 @@
-import { Block } from './core/Block.ts';
 import { composeUnsignedBlockPacket } from './core/Packet.ts';
 import { Output } from './core/BlockCreationModule.ts';
-import { NodeConfig, NodeContext } from './node/NodeContext.ts';
+import { NodeContext } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
 import { FetchHandle, FetchManager, FetchOptions, Verifier } from './node/FetchManager.ts';
 import { FetchNotifyStrategy } from './node/strategies/FetchNotifyStrategy.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
+import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 
 export interface ScaffoldConfig {
   /** Genesis block configuration */
@@ -77,6 +77,11 @@ export class Scaffold {
   /** Close the scaffold instance */
   async close(): Promise<void> {
     // Cleanup - stub for now (will be fleshed out with plugin lifecycle)
+  }
+
+  /** Reactive block record set for observing block graph changes. */
+  get blocks(): BlockRecordSet {
+    return this.nodeContext.blocks;
   }
 
   /** Expert access to internal context */

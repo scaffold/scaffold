@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { Block, BlockStore } from '../src/core/Block.ts';
+import { Block, BlockSource, BlockStore } from '../src/core/Block.ts';
 import { FetchResult, ReactiveEvent, VerifierKey } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { FetchNotifyStrategy } from '../src/node/strategies/FetchNotifyStrategy.ts';
@@ -37,6 +37,9 @@ function stubBlock(blockHash: Hash, outputs: Output[]): Block {
     outputs,
     declaredWeight: 1,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   } satisfies Block;
 }
 

@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block } from '../src/core/Block.ts';
+import { Block, BlockSource } from '../src/core/Block.ts';
 import { FetchManager, FetchResult, Verifier } from '../src/node/FetchManager.ts';
 
 // -- Test helpers ------------------------------------------------
@@ -14,6 +14,9 @@ function makeBlock(overrides?: Partial<Block>): Block {
     outputs: [],
     declaredWeight: 1,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
     ...overrides,
   };
 }

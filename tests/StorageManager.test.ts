@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block } from '../src/core/Block.ts';
+import { Block, BlockSource } from '../src/core/Block.ts';
 import { BlockSerializer, StorageManager, StoragePlugin } from '../src/node/StorageManager.ts';
 import { deserialize, serialize } from '../src/core/BlockSerializer.ts';
 
@@ -51,6 +51,9 @@ function makeBlock(name: string): Block {
     outputs: [],
     declaredWeight: 1,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 }
 

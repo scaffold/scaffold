@@ -1,7 +1,7 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 import { serialize, deserialize } from './BlockSerializer.ts';
-import { Block, BlockPayload, createBlockFromPacket, GENESIS_WEIGHT } from './Block.ts';
+import { Block, BlockPayload, BlockSource, createBlockFromPacket, GENESIS_WEIGHT } from './Block.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 
 // -- PacketType enum ------------------------------------------------
@@ -165,6 +165,7 @@ function blueprintToPayload(blueprint: BlockBlueprint): BlockPayload {
     outputs: blueprint.outputs,
     declaredWeight: blueprint.declaredWeight,
     refs: blueprint.refs,
+    timestamp: Date.now(),
   };
 }
 
@@ -175,7 +176,7 @@ export function composeBlockPacket(
 ): { block: Block; packet: Packet<BlockPayload> } {
   const payload = blueprintToPayload(blueprint);
   const packet = composePacket<BlockPayload>(PacketType.Block, payload, privateKey);
-  const block = createBlockFromPacket(payload, packet.hash);
+  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local);
   return { block, packet };
 }
 
@@ -185,7 +186,7 @@ export function composeUnsignedBlockPacket(
 ): { block: Block; packet: Packet<BlockPayload> } {
   const payload = blueprintToPayload(blueprint);
   const packet = composeUnsignedPacket<BlockPayload>(PacketType.UnsignedBlock, payload);
-  const block = createBlockFromPacket(payload, packet.hash);
+  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local);
   return { block, packet };
 }
 
@@ -200,8 +201,9 @@ export function composeGenesisPacket(
     outputs,
     declaredWeight: GENESIS_WEIGHT,
     refs: [],
+    timestamp: 0,
   };
   const packet = composeUnsignedPacket<BlockPayload>(PacketType.UnsignedBlock, payload);
-  const block = createBlockFromPacket(payload, packet.hash);
+  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local);
   return { block, packet };
 }

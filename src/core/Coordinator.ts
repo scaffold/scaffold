@@ -40,6 +40,9 @@ export class Coordinator {
   private readonly gossip: GossipService;
   private readonly blockCreation: BlockCreationService;
 
+  /** Collects canonicality changes from flushChanges(). */
+  private readonly canonicalityChanges: { hash: Hash; canonical: boolean }[] = [];
+
   constructor(ctx: ProtocolContext) {
     this.ctx = ctx;
     this.store = ctx.get(BlockStore);
@@ -48,6 +51,11 @@ export class Coordinator {
     this.sampling = ctx.get(SamplingService);
     this.gossip = ctx.get(GossipService);
     this.blockCreation = ctx.get(BlockCreationService);
+
+    // Wire consensus change listener to collect canonicality changes
+    this.consensus.onCanonicalityChange((hash, canonical) => {
+      this.canonicalityChanges.push({ hash, canonical });
+    });
   }
 
   /**
@@ -57,13 +65,10 @@ export class Coordinator {
    * 2. Add to conflict module → discover conflicts
    * 3. Add to consensus module + register conflicts + set initial weight
    * 4. Gossip notification
-   * 5. Diff canonical view for changes
+   * 5. Flush canonical view changes
    * 6. For newly canonical blocks, add to sampling
    */
   blockReceived(block: Block, fromPeer: string | null): BlockReceivedResult {
-    // Snapshot canonical view before
-    const canonicalBefore = new Set(this.consensus.getCanonicalView());
-
     // 1. Store the block
     this.store.put(block);
 
@@ -83,24 +88,10 @@ export class Coordinator {
     // 4. Gossip
     const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
 
-    // 5. Diff canonical view
-    const canonicalAfter = this.consensus.getCanonicalView();
-    const canonicalityChanges: { hash: Hash; canonical: boolean }[] = [];
-
-    // Newly canonical
-    for (const key of canonicalAfter) {
-      if (!canonicalBefore.has(key)) {
-        const hash = Hash.fromPrimitive(key);
-        canonicalityChanges.push({ hash, canonical: true });
-      }
-    }
-    // Newly non-canonical
-    for (const key of canonicalBefore) {
-      if (!canonicalAfter.has(key)) {
-        const hash = Hash.fromPrimitive(key);
-        canonicalityChanges.push({ hash, canonical: false });
-      }
-    }
+    // 5. Flush canonical view -- fires listener which populates canonicalityChanges
+    this.canonicalityChanges.length = 0;
+    this.consensus.flushChanges();
+    const canonicalityChanges = [...this.canonicalityChanges];
 
     // 6. For newly canonical blocks, add to sampling
     for (const change of canonicalityChanges) {

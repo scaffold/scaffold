@@ -80,6 +80,7 @@ export class ReactiveLayer {
   private readonly privateKey: Uint8Array | null;
 
   private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
+  private readonly onBlockProcessed?: (block: Block) => void;
 
   constructor(deps: {
     coordinator: Coordinator;
@@ -91,6 +92,7 @@ export class ReactiveLayer {
     blockCreator: BlockCreator;
     privateKey?: Uint8Array | null;
     onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
+    onBlockProcessed?: (block: Block) => void;
   }) {
     this.coordinator = deps.coordinator;
     this.store = deps.store;
@@ -101,6 +103,7 @@ export class ReactiveLayer {
     this.blockCreator = deps.blockCreator;
     this.privateKey = deps.privateKey ?? null;
     this.onNotifyFetch = deps.onNotifyFetch;
+    this.onBlockProcessed = deps.onBlockProcessed;
   }
 
   /**
@@ -126,6 +129,9 @@ export class ReactiveLayer {
   ): void {
     // 1. Run the block through the coordinator
     const result = this.coordinator.blockReceived(block, fromPeer);
+
+    // Notify that block was processed (for BlockRecordSet)
+    this.onBlockProcessed?.(block);
 
     // 2. Skip strategy evaluation for blocks created in this cycle
     if (cycleCreated.has(block.hash.toPrimitive())) {

@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { Block } from '../src/core/Block.ts';
+import { Block, BlockSource } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { NodeConfig, NodeContext } from '../src/node/NodeContext.ts';
 import { Action, ReactiveEvent, Strategy } from '../src/node/ReactiveLayer.ts';
@@ -40,6 +40,9 @@ function makeLeafBlock(
     outputs,
     declaredWeight,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 }
 

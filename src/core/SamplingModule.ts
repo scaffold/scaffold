@@ -53,8 +53,16 @@ export class SamplingModule<BlockType> {
   /** Per-tree sampling state: successes and failures (including pending). */
   private _trees = new Map<HashPrimitive, { n: number; f: number }>();
 
+  /** Listener for verification state changes. */
+  private _verificationListener?: (hash: Hash) => void;
+
   constructor(provider: SamplingProvider<BlockType>) {
     this._provider = provider;
+  }
+
+  /** Register a listener for verification state changes. */
+  onVerificationChange(cb: (hash: Hash) => void): void {
+    this._verificationListener = cb;
   }
 
   /** Register a tree to be tracked for sampling. */
@@ -77,11 +85,14 @@ export class SamplingModule<BlockType> {
     if (!state) return;
     state.n += 1;
     state.f -= 1;
+    this._verificationListener?.(treeHash);
   }
 
   /** Record that a pending sample failed (no state change -- already counted). */
-  recordSampleFailure(_treeHash: Hash): void {
+  recordSampleFailure(treeHash: Hash): void {
     // Intentionally empty: pending samples are already counted as failures.
+    // But still notify listeners that verification state was evaluated.
+    this._verificationListener?.(treeHash);
   }
 
   /** Get the work distribution for a tree. Returns Beta(n, f+1) parameters. */

@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block, BlockStore } from '../src/core/Block.ts';
+import { Block, BlockSource, BlockStore } from '../src/core/Block.ts';
 import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { AggregationStrategy } from '../src/node/strategies/AggregationStrategy.ts';
@@ -28,6 +28,9 @@ function makeBlock(
     outputs: [],
     declaredWeight: 1,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   } satisfies Block;
 }
 

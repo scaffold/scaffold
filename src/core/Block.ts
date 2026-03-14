@@ -127,10 +127,19 @@ export function getBlockWeightVector(block: Block): number[] {
   return [block.declaredWeight];
 }
 
+// -- Block metadata -------------------------------------------------
+
+/** How a block was received at this node. */
+export enum BlockSource {
+  Local = 'local',
+  Remote = 'remote',
+  Storage = 'storage',
+}
+
 // -- Block interface ------------------------------------------------
 
 /**
- * Concrete block type: wire format + computed hash.
+ * Concrete block type: wire format + computed hash + reception metadata.
  * Domain-specific data (aggregation state, collateral, payment) is
  * carried in contract outputs within the outputs array.
  */
@@ -143,6 +152,12 @@ export interface Block {
   readonly declaredWeight: number;
   /** Cross-block references for read-only data access. */
   readonly refs: Hash[];
+  /** Creation time, set by block creator (wire format). */
+  readonly timestamp: number;
+  /** Reception time at this node (Date.now()). Node-local, not serialized. */
+  readonly receivedAt: number;
+  /** How this block was received. Node-local, not serialized. */
+  readonly source: BlockSource;
 }
 
 // -- BlockStore -----------------------------------------------------
@@ -265,11 +280,16 @@ export function getRefOutputs(block: Block, refIndex: number, store: BlockStore)
 
 // -- BlockPayload ---------------------------------------------------
 
-/** Block fields minus hash — the payload carried in a Packet. */
-export type BlockPayload = Omit<Block, 'hash'>;
+/** Block fields minus hash and node-local metadata -- the payload carried in a Packet. */
+export type BlockPayload = Omit<Block, 'hash' | 'receivedAt' | 'source'>;
 
 /** Construct a Block from a deserialized packet payload and a precomputed hash. */
-export function createBlockFromPacket(payload: BlockPayload, hash: Hash): Block {
+export function createBlockFromPacket(
+  payload: BlockPayload,
+  hash: Hash,
+  source: BlockSource = BlockSource.Remote,
+): Block {
+  const now = Date.now();
   return {
     hash,
     anchor: payload.anchor,
@@ -278,6 +298,9 @@ export function createBlockFromPacket(payload: BlockPayload, hash: Hash): Block 
     outputs: payload.outputs,
     declaredWeight: payload.declaredWeight,
     refs: payload.refs,
+    timestamp: payload.timestamp ?? now,
+    receivedAt: now,
+    source,
   };
 }
 
@@ -320,6 +343,9 @@ export function createBlock(
     outputs: blueprint.outputs,
     declaredWeight: blueprint.declaredWeight,
     refs: blueprint.refs,
+    timestamp: Date.now(),
+    receivedAt: Date.now(),
+    source: BlockSource.Local,
   };
 
   return block;
@@ -349,5 +375,8 @@ export function createGenesisBlock(outputs: Output[]): Block {
     outputs,
     declaredWeight: GENESIS_WEIGHT,
     refs: [],
+    timestamp: Date.now(),
+    receivedAt: Date.now(),
+    source: BlockSource.Local,
   };
 }

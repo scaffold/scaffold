@@ -62,8 +62,41 @@ export class ConsensusModule<BlockType> {
   /** Cached canonical view. Null means dirty. */
   private canonicalCache: Set<HashPrimitive> | null = null;
 
+  /** Previous canonical snapshot for change detection. */
+  private previousCanonical: Set<HashPrimitive> | null = null;
+
+  /** Listeners for canonicality changes. */
+  private canonicalityListeners: ((hash: Hash, canonical: boolean) => void)[] = [];
+
   constructor(provider: ConsensusProvider<BlockType>) {
     this.provider = provider;
+  }
+
+  /** Register a listener for canonicality changes. */
+  onCanonicalityChange(cb: (hash: Hash, canonical: boolean) => void): void {
+    this.canonicalityListeners.push(cb);
+  }
+
+  /** Diff canonical set against previous snapshot, fire listeners for each change. */
+  flushChanges(): void {
+    const current = this.getCanonicalView();
+    if (!this.previousCanonical) {
+      this.previousCanonical = new Set(current);
+      return;
+    }
+    for (const key of current) {
+      if (!this.previousCanonical.has(key)) {
+        const hash = Hash.fromPrimitive(key);
+        for (const cb of this.canonicalityListeners) cb(hash, true);
+      }
+    }
+    for (const key of this.previousCanonical) {
+      if (!current.has(key)) {
+        const hash = Hash.fromPrimitive(key);
+        for (const cb of this.canonicalityListeners) cb(hash, false);
+      }
+    }
+    this.previousCanonical = new Set(current);
   }
 
   // -- Mutations --------------------------------------------------

@@ -107,8 +107,16 @@ export class TrustModule<BlockType> {
   /** Target block hash -> set of collateral hash primitives placed on it. */
   private targetIndex = new Map<HashPrimitive, Set<HashPrimitive>>();
 
+  /** Listener for collateral changes on a target block. */
+  private collateralListener?: (targetHash: Hash) => void;
+
   constructor(provider: TrustProvider<BlockType>) {
     this.provider = provider;
+  }
+
+  /** Register a listener for collateral changes. */
+  onCollateralChange(cb: (targetHash: Hash) => void): void {
+    this.collateralListener = cb;
   }
 
   // -- Mutations --------------------------------------------------
@@ -146,6 +154,7 @@ export class TrustModule<BlockType> {
     this.placements.set(key, record);
     this.getOrCreateSet(this.targetIndex, targetHash.toPrimitive()).add(key);
 
+    this.collateralListener?.(targetHash);
     return true;
   }
 
@@ -162,6 +171,7 @@ export class TrustModule<BlockType> {
     if (!this.provider.isAggregated(record.targetHash)) return false;
 
     record.status = CollateralStatus.Redeemed;
+    this.collateralListener?.(record.targetHash);
     return true;
   }
 
@@ -178,6 +188,7 @@ export class TrustModule<BlockType> {
     if (this.provider.isCanonical(record.targetHash)) return false;
 
     record.status = CollateralStatus.Reclaimed;
+    this.collateralListener?.(record.targetHash);
     return true;
   }
 
@@ -211,6 +222,9 @@ export class TrustModule<BlockType> {
       record.status = CollateralStatus.Claimed;
     }
 
+    if (totalClaimed > 0) {
+      this.collateralListener?.(targetHash);
+    }
     return totalClaimed;
   }
 

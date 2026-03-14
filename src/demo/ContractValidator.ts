@@ -1,5 +1,5 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, BlockPayload, getBlockClaimMask } from '../core/Block.ts';
+import { Block, BlockSource, BlockStore, BlockPayload, getBlockClaimMask } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { Packet, verifyPacketSignature } from '../core/Packet.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
@@ -20,6 +20,8 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
   const block: Block = {
     hash: packet.hash,
     ...packet.payload,
+    receivedAt: Date.now(),
+    source: BlockSource.Remote,
   };
 
   // Genesis is always valid

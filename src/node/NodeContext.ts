@@ -17,6 +17,7 @@ import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { Hash } from '../util/Hash.ts';
+import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 
 export interface NodeConfig {
   /** Genesis block outputs (defines the network) */
@@ -44,6 +45,9 @@ export class NodeContext {
   readonly gossip: GossipService;
   readonly trust: TrustService;
   readonly blockCreation: BlockCreationService;
+
+  /** Reactive block record set - notifies listeners on block add/update. */
+  readonly blocks: BlockRecordSet;
 
   private readonly _genesisHash: Hash;
 
@@ -78,7 +82,24 @@ export class NodeContext {
       },
     };
 
-    // 6. Create ReactiveLayer with strategies
+    // 6. Create BlockRecordSet and wire module listeners
+    this.blocks = new BlockRecordSet({ debounceMs: 0 });
+
+    this.consensus.onCanonicalityChange((hash, _canonical) => {
+      const block = this.store.get(hash);
+      if (block) this.blocks.notifyChanged(block);
+    });
+    this.sampling.onVerificationChange((hash) => {
+      const block = this.store.get(hash);
+      if (block) this.blocks.notifyChanged(block);
+    });
+    this.trust.onCollateralChange((targetHash) => {
+      const block = this.store.get(targetHash);
+      if (block) this.blocks.notifyChanged(block);
+    });
+
+    // 7. Create ReactiveLayer with strategies
+    const blocks = this.blocks;
     this.reactiveLayer = new ReactiveLayer({
       coordinator: this.coordinator,
       store: this.store,
@@ -88,12 +109,16 @@ export class NodeContext {
       strategies: config.strategies ?? [],
       blockCreator,
       onNotifyFetch: config.onNotifyFetch,
+      onBlockProcessed: (block: Block) => {
+        blocks.add(block);
+      },
     });
 
-    // 7. Process genesis block through coordinator directly
+    // 8. Process genesis block through coordinator directly
     //    (not through reactive layer, since strategies should not fire on genesis)
     const { block: genesis } = composeGenesisPacket(config.genesis.outputs);
     this.coordinator.blockReceived(genesis, null);
+    this.blocks.add(genesis);
     this._genesisHash = genesis.hash;
   }
 

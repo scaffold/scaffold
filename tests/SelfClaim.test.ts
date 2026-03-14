@@ -2,6 +2,7 @@ import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import {
   Block,
+  BlockSource,
   BlockStore,
   createSelfClaimedOutput,
   findSelfClaimedOutput,
@@ -25,6 +26,9 @@ function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
     outputs,
     declaredWeight: 1,
     refs,
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 }
 

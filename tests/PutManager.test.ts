@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block } from '../src/core/Block.ts';
+import { Block, BlockSource } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockProcessor, PutManager, PutRequest } from '../src/node/PutManager.ts';
 
@@ -23,6 +23,9 @@ function makeBlock(overrides?: Partial<Block>): Block {
     outputs: [],
     declaredWeight: 1,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
     ...overrides,
   };
 }

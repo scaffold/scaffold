@@ -3,6 +3,7 @@ import { Hash } from '../src/util/Hash.ts';
 import {
   AGGREGATION_CONTRACT,
   Block,
+  BlockSource,
   BlockStore,
   createBlock,
   createGenesisBlock,
@@ -64,6 +65,9 @@ function makeLeafBlock(
     outputs,
     declaredWeight,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 }
 
@@ -142,6 +146,9 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 50,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 
   const blockB: Block = {
@@ -152,6 +159,9 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 30,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 
   node.receiveBlock(blockA, null);
@@ -183,6 +193,9 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 
   // Block B: weight 15, claims same output 0
@@ -194,6 +207,9 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 
   node.receiveBlock(blockA, null);
@@ -212,6 +228,9 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     outputs: [],
     declaredWeight: 100,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 
   const result = node.receiveBlock(childA, null);
@@ -275,6 +294,9 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
   node.receiveBlock(subtreeA, null);
 
@@ -287,6 +309,9 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
   node.receiveBlock(subtreeB, null);
 
@@ -313,6 +338,9 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     }],
     declaredWeight: 5,
     refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
 
   const result = node.receiveBlock(aggBlock, null);
@@ -466,6 +494,9 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     outputs: blockBOutputs,
     declaredWeight: 10,
     refs: [blockA.hash],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
   };
   node.receiveBlock(blockB, null);
 
