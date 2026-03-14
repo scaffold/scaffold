@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useHighlightRegistry } from '../highlight/HighlightContext.ts';
-import type { Hash } from '../types.ts';
+import type { Hash } from 'scaffold.io/util/Hash.ts';
 
 interface HashSpanProps {
   hash: Hash;

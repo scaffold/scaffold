@@ -1,6 +1,7 @@
 import React from 'react';
 import { HashSpan } from './HashSpan.tsx';
-import type { Block, Scaffold } from '../types.ts';
+import type { Block } from 'scaffold.io/core/Block.ts';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
 
 interface BlockDetailProps {
   block: Block;

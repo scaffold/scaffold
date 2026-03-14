@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { HighlightRegistry } from '../highlight/HighlightRegistry.ts';
 import { HighlightContext } from '../highlight/HighlightContext.ts';
 import { BlockTable } from './BlockTable.tsx';
-import type { Scaffold } from '../types.ts';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
 
 interface BlockGraphExplorerProps {
   scaffold: Scaffold;

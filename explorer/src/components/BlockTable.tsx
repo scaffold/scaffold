@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
 import { BlockRow } from './BlockRow.tsx';
 import { FilterBar, FilterState } from './FilterBar.tsx';
-import type { Block, Scaffold } from '../types.ts';
+import type { Block } from 'scaffold.io/core/Block.ts';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
 
 const ALL_COLUMNS = [
   { key: 'hash', label: 'Hash' },

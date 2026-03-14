@@ -1,7 +1,9 @@
 import React, { useEffect, useReducer, useCallback } from 'react';
 import { HashSpan } from './HashSpan.tsx';
 import { BlockDetail } from './BlockDetail.tsx';
-import type { Block, BlockRecordSet, Scaffold } from '../types.ts';
+import type { Block } from 'scaffold.io/core/Block.ts';
+import type { BlockRecordSet } from 'scaffold.io/reactive/BlockRecordSet.ts';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
 
 interface BlockRowProps {
   scaffold: Scaffold;

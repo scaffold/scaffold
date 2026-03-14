@@ -1,18 +1,48 @@
 import React, { useMemo, useCallback, useState } from 'react';
 import { BlockGraphExplorer } from '@scaffold/explorer';
-import { createMockScaffold } from './MockScaffold.ts';
+import { Scaffold } from 'scaffold.io/Scaffold.ts';
+import { Hash } from 'scaffold.io/util/Hash.ts';
 
 export function App() {
-  const scaffold = useMemo(() => createMockScaffold(), []);
+  const scaffold = useMemo(() => new Scaffold({
+    genesis: {
+      outputs: [
+        {
+          verifier: { contract: Hash.digest('demo-contract'), params: new Uint8Array(0) },
+          value: 1000,
+          detail: new TextEncoder().encode('genesis'),
+        },
+      ],
+    },
+  }), []);
+
   const [count, setCount] = useState(0);
 
   const handleAddBlock = useCallback(() => {
-    scaffold.addBlock();
+    scaffold.put({
+      outputs: [
+        {
+          verifier: { contract: Hash.digest('demo-contract'), params: new Uint8Array(0) },
+          value: Math.floor(Math.random() * 100),
+          detail: new TextEncoder().encode(`block-${Date.now()}`),
+        },
+      ],
+    });
     setCount((c) => c + 1);
   }, [scaffold]);
 
   const handleAdd5 = useCallback(() => {
-    for (let i = 0; i < 5; i++) scaffold.addBlock();
+    for (let i = 0; i < 5; i++) {
+      scaffold.put({
+        outputs: [
+          {
+            verifier: { contract: Hash.digest('demo-contract'), params: new Uint8Array(0) },
+            value: Math.floor(Math.random() * 100),
+            detail: new TextEncoder().encode(`block-${Date.now()}-${i}`),
+          },
+        ],
+      });
+    }
     setCount((c) => c + 5);
   }, [scaffold]);
 
@@ -54,11 +84,11 @@ export function App() {
           Add 5
         </button>
         <span style={{ fontSize: 12, color: '#8e8e93', fontFamily: '-apple-system, sans-serif' }}>
-          {count > 0 ? `+${count} added` : 'Click to simulate receiving blocks'}
+          {count > 0 ? `+${count} added` : 'Click to add blocks'}
         </span>
       </div>
 
-      <BlockGraphExplorer scaffold={scaffold as any} />
+      <BlockGraphExplorer scaffold={scaffold} />
     </div>
   );
 }
