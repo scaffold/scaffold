@@ -1,4 +1,4 @@
-import { TimeProvider } from '../Config.ts';
+import { TimeProvider } from '../interfaces/TimeProvider.ts';
 
 const NEVER: () => void = () => {
   throw new Error(`This should never be called!`);

@@ -1,5 +1,5 @@
 import { Hash } from '../../src/util/Hash.ts';
-import { StorageProvider } from '../../src/Config.ts';
+import { StorageProvider } from '../../src/interfaces/StorageProvider.ts';
 
 declare global {
   interface FileSystemDirectoryHandle {

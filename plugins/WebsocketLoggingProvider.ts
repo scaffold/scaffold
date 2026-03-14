@@ -1,6 +1,5 @@
-import { LoggingProvider } from '../legacy2/Config.ts';
-import { Context } from '../legacy2/Context.ts';
-import { LogEvent } from '../legacy2/Logger.ts';
+import { LoggingProvider } from '../src/interfaces/LoggingProvider.ts';
+import { LogEvent } from '../src/interfaces/logging.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import { jsonSafeStringify } from '../src/util/json.ts';
 
@@ -19,7 +18,7 @@ export class WebsocketLoggingProvider implements LoggingProvider {
     };
   }
 
-  handler(event: LogEvent, ctx: Context) {
+  handler(event: LogEvent, ctx: { config: { debugName: string } }) {
     const packet = str2bin(
       jsonSafeStringify({
         source: ctx.config.debugName,

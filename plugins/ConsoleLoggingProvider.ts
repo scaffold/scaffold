@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-console
 
-import { LoggingProvider } from '../legacy2/Config.ts';
-import { LogEvent, LogLevel } from '../legacy2/Logger.ts';
+import { LoggingProvider } from '../src/interfaces/LoggingProvider.ts';
+import { LogEvent, LogLevel } from '../src/interfaces/logging.ts';
 
 export class ConsoleLoggingProvider implements LoggingProvider {
   handler(event: LogEvent) {

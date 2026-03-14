@@ -1,4 +1,4 @@
-import { NetworkProvider, SignalingDriver } from '../../src/NetworkProvider.ts';
+import { NetworkProvider, SignalingDriver } from '../../src/interfaces/network.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { orderSignals } from '../util.ts';
 

@@ -1,4 +1,4 @@
-import { Timeout } from '../Config.ts';
+import { Timeout } from '../interfaces/TimeProvider.ts';
 
 export const watchClass = (cls: any, watchKeys: string[], then: () => void) => {
   let timeout: Timeout | undefined;

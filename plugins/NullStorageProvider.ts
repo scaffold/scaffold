@@ -1,5 +1,5 @@
 import { Hash } from '../src/util/Hash.ts';
-import { StorageProvider } from '../legacy2/Config.ts';
+import { StorageProvider } from '../src/interfaces/StorageProvider.ts';
 
 export class NullStorageProvider implements StorageProvider {
   public set(_namespace: number, _key: Hash, _value?: Uint8Array) {}

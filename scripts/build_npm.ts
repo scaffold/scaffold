@@ -20,6 +20,8 @@ for await (
     exclude: [
       './plugins/deno/**/*.ts',
       './src/worker/**/*.ts',
+      './src/contracts/**/*.ts',
+      './src/util/QueueMuxer.ts',
     ],
   })
 ) {

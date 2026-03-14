@@ -2,9 +2,9 @@ import {
   ConnectionProvider,
   NetworkProvider,
   SignalingDriver,
-} from '../legacy2/NetworkProvider.ts';
+} from '../src/interfaces/network.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { Timeout, TimeProvider } from '../legacy2/Config.ts';
+import { Timeout, TimeProvider } from '../src/interfaces/TimeProvider.ts';
 
 export interface MockNetworkOptions {
   connectLatencyMs: number;
