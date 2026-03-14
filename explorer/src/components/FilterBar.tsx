@@ -68,7 +68,7 @@ export const FilterBar = React.memo(function FilterBar({
           className="column-toggle-btn"
           onClick={() => setShowColumns(!showColumns)}
         >
-          Columns
+          Columns {showColumns ? '\u25B4' : '\u25BE'}
         </button>
         {showColumns && (
           <div className="column-dropdown">

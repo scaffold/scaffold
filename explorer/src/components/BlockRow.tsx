@@ -15,22 +15,31 @@ interface BlockRowProps {
 }
 
 function formatTime(ts: number): string {
-  if (ts === 0) return '-';
+  if (ts === 0) return '--:--';
   const d = new Date(ts);
   return d.toLocaleTimeString([], { hour12: false, fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions);
 }
 
 function validityLabel(dist: { successes: number; failures: number; mean: number } | undefined): string {
-  if (!dist) return '-';
+  if (!dist) return '--';
   if (dist.successes === 0 && dist.failures === 0) return 'Unsampled';
   return `${(dist.mean * 100).toFixed(0)}% (${dist.successes}/${dist.successes + dist.failures})`;
 }
 
 function trustLabel(state: { forAmount: number; againstAmount: number }): string {
-  if (state.forAmount === 0 && state.againstAmount === 0) return '-';
+  if (state.forAmount === 0 && state.againstAmount === 0) return '--';
   const total = state.forAmount + state.againstAmount;
   const pct = total > 0 ? ((state.forAmount / total) * 100).toFixed(0) : '0';
   return `+${state.forAmount} -${state.againstAmount} (${pct}%)`;
+}
+
+function sourceClass(source: string): string {
+  switch (source) {
+    case 'local': return 'badge-source-local';
+    case 'remote': return 'badge-source-remote';
+    case 'storage': return 'badge-source-storage';
+    default: return '';
+  }
 }
 
 export const BlockRow = React.memo(function BlockRow({
@@ -74,9 +83,9 @@ export const BlockRow = React.memo(function BlockRow({
           <button
             className={`pin-btn ${pinned ? 'pinned' : ''}`}
             onClick={handlePinClick}
-            title={pinned ? 'Unpin' : 'Pin'}
+            title={pinned ? 'Unpin' : 'Pin to top'}
           >
-            {pinned ? '\u2716' : '\u25C9'}
+            {pinned ? '\u2605' : '\u2606'}
           </button>
         </div>
 
@@ -89,25 +98,31 @@ export const BlockRow = React.memo(function BlockRow({
         {columns.has('canonicality') && (
           <div className="cell cell-canonical">
             <span className={`badge ${isCanonical ? 'badge-canonical' : hasConflicts ? 'badge-conflict' : 'badge-non-canonical'}`}>
-              {isCanonical ? 'Canonical' : hasConflicts ? 'Conflict' : 'Non-canon'}
+              {isCanonical ? 'Canonical' : hasConflicts ? 'Conflict' : 'Pending'}
             </span>
           </div>
         )}
 
         {columns.has('source') && (
-          <div className="cell cell-source">{block.source}</div>
+          <div className="cell cell-source">
+            <span className={`badge badge-source ${sourceClass(block.source)}`}>{block.source}</span>
+          </div>
         )}
 
         {columns.has('timestamp') && (
-          <div className="cell cell-time">{formatTime(block.timestamp)}</div>
+          <div className="cell cell-time mono">{formatTime(block.timestamp)}</div>
         )}
 
         {columns.has('receivedAt') && (
-          <div className="cell cell-time">{formatTime(block.receivedAt)}</div>
+          <div className="cell cell-time mono">{formatTime(block.receivedAt)}</div>
         )}
 
         {columns.has('declaredWeight') && (
-          <div className="cell cell-num">{block.declaredWeight === Number.MAX_SAFE_INTEGER ? 'Genesis' : block.declaredWeight}</div>
+          <div className="cell cell-num">
+            {block.declaredWeight === Number.MAX_SAFE_INTEGER
+              ? <span className="muted" style={{ fontStyle: 'italic' }}>Genesis</span>
+              : block.declaredWeight}
+          </div>
         )}
 
         {columns.has('descendantWeight') && (
@@ -131,11 +146,11 @@ export const BlockRow = React.memo(function BlockRow({
         )}
 
         {columns.has('validity') && (
-          <div className="cell cell-validity">{validityLabel(distribution)}</div>
+          <div className="cell cell-validity mono">{validityLabel(distribution)}</div>
         )}
 
         {columns.has('trust') && (
-          <div className="cell cell-trust">{trustLabel(trustState)}</div>
+          <div className="cell cell-trust mono">{trustLabel(trustState)}</div>
         )}
       </div>
 
