@@ -253,9 +253,9 @@ function computeFitViewBox(
   for (const node of fitNodes) {
     const nx = node.x ?? node.targetX;
     const ny = node.y ?? node.targetY;
-    const isFocused = focusedHash === node.id;
-    const halfW = isFocused ? FOCUSED_WIDTH / 2 : NODE_WIDTH / 2;
-    const halfH = isFocused ? FOCUSED_MAX_HEIGHT / 2 : NODE_HEIGHT / 2;
+    const isExpanded = focusedHash === node.id || pinnedHashes.has(node.id);
+    const halfW = isExpanded ? FOCUSED_WIDTH / 2 : NODE_WIDTH / 2;
+    const halfH = isExpanded ? FOCUSED_MAX_HEIGHT / 2 : NODE_HEIGHT / 2;
     minX = Math.min(minX, nx - halfW);
     minY = Math.min(minY, ny - halfH);
     maxX = Math.max(maxX, nx + halfW);
@@ -303,6 +303,37 @@ function viewBoxConverged(a: ViewBox, b: ViewBox): boolean {
     Math.abs(a.h - b.h) < VIEWBOX_THRESHOLD;
 }
 
+/** Find all blocks that claim a specific output. */
+function findClaimingBlocks(
+  ownerHash: string,
+  ownerOutputIndex: number,
+  allBlocks: Block[],
+  scaffold: Scaffold,
+): { block: Block; isCanonical: boolean }[] {
+  const consensus = scaffold.context.consensus;
+  const results: { block: Block; isCanonical: boolean }[] = [];
+
+  for (const b of allBlocks) {
+    const bHex = b.hash.toHex();
+
+    // Self-claim: block claims its own output
+    if (bHex === ownerHash && b.claims.includes(ownerOutputIndex)) {
+      results.push({ block: b, isCanonical: consensus.isCanonical(b.hash) });
+      continue;
+    }
+
+    // Anchor claim: block's anchor is the owner, claim maps to owner's output
+    if (b.anchor.toHex() === ownerHash) {
+      const anchorClaimIndex = b.outputs.length + ownerOutputIndex;
+      if (b.claims.includes(anchorClaimIndex)) {
+        results.push({ block: b, isCanonical: consensus.isCanonical(b.hash) });
+      }
+    }
+  }
+
+  return results;
+}
+
 // -- Sub-components ---------------------------------------------------------
 
 function HashChip(
@@ -339,10 +370,10 @@ function IOChip(
     <div className="io-chip" onClick={onClick} title={label}>
       <span className="io-chip-value">v={output.value}</span>
       <span className="io-chip-contract">
-        {contractName ?? output.verifier.contract.toHex().slice(0, 8) + '…'}
+        {contractName ?? output.verifier.contract.toHex().slice(0, 8) + '\u2026'}
       </span>
       {output.verifier.params.length > 0 && (
-        <span className="io-chip-params">{toHex(output.verifier.params).slice(0, 8)}…</span>
+        <span className="io-chip-params">{toHex(output.verifier.params).slice(0, 8)}\u2026</span>
       )}
     </div>
   );
@@ -351,21 +382,41 @@ function IOChip(
 // -- Overlay ----------------------------------------------------------------
 
 interface OverlayData {
-  type: 'claim' | 'output';
   index: number;
   output: Output;
+  ownerHash: string;
+  ownerOutputIndex: number;
 }
 
 function IOOverlay(
-  { data, onClose }: { data: OverlayData; onClose: () => void },
+  { data, blocks, scaffold, onNavigate, onClose }: {
+    data: OverlayData;
+    blocks: Block[];
+    scaffold: Scaffold;
+    onNavigate: (hex: string) => void;
+    onClose: () => void;
+  },
 ) {
   const contractName = getContractName(data.output.verifier.contract);
+  const claimers = findClaimingBlocks(data.ownerHash, data.ownerOutputIndex, blocks, scaffold);
+
   return (
     <div className="io-overlay-backdrop" onClick={onClose}>
       <div className="io-overlay-card" onClick={(e) => e.stopPropagation()}>
         <div className="io-overlay-header">
-          <span>{data.type === 'claim' ? 'Claim' : 'Output'} #{data.index}</span>
+          <span>Output #{data.ownerOutputIndex}</span>
           <button className="graph-detail-close" onClick={onClose}>×</button>
+        </div>
+        <div className="io-overlay-row">
+          <span className="detail-label">Block</span>
+          <span className="detail-value">
+            <span
+              className="expanded-hash-chip"
+              onClick={() => onNavigate(data.ownerHash)}
+            >
+              {data.ownerHash.slice(0, 12)}…
+            </span>
+          </span>
         </div>
         <div className="io-overlay-row">
           <span className="detail-label">Value</span>
@@ -391,6 +442,32 @@ function IOOverlay(
             {data.output.detail.length > 0
               ? toHex(data.output.detail)
               : <span className="muted">empty</span>}
+          </span>
+        </div>
+        <div className="io-overlay-row">
+          <span className="detail-label">Claimed by</span>
+          <span className="detail-value">
+            {claimers.length === 0
+              ? <span className="muted">Unclaimed</span>
+              : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {claimers.map((c) => (
+                    <div key={c.block.hash.toHex()} className="io-overlay-claimer">
+                      <span
+                        className="expanded-hash-chip"
+                        onClick={() => onNavigate(c.block.hash.toHex())}
+                      >
+                        {c.block.hash.toHex().slice(0, 12)}…
+                      </span>
+                      <span
+                        className={`badge badge-${c.isCanonical ? 'canonical' : 'non-canonical'}`}
+                      >
+                        {c.isCanonical ? 'Canonical' : 'Non-canonical'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
           </span>
         </div>
       </div>
@@ -541,19 +618,21 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
     };
   }, [graphData]);
 
-  // Update collide force when focused node changes
+  // Update collide force when focused/pinned nodes change
   useEffect(() => {
     const sim = simRef.current;
     if (!sim) return;
     sim.force(
       'collide',
       forceCollide<GraphNode>((d) => {
-        if (focusedHash && d.id === focusedHash) return FOCUSED_WIDTH / 2 + 10;
+        if ((focusedHash && d.id === focusedHash) || pinnedHashes.has(d.id)) {
+          return FOCUSED_WIDTH / 2 + 10;
+        }
         return NODE_WIDTH / 2 + 4;
       }).strength(0.7),
     );
     sim.alpha(0.3).restart();
-  }, [focusedHash]);
+  }, [focusedHash, pinnedHashes]);
 
   // Animate viewBox -- runs after every render, lerps toward target
   useEffect(() => {
@@ -600,20 +679,22 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
     [blocks, registry],
   );
 
-  const handleNodeClick = useCallback((hex: string) => {
-    setFocusedHash((prev) => {
-      if (prev === hex) {
-        // Already focused -- toggle pin
-        setPinnedHashes((p) => {
-          const next = new Set(p);
-          if (next.has(hex)) next.delete(hex);
-          else next.add(hex);
-          return next;
-        });
-        return prev;
-      }
-      return hex;
-    });
+  const handleNodeClick = useCallback((hex: string, metaKey: boolean) => {
+    if (metaKey) {
+      // Cmd-click: pin currently focused block, then focus new one
+      setFocusedHash((prev) => {
+        if (prev && prev !== hex) {
+          setPinnedHashes((p) => {
+            const next = new Set(p);
+            next.add(prev);
+            return next;
+          });
+        }
+        return hex;
+      });
+    } else {
+      setFocusedHash(hex);
+    }
   }, []);
 
   const togglePin = useCallback((hex: string) => {
@@ -633,66 +714,40 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
     [blocks],
   );
 
+  const handleOverlayNavigate = useCallback(
+    (hex: string) => {
+      setOverlayData(null);
+      const exists = blocks.some((b) => b.hash.toHex() === hex);
+      if (exists) setFocusedHash(hex);
+    },
+    [blocks],
+  );
+
   // Render
   const nodes = nodesRef.current;
   const links = linksRef.current;
   const ctx = scaffold.context;
   const consensus = ctx.consensus;
 
-  // Sort nodes: focused last so it renders on top
+  // Sort nodes: expanded (pinned + focused) last so they render on top, focused last of all
   const sortedNodes = useMemo(() => {
-    if (!focusedHash) return nodes;
     const copy = [...nodes];
     copy.sort((a, b) => {
-      if (a.id === focusedHash) return 1;
-      if (b.id === focusedHash) return -1;
+      const aExpanded = a.id === focusedHash || pinnedHashes.has(a.id);
+      const bExpanded = b.id === focusedHash || pinnedHashes.has(b.id);
+      if (aExpanded && !bExpanded) return 1;
+      if (!aExpanded && bExpanded) return -1;
+      if (aExpanded && bExpanded) {
+        if (a.id === focusedHash) return 1;
+        if (b.id === focusedHash) return -1;
+      }
       return 0;
     });
     return copy;
-  }, [nodes, focusedHash]);
-
-  // Find the focused block and its anchor block
-  const focusedBlock = focusedHash
-    ? blocks.find((b) => b.hash.toHex() === focusedHash)
-    : null;
-  const anchorBlock = focusedBlock && focusedBlock.anchor.toHex() !== ZERO_HEX
-    ? ctx.store.get(focusedBlock.anchor)
-    : undefined;
-
-  // Aggregating blocks: blocks whose aggregates[] includes the focused block
-  const aggregatingBlocks = useMemo(() => {
-    if (!focusedBlock) return [];
-    return blocks
-      .filter((b) => b.aggregates.some((a) => Hash.equals(a, focusedBlock.hash)))
-      .sort((a, b) => {
-        const aCan = consensus.isCanonical(a.hash) ? 0 : 1;
-        const bCan = consensus.isCanonical(b.hash) ? 0 : 1;
-        return aCan - bCan;
-      });
-  }, [focusedBlock, blocks, consensus]);
+  }, [nodes, focusedHash, pinnedHashes]);
 
   return (
     <div className="block-graph-container" ref={containerRef}>
-      {/* Pin bar */}
-      {pinnedHashes.size > 0 && (
-        <div className="pin-bar">
-          {[...pinnedHashes].map((hex) => (
-            <span key={hex} className="pin-chip" onClick={() => handleNodeClick(hex)}>
-              <span className="pin-chip-hash">{hex.slice(0, 8)}…</span>
-              <button
-                className="pin-chip-close"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  togglePin(hex);
-                }}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
       {/* SVG canvas */}
       <svg
         ref={svgRef}
@@ -760,6 +815,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
               const ny = node.y ?? 0;
               const isFocused = focusedHash === node.id;
               const isPinned = pinnedHashes.has(node.id);
+              const isExpanded = isFocused || isPinned;
 
               let statusClass = node.isCanonical ? 'canonical' : 'non-canonical';
               if (node.hasConflicts) statusClass = 'conflict';
@@ -768,18 +824,29 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
               if (isFocused) classList.push('focused');
               if (isPinned) classList.push('pinned');
 
-              if (isFocused && focusedBlock) {
-                // -- Expanded inline node --
-                const authorHex = getAuthorHex(focusedBlock);
-                const isGenesis = focusedBlock.anchor.toHex() === ZERO_HEX;
+              if (isExpanded) {
+                // -- Expanded inline node (focused or pinned) --
+                const block = node.block;
+                const authorHex = getAuthorHex(block);
+                const isGenesis = block.anchor.toHex() === ZERO_HEX;
+                const anchorBlock = !isGenesis ? ctx.store.get(block.anchor) : undefined;
 
                 // All claims resolved to their outputs
-                const allClaims = focusedBlock.claims
+                const allClaims = block.claims
                   .map((ci) => ({
                     index: ci,
-                    output: resolveOutput(focusedBlock, ci, anchorBlock),
+                    output: resolveOutput(block, ci, anchorBlock),
                   }))
                   .filter((c): c is { index: number; output: Output } => !!c.output);
+
+                // Blocks whose aggregates[] includes this block
+                const aggregatingBlocks = blocks
+                  .filter((b) => b.aggregates.some((a) => Hash.equals(a, block.hash)))
+                  .sort((a, b) => {
+                    const aCan = consensus.isCanonical(a.hash) ? 0 : 1;
+                    const bCan = consensus.isCanonical(b.hash) ? 0 : 1;
+                    return aCan - bCan;
+                  });
 
                 return (
                   <g
@@ -804,7 +871,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                         className={`block-expanded${isPinned ? ' pinned' : ''}`}
                         style={{ pointerEvents: 'auto' }}
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={() => handleNodeClick(node.id)}
+                        onClick={(e) => handleNodeClick(node.id, e.metaKey)}
                       >
                         {/* Header */}
                         <div className="block-expanded-header">
@@ -815,13 +882,23 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                             </span>
                           )}
                           <span className="block-expanded-time">
-                            <DateSummary instantMs={focusedBlock.timestamp} />
+                            <DateSummary instantMs={block.timestamp} />
                           </span>
+                          <button
+                            className={`block-expanded-pin${isPinned ? ' active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePin(node.id);
+                            }}
+                            title={isPinned ? 'Unpin' : 'Pin'}
+                          >
+                            {isPinned ? '\u2605' : '\u2606'}
+                          </button>
                         </div>
 
                         {/* Weights */}
                         <div className="block-expanded-weights">
-                          <span>Self: {focusedBlock.declaredWeight}</span>
+                          <span>Self: {block.declaredWeight}</span>
                           <span>Subtree: {node.effectiveWeight}</span>
                           <span>Desc: {node.descendantWeight}</span>
                         </div>
@@ -845,14 +922,14 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                           </div>
                         )}
 
-                        {/* Anchor + anchor claims */}
+                        {/* Anchor */}
                         {!isGenesis && (
                           <div className="block-expanded-section">
                             <div className="block-expanded-anchor">
                               <div>
                                 <div className="block-expanded-section-label">Anchor</div>
                                 <HashChip
-                                  hex={focusedBlock.anchor.toHex()}
+                                  hex={block.anchor.toHex()}
                                   registry={registry}
                                   onNavigate={handleNavigate}
                                 />
@@ -862,26 +939,35 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                         )}
 
                         {/* Claims + Outputs */}
-                        {(allClaims.length > 0 || focusedBlock.outputs.length > 0) && (
+                        {(allClaims.length > 0 || block.outputs.length > 0) && (
                           <div className="block-expanded-section">
                             <div className="block-expanded-io">
                               <div>
                                 <div className="block-expanded-section-label">
                                   Claims ({allClaims.length})
                                 </div>
-                                {allClaims.slice(0, MAX_IO_DISPLAY).map((c) => (
-                                  <IOChip
-                                    key={c.index}
-                                    output={c.output}
-                                    label={`Claim #${c.index}`}
-                                    onClick={() =>
-                                      setOverlayData({
-                                        type: 'claim',
-                                        index: c.index,
-                                        output: c.output,
-                                      })}
-                                  />
-                                ))}
+                                {allClaims.slice(0, MAX_IO_DISPLAY).map((c) => {
+                                  const ownerHash = c.index < block.outputs.length
+                                    ? block.hash.toHex()
+                                    : block.anchor.toHex();
+                                  const ownerOutputIndex = c.index < block.outputs.length
+                                    ? c.index
+                                    : c.index - block.outputs.length;
+                                  return (
+                                    <IOChip
+                                      key={c.index}
+                                      output={c.output}
+                                      label={`Claim #${c.index}`}
+                                      onClick={() =>
+                                        setOverlayData({
+                                          index: c.index,
+                                          output: c.output,
+                                          ownerHash,
+                                          ownerOutputIndex,
+                                        })}
+                                    />
+                                  );
+                                })}
                                 {allClaims.length > MAX_IO_DISPLAY && (
                                   <span className="io-more">
                                     +{allClaims.length - MAX_IO_DISPLAY} more
@@ -890,20 +976,25 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                               </div>
                               <div>
                                 <div className="block-expanded-section-label">
-                                  Outputs ({focusedBlock.outputs.length})
+                                  Outputs ({block.outputs.length})
                                 </div>
-                                {focusedBlock.outputs.slice(0, MAX_IO_DISPLAY).map((out, i) => (
+                                {block.outputs.slice(0, MAX_IO_DISPLAY).map((out, i) => (
                                   <IOChip
                                     key={i}
                                     output={out}
                                     label={`Output #${i}`}
                                     onClick={() =>
-                                      setOverlayData({ type: 'output', index: i, output: out })}
+                                      setOverlayData({
+                                        index: i,
+                                        output: out,
+                                        ownerHash: block.hash.toHex(),
+                                        ownerOutputIndex: i,
+                                      })}
                                   />
                                 ))}
-                                {focusedBlock.outputs.length > MAX_IO_DISPLAY && (
+                                {block.outputs.length > MAX_IO_DISPLAY && (
                                   <span className="io-more">
-                                    +{focusedBlock.outputs.length - MAX_IO_DISPLAY} more
+                                    +{block.outputs.length - MAX_IO_DISPLAY} more
                                   </span>
                                 )}
                               </div>
@@ -912,13 +1003,13 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                         )}
 
                         {/* Aggregated blocks */}
-                        {focusedBlock.aggregates.length > 0 && (
+                        {block.aggregates.length > 0 && (
                           <div className="block-expanded-section">
                             <div className="block-expanded-section-label">
-                              Aggregates ({focusedBlock.aggregates.length})
+                              Aggregates ({block.aggregates.length})
                             </div>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                              {focusedBlock.aggregates.map((h) => (
+                              {block.aggregates.map((h) => (
                                 <HashChip
                                   key={h.toHex()}
                                   hex={h.toHex()}
@@ -950,7 +1041,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                   transform={`translate(${nx - NODE_WIDTH / 2},${ny - NODE_HEIGHT / 2})`}
                   onMouseEnter={() => handleNodeHover(node.id)}
                   onMouseLeave={() => handleNodeHover(null)}
-                  onClick={() => handleNodeClick(node.id)}
+                  onClick={(e) => handleNodeClick(node.id, e.metaKey)}
                 >
                   <rect
                     width={NODE_WIDTH}
@@ -990,7 +1081,15 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
       </svg>
 
       {/* IO Overlay */}
-      {overlayData && <IOOverlay data={overlayData} onClose={() => setOverlayData(null)} />}
+      {overlayData && (
+        <IOOverlay
+          data={overlayData}
+          blocks={blocks}
+          scaffold={scaffold}
+          onNavigate={handleOverlayNavigate}
+          onClose={() => setOverlayData(null)}
+        />
+      )}
 
       {/* Footer */}
       <div className="graph-footer">

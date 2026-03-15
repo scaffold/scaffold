@@ -1018,3 +1018,34 @@
 .io-overlay-row .detail-value {
   font-size: 12px;
 }
+
+.io-overlay-claimer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* -- Expanded block pin button ----------------------------- */
+
+.block-expanded-pin {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #c7c7cc;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: all 0.15s;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.block-expanded-pin:hover {
+  color: #0071e3;
+  background: rgba(0, 113, 227, 0.08);
+}
+
+.block-expanded-pin.active {
+  color: #6366f1;
+}
