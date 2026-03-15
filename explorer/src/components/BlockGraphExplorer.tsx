@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { HighlightRegistry } from "../highlight/HighlightRegistry.ts";
 import { HighlightContext } from "../highlight/HighlightContext.ts";
-import { BlockTable } from "./BlockTable.tsx";
+import { BlockGraph } from "./BlockGraph.tsx";
 import type { Scaffold } from "scaffold.io/Scaffold.ts";
 
 interface BlockGraphExplorerProps {
@@ -17,7 +17,7 @@ export function BlockGraphExplorer({ scaffold }: BlockGraphExplorerProps) {
         <div className="explorer-header">
           <h1>Block Graph Explorer</h1>
         </div>
-        <BlockTable scaffold={scaffold} />
+        <BlockGraph scaffold={scaffold} />
       </div>
     </HighlightContext.Provider>
   );
