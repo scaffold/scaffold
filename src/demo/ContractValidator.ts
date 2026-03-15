@@ -1,5 +1,11 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockPayload, BlockSource, BlockStore, getBlockClaimMask } from '../core/Block.ts';
+import {
+  Block,
+  BlockPayload,
+  BlockSource,
+  BlockStore,
+  collectExtendedOutputs,
+} from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { Packet, verifyPacketSignature } from '../core/Packet.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
@@ -105,36 +111,6 @@ function resolveClaimedOutputs(block: Block, anchorBlock: Block, store: BlockSto
   }
 
   return results;
-}
-
-/**
- * Collect the full extended output vector of a block.
- * This is the set of outputs visible to any block that anchors to this one.
- *
- * Extended vector = [own outputs, surviving anchor outputs after claims]
- */
-function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
-  const result: Output[] = [...block.outputs];
-
-  if (Hash.equals(block.anchor, ZERO_HASH)) {
-    // Genesis — only own outputs
-    return result;
-  }
-
-  const anchorBlock = store.get(block.anchor);
-  if (!anchorBlock) return result;
-
-  const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
-  const claimMask = getBlockClaimMask(block, anchorOutputs.length);
-
-  // Add surviving anchor outputs (those not claimed by this block)
-  for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!claimMask.get(i)) {
-      result.push(anchorOutputs[i]);
-    }
-  }
-
-  return result;
 }
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

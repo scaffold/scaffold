@@ -2,20 +2,10 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { BlockGraphExplorer } from '@scaffold/explorer';
 import { Scaffold } from 'scaffold.io/Scaffold.ts';
 import { Hash } from 'scaffold.io/util/Hash.ts';
+import { WELL_KNOWN_PRIVATE_KEY } from 'scaffold.io/genesis.ts';
 
 export function App() {
-  const scaffold = useMemo(() =>
-    new Scaffold({
-      genesis: {
-        outputs: [
-          {
-            verifier: { contract: Hash.digest('demo-contract'), params: new Uint8Array(0) },
-            value: 1000,
-            detail: new TextEncoder().encode('genesis'),
-          },
-        ],
-      },
-    }), []);
+  const scaffold = useMemo(() => new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY }), []);
 
   const [count, setCount] = useState(0);
 

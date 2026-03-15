@@ -1,6 +1,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
+import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { NodeContext } from '../src/node/NodeContext.ts';
 
@@ -15,14 +16,9 @@ function makeOutput(value: number, label?: string): Output {
 }
 
 function defaultConfig(): ScaffoldConfig {
-  return {
-    genesis: {
-      outputs: [
-        makeOutput(100, 'g0'),
-        makeOutput(200, 'g1'),
-      ],
-    },
-  };
+  const outputs = [makeOutput(100, 'g0'), makeOutput(200, 'g1')];
+  const { block: genesis } = composeGenesisPacket(outputs);
+  return { genesis };
 }
 
 // -- Tests ----------------------------------------------------------

@@ -6,6 +6,7 @@ import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { BlockAwareness } from '../core/GossipModule.ts';
+import { composeGenesisPacket } from '../core/Packet.ts';
 import { Scaffold } from '../Scaffold.ts';
 
 import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
@@ -44,7 +45,8 @@ export class DemoNode {
     const genesisOutputs = ANIMALS.map((name) =>
       makeStatusOutput(deriveIdentity(name).publicKey, '')
     );
-    this.scaffold = new Scaffold({ genesis: { outputs: genesisOutputs } });
+    const { block: genesisBlock } = composeGenesisPacket(genesisOutputs);
+    this.scaffold = new Scaffold({ genesis: genesisBlock });
     this.tip = this.scaffold.context.store.get(this.scaffold.context.genesisHash)!;
 
     // Rebuild status index from genesis

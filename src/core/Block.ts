@@ -19,6 +19,18 @@ export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 /** Well-known contract hash for self-claimed outputs (key-value store). */
 export const SELF_CONTRACT = Hash.digest('self-contract');
 
+/**
+ * Create a signature (payment) contract output.
+ * Public key goes in verifier.params (33-byte compressed secp256k1).
+ */
+export function makeSignatureOutput(publicKey: Uint8Array, value: number): Output {
+  return {
+    verifier: { contract: SIGNATURE_CONTRACT, params: publicKey },
+    value,
+    detail: new Uint8Array(0),
+  };
+}
+
 // -- AggregationData -----------------------------------------------
 
 /**
@@ -280,6 +292,38 @@ export function getRefOutputs(
   const refBlock = store.get(refHash);
   if (!refBlock) return undefined;
   return refBlock.outputs;
+}
+
+// -- Extended output vector -----------------------------------------
+
+/**
+ * Collect the full extended output vector of a block.
+ * This is the set of outputs visible to any block that anchors to this one.
+ *
+ * Extended vector = [own outputs, surviving anchor outputs after claims]
+ */
+export function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
+  const result: Output[] = [...block.outputs];
+
+  if (Hash.equals(block.anchor, ZERO_HASH)) {
+    // Genesis -- only own outputs
+    return result;
+  }
+
+  const anchorBlock = store.get(block.anchor);
+  if (!anchorBlock) return result;
+
+  const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
+  const claimMask = getBlockClaimMask(block, anchorOutputs.length);
+
+  // Add surviving anchor outputs (those not claimed by this block)
+  for (let i = 0; i < anchorOutputs.length; i++) {
+    if (!claimMask.get(i)) {
+      result.push(anchorOutputs[i]);
+    }
+  }
+
+  return result;
 }
 
 // -- BlockPayload ---------------------------------------------------

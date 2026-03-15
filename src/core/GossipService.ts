@@ -1,6 +1,6 @@
 import { Hash } from '../util/Hash.ts';
+import { bin2hex } from '../util/hex.ts';
 import {
-  Block,
   BlockStore,
   COLLATERAL_CONTRACT,
   getBlockWeightVector,
@@ -70,14 +70,11 @@ class GossipProviderAdapter implements GossipProvider {
   getPaymentTarget(blockHash: Hash): string | undefined {
     const block = this.store.get(blockHash);
     if (!block) return undefined;
-    // Scan outputs for signature contract
+    // Scan outputs for signature contract -- pubkey is in verifier.params
     for (const output of block.outputs) {
       if (Hash.equals(output.verifier.contract, SIGNATURE_CONTRACT)) {
-        try {
-          const data = JSON.parse(new TextDecoder().decode(output.detail));
-          return data.publicKey;
-        } catch {
-          continue;
+        if (output.verifier.params.length > 0) {
+          return bin2hex(output.verifier.params);
         }
       }
     }

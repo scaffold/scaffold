@@ -64,6 +64,7 @@
     "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
     "test-avro": "mocha --ui tdd --reporter dot",
     "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info",
+    "generate-genesis": "deno run --allow-all scripts/generate_genesis.ts",
     "viz:build": "deno run --allow-all viz/build.ts",
     "viz:serve": "deno run --allow-all viz/serve.ts"
   },

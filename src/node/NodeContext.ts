@@ -1,9 +1,5 @@
 import { Block, BlockStore } from '../core/Block.ts';
-import {
-  composeBlockPacket,
-  composeGenesisPacket,
-  composeUnsignedBlockPacket,
-} from '../core/Packet.ts';
+import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 import {
@@ -19,13 +15,13 @@ import { ConflictService } from '../core/ConflictService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
-import { BlockBlueprint, Output } from '../core/BlockCreationModule.ts';
+import { BlockBlueprint } from '../core/BlockCreationModule.ts';
 import { Hash } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 
 export interface NodeConfig {
-  /** Genesis block outputs (defines the network) */
-  genesis: { outputs: Output[] };
+  /** Genesis block (pre-built). */
+  genesis: Block;
   /** Strategies to register with the reactive layer */
   strategies?: Strategy[];
   /** Callback when a notifyFetch action is dispatched */
@@ -125,7 +121,7 @@ export class NodeContext {
 
     // 8. Process genesis block through coordinator directly
     //    (not through reactive layer, since strategies should not fire on genesis)
-    const { block: genesis } = composeGenesisPacket(config.genesis.outputs);
+    const genesis = config.genesis;
     this.coordinator.blockReceived(genesis, null);
     this.blocks.add(genesis);
     this._genesisHash = genesis.hash;

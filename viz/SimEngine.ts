@@ -6,6 +6,7 @@ import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
+import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { BlockInfo, InFlightMessage } from './types.ts';
 import { NODE_NAMES } from './colors.ts';
@@ -23,14 +24,14 @@ class SetAwareness implements BlockAwareness {
 }
 
 function nonceOutput(nodeIdx: number, seqNum: number): Output {
-  const data = new Uint8Array(8);
-  const view = new DataView(data.buffer);
+  const detail = new Uint8Array(8);
+  const view = new DataView(detail.buffer);
   view.setUint32(0, nodeIdx);
   view.setUint32(4, seqNum);
   return {
-    contract: Hash.digest('viz-nonce'),
+    verifier: { contract: Hash.digest('viz-nonce'), params: new Uint8Array(0) },
     value: 0,
-    data,
+    detail,
   };
 }
 
@@ -40,7 +41,8 @@ class SimNode {
   readonly scaffold: Scaffold;
 
   constructor(_id: string) {
-    this.scaffold = new Scaffold({ genesis: { outputs: [nonceOutput(999, 0)] } });
+    const { block: vizGenesis } = composeGenesisPacket([nonceOutput(999, 0)]);
+    this.scaffold = new Scaffold({ genesis: vizGenesis });
   }
 
   get store(): BlockStore {
