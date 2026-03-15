@@ -13,12 +13,14 @@ state (a `var` initialized from the comptime ID).
 
 ## 1. Binary Size
 
-| Metric | Value |
-| --- | --- |
-| Min | 153 bytes |
-| Max | 173 bytes |
-| Avg | 172 bytes |
-| Total (100 contracts) | 16.8 KB |
+
+| Metric                | Value     |
+| --------------------- | --------- |
+| Min                   | 153 bytes |
+| Max                   | 173 bytes |
+| Avg                   | 172 bytes |
+| Total (100 contracts) | 16.8 KB   |
+
 
 **Verdict**: A minimal Zig-to-WASM contract is **~170 bytes** — firmly in the
 *bytes* range, not kilobytes. Even with real contract logic (imports, memory,
@@ -32,11 +34,13 @@ constant — small integers encode shorter.
 
 ### How many modules can we compile?
 
-| Metric | Value |
-| --- | --- |
-| 100 modules, sequential | 4.4ms (0.044ms each) |
-| 100 modules, concurrent (`Promise.all`) | 0.7ms (0.007ms each) |
-| 10,000 modules, sequential | ~250ms (0.025ms each) |
+
+| Metric                                  | Value                 |
+| --------------------------------------- | --------------------- |
+| 100 modules, sequential                 | 4.4ms (0.044ms each)  |
+| 100 modules, concurrent (`Promise.all`) | 0.7ms (0.007ms each)  |
+| 10,000 modules, sequential              | ~250ms (0.025ms each) |
+
 
 **Compiled 10,000 unique modules without error.** No hard limit was hit.
 
@@ -46,11 +50,11 @@ sequential — V8 parallelizes across cores.
 ### Known browser hard limits
 
 - **Synchronous compilation** (`new WebAssembly.Module(buffer)`) is blocked for
-  modules >4 KB on the main thread in Chrome. This doesn't apply to
-  `WebAssembly.compile()` (async) or Web Workers.
+modules >4 KB on the main thread in Chrome. This doesn't apply to
+`WebAssembly.compile()` (async) or Web Workers.
 - **Module binary size**: Spec recommends max 1 GiB per module.
 - **Number of modules**: No documented hard limit. We hit 10,000 without issue.
-  The practical limit is available memory.
+The practical limit is available memory.
 
 ### Soft limits (memory)
 
@@ -62,31 +66,37 @@ per-tab heap is typically 4 GB on 64-bit systems.
 
 ### Sequential instantiation of 100 distinct modules
 
-| Metric | Value |
-| --- | --- |
-| Time | 2.6ms |
+
+| Metric           | Value   |
+| ---------------- | ------- |
+| Time             | 2.6ms   |
 | Avg per instance | 0.026ms |
+
 
 ### Multiple instances from a single module
 
+
 | Instance count | Total time | Per-instance |
-| --- | --- | --- |
-| 10 | 0.1ms | 0.008ms |
-| 100 | 3.0ms | 0.030ms |
-| 1,000 | 17.7ms | 0.018ms |
-| 5,000 | 144ms | 0.029ms |
-| 10,000 | 477ms | 0.048ms |
+| -------------- | ---------- | ------------ |
+| 10             | 0.1ms      | 0.008ms      |
+| 100            | 3.0ms      | 0.030ms      |
+| 1,000          | 17.7ms     | 0.018ms      |
+| 5,000          | 144ms      | 0.029ms      |
+| 10,000         | 477ms      | 0.048ms      |
+
 
 ### Stress test: maximum instances
 
+
 | Instance count | Avg per-instance | Last-batch per-instance |
-| --- | --- | --- |
-| 5,000 | 0.042ms | 0.045ms |
-| 10,000 | 0.049ms | 0.066ms |
-| 15,000 | 0.058ms | 0.085ms |
-| 20,000 | 0.067ms | 0.094ms |
-| 25,000 | 0.077ms | 0.153ms |
-| 30,000 | 0.090ms | 0.304ms |
+| -------------- | ---------------- | ----------------------- |
+| 5,000          | 0.042ms          | 0.045ms                 |
+| 10,000         | 0.049ms          | 0.066ms                 |
+| 15,000         | 0.058ms          | 0.085ms                 |
+| 20,000         | 0.067ms          | 0.094ms                 |
+| 25,000         | 0.077ms          | 0.153ms                 |
+| 30,000         | 0.090ms          | 0.304ms                 |
+
 
 Instantiation cost **increases with total live instances** due to GC pressure.
 At 30K instances, per-instance time was ~7x higher than at 5K. Beyond ~30K
@@ -98,59 +108,63 @@ previous 1 TiB per-process WASM memory limit in V8 9.6.142 (Chrome 96+).
 
 ### Does memory space size affect instantiation?
 
-| Memory size | Pages | Compile time | Instantiation avg |
-| --- | --- | --- | --- |
-| 64 KB | 1 | 0.31ms | 0.040ms |
-| 640 KB | 10 | 0.09ms | 0.036ms |
-| 6 MB | 100 | 0.08ms | 0.086ms |
-| 16 MB | 256 | 0.16ms | 0.032ms |
-| 63 MB | 1,000 | 0.13ms | 1.903ms |
-| 256 MB | 4,096 | 0.06ms | 0.048ms |
-| 1 GB | 16,384 | 0.03ms | 0.739ms |
-| 2 GB | 32,768 | 0.04ms | 1.442ms |
-| 4 GB | 65,536 | 0.04ms | 1.322ms |
+
+| Memory size | Pages  | Compile time | Instantiation avg |
+| ----------- | ------ | ------------ | ----------------- |
+| 64 KB       | 1      | 0.31ms       | 0.040ms           |
+| 640 KB      | 10     | 0.09ms       | 0.036ms           |
+| 6 MB        | 100    | 0.08ms       | 0.086ms           |
+| 16 MB       | 256    | 0.16ms       | 0.032ms           |
+| 63 MB       | 1,000  | 0.13ms       | 1.903ms           |
+| 256 MB      | 4,096  | 0.06ms       | 0.048ms           |
+| 1 GB        | 16,384 | 0.03ms       | 0.739ms           |
+| 2 GB        | 32,768 | 0.04ms       | 1.442ms           |
+| 4 GB        | 65,536 | 0.04ms       | 1.322ms           |
+
 
 **Key findings**:
 
 - **Compilation time is independent of memory size.** The memory section just
-  declares a page count — V8 doesn't allocate anything during compilation.
+declares a page count — V8 doesn't allocate anything during compilation.
 - **Instantiation time is mostly independent of memory size** too, up to ~4 GB.
-  V8 uses virtual memory mapping — it reserves address space but doesn't commit
-  physical pages until they're touched. The ~1-2ms spikes at certain sizes
-  appear to be noise or VM region setup costs, not proportional to memory.
+V8 uses virtual memory mapping — it reserves address space but doesn't commit
+physical pages until they're touched. The ~1-2ms spikes at certain sizes
+appear to be noise or VM region setup costs, not proportional to memory.
 - **Even 4 GB memory (65,536 pages) instantiates in ~1.3ms.** This is the
-  wasm32 maximum.
+wasm32 maximum.
 
 ## 4. Browser-Specific Limits Summary
 
-| Limit | Chrome | Firefox | Safari |
-| --- | --- | --- | --- |
-| Max memory per instance (32-bit) | 4 GB | 2 GB | 4 GB |
-| memory64 support | Chrome 133+ | Firefox 134+ | No |
-| memory64 max | 16 GB | 16 GB | N/A |
-| Sync compile size limit | 4 KB | Similar | Similar |
-| Module count limit | None found | None found | None found |
-| Instance count limit | None found | None found | None found |
-| iOS practical memory | N/A | ~300 MB | ~300 MB |
+
+| Limit                            | Chrome      | Firefox      | Safari     |
+| -------------------------------- | ----------- | ------------ | ---------- |
+| Max memory per instance (32-bit) | 4 GB        | 2 GB         | 4 GB       |
+| memory64 support                 | Chrome 133+ | Firefox 134+ | No         |
+| memory64 max                     | 16 GB       | 16 GB        | N/A        |
+| Sync compile size limit          | 4 KB        | Similar      | Similar    |
+| Module count limit               | None found  | None found   | None found |
+| Instance count limit             | None found  | None found   | None found |
+| iOS practical memory             | N/A         | ~300 MB      | ~300 MB    |
+
 
 ## 5. Practical Recommendations
 
 For a system loading ~100 contracts:
 
 - **Binary size is negligible.** 100 contracts at ~170 bytes = 17 KB total.
-  Even at 10 KB each (realistic for real contracts), that's 1 MB.
+Even at 10 KB each (realistic for real contracts), that's 1 MB.
 - **Compilation is fast.** 100 modules compile in <5ms sequentially, <1ms
-  concurrent. Use `WebAssembly.compileStreaming()` for production.
+concurrent. Use `WebAssembly.compileStreaming()` for production.
 - **Instantiation is fast.** 100 instances in ~3ms. Creating 10,000+ instances
-  from compiled modules is feasible.
+from compiled modules is feasible.
 - **Memory is the real constraint.** If each contract has its own linear memory,
-  the per-instance overhead is low (V8 uses virtual memory). But if contracts
-  allocate and *use* large amounts of memory, physical RAM becomes the limit.
+the per-instance overhead is low (V8 uses virtual memory). But if contracts
+allocate and *use* large amounts of memory, physical RAM becomes the limit.
 - **No hard caps will be hit** at 100 contracts. You'd need 10,000+ instances
-  before seeing meaningful degradation, and even then it's GC pressure, not a
-  hard wall.
+before seeing meaningful degradation, and even then it's GC pressure, not a
+hard wall.
 - **Concurrent compilation scales well** — use `Promise.all` with
-  `WebAssembly.compile()` for best throughput.
+`WebAssembly.compile()` for best throughput.
 
 ## Raw Test Output
 
@@ -230,3 +244,4 @@ Loading WASM files...
   All tests complete
 ========================================
 ```
+
