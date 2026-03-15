@@ -7,15 +7,6 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 ### Block weight
 How is the weight of a block determined and verified?
 
-### ~~Execution Module~~ ✓
-Implemented: `ExecutionModule.ts` with mock contract registry, `HostContext` host functions (setData, addOutput, requireSignature, cross-block refs), and `ExecutionService` adapter. See [computation.md](docs/protocol/computation.md).
-
-### ~~Verification Module~~ ✓
-Implemented: `VerificationModule.ts` bridges SamplingModule (selectNext) with ExecutionModule (verifyBlock), reporting results back to sampling. See [computation.md](docs/protocol/computation.md).
-
-### ~~Dispute Module~~ ✓
-Implemented: `DisputeModule.ts` resolves FOR/AGAINST collateral stakes using majority-by-stake with proportional payouts. See [computation.md](docs/protocol/computation.md).
-
 ### WASM Contract Runtime
 The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same — only the contract dispatch changes.
 
@@ -42,14 +33,6 @@ How do incentive blocks reach peers who can fulfill them? Options to explore:
 4. **Hybrid**: Start with gossip-only. If gossip is too slow for niche contracts, layer on contract-interest advertisements in peerInfo. The gossip relevance scoring already has hooks for per-peer interest signals.
 
 Likely best starting point: option 4 (gossip-only, with peerInfo contract interest as optimization).
-
-## Structural
-
-### ~~Block Header Schema~~ ✓
-Addressed: the block wire format now carries only structural primitives (anchor, aggregates, claims, outputs, declaredWeight, creator, signature). Domain-specific data (aggregation state, collateral targets, payment targets) lives in contract outputs. See [contracts.md](docs/protocol/contracts.md) and [block-creation.md](docs/protocol/block-creation.md).
-
-### ~~Output Schema Migration~~ ✓
-Addressed: Output migrated from `{ contract, value, data }` to `{ verifier: { contract, params }, value, detail }`. Block gained `refs: Hash[]` for cross-block references. `SELF_CONTRACT` added for self-claimed key-value outputs. See [computation.md](docs/protocol/computation.md).
 
 ## Computation DAG
 
