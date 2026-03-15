@@ -773,20 +773,8 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                 const authorHex = getAuthorHex(focusedBlock);
                 const isGenesis = focusedBlock.anchor.toHex() === ZERO_HEX;
 
-                // Anchor claims: claims where index >= own output count
-                const anchorClaims = focusedBlock.claims
-                  .filter((ci) => ci >= focusedBlock.outputs.length)
-                  .map((ci) => ({
-                    index: ci,
-                    output: resolveOutput(focusedBlock, ci, anchorBlock),
-                  }))
-                  .filter((c): c is { index: number; output: Output } => !!c.output)
-                  .sort((a, b) => b.output.value - a.output.value)
-                  .slice(0, 3);
-
-                // Own claims (index < own output count)
-                const ownClaims = focusedBlock.claims
-                  .filter((ci) => ci < focusedBlock.outputs.length)
+                // All claims resolved to their outputs
+                const allClaims = focusedBlock.claims
                   .map((ci) => ({
                     index: ci,
                     output: resolveOutput(focusedBlock, ci, anchorBlock),
@@ -806,6 +794,12 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                       height={FOCUSED_MAX_HEIGHT}
                       style={{ pointerEvents: 'none', overflow: 'hidden' }}
                     >
+                      <div style={{
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        pointerEvents: 'none',
+                      }}>
                       <div
                         className={`block-expanded${isPinned ? ' pinned' : ''}`}
                         style={{ pointerEvents: 'auto' }}
@@ -863,39 +857,19 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                                   onNavigate={handleNavigate}
                                 />
                               </div>
-                              {anchorClaims.length > 0 && (
-                                <div style={{ flex: 1 }}>
-                                  <div className="block-expanded-section-label">
-                                    Anchor claims
-                                  </div>
-                                  {anchorClaims.map((c) => (
-                                    <IOChip
-                                      key={c.index}
-                                      output={c.output}
-                                      label={`Claim #${c.index}`}
-                                      onClick={() =>
-                                        setOverlayData({
-                                          type: 'claim',
-                                          index: c.index,
-                                          output: c.output,
-                                        })}
-                                    />
-                                  ))}
-                                </div>
-                              )}
                             </div>
                           </div>
                         )}
 
                         {/* Claims + Outputs */}
-                        {(ownClaims.length > 0 || focusedBlock.outputs.length > 0) && (
+                        {(allClaims.length > 0 || focusedBlock.outputs.length > 0) && (
                           <div className="block-expanded-section">
                             <div className="block-expanded-io">
                               <div>
                                 <div className="block-expanded-section-label">
-                                  Claims ({focusedBlock.claims.length})
+                                  Claims ({allClaims.length})
                                 </div>
-                                {ownClaims.slice(0, MAX_IO_DISPLAY).map((c) => (
+                                {allClaims.slice(0, MAX_IO_DISPLAY).map((c) => (
                                   <IOChip
                                     key={c.index}
                                     output={c.output}
@@ -908,9 +882,9 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                                       })}
                                   />
                                 ))}
-                                {ownClaims.length > MAX_IO_DISPLAY && (
+                                {allClaims.length > MAX_IO_DISPLAY && (
                                   <span className="io-more">
-                                    +{ownClaims.length - MAX_IO_DISPLAY} more
+                                    +{allClaims.length - MAX_IO_DISPLAY} more
                                   </span>
                                 )}
                               </div>
@@ -955,6 +929,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                             </div>
                           </div>
                         )}
+                      </div>
                       </div>
                     </foreignObject>
                   </g>
