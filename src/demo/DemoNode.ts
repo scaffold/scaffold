@@ -15,7 +15,7 @@ import {
   Packet,
   parsePacket,
 } from '../core/Packet.ts';
-import { validateBlockPacket, ValidationResult } from './ContractValidator.ts';
+import { validateBlockPacket } from './ContractValidator.ts';
 import { StatusIndex } from './StatusIndex.ts';
 
 /** Simple set-based block awareness tracker for gossip. */
@@ -77,9 +77,10 @@ export class DemoNode {
     if (this.store.has(packet.hash)) return;
 
     // Validate
-    const validation = validateBlockPacket(packet, this.store);
-    if (!validation.ok) {
-      // Reject invalid blocks from peers
+    try {
+      validateBlockPacket(packet, this.store);
+    } catch (e) {
+      console.debug('Rejected invalid block from peer:', (e as Error).message);
       return;
     }
 
@@ -113,13 +114,13 @@ export class DemoNode {
    * identity, the signature won't match and peers will reject it (but we send it anyway
    * for testing).
    */
-  publishStatus(targetName: AnimalName, message: string): { ok: boolean; error?: string } {
+  publishStatus(targetName: AnimalName, message: string): void {
     const targetIdentity = deriveIdentity(targetName);
 
     // Find the current status output for the target
     const claimIdx = this.statusIndex.findClaimIndex(targetName, this.tip, this.store);
     if (claimIdx === undefined) {
-      return { ok: false, error: `no status output found for ${targetName}` };
+      throw new Error(`no status output found for ${targetName}`);
     }
 
     // Build BlockSpec
@@ -133,24 +134,9 @@ export class DemoNode {
       refs: [],
     };
 
-    // Build block through protocol stack
-    const buildResult = this.blockCreation.buildBlock(spec);
-    if (!buildResult.ok) {
-      return { ok: false, error: buildResult.error };
-    }
-
-    const { block, packet } = composeBlockPacket(buildResult.blueprint, this.identity.privateKey);
-
-    // Validate locally
-    const validation = validateBlockPacket(packet, this.store);
-
-    if (validation.ok) {
-      // Accept locally
-      this.packetStore.set(block.hash.toPrimitive(), packet.raw);
-      this.scaffold.context.processBlock(block);
-      this.updateTipFromStore();
-      this.rebuildStatusIndex();
-    }
+    // Build block through protocol stack (throws on error)
+    const blueprint = this.blockCreation.buildBlock(spec);
+    const { block, packet } = composeBlockPacket(blueprint, this.identity.privateKey);
 
     // Send to all peers regardless of local validation
     for (const [_peerId, ws] of this.peers) {
@@ -159,11 +145,12 @@ export class DemoNode {
       }
     }
 
-    if (!validation.ok) {
-      return { ok: false, error: validation.reason };
-    }
-
-    return { ok: true };
+    // Validate and accept locally (throws if invalid)
+    validateBlockPacket(packet, this.store);
+    this.packetStore.set(block.hash.toPrimitive(), packet.raw);
+    this.scaffold.context.processBlock(block);
+    this.updateTipFromStore();
+    this.rebuildStatusIndex();
   }
 
   /** Register a new peer and sync current chain. */

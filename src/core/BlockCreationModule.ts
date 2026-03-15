@@ -70,11 +70,6 @@ export interface BlockBlueprint {
   refs: Hash[];
 }
 
-/** Result of attempting to build a block. */
-export type BuildResult =
-  | { ok: true; blueprint: BlockBlueprint }
-  | { ok: false; error: string };
-
 /** Info about a subtree for weight vector derivation. */
 export interface SubtreeInfo {
   /** Depth of the subtree's anchor relative to the aggregation block's anchor. */
@@ -150,11 +145,11 @@ export class BlockCreationModule<BlockType> {
    * Build a block from a spec. Derives all structural fields and validates
    * throughput balancing. Returns a blueprint ready for signing, or an error.
    */
-  buildBlock(spec: BlockSpec): BuildResult {
+  buildBlock(spec: BlockSpec): BlockBlueprint {
     // 1. Resolve anchor
     const anchorBlock = this.provider.getBlock(spec.anchor);
     if (!anchorBlock) {
-      return { ok: false, error: 'anchor block not found' };
+      throw new Error('anchor block not found');
     }
     const anchorOutputCount = this.provider.getOutputCount(anchorBlock);
 
@@ -169,19 +164,19 @@ export class BlockCreationModule<BlockType> {
     for (const aggHash of spec.aggregates) {
       const aggBlock = this.provider.getBlock(aggHash);
       if (!aggBlock) {
-        return { ok: false, error: `aggregated block not found: ${aggHash}` };
+        throw new Error(`aggregated block not found: ${aggHash}`);
       }
 
       // Get anchor depth of subtree relative to our anchor
       const depth = this.provider.getAnchorDepth(spec.anchor, this.provider.getAnchor(aggBlock)!);
       if (depth === undefined) {
-        return { ok: false, error: `subtree anchor not in our anchor chain: ${aggHash}` };
+        throw new Error(`subtree anchor not in our anchor chain: ${aggHash}`);
       }
 
       // Get rebased claim mask
       const rebasedMask = this.provider.getRebasedClaimMask(aggHash, spec.anchor);
       if (!rebasedMask) {
-        return { ok: false, error: `cannot rebase subtree claim mask: ${aggHash}` };
+        throw new Error(`cannot rebase subtree claim mask: ${aggHash}`);
       }
 
       const subtreeOutputCount = this.provider.getOutputCount(aggBlock);
@@ -204,10 +199,7 @@ export class BlockCreationModule<BlockType> {
     // Check for inter-subtree conflicts (two subtrees claim same anchor output)
     const subtreeClaimTotal = subtreeClaimMasks.reduce((s, m) => s + m.popcount(), 0);
     if (subtreeClaimTotal !== mergedSubtreeMask.popcount()) {
-      return {
-        ok: false,
-        error: 'subtrees have overlapping anchor claims (inter-subtree conflict)',
-      };
+      throw new Error('subtrees have overlapping anchor claims (inter-subtree conflict)');
     }
 
     // 4. Validate and classify claims
@@ -219,14 +211,12 @@ export class BlockCreationModule<BlockType> {
 
     for (const claim of spec.claims) {
       if (claim.index < 0) {
-        return { ok: false, error: `invalid claim index: ${claim.index}` };
+        throw new Error(`invalid claim index: ${claim.index}`);
       }
       if (claim.index >= extendedVectorLength) {
-        return {
-          ok: false,
-          error:
-            `claim index ${claim.index} out of range (extended vector length: ${extendedVectorLength})`,
-        };
+        throw new Error(
+          `claim index ${claim.index} out of range (extended vector length: ${extendedVectorLength})`,
+        );
       }
       if (claim.index < ownOutputCount) {
         selfClaims.push(claim.index);
@@ -244,10 +234,6 @@ export class BlockCreationModule<BlockType> {
       totalSubtreeOutputs,
     );
 
-    if (!claimMask.ok) {
-      return { ok: false, error: claimMask.error };
-    }
-
     // 6. Compute output count
     const ownClaimCount = spec.claims.length;
     const outputCount = this.computeOutputCount(
@@ -262,10 +248,7 @@ export class BlockCreationModule<BlockType> {
     const weight = this.deriveWeightVector(spec.declaredWeight, subtreeInfos);
 
     // 8. Validate throughput
-    const throughputResult = this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
-    if (!throughputResult.ok) {
-      return { ok: false, error: throughputResult.error };
-    }
+    this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
 
     // 9. Build outputs array — user outputs + aggregation contract output (if aggregating)
     const allOutputs = [...spec.outputs];
@@ -277,7 +260,7 @@ export class BlockCreationModule<BlockType> {
 
       // Encode aggregation data into a contract output
       const aggDataJson = JSON.stringify({
-        claimMask: claimMask.mask.toJSON(),
+        claimMask: claimMask.toJSON(),
         outputCount,
         aggregateOutputCounts,
         chainWeights,
@@ -301,7 +284,7 @@ export class BlockCreationModule<BlockType> {
       refs: spec.refs,
     };
 
-    return { ok: true, blueprint };
+    return blueprint;
   }
 
   // -- Pure computations (exposed for testing) --------------------
@@ -351,7 +334,7 @@ export class BlockCreationModule<BlockType> {
     claims: ClaimEntry[],
     outputs: Output[],
     ownOutputCount: number,
-  ): { ok: true } | { ok: false; error: string } {
+  ): void {
     let claimTotal = 0;
     let selfClaimTotal = 0;
     for (const claim of claims) {
@@ -377,22 +360,15 @@ export class BlockCreationModule<BlockType> {
 
     // Self-claims should balance internally
     if (selfClaimTotal !== selfClaimedOutputTotal) {
-      return {
-        ok: false,
-        error:
-          `self-claim value mismatch: claimed ${selfClaimTotal}, output ${selfClaimedOutputTotal}`,
-      };
+      throw new Error(
+        `self-claim value mismatch: claimed ${selfClaimTotal}, output ${selfClaimedOutputTotal}`,
+      );
     }
 
     // Non-self claims should balance with non-self-claimed outputs
     if (claimTotal !== outputTotal) {
-      return {
-        ok: false,
-        error: `throughput imbalance: inputs ${claimTotal}, outputs ${outputTotal}`,
-      };
+      throw new Error(`throughput imbalance: inputs ${claimTotal}, outputs ${outputTotal}`);
     }
-
-    return { ok: true };
   }
 
   /**
@@ -405,7 +381,7 @@ export class BlockCreationModule<BlockType> {
     ownAnchorClaimIndices: number[],
     ownOutputCount: number,
     totalSubtreeOutputs: number,
-  ): { ok: true; mask: BitVector } | { ok: false; error: string } {
+  ): BitVector {
     const mask = mergedSubtreeMask.clone();
 
     // Map own non-self claims back to anchor output indices.
@@ -431,16 +407,13 @@ export class BlockCreationModule<BlockType> {
       );
 
       if (anchorIdx === -1) {
-        return {
-          ok: false,
-          error: `claim maps to invalid anchor output (surviving index ${survivingIdx})`,
-        };
+        throw new Error(`claim maps to invalid anchor output (surviving index ${survivingIdx})`);
       }
 
       mask.set(anchorIdx, true);
     }
 
-    return { ok: true, mask };
+    return mask;
   }
 
   /**

@@ -1,4 +1,4 @@
-import { assert, assertFalse } from '@std/assert';
+import { assert, assertThrows } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
 import { BlockStore } from '../../src/core/Block.ts';
 import { BlockSpec, Output } from '../../src/core/BlockCreationModule.ts';
@@ -46,8 +46,7 @@ Deno.test('ContractValidator: genesis is always valid', () => {
     eagle.privateKey,
   );
 
-  const result = validateBlockPacket(packet, store);
-  assert(result.ok);
+  validateBlockPacket(packet, store); // should not throw
 });
 
 Deno.test('ContractValidator: correct signer passes', () => {
@@ -69,14 +68,10 @@ Deno.test('ContractValidator: correct signer passes', () => {
     refs: [],
   };
 
-  const buildResult = blockCreation.buildBlock(spec);
-  assert(buildResult.ok);
-  if (!buildResult.ok) return;
+  const blueprint = blockCreation.buildBlock(spec);
+  const { packet } = composeBlockPacket(blueprint, eagle.privateKey);
 
-  const { packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey);
-
-  const result = validateBlockPacket(packet, store);
-  assert(result.ok, `Expected valid but got: ${!result.ok ? result.reason : ''}`);
+  validateBlockPacket(packet, store); // should not throw
 });
 
 Deno.test('ContractValidator: wrong signer (eagle signs badger output) fails', () => {
@@ -98,17 +93,14 @@ Deno.test('ContractValidator: wrong signer (eagle signs badger output) fails', (
     refs: [],
   };
 
-  const buildResult = blockCreation.buildBlock(spec);
-  assert(buildResult.ok);
-  if (!buildResult.ok) return;
+  const blueprint = blockCreation.buildBlock(spec);
+  const { packet } = composeBlockPacket(blueprint, eagle.privateKey); // eagle signs badger's output!
 
-  const { packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey); // eagle signs badger's output!
-
-  const result = validateBlockPacket(packet, store);
-  assertFalse(result.ok);
-  if (!result.ok) {
-    assert(result.reason.includes('signature'));
-  }
+  assertThrows(
+    () => validateBlockPacket(packet, store),
+    Error,
+    'signature',
+  );
 });
 
 Deno.test('ContractValidator: block without status outputs passes without signature', () => {
@@ -133,14 +125,11 @@ Deno.test('ContractValidator: block without status outputs passes without signat
     refs: [],
   };
 
-  const buildResult = blockCreation.buildBlock(spec);
-  assert(buildResult.ok);
-  if (!buildResult.ok) return;
+  const blueprint = blockCreation.buildBlock(spec);
 
   // Sign with any key — doesn't matter since no status outputs
   const eagle = deriveIdentity('eagle');
-  const { packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey);
+  const { packet } = composeBlockPacket(blueprint, eagle.privateKey);
 
-  const result = validateBlockPacket(packet, store);
-  assert(result.ok);
+  validateBlockPacket(packet, store); // should not throw
 });

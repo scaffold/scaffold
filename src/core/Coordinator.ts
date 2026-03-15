@@ -13,7 +13,7 @@ import { VerificationService } from './VerificationService.ts';
 import { DisputeService } from './DisputeService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
-import { Output } from './BlockCreationModule.ts';
+import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 import { ExecutionResult } from './ExecutionModule.ts';
 import { VerificationResult } from './VerificationModule.ts';
 import { ResolutionResult } from './DisputeModule.ts';
@@ -145,17 +145,22 @@ export class Coordinator {
       const toAggregate = hashes.slice(0, maxChildren);
       const anchorHash = Hash.fromPrimitive(anchorKey);
 
-      const buildResult = this.blockCreation.buildBlock({
-        anchor: anchorHash,
-        outputs: [output],
-        claims: [],
-        declaredWeight,
-        aggregates: toAggregate,
-        refs: [],
-      });
-      if (!buildResult.ok) continue;
+      let blueprint: BlockBlueprint;
+      try {
+        blueprint = this.blockCreation.buildBlock({
+          anchor: anchorHash,
+          outputs: [output],
+          claims: [],
+          declaredWeight,
+          aggregates: toAggregate,
+          refs: [],
+        });
+      } catch (e) {
+        console.debug('buildBlock failed during aggregation:', (e as Error).message);
+        continue;
+      }
 
-      const block = composeUnsignedBlockPacket(buildResult.blueprint).block;
+      const block = composeUnsignedBlockPacket(blueprint).block;
       const result = this.blockReceived(block, null);
       return { block, result };
     }

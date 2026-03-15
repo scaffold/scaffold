@@ -130,15 +130,15 @@ async function main(): Promise<void> {
             break;
           }
           const message = parts.slice(2).join(' ');
-          const result = node.publishStatus(targetName, message);
-          if (result.ok) {
+          try {
+            node.publishStatus(targetName, message);
             emit(node, { type: 'published', identity: targetName, message });
-          } else {
+          } catch (e) {
             emit(node, {
               type: 'publish_error',
               identity: targetName,
               message,
-              error: result.error,
+              error: (e as Error).message,
             });
           }
           break;

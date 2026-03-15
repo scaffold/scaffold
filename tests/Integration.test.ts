@@ -377,26 +377,21 @@ Deno.test('Integration: block creation through stack — BlockCreationService.bu
     refs: [],
   };
 
-  const result = node.blockCreation.buildBlock(spec);
-  assert(result.ok);
+  const blueprint = node.blockCreation.buildBlock(spec);
+  assertEquals(blueprint.anchor.toPrimitive(), genesis.hash.toPrimitive());
+  assertEquals(blueprint.outputs.length, 1);
+  assertEquals(blueprint.declaredWeight, 25);
 
-  if (result.ok) {
-    const blueprint = result.blueprint;
-    assertEquals(blueprint.anchor.toPrimitive(), genesis.hash.toPrimitive());
-    assertEquals(blueprint.outputs.length, 1);
-    assertEquals(blueprint.declaredWeight, 25);
+  // Create concrete block from blueprint
+  const block = createBlock(blueprint, genesis);
+  assert(block.hash);
 
-    // Create concrete block from blueprint
-    const block = createBlock(blueprint, genesis);
-    assert(block.hash);
+  // Feed through coordinator
+  const coordResult = node.receiveBlock(block, null);
+  assertEquals(coordResult.newConflicts.length, 0);
 
-    // Feed through coordinator
-    const coordResult = node.receiveBlock(block, null);
-    assertEquals(coordResult.newConflicts.length, 0);
-
-    // Block should be canonical
-    assert(node.consensus.isCanonical(block.hash));
-  }
+  // Block should be canonical
+  assert(node.consensus.isCanonical(block.hash));
 });
 
 // -- Computation integration tests ----------------------------------

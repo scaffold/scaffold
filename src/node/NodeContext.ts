@@ -15,7 +15,7 @@ import { ConflictService } from '../core/ConflictService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
-import { Output } from '../core/BlockCreationModule.ts';
+import { BlockBlueprint, Output } from '../core/BlockCreationModule.ts';
 import { Hash } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 
@@ -73,12 +73,17 @@ export class NodeContext {
     const blockCreationService = this.blockCreation;
     const blockCreator: BlockCreator = {
       createBlock: (spec, privateKey) => {
-        const result = blockCreationService.buildBlock(spec);
-        if (!result.ok) return null;
-        if (privateKey) {
-          return composeBlockPacket(result.blueprint, privateKey).block;
+        let blueprint: BlockBlueprint;
+        try {
+          blueprint = blockCreationService.buildBlock(spec);
+        } catch (e) {
+          console.debug('createBlock failed:', (e as Error).message);
+          return null;
         }
-        return composeUnsignedBlockPacket(result.blueprint).block;
+        if (privateKey) {
+          return composeBlockPacket(blueprint, privateKey).block;
+        }
+        return composeUnsignedBlockPacket(blueprint).block;
       },
     };
 

@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from '@std/assert';
+import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import {
@@ -169,8 +169,7 @@ Deno.test('validateThroughput: balanced inputs and outputs', () => {
     { index: 2, value: 100 },
   ];
   const outputs: Output[] = [makeOutput(100)];
-  const result = module.validateThroughput(claims, outputs, 1);
-  assert(result.ok);
+  module.validateThroughput(claims, outputs, 1); // should not throw
 });
 
 Deno.test('validateThroughput: multiple inputs and outputs', () => {
@@ -183,8 +182,7 @@ Deno.test('validateThroughput: multiple inputs and outputs', () => {
   // claims index 1 < ownOutputCount(2) → self-claim
   // claims index 2 >= ownOutputCount(2) → anchor claim
   // self-claim: value 60, self-claimed output[1] value 30... mismatch
-  const result = module.validateThroughput(claims, outputs, 2);
-  assertFalse(result.ok);
+  assertThrows(() => module.validateThroughput(claims, outputs, 2));
 });
 
 Deno.test('validateThroughput: balanced with self-claims', () => {
@@ -199,8 +197,7 @@ Deno.test('validateThroughput: balanced with self-claims', () => {
     makeOutput(50), // self-claimed → nets to zero
     makeOutput(100), // non-self-claimed → must balance with anchor claims
   ];
-  const result = module.validateThroughput(claims, outputs, 2);
-  assert(result.ok);
+  module.validateThroughput(claims, outputs, 2); // should not throw
 });
 
 Deno.test('validateThroughput: imbalanced (inputs > outputs)', () => {
@@ -209,9 +206,11 @@ Deno.test('validateThroughput: imbalanced (inputs > outputs)', () => {
     { index: 1, value: 100 },
   ];
   const outputs: Output[] = [makeOutput(50)];
-  const result = module.validateThroughput(claims, outputs, 1);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('throughput imbalance'));
+  assertThrows(
+    () => module.validateThroughput(claims, outputs, 1),
+    Error,
+    'throughput imbalance',
+  );
 });
 
 Deno.test('validateThroughput: imbalanced (outputs > inputs)', () => {
@@ -220,14 +219,12 @@ Deno.test('validateThroughput: imbalanced (outputs > inputs)', () => {
     { index: 1, value: 50 },
   ];
   const outputs: Output[] = [makeOutput(100)];
-  const result = module.validateThroughput(claims, outputs, 1);
-  assertFalse(result.ok);
+  assertThrows(() => module.validateThroughput(claims, outputs, 1));
 });
 
 Deno.test('validateThroughput: no claims no outputs', () => {
   const { module } = setupModule();
-  const result = module.validateThroughput([], [], 0);
-  assert(result.ok);
+  module.validateThroughput([], [], 0); // should not throw
 });
 
 Deno.test('validateThroughput: self-claim value mismatch', () => {
@@ -238,9 +235,11 @@ Deno.test('validateThroughput: self-claim value mismatch', () => {
   const outputs: Output[] = [
     makeOutput(30), // self-claimed but different value
   ];
-  const result = module.validateThroughput(claims, outputs, 1);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('self-claim'));
+  assertThrows(
+    () => module.validateThroughput(claims, outputs, 1),
+    Error,
+    'self-claim',
+  );
 });
 
 // -- computeOutputCount tests ------------------------------------
@@ -274,55 +273,43 @@ Deno.test('computeClaimMask: no subtrees, single anchor claim', () => {
   const { module } = setupModule();
   const anchorOutputCount = 5;
   const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
-  const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [1], 1, 0);
-  assert(result.ok);
-  if (result.ok) {
-    assert(result.mask.get(0)); // anchor index 0 claimed
-    assertFalse(result.mask.get(1));
-    assertFalse(result.mask.get(2));
-  }
+  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [1], 1, 0);
+  assert(mask.get(0)); // anchor index 0 claimed
+  assert(!mask.get(1));
+  assert(!mask.get(2));
 });
 
 Deno.test('computeClaimMask: with subtree claims, own anchor claim skips claimed', () => {
   const { module } = setupModule();
   const anchorOutputCount = 5;
   const mergedSubtreeMask = BitVector.fromIndices(anchorOutputCount, [1, 3]);
-  const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [5], 2, 3);
-  assert(result.ok);
-  if (result.ok) {
-    assert(result.mask.get(0));
-    assert(result.mask.get(1));
-    assert(result.mask.get(3));
-    assertFalse(result.mask.get(2));
-    assertFalse(result.mask.get(4));
-  }
+  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [5], 2, 3);
+  assert(mask.get(0));
+  assert(mask.get(1));
+  assert(mask.get(3));
+  assert(!mask.get(2));
+  assert(!mask.get(4));
 });
 
 Deno.test('computeClaimMask: claim on subtree output does not affect anchor mask', () => {
   const { module } = setupModule();
   const anchorOutputCount = 5;
   const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
-  const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [2], 1, 3);
-  assert(result.ok);
-  if (result.ok) {
-    assertEquals(result.mask.popcount(), 0);
-  }
+  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [2], 1, 3);
+  assertEquals(mask.popcount(), 0);
 });
 
 Deno.test('computeClaimMask: multiple anchor claims map correctly', () => {
   const { module } = setupModule();
   const anchorOutputCount = 6;
   const mergedSubtreeMask = BitVector.fromIndices(anchorOutputCount, [2]);
-  const result = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [3, 5], 1, 2);
-  assert(result.ok);
-  if (result.ok) {
-    assert(result.mask.get(0));
-    assert(result.mask.get(2));
-    assert(result.mask.get(3));
-    assertFalse(result.mask.get(1));
-    assertFalse(result.mask.get(4));
-    assertFalse(result.mask.get(5));
-  }
+  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [3, 5], 1, 2);
+  assert(mask.get(0));
+  assert(mask.get(2));
+  assert(mask.get(3));
+  assert(!mask.get(1));
+  assert(!mask.get(4));
+  assert(!mask.get(5));
 });
 
 // -- buildBlock tests --------------------------------------------
@@ -343,15 +330,12 @@ Deno.test('buildBlock: simple leaf block', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    // Leaf block: no aggregation contract output added
-    assertEquals(result.blueprint.outputs.length, 2);
-    assertEquals(result.blueprint.declaredWeight, 10);
-    assertEquals(result.blueprint.aggregates, []);
-    assertEquals(result.blueprint.claims, [2]);
-  }
+  const blueprint = module.buildBlock(spec);
+  // Leaf block: no aggregation contract output added
+  assertEquals(blueprint.outputs.length, 2);
+  assertEquals(blueprint.declaredWeight, 10);
+  assertEquals(blueprint.aggregates, []);
+  assertEquals(blueprint.claims, [2]);
 });
 
 Deno.test('buildBlock: leaf block with self-claim', () => {
@@ -371,12 +355,9 @@ Deno.test('buildBlock: leaf block with self-claim', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    assertEquals(result.blueprint.outputs.length, 2);
-    assertEquals(result.blueprint.claims, [0, 2]);
-  }
+  const blueprint = module.buildBlock(spec);
+  assertEquals(blueprint.outputs.length, 2);
+  assertEquals(blueprint.claims, [0, 2]);
 });
 
 Deno.test('buildBlock: aggregation block with subtrees', () => {
@@ -418,26 +399,23 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    assertEquals(result.blueprint.aggregates.length, 2);
-    // Outputs: 1 user output + 1 aggregation contract output
-    assertEquals(result.blueprint.outputs.length, 2);
+  const blueprint = module.buildBlock(spec);
+  assertEquals(blueprint.aggregates.length, 2);
+  // Outputs: 1 user output + 1 aggregation contract output
+  assertEquals(blueprint.outputs.length, 2);
 
-    // Check aggregation data in contract output
-    const aggData = getAggData(result.blueprint.outputs);
-    assert(aggData !== null);
-    if (aggData) {
-      assertEquals(aggData.aggregateOutputCounts, [4, 3]);
-      // chainWeights: full weight [37] minus declaredWeight [2] = [35]
-      assertEquals(aggData.chainWeights, [35]);
-      // Claim mask: subtree claims on anchor [2, 5, 7]
-      assert(aggData.claimMask.get(2));
-      assert(aggData.claimMask.get(5));
-      assert(aggData.claimMask.get(7));
-      assertEquals(aggData.claimMask.popcount(), 3);
-    }
+  // Check aggregation data in contract output
+  const aggData = getAggData(blueprint.outputs);
+  assert(aggData !== null);
+  if (aggData) {
+    assertEquals(aggData.aggregateOutputCounts, [4, 3]);
+    // chainWeights: full weight [37] minus declaredWeight [2] = [35]
+    assertEquals(aggData.chainWeights, [35]);
+    // Claim mask: subtree claims on anchor [2, 5, 7]
+    assert(aggData.claimMask.get(2));
+    assert(aggData.claimMask.get(5));
+    assert(aggData.claimMask.get(7));
+    assertEquals(aggData.claimMask.popcount(), 3);
   }
 });
 
@@ -481,16 +459,13 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    const aggData = getAggData(result.blueprint.outputs);
-    assert(aggData !== null);
-    if (aggData) {
-      // chainWeights: full weight is [23, 10, 5], minus declaredWeight(3) at [0] = [20, 10, 5]
-      assertEquals(aggData.chainWeights, [20, 10, 5]);
-      assertEquals(aggData.aggregateOutputCounts, [3, 2]);
-    }
+  const blueprint = module.buildBlock(spec);
+  const aggData = getAggData(blueprint.outputs);
+  assert(aggData !== null);
+  if (aggData) {
+    // chainWeights: full weight is [23, 10, 5], minus declaredWeight(3) at [0] = [20, 10, 5]
+    assertEquals(aggData.chainWeights, [20, 10, 5]);
+    assertEquals(aggData.aggregateOutputCounts, [3, 2]);
   }
 });
 
@@ -506,9 +481,7 @@ Deno.test('buildBlock: fails on missing anchor', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('anchor'));
+  assertThrows(() => module.buildBlock(spec), Error, 'anchor');
 });
 
 Deno.test('buildBlock: fails on missing aggregated block', () => {
@@ -525,9 +498,7 @@ Deno.test('buildBlock: fails on missing aggregated block', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('aggregated block not found'));
+  assertThrows(() => module.buildBlock(spec), Error, 'aggregated block not found');
 });
 
 Deno.test('buildBlock: fails on throughput imbalance', () => {
@@ -546,9 +517,7 @@ Deno.test('buildBlock: fails on throughput imbalance', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('throughput imbalance'));
+  assertThrows(() => module.buildBlock(spec), Error, 'throughput imbalance');
 });
 
 Deno.test('buildBlock: fails on inter-subtree conflict', () => {
@@ -576,9 +545,7 @@ Deno.test('buildBlock: fails on inter-subtree conflict', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('inter-subtree conflict'));
+  assertThrows(() => module.buildBlock(spec), Error, 'inter-subtree conflict');
 });
 
 Deno.test('buildBlock: fails on claim index out of range', () => {
@@ -597,9 +564,7 @@ Deno.test('buildBlock: fails on claim index out of range', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('out of range'));
+  assertThrows(() => module.buildBlock(spec), Error, 'out of range');
 });
 
 Deno.test('buildBlock: block with only self-claims (no anchor claims)', () => {
@@ -619,12 +584,9 @@ Deno.test('buildBlock: block with only self-claims (no anchor claims)', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    // Leaf block: no aggregation output
-    assertEquals(result.blueprint.outputs.length, 2);
-  }
+  const blueprint = module.buildBlock(spec);
+  // Leaf block: no aggregation output
+  assertEquals(blueprint.outputs.length, 2);
 });
 
 Deno.test('buildBlock: block with no outputs and no claims', () => {
@@ -641,11 +603,8 @@ Deno.test('buildBlock: block with no outputs and no claims', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    assertEquals(result.blueprint.outputs.length, 0);
-  }
+  const blueprint = module.buildBlock(spec);
+  assertEquals(blueprint.outputs.length, 0);
 });
 
 Deno.test('buildBlock: aggregation block with own anchor claim', () => {
@@ -670,18 +629,15 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assert(result.ok);
-  if (result.ok) {
-    const aggData = getAggData(result.blueprint.outputs);
-    assert(aggData !== null);
-    if (aggData) {
-      // claimMask should have subtree's [1, 4] plus our claim on anchor[2]
-      assert(aggData.claimMask.get(1));
-      assert(aggData.claimMask.get(2)); // our claim
-      assert(aggData.claimMask.get(4));
-      assertEquals(aggData.claimMask.popcount(), 3);
-    }
+  const blueprint = module.buildBlock(spec);
+  const aggData = getAggData(blueprint.outputs);
+  assert(aggData !== null);
+  if (aggData) {
+    // claimMask should have subtree's [1, 4] plus our claim on anchor[2]
+    assert(aggData.claimMask.get(1));
+    assert(aggData.claimMask.get(2)); // our claim
+    assert(aggData.claimMask.get(4));
+    assertEquals(aggData.claimMask.popcount(), 3);
   }
 });
 
@@ -705,7 +661,5 @@ Deno.test('buildBlock: fails when subtree rebase returns null', () => {
     refs: [],
   };
 
-  const result = module.buildBlock(spec);
-  assertFalse(result.ok);
-  assert(!result.ok && result.error.includes('rebase'));
+  assertThrows(() => module.buildBlock(spec), Error, 'rebase');
 });

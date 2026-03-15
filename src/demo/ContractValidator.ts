@@ -4,19 +4,15 @@ import { Output } from '../core/BlockCreationModule.ts';
 import { Packet, verifyPacketSignature } from '../core/Packet.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
 
-export type ValidationResult =
-  | { ok: true }
-  | { ok: false; reason: string };
-
 /**
- * Validate a block packet's authorization.
+ * Validate a block packet's authorization. Throws on failure.
  *
  * Rules:
  * - Genesis (no anchor): always valid
  * - Blocks not claiming status outputs: always valid
  * - Blocks claiming status outputs: signature must match the publicKey in the claimed output data
  */
-export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockStore): ValidationResult {
+export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockStore): void {
   const block: Block = {
     hash: packet.hash,
     ...packet.payload,
@@ -26,14 +22,14 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
 
   // Genesis is always valid
   if (Hash.equals(block.anchor, ZERO_HASH)) {
-    return { ok: true };
+    return;
   }
 
   // Find which outputs this block claims by resolving claim indices
   // against the anchor's extended output vector
   const anchorBlock = store.get(block.anchor);
   if (!anchorBlock) {
-    return { ok: false, reason: 'anchor block not found' };
+    throw new Error('anchor block not found');
   }
 
   const claimedOutputs = resolveClaimedOutputs(block, anchorBlock, store);
@@ -46,7 +42,7 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
       if (requiredPublicKey) {
         // Multiple status claims — they must all be for the same identity
         if (!bytesEqual(requiredPublicKey, publicKey)) {
-          return { ok: false, reason: 'block claims status outputs for multiple identities' };
+          throw new Error('block claims status outputs for multiple identities');
         }
       } else {
         requiredPublicKey = publicKey;
@@ -60,10 +56,7 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
       const { publicKey } = decodeStatusData(output.detail);
       if (requiredPublicKey) {
         if (!bytesEqual(requiredPublicKey, publicKey)) {
-          return {
-            ok: false,
-            reason: 'produced status output publicKey does not match claimed output',
-          };
+          throw new Error('produced status output publicKey does not match claimed output');
         }
       } else {
         requiredPublicKey = publicKey;
@@ -73,15 +66,14 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
 
   // If no status outputs are involved, no signature check needed
   if (!requiredPublicKey) {
-    return { ok: true };
+    return;
   }
 
   // Verify signature matches the required publicKey
   if (!verifyPacketSignature(packet, requiredPublicKey)) {
-    return { ok: false, reason: 'signature does not match status output owner' };
+    throw new Error('signature does not match status output owner');
   }
 
-  return { ok: true };
 }
 
 /**

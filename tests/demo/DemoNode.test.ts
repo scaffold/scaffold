@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertFalse } from '@std/assert';
+import { assert, assertEquals, assertThrows } from '@std/assert';
 import { DemoNode } from '../../src/demo/DemoNode.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
@@ -8,9 +8,7 @@ import { composeBlockPacket, parsePacket } from '../../src/core/Packet.ts';
 
 Deno.test('DemoNode: publish valid status update', () => {
   const node = new DemoNode('eagle');
-  const result = node.publishStatus('eagle', 'Hello world');
-
-  assert(result.ok, `Expected ok but got: ${result.error}`);
+  node.publishStatus('eagle', 'Hello world');
   assertEquals(node.statusIndex.getStatus('eagle'), 'Hello world');
 });
 
@@ -19,8 +17,7 @@ Deno.test('DemoNode: two nodes — valid status propagates via method call', () 
   const nodeB = new DemoNode('badger');
 
   // Eagle publishes their own status
-  const result = nodeA.publishStatus('eagle', 'Eagle says hi');
-  assert(result.ok);
+  nodeA.publishStatus('eagle', 'Eagle says hi');
 
   // Manually propagate the block from A to B via raw packet
   const chain = nodeA.getCanonicalChain();
@@ -41,9 +38,11 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
   const nodeB = new DemoNode('badger');
 
   // Eagle tries to publish as badger (impersonation)
-  const result = nodeA.publishStatus('badger', 'Fake message');
-  assertFalse(result.ok);
-  assert(result.error?.includes('signature'));
+  assertThrows(
+    () => nodeA.publishStatus('badger', 'Fake message'),
+    Error,
+    'signature',
+  );
 
   // Construct the invalid block directly and try to deliver to nodeB
   const badger = deriveIdentity('badger');
@@ -61,11 +60,8 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
     refs: [],
   };
 
-  const buildResult = nodeA.blockCreation.buildBlock(spec);
-  assert(buildResult.ok);
-  if (!buildResult.ok) return;
-
-  const { block, packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey); // signed by eagle, not badger!
+  const blueprint = nodeA.blockCreation.buildBlock(spec);
+  const { block, packet } = composeBlockPacket(blueprint, eagle.privateKey); // signed by eagle, not badger!
 
   // nodeB should reject this
   const beforeTip = nodeB.tip.hash.toPrimitive();
@@ -79,8 +75,7 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
 Deno.test('DemoNode: status update correctly claims old output and produces new one', () => {
   const node = new DemoNode('eagle');
 
-  const result1 = node.publishStatus('eagle', 'First message');
-  assert(result1.ok);
+  node.publishStatus('eagle', 'First message');
   assertEquals(node.statusIndex.getStatus('eagle'), 'First message');
 
   // The chain should have genesis + 1 block
@@ -90,16 +85,13 @@ Deno.test('DemoNode: status update correctly claims old output and produces new 
 Deno.test('DemoNode: multiple updates by same identity chain correctly', () => {
   const node = new DemoNode('eagle');
 
-  const result1 = node.publishStatus('eagle', 'Message 1');
-  assert(result1.ok);
+  node.publishStatus('eagle', 'Message 1');
   assertEquals(node.statusIndex.getStatus('eagle'), 'Message 1');
 
-  const result2 = node.publishStatus('eagle', 'Message 2');
-  assert(result2.ok);
+  node.publishStatus('eagle', 'Message 2');
   assertEquals(node.statusIndex.getStatus('eagle'), 'Message 2');
 
-  const result3 = node.publishStatus('eagle', 'Message 3');
-  assert(result3.ok);
+  node.publishStatus('eagle', 'Message 3');
   assertEquals(node.statusIndex.getStatus('eagle'), 'Message 3');
 
   // Chain should have genesis + 3 blocks
@@ -111,8 +103,7 @@ Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject',
   const badgerNode = new DemoNode('badger');
 
   // Eagle tries to publish as badger
-  const result = eagleNode.publishStatus('badger', 'Hello');
-  assertFalse(result.ok);
+  assertThrows(() => eagleNode.publishStatus('badger', 'Hello'));
 
   // Manually construct and send the invalid block to badgerNode
   const badger = deriveIdentity('badger');
@@ -130,13 +121,10 @@ Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject',
     refs: [],
   };
 
-  const buildResult = eagleNode.blockCreation.buildBlock(spec);
-  assert(buildResult.ok);
-  if (!buildResult.ok) return;
-
-  const { block, packet } = composeBlockPacket(buildResult.blueprint, eagle.privateKey);
+  const blueprint = eagleNode.blockCreation.buildBlock(spec);
+  const { block, packet } = composeBlockPacket(blueprint, eagle.privateKey);
 
   // badgerNode should reject this impersonation
   badgerNode.receivePacket(packet, 'eagle');
-  assertFalse(badgerNode.store.has(block.hash));
+  assert(!badgerNode.store.has(block.hash));
 });

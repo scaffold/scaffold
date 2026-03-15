@@ -1,5 +1,5 @@
 import { composeUnsignedBlockPacket } from './core/Packet.ts';
-import { Output } from './core/BlockCreationModule.ts';
+import { BlockBlueprint, Output } from './core/BlockCreationModule.ts';
 import { NodeContext } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
 import { FetchHandle, FetchManager, FetchOptions, Verifier } from './node/FetchManager.ts';
@@ -52,9 +52,14 @@ export class Scaffold {
         }
         const resolvedSpec = { ...spec, anchor: anchorHash };
 
-        const result = nodeContext.blockCreation.buildBlock(resolvedSpec);
-        if (!result.ok) return null;
-        return composeUnsignedBlockPacket(result.blueprint).block;
+        let blueprint: BlockBlueprint;
+        try {
+          blueprint = nodeContext.blockCreation.buildBlock(resolvedSpec);
+        } catch (e) {
+          console.debug('buildBlock failed:', (e as Error).message);
+          return null;
+        }
+        return composeUnsignedBlockPacket(blueprint).block;
       },
       processBlock: (block) => {
         nodeContext.processBlock(block);
