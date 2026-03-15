@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
-import { HighlightRegistry } from '../highlight/HighlightRegistry.ts';
-import { HighlightContext } from '../highlight/HighlightContext.ts';
-import { BlockTable } from './BlockTable.tsx';
-import type { Scaffold } from 'scaffold.io/Scaffold.ts';
+import React, { useMemo } from "react";
+import { HighlightRegistry } from "../highlight/HighlightRegistry.ts";
+import { HighlightContext } from "../highlight/HighlightContext.ts";
+import { BlockTable } from "./BlockTable.tsx";
+import type { Scaffold } from "scaffold.io/Scaffold.ts";
 
 interface BlockGraphExplorerProps {
   scaffold: Scaffold;
@@ -13,8 +13,8 @@ export function BlockGraphExplorer({ scaffold }: BlockGraphExplorerProps) {
 
   return (
     <HighlightContext.Provider value={registry}>
-      <div className='block-graph-explorer'>
-        <div className='explorer-header'>
+      <div className="block-graph-explorer">
+        <div className="explorer-header">
           <h1>Block Graph Explorer</h1>
         </div>
         <BlockTable scaffold={scaffold} />
