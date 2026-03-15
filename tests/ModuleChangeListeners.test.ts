@@ -2,7 +2,7 @@ import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { ConsensusModule, ConsensusProvider } from '../src/core/ConsensusModule.ts';
 import { SamplingModule, SamplingProvider } from '../src/core/SamplingModule.ts';
-import { TrustModule, TrustProvider, CollateralSide } from '../src/core/TrustModule.ts';
+import { CollateralSide, TrustModule, TrustProvider } from '../src/core/TrustModule.ts';
 
 // -- Consensus test helpers ------------------------------------------
 
@@ -257,8 +257,18 @@ Deno.test('TrustModule: listener fires on addCollateral', () => {
   const provider = new TestTrustProvider();
   const trust = new TrustModule(provider);
 
-  const target: TestTrustBlock = { hash: h('target'), anchor: ZERO_HASH, declaredWeight: 100, childWeights: [] };
-  const collateral: TestTrustBlock = { hash: h('collateral'), anchor: ZERO_HASH, declaredWeight: 10, childWeights: [] };
+  const target: TestTrustBlock = {
+    hash: h('target'),
+    anchor: ZERO_HASH,
+    declaredWeight: 100,
+    childWeights: [],
+  };
+  const collateral: TestTrustBlock = {
+    hash: h('collateral'),
+    anchor: ZERO_HASH,
+    declaredWeight: 10,
+    childWeights: [],
+  };
   provider.add(target);
   provider.add(collateral);
 
@@ -277,8 +287,18 @@ Deno.test('TrustModule: listener fires on redeemCollateral', () => {
   const provider = new TestTrustProvider();
   const trust = new TrustModule(provider);
 
-  const target: TestTrustBlock = { hash: h('target'), anchor: ZERO_HASH, declaredWeight: 100, childWeights: [] };
-  const collateral: TestTrustBlock = { hash: h('collateral'), anchor: ZERO_HASH, declaredWeight: 10, childWeights: [] };
+  const target: TestTrustBlock = {
+    hash: h('target'),
+    anchor: ZERO_HASH,
+    declaredWeight: 100,
+    childWeights: [],
+  };
+  const collateral: TestTrustBlock = {
+    hash: h('collateral'),
+    anchor: ZERO_HASH,
+    declaredWeight: 10,
+    childWeights: [],
+  };
   provider.add(target);
   provider.add(collateral);
 
@@ -300,12 +320,27 @@ Deno.test('TrustModule: listener fires on claimCollateral', () => {
   const provider = new TestTrustProvider();
   const trust = new TrustModule(provider);
 
-  const target: TestTrustBlock = { hash: h('target'), anchor: ZERO_HASH, declaredWeight: 100, childWeights: [] };
+  const target: TestTrustBlock = {
+    hash: h('target'),
+    anchor: ZERO_HASH,
+    declaredWeight: 100,
+    childWeights: [],
+  };
   provider.add(target);
 
   // Add FOR and AGAINST collateral
-  const forC: TestTrustBlock = { hash: h('for'), anchor: ZERO_HASH, declaredWeight: 10, childWeights: [] };
-  const againstC: TestTrustBlock = { hash: h('against'), anchor: ZERO_HASH, declaredWeight: 10, childWeights: [] };
+  const forC: TestTrustBlock = {
+    hash: h('for'),
+    anchor: ZERO_HASH,
+    declaredWeight: 10,
+    childWeights: [],
+  };
+  const againstC: TestTrustBlock = {
+    hash: h('against'),
+    anchor: ZERO_HASH,
+    declaredWeight: 10,
+    childWeights: [],
+  };
   provider.add(forC);
   provider.add(againstC);
 

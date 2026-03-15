@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useHighlightRegistry } from '../highlight/HighlightContext.ts';
 import type { Hash } from 'scaffold.io/util/Hash.ts';
 

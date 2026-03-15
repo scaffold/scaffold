@@ -13,8 +13,8 @@ export function BlockGraphExplorer({ scaffold }: BlockGraphExplorerProps) {
 
   return (
     <HighlightContext.Provider value={registry}>
-      <div className="block-graph-explorer">
-        <div className="explorer-header">
+      <div className='block-graph-explorer'>
+        <div className='explorer-header'>
           <h1>Block Graph Explorer</h1>
         </div>
         <BlockTable scaffold={scaffold} />

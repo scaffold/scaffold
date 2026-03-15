@@ -270,7 +270,11 @@ export function findSelfClaimedOutput(block: Block, key: string | Uint8Array): O
  * Returns undefined if the ref index is out of bounds or the referenced
  * block is not in the store.
  */
-export function getRefOutputs(block: Block, refIndex: number, store: BlockStore): Output[] | undefined {
+export function getRefOutputs(
+  block: Block,
+  refIndex: number,
+  store: BlockStore,
+): Output[] | undefined {
   if (refIndex < 0 || refIndex >= block.refs.length) return undefined;
   const refHash = block.refs[refIndex];
   const refBlock = store.get(refHash);

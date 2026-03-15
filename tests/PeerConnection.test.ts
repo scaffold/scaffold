@@ -64,7 +64,11 @@ class MockTransport implements TransportConnection {
 function makeTestBlock(): Block {
   const contract = Hash.digest('test-contract');
   return createGenesisBlock([
-    { verifier: { contract, params: new Uint8Array(0) }, value: 100, detail: new Uint8Array([1, 2, 3]) },
+    {
+      verifier: { contract, params: new Uint8Array(0) },
+      value: 100,
+      detail: new Uint8Array([1, 2, 3]),
+    },
   ]);
 }
 

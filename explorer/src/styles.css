@@ -5,8 +5,9 @@
 /* -- Base --------------------------------------------------- */
 
 .block-graph-explorer {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display',
-    'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica,
+    Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 13px;
@@ -49,7 +50,9 @@
   border-radius: 8px;
   font-size: 13px;
   font-family: inherit;
-  background: #f5f5f7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%238e8e93' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3Cpath d='M9.5 9.5 13 13'/%3E%3C/svg%3E") 10px center no-repeat;
+  background: #f5f5f7
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%238e8e93' stroke-width='1.5' stroke-linecap='round'%3E%3Ccircle cx='6' cy='6' r='4.5'/%3E%3Cpath d='M9.5 9.5 13 13'/%3E%3C/svg%3E")
+    10px center no-repeat;
   outline: none;
   width: 220px;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
@@ -78,7 +81,7 @@
 .filter-check:hover {
   background: #f0f0f5;
 }
-.filter-check input[type="checkbox"] {
+.filter-check input[type='checkbox'] {
   accent-color: #0071e3;
   width: 14px;
   height: 14px;
@@ -163,7 +166,7 @@
 .column-option:hover {
   background: #f5f5f7;
 }
-.column-option input[type="checkbox"] {
+.column-option input[type='checkbox'] {
   accent-color: #0071e3;
   width: 14px;
   height: 14px;
@@ -258,14 +261,33 @@
   white-space: nowrap;
 }
 
-.cell-pin       { width: 36px; text-align: center; }
-.cell-hash      { width: 120px; }
-.cell-canonical { width: 100px; }
-.cell-source    { width: 80px; }
-.cell-time      { width: 110px; }
-.cell-num       { width: 80px; text-align: right; font-variant-numeric: tabular-nums; }
-.cell-validity  { width: 130px; }
-.cell-trust     { width: 150px; }
+.cell-pin {
+  width: 36px;
+  text-align: center;
+}
+.cell-hash {
+  width: 120px;
+}
+.cell-canonical {
+  width: 100px;
+}
+.cell-source {
+  width: 80px;
+}
+.cell-time {
+  width: 110px;
+}
+.cell-num {
+  width: 80px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cell-validity {
+  width: 130px;
+}
+.cell-trust {
+  width: 150px;
+}
 
 .clickable {
   cursor: pointer;

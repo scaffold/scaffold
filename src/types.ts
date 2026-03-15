@@ -24,10 +24,10 @@ export {
   composeBlockPacket,
   composeGenesisPacket,
   composeUnsignedBlockPacket,
+  PacketType,
   parsePacket,
   recoverPacketSigner,
   verifyPacketSignature,
-  PacketType,
 } from './core/Packet.ts';
 export type { Packet } from './core/Packet.ts';
 export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';

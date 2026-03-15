@@ -122,7 +122,9 @@ export class HostContext {
       if (!Hash.equals(output.verifier.contract, SELF_CONTRACT)) continue;
       if (!bytesEqual(output.verifier.params, keyBytes)) continue;
       if (!bytesEqual(output.detail, value)) {
-        this.reject(`self-claimed output key="${typeof key === 'string' ? key : '<bytes>'}" has wrong value`);
+        this.reject(
+          `self-claimed output key="${typeof key === 'string' ? key : '<bytes>'}" has wrong value`,
+        );
         return;
       }
       return; // match found
@@ -218,7 +220,10 @@ export class HostContext {
   }
 
   /** Get the verifier of an output on a referenced block. */
-  refOutputVerifier(refIndex: number, outputIndex: number): { contract: Hash; params: Uint8Array } | undefined {
+  refOutputVerifier(
+    refIndex: number,
+    outputIndex: number,
+  ): { contract: Hash; params: Uint8Array } | undefined {
     const outputs = this._getRefOutputs(refIndex);
     if (!outputs || outputIndex < 0 || outputIndex >= outputs.length) {
       return undefined;

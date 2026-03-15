@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useReducer } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { BlockRow } from './BlockRow.tsx';
 import { FilterBar, FilterState } from './FilterBar.tsx';
 import type { Block } from 'scaffold.io/core/Block.ts';
@@ -21,7 +21,13 @@ const ALL_COLUMNS = [
 ];
 
 const DEFAULT_COLUMNS = new Set([
-  'hash', 'canonicality', 'declaredWeight', 'descendantWeight', 'outputs', 'inputs', 'aggregates',
+  'hash',
+  'canonicality',
+  'declaredWeight',
+  'descendantWeight',
+  'outputs',
+  'inputs',
+  'aggregates',
 ]);
 
 type SortKey = string;
@@ -113,18 +119,30 @@ export function BlockTable({ scaffold }: { scaffold: Scaffold }) {
     // Sort
     const getSortValue = (block: Block): number | string => {
       switch (sortKey) {
-        case 'hash': return block.hash.toHex();
-        case 'canonicality': return ctx.consensus.isCanonical(block.hash) ? 1 : 0;
-        case 'source': return block.source;
-        case 'timestamp': return block.timestamp;
-        case 'receivedAt': return block.receivedAt;
-        case 'declaredWeight': return block.declaredWeight;
-        case 'descendantWeight': return ctx.consensus.getDescendantWeight(block.hash);
-        case 'outputs': return block.outputs.length;
-        case 'inputs': return block.claims.length;
-        case 'aggregates': return block.aggregates.length;
-        case 'throughput': return block.outputs.reduce((s, o) => s + o.value, 0);
-        default: return 0;
+        case 'hash':
+          return block.hash.toHex();
+        case 'canonicality':
+          return ctx.consensus.isCanonical(block.hash) ? 1 : 0;
+        case 'source':
+          return block.source;
+        case 'timestamp':
+          return block.timestamp;
+        case 'receivedAt':
+          return block.receivedAt;
+        case 'declaredWeight':
+          return block.declaredWeight;
+        case 'descendantWeight':
+          return ctx.consensus.getDescendantWeight(block.hash);
+        case 'outputs':
+          return block.outputs.length;
+        case 'inputs':
+          return block.claims.length;
+        case 'aggregates':
+          return block.aggregates.length;
+        case 'throughput':
+          return block.outputs.reduce((s, o) => s + o.value, 0);
+        default:
+          return 0;
       }
     };
 
@@ -149,7 +167,7 @@ export function BlockTable({ scaffold }: { scaffold: Scaffold }) {
   };
 
   return (
-    <div className="block-table-container">
+    <div className='block-table-container'>
       <FilterBar
         filter={filter}
         onChange={setFilter}
@@ -158,71 +176,110 @@ export function BlockTable({ scaffold }: { scaffold: Scaffold }) {
         allColumns={ALL_COLUMNS}
       />
 
-      <div className="block-table">
-        <div className="block-row header-row">
-          <div className="cell cell-pin" />
+      <div className='block-table'>
+        <div className='block-row header-row'>
+          <div className='cell cell-pin' />
           {columns.has('hash') && (
-            <div className="cell cell-hash clickable" onClick={() => handleSort('hash')}>
+            <div
+              className='cell cell-hash clickable'
+              onClick={() => handleSort('hash')}
+            >
               Hash{sortIndicator('hash')}
             </div>
           )}
           {columns.has('canonicality') && (
-            <div className="cell cell-canonical clickable" onClick={() => handleSort('canonicality')}>
+            <div
+              className='cell cell-canonical clickable'
+              onClick={() => handleSort('canonicality')}
+            >
               Status{sortIndicator('canonicality')}
             </div>
           )}
           {columns.has('source') && (
-            <div className="cell cell-source clickable" onClick={() => handleSort('source')}>
+            <div
+              className='cell cell-source clickable'
+              onClick={() => handleSort('source')}
+            >
               Source{sortIndicator('source')}
             </div>
           )}
           {columns.has('timestamp') && (
-            <div className="cell cell-time clickable" onClick={() => handleSort('timestamp')}>
+            <div
+              className='cell cell-time clickable'
+              onClick={() => handleSort('timestamp')}
+            >
               Created{sortIndicator('timestamp')}
             </div>
           )}
           {columns.has('receivedAt') && (
-            <div className="cell cell-time clickable" onClick={() => handleSort('receivedAt')}>
+            <div
+              className='cell cell-time clickable'
+              onClick={() => handleSort('receivedAt')}
+            >
               Received{sortIndicator('receivedAt')}
             </div>
           )}
           {columns.has('declaredWeight') && (
-            <div className="cell cell-num clickable" onClick={() => handleSort('declaredWeight')}>
+            <div
+              className='cell cell-num clickable'
+              onClick={() => handleSort('declaredWeight')}
+            >
               Weight{sortIndicator('declaredWeight')}
             </div>
           )}
           {columns.has('descendantWeight') && (
-            <div className="cell cell-num clickable" onClick={() => handleSort('descendantWeight')}>
+            <div
+              className='cell cell-num clickable'
+              onClick={() => handleSort('descendantWeight')}
+            >
               Desc. Wt{sortIndicator('descendantWeight')}
             </div>
           )}
           {columns.has('outputs') && (
-            <div className="cell cell-num clickable" onClick={() => handleSort('outputs')}>
+            <div
+              className='cell cell-num clickable'
+              onClick={() => handleSort('outputs')}
+            >
               Outs{sortIndicator('outputs')}
             </div>
           )}
           {columns.has('inputs') && (
-            <div className="cell cell-num clickable" onClick={() => handleSort('inputs')}>
+            <div
+              className='cell cell-num clickable'
+              onClick={() => handleSort('inputs')}
+            >
               Claims{sortIndicator('inputs')}
             </div>
           )}
           {columns.has('aggregates') && (
-            <div className="cell cell-num clickable" onClick={() => handleSort('aggregates')}>
+            <div
+              className='cell cell-num clickable'
+              onClick={() => handleSort('aggregates')}
+            >
               Aggs{sortIndicator('aggregates')}
             </div>
           )}
           {columns.has('throughput') && (
-            <div className="cell cell-num clickable" onClick={() => handleSort('throughput')}>
+            <div
+              className='cell cell-num clickable'
+              onClick={() => handleSort('throughput')}
+            >
               Thru{sortIndicator('throughput')}
             </div>
           )}
           {columns.has('validity') && (
-            <div className="cell cell-validity clickable" onClick={() => handleSort('validity')}>
+            <div
+              className='cell cell-validity clickable'
+              onClick={() => handleSort('validity')}
+            >
               Validity{sortIndicator('validity')}
             </div>
           )}
           {columns.has('trust') && (
-            <div className="cell cell-trust clickable" onClick={() => handleSort('trust')}>
+            <div
+              className='cell cell-trust clickable'
+              onClick={() => handleSort('trust')}
+            >
               Collateral{sortIndicator('trust')}
             </div>
           )}
@@ -246,17 +303,16 @@ export function BlockTable({ scaffold }: { scaffold: Scaffold }) {
         })}
 
         {displayed.length === 0 && (
-          <div className="block-row empty-row">
-            <div className="cell" style={{ gridColumn: '1 / -1', textAlign: 'center' }}>
+          <div className='block-row empty-row'>
+            <div className='cell' style={{ gridColumn: '1 / -1', textAlign: 'center' }}>
               No blocks match current filters
             </div>
           </div>
         )}
       </div>
 
-      <div className="table-footer">
-        {blocks.length} block{blocks.length !== 1 ? 's' : ''} total,
-        {' '}{displayed.length} shown
+      <div className='table-footer'>
+        {blocks.length} block{blocks.length !== 1 ? 's' : ''} total, {displayed.length} shown
       </div>
     </div>
   );

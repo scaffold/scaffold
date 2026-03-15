@@ -10,11 +10,7 @@ import { Scaffold } from '../Scaffold.ts';
 
 import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
-import {
-  composeBlockPacket,
-  Packet,
-  parsePacket,
-} from '../core/Packet.ts';
+import { composeBlockPacket, Packet, parsePacket } from '../core/Packet.ts';
 import { validateBlockPacket } from './ContractValidator.ts';
 import { StatusIndex } from './StatusIndex.ts';
 

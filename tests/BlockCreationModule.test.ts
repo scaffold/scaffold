@@ -78,7 +78,10 @@ const h = (name: string): Hash => Hash.digest(name);
 
 function makeOutput(value: number, contractName?: string): Output {
   return {
-    verifier: { contract: contractName ? h(contractName) : h('default-contract'), params: new Uint8Array(0) },
+    verifier: {
+      contract: contractName ? h(contractName) : h('default-contract'),
+      params: new Uint8Array(0),
+    },
     value,
     detail: new Uint8Array(),
   };

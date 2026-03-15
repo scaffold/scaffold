@@ -69,9 +69,7 @@ export class DisputeModule {
     const placements = this._provider.getCollateralPlacements(targetHash);
 
     // Majority by stake wins. VALID wins ties.
-    const winningSide = invalidStake > validStake
-      ? DisputeVote.Invalid
-      : DisputeVote.Valid;
+    const winningSide = invalidStake > validStake ? DisputeVote.Invalid : DisputeVote.Valid;
 
     // The winning collateral side (FOR = Valid, AGAINST = Invalid)
     const winningSidePlacement = winningSide === DisputeVote.Valid

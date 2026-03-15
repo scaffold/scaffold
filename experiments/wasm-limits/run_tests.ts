@@ -8,14 +8,14 @@ function memUsage() {
   return `RSS: ~N/A (use browser test for precise heap measurements)`;
 }
 
-console.log("========================================");
-console.log("  WASM Limits Experiment (Deno runtime)");
-console.log("  " + new Date().toISOString());
+console.log('========================================');
+console.log('  WASM Limits Experiment (Deno runtime)');
+console.log('  ' + new Date().toISOString());
 console.log(`  Deno ${Deno.version.deno}, V8 ${Deno.version.v8}`);
-console.log("========================================\n");
+console.log('========================================\n');
 
 // Load all WASM files
-console.log("Loading WASM files...");
+console.log('Loading WASM files...');
 const wasmBytes: ArrayBuffer[] = [];
 for (let i = 0; i < COUNT; i++) {
   const bytes = await Deno.readFile(`wasm/contract_${i}.wasm`);
@@ -25,7 +25,7 @@ for (let i = 0; i < COUNT; i++) {
 // ================================================================
 // Test 1: Sizes
 // ================================================================
-console.log("\n=== Test 1: WASM File Sizes ===");
+console.log('\n=== Test 1: WASM File Sizes ===');
 const sizes = wasmBytes.map((b) => b.byteLength);
 console.log(`  Files: ${sizes.length}`);
 console.log(`  Min: ${Math.min(...sizes)} bytes`);
@@ -38,7 +38,7 @@ console.log(
 // ================================================================
 // Test 2: Sequential compilation
 // ================================================================
-console.log("\n=== Test 2: Sequential WebAssembly.compile() ===");
+console.log('\n=== Test 2: Sequential WebAssembly.compile() ===');
 const modules: WebAssembly.Module[] = [];
 const compileStart = performance.now();
 for (let i = 0; i < COUNT; i++) {
@@ -51,7 +51,7 @@ console.log(`  Avg: ${(compileTime / COUNT).toFixed(3)}ms per module`);
 // ================================================================
 // Test 3: Sequential instantiation
 // ================================================================
-console.log("\n=== Test 3: Sequential WebAssembly.instantiate() ===");
+console.log('\n=== Test 3: Sequential WebAssembly.instantiate() ===');
 const instances: WebAssembly.Instance[] = [];
 const instStart = performance.now();
 for (let i = 0; i < COUNT; i++) {
@@ -76,7 +76,7 @@ console.log(
 // ================================================================
 // Test 4: Multiple instances from one module
 // ================================================================
-console.log("\n=== Test 4: Multiple Instances from Single Module ===");
+console.log('\n=== Test 4: Multiple Instances from Single Module ===');
 for (const n of [10, 100, 1000, 5000, 10000]) {
   const arr: WebAssembly.Instance[] = [];
   const t0 = performance.now();
@@ -85,7 +85,9 @@ for (const n of [10, 100, 1000, 5000, 10000]) {
   }
   const elapsed = performance.now() - t0;
   console.log(
-    `  ${String(n).padStart(6)} instances: ${elapsed.toFixed(1)}ms total, ${(elapsed / n).toFixed(4)}ms each`,
+    `  ${String(n).padStart(6)} instances: ${elapsed.toFixed(1)}ms total, ${
+      (elapsed / n).toFixed(4)
+    }ms each`,
   );
   arr.length = 0;
   // Small delay for GC
@@ -95,9 +97,9 @@ for (const n of [10, 100, 1000, 5000, 10000]) {
 // ================================================================
 // Test 5: Compile stress
 // ================================================================
-console.log("\n=== Test 5: Compile Stress Test ===");
+console.log('\n=== Test 5: Compile Stress Test ===');
 console.log(
-  "  Compiling as many unique modules as possible (reusing bytes cyclically)...",
+  '  Compiling as many unique modules as possible (reusing bytes cyclically)...',
 );
 const stressModules: WebAssembly.Module[] = [];
 const stressBatch = 100;
@@ -115,7 +117,9 @@ try {
 
     if (stressModules.length % 1000 === 0) {
       console.log(
-        `  ${stressModules.length.toLocaleString()} modules, avg: ${(stressTime / stressModules.length).toFixed(3)}ms/module`,
+        `  ${stressModules.length.toLocaleString()} modules, avg: ${
+          (stressTime / stressModules.length).toFixed(3)
+        }ms/module`,
       );
     }
   }
@@ -131,7 +135,7 @@ try {
 // ================================================================
 // Test 6: Instance stress
 // ================================================================
-console.log("\n=== Test 6: Instance Stress Test ===");
+console.log('\n=== Test 6: Instance Stress Test ===');
 const stressInstances: WebAssembly.Instance[] = [];
 let instStressTime = 0;
 
@@ -146,7 +150,9 @@ try {
 
     if (stressInstances.length % 5000 === 0) {
       console.log(
-        `  ${stressInstances.length.toLocaleString()} instances, avg: ${(instStressTime / stressInstances.length).toFixed(4)}ms/instance, last batch: ${(batchTime / 1000).toFixed(4)}ms/inst`,
+        `  ${stressInstances.length.toLocaleString()} instances, avg: ${
+          (instStressTime / stressInstances.length).toFixed(4)
+        }ms/instance, last batch: ${(batchTime / 1000).toFixed(4)}ms/inst`,
       );
     }
     // Bail if a single batch of 1000 takes >5 seconds (memory pressure)
@@ -170,7 +176,7 @@ stressInstances.length = 0;
 // Force GC if available
 try {
   // @ts-ignore: Deno-specific
-  if (typeof Deno !== "undefined") {
+  if (typeof Deno !== 'undefined') {
     // Give runtime time to GC
     await new Promise((r) => setTimeout(r, 500));
   }
@@ -181,7 +187,7 @@ try {
 // ================================================================
 // Test 7: Memory size impact
 // ================================================================
-console.log("\n=== Test 7: Memory Size Impact on Instantiation ===");
+console.log('\n=== Test 7: Memory Size Impact on Instantiation ===');
 
 function makeWasmWithMemory(initialPages: number): Uint8Array {
   const bytes: number[] = [];
@@ -227,9 +233,9 @@ function makeWasmWithMemory(initialPages: number): Uint8Array {
   const enc = (s: string) => [...s].map((c) => c.charCodeAt(0));
   const expPayload: number[] = [];
   expPayload.push(2); // 2 exports
-  const fn = enc("f");
+  const fn = enc('f');
   expPayload.push(fn.length, ...fn, 0x00, 0x00);
-  const mn = enc("memory");
+  const mn = enc('memory');
   expPayload.push(mn.length, ...mn, 0x02, 0x00);
   bytes.push(7);
   pushLEB(expPayload.length);
@@ -270,7 +276,9 @@ for (const pages of pageCounts) {
     const actualPages = mem.buffer.byteLength / 65536;
 
     console.log(
-      `  ${label.padStart(8)} (${pages} pages): compile=${compTime.toFixed(2)}ms, instantiate=${(iTime / instCount).toFixed(3)}ms avg (x${instCount})${actualPages !== pages ? " [MISMATCH]" : ""}`,
+      `  ${label.padStart(8)} (${pages} pages): compile=${compTime.toFixed(2)}ms, instantiate=${
+        (iTime / instCount).toFixed(3)
+      }ms avg (x${instCount})${actualPages !== pages ? ' [MISMATCH]' : ''}`,
     );
   } catch (e) {
     console.log(
@@ -282,7 +290,7 @@ for (const pages of pageCounts) {
 // ================================================================
 // Test 8: Concurrent compilation
 // ================================================================
-console.log("\n=== Test 8: Concurrent vs Sequential Compilation ===");
+console.log('\n=== Test 8: Concurrent vs Sequential Compilation ===');
 
 const seqT0 = performance.now();
 for (let i = 0; i < COUNT; i++) {
@@ -290,14 +298,18 @@ for (let i = 0; i < COUNT; i++) {
 }
 const seqTime = performance.now() - seqT0;
 console.log(
-  `  Sequential: ${COUNT} modules in ${seqTime.toFixed(1)}ms (${(seqTime / COUNT).toFixed(3)}ms each)`,
+  `  Sequential: ${COUNT} modules in ${seqTime.toFixed(1)}ms (${
+    (seqTime / COUNT).toFixed(3)
+  }ms each)`,
 );
 
 const parT0 = performance.now();
 await Promise.all(wasmBytes.map((b) => WebAssembly.compile(b)));
 const parTime = performance.now() - parT0;
 console.log(
-  `  Concurrent: ${COUNT} modules in ${parTime.toFixed(1)}ms (${(parTime / COUNT).toFixed(3)}ms each)`,
+  `  Concurrent: ${COUNT} modules in ${parTime.toFixed(1)}ms (${
+    (parTime / COUNT).toFixed(3)
+  }ms each)`,
 );
 console.log(`  Speedup: ${(seqTime / parTime).toFixed(2)}x`);
 
@@ -307,9 +319,11 @@ const parInstT0 = performance.now();
 await Promise.all(mods2.map((m) => WebAssembly.instantiate(m)));
 const parInstTime = performance.now() - parInstT0;
 console.log(
-  `  Concurrent instantiate: ${COUNT} in ${parInstTime.toFixed(1)}ms (${(parInstTime / COUNT).toFixed(3)}ms each)`,
+  `  Concurrent instantiate: ${COUNT} in ${parInstTime.toFixed(1)}ms (${
+    (parInstTime / COUNT).toFixed(3)
+  }ms each)`,
 );
 
-console.log("\n========================================");
-console.log("  All tests complete");
-console.log("========================================");
+console.log('\n========================================');
+console.log('  All tests complete');
+console.log('========================================');

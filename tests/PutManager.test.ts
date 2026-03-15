@@ -8,7 +8,10 @@ import { BlockProcessor, PutManager, PutRequest } from '../src/node/PutManager.t
 
 function makeOutput(value: number, contractName?: string): Output {
   return {
-    verifier: { contract: contractName ? Hash.digest(contractName) : Hash.digest('default-contract'), params: new Uint8Array(0) },
+    verifier: {
+      contract: contractName ? Hash.digest(contractName) : Hash.digest('default-contract'),
+      params: new Uint8Array(0),
+    },
     value,
     detail: new Uint8Array(),
   };

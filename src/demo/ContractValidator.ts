@@ -1,5 +1,5 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockSource, BlockStore, BlockPayload, getBlockClaimMask } from '../core/Block.ts';
+import { Block, BlockPayload, BlockSource, BlockStore, getBlockClaimMask } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { Packet, verifyPacketSignature } from '../core/Packet.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
@@ -73,7 +73,6 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
   if (!verifyPacketSignature(packet, requiredPublicKey)) {
     throw new Error('signature does not match status output owner');
   }
-
 }
 
 /**

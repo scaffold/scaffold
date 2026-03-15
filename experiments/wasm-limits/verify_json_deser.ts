@@ -1,4 +1,4 @@
-const wasmBytes = await Deno.readFile("zig-out/bin/json_stdlib.wasm");
+const wasmBytes = await Deno.readFile('zig-out/bin/json_stdlib.wasm');
 console.log(`Size: ${wasmBytes.byteLength} bytes (${(wasmBytes.byteLength / 1024).toFixed(1)} KB)`);
 
 const module = await WebAssembly.compile(wasmBytes);
@@ -19,28 +19,29 @@ function writeStr(s: string): [number, number] {
 }
 
 // Test serialization
-console.log("\n--- Serialization ---");
+console.log('\n--- Serialization ---');
 const demoLen = e.json_demo() as number;
 console.log(`json_demo: ${readBuf(demoLen)}`);
 
 // Test deserialization
-console.log("\n--- Deserialization ---");
+console.log('\n--- Deserialization ---');
 
-const jsonStr = '{"name":"hello\\nworld","age":42,"neg":-999,"scores":[1,2,3],"pi":3.14159265,"active":true,"deleted":null}';
+const jsonStr =
+  '{"name":"hello\\nworld","age":42,"neg":-999,"scores":[1,2,3],"pi":3.14159265,"active":true,"deleted":null}';
 const [ptr, len] = writeStr(jsonStr);
 const result = e.parse_demo(ptr, len);
 console.log(`parse_demo(age+neg): ${result} (expected: ${42 + -999})`);
 
 {
-  const [p, l] = writeStr("12345");
+  const [p, l] = writeStr('12345');
   console.log(`parse_i32("12345"): ${e.parse_i32(p, l)}`);
 }
 {
-  const [p, l] = writeStr("3.14");
+  const [p, l] = writeStr('3.14');
   console.log(`parse_f64("3.14"): ${e.parse_f64(p, l)}`);
 }
 {
-  const [p, l] = writeStr("true");
+  const [p, l] = writeStr('true');
   console.log(`parse_bool("true"): ${e.parse_bool(p, l)}`);
 }
 {
@@ -49,7 +50,7 @@ console.log(`parse_demo(age+neg): ${result} (expected: ${42 + -999})`);
   console.log(`parse_string: "${readBuf(slen)}"`);
 }
 {
-  const [p, l] = writeStr("[10,20,30]");
+  const [p, l] = writeStr('[10,20,30]');
   console.log(`parse_array sum: ${e.parse_array(p, l)} (expected 60)`);
 }
 {
@@ -58,4 +59,4 @@ console.log(`parse_demo(age+neg): ${result} (expected: ${42 + -999})`);
   console.log(`parse_dynamic round-trip: ${readBuf(rlen)}`);
 }
 
-console.log("\nAll tests passed.");
+console.log('\nAll tests passed.');

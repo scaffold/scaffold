@@ -1,5 +1,9 @@
 import { Block, BlockStore } from '../core/Block.ts';
-import { composeBlockPacket, composeGenesisPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
+import {
+  composeBlockPacket,
+  composeGenesisPacket,
+  composeUnsignedBlockPacket,
+} from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 import {

@@ -1,428 +1,535 @@
 <!DOCTYPE html>
 <html>
-<head>
-<meta charset="utf-8">
-<title>WASM Limits Experiment</title>
-<style>
-  body { font-family: monospace; background: #111; color: #ccc; padding: 20px; }
-  h1 { color: #fff; }
-  .pass { color: #4f4; }
-  .warn { color: #ff4; }
-  .fail { color: #f44; }
-  .info { color: #4af; }
-  pre { white-space: pre-wrap; line-height: 1.4; }
-  button { font-family: monospace; font-size: 14px; padding: 8px 16px; margin: 4px;
-           background: #333; color: #fff; border: 1px solid #555; cursor: pointer; }
-  button:hover { background: #444; }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-  #controls { margin-bottom: 16px; }
-</style>
-</head>
-<body>
-<h1>WASM Limits Experiment</h1>
-<div id="controls">
-  <button onclick="runAll()">Run All Tests</button>
-  <button onclick="runTest('sizes')">1. Sizes</button>
-  <button onclick="runTest('compile')">2. Compile</button>
-  <button onclick="runTest('instantiate')">3. Instantiate</button>
-  <button onclick="runTest('multiInstance')">4. Multi-Instance</button>
-  <button onclick="runTest('compileStress')">5. Compile Stress</button>
-  <button onclick="runTest('instanceStress')">6. Instance Stress</button>
-  <button onclick="runTest('memorySizes')">7. Memory Sizes</button>
-  <button onclick="runTest('concurrent')">8. Concurrent</button>
-</div>
-<pre id="output"></pre>
-
-<script>
-const COUNT = 100;
-const out = document.getElementById('output');
-
-function log(msg, cls) {
-  const span = document.createElement('span');
-  if (cls) span.className = cls;
-  span.textContent = msg + '\n';
-  out.appendChild(span);
-  out.scrollTop = out.scrollHeight;
-}
-
-function memInfo() {
-  if (performance.memory) {
-    return `  heap: ${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB / ${(performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)}MB`;
-  }
-  return '  (memory API not available - use Chrome with --enable-precise-memory-info)';
-}
-
-// ============================================================
-// Test 1: File sizes
-// ============================================================
-async function testSizes(wasmBytes) {
-  log('\n=== Test 1: WASM File Sizes ===', 'info');
-  const sizes = wasmBytes.map(b => b.byteLength);
-  const min = Math.min(...sizes);
-  const max = Math.max(...sizes);
-  const total = sizes.reduce((a, b) => a + b, 0);
-  const avg = total / sizes.length;
-
-  log(`  Files: ${sizes.length}`);
-  log(`  Min size: ${min} bytes`);
-  log(`  Max size: ${max} bytes`);
-  log(`  Avg size: ${avg.toFixed(0)} bytes`);
-  log(`  Total: ${(total / 1024).toFixed(1)} KB`);
-  log(`  Each module is ~${max} bytes = ${(max / 1024).toFixed(2)} KB`, 'pass');
-}
-
-// ============================================================
-// Test 2: Sequential compilation
-// ============================================================
-async function testCompile(wasmBytes) {
-  log('\n=== Test 2: Sequential WebAssembly.compile() ===', 'info');
-  const modules = [];
-
-  const t0 = performance.now();
-  for (let i = 0; i < COUNT; i++) {
-    modules.push(await WebAssembly.compile(wasmBytes[i]));
-  }
-  const elapsed = performance.now() - t0;
-
-  log(`  Compiled ${COUNT} modules in ${elapsed.toFixed(1)}ms`);
-  log(`  Avg: ${(elapsed / COUNT).toFixed(3)}ms per module`);
-  log(memInfo());
-
-  return modules;
-}
-
-// ============================================================
-// Test 3: Sequential instantiation
-// ============================================================
-async function testInstantiate(modules) {
-  log('\n=== Test 3: Sequential WebAssembly.instantiate() ===', 'info');
-  const instances = [];
-
-  const t0 = performance.now();
-  for (let i = 0; i < modules.length; i++) {
-    instances.push(await WebAssembly.instantiate(modules[i]));
-  }
-  const elapsed = performance.now() - t0;
-
-  log(`  Instantiated ${modules.length} modules in ${elapsed.toFixed(1)}ms`);
-  log(`  Avg: ${(elapsed / modules.length).toFixed(3)}ms per instance`);
-  log(memInfo());
-
-  // Verify correctness
-  let ok = 0;
-  for (let i = 0; i < instances.length; i++) {
-    if (instances[i].exports.get_id() === i) ok++;
-  }
-  if (ok === instances.length) {
-    log(`  Verification: all ${ok} contracts returned correct IDs`, 'pass');
-  } else {
-    log(`  Verification: ${ok}/${instances.length} correct`, 'fail');
-  }
-
-  return instances;
-}
-
-// ============================================================
-// Test 4: Multiple instances from one module
-// ============================================================
-async function testMultiInstance(modules) {
-  log('\n=== Test 4: Multiple Instances from Single Module ===', 'info');
-
-  const counts = [10, 100, 1000, 5000, 10000];
-  const mod = modules[0];
-
-  for (const n of counts) {
-    const instances = [];
-    const t0 = performance.now();
-    for (let i = 0; i < n; i++) {
-      instances.push(await WebAssembly.instantiate(mod));
-    }
-    const elapsed = performance.now() - t0;
-    log(`  ${n.toLocaleString().padStart(6)} instances: ${elapsed.toFixed(1)}ms total, ${(elapsed / n).toFixed(4)}ms each`);
-    // Let GC run
-    instances.length = 0;
-    await new Promise(r => setTimeout(r, 100));
-  }
-  log(memInfo());
-}
-
-// ============================================================
-// Test 5: Compile stress - how many unique modules can we compile?
-// ============================================================
-async function testCompileStress(wasmBytes) {
-  log('\n=== Test 5: Compile Stress Test ===', 'info');
-  log('  Compiling as many unique modules as possible (reusing bytes cyclically)...');
-
-  const modules = [];
-  const batchSize = 100;
-  let totalTime = 0;
-
-  try {
-    while (modules.length < 10000) {
-      const t0 = performance.now();
-      for (let i = 0; i < batchSize; i++) {
-        modules.push(await WebAssembly.compile(wasmBytes[modules.length % COUNT]));
+  <head>
+    <meta charset="utf-8">
+    <title>WASM Limits Experiment</title>
+    <style>
+      body {
+        font-family: monospace;
+        background: #111;
+        color: #ccc;
+        padding: 20px;
       }
-      totalTime += performance.now() - t0;
-
-      if (modules.length % 1000 === 0) {
-        const mem = performance.memory
-          ? `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB`
-          : '?';
-        log(`  ${modules.length.toLocaleString()} modules compiled, heap: ${mem}, avg: ${(totalTime / modules.length).toFixed(3)}ms/module`);
+      h1 {
+        color: #fff;
       }
-    }
-    log(`  Compiled ${modules.length.toLocaleString()} modules without error`, 'pass');
-  } catch (e) {
-    log(`  Failed at ${modules.length.toLocaleString()} modules: ${e.message}`, 'fail');
-  }
-
-  log(memInfo());
-  return modules;
-}
-
-// ============================================================
-// Test 6: Instance stress - how many instances can we create?
-// ============================================================
-async function testInstanceStress(modules) {
-  log('\n=== Test 6: Instance Stress Test ===', 'info');
-  log('  Creating as many instances as possible from compiled modules...');
-
-  const mod = modules[0];
-  const instances = [];
-  const batchSize = 1000;
-  let totalTime = 0;
-
-  try {
-    while (instances.length < 100000) {
-      const t0 = performance.now();
-      for (let i = 0; i < batchSize; i++) {
-        instances.push(await WebAssembly.instantiate(mod));
+      .pass {
+        color: #4f4;
       }
-      totalTime += performance.now() - t0;
-
-      if (instances.length % 10000 === 0) {
-        const mem = performance.memory
-          ? `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB`
-          : '?';
-        log(`  ${instances.length.toLocaleString()} instances, heap: ${mem}, avg: ${(totalTime / instances.length).toFixed(4)}ms/instance`);
+      .warn {
+        color: #ff4;
       }
-    }
-    log(`  Created ${instances.length.toLocaleString()} instances without error`, 'pass');
-  } catch (e) {
-    log(`  Failed at ${instances.length.toLocaleString()} instances: ${e.message}`, 'fail');
-  }
-
-  log(memInfo());
-}
-
-// ============================================================
-// Test 7: Memory size impact on instantiation
-// ============================================================
-async function testMemorySizes() {
-  log('\n=== Test 7: Memory Size Impact on Instantiation ===', 'info');
-  log('  Testing WASM modules with different memory sizes...');
-  log('  (Constructing minimal WASM modules with memory sections in JS)');
-
-  // Construct minimal WASM modules with different memory sizes
-  // WASM binary format: magic + version + memory section + export section + function section
-  function makeWasmWithMemory(initialPages) {
-    // Minimal WASM module:
-    // - Type section: one function type () -> i32
-    // - Function section: one function
-    // - Memory section: memory with initialPages
-    // - Export section: export memory as "memory", function as "f"
-    // - Code section: one function that returns 42
-
-    const bytes = [];
-    const push = (...b) => bytes.push(...b);
-    const pushU32 = (v) => { // LEB128
-      do { let b = v & 0x7f; v >>= 7; if (v) b |= 0x80; bytes.push(b); } while (v);
-    };
-
-    // Header
-    push(0x00, 0x61, 0x73, 0x6d); // magic
-    push(0x01, 0x00, 0x00, 0x00); // version
-
-    // Type section (id=1)
-    const typeSection = [1, 0x60, 0, 1, 0x7f]; // 1 type: () -> i32
-    push(1); pushU32(typeSection.length); push(...typeSection);
-
-    // Function section (id=3)
-    const funcSection = [1, 0]; // 1 function, type index 0
-    push(3); pushU32(funcSection.length); push(...funcSection);
-
-    // Memory section (id=5)
-    const memSection = [];
-    memSection.push(1); // 1 memory
-    memSection.push(0x00); // flags: no max
-    // LEB128 encode initialPages into memSection
-    let v = initialPages;
-    do { let b = v & 0x7f; v >>= 7; if (v) b |= 0x80; memSection.push(b); } while (v);
-    push(5); pushU32(memSection.length); push(...memSection);
-
-    // Export section (id=7)
-    const exportData = [];
-    // Export "memory"
-    const memName = [..."memory"].map(c => c.charCodeAt(0));
-    const fName = [..."f"].map(c => c.charCodeAt(0));
-    exportData.push(2); // 2 exports
-    exportData.push(memName.length, ...memName, 0x02, 0x00); // memory export, index 0
-    exportData.push(fName.length, ...fName, 0x00, 0x00); // function export, index 0
-    push(7); pushU32(exportData.length); push(...exportData);
-
-    // Code section (id=10)
-    const funcBody = [0x00, 0x41, 0x2a, 0x0b]; // no locals, i32.const 42, end
-    const codeSection = [1, funcBody.length, ...funcBody]; // 1 function
-    push(10); pushU32(codeSection.length); push(...codeSection);
-
-    return new Uint8Array(bytes);
-  }
-
-  // Test different memory sizes
-  const pageSizes = [1, 10, 100, 256, 1000, 4096, 16384, 32768, 65536];
-  // 1 page = 64KB, so 65536 pages = 4GB (max)
-
-  for (const pages of pageSizes) {
-    const sizeMB = (pages * 64) / 1024;
-    const label = sizeMB >= 1 ? `${sizeMB.toFixed(0)}MB` : `${pages * 64}KB`;
-
-    try {
-      const wasmBytes = makeWasmWithMemory(pages);
-      const t0 = performance.now();
-      const module = await WebAssembly.compile(wasmBytes);
-      const compileTime = performance.now() - t0;
-
-      const instances = [];
-      const instStart = performance.now();
-      const instCount = pages > 1000 ? 10 : 100;
-      for (let i = 0; i < instCount; i++) {
-        instances.push(await WebAssembly.instantiate(module));
+      .fail {
+        color: #f44;
       }
-      const instTime = performance.now() - instStart;
-
-      log(`  ${label.padStart(8)} (${pages} pages): compile=${compileTime.toFixed(2)}ms, instantiate=${(instTime / instCount).toFixed(3)}ms avg (${instCount}x)`);
-
-      // Verify the memory size
-      const mem = instances[0].exports.memory;
-      const actualPages = mem.buffer.byteLength / 65536;
-      if (actualPages !== pages) {
-        log(`    WARNING: expected ${pages} pages but got ${actualPages}`, 'warn');
+      .info {
+        color: #4af;
       }
-    } catch (e) {
-      log(`  ${label.padStart(8)} (${pages} pages): FAILED - ${e.message}`, 'fail');
-    }
-  }
+      pre {
+        white-space: pre-wrap;
+        line-height: 1.4;
+      }
+      button {
+        font-family: monospace;
+        font-size: 14px;
+        padding: 8px 16px;
+        margin: 4px;
+        background: #333;
+        color: #fff;
+        border: 1px solid #555;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #444;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #controls {
+        margin-bottom: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>WASM Limits Experiment</h1>
+    <div id="controls">
+      <button onclick="runAll()">Run All Tests</button>
+      <button onclick="runTest('sizes')">1. Sizes</button>
+      <button onclick="runTest('compile')">2. Compile</button>
+      <button onclick="runTest('instantiate')">3. Instantiate</button>
+      <button onclick="runTest('multiInstance')">4. Multi-Instance</button>
+      <button onclick="runTest('compileStress')">5. Compile Stress</button>
+      <button onclick="runTest('instanceStress')">6. Instance Stress</button>
+      <button onclick="runTest('memorySizes')">7. Memory Sizes</button>
+      <button onclick="runTest('concurrent')">8. Concurrent</button>
+    </div>
+    <pre id="output"></pre>
 
-  log(memInfo());
-}
+    <script>
+      const COUNT = 100;
+      const out = document.getElementById('output');
 
-// ============================================================
-// Test 8: Concurrent compilation
-// ============================================================
-async function testConcurrent(wasmBytes) {
-  log('\n=== Test 8: Concurrent vs Sequential Compilation ===', 'info');
+      function log(msg, cls) {
+        const span = document.createElement('span');
+        if (cls) span.className = cls;
+        span.textContent = msg + '\n';
+        out.appendChild(span);
+        out.scrollTop = out.scrollHeight;
+      }
 
-  // Sequential
-  const t0 = performance.now();
-  for (let i = 0; i < COUNT; i++) {
-    await WebAssembly.compile(wasmBytes[i]);
-  }
-  const seqTime = performance.now() - t0;
-  log(`  Sequential: ${COUNT} modules in ${seqTime.toFixed(1)}ms (${(seqTime / COUNT).toFixed(3)}ms each)`);
+      function memInfo() {
+        if (performance.memory) {
+          return `  heap: ${
+            (performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)
+          }MB / ${(performance.memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1)}MB`;
+        }
+        return '  (memory API not available - use Chrome with --enable-precise-memory-info)';
+      }
 
-  // Concurrent with Promise.all
-  const t1 = performance.now();
-  await Promise.all(wasmBytes.map(b => WebAssembly.compile(b)));
-  const parTime = performance.now() - t1;
-  log(`  Concurrent:  ${COUNT} modules in ${parTime.toFixed(1)}ms (${(parTime / COUNT).toFixed(3)}ms each)`);
+      // ============================================================
+      // Test 1: File sizes
+      // ============================================================
+      async function testSizes(wasmBytes) {
+        log('\n=== Test 1: WASM File Sizes ===', 'info');
+        const sizes = wasmBytes.map((b) => b.byteLength);
+        const min = Math.min(...sizes);
+        const max = Math.max(...sizes);
+        const total = sizes.reduce((a, b) => a + b, 0);
+        const avg = total / sizes.length;
 
-  const speedup = seqTime / parTime;
-  log(`  Speedup: ${speedup.toFixed(2)}x`, speedup > 1.2 ? 'pass' : 'info');
+        log(`  Files: ${sizes.length}`);
+        log(`  Min size: ${min} bytes`);
+        log(`  Max size: ${max} bytes`);
+        log(`  Avg size: ${avg.toFixed(0)} bytes`);
+        log(`  Total: ${(total / 1024).toFixed(1)} KB`);
+        log(`  Each module is ~${max} bytes = ${(max / 1024).toFixed(2)} KB`, 'pass');
+      }
 
-  // Concurrent instantiation
-  const modules = await Promise.all(wasmBytes.map(b => WebAssembly.compile(b)));
-  const t2 = performance.now();
-  const instances = await Promise.all(modules.map(m => WebAssembly.instantiate(m)));
-  const parInstTime = performance.now() - t2;
-  log(`  Concurrent instantiate: ${COUNT} in ${parInstTime.toFixed(1)}ms (${(parInstTime / COUNT).toFixed(3)}ms each)`);
+      // ============================================================
+      // Test 2: Sequential compilation
+      // ============================================================
+      async function testCompile(wasmBytes) {
+        log('\n=== Test 2: Sequential WebAssembly.compile() ===', 'info');
+        const modules = [];
 
-  log(memInfo());
-}
+        const t0 = performance.now();
+        for (let i = 0; i < COUNT; i++) {
+          modules.push(await WebAssembly.compile(wasmBytes[i]));
+        }
+        const elapsed = performance.now() - t0;
 
-// ============================================================
-// Main runner
-// ============================================================
-let wasmBytesCache = null;
-let modulesCache = null;
+        log(`  Compiled ${COUNT} modules in ${elapsed.toFixed(1)}ms`);
+        log(`  Avg: ${(elapsed / COUNT).toFixed(3)}ms per module`);
+        log(memInfo());
 
-async function loadWasmFiles() {
-  if (wasmBytesCache) return wasmBytesCache;
-  log('Loading WASM files...');
-  const t0 = performance.now();
-  const promises = [];
-  for (let i = 0; i < COUNT; i++) {
-    promises.push(fetch(`wasm/contract_${i}.wasm`).then(r => r.arrayBuffer()));
-  }
-  wasmBytesCache = await Promise.all(promises);
-  log(`Loaded ${COUNT} files in ${(performance.now() - t0).toFixed(0)}ms`);
-  log(memInfo());
-  return wasmBytesCache;
-}
+        return modules;
+      }
 
-const tests = {
-  sizes: async () => { const b = await loadWasmFiles(); await testSizes(b); },
-  compile: async () => { const b = await loadWasmFiles(); modulesCache = await testCompile(b); },
-  instantiate: async () => {
-    const b = await loadWasmFiles();
-    if (!modulesCache) modulesCache = await testCompile(b);
-    await testInstantiate(modulesCache);
-  },
-  multiInstance: async () => {
-    const b = await loadWasmFiles();
-    if (!modulesCache) modulesCache = await testCompile(b);
-    await testMultiInstance(modulesCache);
-  },
-  compileStress: async () => { const b = await loadWasmFiles(); await testCompileStress(b); },
-  instanceStress: async () => {
-    const b = await loadWasmFiles();
-    if (!modulesCache) modulesCache = await testCompile(b);
-    await testInstanceStress(modulesCache);
-  },
-  memorySizes: testMemorySizes,
-  concurrent: async () => { const b = await loadWasmFiles(); await testConcurrent(b); },
-};
+      // ============================================================
+      // Test 3: Sequential instantiation
+      // ============================================================
+      async function testInstantiate(modules) {
+        log('\n=== Test 3: Sequential WebAssembly.instantiate() ===', 'info');
+        const instances = [];
 
-async function runTest(name) {
-  try {
-    await tests[name]();
-    log(`\nTest "${name}" complete.`, 'pass');
-  } catch (e) {
-    log(`\nTest "${name}" error: ${e.stack || e.message}`, 'fail');
-  }
-}
+        const t0 = performance.now();
+        for (let i = 0; i < modules.length; i++) {
+          instances.push(await WebAssembly.instantiate(modules[i]));
+        }
+        const elapsed = performance.now() - t0;
 
-async function runAll() {
-  out.textContent = '';
-  wasmBytesCache = null;
-  modulesCache = null;
+        log(`  Instantiated ${modules.length} modules in ${elapsed.toFixed(1)}ms`);
+        log(`  Avg: ${(elapsed / modules.length).toFixed(3)}ms per instance`);
+        log(memInfo());
 
-  log('========================================');
-  log('  WASM Limits Experiment');
-  log('  ' + new Date().toISOString());
-  log('  ' + navigator.userAgent);
-  log('========================================');
-  log(memInfo());
+        // Verify correctness
+        let ok = 0;
+        for (let i = 0; i < instances.length; i++) {
+          if (instances[i].exports.get_id() === i) ok++;
+        }
+        if (ok === instances.length) {
+          log(`  Verification: all ${ok} contracts returned correct IDs`, 'pass');
+        } else {
+          log(`  Verification: ${ok}/${instances.length} correct`, 'fail');
+        }
 
-  for (const name of Object.keys(tests)) {
-    await tests[name]();
-  }
+        return instances;
+      }
 
-  log('\n========================================');
-  log('  All tests complete');
-  log('========================================');
-  log(memInfo());
-}
-</script>
-</body>
+      // ============================================================
+      // Test 4: Multiple instances from one module
+      // ============================================================
+      async function testMultiInstance(modules) {
+        log('\n=== Test 4: Multiple Instances from Single Module ===', 'info');
+
+        const counts = [10, 100, 1000, 5000, 10000];
+        const mod = modules[0];
+
+        for (const n of counts) {
+          const instances = [];
+          const t0 = performance.now();
+          for (let i = 0; i < n; i++) {
+            instances.push(await WebAssembly.instantiate(mod));
+          }
+          const elapsed = performance.now() - t0;
+          log(
+            `  ${n.toLocaleString().padStart(6)} instances: ${
+              elapsed.toFixed(1)
+            }ms total, ${(elapsed / n).toFixed(4)}ms each`,
+          );
+          // Let GC run
+          instances.length = 0;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        log(memInfo());
+      }
+
+      // ============================================================
+      // Test 5: Compile stress - how many unique modules can we compile?
+      // ============================================================
+      async function testCompileStress(wasmBytes) {
+        log('\n=== Test 5: Compile Stress Test ===', 'info');
+        log('  Compiling as many unique modules as possible (reusing bytes cyclically)...');
+
+        const modules = [];
+        const batchSize = 100;
+        let totalTime = 0;
+
+        try {
+          while (modules.length < 10000) {
+            const t0 = performance.now();
+            for (let i = 0; i < batchSize; i++) {
+              modules.push(await WebAssembly.compile(wasmBytes[modules.length % COUNT]));
+            }
+            totalTime += performance.now() - t0;
+
+            if (modules.length % 1000 === 0) {
+              const mem = performance.memory
+                ? `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB`
+                : '?';
+              log(
+                `  ${modules.length.toLocaleString()} modules compiled, heap: ${mem}, avg: ${
+                  (totalTime / modules.length).toFixed(3)
+                }ms/module`,
+              );
+            }
+          }
+          log(
+            `  Compiled ${modules.length.toLocaleString()} modules without error`,
+            'pass',
+          );
+        } catch (e) {
+          log(
+            `  Failed at ${modules.length.toLocaleString()} modules: ${e.message}`,
+            'fail',
+          );
+        }
+
+        log(memInfo());
+        return modules;
+      }
+
+      // ============================================================
+      // Test 6: Instance stress - how many instances can we create?
+      // ============================================================
+      async function testInstanceStress(modules) {
+        log('\n=== Test 6: Instance Stress Test ===', 'info');
+        log('  Creating as many instances as possible from compiled modules...');
+
+        const mod = modules[0];
+        const instances = [];
+        const batchSize = 1000;
+        let totalTime = 0;
+
+        try {
+          while (instances.length < 100000) {
+            const t0 = performance.now();
+            for (let i = 0; i < batchSize; i++) {
+              instances.push(await WebAssembly.instantiate(mod));
+            }
+            totalTime += performance.now() - t0;
+
+            if (instances.length % 10000 === 0) {
+              const mem = performance.memory
+                ? `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)}MB`
+                : '?';
+              log(
+                `  ${instances.length.toLocaleString()} instances, heap: ${mem}, avg: ${
+                  (totalTime / instances.length).toFixed(4)
+                }ms/instance`,
+              );
+            }
+          }
+          log(
+            `  Created ${instances.length.toLocaleString()} instances without error`,
+            'pass',
+          );
+        } catch (e) {
+          log(
+            `  Failed at ${instances.length.toLocaleString()} instances: ${e.message}`,
+            'fail',
+          );
+        }
+
+        log(memInfo());
+      }
+
+      // ============================================================
+      // Test 7: Memory size impact on instantiation
+      // ============================================================
+      async function testMemorySizes() {
+        log('\n=== Test 7: Memory Size Impact on Instantiation ===', 'info');
+        log('  Testing WASM modules with different memory sizes...');
+        log('  (Constructing minimal WASM modules with memory sections in JS)');
+
+        // Construct minimal WASM modules with different memory sizes
+        // WASM binary format: magic + version + memory section + export section + function section
+        function makeWasmWithMemory(initialPages) {
+          // Minimal WASM module:
+          // - Type section: one function type () -> i32
+          // - Function section: one function
+          // - Memory section: memory with initialPages
+          // - Export section: export memory as "memory", function as "f"
+          // - Code section: one function that returns 42
+
+          const bytes = [];
+          const push = (...b) => bytes.push(...b);
+          const pushU32 = (v) => { // LEB128
+            do {
+              let b = v & 0x7f;
+              v >>= 7;
+              if (v) b |= 0x80;
+              bytes.push(b);
+            } while (v);
+          };
+
+          // Header
+          push(0x00, 0x61, 0x73, 0x6d); // magic
+          push(0x01, 0x00, 0x00, 0x00); // version
+
+          // Type section (id=1)
+          const typeSection = [1, 0x60, 0, 1, 0x7f]; // 1 type: () -> i32
+          push(1);
+          pushU32(typeSection.length);
+          push(...typeSection);
+
+          // Function section (id=3)
+          const funcSection = [1, 0]; // 1 function, type index 0
+          push(3);
+          pushU32(funcSection.length);
+          push(...funcSection);
+
+          // Memory section (id=5)
+          const memSection = [];
+          memSection.push(1); // 1 memory
+          memSection.push(0x00); // flags: no max
+          // LEB128 encode initialPages into memSection
+          let v = initialPages;
+          do {
+            let b = v & 0x7f;
+            v >>= 7;
+            if (v) b |= 0x80;
+            memSection.push(b);
+          } while (v);
+          push(5);
+          pushU32(memSection.length);
+          push(...memSection);
+
+          // Export section (id=7)
+          const exportData = [];
+          // Export "memory"
+          const memName = [...'memory'].map((c) => c.charCodeAt(0));
+          const fName = [...'f'].map((c) => c.charCodeAt(0));
+          exportData.push(2); // 2 exports
+          exportData.push(memName.length, ...memName, 0x02, 0x00); // memory export, index 0
+          exportData.push(fName.length, ...fName, 0x00, 0x00); // function export, index 0
+          push(7);
+          pushU32(exportData.length);
+          push(...exportData);
+
+          // Code section (id=10)
+          const funcBody = [0x00, 0x41, 0x2a, 0x0b]; // no locals, i32.const 42, end
+          const codeSection = [1, funcBody.length, ...funcBody]; // 1 function
+          push(10);
+          pushU32(codeSection.length);
+          push(...codeSection);
+
+          return new Uint8Array(bytes);
+        }
+
+        // Test different memory sizes
+        const pageSizes = [1, 10, 100, 256, 1000, 4096, 16384, 32768, 65536];
+        // 1 page = 64KB, so 65536 pages = 4GB (max)
+
+        for (const pages of pageSizes) {
+          const sizeMB = (pages * 64) / 1024;
+          const label = sizeMB >= 1 ? `${sizeMB.toFixed(0)}MB` : `${pages * 64}KB`;
+
+          try {
+            const wasmBytes = makeWasmWithMemory(pages);
+            const t0 = performance.now();
+            const module = await WebAssembly.compile(wasmBytes);
+            const compileTime = performance.now() - t0;
+
+            const instances = [];
+            const instStart = performance.now();
+            const instCount = pages > 1000 ? 10 : 100;
+            for (let i = 0; i < instCount; i++) {
+              instances.push(await WebAssembly.instantiate(module));
+            }
+            const instTime = performance.now() - instStart;
+
+            log(
+              `  ${label.padStart(8)} (${pages} pages): compile=${
+                compileTime.toFixed(2)
+              }ms, instantiate=${(instTime / instCount).toFixed(3)}ms avg (${instCount}x)`,
+            );
+
+            // Verify the memory size
+            const mem = instances[0].exports.memory;
+            const actualPages = mem.buffer.byteLength / 65536;
+            if (actualPages !== pages) {
+              log(`    WARNING: expected ${pages} pages but got ${actualPages}`, 'warn');
+            }
+          } catch (e) {
+            log(`  ${label.padStart(8)} (${pages} pages): FAILED - ${e.message}`, 'fail');
+          }
+        }
+
+        log(memInfo());
+      }
+
+      // ============================================================
+      // Test 8: Concurrent compilation
+      // ============================================================
+      async function testConcurrent(wasmBytes) {
+        log('\n=== Test 8: Concurrent vs Sequential Compilation ===', 'info');
+
+        // Sequential
+        const t0 = performance.now();
+        for (let i = 0; i < COUNT; i++) {
+          await WebAssembly.compile(wasmBytes[i]);
+        }
+        const seqTime = performance.now() - t0;
+        log(
+          `  Sequential: ${COUNT} modules in ${seqTime.toFixed(1)}ms (${
+            (seqTime / COUNT).toFixed(3)
+          }ms each)`,
+        );
+
+        // Concurrent with Promise.all
+        const t1 = performance.now();
+        await Promise.all(wasmBytes.map((b) => WebAssembly.compile(b)));
+        const parTime = performance.now() - t1;
+        log(
+          `  Concurrent:  ${COUNT} modules in ${parTime.toFixed(1)}ms (${
+            (parTime / COUNT).toFixed(3)
+          }ms each)`,
+        );
+
+        const speedup = seqTime / parTime;
+        log(`  Speedup: ${speedup.toFixed(2)}x`, speedup > 1.2 ? 'pass' : 'info');
+
+        // Concurrent instantiation
+        const modules = await Promise.all(wasmBytes.map((b) => WebAssembly.compile(b)));
+        const t2 = performance.now();
+        const instances = await Promise.all(modules.map((m) => WebAssembly.instantiate(m)));
+        const parInstTime = performance.now() - t2;
+        log(
+          `  Concurrent instantiate: ${COUNT} in ${parInstTime.toFixed(1)}ms (${
+            (parInstTime / COUNT).toFixed(3)
+          }ms each)`,
+        );
+
+        log(memInfo());
+      }
+
+      // ============================================================
+      // Main runner
+      // ============================================================
+      let wasmBytesCache = null;
+      let modulesCache = null;
+
+      async function loadWasmFiles() {
+        if (wasmBytesCache) return wasmBytesCache;
+        log('Loading WASM files...');
+        const t0 = performance.now();
+        const promises = [];
+        for (let i = 0; i < COUNT; i++) {
+          promises.push(fetch(`wasm/contract_${i}.wasm`).then((r) => r.arrayBuffer()));
+        }
+        wasmBytesCache = await Promise.all(promises);
+        log(`Loaded ${COUNT} files in ${(performance.now() - t0).toFixed(0)}ms`);
+        log(memInfo());
+        return wasmBytesCache;
+      }
+
+      const tests = {
+        sizes: async () => {
+          const b = await loadWasmFiles();
+          await testSizes(b);
+        },
+        compile: async () => {
+          const b = await loadWasmFiles();
+          modulesCache = await testCompile(b);
+        },
+        instantiate: async () => {
+          const b = await loadWasmFiles();
+          if (!modulesCache) modulesCache = await testCompile(b);
+          await testInstantiate(modulesCache);
+        },
+        multiInstance: async () => {
+          const b = await loadWasmFiles();
+          if (!modulesCache) modulesCache = await testCompile(b);
+          await testMultiInstance(modulesCache);
+        },
+        compileStress: async () => {
+          const b = await loadWasmFiles();
+          await testCompileStress(b);
+        },
+        instanceStress: async () => {
+          const b = await loadWasmFiles();
+          if (!modulesCache) modulesCache = await testCompile(b);
+          await testInstanceStress(modulesCache);
+        },
+        memorySizes: testMemorySizes,
+        concurrent: async () => {
+          const b = await loadWasmFiles();
+          await testConcurrent(b);
+        },
+      };
+
+      async function runTest(name) {
+        try {
+          await tests[name]();
+          log(`\nTest "${name}" complete.`, 'pass');
+        } catch (e) {
+          log(`\nTest "${name}" error: ${e.stack || e.message}`, 'fail');
+        }
+      }
+
+      async function runAll() {
+        out.textContent = '';
+        wasmBytesCache = null;
+        modulesCache = null;
+
+        log('========================================');
+        log('  WASM Limits Experiment');
+        log('  ' + new Date().toISOString());
+        log('  ' + navigator.userAgent);
+        log('========================================');
+        log(memInfo());
+
+        for (const name of Object.keys(tests)) {
+          await tests[name]();
+        }
+
+        log('\n========================================');
+        log('  All tests complete');
+        log('========================================');
+        log(memInfo());
+      }
+    </script>
+  </body>
 </html>

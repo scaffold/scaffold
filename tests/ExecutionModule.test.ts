@@ -1,11 +1,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import {
-  createSelfClaimedOutput,
-  SELF_CONTRACT,
-  SIGNATURE_CONTRACT,
-} from '../src/core/Block.ts';
+import { createSelfClaimedOutput, SELF_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import {
   ContractFn,
   ExecutionMode,
@@ -30,7 +26,12 @@ interface TestBlock {
 const h = (name: string): Hash => Hash.digest(name);
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
-function makeOutput(contractName: string, params: Uint8Array, value: number, detail: Uint8Array): Output {
+function makeOutput(
+  contractName: string,
+  params: Uint8Array,
+  value: number,
+  detail: Uint8Array,
+): Output {
   return {
     verifier: { contract: h(contractName), params },
     value,
@@ -459,8 +460,16 @@ Deno.test('ExecutionModule: multiple claimed outputs from different contracts �
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [
-      { verifier: { contract: contractA, params: new Uint8Array(0) }, value: 10, detail: new Uint8Array(0) },
-      { verifier: { contract: contractB, params: new Uint8Array(0) }, value: 20, detail: new Uint8Array(0) },
+      {
+        verifier: { contract: contractA, params: new Uint8Array(0) },
+        value: 10,
+        detail: new Uint8Array(0),
+      },
+      {
+        verifier: { contract: contractB, params: new Uint8Array(0) },
+        value: 20,
+        detail: new Uint8Array(0),
+      },
     ],
     claims: [],
     refs: [],
@@ -493,8 +502,16 @@ Deno.test('ExecutionModule: multiple contracts — one rejects → block invalid
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [
-      { verifier: { contract: contractA, params: new Uint8Array(0) }, value: 10, detail: new Uint8Array(0) },
-      { verifier: { contract: contractB, params: new Uint8Array(0) }, value: 20, detail: new Uint8Array(0) },
+      {
+        verifier: { contract: contractA, params: new Uint8Array(0) },
+        value: 10,
+        detail: new Uint8Array(0),
+      },
+      {
+        verifier: { contract: contractB, params: new Uint8Array(0) },
+        value: 20,
+        detail: new Uint8Array(0),
+      },
     ],
     claims: [],
     refs: [],
@@ -635,8 +652,16 @@ Deno.test('ExecutionModule: verifyClaim verifies a single claim', () => {
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [
-      { verifier: { contract: contractA, params: new Uint8Array(0) }, value: 10, detail: new Uint8Array(0) },
-      { verifier: { contract: contractB, params: new Uint8Array(0) }, value: 20, detail: new Uint8Array(0) },
+      {
+        verifier: { contract: contractA, params: new Uint8Array(0) },
+        value: 10,
+        detail: new Uint8Array(0),
+      },
+      {
+        verifier: { contract: contractB, params: new Uint8Array(0) },
+        value: 20,
+        detail: new Uint8Array(0),
+      },
     ],
     claims: [],
     refs: [],

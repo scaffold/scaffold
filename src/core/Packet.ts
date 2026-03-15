@@ -1,7 +1,13 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
-import { serialize, deserialize } from './BlockSerializer.ts';
-import { Block, BlockPayload, BlockSource, createBlockFromPacket, GENESIS_WEIGHT } from './Block.ts';
+import { deserialize, serialize } from './BlockSerializer.ts';
+import {
+  Block,
+  BlockPayload,
+  BlockSource,
+  createBlockFromPacket,
+  GENESIS_WEIGHT,
+} from './Block.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 
 // -- PacketType enum ------------------------------------------------
@@ -141,7 +147,10 @@ export function recoverPacketSigner(packet: Packet<unknown>): Uint8Array | undef
 }
 
 /** Verify a signed packet's signature against an expected public key. */
-export function verifyPacketSignature(packet: Packet<unknown>, expectedPublicKey: Uint8Array): boolean {
+export function verifyPacketSignature(
+  packet: Packet<unknown>,
+  expectedPublicKey: Uint8Array,
+): boolean {
   if (!packet.signature) return false;
 
   const headerPayload = packet.raw.subarray(0, packet.raw.length - SIGNATURE_SIZE);

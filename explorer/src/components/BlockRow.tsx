@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useCallback } from 'react';
+import React, { useCallback, useEffect, useReducer } from 'react';
 import { HashSpan } from './HashSpan.tsx';
 import { BlockDetail } from './BlockDetail.tsx';
 import type { Block } from 'scaffold.io/core/Block.ts';
@@ -19,10 +19,15 @@ interface BlockRowProps {
 function formatTime(ts: number): string {
   if (ts === 0) return '--:--';
   const d = new Date(ts);
-  return d.toLocaleTimeString([], { hour12: false, fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions);
+  return d.toLocaleTimeString(
+    [],
+    { hour12: false, fractionalSecondDigits: 3 } as Intl.DateTimeFormatOptions,
+  );
 }
 
-function validityLabel(dist: { successes: number; failures: number; mean: number } | undefined): string {
+function validityLabel(
+  dist: { successes: number; failures: number; mean: number } | undefined,
+): string {
   if (!dist) return '--';
   if (dist.successes === 0 && dist.failures === 0) return 'Unsampled';
   return `${(dist.mean * 100).toFixed(0)}% (${dist.successes}/${dist.successes + dist.failures})`;
@@ -37,10 +42,14 @@ function trustLabel(state: { forAmount: number; againstAmount: number }): string
 
 function sourceClass(source: string): string {
   switch (source) {
-    case 'local': return 'badge-source-local';
-    case 'remote': return 'badge-source-remote';
-    case 'storage': return 'badge-source-storage';
-    default: return '';
+    case 'local':
+      return 'badge-source-local';
+    case 'remote':
+      return 'badge-source-remote';
+    case 'storage':
+      return 'badge-source-storage';
+    default:
+      return '';
   }
 }
 
@@ -78,10 +87,12 @@ export const BlockRow = React.memo(function BlockRow({
   return (
     <>
       <div
-        className={`block-row ${isCanonical ? 'canonical' : 'non-canonical'} ${expanded ? 'expanded' : ''}`}
+        className={`block-row ${isCanonical ? 'canonical' : 'non-canonical'} ${
+          expanded ? 'expanded' : ''
+        }`}
         onClick={onToggle}
       >
-        <div className="cell cell-pin">
+        <div className='cell cell-pin'>
           <button
             className={`pin-btn ${pinned ? 'pinned' : ''}`}
             onClick={handlePinClick}
@@ -92,73 +103,73 @@ export const BlockRow = React.memo(function BlockRow({
         </div>
 
         {columns.has('hash') && (
-          <div className="cell cell-hash">
+          <div className='cell cell-hash'>
             <HashSpan hash={block.hash} />
           </div>
         )}
 
         {columns.has('canonicality') && (
-          <div className="cell cell-canonical">
-            <span className={`badge ${isCanonical ? 'badge-canonical' : hasConflicts ? 'badge-conflict' : 'badge-non-canonical'}`}>
+          <div className='cell cell-canonical'>
+            <span
+              className={`badge ${
+                isCanonical
+                  ? 'badge-canonical'
+                  : hasConflicts
+                  ? 'badge-conflict'
+                  : 'badge-non-canonical'
+              }`}
+            >
               {isCanonical ? 'Canonical' : hasConflicts ? 'Conflict' : 'Pending'}
             </span>
           </div>
         )}
 
         {columns.has('source') && (
-          <div className="cell cell-source">
-            <span className={`badge badge-source ${sourceClass(block.source)}`}>{block.source}</span>
+          <div className='cell cell-source'>
+            <span className={`badge badge-source ${sourceClass(block.source)}`}>
+              {block.source}
+            </span>
           </div>
         )}
 
         {columns.has('timestamp') && (
-          <div className="cell cell-time mono">{formatTime(block.timestamp)}</div>
+          <div className='cell cell-time mono'>{formatTime(block.timestamp)}</div>
         )}
 
         {columns.has('receivedAt') && (
-          <div className="cell cell-time mono">{formatTime(block.receivedAt)}</div>
+          <div className='cell cell-time mono'>{formatTime(block.receivedAt)}</div>
         )}
 
         {columns.has('declaredWeight') && (
-          <div className="cell cell-num">
+          <div className='cell cell-num'>
             {block.declaredWeight === Number.MAX_SAFE_INTEGER
-              ? <span className="muted" style={{ fontStyle: 'italic' }}>Genesis</span>
+              ? <span className='muted' style={{ fontStyle: 'italic' }}>Genesis</span>
               : block.declaredWeight}
           </div>
         )}
 
-        {columns.has('descendantWeight') && (
-          <div className="cell cell-num">{descendantWeight}</div>
-        )}
+        {columns.has('descendantWeight') && <div className='cell cell-num'>{descendantWeight}</div>}
 
-        {columns.has('outputs') && (
-          <div className="cell cell-num">{block.outputs.length}</div>
-        )}
+        {columns.has('outputs') && <div className='cell cell-num'>{block.outputs.length}</div>}
 
-        {columns.has('inputs') && (
-          <div className="cell cell-num">{block.claims.length}</div>
-        )}
+        {columns.has('inputs') && <div className='cell cell-num'>{block.claims.length}</div>}
 
         {columns.has('aggregates') && (
-          <div className="cell cell-num">{block.aggregates.length}</div>
+          <div className='cell cell-num'>{block.aggregates.length}</div>
         )}
 
-        {columns.has('throughput') && (
-          <div className="cell cell-num">{throughput}</div>
-        )}
+        {columns.has('throughput') && <div className='cell cell-num'>{throughput}</div>}
 
         {columns.has('validity') && (
-          <div className="cell cell-validity mono">{validityLabel(distribution)}</div>
+          <div className='cell cell-validity mono'>{validityLabel(distribution)}</div>
         )}
 
         {columns.has('trust') && (
-          <div className="cell cell-trust mono">{trustLabel(trustState)}</div>
+          <div className='cell cell-trust mono'>{trustLabel(trustState)}</div>
         )}
       </div>
 
-      {expanded && (
-        <BlockDetail block={block} scaffold={scaffold} />
-      )}
+      {expanded && <BlockDetail block={block} scaffold={scaffold} />}
     </>
   );
 });
