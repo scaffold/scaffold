@@ -671,9 +671,9 @@ If draft D1's phantom anchor creates an output space, and draft D2 wants to refe
 
 | File | Description |
 |------|-------------|
-| TBD | `resolveAnchor` algorithm |
-| TBD | `rebaseOutputIndex` algorithm |
-| TBD | Path finding (shared with ConflictModule) |
-| TBD | Shared utilities: `mapSurvivingToOriginal`, chain walking |
-| [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Downstream consumer |
-| [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Shares rebase machinery |
+| [`src/core/AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | `rebaseOutputIndex`, `resolveAnchor`, path finding |
+| [`src/core/OutputMapping.ts`](../../src/core/OutputMapping.ts) | Shared utilities: `mapSurvivingToOriginal`, `mapOriginalToSurviving`, `ResolvedClaim` |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `resolvedClaims` field on `Block` interface |
+| [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Downstream consumer (imports `mapSurvivingToOriginal`) |
+| [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Shares rebase machinery (imports `mapSurvivingToOriginal`) |
+| [`tests/AnchoringModule.test.ts`](../../tests/AnchoringModule.test.ts) | Tests for output mapping, rebase (T1-T5, T10, T11), and resolveAnchor (T7-T9) |

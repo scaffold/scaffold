@@ -203,6 +203,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
 | [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
+| [Anchoring](anchoring.md) | Anchor resolution & output mapping | Where does a block attach, and how are outputs addressed across blocks? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Output Data](output-data.md) | Data format | How is output data encoded and inspected? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
@@ -223,6 +224,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
+| Anchoring | [`AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | — |
 
 Supporting files:
 
@@ -230,5 +232,6 @@ Supporting files:
 |------|-------------|
 | [`Block.ts`](../../src/core/Block.ts) | Concrete block type, `BlockStore`, genesis creation |
 | [`BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector for claim masks (used by conflict module) |
+| [`OutputMapping.ts`](../../src/core/OutputMapping.ts) | Shared output index mapping utilities and `ResolvedClaim` type |
 | [`Coordinator.ts`](../../src/core/Coordinator.ts) | Orchestrates all modules: block received → conflict → consensus → gossip → sampling |
 | [`ProtocolContext.ts`](../../src/core/ProtocolContext.ts) | Dependency injection container wiring all services together |

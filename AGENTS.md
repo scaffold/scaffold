@@ -47,6 +47,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
 | [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/core/GossipModule.ts) | [GossipService.ts](src/core/GossipService.ts) | |
 | [block-creation.md](docs/protocol/block-creation.md) | [BlockCreationModule.ts](src/core/BlockCreationModule.ts) | [BlockCreationService.ts](src/core/BlockCreationService.ts) | [Block.ts](src/core/Block.ts) |
+| [anchoring.md](docs/protocol/anchoring.md) | [AnchoringModule.ts](src/core/AnchoringModule.ts) | — | [OutputMapping.ts](src/core/OutputMapping.ts), [Block.ts](src/core/Block.ts) |
 | [dag.md](docs/protocol/dag.md) | — (structural, spans modules) | — | [Block.ts](src/core/Block.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
 | [weight.md](docs/protocol/weight.md) | — (design discussion) | — | [BlockCreationModule.ts](src/core/BlockCreationModule.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
 | [computation.md](docs/protocol/computation.md) | [ExecutionModule.ts](src/core/ExecutionModule.ts), [VerificationModule.ts](src/core/VerificationModule.ts), [DisputeModule.ts](src/core/DisputeModule.ts) | [ExecutionService.ts](src/core/ExecutionService.ts), [VerificationService.ts](src/core/VerificationService.ts), [DisputeService.ts](src/core/DisputeService.ts) | [Block.ts](src/core/Block.ts), [WasmStore.ts](src/core/WasmStore.ts) |
