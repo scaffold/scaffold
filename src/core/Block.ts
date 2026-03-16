@@ -3,6 +3,7 @@
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
+import { ResolvedClaim } from './OutputMapping.ts';
 
 /** Genesis blocks use this as their declared weight (very high). */
 export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
@@ -164,6 +165,11 @@ export interface Block {
   readonly declaredWeight: number;
   /** Cross-block references for read-only data access. */
   readonly refs: Hash[];
+  /**
+   * Semantic claims: identifies the source block and output index for each claim.
+   * Optional -- populated at block creation time. Integer claims[] are derived from these.
+   */
+  readonly resolvedClaims?: ResolvedClaim[];
   /** Creation time, set by block creator (wire format). */
   readonly timestamp: number;
   /** Reception time at this node (Date.now()). Node-local, not serialized. */

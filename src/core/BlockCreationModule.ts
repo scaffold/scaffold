@@ -2,6 +2,7 @@
 
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
+import { mapSurvivingToOriginal } from './OutputMapping.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -400,7 +401,7 @@ export class BlockCreationModule<BlockType> {
 
       // Claim on a surviving anchor output
       const survivingIdx = relIdx - totalSubtreeOutputs;
-      const anchorIdx = this.mapSurvivingToOriginal(
+      const anchorIdx = mapSurvivingToOriginal(
         survivingIdx,
         mergedSubtreeMask,
         anchorOutputCount,
@@ -437,24 +438,4 @@ export class BlockCreationModule<BlockType> {
     );
   }
 
-  // -- Internals --------------------------------------------------
-
-  /**
-   * Map a surviving output index to its original anchor index,
-   * given a claim mask that has removed some outputs.
-   */
-  private mapSurvivingToOriginal(
-    survivingIdx: number,
-    claimMask: BitVector,
-    anchorOutputCount: number,
-  ): number {
-    let survived = 0;
-    for (let i = 0; i < anchorOutputCount; i++) {
-      if (!claimMask.get(i)) {
-        if (survived === survivingIdx) return i;
-        survived++;
-      }
-    }
-    return -1;
-  }
 }

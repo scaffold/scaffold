@@ -2,6 +2,7 @@
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BitVector, RebaseResult } from './BitVector.ts';
+import { mapSurvivingToOriginal } from './OutputMapping.ts';
 
 /**
  * Provider interface for the conflict module to access block data.
@@ -367,7 +368,7 @@ export class ConflictModule<BlockType> {
       // Map it back to the original anchor index using the subtree mask
       // (not netMask, which is being mutated).
       const survivingIdx = i - totalSubtreeOutputs;
-      const anchorIdx = this.mapSurvivingToOriginal(
+      const anchorIdx = mapSurvivingToOriginal(
         survivingIdx,
         subtreeMask,
       );
@@ -377,24 +378,6 @@ export class ConflictModule<BlockType> {
     }
 
     return netMask;
-  }
-
-  /**
-   * Map a surviving output index back to its original anchor index,
-   * given a claim mask that has removed some outputs.
-   */
-  private mapSurvivingToOriginal(
-    survivingIdx: number,
-    claimMask: BitVector,
-  ): number {
-    let survived = 0;
-    for (let i = 0; i < claimMask.length; i++) {
-      if (!claimMask.get(i)) {
-        if (survived === survivingIdx) return i;
-        survived++;
-      }
-    }
-    return -1;
   }
 
   /**
