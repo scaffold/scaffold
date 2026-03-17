@@ -107,9 +107,15 @@ Before aggregating a subtree, an aggregator should sample and verify blocks with
 
 The aggregator races against other potential aggregators — the first to produce a canonical aggregation captures the fees (see consensus module). This creates pressure to aggregate quickly, but probing too little increases fraud exposure. The equilibrium depends on the fraud rate in the network: in a mostly-honest network, minimal probing is sufficient; as fraud increases, aggregators must probe more, slowing aggregation and increasing costs.
 
-### Collateral Cascading
+### Collateral Cascading and Risk Transfer
 
 The aggregator places its own collateral on the aggregation block. This transfers risk up the chain — the original publisher's collateral can be redeemed once their block is aggregated, because the aggregator is now the one with skin in the game. Each layer of aggregation is a new risk assessment and a new collateral commitment.
+
+The aggregator's collateral per block is M * C, where M is the **payout multiplier** and C is the original publisher's collateral. M can be less than 1 — an aggregator can stake less than the original publisher. This reflects the Bayesian reality that older blocks are less likely to be fraudulent. Collateral decays through successive re-aggregation at decreasing M.
+
+Risk transfer should happen within seconds of publication to free the publisher's capital. Centralized insurance clients are expected to manage most aggregated risk, competing on fee and verification rate.
+
+For the game-theoretic analysis of risk transfer incentives, equilibrium fraud rates, and the effect of M on verification behavior, see [deception](deception.md).
 
 ---
 
