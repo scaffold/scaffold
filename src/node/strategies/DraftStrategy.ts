@@ -1,5 +1,5 @@
 import { Hash } from '../../util/Hash.ts';
-import { BlockStore } from '../../core/Block.ts';
+import { BlockStore, makeAggregationOutput } from '../../core/Block.ts';
 import { ResolvedClaim } from '../../core/BlockDraft.ts';
 import { Output } from '../../core/BlockCreationModule.ts';
 import { ConsensusService } from '../../core/ConsensusService.ts';
@@ -77,7 +77,7 @@ export class DraftStrategy implements Strategy {
         actions.push({
           type: 'createDraft',
           claim,
-          outputs: [],
+          outputs: [makeAggregationOutput()],
           declaredWeight: 1,
           anchor,
         });

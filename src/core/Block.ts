@@ -81,10 +81,23 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
 export function getAggregationData(block: Block): AggregationData | null {
   for (const output of block.outputs) {
     if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
+      if (output.detail.length === 0) continue; // Skip marker outputs
       return decodeAggregationData(output.detail);
     }
   }
   return null;
+}
+
+/**
+ * Create an aggregation marker output. Every non-genesis block carries one
+ * of these so that the aggregation contract can collect them.
+ */
+export function makeAggregationOutput(): Output {
+  return {
+    verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
+    value: 0,
+    detail: new Uint8Array(0),
+  };
 }
 
 /**

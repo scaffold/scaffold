@@ -366,7 +366,7 @@ Deno.test('multiple anchor groups produce multiple actions', () => {
   }
 });
 
-Deno.test('aggregation spec has empty outputs, claims, and declaredWeight=1', () => {
+Deno.test('aggregation spec has aggregation output, empty claims, and declaredWeight=1', () => {
   const store = new BlockStore();
   const consensus = new MockConsensus();
 
@@ -389,7 +389,7 @@ Deno.test('aggregation spec has empty outputs, claims, and declaredWeight=1', ()
   const actions = strategy.evaluate(event);
   assertEquals(actions.length, 1);
   if (actions[0].type === 'createBlock') {
-    assertEquals(actions[0].spec.outputs.length, 0);
+    assertEquals(actions[0].spec.outputs.length, 1);
     assertEquals(actions[0].spec.claims.length, 0);
     assertEquals(actions[0].spec.declaredWeight, 1);
   }

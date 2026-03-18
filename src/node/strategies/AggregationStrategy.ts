@@ -2,6 +2,7 @@ import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 import { Hash, HashPrimitive } from '../../util/Hash.ts';
 import { BlockSpec } from '../../core/BlockCreationModule.ts';
 import { ZERO_HASH } from '../../util/Hash.ts';
+import { makeAggregationOutput } from '../../core/Block.ts';
 
 /** Configuration for the aggregation strategy. */
 export interface AggregationStrategyConfig {
@@ -85,7 +86,7 @@ export class AggregationStrategy implements Strategy {
 
       const spec: BlockSpec = {
         anchor: anchorHash,
-        outputs: [],
+        outputs: [makeAggregationOutput()],
         claims: [],
         declaredWeight: 1,
         aggregates: toAggregate,

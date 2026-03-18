@@ -228,15 +228,24 @@ export class ContractGenerator implements GeneratorProvider {
     const newClaims = env.getResolvedClaims();
     const newRefs = env.getGeneratedRefs();
 
-    // Register consumed inputs as claims in the OutputClaimModule
+    // Register ALL consumed inputs as claims in the OutputClaimModule
     for (const claim of newClaims) {
       this._outputClaims.addClaim(draft.draftId, claim.block, claim.outputIndex);
     }
 
+    // Deduplicate: drop claims the contract produced that already exist
+    // on the draft (e.g. the trigger claim that requireInput() re-found).
+    const existingClaimKeys = new Set(
+      draft.resolvedClaims.map((rc) => `${rc.block.toPrimitive()}:${rc.outputIndex}`),
+    );
+    const dedupedClaims = newClaims.filter(
+      (rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`),
+    );
+
     // Merge generation results into the draft
     this._draftStore.update(draft.draftId, {
       outputs: [...draft.outputs, ...newOutputs],
-      resolvedClaims: [...draft.resolvedClaims, ...newClaims],
+      resolvedClaims: [...draft.resolvedClaims, ...dedupedClaims],
       refs: [...draft.refs, ...newRefs],
     });
 

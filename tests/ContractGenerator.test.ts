@@ -284,10 +284,10 @@ Deno.test('ContractGenerator: resolved claims from inputs are merged into draft'
 
   const updated = draftStore.get(draft.draftId)!;
   assertEquals(updated.status, 'ready');
-  // Initial claim + the input the contract consumed
-  assertEquals(updated.resolvedClaims.length, 2);
+  // requireInput() re-found the trigger claim (genesis:0) which is
+  // deduplicated on merge, so only the original trigger claim remains.
+  assertEquals(updated.resolvedClaims.length, 1);
   assert(Hash.equals(updated.resolvedClaims[0].block, genesis.hash));
-  assert(Hash.equals(updated.resolvedClaims[1].block, genesis.hash));
 });
 
 Deno.test('ContractGenerator: fetch adds refs to draft', () => {

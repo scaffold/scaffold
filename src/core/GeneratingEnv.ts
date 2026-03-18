@@ -84,10 +84,16 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   requireInput(): MaybePromise<Input> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     return maybeThen(this._provider.findInputs(verifier), (available) => {
-      if (available.length === 0) {
+      // Filter out inputs already consumed in this generation run
+      const unconsumed = available.filter((ai) =>
+        !this._resolvedClaims.some((rc) =>
+          Hash.equals(rc.block, ai.block) && rc.outputIndex === ai.outputIndex
+        )
+      );
+      if (unconsumed.length === 0) {
         throw new ContractRejection('no inputs available');
       }
-      const ai = available[0];
+      const ai = unconsumed[0];
       this._resolvedClaims.push({
         block: ai.block,
         outputIndex: ai.outputIndex,
