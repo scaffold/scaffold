@@ -185,7 +185,8 @@ export function composeBlockPacket(
 ): { block: Block; packet: Packet<BlockPayload> } {
   const payload = blueprintToPayload(blueprint);
   const packet = composePacket<BlockPayload>(PacketType.Block, payload, privateKey);
-  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local);
+  const signer = secp.getPublicKey(privateKey, true);
+  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local, signer);
   return { block, packet };
 }
 

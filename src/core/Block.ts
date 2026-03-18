@@ -179,6 +179,8 @@ export interface Block {
   readonly refs: Hash[];
   /** Resolved claims -- concrete output references for uniform claim handling. */
   readonly resolvedClaims?: import('./BlockDraft.ts').ResolvedClaim[];
+  /** Compressed public key (33 bytes) of the block signer. Node-local, not serialized. */
+  readonly signer?: Uint8Array;
   /** Creation time, set by block creator (wire format). */
   readonly timestamp: number;
   /** Reception time at this node (Date.now()). Node-local, not serialized. */
@@ -349,13 +351,14 @@ export function collectExtendedOutputs(block: Block, store: BlockStore): Output[
 // -- BlockPayload ---------------------------------------------------
 
 /** Block fields minus hash and node-local metadata -- the payload carried in a Packet. */
-export type BlockPayload = Omit<Block, 'hash' | 'receivedAt' | 'source'>;
+export type BlockPayload = Omit<Block, 'hash' | 'receivedAt' | 'source' | 'signer'>;
 
 /** Construct a Block from a deserialized packet payload and a precomputed hash. */
 export function createBlockFromPacket(
   payload: BlockPayload,
   hash: Hash,
   source: BlockSource = BlockSource.Remote,
+  signer?: Uint8Array,
 ): Block {
   const now = Date.now();
   return {
@@ -366,6 +369,7 @@ export function createBlockFromPacket(
     outputs: payload.outputs,
     declaredWeight: payload.declaredWeight,
     refs: payload.refs,
+    signer,
     timestamp: payload.timestamp ?? now,
     receivedAt: now,
     source,

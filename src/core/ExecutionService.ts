@@ -48,6 +48,10 @@ class ExecutionProviderAdapter implements ExecutionProvider<Block> {
   getExtendedOutputs(block: Block): Output[] {
     return collectAllExtendedOutputs(block, this.store);
   }
+
+  getSigner(block: Block): Uint8Array | undefined {
+    return block.signer;
+  }
 }
 
 /** ExecutionModule wired to BlockStore via ProtocolContext. */

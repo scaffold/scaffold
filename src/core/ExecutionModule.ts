@@ -39,6 +39,9 @@ export interface ExecutionProvider<BlockType> {
 
   /** Return the extended output vector for a block (own outputs + surviving anchor outputs). */
   getExtendedOutputs(block: BlockType): Output[];
+
+  /** Return the signer public key for a block, or undefined if unsigned. */
+  getSigner(block: BlockType): Uint8Array | undefined;
 }
 
 // -- ExecutionModule --------------------------------------------------
@@ -172,6 +175,7 @@ export class ExecutionModule<BlockType> {
       extendedOutputs: this._provider.getExtendedOutputs(block),
       refs: this._provider.getRefs(block),
       provider: this._provider,
+      signer: this._provider.getSigner(block),
     });
 
     try {

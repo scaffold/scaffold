@@ -71,6 +71,7 @@ function makeEnv(opts: {
   params?: Uint8Array;
   block: TestBlock;
   provider: TestProvider;
+  signer?: Uint8Array;
 }): VerifyingEnv<TestBlock> {
   const provider = opts.provider;
   return new VerifyingEnv({
@@ -82,6 +83,7 @@ function makeEnv(opts: {
     extendedOutputs: provider.getExtendedOutputs(opts.block),
     refs: provider.getRefs(opts.block),
     provider,
+    signer: opts.signer,
   });
 }
 
@@ -412,7 +414,7 @@ Deno.test('VerifyingEnv: fetch throws when ref claims verifier but no result key
 
 // -- Tests: requireSignature ---------------------------------------
 
-Deno.test('VerifyingEnv: requireSignature passes when params match pubkey', () => {
+Deno.test('VerifyingEnv: requireSignature passes when signer matches pubkey', () => {
   const provider = new TestProvider();
   const pubkey = enc('my-pubkey');
   const block: TestBlock = {
@@ -423,11 +425,11 @@ Deno.test('VerifyingEnv: requireSignature passes when params match pubkey', () =
     refs: [],
   };
   provider.addBlock(block);
-  const env = makeEnv({ params: pubkey, block, provider });
+  const env = makeEnv({ params: pubkey, block, provider, signer: pubkey });
   env.requireSignature(pubkey);
 });
 
-Deno.test('VerifyingEnv: requireSignature throws on mismatch', () => {
+Deno.test('VerifyingEnv: requireSignature throws when signer does not match', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -437,11 +439,29 @@ Deno.test('VerifyingEnv: requireSignature throws on mismatch', () => {
     refs: [],
   };
   provider.addBlock(block);
-  const env = makeEnv({ params: enc('actual'), block, provider });
+  const env = makeEnv({ params: enc('actual'), block, provider, signer: enc('actual') });
   assertThrows(
     () => env.requireSignature(enc('expected')),
     ContractRejection,
-    'signature requirement not met',
+    'block signer does not match',
+  );
+});
+
+Deno.test('VerifyingEnv: requireSignature throws when block is unsigned', () => {
+  const provider = new TestProvider();
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  assertThrows(
+    () => env.requireSignature(enc('any-key')),
+    ContractRejection,
+    'block is not signed',
   );
 });
 

@@ -19,6 +19,7 @@ interface TestBlock {
   outputs: Output[];
   claims: number[];
   refs: Hash[];
+  signer?: Uint8Array;
 }
 
 // -- Test helpers ----------------------------------------------------
@@ -75,6 +76,10 @@ class TestProvider implements ExecutionProvider<TestBlock> {
       result.push(...anchor.outputs);
     }
     return result;
+  }
+
+  getSigner(block: TestBlock): Uint8Array | undefined {
+    return block.signer;
   }
 }
 
@@ -145,13 +150,14 @@ Deno.test('ExecutionModule: signature contract -- accept when params match pubke
   };
   provider.addBlock(anchor);
 
-  // Block that claims the anchor's output
+  // Block that claims the anchor's output -- signed by the matching key
   const block: TestBlock = {
     hash: h('claimer'),
     anchor: anchor.hash,
     outputs: [],
     claims: [0], // claims extended output index 0 -> anchor's output[0]
     refs: [],
+    signer: pubkey,
   };
   provider.addBlock(block);
 

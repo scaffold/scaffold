@@ -42,6 +42,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   private readonly _extendedOutputs: Output[];
   private readonly _refs: Hash[];
   private readonly _provider: VerifyingEnvProvider<BlockType>;
+  private readonly _signer: Uint8Array | undefined;
 
   /** Tracks which matching inputs have been consumed by requireInput(). */
   private _inputCursor = 0;
@@ -56,6 +57,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     extendedOutputs: Output[];
     refs: Hash[];
     provider: VerifyingEnvProvider<BlockType>;
+    signer?: Uint8Array;
   }) {
     this._contractHash = opts.contractHash;
     this._params = opts.params;
@@ -65,6 +67,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     this._extendedOutputs = opts.extendedOutputs;
     this._refs = opts.refs;
     this._provider = opts.provider;
+    this._signer = opts.signer;
   }
 
   getContractHash(): Hash {
@@ -152,10 +155,11 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   }
 
   requireSignature(pubkey: Uint8Array): void {
-    // For now, check that params match the expected pubkey
-    // For the mock implementation, check params match the expected pubkey
-    if (!bytesEqual(this._params, pubkey)) {
-      throw new ContractRejection('signature requirement not met');
+    if (!this._signer) {
+      throw new ContractRejection('block is not signed');
+    }
+    if (!bytesEqual(this._signer, pubkey)) {
+      throw new ContractRejection('block signer does not match required public key');
     }
   }
 
