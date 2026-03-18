@@ -13,11 +13,11 @@ export {
   createBlockFromPacket,
   createGenesisBlock,
   createSelfClaimedOutput,
-  findSelfClaimedOutput,
+  findResultOutput,
   getRefOutputs,
-  getSelfClaimKey,
-  isSelfClaimed,
-  SELF_CONTRACT,
+  getResultKey,
+  isResultOutput,
+  RESULT_CONTRACT,
 } from './core/Block.ts';
 export type { BlockPayload } from './core/Block.ts';
 export {

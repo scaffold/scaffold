@@ -5,11 +5,11 @@ import {
   BlockSource,
   BlockStore,
   createSelfClaimedOutput,
-  findSelfClaimedOutput,
+  findResultOutput,
   getRefOutputs,
-  getSelfClaimKey,
-  isSelfClaimed,
-  SELF_CONTRACT,
+  getResultKey,
+  isResultOutput,
+  RESULT_CONTRACT,
 } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 
@@ -37,7 +37,7 @@ function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
 Deno.test('createSelfClaimedOutput produces correct verifier with string key', () => {
   const output = createSelfClaimedOutput('state', new Uint8Array([1, 2, 3]));
 
-  assert(Hash.equals(output.verifier.contract, SELF_CONTRACT));
+  assert(Hash.equals(output.verifier.contract, RESULT_CONTRACT));
   assertEquals(output.verifier.params, new TextEncoder().encode('state'));
   assertEquals(output.value, 0);
   assertEquals(output.detail, new Uint8Array([1, 2, 3]));
@@ -47,32 +47,32 @@ Deno.test('createSelfClaimedOutput produces correct verifier with Uint8Array key
   const key = new Uint8Array([10, 20, 30]);
   const output = createSelfClaimedOutput(key, new Uint8Array([4, 5]));
 
-  assert(Hash.equals(output.verifier.contract, SELF_CONTRACT));
+  assert(Hash.equals(output.verifier.contract, RESULT_CONTRACT));
   assertEquals(output.verifier.params, key);
   assertEquals(output.detail, new Uint8Array([4, 5]));
 });
 
-Deno.test('isSelfClaimed returns true for self-claimed outputs', () => {
+Deno.test('isResultOutput returns true for self-claimed outputs', () => {
   const output = createSelfClaimedOutput('key', new Uint8Array(0));
-  assert(isSelfClaimed(output));
+  assert(isResultOutput(output));
 });
 
-Deno.test('isSelfClaimed returns false for non-self-claimed outputs', () => {
+Deno.test('isResultOutput returns false for non-self-claimed outputs', () => {
   const output: Output = {
     verifier: { contract: Hash.digest('other-contract'), params: new Uint8Array(0) },
     value: 42,
     detail: new Uint8Array(0),
   };
-  assertFalse(isSelfClaimed(output));
+  assertFalse(isResultOutput(output));
 });
 
-Deno.test('getSelfClaimKey returns the params from a self-claimed output', () => {
+Deno.test('getResultKey returns the params from a self-claimed output', () => {
   const output = createSelfClaimedOutput('myKey', new Uint8Array(0));
-  const key = getSelfClaimKey(output);
+  const key = getResultKey(output);
   assertEquals(key, new TextEncoder().encode('myKey'));
 });
 
-Deno.test('findSelfClaimedOutput finds by string key', () => {
+Deno.test('findResultOutput finds by string key', () => {
   const target = createSelfClaimedOutput('state', new Uint8Array([1]));
   const other = createSelfClaimedOutput('counter', new Uint8Array([2]));
   const nonSelf: Output = {
@@ -82,32 +82,32 @@ Deno.test('findSelfClaimedOutput finds by string key', () => {
   };
   const block = makeBlock([nonSelf, target, other]);
 
-  const found = findSelfClaimedOutput(block, 'state');
+  const found = findResultOutput(block, 'state');
   assert(found !== undefined);
   assertEquals(found!.detail, new Uint8Array([1]));
 });
 
-Deno.test('findSelfClaimedOutput finds by Uint8Array key', () => {
+Deno.test('findResultOutput finds by Uint8Array key', () => {
   const key = new Uint8Array([7, 8, 9]);
   const target = createSelfClaimedOutput(key, new Uint8Array([42]));
   const block = makeBlock([target]);
 
-  const found = findSelfClaimedOutput(block, key);
+  const found = findResultOutput(block, key);
   assert(found !== undefined);
   assertEquals(found!.detail, new Uint8Array([42]));
 });
 
-Deno.test('findSelfClaimedOutput returns undefined when key not found', () => {
+Deno.test('findResultOutput returns undefined when key not found', () => {
   const output = createSelfClaimedOutput('state', new Uint8Array([1]));
   const block = makeBlock([output]);
 
-  const found = findSelfClaimedOutput(block, 'missing');
+  const found = findResultOutput(block, 'missing');
   assertEquals(found, undefined);
 });
 
-Deno.test('findSelfClaimedOutput returns undefined for empty block', () => {
+Deno.test('findResultOutput returns undefined for empty block', () => {
   const block = makeBlock([]);
-  assertEquals(findSelfClaimedOutput(block, 'key'), undefined);
+  assertEquals(findResultOutput(block, 'key'), undefined);
 });
 
 Deno.test('self-claimed outputs have value=0', () => {

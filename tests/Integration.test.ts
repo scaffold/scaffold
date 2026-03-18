@@ -10,7 +10,7 @@ import {
   createSelfClaimedOutput,
   encodeAggregationData,
   getBlockWeightVector,
-  SELF_CONTRACT,
+  RESULT_CONTRACT,
 } from '../src/core/Block.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
@@ -22,7 +22,8 @@ import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { ExecutionService } from '../src/core/ExecutionService.ts';
-import { ContractFn, HostContext } from '../src/core/ExecutionModule.ts';
+import { type ContractFn } from '../src/core/ExecutionModule.ts';
+import { type ContractEnv, ContractRejection } from '../src/core/ContractEnv.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { SimNetwork, SimNode } from './SimNetwork.ts';
 
@@ -403,8 +404,8 @@ Deno.test('Integration: computation block with self-claims → verify → valid'
 
   // Register a trivial contract that accepts any block
   const trivialContract = Hash.digest('trivial-contract');
-  node.execution.registerContract(trivialContract, (ctx: HostContext) => {
-    ctx.accept();
+  node.execution.registerContract(trivialContract, (_env: ContractEnv) => {
+    // normal return = accept
   });
 
   // Genesis
@@ -434,43 +435,50 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
 
   const gameContract = Hash.digest('game-contract');
 
-  // Contract reads previous state from ref[0] and verifies new state
-  node.execution.registerContract(gameContract, (ctx: HostContext) => {
-    const outputCount = ctx.refOutputCount(0);
-    let prevState: string | undefined;
-    for (let i = 0; i < outputCount; i++) {
-      const verifier = ctx.refOutputVerifier(0, i);
-      if (verifier && Hash.equals(verifier.contract, SELF_CONTRACT)) {
-        prevState = new TextDecoder().decode(ctx.refOutputDetail(0, i));
-        break;
-      }
-    }
-    if (!prevState) {
-      ctx.reject('no previous state');
-      return;
-    }
-    // Verify new state = prev + "-next"
-    ctx.setData('state', enc(prevState + '-next'));
-    if (!ctx.result) ctx.accept();
+  // Contract reads previous state via fetch and verifies new state
+  const gameVerifier = { contract: gameContract, params: new Uint8Array(0) };
+  node.execution.registerContract(gameContract, (env: ContractEnv) => {
+    const prevState = new TextDecoder().decode(
+      env.fetch(gameVerifier, enc('state')) as Uint8Array,
+    );
+    env.requireResult(enc('state'), enc(prevState + '-next'));
   });
 
-  // Genesis with game output
-  const genesis = createGenesisBlock([{
-    verifier: { contract: gameContract, params: new Uint8Array(0) },
+  // Genesis with two game outputs (one for A, one for B)
+  const gameOutput = {
+    verifier: gameVerifier,
     value: 0,
     detail: new Uint8Array(0),
-  }]);
+  };
+  const genesis = createGenesisBlock([gameOutput, gameOutput]);
   node.receiveBlock(genesis, null);
 
-  // Block A: produces self-claimed state (no contract claims needed)
-  const blockA = makeLeafBlock(
-    genesis,
-    [createSelfClaimedOutput('state', enc('S0'))],
-    10,
-  );
+  // Block A: claims genesis game output[0], produces self-claimed state
+  const blockAOutputs = [createSelfClaimedOutput('state', enc('S0'))];
+  const blockAHashParts: Uint8Array[] = [
+    genesis.hash.toBytes(),
+    new Uint8Array(new Float64Array([10]).buffer),
+    new Uint8Array(new Float64Array([Math.random()]).buffer),
+  ];
+  for (const out of blockAOutputs) {
+    blockAHashParts.push(out.verifier.contract.toBytes());
+    blockAHashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
+  }
+  const blockA: Block = {
+    hash: Hash.digestParts(...blockAHashParts),
+    anchor: genesis.hash,
+    aggregates: [],
+    claims: [1], // claim extended index 1 = genesis output[0]
+    outputs: blockAOutputs,
+    declaredWeight: 10,
+    refs: [],
+    timestamp: 0,
+    receivedAt: 0,
+    source: BlockSource.Local,
+  };
   node.receiveBlock(blockA, null);
 
-  // Block B: references block A, claims genesis game output, produces new state
+  // Block B: references block A, claims genesis game output[1], produces new state
   const blockBOutputs = [createSelfClaimedOutput('state', enc('S0-next'))];
   const blockBHashParts: Uint8Array[] = [
     genesis.hash.toBytes(),
@@ -485,7 +493,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     hash: Hash.digestParts(...blockBHashParts),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1], // claim genesis output[0] (extended index 1)
+    claims: [2], // claim extended index 2 = genesis output[1]
     outputs: blockBOutputs,
     declaredWeight: 10,
     refs: [blockA.hash],
@@ -505,7 +513,7 @@ Deno.test('Integration: coordinator.attemptVerification works end-to-end', () =>
 
   // Register a contract that always accepts
   const contract = Hash.digest('always-accept');
-  node.execution.registerContract(contract, (ctx: HostContext) => ctx.accept());
+  node.execution.registerContract(contract, (_env: ContractEnv) => {});
 
   // Genesis
   const genesis = createGenesisBlock([{

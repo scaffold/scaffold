@@ -16,8 +16,8 @@ export const COLLATERAL_CONTRACT = Hash.digest('collateral-contract');
 /** Well-known contract hash for signature (payment) contract outputs. */
 export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 
-/** Well-known contract hash for self-claimed outputs (key-value store). */
-export const SELF_CONTRACT = Hash.digest('self-contract');
+/** Well-known contract hash for result outputs (key-value store on a block). */
+export const RESULT_CONTRACT = Hash.digest('result-contract');
 
 /**
  * Create a signature (payment) contract output.
@@ -243,34 +243,34 @@ export class BlockStore {
 // -- Self-claim and ref helpers -------------------------------------
 
 /**
- * Create a self-claimed output. Self-claimed outputs use the SELF_CONTRACT
+ * Create a result output. Result outputs use the RESULT_CONTRACT
  * verifier with the key encoded in params. They act as a key-value store
  * within a block.
  */
 export function createSelfClaimedOutput(key: string | Uint8Array, value: Uint8Array): Output {
   const params = typeof key === 'string' ? new TextEncoder().encode(key) : key;
   return {
-    verifier: { contract: SELF_CONTRACT, params },
+    verifier: { contract: RESULT_CONTRACT, params },
     value: 0,
     detail: value,
   };
 }
 
-/** Check whether an output is a self-claimed output (uses SELF_CONTRACT). */
-export function isSelfClaimed(output: Output): boolean {
-  return Hash.equals(output.verifier.contract, SELF_CONTRACT);
+/** Check whether an output is a result output (uses RESULT_CONTRACT). */
+export function isResultOutput(output: Output): boolean {
+  return Hash.equals(output.verifier.contract, RESULT_CONTRACT);
 }
 
-/** Get the key from a self-claimed output's verifier params. */
-export function getSelfClaimKey(output: Output): Uint8Array {
+/** Get the key from a result output's verifier params. */
+export function getResultKey(output: Output): Uint8Array {
   return output.verifier.params;
 }
 
-/** Find the first self-claimed output in a block matching the given key. */
-export function findSelfClaimedOutput(block: Block, key: string | Uint8Array): Output | undefined {
+/** Find the first result output in a block matching the given key. */
+export function findResultOutput(block: Block, key: string | Uint8Array): Output | undefined {
   const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
   for (const output of block.outputs) {
-    if (!isSelfClaimed(output)) continue;
+    if (!isResultOutput(output)) continue;
     const params = output.verifier.params;
     if (params.length === keyBytes.length && params.every((b, i) => b === keyBytes[i])) {
       return output;

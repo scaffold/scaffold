@@ -49,7 +49,7 @@ Key design questions:
 These sit on top of the core protocol and can be specified later.
 
 ### Game State Contracts
-Deterministic WASM execution for serverless game-state consensus. Dispute/penalty mechanics for incorrect state transitions. The ExecutionModule's HostContext already supports the full host function interface needed (setData, addOutput, cross-block refs).
+Deterministic WASM execution for serverless game-state consensus. Dispute/penalty mechanics for incorrect state transitions. The ContractEnv interface (VerifyingEnv/GeneratingEnv) supports the full host function interface needed (requireResult, requireOutput, fetch, collectInputs).
 
 ### Content Distribution
 Social content from peers with signatures and globally consistent latest-state resolution.

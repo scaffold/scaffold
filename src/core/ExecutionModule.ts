@@ -2,15 +2,16 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
-import { SELF_CONTRACT } from './Block.ts';
+import { RESULT_CONTRACT } from './Block.ts';
+import { type ContractFn, ContractRejection } from './ContractEnv.ts';
+import { VerifyingEnv } from './VerifyingEnv.ts';
+
+// -- Re-exports from ContractEnv ------------------------------------
+
+export { ExecutionMode } from './ContractEnv.ts';
+export type { ContractFn } from './ContractEnv.ts';
 
 // -- Types ----------------------------------------------------------
-
-/** Execution mode: generation (building a block) or verification (checking one). */
-export enum ExecutionMode {
-  Generation = 0,
-  Verification = 1,
-}
 
 /** Result of executing a contract for a single claimed output. */
 export type ExecutionResult =
@@ -40,243 +41,17 @@ export interface ExecutionProvider<BlockType> {
   getExtendedOutputs(block: BlockType): Output[];
 }
 
-// -- Contract function type -----------------------------------------
-
-/**
- * A contract function receives a HostContext and performs verification.
- * It should call ctx.accept() or ctx.reject() to indicate the result.
- * For the mock implementation, contracts are TypeScript functions.
- */
-export type ContractFn = (ctx: HostContext) => void;
-
-// -- HostContext -----------------------------------------------------
-
-/**
- * The host environment for a single contract invocation.
- * Provides host functions as specified in the computation protocol.
- */
-export class HostContext {
-  readonly mode: ExecutionMode;
-  readonly currentContract: Hash;
-  readonly currentParams: Uint8Array;
-
-  private _result: ExecutionResult | null = null;
-  private readonly _block: unknown;
-  private readonly _outputs: Output[];
-  private readonly _claims: number[];
-  private readonly _refs: Hash[];
-  private readonly _provider: ExecutionProvider<unknown>;
-  private readonly _extendedOutputs: Output[];
-
-  // Generation mode state
-  private readonly _generatedSelfClaims: Output[] = [];
-  private readonly _generatedOutputs: Output[] = [];
-
-  constructor(opts: {
-    mode: ExecutionMode;
-    contract: Hash;
-    params: Uint8Array;
-    block: unknown;
-    outputs: Output[];
-    claims: number[];
-    refs: Hash[];
-    provider: ExecutionProvider<unknown>;
-    extendedOutputs: Output[];
-  }) {
-    this.mode = opts.mode;
-    this.currentContract = opts.contract;
-    this.currentParams = opts.params;
-    this._block = opts.block;
-    this._outputs = opts.outputs;
-    this._claims = opts.claims;
-    this._refs = opts.refs;
-    this._provider = opts.provider;
-    this._extendedOutputs = opts.extendedOutputs;
-  }
-
-  /** Get the execution result, or null if not yet terminated. */
-  get result(): ExecutionResult | null {
-    return this._result;
-  }
-
-  // -- Self-claimed output data (set_data) ----------------------------
-
-  /**
-   * In generation mode: creates a self-claimed output.
-   * In verification mode: checks a matching self-claimed output exists.
-   */
-  setData(key: string | Uint8Array, value: Uint8Array): void {
-    const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
-
-    if (this.mode === ExecutionMode.Generation) {
-      this._generatedSelfClaims.push({
-        verifier: { contract: SELF_CONTRACT, params: keyBytes },
-        value: 0,
-        detail: value,
-      });
-      return;
-    }
-
-    // Verification: find a matching self-claimed output on the block
-    for (const output of this._outputs) {
-      if (!Hash.equals(output.verifier.contract, SELF_CONTRACT)) continue;
-      if (!bytesEqual(output.verifier.params, keyBytes)) continue;
-      if (!bytesEqual(output.detail, value)) {
-        this.reject(
-          `self-claimed output key="${typeof key === 'string' ? key : '<bytes>'}" has wrong value`,
-        );
-        return;
-      }
-      return; // match found
-    }
-    this.reject(`self-claimed output key="${typeof key === 'string' ? key : '<bytes>'}" not found`);
-  }
-
-  // -- Claimed outputs ------------------------------------------------
-
-  /** Number of outputs being claimed by this block. */
-  claimedOutputCount(): number {
-    return this._claims.length;
-  }
-
-  /** Get the detail of a claimed output by index into the claims array. */
-  claimedOutputDetail(index: number): Uint8Array {
-    const output = this._getClaimedOutput(index);
-    return output ? output.detail : new Uint8Array(0);
-  }
-
-  /** Get the verifier of a claimed output by index into the claims array. */
-  claimedOutputVerifier(index: number): { contract: Hash; params: Uint8Array } | undefined {
-    const output = this._getClaimedOutput(index);
-    return output ? output.verifier : undefined;
-  }
-
-  private _getClaimedOutput(index: number): Output | undefined {
-    if (index < 0 || index >= this._claims.length) return undefined;
-    const claimIdx = this._claims[index];
-    return this._extendedOutputs[claimIdx];
-  }
-
-  // -- Output requirements (add_output) -------------------------------
-
-  /**
-   * In generation mode: creates an output on the block.
-   * In verification mode: checks a matching output exists.
-   */
-  addOutput(contract: Hash, params: Uint8Array, value: number, detail: Uint8Array): void {
-    if (this.mode === ExecutionMode.Generation) {
-      this._generatedOutputs.push({
-        verifier: { contract, params },
-        value,
-        detail,
-      });
-      return;
-    }
-
-    // Verification: check that a matching output exists on the block
-    for (const output of this._outputs) {
-      if (
-        Hash.equals(output.verifier.contract, contract) &&
-        bytesEqual(output.verifier.params, params) &&
-        output.value === value &&
-        bytesEqual(output.detail, detail)
-      ) {
-        return; // match found
-      }
-    }
-    this.reject('required output not found on block');
-  }
-
-  // -- Constraints ----------------------------------------------------
-
-  /** Assert the block's signature matches the given public key. */
-  requireSignature(pubkey: Uint8Array): void {
-    // For the mock implementation, check params contains the expected pubkey
-    if (!bytesEqual(this.currentParams, pubkey)) {
-      this.reject('signature requirement not met');
-    }
-  }
-
-  // -- Cross-block references -----------------------------------------
-
-  /** Number of referenced blocks. */
-  refCount(): number {
-    return this._refs.length;
-  }
-
-  /** Number of outputs on a referenced block. */
-  refOutputCount(refIndex: number): number {
-    const outputs = this._getRefOutputs(refIndex);
-    return outputs ? outputs.length : 0;
-  }
-
-  /** Get the detail of an output on a referenced block. */
-  refOutputDetail(refIndex: number, outputIndex: number): Uint8Array {
-    const outputs = this._getRefOutputs(refIndex);
-    if (!outputs || outputIndex < 0 || outputIndex >= outputs.length) {
-      return new Uint8Array(0);
-    }
-    return outputs[outputIndex].detail;
-  }
-
-  /** Get the verifier of an output on a referenced block. */
-  refOutputVerifier(
-    refIndex: number,
-    outputIndex: number,
-  ): { contract: Hash; params: Uint8Array } | undefined {
-    const outputs = this._getRefOutputs(refIndex);
-    if (!outputs || outputIndex < 0 || outputIndex >= outputs.length) {
-      return undefined;
-    }
-    return outputs[outputIndex].verifier;
-  }
-
-  private _getRefOutputs(refIndex: number): Output[] | undefined {
-    if (refIndex < 0 || refIndex >= this._refs.length) return undefined;
-    const refHash = this._refs[refIndex];
-    const refBlock = this._provider.getBlock(refHash);
-    if (!refBlock) return undefined;
-    return this._provider.getOutputs(refBlock);
-  }
-
-  // -- Terminal -------------------------------------------------------
-
-  /** Accept: the spending condition is satisfied. */
-  accept(): void {
-    if (this._result) return; // already terminated
-    this._result = { accepted: true };
-  }
-
-  /** Reject: the spending condition is not satisfied. */
-  reject(reason?: string): void {
-    if (this._result) return; // already terminated
-    this._result = { accepted: false, reason: reason ?? 'rejected' };
-  }
-
-  // -- Generation mode accessors --------------------------------------
-
-  /** Get the self-claimed outputs generated during execution (generation mode only). */
-  getGeneratedSelfClaims(): Output[] {
-    return this._generatedSelfClaims;
-  }
-
-  /** Get the outputs generated during execution (generation mode only). */
-  getGeneratedOutputs(): Output[] {
-    return this._generatedOutputs;
-  }
-}
-
 // -- ExecutionModule --------------------------------------------------
 
 /**
  * The execution module runs contract verification on blocks.
  *
  * For each claimed output on a block, the module loads the output's contract
- * and runs it with a HostContext. All contracts must accept for the block
+ * and runs it with a VerifyingEnv. All contracts must accept for the block
  * to be valid.
  *
- * Uses a mock contract registry (Hash → TypeScript function) instead of
- * real WASM instantiation. The interface is the same — real WASM can be
+ * Uses a mock contract registry (Hash -> TypeScript function) instead of
+ * real WASM instantiation. The interface is the same -- real WASM can be
  * layered in later.
  */
 export class ExecutionModule<BlockType> {
@@ -314,9 +89,9 @@ export class ExecutionModule<BlockType> {
         return { accepted: false, reason: `claim index ${claimIdx} out of bounds` };
       }
 
-      // Self-claimed outputs (SELF_CONTRACT) are trivially valid:
+      // Self-claimed outputs (RESULT_CONTRACT) are trivially valid:
       // the claiming block IS the producing block
-      if (Hash.equals(claimedOutput.verifier.contract, SELF_CONTRACT)) continue;
+      if (Hash.equals(claimedOutput.verifier.contract, RESULT_CONTRACT)) continue;
 
       const key = claimedOutput.verifier.contract.toPrimitive();
       let group = contractClaims.get(key);
@@ -363,7 +138,7 @@ export class ExecutionModule<BlockType> {
     }
 
     // Self-claimed outputs are trivially valid
-    if (Hash.equals(claimedOutput.verifier.contract, SELF_CONTRACT)) {
+    if (Hash.equals(claimedOutput.verifier.contract, RESULT_CONTRACT)) {
       return { accepted: true };
     }
 
@@ -388,38 +163,26 @@ export class ExecutionModule<BlockType> {
       return { accepted: false, reason: `contract not found: ${contractHash.toHex()}` };
     }
 
-    const ctx = new HostContext({
-      mode: ExecutionMode.Verification,
-      contract: contractHash,
+    const env = new VerifyingEnv({
+      contractHash,
       params,
       block,
       outputs,
       claims,
-      refs: this._provider.getRefs(block),
-      provider: this._provider as ExecutionProvider<unknown>,
       extendedOutputs: this._provider.getExtendedOutputs(block),
+      refs: this._provider.getRefs(block),
+      provider: this._provider,
     });
 
     try {
-      contractFn(ctx);
+      contractFn(env);
     } catch (e) {
+      if (e instanceof ContractRejection) {
+        return { accepted: false, reason: e.message };
+      }
       return { accepted: false, reason: `contract threw: ${e}` };
     }
 
-    if (!ctx.result) {
-      return { accepted: false, reason: 'contract did not call accept() or reject()' };
-    }
-
-    return ctx.result;
+    return { accepted: true };
   }
-}
-
-// -- Utilities -------------------------------------------------------
-
-function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }
