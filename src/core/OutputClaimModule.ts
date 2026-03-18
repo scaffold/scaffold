@@ -150,6 +150,34 @@ export class OutputClaimModule<BlockType> {
     return this.claims.get(hash.toPrimitive())?.get(outputIndex);
   }
 
+  /**
+   * Directly place a claim entry on a target block's output.
+   * Used by draft-based generation -- no migration needed since drafts
+   * don't participate in the output space hierarchy.
+   */
+  addClaim(claimant: Hash, targetBlock: Hash, targetIndex: number): void {
+    const entry: OutputClaimEntry = { claimant, claimIndex: -1 };
+    this.placeEntry(targetBlock, targetIndex, entry);
+  }
+
+  /**
+   * Remove all claim entries where the claimant matches the given hash.
+   * Used when a draft is cancelled to release its claimed outputs.
+   */
+  removeClaims(claimant: Hash): void {
+    for (const [blockKey, blockClaims] of this.claims) {
+      for (const [index, entries] of blockClaims) {
+        const remaining = entries.filter((e) => !Hash.equals(e.claimant, claimant));
+        if (remaining.length === 0) {
+          blockClaims.delete(index);
+        } else if (remaining.length < entries.length) {
+          blockClaims.set(index, remaining);
+        }
+      }
+      if (blockClaims.size === 0) this.claims.delete(blockKey);
+    }
+  }
+
   // -- Internals --------------------------------------------------
 
   /**

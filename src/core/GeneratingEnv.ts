@@ -5,12 +5,14 @@ import { type MaybePromise, maybeThen } from '../util/MaybePromise.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RESULT_CONTRACT } from './Block.ts';
 import {
+  type AvailableInput,
   type ContractEnv,
   ContractRejection,
   ExecutionMode,
   type GeneratingEnvProvider,
   type Input,
 } from './ContractEnv.ts';
+import { ResolvedClaim } from './BlockDraft.ts';
 
 // -- Helpers ------------------------------------------------------
 
@@ -39,7 +41,9 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _outputs: Output[] = [];
   /** Self-claimed result outputs (also added as outputs + claims). */
   private readonly _resultOutputs: Output[] = [];
-  /** Inputs consumed by this contract (resolved claims). */
+  /** Resolved claims from consumed inputs (with provenance). */
+  private readonly _resolvedClaims: ResolvedClaim[] = [];
+  /** Input data returned to the contract (without provenance). */
   private readonly _inputs: Input[] = [];
   /** Block hashes added to refs. */
   private readonly _refs: Hash[] = [];
@@ -64,19 +68,32 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   collectInputs(): MaybePromise<Input[]> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
-    return maybeThen(this._provider.findInputs(verifier), (inputs) => {
-      this._inputs.push(...inputs);
-      return inputs;
+    return maybeThen(this._provider.findInputs(verifier), (available) => {
+      for (const ai of available) {
+        this._resolvedClaims.push({
+          block: ai.block,
+          outputIndex: ai.outputIndex,
+          value: ai.value,
+        });
+        this._inputs.push({ verifier: ai.verifier, value: ai.value, detail: ai.detail });
+      }
+      return this._inputs.slice(-available.length);
     });
   }
 
   requireInput(): MaybePromise<Input> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
-    return maybeThen(this._provider.findInputs(verifier), (inputs) => {
-      if (inputs.length === 0) {
+    return maybeThen(this._provider.findInputs(verifier), (available) => {
+      if (available.length === 0) {
         throw new ContractRejection('no inputs available');
       }
-      const input = inputs[0];
+      const ai = available[0];
+      this._resolvedClaims.push({
+        block: ai.block,
+        outputIndex: ai.outputIndex,
+        value: ai.value,
+      });
+      const input: Input = { verifier: ai.verifier, value: ai.value, detail: ai.detail };
       this._inputs.push(input);
       return input;
     });
@@ -150,6 +167,11 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   /** Get the inputs consumed by this contract. */
   getConsumedInputs(): Input[] {
     return this._inputs;
+  }
+
+  /** Get resolved claims (inputs with provenance) for the draft. */
+  getResolvedClaims(): ResolvedClaim[] {
+    return this._resolvedClaims;
   }
 
   /** Get the block hashes added to refs. */

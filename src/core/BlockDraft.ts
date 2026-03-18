@@ -129,6 +129,24 @@ export class DraftStore {
   }
 
   /**
+   * Update a draft in-place with merged fields. Keeps the same draftId and status.
+   */
+  update(
+    draftId: Hash,
+    changes: Partial<Omit<BlockDraft, 'draftId' | 'status'>>,
+  ): BlockDraft {
+    const key = draftId.toPrimitive();
+    const existing = this.drafts.get(key);
+    if (!existing) {
+      throw new Error(`Draft ${key} not found`);
+    }
+
+    const updated: BlockDraft = { ...existing, ...changes };
+    this.drafts.set(key, updated);
+    return updated;
+  }
+
+  /**
    * Delete old draft and create a new one with a new draftId and merged fields.
    * Status defaults to 'pending'.
    */

@@ -19,6 +19,14 @@ export interface Input {
   readonly detail: Uint8Array;
 }
 
+/** An input with its provenance -- where it lives in the DAG. */
+export interface AvailableInput extends Input {
+  /** Block containing this output. */
+  readonly block: Hash;
+  /** Index into that block's output array. */
+  readonly outputIndex: number;
+}
+
 /**
  * Thrown by a contract to reject the spending condition.
  * Normal return = accept; throwing ContractRejection = reject.
@@ -123,8 +131,8 @@ export interface VerifyingEnvProvider<BlockType> {
  * Additional capabilities for GeneratingEnv. Internal -- not exposed to contracts.
  */
 export interface GeneratingEnvProvider<BlockType> extends VerifyingEnvProvider<BlockType> {
-  /** Find available inputs matching a verifier. */
-  findInputs(verifier: Verifier): MaybePromise<Input[]>;
+  /** Find available inputs matching a verifier (with provenance). */
+  findInputs(verifier: Verifier): MaybePromise<AvailableInput[]>;
   /** Find a block that claims the given verifier. Returns its hash. */
   findBlockClaiming(verifier: Verifier): MaybePromise<Hash | undefined>;
 }

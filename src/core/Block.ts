@@ -203,6 +203,11 @@ export class BlockStore {
     return this.aggregated.has(hash.toPrimitive());
   }
 
+  /** Iterate over all stored blocks. */
+  values(): IterableIterator<Block> {
+    return this.blocks.values();
+  }
+
   /** Walk anchor chain to determine if `ancestor` is an ancestor of `descendant`. */
   isAncestor(ancestor: Hash, descendant: Hash): boolean {
     const ancestorKey = ancestor.toPrimitive();

@@ -481,6 +481,7 @@ The resolution contract:
 | [`src/core/ContractEnv.ts`](../../src/core/ContractEnv.ts) | `ContractEnv` interface, `Input` type, `ContractFn`, `ContractRejection`, internal provider interfaces |
 | [`src/core/VerifyingEnv.ts`](../../src/core/VerifyingEnv.ts) | `VerifyingEnv` -- verification-mode implementation (synchronous, reads from block) |
 | [`src/core/GeneratingEnv.ts`](../../src/core/GeneratingEnv.ts) | `GeneratingEnv` -- generation-mode implementation (possibly async, builds the draft) |
+| [`src/core/ContractGenerator.ts`](../../src/core/ContractGenerator.ts) | `ContractGenerator` -- runs contracts via `GeneratingEnv` to build block drafts |
 | [`src/core/ExecutionModule.ts`](../../src/core/ExecutionModule.ts) | `ExecutionModule` -- contract registry and block verification |
 | [`src/core/Block.ts`](../../src/core/Block.ts) | `RESULT_CONTRACT`, result output helpers, block structure |
 | Future: WASM runtime | Contract execution engine with host function bindings |
