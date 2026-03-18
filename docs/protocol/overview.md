@@ -205,6 +205,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Output Data](output-data.md) | Data format | How is output data encoded and inspected? |
+| [Output Claims](output-claims.md) | Claim tracking | Who claims each output on a given block? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.
@@ -223,6 +224,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
+| Output Claims | [`OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | [`OutputClaimService.ts`](../../src/core/OutputClaimService.ts) |
 
 Supporting files:
 
