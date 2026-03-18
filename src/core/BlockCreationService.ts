@@ -4,7 +4,7 @@ import {
   AGGREGATION_CONTRACT,
   Block,
   BlockStore,
-  getBlockOutputCount,
+  getAggregationData,
   getBlockWeightVector,
 } from './Block.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
@@ -30,7 +30,25 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
   }
 
   getOutputCount(block: Block): number {
-    return getBlockOutputCount(block);
+    const aggData = getAggregationData(block);
+    if (aggData) {
+      // Total output space = new outputs from subtree + anchor's surviving outputs
+      const anchorOutputCount = this.getAnchorOutputCount(block);
+      return aggData.newOutputCount + anchorOutputCount - aggData.claimMask.popcount();
+    }
+    // Leaf: anchor outputs - own anchor claims + own outputs
+    const anchorBlock = this.store.get(block.anchor);
+    if (!anchorBlock) return block.outputs.length; // genesis
+    const anchorOutputCount = this.getOutputCount(anchorBlock);
+    const ownAnchorClaims = block.claims.filter((c) => c >= block.outputs.length).length;
+    return anchorOutputCount - ownAnchorClaims + block.outputs.length -
+      block.claims.filter((c) => c < block.outputs.length).length;
+  }
+
+  private getAnchorOutputCount(block: Block): number {
+    const anchorBlock = this.store.get(block.anchor);
+    if (!anchorBlock) return 0;
+    return this.getOutputCount(anchorBlock);
   }
 
   getWeightVector(block: Block): number[] {

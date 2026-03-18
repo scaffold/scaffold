@@ -186,30 +186,32 @@ The anchor determines the block's position in the graph and which outputs are av
 
 ## Aggregation
 
-An aggregation block rolls up multiple subtrees into a single block. It replaces the aggregated blocks in the canonical view, consolidating their weight and compressing the graph.
+An aggregation block rolls up multiple subtrees into a single block. It replaces the aggregated blocks in the canonical view, consolidating their weight and compressing the graph. For the full aggregation specification -- total ordering, cache composition, and the aggregation contract -- see [aggregation.md](aggregation.md).
 
 ### Design Principle: Minimal I/O
 
 Aggregation blocks should have minimal inputs and outputs beyond what's structurally necessary. This keeps them small, which means faster gossip propagation and lower bandwidth cost. The aggregation block's purpose is structural consolidation, not application logic.
 
 Typical aggregation block I/O:
-- **Inputs**: Aggregation incentive outputs from the subtrees being aggregated (collecting fees).
-- **Outputs**: An aggregation incentive output for further aggregation of this block, plus fee outputs to the aggregator.
+- **Inputs**: Aggregation marker outputs from the subtrees being aggregated.
+- **Outputs**: An aggregation data output (cache) for further aggregation of this block, plus a marker output.
 
 ### Construction
 
-1. **Choose anchor**: Must be a descendant of all subtrees' anchors.
-2. **Rebase subtrees**: For each subtree, rebase its claim mask from its anchor to the aggregation anchor (see [conflict module](conflict.md) rebasing). If rebasing detects a conflict (subtree claims an output already spent by the chain), exclude that subtree.
-3. **Merge claim masks**: Union all rebased claim masks. If two subtrees claim the same anchor output, they conflict and cannot be aggregated together.
-4. **Add own claims**: The aggregation block claims the aggregation incentive outputs from its subtrees.
-5. **Compute weight and aggregation data**: Attribute each subtree's weight to the correct chain depth based on its anchor position relative to the aggregation anchor. Store the result as an [aggregation contract](contracts.md) output with claim mask, output counts, and chain weights.
-6. **Set aggregates**: The set of block hashes being replaced.
+At a high level, aggregation construction involves:
+
+1. **Consume markers**: The aggregation contract claims marker outputs from blocks to aggregate via `requireInput()`.
+2. **Compose caches**: Read each consumed block's subtree cache, compose into a new cache.
+3. **Produce cache output**: The aggregation data output carries the composed cache.
+4. **Solidify**: The anchoring module determines the anchor and `aggregates` field from include constraints.
+
+For the detailed composition algorithm, see [aggregation.md](aggregation.md#cache-composition).
 
 ### Contracts Satisfied
 
-An aggregation block satisfies the aggregation contracts on its subtrees' incentive outputs. These contracts verify that the claiming block aggregates (replaces) the block that produced the output. The aggregation block should claim all available aggregation incentive outputs from its subtrees.
+An aggregation block satisfies the aggregation contracts on its subtrees' marker outputs. The aggregation contract verifies that the claiming block aggregates the block that produced the output. The aggregation block claims all available aggregation marker outputs from its subtrees.
 
-The aggregation block itself produces an aggregation contract output carrying the aggregation summary (claim mask, output count, weight attribution). This data is consumed by the conflict, consensus, and trust modules through their provider interfaces.
+The aggregation block itself produces an aggregation contract output carrying the aggregation cache (claim mask, output count, weight attribution). This data is consumed by the conflict, consensus, and trust modules through their provider interfaces.
 
 ---
 
@@ -308,7 +310,7 @@ The separation rule is a property of the [collateral contract's](contracts.md) s
 
 ### Invariants
 
-1. **Outputs before claims**: A block's output space is constructed by prepending its own outputs to the inherited space. Claims are then applied as removals. Claim indices in `block.claims` refer to positions in the block's own output space (pre-claim), not the anchor's. This ordering enables self-claiming.
+1. **Outputs before claims**: A block's output space is its final, post-claim set of surviving outputs. During construction, the block's own outputs are prepended to the inherited space, forming the extended vector. Claims are applied as removals from this extended vector. Claim indices in `block.claims` refer to positions in the extended vector, not in the final output space. This ordering enables self-claiming.
 2. **Value conservation**: Every block balances input and output throughput exactly.
 3. **Anchor validity**: All claimed outputs exist in the UTXO set at the anchor point.
 4. **Weight derivation**: The weight vector is deterministically derived from `declaredWeight` and subtrees (verified via the [aggregation contract](contracts.md)).

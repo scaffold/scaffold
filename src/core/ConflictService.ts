@@ -1,6 +1,6 @@
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
-import { Block, BlockStore, getAggregationData, getBlockOutputCount } from './Block.ts';
+import { Block, BlockStore, getAggregationData } from './Block.ts';
 import { ConflictModule, ConflictProvider } from './ConflictModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
@@ -44,7 +44,11 @@ class ConflictProviderAdapter implements ConflictProvider<Block> {
 
   getOutputCount(block: Block): number {
     const aggData = getAggregationData(block);
-    if (aggData) return aggData.outputCount;
+    if (aggData) {
+      // Total = new outputs + anchor's surviving outputs
+      const anchorOutputCount = this.getAnchorOutputCount(block);
+      return aggData.newOutputCount + anchorOutputCount - aggData.claimMask.popcount();
+    }
     // Leaf block: need anchor's output count to compute
     const anchorBlock = this.store.get(block.anchor);
     if (!anchorBlock) return block.outputs.length; // genesis

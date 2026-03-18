@@ -53,10 +53,12 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [deception.md](docs/protocol/deception.md) | — (not yet implemented) | — | |
 | [draft-blocks.md](docs/protocol/draft-blocks.md) | [DraftManager.ts](src/core/DraftManager.ts) | — | [BlockDraft.ts](src/core/BlockDraft.ts), [Generator.ts](src/core/Generator.ts) |
 | [output-claims.md](docs/protocol/output-claims.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
+| [output-space.md](docs/protocol/output-space.md) | — (structural, spans modules) | — | [Block.ts](src/core/Block.ts), [ConflictModule.ts](src/core/ConflictModule.ts) |
+| [aggregation.md](docs/protocol/aggregation.md) | — | — | [AggregationContract.ts](src/core/AggregationContract.ts), [Block.ts](src/core/Block.ts), [ContractGenerator.ts](src/core/ContractGenerator.ts) |
 
 ## Key Protocol Invariant: Outputs Before Claims
 
-A block's output space is constructed by prepending its own outputs to the inherited (post-subtree) space. Claims are then applied as removals from this combined space. This ordering enables self-claiming: a block can produce output at index 0 and claim index 0 in the same block. Claim indices in `block.claims` refer to positions in the block's own output space (pre-claim), not the anchor's.
+A block's **output space** is its final, post-claim set of surviving outputs -- the clean set that descendants inherit. During construction, the block's own outputs are prepended to the inherited (post-subtree) space, forming the **extended vector**. Claims are then applied as removals from this extended vector. This ordering enables self-claiming: a block can produce output at index 0 and claim index 0 in the same block. Claim indices in `block.claims` refer to positions in the extended vector, not in the final output space.
 
 ## Queued Work
 See `TODO.md` for the current backlog of protocol modules and concepts to document and implement, roughly in priority order.

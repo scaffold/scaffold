@@ -11,7 +11,7 @@ import {
   ContractRejection,
   type GeneratingEnvProvider,
 } from './ContractEnv.ts';
-import { GeneratingEnv } from './GeneratingEnv.ts';
+import { GeneratingEnv, type WaitForInputFn } from './GeneratingEnv.ts';
 import { OutputClaimModule } from './OutputClaimModule.ts';
 import { UtxoIndex } from '../node/UtxoIndex.ts';
 import type { MaybePromise } from '../util/MaybePromise.ts';
@@ -113,6 +113,19 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+/** Key for the blocked-generator registry. */
+function verifierKey(v: Verifier): string {
+  return `${v.contract.toPrimitive()}:${Array.from(v.params).join(',')}`;
+}
+
+// -- Blocked generator entry --------------------------------------
+
+interface BlockedGenerator {
+  env: GeneratingEnv<Block>;
+  draftId: Hash;
+  resolve: (input: AvailableInput) => void;
+}
+
 // -- ContractGenerator -------------------------------------------
 
 /**
@@ -121,12 +134,20 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
  * Given a draft with resolved claims identifying the contract to run,
  * it creates a GeneratingEnv, executes the contract, and populates the
  * draft with generated outputs, additional resolved claims, and refs.
+ *
+ * Supports blocking requireInput(): when a contract needs more inputs
+ * than currently available, the generator blocks and is registered in
+ * a waiting queue. When new outputs become available, blocked generators
+ * are resumed before new drafts are created.
  */
 export class ContractGenerator implements GeneratorProvider {
   private readonly _lookupContract: (hash: Hash) => ContractFn | undefined;
   private readonly _adapter: GeneratingEnvAdapter;
   private readonly _draftStore: DraftStore;
   private readonly _outputClaims: OutputClaimModule<Block>;
+
+  /** Blocked generators waiting for inputs, keyed by verifier. */
+  private readonly _blocked = new Map<string, BlockedGenerator[]>();
 
   constructor(opts: {
     lookupContract: (hash: Hash) => ContractFn | undefined;
@@ -174,10 +195,24 @@ export class ContractGenerator implements GeneratorProvider {
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
+    // Create waitForInput callback that registers in our blocked queue
+    const waitForInput: WaitForInputFn = (verifier: Verifier) => {
+      return new Promise<AvailableInput>((resolve) => {
+        const key = verifierKey(verifier);
+        let queue = this._blocked.get(key);
+        if (!queue) {
+          queue = [];
+          this._blocked.set(key, queue);
+        }
+        queue.push({ env, draftId: draft.draftId, resolve });
+      });
+    };
+
     const env = new GeneratingEnv<Block>({
       contractHash,
       params,
       provider: this._adapter,
+      waitForInput,
     });
 
     // Run the contract (may be sync or async)
@@ -193,8 +228,63 @@ export class ContractGenerator implements GeneratorProvider {
       cancel: () => {
         cancelled = true;
         this._outputClaims.removeClaims(draft.draftId);
+        this._removeBlocked(draft.draftId);
       },
     };
+  }
+
+  /**
+   * Notify that a new unclaimed output is available. Checks if a blocked
+   * generator is waiting for this verifier and resumes it.
+   *
+   * Returns true if a blocked generator was resumed (caller should not
+   * create a new draft for this output).
+   */
+  notifyNewOutput(
+    blockHash: Hash,
+    outputIndex: number,
+    output: Output,
+  ): boolean {
+    const key = verifierKey(output.verifier);
+    const queue = this._blocked.get(key);
+    if (!queue || queue.length === 0) return false;
+
+    const entry = queue.shift()!;
+    if (queue.length === 0) this._blocked.delete(key);
+
+    // Pre-claim the output for the blocked generator's draft
+    this._outputClaims.addClaim(entry.draftId, blockHash, outputIndex);
+
+    // Resume the generator
+    entry.resolve({
+      verifier: output.verifier,
+      value: output.value,
+      detail: output.detail,
+      block: blockHash,
+      outputIndex,
+    });
+
+    return true;
+  }
+
+  /** Check if any generators are blocked (for testing/introspection). */
+  get blockedCount(): number {
+    let count = 0;
+    for (const queue of this._blocked.values()) {
+      count += queue.length;
+    }
+    return count;
+  }
+
+  private _removeBlocked(draftId: Hash): void {
+    for (const [key, queue] of this._blocked) {
+      const filtered = queue.filter((e) => !Hash.equals(e.draftId, draftId));
+      if (filtered.length === 0) {
+        this._blocked.delete(key);
+      } else {
+        this._blocked.set(key, filtered);
+      }
+    }
   }
 
   private _runContract(
@@ -227,6 +317,7 @@ export class ContractGenerator implements GeneratorProvider {
     const newOutputs = env.getAllOutputs();
     const newClaims = env.getResolvedClaims();
     const newRefs = env.getGeneratedRefs();
+    const newIncludes = env.getIncludeConstraints();
 
     // Register ALL consumed inputs as claims in the OutputClaimModule
     for (const claim of newClaims) {
@@ -242,11 +333,20 @@ export class ContractGenerator implements GeneratorProvider {
       (rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`),
     );
 
+    // Deduplicate include constraints against existing ones
+    const existingIncludes = new Set(
+      draft.includeConstraints.map((h) => h.toPrimitive()),
+    );
+    const dedupedIncludes = newIncludes.filter(
+      (h) => !existingIncludes.has(h.toPrimitive()),
+    );
+
     // Merge generation results into the draft
     this._draftStore.update(draft.draftId, {
       outputs: [...draft.outputs, ...newOutputs],
       resolvedClaims: [...draft.resolvedClaims, ...dedupedClaims],
       refs: [...draft.refs, ...newRefs],
+      includeConstraints: [...draft.includeConstraints, ...dedupedIncludes],
     });
 
     // Transition to ready

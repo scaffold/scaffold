@@ -234,11 +234,9 @@ export class BlockCreationModule<BlockType> {
       totalSubtreeOutputs,
     );
 
-    // 6. Compute output count
+    // 6. Compute new output count (subtree's new surviving outputs only)
     const ownClaimCount = spec.claims.length;
-    const outputCount = this.computeOutputCount(
-      anchorOutputCount,
-      subtreeAnchorClaims,
+    const newOutputCount = this.computeNewOutputCount(
       totalSubtreeOutputs,
       ownOutputCount,
       ownClaimCount,
@@ -261,7 +259,7 @@ export class BlockCreationModule<BlockType> {
       // Encode aggregation data into a contract output
       const aggDataJson = JSON.stringify({
         claimMask: claimMask.toJSON(),
-        outputCount,
+        newOutputCount,
         aggregateOutputCounts,
         chainWeights,
         aggregateWeights,
@@ -417,24 +415,17 @@ export class BlockCreationModule<BlockType> {
   }
 
   /**
-   * Compute the total output count after full transformation.
-   * outputCount = anchorOutputCount - subtreeAnchorClaims + totalSubtreeOutputs
-   *             + ownOutputCount - ownClaimCount
+   * Compute the new output count: surviving outputs added by this subtree.
+   * Excludes the anchor's surviving outputs.
+   *
+   * newOutputCount = totalSubtreeOutputs + ownOutputCount - ownClaimCount
    */
-  computeOutputCount(
-    anchorOutputCount: number,
-    subtreeAnchorClaims: number,
+  computeNewOutputCount(
     totalSubtreeOutputs: number,
     ownOutputCount: number,
     ownClaimCount: number,
   ): number {
-    return (
-      anchorOutputCount -
-      subtreeAnchorClaims +
-      totalSubtreeOutputs +
-      ownOutputCount -
-      ownClaimCount
-    );
+    return totalSubtreeOutputs + ownOutputCount - ownClaimCount;
   }
 
   // -- Internals --------------------------------------------------

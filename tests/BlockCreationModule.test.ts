@@ -245,29 +245,28 @@ Deno.test('validateThroughput: self-claim value mismatch', () => {
   );
 });
 
-// -- computeOutputCount tests ------------------------------------
+// -- computeNewOutputCount tests ---------------------------------
 
-Deno.test('computeOutputCount: leaf block', () => {
+Deno.test('computeNewOutputCount: leaf block', () => {
   const { module } = setupModule();
-  // anchorOutputCount=10, no subtrees, 3 outputs, 1 claim
-  const result = module.computeOutputCount(10, 0, 0, 3, 1);
-  // 10 - 0 + 0 + 3 - 1 = 12
-  assertEquals(result, 12);
+  // no subtrees, 3 outputs, 1 claim
+  const result = module.computeNewOutputCount(0, 3, 1);
+  // 0 + 3 - 1 = 2
+  assertEquals(result, 2);
 });
 
-Deno.test('computeOutputCount: aggregation block', () => {
+Deno.test('computeNewOutputCount: aggregation block', () => {
   const { module } = setupModule();
-  // anchorOutputCount=10, subtrees claim 3 anchor outputs and produce 5 new outputs
-  // block itself produces 1 output and makes 2 claims
-  const result = module.computeOutputCount(10, 3, 5, 1, 2);
-  // 10 - 3 + 5 + 1 - 2 = 11
-  assertEquals(result, 11);
+  // subtrees produce 5 new outputs, block itself produces 1 output and makes 2 claims
+  const result = module.computeNewOutputCount(5, 1, 2);
+  // 5 + 1 - 2 = 4
+  assertEquals(result, 4);
 });
 
-Deno.test('computeOutputCount: no outputs no claims', () => {
+Deno.test('computeNewOutputCount: no outputs no claims', () => {
   const { module } = setupModule();
-  const result = module.computeOutputCount(10, 0, 0, 0, 0);
-  assertEquals(result, 10);
+  const result = module.computeNewOutputCount(0, 0, 0);
+  assertEquals(result, 0);
 });
 
 // -- computeClaimMask tests --------------------------------------

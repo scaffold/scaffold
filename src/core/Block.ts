@@ -40,9 +40,9 @@ export function makeSignatureOutput(publicKey: Uint8Array, value: number): Outpu
 export interface AggregationData {
   /** Composed claim mask from subtrees (rebased + merged + own claims). */
   claimMask: BitVector;
-  /** Total outputs after full transformation. */
-  outputCount: number;
-  /** Per-subtree output counts. */
+  /** Surviving new outputs added by this subtree (excludes anchor's surviving outputs). */
+  newOutputCount: number;
+  /** Per-subtree new output counts. */
   aggregateOutputCounts: number[];
   /** Weight vector from subtrees only (excludes own declaredWeight). */
   chainWeights: number[];
@@ -54,7 +54,7 @@ export interface AggregationData {
 export function encodeAggregationData(data: AggregationData): Uint8Array {
   const json = JSON.stringify({
     claimMask: data.claimMask.toJSON(),
-    outputCount: data.outputCount,
+    newOutputCount: data.newOutputCount,
     aggregateOutputCounts: data.aggregateOutputCounts,
     chainWeights: data.chainWeights,
     aggregateWeights: data.aggregateWeights,
@@ -67,7 +67,7 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
   const json = JSON.parse(new TextDecoder().decode(bytes));
   return {
     claimMask: BitVector.fromJSON(json.claimMask),
-    outputCount: json.outputCount,
+    newOutputCount: json.newOutputCount,
     aggregateOutputCounts: json.aggregateOutputCounts,
     chainWeights: json.chainWeights,
     aggregateWeights: json.aggregateWeights,
@@ -125,17 +125,15 @@ export function getBlockClaimMask(block: Block, anchorOutputCount: number): BitV
 }
 
 /**
- * Get the output count for a block: from aggregation data if present,
- * otherwise derived as a leaf block.
+ * Get the new output count for a block's subtree: from aggregation data if
+ * present, otherwise derived as a leaf block.
+ *
+ * For leaf blocks, this is simply outputs.length (before self-claims are
+ * subtracted -- the caller must handle self-claims if needed).
  */
-export function getBlockOutputCount(block: Block): number {
+export function getBlockNewOutputCount(block: Block): number {
   const aggData = getAggregationData(block);
-  if (aggData) return aggData.outputCount;
-  // Leaf block or genesis: anchor's output count - own claims + own outputs
-  // For genesis: outputs.length
-  // For leaf blocks without aggregation data, we need the anchor's output count
-  // which we don't have here. This function is only valid when aggData exists
-  // or for genesis blocks.
+  if (aggData) return aggData.newOutputCount;
   return block.outputs.length;
 }
 
@@ -314,13 +312,13 @@ export function getRefOutputs(
   return refBlock.outputs;
 }
 
-// -- Extended output vector -----------------------------------------
+// -- Output space ---------------------------------------------------
 
 /**
- * Collect the full extended output vector of a block.
- * This is the set of outputs visible to any block that anchors to this one.
+ * Collect a block's output space: the final, post-claim set of surviving
+ * outputs. This is the clean set that descendants inherit.
  *
- * Extended vector = [own outputs, surviving anchor outputs after claims]
+ * Output space = [own outputs, surviving anchor outputs after claims]
  */
 export function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   const result: Output[] = [...block.outputs];

@@ -209,7 +209,9 @@ The draft has been created with its claims and outputs, but generation has not s
 
 ### Generating
 
-Active computation is in progress. The draft may be recreated during this phase as claims, refs, or the anchor change. Each recreation preserves the generation state (the computation continues; only the draft's graph participation is updated).
+Active computation is in progress. The contract may be actively executing, or it may be **blocked** waiting for additional inputs via `requireInput()`. A blocked generator is suspended (no CPU) until the system provides a new input matching its verifier. See [aggregation: blocking requireInput](aggregation.md#blocking-requireinput) for details.
+
+The draft may be recreated during this phase as claims, refs, or the anchor change. Each recreation preserves the generation state (the computation continues; only the draft's graph participation is updated).
 
 ### Ready
 

@@ -73,8 +73,25 @@ export function App() {
   }, [scaffold]);
 
   const handleAdd5 = useCallback(() => {
-    for (let i = 0; i < 5; i++) {
+    // Pin anchor so all 5 blocks share it (simulates concurrent peers).
+    // Without this, each block chains to the previous one and
+    // AggregationStrategy never sees sibling blocks.
+    const anchor = scaffold.put({
+      outputs: [
+        {
+          verifier: {
+            contract: Hash.digest("demo-contract"),
+            params: new Uint8Array(0),
+          },
+          value: Math.floor(Math.random() * 100),
+          detail: new TextEncoder().encode(`block-${Date.now()}-0`),
+        },
+      ],
+    }).hash;
+
+    for (let i = 1; i < 5; i++) {
       scaffold.put({
+        anchor,
         outputs: [
           {
             verifier: {

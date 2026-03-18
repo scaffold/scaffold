@@ -82,9 +82,14 @@ function makeTestSetup() {
   return { store, utxoIndex, outputClaims, draftStore, contracts, generator };
 }
 
+/** Flush pending microtasks so async contract execution completes. */
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 // -- Tests ---------------------------------------------------------
 
-Deno.test('aggregation contract rejects when fewer than 4 inputs available', () => {
+Deno.test('aggregation contract blocks when fewer than 4 inputs available', async () => {
   const { store, utxoIndex, draftStore, generator } = makeTestSetup();
 
   // Genesis with one aggregation output
@@ -105,12 +110,17 @@ Deno.test('aggregation contract rejects when fewer than 4 inputs available', () 
   draftStore.transition(draft.draftId, 'generating');
 
   generator.generate(draft);
+  await flushMicrotasks();
 
-  // Draft should be cancelled -- not enough inputs
-  assertEquals(draftStore.get(draft.draftId), undefined);
+  // The async contract consumed the 1 available input, then blocked
+  // waiting for more via waitForInput. Draft stays in 'generating'.
+  const updated = draftStore.get(draft.draftId);
+  assert(updated, 'draft should still exist (blocked, not cancelled)');
+  assertEquals(updated.status, 'generating');
+  assertEquals(generator.blockedCount, 1);
 });
 
-Deno.test('4 blocks with aggregation outputs triggers aggregator generation', () => {
+Deno.test('4 blocks with aggregation outputs triggers aggregator generation', async () => {
   const { store, utxoIndex, draftStore, generator } = makeTestSetup();
 
   // Create a genesis block (no aggregation output -- it's genesis)
@@ -148,6 +158,7 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', ()
   draftStore.transition(draft.draftId, 'generating');
 
   generator.generate(draft);
+  await flushMicrotasks();
 
   // Draft should be ready -- aggregation contract succeeded
   const updated = draftStore.get(draft.draftId)!;
@@ -164,9 +175,16 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', ()
     updated.resolvedClaims.map((rc) => rc.block.toPrimitive()),
   );
   assertEquals(claimedBlocks.size, AGGREGATION_THRESHOLD);
+
+  // The contract produces one aggregation data output via requireOutput()
+  assertEquals(updated.outputs.length, 1);
+  assertEquals(
+    Hash.equals(updated.outputs[0].verifier.contract, AGGREGATION_CONTRACT),
+    true,
+  );
 });
 
-Deno.test('3 blocks are not enough to trigger aggregator', () => {
+Deno.test('3 blocks are not enough -- aggregator blocks waiting for 4th input', async () => {
   const { store, utxoIndex, draftStore, generator } = makeTestSetup();
 
   const genesis = makeBlock({ name: 'genesis' });
@@ -199,12 +217,17 @@ Deno.test('3 blocks are not enough to trigger aggregator', () => {
   draftStore.transition(draft.draftId, 'generating');
 
   generator.generate(draft);
+  await flushMicrotasks();
 
-  // Draft should be cancelled -- not enough inputs
-  assertEquals(draftStore.get(draft.draftId), undefined);
+  // The async contract consumed 3 available inputs, then blocked on the 4th.
+  // Draft stays in 'generating' status.
+  const updated = draftStore.get(draft.draftId);
+  assert(updated, 'draft should still exist (blocked, not cancelled)');
+  assertEquals(updated.status, 'generating');
+  assertEquals(generator.blockedCount, 1);
 });
 
-Deno.test('merged resolvedClaims contain no duplicates', () => {
+Deno.test('merged resolvedClaims contain no duplicates', async () => {
   const { store, utxoIndex, draftStore, generator } = makeTestSetup();
 
   const genesis = makeBlock({ name: 'genesis' });
@@ -234,6 +257,7 @@ Deno.test('merged resolvedClaims contain no duplicates', () => {
   draftStore.transition(draft.draftId, 'generating');
 
   generator.generate(draft);
+  await flushMicrotasks();
 
   const updated = draftStore.get(draft.draftId)!;
   assert(updated, 'draft should exist');

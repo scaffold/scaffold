@@ -14,13 +14,13 @@ This module is **not** responsible for:
 
 ---
 
-## Prerequisite: Output Space and Claim Ordering
+## Prerequisite: Extended Vector and Claim Resolution
 
-A block's output space is constructed by prepending its own outputs to the inherited space. Claims are then applied as removals from this space. **Outputs are added before claims are applied.** This ordering is what enables self-claiming: a block can produce an output at index 0 and claim index 0 in the same block.
+A block's **output space** is its final, post-claim set of surviving outputs -- the clean set that descendants inherit. During construction, claim indices are resolved against the **extended vector**: the block's own outputs prepended to the inherited outputs, before claims are applied. **Outputs are added before claims are applied.** This ordering is what enables self-claiming: a block can produce an output at index 0 and claim index 0 in the same block.
 
-A claim at index I in `block.claims` refers to index I in the block's own output space (pre-claim), not the anchor's.
+A claim at index I in `block.claims` refers to index I in the block's extended vector, not in its final output space or the anchor's output space.
 
-A block C's output space (before claims are applied):
+A block C's extended vector (used for claim resolution):
 
 ```
 [0 .. C.outputs.length-1]                              -> C's own outputs
@@ -61,7 +61,7 @@ Self-claims (I < C.outputs.length) resolve immediately during migration -- the p
 
 ## Migration
 
-Migration moves claim entries from their starting block toward the block that actually produced the claimed output. An entry migrates one hop at a time through the output space hierarchy.
+Migration moves claim entries from their starting block toward the block that actually produced the claimed output. An entry migrates one hop at a time through the aggregation hierarchy.
 
 Given an entry at index I on block B:
 
@@ -103,7 +103,7 @@ To make this efficient, the module maintains a reverse index: for each unloaded 
 
 ### Invariants
 
-1. **Claim conservation**: Every claim in a block's `claims[]` array has exactly one corresponding entry somewhere in the outputClaims system -- either on this block, a descendant in the output space, or resolved.
+1. **Claim conservation**: Every claim in a block's `claims[]` array has exactly one corresponding entry somewhere in the outputClaims system -- either on this block, on an aggregate or anchor block further down the hierarchy, or resolved.
 2. **Monotonic migration**: Entries only move toward the producing block, never away from it.
 3. **Resolution correctness**: A resolved claim at `{block: B, outputIndex: I}` means `I < B.outputs.length` -- it refers to an actual local output.
 
