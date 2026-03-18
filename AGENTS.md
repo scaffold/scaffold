@@ -61,6 +61,18 @@ A block's output space is constructed by prepending its own outputs to the inher
 ## Queued Work
 See `TODO.md` for the current backlog of protocol modules and concepts to document and implement, roughly in priority order.
 
+## Daily Goal
+
+BEFORE doing ANY work, read the last 10 lines of `DAILY_GOAL.md` to see if a goal has been set for today. If not, prompt the user to describe what they want to accomplish today, and update the file. Goals must be a single sentence and be somewhat measurable. You should not "plan forwards" or set goals for future days.
+
+It's fine to work on non-goal-related things during the day, but achieving the goal should be a priority. As you make progress towards completing the goal, update the current day's goal percentage (e.g. `-- 40%`).
+
+If you think the goal has been achieved, ask the user. If he agrees, update the percentage to `-- 100%` and throw a little mini-party however you'd like.
+
+Not all goals will be achieved -- that's ok. The point is to have a singular focus for each day and a record of what got done.
+
+**Format:** `- **YYYY-MM-DD** — Goal description in one sentence -- XX%`
+
 ## Ways of Working
 Planning -> Documentation -> Testing -> Coding
 
