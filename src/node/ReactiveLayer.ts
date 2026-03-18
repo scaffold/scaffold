@@ -1,10 +1,12 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
+import { ResolvedClaim } from '../core/BlockDraft.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
-import { BlockSpec } from '../core/BlockCreationModule.ts';
+import { BlockSpec, Output } from '../core/BlockCreationModule.ts';
 import { ConflictService } from '../core/ConflictService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
+import { DraftManager } from '../core/DraftManager.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 
 // -- Future types (placeholders until their modules exist) ----------
@@ -36,7 +38,16 @@ export type Action =
   | { type: 'createBlock'; spec: BlockSpec; sign: boolean }
   | { type: 'verify'; block: Hash; contract: Hash; params: Uint8Array }
   | { type: 'dispute'; block: Hash; side: 'for' | 'against' }
-  | { type: 'notifyFetch'; verifier: VerifierKey; result: FetchResult | null };
+  | { type: 'notifyFetch'; verifier: VerifierKey; result: FetchResult | null }
+  | {
+    type: 'createDraft';
+    claim: ResolvedClaim;
+    outputs: Output[];
+    declaredWeight: number;
+    anchor: Hash;
+    refs?: Hash[];
+    aggregates?: Hash[];
+  };
 
 // -- Block creator interface ----------------------------------------
 
@@ -79,6 +90,8 @@ export class ReactiveLayer {
   private readonly blockCreator: BlockCreator;
   private readonly privateKey: Uint8Array | null;
 
+  private readonly draftManager?: DraftManager;
+
   private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
   private readonly onBlockProcessed?: (block: Block) => void;
 
@@ -91,6 +104,7 @@ export class ReactiveLayer {
     strategies: Strategy[];
     blockCreator: BlockCreator;
     privateKey?: Uint8Array | null;
+    draftManager?: DraftManager;
     onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
     onBlockProcessed?: (block: Block) => void;
   }) {
@@ -102,6 +116,7 @@ export class ReactiveLayer {
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
     this.privateKey = deps.privateKey ?? null;
+    this.draftManager = deps.draftManager;
     this.onNotifyFetch = deps.onNotifyFetch;
     this.onBlockProcessed = deps.onBlockProcessed;
   }
@@ -181,6 +196,18 @@ export class ReactiveLayer {
         case 'notifyFetch':
           if (this.onNotifyFetch) {
             this.onNotifyFetch(action.verifier, action.result);
+          }
+          break;
+        case 'createDraft':
+          if (this.draftManager) {
+            this.draftManager.createDraft({
+              resolvedClaims: [action.claim],
+              outputs: action.outputs,
+              declaredWeight: action.declaredWeight,
+              anchor: action.anchor,
+              refs: action.refs,
+              aggregates: action.aggregates,
+            });
           }
           break;
       }

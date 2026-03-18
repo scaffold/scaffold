@@ -149,6 +149,66 @@ export class ConsensusModule<BlockType> {
     this.markDirty();
   }
 
+  /**
+   * Remove a previously registered block.
+   * Cleans up children, aggregation maps, chain contributions,
+   * verified weights, and direct conflicts. Marks dirty.
+   */
+  removeBlock(hash: Hash): void {
+    const key = hash.toPrimitive();
+    if (!this.blocks.has(key)) return;
+
+    this.blocks.delete(key);
+
+    // Remove from children map (as child of its anchor)
+    const block = this.provider.getBlock(hash);
+    if (block) {
+      const anchorHash = this.provider.getAnchor(block);
+      if (!Hash.equals(anchorHash, ZERO_HASH)) {
+        const siblings = this.children.get(anchorHash.toPrimitive());
+        if (siblings) siblings.delete(key);
+      }
+    }
+
+    // Remove own children entry
+    this.children.delete(key);
+
+    // Clean up aggregation maps
+    const aggs = this.aggregatesMap.get(key);
+    if (aggs) {
+      for (const aggKey of aggs) {
+        const reverse = this.aggregatedByMap.get(aggKey);
+        if (reverse) reverse.delete(key);
+      }
+      this.aggregatesMap.delete(key);
+    }
+    this.aggregatedByMap.delete(key);
+
+    // Clean up chain contributions (remove this block's contributions from all ancestors)
+    for (const [_ancestorKey, contributions] of this.chainContributions) {
+      const idx = contributions.findIndex((c) => c.block === key);
+      if (idx !== -1) contributions.splice(idx, 1);
+    }
+
+    // Remove this block's own contribution entry
+    this.chainContributions.delete(key);
+
+    // Clean up verified weights
+    this.verifiedWeights.delete(key);
+
+    // Clean up direct conflicts
+    const conflicts = this.directConflicts.get(key);
+    if (conflicts) {
+      for (const cKey of conflicts) {
+        const reverse = this.directConflicts.get(cKey);
+        if (reverse) reverse.delete(key);
+      }
+      this.directConflicts.delete(key);
+    }
+
+    this.markDirty();
+  }
+
   /** Declare a direct conflict between two blocks (symmetric). */
   addConflict(a: Hash, b: Hash): void {
     const aKey = a.toPrimitive();

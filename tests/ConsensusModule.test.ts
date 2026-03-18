@@ -686,6 +686,101 @@ Deno.test({
   assertEquals(layer.getDescendantWeight(G.hash), 25);
 });
 
+// -- removeBlock tests --------------------------------------------
+
+Deno.test('removeBlock: removes from canonical view', () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [50] };
+  const { layer } = setup(G, A);
+
+  layer.setVerifiedWeight(A.hash, [50]);
+  assert(layer.isCanonical(A.hash));
+  assertEquals(layer.getCanonicalView().size, 2);
+
+  layer.removeBlock(A.hash);
+  assertEquals(layer.getCanonicalView().size, 1);
+  assert(layer.isCanonical(G.hash));
+});
+
+Deno.test('removeBlock: cleans up children map', () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [50] };
+  const B: TestBlock = { hash: h('B'), anchor: A.hash, aggregates: [], weight: [30] };
+  const { layer } = setup(G, A, B);
+
+  layer.setVerifiedWeight(A.hash, [50]);
+  layer.setVerifiedWeight(B.hash, [30]);
+
+  // B contributes to A's effective weight
+  assertEquals(layer.getEffectiveWeight(A.hash), 80);
+
+  layer.removeBlock(B.hash);
+  assertEquals(layer.getEffectiveWeight(A.hash), 50);
+});
+
+Deno.test('removeBlock: cleans up chain contributions', () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [10] };
+  const B: TestBlock = { hash: h('B'), anchor: A.hash, aggregates: [], weight: [20] };
+  const { layer } = setup(G, A, B);
+
+  layer.setVerifiedWeight(A.hash, [10]);
+  layer.setVerifiedWeight(B.hash, [20]);
+
+  assertEquals(layer.getDescendantWeight(A.hash), 20);
+
+  layer.removeBlock(B.hash);
+  assertEquals(layer.getDescendantWeight(A.hash), 0);
+});
+
+Deno.test('removeBlock: cleans up aggregation maps', () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [50] };
+  const S: TestBlock = { hash: h('S'), anchor: G.hash, aggregates: [A.hash], weight: [60] };
+  const { layer } = setup(G, A, S);
+
+  layer.setVerifiedWeight(A.hash, [50]);
+  layer.setVerifiedWeight(S.hash, [60]);
+
+  // S aggregates A -> conflict
+  assertFalse(layer.isCanonical(A.hash));
+
+  // Remove S -> A no longer conflicted
+  layer.removeBlock(S.hash);
+  assert(layer.isCanonical(A.hash));
+});
+
+Deno.test('removeBlock: unknown hash is no-op', () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const { layer } = setup(G);
+
+  // Should not throw
+  layer.removeBlock(Hash.digest('nonexistent'));
+  assertEquals(layer.getCanonicalView().size, 1);
+});
+
+Deno.test('removeBlock: canonicality recalculates (may flip conflict winners)', () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [50] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [30] };
+  const D: TestBlock = { hash: h('D'), anchor: B.hash, aggregates: [], weight: [100] };
+  const { layer } = setup(G, A, B, D);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [50]);
+  layer.setVerifiedWeight(B.hash, [30]);
+  layer.setVerifiedWeight(D.hash, [100]);
+
+  // B wins: 30 + 100 = 130 > 50
+  assert(layer.isCanonical(B.hash));
+  assertFalse(layer.isCanonical(A.hash));
+
+  // Remove D -> A should win: 50 > 30
+  layer.removeBlock(D.hash);
+  assert(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(B.hash));
+});
+
 Deno.test({
   name: 'dynamic conflict discovery updates canonical view',
 }, () => {

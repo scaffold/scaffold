@@ -164,6 +164,8 @@ export interface Block {
   readonly declaredWeight: number;
   /** Cross-block references for read-only data access. */
   readonly refs: Hash[];
+  /** Resolved claims -- concrete output references for uniform claim handling. */
+  readonly resolvedClaims?: import('./BlockDraft.ts').ResolvedClaim[];
   /** Creation time, set by block creator (wire format). */
   readonly timestamp: number;
   /** Reception time at this node (Date.now()). Node-local, not serialized. */

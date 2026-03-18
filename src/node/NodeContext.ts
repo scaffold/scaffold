@@ -1,4 +1,7 @@
 import { Block, BlockStore } from '../core/Block.ts';
+import { DraftStore } from '../core/BlockDraft.ts';
+import { DraftManager } from '../core/DraftManager.ts';
+import { StubGenerator } from '../core/Generator.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
@@ -34,9 +37,11 @@ export interface NodeConfig {
  */
 export class NodeContext {
   readonly store: BlockStore;
+  readonly draftStore: DraftStore;
   readonly protocolContext: ProtocolContext;
   readonly coordinator: Coordinator;
   readonly reactiveLayer: ReactiveLayer;
+  readonly draftManager: DraftManager;
 
   // Protocol services (convenience accessors)
   readonly consensus: ConsensusService;
@@ -58,8 +63,12 @@ export class NodeContext {
     // 2. Get BlockStore from context (lazily created by DI)
     this.store = this.protocolContext.get(BlockStore);
 
+    // 2b. Create DraftStore and wire to ConsensusService
+    this.draftStore = new DraftStore();
+
     // 3. Get all services from ProtocolContext
     this.consensus = this.protocolContext.get(ConsensusService);
+    this.consensus.setDraftStore(this.draftStore);
     this.conflict = this.protocolContext.get(ConflictService);
     this.sampling = this.protocolContext.get(SamplingService);
     this.gossip = this.protocolContext.get(GossipService);
@@ -87,6 +96,13 @@ export class NodeContext {
       },
     };
 
+    // 5b. Create DraftManager
+    const generator = new StubGenerator();
+    this.draftManager = new DraftManager(this.draftStore, this.consensus, generator);
+    this.consensus.onCanonicalityChange((hash, canonical) => {
+      this.draftManager.onCanonicalityChange(hash, canonical);
+    });
+
     // 6. Create BlockRecordSet and wire module listeners
     this.blocks = new BlockRecordSet({ debounceMs: 0 });
 
@@ -113,6 +129,7 @@ export class NodeContext {
       sampling: this.sampling,
       strategies: config.strategies ?? [],
       blockCreator,
+      draftManager: this.draftManager,
       onNotifyFetch: config.onNotifyFetch,
       onBlockProcessed: (block: Block) => {
         blocks.add(block);

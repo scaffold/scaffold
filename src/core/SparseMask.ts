@@ -97,7 +97,7 @@ export class SparseMask<ChunkType extends ChunkBase> {
 
       const c = this.chunks[chunkIdx];
       if (c.oneIndices === undefined) {
-        results.push(c as ChunkType);
+        results.push(c);
       } else {
         const onesBelow = searchSorted(c.oneIndices, (x) => x >= index);
         if (onesBelow < c.oneIndices.length && c.oneIndices[onesBelow] === index) {
@@ -138,7 +138,7 @@ export class SparseMask<ChunkType extends ChunkBase> {
 
       const c = this.chunks[chunkIdx];
       if (c.oneIndices === undefined) {
-        results.push(c as ChunkType);
+        results.push(c);
       } else {
         const localZeroIdx = n - cumulativeZeros;
         results.push(findNthZero(c.oneIndices, c.offset, localZeroIdx));

@@ -51,6 +51,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [weight.md](docs/protocol/weight.md) | — (design discussion) | — | [BlockCreationModule.ts](src/core/BlockCreationModule.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
 | [computation.md](docs/protocol/computation.md) | [ExecutionModule.ts](src/core/ExecutionModule.ts), [VerificationModule.ts](src/core/VerificationModule.ts), [DisputeModule.ts](src/core/DisputeModule.ts) | [ExecutionService.ts](src/core/ExecutionService.ts), [VerificationService.ts](src/core/VerificationService.ts), [DisputeService.ts](src/core/DisputeService.ts) | [Block.ts](src/core/Block.ts), [WasmStore.ts](src/core/WasmStore.ts) |
 | [deception.md](docs/protocol/deception.md) | — (not yet implemented) | — | |
+| [draft-blocks.md](docs/protocol/draft-blocks.md) | [DraftManager.ts](src/core/DraftManager.ts) | — | [BlockDraft.ts](src/core/BlockDraft.ts), [Generator.ts](src/core/Generator.ts) |
 
 ## Queued Work
 See `TODO.md` for the current backlog of protocol modules and concepts to document and implement, roughly in priority order.
