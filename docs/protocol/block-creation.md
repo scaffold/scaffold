@@ -308,13 +308,14 @@ The separation rule is a property of the [collateral contract's](contracts.md) s
 
 ### Invariants
 
-1. **Value conservation**: Every block balances input and output throughput exactly.
-2. **Anchor validity**: All claimed outputs exist in the UTXO set at the anchor point.
-3. **Weight derivation**: The weight vector is deterministically derived from `declaredWeight` and subtrees (verified via the [aggregation contract](contracts.md)).
-4. **Claim mask completeness**: The claim mask (in the aggregation contract output) includes all claims against anchor outputs from any source within the block.
-5. **Self-claim exclusion**: Self-claims (index < `outputs.length`) never appear in the claim mask.
-6. **Collateral independence**: Collateral blocks are never the same block as the work they vouch for, and never descendants of it (enforced by the [collateral contract](contracts.md)).
-7. **Aggregation minimality**: Aggregation blocks have minimal I/O — only what's needed to collect fees and incentivize further aggregation.
+1. **Outputs before claims**: A block's output space is constructed by prepending its own outputs to the inherited space. Claims are then applied as removals. Claim indices in `block.claims` refer to positions in the block's own output space (pre-claim), not the anchor's. This ordering enables self-claiming.
+2. **Value conservation**: Every block balances input and output throughput exactly.
+3. **Anchor validity**: All claimed outputs exist in the UTXO set at the anchor point.
+4. **Weight derivation**: The weight vector is deterministically derived from `declaredWeight` and subtrees (verified via the [aggregation contract](contracts.md)).
+5. **Claim mask completeness**: The claim mask (in the aggregation contract output) includes all claims against anchor outputs from any source within the block.
+6. **Self-claim exclusion**: Self-claims (index < `outputs.length`) never appear in the claim mask.
+7. **Collateral independence**: Collateral blocks are never the same block as the work they vouch for, and never descendants of it (enforced by the [collateral contract](contracts.md)).
+8. **Aggregation minimality**: Aggregation blocks have minimal I/O — only what's needed to collect fees and incentivize further aggregation.
 
 ---
 
