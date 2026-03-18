@@ -15,15 +15,18 @@ export class DraftManager {
   private readonly consensus: ConsensusModule<unknown>;
   private readonly generator: GeneratorProvider;
   private readonly handles = new Map<HashPrimitive, GeneratorHandle>();
+  private readonly _onDraftReady?: (draft: BlockDraft) => void;
 
   constructor(
     store: DraftStore,
     consensus: ConsensusModule<unknown>,
     generator: GeneratorProvider,
+    opts?: { onDraftReady?: (draft: BlockDraft) => void },
   ) {
     this.store = store;
     this.consensus = consensus;
     this.generator = generator;
+    this._onDraftReady = opts?.onDraftReady;
   }
 
   /**
@@ -46,12 +49,13 @@ export class DraftManager {
     this.consensus.addBlock(draft.draftId);
     this.consensus.setVerifiedWeight(draft.draftId, [draft.declaredWeight]);
 
+    // Transition to generating before starting the generator,
+    // since the generator may synchronously transition to ready/cancelled.
+    this.store.transition(draft.draftId, 'generating');
+
     // Start generation
     const handle = this.generator.generate(draft);
     this.handles.set(draft.draftId.toPrimitive(), handle);
-
-    // Transition to generating
-    this.store.transition(draft.draftId, 'generating');
 
     return draft;
   }

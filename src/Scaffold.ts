@@ -1,6 +1,6 @@
 import { composeBlockPacket } from './core/Packet.ts';
 import { secp } from './util/secp.ts';
-import { Block, makeSignatureOutput, SIGNATURE_CONTRACT } from './core/Block.ts';
+import { Block, makeAggregationOutput, makeSignatureOutput, SIGNATURE_CONTRACT } from './core/Block.ts';
 import { BlockBlueprint, BlockSpec } from './core/BlockCreationModule.ts';
 import { Hash } from './util/Hash.ts';
 import { NodeContext } from './node/NodeContext.ts';
@@ -19,6 +19,10 @@ export interface ScaffoldConfig {
   genesis?: Block;
   /** Strategies to register */
   strategies?: Strategy[];
+  /** Filter: should generation run for this contract hash? Default: all enabled. */
+  enableGeneration?: (contractHash: Hash) => boolean;
+  /** Filter: should verification run for this contract hash? Default: all enabled. */
+  enableVerification?: (contractHash: Hash) => boolean;
 }
 
 export class Scaffold {
@@ -47,25 +51,15 @@ export class Scaffold {
     this.nodeContext = new NodeContext({
       genesis,
       strategies,
+      enableGeneration: config.enableGeneration,
+      enableVerification: config.enableVerification,
       onNotifyFetch: (verifierKey, result) => {
         fetchManager.notify(verifierKey, result);
       },
     });
 
-    // 4. Create UTXO index and wire to canonical changes
-    const utxoIndex = new UtxoIndex(this.nodeContext.store);
-    // Seed the index with the genesis block (it's already canonical)
-    utxoIndex.blockBecameCanonical(genesis);
-    // Wire future canonical changes
-    this.nodeContext.consensus.onCanonicalityChange((hash, canonical) => {
-      const block = this.nodeContext.store.get(hash);
-      if (!block) return;
-      if (canonical) {
-        utxoIndex.blockBecameCanonical(block);
-      } else {
-        utxoIndex.blockBecameNonCanonical(block);
-      }
-    });
+    // 4. Get UtxoIndex from NodeContext (created and wired there)
+    const utxoIndex = this.nodeContext.utxoIndex;
 
     // 5. Create PutManager with a BlockProcessor that delegates to NodeContext.
     const nodeContext = this.nodeContext;
@@ -78,9 +72,12 @@ export class Scaffold {
           anchorHash = findCanonicalTip(nodeContext);
         }
 
+        // Every non-genesis block carries an aggregation marker output
+        const outputs = [...spec.outputs, makeAggregationOutput()];
+
         // Auto-balance throughput
         const balancedSpec = autoBalance(
-          { ...spec, anchor: anchorHash },
+          { ...spec, anchor: anchorHash, outputs },
           utxoIndex,
           publicKey,
         );

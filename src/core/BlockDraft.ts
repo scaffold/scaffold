@@ -74,6 +74,12 @@ export function createDraft(fields: {
 /** In-memory store for block drafts. Immutable transitions. */
 export class DraftStore {
   private readonly drafts = new Map<HashPrimitive, BlockDraft>();
+  private readonly _transitionListeners: ((draft: BlockDraft) => void)[] = [];
+
+  /** Register a listener that fires after any status transition. */
+  onTransition(cb: (draft: BlockDraft) => void): void {
+    this._transitionListeners.push(cb);
+  }
 
   get size(): number {
     return this.drafts.size;
@@ -128,6 +134,8 @@ export class DraftStore {
     } else {
       this.drafts.set(key, updated);
     }
+
+    for (const cb of this._transitionListeners) cb(updated);
 
     return updated;
   }

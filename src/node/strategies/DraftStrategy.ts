@@ -22,9 +22,11 @@ export interface DraftStrategyConfig {
   minValue?: number;
   /** Maximum concurrent drafts. Default: 3. */
   maxConcurrent?: number;
+  /** Filter: should generation run for this contract hash? Default: all enabled. */
+  enableGeneration?: (contractHash: Hash) => boolean;
 }
 
-const DEFAULT_CONFIG: Required<DraftStrategyConfig> = {
+const DEFAULT_CONFIG = {
   minValue: 0,
   maxConcurrent: 3,
 };
@@ -37,13 +39,15 @@ const DEFAULT_CONFIG: Required<DraftStrategyConfig> = {
  * Resumed outputs are not double-drafted.
  */
 export class DraftStrategy implements Strategy {
-  private readonly config: Required<DraftStrategyConfig>;
+  private readonly config: { minValue: number; maxConcurrent: number };
   private readonly inFlight = new Set<string>();
   private readonly _contractGenerator?: ContractGenerator;
+  private readonly _enableGeneration: (contractHash: Hash) => boolean;
 
   constructor(config?: DraftStrategyConfig, contractGenerator?: ContractGenerator) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this._contractGenerator = contractGenerator;
+    this._enableGeneration = config?.enableGeneration ?? (() => true);
   }
 
   evaluate(event: ReactiveEvent): (Action | CreateDraftAction)[] {
@@ -52,6 +56,31 @@ export class DraftStrategy implements Strategy {
     );
     if (newlyCanonical.length === 0) return [];
 
+    // First pass: resume blocked generators (no concurrency limit --
+    // resuming feeds an existing draft, doesn't create a new one).
+    if (this._contractGenerator) {
+      for (const change of newlyCanonical) {
+        const block = event.store.get(change.hash);
+        if (!block) continue;
+
+        for (let i = 0; i < block.outputs.length; i++) {
+          const output = block.outputs[i];
+          const trackingKey = `${change.hash.toPrimitive()}:${i}`;
+          if (this.inFlight.has(trackingKey)) continue;
+
+          const resumed = this._contractGenerator.notifyNewOutput(
+            change.hash,
+            i,
+            output,
+          );
+          if (resumed) {
+            this.inFlight.add(trackingKey);
+          }
+        }
+      }
+    }
+
+    // Second pass: create new drafts for remaining outputs (up to maxConcurrent).
     const actions: CreateDraftAction[] = [];
 
     for (const change of newlyCanonical) {
@@ -65,23 +94,10 @@ export class DraftStrategy implements Strategy {
 
         const output = block.outputs[i];
         if (output.value < this.config.minValue) continue;
+        if (!this._enableGeneration(output.verifier.contract)) continue;
 
         const trackingKey = `${change.hash.toPrimitive()}:${i}`;
         if (this.inFlight.has(trackingKey)) continue;
-
-        // Try to resume a blocked generator first
-        if (this._contractGenerator) {
-          const resumed = this._contractGenerator.notifyNewOutput(
-            change.hash,
-            i,
-            output,
-          );
-          if (resumed) {
-            // Output was fed to a blocked generator -- don't create a new draft
-            this.inFlight.add(trackingKey);
-            continue;
-          }
-        }
 
         this.inFlight.add(trackingKey);
 
