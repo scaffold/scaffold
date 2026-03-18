@@ -22,9 +22,11 @@ export interface DraftStrategyConfig {
   minValue?: number;
   /** Maximum concurrent drafts. Default: 3. */
   maxConcurrent?: number;
+  /** Filter: should generation run for this contract hash? Default: all enabled. */
+  enableGeneration?: (contractHash: Hash) => boolean;
 }
 
-const DEFAULT_CONFIG: Required<DraftStrategyConfig> = {
+const DEFAULT_CONFIG = {
   minValue: 0,
   maxConcurrent: 3,
 };
@@ -37,13 +39,15 @@ const DEFAULT_CONFIG: Required<DraftStrategyConfig> = {
  * Resumed outputs are not double-drafted.
  */
 export class DraftStrategy implements Strategy {
-  private readonly config: Required<DraftStrategyConfig>;
+  private readonly config: { minValue: number; maxConcurrent: number };
   private readonly inFlight = new Set<string>();
   private readonly _contractGenerator?: ContractGenerator;
+  private readonly _enableGeneration: (contractHash: Hash) => boolean;
 
   constructor(config?: DraftStrategyConfig, contractGenerator?: ContractGenerator) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this._contractGenerator = contractGenerator;
+    this._enableGeneration = config?.enableGeneration ?? (() => true);
   }
 
   evaluate(event: ReactiveEvent): (Action | CreateDraftAction)[] {
@@ -65,6 +69,7 @@ export class DraftStrategy implements Strategy {
 
         const output = block.outputs[i];
         if (output.value < this.config.minValue) continue;
+        if (!this._enableGeneration(output.verifier.contract)) continue;
 
         const trackingKey = `${change.hash.toPrimitive()}:${i}`;
         if (this.inFlight.has(trackingKey)) continue;

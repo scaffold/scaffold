@@ -46,12 +46,13 @@ export class DraftManager {
     this.consensus.addBlock(draft.draftId);
     this.consensus.setVerifiedWeight(draft.draftId, [draft.declaredWeight]);
 
+    // Transition to generating before starting the generator,
+    // since the generator may synchronously transition to ready/cancelled.
+    this.store.transition(draft.draftId, 'generating');
+
     // Start generation
     const handle = this.generator.generate(draft);
     this.handles.set(draft.draftId.toPrimitive(), handle);
-
-    // Transition to generating
-    this.store.transition(draft.draftId, 'generating');
 
     return draft;
   }
