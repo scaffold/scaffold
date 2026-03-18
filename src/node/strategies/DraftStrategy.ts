@@ -3,6 +3,7 @@ import { BlockStore, makeAggregationOutput } from '../../core/Block.ts';
 import { ResolvedClaim } from '../../core/BlockDraft.ts';
 import { Output } from '../../core/BlockCreationModule.ts';
 import { ConsensusService } from '../../core/ConsensusService.ts';
+import { ContractGenerator } from '../../core/ContractGenerator.ts';
 import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 
 /** Action type for creating a draft (handled by ReactiveLayer). */
@@ -17,27 +18,32 @@ export interface CreateDraftAction {
 }
 
 export interface DraftStrategyConfig {
-  /** Minimum output value to trigger draft creation. Default: 1. */
+  /** Minimum output value to trigger draft creation. Default: 0 (all outputs). */
   minValue?: number;
   /** Maximum concurrent drafts. Default: 3. */
   maxConcurrent?: number;
 }
 
 const DEFAULT_CONFIG: Required<DraftStrategyConfig> = {
-  minValue: 1,
+  minValue: 0,
   maxConcurrent: 3,
 };
 
 /**
- * Strategy that creates drafts for high-value unclaimed outputs
- * on newly canonical blocks.
+ * Strategy that creates drafts for unclaimed outputs on newly canonical blocks.
+ *
+ * Before creating a new draft, checks if a blocked generator can be
+ * resumed for the output (via ContractGenerator.notifyNewOutput).
+ * Resumed outputs are not double-drafted.
  */
 export class DraftStrategy implements Strategy {
   private readonly config: Required<DraftStrategyConfig>;
   private readonly inFlight = new Set<string>();
+  private readonly _contractGenerator?: ContractGenerator;
 
-  constructor(config?: DraftStrategyConfig) {
+  constructor(config?: DraftStrategyConfig, contractGenerator?: ContractGenerator) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this._contractGenerator = contractGenerator;
   }
 
   evaluate(event: ReactiveEvent): (Action | CreateDraftAction)[] {
@@ -62,6 +68,20 @@ export class DraftStrategy implements Strategy {
 
         const trackingKey = `${change.hash.toPrimitive()}:${i}`;
         if (this.inFlight.has(trackingKey)) continue;
+
+        // Try to resume a blocked generator first
+        if (this._contractGenerator) {
+          const resumed = this._contractGenerator.notifyNewOutput(
+            change.hash,
+            i,
+            output,
+          );
+          if (resumed) {
+            // Output was fed to a blocked generator -- don't create a new draft
+            this.inFlight.add(trackingKey);
+            continue;
+          }
+        }
 
         this.inFlight.add(trackingKey);
 

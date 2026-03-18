@@ -24,6 +24,17 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
+// -- Types --------------------------------------------------------
+
+/**
+ * Callback that the GeneratingEnv calls when requireInput() cannot be
+ * satisfied immediately. The ContractGenerator provides this to register
+ * the env in the blocked-generator registry.
+ *
+ * Returns a Promise that resolves with the next available input.
+ */
+export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableInput>;
+
 // -- GeneratingEnv ------------------------------------------------
 
 /**
@@ -36,6 +47,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _contractHash: Hash;
   private readonly _params: Uint8Array;
   private readonly _provider: GeneratingEnvProvider<BlockType>;
+  private readonly _waitForInput?: WaitForInputFn;
 
   /** Outputs to add to the draft. */
   private readonly _outputs: Output[] = [];
@@ -47,15 +59,20 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _inputs: Input[] = [];
   /** Block hashes added to refs. */
   private readonly _refs: Hash[] = [];
+  /** Block hashes that must be included in the final subtree. */
+  private readonly _includeConstraints: Hash[] = [];
 
   constructor(opts: {
     contractHash: Hash;
     params: Uint8Array;
     provider: GeneratingEnvProvider<BlockType>;
+    /** Optional callback for blocking requireInput(). If not provided, throws on no input. */
+    waitForInput?: WaitForInputFn;
   }) {
     this._contractHash = opts.contractHash;
     this._params = opts.params;
     this._provider = opts.provider;
+    this._waitForInput = opts.waitForInput;
   }
 
   getContractHash(): Hash {
@@ -76,6 +93,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
           value: ai.value,
         });
         this._inputs.push({ verifier: ai.verifier, value: ai.value, detail: ai.detail });
+        this._addIncludeConstraint(ai.block);
       }
       return this._inputs.slice(-available.length);
     });
@@ -83,26 +101,35 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   requireInput(): MaybePromise<Input> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
-    return maybeThen(this._provider.findInputs(verifier), (available) => {
-      // Filter out inputs already consumed in this generation run
-      const unconsumed = available.filter((ai) =>
-        !this._resolvedClaims.some((rc) =>
-          Hash.equals(rc.block, ai.block) && rc.outputIndex === ai.outputIndex
-        )
-      );
-      if (unconsumed.length === 0) {
-        throw new ContractRejection('no inputs available');
-      }
-      const ai = unconsumed[0];
-      this._resolvedClaims.push({
-        block: ai.block,
-        outputIndex: ai.outputIndex,
-        value: ai.value,
-      });
-      const input: Input = { verifier: ai.verifier, value: ai.value, detail: ai.detail };
-      this._inputs.push(input);
-      return input;
-    });
+    const findResult = this._provider.findInputs(verifier);
+
+    if (findResult instanceof Promise) {
+      return findResult.then((available) => this._pickInput(available, verifier));
+    }
+    return this._pickInput(findResult, verifier);
+  }
+
+  private _pickInput(
+    available: AvailableInput[],
+    verifier: Verifier,
+  ): MaybePromise<Input> {
+    // Filter out inputs already consumed in this generation run
+    const unconsumed = available.filter((ai) =>
+      !this._resolvedClaims.some((rc) =>
+        Hash.equals(rc.block, ai.block) && rc.outputIndex === ai.outputIndex
+      )
+    );
+    if (unconsumed.length > 0) {
+      return this._consumeInput(unconsumed[0]);
+    }
+
+    // No inputs available -- block if we have a wait callback
+    if (this._waitForInput) {
+      return this._waitForInput(verifier).then((ai) => this._consumeInput(ai));
+    }
+
+    // No wait callback -- reject immediately (legacy behavior)
+    throw new ContractRejection('no inputs available');
   }
 
   requireOutput(verifier: Verifier, value: number, detail?: Uint8Array): void {
@@ -153,6 +180,26 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
+  // -- Internal helpers --------------------------------------------
+
+  private _consumeInput(ai: AvailableInput): Input {
+    this._resolvedClaims.push({
+      block: ai.block,
+      outputIndex: ai.outputIndex,
+      value: ai.value,
+    });
+    const input: Input = { verifier: ai.verifier, value: ai.value, detail: ai.detail };
+    this._inputs.push(input);
+    this._addIncludeConstraint(ai.block);
+    return input;
+  }
+
+  private _addIncludeConstraint(blockHash: Hash): void {
+    if (!this._includeConstraints.some((h) => Hash.equals(h, blockHash))) {
+      this._includeConstraints.push(blockHash);
+    }
+  }
+
   // -- Accessors for the generation harness -------------------------
 
   /** Get the outputs the contract wants to produce. */
@@ -183,5 +230,10 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   /** Get the block hashes added to refs. */
   getGeneratedRefs(): Hash[] {
     return this._refs;
+  }
+
+  /** Get the blocks that must be included in the final subtree. */
+  getIncludeConstraints(): Hash[] {
+    return this._includeConstraints;
   }
 }

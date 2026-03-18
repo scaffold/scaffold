@@ -37,6 +37,7 @@ export class DraftManager {
     anchor: Hash;
     refs?: Hash[];
     aggregates?: Hash[];
+    includeConstraints?: Hash[];
   }): BlockDraft {
     const draft = createDraft(fields);
     this.store.add(draft);

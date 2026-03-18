@@ -30,6 +30,8 @@ export interface BlockDraft {
   readonly anchor: Hash;
   readonly refs: Hash[];
   readonly aggregates: Hash[];
+  /** Blocks that must appear in the final subtree (accumulated by requireInput). */
+  readonly includeConstraints: Hash[];
   readonly status: DraftStatus;
 }
 
@@ -52,6 +54,7 @@ export function createDraft(fields: {
   anchor: Hash;
   refs?: Hash[];
   aggregates?: Hash[];
+  includeConstraints?: Hash[];
 }): BlockDraft {
   return {
     draftId: Hash.random(),
@@ -61,6 +64,7 @@ export function createDraft(fields: {
     anchor: fields.anchor,
     refs: fields.refs ?? [],
     aggregates: fields.aggregates ?? [],
+    includeConstraints: fields.includeConstraints ?? [],
     status: 'pending',
   };
 }

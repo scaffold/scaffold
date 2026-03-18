@@ -321,7 +321,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
   const mergedClaimMask = BitVector.fromIndices(4, [0, 1]);
   const aggData = encodeAggregationData({
     claimMask: mergedClaimMask,
-    outputCount: 10, // 4 (anchor) - 2 (subtree claims) + 4 + 4 + 0 - 0 = 10
+    newOutputCount: 9, // 4 + 4 (subtree outputs) + 1 (own output) - 0 (own claims) = 9
     aggregateOutputCounts: [4, 4],
     chainWeights: [25], // subtreeA(10) + subtreeB(15) = 25
     aggregateWeights: [10, 15],

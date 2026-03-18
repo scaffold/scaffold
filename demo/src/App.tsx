@@ -4,7 +4,6 @@ import { Scaffold } from "scaffold.io/Scaffold.ts";
 import { Hash } from "scaffold.io/util/Hash.ts";
 import { WELL_KNOWN_PRIVATE_KEY } from "scaffold.io/genesis.ts";
 import type { Strategy } from "scaffold.io/node/ReactiveLayer.ts";
-import { AggregationStrategy } from "scaffold.io/node/strategies/AggregationStrategy.ts";
 import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.ts";
 import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
 
@@ -16,12 +15,6 @@ interface StrategyDef {
 }
 
 const STRATEGIES: StrategyDef[] = [
-  {
-    key: "aggregation",
-    label: "Aggregation",
-    description: "Auto-aggregate sibling blocks",
-    create: () => new AggregationStrategy(),
-  },
   {
     key: "sampling",
     label: "Sampling",
@@ -73,8 +66,23 @@ export function App() {
   }, [scaffold]);
 
   const handleAdd5 = useCallback(() => {
-    for (let i = 0; i < 5; i++) {
+    // Pin anchor so all 5 blocks share it (simulates concurrent peers).
+    const anchor = scaffold.put({
+      outputs: [
+        {
+          verifier: {
+            contract: Hash.digest("demo-contract"),
+            params: new Uint8Array(0),
+          },
+          value: Math.floor(Math.random() * 100),
+          detail: new TextEncoder().encode(`block-${Date.now()}-0`),
+        },
+      ],
+    }).hash;
+
+    for (let i = 1; i < 5; i++) {
       scaffold.put({
+        anchor,
         outputs: [
           {
             verifier: {

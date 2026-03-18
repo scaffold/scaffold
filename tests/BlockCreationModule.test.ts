@@ -9,8 +9,6 @@ import {
   Output,
   SubtreeInfo,
 } from '../src/core/BlockCreationModule.ts';
-import { AGGREGATION_CONTRACT, decodeAggregationData } from '../src/core/Block.ts';
-
 // -- Test helpers ------------------------------------------------
 
 interface TestBlock {
@@ -68,10 +66,6 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     const result = this.rebasedMasks.get(key);
     return result === undefined ? null : result;
   }
-
-  getAggregationContract(): Hash {
-    return AGGREGATION_CONTRACT;
-  }
 }
 
 const h = (name: string): Hash => Hash.digest(name);
@@ -91,13 +85,6 @@ function setupModule(): { provider: TestProvider; module: BlockCreationModule<Te
   const provider = new TestProvider();
   const module = new BlockCreationModule(provider);
   return { provider, module };
-}
-
-/** Extract aggregation data from a blueprint's outputs. */
-function getAggData(outputs: Output[]) {
-  const aggOutput = outputs.find((o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT));
-  if (!aggOutput) return null;
-  return decodeAggregationData(aggOutput.detail);
 }
 
 // -- deriveWeightVector tests ------------------------------------
@@ -245,29 +232,28 @@ Deno.test('validateThroughput: self-claim value mismatch', () => {
   );
 });
 
-// -- computeOutputCount tests ------------------------------------
+// -- computeNewOutputCount tests ---------------------------------
 
-Deno.test('computeOutputCount: leaf block', () => {
+Deno.test('computeNewOutputCount: leaf block', () => {
   const { module } = setupModule();
-  // anchorOutputCount=10, no subtrees, 3 outputs, 1 claim
-  const result = module.computeOutputCount(10, 0, 0, 3, 1);
-  // 10 - 0 + 0 + 3 - 1 = 12
-  assertEquals(result, 12);
+  // no subtrees, 3 outputs, 1 claim
+  const result = module.computeNewOutputCount(0, 3, 1);
+  // 0 + 3 - 1 = 2
+  assertEquals(result, 2);
 });
 
-Deno.test('computeOutputCount: aggregation block', () => {
+Deno.test('computeNewOutputCount: aggregation block', () => {
   const { module } = setupModule();
-  // anchorOutputCount=10, subtrees claim 3 anchor outputs and produce 5 new outputs
-  // block itself produces 1 output and makes 2 claims
-  const result = module.computeOutputCount(10, 3, 5, 1, 2);
-  // 10 - 3 + 5 + 1 - 2 = 11
-  assertEquals(result, 11);
+  // subtrees produce 5 new outputs, block itself produces 1 output and makes 2 claims
+  const result = module.computeNewOutputCount(5, 1, 2);
+  // 5 + 1 - 2 = 4
+  assertEquals(result, 4);
 });
 
-Deno.test('computeOutputCount: no outputs no claims', () => {
+Deno.test('computeNewOutputCount: no outputs no claims', () => {
   const { module } = setupModule();
-  const result = module.computeOutputCount(10, 0, 0, 0, 0);
-  assertEquals(result, 10);
+  const result = module.computeNewOutputCount(0, 0, 0);
+  assertEquals(result, 0);
 });
 
 // -- computeClaimMask tests --------------------------------------
@@ -404,22 +390,8 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
 
   const blueprint = module.buildBlock(spec);
   assertEquals(blueprint.aggregates.length, 2);
-  // Outputs: 1 user output + 1 aggregation contract output
-  assertEquals(blueprint.outputs.length, 2);
-
-  // Check aggregation data in contract output
-  const aggData = getAggData(blueprint.outputs);
-  assert(aggData !== null);
-  if (aggData) {
-    assertEquals(aggData.aggregateOutputCounts, [4, 3]);
-    // chainWeights: full weight [37] minus declaredWeight [2] = [35]
-    assertEquals(aggData.chainWeights, [35]);
-    // Claim mask: subtree claims on anchor [2, 5, 7]
-    assert(aggData.claimMask.get(2));
-    assert(aggData.claimMask.get(5));
-    assert(aggData.claimMask.get(7));
-    assertEquals(aggData.claimMask.popcount(), 3);
-  }
+  // Outputs: only user outputs (aggregation cache is produced by the contract)
+  assertEquals(blueprint.outputs.length, 1);
 });
 
 Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
@@ -463,13 +435,8 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
   };
 
   const blueprint = module.buildBlock(spec);
-  const aggData = getAggData(blueprint.outputs);
-  assert(aggData !== null);
-  if (aggData) {
-    // chainWeights: full weight is [23, 10, 5], minus declaredWeight(3) at [0] = [20, 10, 5]
-    assertEquals(aggData.chainWeights, [20, 10, 5]);
-    assertEquals(aggData.aggregateOutputCounts, [3, 2]);
-  }
+  assertEquals(blueprint.aggregates.length, 2);
+  assertEquals(blueprint.outputs.length, 1);
 });
 
 Deno.test('buildBlock: fails on missing anchor', () => {
@@ -633,15 +600,8 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
   };
 
   const blueprint = module.buildBlock(spec);
-  const aggData = getAggData(blueprint.outputs);
-  assert(aggData !== null);
-  if (aggData) {
-    // claimMask should have subtree's [1, 4] plus our claim on anchor[2]
-    assert(aggData.claimMask.get(1));
-    assert(aggData.claimMask.get(2)); // our claim
-    assert(aggData.claimMask.get(4));
-    assertEquals(aggData.claimMask.popcount(), 3);
-  }
+  assertEquals(blueprint.aggregates.length, 1);
+  assertEquals(blueprint.outputs.length, 1);
 });
 
 Deno.test('buildBlock: fails when subtree rebase returns null', () => {
