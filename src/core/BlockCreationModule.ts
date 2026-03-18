@@ -113,9 +113,6 @@ export interface BlockCreationProvider<BlockType> {
    * Returns null if rebasing fails (chain broken, etc).
    */
   getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null;
-
-  /** Return the aggregation contract hash for generated outputs. */
-  getAggregationContract(): Hash;
 }
 
 // -- Module -------------------------------------------------------
@@ -123,12 +120,12 @@ export interface BlockCreationProvider<BlockType> {
 /**
  * The block creation module constructs blocks from specs (intents).
  *
- * It derives all structural fields: claim masks, weight vectors, output counts,
- * and aggregate output counts. It validates throughput balancing (value
- * conservation) and structural constraints.
+ * It validates structural constraints: throughput balancing (value
+ * conservation), claim index range, inter-subtree conflict detection,
+ * and anchor chain validity.
  *
- * For aggregation blocks, it produces an aggregation contract output containing
- * the computed AggregationData (claim mask, output count, chain weights, etc.).
+ * Aggregation data (cache) is produced by the aggregation contract,
+ * not by this module. See AggregationContract.ts.
  *
  * Fully self-contained — depends only on BlockCreationProvider, BitVector, and Hash.
  */
@@ -155,9 +152,7 @@ export class BlockCreationModule<BlockType> {
 
     // 2. Process subtrees (aggregation)
     const subtreeInfos: SubtreeInfo[] = [];
-    const aggregateOutputCounts: number[] = [];
     const subtreeClaimMasks: BitVector[] = [];
-    const aggregateWeights: number[] = [];
     let totalSubtreeOutputs = 0;
     let subtreeAnchorClaims = 0;
 
@@ -183,9 +178,7 @@ export class BlockCreationModule<BlockType> {
       const subtreeWeightVector = this.provider.getWeightVector(aggBlock);
 
       subtreeInfos.push({ anchorDepth: depth, weightVector: subtreeWeightVector });
-      aggregateOutputCounts.push(subtreeOutputCount);
       subtreeClaimMasks.push(rebasedMask);
-      aggregateWeights.push(subtreeWeightVector[0] ?? 0);
       totalSubtreeOutputs += subtreeOutputCount;
       subtreeAnchorClaims += rebasedMask.popcount();
     }
@@ -225,8 +218,8 @@ export class BlockCreationModule<BlockType> {
       }
     }
 
-    // 5. Compute claim mask (against anchor output space)
-    const claimMask = this.computeClaimMask(
+    // 5. Validate own anchor claims map correctly to anchor output space
+    this.computeClaimMask(
       anchorOutputCount,
       mergedSubtreeMask,
       anchorClaims,
@@ -234,50 +227,15 @@ export class BlockCreationModule<BlockType> {
       totalSubtreeOutputs,
     );
 
-    // 6. Compute new output count (subtree's new surviving outputs only)
-    const ownClaimCount = spec.claims.length;
-    const newOutputCount = this.computeNewOutputCount(
-      totalSubtreeOutputs,
-      ownOutputCount,
-      ownClaimCount,
-    );
-
-    // 7. Derive weight vector
-    const weight = this.deriveWeightVector(spec.declaredWeight, subtreeInfos);
-
-    // 8. Validate throughput
+    // 6. Validate throughput
     this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
 
-    // 9. Build outputs array — user outputs + aggregation contract output (if aggregating)
-    const allOutputs = [...spec.outputs];
-
-    if (spec.aggregates.length > 0) {
-      // Compute chainWeights (weight vector without own declaredWeight)
-      const chainWeights = [...weight];
-      chainWeights[0] -= spec.declaredWeight;
-
-      // Encode aggregation data into a contract output
-      const aggDataJson = JSON.stringify({
-        claimMask: claimMask.toJSON(),
-        newOutputCount,
-        aggregateOutputCounts,
-        chainWeights,
-        aggregateWeights,
-      });
-
-      allOutputs.push({
-        verifier: { contract: this.provider.getAggregationContract(), params: new Uint8Array(0) },
-        value: 0,
-        detail: new TextEncoder().encode(aggDataJson),
-      });
-    }
-
-    // 10. Build blueprint
+    // 9. Build blueprint
     const blueprint: BlockBlueprint = {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
       claims: spec.claims.map((c) => c.index),
-      outputs: allOutputs,
+      outputs: spec.outputs,
       declaredWeight: spec.declaredWeight,
       refs: spec.refs,
     };

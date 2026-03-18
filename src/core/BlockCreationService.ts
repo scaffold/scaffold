@@ -1,7 +1,6 @@
 import { Hash } from '../util/Hash.ts';
 import { BitVector } from './BitVector.ts';
 import {
-  AGGREGATION_CONTRACT,
   Block,
   BlockStore,
   getAggregationData,
@@ -63,10 +62,6 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
     const result = this.conflict.rebase(blockHash, targetAnchor);
     if (!result) return null;
     return result.mask;
-  }
-
-  getAggregationContract(): Hash {
-    return AGGREGATION_CONTRACT;
   }
 }
 
