@@ -400,7 +400,9 @@ export class ConflictModule<BlockType> {
   /**
    * Find the chain of blocks from `from` to `to` (exclusive of `from`,
    * inclusive of `to`). Returns the blocks in order from `from` toward `to`.
-   * Returns null if no path exists.
+   * Tries walking backward from `to` first; if that fails, tries from `from`
+   * (for when `to` is above `from` in the anchor chain).
+   * Returns null if no path exists in either direction.
    */
   private findChain(from: Hash, to: Hash): Hash[] | null {
     const fromKey = from.toPrimitive();
@@ -408,12 +410,33 @@ export class ConflictModule<BlockType> {
 
     if (fromKey === toKey) return [];
 
-    // Walk backward from `to` to `from`, collecting the path
-    const path: Hash[] = [];
-    let current = to;
-    let currentKey = toKey;
+    // Try walking backward from `to` to `from` (to is deeper)
+    const downPath = this.walkChain(to, fromKey);
+    if (downPath) {
+      downPath.reverse();
+      return downPath;
+    }
 
-    while (currentKey !== fromKey) {
+    // Try walking backward from `from` to `to` (from is deeper)
+    const upPath = this.walkChain(from, toKey);
+    if (upPath) {
+      // Path goes from `from` up to `to`, but we need from->to order.
+      // Since `to` is above `from`, the chain is in reverse (toward root).
+      // Return empty -- no intermediate blocks to rebase through when
+      // the target is above us (the mask is already against a deeper anchor).
+      return [];
+    }
+
+    return null;
+  }
+
+  /** Walk backward from `start` up the anchor chain looking for `targetKey`. */
+  private walkChain(start: Hash, targetKey: HashPrimitive): Hash[] | null {
+    const path: Hash[] = [];
+    let current = start;
+    let currentKey = current.toPrimitive();
+
+    while (currentKey !== targetKey) {
       path.push(current);
       const block = this.provider.getBlock(current);
       if (!block) return null;
@@ -423,8 +446,6 @@ export class ConflictModule<BlockType> {
       currentKey = current.toPrimitive();
     }
 
-    // Reverse to get from -> to order
-    path.reverse();
     return path;
   }
 

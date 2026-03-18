@@ -15,15 +15,18 @@ export class DraftManager {
   private readonly consensus: ConsensusModule<unknown>;
   private readonly generator: GeneratorProvider;
   private readonly handles = new Map<HashPrimitive, GeneratorHandle>();
+  private readonly _onDraftReady?: (draft: BlockDraft) => void;
 
   constructor(
     store: DraftStore,
     consensus: ConsensusModule<unknown>,
     generator: GeneratorProvider,
+    opts?: { onDraftReady?: (draft: BlockDraft) => void },
   ) {
     this.store = store;
     this.consensus = consensus;
     this.generator = generator;
+    this._onDraftReady = opts?.onDraftReady;
   }
 
   /**

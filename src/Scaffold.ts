@@ -1,6 +1,6 @@
 import { composeBlockPacket } from './core/Packet.ts';
 import { secp } from './util/secp.ts';
-import { Block, makeSignatureOutput, SIGNATURE_CONTRACT } from './core/Block.ts';
+import { Block, makeAggregationOutput, makeSignatureOutput, SIGNATURE_CONTRACT } from './core/Block.ts';
 import { BlockBlueprint, BlockSpec } from './core/BlockCreationModule.ts';
 import { Hash } from './util/Hash.ts';
 import { NodeContext } from './node/NodeContext.ts';
@@ -72,9 +72,12 @@ export class Scaffold {
           anchorHash = findCanonicalTip(nodeContext);
         }
 
+        // Every non-genesis block carries an aggregation marker output
+        const outputs = [...spec.outputs, makeAggregationOutput()];
+
         // Auto-balance throughput
         const balancedSpec = autoBalance(
-          { ...spec, anchor: anchorHash },
+          { ...spec, anchor: anchorHash, outputs },
           utxoIndex,
           publicKey,
         );

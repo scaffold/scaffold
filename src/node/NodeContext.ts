@@ -1,5 +1,6 @@
 import { Block, BlockStore, AGGREGATION_CONTRACT } from '../core/Block.ts';
-import { DraftStore } from '../core/BlockDraft.ts';
+import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
+import { BlockBlueprint, BlockSpec, type ClaimEntry } from '../core/BlockCreationModule.ts';
 import { DraftManager } from '../core/DraftManager.ts';
 import { ContractGenerator } from '../core/ContractGenerator.ts';
 import { aggregationContract } from '../core/AggregationContract.ts';
@@ -21,7 +22,6 @@ import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
-import { BlockBlueprint } from '../core/BlockCreationModule.ts';
 import { Hash } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { UtxoIndex } from './UtxoIndex.ts';
@@ -183,7 +183,13 @@ export class NodeContext {
       },
     });
 
-    // 9. Process genesis block through coordinator directly
+    // 9. Wire draft solidification: when a draft becomes ready, build and process it
+    this.draftStore.onTransition((draft) => {
+      if (draft.status !== 'ready') return;
+      this._solidifyDraft(draft, blockCreator);
+    });
+
+    // 10. Process genesis block through coordinator directly
     //    (not through reactive layer, since strategies should not fire on genesis)
     const genesis = config.genesis;
     this.coordinator.blockReceived(genesis, null);
@@ -199,6 +205,109 @@ export class NodeContext {
   /** Process a block through the reactive layer */
   processBlock(block: Block, fromPeer?: string | null): void {
     this.reactiveLayer.processBlock(block, fromPeer ?? null);
+  }
+
+  /**
+   * Solidify a ready draft into a real block and process it.
+   *
+   * Determines anchor and aggregates from the draft's includeConstraints,
+   * then computes claim indices relative to the extended vector.
+   */
+  private _solidifyDraft(draft: BlockDraft, blockCreator: BlockCreator): void {
+    const includes = draft.includeConstraints;
+    if (includes.length === 0) {
+      this.draftManager.cancelDraft(draft.draftId);
+      return;
+    }
+
+    // Find the deepest common ancestor of all include-constrained blocks.
+    // For each include, walk its anchor chain to build a depth map.
+    // The common ancestor is the deepest block that appears in ALL chains.
+    const depthMaps: Map<string, number>[] = [];
+    for (const incHash of includes) {
+      const map = new Map<string, number>();
+      let cur = incHash;
+      let depth = 0;
+      while (this.store.has(cur)) {
+        map.set(cur.toPrimitive(), depth);
+        const block = this.store.get(cur)!;
+        cur = block.anchor;
+        depth++;
+      }
+      depthMaps.push(map);
+    }
+
+    // Find the deepest block that's in ALL ancestor chains
+    let anchor: Hash | undefined;
+    let bestDepth = Infinity;
+    for (const [key, depth] of depthMaps[0]) {
+      if (depthMaps.every((m) => m.has(key))) {
+        // This block is a common ancestor. Pick the shallowest total depth
+        // (= deepest block, since depth counts upward from the include).
+        const maxDepth = Math.max(...depthMaps.map((m) => m.get(key)!));
+        if (maxDepth < bestDepth) {
+          bestDepth = maxDepth;
+          anchor = Hash.fromPrimitive(key);
+        }
+      }
+    }
+
+    if (!anchor) {
+      this.draftManager.cancelDraft(draft.draftId);
+      return;
+    }
+
+    // Aggregates are includes that aren't the anchor itself or below it
+    const anchorKey = anchor.toPrimitive();
+    const aggregates = includes.filter((h) => h.toPrimitive() !== anchorKey);
+
+    // Compute claim indices in the extended vector:
+    // [own outputs, agg[last] new outputs, ..., agg[0] new outputs, anchor surviving]
+    // For each resolved claim (block, outputIndex), find which aggregate
+    // it belongs to and compute the offset.
+    const ownOutputCount = draft.outputs.length;
+
+    // Build offset table: for each aggregate (in reverse order, last first),
+    // the starting index in the extended vector after own outputs.
+    const aggOutputCounts: number[] = [];
+    for (const aggHash of aggregates) {
+      const aggBlock = this.store.get(aggHash);
+      aggOutputCounts.push(aggBlock ? aggBlock.outputs.length : 0);
+    }
+
+    // Extended vector layout: [own, agg[n-1], agg[n-2], ..., agg[0], anchor surviving]
+    // Offset for agg[i] = ownOutputCount + sum(aggOutputCounts[j] for j from n-1 down to i+1)
+    const aggOffsets = new Map<string, number>();
+    let offset = ownOutputCount;
+    for (let i = aggregates.length - 1; i >= 0; i--) {
+      aggOffsets.set(aggregates[i].toPrimitive(), offset);
+      offset += aggOutputCounts[i];
+    }
+
+    const claims: ClaimEntry[] = [];
+    for (const rc of draft.resolvedClaims) {
+      const aggOffset = aggOffsets.get(rc.block.toPrimitive());
+      if (aggOffset !== undefined) {
+        claims.push({ index: aggOffset + rc.outputIndex, value: rc.value });
+      }
+    }
+
+    const spec: BlockSpec = {
+      anchor,
+      outputs: draft.outputs,
+      claims,
+      declaredWeight: draft.declaredWeight,
+      aggregates,
+      refs: draft.refs,
+    };
+
+    const block = blockCreator.createBlock(spec, null);
+    if (block) {
+      this.reactiveLayer.processBlock(block, null);
+    }
+
+    // Clean up the draft
+    this.draftManager.cancelDraft(draft.draftId);
   }
 
   /** Get the genesis block hash (first block in store) */

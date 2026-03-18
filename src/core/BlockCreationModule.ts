@@ -162,8 +162,13 @@ export class BlockCreationModule<BlockType> {
         throw new Error(`aggregated block not found: ${aggHash}`);
       }
 
-      // Get anchor depth of subtree relative to our anchor
-      const depth = this.provider.getAnchorDepth(spec.anchor, this.provider.getAnchor(aggBlock)!);
+      // Get anchor depth: distance between spec.anchor and aggregate's anchor.
+      // Try both directions — the aggregate may anchor above or below spec.anchor.
+      const aggAnchor = this.provider.getAnchor(aggBlock)!;
+      let depth = this.provider.getAnchorDepth(spec.anchor, aggAnchor);
+      if (depth === undefined) {
+        depth = this.provider.getAnchorDepth(aggAnchor, spec.anchor);
+      }
       if (depth === undefined) {
         throw new Error(`subtree anchor not in our anchor chain: ${aggHash}`);
       }
