@@ -753,6 +753,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
         ref={svgRef}
         className="block-graph-svg"
         preserveAspectRatio="xMidYMid meet"
+        onClick={() => setFocusedHash(null)}
       >
         <defs>
           <marker
@@ -871,7 +872,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                         className={`block-expanded${isPinned ? ' pinned' : ''}`}
                         style={{ pointerEvents: 'auto' }}
                         onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => handleNodeClick(node.id, e.metaKey)}
+                        onClick={(e) => { e.stopPropagation(); handleNodeClick(node.id, e.metaKey); }}
                       >
                         {/* Header */}
                         <div className="block-expanded-header">
@@ -1041,7 +1042,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
                   transform={`translate(${nx - NODE_WIDTH / 2},${ny - NODE_HEIGHT / 2})`}
                   onMouseEnter={() => handleNodeHover(node.id)}
                   onMouseLeave={() => handleNodeHover(null)}
-                  onClick={(e) => handleNodeClick(node.id, e.metaKey)}
+                  onClick={(e) => { e.stopPropagation(); handleNodeClick(node.id, e.metaKey); }}
                 >
                   <rect
                     width={NODE_WIDTH}
