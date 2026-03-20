@@ -220,6 +220,6 @@ Two blocks conflict if their claim masks overlap (share any index). This is the 
 | File | Description |
 |------|-------------|
 | [`src/core/OutputSpace.ts`](../../src/core/OutputSpace.ts) | Pure output-space operations: resolution, inverse, claim masks, ordering, UTXO computation |
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData` type, `getBlockClaimMask()`, `getBlockNewOutputCount()` (legacy, delegates to OutputSpace) |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData` type, `getBlockClaimMask()`, `collectExtendedOutputs()` (legacy helpers) |
 | [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Claim mask comparison, rebasing (index transformation) |
 | [`src/core/OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | Claim migration through the aggregation hierarchy |

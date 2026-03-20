@@ -119,18 +119,6 @@ export function getBlockClaimMask(block: Block, _anchorOutputCount?: number): nu
   return mask;
 }
 
-/**
- * Get the new output count for a block's subtree: from aggregation data if
- * present, otherwise derived as a leaf block.
- *
- * For leaf blocks, this is simply outputs.length (before self-claims are
- * subtracted -- the caller must handle self-claims if needed).
- */
-export function getBlockNewOutputCount(block: Block): number {
-  const aggData = getAggregationData(block);
-  if (aggData) return aggData.newOutputCount;
-  return block.outputs.length;
-}
 
 /**
  * Get the weight vector for a block: reconstructed from declaredWeight + chainWeights.

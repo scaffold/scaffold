@@ -4,7 +4,6 @@ import {
   BlockStore,
   encodeAggregationData,
   getAggregationData,
-  getBlockNewOutputCount,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
 import { BlockBlueprint, BlockSpec, type ClaimEntry, Output } from '../core/BlockCreationModule.ts';
@@ -247,7 +246,10 @@ export class NodeContext {
     const aggregateOutputCounts: number[] = [];
     for (const aggHash of aggregates) {
       const aggBlock = this.store.get(aggHash);
-      aggregateOutputCounts.push(aggBlock ? getBlockNewOutputCount(aggBlock) : 0);
+      if (!aggBlock) { aggregateOutputCounts.push(0); continue; }
+      const aggData = getAggregationData(aggBlock);
+      const sc = aggBlock.claims.filter((c) => c < aggBlock.outputs.length).length;
+      aggregateOutputCounts.push(aggData?.newOutputCount ?? (aggBlock.outputs.length - sc));
     }
 
     // Create a virtual OutputSpaceBlock for the block being solidified.

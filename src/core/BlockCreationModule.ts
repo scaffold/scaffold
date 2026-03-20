@@ -223,16 +223,7 @@ export class BlockCreationModule<BlockType> {
       }
     }
 
-    // 5. Validate own anchor claims map correctly to anchor output space
-    this.computeClaimMask(
-      anchorOutputCount,
-      mergedSubtreeMask,
-      anchorClaims,
-      ownOutputCount,
-      totalSubtreeOutputs,
-    );
-
-    // 6. Validate throughput
+    // 5. Validate throughput
     this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
 
     // 9. Build blueprint
@@ -332,83 +323,4 @@ export class BlockCreationModule<BlockType> {
     }
   }
 
-  /**
-   * Compute the claim mask against anchor output space.
-   * Merges the subtree mask with own non-self claims mapped to anchor indices.
-   */
-  computeClaimMask(
-    anchorOutputCount: number,
-    mergedSubtreeMask: BitVector,
-    ownAnchorClaimIndices: number[],
-    ownOutputCount: number,
-    totalSubtreeOutputs: number,
-  ): BitVector {
-    const mask = mergedSubtreeMask.clone();
-
-    // Map own non-self claims back to anchor output indices.
-    // Own claims are against the extended vector:
-    //   [own outputs (0..ownOutputCount-1), subtree outputs..., surviving anchor outputs...]
-    // Non-self claims have index >= ownOutputCount.
-    // Indices in [ownOutputCount, ownOutputCount + totalSubtreeOutputs) target subtree outputs.
-    // Indices >= ownOutputCount + totalSubtreeOutputs target surviving anchor outputs.
-    for (const claimIdx of ownAnchorClaimIndices) {
-      const relIdx = claimIdx - ownOutputCount;
-
-      if (relIdx < totalSubtreeOutputs) {
-        // Claim on a subtree output — internal, doesn't affect anchor mask
-        continue;
-      }
-
-      // Claim on a surviving anchor output
-      const survivingIdx = relIdx - totalSubtreeOutputs;
-      const anchorIdx = this.mapSurvivingToOriginal(
-        survivingIdx,
-        mergedSubtreeMask,
-        anchorOutputCount,
-      );
-
-      if (anchorIdx === -1) {
-        throw new Error(`claim maps to invalid anchor output (surviving index ${survivingIdx})`);
-      }
-
-      mask.set(anchorIdx, true);
-    }
-
-    return mask;
-  }
-
-  /**
-   * Compute the new output count: surviving outputs added by this subtree.
-   * Excludes the anchor's surviving outputs.
-   *
-   * newOutputCount = totalSubtreeOutputs + ownOutputCount - ownClaimCount
-   */
-  computeNewOutputCount(
-    totalSubtreeOutputs: number,
-    ownOutputCount: number,
-    ownClaimCount: number,
-  ): number {
-    return totalSubtreeOutputs + ownOutputCount - ownClaimCount;
-  }
-
-  // -- Internals --------------------------------------------------
-
-  /**
-   * Map a surviving output index to its original anchor index,
-   * given a claim mask that has removed some outputs.
-   */
-  private mapSurvivingToOriginal(
-    survivingIdx: number,
-    claimMask: BitVector,
-    anchorOutputCount: number,
-  ): number {
-    let survived = 0;
-    for (let i = 0; i < anchorOutputCount; i++) {
-      if (!claimMask.get(i)) {
-        if (survived === survivingIdx) return i;
-        survived++;
-      }
-    }
-    return -1;
-  }
 }

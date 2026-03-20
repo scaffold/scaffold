@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from '@std/assert';
+import { assertEquals, assertThrows } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { BitVector } from '../src/core/BitVector.ts';
 import {
@@ -232,74 +232,9 @@ Deno.test('validateThroughput: self-claim value mismatch', () => {
   );
 });
 
-// -- computeNewOutputCount tests ---------------------------------
-
-Deno.test('computeNewOutputCount: leaf block', () => {
-  const { module } = setupModule();
-  // no subtrees, 3 outputs, 1 claim
-  const result = module.computeNewOutputCount(0, 3, 1);
-  // 0 + 3 - 1 = 2
-  assertEquals(result, 2);
-});
-
-Deno.test('computeNewOutputCount: aggregation block', () => {
-  const { module } = setupModule();
-  // subtrees produce 5 new outputs, block itself produces 1 output and makes 2 claims
-  const result = module.computeNewOutputCount(5, 1, 2);
-  // 5 + 1 - 2 = 4
-  assertEquals(result, 4);
-});
-
-Deno.test('computeNewOutputCount: no outputs no claims', () => {
-  const { module } = setupModule();
-  const result = module.computeNewOutputCount(0, 0, 0);
-  assertEquals(result, 0);
-});
-
-// -- computeClaimMask tests --------------------------------------
-
-Deno.test('computeClaimMask: no subtrees, single anchor claim', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 5;
-  const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [1], 1, 0);
-  assert(mask.get(0)); // anchor index 0 claimed
-  assert(!mask.get(1));
-  assert(!mask.get(2));
-});
-
-Deno.test('computeClaimMask: with subtree claims, own anchor claim skips claimed', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 5;
-  const mergedSubtreeMask = BitVector.fromIndices(anchorOutputCount, [1, 3]);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [5], 2, 3);
-  assert(mask.get(0));
-  assert(mask.get(1));
-  assert(mask.get(3));
-  assert(!mask.get(2));
-  assert(!mask.get(4));
-});
-
-Deno.test('computeClaimMask: claim on subtree output does not affect anchor mask', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 5;
-  const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [2], 1, 3);
-  assertEquals(mask.popcount(), 0);
-});
-
-Deno.test('computeClaimMask: multiple anchor claims map correctly', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 6;
-  const mergedSubtreeMask = BitVector.fromIndices(anchorOutputCount, [2]);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [3, 5], 1, 2);
-  assert(mask.get(0));
-  assert(mask.get(2));
-  assert(mask.get(3));
-  assert(!mask.get(1));
-  assert(!mask.get(4));
-  assert(!mask.get(5));
-});
+// computeClaimMask and computeNewOutputCount have been removed from
+// BlockCreationModule. Claim mask computation is now handled by
+// OutputSpaceModule.subtreeClaimMask().
 
 // -- buildBlock tests --------------------------------------------
 
