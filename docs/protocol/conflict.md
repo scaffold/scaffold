@@ -189,8 +189,12 @@ Peers should prioritize loading claim mask chunks where potential conflicts are 
 
 ## Implementation
 
+Conflict detection is handled by the [OutputClaimModule](../../src/core/OutputClaimModule.ts). Each block's claims migrate through the output space hierarchy toward their producing block. When two different blocks' claims converge on the same `(producingBlock, outputIndex)`, that is a double-spend conflict. The module emits conflict pairs which are fed to the consensus module.
+
+Rebasing (mapping claim masks across different anchor levels) is handled internally by [BlockCreationService](../../src/core/BlockCreationService.ts) during aggregation block construction.
+
 | File | Description |
 |------|-------------|
-| [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Core algorithm: claim mask comparison, rebasing, conflict detection |
-| [`src/core/ConflictService.ts`](../../src/core/ConflictService.ts) | Wired adapter using concrete `Block` type |
-| [`src/core/BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector with partial knowledge support |
+| [`src/core/OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | Claim tracking, migration, and double-spend conflict detection |
+| [`src/core/OutputClaimService.ts`](../../src/core/OutputClaimService.ts) | Wired adapter using concrete `Block` type |
+| [`src/core/BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector for claim masks (used by block creation) |

@@ -28,7 +28,7 @@ Deno.test('Conflict: same-anchor conflict detected on all nodes', () => {
   for (const id of net.nodeIds) {
     const node = net.getNode(id);
     assert(
-      node.conflict.hasConflict(blockX.hash, blockY.hash),
+      node.consensus.getConflicts(blockX.hash).has(blockY.hash.toPrimitive()),
       `Node ${id} should detect conflict between X and Y`,
     );
   }
@@ -191,7 +191,7 @@ Deno.test('Conflict: independent conflicts do not interfere', () => {
   for (const id of net.nodeIds) {
     const node = net.getNode(id);
     assertFalse(
-      node.conflict.hasConflict(c1Winner.hash, c2Winner.hash),
+      node.consensus.getConflicts(c1Winner.hash).has(c2Winner.hash.toPrimitive()),
       `Node ${id}: independent winners should not conflict`,
     );
   }

@@ -164,7 +164,6 @@ Deno.test('NodeContext: service accessors return working instances', () => {
 
   // All service accessors should return defined instances
   assert(ctx.consensus);
-  assert(ctx.conflict);
   assert(ctx.sampling);
   assert(ctx.gossip);
   assert(ctx.trust);

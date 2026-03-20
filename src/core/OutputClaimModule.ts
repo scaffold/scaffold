@@ -13,6 +13,14 @@ export interface OutputClaimEntry {
   readonly claimIndex: number;
 }
 
+/** Result of addBlock() or onBlockLoaded(). */
+export interface OutputClaimResult {
+  /** Claims that resolved (reached their producing block). */
+  resolved: ResolvedClaim[];
+  /** Newly discovered conflict pairs (double-spend: two blocks claim same output). */
+  conflicts: [Hash, Hash][];
+}
+
 /**
  * Provider interface for the output claim module to access block data.
  * The module is fully encapsulated -- it knows nothing about block
@@ -51,6 +59,10 @@ export interface OutputClaimProvider<BlockType> {
  * the output. Migration happens one hop at a time through the output space
  * hierarchy: own outputs -> aggregates (reverse order) -> anchor.
  *
+ * When two different blocks' claims resolve to the same (producingBlock,
+ * outputIndex), that is a double-spend conflict. The module detects these
+ * and returns them as conflict pairs.
+ *
  * Key invariant: outputs are added before claims are applied. A claim at
  * index I in block.claims refers to index I in the block's own output space
  * (pre-claim), not the anchor's.
@@ -72,6 +84,9 @@ export class OutputClaimModule<BlockType> {
    */
   private readonly waitingFor = new Map<HashPrimitive, Set<HashPrimitive>>();
 
+  /** Known conflict pairs (canonical key -> true). Prevents re-emitting. */
+  private readonly knownConflicts = new Set<string>();
+
   constructor(provider: OutputClaimProvider<BlockType>) {
     this.provider = provider;
   }
@@ -81,32 +96,34 @@ export class OutputClaimModule<BlockType> {
   /**
    * Register a block's claims. Places each claim on the block's own
    * outputClaims and immediately attempts migration.
-   * Returns any claims that resolved (reached their producing block).
+   * Returns resolved claims and any newly discovered conflicts.
    */
-  addBlock(hash: Hash, claimIndices: number[]): ResolvedClaim[] {
+  addBlock(hash: Hash, claimIndices: number[]): OutputClaimResult {
     const resolved: ResolvedClaim[] = [];
+    const conflicts: [Hash, Hash][] = [];
 
     for (let i = 0; i < claimIndices.length; i++) {
       const entry: OutputClaimEntry = { claimant: hash, claimIndex: i };
       this.placeEntry(hash, claimIndices[i], entry);
-      const result = this.tryMigrate(hash, claimIndices[i], entry);
+      const result = this.tryMigrate(hash, claimIndices[i], entry, conflicts);
       if (result) resolved.push(result);
     }
 
-    return resolved;
+    return { resolved, conflicts };
   }
 
   /**
    * Notify the module that a block has been loaded into the store.
    * Triggers migration for any stuck entries waiting for this block.
-   * Returns any claims that resolved during migration.
+   * Returns resolved claims and any newly discovered conflicts.
    */
-  onBlockLoaded(hash: Hash): ResolvedClaim[] {
+  onBlockLoaded(hash: Hash): OutputClaimResult {
     const resolved: ResolvedClaim[] = [];
+    const conflicts: [Hash, Hash][] = [];
     const key = hash.toPrimitive();
 
     const waiters = this.waitingFor.get(key);
-    if (!waiters) return resolved;
+    if (!waiters) return { resolved, conflicts };
 
     // Copy the set since migration may modify it
     const waiterList = [...waiters];
@@ -130,12 +147,13 @@ export class OutputClaimModule<BlockType> {
           Hash.fromPrimitive(waiterKey),
           index,
           entry,
+          conflicts,
         );
         if (result) resolved.push(result);
       }
     }
 
-    return resolved;
+    return { resolved, conflicts };
   }
 
   // -- Queries ----------------------------------------------------
@@ -165,7 +183,7 @@ export class OutputClaimModule<BlockType> {
    * Used when a draft is cancelled to release its claimed outputs.
    */
   removeClaims(claimant: Hash): void {
-    for (const [blockKey, blockClaims] of this.claims) {
+    for (const [_blockKey, blockClaims] of this.claims) {
       for (const [index, entries] of blockClaims) {
         const remaining = entries.filter((e) => !Hash.equals(e.claimant, claimant));
         if (remaining.length === 0) {
@@ -174,7 +192,7 @@ export class OutputClaimModule<BlockType> {
           blockClaims.set(index, remaining);
         }
       }
-      if (blockClaims.size === 0) this.claims.delete(blockKey);
+      if (blockClaims.size === 0) this.claims.delete(_blockKey);
     }
   }
 
@@ -224,13 +242,46 @@ export class OutputClaimModule<BlockType> {
   }
 
   /**
+   * Check for conflicts at a resolved position and emit new conflict pairs.
+   * Called when a claim resolves to a producing block's own output.
+   */
+  private detectConflicts(
+    blockHash: Hash,
+    index: number,
+    entry: OutputClaimEntry,
+    conflicts: [Hash, Hash][],
+  ): void {
+    const entries = this.claims.get(blockHash.toPrimitive())?.get(index);
+    if (!entries || entries.length < 2) return;
+
+    for (const other of entries) {
+      if (Hash.equals(other.claimant, entry.claimant)) continue;
+
+      const conflictKey = this.conflictKey(entry.claimant, other.claimant);
+      if (this.knownConflicts.has(conflictKey)) continue;
+
+      this.knownConflicts.add(conflictKey);
+      conflicts.push([entry.claimant, other.claimant]);
+    }
+  }
+
+  /** Canonical string key for a conflict pair (order-independent). */
+  private conflictKey(a: Hash, b: Hash): string {
+    const aP = a.toPrimitive();
+    const bP = b.toPrimitive();
+    return aP < bP ? `${aP}:${bP}` : `${bP}:${aP}`;
+  }
+
+  /**
    * Attempt to migrate an entry from block B at index I toward the producing block.
    * Returns a ResolvedClaim if the entry reached the producing block, undefined otherwise.
+   * Appends any newly discovered conflict pairs to the conflicts array.
    */
   private tryMigrate(
     blockHash: Hash,
     index: number,
     entry: OutputClaimEntry,
+    conflicts: [Hash, Hash][],
   ): ResolvedClaim | undefined {
     const block = this.provider.getBlock(blockHash);
     if (!block) return undefined;
@@ -239,6 +290,7 @@ export class OutputClaimModule<BlockType> {
 
     // Case 1: Resolved -- claim targets this block's own output
     if (index < ownOutputCount) {
+      this.detectConflicts(blockHash, index, entry, conflicts);
       return {
         block: blockHash,
         outputIndex: index,
@@ -258,7 +310,7 @@ export class OutputClaimModule<BlockType> {
       if (remaining < count) {
         // Belongs to this aggregate
         const aggHash = aggregateHashes[i];
-        return this.migrateEntry(blockHash, index, entry, aggHash, remaining);
+        return this.migrateEntry(blockHash, index, entry, aggHash, remaining, conflicts);
       }
       remaining -= count;
     }
@@ -270,7 +322,7 @@ export class OutputClaimModule<BlockType> {
       return undefined;
     }
 
-    return this.migrateEntry(blockHash, index, entry, anchorHash, remaining);
+    return this.migrateEntry(blockHash, index, entry, anchorHash, remaining, conflicts);
   }
 
   /**
@@ -283,6 +335,7 @@ export class OutputClaimModule<BlockType> {
     entry: OutputClaimEntry,
     targetHash: Hash,
     targetIndex: number,
+    conflicts: [Hash, Hash][],
   ): ResolvedClaim | undefined {
     const targetBlock = this.provider.getBlock(targetHash);
 
@@ -306,7 +359,7 @@ export class OutputClaimModule<BlockType> {
     this.removeWaiter(targetHash, sourceHash);
 
     // Recurse
-    return this.tryMigrate(targetHash, targetIndex, entry);
+    return this.tryMigrate(targetHash, targetIndex, entry, conflicts);
   }
 
   /** Remove a waiter registration. */

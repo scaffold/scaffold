@@ -219,7 +219,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Module | Core File | Service File |
 |--------|-----------|-------------|
 | Consensus | [`ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | [`ConsensusService.ts`](../../src/core/ConsensusService.ts) |
-| Conflict | [`ConflictModule.ts`](../../src/core/ConflictModule.ts) | [`ConflictService.ts`](../../src/core/ConflictService.ts) |
+| Conflict | — (detected by OutputClaimModule) | — |
 | Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |

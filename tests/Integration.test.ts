@@ -15,7 +15,6 @@ import {
 import { BitVector } from '../src/core/BitVector.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
-import { ConflictService } from '../src/core/ConflictService.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';

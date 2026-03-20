@@ -3,7 +3,6 @@ import { Block, BlockStore } from '../core/Block.ts';
 import { ResolvedClaim } from '../core/BlockDraft.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { BlockSpec, Output } from '../core/BlockCreationModule.ts';
-import { ConflictService } from '../core/ConflictService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { DraftManager } from '../core/DraftManager.ts';
@@ -29,7 +28,6 @@ export interface ReactiveEvent {
   readonly result: BlockReceivedResult;
   readonly store: BlockStore;
   readonly consensus: ConsensusService;
-  readonly conflict: ConflictService;
   readonly sampling: SamplingService;
 }
 
@@ -84,7 +82,6 @@ export class ReactiveLayer {
   private readonly coordinator: Coordinator;
   private readonly store: BlockStore;
   private readonly consensus: ConsensusService;
-  private readonly conflict: ConflictService;
   private readonly sampling: SamplingService;
   private readonly strategies: Strategy[];
   private readonly blockCreator: BlockCreator;
@@ -99,7 +96,6 @@ export class ReactiveLayer {
     coordinator: Coordinator;
     store: BlockStore;
     consensus: ConsensusService;
-    conflict: ConflictService;
     sampling: SamplingService;
     strategies: Strategy[];
     blockCreator: BlockCreator;
@@ -111,7 +107,6 @@ export class ReactiveLayer {
     this.coordinator = deps.coordinator;
     this.store = deps.store;
     this.consensus = deps.consensus;
-    this.conflict = deps.conflict;
     this.sampling = deps.sampling;
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
@@ -160,7 +155,6 @@ export class ReactiveLayer {
       result,
       store: this.store,
       consensus: this.consensus,
-      conflict: this.conflict,
       sampling: this.sampling,
     };
 

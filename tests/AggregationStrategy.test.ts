@@ -77,7 +77,6 @@ function makeEvent(
     result,
     store,
     consensus: consensus as unknown as ReactiveEvent['consensus'],
-    conflict: {} as ReactiveEvent['conflict'],
     sampling: {} as ReactiveEvent['sampling'],
   };
 }

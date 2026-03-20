@@ -42,7 +42,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 |-------------|-------------|-----------------|-----------------|
 | [overview.md](docs/protocol/overview.md) | — | — | [Coordinator.ts](src/core/Coordinator.ts), [ProtocolContext.ts](src/core/ProtocolContext.ts) |
 | [consensus.md](docs/protocol/consensus.md) | [ConsensusModule.ts](src/core/ConsensusModule.ts) | [ConsensusService.ts](src/core/ConsensusService.ts) | |
-| [conflict.md](docs/protocol/conflict.md) | [ConflictModule.ts](src/core/ConflictModule.ts) | [ConflictService.ts](src/core/ConflictService.ts) | [BitVector.ts](src/core/BitVector.ts) |
+| [conflict.md](docs/protocol/conflict.md) | — (handled by OutputClaimModule) | — | [BitVector.ts](src/core/BitVector.ts) |
 | [sampling.md](docs/protocol/sampling.md) | [SamplingModule.ts](src/core/SamplingModule.ts) | [SamplingService.ts](src/core/SamplingService.ts) | |
 | [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
 | [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/core/GossipModule.ts) | [GossipService.ts](src/core/GossipService.ts) | |

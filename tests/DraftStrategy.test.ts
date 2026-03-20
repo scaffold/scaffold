@@ -2,7 +2,6 @@ import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block, BlockSource, BlockStore, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
-import { ConflictService } from '../src/core/ConflictService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
@@ -45,7 +44,6 @@ function makeEvent(
     },
     store,
     consensus,
-    conflict: ctx.get(ConflictService),
     sampling: ctx.get(SamplingService),
   };
 }
