@@ -6,9 +6,11 @@ import {
   type ResolvedOutput,
   OutputSpaceModule,
   mapSurvivingToOriginal,
+  mapSurvivingToOriginalBatch,
   mapOriginalToSurviving,
   claimMasksOverlap,
   unionClaimMasks,
+  filterAboveAndShift,
 } from '../src/core/OutputSpace.ts';
 
 // -- Test helpers -------------------------------------------------
@@ -165,6 +167,30 @@ Deno.test('mapSurvivingToOriginal: with claims', () => {
   assertEquals(mapSurvivingToOriginal(0, [1, 3]), 0);
   assertEquals(mapSurvivingToOriginal(1, [1, 3]), 2);
   assertEquals(mapSurvivingToOriginal(2, [1, 3]), 4);
+});
+
+Deno.test('mapSurvivingToOriginalBatch: empty inputs', () => {
+  assertEquals(mapSurvivingToOriginalBatch([], [1, 3]), []);
+  assertEquals(mapSurvivingToOriginalBatch([0, 1, 2], []), [0, 1, 2]);
+});
+
+Deno.test('mapSurvivingToOriginalBatch: matches single-index version', () => {
+  const claims = [1, 3, 5];
+  const survivors = [0, 1, 2, 3, 4];
+  const batch = mapSurvivingToOriginalBatch(survivors, claims);
+  const single = survivors.map((s) => mapSurvivingToOriginal(s, claims));
+  assertEquals(batch, single);
+});
+
+Deno.test('filterAboveAndShift: basic', () => {
+  assertEquals(filterAboveAndShift([1, 3, 5, 7], 3), [0, 2, 4]);
+  assertEquals(filterAboveAndShift([0, 1, 2], 2), [0]);
+  assertEquals(filterAboveAndShift([0, 1, 2], 5), []);
+  assertEquals(filterAboveAndShift([], 3), []);
+});
+
+Deno.test('filterAboveAndShift: threshold 0 shifts everything', () => {
+  assertEquals(filterAboveAndShift([3, 5, 7], 0), [3, 5, 7]);
 });
 
 Deno.test('mapOriginalToSurviving: no claims', () => {
