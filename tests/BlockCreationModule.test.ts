@@ -1,6 +1,5 @@
 import { assertEquals, assertThrows } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import {
   BlockCreationModule,
   BlockCreationProvider,
@@ -23,7 +22,7 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
   /** Pre-configured anchor depths: key = `${from}:${ancestor}` */
   private anchorDepths = new Map<string, number>();
   /** Pre-configured rebased claim masks: key = `${blockHash}:${targetAnchor}` */
-  private rebasedMasks = new Map<string, BitVector | null>();
+  private rebasedMasks = new Map<string, readonly number[] | null>();
 
   add(block: TestBlock): void {
     this.blocks.set(block.hash.toPrimitive(), block);
@@ -33,7 +32,7 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     this.anchorDepths.set(`${from.toPrimitive()}:${ancestor.toPrimitive()}`, depth);
   }
 
-  setRebasedClaimMask(blockHash: Hash, targetAnchor: Hash, mask: BitVector | null): void {
+  setRebasedClaimMask(blockHash: Hash, targetAnchor: Hash, mask: readonly number[] | null): void {
     this.rebasedMasks.set(`${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`, mask);
   }
 
@@ -61,7 +60,7 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     return this.anchorDepths.get(`${from.toPrimitive()}:${ancestor.toPrimitive()}`);
   }
 
-  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null {
+  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
     const key = `${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`;
     const result = this.rebasedMasks.get(key);
     return result === undefined ? null : result;
@@ -308,8 +307,8 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
   provider.setAnchorDepth(genesis, genesis, 0);
 
   // Subtree1 claims anchor outputs [2, 5], subtree2 claims [7]
-  provider.setRebasedClaimMask(subtree1, genesis, BitVector.fromIndices(10, [2, 5]));
-  provider.setRebasedClaimMask(subtree2, genesis, BitVector.fromIndices(10, [7]));
+  provider.setRebasedClaimMask(subtree1, genesis, [2, 5]);
+  provider.setRebasedClaimMask(subtree2, genesis, [7]);
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -354,8 +353,8 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
   provider.setAnchorDepth(blockA, genesis, 1);
   provider.setAnchorDepth(blockA, blockA, 0);
 
-  provider.setRebasedClaimMask(subtree1, blockA, BitVector.fromIndices(8, [1]));
-  provider.setRebasedClaimMask(subtree2, blockA, BitVector.fromIndices(8, [3]));
+  provider.setRebasedClaimMask(subtree1, blockA, [1]);
+  provider.setRebasedClaimMask(subtree2, blockA, [3]);
 
   const spec: BlockSpec = {
     anchor: blockA,
@@ -438,8 +437,8 @@ Deno.test('buildBlock: fails on inter-subtree conflict', () => {
   provider.setAnchorDepth(genesis, genesis, 0);
 
   // Both subtrees claim anchor output 2 — conflict!
-  provider.setRebasedClaimMask(subtree1, genesis, BitVector.fromIndices(5, [2]));
-  provider.setRebasedClaimMask(subtree2, genesis, BitVector.fromIndices(5, [2]));
+  provider.setRebasedClaimMask(subtree1, genesis, [2]);
+  provider.setRebasedClaimMask(subtree2, genesis, [2]);
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -521,7 +520,7 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
   provider.add({ hash: subtree, anchor: genesis, outputCount: 3, weightVector: [15] });
 
   provider.setAnchorDepth(genesis, genesis, 0);
-  provider.setRebasedClaimMask(subtree, genesis, BitVector.fromIndices(8, [1, 4]));
+  provider.setRebasedClaimMask(subtree, genesis, [1, 4]);
 
   const spec: BlockSpec = {
     anchor: genesis,

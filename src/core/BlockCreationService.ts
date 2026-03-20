@@ -1,5 +1,4 @@
 import { Hash } from '../util/Hash.ts';
-import { BitVector } from './BitVector.ts';
 import {
   Block,
   BlockStore,
@@ -7,14 +6,42 @@ import {
   getBlockWeightVector,
 } from './Block.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
-import { ConflictService } from './ConflictService.ts';
+import {
+  OutputSpaceModule,
+  type OutputSpaceBlock,
+  type OutputSpaceProvider,
+} from './OutputSpace.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
+/** Create an OutputSpaceProvider backed by a BlockStore. */
+function makeOutputSpaceProvider(store: BlockStore): OutputSpaceProvider {
+  return {
+    getBlock(hash: Hash): OutputSpaceBlock | undefined {
+      const block = store.get(hash);
+      if (!block) return undefined;
+      const aggData = getAggregationData(block);
+      const sc = block.claims.filter((c) => c < block.outputs.length).length;
+      return {
+        hash: block.hash,
+        anchor: block.anchor,
+        aggregates: block.aggregates,
+        outputs: block.outputs.map((o) => ({ value: o.value })),
+        claims: block.claims,
+        aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
+        newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
+      };
+    },
+  };
+}
+
 class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
+  private readonly outputSpace: OutputSpaceModule;
+
   constructor(
     private readonly store: BlockStore,
-    private readonly conflict: ConflictService,
-  ) {}
+  ) {
+    this.outputSpace = new OutputSpaceModule(makeOutputSpaceProvider(store));
+  }
 
   getBlock(hash: Hash): Block | undefined {
     return this.store.get(hash);
@@ -58,18 +85,15 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
     return this.store.getAnchorDepth(from, ancestor);
   }
 
-  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null {
-    const result = this.conflict.rebase(blockHash, targetAnchor);
-    if (!result) return null;
-    return result.mask;
+  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
+    return this.outputSpace.rebaseClaimMask(blockHash, targetAnchor);
   }
 }
 
-/** BlockCreationModule wired to BlockStore and ConflictService via ProtocolContext. */
+/** BlockCreationModule wired to BlockStore via ProtocolContext. */
 export class BlockCreationService extends BlockCreationModule<Block> {
   constructor(ctx: ProtocolContext) {
     const store = ctx.get(BlockStore);
-    const conflict = ctx.get(ConflictService);
-    super(new BlockCreationProviderAdapter(store, conflict));
+    super(new BlockCreationProviderAdapter(store));
   }
 }

@@ -41,7 +41,6 @@ The payload is a UTF-8 encoded JSON string produced by `BlockSerializer.serializ
 - `Hash` → `{ __t: 'H', v: hex }`
 - `Uint8Array` → `{ __t: 'B', v: base64 }`
 - `bigint` → `{ __t: 'N', v: string }`
-- `BitVector` → `{ __t: 'BV', len, chunks }`
 
 The payload carries all block fields except `hash`:
 

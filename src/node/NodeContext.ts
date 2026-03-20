@@ -28,7 +28,6 @@ import {
 } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
-import { ConflictService } from '../core/ConflictService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
@@ -66,7 +65,6 @@ export class NodeContext {
 
   // Protocol services (convenience accessors)
   readonly consensus: ConsensusService;
-  readonly conflict: ConflictService;
   readonly sampling: SamplingService;
   readonly gossip: GossipService;
   readonly trust: TrustService;
@@ -91,7 +89,6 @@ export class NodeContext {
     // 3. Get all services from ProtocolContext
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
-    this.conflict = this.protocolContext.get(ConflictService);
     this.sampling = this.protocolContext.get(SamplingService);
     this.gossip = this.protocolContext.get(GossipService);
     this.trust = this.protocolContext.get(TrustService);
@@ -183,7 +180,6 @@ export class NodeContext {
       coordinator: this.coordinator,
       store: this.store,
       consensus: this.consensus,
-      conflict: this.conflict,
       sampling: this.sampling,
       strategies,
       blockCreator,

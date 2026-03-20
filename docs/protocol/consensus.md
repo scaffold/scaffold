@@ -14,7 +14,7 @@ At this module, a block is:
 Block {
     anchor:      Hash         // the chain block this builds on (genesis uses the zero hash)
     weight:      Number[]     // weight vector indexed by anchor chain depth
-    aggregates:  Set<Hash>    // blocks this block replaces (implies conflict + inheritance)
+    aggregates:  Set<Hash>    // blocks this block replaces (dependency, not conflict)
 }
 ```
 
@@ -47,13 +47,9 @@ The total declared weight of a block is `sum(weight)`.
 
 ### Aggregates
 
-A block's **aggregates** set contains the hashes of blocks it replaces. This is the consensus module's representation of aggregation: when block C aggregates blocks A1 and A2, it means "C is a rolled-up replacement for A1 and A2."
+A block's **aggregates** set contains the hashes of blocks it replaces. When block C aggregates blocks A1 and A2, it means "C is a rolled-up replacement for A1 and A2."
 
-Aggregation implies:
-1. **Conflict**: C conflicts with every block in its aggregates set. They can never coexist in the canonical view.
-2. **Conflict inheritance**: C inherits all conflicts from every block it aggregates, recursively. If A1 conflicts with B, and C aggregates A1, then C also conflicts with B.
-
-Conflict inheritance is dynamic: if a new conflict involving A1 is discovered after C was created, C automatically inherits it.
+Aggregation creates a **dependency**, not a conflict. C depends on the correctness of A1 and A2. If any aggregated block becomes non-canonical (e.g., it loses a conflict), C becomes non-canonical too -- not because C conflicts with anything, but because its dependency is no longer valid. See [Canonicality Rules](#canonicality-rules) below.
 
 ### Genesis
 
@@ -88,50 +84,36 @@ C2a and C2b both anchor to C1. They may or may not conflict. Non-conflicting blo
 
 ### Sources
 
-Conflicts come from three sources:
-
-1. **Direct conflicts**: Declared by other modules (e.g., "A and B both claim the same resource").
-2. **Aggregation conflicts**: A block conflicts with every block it aggregates.
-3. **Inherited conflicts**: A block inherits all conflicts from blocks it aggregates, recursively.
+Conflicts come from one source: the [output claims module](output-claims.md). When two blocks' claims migrate to the same output, those two blocks are in **direct conflict** -- they are attempting to spend the same resource.
 
 ### Properties
 
 - **Symmetric**: If A conflicts with B, then B conflicts with A.
-- **Discoverable**: New direct conflicts can be reported at any time.
-- **Dynamic inheritance**: Inherited conflicts update automatically when new direct conflicts are discovered.
+- **Discoverable**: New conflicts can appear at any time as claim masks are loaded and claims migrate.
+- **Direct only**: Conflicts are between the two claimant blocks. There is no conflict inheritance or forward propagation. The effects of a conflict on ancestors and descendants are handled by the canonicality rules, not by expanding the conflict set.
 
-### Propagation
+### No Propagation
 
-**Rule**: If X conflicts with Y, and Y is an ancestor of Z (via anchor chain), then X conflicts with Z.
-
-This means: everything built on top of a conflicting block is also in conflict.
+Conflicts do **not** propagate through the anchor chain. If X conflicts with Y, blocks built on top of Y are not "in conflict with" X. Instead, if Y loses the conflict and becomes non-canonical, its descendants become non-canonical because their anchor is non-canonical -- a structural dependency, not a conflict.
 
 ```
     [X]        [Y] ← anchor ← [Z]
-     X ⚡ Y  →  X ⚡ Z
+     X ⚡ Y  →  Z is non-canonical (because Y is non-canonical)
+               but Z does NOT conflict with X
 ```
 
-This does **not** propagate backward: if X conflicts with Y, and Y anchors to W, then W is **not** in conflict with X. W existed before Y and is independent.
-
-```
-    [X]        [W] ← anchor ← [Y]
-     X ⚡ Y  ↛  X ⚡ W
-```
-
-### Aggregation and Inheritance Example
+Similarly, aggregation does not create conflicts. If C aggregates A, and A conflicts with B, then C does not conflict with B. Instead, if A loses to B and becomes non-canonical, C becomes non-canonical because it aggregates a non-canonical block.
 
 ```
     [C] aggregates [A]        [B]
-         C ⚡ A  (from aggregation)
-         A ⚡ B  (from another module)
-         ∴ C ⚡ B  (inherited via aggregation)
+         A ⚡ B  (direct conflict from output claims)
+         If B wins: A is non-canonical → C is non-canonical (dependency)
+         C does NOT conflict with B
 ```
-
-Without inheritance, C could "launder" A's contested work by rolling it up. Inheritance prevents this: if A is bad, C (which claims A's work) is also considered bad.
 
 ### Conflict Re-evaluation
 
-When a new conflict is discovered, the consensus module re-evaluates all affected branches. A previously winning branch may lose if its effective weight is now contested. Because inheritance is dynamic, a new conflict involving an aggregated block immediately affects the aggregating block too.
+When a new conflict is discovered, the consensus module re-evaluates canonicality. A previously canonical block may become non-canonical if a new conflict causes one of its dependencies (anchor or aggregates) to lose.
 
 ---
 
@@ -139,15 +121,15 @@ When a new conflict is discovered, the consensus module re-evaluates all affecte
 
 ### Descendant Weight
 
-The **descendant weight** of a chain block C is the total verified work attributed to C by all non-conflicting blocks:
+The **descendant weight** of a chain block C is the total verified work attributed to C by all blocks that have C in their anchor chain:
 
 ```
 descendant_weight(C) = sum of B.verified_weight[i]
-    for each non-conflicting block B
+    for each block B
     where B's anchor chain at depth i equals C
 ```
 
-In other words: every block that has C in its anchor chain contributes its weight at the corresponding depth. Only blocks in the canonical view (non-conflicting winners) are counted.
+Descendant weight includes **all** descendants, regardless of their canonicality. This is what makes effective weight canonical-independent (see below).
 
 ### Effective Weight (for conflict resolution)
 
@@ -197,29 +179,62 @@ A peer cannot verify everything — it must prioritize. The recommended heuristi
 
 ---
 
-## Branch Selection
+## Canonicality
+
+### Canonicality Rules
+
+A block is **canonical** if and only if all three conditions hold:
+
+1. **Anchor rule**: Its anchor is canonical (or it is genesis).
+2. **Aggregation rule**: All blocks it aggregates are canonical.
+3. **Conflict rule**: It wins all its direct conflicts (by effective weight; ties broken by block hash, lexicographic ordering).
+
+A block that fails any rule is **non-canonical**. The canonical view is the set of all canonical blocks.
+
+These three rules replace the previous system of conflict propagation and conflict inheritance. Descendants of a losing block are not "in conflict" -- they are simply non-canonical because their anchor (rule 1) or an aggregated block (rule 2) is non-canonical. This is a structural dependency, not a conflict relationship.
 
 ### Conflict Resolution
 
-For each conflict set `{A, B, C, ...}`:
+For each pair of directly conflicting blocks A and B:
 
-1. Compute `effective_weight` for each block.
-2. The **winner** is the block with the highest `effective_weight`.
+1. Compute `effective_weight` for each.
+2. The block with higher `effective_weight` wins.
 3. Ties are broken deterministically by block hash (lexicographic ordering).
 4. The winner can change at any time as weights update, new blocks arrive, or new conflicts are discovered.
 
+Effective weight is **canonical-independent** (see [Weight](#weight) below), so conflict winners can be determined without first knowing canonicality. This makes the computation non-circular.
+
+### Canonicality Algorithm
+
+Canonicality is computed in topological order using Kahn's algorithm over the dependency graph (anchor + aggregate edges).
+
+**Phase 1 -- Determine conflict winners:**
+
+For each block that has direct conflicts, compare effective weights. This can be done independently for each conflict pair because effective weight does not depend on canonicality.
+
+**Phase 2 -- Topological canonicality sweep:**
+
+1. Build the dependency graph: each block depends on its anchor and all blocks it aggregates. Compute in-degrees.
+2. Initialize the queue with all zero-in-degree blocks (genesis).
+3. For each block dequeued:
+   - Check **anchor rule**: Is its anchor canonical? (Genesis passes trivially.)
+   - Check **aggregation rule**: Are all its aggregated blocks canonical?
+   - Check **conflict rule**: Did it win all its direct conflicts (from Phase 1)?
+   - If all pass, mark canonical. Otherwise, mark non-canonical.
+   - Decrement in-degree for all blocks that depend on this block (blocks that anchor to it, and blocks that aggregate it). Enqueue any that reach zero.
+
+This runs in O(|blocks| + |edges|) time. The topological order guarantees that when a block is processed, all its dependencies have already been resolved.
+
 ### Canonical View
 
-A peer's **canonical view** is the maximal set of non-conflicting blocks where, for each conflict, the winner is included and losers are excluded. Blocks not involved in any conflict are always included.
-
-The canonical view is each peer's best understanding of the "true" state of the network. It is continuously updated.
+A peer's **canonical view** is the set of all canonical blocks. It is each peer's best understanding of the "true" state of the network, continuously updated as new blocks arrive, weights change, or new conflicts are discovered.
 
 ### Why Earlier Blocks are More Stable
 
 There is no explicit finality or time preference. However, earlier blocks are naturally more stable:
 
 - They've had more time to accumulate descendant weight.
-- To overtake an early block, an attacker must produce more verified weight than what has already been built on top of it — which grows continuously.
+- To overtake an early block, an attacker must produce more verified weight than what has already been built on top of it -- which grows continuously.
 - The cost of attack grows over time, making reversals increasingly impractical (though never impossible).
 
 ---
@@ -254,7 +269,7 @@ There is no explicit finality or time preference. However, earlier blocks are na
 
 **Attack**: Aggregate a contested block to inherit its work without inheriting its conflicts.
 
-**Defense**: Conflict inheritance. Aggregating a block means inheriting all its conflicts. If A is contested, any block that aggregates A is also contested.
+**Defense**: The aggregation canonicality rule. If A is non-canonical (it lost a conflict), any block that aggregates A is also non-canonical -- not because it inherits the conflict, but because it depends on a non-canonical block. The aggregator cannot be canonical unless all its aggregated blocks are canonical.
 
 ### Sampling Manipulation
 
@@ -274,18 +289,24 @@ Genesis block `G` exists. Three blocks anchor to `G`:
 - **Block B**: `weight = [80]`, anchors to G
 - **Block C**: `weight = [50]`, anchors to G
 
-A and B conflict (they both claim the same resource, per another module). C does not conflict with either.
+A and B have a direct conflict (they both claim the same output, detected by the output claims module). C does not conflict with either.
 
 ### Initial State (Unverified)
 
 All weights are unverified (zero effective weight). Tie broken by hash: say `hash(A) < hash(B)`, so A wins tentatively.
+
+Canonicality (topological order: G first, then A/B/C):
+- G: canonical (genesis).
+- A: anchor G is canonical, no aggregates, wins conflict with B (tie-break). **Canonical.**
+- B: anchor G is canonical, no aggregates, loses conflict with A. **Non-canonical.**
+- C: anchor G is canonical, no aggregates, no conflicts. **Canonical.**
 
 ### After Verification
 
 Verification of A finds 90% of work is real: `verified_weight(A) = [90]`.
 Verification of B finds 100% real: `verified_weight(B) = [80]`.
 
-A wins the conflict (90 > 80). C is uncontested and included in canonical view.
+A wins the conflict (90 > 80). Same canonicality result.
 
 ### New Blocks Arrive
 
@@ -294,23 +315,33 @@ Block E (`weight = [50]`) anchors to A.
 
 Now descendant weight matters:
 
-- `effective_weight(A) = 90 + effective_weight(E)`
-- `effective_weight(B) = 80 + effective_weight(D)`
+- `effective_weight(A) = 90 + effective_weight(E) = 90 + 50 = 140`
+- `effective_weight(B) = 80 + effective_weight(D) = 80 + 200 = 280`
 
-After verification: D's work is real (200), E's work is real (50).
+Note: effective weight includes **all** descendants regardless of their canonicality. D contributes to B's weight even though D's own canonicality depends on B's. This is what makes the computation non-circular.
 
-- `effective_weight(A) = 90 + 50 = 140`
-- `effective_weight(B) = 80 + 200 = 280`
+**B overtakes A.** Now re-evaluate canonicality (topological order):
+- G: canonical.
+- A: anchor G canonical, no aggregates, loses conflict with B (140 < 280). **Non-canonical.**
+- B: anchor G canonical, no aggregates, wins conflict with A. **Canonical.**
+- E: anchor A is non-canonical. **Non-canonical** (anchor rule, not a conflict).
+- D: anchor B is canonical, no conflicts. **Canonical.**
+- C: anchor G canonical, no conflicts. **Canonical.**
 
-**B overtakes A.** A and E are excluded from canonical view. D and everything built on D are included.
+E becomes non-canonical because its anchor A lost -- not because E is "in conflict with" anything. If A later reclaims the lead, E automatically becomes canonical again.
 
 ### Aggregation Example
 
-Block S aggregates A and E: `aggregates = {A, E}`, `weight = [90, 50]` (90 attributed to G level via A's anchor, 50 attributed to G level via E being built on A).
+Block S aggregates A and E: `aggregates = {A, E}`, `weight = [90, 50]`.
 
-S conflicts with A and E (aggregation). S also inherits A's conflict with B. So S conflicts with B.
+S does **not** conflict with B. But S depends on A and E being canonical (aggregation rule). Since A is non-canonical (it lost to B), S is also non-canonical:
 
-S's effective weight = 90 + 50 = 140. B's effective weight = 280. B still wins. S and its aggregated blocks are excluded.
+Canonicality check for S:
+- Anchor rule: S anchors to G, which is canonical. Pass.
+- Aggregation rule: S aggregates A. A is non-canonical. **Fail.**
+- S is **non-canonical**.
+
+If A's branch later overtakes B's branch, A becomes canonical, and then S's aggregation rule would pass too.
 
 ### Fraud Detection
 
@@ -319,7 +350,7 @@ Continuing with B winning: further verification of D reveals 50% fake work.
 - `verified_weight(D) = [100]`
 - `effective_weight(B) = 80 + 100 = 180`
 
-A's branch is at 140. B still wins, but the gap has narrowed. If more real work arrives on A's branch, A could reclaim the lead.
+A's branch is at 140. B still wins, but the gap has narrowed. If more real work arrives on A's branch, A could reclaim the lead -- and all of A's descendants (E) and aggregators (S) would become canonical again.
 
 ---
 
@@ -330,16 +361,16 @@ A's branch is at 140. B still wins, but the gap has narrowed. If more real work 
 | Input | Source | Description |
 |-------|--------|-------------|
 | Block anchor + weight vector | Block creation module | Where the block attaches and how much work it claims at each chain level |
-| Aggregates set | Block creation module | Which blocks this block replaces |
-| Direct conflict declarations | Validity/execution modules | "Block X conflicts with block Y" |
+| Aggregates set | Block creation module | Which blocks this block replaces (dependency for canonicality) |
+| Direct conflict declarations | Output claims module | "Block X conflicts with block Y" (both claim the same output) |
 | Verified weight vectors | Verification module | Component-by-component verified weights |
 
 ### This Module Provides
 
 | Output | Consumer | Description |
 |--------|----------|-------------|
-| Canonical view | All modules | The set of non-conflicting blocks that constitutes the current consensus |
-| Conflict winners | All modules | For each conflict set, which block currently wins |
+| Canonical view | All modules | The set of blocks that pass all three canonicality rules |
+| Conflict winners | All modules | For each direct conflict, which block currently wins |
 | Effective weight estimates | Verification module | Current weights, to inform verification priority |
 | Descendant weight per chain block | All modules | How much verified work has been built on each chain block |
 

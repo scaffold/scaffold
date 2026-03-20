@@ -162,7 +162,7 @@ Deno.test({
   assertEquals(layer.getEffectiveWeight(A.hash), 140);
 });
 
-Deno.test({ name: 'aggregation creates conflict with aggregated block' }, () => {
+Deno.test({ name: 'aggregation does not create implicit conflict' }, () => {
   const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
     hash: h('A'),
@@ -181,17 +181,17 @@ Deno.test({ name: 'aggregation creates conflict with aggregated block' }, () => 
   layer.setVerifiedWeight(A.hash, [50]);
   layer.setVerifiedWeight(C.hash, [60]);
 
-  // C aggregates A -> C conflicts with A
+  // Aggregation no longer creates an implicit conflict between C and A
   const conflicts = layer.getConflicts(C.hash);
-  assert(conflicts.has(A.hash.toPrimitive()));
+  assertFalse(conflicts.has(A.hash.toPrimitive()));
 
-  // C wins (60 > 50)
+  // Both should be canonical (no conflict between them)
+  assert(layer.isCanonical(A.hash));
   assert(layer.isCanonical(C.hash));
-  assertFalse(layer.isCanonical(A.hash));
 });
 
 Deno.test({
-  name: 'aggregation inherits conflicts from aggregated block',
+  name: 'aggregation does not inherit conflicts from aggregated block',
 }, () => {
   const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = {
@@ -216,16 +216,22 @@ Deno.test({
 
   // A conflicts with B (direct)
   layer.addConflict(A.hash, B.hash);
-  // C aggregates A -> C inherits A's conflict with B
+  layer.setVerifiedWeight(A.hash, [50]);
   layer.setVerifiedWeight(C.hash, [70]);
   layer.setVerifiedWeight(B.hash, [40]);
 
+  // C does NOT inherit A's conflicts -- no transitive conflict inheritance
   const cConflicts = layer.getConflicts(C.hash);
-  assert(cConflicts.has(B.hash.toPrimitive()), 'C should inherit conflict with B');
-  assert(cConflicts.has(A.hash.toPrimitive()), 'C should conflict with A (aggregation)');
+  assertFalse(cConflicts.has(B.hash.toPrimitive()), 'C should NOT inherit conflict with B');
+  assertFalse(cConflicts.has(A.hash.toPrimitive()), 'C should NOT conflict with A');
+
+  // A wins its conflict with B (50 > 40), C aggregates A (canonical), so C is canonical
+  assert(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(B.hash));
+  assert(layer.isCanonical(C.hash));
 });
 
-Deno.test({ name: 'conflict propagates forward along anchor chain' }, () => {
+Deno.test({ name: 'conflict does NOT propagate forward along anchor chain' }, () => {
   const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const X: TestBlock = {
     hash: h('X'),
@@ -248,13 +254,21 @@ Deno.test({ name: 'conflict propagates forward along anchor chain' }, () => {
   const { layer } = setup(G, X, Y, Z);
 
   layer.addConflict(X.hash, Y.hash);
+  layer.setVerifiedWeight(X.hash, [100]);
+  layer.setVerifiedWeight(Y.hash, [50]);
+  layer.setVerifiedWeight(Z.hash, [30]);
 
-  // X conflicts with Y, Z anchors to Y -> X conflicts with Z
+  // Conflicts are NOT propagated forward -- Z has no direct conflict with X
   const xConflicts = layer.getConflicts(X.hash);
-  assert(xConflicts.has(Z.hash.toPrimitive()), 'X should conflict with Z (propagation)');
+  assertFalse(xConflicts.has(Z.hash.toPrimitive()), 'X should NOT conflict with Z');
 
   const zConflicts = layer.getConflicts(Z.hash);
-  assert(zConflicts.has(X.hash.toPrimitive()), 'Z should conflict with X (symmetric)');
+  assertFalse(zConflicts.has(X.hash.toPrimitive()), 'Z should NOT conflict with X');
+
+  // However, Z is still non-canonical because its anchor Y lost (Rule 1)
+  assert(layer.isCanonical(X.hash));
+  assertFalse(layer.isCanonical(Y.hash));
+  assertFalse(layer.isCanonical(Z.hash));
 });
 
 Deno.test({
@@ -317,7 +331,7 @@ Deno.test({
   // A wins (100 > 50+30=80)
   assert(layer.isCanonical(A.hash));
   assertFalse(layer.isCanonical(B.hash));
-  // F anchors to B, B lost -> F conflicts with A (propagation) -> F excluded
+  // F anchors to B, B is non-canonical -> F excluded (Rule 1: anchor must be canonical)
   assertFalse(layer.isCanonical(F.hash));
 });
 
@@ -509,7 +523,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: 'multiple aggregates with inheritance from both',
+  name: 'multiple aggregates: no conflict inheritance, Rule 2 governs canonicality',
 }, () => {
   const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A1: TestBlock = {
@@ -546,16 +560,23 @@ Deno.test({
 
   layer.addConflict(A1.hash, B1.hash); // A1 conflicts with B1
   layer.addConflict(A2.hash, B2.hash); // A2 conflicts with B2
+  layer.setVerifiedWeight(A1.hash, [10]);
+  layer.setVerifiedWeight(A2.hash, [20]);
+  layer.setVerifiedWeight(B1.hash, [5]);
+  layer.setVerifiedWeight(B2.hash, [8]);
+  layer.setVerifiedWeight(S.hash, [30]);
 
+  // S does NOT have any direct conflicts -- no inheritance
   const sConflicts = layer.getConflicts(S.hash);
+  assertEquals(sConflicts.size, 0);
 
-  // S aggregates A1 and A2 -> conflicts with both
-  assert(sConflicts.has(A1.hash.toPrimitive()));
-  assert(sConflicts.has(A2.hash.toPrimitive()));
-
-  // S inherits A1's conflict with B1 and A2's conflict with B2
-  assert(sConflicts.has(B1.hash.toPrimitive()), 'S should inherit A1 conflict with B1');
-  assert(sConflicts.has(B2.hash.toPrimitive()), 'S should inherit A2 conflict with B2');
+  // A1 wins over B1 (10 > 5), A2 wins over B2 (20 > 8)
+  // Both aggregates are canonical, so S is canonical (Rule 2 satisfied)
+  assert(layer.isCanonical(A1.hash));
+  assert(layer.isCanonical(A2.hash));
+  assert(layer.isCanonical(S.hash));
+  assertFalse(layer.isCanonical(B1.hash));
+  assertFalse(layer.isCanonical(B2.hash));
 });
 
 Deno.test({
@@ -736,18 +757,23 @@ Deno.test('removeBlock: cleans up chain contributions', () => {
 Deno.test('removeBlock: cleans up aggregation maps', () => {
   const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
   const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [50] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [80] };
   const S: TestBlock = { hash: h('S'), anchor: G.hash, aggregates: [A.hash], weight: [60] };
-  const { layer } = setup(G, A, S);
+  const { layer } = setup(G, A, B, S);
 
+  layer.addConflict(A.hash, B.hash);
   layer.setVerifiedWeight(A.hash, [50]);
+  layer.setVerifiedWeight(B.hash, [80]);
   layer.setVerifiedWeight(S.hash, [60]);
 
-  // S aggregates A -> conflict
+  // A loses to B (50 < 80), so S is non-canonical (Rule 2: aggregate A not canonical)
   assertFalse(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(S.hash));
 
-  // Remove S -> A no longer conflicted
+  // Remove S -> aggregation edge cleaned up, A still loses conflict with B
   layer.removeBlock(S.hash);
-  assert(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(A.hash));
+  assert(layer.isCanonical(B.hash));
 });
 
 Deno.test('removeBlock: unknown hash is no-op', () => {
@@ -812,4 +838,123 @@ Deno.test({
   // Now A wins
   assert(layer.isCanonical(A.hash));
   assertFalse(layer.isCanonical(B.hash));
+});
+
+// -- Rule 1/2 propagation tests -----------------------------------
+
+Deno.test({
+  name: 'anchor must be canonical: block with non-canonical anchor excluded',
+}, () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = {
+    hash: h('A'),
+    anchor: G.hash,
+    aggregates: [],
+    weight: [100],
+  };
+  const B: TestBlock = {
+    hash: h('B'),
+    anchor: G.hash,
+    aggregates: [],
+    weight: [50],
+  };
+  const C: TestBlock = {
+    hash: h('C'),
+    anchor: B.hash,
+    aggregates: [],
+    weight: [10],
+  };
+  const { layer } = setup(G, A, B, C);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [100]);
+  layer.setVerifiedWeight(B.hash, [50]);
+  layer.setVerifiedWeight(C.hash, [10]);
+
+  // A wins (100 > 50+10=60), B is non-canonical
+  assert(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(B.hash));
+  // C has no conflicts of its own, but its anchor B is non-canonical (Rule 1)
+  assertFalse(layer.isCanonical(C.hash));
+});
+
+Deno.test({
+  name: 'aggregated block must be canonical: aggregator excluded when aggregate loses',
+}, () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = {
+    hash: h('A'),
+    anchor: G.hash,
+    aggregates: [],
+    weight: [30],
+  };
+  const B: TestBlock = {
+    hash: h('B'),
+    anchor: G.hash,
+    aggregates: [],
+    weight: [80],
+  };
+  const C: TestBlock = {
+    hash: h('C'),
+    anchor: G.hash,
+    aggregates: [A.hash],
+    weight: [50],
+  };
+  const { layer } = setup(G, A, B, C);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [30]);
+  layer.setVerifiedWeight(B.hash, [80]);
+  layer.setVerifiedWeight(C.hash, [50]);
+
+  // B wins conflict with A (80 > 30)
+  assert(layer.isCanonical(B.hash));
+  assertFalse(layer.isCanonical(A.hash));
+  // C aggregates A, which is non-canonical -> C excluded (Rule 2)
+  assertFalse(layer.isCanonical(C.hash));
+});
+
+Deno.test({
+  name: 'non-canonical aggregate cascades to aggregator descendants',
+}, () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = {
+    hash: h('A'),
+    anchor: G.hash,
+    aggregates: [],
+    weight: [30],
+  };
+  const B: TestBlock = {
+    hash: h('B'),
+    anchor: G.hash,
+    aggregates: [],
+    weight: [80],
+  };
+  const C: TestBlock = {
+    hash: h('C'),
+    anchor: G.hash,
+    aggregates: [A.hash],
+    weight: [50],
+  };
+  const D: TestBlock = {
+    hash: h('D'),
+    anchor: C.hash,
+    aggregates: [],
+    weight: [20],
+  };
+  const { layer } = setup(G, A, B, C, D);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [30]);
+  layer.setVerifiedWeight(B.hash, [80]);
+  layer.setVerifiedWeight(C.hash, [50]);
+  layer.setVerifiedWeight(D.hash, [20]);
+
+  // B wins conflict with A (80 > 30)
+  assert(layer.isCanonical(B.hash));
+  assertFalse(layer.isCanonical(A.hash));
+  // C aggregates A (non-canonical) -> C excluded (Rule 2)
+  assertFalse(layer.isCanonical(C.hash));
+  // D anchors to C (non-canonical) -> D excluded (Rule 1)
+  assertFalse(layer.isCanonical(D.hash));
 });

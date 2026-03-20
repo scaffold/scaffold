@@ -206,7 +206,7 @@ Two blocks conflict if their claim masks overlap (share any index). This is the 
 
 | Module | How It Uses the Output Space |
 |--------|------------------------------|
-| [Conflict](conflict.md) | Compares claim masks to detect double-spends |
+| [Conflict](conflict.md) | Detects double-spends when two claims resolve to the same producing output |
 | [Consensus](consensus.md) | Output space is the "state" that branches diverge on |
 | [Output Claims](output-claims.md) | Migrates claim entries through the output space hierarchy to resolve which block produced each claimed output |
 | [Block Creation](block-creation.md) | Validates claim indices and throughput balance against the extended vector |
@@ -221,5 +221,4 @@ Two blocks conflict if their claim masks overlap (share any index). This is the 
 |------|-------------|
 | [`src/core/OutputSpace.ts`](../../src/core/OutputSpace.ts) | Pure output-space operations: resolution, inverse, claim masks, ordering, UTXO computation |
 | [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData` type, `getBlockClaimMask()`, `collectExtendedOutputs()` (legacy helpers) |
-| [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Claim mask comparison, rebasing (index transformation) |
-| [`src/core/OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | Claim migration through the aggregation hierarchy |
+| [`src/core/OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | Claim migration through the aggregation hierarchy; conflict detection |

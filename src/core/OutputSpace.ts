@@ -463,6 +463,38 @@ export class OutputSpaceModule {
     return result;
   }
 
+  // -- Rebase -----------------------------------------------------
+
+  /**
+   * Rebase a block's subtree claim mask from its own anchor to a target ancestor.
+   * Walks from block.anchor up to targetAnchor, rebasing at each step.
+   * Returns null if the chain can't be walked.
+   */
+  rebaseClaimMask(blockHash: Hash, targetAnchor: Hash): number[] | null {
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return null;
+
+    let mask = this.subtreeClaimMask(blockHash) ?? [];
+
+    // If already at target, no rebase needed
+    if (Hash.equals(block.anchor, targetAnchor)) return mask;
+
+    // Walk from block.anchor toward targetAnchor
+    let current = block.anchor;
+    while (!Hash.equals(current, targetAnchor)) {
+      const curBlock = this.provider.getBlock(current);
+      if (!curBlock) return null;
+
+      const curMask = this.subtreeClaimMask(current) ?? [];
+      const inherited = filterAboveAndShift(mask, curBlock.newOutputCount);
+      const rebased = mapSurvivingToOriginalBatch(inherited, curMask);
+      mask = unionClaimMasks(rebased, curMask);
+      current = curBlock.anchor;
+    }
+
+    return mask;
+  }
+
   // -- Internal ---------------------------------------------------
 
   /**
@@ -480,29 +512,10 @@ export class OutputSpaceModule {
     let result: number[] = [];
 
     for (const aggHash of block.aggregates) {
-      const aggBlock = this.provider.getBlock(aggHash);
-      if (!aggBlock) continue;
-
-      let mask = this.subtreeClaimMask(aggHash) ?? [];
-
-      // Rebase through each intermediate block from aggBlock.anchor up to block.anchor
-      let current = aggBlock.anchor;
-      while (!Hash.equals(current, block.anchor)) {
-        const curBlock = this.provider.getBlock(current);
-        if (!curBlock) break;
-
-        const curMask = this.subtreeClaimMask(current) ?? [];
-
-        // Drop claims on curBlock's own new outputs, shift to inherited space,
-        // then map surviving indices to original anchor indices
-        const inherited = filterAboveAndShift(mask, curBlock.newOutputCount);
-        const rebased = mapSurvivingToOriginalBatch(inherited, curMask);
-
-        mask = unionClaimMasks(rebased, curMask);
-        current = curBlock.anchor;
+      const mask = this.rebaseClaimMask(aggHash, block.anchor);
+      if (mask) {
+        result = unionClaimMasks(result, mask);
       }
-
-      result = unionClaimMasks(result, mask);
     }
 
     return result;

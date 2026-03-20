@@ -2,6 +2,7 @@
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { ResolvedClaim } from './BlockDraft.ts';
+import { mapSurvivingToOriginal } from './OutputSpace.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -39,6 +40,9 @@ export interface OutputClaimProvider<BlockType> {
    * Empty array for leaf blocks.
    */
   getAggregateOutputCounts(block: BlockType): number[];
+
+  /** Return the subtree claim mask (sorted anchor output indices claimed by aggregates). Empty for leaf blocks. */
+  getSubtreeClaimMask(block: BlockType): readonly number[];
 }
 
 // -- Module -------------------------------------------------------
@@ -72,8 +76,15 @@ export class OutputClaimModule<BlockType> {
    */
   private readonly waitingFor = new Map<HashPrimitive, Set<HashPrimitive>>();
 
+  private readonly conflictListeners: ((a: Hash, b: Hash) => void)[] = [];
+
   constructor(provider: OutputClaimProvider<BlockType>) {
     this.provider = provider;
+  }
+
+  /** Register a callback for conflict detection. Fires when two different blocks claim the same output. */
+  onConflict(cb: (a: Hash, b: Hash) => void): void {
+    this.conflictListeners.push(cb);
   }
 
   // -- Mutations --------------------------------------------------
@@ -199,6 +210,19 @@ export class OutputClaimModule<BlockType> {
     }
 
     entries.push(entry);
+
+    // Conflict detection: if 2+ claimants on this output, fire conflicts.
+    // Filter out draft claims (claimIndex === -1) and self-conflicts.
+    if (entries.length > 1 && entry.claimIndex >= 0) {
+      for (let i = 0; i < entries.length - 1; i++) {
+        const existing = entries[i];
+        if (existing.claimIndex >= 0 && !Hash.equals(existing.claimant, entry.claimant)) {
+          for (const cb of this.conflictListeners) {
+            cb(existing.claimant, entry.claimant);
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -263,21 +287,18 @@ export class OutputClaimModule<BlockType> {
       remaining -= count;
     }
 
-    // Remaining maps to surviving anchor outputs (post-subtree-claims).
-    // Map through the aggregate subtree claim mask to get the original
-    // anchor output space index.
     const anchorHash = this.provider.getAnchor(block);
     if (Hash.equals(anchorHash, ZERO_HASH)) {
       return undefined;
     }
 
-    // For leaf blocks (no aggregates), remaining maps directly to anchor index.
-    // For aggregation blocks, we need to account for subtree claims.
-    // Since the OutputClaimModule doesn't yet have access to OutputSpaceModule
-    // for rebasing, and aggregation blocks' claims are handled at solidification
-    // time (not through lazy migration), this path is only reached for leaf blocks
-    // where the mapping is direct.
-    return this.migrateEntry(blockHash, index, entry, anchorHash, remaining);
+    // Map through subtree claim mask for aggregation blocks.
+    // For leaf blocks (empty mask), remaining maps directly.
+    const subtreeClaimMask = this.provider.getSubtreeClaimMask(block);
+    const anchorIdx = subtreeClaimMask.length > 0
+      ? mapSurvivingToOriginal(remaining, subtreeClaimMask)
+      : remaining;
+    return this.migrateEntry(blockHash, index, entry, anchorHash, anchorIdx);
   }
 
   /**

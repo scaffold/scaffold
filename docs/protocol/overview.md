@@ -86,7 +86,7 @@ The graph grows as peers create new blocks, and each peer maintains its own view
 
 Two blocks **conflict** when they both try to consume the same output. Since an output can only be spent once, the network must choose one block and exclude the other.
 
-Conflict detection works by comparing **claim masks** — compact bit vectors that record which outputs a block consumes from its anchor. If two blocks anchor to the same parent and their claim masks overlap (they both set the same bit), they conflict.
+Conflict detection is handled by the OutputClaimModule. During claim migration, when a second claimant is placed on the same output, a double-spend conflict is detected. If two blocks both claim the same producing output, they conflict.
 
 Conflicts are:
 - **Permanent**: once detected, a conflict never goes away.
@@ -180,7 +180,7 @@ Here's how the pieces interact when a peer publishes a new block:
 1. **Creation**: The peer constructs a block — choosing an anchor, consuming inputs, running a computation, producing outputs, and declaring weight.
 2. **Collateral**: The peer stakes collateral vouching for the block's validity.
 3. **Gossip**: The block propagates to peers who are likely to care about it.
-4. **Conflict detection**: Receiving peers check if the new block's claim mask overlaps with any existing block's. If so, a conflict is declared.
+4. **Conflict detection**: The OutputClaimModule detects conflicts during claim migration -- when a second claimant is placed on the same output, a double-spend conflict is declared.
 5. **Consensus**: The new block's weight is added to its branch. If it's in a conflict, the branch with more verified weight wins.
 6. **Verification**: Peers sample and spot-check the block's declared work. Verified weight converges toward declared weight for honest blocks and toward zero for fraudulent ones.
 7. **Aggregation**: Eventually, an aggregator rolls up the block (and others) into a consolidated block, transferring risk and compressing the graph.
@@ -221,7 +221,6 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Module | Core File | Service File |
 |--------|-----------|-------------|
 | Consensus | [`ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | [`ConsensusService.ts`](../../src/core/ConsensusService.ts) |
-| Conflict | [`ConflictModule.ts`](../../src/core/ConflictModule.ts) | [`ConflictService.ts`](../../src/core/ConflictService.ts) |
 | Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
@@ -234,6 +233,5 @@ Supporting files:
 |------|-------------|
 | [`Block.ts`](../../src/core/Block.ts) | Concrete block type, `BlockStore`, genesis creation |
 | [`OutputSpace.ts`](../../src/core/OutputSpace.ts) | Pure output-space operations: claim resolution, masks, ordering, UTXO computation |
-| [`BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector for claim masks (used by conflict module) |
 | [`Coordinator.ts`](../../src/core/Coordinator.ts) | Orchestrates all modules: block received → conflict → consensus → gossip → sampling |
 | [`ProtocolContext.ts`](../../src/core/ProtocolContext.ts) | Dependency injection container wiring all services together |

@@ -14,7 +14,6 @@ import {
 } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
-import { ConflictService } from '../src/core/ConflictService.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
@@ -305,7 +304,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     hash: Hash.digest('subtreeB'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1], // claims extended idx 1 = anchor output 1
+    claims: [2], // claims extended idx 2 = anchor output 1
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
     refs: [],

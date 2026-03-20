@@ -14,6 +14,7 @@ interface TestBlock {
   ownOutputCount: number;
   aggregateHashes: Hash[];
   aggregateOutputCounts: number[];
+  subtreeClaimMask: number[];
 }
 
 class TestProvider implements OutputClaimProvider<TestBlock> {
@@ -46,6 +47,10 @@ class TestProvider implements OutputClaimProvider<TestBlock> {
   getAggregateOutputCounts(block: TestBlock): number[] {
     return block.aggregateOutputCounts;
   }
+
+  getSubtreeClaimMask(block: TestBlock): readonly number[] {
+    return block.subtreeClaimMask;
+  }
 }
 
 const h = (name: string): Hash => Hash.digest(name);
@@ -57,6 +62,7 @@ function genesis(hash: Hash, outputCount: number): TestBlock {
     ownOutputCount: outputCount,
     aggregateHashes: [],
     aggregateOutputCounts: [],
+    subtreeClaimMask: [],
   };
 }
 
@@ -71,6 +77,7 @@ function leaf(opts: {
     ownOutputCount: opts.ownOutputCount,
     aggregateHashes: [],
     aggregateOutputCounts: [],
+    subtreeClaimMask: [],
   };
 }
 
@@ -80,8 +87,9 @@ function aggregator(opts: {
   ownOutputCount: number;
   aggregateHashes: Hash[];
   aggregateOutputCounts: number[];
+  subtreeClaimMask?: number[];
 }): TestBlock {
-  return { ...opts };
+  return { subtreeClaimMask: [], ...opts };
 }
 
 function setup(...blocks: TestBlock[]) {
@@ -514,5 +522,157 @@ Deno.test('OutputClaimModule', async (t) => {
     assertEquals(resolved.length, 1);
     assertEquals(Hash.equals(resolved[0].block, S1.hash), true);
     assertEquals(resolved[0].outputIndex, 0);
+  });
+});
+
+// -- Conflict Detection Tests ------------------------------------
+
+Deno.test('OutputClaimModule conflict detection', async (t) => {
+  // ---------------------------------------------------------------
+  // Double-spend fires conflict: two blocks claim same output
+  // ---------------------------------------------------------------
+  await t.step('double-spend fires conflict: two blocks claim same output', () => {
+    // G has 5 outputs. C1 and C2 both anchor to G with 1 own output.
+    // Both claim index 1 in their output space -> G's output 0.
+    const G = genesis(h('G'), 5);
+    const C1 = leaf({ hash: h('C1'), anchor: G.hash, ownOutputCount: 1 });
+    const C2 = leaf({ hash: h('C2'), anchor: G.hash, ownOutputCount: 1 });
+    const { module } = setup(G, C1, C2);
+
+    const conflicts: { a: Hash; b: Hash }[] = [];
+    module.onConflict((a, b) => conflicts.push({ a, b }));
+
+    module.addBlock(C1.hash, [1]); // claims G output 0
+    module.addBlock(C2.hash, [1]); // claims G output 0 -- conflict!
+
+    assertEquals(conflicts.length, 1);
+    assertEquals(Hash.equals(conflicts[0].a, C1.hash), true);
+    assertEquals(Hash.equals(conflicts[0].b, C2.hash), true);
+  });
+
+  // ---------------------------------------------------------------
+  // No false conflict: claims on different outputs
+  // ---------------------------------------------------------------
+  await t.step('no false conflict: claims on different outputs', () => {
+    // G has 5 outputs. C1 claims G output 0, C2 claims G output 1.
+    // C1: 1 own output, claims=[1] -> G output 0
+    // C2: 1 own output, claims=[2] -> G output 1
+    const G = genesis(h('G'), 5);
+    const C1 = leaf({ hash: h('C1'), anchor: G.hash, ownOutputCount: 1 });
+    const C2 = leaf({ hash: h('C2'), anchor: G.hash, ownOutputCount: 1 });
+    const { module } = setup(G, C1, C2);
+
+    const conflicts: { a: Hash; b: Hash }[] = [];
+    module.onConflict((a, b) => conflicts.push({ a, b }));
+
+    module.addBlock(C1.hash, [1]); // claims G output 0
+    module.addBlock(C2.hash, [2]); // claims G output 1
+
+    assertEquals(conflicts.length, 0);
+  });
+
+  // ---------------------------------------------------------------
+  // Draft claims do not fire conflicts
+  // ---------------------------------------------------------------
+  await t.step('draft claims do not fire conflicts', () => {
+    // G has 5 outputs. C1 claims G output 0 via addBlock (claimIndex >= 0).
+    // Draft D1 claims G output 0 via addClaim (claimIndex = -1).
+    // No conflict should fire because draft claims are filtered.
+    const G = genesis(h('G'), 5);
+    const C1 = leaf({ hash: h('C1'), anchor: G.hash, ownOutputCount: 1 });
+    const { module } = setup(G, C1);
+
+    const conflicts: { a: Hash; b: Hash }[] = [];
+    module.onConflict((a, b) => conflicts.push({ a, b }));
+
+    module.addBlock(C1.hash, [1]); // claims G output 0 (claimIndex = 0)
+    module.addClaim(h('D1'), G.hash, 0); // draft claims G output 0 (claimIndex = -1)
+
+    assertEquals(conflicts.length, 0);
+  });
+
+  // ---------------------------------------------------------------
+  // Migration reveals conflict: stuck claims resolve to occupied output
+  // ---------------------------------------------------------------
+  await t.step('migration reveals conflict: stuck claims resolve to occupied output', () => {
+    // G has 3 outputs. M (intermediate) anchors to G, 1 output, no claims.
+    // M is NOT initially loaded in the provider.
+    // A anchors to M, 1 own output, claims=[1] (claims M output 0)
+    // B anchors to M, 1 own output, claims=[1] (claims M output 0)
+    // addBlock(A) -- stuck (M not loaded)
+    // addBlock(B) -- stuck (M not loaded)
+    // Load M, call onBlockLoaded(M) -- both claims migrate to M output 0
+    // Conflict detected between A and B.
+    const G = genesis(h('G'), 3);
+    const A = leaf({ hash: h('A'), anchor: h('M'), ownOutputCount: 1 });
+    const B = leaf({ hash: h('B'), anchor: h('M'), ownOutputCount: 1 });
+    const { provider, module } = setup(G, A, B);
+
+    const conflicts: { a: Hash; b: Hash }[] = [];
+    module.onConflict((a, b) => conflicts.push({ a, b }));
+
+    // Both claims stuck -- M not loaded
+    const resolvedA = module.addBlock(A.hash, [1]);
+    assertEquals(resolvedA.length, 0);
+    const resolvedB = module.addBlock(B.hash, [1]);
+    assertEquals(resolvedB.length, 0);
+
+    assertEquals(conflicts.length, 0);
+
+    // Now load M
+    const M = leaf({ hash: h('M'), anchor: G.hash, ownOutputCount: 1 });
+    provider.add(M);
+    const resolvedAfter = module.onBlockLoaded(M.hash);
+
+    // Both claims resolve to M output 0
+    assertEquals(resolvedAfter.length, 2);
+    for (const r of resolvedAfter) {
+      assertEquals(Hash.equals(r.block, M.hash), true);
+      assertEquals(r.outputIndex, 0);
+    }
+
+    // Conflict should have fired between A and B
+    assertEquals(conflicts.length, 1);
+    const pair = [conflicts[0].a, conflicts[0].b];
+    assertEquals(
+      pair.some((p) => Hash.equals(p, A.hash)) &&
+        pair.some((p) => Hash.equals(p, B.hash)),
+      true,
+    );
+  });
+
+  // ---------------------------------------------------------------
+  // Three-way conflict: all pairs detected
+  // ---------------------------------------------------------------
+  await t.step('three-way conflict: all pairs detected', () => {
+    // G has 5 outputs. C1, C2, C3 all claim G output 0.
+    // Each has 1 own output, claims=[1] -> G output 0.
+    const G = genesis(h('G'), 5);
+    const C1 = leaf({ hash: h('C1'), anchor: G.hash, ownOutputCount: 1 });
+    const C2 = leaf({ hash: h('C2'), anchor: G.hash, ownOutputCount: 1 });
+    const C3 = leaf({ hash: h('C3'), anchor: G.hash, ownOutputCount: 1 });
+    const { module } = setup(G, C1, C2, C3);
+
+    const conflicts: { a: Hash; b: Hash }[] = [];
+    module.onConflict((a, b) => conflicts.push({ a, b }));
+
+    module.addBlock(C1.hash, [1]); // claims G output 0
+    module.addBlock(C2.hash, [1]); // conflict with C1
+    module.addBlock(C3.hash, [1]); // conflict with C1 and C2
+
+    // 3 conflict pairs: (C1,C2), (C1,C3), (C2,C3)
+    assertEquals(conflicts.length, 3);
+
+    // Verify all expected pairs are present
+    const pairExists = (x: Hash, y: Hash) =>
+      conflicts.some(
+        (c) =>
+          (Hash.equals(c.a, x) && Hash.equals(c.b, y)) ||
+          (Hash.equals(c.a, y) && Hash.equals(c.b, x)),
+      );
+
+    assertEquals(pairExists(C1.hash, C2.hash), true);
+    assertEquals(pairExists(C1.hash, C3.hash), true);
+    assertEquals(pairExists(C2.hash, C3.hash), true);
   });
 });

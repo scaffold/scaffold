@@ -42,7 +42,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 |-------------|-------------|-----------------|-----------------|
 | [overview.md](docs/protocol/overview.md) | — | — | [Coordinator.ts](src/core/Coordinator.ts), [ProtocolContext.ts](src/core/ProtocolContext.ts) |
 | [consensus.md](docs/protocol/consensus.md) | [ConsensusModule.ts](src/core/ConsensusModule.ts) | [ConsensusService.ts](src/core/ConsensusService.ts) | |
-| [conflict.md](docs/protocol/conflict.md) | [ConflictModule.ts](src/core/ConflictModule.ts) | [ConflictService.ts](src/core/ConflictService.ts) | [BitVector.ts](src/core/BitVector.ts) |
+| [conflict.md](docs/protocol/conflict.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
 | [sampling.md](docs/protocol/sampling.md) | [SamplingModule.ts](src/core/SamplingModule.ts) | [SamplingService.ts](src/core/SamplingService.ts) | |
 | [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
 | [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/core/GossipModule.ts) | [GossipService.ts](src/core/GossipService.ts) | |
@@ -53,7 +53,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [deception.md](docs/protocol/deception.md) | — (not yet implemented) | — | |
 | [draft-blocks.md](docs/protocol/draft-blocks.md) | [DraftManager.ts](src/core/DraftManager.ts) | — | [BlockDraft.ts](src/core/BlockDraft.ts), [Generator.ts](src/core/Generator.ts) |
 | [output-claims.md](docs/protocol/output-claims.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
-| [output-space.md](docs/protocol/output-space.md) | — (structural, spans modules) | — | [OutputSpace.ts](src/core/OutputSpace.ts), [Block.ts](src/core/Block.ts), [ConflictModule.ts](src/core/ConflictModule.ts) |
+| [output-space.md](docs/protocol/output-space.md) | — (structural, spans modules) | — | [OutputSpace.ts](src/core/OutputSpace.ts), [Block.ts](src/core/Block.ts) |
 | [aggregation.md](docs/protocol/aggregation.md) | — | — | [AggregationContract.ts](src/core/AggregationContract.ts), [Block.ts](src/core/Block.ts), [ContractGenerator.ts](src/core/ContractGenerator.ts) |
 
 ## Key Protocol Invariant: Outputs Before Claims

@@ -143,7 +143,7 @@ Deno.test('Aggregation: aggregation block with claim mask merging', () => {
   const sub1 = makeBlock('cm-sub1', genesis, [makeOutput(100), makeOutput(100)], 10, [2, 3]);
 
   // Subtree 2 claims output 2
-  const sub2 = makeBlock('cm-sub2', genesis, [makeOutput(100)], 15, [1]);
+  const sub2 = makeBlock('cm-sub2', genesis, [makeOutput(100)], 15, [3]);
 
   net.deliverToAll(sub1, 'A');
   net.deliverToAll(sub2, 'B');

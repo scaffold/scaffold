@@ -6,9 +6,9 @@ This module is responsible for:
 - Tracking per-output claimant lists on every block
 - Migrating claim entries toward the actual producing block as the DAG loads
 - Populating `resolvedClaims` when a claim reaches its producing block
+- Detecting double-spend conflicts: when migration places a second claimant on the same output, the module detects a double-spend conflict and reports it to the consensus module
 
 This module is **not** responsible for:
-- Detecting conflicts between claimants (that's the [conflict module](conflict.md))
 - Deciding which claimant wins (that's the [consensus module](consensus.md))
 - Constructing blocks or computing claim masks (that's [block creation](block-creation.md))
 
@@ -102,6 +102,7 @@ To make this efficient, the module maintains a reverse index: for each unloaded 
 |--------|----------|-------------|
 | Per-output claimant lists | Application layer | Who claims each output on a given block |
 | Resolved claims | Block drafts / application | Concrete `{block, outputIndex}` for completed migrations |
+| Conflict declarations | Consensus module | Two blocks both claiming the same producing output |
 
 ### Invariants
 

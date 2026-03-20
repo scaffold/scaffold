@@ -161,7 +161,7 @@ Pre-claiming uses the scatter-to-source pattern: claims are stored on the **prod
 
 For a resolved claim `{ block: X, outputIndex: 3 }`, the claim is recorded on block X's output 3 as "claimed by draft D". Conflict detection becomes a lookup: if output 3 of block X has multiple claimants, those claimants conflict.
 
-This is simpler than BitVector intersection for drafts because:
+This is simpler than bitmask intersection for drafts because:
 - No anchor is needed to compute the claim's position.
 - Conflict detection is O(1) per output (check the claimant list).
 - The same data structure works for both drafts and published blocks.
@@ -292,7 +292,7 @@ The conflict module can support resolved claims alongside index-based claims:
 3. When a draft is added, directly insert its resolved claims.
 4. Conflict exists when any output has multiple claimants.
 
-This unifies conflict detection for drafts and blocks without requiring drafts to produce BitVector masks.
+This unifies conflict detection for drafts and blocks without requiring drafts to produce bitmasks.
 
 ---
 
@@ -321,6 +321,6 @@ This unifies conflict detection for drafts and blocks without requiring drafts t
 ## Relation to Existing Docs
 
 - [Block Creation](block-creation.md): the existing Draft System section describes drafts as generator functions. This document formalizes that concept with a concrete data model and lifecycle. The `BlockDraft` type replaces the informal `DraftGenerator` concept.
-- [Conflict](conflict.md): the scatter-to-source claim tracking and per-output conflict detection extend the existing BitVector-based approach. Both mechanisms coexist.
+- [Conflict](conflict.md): the scatter-to-source claim tracking and per-output conflict detection extend the existing claim-mask-based approach. Both mechanisms coexist.
 - [Consensus](consensus.md): phantom weight is a local-only extension. The canonical view exposed to peers does not include draft weight — it is a speculative local adjustment.
 - [DAG](dag.md): drafts are not part of the DAG. They influence the local node's conflict view but are invisible to the network.

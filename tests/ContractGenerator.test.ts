@@ -66,6 +66,9 @@ class TestOutputClaimProvider implements OutputClaimProvider<Block> {
   getAggregateOutputCounts(_block: Block): number[] {
     return [];
   }
+  getSubtreeClaimMask(_block: Block): readonly number[] {
+    return [];
+  }
 }
 
 function makeTestSetup() {

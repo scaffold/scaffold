@@ -30,6 +30,10 @@ class OutputClaimProviderAdapter implements OutputClaimProvider<Block> {
     const aggData = getAggregationData(block);
     return aggData?.aggregateOutputCounts ?? [];
   }
+
+  getSubtreeClaimMask(block: Block): readonly number[] {
+    return getAggregationData(block)?.claimMask ?? [];
+  }
 }
 
 /** OutputClaimModule wired to a BlockStore via ProtocolContext. */

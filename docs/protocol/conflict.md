@@ -1,196 +1,127 @@
-# Conflict Module
+# Conflict Detection
 
-The conflict module determines whether two blocks are **conflicting** — meaning they cannot both be included in the canonical view. It provides direct conflict declarations to the consensus module, which uses them for branch selection.
+The conflict concern determines whether two blocks are **conflicting** -- meaning they cannot both be included in the canonical view. It provides direct conflict declarations to the consensus module, which uses them for branch selection.
 
-The core conflict condition is **double-spend**: two blocks that both claim (spend) the same output from a shared ancestor. The module encodes claims as bit vectors over the anchor's output set, enabling fast conflict detection via bitwise intersection.
+The core conflict condition is **double-spend**: two blocks that both claim (spend) the same output. Conflicts are detected through the [output claims module](output-claims.md): when claim migration resolves two claims to the same producing output `{block, outputIndex}`, those claimants are in a double-spend conflict.
 
-This module is responsible for:
-- Defining the output model (how blocks transform output sets)
-- Encoding and comparing claim masks
-- Detecting conflicts between same-anchor trees (direct comparison) and different-anchor trees (via rebasing)
-- Managing partial knowledge of claim masks and monotonic conflict discovery
+This concern is responsible for:
+- Detecting double-spend conflicts when two claims resolve to the same output
+- Detecting double-aggregation conflicts via aggregation marker outputs
+- Declaring conflicts to the consensus module
 
-This module is **not** responsible for:
-- Deciding which conflicting block wins (that's the consensus module)
-- Verifying that claimed work is real (verification module)
+This concern is **not** responsible for:
+- Deciding which conflicting block wins (that's the [consensus module](consensus.md))
+- Migrating claims through the DAG (that's the [output claims module](output-claims.md))
+- Constructing blocks or computing claim masks (that's [block creation](block-creation.md))
 - Defining what outputs represent semantically (application layer)
 
 ---
 
-## Output Model
+## Conflict Detection via Claim Migration
 
-Every block (except genesis) anchors to a parent block. A block transforms its anchor's output vector in two phases:
+Conflict detection is a natural byproduct of the output claims module's claim migration. When a block is loaded with claims, each claim entry migrates through the aggregation hierarchy toward the block that actually produced the claimed output. When migration completes, the claim resolves to a concrete `{block, outputIndex}` pair.
 
-### Phase 1 — Subtree Effects
+If two different blocks' claims both resolve to the same `{block, outputIndex}`, those blocks are attempting to spend the same output -- a double-spend conflict.
 
-Only applies if the block aggregates subtrees. Subtrees are applied sequentially in the order they appear in the block's children list. Each subtree removes its claims from the current output vector, then prepends its new outputs. Later subtrees can claim outputs produced by earlier ones.
+### Example
 
-- **`claimMask`**: Bit vector of length N (anchor's output count). Records which anchor outputs the subtrees collectively claim.
-- **`aggregateOutputCounts`**: Vector of integers, one per subtree. Records how many outputs each subtree contributes.
-
-### Phase 2 — Block's Own Effects
-
-The block prepends its own new outputs to the current output vector, then claims from the extended vector. Because outputs are prepended before claims are applied, the block can claim its own outputs (**self-claiming**).
+Block A and block B both anchor to block G. A claims index 3 and B claims index 3 in their respective extended vectors. Both claims migrate and resolve to `{G, 2}` (the third output in G's output list). Since both A and B claim the same producing output, they conflict.
 
 ```
-start:       [anchor outputs: o_0 .. o_{N-1}]
-subtree 1:   remove s1.claims, prepend s1.outputs
-subtree 2:   remove s2.claims, prepend s2.outputs
-...
-subtree K:   remove sK.claims, prepend sK.outputs
-self:        prepend own outputs, THEN remove own claims
-end:         block's output vector
+G: outputs = [o0, o1, o2, o3, o4]
+
+Block A: anchor=G, claims=[3]  --> resolves to {G, 2}
+Block B: anchor=G, claims=[3]  --> resolves to {G, 2}
+
+Both resolve to {G, 2} --> A conflicts with B
 ```
 
-Claims in the block's `claims` field are indices into the extended vector (`[own outputs..., post-subtree outputs...]`). Claims with index < `ownOutputCount` are **self-claims** — they reference the block's own outputs. Self-claimed outputs are produced and immediately consumed atomically; they never appear in the block's final output vector or the UTXO set.
+### Different-Anchor Case
 
-Self-claims serve contract fulfillment: a spending condition may require the existence of a specific output type. The block produces that output to satisfy the condition while consuming it in the same step, avoiding unnecessary pollution of the output set. Self-claims are economically neutral — they add and subtract the same value, netting to zero in the throughput balance.
+Claim migration handles the different-anchor case naturally. If block A anchors to G and block B anchors to a descendant of G, both claims still migrate toward their producing blocks. If they resolve to the same `{block, outputIndex}`, the conflict is detected -- regardless of where the claimants sit in the DAG.
 
-The output vector is ordered newest-first. Recent outputs cluster at the front, improving claim mask compression since recent outputs are claimed more frequently.
-
-`claimMask` records which anchor outputs are claimed by any source within the block — subtrees and the block's own non-self claims. It is used both for conflict detection (bitwise intersection) and for merkle tree navigation (locating which subtree produced or claimed a given output). `aggregateOutputCounts` records per-subtree output counts for navigation. The block's own claims and outputs are separate fields.
-
-### Block Header Fields (Conflict-Relevant)
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `claimMask` | Merkle root (of bit vector, length N) | Which anchor outputs are claimed (from subtrees and block's own non-self claims). The block header stores only the merkle root; chunks of the full bit vector are distributed separately (see Partial Knowledge). |
-| `aggregateOutputCounts` | Integer vector | Number of outputs each subtree contributes |
-| `ownOutputCount` | Integer | Number of outputs the block itself produces (before claims). Claims with index < `ownOutputCount` are self-claims. |
-| `claims` | Block's own claims | Indices into the extended vector (`[own outputs..., post-subtree outputs...]`). Includes both self-claims (index < `ownOutputCount`) and shared-resource claims. |
-| `outputs` | Block's own outputs | New outputs this block itself produces |
-| `outputCount` | Integer | Total output count after full transformation |
-
-### Aggregation Example
-
-Block A anchors to block X (which has 10 outputs). A aggregates subtrees S1 and S2 in that order:
-
-1. **S1** claims outputs {2, 5} from X, produces 3 new outputs.
-   Vector: `[s1_0, s1_1, s1_2, x_0, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (11 entries)
-
-2. **S2** claims output {0} (which is `s1_0`, one of S1's outputs), produces 1 new output.
-   Vector: `[s2_0, s1_1, s1_2, x_0, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (11 entries)
-
-3. **A itself** (`ownOutputCount = 2`) — first prepend A's outputs, then apply claims.
-   After prepend: `[a_0, a_1, s2_0, s1_1, s1_2, x_0, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (13 entries)
-   A claims {5} (index 5 = `x_0`, since 5 >= `ownOutputCount` of 2, this is a shared-resource claim).
-   Final vector: `[a_0, a_1, s2_0, s1_1, s1_2, x_1, x_3, x_4, x_6, x_7, x_8, x_9]` (12 entries)
-
-A's conflict-relevant header: `claimMask = 0b0000100101` (bit 0 from A's own claim of `x_0`, bits 2 and 5 from subtrees), `aggregateOutputCounts = [3, 1]`, `ownOutputCount = 2`.
-
-### Self-Claiming Example
-
-Block B anchors to block X (which has 10 outputs). B has no subtrees. B produces 3 outputs and has `claims = {1, 5}`.
-
-1. Prepend B's outputs: `[b_0, b_1, b_2, x_0, x_1, ..., x_9]` (13 entries)
-2. Apply claims:
-   - Claim {1}: index 1 < `ownOutputCount` (3), so this is a **self-claim**. B claims its own `b_1`. This output is produced and immediately consumed — it never appears in the final output vector. It may serve to satisfy a spending condition on another claimed output (e.g., a contract that requires a proof output to exist).
-   - Claim {5}: index 5 >= `ownOutputCount` (3), so this is a shared-resource claim. Maps to anchor index 2 (`x_2`). Recorded in `claimMask` at bit 2.
-3. Final vector: `[b_0, b_2, x_0, x_1, x_3, ..., x_9]` (11 entries)
-
-B's header: `claimMask = 0b0000000100` (bit 2 only — the self-claim is excluded), `ownOutputCount = 3`.
+No explicit rebasing is needed. The output claims module's migration algorithm resolves every claim to its producing block by walking through the aggregation hierarchy one hop at a time (see [output-claims.md](output-claims.md#migration)). Two claims that target the same producing output will always converge to the same `{block, outputIndex}`, making the conflict visible.
 
 ---
 
-## Conflict Detection
+## Self-Claim Exclusion
 
-Two trees conflict if they attempt to spend the same output. Detection depends on whether the trees share an anchor.
+A block claiming its own output (index < `outputs.length`) does not create conflicts. Self-claims resolve to `{block: self, outputIndex}` -- a producing output that only the block itself can reference. No other block's claim can resolve to the same `{block, outputIndex}` because that output is internal to the claiming block.
 
-### Same-Anchor Case
-
-Two trees T1 and T2 with the same anchor conflict iff their claim masks intersect:
-
-```
-conflicts(T1, T2) = (T1.claimMask & T2.claimMask) != 0
-```
-
-This is a bitwise AND — one CPU instruction per word of the bit vector.
-
-**Self-claims are excluded** from `claimMask`. Two blocks at the same anchor that both self-claim their own index 0 are not conflicting — each references its own internal output, not a shared resource. Only claims against anchor outputs (indices >= `ownOutputCount` in the block's `claims` field, mapped back to anchor positions) appear in `claimMask` and participate in conflict detection.
-
-### Different-Anchor Case (Rebasing)
-
-If T1 anchors to block P and T2 anchors to block Q, where Q is a descendant of P (Q's anchor chain passes through P), we must **rebase** T1's claims forward through the chain P → ... → Q.
-
-Each block in the chain transforms the output vector: removing claimed outputs and prepending new ones. Rebasing maps T1's claim indices through these transformations:
-
-1. For each block B in the chain from P toward Q:
-   - If B claims an output that T1 also claims, **conflict** — both are spending the same output.
-   - Otherwise, adjust T1's claim indices: remove indices that B claimed (they no longer exist), shift remaining indices to account for B's prepended outputs.
-2. After reaching Q's output space, compare the rebased claims against T2's claim mask with bitwise AND.
-
-Rebasing is always **forward** (toward descendants). When aggregating subtrees with different anchors, the aggregator's anchor must be a descendant of all subtrees' anchors, so all subtrees rebase toward the aggregator.
-
-Rebasing can also detect conflicts with the chain itself — if T1 claims an output that an intermediate block already spent, that's a conflict discovered during rebasing.
+Self-claimed outputs are produced and immediately consumed atomically. They never appear in the block's output space, so no descendant can claim them. Two blocks that each self-claim their own index 0 are not conflicting -- each references its own internal output, not a shared resource.
 
 ---
 
-## Partial Knowledge and Monotonic Discovery
+## Aggregation Marker Conflicts
 
-A tree root's claim mask can be large. A block's header contains only the **merkle root** of its claim mask, not the full bit vector. The full vector is split into chunks that form the leaves of this merkle tree. These chunks are distributed separately — typically within collateral postings, which are themselves blocks. A peer may receive a block header (with the merkle root) long before it has any chunks of the actual claim mask.
+Every non-genesis block carries an **aggregation marker output** -- an output whose verifier uses the well-known `AGGREGATION_CONTRACT` hash (see [aggregation.md](aggregation.md#aggregation-contract-output-cache)). This marker exists so that aggregators can claim it to roll up the block.
 
-When a block is first received, its claim mask is therefore only **partially known** — some chunks may be loaded and others missing.
+Since the aggregation marker is a regular output, it follows the same double-spend rules as any other output: it can be claimed at most once. If two blocks both attempt to aggregate the same block, both will claim that block's aggregation marker. Both claims resolve to the same `{block, outputIndex}` (the marker's position in the producing block's output list). This is a double-spend conflict, detected automatically.
 
-### Default Assumption
+### Why This Matters
 
-Unknown chunks are treated as **unclaimed** (all zeros). This is optimistic: we do not generate conflicts from missing data. Conflicts can only be declared when we have positive evidence.
+Without aggregation markers, two aggregators could independently roll up the same block, creating conflicting views of the DAG. The marker mechanism converts this structural constraint into a regular double-spend problem: the producing block's marker is a unique output, and only one aggregator can claim it.
 
-### Upward Inference
+### Example
 
-If we know that a block deep within a tree claims a specific output, we can infer that every aggregator above it in the tree must also claim that output — because the aggregator's claim mask represents the net effect of its subtrees. This lets us fill in bits of a partially-known claim mask without loading the full tree.
+Block X has an aggregation marker at output index 0. Aggregator blocks E1 and E2 both try to aggregate X:
 
-Concretely: if block B is a subtree of aggregator A, and B's claim mask has bit `i` set, then A's claim mask must also have bit `i` set (after index adjustment through any intermediate transformations).
+```
+X: outputs = [marker, ...]
 
-### Monotonicity
+E1: claims marker from X --> resolves to {X, 0}
+E2: claims marker from X --> resolves to {X, 0}
 
-Conflict discovery is monotonic:
+Both resolve to {X, 0} --> E1 conflicts with E2
+```
 
-- Once a bit is known to be claimed, it stays claimed — claim masks only grow.
-- New conflicts can **appear** as more of the claim mask is revealed.
-- Conflicts can **never disappear** — a confirmed double-spend is permanent.
+This prevents double-aggregation using the same mechanism as any other double-spend.
 
-This means a peer's conflict set grows over time as it downloads more of the block graph. Two peers may temporarily disagree about conflicts (one has loaded more chunks than the other), but they will converge as both fill in the same data.
+---
 
-### Verification Priority Implication
+## Interaction with Consensus
 
-Peers should prioritize loading claim mask chunks where potential conflicts are most consequential — near the decision boundary of active consensus races.
+When a conflict is detected, the consensus module is notified. The consensus module then applies its branch selection rules (effective weight comparison) to determine which block wins. See [consensus.md](consensus.md#conflicts) for how conflicts are resolved.
+
+Conflict declarations from this concern are one of three conflict sources the consensus module handles:
+
+1. **Direct conflicts**: double-spend conflicts detected here (two claims on the same output).
+2. **Aggregation conflicts**: a block conflicts with every block it aggregates (structural, from the `aggregates` field).
+3. **Inherited conflicts**: a block inherits all conflicts from blocks it aggregates, recursively.
+
+This concern provides source (1). Sources (2) and (3) are derived by the consensus module from the block structure.
 
 ---
 
 ## Module Boundary
 
-### This Module Receives
+### This Concern Receives
 
 | Input | Source | Description |
 |-------|--------|-------------|
-| Block claim mask | Block creation module | Bit vector of claimed outputs against anchor |
-| Block output count | Block creation module | Number of new outputs the block produces |
-| Aggregate output counts | Block creation module | Per-subtree output counts for aggregation blocks |
-| Subtree ordering | Block creation module | Ordered list of subtrees for sequential transformation |
-| Claim mask chunks | Network/sync module | Incrementally loaded chunks of partially-known claim masks |
+| Resolved claims | Output claims module | `{block, outputIndex}` pairs from completed claim migration |
+| Block data | Block store | Block structure for claim and output inspection |
 
-### This Module Provides
+### This Concern Provides
 
 | Output | Consumer | Description |
 |--------|----------|-------------|
 | Direct conflict declarations | Consensus module | "Block X conflicts with block Y" (double-spend detected) |
-| Conflict set updates | Consensus module | New conflicts discovered as claim masks fill in |
-| Rebase results | Block creation module | Rebased claim masks for aggregation across different anchors |
 
 ### Invariants
 
-1. **Symmetry**: If A conflicts with B, then B conflicts with A.
-2. **Monotonicity**: Once a conflict is declared, it is never retracted.
-3. **Completeness**: With full knowledge of all claim masks, all double-spend conflicts are detected.
-4. **Optimistic partial knowledge**: Missing data never produces false conflicts.
-5. **Upward inference**: A known claim in a subtree implies the corresponding claim in all ancestor aggregators.
+1. **Symmetry**: If A conflicts with B, then B conflicts with A. Both blocks' claims resolved to the same output -- the relationship is inherently symmetric.
+2. **Monotonicity**: Once a conflict is declared, it is never retracted. A resolved claim is permanent -- the producing output does not change.
+3. **Completeness**: With full block data loaded, all double-spend conflicts are detected. Every claim migrates to its producing block, and every collision at a `{block, outputIndex}` produces a conflict declaration.
+4. **Self-claims excluded**: A block claiming its own output (index < `outputs.length`) does not create conflicts. Self-claimed outputs are internal and unreachable by other blocks' claims.
 
 ---
 
 ## Implementation
 
+The conflict detection concern is handled by the output claims module, which detects conflicts as a natural consequence of claim migration.
+
 | File | Description |
 |------|-------------|
-| [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Core algorithm: claim mask comparison, rebasing, conflict detection |
-| [`src/core/ConflictService.ts`](../../src/core/ConflictService.ts) | Wired adapter using concrete `Block` type |
-| [`src/core/BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector with partial knowledge support |
+| [`src/core/OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | Claim migration and resolution; conflict detection when two claims resolve to the same output |
+| [`src/core/OutputClaimService.ts`](../../src/core/OutputClaimService.ts) | Wired adapter using concrete `Block` type |

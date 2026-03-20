@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/block-creation.md, docs/protocol/contracts.md
 
 import { Hash } from '../util/Hash.ts';
-import { BitVector } from './BitVector.ts';
+import { unionClaimMasks } from './OutputSpace.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -112,7 +112,7 @@ export interface BlockCreationProvider<BlockType> {
    * Return the claim mask of `blockHash` rebased to `targetAnchor`.
    * Returns null if rebasing fails (chain broken, etc).
    */
-  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null;
+  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null;
 }
 
 // -- Module -------------------------------------------------------
@@ -127,7 +127,7 @@ export interface BlockCreationProvider<BlockType> {
  * Aggregation data (cache) is produced by the aggregation contract,
  * not by this module. See AggregationContract.ts.
  *
- * Fully self-contained — depends only on BlockCreationProvider, BitVector, and Hash.
+ * Fully self-contained -- depends only on BlockCreationProvider, OutputSpace helpers, and Hash.
  */
 export class BlockCreationModule<BlockType> {
   private readonly provider: BlockCreationProvider<BlockType>;
@@ -152,7 +152,7 @@ export class BlockCreationModule<BlockType> {
 
     // 2. Process subtrees (aggregation)
     const subtreeInfos: SubtreeInfo[] = [];
-    const subtreeClaimMasks: BitVector[] = [];
+    const subtreeClaimMasks: (readonly number[])[] = [];
     let totalSubtreeOutputs = 0;
     let subtreeAnchorClaims = 0;
 
@@ -185,18 +185,18 @@ export class BlockCreationModule<BlockType> {
       subtreeInfos.push({ anchorDepth: depth, weightVector: subtreeWeightVector });
       subtreeClaimMasks.push(rebasedMask);
       totalSubtreeOutputs += subtreeOutputCount;
-      subtreeAnchorClaims += rebasedMask.popcount();
+      subtreeAnchorClaims += rebasedMask.length;
     }
 
-    // 3. Compute merged subtree claim mask (OR of all rebased masks)
-    const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
+    // 3. Compute merged subtree claim mask (union of all rebased masks)
+    let mergedSubtreeMask: number[] = [];
     for (const mask of subtreeClaimMasks) {
-      mergedSubtreeMask.or(mask);
+      mergedSubtreeMask = unionClaimMasks(mergedSubtreeMask, mask);
     }
 
     // Check for inter-subtree conflicts (two subtrees claim same anchor output)
-    const subtreeClaimTotal = subtreeClaimMasks.reduce((s, m) => s + m.popcount(), 0);
-    if (subtreeClaimTotal !== mergedSubtreeMask.popcount()) {
+    const subtreeClaimTotal = subtreeClaimMasks.reduce((s, m) => s + m.length, 0);
+    if (subtreeClaimTotal !== mergedSubtreeMask.length) {
       throw new Error('subtrees have overlapping anchor claims (inter-subtree conflict)');
     }
 

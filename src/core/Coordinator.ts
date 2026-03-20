@@ -2,7 +2,6 @@
 
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
-import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
 import { GossipService } from './GossipService.ts';
@@ -34,7 +33,6 @@ export interface BlockReceivedResult {
 export class Coordinator {
   private readonly ctx: ProtocolContext;
   private readonly store: BlockStore;
-  private readonly conflict: ConflictService;
   private readonly consensus: ConsensusService;
   private readonly sampling: SamplingService;
   private readonly gossip: GossipService;
@@ -44,15 +42,23 @@ export class Coordinator {
   /** Collects canonicality changes from flushChanges(). */
   private readonly canonicalityChanges: { hash: Hash; canonical: boolean }[] = [];
 
+  /** Collects conflicts discovered during blockReceived(). */
+  private pendingConflicts: [Hash, Hash][] = [];
+
   constructor(ctx: ProtocolContext) {
     this.ctx = ctx;
     this.store = ctx.get(BlockStore);
-    this.conflict = ctx.get(ConflictService);
     this.consensus = ctx.get(ConsensusService);
     this.sampling = ctx.get(SamplingService);
     this.gossip = ctx.get(GossipService);
     this.blockCreation = ctx.get(BlockCreationService);
     this.outputClaims = ctx.get(OutputClaimService);
+
+    // Wire output claim conflicts to consensus + pending collection
+    this.outputClaims.onConflict((a, b) => {
+      this.consensus.addConflict(a, b);
+      this.pendingConflicts.push([a, b]);
+    });
 
     // Wire consensus change listener to collect canonicality changes
     this.consensus.onCanonicalityChange((hash, canonical) => {
@@ -64,49 +70,46 @@ export class Coordinator {
    * Process a received block through all protocol modules.
    *
    * 1. Store the block
-   * 2. Register output claims and trigger migration
-   * 3. Add to conflict module → discover conflicts
-   * 4. Add to consensus module + register conflicts + set initial weight
-   * 5. Gossip notification
-   * 6. Flush canonical view changes
-   * 7. For newly canonical blocks, add to sampling
+   * 2. Reset pendingConflicts, register output claims and trigger migration
+   *    (conflicts fire via callback -> addConflict + collect)
+   * 3. Add to consensus module + set initial weight
+   * 4. Gossip notification
+   * 5. Flush canonical view changes
+   * 6. For newly canonical blocks, add to sampling
    */
   blockReceived(block: Block, fromPeer: string | null): BlockReceivedResult {
     // 1. Store the block
     this.store.put(block);
 
-    // 2. Output claim tracking: register claims and trigger migration
+    // 2. Reset pending conflicts, then register output claims and trigger migration
+    //    (conflicts fire via onConflict callback -> addConflict + collect)
+    this.pendingConflicts.length = 0;
     this.outputClaims.addBlock(block.hash, block.claims);
     this.outputClaims.onBlockLoaded(block.hash);
 
-    // 3. Conflict detection
-    const newConflicts = this.conflict.addBlock(block.hash);
-
-    // 4. Consensus
+    // 3. Consensus
     this.consensus.addBlock(block.hash);
-    for (const [a, b] of newConflicts) {
-      this.consensus.addConflict(a, b);
-    }
 
-    // Trust declared weight initially — reconstruct weight vector from block
+    // Trust declared weight initially -- reconstruct weight vector from block
     const weightVector = getBlockWeightVector(block);
     this.consensus.setVerifiedWeight(block.hash, weightVector);
 
-    // 5. Gossip
+    // 4. Gossip
     const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
 
-    // 6. Flush canonical view -- fires listener which populates canonicalityChanges
+    // 5. Flush canonical view -- fires listener which populates canonicalityChanges
     this.canonicalityChanges.length = 0;
     this.consensus.flushChanges();
     const canonicalityChanges = [...this.canonicalityChanges];
 
-    // 7. For newly canonical blocks, add to sampling
+    // 6. For newly canonical blocks, add to sampling
     for (const change of canonicalityChanges) {
       if (change.canonical) {
         this.sampling.addTree(change.hash);
       }
     }
 
+    const newConflicts = [...this.pendingConflicts];
     return { pushActions, canonicalityChanges, newConflicts };
   }
 

@@ -31,5 +31,4 @@ export {
 } from './core/Packet.ts';
 export type { Packet } from './core/Packet.ts';
 export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
-export { BitVector } from './core/BitVector.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';
