@@ -164,9 +164,13 @@ export class NodeContext {
       if (block) this.blocks.notifyChanged(block);
     });
 
-    // 7. Create built-in DraftStrategy and combine with user strategies
+    // 7. Create built-in DraftStrategy and combine with user strategies.
+    //    Default enableGeneration to only registered contracts so that
+    //    outputs for unregistered contracts don't waste inFlight slots.
+    const enableGeneration = config.enableGeneration ??
+      ((hash: Hash) => contracts.has(hash.toHex()));
     const draftStrategy = new DraftStrategy(
-      { enableGeneration: config.enableGeneration },
+      { enableGeneration },
       contractGenerator,
     );
     const strategies: Strategy[] = [

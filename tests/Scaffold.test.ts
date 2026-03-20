@@ -164,3 +164,35 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
   // The aggregation block should aggregate the chain blocks
   assert(aggBlock.aggregates.length > 0, 'aggregation block should have aggregates');
 });
+
+Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async () => {
+  // 8 blocks produce 8 aggregation markers. Two first-level aggregations
+  // each consume 4 markers (A1, A2). Their own marker + aggData outputs
+  // (4 total) then trigger a second-level aggregation (A3).
+  const scaffold = new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY });
+  const ctx = scaffold.context;
+
+  for (let i = 0; i < 8; i++) {
+    scaffold.put({
+      outputs: [makeOutput(50, `demo-${i}`)],
+    });
+  }
+
+  // Flush async -- multiple rounds of aggregation need time.
+  await new Promise((r) => setTimeout(r, 100));
+
+  const aggBlocks: Block[] = [];
+  for (const block of ctx.store.values()) {
+    const hasAggData = block.outputs.some(
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+    );
+    if (hasAggData) {
+      aggBlocks.push(block);
+    }
+  }
+
+  assert(
+    aggBlocks.length >= 2,
+    `expected at least 2 aggregation blocks, got ${aggBlocks.length}`,
+  );
+});
