@@ -70,9 +70,11 @@ Given an entry at index I on block B:
 2. **Descend through aggregates**: If I >= B.outputs.length:
    - Compute R = I - B.outputs.length
    - Walk B's aggregates in reverse order. For each aggregate:
-     - If R < aggregate.newOutputCount: the entry belongs to this aggregate. Move it to the aggregate's outputClaims at index R. Recurse.
-     - Else: R -= aggregate.newOutputCount. Continue to next aggregate.
-   - If R survives all aggregates: the entry maps to B's anchor's output space at index R. Move it to the anchor's outputClaims at index R. Recurse.
+     - If R < aggregate's `newOutputCount` (from `aggregateOutputCounts`): the entry belongs to this aggregate's output space at index R. Move it there and recurse (using `resolveOutputSpaceIndex` to map through the aggregate's claims).
+     - Else: R -= aggregate's `newOutputCount`. Continue to next aggregate.
+   - If R survives all aggregates: R indexes into the **surviving** anchor outputs (post-subtree-claims). Map through the aggregate subtree claim mask to get the original anchor output space index, then move the entry to the anchor at that index. Recurse.
+
+   This is the same algorithm as `resolveClaimIndex` / `resolveOutputSpaceIndex` in the [output space module](output-space.md#claim-index-resolution), applied one hop at a time.
 
 3. **Stuck**: If the target block (aggregate or anchor) is not loaded, the entry stays on B. It will migrate when the target block loads.
 

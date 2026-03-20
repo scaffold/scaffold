@@ -233,6 +233,7 @@ Supporting files:
 | File | Description |
 |------|-------------|
 | [`Block.ts`](../../src/core/Block.ts) | Concrete block type, `BlockStore`, genesis creation |
+| [`OutputSpace.ts`](../../src/core/OutputSpace.ts) | Pure output-space operations: claim resolution, masks, ordering, UTXO computation |
 | [`BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector for claim masks (used by conflict module) |
 | [`Coordinator.ts`](../../src/core/Coordinator.ts) | Orchestrates all modules: block received → conflict → consensus → gossip → sampling |
 | [`ProtocolContext.ts`](../../src/core/ProtocolContext.ts) | Dependency injection container wiring all services together |
