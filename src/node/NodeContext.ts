@@ -194,9 +194,14 @@ export class NodeContext {
       },
     });
 
-    // 9. Wire draft solidification: when a draft becomes ready, build and process it
+    // 9. Wire draft solidification: when a draft becomes ready, build and process it.
+    //    Release inFlight slots BEFORE solidification so that when the new
+    //    block is processed, DraftStrategy has room to create follow-on drafts.
     this.draftStore.onTransition((draft) => {
       if (draft.status !== 'ready') return;
+      for (const rc of draft.resolvedClaims) {
+        draftStrategy.complete(rc.block, rc.outputIndex);
+      }
       this._solidifyDraft(draft, blockCreator);
     });
 

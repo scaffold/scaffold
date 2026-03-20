@@ -196,3 +196,37 @@ Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async (
     `expected at least 2 aggregation blocks, got ${aggBlocks.length}`,
   );
 });
+
+Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', async () => {
+  // Simulates the demo UI: each click is separated by time, so microtasks
+  // resolve between puts. A single draft consumes markers one at a time via
+  // notifyNewOutput. After 4 markers, the aggregation completes. The inFlight
+  // release must happen so follow-on drafts can start for the next batch.
+  const scaffold = new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY });
+  const ctx = scaffold.context;
+
+  for (let i = 0; i < 8; i++) {
+    scaffold.put({
+      outputs: [makeOutput(50, `async-${i}`)],
+    });
+    // Simulate UI timing: flush microtasks between each put
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  await new Promise((r) => setTimeout(r, 100));
+
+  const aggBlocks: Block[] = [];
+  for (const block of ctx.store.values()) {
+    const hasAggData = block.outputs.some(
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+    );
+    if (hasAggData) {
+      aggBlocks.push(block);
+    }
+  }
+
+  assert(
+    aggBlocks.length >= 2,
+    `expected at least 2 aggregation blocks with async puts, got ${aggBlocks.length}`,
+  );
+});
