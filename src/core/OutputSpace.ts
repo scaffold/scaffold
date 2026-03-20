@@ -4,7 +4,7 @@ import { Hash, ZERO_HASH } from '../util/Hash.ts';
 
 // -- Types --------------------------------------------------------
 
-/** Minimal block data needed for output-space operations. */
+/** Minimal block view needed for output-space operations. */
 export interface OutputSpaceBlock {
   readonly hash: Hash;
   readonly anchor: Hash;
@@ -22,8 +22,10 @@ export interface OutputSpaceBlock {
   readonly newOutputCount: number;
 }
 
-/** Lookup function for block data. */
-export type OutputSpaceLookup = (hash: Hash) => OutputSpaceBlock | undefined;
+/** Provider interface for the OutputSpaceModule. */
+export interface OutputSpaceProvider {
+  getBlock(hash: Hash): OutputSpaceBlock | undefined;
+}
 
 /** A resolved output: which block produced it and at what local index. */
 export interface ResolvedOutput {
@@ -62,7 +64,6 @@ export function mapSurvivingToOriginal(
   let maskIdx = 0;
 
   while (survived <= survivingIndex) {
-    // Skip over claimed positions
     while (maskIdx < claimMask.length && claimMask[maskIdx] === original) {
       original++;
       maskIdx++;
@@ -72,7 +73,7 @@ export function mapSurvivingToOriginal(
     original++;
   }
 
-  return original; // Should not reach here for valid input
+  return original;
 }
 
 /**
@@ -84,7 +85,6 @@ export function mapOriginalToSurviving(
   originalIndex: number,
   claimMask: readonly number[],
 ): number {
-  // Check if this index was claimed
   let lo = 0;
   let hi = claimMask.length;
   while (lo < hi) {
@@ -93,9 +93,6 @@ export function mapOriginalToSurviving(
     else hi = mid;
   }
   if (lo < claimMask.length && claimMask[lo] === originalIndex) return -1;
-
-  // Count how many claimed indices are below originalIndex
-  // lo is already the count of mask entries < originalIndex (from the binary search)
   return originalIndex - lo;
 }
 
@@ -136,375 +133,299 @@ export function unionClaimMasks(
   return result;
 }
 
-// -- DAG Ordering -------------------------------------------------
+// -- Module -------------------------------------------------------
 
 /**
- * Compute the subtree ordering from base (exclusive) to tip (inclusive).
- * Follows both anchor chains and aggregate chains, stopping at base.
+ * Pure output-space logic. Encapsulates all claim index transformation,
+ * ordering, claim mask computation, and UTXO set operations.
  *
- * subtreeFrom(block, base) =
- *   if block == base: []
- *   else: [...subtreeFrom(block.anchor, base),
- *          ...block.aggregates.flatMap(a => subtreeFrom(a, base)),
- *          block]
+ * Fully self-contained -- depends only on OutputSpaceProvider and Hash.
  */
-export function subtreeFrom(
-  tip: Hash,
-  base: Hash,
-  lookup: OutputSpaceLookup,
-): Hash[] {
-  if (Hash.equals(tip, base)) return [];
+export class OutputSpaceModule {
+  constructor(private readonly provider: OutputSpaceProvider) {}
 
-  const block = lookup(tip);
-  if (!block) return [];
+  // -- DAG Ordering -----------------------------------------------
 
-  const result: Hash[] = [];
+  /**
+   * Compute the subtree ordering from base (exclusive) to tip (inclusive).
+   * Follows both anchor chains and aggregate chains, stopping at base.
+   */
+  subtreeFrom(tip: Hash, base: Hash): Hash[] {
+    if (Hash.equals(tip, base)) return [];
 
-  // Follow anchor chain
-  if (!Hash.equals(block.anchor, ZERO_HASH)) {
-    result.push(...subtreeFrom(block.anchor, base, lookup));
-  }
+    const block = this.provider.getBlock(tip);
+    if (!block) return [];
 
-  // Follow aggregate chains
-  for (const agg of block.aggregates) {
-    result.push(...subtreeFrom(agg, base, lookup));
-  }
+    const result: Hash[] = [];
 
-  result.push(tip);
-  return result;
-}
-
-/**
- * Compute the full total ordering ending at tip (including genesis).
- */
-export function totalOrdering(
-  tip: Hash,
-  lookup: OutputSpaceLookup,
-): Hash[] {
-  const block = lookup(tip);
-  if (!block) return [];
-
-  // Genesis: anchor is ZERO_HASH
-  if (Hash.equals(block.anchor, ZERO_HASH)) return [tip];
-
-  return [
-    ...totalOrdering(block.anchor, lookup),
-    ...block.aggregates.flatMap((a) => subtreeFrom(a, block.anchor, lookup)),
-    tip,
-  ];
-}
-
-// -- Claim Index Resolution ---------------------------------------
-
-/**
- * Resolve a claim index in block's extended vector to the producing block.
- *
- * Extended vector: [own outputs, agg[n-1].new, ..., agg[0].new, anchor.surviving]
- * - I < outputs.length → self-claim: {block, I}
- * - else → navigate through aggregates (reverse order) then anchor
- */
-export function resolveClaimIndex(
-  blockHash: Hash,
-  claimIndex: number,
-  lookup: OutputSpaceLookup,
-): ResolvedOutput | undefined {
-  const block = lookup(blockHash);
-  if (!block) return undefined;
-
-  // Self-claim or own output
-  if (claimIndex < block.outputs.length) {
-    return { block: blockHash, outputIndex: claimIndex };
-  }
-
-  // Navigate through inherited space
-  let remaining = claimIndex - block.outputs.length;
-
-  // Walk aggregates in reverse order (last aggregate first)
-  for (let i = block.aggregates.length - 1; i >= 0; i--) {
-    const count = block.aggregateOutputCounts[i];
-    if (remaining < count) {
-      // Target is in this aggregate's output space at index `remaining`
-      return resolveOutputSpaceIndex(block.aggregates[i], remaining, lookup);
+    if (!Hash.equals(block.anchor, ZERO_HASH)) {
+      result.push(...this.subtreeFrom(block.anchor, base));
     }
-    remaining -= count;
+
+    for (const agg of block.aggregates) {
+      result.push(...this.subtreeFrom(agg, base));
+    }
+
+    result.push(tip);
+    return result;
   }
 
-  // Remaining maps to surviving anchor outputs (post-subtree-claims).
-  // Map through the aggregate subtree mask to get the original anchor
-  // output space index before delegating to the anchor.
-  const aggMask = _aggregateClaimMask(block, lookup);
-  const anchorSpaceIdx = mapSurvivingToOriginal(remaining, aggMask);
-  return resolveOutputSpaceIndex(block.anchor, anchorSpaceIdx, lookup);
-}
+  /**
+   * Compute the full total ordering ending at tip (including genesis).
+   */
+  totalOrdering(tip: Hash): Hash[] {
+    const block = this.provider.getBlock(tip);
+    if (!block) return [];
 
-/**
- * Resolve an index in block's output space (post-claims) to the producing block.
- *
- * Maps through claim gaps to get the extended vector index, then delegates
- * to resolveClaimIndex.
- */
-export function resolveOutputSpaceIndex(
-  blockHash: Hash,
-  spaceIndex: number,
-  lookup: OutputSpaceLookup,
-): ResolvedOutput | undefined {
-  const block = lookup(blockHash);
-  if (!block) return undefined;
+    if (Hash.equals(block.anchor, ZERO_HASH)) return [tip];
 
-  const extIdx = mapSurvivingToOriginal(spaceIndex, block.claims);
-  return resolveClaimIndex(blockHash, extIdx, lookup);
-}
+    return [
+      ...this.totalOrdering(block.anchor),
+      ...block.aggregates.flatMap((a) => this.subtreeFrom(a, block.anchor)),
+      tip,
+    ];
+  }
 
-// -- Inverse: Compute Claim Index ---------------------------------
+  // -- Claim Index Resolution -------------------------------------
 
-/**
- * Compute the claim index in block's extended vector for a known output.
- * Inverse of resolveClaimIndex.
- *
- * Returns undefined if the target is not reachable from block's extended vector.
- */
-export function computeClaimIndex(
-  blockHash: Hash,
-  target: ResolvedOutput,
-  lookup: OutputSpaceLookup,
-): number | undefined {
-  const block = lookup(blockHash);
-  if (!block) return undefined;
+  /**
+   * Resolve a claim index in block's extended vector to the producing block.
+   *
+   * Extended vector: [own outputs, agg[n-1].new, ..., agg[0].new, anchor.surviving]
+   */
+  resolveClaimIndex(blockHash: Hash, claimIndex: number): ResolvedOutput | undefined {
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
 
-  // Direct match: target is one of block's own outputs
-  if (Hash.equals(target.block, blockHash)) {
-    if (target.outputIndex < block.outputs.length) {
-      return target.outputIndex;
+    if (claimIndex < block.outputs.length) {
+      return { block: blockHash, outputIndex: claimIndex };
     }
+
+    let remaining = claimIndex - block.outputs.length;
+
+    for (let i = block.aggregates.length - 1; i >= 0; i--) {
+      const count = block.aggregateOutputCounts[i];
+      if (remaining < count) {
+        return this.resolveOutputSpaceIndex(block.aggregates[i], remaining);
+      }
+      remaining -= count;
+    }
+
+    const aggMask = this._aggregateClaimMask(block);
+    const anchorSpaceIdx = mapSurvivingToOriginal(remaining, aggMask);
+    return this.resolveOutputSpaceIndex(block.anchor, anchorSpaceIdx);
+  }
+
+  /**
+   * Resolve an index in block's output space (post-claims) to the producing block.
+   * Maps through claim gaps to get the extended vector index, then delegates
+   * to resolveClaimIndex.
+   */
+  resolveOutputSpaceIndex(blockHash: Hash, spaceIndex: number): ResolvedOutput | undefined {
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
+
+    const extIdx = mapSurvivingToOriginal(spaceIndex, block.claims);
+    return this.resolveClaimIndex(blockHash, extIdx);
+  }
+
+  // -- Inverse: Compute Claim Index -------------------------------
+
+  /**
+   * Compute the claim index in block's extended vector for a known output.
+   * Inverse of resolveClaimIndex.
+   */
+  computeClaimIndex(blockHash: Hash, target: ResolvedOutput): number | undefined {
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
+
+    if (Hash.equals(target.block, blockHash)) {
+      if (target.outputIndex < block.outputs.length) {
+        return target.outputIndex;
+      }
+      return undefined;
+    }
+
+    // Only match if in the aggregate's NEW outputs (< aggregateOutputCounts[i])
+    let offset = block.outputs.length;
+    for (let i = block.aggregates.length - 1; i >= 0; i--) {
+      const spaceIdx = this.computeOutputSpaceIndex(block.aggregates[i], target);
+      if (spaceIdx !== undefined && spaceIdx < block.aggregateOutputCounts[i]) {
+        return offset + spaceIdx;
+      }
+      offset += block.aggregateOutputCounts[i];
+    }
+
+    // Anchor portion uses surviving indices (post-subtree-claims)
+    const anchorSpaceIdx = this.computeOutputSpaceIndex(block.anchor, target);
+    if (anchorSpaceIdx !== undefined) {
+      const aggMask = this._aggregateClaimMask(block);
+      const survivingIdx = mapOriginalToSurviving(anchorSpaceIdx, aggMask);
+      if (survivingIdx === -1) return undefined;
+      return offset + survivingIdx;
+    }
+
     return undefined;
   }
 
-  // Check each aggregate's subtree. Only match if the target is in the
-  // aggregate's NEW outputs (first aggregateOutputCounts[i] entries of its
-  // output space), not inherited outputs from the anchor.
-  let offset = block.outputs.length;
-  for (let i = block.aggregates.length - 1; i >= 0; i--) {
-    const spaceIdx = computeOutputSpaceIndex(block.aggregates[i], target, lookup);
-    if (spaceIdx !== undefined && spaceIdx < block.aggregateOutputCounts[i]) {
-      return offset + spaceIdx;
+  /**
+   * Compute the output space index for a known output in a block.
+   * Inverse of resolveOutputSpaceIndex.
+   */
+  computeOutputSpaceIndex(blockHash: Hash, target: ResolvedOutput): number | undefined {
+    const extIdx = this.computeClaimIndex(blockHash, target);
+    if (extIdx === undefined) return undefined;
+
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
+
+    const result = mapOriginalToSurviving(extIdx, block.claims);
+    return result === -1 ? undefined : result;
+  }
+
+  // -- Claim Masks ------------------------------------------------
+
+  /**
+   * Compute the claim mask for a block's subtree against its anchor's output space.
+   * Returns a sorted array of anchor output indices that the subtree claims.
+   * Self-claims are excluded.
+   */
+  subtreeClaimMask(blockHash: Hash): ClaimMask | undefined {
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
+
+    const aggMask = this._aggregateClaimMask(block);
+
+    const ownOutputCount = block.outputs.length;
+    const totalAggOutputs = block.aggregateOutputCounts.reduce((a, b) => a + b, 0);
+    const inheritedOffset = ownOutputCount + totalAggOutputs;
+
+    const ownAnchorClaims: number[] = [];
+    for (const idx of block.claims) {
+      if (idx < ownOutputCount) continue;
+      if (idx < inheritedOffset) continue;
+
+      const survivingIdx = idx - inheritedOffset;
+      const originalIdx = mapSurvivingToOriginal(survivingIdx, aggMask);
+      ownAnchorClaims.push(originalIdx);
     }
-    offset += block.aggregateOutputCounts[i];
+
+    ownAnchorClaims.sort((a, b) => a - b);
+    return unionClaimMasks(aggMask, ownAnchorClaims);
   }
 
-  // Check anchor's subtree. The anchor portion of the extended vector uses
-  // surviving anchor indices (post-subtree-claims), so map through the mask.
-  const anchorSpaceIdx = computeOutputSpaceIndex(block.anchor, target, lookup);
-  if (anchorSpaceIdx !== undefined) {
-    const aggMask = _aggregateClaimMask(block, lookup);
-    const survivingIdx = mapOriginalToSurviving(anchorSpaceIdx, aggMask);
-    if (survivingIdx === -1) return undefined; // claimed by aggregate subtree
-    return offset + survivingIdx;
+  // -- Output Space Computation -----------------------------------
+
+  /**
+   * Compute the extended vector of a block (before claims are applied).
+   * Layout: [own outputs, agg[n-1].new, ..., agg[0].new, anchor.surviving]
+   */
+  extendedVector(blockHash: Hash): UtxoEntry[] | undefined {
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
+
+    const entries: UtxoEntry[] = [];
+    let idx = 0;
+
+    for (let i = 0; i < block.outputs.length; i++) {
+      entries.push({ block: blockHash, outputIndex: i, spaceIndex: idx++ });
+    }
+
+    for (let i = block.aggregates.length - 1; i >= 0; i--) {
+      const aggSpace = this.outputSpace(block.aggregates[i]);
+      if (!aggSpace) return undefined;
+
+      const newCount = block.aggregateOutputCounts[i];
+      for (let j = 0; j < newCount && j < aggSpace.length; j++) {
+        entries.push({
+          block: aggSpace[j].block,
+          outputIndex: aggSpace[j].outputIndex,
+          spaceIndex: idx++,
+        });
+      }
+    }
+
+    if (!Hash.equals(block.anchor, ZERO_HASH)) {
+      const anchorSpace = this.outputSpace(block.anchor);
+      if (!anchorSpace) return undefined;
+
+      const aggMask = this._aggregateClaimMask(block);
+      const aggMaskSet = new Set(aggMask);
+
+      for (let i = 0; i < anchorSpace.length; i++) {
+        if (aggMaskSet.has(i)) continue;
+        entries.push({
+          block: anchorSpace[i].block,
+          outputIndex: anchorSpace[i].outputIndex,
+          spaceIndex: idx++,
+        });
+      }
+    }
+
+    return entries;
   }
 
-  return undefined;
-}
+  /**
+   * Compute the output space of a block: surviving outputs after all claims.
+   * Layout: [surviving own, agg[n-1].new, ..., agg[0].new, anchor.surviving]
+   */
+  outputSpace(blockHash: Hash): UtxoEntry[] | undefined {
+    const extended = this.extendedVector(blockHash);
+    if (!extended) return undefined;
 
-/**
- * Compute the output space index for a known output in a block.
- * Inverse of resolveOutputSpaceIndex.
- *
- * Returns undefined if the target is not reachable or was claimed.
- */
-export function computeOutputSpaceIndex(
-  blockHash: Hash,
-  target: ResolvedOutput,
-  lookup: OutputSpaceLookup,
-): number | undefined {
-  const extIdx = computeClaimIndex(blockHash, target, lookup);
-  if (extIdx === undefined) return undefined;
+    const block = this.provider.getBlock(blockHash);
+    if (!block) return undefined;
 
-  const block = lookup(blockHash);
-  if (!block) return undefined;
+    const claimSet = new Set(block.claims);
+    const result: UtxoEntry[] = [];
+    let spaceIdx = 0;
+    for (const entry of extended) {
+      if (!claimSet.has(entry.spaceIndex)) {
+        result.push({ ...entry, spaceIndex: spaceIdx++ });
+      }
+    }
 
-  const result = mapOriginalToSurviving(extIdx, block.claims);
-  return result === -1 ? undefined : result;
-}
+    return result;
+  }
 
-// -- Internal Helpers ---------------------------------------------
+  // -- Internal ---------------------------------------------------
 
-/**
- * Compute the combined claim mask that aggregate subtrees make against
- * the block's anchor's output space (excluding the block's own claims).
- *
- * Walks each aggregate's subtree ordering, resolves every non-self claim,
- * and checks if the resolved output lives in the anchor's output space.
- * This correctly handles aggregates that anchor to intermediate blocks
- * (not directly to the aggregator's anchor).
- */
-function _aggregateClaimMask(
-  block: OutputSpaceBlock,
-  lookup: OutputSpaceLookup,
-): number[] {
-  if (block.aggregates.length === 0) return [];
+  /**
+   * Compute the combined claim mask that aggregate subtrees make against
+   * the block's anchor's output space. Walks each aggregate's subtree,
+   * resolves every non-self claim, and checks if the resolved output
+   * lives in the anchor's output space.
+   */
+  private _aggregateClaimMask(block: OutputSpaceBlock): number[] {
+    if (block.aggregates.length === 0) return [];
 
-  const anchorHash = block.anchor;
-  const mask: number[] = [];
+    const anchorHash = block.anchor;
+    const mask: number[] = [];
 
-  for (const aggHash of block.aggregates) {
-    const sub = subtreeFrom(aggHash, anchorHash, lookup);
-    for (const bHash of sub) {
-      const b = lookup(bHash);
-      if (!b) continue;
-      for (const claimIdx of b.claims) {
-        if (claimIdx < b.outputs.length) continue; // self-claim
-        const resolved = resolveClaimIndex(bHash, claimIdx, lookup);
-        if (!resolved) continue;
-        // Check if this resolved output is in the anchor's output space
-        const anchorIdx = computeOutputSpaceIndex(anchorHash, resolved, lookup);
-        if (anchorIdx !== undefined) {
-          mask.push(anchorIdx);
+    for (const aggHash of block.aggregates) {
+      const sub = this.subtreeFrom(aggHash, anchorHash);
+      for (const bHash of sub) {
+        const b = this.provider.getBlock(bHash);
+        if (!b) continue;
+        for (const claimIdx of b.claims) {
+          if (claimIdx < b.outputs.length) continue;
+          const resolved = this.resolveClaimIndex(bHash, claimIdx);
+          if (!resolved) continue;
+          const anchorIdx = this.computeOutputSpaceIndex(anchorHash, resolved);
+          if (anchorIdx !== undefined) {
+            mask.push(anchorIdx);
+          }
         }
       }
     }
-  }
 
-  mask.sort((a, b) => a - b);
-  // Deduplicate
-  const deduped: number[] = [];
-  for (const v of mask) {
-    if (deduped.length === 0 || deduped[deduped.length - 1] !== v) {
-      deduped.push(v);
+    mask.sort((a, b) => a - b);
+    const deduped: number[] = [];
+    for (const v of mask) {
+      if (deduped.length === 0 || deduped[deduped.length - 1] !== v) {
+        deduped.push(v);
+      }
     }
+    return deduped;
   }
-  return deduped;
-}
-
-// -- Claim Masks --------------------------------------------------
-
-/**
- * Compute the claim mask for a block's subtree against its anchor's output space.
- * Returns a sorted array of anchor output indices that the subtree claims.
- *
- * Self-claims are excluded (they don't consume anchor outputs).
- *
- * For leaf blocks: non-self claims mapped directly to anchor indices.
- * For aggregation blocks: union of aggregate masks + own anchor claims.
- */
-export function subtreeClaimMask(
-  blockHash: Hash,
-  lookup: OutputSpaceLookup,
-): ClaimMask | undefined {
-  const block = lookup(blockHash);
-  if (!block) return undefined;
-
-  // Get the aggregate claim mask (claims against our anchor from aggregate subtrees)
-  const aggMask = _aggregateClaimMask(block, lookup);
-
-  // Own claims against inherited space
-  const ownOutputCount = block.outputs.length;
-  const totalAggOutputs = block.aggregateOutputCounts.reduce((a, b) => a + b, 0);
-  const inheritedOffset = ownOutputCount + totalAggOutputs;
-
-  const ownAnchorClaims: number[] = [];
-  for (const idx of block.claims) {
-    if (idx < ownOutputCount) continue; // self-claim
-    if (idx < inheritedOffset) continue; // claim on aggregate output
-
-    // This claim hits the surviving anchor space at position (idx - inheritedOffset)
-    const survivingIdx = idx - inheritedOffset;
-    // Map surviving anchor index back to original anchor index through subtree mask
-    const originalIdx = mapSurvivingToOriginal(survivingIdx, aggMask);
-    ownAnchorClaims.push(originalIdx);
-  }
-
-  ownAnchorClaims.sort((a, b) => a - b);
-  return unionClaimMasks(aggMask, ownAnchorClaims);
-}
-
-// -- Output Space Computation -------------------------------------
-
-/**
- * Compute the extended vector of a block (before claims are applied).
- * Returns UtxoEntry[] with provenance.
- *
- * Layout: [own outputs, agg[n-1].new, ..., agg[0].new, anchor.surviving]
- */
-export function extendedVector(
-  blockHash: Hash,
-  lookup: OutputSpaceLookup,
-): UtxoEntry[] | undefined {
-  const block = lookup(blockHash);
-  if (!block) return undefined;
-
-  const entries: UtxoEntry[] = [];
-  let idx = 0;
-
-  // Own outputs
-  for (let i = 0; i < block.outputs.length; i++) {
-    entries.push({ block: blockHash, outputIndex: i, spaceIndex: idx++ });
-  }
-
-  // Aggregate new outputs (reverse order)
-  for (let i = block.aggregates.length - 1; i >= 0; i--) {
-    const aggSpace = outputSpace(block.aggregates[i], lookup);
-    if (!aggSpace) return undefined;
-
-    // Take only the "new" outputs (first aggregateOutputCounts[i] entries).
-    // Use the aggregating block's cached count, not the aggregate's own newOutputCount,
-    // because for deep subtrees the cached count covers the entire subtree.
-    const newCount = block.aggregateOutputCounts[i];
-
-    for (let j = 0; j < newCount && j < aggSpace.length; j++) {
-      entries.push({
-        block: aggSpace[j].block,
-        outputIndex: aggSpace[j].outputIndex,
-        spaceIndex: idx++,
-      });
-    }
-  }
-
-  // Anchor's surviving outputs (after subtree claims)
-  if (!Hash.equals(block.anchor, ZERO_HASH)) {
-    const anchorSpace = outputSpace(block.anchor, lookup);
-    if (!anchorSpace) return undefined;
-
-    // Remove entries claimed by aggregate subtrees (against this block's anchor)
-    const aggMask = _aggregateClaimMask(block, lookup);
-    const aggMaskSet = new Set(aggMask);
-
-    for (let i = 0; i < anchorSpace.length; i++) {
-      if (aggMaskSet.has(i)) continue;
-      entries.push({
-        block: anchorSpace[i].block,
-        outputIndex: anchorSpace[i].outputIndex,
-        spaceIndex: idx++,
-      });
-    }
-  }
-
-  return entries;
-}
-
-/**
- * Compute the output space of a block: surviving outputs after all claims.
- * Returns UtxoEntry[] with provenance, indexed by output space position.
- *
- * Layout: [surviving own, agg[n-1].new, ..., agg[0].new, anchor.surviving]
- */
-export function outputSpace(
-  blockHash: Hash,
-  lookup: OutputSpaceLookup,
-): UtxoEntry[] | undefined {
-  const extended = extendedVector(blockHash, lookup);
-  if (!extended) return undefined;
-
-  const block = lookup(blockHash);
-  if (!block) return undefined;
-
-  // Remove claimed entries
-  const claimSet = new Set(block.claims);
-  const result: UtxoEntry[] = [];
-  let spaceIdx = 0;
-  for (const entry of extended) {
-    if (!claimSet.has(entry.spaceIndex)) {
-      result.push({ ...entry, spaceIndex: spaceIdx++ });
-    }
-  }
-
-  return result;
 }
