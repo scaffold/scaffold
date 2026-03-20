@@ -303,35 +303,10 @@ export class SimEngine {
     this.enqueueToConnected(result.block, nodeIdx);
   }
 
-  /** Attempt aggregation via the core Coordinator method. */
-  private attemptAggregation(nodeIdx: number): void {
-    const node = this.nodes[nodeIdx];
-    const seq = this.seqNums[nodeIdx]++;
-
-    const agg = node.coordinator.attemptAggregation(nonceOutput(nodeIdx, seq));
-    if (!agg) return;
-
-    const { block } = agg;
-
-    // Compute depth from aggregated children
-    let maxAggDepth = 0;
-    for (const h of block.aggregates) {
-      const aggInfo = this.blockInfos.get(h.toPrimitive());
-      if (aggInfo && aggInfo.depth > maxAggDepth) {
-        maxAggDepth = aggInfo.depth;
-      }
-    }
-    const anchorInfo = block.anchor ? this.blockInfos.get(block.anchor.toPrimitive()) : undefined;
-    const depth = Math.max(maxAggDepth, anchorInfo?.depth ?? 0) + 1;
-
-    this.blockInfos.set(block.hash.toPrimitive(), {
-      block,
-      creator: nodeIdx,
-      depth,
-      seqNum: seq,
-    });
-
-    this.enqueueToConnected(block, nodeIdx);
+  /** Aggregation is now handled by the contract pipeline (DraftStrategy + AggregationContract). */
+  private attemptAggregation(_nodeIdx: number): void {
+    // No-op: aggregation blocks are created automatically by the
+    // aggregation contract when enough marker outputs accumulate.
   }
 
   /** Enqueue a block to all connected peers (used for own blocks - always delivered). */

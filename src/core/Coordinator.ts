@@ -1,16 +1,7 @@
 // Protocol spec: docs/protocol/overview.md (module orchestration)
 
-import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import {
-  AGGREGATION_CONTRACT,
-  Block,
-  BlockStore,
-  encodeAggregationData,
-  getAggregationData,
-  getBlockNewOutputCount,
-  getBlockWeightVector,
-} from './Block.ts';
-import { composeUnsignedBlockPacket } from './Packet.ts';
+import { Hash, ZERO_HASH } from '../util/Hash.ts';
+import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
@@ -22,7 +13,7 @@ import { VerificationService } from './VerificationService.ts';
 import { DisputeService } from './DisputeService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
-import { BlockBlueprint, Output } from './BlockCreationModule.ts';
+import { Output } from './BlockCreationModule.ts';
 import { ExecutionResult } from './ExecutionModule.ts';
 import { VerificationResult } from './VerificationModule.ts';
 import { ResolutionResult } from './DisputeModule.ts';
@@ -117,116 +108,6 @@ export class Coordinator {
     }
 
     return { pushActions, canonicalityChanges, newConflicts };
-  }
-
-  /**
-   * Find canonical, non-aggregated leaf blocks that share an anchor, build an
-   * aggregation block, and submit it. Returns the new block or null if no
-   * aggregation opportunity exists.
-   *
-   * @param output  Output to include in the aggregation block.
-   * @param declaredWeight  Declared weight (default 1).
-   * @param maxChildren  Maximum blocks to aggregate at once (default 3).
-   */
-  attemptAggregation(
-    output: Output,
-    declaredWeight = 1,
-    maxChildren = 3,
-  ): { block: Block; result: BlockReceivedResult } | null {
-    const canonical = this.consensus.getCanonicalView();
-
-    // Group canonical leaf blocks by anchor
-    const byAnchor = new Map<HashPrimitive, Hash[]>();
-    for (const key of canonical) {
-      const block = this.store.get(Hash.fromPrimitive(key));
-      if (!block || Hash.equals(block.anchor, ZERO_HASH)) continue;
-      // Skip already-aggregated blocks
-      if (this.store.isAggregated(block.hash)) continue;
-      // Skip blocks that are themselves aggregations
-      if (block.aggregates.length > 0) continue;
-
-      const anchorKey = block.anchor.toPrimitive();
-      let arr = byAnchor.get(anchorKey);
-      if (!arr) {
-        arr = [];
-        byAnchor.set(anchorKey, arr);
-      }
-      arr.push(block.hash);
-    }
-
-    // Find a group with 2+ blocks
-    for (const [anchorKey, hashes] of byAnchor) {
-      if (hashes.length < 2) continue;
-
-      const toAggregate = hashes.slice(0, maxChildren);
-      const anchorHash = Hash.fromPrimitive(anchorKey);
-
-      // Build aggregation data output for the block
-      const aggregateOutputCounts: number[] = [];
-      const aggregateWeights: number[] = [];
-      const chainWeights: number[] = [];
-      let newOutputCount = 0;
-      const claimMask: number[] = [];
-
-      for (const aggHash of toAggregate) {
-        const aggBlock = this.store.get(aggHash);
-        if (!aggBlock) continue;
-        const noc = getBlockNewOutputCount(aggBlock);
-        aggregateOutputCounts.push(noc);
-        newOutputCount += noc;
-        const wv = getBlockWeightVector(aggBlock);
-        aggregateWeights.push(wv[0] ?? 0);
-        for (let d = 0; d < wv.length; d++) {
-          while (chainWeights.length <= d) chainWeights.push(0);
-          chainWeights[d] += wv[d];
-        }
-        // Collect leaf claim masks (siblings share anchor so no rebasing needed)
-        const aggData = getAggregationData(aggBlock);
-        const mask = aggData?.claimMask ??
-          aggBlock.claims.filter((c) => c >= aggBlock.outputs.length)
-            .map((c) => c - aggBlock.outputs.length);
-        for (const idx of mask) {
-          if (!claimMask.includes(idx)) claimMask.push(idx);
-        }
-      }
-      claimMask.sort((a, b) => a - b);
-      newOutputCount += 1; // own output
-
-      const aggDataDetail = encodeAggregationData({
-        claimMask,
-        newOutputCount,
-        aggregateOutputCounts,
-        chainWeights,
-        aggregateWeights,
-      });
-
-      const aggOutput: Output = {
-        verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
-        value: 0,
-        detail: aggDataDetail,
-      };
-
-      let blueprint: BlockBlueprint;
-      try {
-        blueprint = this.blockCreation.buildBlock({
-          anchor: anchorHash,
-          outputs: [output, aggOutput],
-          claims: [],
-          declaredWeight,
-          aggregates: toAggregate,
-          refs: [],
-        });
-      } catch (e) {
-        console.debug('buildBlock failed during aggregation:', (e as Error).message);
-        continue;
-      }
-
-      const block = composeUnsignedBlockPacket(blueprint).block;
-      const result = this.blockReceived(block, null);
-      return { block, result };
-    }
-
-    return null;
   }
 
   // -- Computation methods -------------------------------------------

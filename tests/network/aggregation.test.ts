@@ -132,34 +132,6 @@ Deno.test('Aggregation: subtrees marked as aggregated on all nodes', () => {
   }
 });
 
-Deno.test('Aggregation: attemptAggregation produces valid block', () => {
-  const net = new TestNetwork();
-  net.addNode('A');
-
-  const genesis = makeGenesis(4);
-  net.broadcastGenesis(genesis);
-
-  // Create two canonical, non-conflicting leaf blocks
-  const leaf1 = makeBlock('aa-leaf1', genesis, [makeOutput(100)], 10);
-  const leaf2 = makeBlock('aa-leaf2', genesis, [makeOutput(200)], 15);
-
-  net.deliverDirect(leaf1, 'A');
-  net.deliverDirect(leaf2, 'A');
-
-  // Use coordinator's attemptAggregation
-  const result = net.getNode('A').coordinator.attemptAggregation(makeOutput(0, 'agg-marker'));
-
-  // If aggregation was attempted, the result block should be canonical
-  if (result) {
-    assert(
-      net.getNode('A').consensus.isCanonical(result.block.hash),
-      'Aggregation block should be canonical',
-    );
-    assert(result.block.aggregates.length >= 2, 'Should aggregate at least 2 blocks');
-  }
-  // If null, it means no aggregation opportunity was found (also valid)
-});
-
 Deno.test('Aggregation: aggregation block with claim mask merging', () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B']) net.addNode(id);
