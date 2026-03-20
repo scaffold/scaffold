@@ -77,7 +77,7 @@ The **aggregation cache** stores the net effect of a block's subtree on its anch
 
 ```
 AggregationCache {
-    claimMask:             BitVector    // which anchor outputs the subtree claims
+    claimMask:             number[]     // sorted anchor output indices claimed by the subtree
     newOutputCount:        number       // surviving outputs added by the subtree
     aggregateOutputCounts: number[]     // per-aggregate new output counts
     chainWeights:          number[]     // weight vector from subtrees (excludes own declaredWeight)
@@ -85,7 +85,7 @@ AggregationCache {
 }
 ```
 
-- **`claimMask`**: a bit vector against the anchor's output space. Bit `i` is set if the subtree (including the block itself) claims anchor output `i`.
+- **`claimMask`**: a sorted array of anchor output space indices. Index `i` is present if the subtree (including the block itself) claims anchor output `i`.
 - **`newOutputCount`**: the total number of new, surviving outputs the subtree contributes. This is the count of outputs that appear in the block's output space but not in the anchor's output space. It includes the block's own surviving outputs plus all aggregated subtrees' surviving outputs.
 - **`aggregateOutputCounts`**: per-aggregate breakdown of new output counts, in the same order as `aggregates`. Used for navigating claim indices through the subtree structure (see [output-space.md](output-space.md#claim-index-resolution)).
 - **`chainWeights`** and **`aggregateWeights`**: weight attribution data, used by the consensus module.
@@ -140,7 +140,9 @@ Self-claims (index < `E.outputs.length`) do not contribute to the claim mask or 
 
 ### Different-Anchor Aggregates
 
-When aggregates anchor to different blocks in the anchor chain (e.g., X anchors to A, Y anchors to B where B is between A and the aggregating block's anchor), Y's cache must be **rebased** through the chain from Y's anchor to the shared anchor before composition. Rebasing maps Y's claim mask forward through the intervening blocks' transformations. See [conflict.md](conflict.md#rebasing) for the rebasing algorithm.
+Aggregates may anchor to different blocks in the anchor chain (e.g., X anchors to A directly, while Y anchors to B which is between A and Y). This is the linear aggregation case: `subtreeFrom(Y, A)` follows Y's anchor chain back to A, yielding intermediate blocks.
+
+To compose the claim mask against the aggregator's anchor A, the system walks each aggregate's subtree ordering (`subtreeFrom(agg, A)`), resolves every non-self claim using `resolveClaimIndex`, and checks which resolved outputs belong to A's output space. This correctly handles arbitrary depth without explicit rebasing. See [output-space.md](output-space.md#claim-index-resolution) for the resolution algorithm.
 
 ---
 
@@ -269,6 +271,7 @@ Anchor and aggregates are determined simultaneously. See [draft-blocks.md](draft
 | File | Description |
 |------|-------------|
 | [`src/core/AggregationContract.ts`](../../src/core/AggregationContract.ts) | Aggregation contract function and threshold constant |
+| [`src/core/OutputSpace.ts`](../../src/core/OutputSpace.ts) | Claim resolution, claim masks, UTXO computation, total ordering |
 | [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData`, `makeAggregationOutput()`, cache encode/decode |
 | [`src/core/ContractGenerator.ts`](../../src/core/ContractGenerator.ts) | Runs contracts via GeneratingEnv to build drafts |
 | [`src/node/strategies/DraftStrategy.ts`](../../src/node/strategies/DraftStrategy.ts) | Triggers drafts for unclaimed outputs (including aggregation markers) |

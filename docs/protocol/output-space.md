@@ -19,7 +19,7 @@ Block B's output space:
      aggregate[-2]'s new outputs,
      ...,
      aggregate[0]'s new outputs,
-     anchor's surviving outputs (after B's and subtrees' claims)]
+     anchor's surviving outputs (after subtrees' claims)]
 ```
 
 Genesis has no anchor. Its output space is simply its own outputs.
@@ -33,10 +33,13 @@ The **extended vector** is a transient construction used during claim resolution
 ```
 Block B's extended vector:
     [B's own outputs (all, including those about to be self-claimed),
-     post-subtree inherited outputs]
+     aggregate[-1]'s new outputs,
+     ...,
+     aggregate[0]'s new outputs,
+     anchor's surviving outputs (after subtrees' claims)]
 ```
 
-Where "post-subtree inherited outputs" is the state of the UTXO space after all aggregate subtrees have applied their transformations to the anchor's output space, but before B's own outputs and claims.
+The "anchor's surviving outputs" are the anchor's output space with aggregate subtree claims removed. This is the state after all aggregate subtrees have applied their transformations to the anchor's output space, but before B's own outputs and claims.
 
 Claim indices in `block.claims` refer to positions in this extended vector:
 - Index < `B.outputs.length`: **self-claim** (targets B's own output)
@@ -64,34 +67,101 @@ Because outputs are prepended before claims are applied, a block can claim its o
 
 Self-claims are economically neutral (they net to zero in throughput balance) and do not participate in conflict detection.
 
+### `newOutputCount` and Self-Claims
+
+A block's `newOutputCount` is the number of new surviving outputs it contributes:
+
+```
+newOutputCount = outputs.length - selfClaimCount
+```
+
+This is the count of outputs that appear in the block's output space but not in the anchor's output space. Parent blocks use this value to navigate the extended vector -- self-claimed outputs are invisible to parents.
+
 ---
 
 ## Claim Index Resolution
 
-Given a claim at index `I` on block `B`, resolving it to the specific block and output that produced the claimed output:
+Given a claim at index `I` on block `B`, resolving it to the specific block and output that produced the claimed output requires two mutually recursive operations:
 
-### Leaf Block (no aggregates)
+### `resolveClaimIndex(block, I)` -- Extended Vector Resolution
 
-1. If `I < B.outputs.length`: self-claim. Resolves to `{block: B, outputIndex: I}`.
-2. If `I >= B.outputs.length`: shared-resource claim. The target is at index `I - B.outputs.length` in the anchor's output space. Recurse into the anchor.
-
-### Aggregation Block (has aggregates and cache)
+Resolves index `I` in block's extended vector (pre-claims):
 
 1. If `I < B.outputs.length`: self-claim. Resolves to `{block: B, outputIndex: I}`.
 2. Compute `R = I - B.outputs.length`.
 3. Walk `B.aggregates` in **reverse** order (last aggregate first). For each aggregate `A`:
-   - Read `A`'s `newOutputCount` from the cache (via `aggregateOutputCounts`).
-   - If `R < A.newOutputCount`: the claim targets an output within A's subtree at index `R`. Recurse into A.
-   - Else: `R -= A.newOutputCount`. Continue to next aggregate.
-4. If `R` survives all aggregates: the claim targets index `R` in the anchor's output space. Recurse into the anchor.
+   - Read `A`'s subtree `newOutputCount` from the cache (via `aggregateOutputCounts[i]`).
+   - If `R < newOutputCount`: the claim targets an output within A's output space at index `R`. Call `resolveOutputSpaceIndex(A, R)`.
+   - Else: `R -= newOutputCount`. Continue to next aggregate.
+4. If `R` survives all aggregates: `R` indexes into the **surviving** anchor outputs (post-subtree-claims). Map through the aggregate subtree claim mask to get the original anchor output space index, then call `resolveOutputSpaceIndex(anchor, mappedIndex)`.
 
-This is the same algorithm used by the [output claims module](output-claims.md#migration) for claim migration.
+### `resolveOutputSpaceIndex(block, S)` -- Output Space Resolution
 
-### Using the Cache
+Resolves index `S` in block's output space (post-claims):
 
-The `aggregateOutputCounts` in the aggregation cache enables step 3 without loading the actual aggregate blocks. The cache provides the output counts needed for navigation. Only when the target aggregate is identified does that block need to be loaded.
+1. Map `S` through the block's claim gaps to get the extended vector index `E`. This reverses the claim removals: skip over claimed positions to find the `S`-th surviving entry.
+2. Return `resolveClaimIndex(block, E)`.
 
-For deep subtrees, this is recursive: each aggregate block also has a cache with its own `aggregateOutputCounts`, so resolution descends through the tree loading only the blocks on the path to the producing block.
+### Why Two Functions
+
+The extended vector includes all outputs (including those about to be self-claimed), while the output space has self-claimed outputs removed. When navigating into an aggregate's outputs, you enter its output space (post-claims). To continue resolution within that block, you need to map back to the extended vector. The two functions alternate: extended vector -> output space (descend into aggregate) -> extended vector (map through claims) -> and so on.
+
+### Step 4: The Anchor Surviving Mapping
+
+The anchor's entries in the extended vector are the anchor's output space with subtree-claimed outputs removed. An index `R` into this surviving portion does NOT directly correspond to anchor output space index `R`. The aggregate subtree claim mask specifies which anchor output space entries were consumed. To resolve:
+
+```
+originalAnchorIdx = mapSurvivingToOriginal(R, aggregateSubtreeClaimMask)
+```
+
+Where `mapSurvivingToOriginal` skips over claimed positions to find the `R`-th surviving entry's original index.
+
+---
+
+## Worked Example
+
+Consider a block B with 3 outputs and self-claims at [0], anchored to G with 5 outputs:
+
+```
+B: outputs=[x0, x1, x2], claims=[0], anchor=G
+G: outputs=[o0, o1, o2, o3, o4]
+
+B's extended vector: [x0, x1, x2, o0, o1, o2, o3, o4]
+B claims [0] -> removes x0 (self-claim)
+B's output space: [x1, x2, o0, o1, o2, o3, o4]
+B.newOutputCount = 3 - 1 = 2
+```
+
+Now block D aggregates B with anchor G:
+
+```
+D: outputs=[d0], aggregates=[B], aggregateOutputCounts=[2], anchor=G
+
+D's extended vector:
+    [d0,              -- own output (index 0)
+     x1, x2,          -- B's new outputs (first 2 of B's output space)
+     o0, o1, o2, o3, o4]  -- G's surviving (no subtree claims against G)
+```
+
+Resolving index 1 in D's extended vector:
+1. `1 >= D.outputs.length (1)`, so `R = 0`
+2. Walk aggregates in reverse: B has `newOutputCount = 2`
+3. `R (0) < 2`, so call `resolveOutputSpaceIndex(B, 0)`
+4. Map through B's claims [0]: `mapSurvivingToOriginal(0, [0]) = 1`
+5. `resolveClaimIndex(B, 1)` -> `1 < 3` -> `{B, 1}` (which is x1)
+
+The self-claimed output x0 is invisible to D. D's index 1 resolves to B's second output (x1), not B's first (x0).
+
+---
+
+## Inverse: Computing Claim Indices
+
+The inverse operations (`computeClaimIndex` and `computeOutputSpaceIndex`) work symmetrically:
+
+- **`computeClaimIndex(block, target)`**: Given a known output `{targetBlock, outputIndex}`, find its index in block's extended vector. Searches own outputs, then each aggregate's output space (only the "new" portion), then the anchor.
+- **`computeOutputSpaceIndex(block, target)`**: Find the output space index by computing the extended vector index and mapping through claims.
+
+These are used during draft solidification to convert resolved claims `{block, outputIndex}` into claim indices for the final block.
 
 ---
 
@@ -113,39 +183,22 @@ This is O(total blocks in ancestry) without caching.
 
 With aggregation caches, skip subtree internals:
 1. Compute the anchor's output space (recursively, also cache-accelerated).
-2. For each aggregate, use its cache: remove `cache.claimMask` bits from the anchor space, prepend `cache.newOutputCount` outputs. The actual outputs can be retrieved from the aggregate's output space.
+2. For each aggregate, use its cache: remove `cache.claimMask` entries from the anchor space, prepend `cache.newOutputCount` outputs. The actual outputs can be retrieved from the aggregate's output space.
 3. Prepend own outputs, apply own claims.
 
 This is O(depth of anchor chain * average aggregates per block), which is O(log N) for balanced aggregation trees.
 
-### Retrieving Specific Outputs
-
-To retrieve the output at index `I` in a block's output space without computing the full set:
-
-1. If `I < B.outputs.length - selfClaimCount`: it's one of B's own surviving outputs. Map through the self-claim gaps.
-2. Else: use claim index resolution (above) to find which aggregate or ancestor produced it, then retrieve from that block.
-
 ---
 
-## Index Transformation
+## Claim Masks
 
-Several operations require transforming an index from one block's output space to another's.
+A **claim mask** is a sorted array of anchor output space indices that a block's subtree claims. It captures the net effect of the subtree on the anchor's outputs.
 
-### Forward Transformation (Anchor to Descendant)
+For a leaf block: the claim mask is the set of non-self claim indices mapped to the anchor's output space.
 
-Given index `I` in block A's output space, find the corresponding index in descendant D's output space (where D anchors to A, possibly through intermediaries):
+For an aggregation block: the claim mask is the union of all aggregate subtree claim masks, plus the block's own non-self, non-aggregate claims mapped to the anchor's output space (accounting for the subtree claim mask when mapping through surviving positions).
 
-For each block B in the chain from A to D:
-1. Apply B's claims: if B claims an output at or before index `I`, the index shifts. For each claim at position `P < I` (mapped to anchor space), decrement `I`. If B claims exactly `I`, the output was consumed -- it has no corresponding index in D's space.
-2. Apply B's new outputs: `I += B.newOutputCount` (B's outputs are prepended, shifting all inherited indices up).
-
-This is the **rebasing** operation used by the conflict module.
-
-### Backward Transformation (Descendant to Anchor)
-
-Given index `I` in block D's output space, find the corresponding index in ancestor A's output space:
-
-This is the reverse of forward transformation: subtract new outputs, then add back claimed positions. The aggregation cache enables this without walking the full subtree.
+Two blocks conflict if their claim masks overlap (share any index). This is the foundation of [conflict detection](conflict.md).
 
 ---
 
@@ -153,10 +206,10 @@ This is the reverse of forward transformation: subtract new outputs, then add ba
 
 | Module | How It Uses the Output Space |
 |--------|------------------------------|
-| [Conflict](conflict.md) | Compares claim masks (derived from claims against the anchor's output space) to detect double-spends |
+| [Conflict](conflict.md) | Compares claim masks to detect double-spends |
 | [Consensus](consensus.md) | Output space is the "state" that branches diverge on |
 | [Output Claims](output-claims.md) | Migrates claim entries through the output space hierarchy to resolve which block produced each claimed output |
-| [Block Creation](block-creation.md) | Constructs the extended vector, applies claims, produces the output space |
+| [Block Creation](block-creation.md) | Validates claim indices and throughput balance against the extended vector |
 | [Aggregation](aggregation.md) | Caches the net transformation of subtrees for efficient output space computation |
 | [Computation](computation.md) | Contracts read inputs from the output space (via claimed outputs and refs) |
 
@@ -166,6 +219,7 @@ This is the reverse of forward transformation: subtract new outputs, then add ba
 
 | File | Description |
 |------|-------------|
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `collectExtendedOutputs()` -- computes a block's output space, `getBlockClaimMask()` -- derives claim mask |
+| [`src/core/OutputSpace.ts`](../../src/core/OutputSpace.ts) | Pure output-space operations: resolution, inverse, claim masks, ordering, UTXO computation |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData` type, `getBlockClaimMask()`, `getBlockNewOutputCount()` (legacy, delegates to OutputSpace) |
 | [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Claim mask comparison, rebasing (index transformation) |
 | [`src/core/OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | Claim migration through the aggregation hierarchy |
