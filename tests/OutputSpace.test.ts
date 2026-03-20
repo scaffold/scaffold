@@ -564,6 +564,111 @@ Deno.test('S8: non-overlapping claims', () => {
   assertEquals(claimMasksOverlap([0], [1]), false);
 });
 
+// -- Rebase claim mask tests --------------------------------------
+
+// Chain: G(5 outputs) → A → B → C, each claiming the previous block's output 0.
+// A claims G:0, B claims A:0, C claims B:0.
+function rebaseChainBlocks() {
+  return [
+    makeGenesis('G', 5),
+    // A: 2 outputs, claims extended index 2 → anchor (G) output 0
+    makeLeaf({ name: 'A', anchor: 'G', outputCount: 2, claims: [2] }),
+    // B: 2 outputs, claims extended index 2 → anchor (A) output 0 (A's own output)
+    makeLeaf({ name: 'B', anchor: 'A', outputCount: 2, claims: [2] }),
+    // C: 2 outputs, claims extended index 2 → anchor (B) output 0 (B's own output)
+    makeLeaf({ name: 'C', anchor: 'B', outputCount: 2, claims: [2] }),
+  ];
+}
+
+Deno.test('rebaseClaimMask: direct anchor returns subtreeClaimMask unchanged', () => {
+  const mod = buildModule(rebaseChainBlocks());
+  // A anchors to G, so rebase to G needs no walk
+  assertEquals(mod.rebaseClaimMask(h('A'), h('G')), [0]);
+  assertEquals(mod.rebaseClaimMaskExclusive(h('A'), h('G')), [0]);
+});
+
+Deno.test('rebaseClaimMask: full rebase accumulates intermediate claims', () => {
+  const mod = buildModule(rebaseChainBlocks());
+  // B claims A:0 (A's own output). Full rebase walks through A and adds A's claims.
+  // A claims G:0, so full rebase = [0] (A's claim, since B's own claim doesn't pass through).
+  assertEquals(mod.rebaseClaimMask(h('B'), h('G')), [0]);
+  // C claims B:0 (B's own output). Full rebase walks through B then A.
+  // Picks up A's claims from the walk.
+  assertEquals(mod.rebaseClaimMask(h('C'), h('G')), [0]);
+});
+
+Deno.test('rebaseClaimMaskExclusive: chain claims do not accumulate', () => {
+  const mod = buildModule(rebaseChainBlocks());
+  // B claims A:0 -- that's A's own output (index 0 < A.newOutputCount=2).
+  // filterAboveAndShift removes it. Nothing passes through to G.
+  // Exclusive rebase does NOT add A's own claims → result is empty.
+  assertEquals(mod.rebaseClaimMaskExclusive(h('B'), h('G')), []);
+  // Same for C: claims B:0 (B's own output), nothing reaches G.
+  assertEquals(mod.rebaseClaimMaskExclusive(h('C'), h('G')), []);
+});
+
+Deno.test('rebaseClaimMaskExclusive: claim on inherited output passes through', () => {
+  // G(5) → A(2 outputs, claims G:0) → B(1 output, claims A:2 which is G:1 surviving)
+  // B claims an output inherited from G through A.
+  const blocks = [
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'A', anchor: 'G', outputCount: 2, claims: [2] }),
+    // B: 1 output, claims extended index 3 → A's surviving index 2.
+    // A's output space: [A:0, A:1, G:1, G:2, G:3, G:4] (G:0 was claimed).
+    // A surviving index 2 = G:1.
+    makeLeaf({ name: 'B', anchor: 'A', outputCount: 1, claims: [3] }),
+  ];
+  const mod = buildModule(blocks);
+
+  // B's subtreeClaimMask against A = [2] (surviving index 2 of A's output space)
+  assertEquals(mod.subtreeClaimMask(h('B')), [2]);
+
+  // Full rebase: B claims A's surviving index 2. filterAboveAndShift([2], 2) = [0].
+  // mapSurvivingToOriginalBatch([0], A's claimMask=[0]) → original index 1.
+  // Then union with A's claims [0] → [0, 1].
+  assertEquals(mod.rebaseClaimMask(h('B'), h('G')), [0, 1]);
+
+  // Exclusive rebase: same projection but without adding A's claims → [1].
+  assertEquals(mod.rebaseClaimMaskExclusive(h('B'), h('G')), [1]);
+});
+
+Deno.test('rebaseClaimMaskExclusive: independent subtrees match full rebase', () => {
+  // When blocks anchor directly to the target, exclusive = full (no walk).
+  const blocks = [
+    makeGenesis('G', 10),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [4] }),
+    makeLeaf({ name: 'C', anchor: 'G', outputCount: 2, claims: [3] }),
+  ];
+  const mod = buildModule(blocks);
+
+  assertEquals(mod.rebaseClaimMask(h('B'), h('G')), [2]);
+  assertEquals(mod.rebaseClaimMaskExclusive(h('B'), h('G')), [2]);
+  assertEquals(mod.rebaseClaimMask(h('C'), h('G')), [1]);
+  assertEquals(mod.rebaseClaimMaskExclusive(h('C'), h('G')), [1]);
+});
+
+Deno.test('rebaseClaimMaskExclusive: multi-hop walk projects correctly', () => {
+  // G(10) → A(2 outputs, claims G:0) → B(2 outputs, claims inherited G:1 via A)
+  // B claims an output that originated at G and passes through A.
+  const blocks = [
+    makeGenesis('G', 10),
+    makeLeaf({ name: 'A', anchor: 'G', outputCount: 2, claims: [2] }),
+    // B: claims extended index 4 → A surviving index 2 → G original index 1
+    makeLeaf({ name: 'B', anchor: 'A', outputCount: 2, claims: [4] }),
+  ];
+  const mod = buildModule(blocks);
+
+  // A: direct anchor to G, no walk needed -- both variants identical.
+  assertEquals(mod.rebaseClaimMask(h('A'), h('G')), [0]);
+  assertEquals(mod.rebaseClaimMaskExclusive(h('A'), h('G')), [0]);
+
+  // B: claims A output space index 2 (G:1 inherited through A).
+  // Full rebase: B's projected claim [1] plus A's claim [0] → [0, 1].
+  assertEquals(mod.rebaseClaimMask(h('B'), h('G')), [0, 1]);
+  // Exclusive: only B's projected claim → [1].
+  assertEquals(mod.rebaseClaimMaskExclusive(h('B'), h('G')), [1]);
+});
+
 // -- Genesis edge case --------------------------------------------
 
 Deno.test('genesis block has trivial output space', () => {

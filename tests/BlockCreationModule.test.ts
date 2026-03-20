@@ -23,6 +23,8 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
   private anchorDepths = new Map<string, number>();
   /** Pre-configured rebased claim masks: key = `${blockHash}:${targetAnchor}` */
   private rebasedMasks = new Map<string, readonly number[] | null>();
+  /** Pre-configured exclusive rebased claim masks */
+  private exclusiveMasks = new Map<string, readonly number[] | null>();
 
   add(block: TestBlock): void {
     this.blocks.set(block.hash.toPrimitive(), block);
@@ -34,6 +36,14 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
 
   setRebasedClaimMask(blockHash: Hash, targetAnchor: Hash, mask: readonly number[] | null): void {
     this.rebasedMasks.set(`${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`, mask);
+  }
+
+  setRebasedClaimMaskExclusive(
+    blockHash: Hash,
+    targetAnchor: Hash,
+    mask: readonly number[] | null,
+  ): void {
+    this.exclusiveMasks.set(`${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`, mask);
   }
 
   getBlock(hash: Hash): TestBlock | undefined {
@@ -64,6 +74,14 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     const key = `${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`;
     const result = this.rebasedMasks.get(key);
     return result === undefined ? null : result;
+  }
+
+  getRebasedClaimMaskExclusive(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
+    const key = `${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`;
+    // Fall back to the full rebase mask if no exclusive mask was configured
+    const exclusive = this.exclusiveMasks.get(key);
+    if (exclusive !== undefined) return exclusive;
+    return this.rebasedMasks.get(key) ?? null;
   }
 }
 

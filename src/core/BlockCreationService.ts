@@ -88,6 +88,10 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
   getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
     return this.outputSpace.rebaseClaimMask(blockHash, targetAnchor);
   }
+
+  getRebasedClaimMaskExclusive(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
+    return this.outputSpace.rebaseClaimMaskExclusive(blockHash, targetAnchor);
+  }
 }
 
 /** BlockCreationModule wired to BlockStore via ProtocolContext. */

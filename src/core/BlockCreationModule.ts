@@ -110,9 +110,18 @@ export interface BlockCreationProvider<BlockType> {
 
   /**
    * Return the claim mask of `blockHash` rebased to `targetAnchor`.
+   * Full subtree rebase: includes intermediate blocks' claims.
    * Returns null if rebasing fails (chain broken, etc).
    */
   getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null;
+
+  /**
+   * Return the claim mask of `blockHash` rebased to `targetAnchor`,
+   * projecting only the block's own claims through intermediates
+   * without accumulating intermediate blocks' claims.
+   * Returns null if rebasing fails (chain broken, etc).
+   */
+  getRebasedClaimMaskExclusive(blockHash: Hash, targetAnchor: Hash): readonly number[] | null;
 }
 
 // -- Module -------------------------------------------------------
@@ -194,10 +203,27 @@ export class BlockCreationModule<BlockType> {
       mergedSubtreeMask = unionClaimMasks(mergedSubtreeMask, mask);
     }
 
-    // Check for inter-subtree conflicts (two subtrees claim same anchor output)
-    const subtreeClaimTotal = subtreeClaimMasks.reduce((s, m) => s + m.length, 0);
-    if (subtreeClaimTotal !== mergedSubtreeMask.length) {
-      throw new Error('subtrees have overlapping anchor claims (inter-subtree conflict)');
+    // Check for inter-subtree conflicts using exclusive rebased masks.
+    // The exclusive rebase projects only each aggregate's own claims
+    // through intermediates, so chain aggregates don't double-count.
+    {
+      const exclusiveMasks: (readonly number[])[] = [];
+      for (const aggHash of spec.aggregates) {
+        const mask = this.provider.getRebasedClaimMaskExclusive(aggHash, spec.anchor);
+        if (!mask) {
+          throw new Error(`cannot exclusive-rebase subtree claim mask: ${aggHash}`);
+        }
+        exclusiveMasks.push(mask);
+      }
+      let merged: number[] = [];
+      let total = 0;
+      for (const mask of exclusiveMasks) {
+        merged = unionClaimMasks(merged, mask);
+        total += mask.length;
+      }
+      if (total !== merged.length) {
+        throw new Error('subtrees have overlapping anchor claims (inter-subtree conflict)');
+      }
     }
 
     // 4. Validate and classify claims

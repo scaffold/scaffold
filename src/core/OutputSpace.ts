@@ -471,6 +471,33 @@ export class OutputSpaceModule {
    * Returns null if the chain can't be walked.
    */
   rebaseClaimMask(blockHash: Hash, targetAnchor: Hash): number[] | null {
+    return this._rebaseClaimMaskInner(blockHash, targetAnchor, true);
+  }
+
+  /**
+   * Rebase a block's subtree claim mask exclusively -- projecting only the
+   * block's own claims through intermediates without accumulating intermediate
+   * blocks' claims. Intermediate claim masks are used for gap-mapping only.
+   *
+   * Use this when aggregates may be in each other's anchor chains; each
+   * aggregate reports only its own contribution, avoiding double-counting.
+   */
+  rebaseClaimMaskExclusive(blockHash: Hash, targetAnchor: Hash): number[] | null {
+    return this._rebaseClaimMaskInner(blockHash, targetAnchor, false);
+  }
+
+  /**
+   * Shared rebase implementation.
+   *
+   * @param accumulate - When true, unions intermediate blocks' subtree claim
+   *   masks into the result (full subtree rebase). When false, only projects
+   *   the starting block's claims through intermediates (exclusive rebase).
+   */
+  private _rebaseClaimMaskInner(
+    blockHash: Hash,
+    targetAnchor: Hash,
+    accumulate: boolean,
+  ): number[] | null {
     const block = this.provider.getBlock(blockHash);
     if (!block) return null;
 
@@ -488,7 +515,7 @@ export class OutputSpaceModule {
       const curMask = this.subtreeClaimMask(current) ?? [];
       const inherited = filterAboveAndShift(mask, curBlock.newOutputCount);
       const rebased = mapSurvivingToOriginalBatch(inherited, curMask);
-      mask = unionClaimMasks(rebased, curMask);
+      mask = accumulate ? unionClaimMasks(rebased, curMask) : rebased;
       current = curBlock.anchor;
     }
 
