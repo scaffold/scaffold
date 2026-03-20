@@ -263,13 +263,20 @@ export class OutputClaimModule<BlockType> {
       remaining -= count;
     }
 
-    // Remaining maps to anchor's output space
+    // Remaining maps to surviving anchor outputs (post-subtree-claims).
+    // Map through the aggregate subtree claim mask to get the original
+    // anchor output space index.
     const anchorHash = this.provider.getAnchor(block);
     if (Hash.equals(anchorHash, ZERO_HASH)) {
-      // Genesis has no anchor -- this shouldn't happen for valid claims
       return undefined;
     }
 
+    // For leaf blocks (no aggregates), remaining maps directly to anchor index.
+    // For aggregation blocks, we need to account for subtree claims.
+    // Since the OutputClaimModule doesn't yet have access to OutputSpaceModule
+    // for rebasing, and aggregation blocks' claims are handled at solidification
+    // time (not through lazy migration), this path is only reached for leaf blocks
+    // where the mapping is direct.
     return this.migrateEntry(blockHash, index, entry, anchorHash, remaining);
   }
 

@@ -1,6 +1,18 @@
-import { Block, BlockStore, AGGREGATION_CONTRACT } from '../core/Block.ts';
+import {
+  AGGREGATION_CONTRACT,
+  Block,
+  BlockStore,
+  encodeAggregationData,
+  getAggregationData,
+  getBlockNewOutputCount,
+} from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
-import { BlockBlueprint, BlockSpec, type ClaimEntry } from '../core/BlockCreationModule.ts';
+import { BlockBlueprint, BlockSpec, type ClaimEntry, Output } from '../core/BlockCreationModule.ts';
+import {
+  OutputSpaceModule,
+  type OutputSpaceBlock,
+  type OutputSpaceProvider,
+} from '../core/OutputSpace.ts';
 import { DraftManager } from '../core/DraftManager.ts';
 import { ContractGenerator } from '../core/ContractGenerator.ts';
 import { aggregationContract } from '../core/AggregationContract.ts';
@@ -211,7 +223,8 @@ export class NodeContext {
    * Solidify a ready draft into a real block and process it.
    *
    * Determines anchor and aggregates from the draft's includeConstraints,
-   * then computes claim indices relative to the extended vector.
+   * uses OutputSpaceModule to compute claim indices and the composed
+   * aggregation claim mask.
    */
   private _solidifyDraft(draft: BlockDraft, blockCreator: BlockCreator): void {
     const includes = draft.includeConstraints;
@@ -221,8 +234,103 @@ export class NodeContext {
     }
 
     // Find the deepest common ancestor of all include-constrained blocks.
-    // For each include, walk its anchor chain to build a depth map.
-    // The common ancestor is the deepest block that appears in ALL chains.
+    const anchor = this._findCommonAncestor(includes);
+    if (!anchor) {
+      this.draftManager.cancelDraft(draft.draftId);
+      return;
+    }
+
+    const anchorKey = anchor.toPrimitive();
+    const aggregates = includes.filter((h) => h.toPrimitive() !== anchorKey);
+
+    // Build per-aggregate output counts from caches (or leaf defaults)
+    const aggregateOutputCounts: number[] = [];
+    for (const aggHash of aggregates) {
+      const aggBlock = this.store.get(aggHash);
+      aggregateOutputCounts.push(aggBlock ? getBlockNewOutputCount(aggBlock) : 0);
+    }
+
+    // Create a virtual OutputSpaceBlock for the block being solidified.
+    // This lets OutputSpaceModule compute claim indices and claim masks
+    // even though the block doesn't exist in the store yet.
+    const selfClaimCount = 0; // Solidified blocks don't self-claim
+    const virtualHash = draft.draftId;
+    const virtualBlock: OutputSpaceBlock = {
+      hash: virtualHash,
+      anchor,
+      aggregates,
+      outputs: draft.outputs.map((o) => ({ value: o.value })),
+      claims: [], // Will be filled after computation
+      aggregateOutputCounts,
+      newOutputCount: draft.outputs.length - selfClaimCount +
+        aggregateOutputCounts.reduce((a, b) => a + b, 0),
+    };
+
+    // Provider that includes the virtual block + real store blocks
+    const store = this.store;
+    const virtualProvider: OutputSpaceProvider = {
+      getBlock(hash: Hash): OutputSpaceBlock | undefined {
+        if (Hash.equals(hash, virtualHash)) return virtualBlock;
+        const block = store.get(hash);
+        if (!block) return undefined;
+        const aggData = getAggregationData(block);
+        const sc = block.claims.filter((c) => c < block.outputs.length).length;
+        return {
+          hash: block.hash,
+          anchor: block.anchor,
+          aggregates: block.aggregates,
+          outputs: block.outputs.map((o) => ({ value: o.value })),
+          claims: [...block.claims].sort((a, b) => a - b),
+          aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
+          newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
+        };
+      },
+    };
+
+    const outputSpace = new OutputSpaceModule(virtualProvider);
+
+    // Compute claim indices using OutputSpaceModule
+    const claims: ClaimEntry[] = [];
+    for (const rc of draft.resolvedClaims) {
+      const idx = outputSpace.computeClaimIndex(virtualHash, {
+        block: rc.block,
+        outputIndex: rc.outputIndex,
+      });
+      if (idx !== undefined) {
+        claims.push({ index: idx, value: rc.value });
+      }
+    }
+
+    // Compute the composed claim mask for the aggregation data output
+    const composedClaimMask = outputSpace.subtreeClaimMask(virtualHash) ?? [];
+
+    // Update the aggregation data output with the composed claim mask
+    const outputs = this._patchAggregationOutput(
+      draft.outputs,
+      composedClaimMask,
+      aggregateOutputCounts,
+      virtualBlock.newOutputCount,
+    );
+
+    const spec: BlockSpec = {
+      anchor,
+      outputs,
+      claims,
+      declaredWeight: draft.declaredWeight,
+      aggregates,
+      refs: draft.refs,
+    };
+
+    const block = blockCreator.createBlock(spec, null);
+    if (block) {
+      this.reactiveLayer.processBlock(block, null);
+    }
+
+    this.draftManager.cancelDraft(draft.draftId);
+  }
+
+  /** Find the deepest common ancestor of a set of block hashes. */
+  private _findCommonAncestor(includes: Hash[]): Hash | undefined {
     const depthMaps: Map<string, number>[] = [];
     for (const incHash of includes) {
       const map = new Map<string, number>();
@@ -237,13 +345,10 @@ export class NodeContext {
       depthMaps.push(map);
     }
 
-    // Find the deepest block that's in ALL ancestor chains
     let anchor: Hash | undefined;
     let bestDepth = Infinity;
     for (const [key, depth] of depthMaps[0]) {
       if (depthMaps.every((m) => m.has(key))) {
-        // This block is a common ancestor. Pick the shallowest total depth
-        // (= deepest block, since depth counts upward from the include).
         const maxDepth = Math.max(...depthMaps.map((m) => m.get(key)!));
         if (maxDepth < bestDepth) {
           bestDepth = maxDepth;
@@ -252,62 +357,40 @@ export class NodeContext {
       }
     }
 
-    if (!anchor) {
-      this.draftManager.cancelDraft(draft.draftId);
-      return;
-    }
+    return anchor;
+  }
 
-    // Aggregates are includes that aren't the anchor itself or below it
-    const anchorKey = anchor.toPrimitive();
-    const aggregates = includes.filter((h) => h.toPrimitive() !== anchorKey);
+  /**
+   * Patch the aggregation data output with the composed claim mask.
+   * If the draft has an aggregation data output (from the contract),
+   * update its claimMask. Otherwise return outputs unchanged.
+   */
+  private _patchAggregationOutput(
+    outputs: Output[],
+    claimMask: number[],
+    aggregateOutputCounts: number[],
+    newOutputCount: number,
+  ): Output[] {
+    return outputs.map((output) => {
+      if (!Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
+      if (output.detail.length === 0) return output; // marker, not data
 
-    // Compute claim indices in the extended vector:
-    // [own outputs, agg[last] new outputs, ..., agg[0] new outputs, anchor surviving]
-    // For each resolved claim (block, outputIndex), find which aggregate
-    // it belongs to and compute the offset.
-    const ownOutputCount = draft.outputs.length;
+      // Decode, patch claimMask, re-encode
+      const aggData = getAggregationData({
+        outputs: [output],
+      } as Block);
+      if (!aggData) return output;
 
-    // Build offset table: for each aggregate (in reverse order, last first),
-    // the starting index in the extended vector after own outputs.
-    const aggOutputCounts: number[] = [];
-    for (const aggHash of aggregates) {
-      const aggBlock = this.store.get(aggHash);
-      aggOutputCounts.push(aggBlock ? aggBlock.outputs.length : 0);
-    }
-
-    // Extended vector layout: [own, agg[n-1], agg[n-2], ..., agg[0], anchor surviving]
-    // Offset for agg[i] = ownOutputCount + sum(aggOutputCounts[j] for j from n-1 down to i+1)
-    const aggOffsets = new Map<string, number>();
-    let offset = ownOutputCount;
-    for (let i = aggregates.length - 1; i >= 0; i--) {
-      aggOffsets.set(aggregates[i].toPrimitive(), offset);
-      offset += aggOutputCounts[i];
-    }
-
-    const claims: ClaimEntry[] = [];
-    for (const rc of draft.resolvedClaims) {
-      const aggOffset = aggOffsets.get(rc.block.toPrimitive());
-      if (aggOffset !== undefined) {
-        claims.push({ index: aggOffset + rc.outputIndex, value: rc.value });
-      }
-    }
-
-    const spec: BlockSpec = {
-      anchor,
-      outputs: draft.outputs,
-      claims,
-      declaredWeight: draft.declaredWeight,
-      aggregates,
-      refs: draft.refs,
-    };
-
-    const block = blockCreator.createBlock(spec, null);
-    if (block) {
-      this.reactiveLayer.processBlock(block, null);
-    }
-
-    // Clean up the draft
-    this.draftManager.cancelDraft(draft.draftId);
+      return {
+        ...output,
+        detail: encodeAggregationData({
+          ...aggData,
+          claimMask,
+          aggregateOutputCounts,
+          newOutputCount,
+        }),
+      };
+    });
   }
 
   /** Get the genesis block hash (first block in store) */
