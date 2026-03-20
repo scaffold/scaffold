@@ -53,12 +53,13 @@ export type ClaimMask = number[];
  * claimMask is a sorted array of removed positions.
  *
  * Example: claimMask=[1,3], survivingIndex=1 → original index 2
- * (positions 0,2,4,... survive; the 1st survivor is position 2)
  */
 export function mapSurvivingToOriginal(
   survivingIndex: number,
   claimMask: readonly number[],
 ): number {
+  if (claimMask.length === 0) return survivingIndex;
+
   let original = 0;
   let survived = 0;
   let maskIdx = 0;
@@ -77,14 +78,52 @@ export function mapSurvivingToOriginal(
 }
 
 /**
+ * Batch version: map a sorted array of surviving indices to original indices.
+ * Both inputs sorted, output sorted. O(n + m) single-pass merge.
+ */
+export function mapSurvivingToOriginalBatch(
+  survivingIndices: readonly number[],
+  claimMask: readonly number[],
+): number[] {
+  if (survivingIndices.length === 0) return [];
+  if (claimMask.length === 0) return [...survivingIndices];
+
+  const result: number[] = [];
+  let original = 0;
+  let survived = 0;
+  let maskIdx = 0;
+  let inputIdx = 0;
+
+  while (inputIdx < survivingIndices.length) {
+    // Skip over claimed positions
+    while (maskIdx < claimMask.length && claimMask[maskIdx] === original) {
+      original++;
+      maskIdx++;
+    }
+    // If this surviving position matches, record it
+    if (survived === survivingIndices[inputIdx]) {
+      result.push(original);
+      inputIdx++;
+    }
+    survived++;
+    original++;
+  }
+
+  return result;
+}
+
+/**
  * Map an original (pre-claim) index to its surviving (post-claim) index.
  * Returns -1 if the index was claimed (removed).
- * claimMask is a sorted array of removed positions.
+ * Uses binary search on the sorted claimMask: O(log m).
  */
 export function mapOriginalToSurviving(
   originalIndex: number,
   claimMask: readonly number[],
 ): number {
+  if (claimMask.length === 0) return originalIndex;
+
+  // Binary search for the insertion point
   let lo = 0;
   let hi = claimMask.length;
   while (lo < hi) {
@@ -98,6 +137,7 @@ export function mapOriginalToSurviving(
 
 /**
  * Check if two sorted claim masks overlap (share any index).
+ * O(n + m) merge walk.
  */
 export function claimMasksOverlap(
   a: readonly number[],
@@ -115,11 +155,15 @@ export function claimMasksOverlap(
 
 /**
  * Union two sorted claim masks into a new sorted array.
+ * O(n + m) merge.
  */
 export function unionClaimMasks(
   a: readonly number[],
   b: readonly number[],
 ): number[] {
+  if (a.length === 0) return [...b];
+  if (b.length === 0) return [...a];
+
   const result: number[] = [];
   let i = 0;
   let j = 0;
@@ -130,6 +174,32 @@ export function unionClaimMasks(
   }
   while (i < a.length) result.push(a[i++]);
   while (j < b.length) result.push(b[j++]);
+  return result;
+}
+
+/**
+ * From a sorted array, drop values below threshold and subtract threshold
+ * from the rest. Output is sorted since input is sorted and shift is uniform.
+ *
+ * Example: filterAboveAndShift([1, 3, 5, 7], 3) → [0, 2, 4]
+ */
+export function filterAboveAndShift(
+  sorted: readonly number[],
+  threshold: number,
+): number[] {
+  // Binary search for first index >= threshold
+  let lo = 0;
+  let hi = sorted.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sorted[mid] < threshold) lo = mid + 1;
+    else hi = mid;
+  }
+
+  const result = new Array(sorted.length - lo);
+  for (let i = lo; i < sorted.length; i++) {
+    result[i - lo] = sorted[i] - threshold;
+  }
   return result;
 }
 
@@ -296,21 +366,14 @@ export class OutputSpaceModule {
 
     const aggMask = this._aggregateClaimMask(block);
 
-    const ownOutputCount = block.outputs.length;
-    const totalAggOutputs = block.aggregateOutputCounts.reduce((a, b) => a + b, 0);
-    const inheritedOffset = ownOutputCount + totalAggOutputs;
+    // Extract own claims that hit anchor's surviving outputs:
+    // claims >= (ownOutputCount + totalAggOutputs) target the anchor portion
+    const inheritedOffset = block.outputs.length +
+      block.aggregateOutputCounts.reduce((a, b) => a + b, 0);
 
-    const ownAnchorClaims: number[] = [];
-    for (const idx of block.claims) {
-      if (idx < ownOutputCount) continue;
-      if (idx < inheritedOffset) continue;
+    const shifted = filterAboveAndShift(block.claims, inheritedOffset);
+    const ownAnchorClaims = mapSurvivingToOriginalBatch(shifted, aggMask);
 
-      const survivingIdx = idx - inheritedOffset;
-      const originalIdx = mapSurvivingToOriginal(survivingIdx, aggMask);
-      ownAnchorClaims.push(originalIdx);
-    }
-
-    ownAnchorClaims.sort((a, b) => a - b);
     return unionClaimMasks(aggMask, ownAnchorClaims);
   }
 
@@ -327,10 +390,12 @@ export class OutputSpaceModule {
     const entries: UtxoEntry[] = [];
     let idx = 0;
 
+    // Own outputs
     for (let i = 0; i < block.outputs.length; i++) {
       entries.push({ block: blockHash, outputIndex: i, spaceIndex: idx++ });
     }
 
+    // Aggregate new outputs (reverse order)
     for (let i = block.aggregates.length - 1; i >= 0; i--) {
       const aggSpace = this.outputSpace(block.aggregates[i]);
       if (!aggSpace) return undefined;
@@ -345,15 +410,19 @@ export class OutputSpaceModule {
       }
     }
 
+    // Anchor's surviving outputs — merge-walk with sorted aggMask
     if (!Hash.equals(block.anchor, ZERO_HASH)) {
       const anchorSpace = this.outputSpace(block.anchor);
       if (!anchorSpace) return undefined;
 
       const aggMask = this._aggregateClaimMask(block);
-      const aggMaskSet = new Set(aggMask);
+      let maskPtr = 0;
 
       for (let i = 0; i < anchorSpace.length; i++) {
-        if (aggMaskSet.has(i)) continue;
+        // Advance mask pointer past positions below i
+        while (maskPtr < aggMask.length && aggMask[maskPtr] < i) maskPtr++;
+        if (maskPtr < aggMask.length && aggMask[maskPtr] === i) continue;
+
         entries.push({
           block: anchorSpace[i].block,
           outputIndex: anchorSpace[i].outputIndex,
@@ -376,13 +445,19 @@ export class OutputSpaceModule {
     const block = this.provider.getBlock(blockHash);
     if (!block) return undefined;
 
-    const claimSet = new Set(block.claims);
+    // Merge-walk: extended entries have sequential spaceIndex (0,1,2,...),
+    // claims is sorted — use a pointer instead of Set
+    const claims = block.claims;
+    let claimPtr = 0;
+
     const result: UtxoEntry[] = [];
     let spaceIdx = 0;
     for (const entry of extended) {
-      if (!claimSet.has(entry.spaceIndex)) {
-        result.push({ ...entry, spaceIndex: spaceIdx++ });
+      while (claimPtr < claims.length && claims[claimPtr] < entry.spaceIndex) claimPtr++;
+      if (claimPtr < claims.length && claims[claimPtr] === entry.spaceIndex) {
+        continue;
       }
+      result.push({ ...entry, spaceIndex: spaceIdx++ });
     }
 
     return result;
@@ -408,7 +483,6 @@ export class OutputSpaceModule {
       const aggBlock = this.provider.getBlock(aggHash);
       if (!aggBlock) continue;
 
-      // Start with the aggregate's subtreeClaimMask against its own anchor
       let mask = this.subtreeClaimMask(aggHash) ?? [];
 
       // Rebase through each intermediate block from aggBlock.anchor up to block.anchor
@@ -419,20 +493,12 @@ export class OutputSpaceModule {
 
         const curMask = this.subtreeClaimMask(current) ?? [];
 
-        // Rebase: indices in mask are against curBlock's output space.
-        // Indices < curBlock.newOutputCount target curBlock's own new outputs (not anchor's).
-        // Indices >= curBlock.newOutputCount target inherited (surviving anchor) outputs.
-        const rebased: number[] = [];
-        for (const idx of mask) {
-          if (idx < curBlock.newOutputCount) continue;
-          const inheritedIdx = idx - curBlock.newOutputCount;
-          rebased.push(mapSurvivingToOriginal(inheritedIdx, curMask));
-        }
-        rebased.sort((a, b) => a - b);
+        // Drop claims on curBlock's own new outputs, shift to inherited space,
+        // then map surviving indices to original anchor indices
+        const inherited = filterAboveAndShift(mask, curBlock.newOutputCount);
+        const rebased = mapSurvivingToOriginalBatch(inherited, curMask);
 
-        // Union with curBlock's own mask (its claims against its anchor)
         mask = unionClaimMasks(rebased, curMask);
-
         current = curBlock.anchor;
       }
 
