@@ -394,50 +394,29 @@ export class ConsensusModule<BlockType> {
 
     // -- Phase 1: Determine direct conflict outcomes --
 
-    // For each block that lost a direct conflict, record it here.
+    // A block is a loser if ANY direct conflict partner beats it.
+    // Evaluated pairwise: A ⚡ B and B ⚡ C does not mean A ⚡ C.
     const conflictLosers = new Set<HashPrimitive>();
-
-    // Track which blocks we've already resolved so we process each
-    // conflict group only once.
-    const conflictResolved = new Set<HashPrimitive>();
 
     for (const blockKey of this.blocks.keys()) {
       const dc = this.directConflicts.get(blockKey);
       if (!dc || dc.size === 0) continue;
-      if (conflictResolved.has(blockKey)) continue;
 
-      // Gather the full conflict group: blockKey + all its direct partners
-      // (direct conflicts are symmetric, so we just need one BFS hop)
-      const group = new Set<HashPrimitive>();
-      group.add(blockKey);
-      for (const partner of dc) {
-        if (this.blocks.has(partner)) group.add(partner);
-      }
+      const blockHash = this.blocks.get(blockKey)!;
+      const blockWeight = this.computeEffectiveWeight(blockKey, memo);
 
-      // Find the winner in this group by effective weight, tie-break by lower hash
-      let bestKey: HashPrimitive | null = null;
-      let bestHash: Hash | null = null;
-      let bestWeight = -1;
+      for (const partnerKey of dc) {
+        if (!this.blocks.has(partnerKey)) continue;
+        const partnerHash = this.blocks.get(partnerKey)!;
+        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo);
 
-      for (const gKey of group) {
-        const gHash = this.blocks.get(gKey)!;
-        const gWeight = this.computeEffectiveWeight(gKey, memo);
         if (
-          bestKey === null ||
-          gWeight > bestWeight ||
-          (gWeight === bestWeight && Hash.compare(gHash, bestHash!) < 0)
+          partnerWeight > blockWeight ||
+          (partnerWeight === blockWeight &&
+            Hash.compare(partnerHash, blockHash) < 0)
         ) {
-          bestKey = gKey;
-          bestHash = gHash;
-          bestWeight = gWeight;
-        }
-      }
-
-      // Mark all non-winners as losers
-      for (const gKey of group) {
-        conflictResolved.add(gKey);
-        if (gKey !== bestKey) {
-          conflictLosers.add(gKey);
+          conflictLosers.add(blockKey);
+          break;
         }
       }
     }

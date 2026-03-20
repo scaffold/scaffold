@@ -958,3 +958,29 @@ Deno.test({
   // D anchors to C (non-canonical) -> D excluded (Rule 1)
   assertFalse(layer.isCanonical(D.hash));
 });
+
+Deno.test({
+  name: 'pairwise conflict: non-clique graph does not group unrelated blocks',
+}, () => {
+  // A ⚡ B and B ⚡ C, but NOT A ⚡ C.
+  // B claims two outputs, each contested by a different block.
+  // A and C should both be canonical; only B loses (if weaker than both).
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [50] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [30] };
+  const C: TestBlock = { hash: h('C'), anchor: G.hash, aggregates: [], weight: [40] };
+  const { layer } = setup(G, A, B, C);
+
+  layer.addConflict(A.hash, B.hash); // A ⚡ B
+  layer.addConflict(B.hash, C.hash); // B ⚡ C
+  // No A ⚡ C conflict
+  layer.setVerifiedWeight(A.hash, [50]);
+  layer.setVerifiedWeight(B.hash, [30]);
+  layer.setVerifiedWeight(C.hash, [40]);
+
+  // B loses to both A (50 > 30) and C (40 > 30)
+  assertFalse(layer.isCanonical(B.hash));
+  // A and C don't conflict -- both should be canonical
+  assert(layer.isCanonical(A.hash));
+  assert(layer.isCanonical(C.hash));
+});
