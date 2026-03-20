@@ -392,40 +392,53 @@ export class OutputSpaceModule {
 
   /**
    * Compute the combined claim mask that aggregate subtrees make against
-   * the block's anchor's output space. Walks each aggregate's subtree,
-   * resolves every non-self claim, and checks if the resolved output
-   * lives in the anchor's output space.
+   * the block's anchor's output space.
+   *
+   * For each aggregate, takes its subtreeClaimMask (against its own anchor)
+   * and rebases it through the chain of intermediate blocks up to this
+   * block's anchor. Only requires the subtree root's claim masks, not a
+   * walk of the full subtree.
    */
   private _aggregateClaimMask(block: OutputSpaceBlock): number[] {
     if (block.aggregates.length === 0) return [];
 
-    const anchorHash = block.anchor;
-    const mask: number[] = [];
+    let result: number[] = [];
 
     for (const aggHash of block.aggregates) {
-      const sub = this.subtreeFrom(aggHash, anchorHash);
-      for (const bHash of sub) {
-        const b = this.provider.getBlock(bHash);
-        if (!b) continue;
-        for (const claimIdx of b.claims) {
-          if (claimIdx < b.outputs.length) continue;
-          const resolved = this.resolveClaimIndex(bHash, claimIdx);
-          if (!resolved) continue;
-          const anchorIdx = this.computeOutputSpaceIndex(anchorHash, resolved);
-          if (anchorIdx !== undefined) {
-            mask.push(anchorIdx);
-          }
+      const aggBlock = this.provider.getBlock(aggHash);
+      if (!aggBlock) continue;
+
+      // Start with the aggregate's subtreeClaimMask against its own anchor
+      let mask = this.subtreeClaimMask(aggHash) ?? [];
+
+      // Rebase through each intermediate block from aggBlock.anchor up to block.anchor
+      let current = aggBlock.anchor;
+      while (!Hash.equals(current, block.anchor)) {
+        const curBlock = this.provider.getBlock(current);
+        if (!curBlock) break;
+
+        const curMask = this.subtreeClaimMask(current) ?? [];
+
+        // Rebase: indices in mask are against curBlock's output space.
+        // Indices < curBlock.newOutputCount target curBlock's own new outputs (not anchor's).
+        // Indices >= curBlock.newOutputCount target inherited (surviving anchor) outputs.
+        const rebased: number[] = [];
+        for (const idx of mask) {
+          if (idx < curBlock.newOutputCount) continue;
+          const inheritedIdx = idx - curBlock.newOutputCount;
+          rebased.push(mapSurvivingToOriginal(inheritedIdx, curMask));
         }
+        rebased.sort((a, b) => a - b);
+
+        // Union with curBlock's own mask (its claims against its anchor)
+        mask = unionClaimMasks(rebased, curMask);
+
+        current = curBlock.anchor;
       }
+
+      result = unionClaimMasks(result, mask);
     }
 
-    mask.sort((a, b) => a - b);
-    const deduped: number[] = [];
-    for (const v of mask) {
-      if (deduped.length === 0 || deduped[deduped.length - 1] !== v) {
-        deduped.push(v);
-      }
-    }
-    return deduped;
+    return result;
   }
 }
