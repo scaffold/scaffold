@@ -33,7 +33,7 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
     if (aggData) {
       // Total output space = new outputs from subtree + anchor's surviving outputs
       const anchorOutputCount = this.getAnchorOutputCount(block);
-      return aggData.newOutputCount + anchorOutputCount - aggData.claimMask.popcount();
+      return aggData.newOutputCount + anchorOutputCount - aggData.claimMask.length;
     }
     // Leaf: anchor outputs - own anchor claims + own outputs
     const anchorBlock = this.store.get(block.anchor);

@@ -13,7 +13,6 @@ import {
   encodeAggregationData,
   RESULT_CONTRACT,
 } from '../../src/core/Block.ts';
-import { BitVector } from '../../src/core/BitVector.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
 import { type ContractFn } from '../../src/core/ContractEnv.ts';
 
@@ -106,16 +105,14 @@ export function makeAggregationBlock(
 ): Block {
   const { anchorOutputCount, claimedIndices, aggregateOutputCounts, declaredWeight = 1 } = opts;
 
-  const mergedClaimMask = BitVector.fromIndices(anchorOutputCount, claimedIndices);
   const subtreeWeights = subtrees.map((s) => s.declaredWeight);
   const totalSubtreeWeight = subtreeWeights.reduce((sum, w) => sum + w, 0);
   const totalSubtreeOutputs = aggregateOutputCounts.reduce((sum, c) => sum + c, 0);
-  const survivingAnchorOutputs = anchorOutputCount - claimedIndices.length;
-  const outputCount = 1 + totalSubtreeOutputs + survivingAnchorOutputs;
+  const newOutputCount = 1 + totalSubtreeOutputs; // 1 own output + subtree outputs
 
   const aggData = encodeAggregationData({
-    claimMask: mergedClaimMask,
-    outputCount,
+    claimMask: [...claimedIndices].sort((a, b) => a - b),
+    newOutputCount,
     aggregateOutputCounts,
     chainWeights: [totalSubtreeWeight],
     aggregateWeights: subtreeWeights,

@@ -1,7 +1,15 @@
 // Protocol spec: docs/protocol/overview.md (module orchestration)
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
+import {
+  AGGREGATION_CONTRACT,
+  Block,
+  BlockStore,
+  encodeAggregationData,
+  getAggregationData,
+  getBlockNewOutputCount,
+  getBlockWeightVector,
+} from './Block.ts';
 import { composeUnsignedBlockPacket } from './Packet.ts';
 import { ConflictService } from './ConflictService.ts';
 import { ConsensusService } from './ConsensusService.ts';
@@ -153,11 +161,56 @@ export class Coordinator {
       const toAggregate = hashes.slice(0, maxChildren);
       const anchorHash = Hash.fromPrimitive(anchorKey);
 
+      // Build aggregation data output for the block
+      const aggregateOutputCounts: number[] = [];
+      const aggregateWeights: number[] = [];
+      const chainWeights: number[] = [];
+      let newOutputCount = 0;
+      const claimMask: number[] = [];
+
+      for (const aggHash of toAggregate) {
+        const aggBlock = this.store.get(aggHash);
+        if (!aggBlock) continue;
+        const noc = getBlockNewOutputCount(aggBlock);
+        aggregateOutputCounts.push(noc);
+        newOutputCount += noc;
+        const wv = getBlockWeightVector(aggBlock);
+        aggregateWeights.push(wv[0] ?? 0);
+        for (let d = 0; d < wv.length; d++) {
+          while (chainWeights.length <= d) chainWeights.push(0);
+          chainWeights[d] += wv[d];
+        }
+        // Collect leaf claim masks (siblings share anchor so no rebasing needed)
+        const aggData = getAggregationData(aggBlock);
+        const mask = aggData?.claimMask ??
+          aggBlock.claims.filter((c) => c >= aggBlock.outputs.length)
+            .map((c) => c - aggBlock.outputs.length);
+        for (const idx of mask) {
+          if (!claimMask.includes(idx)) claimMask.push(idx);
+        }
+      }
+      claimMask.sort((a, b) => a - b);
+      newOutputCount += 1; // own output
+
+      const aggDataDetail = encodeAggregationData({
+        claimMask,
+        newOutputCount,
+        aggregateOutputCounts,
+        chainWeights,
+        aggregateWeights,
+      });
+
+      const aggOutput: Output = {
+        verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
+        value: 0,
+        detail: aggDataDetail,
+      };
+
       let blueprint: BlockBlueprint;
       try {
         blueprint = this.blockCreation.buildBlock({
           anchor: anchorHash,
-          outputs: [output],
+          outputs: [output, aggOutput],
           claims: [],
           declaredWeight,
           aggregates: toAggregate,

@@ -7,7 +7,6 @@ import {
   encodeAggregationData,
   type AggregationData,
 } from './Block.ts';
-import { BitVector } from './BitVector.ts';
 
 /** Number of aggregation marker inputs required to produce an aggregation block. */
 export const AGGREGATION_THRESHOLD = 4;
@@ -16,9 +15,12 @@ export const AGGREGATION_THRESHOLD = 4;
  * Aggregation contract: consumes AGGREGATION_THRESHOLD marker outputs,
  * composes their subtree caches, and produces an aggregation data output.
  *
+ * The contract accumulates per-aggregate output counts and weights.
+ * The composed claimMask is computed at solidification time by the
+ * OutputSpaceModule, which correctly handles arbitrary anchor depths.
+ *
  * Each requireInput() call blocks if no marker is available, resuming
- * when the next marker becomes canonical. This means the contract may
- * be suspended across multiple block arrivals.
+ * when the next marker becomes canonical.
  */
 export const aggregationContract: ContractFn = async (env) => {
   const inputs = [];
@@ -28,22 +30,18 @@ export const aggregationContract: ContractFn = async (env) => {
     inputs.push(input);
   }
 
-  // Compose caches from consumed inputs.
+  // Decode caches from consumed inputs.
   // Inputs with empty detail are leaves (implicit trivial cache).
-  // Inputs with non-empty detail carry encoded AggregationData.
   const caches: (AggregationData | null)[] = inputs.map((input) => {
-    if (input.detail.length === 0) return null; // leaf marker
+    if (input.detail.length === 0) return null;
     return decodeAggregationData(input.detail);
   });
 
-  // Compose: union claim masks, sum newOutputCounts.
-  // For leaves without a cache, we use trivial values.
-  // Leaf newOutputCount is 0 here -- the real value will be computed
-  // during solidification when the full block structure is known.
+  // Compose: sum newOutputCounts, collect per-aggregate info.
+  // claimMask is left empty -- computed at solidification by OutputSpaceModule.
   let composedNewOutputCount = 0;
   const aggregateOutputCounts: number[] = [];
   const aggregateWeights: number[] = [];
-  let composedClaimMask = BitVector.empty(0);
   const chainWeights: number[] = [];
 
   for (const cache of caches) {
@@ -54,15 +52,6 @@ export const aggregationContract: ContractFn = async (env) => {
         cache.chainWeights.length > 0 ? cache.chainWeights[0] : 0,
       );
 
-      // Union claim masks (resize if needed)
-      if (cache.claimMask.length > composedClaimMask.length) {
-        const resized = BitVector.empty(cache.claimMask.length);
-        resized.or(composedClaimMask);
-        composedClaimMask = resized;
-      }
-      composedClaimMask.or(cache.claimMask);
-
-      // Accumulate chain weights
       for (let d = 0; d < cache.chainWeights.length; d++) {
         while (chainWeights.length <= d) chainWeights.push(0);
         chainWeights[d] += cache.chainWeights[d];
@@ -75,14 +64,13 @@ export const aggregationContract: ContractFn = async (env) => {
   }
 
   const composedData: AggregationData = {
-    claimMask: composedClaimMask,
+    claimMask: [], // Computed at solidification time
     newOutputCount: composedNewOutputCount,
     aggregateOutputCounts,
     chainWeights,
     aggregateWeights,
   };
 
-  // Produce the aggregation data output
   env.requireOutput(
     { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
     0,

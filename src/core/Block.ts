@@ -1,7 +1,6 @@
 // Protocol spec: docs/protocol/block-creation.md (block structure), docs/protocol/contracts.md (standard contracts), docs/protocol/dag.md (graph topology)
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { BitVector } from './BitVector.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 
 /** Genesis blocks use this as their declared weight (very high). */
@@ -38,8 +37,8 @@ export function makeSignatureOutput(publicKey: Uint8Array, value: number): Outpu
  * Contains the cached UTXO transformation state computed from subtrees.
  */
 export interface AggregationData {
-  /** Composed claim mask from subtrees (rebased + merged + own claims). */
-  claimMask: BitVector;
+  /** Sorted anchor output indices claimed by the subtree. */
+  claimMask: number[];
   /** Surviving new outputs added by this subtree (excludes anchor's surviving outputs). */
   newOutputCount: number;
   /** Per-subtree new output counts. */
@@ -53,7 +52,7 @@ export interface AggregationData {
 /** Encode AggregationData to a Uint8Array for use in Output.detail. */
 export function encodeAggregationData(data: AggregationData): Uint8Array {
   const json = JSON.stringify({
-    claimMask: data.claimMask.toJSON(),
+    claimMask: data.claimMask,
     newOutputCount: data.newOutputCount,
     aggregateOutputCounts: data.aggregateOutputCounts,
     chainWeights: data.chainWeights,
@@ -66,7 +65,7 @@ export function encodeAggregationData(data: AggregationData): Uint8Array {
 export function decodeAggregationData(bytes: Uint8Array): AggregationData {
   const json = JSON.parse(new TextDecoder().decode(bytes));
   return {
-    claimMask: BitVector.fromJSON(json.claimMask),
+    claimMask: json.claimMask as number[],
     newOutputCount: json.newOutputCount,
     aggregateOutputCounts: json.aggregateOutputCounts,
     chainWeights: json.chainWeights,
@@ -103,24 +102,20 @@ export function makeAggregationOutput(): Output {
 /**
  * Get the claim mask for a block: from aggregation data if present,
  * otherwise computed from claims for leaf blocks.
- * For leaf blocks, requires the anchor block to determine the anchor output count.
- * Returns null if insufficient data is available.
+ * Returns a sorted array of anchor output indices that the block's subtree claims.
  */
-export function getBlockClaimMask(block: Block, anchorOutputCount: number): BitVector {
+export function getBlockClaimMask(block: Block, _anchorOutputCount?: number): number[] {
   const aggData = getAggregationData(block);
   if (aggData) return aggData.claimMask;
-  // Leaf block: compute from own claims
+  // Leaf block: non-self claims map directly to anchor indices
   const ownOutputCount = block.outputs.length;
-  const mask = BitVector.empty(anchorOutputCount);
+  const mask: number[] = [];
   for (const claimIdx of block.claims) {
     if (claimIdx >= ownOutputCount) {
-      // Map to anchor output index: claim targets surviving anchor output
-      const anchorIdx = claimIdx - ownOutputCount;
-      if (anchorIdx < anchorOutputCount) {
-        mask.set(anchorIdx, true);
-      }
+      mask.push(claimIdx - ownOutputCount);
     }
   }
+  mask.sort((a, b) => a - b);
   return mask;
 }
 
@@ -337,8 +332,9 @@ export function collectExtendedOutputs(block: Block, store: BlockStore): Output[
   const claimMask = getBlockClaimMask(block, anchorOutputs.length);
 
   // Add surviving anchor outputs (those not claimed by this block)
+  const claimSet = new Set(claimMask);
   for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!claimMask.get(i)) {
+    if (!claimSet.has(i)) {
       result.push(anchorOutputs[i]);
     }
   }

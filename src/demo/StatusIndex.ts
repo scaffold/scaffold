@@ -100,8 +100,9 @@ function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
   const claimMask = getBlockClaimMask(block, anchorOutputs.length);
 
+  const claimSet = new Set(claimMask);
   for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!claimMask.get(i)) {
+    if (!claimSet.has(i)) {
       result.push(anchorOutputs[i]);
     }
   }

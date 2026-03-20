@@ -22,7 +22,10 @@ class ConflictProviderAdapter implements ConflictProvider<Block> {
   getClaimMask(block: Block): BitVector | null {
     if (block.aggregates.length === 0) return null;
     const aggData = getAggregationData(block);
-    return aggData?.claimMask ?? null;
+    if (!aggData) return null;
+    // Convert sorted number[] claim mask to BitVector for ConflictModule
+    const anchorOutputCount = this.getAnchorOutputCount(block);
+    return BitVector.fromIndices(anchorOutputCount, aggData.claimMask);
   }
 
   getAggregateOutputCounts(block: Block): number[] {
@@ -47,7 +50,7 @@ class ConflictProviderAdapter implements ConflictProvider<Block> {
     if (aggData) {
       // Total = new outputs + anchor's surviving outputs
       const anchorOutputCount = this.getAnchorOutputCount(block);
-      return aggData.newOutputCount + anchorOutputCount - aggData.claimMask.popcount();
+      return aggData.newOutputCount + anchorOutputCount - aggData.claimMask.length;
     }
     // Leaf block: need anchor's output count to compute
     const anchorBlock = this.store.get(block.anchor);

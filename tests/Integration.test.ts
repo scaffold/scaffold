@@ -12,7 +12,6 @@ import {
   getBlockWeightVector,
   RESULT_CONTRACT,
 } from '../src/core/Block.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConflictService } from '../src/core/ConflictService.ts';
@@ -318,9 +317,8 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
 
   // Aggregation block: aggregates both subtrees, anchored to genesis
   // Must include aggregation contract output with the aggregation data
-  const mergedClaimMask = BitVector.fromIndices(4, [0, 1]);
   const aggData = encodeAggregationData({
-    claimMask: mergedClaimMask,
+    claimMask: [0, 1],
     newOutputCount: 9, // 4 + 4 (subtree outputs) + 1 (own output) - 0 (own claims) = 9
     aggregateOutputCounts: [4, 4],
     chainWeights: [25], // subtreeA(10) + subtreeB(15) = 25
