@@ -46,31 +46,42 @@ The `chainWeights` vector excludes the block's own `declaredWeight`. The full we
 
 ---
 
-## Collateral Contract
+## Collateral Resolution Contract
 
-**Purpose**: Lock funds contingent on a target block's validity.
+**Purpose**: Stake funds on a block's validity (FOR or AGAINST) and resolve disputes by distributing stakes to the winning side.
 
-**Verification**: Spending conditions depend on the dispute outcome for the target block.
+**Verification**: The same contract handles both collateral posting (spending condition checks) and resolution (claims all collateral for a target, sums sides, distributes).
 
-**Verifier params**: The target block hash.
+**Verifier params**:
+```
+CollateralParams {
+    coveredBlockHash: Hash       // the block this collateral covers
+}
+```
 
 **Detail**:
 ```
 CollateralDetail {
-    path:     Number[]     // dispute path within the target
-    side:     "valid" | "invalid"
-    pubkey:   PublicKey    // where to remit funds on resolution
+    publicKey:    Uint8Array     // remittance address for refunds/winnings
+    vote:         'FOR' | 'AGAINST'
+    packagingFee: integer        // max fee the poster will pay for risk transfer
 }
 ```
 
 **Spending conditions** (from [trust module](trust.md)):
-- **Publisher redemption**: target block is aggregated (risk period passed).
-- **Non-canonical reclaim**: target block becomes non-canonical (consensus race lost, no fault).
-- **Fraud claim**: dispute resolved against the target — the opposing side claims the stake.
+- **Publisher redemption**: covered block is aggregated (risk has been transferred to the aggregator).
+- **Non-canonical reclaim**: covered block becomes non-canonical (consensus race lost, no fault).
+- **Resolution claim**: the resolution contract claims all collateral outputs for the `coveredBlockHash`, sums FOR and AGAINST totals, and distributes funds to the winning side.
 
-Resolution: a collateral resolution block claims all collateral outputs for a target, sums VALID and INVALID stakes, and distributes funds to the winning side. See [computation](computation.md#collateral-and-dispute-resolution) for the resolution mechanism.
+**Resolution mechanics**:
+1. A resolution block claims all `COLLATERAL_RESOLUTION` outputs targeting a given `coveredBlockHash`.
+2. FOR totals and AGAINST totals are summed. The side with more total value wins.
+3. Winning postings: `packagingFee` is forwarded to the contract (as a new output), `amount - packagingFee` is returned to the poster's `publicKey`.
+4. Losing postings: the entire `amount` is distributed to winning `publicKey`s, proportionally to their stakes.
 
-The [trust module](trust.md) already describes collateral as "a regular output with restricted spending conditions." The collateral contract makes this literal — no special block-level field needed. The separation rule (collateral block C must not be the target H or a descendant of H) is a property of the collateral contract's spending conditions.
+**Contract-defined bonus**: The resolution contract defines a claim bonus equal to `SUM(amount_i - claimedFee_i)`, where `claimedFee_i <= packagingFee_i`. This incentivizes claiming all posted collateral and charging competitive fees. See [trust module](trust.md#contract-defined-bonus) for details.
+
+**Separation rule**: The collateral block must not be the covered block or a descendant of it. If the covered block is invalidated and removed, its descendants are also removed -- collateral inside those blocks would vanish when it is most needed.
 
 ---
 

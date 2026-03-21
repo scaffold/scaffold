@@ -202,13 +202,14 @@ The protocol is specified across several module documents, each responsible for 
 | [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
-| [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
+| [Weight](weight.md) | Weight derivation | How do blocks earn consensus influence through verified computation? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Output Data](output-data.md) | Data format | How is output data encoded and inspected? |
 | [Output Claims](output-claims.md) | Claim tracking | Who claims each output on a given block? |
 | [Output Space](output-space.md) | UTXO state model | How are output spaces constructed, indexed, and transformed? |
 | [Aggregation](aggregation.md) | Subtree composition | How does aggregation define ordering and cache transformations? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
+| [Attacks](attacks.md) | Security catalog | What attacks exist and how does the protocol defend against them? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.
 
