@@ -135,19 +135,167 @@ Low M (e.g., 0.5) is the preferred operating point for several reasons:
 
 **Fee is M-independent**: Publishers pay the same fee (~v) regardless of M. Low M doesn't cost publishers more.
 
-### The Independent Verification Layer
+### Self-Flagging is the Primary Detection Mechanism
 
-Low M means aggregators catch less fraud proactively. This is acceptable because a second layer of independent verifiers can check blocks post-aggregation.
+Independent verification -- random bounty hunting by third parties -- is **structurally unprofitable** at equilibrium. A verifier who picks a random block, pays v to check it, and earns `alpha * M * C` if invalid has expected profit:
 
-The bounty for catching fraud is `alpha * M * C`. Even at M = 0.1, this is 50 units -- far more than the verification cost v = 1. Independent verifiers can profitably sample aggregated blocks at random, providing a safety net for fraud that aggregators miss.
+```
+E = p * alpha * M * C - v
+  = (v / (M * C)) * alpha * M * C - v     -- substituting equilibrium p
+  = alpha * v - v
+  = (alpha - 1) * v
+  < 0                                      -- since alpha < 1
+```
 
-The floor for M is where `alpha * M * C` approaches v. Below that, independent verification becomes unprofitable and post-hoc fraud detection breaks down.
+This holds for all M. The equilibrium fraud rate is exactly low enough to make bounty hunting a losing proposition. If it were profitable, more verifiers would enter, pushing p down, making it unprofitable again.
 
-### Collateral Decay
+This means detection cannot rely on independent verifiers. Instead, **self-flagging by the deceptive publisher is the primary detection mechanism**. The publisher knows their block is invalid (private information) and races to flag it immediately after risk transfer. Delay risks someone else catching it first and claiming the reward. Detection is nearly instant.
 
-M can decrease over time through re-aggregation. Fresh blocks carry full publisher collateral (C = 1000). After a few seconds, an aggregator takes over at M = 0.5 (500). Later, another aggregator re-aggregates at an even lower M. Collateral decays as blocks age without being contested -- like insurance premiums dropping on a claim-free policy.
+The floor for M is therefore not about independent verification profitability. It is about the self-flagging incentive: `alpha * M * C` must be large enough relative to the publisher's effort cost that the deception game remains attractive enough to fund the verification layer at all.
 
-This reflects the Bayesian reality: blocks that survive longer without dispute are less likely to be fraudulent.
+---
+
+## Partial Collateral Coverage
+
+An aggregator covering N blocks at M * C each does not need to post N * M * C collateral. Instead, they post a fraction -- e.g., 10% of the worst case. With N = 1000 and M * C = 500, the aggregator posts 50,000 instead of 500,000.
+
+This reserve covers the first discovered invalidities. In the rare case that more than 10% of covered blocks are invalid, the remaining ones go uncovered.
+
+### Why This Works
+
+At the equilibrium fraud rate (p = 0.2% for M = 0.5), the expected number of invalid blocks per 1000 is 2. A 10% reserve covers 100 blocks -- 50x the expected fraud. The probability of exceeding this under independent fraud is negligible.
+
+**Correlated fraud is easier to detect, not harder.** If 200 out of 1000 blocks are invalid (correlated cause), a 20% random sample catches at least one with overwhelming probability:
+
+```
+P(catch) = 1 - (800/1000)^200 ≈ 1 - 10^-19
+```
+
+One hit should trigger the aggregator to reject the entire correlated batch or probe deeper. The more concentrated the fraud, the faster probing finds it.
+
+### Reserve as Risk Parameter
+
+The reserve ratio is a risk management choice, not a game-theoretic parameter. It does not affect the equilibrium (f, p, q are unchanged). Aggregators with lower reserves offer lower fees (less locked capital) but face ruin risk from tail events. The market finds the efficient level.
+
+### Collateral Exhaustion is Self-Regulating
+
+If a publisher knows the aggregator's reserve is nearly depleted from prior claims, they know their self-flag won't pay out. This **discourages** deception when the reserve is low -- a nice self-regulating property. But it also means late-discovered fraud in a bad batch goes uncovered.
+
+---
+
+## Collateral Decay
+
+### Bayesian Risk Decay
+
+A block starts with prior fraud probability p. Over time, if the block remains unchallenged, the posterior probability of invalidity decreases. Modeling detection as a Poisson process with rate lambda (detections per second):
+
+```
+P(invalid | unchallenged for t) = p * e^(-lambda * t) / (1 - p + p * e^(-lambda * t))
+                                ≈ p * e^(-lambda * t)     -- since p << 1
+```
+
+Risk decays exponentially. Required collateral tracks this:
+
+```
+C(t) = M * C_0 * p * e^(-lambda * t)
+```
+
+### Detection Rate
+
+lambda depends on how quickly invalid blocks get flagged. Since self-flagging is the primary detection mechanism (see above), lambda is driven by the attacker's own incentive to flag quickly -- they race to claim the reward before anyone else. In practice, lambda is high (seconds, not minutes).
+
+For a subtree of K blocks, the total residual risk at time t:
+
+```
+risk(t) = K * M * C * p * e^(-lambda * t)
+```
+
+With K = 1000, M = 0.5, C = 1000, p = 0.002:
+
+| Time (half-lives) | Residual risk per block | Total subtree risk | Collateral needed (10% reserve) |
+|---|---|---|---|
+| 0 | 1.0 | 1,000 | 50,000 |
+| 1 | 0.5 | 500 | 25,000 |
+| 3 | 0.125 | 125 | 6,250 |
+| 5 | 0.031 | 31 | 1,550 |
+| 10 | 0.001 | 1 | 50 |
+
+### Re-Aggregation Cascade
+
+Collateral can be released through successive re-aggregation as risk decays:
+
+```
+t=0:   Publisher posts 1000, aggregator A posts 50,000 for 1000 blocks
+t=5s:  Aggregator B takes over, posts 1,550. A's 50,000 released.
+t=30s: Aggregator C takes over, posts 50. B's 1,550 released.
+t=60s: Subtree is effectively trust-finalized. Minimal collateral.
+```
+
+### Recursive Fees are Negligible
+
+Each re-aggregation step charges its own fee. At level k, the re-aggregator decides: verify (cost v) or accept the risk (expected loss `p_k * C_k`)?
+
+```
+p_k ≈ p * e^(-lambda * t_k)     -- Bayesian decay
+C_k ≈ M^k * C                    -- collateral shrinks each level
+```
+
+Only the first aggregation requires verification (where `p * M * C > v`). At every subsequent level, the residual risk is below v, so the re-aggregator accepts without checking. The total recursive fee converges:
+
+```
+F = v + sum_{k>=1} p * e^(-lambda * k * delta) * M^k * C
+  = v + p * C * (M * e^(-lambda * delta)) / (1 - M * e^(-lambda * delta))
+```
+
+With delta = 5s, lambda = 1/s, M = 0.5:
+
+```
+F = 1 + 2 * (0.5 * e^-5) / (1 - 0.5 * e^-5) ≈ 1.007
+```
+
+**One fee, paid once, covers the block's entire lifecycle from publication to finality.**
+
+---
+
+## Throughput-Proportional Fees
+
+Blocks vary in throughput T (coins in = coins out). Collateral is proportional to throughput: `C_i = k * T_i`. Verification sampling should also be proportional to throughput, since the aggregator's risk from each block scales with its collateral.
+
+### The Equilibrium q is Throughput-Independent
+
+Both the deception reward and penalty scale linearly with T_i:
+
+```
+deception payoff for block i:
+  (1 - q) * alpha * M * k * T_i  -  q * k * T_i
+= T_i * [(1 - q) * alpha * M * k  -  q * k]
+```
+
+The publisher is indifferent when the bracket is zero:
+
+```
+q = alpha * M / (1 + alpha * M)
+```
+
+This is the same q for all blocks regardless of throughput. The aggregator verifies each block with the same probability.
+
+### But the Fee Scales with Throughput
+
+The aggregator's expected loss from missed fraud on block i is `p * M * C_i`, which is proportional to T_i. A high-throughput block creates proportionally more risk. The fee should price this:
+
+```
+f_i = v * T_i / T_avg
+```
+
+Equivalently, there is a constant **aggregation tax rate** on throughput:
+
+```
+f_i / T_i = v / T_avg = constant
+```
+
+Every block pays the same fraction of its throughput. A 1-coin block and a 1,000,000-coin block both pay the same percentage. Flat fees would force small blocks to subsidize the risk of large ones.
+
+Very small blocks where `f_i` falls below a practical minimum may not be worth aggregating individually, pushing toward batching small blocks before aggregation.
 
 ---
 
@@ -155,13 +303,13 @@ This reflects the Bayesian reality: blocks that survive longer without dispute a
 
 The equilibrium above models **strategic deception**: publishers who plan to self-flag for profit. This is rational economic behavior that funds the verification layer.
 
-**Malicious fraud** is different: an attacker publishes invalid blocks hoping the invalid state persists. They do not self-flag. At M = 0.5, only 20% of these are caught by the aggregator. The remaining 80% must be caught by:
+**Malicious fraud** is different: an attacker publishes invalid blocks hoping the invalid state persists. They do not self-flag. At M = 0.5, only 20% of these are caught by the aggregator's probing. The remaining 80% must be caught by:
 
-1. Independent verifiers sampling post-aggregation (bounty: `alpha * M * C`).
-2. Application-layer users who notice incorrect state.
-3. Other publishers whose blocks depend on the fraudulent block's outputs.
+1. Application-layer users who notice incorrect state and flag it for the bounty.
+2. Other publishers whose blocks depend on the fraudulent block's outputs.
+3. Aggregators at subsequent re-aggregation steps who may probe the block.
 
-The independent verification bounty is the primary defense. As long as `alpha * M * C >> v`, malicious fraud is eventually caught with high probability.
+Note that independent bounty hunting is structurally unprofitable at equilibrium (see "Self-Flagging is the Primary Detection Mechanism" above). Malicious fraud that evades the aggregator's initial probing relies on downstream consumers and dependent publishers to notice. This is a weaker detection guarantee than strategic fraud (which is self-correcting via self-flagging). The aggregator's probing rate q is the primary defense against malicious fraud.
 
 ---
 
@@ -172,8 +320,7 @@ A healthier equilibrium involves a low baseline fraud rate:
 1. Some nodes occasionally publish invalid blocks.
 2. Aggregators catch a fraction during probing.
 3. The publisher self-flags the rest after risk transfer.
-4. Independent verifiers provide a backstop for non-self-flagged fraud.
-5. The fraud rate stabilizes at `p = v / (M * C)`.
+4. The fraud rate stabilizes at `p = v / (M * C)`.
 
 ### Why Publish Invalid Blocks?
 
@@ -197,11 +344,11 @@ The protocol controls the equilibrium through:
 
 ## Open Questions
 
-1. **Minimum M**: What is the lowest acceptable M? Bounded by `alpha * M * C > v` for independent verification profitability. With alpha = 0.5, C = 1000, v = 1: M > 0.002. In practice, the floor should be higher to ensure robust detection.
-2. **Collateral decay schedule**: How quickly should M decrease through re-aggregation? Should it be a fixed schedule or market-driven?
+1. **Minimum M**: The floor for M is not about independent verification profitability (which is structurally unprofitable at any M). Instead, M must be high enough that the aggregator's probing rate q provides adequate defense against malicious (non-self-flagging) fraud. With alpha = 0.5 and M = 0.5, q = 20% -- one in five malicious blocks caught. Is this sufficient?
+2. **Detection rate lambda**: The Bayesian decay model requires estimating lambda. Self-flagging provides fast detection for strategic fraud, but lambda for malicious fraud depends on downstream consumers noticing. How do we estimate lambda conservatively for re-aggregation pricing?
 3. **Reputation effects**: Nodes caught publishing invalid blocks may be deprioritized by peers in the gossip module. Does this create a secondary cost that suppresses the fraud rate below the healthy equilibrium?
 4. **Verification cartels**: Can verifiers and publishers collude (publisher tips off verifier, they split the reward)? This may not be harmful -- the collateral still gets claimed, and the verification still happens. The "victim" is the aggregator who should have probed more carefully.
-5. **M < 1 and graph integrity**: When M < 1, the total collateral backing a block decreases after aggregation. Is there a risk that re-aggregation at very low M makes fraud too cheap to deter, even if detection is profitable for verifiers?
+5. **Throughput distribution**: If the block throughput distribution is very skewed (a few huge blocks, many tiny ones), the aggregation tax rate `v / T_avg` may be impractical for tiny blocks. Should there be a minimum block throughput for direct aggregation, with smaller blocks required to batch first?
 
 ---
 

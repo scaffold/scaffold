@@ -115,6 +115,30 @@ The aggregator's collateral per block is M * C, where M is the **payout multipli
 
 Risk transfer should happen within seconds of publication to free the publisher's capital. Centralized insurance clients are expected to manage most aggregated risk, competing on fee and verification rate.
 
+### Partial Collateral Coverage
+
+An aggregator covering N blocks does not need to post N * M * C total collateral. Since the expected fraud rate is low (p = v / (M * C)), the aggregator posts a fraction of the worst case — e.g., 10%. The reserve covers the first discovered invalidities. At the equilibrium fraud rate (p = 0.2% for M = 0.5), expected invalid blocks per 1000 is 2, so a 10% reserve provides 50x headroom. Correlated fraud is detectable through random sampling: one hit triggers deeper investigation or batch rejection. See [deception](deception.md) for the full analysis.
+
+### Throughput-Proportional Fees
+
+Collateral is proportional to block throughput T (coins in = coins out): `C_i = k * T_i`. The aggregation fee is also proportional to throughput:
+
+```
+f_i = v * T_i / T_avg
+```
+
+This defines a constant aggregation tax rate (`v / T_avg`) on throughput. Every block pays the same percentage. The aggregator's verification probability q is the same for all blocks (throughput-independent at equilibrium), but the risk per block scales with throughput, so the fee must scale to match.
+
+### Bayesian Risk Decay
+
+As a block ages without being contested, the posterior probability of invalidity decays exponentially:
+
+```
+P(invalid | unchallenged for t) ≈ p * e^(-lambda * t)
+```
+
+Where lambda is the detection rate (driven primarily by the self-flagging incentive of deceptive publishers). Required collateral at time t tracks this decay, enabling re-aggregation at successively lower collateral. The total fee across all re-aggregation levels converges to approximately v — one fee covers the block's entire lifecycle. See [deception](deception.md) for the cascade model and formulas.
+
 For the game-theoretic analysis of risk transfer incentives, equilibrium fraud rates, and the effect of M on verification behavior, see [deception](deception.md).
 
 ---
