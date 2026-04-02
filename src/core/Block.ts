@@ -122,7 +122,6 @@ export function getBlockClaimMask(block: Block, _anchorOutputCount?: number): nu
   return mask;
 }
 
-
 /**
  * Get the weight vector for a block: reconstructed from declaredWeight + chainWeights.
  */
@@ -264,6 +263,10 @@ export interface Block {
   readonly receivedAt: number;
   /** How this block was received. Node-local, not serialized. */
   readonly source: BlockSource;
+  /** Block's own verification cost (excluding subtrees). Used by probing. */
+  readonly selfWeight?: number;
+  /** Total weight of the block's subtree (self + aggregates). Used by probing. */
+  readonly subtreeWeight?: number;
 }
 
 // -- BlockStore -----------------------------------------------------

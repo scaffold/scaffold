@@ -1,118 +1,211 @@
-# Sampling Module
+# Sampling
 
-The sampling module determines which trees to verify and maintains a statistical model of each tree's work authenticity. Its output is a probability distribution per tree, consumed by the consensus module for weight computation and by this module internally for verification prioritization.
+Sampling is how the protocol converts declared work into verified work. Without sampling, a block could claim arbitrary weight and the network would have no way to distinguish legitimate work from fabrication.
 
-The consensus module specifies the verification interface: it expects verified weights that converge toward declared weights for honest trees and toward zero for fraudulent ones. This module fulfills that interface through statistical sampling.
+The protocol uses two sampling processes:
+
+1. **Weight sampling** (this document): Probes trees proportionally to aggregation incentive, which approximates verification cost. Determines tree weight through a statistical weight factor. This is the primary mechanism by which blocks earn consensus influence.
+
+2. **Throughput sampling** (see [deception.md](deception.md)): Probes trees proportionally to total throughput. Used to detect invalid blocks and trigger challenges. Covered separately because it serves a different purpose (fraud detection vs. weight determination).
 
 ---
 
-## State Model
+## Block Probe State
 
-For each tree T, the module maintains:
+Each block maintains a local probe state tracking the history and outcomes of probes that have passed through it:
 
 ```
-SamplingState {
-    declared_work:  Number     // W — total work declared by the tree
-    successes:      Number     // n — samples verified as real
-    failures:       Number     // f — failed samples (includes pending)
+BlockProbeState {
+    aggregateWeights:  number[]     // verification cost per aggregate subtree
+    selfWeight:        number       // this block's own verification cost
+    queries:           number[]     // probe log: -1 = self, i = aggregate index
+    selfVerified:      boolean      // whether this block passed verification
 }
 ```
 
-Where `s = n + f` is the total sample count.
+**aggregateWeights** are the aggregation incentives of each aggregate subtree -- the total verification cost of the subtree rooted at each aggregate. These determine the probability of a probe descending into each subtree.
 
-**Pending samples**: When a sample is requested but not yet resolved, it is immediately counted as a failure. When it resolves:
+**selfWeight** is the block's own verification cost, excluding its subtrees. Ideally this is derived from the aggregation incentive (the block's incentive minus the sum of its aggregates' incentives), preserving the self-correcting market-pricing property. For now, it is stored as a direct property. The exact derivation is an open question.
 
-- **Success**: `n += 1, f -= 1` (flipped from failure to success)
-- **Failure**: no change (already counted)
+**queries** is an append-only log recording where each probe descended. Each entry is either -1 (the block itself was the terminal) or an index into the aggregates array. The length of this array is the total probe count at this block.
 
-This "pessimistic pending" model ensures the tree looks worse while we wait, providing natural backpressure against redundant requests without a separate throttling mechanism. Failure encompasses both unavailability (block could not be fetched) and invalidity (computation did not match).
-
----
-
-## Output Distribution
-
-The module outputs a Beta distribution representing belief about the fraction of real work in the tree:
-
-```
-p_real ~ Beta(n, f + 1)
-```
-
-This uses an improper prior `Beta(0, 1)`, making the model maximally pessimistic — a tree contributes zero verified weight until its first successful sample:
-
-| State | Distribution | E[p] | Verified Weight |
-|-------|-------------|------|-----------------|
-| Unsampled (n=0, f=0) | Beta(0, 1) | 0 | 0 |
-| 1 success, 0 failures | Beta(1, 1) | 1/2 | W/2 |
-| 5 successes, 0 failures | Beta(5, 1) | 5/6 | 5W/6 |
-| 0 successes, 5 failures | Beta(0, 6) | 0 | 0 |
-| 3 successes, 2 failures | Beta(3, 3) | 1/2 | W/2 |
-
-The verified weight is:
-
-```
-v(T) = W × n / (n + f + 1)
-```
-
-The consensus module receives the full distribution and interprets it according to its own needs (mean, lower quantile, etc.).
+**selfVerified** is set to true when the block's own computation has been verified: all refs and anchors fetched, and the verifier contract executed and accepted.
 
 ---
 
-## Sampling Priority
+## Probe Descent
 
-To decide where to sample next, the module computes a priority score for each tree reflecting the expected value of information from one additional sample.
+A probe starts at some initial block and randomly descends through the aggregation tree, choosing a path proportionally to weight at each branch point:
+
+```
+function initProbe(block):
+    state = getProbeState(block)
+    totalWeight = state.selfWeight + sum(state.aggregateWeights)
+
+    probeAt = random() * totalWeight
+    for i in 0..state.aggregateWeights.length:
+        w = state.aggregateWeights[i]
+        if probeAt < w:
+            // Probe descends into aggregate i
+            state.queries.push(i)
+
+            // Ensure the aggregate has at least as many probes as we've sent it
+            requestedCount = count(state.queries, q => q == i)
+            if getProbeState(block.aggregates[i]).queries.length < requestedCount:
+                initProbe(block.aggregates[i])
+
+            return
+        probeAt -= w
+
+    // Self-weight was selected: this block is the terminal
+    state.queries.push(-1)
+    // Launch verification of this block (async)
+```
+
+At each branch point, the block's own weight and all aggregate subtree weights compete. When the block's own weight is selected, the probe has hit a **terminal** -- the block itself must be verified. This can happen even when the block has aggregated subtrees, because selfWeight is always one of the options.
+
+### Terminal Verification
+
+When a probe hits a terminal, the block is verified:
+
+1. Request all refs and anchors (fetch any missing data).
+2. Run the verifier contract on the block.
+3. If verification succeeds, set `selfVerified = true`.
+
+### Propagation Boundary
+
+Verification results propagate up to the **initial query block** (the block where `initProbe` was first called) but **not past it**. From a parent's perspective, a probe it didn't initiate is not a true random sample -- the child chose its own descent path, which may not be representative of the parent's weight distribution.
+
+**Reuse exception**: When a parent probes a child block that has already accumulated results from earlier probes, the child's existing results can be reused via the `limit` parameter in `countVerifications`. The parent DID choose this child proportionally to weight, so the child's results are valid samples from the parent's perspective, up to the number of probes the parent actually sent.
+
+### Missing Blocks
+
+If a probe descends and hits a block that hasn't been received, the probe counts as a **pending failure**. The query counter increments (increasing the denominator of the weight factor), but the response counter does not increment until the block is received and verified.
+
+This naturally penalizes trees with missing data -- their weight factor drops while blocks are unavailable. You shouldn't trust work you can't verify.
+
+When a missing block arrives and is subsequently verified, the weight factor recovers.
+
+---
+
+## Weight Factor
+
+The weight factor is the ratio of verified terminals to total probes at a given block:
+
+```
+weight_factor(block) = countVerifications(block, state, state.queries.length)
+                       / state.queries.length
+```
+
+When `queries.length = 0`, the weight factor is 0. This is the pessimistic default -- unverified blocks contribute no weight to consensus.
+
+A tree's verified weight is:
+
+```
+tree_weight = aggregation_incentive * weight_factor
+```
+
+This feeds into the consensus module as the block's verified weight for conflict resolution.
+
+### Counting Verifications
+
+The `countVerifications` function recursively counts verified terminals, bounded by a limit parameter:
+
+```
+function countVerifications(block, state, limit):
+    // Only consider the first `limit` queries at this level
+    queries = state.queries.slice(0, limit)
+    verifications = 0
+
+    for i in 0..block.aggregates.length:
+        probeCount = count(queries, q => q == i)
+        if probeCount == 0: continue
+        verifications += countVerifications(
+            block.aggregates[i],
+            getProbeState(block.aggregates[i]),
+            probeCount
+        )
+
+    if state.selfVerified:
+        verifications += count(queries, q => q == -1)
+
+    return verifications
+```
+
+The **limit** parameter is the key mechanism for safe result reuse. When a parent probes a child N times, only N of the child's results count toward the parent's weight factor. This prevents a heavily-probed subtree from disproportionately inflating its parent's confidence.
+
+**Example**: Block A probes aggregate B twice. B has been independently probed 100 times with 90 successes. From A's perspective, B contributes at most 2 verifications (limited to how many times A actually probed B). A's weight factor is not inflated by B's extensive independent verification.
+
+---
+
+## Probe Scheduling
+
+Given a budget of one probe, which tree should be probed? The optimal choice maximizes the expected absolute change in tree weight -- the **expected weight swing**.
 
 ### Expected Weight Swing
 
-For priority computation, we use the proper prior `Beta(n + 1, f + 1)` rather than the pessimistic output prior. The question here is not "what do we believe?" but "how much could we learn?" — and these require different priors:
+The expected signed weight change from a probe is zero (the ratio estimator is a martingale -- one more sample doesn't change the expected value). But the expected **absolute** change -- how much the weight moves in either direction -- is computable and represents the information value of one probe.
+
+Model the true validity fraction as `p ~ Beta(r + 1, q - r + 1)` (uniform prior, Bayesian update from observed probes), where `r` = responses (verified count), `q` = queries (total probes), and `I` = aggregation incentive. The expected absolute weight change is:
 
 ```
-expected_swing(T) = 2W × Var(Beta(n + 1, f + 1))
-                  = 2W(n + 1)(f + 1) / [(s + 2)²(s + 3)]
+swing(T) = 2I(r + 1)(q - r + 1) / [(q + 2)^2(q + 3)]
 ```
 
-**Derivation**: The expected absolute change in verified weight from one additional sample equals `2W × Var(p)`. This follows from computing the Bayesian update in each direction (success vs failure), weighting by their posterior predictive probabilities, and noting the result simplifies to twice the posterior variance scaled by the declared work.
+**Derivation**: Compute the Bayesian update under success (prob `alpha / (alpha + beta)`) and failure (prob `beta / (alpha + beta)`), take the absolute weight change in each case, and weight by their probabilities. The result simplifies to `2I * alpha * beta / [(alpha + beta)^2 * (alpha + beta + 1)]` where `alpha = r + 1` and `beta = q - r + 1`.
 
-### Descendant Dampening
+| State | swing / I |
+|-------|-----------|
+| q=0, r=0 (unknown) | 1/6 |
+| q=1, r=1 (one success) | 1/18 |
+| q=10, r=5 (uncertain) | 36/1872 |
+| q=10, r=10 (well-verified) | 11/1872 |
+| q=10, r=0 (likely fraud) | 11/1872 |
 
-Trees with high verified descendant weight `D` (provided by the consensus module) are already well-established in consensus. Further verification of the tree itself has diminishing impact:
+Unknown trees get maximum priority per unit of incentive. Maximum uncertainty (r = q/2) maximizes swing. Well-characterized trees (high or low weight factor) have minimal swing -- we already know enough about them.
+
+### Conflict Proximity Multiplier
+
+Trees in close conflicts benefit more from probing -- one probe could flip the conflict outcome. The proximity multiplier scales priority by the inverse of the weight gap:
 
 ```
-dampening(T) = W / (W + D)
+proximity(T) = 1 / max(|weight_T - weight_rival|, epsilon)
 ```
 
-### Priority Formula
+Where `weight_rival` is the weight of T's closest conflict partner. Trees far from any conflict boundary have low proximity (low urgency). Trees at the decision boundary have high proximity (one probe could flip the canonical set).
+
+For trees with no active conflicts, proximity defaults to 1 (no multiplier).
+
+### Full Priority Formula
 
 ```
-priority(T) = 2W(n + 1)(f + 1) / [(s + 2)²(s + 3)]  ×  W / (W + D)
+priority(T) = swing(T) * proximity(T)
+            = [2I(r+1)(q-r+1) / ((q+2)^2(q+3))] * [1 / max(|gap|, epsilon)]
 ```
 
-The tree with the highest priority is selected for sampling.
+The tree with the highest priority is selected for probing.
+
+### Pending Backpressure
+
+Each in-flight probe increments the query counter but not the response counter. This naturally limits concurrent probes: launching too many probes on a single tree temporarily deflates its weight factor, which reduces the tree's consensus influence while probes are outstanding.
+
+The optimal concurrency emerges from the priority formula: each additional pending probe increases `q`, which reduces the swing, making other trees relatively more attractive to probe. No explicit concurrency limit is needed.
 
 ---
 
 ## Emergent Behaviors
 
-The priority formula produces several desirable behaviors without explicitly modeling them:
+The probe mechanism produces desirable behaviors without explicit modeling:
 
-**Recency preference.** New trees have `s = 0` and `D = 0`, giving maximum priority per unit of declared work. Old verified trees have high `s` and high `D`. No explicit time parameter is needed — recency emerges from the information structure.
+**Recency preference.** New trees (q=0) get maximum priority per unit of incentive. Old, well-verified trees have high `q` and high weight factor. No explicit time parameter is needed -- recency emerges from the information structure.
 
-**Fraud deprioritization.** Trees that consistently fail accumulate high `f` with `n = 0`. Their verified weight stays at zero, they lose consensus conflicts, nobody builds on them (`D` remains 0), and their priority decays as `~1/f`. They fall off naturally without a blacklist.
+**Fraud deprioritization.** Trees with consistent failures accumulate high `q` with low `r`. Their weight factor stays near zero (they contribute no consensus weight), and their swing is minimal (we already know they're fraudulent). They fall off naturally without a blacklist.
 
-**Pending saturation.** Each pending sample inflates `f`, reducing priority. Five pending samples on an otherwise unsampled tree drop priority from `W/6` to roughly `W/32`. When samples resolve as successes, `f` decreases and priority partially recovers.
+**Natural concurrency limit.** Pending probes deflate the weight factor and reduce swing, making it increasingly unattractive to launch more probes on the same tree. The system self-regulates to an efficient number of concurrent probes.
 
-**Descendant confidence.** A tree with `10×` its declared work in verified descendants has `dampening ≈ 0.09`, reducing priority by `~11×`. Confidence flows upward: extensive verified work built on a tree is itself evidence of authenticity.
+**Convergence.** As probes accumulate, the weight factor converges to the true fraction of valid work (law of large numbers). The rate of convergence is proportional to sampling frequency, which is proportional to incentive.
 
----
-
-## Sampling Procedure
-
-1. Compute `priority(T)` for all trees with unresolved work (`v(T) < W`).
-2. Select the tree `T*` with the highest priority.
-3. Choose a random unit of work from `T*`'s declared work.
-4. Descend the tree structure, requesting child blocks from peers, until the unit is located.
-5. Mark the sample as pending (`f += 1`).
-6. When resolved, update state (success: `n += 1, f -= 1`; failure: no change).
-7. Emit the updated distribution to the consensus module.
+**Subtree isolation.** The limit parameter in `countVerifications` ensures that fraud in one subtree doesn't inflate confidence in sibling subtrees. Each subtree's contribution to its parent's weight factor is bounded by how many probes the parent actually sent to it.
 
 ---
 
@@ -120,47 +213,75 @@ The priority formula produces several desirable behaviors without explicitly mod
 
 ### Setup
 
-Three trees, no samples yet:
-
-| Tree | W | n | f | D |
-|------|---|---|---|---|
-| A | 1000 | 0 | 0 | 0 |
-| B | 500 | 0 | 0 | 0 |
-| C | 200 | 10 | 0 | 5000 |
-
-### Initial Priorities
+Block G (genesis) has two aggregate subtrees, each containing further structure:
 
 ```
-priority(A) = 2×1000×1×1 / (4×3) × 1000/1000 = 167
-priority(B) = 2×500×1×1 / (4×3) × 500/500 = 83
-priority(C) = 2×200×11×1 / (144×13) × 200/5200 ≈ 0.09
+G (selfWeight: 10)
+  +-- A (selfWeight: 5, subtreeWeight: 40)
+  |     +-- A1 (selfWeight: 15)
+  |     +-- A2 (selfWeight: 20)
+  +-- B (selfWeight: 8, subtreeWeight: 30)
+        +-- B1 (selfWeight: 22)
 ```
 
-Tree A is sampled first — highest declared work, no verification, no descendants. Tree C has been verified many times and has massive descendant weight, so it is effectively ignored.
+G's total weight = 10 + 40 + 30 = 80.
 
-### After Sampling Tree A (Mixed Results)
+Probe probability at G: A gets 40/80 = 50%, B gets 30/80 = 37.5%, self gets 10/80 = 12.5%.
 
-Five samples requested. Three succeed, two still pending (counted as failures).
+### After 8 Probes
 
-State: `n = 3, f = 2, s = 5`.
+Suppose 8 probes are sent to G. By the random descent, approximately:
+- 4 go to A (2 hit A1, 1 hits A2, 1 hits A's self)
+- 3 go to B (2 hit B1, 1 hits B's self)
+- 1 hits G's self
 
-```
-Distribution: Beta(3, 3), E[p] = 0.5, v(A) = 500
-priority(A) = 2×1000×4×3 / (49×8) × 1000/1000 ≈ 61
-```
+All terminals verify successfully.
 
-Priority has dropped from 167 to 61. Half the work is tentatively verified; there is less to learn.
-
-### Tree A Turns Out Fraudulent
-
-All samples eventually fail. State: `n = 0, f = 10, s = 10`.
+G's state: `queries = [0, 0, 1, 0, -1, 1, 1, 0]`, where 0 = aggregate A, 1 = aggregate B, -1 = self.
 
 ```
-Distribution: Beta(0, 11), E[p] = 0, v(A) = 0
-priority(A) = 2×1000×1×11 / (144×13) × 1000/1000 ≈ 12
+countVerifications(G, state, 8):
+  A probed 4 times: countVerifications(A, A_state, 4) = 4 (all verified)
+  B probed 3 times: countVerifications(B, B_state, 3) = 3 (all verified)
+  self: 1 query, selfVerified = true: 1
+  total = 8
+
+weight_factor(G) = 8 / 8 = 1.0
+tree_weight = 80 * 1.0 = 80
 ```
 
-Priority has dropped from 167 to 12. Verified weight is zero — Tree A loses all consensus conflicts. Further sampling continues to decrease in priority as `f` grows.
+### One Subtree Fails
+
+Now suppose A2 fails verification. After 10 total probes:
+
+G's state: queries has 5 to A, 3 to B, 2 to self. A's state: 2 to A1, 2 to A2, 1 to self.
+
+```
+countVerifications(A, A_state, 5):
+  A1 probed 2 times, both verified: 2
+  A2 probed 2 times, NOT verified: 0
+  self: 1 query, verified: 1
+  total = 3
+
+countVerifications(G, state, 10):
+  A: 3 (out of 5 probes)
+  B: 3 (out of 3 probes, all verified)
+  self: 2 (selfVerified = true)
+  total = 8
+
+weight_factor(G) = 8 / 10 = 0.8
+tree_weight = 80 * 0.8 = 64
+```
+
+The fraudulent subtree A2 has reduced G's weight factor from 1.0 to 0.8. As more probes hit A2, the weight factor will converge toward 0.75 (A2's 20 out of 80 total weight is invalid, so 60/80 = 0.75 of the tree is real).
+
+---
+
+## Throughput Sampling
+
+Weight sampling determines *how much* of a tree's work is real. A separate process -- throughput sampling -- determines *whether specific blocks are invalid*. It descends proportionally to total throughput rather than verification cost, and is the mechanism by which invalid blocks are detected with high probability.
+
+Throughput sampling is specified in [deception.md](deception.md) because it is intimately connected to the self-flagging mechanism and the deception equilibrium.
 
 ---
 
@@ -170,16 +291,19 @@ Priority has dropped from 167 to 12. Verified weight is zero — Tree A loses al
 
 | Input | Source | Description |
 |-------|--------|-------------|
-| Tree declared work | Block creation module | `W` for each tree |
-| Verified descendant weight | Consensus module | `D` for priority dampening |
-| Sample results | Verification module | Success/failure for each sampled unit |
+| Block structure | Block creation module | Aggregates, self weight, subtree weights |
+| Aggregation incentive | Aggregation module | Total verification cost per tree |
+| Verification results | Verification module | Success/failure for terminal blocks |
+| Conflict weight gaps | Consensus module | For proximity multiplier in scheduling |
+| Block availability | Network / Gossip | Whether blocks can be fetched for verification |
 
 ### This Module Provides
 
 | Output | Consumer | Description |
 |--------|----------|-------------|
-| Work distribution per tree | Consensus module | `Beta(n, f + 1)` representing belief about fraction of real work |
-| Sample requests | Network/peer layer | Which tree and unit of work to fetch and verify |
+| Weight factor per block | Consensus module | Scales declared weight to verified weight |
+| Probe requests | Verification module | Which block to verify next (terminal from descent) |
+| Scheduling priority | Verification module | Which tree to probe next |
 
 ---
 
@@ -187,5 +311,5 @@ Priority has dropped from 167 to 12. Verified weight is zero — Tree A loses al
 
 | File | Description |
 |------|-------------|
-| [`src/core/SamplingModule.ts`](../../src/core/SamplingModule.ts) | Core algorithm: Beta distributions, priority scoring, tree selection |
-| [`src/core/SamplingService.ts`](../../src/core/SamplingService.ts) | Wired adapter using concrete `Block` type |
+| [`src/core/ProbeModule.ts`](../../src/core/ProbeModule.ts) | Core probe logic: BlockProbeState, initProbe, countVerifications, weight factor, scheduling |
+| [`src/core/ProbeService.ts`](../../src/core/ProbeService.ts) | Adapter wiring ProbeModule to BlockStore and ConsensusService |

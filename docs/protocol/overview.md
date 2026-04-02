@@ -197,7 +197,7 @@ The protocol is specified across several module documents, each responsible for 
 |--------|---------|-------------------|
 | [Consensus](consensus.md) | Branch selection | Which conflicting block wins? |
 | [Conflict](conflict.md) | Double-spend detection | Do two blocks claim the same output? |
-| [Sampling](sampling.md) | Verification priority | Which blocks should we spot-check next? |
+| [Sampling](sampling.md) | Weight verification & probe scheduling | How is declared work converted to verified weight? |
 | [Trust](trust.md) | Economic incentives | What happens if a block is fraudulent? |
 | [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
@@ -224,7 +224,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Module | Core File | Service File |
 |--------|-----------|-------------|
 | Consensus | [`ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | [`ConsensusService.ts`](../../src/core/ConsensusService.ts) |
-| Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
+| Sampling (Probing) | [`ProbeModule.ts`](../../src/core/ProbeModule.ts) | [`ProbeService.ts`](../../src/core/ProbeService.ts) |
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
