@@ -46,31 +46,64 @@ The `chainWeights` vector excludes the block's own `declaredWeight`. The full we
 
 ---
 
-## Collateral Contract
+## Verifier Reward Contract
 
-**Purpose**: Lock funds contingent on a target block's validity.
+**Purpose**: Publisher's short-term validity stake. Decays back to the publisher if unchallenged.
 
-**Verification**: Spending conditions depend on the dispute outcome for the target block.
+**Verifier params**: The target block hash.
+
+**Detail**: The publisher's public key (where to remit funds on decay return).
+
+**Spending conditions** (see [collateral-resolution](collateral-resolution.md)):
+- **Decay return**: Publisher reclaims `C1 * exp(-c * age)` if no active challenges exist.
+- **Challenge claim**: An AGAINST challenge was posted and not responded to. Challenger claims the decayed remainder (locked at challenge timestamp).
+- **Non-canonical reclaim**: Target block becomes non-canonical. Full return, no penalty.
+
+The separation rule (collateral block C must not be the target H or a descendant of H) is a property of this contract's spending conditions.
+
+---
+
+## Rectification Contract
+
+**Purpose**: Long-term insurance for invalid blocks. Funded by the aggregation fee.
+
+**Verifier params**: The target block hash (individual fee output) or aggregation tree root (accumulated pot).
+
+**Detail**: The owner's public key (publisher for fee output, aggregator for pot).
+
+**Spending conditions** (see [collateral-resolution](collateral-resolution.md)):
+- **Aggregation claim**: Aggregator claims the fee output during aggregation, rolls into their rectification pot.
+- **Rectification payout**: A block in the covered tree is proven invalid. Creates finder's reward + victim restoration outputs.
+- **Non-canonical reclaim**: Full return if the aggregation tree becomes non-canonical.
+- **Solidification return**: After sufficient time without challenges, aggregator reclaims.
+
+---
+
+## Challenge Contract
+
+**Purpose**: AGAINST bond targeting a specific hash or validity claim in a block.
 
 **Verifier params**: The target block hash.
 
 **Detail**:
 ```
-CollateralDetail {
-    path:     Number[]     // dispute path within the target
-    side:     "valid" | "invalid"
-    pubkey:   PublicKey    // where to remit funds on resolution
+ChallengeDetail {
+    target:     ChallengeTarget    // discriminated union (see below)
+    pubkey:     PublicKey           // challenger's pubkey for remittance
 }
+
+ChallengeTarget =
+    | { type: 'validity' }
+    | { type: 'anchor' }
+    | { type: 'ref', index: Number }
+    | { type: 'aggregate', index: Number }
+    | { type: 'output', index: Number }
 ```
 
-**Spending conditions** (from [trust module](trust.md)):
-- **Publisher redemption**: target block is aggregated (risk period passed).
-- **Non-canonical reclaim**: target block becomes non-canonical (consensus race lost, no fault).
-- **Fraud claim**: dispute resolved against the target — the opposing side claims the stake.
-
-Resolution: a collateral resolution block claims all collateral outputs for a target, sums VALID and INVALID stakes, and distributes funds to the winning side. See [computation](computation.md#collateral-and-dispute-resolution) for the resolution mechanism.
-
-The [trust module](trust.md) already describes collateral as "a regular output with restricted spending conditions." The collateral contract makes this literal — no special block-level field needed. The separation rule (collateral block C must not be the target H or a descendant of H) is a property of the collateral contract's spending conditions.
+**Spending conditions**:
+- **Hash response**: Anyone reveals the preimage matching the targeted hash. `hash(preimage) == target_hash`. Self-resolving. Responder earns the bond.
+- **Validity response**: Re-execution proves the block's computation is correct. Responder earns the bond.
+- **Unclaimed return**: If the challenge is old enough that the corresponding verifier reward has fully decayed, the challenger can reclaim their bond (the challenge is moot).
 
 ---
 
@@ -121,8 +154,8 @@ Each protocol module interacts with contract output data through its provider in
 |--------|-------------------|-----|
 | [Conflict](conflict.md) | Aggregation (claimMask, outputCount, aggregateOutputCounts) | Detect double-spends via claim mask overlap |
 | [Consensus](consensus.md) | Aggregation (chainWeights) | Reconstruct weight vector for branch selection |
-| [Trust](trust.md) | Aggregation (aggregateWeights), Collateral (target, side) | Evaluate child weights, manage collateral lifecycle |
-| [Gossip](gossip.md) | Aggregation (chainWeights), Signature (publicKey), Collateral (target) | Priority scoring for block distribution |
+| [Trust](trust.md) | Aggregation (aggregateWeights), Verifier Reward (target, decay), Rectification (target, pot), Challenge (target, type) | Evaluate child weights, manage collateral lifecycle |
+| [Gossip](gossip.md) | Aggregation (chainWeights), Signature (publicKey), Verifier Reward (target) | Priority scoring for block distribution |
 | [Sampling](sampling.md) | (none — uses block.declaredWeight directly) | Verification priority |
 
 ---

@@ -319,18 +319,15 @@ accept();
 
 ---
 
-## Query and Promise Mechanism
+## Data Queries via AGAINST Challenges
 
-> Status: design discussion. Not yet specified.
+> Superseded by the challenge mechanism in [collateral-resolution](collateral-resolution.md).
 
-For offline state (data the publisher holds but did not publish in full), two outputs work together:
+Queries and verification are the same operation. To request data from a block (e.g., a hash preimage, a merkle branch), a peer posts an AGAINST challenge bond targeting the relevant hash. The block creator (or anyone with the data) responds by revealing the preimage and earning the bond.
 
-- A **promise output** commits to data (e.g., a merkle root) alongside the block.
-- A **query output** can be posted by any peer requesting specific data (e.g., a merkle branch).
+While an AGAINST challenge exists and is unresolved, the target block's effective weight is reduced. This incentivizes fast responses. The verifier reward decay provides the implicit deadline -- there is no explicit timeout.
 
-While a query is posted but unanswered, the original block's effective weight is reduced. This incentivizes the publisher to respond quickly with the requested data.
-
-The exact mechanism — how weight reduction works, query format, response validation, and the relationship between queries and challenges — is an open design question. See the [brainstorming notes](../../brainstorming/compute/explorations/03-offline-state-and-challenge-lifecycle.md) for analysis of the challenge vs. query distinction.
+This replaces the earlier query/promise design. See [collateral-resolution](collateral-resolution.md) for the full mechanism.
 
 ---
 
@@ -425,25 +422,39 @@ Response block:
 
 The HASH_LOCK contract checks that `hash(claimed_self_data("data")) == params` (the hash H).
 
-### Collateral Resolution
+### Collateral Resolution (AGAINST Challenge Response)
 
-After a dispute deadline, a resolution block claims all VALID/INVALID collateral for a target:
+A peer challenges a hash in a block. Anyone with the preimage responds:
 
 ```
-Resolution block:
-  claims: [<valid_1>, <valid_2>, <invalid_1>]   // all collateral for target
-  refs: [<target_block>]
+Challenge block:
   outputs:
-    // Winners receive proportional shares
-    [0] { SIGNATURE/winner1_pubkey, share1, empty }
-    [1] { SIGNATURE/winner2_pubkey, share2, empty }
+    [0] { CHALLENGE/target_block, bond, encode({ type: 'ref', index: 2 }, challenger_pubkey) }
+
+Response block:
+  claims: [<challenge_output>]
+  detail: encode(preimage)
+  outputs:
+    [0] { SIGNATURE/responder_pubkey, bond, empty }
 ```
 
-The resolution contract:
-1. Iterates claimed outputs, summing VALID and INVALID stakes.
-2. Determines the winning side (majority by stake).
-3. Calls `add_output()` for each winner's share.
-4. Calls `accept()`.
+The challenge contract verifies `hash(preimage) == target_hash`. Self-resolving -- no voting needed.
+
+### Rectification
+
+When a block is proven invalid, a restoration block claims from the aggregator's rectification pot:
+
+```
+Restoration block:
+  claims: [<rectification_pot_output>]
+  refs: [<invalid_block>, <aggregation_tree_root>]
+  outputs:
+    [0] { SIGNATURE/victim_pubkey, restored_amount, empty }
+    [1] { SIGNATURE/finder_pubkey, finder_reward, empty }
+    [2] { RECTIFICATION/tree_root, remaining_pot, aggregator_pubkey }
+```
+
+The rectification contract verifies the proof chain from the aggregation tree root to the invalid block, checks the restoration amounts, and ensures the finder's reward doesn't exceed `alpha * R`. Restoration blocks use easy-to-verify contracts (signature checks) and don't require collateral. See [collateral-resolution](collateral-resolution.md).
 
 ---
 
@@ -455,10 +466,10 @@ The resolution contract:
 | [Contracts](contracts.md) | Computation contract placeholder replaced by this spec. Standard contracts updated to use verifier/detail terminology. New SELF contract for self-claimed outputs. |
 | [Consensus](consensus.md) | No change. Consumes weight vectors as before. |
 | [Conflict](conflict.md) | No change. Self-claimed outputs follow existing self-claim rules. Refs do not participate in conflict detection. |
-| [Trust](trust.md) | VALID/INVALID collateral with resolution mechanism. Publisher must post VALID collateral for hard contracts. |
+| [Trust](trust.md) | Two-tier collateral (Verifier Reward + Rectification). Publisher must post both for hard contracts. |
 | [Sampling](sampling.md) | Verification cost varies by contract. Hard contracts are more expensive to sample. Priority formula may factor in verification cost. |
 | [Gossip](gossip.md) | Needs extension for contract-hash-based routing: peers advertise which contracts they serve. |
-| [Deception](deception.md) | Insurance commitments on FOR collateral blocks. Self-catch mechanism for trap blocks. |
+| [Deception](deception.md) | Self-flagging incentive via rectification pot. Verifier reward decay deters data hiding. |
 
 ---
 

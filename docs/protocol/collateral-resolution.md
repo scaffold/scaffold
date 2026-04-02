@@ -1,215 +1,274 @@
-# Collateral Resolution Contract
+# Collateral Resolution
 
-This document specifies the collateral resolution contract -- the mechanism by which blocks are challenged, validated, and (if invalid) rectified. The contract handles two distinct types of collateral with different lifecycles and responsibilities.
+Two contracts handle block validity incentives: the **Verifier Reward Contract** (Type 1) and the **Rectification Contract** (Type 2). They are separate contracts with separate outputs because they have different owners, lifecycles, transfer semantics, and claim conditions.
 
 For the economic model and equilibrium analysis, see [deception](deception.md). For the collateral structure and trust module, see [trust](trust.md).
 
 ---
 
-## Two Types of Collateral
+## Why Two Contracts
 
-Every block's initial FOR collateral covers two components:
+| Property | Verifier Reward (Type 1) | Rectification (Type 2) |
+|---|---|---|
+| Owner | Publisher | Aggregator (via fee) |
+| Lifecycle | Seconds (exponential decay) | Hours to days (persistent) |
+| Transfers on aggregation? | No -- stays with publisher | Yes -- aggregator claims it |
+| Claim trigger | AGAINST challenge | Proven invalidity |
+| Purpose | Incentivize fast responses, deter data hiding | Make victims whole, fund finder's reward |
 
-### 1. Verifier Reward
-
-The publisher's stake for short-term validity. It is high initially and decays exponentially back to the publisher over time (hours to days). The **original publisher remains responsible** for responding to challenges against this collateral -- it is never transferred to an aggregator.
-
-If the block is valid and unchallenged, the full amount returns to the publisher. If the block is found invalid, the decayed remainder goes to the challenger.
-
-### 2. Rectification Insurance
-
-Long-term insurance for invalid blocks discovered later. Aggregators are responsible for rectification -- even if the original publisher is long gone, the current aggregator covers the cost. The aggregation fee (`throughput / AVG(throughput) * verification_cost`) funds this.
-
-If an invalid block is discovered, the rectification pot pays:
-- A **finder's reward** to whoever proved the invalidity.
-- **Victim restoration** -- new outputs that make the incorrectly claimed outputs whole.
+If these were a single output, every aggregation would need to partially claim and split it -- the aggregator takes Type 2 responsibility but can't touch Type 1. Two outputs keep aggregation clean: the aggregator claims the fee output and ignores the verifier reward.
 
 ---
 
-## The Challenge/Response Mechanism
+## Contract 1: Verifier Reward
 
-Challenges serve dual purpose: they are both a verification mechanism and a data query mechanism. Requesting a hash preimage from a block IS verifying that block.
+Posted by the publisher for each block. High initially, decays exponentially back to the publisher.
 
-### Posting a Challenge (AGAINST)
-
-Any peer can post a small AGAINST bond targeting a specific hash referenced by a block. The hash can be any structural commitment: a ref, an anchor, an aggregate hash, an output hash, or any other hash the block declares.
+### Output
 
 ```
-AGAINST output:
-  verifier: { contract: COLLATERAL_RESOLUTION, params: encode(target_block, hash) }
-  value: <small_bond>
+Verifier Reward output:
+  verifier: { contract: VERIFIER_REWARD_CONTRACT, params: encode(target_block_hash) }
+  value: C1  (proportional to throughput)
+  detail: encode(publisher_pubkey)
 ```
 
-The bond must be large enough to incentivize a response. If no one responds, the bond is too small. The protocol does not set a minimum -- the market determines what's worth responding to.
+### Spending Conditions
 
-### Responding (Preimage Reveal)
-
-Anyone who knows the preimage can claim the AGAINST bond by publishing a resolution block containing the preimage. The resolution contract verifies `hash(preimage) == hash` and awards the AGAINST bond to the responder.
+**Decay return** -- Publisher reclaims the decayed remainder after the block is no longer actively challenged:
 
 ```
-Resolution block:
-  claims: [AGAINST_output]
-  outputs: [responder_payment]
-  detail: encode(preimage)
+return_amount = C1 * exp(-c * (now - block_timestamp))
 ```
 
-This is self-resolving -- no dispute module, no voting. The hash either matches or it doesn't.
+The publisher must prove no active AGAINST challenges exist on this target. Requires `require_signature(publisher_pubkey)`.
 
-### What Happens During the Challenge Window
+**Challenge claim** -- A successful AGAINST challenge was posted and not responded to. The challenger claims the decayed remainder:
 
-While an AGAINST challenge exists and is unresolved:
+```
+claim_amount = C1 * exp(-c * (challenge_timestamp - block_timestamp))
+```
 
-1. **The target block is effectively invalid.** Its weight is reduced. Blocks building on it are at risk.
-2. **The publisher's verifier reward (Type 1) decays toward the challenger** instead of back to the publisher.
-3. **Anyone can respond** -- not just the original publisher. Because responding is profitable (you claim the AGAINST bond), any peer holding the data is incentivized to respond.
+The reward is locked at the time the challenge was posted, not at resolution time. This prevents the reward from decaying further while waiting for a response.
 
-If the challenge remains unresolved (no one produces the preimage), the block stays invalid. The full remaining verifier reward goes to the challenger.
-
-### Using Challenges as Queries
-
-To traverse a subtree, a peer posts AGAINST on a hash they want to descend into. The block creator (or anyone with the data) responds with the preimage, earning the AGAINST bond. The querier gets the data they wanted. This makes graph traversal a paid protocol operation where data providers are compensated.
-
----
-
-## Verifier Reward Lifecycle (Type 1)
+**Non-canonical reclaim** -- Target block became non-canonical (lost a consensus race). Full C1 returned to publisher. No penalty for losing a fair race.
 
 ### Decay Formula
-
-The verifier reward decays from the block's creation time:
 
 ```
 reward(t) = C1 * exp(-c * (now - block_timestamp))
 ```
 
-Where:
-- `C1` is the initial verifier reward collateral (proportional to throughput)
-- `c` is the decay constant (~0.2-0.3 per second for a half-life of ~2-3 seconds)
-- `now` is when the challenge is resolved (or when the remaining collateral is returned)
-
-At `t = block_timestamp` (immediate challenge): full reward.
-After a few seconds: reward drops significantly.
-After minutes/hours: reward is negligible; remainder returns to publisher.
-
-### Why Decay Matters
-
-The decay incentivizes:
-- **Fast responses**: If you know the data, respond immediately. Delay means the reward shrinks.
-- **Fast detection**: If a block is invalid, challenge it immediately. The verifier reward is highest when the block is fresh.
-- **No data hiding**: An attacker who hides data and reveals it later gets negligible reward because the decay has consumed most of the verifier reward by then.
+- `C1`: initial verifier reward (proportional to throughput T)
+- `c`: decay constant (~0.2-0.3/s, half-life ~2-3s)
+- No explicit deadline. The decay IS the deadline. After ~30s the reward is negligible.
 
 ### Responsibility
 
-The original publisher remains responsible for Type 1 for the block's lifetime. They are incentivized to stay online and respond to queries because:
-- Each response earns the AGAINST bond (profitable).
-- Failure to respond means their Type 1 decays to the challenger (costly).
+The original publisher remains responsible for Type 1 forever. It never transfers. The publisher is incentivized to stay online because:
+- Responding to AGAINST challenges earns the challenge bond (profitable).
+- Failing to respond means their Type 1 decays to the challenger (costly).
 
-If the publisher goes offline and the data is well-known, anyone can respond on their behalf. The AGAINST bond is still profitable for the responder, and the publisher's collateral is protected.
-
----
-
-## Rectification Lifecycle (Type 2)
-
-### Who is Responsible
-
-Aggregators. When an aggregator includes a block in their tree, they take on rectification responsibility for that block. This is the aggregator's core economic role: long-term insurance.
-
-### Fee
-
-The aggregation fee funds rectification coverage:
-
-```
-f_i = v * T_i / T_avg
-```
-
-Where `v` is verification cost, `T_i` is the block's throughput, and `T_avg` is the average throughput. This is a constant tax rate on throughput.
-
-### When Rectification Triggers
-
-Rectification requires:
-1. A known block (not just a missing hash) whose Type 1 collateral has been resolved AGAINST -- i.e., the block is proven invalid.
-2. A proof chain from the current aggregator through intermediate aggregators to the invalid block.
-
-### Payout
-
-The rectification pot (proportional to throughput T) is split:
-
-1. **Finder's reward**: Paid to whoever proved the block invalid. This incentivizes discovery. The finder may be the original publisher themselves (self-flagging) or any third party.
-2. **Victim restoration**: New outputs are created that mirror the incorrectly claimed outputs. For example, if an output to public key A was incorrectly claimed by B's forged signature, a new output to A is created, making A whole.
-
-### Example
-
-1. Block B has an output: 100 coins to pubkey A.
-2. Fraudulent block F claims B's output using a forged signature for A.
-3. F is aggregated. The aggregator now insures F.
-4. B discovers F is fraudulent (B knows A's real signature wasn't used).
-5. B posts AGAINST on F's signature hash. F's publisher can't respond (the preimage would prove the signature is forged).
-6. F is resolved invalid. Type 1 decays to B (the challenger).
-7. Rectification triggers: the aggregator's Type 2 pot pays a finder's reward to B and creates a new 100-coin output for A.
+If the publisher goes offline and the data is well-known, anyone can respond on their behalf -- the challenge bond is profitable for any responder, and the publisher's collateral is protected.
 
 ---
 
-## Interaction Between Types
+## Contract 2: Rectification Insurance
 
-The two types are complementary:
+Posted by the publisher as the aggregation fee. Claimed by the aggregator during aggregation. Accumulates into the aggregator's rectification pot.
 
-| Property | Type 1 (Verifier Reward) | Type 2 (Rectification) |
-|---|---|---|
-| Who posts it | Publisher | Aggregator (funded by fee) |
-| Who is responsible | Original publisher | Current aggregator chain |
-| What it covers | Validity and structural correctness | Restoring incorrectly claimed outputs |
-| Timescale | Seconds to hours (decaying) | Hours to weeks (persistent) |
-| Claimed by | Challenger (AGAINST poster) | Finder + victim restoration |
-| Transfers to aggregator? | No -- stays with publisher | Yes -- aggregator takes this risk |
+### Output (Initial -- Publisher Posts)
 
-A single invalid block resolution touches both:
-1. Type 1 decays to the challenger who proved invalidity.
-2. Type 2 pays the finder and restores victims.
+```
+Rectification Fee output:
+  verifier: { contract: RECTIFICATION_CONTRACT, params: encode(target_block_hash) }
+  value: f = v * T / T_avg
+  detail: encode(publisher_pubkey)
+```
+
+### Output (Accumulated -- Aggregator's Pot)
+
+When the aggregator claims individual fee outputs, they roll them into a single rectification pot output covering the entire aggregation tree:
+
+```
+Rectification Pot output:
+  verifier: { contract: RECTIFICATION_CONTRACT, params: encode(aggregation_tree_root) }
+  value: sum(f_i for all covered blocks)
+  detail: encode(aggregator_pubkey)
+```
+
+### Spending Conditions
+
+**Aggregation claim** -- Aggregator claims the fee output when aggregating the target block. The aggregation contract requires the fee to be rolled into the aggregator's pot. This is normal output claiming -- no special logic.
+
+**Rectification payout** -- A block in the covered tree is proven invalid. The contract creates:
+- Finder's reward: `alpha * R` to whoever proved invalidity.
+- Victim restoration: new outputs mirroring the incorrectly claimed outputs, making victims whole.
+- Remainder stays in the pot (covering other blocks).
+
+If the pot is smaller than the victim's total loss, the pot pays out what it can. This is an unfortunate but bounded situation -- it means the aggregator's insurance wasn't enough. Aggregator selection mechanisms (prioritizing aggregators with maximal collateral) mitigate this.
+
+**Non-canonical reclaim** -- Full return if aggregation tree becomes non-canonical.
+
+**Solidification return** -- After sufficient time without challenges, the aggregator reclaims the pot. The Bayesian risk decay makes old, unchallenged blocks overwhelmingly likely to be valid.
+
+### Rectification Proof Chain
+
+To trigger rectification, the claimant must prove:
+1. A specific block B in the aggregation tree is invalid (resolved via Type 1).
+2. The aggregation tree root covers B (traversable through the aggregation hierarchy).
+
+The proof is the chain of aggregation references from the pot's target (tree root) down to the invalid block.
 
 ---
 
-## Initial Collateral Sizing
+## Challenge Mechanism
 
-The publisher's initial FOR collateral must fund both components:
+### Challenge Target (Discriminated Union)
+
+Every AGAINST challenge specifies what it contests:
 
 ```
-initial_FOR = C1 + f
+ChallengeTarget =
+  | { type: 'validity' }                    // WASM re-execution dispute
+  | { type: 'anchor' }                      // anchor hash preimage
+  | { type: 'ref', index: number }          // ref[index] hash preimage
+  | { type: 'aggregate', index: number }    // aggregates[index] hash preimage
+  | { type: 'output', index: number }       // outputs[index] content
 ```
 
-Where:
-- `C1` is the verifier reward component (proportional to throughput T, large enough to incentivize verification)
-- `f` is the aggregation fee (throughput / AVG(throughput) * verification_cost)
+### AGAINST Challenge Output
 
-`C1` should be large relative to `f` because it is the primary deterrent against publishing invalid blocks. The publisher risks losing `C1` if challenged. The aggregation fee `f` is comparatively small.
+```
+AGAINST output:
+  verifier: { contract: CHALLENGE_CONTRACT, params: encode(target_block_hash) }
+  value: bond
+  detail: encode({ target: ChallengeTarget, challenger_pubkey: PublicKey })
+```
+
+The bond must be large enough to incentivize a response. The protocol does not set a minimum -- the market determines what's worth responding to.
+
+### Hash Challenges (anchor, ref, aggregate, output)
+
+Hash challenges are self-resolving. The hash either matches or it doesn't.
+
+**Flow:**
+
+1. Challenger posts AGAINST bond targeting a specific hash (e.g., `{ type: 'ref', index: 2 }`).
+2. **Response**: Anyone with the preimage publishes a resolution block that claims the AGAINST output, providing the preimage in the block's detail. The challenge contract verifies `hash(preimage) == target_hash`. The responder earns the bond.
+3. **No response**: The challenge goes unanswered. The block is considered invalid at this hash. The challenger can then claim the Type 1 verifier reward (decayed to the challenge timestamp).
+
+```
+Hash Response block:
+  claims: [AGAINST_output]
+  detail: encode(preimage)
+  outputs: [{ SIGNATURE/responder, bond, empty }]
+```
+
+### Validity Challenges
+
+Validity challenges contest the block's computational correctness -- the WASM execution produced wrong outputs.
+
+**Flow:**
+
+1. Challenger posts AGAINST bond with `{ type: 'validity' }`.
+2. **Response**: The publisher (or anyone) re-executes the WASM and proves the output is correct. The exact proof mechanism depends on the contract's complexity:
+   - For simple contracts: re-execute and compare outputs.
+   - For complex contracts: may require a bisection protocol (interactive dispute).
+3. **No response**: Same as hash challenges -- block is invalid, Type 1 decays to challenger.
+
+Computational validity disputes are more complex than hash challenges because re-execution may be expensive. The bisection protocol (if needed) is a future extension. For now, the simple case (re-execute, compare) is sufficient for most contracts.
+
+### Challenges as Queries
+
+AGAINST challenges double as data queries. To traverse a block's subtree:
+
+1. Post AGAINST on a hash you want to descend into (e.g., `{ type: 'ref', index: 0 }`).
+2. The block creator (or anyone with the data) responds with the preimage, earning the bond.
+3. The querier gets the data they wanted.
+
+This makes graph traversal a paid protocol operation. Data providers are compensated for serving data. Verification and querying are the same operation.
+
+### No Explicit Deadline
+
+There is no challenge timeout. The verifier reward decay IS the implicit deadline:
+
+- At t=0: full reward available. Strong incentive to challenge immediately.
+- At t=3s: ~50% of reward remains. Still worth challenging.
+- At t=30s: <0.1% remains. Not worth challenging.
+- At t=minutes: effectively zero. Block is considered solidified.
+
+For the responder, the same decay applies: respond immediately to protect your collateral. Delayed responses still work (the challenge bond is profitable regardless of timing), but the publisher's collateral is at risk the longer a challenge sits unanswered.
 
 ---
 
-## Simplifications Over the Previous Model
+## Restoration Blocks
 
-This contract replaces several mechanisms from the earlier design:
+When rectification triggers, new outputs must be created to make victims whole. These restoration outputs are created in a standard block.
 
-1. **No voting.** The old FOR/AGAINST model used stake-weighted voting to determine validity. Hash challenges are self-resolving -- the hash matches or it doesn't. No dispute module needed for structural validity.
-2. **No risk transfer of publisher collateral.** The publisher's Type 1 stays with them. Aggregators handle a separate Type 2 pot. This eliminates the complexity of transferring collateral between parties.
-3. **No separate dispute module for hash challenges.** Computational validity (does the WASM produce the right output?) may still need a dispute mechanism. But structural validity (do the hashes match?) is deterministic.
-4. **Queries and verification are the same operation.** No separate query/promise mechanism -- AGAINST challenges ARE queries, and responses ARE verification.
+### Easy-Verify Whitelist
+
+Restoration blocks use contracts from a protocol-maintained whitelist of **easy-to-verify** contract hashes. Easy contracts are trivially verifiable by any peer (signature checks, simple arithmetic). They do not require collateral because:
+
+1. Verification is instant -- any peer can confirm correctness.
+2. Invalid restoration blocks are simply ignored by all peers.
+3. The cost of publishing an invalid restoration block (wasted effort, reputation damage) exceeds any possible gain.
+
+The whitelist includes contracts like `SIGNATURE_CONTRACT` and the rectification payout contract itself. The protocol parameter controlling this whitelist is a set of contract hashes.
+
+### Restoration Block Structure
+
+```
+Restoration block:
+  claims: [rectification_pot_output]
+  refs: [invalid_block, aggregation_tree_root]
+  outputs:
+    [0] { SIGNATURE/victim_pubkey, restored_amount, empty }    // victim restoration
+    [1] { SIGNATURE/finder_pubkey, finder_reward, empty }      // finder's reward
+    [2] { RECTIFICATION/tree_root, remaining_pot, agg_pubkey } // remaining pot
+```
+
+The rectification contract verifies:
+1. The referenced block is proven invalid (Type 1 resolved against it).
+2. The proof chain from the aggregation tree root to the invalid block is valid.
+3. The restoration outputs correctly mirror the victims' lost outputs.
+4. The finder's reward does not exceed `alpha * R`.
+5. The remaining pot is returned to the aggregator.
+
+---
+
+## Interaction Between Contracts
+
+A single invalid block resolution touches both contracts:
+
+1. **Type 1 (Verifier Reward)**: The challenger posts AGAINST. No response. The verifier reward (decayed to challenge time) goes to the challenger.
+2. **Type 2 (Rectification)**: The finder (may be the same challenger, or the self-flagging publisher) proves invalidity to the aggregator's rectification pot. Finder's reward + victim restoration outputs are created.
+
+Self-flagging scenario:
+1. Publisher creates invalid block B, posts Type 1 (C1) and Type 2 fee (f).
+2. Aggregator includes B, claims the Type 2 fee, rolls into pot.
+3. Publisher posts AGAINST on their own block. Type 1 is a wash (they're both poster and challenger).
+4. Publisher triggers rectification. Profit comes from the finder's reward (`alpha * R`) from the aggregator's Type 2 pot.
 
 ---
 
 ## Open Questions
 
-1. **Decay constant c**: Needs calibration. Fast enough that data hiding is unprofitable (reward negligible after ~30s), slow enough that honest responses (~1-3s) earn most of the reward. c = 0.2-0.3 per second is a starting point.
-2. **Minimum AGAINST bond**: The market should set this, but is there a risk of dust challenges being used to harass publishers? A minimum might be needed.
-3. **Rectification proof chain**: What exactly does the proof chain look like? The aggregator must demonstrate they're responsible for the invalid block through their aggregation tree. This needs specification.
-4. **Finder's reward fraction**: What fraction of the rectification pot goes to the finder vs. victim restoration? If the finder's reward is too small, nobody looks. If too large, victims aren't fully restored.
-5. **Computational validity**: Hash challenges handle structural validity. How does this contract interact with challenges to computational correctness (WASM re-execution)? This likely still needs a dispute mechanism.
+1. **Decay constant c**: c = 0.2-0.3/s gives a half-life of 2-3s. Needs empirical calibration.
+2. **Minimum AGAINST bond**: Market-determined, but dust challenges could harass publishers. A minimum may be needed.
+3. **Finder's reward fraction (alpha)**: Split between finder and victim restoration. Too small = nobody looks. Too large = victims not fully restored. Starting point: 50%.
+4. **Bisection protocol for validity disputes**: Hash challenges are self-resolving. Complex WASM disputes may need interactive bisection. Deferred.
+5. **Partial rectification pot claims**: When a single block is invalidated, how is the payout computed against the total pot covering many blocks? The pot needs bookkeeping for per-block coverage.
+6. **Aggregator selection by collateral**: Mechanism for prioritizing aggregators that post maximal collateral. Deferred.
 
 ---
 
 ## Implementation
 
-No implementation yet. This is a new contract that will need:
-
 | File | Description |
 |------|-------------|
-| Future: `src/core/CollateralResolutionContract.ts` | The WASM contract logic |
-| Future: `src/core/CollateralResolutionModule.ts` | Module wrapping challenge/response lifecycle |
-| [`src/core/TrustModule.ts`](../../src/core/TrustModule.ts) | Updates to integrate two-tier model |
+| Future: `src/core/VerifierRewardContract.ts` | Type 1 contract: decay, challenge claim, non-canonical reclaim |
+| Future: `src/core/RectificationContract.ts` | Type 2 contract: aggregation claim, rectification payout, solidification |
+| Future: `src/core/ChallengeContract.ts` | AGAINST bond: hash response, validity response |
+| [`src/core/TrustModule.ts`](../../src/core/TrustModule.ts) | Updates to integrate two-tier model and challenge lifecycle |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | New contract hashes: `VERIFIER_REWARD_CONTRACT`, `RECTIFICATION_CONTRACT`, `CHALLENGE_CONTRACT` |

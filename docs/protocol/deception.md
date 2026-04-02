@@ -318,7 +318,7 @@ A healthier equilibrium involves a low baseline fraud rate:
 1. Some nodes occasionally publish invalid blocks.
 2. Aggregators catch a fraction during probing.
 3. The publisher self-flags the rest after risk transfer.
-4. The fraud rate stabilizes at `p = v / (M * C)`.
+4. The fraud rate stabilizes at `p = v / R`.
 
 ### Why Publish Invalid Blocks?
 

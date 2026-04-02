@@ -9,14 +9,14 @@ The trust module provides economic incentives for block validity. It does not de
 Collateral is the mechanism. It is not a new primitive — collateral is a regular output with restricted spending conditions that reference another block's fate.
 
 This module is responsible for:
-- Defining how collateral is placed (FOR and AGAINST votes on block validity)
+- Defining how collateral is placed (Verifier Reward and Rectification outputs)
 - Spending conditions on collateral outputs (when and by whom they can be redeemed)
 - Encapsulated weight and claiming limits
 - The aggregation risk model (how aggregators assess fraud exposure)
 
 This module is **not** responsible for:
 - Determining whether a block is valid (verification module)
-- Resolving FOR/AGAINST disputes — the voting mechanism (dispute module)
+- Resolving challenges -- the challenge/response mechanism ([collateral resolution contracts](collateral-resolution.md))
 - Defining what "valid" means for a given block type (application layer)
 - Deciding which conflicting block becomes canonical (consensus module)
 
@@ -35,47 +35,65 @@ Collateral addresses validity, not conflict. A publisher who loses a consensus r
 
 ## Collateral Structure
 
-Every block's initial FOR collateral covers two components with different lifecycles and responsibilities. See [collateral-resolution](collateral-resolution.md) for the full contract specification.
+The publisher posts two separate collateral outputs per block, implemented as two separate contracts. See [collateral-resolution](collateral-resolution.md) for the full contract specification and [contracts](contracts.md) for the standard contract definitions.
 
-### Two-Tier Collateral
+### Two Contracts
 
-**Type 1 — Verifier Reward (publisher's responsibility):**
-- High initially, decays exponentially back to the publisher over time.
-- Never transferred to an aggregator — the original publisher remains responsible for responding to hash challenges.
-- Covers validity and structural correctness (refs, anchor, aggregates, outputs).
+**Verifier Reward Contract (Type 1 -- publisher's responsibility):**
+- A single output per block, decays exponentially back to the publisher.
+- Never transferred to an aggregator. The original publisher remains responsible.
+- Can be challenged via AGAINST bonds (hash preimage requests or validity disputes).
 - If challenged and undefended, the decayed remainder goes to the challenger.
-- Because responding to challenges is profitable (you earn the AGAINST bond), anyone with the data can respond, not just the publisher.
+- Because responding to challenges is profitable (you earn the AGAINST bond), anyone with the data can respond.
 
-**Type 2 — Rectification Insurance (aggregator's responsibility):**
-- Funded by the aggregation fee. Aggregators take on long-term insurance for the blocks they aggregate.
-- Even if the original publisher is long gone, the current aggregator is responsible for rectification.
-- If an invalid block is discovered, the rectification pot pays a finder's reward and restores incorrectly claimed outputs (making victims whole).
+**Rectification Contract (Type 2 -- aggregator's responsibility):**
+- A single fee output per block, claimed by the aggregator during aggregation.
+- Aggregator accumulates fees into a rectification pot covering their aggregation tree.
+- If an invalid block is discovered, the pot pays a finder's reward and restores victims.
 
-### FOR Collateral
+### Initial Collateral
 
-The publisher's initial FOR collateral funds both types:
+The publisher posts two outputs:
 
 ```
-initial_FOR = C1 + f
+Verifier Reward output:  value = C1 (proportional to throughput T)
+Rectification Fee output: value = f = v * T / T_avg
 ```
 
-Where C1 is the verifier reward (proportional to throughput) and f is the aggregation fee. The FOR collateral must exist independently of the block it vouches for — it must not be a descendant of the target block.
+Both must exist independently of the target block -- neither can be a descendant of the block they vouch for.
 
 ### AGAINST Challenges
 
-An AGAINST is a small bond targeting a specific hash in a block. It serves dual purpose: verification and data query. The challenged party must reveal the hash preimage to reclaim the challenge bond.
+An AGAINST challenge is a separate output (using the Challenge Contract) that targets a specific aspect of a block via a discriminated union:
 
-- If the preimage is produced: block is valid, AGAINST bond goes to the responder.
-- If no preimage is produced: block is invalid, Type 1 collateral decays to the challenger, Type 2 rectification triggers.
+```
+ChallengeTarget =
+  | { type: 'validity' }                    // WASM re-execution dispute
+  | { type: 'anchor' }                      // anchor hash preimage
+  | { type: 'ref', index: number }          // ref hash preimage
+  | { type: 'aggregate', index: number }    // aggregate hash preimage
+  | { type: 'output', index: number }       // output content
+```
 
-This is self-resolving — no voting, no dispute module. The hash matches or it doesn't. See [collateral-resolution](collateral-resolution.md) for the full mechanism.
+- Hash challenges are self-resolving: the hash matches or it doesn't.
+- Validity challenges require WASM re-execution.
+- If the preimage is produced (or validity confirmed): AGAINST bond goes to the responder.
+- If no response: Type 1 verifier reward decays to the challenger, Type 2 rectification triggers.
+
+No explicit deadline -- the verifier reward decay IS the deadline. See [collateral-resolution](collateral-resolution.md).
 
 ### Spending Conditions
 
-- **Type 1 decay return**: Unchallenged verifier reward decays back to the publisher over hours/days.
-- **Type 1 challenge claim**: If an AGAINST challenge succeeds, the remaining verifier reward goes to the challenger.
-- **Non-canonical reclaim**: Can be spent if the block becomes non-canonical (publisher bears no penalty for losing a consensus race).
-- **Aggregation fee transfer**: The Type 2 portion transfers to the aggregator when the block is aggregated.
+**Verifier Reward (Type 1):**
+- **Decay return**: Publisher reclaims `C1 * exp(-c * age)` if unchallenged.
+- **Challenge claim**: Challenger claims decayed remainder (locked at challenge timestamp).
+- **Non-canonical reclaim**: Full return if target block loses consensus race.
+
+**Rectification (Type 2):**
+- **Aggregation claim**: Aggregator claims fee output, rolls into pot.
+- **Rectification payout**: Invalid block proven -- finder's reward + victim restoration.
+- **Non-canonical reclaim**: Full return if aggregation tree becomes non-canonical.
+- **Solidification return**: Aggregator reclaims after sufficient time without challenges.
 
 ---
 
@@ -180,9 +198,10 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 
 | Input | Source | Description |
 |-------|--------|-------------|
-| Collateral placement (FOR) | Block creation module | Publisher's initial collateral (Type 1 + Type 2 fee) |
-| Challenge (AGAINST) | Any peer | A small bond challenging a specific hash in a block |
-| Challenge resolution | Collateral resolution contract | Preimage revealed (valid) or unresponded (invalid) |
+| Verifier Reward output | Block creation module | Publisher's Type 1 collateral (decay-based) |
+| Rectification Fee output | Block creation module | Publisher's Type 2 fee (claimed by aggregator) |
+| Challenge output (AGAINST) | Any peer | A bond targeting a specific hash or validity claim |
+| Challenge resolution | Collateral resolution contracts | Preimage revealed (valid) or unresponded (invalid) |
 | Block validity verdict | Verification module | Whether a specific block is valid or invalid |
 | Canonical view updates | Consensus module | Whether H is canonical or non-canonical |
 | Aggregation events | Block creation module | When H is aggregated by an aggregator |
@@ -192,8 +211,8 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 | Output | Consumer | Description |
 |--------|----------|-------------|
 | Collateral spending conditions | Conflict module | Restricted spending rules on collateral outputs |
-| Encapsulated weight | Collateral resolution contract | The weight value used to compute claiming limits |
-| Claiming limits | Collateral resolution contract | Maximum claimable collateral per fraud event (W * N) |
+| Encapsulated weight | Collateral resolution contracts | The weight value used to compute claiming limits |
+| Claiming limits | Collateral resolution contracts | Maximum claimable collateral per fraud event (W * N) |
 | Trust signal | All modules | Whether a block has active collateral vouching for it |
 | Aggregation risk estimates | Block creation module | Expected fraud exposure for potential aggregations |
 
