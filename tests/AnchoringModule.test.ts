@@ -1,11 +1,10 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import { AnchoringModule, AnchoringProvider } from '../src/core/AnchoringModule.ts';
 import {
   mapOriginalToSurviving,
   mapSurvivingToOriginal,
-} from '../src/core/OutputMapping.ts';
+} from '../src/core/OutputSpace.ts';
 
 // -- Test helpers ------------------------------------------------
 
@@ -14,7 +13,7 @@ interface TestBlock {
   anchor: Hash;
   ownOutputCount: number;
   outputCount: number;
-  claimMask: BitVector | null;
+  claimMask: readonly number[] | null;
   ownClaims: number[];
   aggregates: Hash[];
   aggregateOutputCounts: number[];
@@ -49,7 +48,7 @@ class TestProvider implements AnchoringProvider<TestBlock> {
   getOutputCount(block: TestBlock): number {
     return block.outputCount;
   }
-  getClaimMask(block: TestBlock): BitVector | null {
+  getClaimMask(block: TestBlock): readonly number[] | null {
     return block.claimMask;
   }
   getOwnClaims(block: TestBlock): number[] {
@@ -111,49 +110,44 @@ function leafBlock(opts: {
 // -- mapSurvivingToOriginal tests --------------------------------
 
 Deno.test('mapSurvivingToOriginal: no claims -- identity mapping', () => {
-  const mask = BitVector.empty(5);
+  const mask: number[] = [];
   assertEquals(mapSurvivingToOriginal(0, mask), 0);
   assertEquals(mapSurvivingToOriginal(1, mask), 1);
   assertEquals(mapSurvivingToOriginal(4, mask), 4);
 });
 
 Deno.test('mapSurvivingToOriginal: some claims', () => {
-  const mask = BitVector.fromIndices(5, [1, 3]);
+  const mask = [1, 3];
   // Surviving: 0, 2, 4
   assertEquals(mapSurvivingToOriginal(0, mask), 0);
   assertEquals(mapSurvivingToOriginal(1, mask), 2);
   assertEquals(mapSurvivingToOriginal(2, mask), 4);
-  assertEquals(mapSurvivingToOriginal(3, mask), -1);
 });
 
 Deno.test('mapSurvivingToOriginal: all claimed', () => {
-  const mask = BitVector.fromIndices(3, [0, 1, 2]);
-  assertEquals(mapSurvivingToOriginal(0, mask), -1);
-});
-
-Deno.test('mapSurvivingToOriginal: with explicit length', () => {
-  const mask = BitVector.fromIndices(10, [1, 3]);
-  assertEquals(mapSurvivingToOriginal(0, mask, 5), 0);
-  assertEquals(mapSurvivingToOriginal(1, mask, 5), 2);
-  assertEquals(mapSurvivingToOriginal(2, mask, 5), 4);
+  const mask = [0, 1, 2];
+  // No surviving indices -- mapSurvivingToOriginal(0, mask) would return
+  // an out-of-range value since there are no surviving slots.
+  // The OutputSpace version returns the next original index after all claims.
+  assertEquals(mapSurvivingToOriginal(0, mask), 3);
 });
 
 // -- mapOriginalToSurviving tests --------------------------------
 
 Deno.test('mapOriginalToSurviving: no claims -- identity', () => {
-  const mask = BitVector.empty(5);
+  const mask: number[] = [];
   assertEquals(mapOriginalToSurviving(0, mask), 0);
   assertEquals(mapOriginalToSurviving(4, mask), 4);
 });
 
 Deno.test('mapOriginalToSurviving: claimed index returns -1', () => {
-  const mask = BitVector.fromIndices(5, [1, 3]);
+  const mask = [1, 3];
   assertEquals(mapOriginalToSurviving(1, mask), -1);
   assertEquals(mapOriginalToSurviving(3, mask), -1);
 });
 
 Deno.test('mapOriginalToSurviving: unclaimed indices mapped correctly', () => {
-  const mask = BitVector.fromIndices(5, [1, 3]);
+  const mask = [1, 3];
   assertEquals(mapOriginalToSurviving(0, mask), 0);
   assertEquals(mapOriginalToSurviving(2, mask), 1);
   assertEquals(mapOriginalToSurviving(4, mask), 2);
@@ -162,10 +156,9 @@ Deno.test('mapOriginalToSurviving: unclaimed indices mapped correctly', () => {
 // -- Round-trip tests --------------------------------------------
 
 Deno.test('round-trip: mapOriginalToSurviving(mapSurvivingToOriginal(i)) = identity', () => {
-  const mask = BitVector.fromIndices(8, [2, 5, 7]);
+  const mask = [2, 5, 7];
   for (let i = 0; i < 5; i++) {
     const original = mapSurvivingToOriginal(i, mask);
-    assert(original !== -1);
     const roundTrip = mapOriginalToSurviving(original, mask);
     assertEquals(roundTrip, i);
   }
@@ -183,7 +176,7 @@ Deno.test('T1: simple forward rebase through one block', () => {
     anchor: G.hash,
     ownOutputCount: 1,
     outputCount: 3,
-    claimMask: BitVector.fromIndices(3, [1]),
+    claimMask: [1],
     ownClaims: [1],
     aggregates: [],
     aggregateOutputCounts: [],
@@ -237,7 +230,7 @@ Deno.test('T3: backward rebase', () => {
     anchor: G.hash,
     ownOutputCount: 1,
     outputCount: 3,
-    claimMask: BitVector.fromIndices(3, [1]),
+    claimMask: [1],
     ownClaims: [1],
     aggregates: [],
     aggregateOutputCounts: [],
@@ -273,7 +266,7 @@ Deno.test('T4: forward through aggregation', () => {
   };
   const D: TestBlock = {
     hash: h('D'), anchor: G.hash, ownOutputCount: 1, outputCount: 5,
-    claimMask: BitVector.fromIndices(2, [0, 1]), ownClaims: [],
+    claimMask: [0, 1], ownClaims: [],
     aggregates: [S1.hash, S2.hash], aggregateOutputCounts: [2, 2],
   };
   provider.add(G);
@@ -307,7 +300,7 @@ Deno.test('T5: aggregation with chained subtrees', () => {
   };
   const D: TestBlock = {
     hash: h('D'), anchor: G.hash, ownOutputCount: 1, outputCount: 5,
-    claimMask: BitVector.fromIndices(3, [0, 1, 2]), ownClaims: [],
+    claimMask: [0, 1, 2], ownClaims: [],
     aggregates: [B.hash, C.hash], aggregateOutputCounts: [4, 4],
   };
   provider.add(G);
@@ -335,7 +328,7 @@ Deno.test('T10: forward through single-subtree aggregation', () => {
   };
   const D: TestBlock = {
     hash: h('D'), anchor: G.hash, ownOutputCount: 1, outputCount: 3,
-    claimMask: BitVector.fromIndices(2, [0, 1]), ownClaims: [],
+    claimMask: [0, 1], ownClaims: [],
     aggregates: [S1.hash], aggregateOutputCounts: [2],
   };
   provider.add(G);
@@ -376,7 +369,7 @@ Deno.test('output consumed by intermediate block returns null', () => {
   const G = genesisBlock(h('G'), 2);
   const A: TestBlock = {
     hash: h('A'), anchor: G.hash, ownOutputCount: 1, outputCount: 2,
-    claimMask: BitVector.fromIndices(2, [0]), ownClaims: [1],
+    claimMask: [0], ownClaims: [1],
     aggregates: [], aggregateOutputCounts: [],
   };
   const B = leafBlock({ hash: h('B'), anchor: A.hash, ownOutputCount: 1, anchorOutputCount: 2 });

@@ -1,8 +1,7 @@
 // Protocol spec: docs/protocol/anchoring.md
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { BitVector } from './BitVector.ts';
-import { mapOriginalToSurviving, mapSurvivingToOriginal } from './OutputMapping.ts';
+import { mapOriginalToSurviving, mapSurvivingToOriginal } from './OutputSpace.ts';
 
 // -- Provider -----------------------------------------------------
 
@@ -28,11 +27,11 @@ export interface AnchoringProvider<BlockType> {
   getOutputCount(block: BlockType): number;
 
   /**
-   * Return the subtree claim mask: a bit vector over the anchor's output space
-   * indicating which anchor outputs are consumed by the block's subtrees.
+   * Return the subtree claim mask: a sorted array of anchor output indices
+   * consumed by the block's subtrees.
    * Returns null if this block has no subtrees (leaf block).
    */
-  getClaimMask(block: BlockType): BitVector | null;
+  getClaimMask(block: BlockType): readonly number[] | null;
 
   /**
    * Return the block's own claim indices as an array of integers.
@@ -77,7 +76,7 @@ interface PathStep {
  * - rebaseOutputIndex: map an output from one block's space to another's
  * - resolveAnchor: compute anchor + aggregates from include/exclude constraints
  *
- * Fully self-contained -- depends only on AnchoringProvider, BitVector, and Hash.
+ * Fully self-contained -- depends only on AnchoringProvider and Hash.
  */
 export class AnchoringModule<BlockType> {
   private readonly provider: AnchoringProvider<BlockType>;
@@ -247,11 +246,11 @@ export class AnchoringModule<BlockType> {
     const aggOutputCounts = this.provider.getAggregateOutputCounts(block);
     const totalSubtreeOutputs = aggOutputCounts.reduce((s, c) => s + c, 0);
 
-    if (claimMask && claimMask.get(index)) {
+    if (claimMask && this.isClaimed(claimMask, index)) {
       return null; // consumed by subtrees
     }
 
-    const claimedBefore = claimMask ? this.popcountBefore(claimMask, index) : 0;
+    const claimedBefore = claimMask ? this.countBefore(claimMask, index) : 0;
     const survivingIndex = index - claimedBefore;
 
     // Position in output space: own outputs, then subtree outputs, then surviving anchor
@@ -294,14 +293,14 @@ export class AnchoringModule<BlockType> {
         // Build the effective claim mask for the later block against its anchor's space
         // The later block's claimMask covers its anchor's output space.
         // We need to check if currentIndex is claimed.
-        if (laterClaimMask && laterClaimMask.get(currentIndex)) {
+        if (laterClaimMask && this.isClaimed(laterClaimMask, currentIndex)) {
           return null; // consumed by later subtree's subtrees
         }
 
         // Check own claims of the later block too
         const laterOwnOutputCount = this.provider.getOwnOutputCount(laterBlock);
         // Map currentIndex to position in later block's output vector
-        const claimedBefore = laterClaimMask ? this.popcountBefore(laterClaimMask, currentIndex) : 0;
+        const claimedBefore = laterClaimMask ? this.countBefore(laterClaimMask, currentIndex) : 0;
         const survivingIdx = currentIndex - claimedBefore;
         const posInLater = laterOwnOutputCount + laterTotalSubtreeOutputs + survivingIdx;
 
@@ -499,13 +498,28 @@ export class AnchoringModule<BlockType> {
 
   // -- Internals --------------------------------------------------
 
-  /** Count set bits before index in a BitVector. */
-  private popcountBefore(mask: BitVector, index: number): number {
-    let count = 0;
-    for (let i = 0; i < index; i++) {
-      if (mask.get(i)) count++;
+  /** Check if an index is present in a sorted claim mask. */
+  private isClaimed(mask: readonly number[], index: number): boolean {
+    let lo = 0;
+    let hi = mask.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (mask[mid] < index) lo = mid + 1;
+      else hi = mid;
     }
-    return count;
+    return lo < mask.length && mask[lo] === index;
+  }
+
+  /** Count elements in a sorted claim mask that are less than index. */
+  private countBefore(mask: readonly number[], index: number): number {
+    let lo = 0;
+    let hi = mask.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (mask[mid] < index) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
   }
 
   /**
