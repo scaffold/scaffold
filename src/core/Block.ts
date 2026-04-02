@@ -1,9 +1,7 @@
 // Protocol spec: docs/protocol/block-creation.md (block structure), docs/protocol/contracts.md (standard contracts), docs/protocol/dag.md (graph topology)
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { BitVector } from './BitVector.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
-import { ResolvedClaim } from './OutputMapping.ts';
 
 /** Genesis blocks use this as their declared weight (very high). */
 export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
@@ -17,8 +15,8 @@ export const COLLATERAL_CONTRACT = Hash.digest('collateral-contract');
 /** Well-known contract hash for signature (payment) contract outputs. */
 export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 
-/** Well-known contract hash for self-claimed outputs (key-value store). */
-export const SELF_CONTRACT = Hash.digest('self-contract');
+/** Well-known contract hash for result outputs (key-value store on a block). */
+export const RESULT_CONTRACT = Hash.digest('result-contract');
 
 /**
  * Create a signature (payment) contract output.
@@ -39,11 +37,11 @@ export function makeSignatureOutput(publicKey: Uint8Array, value: number): Outpu
  * Contains the cached UTXO transformation state computed from subtrees.
  */
 export interface AggregationData {
-  /** Composed claim mask from subtrees (rebased + merged + own claims). */
-  claimMask: BitVector;
-  /** Total outputs after full transformation. */
-  outputCount: number;
-  /** Per-subtree output counts. */
+  /** Sorted anchor output indices claimed by the subtree. */
+  claimMask: number[];
+  /** Surviving new outputs added by this subtree (excludes anchor's surviving outputs). */
+  newOutputCount: number;
+  /** Per-subtree new output counts. */
   aggregateOutputCounts: number[];
   /** Weight vector from subtrees only (excludes own declaredWeight). */
   chainWeights: number[];
@@ -54,8 +52,8 @@ export interface AggregationData {
 /** Encode AggregationData to a Uint8Array for use in Output.detail. */
 export function encodeAggregationData(data: AggregationData): Uint8Array {
   const json = JSON.stringify({
-    claimMask: data.claimMask.toJSON(),
-    outputCount: data.outputCount,
+    claimMask: data.claimMask,
+    newOutputCount: data.newOutputCount,
     aggregateOutputCounts: data.aggregateOutputCounts,
     chainWeights: data.chainWeights,
     aggregateWeights: data.aggregateWeights,
@@ -67,8 +65,8 @@ export function encodeAggregationData(data: AggregationData): Uint8Array {
 export function decodeAggregationData(bytes: Uint8Array): AggregationData {
   const json = JSON.parse(new TextDecoder().decode(bytes));
   return {
-    claimMask: BitVector.fromJSON(json.claimMask),
-    outputCount: json.outputCount,
+    claimMask: json.claimMask as number[],
+    newOutputCount: json.newOutputCount,
     aggregateOutputCounts: json.aggregateOutputCounts,
     chainWeights: json.chainWeights,
     aggregateWeights: json.aggregateWeights,
@@ -82,6 +80,7 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
 export function getAggregationData(block: Block): AggregationData | null {
   for (const output of block.outputs) {
     if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
+      if (output.detail.length === 0) continue; // Skip marker outputs
       return decodeAggregationData(output.detail);
     }
   }
@@ -89,43 +88,37 @@ export function getAggregationData(block: Block): AggregationData | null {
 }
 
 /**
- * Get the claim mask for a block: from aggregation data if present,
- * otherwise computed from claims for leaf blocks.
- * For leaf blocks, requires the anchor block to determine the anchor output count.
- * Returns null if insufficient data is available.
+ * Create an aggregation marker output. Every non-genesis block carries one
+ * of these so that the aggregation contract can collect them.
  */
-export function getBlockClaimMask(block: Block, anchorOutputCount: number): BitVector {
-  const aggData = getAggregationData(block);
-  if (aggData) return aggData.claimMask;
-  // Leaf block: compute from own claims
-  const ownOutputCount = block.outputs.length;
-  const mask = BitVector.empty(anchorOutputCount);
-  for (const claimIdx of block.claims) {
-    if (claimIdx >= ownOutputCount) {
-      // Map to anchor output index: claim targets surviving anchor output
-      const anchorIdx = claimIdx - ownOutputCount;
-      if (anchorIdx < anchorOutputCount) {
-        mask.set(anchorIdx, true);
-      }
-    }
-  }
-  return mask;
+export function makeAggregationOutput(): Output {
+  return {
+    verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
+    value: 0,
+    detail: new Uint8Array(0),
+  };
 }
 
 /**
- * Get the output count for a block: from aggregation data if present,
- * otherwise derived as a leaf block.
+ * Get the claim mask for a block: from aggregation data if present,
+ * otherwise computed from claims for leaf blocks.
+ * Returns a sorted array of anchor output indices that the block's subtree claims.
  */
-export function getBlockOutputCount(block: Block): number {
+export function getBlockClaimMask(block: Block, _anchorOutputCount?: number): number[] {
   const aggData = getAggregationData(block);
-  if (aggData) return aggData.outputCount;
-  // Leaf block or genesis: anchor's output count - own claims + own outputs
-  // For genesis: outputs.length
-  // For leaf blocks without aggregation data, we need the anchor's output count
-  // which we don't have here. This function is only valid when aggData exists
-  // or for genesis blocks.
-  return block.outputs.length;
+  if (aggData) return aggData.claimMask;
+  // Leaf block: non-self claims map directly to anchor indices
+  const ownOutputCount = block.outputs.length;
+  const mask: number[] = [];
+  for (const claimIdx of block.claims) {
+    if (claimIdx >= ownOutputCount) {
+      mask.push(claimIdx - ownOutputCount);
+    }
+  }
+  mask.sort((a, b) => a - b);
+  return mask;
 }
+
 
 /**
  * Get the weight vector for a block: reconstructed from declaredWeight + chainWeights.
@@ -165,11 +158,10 @@ export interface Block {
   readonly declaredWeight: number;
   /** Cross-block references for read-only data access. */
   readonly refs: Hash[];
-  /**
-   * Semantic claims: identifies the source block and output index for each claim.
-   * Optional -- populated at block creation time. Integer claims[] are derived from these.
-   */
-  readonly resolvedClaims?: ResolvedClaim[];
+  /** Resolved claims -- concrete output references for uniform claim handling. */
+  readonly resolvedClaims?: import('./BlockDraft.ts').ResolvedClaim[];
+  /** Compressed public key (33 bytes) of the block signer. Node-local, not serialized. */
+  readonly signer?: Uint8Array;
   /** Creation time, set by block creator (wire format). */
   readonly timestamp: number;
   /** Reception time at this node (Date.now()). Node-local, not serialized. */
@@ -205,6 +197,11 @@ export class BlockStore {
   /** Whether a block has been aggregated by another block. */
   isAggregated(hash: Hash): boolean {
     return this.aggregated.has(hash.toPrimitive());
+  }
+
+  /** Iterate over all stored blocks. */
+  values(): IterableIterator<Block> {
+    return this.blocks.values();
   }
 
   /** Walk anchor chain to determine if `ancestor` is an ancestor of `descendant`. */
@@ -247,34 +244,34 @@ export class BlockStore {
 // -- Self-claim and ref helpers -------------------------------------
 
 /**
- * Create a self-claimed output. Self-claimed outputs use the SELF_CONTRACT
+ * Create a result output. Result outputs use the RESULT_CONTRACT
  * verifier with the key encoded in params. They act as a key-value store
  * within a block.
  */
 export function createSelfClaimedOutput(key: string | Uint8Array, value: Uint8Array): Output {
   const params = typeof key === 'string' ? new TextEncoder().encode(key) : key;
   return {
-    verifier: { contract: SELF_CONTRACT, params },
+    verifier: { contract: RESULT_CONTRACT, params },
     value: 0,
     detail: value,
   };
 }
 
-/** Check whether an output is a self-claimed output (uses SELF_CONTRACT). */
-export function isSelfClaimed(output: Output): boolean {
-  return Hash.equals(output.verifier.contract, SELF_CONTRACT);
+/** Check whether an output is a result output (uses RESULT_CONTRACT). */
+export function isResultOutput(output: Output): boolean {
+  return Hash.equals(output.verifier.contract, RESULT_CONTRACT);
 }
 
-/** Get the key from a self-claimed output's verifier params. */
-export function getSelfClaimKey(output: Output): Uint8Array {
+/** Get the key from a result output's verifier params. */
+export function getResultKey(output: Output): Uint8Array {
   return output.verifier.params;
 }
 
-/** Find the first self-claimed output in a block matching the given key. */
-export function findSelfClaimedOutput(block: Block, key: string | Uint8Array): Output | undefined {
+/** Find the first result output in a block matching the given key. */
+export function findResultOutput(block: Block, key: string | Uint8Array): Output | undefined {
   const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
   for (const output of block.outputs) {
-    if (!isSelfClaimed(output)) continue;
+    if (!isResultOutput(output)) continue;
     const params = output.verifier.params;
     if (params.length === keyBytes.length && params.every((b, i) => b === keyBytes[i])) {
       return output;
@@ -300,13 +297,13 @@ export function getRefOutputs(
   return refBlock.outputs;
 }
 
-// -- Extended output vector -----------------------------------------
+// -- Output space ---------------------------------------------------
 
 /**
- * Collect the full extended output vector of a block.
- * This is the set of outputs visible to any block that anchors to this one.
+ * Collect a block's output space: the final, post-claim set of surviving
+ * outputs. This is the clean set that descendants inherit.
  *
- * Extended vector = [own outputs, surviving anchor outputs after claims]
+ * Output space = [own outputs, surviving anchor outputs after claims]
  */
 export function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
   const result: Output[] = [...block.outputs];
@@ -323,8 +320,9 @@ export function collectExtendedOutputs(block: Block, store: BlockStore): Output[
   const claimMask = getBlockClaimMask(block, anchorOutputs.length);
 
   // Add surviving anchor outputs (those not claimed by this block)
+  const claimSet = new Set(claimMask);
   for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!claimMask.get(i)) {
+    if (!claimSet.has(i)) {
       result.push(anchorOutputs[i]);
     }
   }
@@ -335,13 +333,14 @@ export function collectExtendedOutputs(block: Block, store: BlockStore): Output[
 // -- BlockPayload ---------------------------------------------------
 
 /** Block fields minus hash and node-local metadata -- the payload carried in a Packet. */
-export type BlockPayload = Omit<Block, 'hash' | 'receivedAt' | 'source'>;
+export type BlockPayload = Omit<Block, 'hash' | 'receivedAt' | 'source' | 'signer'>;
 
 /** Construct a Block from a deserialized packet payload and a precomputed hash. */
 export function createBlockFromPacket(
   payload: BlockPayload,
   hash: Hash,
   source: BlockSource = BlockSource.Remote,
+  signer?: Uint8Array,
 ): Block {
   const now = Date.now();
   return {
@@ -352,6 +351,7 @@ export function createBlockFromPacket(
     outputs: payload.outputs,
     declaredWeight: payload.declaredWeight,
     refs: payload.refs,
+    signer,
     timestamp: payload.timestamp ?? now,
     receivedAt: now,
     source,

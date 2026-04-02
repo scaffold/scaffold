@@ -1,8 +1,7 @@
 // Protocol spec: docs/protocol/block-creation.md, docs/protocol/contracts.md
 
 import { Hash } from '../util/Hash.ts';
-import { BitVector } from './BitVector.ts';
-import { mapSurvivingToOriginal } from './OutputMapping.ts';
+import { unionClaimMasks } from './OutputSpace.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -111,12 +110,18 @@ export interface BlockCreationProvider<BlockType> {
 
   /**
    * Return the claim mask of `blockHash` rebased to `targetAnchor`.
+   * Full subtree rebase: includes intermediate blocks' claims.
    * Returns null if rebasing fails (chain broken, etc).
    */
-  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null;
+  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null;
 
-  /** Return the aggregation contract hash for generated outputs. */
-  getAggregationContract(): Hash;
+  /**
+   * Return the claim mask of `blockHash` rebased to `targetAnchor`,
+   * projecting only the block's own claims through intermediates
+   * without accumulating intermediate blocks' claims.
+   * Returns null if rebasing fails (chain broken, etc).
+   */
+  getRebasedClaimMaskExclusive(blockHash: Hash, targetAnchor: Hash): readonly number[] | null;
 }
 
 // -- Module -------------------------------------------------------
@@ -124,14 +129,14 @@ export interface BlockCreationProvider<BlockType> {
 /**
  * The block creation module constructs blocks from specs (intents).
  *
- * It derives all structural fields: claim masks, weight vectors, output counts,
- * and aggregate output counts. It validates throughput balancing (value
- * conservation) and structural constraints.
+ * It validates structural constraints: throughput balancing (value
+ * conservation), claim index range, inter-subtree conflict detection,
+ * and anchor chain validity.
  *
- * For aggregation blocks, it produces an aggregation contract output containing
- * the computed AggregationData (claim mask, output count, chain weights, etc.).
+ * Aggregation data (cache) is produced by the aggregation contract,
+ * not by this module. See AggregationContract.ts.
  *
- * Fully self-contained — depends only on BlockCreationProvider, BitVector, and Hash.
+ * Fully self-contained -- depends only on BlockCreationProvider, OutputSpace helpers, and Hash.
  */
 export class BlockCreationModule<BlockType> {
   private readonly provider: BlockCreationProvider<BlockType>;
@@ -156,9 +161,7 @@ export class BlockCreationModule<BlockType> {
 
     // 2. Process subtrees (aggregation)
     const subtreeInfos: SubtreeInfo[] = [];
-    const aggregateOutputCounts: number[] = [];
-    const subtreeClaimMasks: BitVector[] = [];
-    const aggregateWeights: number[] = [];
+    const subtreeClaimMasks: (readonly number[])[] = [];
     let totalSubtreeOutputs = 0;
     let subtreeAnchorClaims = 0;
 
@@ -168,8 +171,13 @@ export class BlockCreationModule<BlockType> {
         throw new Error(`aggregated block not found: ${aggHash}`);
       }
 
-      // Get anchor depth of subtree relative to our anchor
-      const depth = this.provider.getAnchorDepth(spec.anchor, this.provider.getAnchor(aggBlock)!);
+      // Get anchor depth: distance between spec.anchor and aggregate's anchor.
+      // Try both directions — the aggregate may anchor above or below spec.anchor.
+      const aggAnchor = this.provider.getAnchor(aggBlock)!;
+      let depth = this.provider.getAnchorDepth(spec.anchor, aggAnchor);
+      if (depth === undefined) {
+        depth = this.provider.getAnchorDepth(aggAnchor, spec.anchor);
+      }
       if (depth === undefined) {
         throw new Error(`subtree anchor not in our anchor chain: ${aggHash}`);
       }
@@ -184,23 +192,38 @@ export class BlockCreationModule<BlockType> {
       const subtreeWeightVector = this.provider.getWeightVector(aggBlock);
 
       subtreeInfos.push({ anchorDepth: depth, weightVector: subtreeWeightVector });
-      aggregateOutputCounts.push(subtreeOutputCount);
       subtreeClaimMasks.push(rebasedMask);
-      aggregateWeights.push(subtreeWeightVector[0] ?? 0);
       totalSubtreeOutputs += subtreeOutputCount;
-      subtreeAnchorClaims += rebasedMask.popcount();
+      subtreeAnchorClaims += rebasedMask.length;
     }
 
-    // 3. Compute merged subtree claim mask (OR of all rebased masks)
-    const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
+    // 3. Compute merged subtree claim mask (union of all rebased masks)
+    let mergedSubtreeMask: number[] = [];
     for (const mask of subtreeClaimMasks) {
-      mergedSubtreeMask.or(mask);
+      mergedSubtreeMask = unionClaimMasks(mergedSubtreeMask, mask);
     }
 
-    // Check for inter-subtree conflicts (two subtrees claim same anchor output)
-    const subtreeClaimTotal = subtreeClaimMasks.reduce((s, m) => s + m.popcount(), 0);
-    if (subtreeClaimTotal !== mergedSubtreeMask.popcount()) {
-      throw new Error('subtrees have overlapping anchor claims (inter-subtree conflict)');
+    // Check for inter-subtree conflicts using exclusive rebased masks.
+    // The exclusive rebase projects only each aggregate's own claims
+    // through intermediates, so chain aggregates don't double-count.
+    {
+      const exclusiveMasks: (readonly number[])[] = [];
+      for (const aggHash of spec.aggregates) {
+        const mask = this.provider.getRebasedClaimMaskExclusive(aggHash, spec.anchor);
+        if (!mask) {
+          throw new Error(`cannot exclusive-rebase subtree claim mask: ${aggHash}`);
+        }
+        exclusiveMasks.push(mask);
+      }
+      let merged: number[] = [];
+      let total = 0;
+      for (const mask of exclusiveMasks) {
+        merged = unionClaimMasks(merged, mask);
+        total += mask.length;
+      }
+      if (total !== merged.length) {
+        throw new Error('subtrees have overlapping anchor claims (inter-subtree conflict)');
+      }
     }
 
     // 4. Validate and classify claims
@@ -226,61 +249,15 @@ export class BlockCreationModule<BlockType> {
       }
     }
 
-    // 5. Compute claim mask (against anchor output space)
-    const claimMask = this.computeClaimMask(
-      anchorOutputCount,
-      mergedSubtreeMask,
-      anchorClaims,
-      ownOutputCount,
-      totalSubtreeOutputs,
-    );
-
-    // 6. Compute output count
-    const ownClaimCount = spec.claims.length;
-    const outputCount = this.computeOutputCount(
-      anchorOutputCount,
-      subtreeAnchorClaims,
-      totalSubtreeOutputs,
-      ownOutputCount,
-      ownClaimCount,
-    );
-
-    // 7. Derive weight vector
-    const weight = this.deriveWeightVector(spec.declaredWeight, subtreeInfos);
-
-    // 8. Validate throughput
+    // 5. Validate throughput
     this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
 
-    // 9. Build outputs array — user outputs + aggregation contract output (if aggregating)
-    const allOutputs = [...spec.outputs];
-
-    if (spec.aggregates.length > 0) {
-      // Compute chainWeights (weight vector without own declaredWeight)
-      const chainWeights = [...weight];
-      chainWeights[0] -= spec.declaredWeight;
-
-      // Encode aggregation data into a contract output
-      const aggDataJson = JSON.stringify({
-        claimMask: claimMask.toJSON(),
-        outputCount,
-        aggregateOutputCounts,
-        chainWeights,
-        aggregateWeights,
-      });
-
-      allOutputs.push({
-        verifier: { contract: this.provider.getAggregationContract(), params: new Uint8Array(0) },
-        value: 0,
-        detail: new TextEncoder().encode(aggDataJson),
-      });
-    }
-
-    // 10. Build blueprint
+    // 9. Build blueprint
     const blueprint: BlockBlueprint = {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
       claims: spec.claims.map((c) => c.index),
-      outputs: allOutputs,
+      outputs: spec.outputs,
       declaredWeight: spec.declaredWeight,
       refs: spec.refs,
     };
@@ -370,72 +347,6 @@ export class BlockCreationModule<BlockType> {
     if (claimTotal !== outputTotal) {
       throw new Error(`throughput imbalance: inputs ${claimTotal}, outputs ${outputTotal}`);
     }
-  }
-
-  /**
-   * Compute the claim mask against anchor output space.
-   * Merges the subtree mask with own non-self claims mapped to anchor indices.
-   */
-  computeClaimMask(
-    anchorOutputCount: number,
-    mergedSubtreeMask: BitVector,
-    ownAnchorClaimIndices: number[],
-    ownOutputCount: number,
-    totalSubtreeOutputs: number,
-  ): BitVector {
-    const mask = mergedSubtreeMask.clone();
-
-    // Map own non-self claims back to anchor output indices.
-    // Own claims are against the extended vector:
-    //   [own outputs (0..ownOutputCount-1), subtree outputs..., surviving anchor outputs...]
-    // Non-self claims have index >= ownOutputCount.
-    // Indices in [ownOutputCount, ownOutputCount + totalSubtreeOutputs) target subtree outputs.
-    // Indices >= ownOutputCount + totalSubtreeOutputs target surviving anchor outputs.
-    for (const claimIdx of ownAnchorClaimIndices) {
-      const relIdx = claimIdx - ownOutputCount;
-
-      if (relIdx < totalSubtreeOutputs) {
-        // Claim on a subtree output — internal, doesn't affect anchor mask
-        continue;
-      }
-
-      // Claim on a surviving anchor output
-      const survivingIdx = relIdx - totalSubtreeOutputs;
-      const anchorIdx = mapSurvivingToOriginal(
-        survivingIdx,
-        mergedSubtreeMask,
-        anchorOutputCount,
-      );
-
-      if (anchorIdx === -1) {
-        throw new Error(`claim maps to invalid anchor output (surviving index ${survivingIdx})`);
-      }
-
-      mask.set(anchorIdx, true);
-    }
-
-    return mask;
-  }
-
-  /**
-   * Compute the total output count after full transformation.
-   * outputCount = anchorOutputCount - subtreeAnchorClaims + totalSubtreeOutputs
-   *             + ownOutputCount - ownClaimCount
-   */
-  computeOutputCount(
-    anchorOutputCount: number,
-    subtreeAnchorClaims: number,
-    totalSubtreeOutputs: number,
-    ownOutputCount: number,
-    ownClaimCount: number,
-  ): number {
-    return (
-      anchorOutputCount -
-      subtreeAnchorClaims +
-      totalSubtreeOutputs +
-      ownOutputCount -
-      ownClaimCount
-    );
   }
 
 }

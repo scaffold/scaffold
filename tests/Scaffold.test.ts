@@ -1,9 +1,11 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
+import { AGGREGATION_CONTRACT, Block } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { NodeContext } from '../src/node/NodeContext.ts';
+import { WELL_KNOWN_PRIVATE_KEY } from '../src/genesis.ts';
 
 // -- Helpers --------------------------------------------------------
 
@@ -122,4 +124,109 @@ Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', ()
 Deno.test('Scaffold: close() does not throw', async () => {
   const scaffold = new Scaffold(defaultConfig());
   await scaffold.close();
+});
+
+Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
+  // Mirrors the demo UI: click "Add Block" 4 times sequentially.
+  // Each block anchors to the canonical tip (the previous block).
+  // Non-zero output values force UTXO claims (autoBalance), which is what
+  // the demo does (Math.floor(Math.random() * 100)).
+  // After 4 blocks, the aggregation contract should fire and produce
+  // an aggregation block that rolls up the 4 marker outputs.
+  const scaffold = new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY });
+  const ctx = scaffold.context;
+
+  for (let i = 0; i < 4; i++) {
+    scaffold.put({
+      outputs: [makeOutput(50, `demo-${i}`)],
+    });
+  }
+
+  // The aggregation contract resolves via async requireInput() --
+  // flush microtasks to let it complete.
+  await new Promise((r) => setTimeout(r, 50));
+
+  // Look for a block carrying an aggregation data output (non-empty detail
+  // on AGGREGATION_CONTRACT).
+  let aggBlock: Block | undefined;
+  for (const block of ctx.store.values()) {
+    const hasAggData = block.outputs.some(
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+    );
+    if (hasAggData) {
+      aggBlock = block;
+      break;
+    }
+  }
+
+  assert(aggBlock, 'an aggregation block should have been created after 4 sequential puts');
+
+  // The aggregation block should aggregate the chain blocks
+  assert(aggBlock.aggregates.length > 0, 'aggregation block should have aggregates');
+});
+
+Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async () => {
+  // 8 blocks produce 8 aggregation markers. Two first-level aggregations
+  // each consume 4 markers (A1, A2). Their own marker + aggData outputs
+  // (4 total) then trigger a second-level aggregation (A3).
+  const scaffold = new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY });
+  const ctx = scaffold.context;
+
+  for (let i = 0; i < 8; i++) {
+    scaffold.put({
+      outputs: [makeOutput(50, `demo-${i}`)],
+    });
+  }
+
+  // Flush async -- multiple rounds of aggregation need time.
+  await new Promise((r) => setTimeout(r, 100));
+
+  const aggBlocks: Block[] = [];
+  for (const block of ctx.store.values()) {
+    const hasAggData = block.outputs.some(
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+    );
+    if (hasAggData) {
+      aggBlocks.push(block);
+    }
+  }
+
+  assert(
+    aggBlocks.length >= 2,
+    `expected at least 2 aggregation blocks, got ${aggBlocks.length}`,
+  );
+});
+
+Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', async () => {
+  // Simulates the demo UI: each click is separated by time, so microtasks
+  // resolve between puts. A single draft consumes markers one at a time via
+  // notifyNewOutput. After 4 markers, the aggregation completes. The inFlight
+  // release must happen so follow-on drafts can start for the next batch.
+  const scaffold = new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY });
+  const ctx = scaffold.context;
+
+  for (let i = 0; i < 8; i++) {
+    scaffold.put({
+      outputs: [makeOutput(50, `async-${i}`)],
+    });
+    // Simulate UI timing: flush microtasks between each put
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  await new Promise((r) => setTimeout(r, 100));
+
+  const aggBlocks: Block[] = [];
+  for (const block of ctx.store.values()) {
+    const hasAggData = block.outputs.some(
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+    );
+    if (hasAggData) {
+      aggBlocks.push(block);
+    }
+  }
+
+  assert(
+    aggBlocks.length >= 2,
+    `expected at least 2 aggregation blocks with async puts, got ${aggBlocks.length}`,
+  );
 });

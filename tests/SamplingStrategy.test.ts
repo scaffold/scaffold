@@ -76,7 +76,6 @@ function makeEvent(
     result,
     store: new BlockStore(),
     consensus: {} as ReactiveEvent['consensus'],
-    conflict: {} as ReactiveEvent['conflict'],
     sampling: module as unknown as ReactiveEvent['sampling'],
   };
 }

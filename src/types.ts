@@ -13,11 +13,11 @@ export {
   createBlockFromPacket,
   createGenesisBlock,
   createSelfClaimedOutput,
-  findSelfClaimedOutput,
+  findResultOutput,
   getRefOutputs,
-  getSelfClaimKey,
-  isSelfClaimed,
-  SELF_CONTRACT,
+  getResultKey,
+  isResultOutput,
+  RESULT_CONTRACT,
 } from './core/Block.ts';
 export type { BlockPayload } from './core/Block.ts';
 export {
@@ -31,5 +31,4 @@ export {
 } from './core/Packet.ts';
 export type { Packet } from './core/Packet.ts';
 export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
-export { BitVector } from './core/BitVector.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';

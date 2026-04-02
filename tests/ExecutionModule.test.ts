@@ -1,15 +1,15 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { createSelfClaimedOutput, SELF_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
+import { createSelfClaimedOutput, RESULT_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import {
-  ContractFn,
+  type ContractFn,
   ExecutionMode,
   ExecutionModule,
-  ExecutionProvider,
-  ExecutionResult,
-  HostContext,
+  type ExecutionProvider,
+  type ExecutionResult,
 } from '../src/core/ExecutionModule.ts';
+import { type ContractEnv, ContractRejection } from '../src/core/ContractEnv.ts';
 
 // -- Test block type -------------------------------------------------
 
@@ -19,6 +19,7 @@ interface TestBlock {
   outputs: Output[];
   claims: number[];
   refs: Hash[];
+  signer?: Uint8Array;
 }
 
 // -- Test helpers ----------------------------------------------------
@@ -76,6 +77,10 @@ class TestProvider implements ExecutionProvider<TestBlock> {
     }
     return result;
   }
+
+  getSigner(block: TestBlock): Uint8Array | undefined {
+    return block.signer;
+  }
 }
 
 function setup(): { provider: TestProvider; module: ExecutionModule<TestBlock> } {
@@ -119,16 +124,15 @@ Deno.test('ExecutionModule: self-claimed outputs are trivially valid', () => {
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: signature contract — accept when params match pubkey', () => {
+Deno.test('ExecutionModule: signature contract -- accept when params match pubkey', () => {
   const { provider, module } = setup();
 
   const pubkey = enc('eagle-pubkey');
   const sigContract = h('sig-contract');
 
-  // Register a signature-checking contract
-  const sigFn: ContractFn = (ctx: HostContext) => {
-    ctx.requireSignature(ctx.currentParams);
-    ctx.accept();
+  // Contract checks that params match pubkey
+  const sigFn: ContractFn = (env: ContractEnv) => {
+    env.requireSignature(env.getParams());
   };
   module.registerContract(sigContract, sigFn);
 
@@ -146,13 +150,14 @@ Deno.test('ExecutionModule: signature contract — accept when params match pubk
   };
   provider.addBlock(anchor);
 
-  // Block that claims the anchor's output
+  // Block that claims the anchor's output -- signed by the matching key
   const block: TestBlock = {
     hash: h('claimer'),
     anchor: anchor.hash,
     outputs: [],
-    claims: [0], // claims extended output index 0 → anchor's output[0]
+    claims: [0], // claims extended output index 0 -> anchor's output[0]
     refs: [],
+    signer: pubkey,
   };
   provider.addBlock(block);
 
@@ -160,15 +165,14 @@ Deno.test('ExecutionModule: signature contract — accept when params match pubk
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: signature contract — reject when pubkey mismatch', () => {
+Deno.test('ExecutionModule: signature contract -- reject when pubkey mismatch', () => {
   const { provider, module } = setup();
 
   const sigContract = h('sig-contract');
 
-  const sigFn: ContractFn = (ctx: HostContext) => {
+  const sigFn: ContractFn = (env: ContractEnv) => {
     // Contract checks that params match a specific pubkey
-    ctx.requireSignature(enc('expected-pubkey'));
-    if (!ctx.result) ctx.accept();
+    env.requireSignature(enc('expected-pubkey'));
   };
   module.registerContract(sigContract, sigFn);
 
@@ -198,15 +202,14 @@ Deno.test('ExecutionModule: signature contract — reject when pubkey mismatch',
   assert(!result.accepted);
 });
 
-Deno.test('ExecutionModule: self-claim verification — setData checks match', () => {
+Deno.test('ExecutionModule: requireResult checks self-claimed data', () => {
   const { provider, module } = setup();
 
   const gameContract = h('game-contract');
 
-  // Contract that verifies self-claimed state
-  const gameFn: ContractFn = (ctx: HostContext) => {
-    ctx.setData('state', enc('valid-state'));
-    if (!ctx.result) ctx.accept();
+  // Contract that verifies result output exists
+  const gameFn: ContractFn = (env: ContractEnv) => {
+    env.requireResult(enc('state'), enc('valid-state'));
   };
   module.registerContract(gameContract, gameFn);
 
@@ -224,14 +227,14 @@ Deno.test('ExecutionModule: self-claim verification — setData checks match', (
   };
   provider.addBlock(anchor);
 
-  // Block that claims anchor's output and has matching self-claimed data
+  // Block that claims anchor's output and has matching result data
   const block: TestBlock = {
     hash: h('game-block'),
     anchor: anchor.hash,
     outputs: [
       createSelfClaimedOutput('state', enc('valid-state')),
     ],
-    claims: [1], // claims extended index 1 → anchor's output[0]
+    claims: [1], // claims extended index 1 -> anchor's output[0]
     refs: [],
   };
   provider.addBlock(block);
@@ -240,14 +243,13 @@ Deno.test('ExecutionModule: self-claim verification — setData checks match', (
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: self-claim verification — setData rejects wrong value', () => {
+Deno.test('ExecutionModule: requireResult rejects wrong value', () => {
   const { provider, module } = setup();
 
   const gameContract = h('game-contract');
 
-  const gameFn: ContractFn = (ctx: HostContext) => {
-    ctx.setData('state', enc('expected-state'));
-    if (!ctx.result) ctx.accept();
+  const gameFn: ContractFn = (env: ContractEnv) => {
+    env.requireResult(enc('state'), enc('expected-state'));
   };
   module.registerContract(gameContract, gameFn);
 
@@ -264,7 +266,7 @@ Deno.test('ExecutionModule: self-claim verification — setData rejects wrong va
   };
   provider.addBlock(anchor);
 
-  // Block has WRONG self-claimed data
+  // Block has WRONG result data
   const block: TestBlock = {
     hash: h('bad-block'),
     anchor: anchor.hash,
@@ -283,40 +285,40 @@ Deno.test('ExecutionModule: self-claim verification — setData rejects wrong va
   }
 });
 
-Deno.test('ExecutionModule: cross-block reference — reads previous state', () => {
+Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
   const { provider, module } = setup();
 
   const gameContract = h('game-contract');
+  const gameVerifier = { contract: gameContract, params: new Uint8Array(0) };
 
-  // Contract reads state from ref[0] and verifies new state is correct
-  const gameFn: ContractFn = (ctx: HostContext) => {
-    const outputCount = ctx.refOutputCount(0);
-    let prevState: Uint8Array | undefined;
-    for (let i = 0; i < outputCount; i++) {
-      const verifier = ctx.refOutputVerifier(0, i);
-      if (verifier && Hash.equals(verifier.contract, SELF_CONTRACT)) {
-        prevState = ctx.refOutputDetail(0, i);
-        break;
-      }
-    }
-    if (!prevState) {
-      ctx.reject('no previous state found');
-      return;
-    }
-
-    // Verify new state is "prev + 1" (simplified check)
+  // Contract reads state from a ref block that claims gameVerifier
+  const gameFn: ContractFn = (env: ContractEnv) => {
+    const prevState = env.fetch(gameVerifier, enc('state')) as Uint8Array;
     const prev = new TextDecoder().decode(prevState);
-    ctx.setData('state', enc(`${prev}+1`));
-    if (!ctx.result) ctx.accept();
+    env.requireResult(enc('state'), enc(`${prev}+1`));
   };
   module.registerContract(gameContract, gameFn);
 
-  // Previous block with self-claimed state
+  // Anchor for the previous block (has a game output to claim)
+  const prevAnchor: TestBlock = {
+    hash: h('prev-anchor'),
+    anchor: ZERO_HASH,
+    outputs: [{
+      verifier: gameVerifier,
+      value: 0,
+      detail: new Uint8Array(0),
+    }],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(prevAnchor);
+
+  // Previous block with result state, claiming the game output
   const prevBlock: TestBlock = {
     hash: h('prev-block'),
-    anchor: ZERO_HASH,
+    anchor: prevAnchor.hash,
     outputs: [createSelfClaimedOutput('state', enc('S0'))],
-    claims: [],
+    claims: [1], // claims extended index 1 = prevAnchor's game output
     refs: [],
   };
   provider.addBlock(prevBlock);
@@ -326,7 +328,7 @@ Deno.test('ExecutionModule: cross-block reference — reads previous state', () 
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [{
-      verifier: { contract: gameContract, params: new Uint8Array(0) },
+      verifier: gameVerifier,
       value: 0,
       detail: new Uint8Array(0),
     }],
@@ -349,16 +351,19 @@ Deno.test('ExecutionModule: cross-block reference — reads previous state', () 
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: addOutput checks matching output exists', () => {
+Deno.test('ExecutionModule: requireOutput checks matching output exists', () => {
   const { provider, module } = setup();
 
   const contract = h('test-contract');
   const targetContract = h('target-contract');
   const targetParams = enc('target-params');
 
-  const fn: ContractFn = (ctx: HostContext) => {
-    ctx.addOutput(targetContract, targetParams, 42, enc('payload'));
-    if (!ctx.result) ctx.accept();
+  const fn: ContractFn = (env: ContractEnv) => {
+    env.requireOutput(
+      { contract: targetContract, params: targetParams },
+      42,
+      enc('payload'),
+    );
   };
   module.registerContract(contract, fn);
 
@@ -409,13 +414,13 @@ Deno.test('ExecutionModule: addOutput checks matching output exists', () => {
   }
 });
 
-Deno.test('ExecutionModule: contract calls reject() → block invalid', () => {
+Deno.test('ExecutionModule: contract throws ContractRejection -> block invalid', () => {
   const { provider, module } = setup();
 
   const contract = h('always-reject');
 
-  module.registerContract(contract, (ctx) => {
-    ctx.reject('nope');
+  module.registerContract(contract, (_env) => {
+    throw new ContractRejection('nope');
   });
 
   const anchor: TestBlock = {
@@ -447,14 +452,14 @@ Deno.test('ExecutionModule: contract calls reject() → block invalid', () => {
   }
 });
 
-Deno.test('ExecutionModule: multiple claimed outputs from different contracts — all must accept', () => {
+Deno.test('ExecutionModule: multiple claimed outputs from different contracts -- all must accept', () => {
   const { provider, module } = setup();
 
   const contractA = h('contract-a');
   const contractB = h('contract-b');
 
-  module.registerContract(contractA, (ctx) => ctx.accept());
-  module.registerContract(contractB, (ctx) => ctx.accept());
+  module.registerContract(contractA, (_env) => {});
+  module.registerContract(contractB, (_env) => {});
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -489,14 +494,16 @@ Deno.test('ExecutionModule: multiple claimed outputs from different contracts �
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: multiple contracts — one rejects → block invalid', () => {
+Deno.test('ExecutionModule: multiple contracts -- one rejects -> block invalid', () => {
   const { provider, module } = setup();
 
   const contractA = h('contract-a');
   const contractB = h('contract-b');
 
-  module.registerContract(contractA, (ctx) => ctx.accept());
-  module.registerContract(contractB, (ctx) => ctx.reject('contract B rejects'));
+  module.registerContract(contractA, (_env) => {});
+  module.registerContract(contractB, (_env) => {
+    throw new ContractRejection('contract B rejects');
+  });
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -531,7 +538,7 @@ Deno.test('ExecutionModule: multiple contracts — one rejects → block invalid
   assert(!result.accepted);
 });
 
-Deno.test('ExecutionModule: contract not found → block invalid', () => {
+Deno.test('ExecutionModule: contract not found -> block invalid', () => {
   const { provider, module } = setup();
 
   const unknownContract = h('unknown-contract');
@@ -565,12 +572,12 @@ Deno.test('ExecutionModule: contract not found → block invalid', () => {
   }
 });
 
-Deno.test('ExecutionModule: contract does not call accept/reject → invalid', () => {
+Deno.test('ExecutionModule: silent contract (no-op) is accepted', () => {
   const { provider, module } = setup();
 
   const contract = h('silent-contract');
-  module.registerContract(contract, (_ctx) => {
-    // does nothing
+  module.registerContract(contract, (_env) => {
+    // does nothing -- normal return = accept
   });
 
   const anchor: TestBlock = {
@@ -596,17 +603,14 @@ Deno.test('ExecutionModule: contract does not call accept/reject → invalid', (
   provider.addBlock(block);
 
   const result = module.verifyBlock(block.hash);
-  assert(!result.accepted);
-  if (!result.accepted) {
-    assert(result.reason.includes('did not call accept'));
-  }
+  assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: contract throws → block invalid', () => {
+Deno.test('ExecutionModule: contract throws non-rejection error -> block invalid', () => {
   const { provider, module } = setup();
 
   const contract = h('throwing-contract');
-  module.registerContract(contract, (_ctx) => {
+  module.registerContract(contract, (_env) => {
     throw new Error('boom');
   });
 
@@ -645,8 +649,10 @@ Deno.test('ExecutionModule: verifyClaim verifies a single claim', () => {
   const contractA = h('contract-a');
   const contractB = h('contract-b');
 
-  module.registerContract(contractA, (ctx) => ctx.accept());
-  module.registerContract(contractB, (ctx) => ctx.reject('B rejects'));
+  module.registerContract(contractA, (_env) => {});
+  module.registerContract(contractB, (_env) => {
+    throw new ContractRejection('B rejects');
+  });
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -712,7 +718,7 @@ Deno.test('ExecutionModule: block not found returns error', () => {
   }
 });
 
-Deno.test('ExecutionModule: HostContext mode and contract info', () => {
+Deno.test('ExecutionModule: ContractEnv mode and contract info', () => {
   const { provider, module } = setup();
 
   const contract = h('info-contract');
@@ -720,11 +726,10 @@ Deno.test('ExecutionModule: HostContext mode and contract info', () => {
   let capturedContract: Hash | undefined;
   let capturedParams: Uint8Array | undefined;
 
-  module.registerContract(contract, (ctx) => {
-    capturedMode = ctx.mode;
-    capturedContract = ctx.currentContract;
-    capturedParams = ctx.currentParams;
-    ctx.accept();
+  module.registerContract(contract, (env) => {
+    capturedMode = env.mode;
+    capturedContract = env.getContractHash();
+    capturedParams = env.getParams();
   });
 
   const params = enc('my-params');
@@ -758,17 +763,21 @@ Deno.test('ExecutionModule: HostContext mode and contract info', () => {
   assertEquals(capturedParams, params);
 });
 
-Deno.test('ExecutionModule: HostContext claimedOutputCount and claimedOutputDetail', () => {
+Deno.test('ExecutionModule: collectInputs returns claimed outputs matching verifier', () => {
   const { provider, module } = setup();
 
   const contract = h('claim-reader');
-  let claimCount = 0;
-  let detail0: Uint8Array | undefined;
+  let inputCount = 0;
+  let inputDetail: Uint8Array | undefined;
 
-  module.registerContract(contract, (ctx) => {
-    claimCount = ctx.claimedOutputCount();
-    detail0 = ctx.claimedOutputDetail(0);
-    ctx.accept();
+  module.registerContract(contract, (env) => {
+    const inputs = env.collectInputs();
+    // In verification mode, collectInputs is synchronous
+    const resolvedInputs = inputs as import('../src/core/ContractEnv.ts').Input[];
+    inputCount = resolvedInputs.length;
+    if (resolvedInputs.length > 0) {
+      inputDetail = resolvedInputs[0].detail;
+    }
   });
 
   const anchor: TestBlock = {
@@ -795,59 +804,6 @@ Deno.test('ExecutionModule: HostContext claimedOutputCount and claimedOutputDeta
 
   module.verifyBlock(block.hash);
 
-  assertEquals(claimCount, 1);
-  assertEquals(detail0, enc('claimed-data'));
-});
-
-Deno.test('ExecutionModule: HostContext ref functions', () => {
-  const { provider, module } = setup();
-
-  const contract = h('ref-reader');
-  let refCountVal = 0;
-  let refOutputCountVal = 0;
-  let refDetail: Uint8Array | undefined;
-
-  module.registerContract(contract, (ctx) => {
-    refCountVal = ctx.refCount();
-    refOutputCountVal = ctx.refOutputCount(0);
-    refDetail = ctx.refOutputDetail(0, 0);
-    ctx.accept();
-  });
-
-  const refBlock: TestBlock = {
-    hash: h('ref-block'),
-    anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('data', enc('ref-data'))],
-    claims: [],
-    refs: [],
-  };
-  provider.addBlock(refBlock);
-
-  const anchor: TestBlock = {
-    hash: h('anchor'),
-    anchor: ZERO_HASH,
-    outputs: [{
-      verifier: { contract, params: new Uint8Array(0) },
-      value: 0,
-      detail: new Uint8Array(0),
-    }],
-    claims: [],
-    refs: [],
-  };
-  provider.addBlock(anchor);
-
-  const block: TestBlock = {
-    hash: h('block'),
-    anchor: anchor.hash,
-    outputs: [],
-    claims: [0],
-    refs: [refBlock.hash],
-  };
-  provider.addBlock(block);
-
-  module.verifyBlock(block.hash);
-
-  assertEquals(refCountVal, 1);
-  assertEquals(refOutputCountVal, 1);
-  assertEquals(refDetail, enc('ref-data'));
+  assertEquals(inputCount, 1);
+  assertEquals(inputDetail, enc('claimed-data'));
 });

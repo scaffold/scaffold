@@ -349,6 +349,7 @@ The protocol controls the equilibrium through:
 4. **Computational validity disputes**: Hash challenges handle structural validity (self-resolving). How are disputes about computational correctness (WASM re-execution) handled? This likely still needs a separate mechanism.
 5. **Throughput distribution**: If the block throughput distribution is very skewed (a few huge blocks, many tiny ones), the aggregation tax rate `v / T_avg` may be impractical for tiny blocks. Should there be a minimum block throughput for direct aggregation, with smaller blocks required to batch first?
 6. **Reputation effects**: Nodes caught publishing invalid blocks may be deprioritized by peers in the gossip module. Does this create a secondary cost that suppresses the fraud rate below the healthy equilibrium?
+7. **Verification cartels**: Can verifiers and publishers collude (publisher tips off verifier, they split the reward)? This may not be harmful -- the collateral still gets claimed, and the verification still happens. The "victim" is the aggregator who should have probed more carefully.
 
 ---
 

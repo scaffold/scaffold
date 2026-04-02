@@ -86,7 +86,7 @@ The graph grows as peers create new blocks, and each peer maintains its own view
 
 Two blocks **conflict** when they both try to consume the same output. Since an output can only be spent once, the network must choose one block and exclude the other.
 
-Conflict detection works by comparing **claim masks** — compact bit vectors that record which outputs a block consumes from its anchor. If two blocks anchor to the same parent and their claim masks overlap (they both set the same bit), they conflict.
+Conflict detection is handled by the OutputClaimModule. During claim migration, when a second claimant is placed on the same output, a double-spend conflict is detected. If two blocks both claim the same producing output, they conflict.
 
 Conflicts are:
 - **Permanent**: once detected, a conflict never goes away.
@@ -180,7 +180,7 @@ Here's how the pieces interact when a peer publishes a new block:
 1. **Creation**: The peer constructs a block — choosing an anchor, consuming inputs, running a computation, producing outputs, and declaring weight.
 2. **Collateral**: The peer stakes collateral vouching for the block's validity.
 3. **Gossip**: The block propagates to peers who are likely to care about it.
-4. **Conflict detection**: Receiving peers check if the new block's claim mask overlaps with any existing block's. If so, a conflict is declared.
+4. **Conflict detection**: The OutputClaimModule detects conflicts during claim migration -- when a second claimant is placed on the same output, a double-spend conflict is declared.
 5. **Consensus**: The new block's weight is added to its branch. If it's in a conflict, the branch with more verified weight wins.
 6. **Verification**: Peers sample and spot-check the block's declared work. Verified weight converges toward declared weight for honest blocks and toward zero for fraudulent ones.
 7. **Aggregation**: Eventually, an aggregator rolls up the block (and others) into a consolidated block, transferring risk and compressing the graph.
@@ -202,12 +202,16 @@ The protocol is specified across several module documents, each responsible for 
 | [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
-| [Weight](weight.md) | Weight derivation | How is `declaredWeight` constrained or verified? |
+| [Weight](weight.md) | Weight derivation | How do blocks earn consensus influence through verified computation? |
 | [Anchoring](anchoring.md) | Anchor resolution & output mapping | Where does a block attach, and how are outputs addressed across blocks? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Output Data](output-data.md) | Data format | How is output data encoded and inspected? |
+| [Output Claims](output-claims.md) | Claim tracking | Who claims each output on a given block? |
+| [Output Space](output-space.md) | UTXO state model | How are output spaces constructed, indexed, and transformed? |
+| [Aggregation](aggregation.md) | Subtree composition | How does aggregation define ordering and cache transformations? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 | [Collateral Resolution](collateral-resolution.md) | Collateral contract | How are blocks challenged, validated, and rectified? |
+| [Attacks](attacks.md) | Security catalog | What attacks exist and how does the protocol defend against them? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.
 
@@ -220,19 +224,18 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Module | Core File | Service File |
 |--------|-----------|-------------|
 | Consensus | [`ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | [`ConsensusService.ts`](../../src/core/ConsensusService.ts) |
-| Conflict | [`ConflictModule.ts`](../../src/core/ConflictModule.ts) | [`ConflictService.ts`](../../src/core/ConflictService.ts) |
 | Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
 | Anchoring | [`AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | — |
+| Output Claims | [`OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | [`OutputClaimService.ts`](../../src/core/OutputClaimService.ts) |
 
 Supporting files:
 
 | File | Description |
 |------|-------------|
 | [`Block.ts`](../../src/core/Block.ts) | Concrete block type, `BlockStore`, genesis creation |
-| [`BitVector.ts`](../../src/core/BitVector.ts) | Chunked bit vector for claim masks (used by conflict module) |
-| [`OutputMapping.ts`](../../src/core/OutputMapping.ts) | Shared output index mapping utilities and `ResolvedClaim` type |
+| [`OutputSpace.ts`](../../src/core/OutputSpace.ts) | Pure output-space operations: claim resolution, masks, ordering, UTXO computation |
 | [`Coordinator.ts`](../../src/core/Coordinator.ts) | Orchestrates all modules: block received → conflict → consensus → gossip → sampling |
 | [`ProtocolContext.ts`](../../src/core/ProtocolContext.ts) | Dependency injection container wiring all services together |

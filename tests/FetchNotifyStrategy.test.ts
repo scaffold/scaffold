@@ -69,7 +69,6 @@ function makeEvent(
     result,
     store,
     consensus: {} as ReactiveEvent['consensus'],
-    conflict: {} as ReactiveEvent['conflict'],
     sampling: {} as ReactiveEvent['sampling'],
   };
 }

@@ -1,6 +1,6 @@
-# Draft Blocks
+# Block Drafts
 
-A **draft block** is a local-only representation of a block that is being constructed but has not yet been published. Drafts participate in the local node's consensus and conflict views — contributing weight and pre-claiming outputs — but are invisible to peers and cannot be built upon, aggregated, or claimed.
+A **block draft** is a local-only representation of a block that is being constructed but has not yet been published. Drafts participate in the local node's consensus and conflict views — contributing weight and pre-claiming outputs — but are invisible to peers and cannot be built upon, aggregated, or claimed.
 
 Drafts exist because block construction is not instantaneous. Generating a computation result, aggregating heavy subtrees, or waiting for economic inputs all take time. During that time, the canonical view evolves: new blocks arrive, conflicts resolve, outputs get claimed. Without drafts, the node operates blind during construction — it doesn't know whether the block it's building will be canonical when published, it might duplicate work another peer is already doing, and it can't influence its own canonicality decisions with knowledge of its in-progress work.
 
@@ -20,14 +20,14 @@ ResolvedClaim {
 }
 ```
 
-This is the **semantic** representation of a claim. The wire format (`claims: Index[]`) is an encoding of resolved claims relative to a specific anchor — it is computed at publication time when the anchor is known. `ResolvedClaim` is anchor-independent: it means the same thing regardless of where the block ends up in the graph.
+This is the **semantic** representation of a claim. The wire format (`claims: Index[]`) is an encoding of resolved claims relative to a specific anchor — it is computed at composition time when the anchor is resolved. `ResolvedClaim` is anchor-independent: it means the same thing regardless of where the block ends up in the graph.
 
-`ResolvedClaim` should also appear on the `Block` interface as a `resolvedClaims` field alongside the existing `claims: number[]` field. Using the same field name on both `Block` and `DraftBlock` allows consumers to work with claims uniformly without knowing which block type they're dealing with, and without needing to reverse-engineer the extended vector mapping. The index-based `claims` field becomes a wire-format concern computed at publication time by the [anchoring module](anchoring.md).
+`ResolvedClaim` should also appear on the `Block` interface as a `resolvedClaims` field alongside the existing `claims: number[]` field. Using the same field name on both `Block` and `BlockDraft` allows consumers to work with claims uniformly without knowing which type they're dealing with, and without needing to reverse-engineer the extended vector mapping. The index-based `claims` field becomes a wire-format concern computed at composition time by the [anchoring module](anchoring.md).
 
-### DraftBlock
+### BlockDraft
 
 ```
-DraftBlock {
+BlockDraft {
     draftId:        DraftID          // local-only identity (random hash or UUID)
     resolvedClaims: ResolvedClaim[]  // outputs being claimed (semantic form)
     outputs:        Output[]         // new outputs this block will produce
@@ -41,14 +41,16 @@ DraftBlock {
 
 A draft has **no hash** (it hasn't been serialized) and **no signature**. The `anchor` field is a **phantom anchor** — a best-guess placement that allows the draft to participate in consensus, but which may change before publication. The `aggregates` field is explicit because aggregation interacts with anchor selection -- which blocks are aggregated determines which claims are reachable via subtrees vs. via the anchor chain. See [Anchoring](anchoring.md).
 
-### Replacing BlockSpec
+The construction pipeline becomes:
 
-`DraftBlock` replaces `BlockSpec` as the primary input for block construction. `BlockSpec` was a one-shot construction input with index-based claims and a fixed anchor — these are now derived properties computed by the [anchoring module](anchoring.md) at publication time. The construction pipeline becomes:
-
-1. Create a `DraftBlock` with `resolvedClaims`, `outputs`, `aggregates`, etc.
+1. Create a `BlockDraft` with `resolvedClaims`, `outputs`, `aggregates`, etc.
 2. The anchoring module computes the anchor and maps `resolvedClaims` to indices.
 3. `BlockCreationModule.buildBlock()` takes the computed spec and produces a `BlockBlueprint`.
 4. Sign and publish.
+
+### Replacing BlockSpec
+
+`BlockDraft` replaces `BlockSpec` as the primary input for block construction. `BlockSpec` was a one-shot construction input with index-based claims and a fixed anchor — these are now derived properties computed by the [anchoring module](anchoring.md) at composition time.
 
 `BlockSpec` may survive as an internal intermediate representation within the anchoring module, but it is no longer a user-facing type.
 
@@ -67,7 +69,7 @@ Recreation triggers include:
 
 - **Anchor change**: the phantom anchor is no longer optimal (e.g., a new canonical tip appeared that is a better common ancestor of the claims).
 - **Claim change**: the generation process determines it needs an additional input, or an existing claim becomes unavailable.
-- **Ref change**: the computation needs to reference a block that wasn't known when the draft was created.
+- **Ref change**: the computation needs to reference a block that wasn't known when the draft was created. This changes the draft's content but does not affect the phantom anchor (refs are free-floating).
 - **Publication**: the draft is finalized into a real block. The draft is deleted; the block takes its place in the graph, inheriting its weight and conflict contributions.
 - **Cancellation**: the draft is no longer viable (the claim became unrecoverably non-canonical, or a peer published a competing block that won).
 
@@ -96,9 +98,10 @@ This places the anchor as close to genesis as possible while still being able to
 
 At publication time, the anchor may have additional constraints beyond covering the claims:
 
-- **Refs**: if the block references other blocks via `refs`, the anchor may need to be a descendant of those blocks' positions (depending on the contract's requirements).
 - **Negative constraints**: for collateral blocks, the anchor must NOT be a descendant of the target block. This ensures the collateral remains valid even if the target is removed from the canonical view.
 - **UTXO availability**: economic inputs (balance outputs for throughput balancing) must exist in the anchor's UTXO set.
+
+Refs are **not** an anchor constraint. Referenced blocks do not need to appear in the anchor chain or be ancestors of the block. Refs are free-floating pointers — the protocol only requires that the referenced block exists and is available for read access during execution and verification. The anchor chain is determined solely by claims and aggregation.
 
 The phantom anchor need not satisfy all publication-time constraints — it is a best-effort placement for speculative consensus participation. At publication time, the real anchor is computed with full constraints, and may differ.
 
@@ -139,7 +142,7 @@ When a draft is published (converted to a real block), the weight transition mus
 2. Add the real block to consensus (with its actual anchor and hash).
 3. The net weight change should be zero if the anchor didn't change, or a small adjustment if it did.
 
-The delete-and-recreate pattern handles this naturally — publication is just another recreation where the new entity is a `Block` instead of a `DraftBlock`.
+The delete-and-recreate pattern handles this naturally — publication is just another recreation where the new entity is a `Block` instead of a `BlockDraft`.
 
 ---
 
@@ -158,7 +161,7 @@ Pre-claiming uses the scatter-to-source pattern: claims are stored on the **prod
 
 For a resolved claim `{ block: X, outputIndex: 3 }`, the claim is recorded on block X's output 3 as "claimed by draft D". Conflict detection becomes a lookup: if output 3 of block X has multiple claimants, those claimants conflict.
 
-This is simpler than BitVector intersection for drafts because:
+This is simpler than bitmask intersection for drafts because:
 - No anchor is needed to compute the claim's position.
 - Conflict detection is O(1) per output (check the claimant list).
 - The same data structure works for both drafts and published blocks.
@@ -206,7 +209,9 @@ The draft has been created with its claims and outputs, but generation has not s
 
 ### Generating
 
-Active computation is in progress. The draft may be recreated during this phase as claims, refs, or the anchor change. Each recreation preserves the generation state (the computation continues; only the draft's graph participation is updated).
+Active computation is in progress. The contract may be actively executing, or it may be **blocked** waiting for additional inputs via `requireInput()`. A blocked generator is suspended (no CPU) until the system provides a new input matching its verifier. See [aggregation: blocking requireInput](aggregation.md#blocking-requireinput) for details.
+
+The draft may be recreated during this phase as claims, refs, or the anchor change. Each recreation preserves the generation state (the computation continues; only the draft's graph participation is updated).
 
 ### Ready
 
@@ -287,7 +292,7 @@ The conflict module can support resolved claims alongside index-based claims:
 3. When a draft is added, directly insert its resolved claims.
 4. Conflict exists when any output has multiple claimants.
 
-This unifies conflict detection for drafts and blocks without requiring drafts to produce BitVector masks.
+This unifies conflict detection for drafts and blocks without requiring drafts to produce bitmasks.
 
 ---
 
@@ -315,7 +320,7 @@ This unifies conflict detection for drafts and blocks without requiring drafts t
 
 ## Relation to Existing Docs
 
-- [Block Creation](block-creation.md): the existing Draft System section describes drafts as generator functions. This document formalizes that concept with a concrete data model and lifecycle. The `DraftBlock` type replaces the informal `DraftGenerator` concept.
-- [Conflict](conflict.md): the scatter-to-source claim tracking and per-output conflict detection extend the existing BitVector-based approach. Both mechanisms coexist.
+- [Block Creation](block-creation.md): the existing Draft System section describes drafts as generator functions. This document formalizes that concept with a concrete data model and lifecycle. The `BlockDraft` type replaces the informal `DraftGenerator` concept.
+- [Conflict](conflict.md): the scatter-to-source claim tracking and per-output conflict detection extend the existing claim-mask-based approach. Both mechanisms coexist.
 - [Consensus](consensus.md): phantom weight is a local-only extension. The canonical view exposed to peers does not include draft weight — it is a speculative local adjustment.
-- [DAG](dag.md): drafts are not part of the DAG. They influence the local node's view of the DAG but are invisible to the network.
+- [DAG](dag.md): drafts are not part of the DAG. They influence the local node's conflict view but are invisible to the network.

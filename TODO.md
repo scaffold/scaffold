@@ -4,19 +4,80 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 
 ## Core Protocol
 
-### Block weight
-How is the weight of a block determined and verified?
+### Block Weight
+How is the weight of a block determined and verified? [weight.md](docs/protocol/weight.md) discusses four options (contract-declared, economic, collateral-backed, hybrid) but no decision has been made. This is the highest-priority protocol design decision -- it affects block creation, consensus, and trust.
+
+### Collateral Posting Strategy
+The TrustModule tracks collateral and the DisputeStrategy emits `dispute` actions for invalid blocks, but there is no strategy for **posting** collateral. Need a `CollateralStrategy` that:
+- Posts FOR collateral on blocks we generated (publisher obligation for hard contracts)
+- Posts FOR collateral on blocks we verified as valid (earn resolution reward)
+- Posts AGAINST collateral when verification fails (trigger dispute)
+- Manages collateral lifecycle: redemption after aggregation, reclaim when non-canonical
+
+The reactive action types (`createBlock` with collateral outputs) exist, but the decision logic for when and how much to stake is unimplemented. The [CollateralContract](src/contracts/CollateralContract.ts) handles resolution; this is about the posting side.
 
 ### WASM Contract Runtime
-The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same — only the contract dispatch changes.
+The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as a stub.
+
+### Generator Implementation
+[Generator.ts](src/core/Generator.ts) is a `StubGenerator` that records generate/cancel signals without performing real computation. Replace with a real generator that:
+- Runs contracts in generation mode via [GeneratingEnv](src/core/GeneratingEnv.ts)
+- Produces block specs from [ContractGenerator](src/core/ContractGenerator.ts) draft pipeline
+- Handles async WASM execution
+- Cancels running generations when canonicality changes invalidate the draft
+
+The [GenerationStrategy](src/node/strategies/GenerationStrategy.ts) already detects incentive blocks and emits `createBlock` actions, but the actual contract execution is stubbed.
 
 ### Deception Module
-Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (now done) and economic equilibrium analysis.
+Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (done) and economic equilibrium analysis.
 
 ### Query and Promise Mechanism
 Design the offline state mechanism from [computation.md](docs/protocol/computation.md#query-and-promise-mechanism): promise outputs committing to data, query outputs requesting specific data, and weight reduction for unanswered queries.
 
+## Contracts
+
+Standard contracts are specified in [contracts.md](docs/protocol/contracts.md). Implementation status:
+
+| Contract | Spec | Implementation | Status |
+|----------|------|----------------|--------|
+| Signature | contracts.md | `SIGNATURE_CONTRACT` constant + `makeSignatureOutput` helper | Needs contract function that verifies block signature against pubkey in params |
+| Aggregation | contracts.md | [AggregationContract.ts](src/core/AggregationContract.ts) | Done (threshold-based, uses `requireInput`) |
+| Collateral | contracts.md | [CollateralContract.ts](src/contracts/CollateralContract.ts) | Exists from old codebase; needs adapter to new ContractEnv interface |
+| Self/Result | contracts.md | `RESULT_CONTRACT` + `createSelfClaimedOutput` | Working (trivially valid -- claiming block is producing block) |
+| Timelock | contracts.md | — | Needs implementation (verify anchor chain depth >= minDepth in params) |
+| Computation | contracts.md | ExecutionModule mock registry | Working for TypeScript mocks; needs WASM runtime for real contracts |
+
+Additional contracts from `src/contracts/` that predate the current module system and need review/adaptation:
+- `AccountContract.ts`, `DataContract.ts`, `TimeContract.ts`, `FrontierContract.ts`
+- `BurnContract.ts`, `CollatzContract.ts`, `NameContract.ts`, `RootContract.ts`
+- `GeneratorContract.ts`, `TrueContract.ts`
+
+These use the old `ContractProvider<Hash>` / `ComputationDriver` interface. They need to be ported to the new `ContractFn` / `ContractEnv` interface, or evaluated for whether they're still needed.
+
 ## Infrastructure
+
+### Wire Up Network Plugins
+Network transport plugins exist but are not wired into the node layer:
+
+| Plugin | Location | Status |
+|--------|----------|--------|
+| WebRTC | [plugins/browser/WebrtcProvider.ts](plugins/browser/WebrtcProvider.ts) | Implemented (data channels, STUN, NAT traversal) |
+| WebSocket server | [plugins/deno/WebsocketServerProvider.ts](plugins/deno/WebsocketServerProvider.ts) | Implemented (Deno HTTP upgrade) |
+| WebSocket client | [plugins/WebsocketClientProvider.ts](plugins/WebsocketClientProvider.ts) | Implemented (browser-side) |
+| Mock network | [plugins/MockNetworkProvider.ts](plugins/MockNetworkProvider.ts) | Implemented (in-memory, configurable latency/loss) |
+
+[NetworkManager](src/node/NetworkManager.ts) defines the plugin interface. The gap is wiring these providers into `NodeContext` / `Scaffold` so that blocks received from the network flow through the coordinator and blocks produced locally get pushed to peers via gossip.
+
+Specific work:
+- Adapter from NetworkManager's message events → `coordinator.blockReceived`
+- Adapter from gossip push actions → NetworkManager send
+- Connection lifecycle: peer add/remove synced to gossip module's `addPeer`/`removePeer`
+- Signaling server for WebRTC (the provider handles negotiation, but needs a signaling channel)
+
+Storage plugins also exist but need wiring:
+- [DenoKvStorageProvider](plugins/deno/DenoKvStorageProvider.ts) -- Deno KV backend
+- [OpfsStorageProvider](plugins/browser/OpfsStorageProvider.ts) -- browser OPFS
+- [LocalStorageProvider](plugins/browser/LocalStorageProvider.ts) -- browser localStorage
 
 ### Peer Module
 Peer discovery, connection management, and disconnection of useless peers. The gossip module exports per-peer quality scores and consumes the peer set + transport metrics (latency, throughput). This module decides who to connect to, how to find new peers, and when to drop unproductive connections.
@@ -28,7 +89,7 @@ How do incentive blocks reach peers who can fulfill them? Options to explore:
 
 2. **DHT-like sync points**: Hash the verifier's contract hash to a point in a DHT. Generators register interest at that point; clients route incentive blocks there. The sync point forwards to registered generators. Pros: efficient for niche contracts. Cons: adds infrastructure complexity, sync point is a soft centralization point.
 
-3. **Subscription flooding**: Peers advertise which contracts they can execute (via peerInfo). Gossip module uses this as a relevance signal — incentive blocks for contract C are routed preferentially to peers advertising C. Pros: uses existing gossip infrastructure. Cons: floods subscription info.
+3. **Subscription flooding**: Peers advertise which contracts they can execute (via peerInfo). Gossip module uses this as a relevance signal -- incentive blocks for contract C are routed preferentially to peers advertising C. Pros: uses existing gossip infrastructure. Cons: floods subscription info.
 
 4. **Hybrid**: Start with gossip-only. If gossip is too slow for niche contracts, layer on contract-interest advertisements in peerInfo. The gossip relevance scoring already has hooks for per-peer interest signals.
 
@@ -36,7 +97,7 @@ Likely best starting point: option 4 (gossip-only, with peerInfo contract intere
 
 ## Computation DAG
 
-When a contract calls `ctx.request(otherVerifier)`, it resolves to a Promise for the first canonical response. This creates an input dependency: the generated block specifies the requested block as an input. If the requested result later becomes non-canonical, the dependent block is affected — generation should be cancelled (if still running) and restarted with the new canonical input.
+When a contract calls `ctx.request(otherVerifier)`, it resolves to a Promise for the first canonical response. This creates an input dependency: the generated block specifies the requested block as an input. If the requested result later becomes non-canonical, the dependent block is affected -- generation should be cancelled (if still running) and restarted with the new canonical input.
 
 Key design questions:
 - How deep can the computation DAG go? Contracts requesting contracts requesting contracts... Need to bound recursion depth.
@@ -49,7 +110,7 @@ Key design questions:
 These sit on top of the core protocol and can be specified later.
 
 ### Game State Contracts
-Deterministic WASM execution for serverless game-state consensus. Dispute/penalty mechanics for incorrect state transitions. The ExecutionModule's HostContext already supports the full host function interface needed (setData, addOutput, cross-block refs).
+Deterministic WASM execution for serverless game-state consensus. Dispute/penalty mechanics for incorrect state transitions. The ContractEnv interface (VerifyingEnv/GeneratingEnv) supports the full host function interface needed (requireResult, requireOutput, fetch, collectInputs).
 
 ### Content Distribution
 Social content from peers with signatures and globally consistent latest-state resolution.

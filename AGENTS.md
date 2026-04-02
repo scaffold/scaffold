@@ -42,7 +42,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 |-------------|-------------|-----------------|-----------------|
 | [overview.md](docs/protocol/overview.md) | — | — | [Coordinator.ts](src/core/Coordinator.ts), [ProtocolContext.ts](src/core/ProtocolContext.ts) |
 | [consensus.md](docs/protocol/consensus.md) | [ConsensusModule.ts](src/core/ConsensusModule.ts) | [ConsensusService.ts](src/core/ConsensusService.ts) | |
-| [conflict.md](docs/protocol/conflict.md) | [ConflictModule.ts](src/core/ConflictModule.ts) | [ConflictService.ts](src/core/ConflictService.ts) | [BitVector.ts](src/core/BitVector.ts) |
+| [conflict.md](docs/protocol/conflict.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
 | [sampling.md](docs/protocol/sampling.md) | [SamplingModule.ts](src/core/SamplingModule.ts) | [SamplingService.ts](src/core/SamplingService.ts) | |
 | [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
 | [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/core/GossipModule.ts) | [GossipService.ts](src/core/GossipService.ts) | |
@@ -50,9 +50,17 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [anchoring.md](docs/protocol/anchoring.md) | [AnchoringModule.ts](src/core/AnchoringModule.ts) | — | [OutputMapping.ts](src/core/OutputMapping.ts), [Block.ts](src/core/Block.ts) |
 | [dag.md](docs/protocol/dag.md) | — (structural, spans modules) | — | [Block.ts](src/core/Block.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
 | [weight.md](docs/protocol/weight.md) | — (design discussion) | — | [BlockCreationModule.ts](src/core/BlockCreationModule.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |
-| [computation.md](docs/protocol/computation.md) | [ExecutionModule.ts](src/core/ExecutionModule.ts), [VerificationModule.ts](src/core/VerificationModule.ts), [DisputeModule.ts](src/core/DisputeModule.ts) | [ExecutionService.ts](src/core/ExecutionService.ts), [VerificationService.ts](src/core/VerificationService.ts), [DisputeService.ts](src/core/DisputeService.ts) | [Block.ts](src/core/Block.ts), [WasmStore.ts](src/core/WasmStore.ts) |
+| [computation.md](docs/protocol/computation.md) | [ExecutionModule.ts](src/core/ExecutionModule.ts), [VerificationModule.ts](src/core/VerificationModule.ts), [DisputeModule.ts](src/core/DisputeModule.ts) | [ExecutionService.ts](src/core/ExecutionService.ts), [VerificationService.ts](src/core/VerificationService.ts), [DisputeService.ts](src/core/DisputeService.ts) | [ContractEnv.ts](src/core/ContractEnv.ts), [VerifyingEnv.ts](src/core/VerifyingEnv.ts), [GeneratingEnv.ts](src/core/GeneratingEnv.ts), [ContractGenerator.ts](src/core/ContractGenerator.ts), [Block.ts](src/core/Block.ts), [WasmStore.ts](src/core/WasmStore.ts) |
 | [deception.md](docs/protocol/deception.md) | — (not yet implemented) | — | |
 | [collateral-resolution.md](docs/protocol/collateral-resolution.md) | — (not yet implemented) | — | [TrustModule.ts](src/core/TrustModule.ts), [Block.ts](src/core/Block.ts) |
+| [draft-blocks.md](docs/protocol/draft-blocks.md) | [DraftManager.ts](src/core/DraftManager.ts) | — | [BlockDraft.ts](src/core/BlockDraft.ts), [Generator.ts](src/core/Generator.ts) |
+| [output-claims.md](docs/protocol/output-claims.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
+| [output-space.md](docs/protocol/output-space.md) | — (structural, spans modules) | — | [OutputSpace.ts](src/core/OutputSpace.ts), [Block.ts](src/core/Block.ts) |
+| [aggregation.md](docs/protocol/aggregation.md) | — | — | [AggregationContract.ts](src/core/AggregationContract.ts), [Block.ts](src/core/Block.ts), [ContractGenerator.ts](src/core/ContractGenerator.ts) |
+
+## Key Protocol Invariant: Outputs Before Claims
+
+A block's **output space** is its final, post-claim set of surviving outputs -- the clean set that descendants inherit. During construction, the block's own outputs are prepended to the inherited (post-subtree) space, forming the **extended vector**. Claims are then applied as removals from this extended vector. This ordering enables self-claiming: a block can produce output at index 0 and claim index 0 in the same block. Claim indices in `block.claims` refer to positions in the extended vector, not in the final output space.
 
 ## Queued Work
 See `TODO.md` for the current backlog of protocol modules and concepts to document and implement, roughly in priority order.

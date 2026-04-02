@@ -23,9 +23,16 @@ export interface ConsensusProvider<BlockType> {
 /**
  * The consensus module chooses between conflicting branches in the block graph.
  *
- * It tracks blocks, conflicts, and verified weights, and computes the canonical
- * view: the maximal set of non-conflicting blocks where each conflict's winner
- * (by effective weight, ties broken by hash) is included.
+ * Canonicality is determined by a three-rule system propagated via topological
+ * sort (Kahn's algorithm) over anchor and aggregation edges:
+ *
+ *   Rule 1 -- Anchor: a non-genesis block is canonical only if its anchor is canonical.
+ *   Rule 2 -- Aggregates: a block is canonical only if every block it aggregates is canonical.
+ *   Rule 3 -- Conflict: a block is canonical only if it wins (or ties by lower hash) every
+ *             direct conflict, compared by effective weight.
+ *
+ * Effective weight is canonical-independent (includes all descendants) so conflict
+ * outcomes are determined once in Phase 1, then propagated structurally in Phase 2.
  *
  * Fully self-contained -- depends only on ConsensusProvider and Hash.
  */
@@ -37,9 +44,6 @@ export class ConsensusModule<BlockType> {
 
   /** Direct conflicts declared by external layers. Stored symmetrically. */
   private directConflicts = new Map<HashPrimitive, Set<HashPrimitive>>();
-
-  /** Block -> set of block hash primitives it aggregates. */
-  private aggregatesMap = new Map<HashPrimitive, Set<HashPrimitive>>();
 
   /** Reverse: block -> set of blocks that aggregate it. */
   private aggregatedByMap = new Map<HashPrimitive, Set<HashPrimitive>>();
@@ -118,16 +122,11 @@ export class ConsensusModule<BlockType> {
       this.getOrCreateSet(this.children, anchorKey).add(key);
     }
 
-    // Register aggregation
+    // Register aggregation (reverse map only -- needed for topological sort)
     const aggregates = this.provider.getAggregates(block);
-    if (aggregates.length > 0) {
-      const sSet = new Set<HashPrimitive>();
-      for (const s of aggregates) {
-        const sKey = s.toPrimitive();
-        sSet.add(sKey);
-        this.getOrCreateSet(this.aggregatedByMap, sKey).add(key);
-      }
-      this.aggregatesMap.set(key, sSet);
+    for (const s of aggregates) {
+      const sKey = s.toPrimitive();
+      this.getOrCreateSet(this.aggregatedByMap, sKey).add(key);
     }
 
     // Register chain contributions for weight-vector-aware descendant weight
@@ -144,6 +143,66 @@ export class ConsensusModule<BlockType> {
       if (!cBlock) break;
       current = this.provider.getAnchor(cBlock);
       depth++;
+    }
+
+    this.markDirty();
+  }
+
+  /**
+   * Remove a previously registered block.
+   * Cleans up children, aggregation maps, chain contributions,
+   * verified weights, and direct conflicts. Marks dirty.
+   */
+  removeBlock(hash: Hash): void {
+    const key = hash.toPrimitive();
+    if (!this.blocks.has(key)) return;
+
+    this.blocks.delete(key);
+
+    // Remove from children map (as child of its anchor)
+    const block = this.provider.getBlock(hash);
+    if (block) {
+      const anchorHash = this.provider.getAnchor(block);
+      if (!Hash.equals(anchorHash, ZERO_HASH)) {
+        const siblings = this.children.get(anchorHash.toPrimitive());
+        if (siblings) siblings.delete(key);
+      }
+
+      // Clean up aggregatedByMap (reverse aggregation edges from this block)
+      const aggregates = this.provider.getAggregates(block);
+      for (const s of aggregates) {
+        const sKey = s.toPrimitive();
+        const reverse = this.aggregatedByMap.get(sKey);
+        if (reverse) reverse.delete(key);
+      }
+    }
+
+    // Remove own children entry
+    this.children.delete(key);
+
+    // Clean up aggregatedByMap entry for this block
+    this.aggregatedByMap.delete(key);
+
+    // Clean up chain contributions (remove this block's contributions from all ancestors)
+    for (const [_ancestorKey, contributions] of this.chainContributions) {
+      const idx = contributions.findIndex((c) => c.block === key);
+      if (idx !== -1) contributions.splice(idx, 1);
+    }
+
+    // Remove this block's own contribution entry
+    this.chainContributions.delete(key);
+
+    // Clean up verified weights
+    this.verifiedWeights.delete(key);
+
+    // Clean up direct conflicts
+    const conflicts = this.directConflicts.get(key);
+    if (conflicts) {
+      for (const cKey of conflicts) {
+        const reverse = this.directConflicts.get(cKey);
+        if (reverse) reverse.delete(key);
+      }
+      this.directConflicts.delete(key);
     }
 
     this.markDirty();
@@ -216,21 +275,23 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
-   * Full conflict set for a block: direct + aggregation + inherited +
-   * propagated via anchor chains. Excludes the block itself.
+   * Direct conflict set for a block. Returns only explicitly declared
+   * direct conflicts (no transitive expansion). Excludes the block itself.
    */
   getConflicts(hash: Hash): ReadonlySet<HashPrimitive> {
-    return this.computeFullConflicts(hash.toPrimitive());
+    const key = hash.toPrimitive();
+    const dc = this.directConflicts.get(key);
+    return dc ?? new Set<HashPrimitive>();
   }
 
   /**
-   * The winner among a block and all blocks it conflicts with.
+   * The winner among a block and all blocks it directly conflicts with.
    * Returns the block itself if it has no conflicts or is the winner.
    */
   getConflictWinner(hash: Hash): Hash {
     const key = hash.toPrimitive();
-    const conflicts = this.computeFullConflicts(key);
-    if (conflicts.size === 0) return hash;
+    const conflicts = this.directConflicts.get(key);
+    if (!conflicts || conflicts.size === 0) return hash;
 
     const memo = new Map<HashPrimitive, number>();
 
@@ -269,102 +330,6 @@ export class ConsensusModule<BlockType> {
       map.set(key, set);
     }
     return set;
-  }
-
-  /** Look up a block's anchor hash primitive, or undefined for genesis. */
-  private getAnchorKeyOf(blockKey: HashPrimitive): HashPrimitive | undefined {
-    const hash = this.blocks.get(blockKey);
-    if (!hash) return undefined;
-    const block = this.provider.getBlock(hash);
-    if (!block) return undefined;
-    const anchor = this.provider.getAnchor(block);
-    if (Hash.equals(anchor, ZERO_HASH)) return undefined;
-    return anchor.toPrimitive();
-  }
-
-  /**
-   * Compute the full conflict set for a block.
-   *
-   * Phase 1 (base): Walk the anchor chain to build the lineage. For each
-   *   block in the lineage, BFS through the aggregation graph collecting
-   *   direct + aggregation conflicts + reverse aggregation.
-   *
-   * Phase 2 (propagation): BFS forward along anchor children. If X
-   *   conflicts with Y, then X also conflicts with every descendant
-   *   of Y via anchor links.
-   */
-  private computeFullConflicts(blockKey: HashPrimitive): Set<HashPrimitive> {
-    const result = new Set<HashPrimitive>();
-
-    // Build anchor chain lineage: [blockKey, anchor, anchor.anchor, ...]
-    const lineage: HashPrimitive[] = [];
-    let cur: HashPrimitive | undefined = blockKey;
-    while (cur !== undefined) {
-      lineage.push(cur);
-      cur = this.getAnchorKeyOf(cur);
-    }
-
-    // Phase 1: For each block in lineage, collect base conflicts
-    for (const source of lineage) {
-      // BFS through aggregation graph from source
-      const visited = new Set<HashPrimitive>();
-      const queue: HashPrimitive[] = [source];
-
-      while (queue.length > 0) {
-        const current = queue.pop()!;
-        if (visited.has(current)) continue;
-        visited.add(current);
-
-        // Aggregation conflict: current is aggregated by source's BFS
-        if (current !== source) {
-          result.add(current);
-        }
-
-        // Collect direct conflicts of current
-        const dc = this.directConflicts.get(current);
-        if (dc) {
-          for (const d of dc) {
-            result.add(d);
-          }
-        }
-
-        // Recurse into blocks that current aggregates
-        const ss = this.aggregatesMap.get(current);
-        if (ss) {
-          for (const s of ss) {
-            queue.push(s);
-          }
-        }
-      }
-
-      // Reverse aggregation: blocks that aggregate this lineage member
-      const sb = this.aggregatedByMap.get(source);
-      if (sb) {
-        for (const s of sb) {
-          result.add(s);
-        }
-      }
-    }
-
-    // Phase 2: propagate forward along anchor children (descendants)
-    const propQueue: HashPrimitive[] = [...result];
-    while (propQueue.length > 0) {
-      const y = propQueue.pop()!;
-      const kids = this.children.get(y);
-      if (!kids) continue;
-      for (const child of kids) {
-        if (!result.has(child) && child !== blockKey) {
-          result.add(child);
-          propQueue.push(child);
-        }
-      }
-    }
-
-    // Remove lineage members and self -- ancestors are not conflicts
-    for (const l of lineage) {
-      result.delete(l);
-    }
-    return result;
   }
 
   /**
@@ -409,12 +374,17 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
-   * Compute the canonical view in a single pass.
+   * Compute the canonical view using a two-phase topological algorithm.
    *
-   * Since effective weight is canonical-independent (includes all
-   * descendants), weights are stable and we can determine winners
-   * without iteration: a block is canonical iff it beats every
-   * block in its conflict set.
+   * Phase 1: Determine direct conflict outcomes. For each block with
+   *   direct conflicts, compare effective weights (ties broken by lower hash)
+   *   to record winners and losers.
+   *
+   * Phase 2: Propagate canonicality via Kahn's algorithm over anchor and
+   *   aggregation edges. A block enters the canonical set only if:
+   *     Rule 1 -- its anchor is canonical (or it is genesis)
+   *     Rule 2 -- every aggregate it references is canonical
+   *     Rule 3 -- it won its direct conflict (or has none)
    */
   private ensureCanonical(): void {
     if (this.canonicalCache !== null) return;
@@ -422,40 +392,142 @@ export class ConsensusModule<BlockType> {
     const canonical = new Set<HashPrimitive>();
     const memo = new Map<HashPrimitive, number>();
 
+    // -- Phase 1: Determine direct conflict outcomes --
+
+    // A block is a loser if ANY direct conflict partner beats it.
+    // Evaluated pairwise: A ⚡ B and B ⚡ C does not mean A ⚡ C.
+    const conflictLosers = new Set<HashPrimitive>();
+
     for (const blockKey of this.blocks.keys()) {
-      const conflicts = this.computeFullConflicts(blockKey);
-      if (conflicts.size === 0) {
-        canonical.add(blockKey);
-        continue;
-      }
+      const dc = this.directConflicts.get(blockKey);
+      if (!dc || dc.size === 0) continue;
 
       const blockHash = this.blocks.get(blockKey)!;
       const blockWeight = this.computeEffectiveWeight(blockKey, memo);
-      let isWinner = true;
 
-      for (const conflictKey of conflicts) {
-        if (!this.blocks.has(conflictKey)) continue;
-        const conflictHash = this.blocks.get(conflictKey)!;
-        const conflictWeight = this.computeEffectiveWeight(
-          conflictKey,
-          memo,
-        );
+      for (const partnerKey of dc) {
+        if (!this.blocks.has(partnerKey)) continue;
+        const partnerHash = this.blocks.get(partnerKey)!;
+        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo);
 
         if (
-          conflictWeight > blockWeight ||
-          (conflictWeight === blockWeight &&
-            Hash.compare(conflictHash, blockHash) < 0)
+          partnerWeight > blockWeight ||
+          (partnerWeight === blockWeight &&
+            Hash.compare(partnerHash, blockHash) < 0)
         ) {
-          isWinner = false;
+          conflictLosers.add(blockKey);
           break;
         }
       }
+    }
 
-      if (isWinner) {
-        canonical.add(blockKey);
+    // -- Phase 2: Kahn's algorithm over anchor + aggregation edges --
+
+    // Compute in-degree for each block:
+    //   +1 if has a non-ZERO_HASH anchor that is in our blocks map
+    //   +1 for each aggregate that is in our blocks map
+    const inDegree = new Map<HashPrimitive, number>();
+    for (const blockKey of this.blocks.keys()) {
+      let deg = 0;
+      const hash = this.blocks.get(blockKey)!;
+      const block = this.provider.getBlock(hash);
+      if (block) {
+        const anchor = this.provider.getAnchor(block);
+        if (!Hash.equals(anchor, ZERO_HASH) && this.blocks.has(anchor.toPrimitive())) {
+          deg++;
+        }
+        const aggregates = this.provider.getAggregates(block);
+        for (const agg of aggregates) {
+          if (this.blocks.has(agg.toPrimitive())) {
+            deg++;
+          }
+        }
       }
+      inDegree.set(blockKey, deg);
+    }
+
+    // Initialize queue with all in-degree-0 blocks (genesis blocks)
+    const queue: HashPrimitive[] = [];
+    for (const [blockKey, deg] of inDegree) {
+      if (deg === 0) queue.push(blockKey);
+    }
+
+    while (queue.length > 0) {
+      const blockKey = queue.shift()!;
+      const hash = this.blocks.get(blockKey);
+      if (!hash) continue;
+
+      const block = this.provider.getBlock(hash);
+
+      // Rule 1: anchor must be canonical (unless genesis)
+      if (block) {
+        const anchor = this.provider.getAnchor(block);
+        if (!Hash.equals(anchor, ZERO_HASH) && this.blocks.has(anchor.toPrimitive())) {
+          if (!canonical.has(anchor.toPrimitive())) {
+            // Anchor is not canonical -- skip this block (don't add to canonical)
+            this.decrementSuccessors(blockKey, inDegree, queue);
+            continue;
+          }
+        }
+      }
+
+      // Rule 2: all aggregates must be canonical
+      if (block) {
+        const aggregates = this.provider.getAggregates(block);
+        let allAggregatesCanonical = true;
+        for (const agg of aggregates) {
+          if (this.blocks.has(agg.toPrimitive()) && !canonical.has(agg.toPrimitive())) {
+            allAggregatesCanonical = false;
+            break;
+          }
+        }
+        if (!allAggregatesCanonical) {
+          this.decrementSuccessors(blockKey, inDegree, queue);
+          continue;
+        }
+      }
+
+      // Rule 3: must not have lost its direct conflict
+      if (conflictLosers.has(blockKey)) {
+        this.decrementSuccessors(blockKey, inDegree, queue);
+        continue;
+      }
+
+      // All rules pass -- block is canonical
+      canonical.add(blockKey);
+      this.decrementSuccessors(blockKey, inDegree, queue);
     }
 
     this.canonicalCache = canonical;
+  }
+
+  /**
+   * Decrement in-degree of all successors (children and aggregatedBy) of
+   * a block, enqueueing any that reach zero.
+   */
+  private decrementSuccessors(
+    blockKey: HashPrimitive,
+    inDegree: Map<HashPrimitive, number>,
+    queue: HashPrimitive[],
+  ): void {
+    // Children: blocks that anchor to this one
+    const kids = this.children.get(blockKey);
+    if (kids) {
+      for (const childKey of kids) {
+        const deg = (inDegree.get(childKey) ?? 0) - 1;
+        inDegree.set(childKey, deg);
+        if (deg === 0) queue.push(childKey);
+      }
+    }
+
+    // AggregatedBy: blocks that list this one in their aggregates
+    const aggBy = this.aggregatedByMap.get(blockKey);
+    if (aggBy) {
+      for (const abKey of aggBy) {
+        const deg = (inDegree.get(abKey) ?? 0) - 1;
+        inDegree.set(abKey, deg);
+        if (deg === 0) queue.push(abKey);
+      }
+    }
   }
 }

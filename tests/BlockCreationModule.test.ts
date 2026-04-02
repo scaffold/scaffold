@@ -1,6 +1,5 @@
-import { assert, assertEquals, assertThrows } from '@std/assert';
+import { assertEquals, assertThrows } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { BitVector } from '../src/core/BitVector.ts';
 import {
   BlockCreationModule,
   BlockCreationProvider,
@@ -9,8 +8,6 @@ import {
   Output,
   SubtreeInfo,
 } from '../src/core/BlockCreationModule.ts';
-import { AGGREGATION_CONTRACT, decodeAggregationData } from '../src/core/Block.ts';
-
 // -- Test helpers ------------------------------------------------
 
 interface TestBlock {
@@ -25,7 +22,9 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
   /** Pre-configured anchor depths: key = `${from}:${ancestor}` */
   private anchorDepths = new Map<string, number>();
   /** Pre-configured rebased claim masks: key = `${blockHash}:${targetAnchor}` */
-  private rebasedMasks = new Map<string, BitVector | null>();
+  private rebasedMasks = new Map<string, readonly number[] | null>();
+  /** Pre-configured exclusive rebased claim masks */
+  private exclusiveMasks = new Map<string, readonly number[] | null>();
 
   add(block: TestBlock): void {
     this.blocks.set(block.hash.toPrimitive(), block);
@@ -35,8 +34,16 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     this.anchorDepths.set(`${from.toPrimitive()}:${ancestor.toPrimitive()}`, depth);
   }
 
-  setRebasedClaimMask(blockHash: Hash, targetAnchor: Hash, mask: BitVector | null): void {
+  setRebasedClaimMask(blockHash: Hash, targetAnchor: Hash, mask: readonly number[] | null): void {
     this.rebasedMasks.set(`${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`, mask);
+  }
+
+  setRebasedClaimMaskExclusive(
+    blockHash: Hash,
+    targetAnchor: Hash,
+    mask: readonly number[] | null,
+  ): void {
+    this.exclusiveMasks.set(`${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`, mask);
   }
 
   getBlock(hash: Hash): TestBlock | undefined {
@@ -63,14 +70,18 @@ class TestProvider implements BlockCreationProvider<TestBlock> {
     return this.anchorDepths.get(`${from.toPrimitive()}:${ancestor.toPrimitive()}`);
   }
 
-  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): BitVector | null {
+  getRebasedClaimMask(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
     const key = `${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`;
     const result = this.rebasedMasks.get(key);
     return result === undefined ? null : result;
   }
 
-  getAggregationContract(): Hash {
-    return AGGREGATION_CONTRACT;
+  getRebasedClaimMaskExclusive(blockHash: Hash, targetAnchor: Hash): readonly number[] | null {
+    const key = `${blockHash.toPrimitive()}:${targetAnchor.toPrimitive()}`;
+    // Fall back to the full rebase mask if no exclusive mask was configured
+    const exclusive = this.exclusiveMasks.get(key);
+    if (exclusive !== undefined) return exclusive;
+    return this.rebasedMasks.get(key) ?? null;
   }
 }
 
@@ -91,13 +102,6 @@ function setupModule(): { provider: TestProvider; module: BlockCreationModule<Te
   const provider = new TestProvider();
   const module = new BlockCreationModule(provider);
   return { provider, module };
-}
-
-/** Extract aggregation data from a blueprint's outputs. */
-function getAggData(outputs: Output[]) {
-  const aggOutput = outputs.find((o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT));
-  if (!aggOutput) return null;
-  return decodeAggregationData(aggOutput.detail);
 }
 
 // -- deriveWeightVector tests ------------------------------------
@@ -245,75 +249,9 @@ Deno.test('validateThroughput: self-claim value mismatch', () => {
   );
 });
 
-// -- computeOutputCount tests ------------------------------------
-
-Deno.test('computeOutputCount: leaf block', () => {
-  const { module } = setupModule();
-  // anchorOutputCount=10, no subtrees, 3 outputs, 1 claim
-  const result = module.computeOutputCount(10, 0, 0, 3, 1);
-  // 10 - 0 + 0 + 3 - 1 = 12
-  assertEquals(result, 12);
-});
-
-Deno.test('computeOutputCount: aggregation block', () => {
-  const { module } = setupModule();
-  // anchorOutputCount=10, subtrees claim 3 anchor outputs and produce 5 new outputs
-  // block itself produces 1 output and makes 2 claims
-  const result = module.computeOutputCount(10, 3, 5, 1, 2);
-  // 10 - 3 + 5 + 1 - 2 = 11
-  assertEquals(result, 11);
-});
-
-Deno.test('computeOutputCount: no outputs no claims', () => {
-  const { module } = setupModule();
-  const result = module.computeOutputCount(10, 0, 0, 0, 0);
-  assertEquals(result, 10);
-});
-
-// -- computeClaimMask tests --------------------------------------
-
-Deno.test('computeClaimMask: no subtrees, single anchor claim', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 5;
-  const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [1], 1, 0);
-  assert(mask.get(0)); // anchor index 0 claimed
-  assert(!mask.get(1));
-  assert(!mask.get(2));
-});
-
-Deno.test('computeClaimMask: with subtree claims, own anchor claim skips claimed', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 5;
-  const mergedSubtreeMask = BitVector.fromIndices(anchorOutputCount, [1, 3]);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [5], 2, 3);
-  assert(mask.get(0));
-  assert(mask.get(1));
-  assert(mask.get(3));
-  assert(!mask.get(2));
-  assert(!mask.get(4));
-});
-
-Deno.test('computeClaimMask: claim on subtree output does not affect anchor mask', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 5;
-  const mergedSubtreeMask = BitVector.empty(anchorOutputCount);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [2], 1, 3);
-  assertEquals(mask.popcount(), 0);
-});
-
-Deno.test('computeClaimMask: multiple anchor claims map correctly', () => {
-  const { module } = setupModule();
-  const anchorOutputCount = 6;
-  const mergedSubtreeMask = BitVector.fromIndices(anchorOutputCount, [2]);
-  const mask = module.computeClaimMask(anchorOutputCount, mergedSubtreeMask, [3, 5], 1, 2);
-  assert(mask.get(0));
-  assert(mask.get(2));
-  assert(mask.get(3));
-  assert(!mask.get(1));
-  assert(!mask.get(4));
-  assert(!mask.get(5));
-});
+// computeClaimMask and computeNewOutputCount have been removed from
+// BlockCreationModule. Claim mask computation is now handled by
+// OutputSpaceModule.subtreeClaimMask().
 
 // -- buildBlock tests --------------------------------------------
 
@@ -387,8 +325,8 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
   provider.setAnchorDepth(genesis, genesis, 0);
 
   // Subtree1 claims anchor outputs [2, 5], subtree2 claims [7]
-  provider.setRebasedClaimMask(subtree1, genesis, BitVector.fromIndices(10, [2, 5]));
-  provider.setRebasedClaimMask(subtree2, genesis, BitVector.fromIndices(10, [7]));
+  provider.setRebasedClaimMask(subtree1, genesis, [2, 5]);
+  provider.setRebasedClaimMask(subtree2, genesis, [7]);
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -404,22 +342,8 @@ Deno.test('buildBlock: aggregation block with subtrees', () => {
 
   const blueprint = module.buildBlock(spec);
   assertEquals(blueprint.aggregates.length, 2);
-  // Outputs: 1 user output + 1 aggregation contract output
-  assertEquals(blueprint.outputs.length, 2);
-
-  // Check aggregation data in contract output
-  const aggData = getAggData(blueprint.outputs);
-  assert(aggData !== null);
-  if (aggData) {
-    assertEquals(aggData.aggregateOutputCounts, [4, 3]);
-    // chainWeights: full weight [37] minus declaredWeight [2] = [35]
-    assertEquals(aggData.chainWeights, [35]);
-    // Claim mask: subtree claims on anchor [2, 5, 7]
-    assert(aggData.claimMask.get(2));
-    assert(aggData.claimMask.get(5));
-    assert(aggData.claimMask.get(7));
-    assertEquals(aggData.claimMask.popcount(), 3);
-  }
+  // Outputs: only user outputs (aggregation cache is produced by the contract)
+  assertEquals(blueprint.outputs.length, 1);
 });
 
 Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
@@ -447,8 +371,8 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
   provider.setAnchorDepth(blockA, genesis, 1);
   provider.setAnchorDepth(blockA, blockA, 0);
 
-  provider.setRebasedClaimMask(subtree1, blockA, BitVector.fromIndices(8, [1]));
-  provider.setRebasedClaimMask(subtree2, blockA, BitVector.fromIndices(8, [3]));
+  provider.setRebasedClaimMask(subtree1, blockA, [1]);
+  provider.setRebasedClaimMask(subtree2, blockA, [3]);
 
   const spec: BlockSpec = {
     anchor: blockA,
@@ -463,13 +387,8 @@ Deno.test('buildBlock: aggregation with subtrees at different depths', () => {
   };
 
   const blueprint = module.buildBlock(spec);
-  const aggData = getAggData(blueprint.outputs);
-  assert(aggData !== null);
-  if (aggData) {
-    // chainWeights: full weight is [23, 10, 5], minus declaredWeight(3) at [0] = [20, 10, 5]
-    assertEquals(aggData.chainWeights, [20, 10, 5]);
-    assertEquals(aggData.aggregateOutputCounts, [3, 2]);
-  }
+  assertEquals(blueprint.aggregates.length, 2);
+  assertEquals(blueprint.outputs.length, 1);
 });
 
 Deno.test('buildBlock: fails on missing anchor', () => {
@@ -536,8 +455,8 @@ Deno.test('buildBlock: fails on inter-subtree conflict', () => {
   provider.setAnchorDepth(genesis, genesis, 0);
 
   // Both subtrees claim anchor output 2 — conflict!
-  provider.setRebasedClaimMask(subtree1, genesis, BitVector.fromIndices(5, [2]));
-  provider.setRebasedClaimMask(subtree2, genesis, BitVector.fromIndices(5, [2]));
+  provider.setRebasedClaimMask(subtree1, genesis, [2]);
+  provider.setRebasedClaimMask(subtree2, genesis, [2]);
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -619,7 +538,7 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
   provider.add({ hash: subtree, anchor: genesis, outputCount: 3, weightVector: [15] });
 
   provider.setAnchorDepth(genesis, genesis, 0);
-  provider.setRebasedClaimMask(subtree, genesis, BitVector.fromIndices(8, [1, 4]));
+  provider.setRebasedClaimMask(subtree, genesis, [1, 4]);
 
   const spec: BlockSpec = {
     anchor: genesis,
@@ -633,15 +552,8 @@ Deno.test('buildBlock: aggregation block with own anchor claim', () => {
   };
 
   const blueprint = module.buildBlock(spec);
-  const aggData = getAggData(blueprint.outputs);
-  assert(aggData !== null);
-  if (aggData) {
-    // claimMask should have subtree's [1, 4] plus our claim on anchor[2]
-    assert(aggData.claimMask.get(1));
-    assert(aggData.claimMask.get(2)); // our claim
-    assert(aggData.claimMask.get(4));
-    assertEquals(aggData.claimMask.popcount(), 3);
-  }
+  assertEquals(blueprint.aggregates.length, 1);
+  assertEquals(blueprint.outputs.length, 1);
 });
 
 Deno.test('buildBlock: fails when subtree rebase returns null', () => {
