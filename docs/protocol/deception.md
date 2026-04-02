@@ -14,47 +14,47 @@ A perfectly honest network has zero verification incentive, making it maximally 
 
 ---
 
-## Two-Tier Collateral Model
+## Collateral and Insurance Model
 
-When a publisher creates a block, they post FOR collateral covering two components. See [collateral-resolution](collateral-resolution.md) for the contract specification.
+When an author creates a block, they post two outputs. See [collateral-resolution](collateral-resolution.md) for the contract specification.
 
-### Type 1: Verifier Reward (Publisher's Responsibility)
+### Collateral (Author's Responsibility)
 
-The publisher's stake for short-term validity. It decays exponentially back to the publisher:
+The author's FOR collateral for short-term validity. It decays exponentially back to the author:
 
 ```
-reward(t) = C1 * exp(-c * (now - block_timestamp))
+collateral(t) = C1 * exp(-c * (now - block_timestamp))
 ```
 
-The publisher remains responsible for responding to AGAINST challenges (hash preimage requests) for the block's lifetime. This collateral is never transferred to an aggregator.
+The author remains responsible for responding to AGAINST challenges (hash preimage requests) for the block's lifetime. Collateral is never transferred to an aggregator.
 
-If the block is valid: collateral decays back to publisher. Responding to challenges earns the AGAINST bond as profit.
+If the block is valid: collateral decays back to author. Responding to challenges earns the AGAINST bond as profit.
 
-If the block is invalid: collateral decays to the challenger instead. The decaying reward makes data hiding unprofitable -- the longer the attacker waits, the less they earn.
+If the block is invalid: collateral decays to the challenger instead. The decaying collateral makes data hiding unprofitable -- the longer the attacker waits, the less they earn.
 
-### Type 2: Rectification Insurance (Aggregator's Responsibility)
+### Insurance (Risk Transfer to Aggregator)
 
-Long-term insurance funded by the aggregation fee. Aggregators take on rectification responsibility when they include a block in their tree. Even if the original publisher is gone, someone is always responsible.
+The author posts insurance as a deposit. Upon aggregation, most is returned to the author minus a fee approximating the verification cost. The aggregator posts their own insurance covering the entire subtree. Even if the original author is gone, the aggregator is always responsible.
 
-If an invalid block is discovered, rectification pays:
+If an invalid block is discovered, the aggregator's insurance pays:
 - A finder's reward to whoever proved the invalidity.
 - Victim restoration -- new outputs that mirror the incorrectly claimed outputs.
 
 ### Self-Flagging
 
-The critical dynamic: a deceptive publisher can publish an invalid block, wait for an aggregator to include it, then prove their own block invalid.
+The critical dynamic: a deceptive author can publish an invalid block, wait for an aggregator to include it, then prove their own block invalid.
 
-- The publisher knows the block is invalid (private information).
+- The author knows the block is invalid (private information).
 - The aggregator doesn't know (information asymmetry).
-- The publisher posts AGAINST on their own block. Their Type 1 collateral is a wash (they're both poster and challenger). Their profit comes from the Type 2 finder's reward.
+- The author posts AGAINST on their own block. Their collateral is a wash (they're both poster and challenger). Their profit comes from the insurance finder's reward.
 
-The aggregator's defense: probe blocks before aggregating. If they find an invalid block, they reject it (no Type 2 coverage, no finder's reward opportunity).
+The aggregator's defense: probe blocks before aggregating. If they find an invalid block, they reject it (no insurance coverage, no finder's reward opportunity).
 
 This is an adverse selection market (Akerlof's lemons problem). The aggregator knows some blocks may be lemons. Their verification rate is a rational response to this asymmetry.
 
 ### Challenge as Query
 
-AGAINST challenges double as data queries. To descend into a subtree, post AGAINST on a hash. The block creator responds with the preimage (earning the AGAINST bond), and the querier gets the data. This unifies verification and graph traversal into a single paid operation.
+AGAINST challenges double as data queries. To descend into a subtree, post AGAINST collateral on a hash. The block creator responds with the preimage (earning the AGAINST bond), and the querier gets the data. This unifies verification and graph traversal into a single paid operation.
 
 ---
 
@@ -64,28 +64,28 @@ AGAINST challenges double as data queries. To descend into a subtree, post AGAIN
 
 | Symbol | Meaning | Example |
 |--------|---------|---------|
-| C1 | Publisher's verifier reward collateral (Type 1) | 1000 |
+| C1 | Author's collateral (decaying) | 1000 |
 | T | Block throughput (coins in = coins out) | 1000 |
 | r | Net reward for publishing a valid block (after effort) | 1 |
 | v | Cost to verify one block | 1 |
-| c | Verifier reward decay constant (per second) | 0.3 |
-| f | Aggregation fee (Type 2 funding) | ~v * T / T_avg |
-| R | Rectification pot (Type 2, proportional to T) | T |
-| alpha | Finder's share of rectification pot | 0.5 |
+| c | Collateral decay constant (per second) | 0.3 |
+| f | Aggregation fee (insurance risk transfer) | ~v * T / T_avg |
+| R | Aggregator's insurance (proportional to T) | T |
+| alpha | Finder's share of insurance payout | 0.5 |
 | p | Equilibrium fraud rate | derived |
 | q | Equilibrium verification rate | derived |
 
 ### Players and Strategies
 
 **Publisher** chooses between:
-- **Honest**: publish valid block, pay fee f, earn reward r. Type 1 collateral decays back. Net: `r - f`.
+- **Honest**: publish valid block, pay fee f, earn reward r. Collateral decays back. Net: `r - f`.
 - **Deceptive**: publish invalid block, post collateral C1, wait for aggregation, self-flag.
   - If aggregator verifies and catches (prob q): block rejected, lose C1. Net: `-C1`.
-  - If aggregator doesn't verify (prob 1 - q): self-flag, Type 1 is a wash, earn finder's reward `alpha * R`. Net: `alpha * R`.
+  - If aggregator doesn't verify (prob 1 - q): self-flag, collateral is a wash, earn finder's reward `alpha * R`. Net: `alpha * R`.
 
 **Aggregator** chooses per block:
 - **Verify** (cost v): reject if invalid, accept if valid. Expected: `(1 - p) * f - v`.
-- **Accept without verifying**: earn fee, risk rectification payout. Expected: `f - p * R`.
+- **Accept without verifying**: earn fee, risk insurance payout. Expected: `f - p * R`.
 
 ### Nash Equilibrium (Mixed Strategy)
 
@@ -121,7 +121,7 @@ The fee is proportional to throughput (see "Throughput-Proportional Fees" below)
 
 ### Equilibrium Values
 
-With R = T = 1000 (rectification pot = throughput), C1 = 1000, r = 1, v = 1, alpha = 0.5:
+With R = T = 1000 (aggregator's insurance = throughput), C1 = 1000, r = 1, v = 1, alpha = 0.5:
 
 ```
 p = v / R = 1 / 1000 = 0.1%
@@ -140,7 +140,7 @@ The equilibrium is self-correcting:
 
 At equilibrium, deception is not more profitable than honest publishing -- it is equally profitable with higher variance. Risk-averse publishers prefer honest work, so the actual fraud rate may be below the equilibrium prediction.
 
-The decaying verifier reward (Type 1) adds a time dimension: the publisher must self-flag quickly to earn the maximum finder's reward. Delayed revelation earns less:
+The decaying collateral adds a time dimension: the author must self-flag quickly to earn the maximum finder's reward. Delayed revelation earns less:
 
 ```
 finder_reward(t) = alpha * R * exp(-c * t)
@@ -168,9 +168,9 @@ The equilibrium fraud rate is exactly low enough to make bounty hunting a losing
 
 Detection relies on **self-flagging by the deceptive publisher** and **the aggregator's probing**. The publisher knows their block is invalid (private information) and races to prove it immediately after aggregation.
 
-### The Decaying Verifier Reward Prevents Data Hiding
+### The Decaying Collateral Prevents Data Hiding
 
-The Type 1 verifier reward decays from the block's creation time. This eliminates the data hiding attack:
+The author's collateral decays from the block's creation time. This eliminates the data hiding attack:
 
 - An honest self-flagger acts within seconds: nearly full reward.
 - A data-hiding attacker waits for aggregation + re-aggregation: reward has decayed to near zero.
@@ -188,15 +188,15 @@ Immediate action is strictly dominant. There is no profitable "wait and reveal" 
 
 ### AGAINST Challenges as Ongoing Verification
 
-The AGAINST challenge mechanism provides continuous verification pressure. Any peer can challenge any hash in any block at any time by posting a small bond. If the block creator (or anyone with the data) cannot produce the preimage, the block is invalid and the challenger claims the decaying Type 1 collateral.
+The AGAINST challenge mechanism provides continuous verification pressure. Any peer can challenge any hash in any block at any time by posting AGAINST collateral. If the block creator (or anyone with the data) cannot produce the preimage, the block is invalid and the challenger claims the decaying collateral.
 
 This means blocks are only as trusted as they are responsive. A block whose publisher goes offline is vulnerable to challenges -- but because responding is profitable (the AGAINST bond), any peer with the data is incentivized to defend it.
 
 ---
 
-## Partial Collateral Coverage (Type 2)
+## Partial Insurance Coverage
 
-An aggregator covering N blocks does not need to post N * R_per_block total rectification collateral. Instead, they post a fraction -- e.g., 10% of the worst case. With N = 1000 blocks, the aggregator reserves 10% of total rectification liability.
+An aggregator covering N blocks does not need to post N * R_per_block total insurance. Instead, they post a fraction -- e.g., 10% of the worst case. With N = 1000 blocks, the aggregator reserves 10% of total insurance liability.
 
 This reserve covers the first discovered invalidities. In the rare case that more than 10% of covered blocks are invalid, the remaining ones go uncovered.
 
@@ -220,38 +220,38 @@ The reserve ratio is a risk management choice, not a game-theoretic parameter. I
 
 ## Collateral Decay
 
-### Type 1 Decay (Verifier Reward)
+### Collateral Decay
 
-The publisher's verifier reward collateral decays from block creation:
+The author's collateral decays from block creation:
 
 ```
 C1(t) = C1_0 * exp(-c * t)
 ```
 
-With c = 0.3 (half-life ~2.3s), most of the verifier reward returns to the publisher within seconds if unchallenged. This is the primary mechanism that makes data hiding unprofitable -- the reward is gone before an attacker can exploit it.
+With c = 0.3 (half-life ~2.3s), most of the collateral returns to the author within seconds if unchallenged. This is the primary mechanism that makes data hiding unprofitable -- the collateral is gone before an attacker can exploit it.
 
-### Type 2 Decay (Rectification Insurance)
+### Insurance Decay
 
-The aggregator's rectification responsibility decays more slowly. As a block ages without being contested, the posterior probability of invalidity decreases:
+The aggregator's insurance responsibility decays more slowly. As a block ages without being contested, the posterior probability of invalidity decreases:
 
 ```
 P(invalid | unchallenged for t) ≈ p * exp(-lambda * t)
 ```
 
-The aggregator's required rectification reserve per block drops accordingly. Over hours to days, old blocks can be considered solidified -- the cumulative verification history makes invalidity overwhelmingly unlikely.
+The aggregator's required insurance reserve per block drops accordingly. Over hours to days, old blocks can be considered solidified -- the cumulative verification history makes invalidity overwhelmingly unlikely.
 
 ### Re-Aggregation Cascade
 
-Type 2 collateral can be released through successive re-aggregation as residual risk drops:
+Insurance can be released through successive re-aggregation as residual risk drops:
 
 ```
 t=0:    Publisher posts C1, aggregator A covers 1000 blocks
-t=5s:   Type 1 nearly fully decayed. Publisher's risk period is over.
+t=5s:   Collateral nearly fully decayed. Author's risk period is over.
 t=60s:  Aggregator B re-aggregates at lower reserve. A's capital released.
-t=hours: Subtree is effectively solidified. Minimal rectification reserve.
+t=hours: Subtree is effectively solidified. Minimal insurance reserve.
 ```
 
-The aggregation fee (Type 2) is paid once per block. Re-aggregation at lower reserve levels is nearly free because the residual risk is below v.
+The aggregation fee is paid once per block. Re-aggregation at lower reserve levels is nearly free because the residual risk is below v.
 
 ---
 
@@ -322,7 +322,7 @@ A healthier equilibrium involves a low baseline fraud rate:
 
 ### Why Publish Invalid Blocks?
 
-If you publish an invalid block and an aggregator includes it without verifying, you can prove it invalid and claim the finder's reward from the rectification pot (Type 2). The aggregator staked on the validity of your block (by aggregating it), and you know it's invalid.
+If you publish an invalid block and an aggregator includes it without verifying, you can prove it invalid and claim the finder's reward from the aggregator's insurance. The aggregator staked on the validity of your block (by aggregating it), and you know it's invalid.
 
 - **If you succeed** (aggregator doesn't catch it): you claim `alpha * R` (finder's reward).
 - **If you fail** (aggregator probes and catches it): you lose C1.
@@ -333,9 +333,9 @@ This creates a natural adversarial dynamic that funds the verification layer.
 
 The protocol controls the equilibrium through:
 
-- **C1 (verifier reward collateral)**: Publisher's skin in the game for short-term validity. Higher C1 means more deterrence but higher capital requirements.
-- **c (decay constant)**: Controls how fast the verifier reward decays. Higher c means faster decay, stronger deterrence against data hiding, but less reward for legitimate late detection.
-- **R (rectification pot)**: Proportional to throughput. Controls the aggregator's incentive to probe and the self-flagger's reward.
+- **C1 (collateral)**: Author's skin in the game for short-term validity. Higher C1 means more deterrence but higher capital requirements.
+- **c (decay constant)**: Controls how fast the collateral decays. Higher c means faster decay, stronger deterrence against data hiding, but less reward for legitimate late detection.
+- **R (insurance)**: Proportional to throughput. Controls the aggregator's incentive to probe and the self-flagger's reward.
 - **alpha (finder's share)**: Controls the split between finder reward and victim restoration. Higher alpha incentivizes faster detection. 50% is a reasonable starting point.
 - **Claiming limits** (see [trust](trust.md)): Bound the maximum payout per fraud event to prevent disproportionate claims.
 
@@ -345,7 +345,7 @@ The protocol controls the equilibrium through:
 
 1. **Decay constant c**: Needs calibration. c = 0.2-0.3/s gives a half-life of 2-3 seconds. Is this the right balance between rewarding honest detection and punishing data hiding?
 2. **Minimum AGAINST bond**: The market should determine what's worth responding to, but is there a risk of dust challenges harassing publishers? A minimum might be needed.
-3. **Finder's reward fraction (alpha)**: What fraction of the rectification pot goes to the finder vs. victim restoration? If too small, nobody looks. If too large, victims aren't fully restored.
+3. **Finder's reward fraction (alpha)**: What fraction of the insurance payout goes to the finder vs. victim restoration? If too small, nobody looks. If too large, victims not fully restored.
 4. **Computational validity disputes**: Hash challenges handle structural validity (self-resolving). How are disputes about computational correctness (WASM re-execution) handled? This likely still needs a separate mechanism.
 5. **Throughput distribution**: If the block throughput distribution is very skewed (a few huge blocks, many tiny ones), the aggregation tax rate `v / T_avg` may be impractical for tiny blocks. Should there be a minimum block throughput for direct aggregation, with smaller blocks required to batch first?
 6. **Reputation effects**: Nodes caught publishing invalid blocks may be deprioritized by peers in the gossip module. Does this create a secondary cost that suppresses the fraud rate below the healthy equilibrium?

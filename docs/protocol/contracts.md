@@ -46,55 +46,23 @@ The `chainWeights` vector excludes the block's own `declaredWeight`. The full we
 
 ---
 
-## Verifier Reward Contract
+## Collateral Contract
 
-**Purpose**: Publisher's short-term validity stake. Decays back to the publisher if unchallenged.
+**Purpose**: FOR/AGAINST validity stakes on a target block. FOR is the author's collateral (decays back if unchallenged). AGAINST is a challenger's bond contesting a specific aspect of the block.
 
-**Verifier params**: The target block hash.
+**Verifier params**: The target block hash. All FOR and AGAINST postings for the same target share the same verifier, so `collectInputs()` returns them all.
 
-**Detail**: The publisher's public key (where to remit funds on decay return).
-
-**Spending conditions** (see [collateral-resolution](collateral-resolution.md)):
-- **Decay return**: Publisher reclaims `C1 * exp(-c * age)` if no active challenges exist.
-- **Challenge claim**: An AGAINST challenge was posted and not responded to. Challenger claims the decayed remainder (locked at challenge timestamp).
-- **Non-canonical reclaim**: Target block becomes non-canonical. Full return, no penalty.
-
-The separation rule (collateral block C must not be the target H or a descendant of H) is a property of this contract's spending conditions.
-
----
-
-## Rectification Contract
-
-**Purpose**: Long-term insurance for invalid blocks. Funded by the aggregation fee.
-
-**Verifier params**: The target block hash (individual fee output) or aggregation tree root (accumulated pot).
-
-**Detail**: The owner's public key (publisher for fee output, aggregator for pot).
-
-**Spending conditions** (see [collateral-resolution](collateral-resolution.md)):
-- **Aggregation claim**: Aggregator claims the fee output during aggregation, rolls into their rectification pot.
-- **Rectification payout**: A block in the covered tree is proven invalid. Creates finder's reward + victim restoration outputs.
-- **Non-canonical reclaim**: Full return if the aggregation tree becomes non-canonical.
-- **Solidification return**: After sufficient time without challenges, aggregator reclaims.
-
----
-
-## Challenge Contract
-
-**Purpose**: AGAINST bond targeting a specific hash or validity claim in a block.
-
-**Verifier params**:
+**Detail (FOR)**:
 ```
-CollateralParams {
-    coveredBlockHash: Hash       // the block this collateral covers
-}
+{ side: 'for', pubkey: PublicKey }
 ```
 
-**Detail**:
+**Detail (AGAINST)**:
 ```
-ChallengeDetail {
-    target:     ChallengeTarget    // discriminated union (see below)
-    pubkey:     PublicKey           // challenger's pubkey for remittance
+{
+    side:       'against',
+    target:     ChallengeTarget,
+    pubkey:     PublicKey
 }
 
 ChallengeTarget =
@@ -102,13 +70,35 @@ ChallengeTarget =
     | { type: 'anchor' }
     | { type: 'ref', index: Number }
     | { type: 'aggregate', index: Number }
-    | { type: 'output', index: Number }
+    | { type: 'output_verifier_contract', index: Number }
 ```
 
-**Spending conditions**:
-- **Hash response**: Anyone reveals the preimage matching the targeted hash. `hash(preimage) == target_hash`. Self-resolving. Responder earns the bond.
-- **Validity response**: Re-execution proves the block's computation is correct. Responder earns the bond.
-- **Unclaimed return**: If the challenge is old enough that the corresponding verifier reward has fully decayed, the challenger can reclaim their bond (the challenge is moot).
+**Spending conditions** (see [collateral-resolution](collateral-resolution.md)):
+- **Decay return**: Author reclaims `C1 * exp(-c * age)` if no AGAINST exists.
+- **Hash challenge response**: Responder reveals preimage, earns AGAINST bond. FOR unaffected.
+- **Unresolved challenge**: Challenger claims decayed FOR (locked at challenge timestamp) + AGAINST bond.
+- **Non-canonical reclaim**: Full return to both sides. No penalty.
+
+The separation rule (collateral block C must not be the target H or a descendant of H) is enforced by the contract. AGAINST challenges double as data queries -- posting AGAINST on a hash requests its preimage.
+
+---
+
+## Insurance Contract
+
+**Purpose**: Risk transfer deposit. Author posts insurance; aggregator claims it, returns most to the author minus a fee, and posts their own insurance covering the subtree.
+
+**Verifier params**: The target block hash (author's deposit) or aggregation tree root (aggregator's coverage).
+
+**Detail**:
+```
+{ pubkey: PublicKey }    // owner (author or aggregator)
+```
+
+**Spending conditions** (see [collateral-resolution](collateral-resolution.md)):
+- **Aggregation claim**: Aggregator claims author's insurance (1000), returns most (995) to author, keeps fee (5 = v * T / T_avg). Aggregator posts own insurance for the tree.
+- **Rectification payout**: A block in the insured tree is proven invalid (via collateral resolution). Pays finder's reward + victim restoration.
+- **Non-canonical reclaim**: Full return.
+- **Solidification return**: Aggregator reclaims after sufficient time without challenges.
 
 ---
 
@@ -159,8 +149,8 @@ Each protocol module interacts with contract output data through its provider in
 |--------|-------------------|-----|
 | [Conflict](conflict.md) | Aggregation (claimMask, outputCount, aggregateOutputCounts) | Detect double-spends via claim mask overlap |
 | [Consensus](consensus.md) | Aggregation (chainWeights) | Reconstruct weight vector for branch selection |
-| [Trust](trust.md) | Aggregation (aggregateWeights), Verifier Reward (target, decay), Rectification (target, pot), Challenge (target, type) | Evaluate child weights, manage collateral lifecycle |
-| [Gossip](gossip.md) | Aggregation (chainWeights), Signature (publicKey), Verifier Reward (target) | Priority scoring for block distribution |
+| [Trust](trust.md) | Aggregation (aggregateWeights), Collateral (target, side, decay), Insurance (target, coverage) | Evaluate child weights, manage collateral lifecycle |
+| [Gossip](gossip.md) | Aggregation (chainWeights), Signature (publicKey), Collateral (target) | Priority scoring for block distribution |
 | [Sampling](sampling.md) | (none — uses block.declaredWeight directly) | Verification priority |
 
 ---

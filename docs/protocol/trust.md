@@ -33,66 +33,68 @@ Collateral addresses validity, not conflict. A publisher who loses a consensus r
 
 ---
 
-## Collateral Output Structure
+## Collateral and Insurance
 
-The publisher posts two separate collateral outputs per block, implemented as two separate contracts. See [collateral-resolution](collateral-resolution.md) for the full contract specification and [contracts](contracts.md) for the standard contract definitions.
+The author posts two separate outputs per block, implemented as two separate contracts. See [collateral-resolution](collateral-resolution.md) for the full contract specification and [contracts](contracts.md) for the standard contract definitions.
 
 ### Two Contracts
 
-**Verifier Reward Contract (Type 1 -- publisher's responsibility):**
-- A single output per block, decays exponentially back to the publisher.
-- Never transferred to an aggregator. The original publisher remains responsible.
-- Can be challenged via AGAINST bonds (hash preimage requests or validity disputes).
-- If challenged and undefended, the decayed remainder goes to the challenger.
-- Because responding to challenges is profitable (you earn the AGAINST bond), anyone with the data can respond.
+**Collateral Contract (author's responsibility):**
+- FOR output per block. Decays exponentially back to the author if unchallenged.
+- Never transferred to an aggregator. The original author remains responsible.
+- AGAINST postings challenge a specific aspect of the block (hash preimage or validity).
+- FOR and AGAINST share the same verifier (target block hash), so `collectInputs()` returns all of them.
+- Because responding to AGAINST is profitable (you earn the bond), anyone with the data can respond.
 
-**Rectification Contract (Type 2 -- aggregator's responsibility):**
-- A single fee output per block, claimed by the aggregator during aggregation.
-- Aggregator accumulates fees into a rectification pot covering their aggregation tree.
-- If an invalid block is discovered, the pot pays a finder's reward and restores victims.
+**Insurance Contract (risk transfer):**
+- Author posts insurance as a deposit (proportional to throughput).
+- Upon aggregation, most is returned to the author minus a fee approximating the verification cost.
+- The aggregator posts their own insurance covering the entire aggregated subtree.
+- If an invalid block is discovered, the aggregator's insurance pays finder's reward and restores victims.
 
-### Initial Collateral
+### Initial Outputs
 
-The publisher posts two outputs:
+The author posts two outputs:
 
 ```
-Verifier Reward output:  value = C1 (proportional to throughput T)
-Rectification Fee output: value = f = v * T / T_avg
+Collateral output (FOR): value = C1 (proportional to throughput T)
+Insurance output:         value = I  (proportional to throughput T)
 ```
 
 Both must exist independently of the target block -- neither can be a descendant of the block they vouch for. The collateral block C must not be the covered block H itself, and C must not be a descendant of H. If H is found invalid and removed from the canonical view, any block descending from H is also removed -- including its outputs. Collateral inside such a block would vanish when it is most needed. C references H by hash only -- H is not an input or ancestor of C.
 
 ### AGAINST Challenges
 
-An AGAINST challenge is a separate output (using the Challenge Contract) that targets a specific aspect of a block via a discriminated union:
+An AGAINST challenge is a collateral output (same contract, same params as FOR) that targets a specific aspect of a block via a discriminated union in the detail:
 
 ```
 ChallengeTarget =
-  | { type: 'validity' }                    // WASM re-execution dispute
-  | { type: 'anchor' }                      // anchor hash preimage
-  | { type: 'ref', index: number }          // ref hash preimage
-  | { type: 'aggregate', index: number }    // aggregate hash preimage
-  | { type: 'output', index: number }       // output content
+  | { type: 'validity' }                          // WASM re-execution dispute
+  | { type: 'anchor' }                            // anchor hash preimage
+  | { type: 'ref', index: number }                // ref hash preimage
+  | { type: 'aggregate', index: number }           // aggregate hash preimage
+  | { type: 'output_verifier_contract', index: number }  // output verifier contract hash
 ```
 
 - Hash challenges are self-resolving: the hash matches or it doesn't.
 - Validity challenges require WASM re-execution.
 - If the preimage is produced (or validity confirmed): AGAINST bond goes to the responder.
-- If no response: Type 1 verifier reward decays to the challenger, Type 2 rectification triggers.
+- If no response: collateral decays to the challenger, insurance rectification triggers.
 
-No explicit deadline -- the verifier reward decay IS the deadline. See [collateral-resolution](collateral-resolution.md).
+No explicit deadline -- the collateral decay IS the deadline. See [collateral-resolution](collateral-resolution.md).
 
 ### Spending Conditions
 
-**Verifier Reward (Type 1):**
-- **Decay return**: Publisher reclaims `C1 * exp(-c * age)` if unchallenged.
-- **Challenge claim**: Challenger claims decayed remainder (locked at challenge timestamp).
-- **Non-canonical reclaim**: Full return if target block loses consensus race.
+**Collateral:**
+- **Decay return**: Author reclaims `C1 * exp(-c * age)` if no AGAINST exists.
+- **Hash response**: Responder reveals preimage, earns AGAINST bond. FOR unaffected.
+- **Unresolved challenge**: Challenger claims decayed FOR (locked at challenge timestamp).
+- **Non-canonical reclaim**: Full return to both sides.
 
-**Rectification (Type 2):**
-- **Aggregation claim**: Aggregator claims fee output, rolls into pot.
+**Insurance:**
+- **Aggregation claim**: Aggregator claims author's insurance, returns most minus fee, posts own insurance for the tree.
 - **Rectification payout**: Invalid block proven -- finder's reward + victim restoration.
-- **Non-canonical reclaim**: Full return if aggregation tree becomes non-canonical.
+- **Non-canonical reclaim**: Full return.
 - **Solidification return**: Aggregator reclaims after sufficient time without challenges.
 
 ---
@@ -203,13 +205,11 @@ Before aggregating a subtree, an aggregator should sample and verify blocks with
 
 The aggregator races against other potential aggregators -- the first to produce a canonical aggregation captures the fees. This creates pressure to aggregate quickly, but probing too little increases fraud exposure. The equilibrium depends on the fraud rate: in a mostly-honest network, minimal probing is sufficient; as fraud increases, aggregators must probe more.
 
-### Collateral Cascading and Risk Transfer
+### Collateral and Insurance Transfer Mechanics
 
-The two collateral types have different transfer mechanics:
+**Collateral does not transfer.** The author remains responsible for their own block's short-term validity. Their collateral decays back to them over time. This keeps responsibility close to the information -- the author knows their block best.
 
-**Type 1 (verifier reward) does not transfer.** The publisher remains responsible for their own block's short-term validity. Their collateral decays back to them over time. This keeps responsibility close to the information -- the publisher knows their block best.
-
-**Type 2 (rectification insurance) transfers through aggregation.** When an aggregator includes a block, they take on rectification responsibility. Each layer of aggregation is a new risk assessment. Centralized insurance clients are expected to manage most aggregated risk, competing on fee and verification rate.
+**Insurance transfers through aggregation.** When an aggregator includes a block, they claim the author's insurance deposit, return most of it minus the risk transfer fee, and post their own insurance covering the tree. Each layer of aggregation is a new risk assessment. Centralized insurance clients are expected to manage most aggregated risk, competing on fee and verification rate.
 
 ### Partial Collateral Coverage
 
@@ -261,10 +261,10 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 
 | Input | Source | Description |
 |-------|--------|-------------|
-| Verifier Reward output | Block creation module | Publisher's Type 1 collateral (decay-based) |
-| Rectification Fee output | Block creation module | Publisher's Type 2 fee (claimed by aggregator) |
-| Challenge output (AGAINST) | Any peer | A bond targeting a specific hash or validity claim |
-| Challenge resolution | Collateral resolution contracts | Preimage revealed (valid) or unresponded (invalid) |
+| Collateral output (FOR) | Block creation module | Author's collateral (decay-based) |
+| Insurance output | Block creation module | Author's insurance deposit |
+| Collateral output (AGAINST) | Any peer | A bond challenging a specific hash or validity claim |
+| Challenge resolution | Collateral contract | Preimage revealed (valid) or unresponded (invalid) |
 | Block validity verdict | Verification module | Whether a specific block is valid or invalid |
 | Canonical view updates | Consensus module | Whether H is canonical or non-canonical |
 | Aggregation events | Block creation module | When H is aggregated by an aggregator |
@@ -285,9 +285,9 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 2. **No circular trust**: Collateral block C must not be the covered block H or a descendant of H.
 3. **Per-sub-block independence**: Disputes against sub-blocks within a package are resolved independently. One invalid sub-block cannot contaminate others' collateral.
 4. **Bounded claims**: Total claimable collateral per fraud event never exceeds encapsulated_weight * N.
-5. **Split responsibility**: Type 1 (verifier reward) stays with publisher. Type 2 (rectification) transfers to aggregator. Both are always covered.
-6. **Challenger skin in the game**: AGAINST votes require staking value at risk if the challenge fails.
-7. **Risk transfer via aggregation**: Once the covered block is aggregated, the aggregator's rectification pot replaces the publisher's Type 2 coverage.
+5. **Split responsibility**: Collateral stays with author. Insurance transfers to aggregator via fee. Both are always covered.
+6. **Challenger skin in the game**: AGAINST collateral requires staking value at risk if the challenge fails.
+7. **Risk transfer via aggregation**: Once aggregated, the aggregator's insurance replaces the author's insurance deposit.
 
 ---
 
