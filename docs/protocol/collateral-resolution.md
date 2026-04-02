@@ -233,7 +233,7 @@ Both contracts are `ContractFn` functions using `ContractEnv`. A `getTimestamp()
 
 | File | Description |
 |------|-------------|
-| Future: `src/core/CollateralContract.ts` | Collateral contract: FOR/AGAINST, decay, hash preimage, validity |
-| Future: `src/core/InsuranceContract.ts` | Insurance contract: aggregation claim, rectification, solidification |
-| [`src/core/ContractEnv.ts`](../../src/core/ContractEnv.ts) | Add `getTimestamp()` hook |
-| [`src/core/Block.ts`](../../src/core/Block.ts) | New contract hashes: `COLLATERAL_CONTRACT`, `INSURANCE_CONTRACT`. Encode/decode helpers. |
+| [`src/core/CollateralContract.ts`](../../src/core/CollateralContract.ts) | Collateral contract: FOR/AGAINST, decay, hash preimage, validity |
+| [`src/core/InsuranceContract.ts`](../../src/core/InsuranceContract.ts) | Insurance contract: aggregation claim, rectification, solidification |
+| [`src/core/ContractEnv.ts`](../../src/core/ContractEnv.ts) | `getTimestamp()` hook for decay computation |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `COLLATERAL_CONTRACT`, `INSURANCE_CONTRACT` hashes. ChallengeTarget, CollateralDetail, InsuranceDetail types. Encode/decode helpers. |

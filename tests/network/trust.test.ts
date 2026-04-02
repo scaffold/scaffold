@@ -8,7 +8,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
 import { CollateralSide, CollateralStatus } from '../../src/core/TrustModule.ts';
-import { DisputeVote } from '../../src/core/DisputeModule.ts';
 import { TestNetwork } from './TestNetwork.ts';
 import { makeAggregationBlock, makeBlock, makeGenesis, makeOutput } from './helpers.ts';
 
@@ -175,48 +174,5 @@ Deno.test('Trust: collateral reclaimed when target becomes non-canonical', () =>
   assertEquals(placement!.status, CollateralStatus.Reclaimed);
 });
 
-Deno.test('Trust: dispute resolution payout proportional to stake', () => {
-  const net = new TestNetwork();
-  net.addNode('A');
-
-  const genesis = makeGenesis(4);
-  net.broadcastGenesis(genesis);
-
-  const target = makeBlock('dispute-target', genesis, [makeOutput(100)], 20);
-  net.deliverDirect(target, 'A');
-
-  // Multiple FOR collaterals
-  const for1 = makeBlock('disp-for1', genesis, [makeOutput(10)], 1);
-  const for2 = makeBlock('disp-for2', genesis, [makeOutput(10)], 2);
-  net.deliverDirect(for1, 'A');
-  net.deliverDirect(for2, 'A');
-
-  net.getNode('A').trust.addCollateral(for1.hash, target.hash, CollateralSide.For, [], 60);
-  net.getNode('A').trust.addCollateral(for2.hash, target.hash, CollateralSide.For, [], 40);
-
-  // One AGAINST collateral
-  const against = makeBlock('disp-against', genesis, [makeOutput(10)], 3);
-  net.deliverDirect(against, 'A');
-  net.getNode('A').trust.addCollateral(
-    against.hash,
-    target.hash,
-    CollateralSide.Against,
-    [],
-    50,
-  );
-
-  // Resolve dispute
-  const result = net.getNode('A').dispute.resolve(target.hash);
-
-  // FOR side has 100, AGAINST has 50 -- FOR wins
-  assertEquals(result.winningSide, DisputeVote.Valid);
-  assertEquals(result.validStake, 100);
-  assertEquals(result.invalidStake, 50);
-
-  // Total pool is 150, distributed proportionally to FOR winners
-  // for1 gets 60% of 150 = 90, for2 gets 40% of 150 = 60
-  assertEquals(result.requiredOutputs.length, 2);
-  const values = result.requiredOutputs.map((o) => o.value).sort((a, b) => b - a);
-  assertEquals(values[0], 90); // 60/100 * 150
-  assertEquals(values[1], 60); // 40/100 * 150
-});
+// Dispute resolution is now handled by the CollateralContract (ContractFn).
+// The old DisputeModule has been replaced. See collateral-resolution.md.

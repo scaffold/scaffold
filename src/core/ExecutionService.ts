@@ -52,6 +52,10 @@ class ExecutionProviderAdapter implements ExecutionProvider<Block> {
   getSigner(block: Block): Uint8Array | undefined {
     return block.signer;
   }
+
+  getTimestamp(block: Block): number {
+    return block.timestamp;
+  }
 }
 
 /** ExecutionModule wired to BlockStore via ProtocolContext. */

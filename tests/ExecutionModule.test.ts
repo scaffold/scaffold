@@ -81,6 +81,10 @@ class TestProvider implements ExecutionProvider<TestBlock> {
   getSigner(block: TestBlock): Uint8Array | undefined {
     return block.signer;
   }
+
+  getTimestamp(_block: TestBlock): number {
+    return 0;
+  }
 }
 
 function setup(): { provider: TestProvider; module: ExecutionModule<TestBlock> } {

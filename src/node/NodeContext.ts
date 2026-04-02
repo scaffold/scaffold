@@ -1,5 +1,7 @@
 import {
   AGGREGATION_CONTRACT,
+  COLLATERAL_CONTRACT,
+  INSURANCE_CONTRACT,
   Block,
   BlockStore,
   encodeAggregationData,
@@ -15,6 +17,8 @@ import {
 import { DraftManager } from '../core/DraftManager.ts';
 import { ContractGenerator } from '../core/ContractGenerator.ts';
 import { aggregationContract } from '../core/AggregationContract.ts';
+import { collateralContract } from '../core/CollateralContract.ts';
+import { insuranceContract } from '../core/InsuranceContract.ts';
 import { type ContractFn } from '../core/ContractEnv.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
@@ -122,6 +126,8 @@ export class NodeContext {
     // 5c. Create ContractGenerator with built-in contracts
     const contracts = new Map<string, ContractFn>();
     contracts.set(AGGREGATION_CONTRACT.toHex(), aggregationContract);
+    contracts.set(COLLATERAL_CONTRACT.toHex(), collateralContract);
+    contracts.set(INSURANCE_CONTRACT.toHex(), insuranceContract);
 
     const contractGenerator = new ContractGenerator({
       lookupContract: (hash) => contracts.get(hash.toHex()),

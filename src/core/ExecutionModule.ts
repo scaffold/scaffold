@@ -42,6 +42,9 @@ export interface ExecutionProvider<BlockType> {
 
   /** Return the signer public key for a block, or undefined if unsigned. */
   getSigner(block: BlockType): Uint8Array | undefined;
+
+  /** Return the block's timestamp (milliseconds since epoch). */
+  getTimestamp(block: BlockType): number;
 }
 
 // -- ExecutionModule --------------------------------------------------
@@ -176,6 +179,7 @@ export class ExecutionModule<BlockType> {
       refs: this._provider.getRefs(block),
       provider: this._provider,
       signer: this._provider.getSigner(block),
+      timestamp: this._provider.getTimestamp(block),
     });
 
     try {

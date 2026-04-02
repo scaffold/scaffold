@@ -180,6 +180,10 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
+  getTimestamp(): number {
+    return Date.now();
+  }
+
   // -- Internal helpers --------------------------------------------
 
   private _consumeInput(ai: AvailableInput): Input {

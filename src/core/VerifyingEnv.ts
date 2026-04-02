@@ -43,6 +43,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   private readonly _refs: Hash[];
   private readonly _provider: VerifyingEnvProvider<BlockType>;
   private readonly _signer: Uint8Array | undefined;
+  private readonly _timestamp: number;
 
   /** Tracks which matching inputs have been consumed by requireInput(). */
   private _inputCursor = 0;
@@ -58,6 +59,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     refs: Hash[];
     provider: VerifyingEnvProvider<BlockType>;
     signer?: Uint8Array;
+    timestamp?: number;
   }) {
     this._contractHash = opts.contractHash;
     this._params = opts.params;
@@ -68,6 +70,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     this._refs = opts.refs;
     this._provider = opts.provider;
     this._signer = opts.signer;
+    this._timestamp = opts.timestamp ?? 0;
   }
 
   getContractHash(): Hash {
@@ -161,6 +164,10 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     if (!bytesEqual(this._signer, pubkey)) {
       throw new ContractRejection('block signer does not match required public key');
     }
+  }
+
+  getTimestamp(): number {
+    return this._timestamp;
   }
 
   // -- Private ----------------------------------------------------

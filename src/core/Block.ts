@@ -9,8 +9,11 @@ export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
 /** Well-known contract hash for aggregation contract outputs. */
 export const AGGREGATION_CONTRACT = Hash.digest('aggregation-contract');
 
-/** Well-known contract hash for collateral contract outputs. */
+/** Well-known contract hash for collateral contract outputs (FOR/AGAINST). */
 export const COLLATERAL_CONTRACT = Hash.digest('collateral-contract');
+
+/** Well-known contract hash for insurance contract outputs. */
+export const INSURANCE_CONTRACT = Hash.digest('insurance-contract');
 
 /** Well-known contract hash for signature (payment) contract outputs. */
 export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
@@ -131,6 +134,99 @@ export function getBlockWeightVector(block: Block): number[] {
     return result;
   }
   return [block.declaredWeight];
+}
+
+// -- Collateral types -----------------------------------------------
+
+/** What aspect of a block an AGAINST challenge contests. */
+export type ChallengeTarget =
+  | { type: 'validity' }
+  | { type: 'anchor' }
+  | { type: 'ref'; index: number }
+  | { type: 'aggregate'; index: number }
+  | { type: 'output_verifier_contract'; index: number };
+
+/** Detail payload for a collateral contract output. */
+export type CollateralDetail =
+  | { side: 'for'; pubkey: Uint8Array }
+  | { side: 'against'; pubkey: Uint8Array; target: ChallengeTarget };
+
+/** Detail payload for an insurance contract output. */
+export interface InsuranceDetail {
+  pubkey: Uint8Array;
+}
+
+/** Encode CollateralDetail to Uint8Array. */
+export function encodeCollateralDetail(detail: CollateralDetail): Uint8Array {
+  const obj: Record<string, unknown> = {
+    side: detail.side,
+    pubkey: Array.from(detail.pubkey),
+  };
+  if (detail.side === 'against') {
+    obj.target = detail.target;
+  }
+  return new TextEncoder().encode(JSON.stringify(obj));
+}
+
+/** Decode CollateralDetail from Uint8Array. */
+export function decodeCollateralDetail(bytes: Uint8Array): CollateralDetail {
+  const json = JSON.parse(new TextDecoder().decode(bytes));
+  const pubkey = new Uint8Array(json.pubkey);
+  if (json.side === 'for') {
+    return { side: 'for', pubkey };
+  }
+  return { side: 'against', pubkey, target: json.target as ChallengeTarget };
+}
+
+/** Encode InsuranceDetail to Uint8Array. */
+export function encodeInsuranceDetail(detail: InsuranceDetail): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify({ pubkey: Array.from(detail.pubkey) }));
+}
+
+/** Decode InsuranceDetail from Uint8Array. */
+export function decodeInsuranceDetail(bytes: Uint8Array): InsuranceDetail {
+  const json = JSON.parse(new TextDecoder().decode(bytes));
+  return { pubkey: new Uint8Array(json.pubkey) };
+}
+
+/** Create a FOR collateral output for a target block. */
+export function makeCollateralOutput(
+  targetBlockHash: Hash,
+  value: number,
+  pubkey: Uint8Array,
+): Output {
+  return {
+    verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
+    value,
+    detail: encodeCollateralDetail({ side: 'for', pubkey }),
+  };
+}
+
+/** Create an AGAINST collateral output challenging a target block. */
+export function makeAgainstOutput(
+  targetBlockHash: Hash,
+  value: number,
+  pubkey: Uint8Array,
+  target: ChallengeTarget,
+): Output {
+  return {
+    verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
+    value,
+    detail: encodeCollateralDetail({ side: 'against', pubkey, target }),
+  };
+}
+
+/** Create an insurance deposit output for a target block. */
+export function makeInsuranceOutput(
+  targetBlockHash: Hash,
+  value: number,
+  pubkey: Uint8Array,
+): Output {
+  return {
+    verifier: { contract: INSURANCE_CONTRACT, params: targetBlockHash.toBytes() },
+    value,
+    detail: encodeInsuranceDetail({ pubkey }),
+  };
 }
 
 // -- Block metadata -------------------------------------------------

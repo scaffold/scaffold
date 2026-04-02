@@ -3,6 +3,7 @@ import { bin2hex } from '../util/hex.ts';
 import {
   BlockStore,
   COLLATERAL_CONTRACT,
+  INSURANCE_CONTRACT,
   getBlockWeightVector,
   SIGNATURE_CONTRACT,
 } from './Block.ts';
@@ -48,14 +49,15 @@ class GossipProviderAdapter implements GossipProvider {
   getCollateralTarget(blockHash: Hash): Hash | undefined {
     const block = this.store.get(blockHash);
     if (!block) return undefined;
-    // Scan outputs for collateral contract
+    // Scan outputs for collateral or insurance contract.
+    // Target block hash is in verifier.params (not detail).
     for (const output of block.outputs) {
-      if (Hash.equals(output.verifier.contract, COLLATERAL_CONTRACT)) {
-        try {
-          const data = JSON.parse(new TextDecoder().decode(output.detail));
-          return Hash.fromHex(data.target);
-        } catch {
-          continue;
+      if (
+        Hash.equals(output.verifier.contract, COLLATERAL_CONTRACT) ||
+        Hash.equals(output.verifier.contract, INSURANCE_CONTRACT)
+      ) {
+        if (output.verifier.params.length === 32) {
+          return Hash.fromBytes(output.verifier.params);
         }
       }
     }

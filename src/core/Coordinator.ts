@@ -9,13 +9,11 @@ import { BlockCreationService } from './BlockCreationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
 import { ExecutionService } from './ExecutionService.ts';
 import { VerificationService } from './VerificationService.ts';
-import { DisputeService } from './DisputeService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ExecutionResult } from './ExecutionModule.ts';
 import { VerificationResult } from './VerificationModule.ts';
-import { ResolutionResult } from './DisputeModule.ts';
 
 /** Result of processing a block received event. */
 export interface BlockReceivedResult {
@@ -125,13 +123,4 @@ export class Coordinator {
     return verification.verifyNext();
   }
 
-  /**
-   * Resolve a dispute for a target block.
-   * Requires DisputeService to be registered.
-   */
-  resolveDispute(targetHash: Hash): ResolutionResult | null {
-    const dispute = this.ctx.maybeGet(DisputeService);
-    if (!dispute) return null;
-    return dispute.resolve(targetHash);
-  }
 }

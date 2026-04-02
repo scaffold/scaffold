@@ -109,6 +109,14 @@ export interface ContractEnv {
    * Throws ContractRejection if not.
    */
   requireSignature(pubkey: Uint8Array): void;
+
+  /**
+   * Return the current block's timestamp (milliseconds since epoch).
+   *
+   * Verification: returns the block's wire-format timestamp.
+   * Generation: returns the draft's timestamp or Date.now().
+   */
+  getTimestamp(): number;
 }
 
 /** A contract function receives a ContractEnv and performs verification/generation. */
