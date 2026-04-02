@@ -269,34 +269,22 @@ The collateral system has two complementary layers. For the collateral lifecycle
 
 Publishers occasionally publish intentionally wrong results. If nobody catches the fraud, the publisher self-catches and claims a jackpot from the aggregator's collateral. This funds the verification layer — verifiers are incentivized to check results because catching fraud is profitable. See [deception](deception.md) for the equilibrium analysis.
 
-### Layer 2: VALID/INVALID Voting
+### Layer 2: Two-Tier Collateral
 
-Non-descendant blocks post collateral on a target block, asserting either **VALID** or **INVALID**:
+The publisher posts FOR collateral covering two components:
 
-```
-Collateral output:
-  verifier: { contract: COLLATERAL_CONTRACT, params: encode(target_hash) }
-  value: <stake_amount>
-  detail: encode({ side: VALID | INVALID, pubkey: <remittance_key> })
-```
+- **Type 1 (Verifier Reward)**: The publisher's stake for short-term validity. Decays back to the publisher over time. Challenged via hash preimage requests (AGAINST bonds). Self-resolving for structural validity.
+- **Type 2 (Rectification Insurance)**: Funded by the aggregation fee. Aggregators cover long-term insurance. If fraud is discovered, pays a finder's reward and restores incorrectly claimed outputs.
 
-The **non-descendant requirement** is critical: if the target block becomes invalid, the collateral block must not be invalidated along with it. This is enforced by the [collateral contract's](contracts.md) spending conditions.
+The **non-descendant requirement** remains critical: collateral must exist independently of the block it vouches for. This is enforced by the [collateral contract's](contracts.md) spending conditions.
 
-For hard contracts, the publisher **must** post VALID collateral on their own block. Without publisher collateral, other peers have no reason to trust the result — there is no economic consequence for fraud.
+For hard contracts, the publisher **must** post FOR collateral on their own block. Without publisher collateral, other peers have no reason to trust the result — there is no economic consequence for fraud.
 
 ### Resolution
 
-After a resolution event (aggregation or time-based deadline), a **collateral resolution block** claims all collateral outputs referencing the target:
+For structural validity (hash challenges), resolution is self-resolving: the hash preimage either matches or it doesn't. No voting needed. See [collateral-resolution](collateral-resolution.md) for the contract specification.
 
-1. Sum the VALID stakes and INVALID stakes.
-2. The side with the greater total stake wins — this determines the block's effective validity.
-3. The resolution contract requires outputs directing the total collateral to the winners' remittance keys.
-
-The resolution algorithm's details (proportional vs. winner-take-all distribution, minimum stakes, timing) are open design questions. The core mechanism is: majority by stake wins, losers' collateral is redistributed to winners.
-
-### Incentive
-
-When a resolution is contested (some vote VALID, some INVALID), every additional voter can potentially profit. If you can determine the correct validity and the current minority is correct, voting with them can flip the outcome — winning you the majority's stakes. This creates a self-correcting economic pressure toward the correct answer.
+For computational validity (WASM re-execution disputes), a separate resolution mechanism may be needed — this is an open design question.
 
 ---
 

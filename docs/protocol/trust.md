@@ -35,30 +35,47 @@ Collateral addresses validity, not conflict. A publisher who loses a consensus r
 
 ## Collateral Structure
 
-A collateral block C is a block that vouches for the validity of a target block H and H's entire subtree (all blocks aggregated within H, recursively).
+Every block's initial FOR collateral covers two components with different lifecycles and responsibilities. See [collateral-resolution](collateral-resolution.md) for the full contract specification.
 
-### Structural Rules
+### Two-Tier Collateral
 
-- C references H by hash only — H is not an input or ancestor of C.
-- **C must not be H itself, and C must not be a descendant of H.** If H is found invalid and removed from the canonical view, any block that is H or descends from H is also removed — including its outputs. Collateral outputs inside such a block would vanish, making it impossible for verifiers to claim fraud rewards. Collateral must exist independently of the block it vouches for.
-- C can anchor anywhere else in the DAG.
+**Type 1 — Verifier Reward (publisher's responsibility):**
+- High initially, decays exponentially back to the publisher over time.
+- Never transferred to an aggregator — the original publisher remains responsible for responding to hash challenges.
+- Covers validity and structural correctness (refs, anchor, aggregates, outputs).
+- If challenged and undefended, the decayed remainder goes to the challenger.
+- Because responding to challenges is profitable (you earn the AGAINST bond), anyone with the data can respond, not just the publisher.
 
-### Collateral as Output
+**Type 2 — Rectification Insurance (aggregator's responsibility):**
+- Funded by the aggregation fee. Aggregators take on long-term insurance for the blocks they aggregate.
+- Even if the original publisher is long gone, the current aggregator is responsible for rectification.
+- If an invalid block is discovered, the rectification pot pays a finder's reward and restores incorrectly claimed outputs (making victims whole).
 
-Collateral is a regular output produced by C, with restricted spending conditions. There are two types of collateral placement:
+### FOR Collateral
 
-- **FOR**: Asserts that a block (or a specific path within a block's subtree) is valid. The initial FOR collateral has path `[]`, meaning it vouches for the entire block. Later FOR placements may target a specific path like `[3, 0, 1]` to contest a specific fraud allegation.
-- **AGAINST**: Asserts that a specific block within H's subtree is invalid. Must include a path like `[3, 0, 1]` identifying the allegedly invalid block by its child indices within the tree. Each AGAINST vote targets one specific block, not a subtree — multiple AGAINST votes can independently target different blocks.
+The publisher's initial FOR collateral funds both types:
+
+```
+initial_FOR = C1 + f
+```
+
+Where C1 is the verifier reward (proportional to throughput) and f is the aggregation fee. The FOR collateral must exist independently of the block it vouches for — it must not be a descendant of the target block.
+
+### AGAINST Challenges
+
+An AGAINST is a small bond targeting a specific hash in a block. It serves dual purpose: verification and data query. The challenged party must reveal the hash preimage to reclaim the challenge bond.
+
+- If the preimage is produced: block is valid, AGAINST bond goes to the responder.
+- If no preimage is produced: block is invalid, Type 1 collateral decays to the challenger, Type 2 rectification triggers.
+
+This is self-resolving — no voting, no dispute module. The hash matches or it doesn't. See [collateral-resolution](collateral-resolution.md) for the full mechanism.
 
 ### Spending Conditions
 
-Collateral outputs have restricted spending conditions:
-
-- **Publisher redemption**: Can only be spent in a block that has an aggregator of H as an ancestor (the risk has been handed off to the aggregator).
-- **Non-canonical reclaim**: Can be spent if H becomes non-canonical (publisher bears no penalty for losing a consensus race).
-- **Fraud claim**: Can be claimed by the winning side of a FOR/AGAINST dispute (resolution mechanism defined in the dispute module).
-
-The specifics of the spending contract (e.g., whether descendants of the aggregator qualify) are properties of the collateral contract itself and may vary.
+- **Type 1 decay return**: Unchallenged verifier reward decays back to the publisher over hours/days.
+- **Type 1 challenge claim**: If an AGAINST challenge succeeds, the remaining verifier reward goes to the challenger.
+- **Non-canonical reclaim**: Can be spent if the block becomes non-canonical (publisher bears no penalty for losing a consensus race).
+- **Aggregation fee transfer**: The Type 2 portion transfers to the aggregator when the block is aggregated.
 
 ---
 
@@ -109,11 +126,11 @@ The aggregator races against other potential aggregators — the first to produc
 
 ### Collateral Cascading and Risk Transfer
 
-The aggregator places its own collateral on the aggregation block. This transfers risk up the chain — the original publisher's collateral can be redeemed once their block is aggregated, because the aggregator is now the one with skin in the game. Each layer of aggregation is a new risk assessment and a new collateral commitment.
+The two collateral types have different transfer mechanics:
 
-The aggregator's collateral per block is M * C, where M is the **payout multiplier** and C is the original publisher's collateral. M can be less than 1 — an aggregator can stake less than the original publisher. This reflects the Bayesian reality that older blocks are less likely to be fraudulent. Collateral decays through successive re-aggregation at decreasing M.
+**Type 1 (verifier reward) does not transfer.** The publisher remains responsible for their own block's short-term validity. Their collateral decays back to them over time. This keeps responsibility close to the information — the publisher knows their block best.
 
-Risk transfer should happen within seconds of publication to free the publisher's capital. Centralized insurance clients are expected to manage most aggregated risk, competing on fee and verification rate.
+**Type 2 (rectification insurance) transfers through aggregation.** When an aggregator includes a block, they take on rectification responsibility. Each layer of aggregation is a new risk assessment. Centralized insurance clients are expected to manage most aggregated risk, competing on fee and verification rate.
 
 ### Partial Collateral Coverage
 
@@ -151,7 +168,7 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 
 **Verification module**: Verification determines whether a block's declared work is real (spot-checking). Trust determines the economic consequences of that verdict. Verification provides the facts; collateral provides the stakes. Verified weight feeds into consensus; fraud detection feeds into collateral claims.
 
-**Dispute module** (not yet specified): The trust module defines that FOR and AGAINST collateral placements exist, and that the winning side claims the losing side's stake. The dispute module defines *how* disputes are resolved — the voting mechanism, evidence requirements, and how a winner is determined. This module treats dispute resolution as an interface: given a dispute outcome, collateral flows to the winner.
+**Collateral resolution contract** (see [collateral-resolution](collateral-resolution.md)): Hash challenges (structural validity) are self-resolving through the AGAINST/preimage mechanism -- no dispute module needed. Computational validity (WASM re-execution) may still require a separate dispute mechanism.
 
 **Application layer**: This module does not define what "valid" means for any particular block type. Validity semantics are application-specific. This module only defines the economic incentives around validity.
 
@@ -163,9 +180,9 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 
 | Input | Source | Description |
 |-------|--------|-------------|
-| Collateral placement (FOR) | Block creation module | A block vouching for target H's validity, with path and staked output |
-| Collateral placement (AGAINST) | Block creation module | A block alleging invalidity at a specific path within H's subtree |
-| Dispute outcome | Dispute module | Which side (FOR/AGAINST) won for a given path |
+| Collateral placement (FOR) | Block creation module | Publisher's initial collateral (Type 1 + Type 2 fee) |
+| Challenge (AGAINST) | Any peer | A small bond challenging a specific hash in a block |
+| Challenge resolution | Collateral resolution contract | Preimage revealed (valid) or unresponded (invalid) |
 | Block validity verdict | Verification module | Whether a specific block is valid or invalid |
 | Canonical view updates | Consensus module | Whether H is canonical or non-canonical |
 | Aggregation events | Block creation module | When H is aggregated by an aggregator |
@@ -175,8 +192,8 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 | Output | Consumer | Description |
 |--------|----------|-------------|
 | Collateral spending conditions | Conflict module | Restricted spending rules on collateral outputs |
-| Encapsulated weight | Dispute module | The weight value used to compute claiming limits |
-| Claiming limits | Dispute module | Maximum claimable collateral per fraud event (W * N) |
+| Encapsulated weight | Collateral resolution contract | The weight value used to compute claiming limits |
+| Claiming limits | Collateral resolution contract | Maximum claimable collateral per fraud event (W * N) |
 | Trust signal | All modules | Whether a block has active collateral vouching for it |
 | Aggregation risk estimates | Block creation module | Expected fraud exposure for potential aggregations |
 
@@ -186,7 +203,7 @@ For the game-theoretic analysis of risk transfer incentives, equilibrium fraud r
 2. **No circular trust**: Collateral block C must not be a descendant of the block it vouches for.
 3. **Monotonic fraud**: Once fraud is proven at a path, it cannot be retracted.
 4. **Bounded claims**: Total claimable collateral per fraud event never exceeds encapsulated_weight * N.
-5. **Risk transfer**: Once H is aggregated, the aggregator's collateral replaces the publisher's as the active trust signal.
+5. **Split responsibility**: Type 1 (verifier reward) stays with publisher. Type 2 (rectification) transfers to aggregator. Both are always covered.
 
 ---
 
