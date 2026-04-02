@@ -26,13 +26,10 @@ Incorrect responses should be eventually corrected, and publishing incorrect res
 4. Eventual immutability:
 Executions are eventually committed to a global block graph. Finalization should be delayed enough to allow verifiers to detect and challenge incorrect executions.
 
-## Constraints
-- Protocol design first, implementation second.
-- Security and correctness are first-order priorities.
-- Incentive/game-theory design must be explicit before code-level commitment.
-- Documentation is the source of truth for protocol behavior.
-- Most code in `src/` is reference material only; primarily look at `docs/protocol/` for the latest and greatest.
-- Use `camelCase` for TypeScript properties and interface fields. `snake_case` is allowed in pseudocode/math notation inside docs.
+## Philosophy
+- The elegant, simple solution is always the right one.
+- The protocol documentation is always the source of truth. The implementation is just an implementation.
+- Scaffold is decentralized, so every action must be incentivized.
 
 ## Source ↔ Documentation Map
 
