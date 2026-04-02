@@ -126,7 +126,7 @@ Deno.test('GeneratingEnv: requireResult creates a result output', () => {
   assertEquals(results.length, 1);
   assert(Hash.equals(results[0].verifier.contract, RESULT_CONTRACT));
   assertEquals(results[0].verifier.params, enc('state'));
-  assertEquals(results[0].detail, enc('value'));
+  assertEquals(results[0].data, enc('value'));
   assertEquals(results[0].value, 0);
 });
 
@@ -150,13 +150,13 @@ Deno.test('GeneratingEnv: requireOutput adds output to list', () => {
   assertEquals(outputs.length, 1);
   assert(Hash.equals(outputs[0].verifier.contract, verifier.contract));
   assertEquals(outputs[0].value, 42);
-  assertEquals(outputs[0].detail, enc('data'));
+  assertEquals(outputs[0].data, enc('data'));
 });
 
-Deno.test('GeneratingEnv: requireOutput defaults detail to empty', () => {
+Deno.test('GeneratingEnv: requireOutput defaults data to empty', () => {
   const { env } = makeGenEnv();
   env.requireOutput({ contract: h('x'), params: new Uint8Array(0) }, 10);
-  assertEquals(env.getGeneratedOutputs()[0].detail, new Uint8Array(0));
+  assertEquals(env.getGeneratedOutputs()[0].data, new Uint8Array(0));
 });
 
 // -- Tests: collectInputs ------------------------------------------
@@ -168,8 +168,8 @@ Deno.test('GeneratingEnv: collectInputs queries provider', () => {
   const verifier: Verifier = { contract: contractHash, params };
 
   const available: AvailableInput[] = [
-    { verifier, value: 10, detail: enc('move1'), block: h('b1'), outputIndex: 0 },
-    { verifier, value: 20, detail: enc('move2'), block: h('b2'), outputIndex: 1 },
+    { verifier, value: 10, data: enc('move1'), block: h('b1'), outputIndex: 0 },
+    { verifier, value: 20, data: enc('move2'), block: h('b2'), outputIndex: 1 },
   ];
   provider.setAvailableInputs(verifier, available);
 
@@ -204,14 +204,14 @@ Deno.test('GeneratingEnv: requireInput returns first available input', () => {
   const verifier: Verifier = { contract: contractHash, params };
 
   const available: AvailableInput[] = [
-    { verifier, value: 5, detail: enc('data'), block: h('b1'), outputIndex: 2 },
+    { verifier, value: 5, data: enc('data'), block: h('b1'), outputIndex: 2 },
   ];
   provider.setAvailableInputs(verifier, available);
 
   const { env } = makeGenEnv({ contractHash, params, provider });
   const input = env.requireInput() as Input;
   assertEquals(input.value, 5);
-  assertEquals(input.detail, enc('data'));
+  assertEquals(input.data, enc('data'));
 
   // Resolved claim tracks provenance
   const claims = env.getResolvedClaims();
@@ -339,7 +339,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
   const anchorForRef: TestBlock = {
     hash: h('ref-anchor'),
     anchor: ZERO_HASH,
-    outputs: [{ verifier: gameVerifier, value: 0, detail: new Uint8Array(0) }],
+    outputs: [{ verifier: gameVerifier, value: 0, data: new Uint8Array(0) }],
     claims: [],
     refs: [],
   };

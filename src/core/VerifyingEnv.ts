@@ -93,13 +93,13 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return inputs[this._inputCursor++];
   }
 
-  requireOutput(verifier: Verifier, value: number, detail?: Uint8Array): void {
-    const detailBytes = detail ?? new Uint8Array(0);
+  requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
+    const dataBytes = data ?? new Uint8Array(0);
     for (const output of this._outputs) {
       if (
         verifierEquals(output.verifier, verifier) &&
         output.value === value &&
-        bytesEqual(output.detail, detailBytes)
+        bytesEqual(output.data, dataBytes)
       ) {
         return;
       }
@@ -111,7 +111,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     for (const output of this._outputs) {
       if (!Hash.equals(output.verifier.contract, RESULT_CONTRACT)) continue;
       if (!bytesEqual(output.verifier.params, key)) continue;
-      if (!bytesEqual(output.detail, value)) {
+      if (!bytesEqual(output.data, value)) {
         throw new ContractRejection(
           `result key has wrong value`,
         );
@@ -148,7 +148,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
           Hash.equals(output.verifier.contract, RESULT_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
         ) {
-          return output.detail;
+          return output.data;
         }
       }
       // Ref claims the verifier but has no matching result key
@@ -190,7 +190,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
         inputs.push({
           verifier: output.verifier,
           value: output.value,
-          detail: output.detail,
+          data: output.data,
         });
       }
     }

@@ -25,7 +25,7 @@ class GossipProviderAdapter implements GossipProvider {
     size += block.aggregates.length * 32;
     size += block.claims.length * 4;
     for (const out of block.outputs) {
-      size += 32 + out.verifier.params.length + 8 + out.detail.length;
+      size += 32 + out.verifier.params.length + 8 + out.data.length;
     }
     return size;
   }
@@ -50,7 +50,7 @@ class GossipProviderAdapter implements GossipProvider {
     const block = this.store.get(blockHash);
     if (!block) return undefined;
     // Scan outputs for collateral or insurance contract.
-    // Target block hash is in verifier.params (not detail).
+    // Target block hash is in verifier.params (not data).
     for (const output of block.outputs) {
       if (
         Hash.equals(output.verifier.contract, COLLATERAL_CONTRACT) ||

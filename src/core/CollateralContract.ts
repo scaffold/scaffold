@@ -53,7 +53,7 @@ function partitionInputs(inputs: Input[]): PartitionedInputs {
   const againstInputs: PartitionedInputs['againstInputs'] = [];
 
   for (const input of inputs) {
-    const detail = decodeCollateralDetail(input.detail);
+    const detail = decodeCollateralDetail(input.data);
     if (detail.side === 'for') {
       forInputs.push({
         input,

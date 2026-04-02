@@ -106,7 +106,7 @@ Deno.test('ContractGenerator: runs contract and populates draft', () => {
   // Create a genesis block with a game output
   const genesis = makeBlock({
     name: 'genesis',
-    outputs: [{ verifier: gameVerifier, value: 0, detail: enc('init') }],
+    outputs: [{ verifier: gameVerifier, value: 0, data: enc('init') }],
   });
   store.put(genesis);
   utxoIndex.blockBecameCanonical(genesis);
@@ -145,7 +145,7 @@ Deno.test('ContractGenerator: contract rejection cancels draft', () => {
 
   const genesis = makeBlock({
     name: 'genesis',
-    outputs: [{ verifier: gameVerifier, value: 0, detail: enc('init') }],
+    outputs: [{ verifier: gameVerifier, value: 0, data: enc('init') }],
   });
   store.put(genesis);
 
@@ -182,8 +182,8 @@ Deno.test('ContractGenerator: cancel handle removes claims', () => {
   const genesis = makeBlock({
     name: 'genesis',
     outputs: [
-      { verifier: gameVerifier, value: 5, detail: enc('data') },
-      { verifier: sigVerifier, value: 10, detail: new Uint8Array(0) },
+      { verifier: gameVerifier, value: 5, data: enc('data') },
+      { verifier: sigVerifier, value: 10, data: new Uint8Array(0) },
     ],
   });
   store.put(genesis);
@@ -228,8 +228,8 @@ Deno.test('ContractGenerator: findInputs filters already-claimed outputs', () =>
   const genesis = makeBlock({
     name: 'genesis',
     outputs: [
-      { verifier: gameVerifier, value: 5, detail: enc('a') },
-      { verifier: gameVerifier, value: 10, detail: enc('b') },
+      { verifier: gameVerifier, value: 5, data: enc('a') },
+      { verifier: gameVerifier, value: 10, data: enc('b') },
     ],
   });
   store.put(genesis);
@@ -267,7 +267,7 @@ Deno.test('ContractGenerator: resolved claims from inputs are merged into draft'
   const genesis = makeBlock({
     name: 'genesis',
     outputs: [
-      { verifier: gameVerifier, value: 7, detail: enc('data') },
+      { verifier: gameVerifier, value: 7, data: enc('data') },
     ],
   });
   store.put(genesis);
@@ -302,7 +302,7 @@ Deno.test('ContractGenerator: fetch adds refs to draft', () => {
   // A block that claims the game verifier and has a result
   const prevAnchor = makeBlock({
     name: 'prev-anchor',
-    outputs: [{ verifier: gameVerifier, value: 0, detail: new Uint8Array(0) }],
+    outputs: [{ verifier: gameVerifier, value: 0, data: new Uint8Array(0) }],
   });
   store.put(prevAnchor);
 
@@ -317,7 +317,7 @@ Deno.test('ContractGenerator: fetch adds refs to draft', () => {
   // Genesis has a triggering output
   const genesis = makeBlock({
     name: 'genesis',
-    outputs: [{ verifier: gameVerifier, value: 0, detail: enc('trigger') }],
+    outputs: [{ verifier: gameVerifier, value: 0, data: enc('trigger') }],
   });
   store.put(genesis);
   utxoIndex.blockBecameCanonical(genesis);
@@ -369,7 +369,7 @@ Deno.test('ContractGenerator: missing contract cancels draft', () => {
   const unknownContract = h('unknown');
   const genesis = makeBlock({
     name: 'genesis',
-    outputs: [{ verifier: { contract: unknownContract, params: new Uint8Array(0) }, value: 0, detail: new Uint8Array(0) }],
+    outputs: [{ verifier: { contract: unknownContract, params: new Uint8Array(0) }, value: 0, data: new Uint8Array(0) }],
   });
   store.put(genesis);
 

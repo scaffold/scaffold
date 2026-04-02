@@ -31,12 +31,12 @@ function makeOutput(
   contractName: string,
   params: Uint8Array,
   value: number,
-  detail: Uint8Array,
+  data: Uint8Array,
 ): Output {
   return {
     verifier: { contract: h(contractName), params },
     value,
-    detail,
+    data,
   };
 }
 
@@ -147,7 +147,7 @@ Deno.test('ExecutionModule: signature contract -- accept when params match pubke
     outputs: [{
       verifier: { contract: sigContract, params: pubkey },
       value: 100,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -186,7 +186,7 @@ Deno.test('ExecutionModule: signature contract -- reject when pubkey mismatch', 
     outputs: [{
       verifier: { contract: sigContract, params: enc('wrong-pubkey') },
       value: 50,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -224,7 +224,7 @@ Deno.test('ExecutionModule: requireResult checks self-claimed data', () => {
     outputs: [{
       verifier: { contract: gameContract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -263,7 +263,7 @@ Deno.test('ExecutionModule: requireResult rejects wrong value', () => {
     outputs: [{
       verifier: { contract: gameContract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -310,7 +310,7 @@ Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
     outputs: [{
       verifier: gameVerifier,
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -334,7 +334,7 @@ Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
     outputs: [{
       verifier: gameVerifier,
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -377,7 +377,7 @@ Deno.test('ExecutionModule: requireOutput checks matching output exists', () => 
     outputs: [{
       verifier: { contract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -391,7 +391,7 @@ Deno.test('ExecutionModule: requireOutput checks matching output exists', () => 
     outputs: [{
       verifier: { contract: targetContract, params: targetParams },
       value: 42,
-      detail: enc('payload'),
+      data: enc('payload'),
     }],
     claims: [1],
     refs: [],
@@ -433,7 +433,7 @@ Deno.test('ExecutionModule: contract throws ContractRejection -> block invalid',
     outputs: [{
       verifier: { contract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -472,12 +472,12 @@ Deno.test('ExecutionModule: multiple claimed outputs from different contracts --
       {
         verifier: { contract: contractA, params: new Uint8Array(0) },
         value: 10,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
       {
         verifier: { contract: contractB, params: new Uint8Array(0) },
         value: 20,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
     ],
     claims: [],
@@ -516,12 +516,12 @@ Deno.test('ExecutionModule: multiple contracts -- one rejects -> block invalid',
       {
         verifier: { contract: contractA, params: new Uint8Array(0) },
         value: 10,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
       {
         verifier: { contract: contractB, params: new Uint8Array(0) },
         value: 20,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
     ],
     claims: [],
@@ -553,7 +553,7 @@ Deno.test('ExecutionModule: contract not found -> block invalid', () => {
     outputs: [{
       verifier: { contract: unknownContract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -590,7 +590,7 @@ Deno.test('ExecutionModule: silent contract (no-op) is accepted', () => {
     outputs: [{
       verifier: { contract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -624,7 +624,7 @@ Deno.test('ExecutionModule: contract throws non-rejection error -> block invalid
     outputs: [{
       verifier: { contract, params: new Uint8Array(0) },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -665,12 +665,12 @@ Deno.test('ExecutionModule: verifyClaim verifies a single claim', () => {
       {
         verifier: { contract: contractA, params: new Uint8Array(0) },
         value: 10,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
       {
         verifier: { contract: contractB, params: new Uint8Array(0) },
         value: 20,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
     ],
     claims: [],
@@ -743,7 +743,7 @@ Deno.test('ExecutionModule: ContractEnv mode and contract info', () => {
     outputs: [{
       verifier: { contract, params },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
     claims: [],
     refs: [],
@@ -780,7 +780,7 @@ Deno.test('ExecutionModule: collectInputs returns claimed outputs matching verif
     const resolvedInputs = inputs as import('../src/core/ContractEnv.ts').Input[];
     inputCount = resolvedInputs.length;
     if (resolvedInputs.length > 0) {
-      inputDetail = resolvedInputs[0].detail;
+      inputDetail = resolvedInputs[0].data;
     }
   });
 
@@ -790,7 +790,7 @@ Deno.test('ExecutionModule: collectInputs returns claimed outputs matching verif
     outputs: [{
       verifier: { contract, params: new Uint8Array(0) },
       value: 0,
-      detail: enc('claimed-data'),
+      data: enc('claimed-data'),
     }],
     claims: [],
     refs: [],

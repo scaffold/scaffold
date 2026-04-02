@@ -22,7 +22,7 @@ const publicKeyB = secp.getPublicKey(privateKeyB, true);
 
 function makeSignedBlock(
   anchor: Block,
-  outputs: { verifier: { contract: Hash; params: Uint8Array }; value: number; detail: Uint8Array }[],
+  outputs: { verifier: { contract: Hash; params: Uint8Array }; value: number; data: Uint8Array }[],
   declaredWeight: number,
   claims: number[],
   privateKey: Uint8Array,

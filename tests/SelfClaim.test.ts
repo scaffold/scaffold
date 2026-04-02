@@ -40,7 +40,7 @@ Deno.test('createSelfClaimedOutput produces correct verifier with string key', (
   assert(Hash.equals(output.verifier.contract, RESULT_CONTRACT));
   assertEquals(output.verifier.params, new TextEncoder().encode('state'));
   assertEquals(output.value, 0);
-  assertEquals(output.detail, new Uint8Array([1, 2, 3]));
+  assertEquals(output.data, new Uint8Array([1, 2, 3]));
 });
 
 Deno.test('createSelfClaimedOutput produces correct verifier with Uint8Array key', () => {
@@ -49,7 +49,7 @@ Deno.test('createSelfClaimedOutput produces correct verifier with Uint8Array key
 
   assert(Hash.equals(output.verifier.contract, RESULT_CONTRACT));
   assertEquals(output.verifier.params, key);
-  assertEquals(output.detail, new Uint8Array([4, 5]));
+  assertEquals(output.data, new Uint8Array([4, 5]));
 });
 
 Deno.test('isResultOutput returns true for self-claimed outputs', () => {
@@ -61,7 +61,7 @@ Deno.test('isResultOutput returns false for non-self-claimed outputs', () => {
   const output: Output = {
     verifier: { contract: Hash.digest('other-contract'), params: new Uint8Array(0) },
     value: 42,
-    detail: new Uint8Array(0),
+    data: new Uint8Array(0),
   };
   assertFalse(isResultOutput(output));
 });
@@ -78,13 +78,13 @@ Deno.test('findResultOutput finds by string key', () => {
   const nonSelf: Output = {
     verifier: { contract: Hash.digest('x'), params: new Uint8Array(0) },
     value: 0,
-    detail: new Uint8Array(0),
+    data: new Uint8Array(0),
   };
   const block = makeBlock([nonSelf, target, other]);
 
   const found = findResultOutput(block, 'state');
   assert(found !== undefined);
-  assertEquals(found!.detail, new Uint8Array([1]));
+  assertEquals(found!.data, new Uint8Array([1]));
 });
 
 Deno.test('findResultOutput finds by Uint8Array key', () => {
@@ -94,7 +94,7 @@ Deno.test('findResultOutput finds by Uint8Array key', () => {
 
   const found = findResultOutput(block, key);
   assert(found !== undefined);
-  assertEquals(found!.detail, new Uint8Array([42]));
+  assertEquals(found!.data, new Uint8Array([42]));
 });
 
 Deno.test('findResultOutput returns undefined when key not found', () => {
@@ -127,7 +127,7 @@ Deno.test('getRefOutputs returns referenced block outputs', () => {
   const outputs = getRefOutputs(block, 0, store);
   assert(outputs !== undefined);
   assertEquals(outputs!.length, 1);
-  assertEquals(outputs![0].detail, new Uint8Array([10]));
+  assertEquals(outputs![0].data, new Uint8Array([10]));
 });
 
 Deno.test('getRefOutputs returns undefined for out-of-bounds index', () => {
@@ -157,9 +157,9 @@ Deno.test('getRefOutputs with multiple refs returns correct block', () => {
 
   const outputs0 = getRefOutputs(block, 0, store);
   assert(outputs0 !== undefined);
-  assertEquals(outputs0![0].detail, new Uint8Array([1]));
+  assertEquals(outputs0![0].data, new Uint8Array([1]));
 
   const outputs1 = getRefOutputs(block, 1, store);
   assert(outputs1 !== undefined);
-  assertEquals(outputs1![0].detail, new Uint8Array([2]));
+  assertEquals(outputs1![0].data, new Uint8Array([2]));
 });

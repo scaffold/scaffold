@@ -53,7 +53,7 @@ An **output** is a resource produced by a block:
 Output {
     verifier:   Verifier  // spending condition
     value:      Number    // economic value
-    detail:     Bytes     // application-specific payload
+    data:       Bytes     // application-specific payload
 }
 
 Verifier {
@@ -64,7 +64,7 @@ Verifier {
 
 A **verifier** defines the spending condition for an output. It combines a contract (identified by its WASM hash) with parameters that configure the condition. For example, a signature contract's params contain the owner's public key. When a block claims an output, the contract WASM is executed with the verifier's params — it accepts or rejects the claim. This is **contractual verification**, distinct from structural verification.
 
-The separation of `params` from `detail` is deliberate: `params` parameterizes the spending condition (who/how can claim), while `detail` carries the output's data payload. See [computation](computation.md#schema) for details.
+The separation of `params` from `data` is deliberate: `params` parameterizes the spending condition (who/how can claim), while `data` carries the output's payload. See [computation](computation.md#schema) for details.
 
 Contracts are general-purpose. Example contract types:
 

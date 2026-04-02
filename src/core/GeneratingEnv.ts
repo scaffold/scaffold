@@ -92,7 +92,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
           outputIndex: ai.outputIndex,
           value: ai.value,
         });
-        this._inputs.push({ verifier: ai.verifier, value: ai.value, detail: ai.detail });
+        this._inputs.push({ verifier: ai.verifier, value: ai.value, data: ai.data });
         this._addIncludeConstraint(ai.block);
       }
       return this._inputs.slice(-available.length);
@@ -132,11 +132,11 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection('no inputs available');
   }
 
-  requireOutput(verifier: Verifier, value: number, detail?: Uint8Array): void {
+  requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
     this._outputs.push({
       verifier,
       value,
-      detail: detail ?? new Uint8Array(0),
+      data: data ?? new Uint8Array(0),
     });
   }
 
@@ -144,7 +144,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     this._resultOutputs.push({
       verifier: { contract: RESULT_CONTRACT, params: key },
       value: 0,
-      detail: value,
+      data: value,
     });
   }
 
@@ -167,7 +167,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
           Hash.equals(output.verifier.contract, RESULT_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
         ) {
-          return output.detail;
+          return output.data;
         }
       }
       throw new ContractRejection('block claims verifier but has no result for key');
@@ -192,7 +192,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       outputIndex: ai.outputIndex,
       value: ai.value,
     });
-    const input: Input = { verifier: ai.verifier, value: ai.value, detail: ai.detail };
+    const input: Input = { verifier: ai.verifier, value: ai.value, data: ai.data };
     this._inputs.push(input);
     this._addIncludeConstraint(ai.block);
     return input;

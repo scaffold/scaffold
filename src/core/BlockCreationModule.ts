@@ -20,7 +20,7 @@ export interface Output {
   /** Economic value. */
   value: number;
   /** Application-specific payload. */
-  detail: Uint8Array;
+  data: Uint8Array;
 }
 
 /** A claim against an output in the extended vector. */

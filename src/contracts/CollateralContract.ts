@@ -31,7 +31,7 @@ export const CollateralContract: ContractProvider<Hash> = {
       await driver.requireTimestampGte(Number(input.timestamp) + resolutionDelayMs);
       postings.push({
         ...input,
-        detail: CollateralContractDetail.decode(input.output.detail.value!.bytes),
+        detail: CollateralContractDetail.decode(input.output.data.value!.bytes),
         amount: input.output.amount,
       });
     }

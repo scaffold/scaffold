@@ -29,7 +29,7 @@ export function makeSignatureOutput(publicKey: Uint8Array, value: number): Outpu
   return {
     verifier: { contract: SIGNATURE_CONTRACT, params: publicKey },
     value,
-    detail: new Uint8Array(0),
+    data: new Uint8Array(0),
   };
 }
 
@@ -52,7 +52,7 @@ export interface AggregationData {
   aggregateWeights: number[];
 }
 
-/** Encode AggregationData to a Uint8Array for use in Output.detail. */
+/** Encode AggregationData to a Uint8Array for use in Output.data. */
 export function encodeAggregationData(data: AggregationData): Uint8Array {
   const json = JSON.stringify({
     claimMask: data.claimMask,
@@ -64,7 +64,7 @@ export function encodeAggregationData(data: AggregationData): Uint8Array {
   return new TextEncoder().encode(json);
 }
 
-/** Decode AggregationData from an Output.detail Uint8Array. */
+/** Decode AggregationData from an Output.data Uint8Array. */
 export function decodeAggregationData(bytes: Uint8Array): AggregationData {
   const json = JSON.parse(new TextDecoder().decode(bytes));
   return {
@@ -83,8 +83,8 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
 export function getAggregationData(block: Block): AggregationData | null {
   for (const output of block.outputs) {
     if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
-      if (output.detail.length === 0) continue; // Skip marker outputs
-      return decodeAggregationData(output.detail);
+      if (output.data.length === 0) continue; // Skip marker outputs
+      return decodeAggregationData(output.data);
     }
   }
   return null;
@@ -98,7 +98,7 @@ export function makeAggregationOutput(): Output {
   return {
     verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
     value: 0,
-    detail: new Uint8Array(0),
+    data: new Uint8Array(0),
   };
 }
 
@@ -198,7 +198,7 @@ export function makeCollateralOutput(
   return {
     verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
     value,
-    detail: encodeCollateralDetail({ side: 'for', pubkey }),
+    data: encodeCollateralDetail({ side: 'for', pubkey }),
   };
 }
 
@@ -212,7 +212,7 @@ export function makeAgainstOutput(
   return {
     verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
     value,
-    detail: encodeCollateralDetail({ side: 'against', pubkey, target }),
+    data: encodeCollateralDetail({ side: 'against', pubkey, target }),
   };
 }
 
@@ -225,7 +225,7 @@ export function makeInsuranceOutput(
   return {
     verifier: { contract: INSURANCE_CONTRACT, params: targetBlockHash.toBytes() },
     value,
-    detail: encodeInsuranceDetail({ pubkey }),
+    data: encodeInsuranceDetail({ pubkey }),
   };
 }
 
@@ -349,7 +349,7 @@ export function createSelfClaimedOutput(key: string | Uint8Array, value: Uint8Ar
   return {
     verifier: { contract: RESULT_CONTRACT, params },
     value: 0,
-    detail: value,
+    data: value,
   };
 }
 
@@ -474,7 +474,7 @@ export function createBlock(
     hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(out.verifier.params);
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    hashParts.push(out.detail);
+    hashParts.push(out.data);
   }
   for (const idx of blueprint.claims) {
     hashParts.push(new Uint8Array(new Float64Array([idx]).buffer));
@@ -513,7 +513,7 @@ export function createGenesisBlock(outputs: Output[]): Block {
     hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(out.verifier.params);
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    hashParts.push(out.detail);
+    hashParts.push(out.data);
   }
   const hash = Hash.digestParts(...hashParts);
 

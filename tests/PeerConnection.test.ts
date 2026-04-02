@@ -67,7 +67,7 @@ function makeTestBlock(): Block {
     {
       verifier: { contract, params: new Uint8Array(0) },
       value: 100,
-      detail: new Uint8Array([1, 2, 3]),
+      data: new Uint8Array([1, 2, 3]),
     },
   ]);
 }

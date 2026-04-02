@@ -57,7 +57,7 @@ export const FrontierContract: ContractProvider<{}> = {
     //   await driver.requireInput();
     // }
 
-    // // A little hacky, because if replaced with requireOutput, we wouldn't have the detail yet (because it requires weighing the block).
+    // // A little hacky, because if replaced with requireOutput, we wouldn't have the data yet (because it requires weighing the block).
     // driver.requireFrontierLevel(level + 1);
   },
 };

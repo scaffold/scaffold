@@ -2,7 +2,7 @@
 
 Contracts are general-purpose spending conditions. Any valid WASM program that accepts or rejects a block can serve as a contract. The protocol does not privilege specific contracts — but the protocol's own modules (conflict, consensus, trust, gossip) know how to interpret the standard contracts defined here.
 
-Standard contracts are **conventions**, not protocol primitives. They carry domain-specific data in the output's `detail` field that the protocol's modules consume through their provider interfaces. Each output has a **verifier** (contract hash + params) that defines its spending condition, separate from the `detail` payload. See [computation](computation.md) for the full schema.
+Standard contracts are **conventions**, not protocol primitives. They carry domain-specific data in the output's `data` field that the protocol's modules consume through their provider interfaces. Each output has a **verifier** (contract hash + params) that defines its spending condition, separate from the `data` payload. See [computation](computation.md) for the full schema.
 
 ---
 

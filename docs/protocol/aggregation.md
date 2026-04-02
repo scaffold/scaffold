@@ -69,7 +69,7 @@ When block E has `aggregates: [X, Y]`, it means:
 
 ## Aggregation Contract Output (Cache)
 
-Every non-genesis block carries an aggregation marker output -- an output whose verifier uses the well-known `AGGREGATION_CONTRACT` hash. For leaf blocks (no aggregates), this marker has empty detail and zero value. For aggregation blocks, the marker's `detail` field carries cached transformation data.
+Every non-genesis block carries an aggregation marker output -- an output whose verifier uses the well-known `AGGREGATION_CONTRACT` hash. For leaf blocks (no aggregates), this marker has empty data and zero value. For aggregation blocks, the marker's `data` field carries cached transformation data.
 
 The **aggregation cache** stores the net effect of a block's subtree on its anchor's output space, so that parent aggregators can compose transformations without walking the full subtree.
 
@@ -92,7 +92,7 @@ AggregationCache {
 
 ### Leaf Blocks
 
-Leaf blocks (no aggregates) have a trivial cache. Their marker output has empty detail. The cache is implicitly:
+Leaf blocks (no aggregates) have a trivial cache. Their marker output has empty data. The cache is implicitly:
 
 ```
 claimMask:             computed from block.claims (non-self-claims only)
@@ -102,7 +102,7 @@ chainWeights:          []
 aggregateWeights:      []
 ```
 
-This is computed on demand from the block's own fields, not stored in the output detail.
+This is computed on demand from the block's own fields, not stored in the output data.
 
 ---
 
@@ -157,7 +157,7 @@ The aggregation contract generator consumes aggregation marker outputs from bloc
 1. Finds an unclaimed aggregation marker output in the UTXO index
 2. If no input is available, **blocks** until one becomes available (see [Aggregation Trigger](#aggregation-trigger))
 3. Adds the producing block as an implicit **include constraint** on the draft
-4. Reads the marker's `detail` to get the producing block's subtree cache (empty for leaves)
+4. Reads the marker's `data` to get the producing block's subtree cache (empty for leaves)
 
 After consuming all inputs, the contract:
 

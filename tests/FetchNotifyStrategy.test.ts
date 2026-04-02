@@ -18,7 +18,7 @@ function makeOutput(contractName: string, dataStr: string): Output {
   return {
     verifier: { contract: h(contractName), params: encoded },
     value: 0,
-    detail: encoded,
+    data: encoded,
   };
 }
 
@@ -95,7 +95,7 @@ Deno.test('canonical block matching a subscription triggers notifyFetch', () => 
   if (actions[0].type === 'notifyFetch') {
     assertEquals(actions[0].verifier, key);
     assertEquals(actions[0].result !== null, true);
-    assertEquals((actions[0].result as FetchResult).data, output.detail);
+    assertEquals((actions[0].result as FetchResult).data, output.data);
   }
 });
 
@@ -265,7 +265,7 @@ Deno.test('multiple canonicality changes across different blocks', () => {
   assertEquals(a1 !== undefined, true);
   if (a1 && a1.type === 'notifyFetch') {
     assertEquals(a1.result !== null, true);
-    assertEquals((a1.result as FetchResult).data, output1.detail);
+    assertEquals((a1.result as FetchResult).data, output1.data);
   }
 
   // block2 lost canonicality => result is null

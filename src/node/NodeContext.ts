@@ -386,7 +386,7 @@ export class NodeContext {
   ): Output[] {
     return outputs.map((output) => {
       if (!Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
-      if (output.detail.length === 0) return output; // marker, not data
+      if (output.data.length === 0) return output; // marker, not data
 
       // Decode, patch claimMask, re-encode
       const aggData = getAggregationData({
@@ -396,7 +396,7 @@ export class NodeContext {
 
       return {
         ...output,
-        detail: encodeAggregationData({
+        data: encodeAggregationData({
           ...aggData,
           claimMask,
           aggregateOutputCounts,

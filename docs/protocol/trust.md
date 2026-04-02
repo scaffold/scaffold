@@ -65,7 +65,7 @@ Both must exist independently of the target block -- neither can be a descendant
 
 ### AGAINST Challenges
 
-An AGAINST challenge is a collateral output (same contract, same params as FOR) that targets a specific aspect of a block via a discriminated union in the detail:
+An AGAINST challenge is a collateral output (same contract, same params as FOR) that targets a specific aspect of a block via a discriminated union in the data:
 
 ```
 ChallengeTarget =

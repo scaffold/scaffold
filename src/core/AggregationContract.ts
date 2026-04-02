@@ -31,10 +31,10 @@ export const aggregationContract: ContractFn = async (env) => {
   }
 
   // Decode caches from consumed inputs.
-  // Inputs with empty detail are leaves (implicit trivial cache).
+  // Inputs with empty data are leaves (implicit trivial cache).
   const caches: (AggregationData | null)[] = inputs.map((input) => {
-    if (input.detail.length === 0) return null;
-    return decodeAggregationData(input.detail);
+    if (input.data.length === 0) return null;
+    return decodeAggregationData(input.data);
   });
 
   // Compose: sum newOutputCounts, collect per-aggregate info.

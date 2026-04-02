@@ -51,7 +51,7 @@ The `refs` field is new. It lists blocks whose outputs this block's contracts ma
 Output {
     verifier:   Verifier         // spending condition
     value:      Number           // economic value
-    detail:     Uint8Array       // application-specific payload
+    data:       Uint8Array       // application-specific payload
 }
 ```
 
@@ -68,9 +68,9 @@ Verifier {
 
 A verifier combines the contract WASM (identified by hash) with parameters that configure the spending condition. For example, a signature contract's params contain the public key; two outputs can use the same signature contract WASM with different public keys.
 
-The separation of `params` from `detail` is deliberate:
+The separation of `params` from `data` is deliberate:
 - **`params`** parameterizes the spending condition (who/how can you claim this output).
-- **`detail`** carries the output's payload data (what information does this output hold).
+- **`data`** carries the output's payload (what information does this output hold).
 
 ---
 
@@ -78,14 +78,14 @@ The separation of `params` from `detail` is deliberate:
 
 Computation results are stored as **self-claimed outputs** — outputs that a block produces and claims atomically in the same block. The self-claim mechanism is already part of the protocol (see [block creation: output transformation](block-creation.md#output-transformation)).
 
-A self-claimed output uses a well-known SELF contract whose spending condition is: the claiming block must be the producing block. The verifier's `params` field acts as a key, and the output's `detail` field acts as the value, creating a key-value store for computation results.
+A self-claimed output uses a well-known SELF contract whose spending condition is: the claiming block must be the producing block. The verifier's `params` field acts as a key, and the output's `data` field acts as the value, creating a key-value store for computation results.
 
 ```
 // Self-claimed output example: storing game state
 Output {
     verifier: { contract: RESULT_CONTRACT, params: encode("state") },
     value: 0,
-    detail: <game_state_bytes>
+    data: <game_state_bytes>
 }
 ```
 
@@ -93,9 +93,9 @@ A block can have multiple self-claimed outputs with different keys:
 
 ```
 Block outputs:
-  [0] { verifier: SELF/"state",  value: 0, detail: <game_state> }     // self-claimed
-  [1] { verifier: SELF/"tick",   value: 0, detail: <tick_number> }     // self-claimed
-  [2] { verifier: GAME/config,   value: 10, detail: <next_request> }   // regular output
+  [0] { verifier: SELF/"state",  value: 0, data: <game_state> }     // self-claimed
+  [1] { verifier: SELF/"tick",   value: 0, data: <tick_number> }     // self-claimed
+  [2] { verifier: GAME/config,   value: 10, data: <next_request> }   // regular output
 Block claims: [0, 1, ...]   // self-claim indices 0 and 1
 ```
 
@@ -127,18 +127,18 @@ Contracts access referenced blocks' outputs through host functions:
 ```
 ref_count() → u32
 ref_output_count(ref_index) → u32
-ref_output_detail(ref_index, output_index) → bytes
+ref_output_data(ref_index, output_index) → bytes
 ref_output_verifier(ref_index, output_index) → (hash, bytes)
 ```
 
-A contract can iterate a referenced block's outputs, find the one with the expected verifier, and read its detail. For example, reading a previous game state:
+A contract can iterate a referenced block's outputs, find the one with the expected verifier, and read its data. For example, reading a previous game state:
 
 ```
 // In game tick contract:
 for i in 0..ref_output_count(0) {
     let (contract, params) = ref_output_verifier(0, i);
     if contract == RESULT_CONTRACT && params == "state" {
-        let prev_state = ref_output_detail(0, i);
+        let prev_state = ref_output_data(0, i);
         // ... use prev_state
     }
 }
@@ -176,26 +176,26 @@ current_params() → (ptr, len)       // this verifier's params
 set_data(key_ptr, key_len, value_ptr, value_len) → void
 ```
 
-Adds a self-claimed output with verifier `(RESULT_CONTRACT, key)` and detail `value`. In generation mode, creates the output and adds a self-claim. In verification mode, checks that a matching self-claimed output exists with the expected detail.
+Adds a self-claimed output with verifier `(RESULT_CONTRACT, key)` and data `value`. In generation mode, creates the output and adds a self-claim. In verification mode, checks that a matching self-claimed output exists with the expected data.
 
 #### Claimed Outputs
 
 ```
 claimed_output_count() → u32
-claimed_output_detail(index) → (ptr, len)
+claimed_output_data(index) → (ptr, len)
 claimed_output_verifier(index) → (contract_ptr, contract_len, params_ptr, params_len)
 ```
 
-Iterate over all outputs being claimed by this block. The contract can read each claimed output's detail and verifier to validate the claim.
+Iterate over all outputs being claimed by this block. The contract can read each claimed output's data and verifier to validate the claim.
 
 #### Output Requirements
 
 ```
 add_output(contract_ptr, contract_len, params_ptr, params_len,
-           value, detail_ptr, detail_len) → void
+           value, data_ptr, data_len) → void
 ```
 
-In generation mode, creates an output on the block. In verification mode, checks that a matching output exists (same verifier, value, and detail).
+In generation mode, creates an output on the block. In verification mode, checks that a matching output exists (same verifier, value, and data).
 
 #### Constraints
 
@@ -211,7 +211,7 @@ Assert that the block satisfies a constraint. `require_signature` checks the blo
 ```
 ref_count() → u32
 ref_output_count(ref_index) → u32
-ref_output_detail(ref_index, output_index) → (ptr, len)
+ref_output_data(ref_index, output_index) → (ptr, len)
 ref_output_verifier(ref_index, output_index) → (contract_ptr, contract_len,
                                                   params_ptr, params_len)
 ```
@@ -308,7 +308,7 @@ accept();
 
 ```
 // Hash-lock contract:
-let data = claimed_output_detail(0);  // or read from self-claimed output
+let data = claimed_output_data(0);  // or read from self-claimed output
 if hash(data) != current_params() {   // params = expected hash H
     reject();
 }
@@ -349,7 +349,7 @@ Contracts can optionally export functions for generic tools (block explorers, de
 
 ### Option 1: JSON Serialization
 
-The contract exports `toJson` and `fromJson` functions for each data type (params, detail, self-claimed values). Simple, but adds 14–100 KB to the WASM binary for JSON encoding/decoding.
+The contract exports `toJson` and `fromJson` functions for each data type (params, data, self-claimed values). Simple, but adds 14--100 KB to the WASM binary for JSON encoding/decoding.
 
 ### Option 2: Host-Driven Walker (Preferred)
 
@@ -357,7 +357,7 @@ The contract walks its data structure, calling host-imported functions for each 
 
 ```
 // Contract exports:
-walk_detail(detail_ptr, detail_len) → void
+walk_data(data_ptr, data_len) → void
 walk_params(params_ptr, params_len) → void
 
 // Host-imported functions used by the walker:
@@ -394,8 +394,8 @@ Block:
 ```
 
 The game tick contract:
-1. Reads `state_N` from `ref_output_detail(0, state_output_index)`.
-2. Reads player moves from `claimed_output_detail(...)` (claiming move outputs).
+1. Reads `state_N` from `ref_output_data(0, state_output_index)`.
+2. Reads player moves from `claimed_output_data(...)` (claiming move outputs).
 3. Computes `state_N+1`.
 4. Calls `set_data("state", state_N+1)` — in gen mode creates the self-claimed output; in verify mode checks it matches.
 5. Calls `set_data("tick", tick_number)`.
@@ -433,7 +433,7 @@ Challenge block:
 
 Response block:
   claims: [<challenge_output>]
-  detail: encode(preimage)
+  data: encode(preimage)
   outputs:
     [0] { SIGNATURE/responder_pubkey, bond, empty }
 ```
@@ -462,8 +462,8 @@ The rectification contract verifies the proof chain from the aggregation tree ro
 
 | Module | Impact |
 |--------|--------|
-| [Block Creation](block-creation.md) | `refs` added to block structure. Output gains `verifier` (contract + params) and `detail` (renamed from `data`). Self-claims used for computation results. |
-| [Contracts](contracts.md) | Computation contract placeholder replaced by this spec. Standard contracts updated to use verifier/detail terminology. New SELF contract for self-claimed outputs. |
+| [Block Creation](block-creation.md) | `refs` added to block structure. Output gains `verifier` (contract + params) and `data` (payload). Self-claims used for computation results. |
+| [Contracts](contracts.md) | Computation contract placeholder replaced by this spec. Standard contracts updated to use verifier/data terminology. New SELF contract for self-claimed outputs. |
 | [Consensus](consensus.md) | No change. Consumes weight vectors as before. |
 | [Conflict](conflict.md) | No change. Self-claimed outputs follow existing self-claim rules. Refs do not participate in conflict detection. |
 | [Trust](trust.md) | Two-tier collateral (Verifier Reward + Rectification). Publisher must post both for hard contracts. |

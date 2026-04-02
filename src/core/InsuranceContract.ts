@@ -57,7 +57,7 @@ export const insuranceContract: ContractFn = (env) => {
 
     const now = env.getTimestamp();
     const input = inputs[0];
-    const detail = decodeInsuranceDetail(input.detail);
+    const detail = decodeInsuranceDetail(input.data);
 
     // The resolution mode is determined by what outputs the claiming block produces.
     // The contract enforces the minimum return to the original author.

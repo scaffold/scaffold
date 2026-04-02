@@ -16,7 +16,7 @@ export enum ExecutionMode {
 export interface Input {
   readonly verifier: Verifier;
   readonly value: number;
-  readonly detail: Uint8Array;
+  readonly data: Uint8Array;
 }
 
 /** An input with its provenance -- where it lives in the DAG. */
@@ -82,11 +82,11 @@ export interface ContractEnv {
    * Verification: checks a matching output exists on the block.
    * Generation: adds the output to the draft.
    */
-  requireOutput(verifier: Verifier, value: number, detail?: Uint8Array): void;
+  requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void;
 
   /**
    * Require a result (self-claimed key-value output) on this block.
-   * Creates/checks an output with { contract: RESULT_CONTRACT, params: key, detail: value }.
+   * Creates/checks an output with { contract: RESULT_CONTRACT, params: key, data: value }.
    *
    * Verification: checks the result output exists with the expected value.
    * Generation: creates the result output and self-claim.

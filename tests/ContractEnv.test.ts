@@ -25,12 +25,12 @@ function makeOutput(
   contractName: string,
   params: Uint8Array,
   value: number,
-  detail: Uint8Array,
+  data: Uint8Array,
 ): Output {
   return {
     verifier: { contract: h(contractName), params },
     value,
-    detail,
+    data,
   };
 }
 
@@ -165,7 +165,7 @@ Deno.test('VerifyingEnv: requireOutput accepts when output exists', () => {
   const block: TestBlock = {
     hash: h('b'),
     anchor: ZERO_HASH,
-    outputs: [{ verifier, value: 42, detail: enc('data') }],
+    outputs: [{ verifier, value: 42, data: enc('data') }],
     claims: [],
     refs: [],
   };
@@ -174,13 +174,13 @@ Deno.test('VerifyingEnv: requireOutput accepts when output exists', () => {
   env.requireOutput(verifier, 42, enc('data'));
 });
 
-Deno.test('VerifyingEnv: requireOutput accepts with default empty detail', () => {
+Deno.test('VerifyingEnv: requireOutput accepts with default empty data', () => {
   const provider = new TestProvider();
   const verifier: Verifier = { contract: h('pay'), params: enc('key') };
   const block: TestBlock = {
     hash: h('b'),
     anchor: ZERO_HASH,
-    outputs: [{ verifier, value: 10, detail: new Uint8Array(0) }],
+    outputs: [{ verifier, value: 10, data: new Uint8Array(0) }],
     claims: [],
     refs: [],
   };
@@ -219,13 +219,13 @@ Deno.test('VerifyingEnv: collectInputs returns matching claimed outputs', () => 
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [
-      { verifier, value: 10, detail: enc('move1') },
+      { verifier, value: 10, data: enc('move1') },
       {
         verifier: { contract: h('other'), params: new Uint8Array(0) },
         value: 5,
-        detail: new Uint8Array(0),
+        data: new Uint8Array(0),
       },
-      { verifier, value: 20, detail: enc('move2') },
+      { verifier, value: 20, data: enc('move2') },
     ],
     claims: [],
     refs: [],
@@ -244,8 +244,8 @@ Deno.test('VerifyingEnv: collectInputs returns matching claimed outputs', () => 
   const env = makeEnv({ contractHash, params, block, provider });
   const inputs = env.collectInputs();
   assertEquals(inputs.length, 2);
-  assertEquals(inputs[0].detail, enc('move1'));
-  assertEquals(inputs[1].detail, enc('move2'));
+  assertEquals(inputs[0].data, enc('move1'));
+  assertEquals(inputs[1].data, enc('move2'));
 });
 
 Deno.test('VerifyingEnv: collectInputs returns empty when no matching claims', () => {
@@ -274,8 +274,8 @@ Deno.test('VerifyingEnv: requireInput returns inputs sequentially', () => {
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [
-      { verifier, value: 1, detail: enc('a') },
-      { verifier, value: 2, detail: enc('b') },
+      { verifier, value: 1, data: enc('a') },
+      { verifier, value: 2, data: enc('b') },
     ],
     claims: [],
     refs: [],
@@ -294,8 +294,8 @@ Deno.test('VerifyingEnv: requireInput returns inputs sequentially', () => {
   const env = makeEnv({ contractHash, params, block, provider });
   const first = env.requireInput();
   const second = env.requireInput();
-  assertEquals(first.detail, enc('a'));
-  assertEquals(second.detail, enc('b'));
+  assertEquals(first.data, enc('a'));
+  assertEquals(second.data, enc('b'));
 });
 
 Deno.test('VerifyingEnv: requireInput throws when no more inputs', () => {
@@ -322,7 +322,7 @@ Deno.test('VerifyingEnv: fetch reads result from ref block that claims verifier'
   const prevAnchor: TestBlock = {
     hash: h('prev-anchor'),
     anchor: ZERO_HASH,
-    outputs: [{ verifier: gameVerifier, value: 10, detail: new Uint8Array(0) }],
+    outputs: [{ verifier: gameVerifier, value: 10, data: new Uint8Array(0) }],
     claims: [],
     refs: [],
   };
@@ -379,7 +379,7 @@ Deno.test('VerifyingEnv: fetch throws when ref claims verifier but no result key
   const prevAnchor: TestBlock = {
     hash: h('prev-anchor'),
     anchor: ZERO_HASH,
-    outputs: [{ verifier, value: 5, detail: new Uint8Array(0) }],
+    outputs: [{ verifier, value: 5, data: new Uint8Array(0) }],
     claims: [],
     refs: [],
   };

@@ -86,7 +86,7 @@ export class GenerationStrategy implements Strategy {
           {
             verifier: { contract: matchedOutput.verifier.contract, params: new Uint8Array(0) },
             value: 0,
-            detail: new Uint8Array(),
+            data: new Uint8Array(),
           },
         ],
         claims: [],

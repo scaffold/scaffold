@@ -27,6 +27,6 @@ export function makeStatusOutput(publicKey: Uint8Array, message: string): Output
   return {
     verifier: { contract: statusHash, params: new Uint8Array(0) },
     value: 1,
-    detail: encodeStatusData(publicKey, message),
+    data: encodeStatusData(publicKey, message),
   };
 }

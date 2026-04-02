@@ -8,7 +8,7 @@ For the economic model and equilibrium analysis, see [deception](deception.md). 
 
 ## Terminology
 
-- **Collateral**: Posted by the block author. Decays exponentially back to the author if unchallenged. If challenged (AGAINST), the decayed value goes to the challenger or responder depending on resolution. FOR and AGAINST are both collateral outputs with the same contract and params (target block hash), distinguished by their detail.
+- **Collateral**: Posted by the block author. Decays exponentially back to the author if unchallenged. If challenged (AGAINST), the decayed value goes to the challenger or responder depending on resolution. FOR and AGAINST are both collateral outputs with the same contract and params (target block hash), distinguished by their data.
 - **Insurance**: Posted by the block author as a deposit. Upon aggregation, most is returned to the author minus a risk transfer fee approximating the verification cost. The aggregator posts their own insurance covering the entire aggregated subtree.
 
 ---
@@ -34,7 +34,7 @@ Handles both FOR (publisher's stake) and AGAINST (challenger's bond) postings fo
 - `getParams()` -- target block hash
 - `getTimestamp()` -- current block timestamp (for decay computation)
 - `collectInputs()` -- all visible FOR and AGAINST collateral for the target
-- `requireOutput(verifier, value, detail)` -- distribute funds to winners
+- `requireOutput(verifier, value, data)` -- distribute funds to winners
 - `requireSignature(pubkey)` -- verify publisher identity for decay return
 
 ### Output Structure
@@ -43,12 +43,12 @@ Handles both FOR (publisher's stake) and AGAINST (challenger's bond) postings fo
 Collateral output (FOR):
   verifier: { contract: COLLATERAL_CONTRACT, params: encode(target_block_hash) }
   value: C1  (proportional to throughput)
-  detail: encode({ side: 'for', pubkey: publisher_pubkey })
+  data: encode({ side: 'for', pubkey: publisher_pubkey })
 
 Collateral output (AGAINST):
   verifier: { contract: COLLATERAL_CONTRACT, params: encode(target_block_hash) }
   value: bond
-  detail: encode({ side: 'against', target: ChallengeTarget, pubkey: challenger_pubkey })
+  data: encode({ side: 'against', target: ChallengeTarget, pubkey: challenger_pubkey })
 ```
 
 ### Challenge Target (Discriminated Union)
@@ -124,7 +124,7 @@ Handles the risk transfer between block authors and aggregators. The author post
 
 - `getParams()` -- target block hash or aggregation tree root
 - `collectInputs()` -- insurance outputs for the target
-- `requireOutput(verifier, value, detail)` -- return to publisher, aggregator payout, rectification
+- `requireOutput(verifier, value, data)` -- return to publisher, aggregator payout, rectification
 - `requireSignature(pubkey)` -- verify identity
 - `fetch(verifier, key)` -- check collateral resolution outcome for a target block
 
@@ -134,12 +134,12 @@ Handles the risk transfer between block authors and aggregators. The author post
 Insurance output (author posts):
   verifier: { contract: INSURANCE_CONTRACT, params: encode(target_block_hash) }
   value: 1000  (proportional to throughput)
-  detail: encode({ pubkey: author_pubkey })
+  data: encode({ pubkey: author_pubkey })
 
 Insurance output (aggregator posts):
   verifier: { contract: INSURANCE_CONTRACT, params: encode(aggregation_tree_root) }
   value: 2500  (covers entire aggregated subtree)
-  detail: encode({ pubkey: aggregator_pubkey })
+  data: encode({ pubkey: aggregator_pubkey })
 ```
 
 ### Aggregation Claim Flow

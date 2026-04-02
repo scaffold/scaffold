@@ -13,7 +13,7 @@ function makeOutput(value: number, label?: string): Output {
   return {
     verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    detail: new Uint8Array([]),
+    data: new Uint8Array([]),
   };
 }
 
@@ -110,7 +110,7 @@ Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', ()
     outputs: [{
       verifier: { contract: contractHash, params },
       value: 0,
-      detail: new Uint8Array(0),
+      data: new Uint8Array(0),
     }],
   });
 
@@ -146,12 +146,12 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
   // flush microtasks to let it complete.
   await new Promise((r) => setTimeout(r, 50));
 
-  // Look for a block carrying an aggregation data output (non-empty detail
+  // Look for a block carrying an aggregation data output (non-empty data
   // on AGGREGATION_CONTRACT).
   let aggBlock: Block | undefined;
   for (const block of ctx.store.values()) {
     const hasAggData = block.outputs.some(
-      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data.length > 0,
     );
     if (hasAggData) {
       aggBlock = block;
@@ -184,7 +184,7 @@ Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async (
   const aggBlocks: Block[] = [];
   for (const block of ctx.store.values()) {
     const hasAggData = block.outputs.some(
-      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data.length > 0,
     );
     if (hasAggData) {
       aggBlocks.push(block);
@@ -218,7 +218,7 @@ Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', as
   const aggBlocks: Block[] = [];
   for (const block of ctx.store.values()) {
     const hasAggData = block.outputs.some(
-      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.detail.length > 0,
+      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data.length > 0,
     );
     if (hasAggData) {
       aggBlocks.push(block);

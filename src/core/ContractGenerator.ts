@@ -59,7 +59,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       const claimants = this.outputClaims.getClaimantsAt(entry.blockHash, entry.outputIndex);
       if (claimants && claimants.length > 0) continue;
 
-      // Look up the actual output for detail
+      // Look up the actual output for data
       const block = this.store.get(entry.blockHash);
       if (!block || entry.outputIndex >= block.outputs.length) continue;
 
@@ -67,7 +67,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       result.push({
         verifier: output.verifier,
         value: output.value,
-        detail: output.detail,
+        data: output.data,
         block: entry.blockHash,
         outputIndex: entry.outputIndex,
       });
@@ -259,7 +259,7 @@ export class ContractGenerator implements GeneratorProvider {
     entry.resolve({
       verifier: output.verifier,
       value: output.value,
-      detail: output.detail,
+      data: output.data,
       block: blockHash,
       outputIndex,
     });

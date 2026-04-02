@@ -37,7 +37,7 @@ function makeContractGenesis(contract: Hash, count = 1) {
   const outputs = Array.from({ length: count }, () => ({
     verifier: { contract, params: new Uint8Array(0) },
     value: 0,
-    detail: new Uint8Array(0),
+    data: new Uint8Array(0),
   }));
   return createGenesisBlock(outputs);
 }
@@ -94,7 +94,7 @@ Deno.test('Computation: cross-block references work across nodes', () => {
   for (const id of net.nodeIds) registerGameContract(net, id);
 
   const gameVerifier = { contract: gameContract, params: new Uint8Array(0) };
-  const gameOutput = { verifier: gameVerifier, value: 0, detail: new Uint8Array(0) };
+  const gameOutput = { verifier: gameVerifier, value: 0, data: new Uint8Array(0) };
 
   const genesis = createGenesisBlock([gameOutput, gameOutput]);
   net.broadcastGenesis(genesis);

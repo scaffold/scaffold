@@ -58,7 +58,7 @@ Deno.test('StatusContract: makeStatusOutput produces correct structure', () => {
   assert(Hash.equals(output.verifier.contract, statusHash));
   assertEquals(output.value, 1);
 
-  const decoded = decodeStatusData(output.detail);
+  const decoded = decodeStatusData(output.data);
   assertEquals(decoded.publicKey, identity.publicKey);
   assertEquals(decoded.message, 'test');
 });
