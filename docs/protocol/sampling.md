@@ -157,10 +157,10 @@ swing(T) = 2I(r + 1)(q - r + 1) / [(q + 2)^2(q + 3)]
 | State | swing / I |
 |-------|-----------|
 | q=0, r=0 (unknown) | 1/6 |
-| q=1, r=1 (one success) | 1/18 |
-| q=10, r=5 (uncertain) | 36/1872 |
-| q=10, r=10 (well-verified) | 11/1872 |
-| q=10, r=0 (likely fraud) | 11/1872 |
+| q=1, r=1 (one success) | 1/9 |
+| q=10, r=5 (uncertain) | 72/1872 |
+| q=10, r=10 (well-verified) | 22/1872 |
+| q=10, r=0 (likely fraud) | 22/1872 |
 
 Unknown trees get maximum priority per unit of incentive. Maximum uncertainty (r = q/2) maximizes swing. Well-characterized trees (high or low weight factor) have minimal swing -- we already know enough about them.
 
@@ -321,4 +321,4 @@ Throughput sampling is specified in [deception.md](deception.md) because it is i
 | File | Description |
 |------|-------------|
 | [`src/core/ProbeModule.ts`](../../src/core/ProbeModule.ts) | Core probe logic: BlockProbeState, initProbe, countVerifications, weight factor, scheduling |
-| [`src/core/ProbeService.ts`](../../src/core/ProbeService.ts) | Adapter wiring ProbeModule to BlockStore and ConsensusService |
+| [`src/core/ProbeService.ts`](../../src/core/ProbeService.ts) | Adapter wiring ProbeModule to BlockStore |
