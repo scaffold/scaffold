@@ -160,18 +160,25 @@ function computeGraphData(
   for (const node of nodes) {
     const anchorHex = node.block.anchor.toHex();
     if (anchorHex !== ZERO_HEX && nodeSet.has(anchorHex)) {
-      links.push({ source: node.id, target: anchorHex, type: "anchor" });
+      // Skip edges between two ghost nodes
+      if (!(node.isGhost && ghostHashes.has(anchorHex))) {
+        links.push({ source: node.id, target: anchorHex, type: "anchor" });
+      }
     }
     for (const agg of node.block.aggregates) {
       const aggHex = agg.toHex();
       if (nodeSet.has(aggHex)) {
-        links.push({ source: node.id, target: aggHex, type: "aggregate" });
+        if (!(node.isGhost && ghostHashes.has(aggHex))) {
+          links.push({ source: node.id, target: aggHex, type: "aggregate" });
+        }
       }
     }
     for (const ref of node.block.refs) {
       const refHex = ref.toHex();
       if (nodeSet.has(refHex)) {
-        links.push({ source: node.id, target: refHex, type: "ref" });
+        if (!(node.isGhost && ghostHashes.has(refHex))) {
+          links.push({ source: node.id, target: refHex, type: "ref" });
+        }
       }
     }
   }
