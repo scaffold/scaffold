@@ -1,5 +1,5 @@
+import { Block, BlockStore, getAggregationData } from './Block.ts';
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore } from './Block.ts';
 import { ProbeModule, ProbeProvider } from './ProbeModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
@@ -24,11 +24,14 @@ class ProbeProviderAdapter implements ProbeProvider<Block> {
     return block.selfWeight ?? block.declaredWeight;
   }
 
+  // TODO(@joel): aggregateWeights from the aggregation cache stores throughput
+  // (per-subtree declared weights), but probe descent should be proportional to
+  // verification cost. These are related (effective_weight = verification_cost)
+  // but may diverge. Revisit when the aggregation incentive derivation is finalized.
   getAggregateWeights(block: Block): number[] {
-    return block.aggregates.map((aggHash) => {
-      const agg = this.store.get(aggHash);
-      return agg ? (agg.subtreeWeight ?? agg.declaredWeight) : 0;
-    });
+    const aggData = getAggregationData(block);
+    if (aggData) return aggData.aggregateWeights;
+    return [];
   }
 }
 

@@ -1,17 +1,17 @@
 import {
   AGGREGATION_CONTRACT,
-  COLLATERAL_CONTRACT,
-  INSURANCE_CONTRACT,
   Block,
   BlockStore,
+  COLLATERAL_CONTRACT,
   encodeAggregationData,
   getAggregationData,
+  INSURANCE_CONTRACT,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
 import { BlockBlueprint, BlockSpec, type ClaimEntry, Output } from '../core/BlockCreationModule.ts';
 import {
-  OutputSpaceModule,
   type OutputSpaceBlock,
+  OutputSpaceModule,
   type OutputSpaceProvider,
 } from '../core/OutputSpace.ts';
 import { DraftManager } from '../core/DraftManager.ts';
@@ -32,7 +32,7 @@ import {
 } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
-import { SamplingService } from '../core/SamplingService.ts';
+import { ProbeService } from '../core/ProbeService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
@@ -69,7 +69,7 @@ export class NodeContext {
 
   // Protocol services (convenience accessors)
   readonly consensus: ConsensusService;
-  readonly sampling: SamplingService;
+  readonly probe: ProbeService;
   readonly gossip: GossipService;
   readonly trust: TrustService;
   readonly blockCreation: BlockCreationService;
@@ -93,7 +93,7 @@ export class NodeContext {
     // 3. Get all services from ProtocolContext
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
-    this.sampling = this.protocolContext.get(SamplingService);
+    this.probe = this.protocolContext.get(ProbeService);
     this.gossip = this.protocolContext.get(GossipService);
     this.trust = this.protocolContext.get(TrustService);
     this.blockCreation = this.protocolContext.get(BlockCreationService);
@@ -161,7 +161,7 @@ export class NodeContext {
       const block = this.store.get(hash);
       if (block) this.blocks.notifyChanged(block);
     });
-    this.sampling.onVerificationChange((hash) => {
+    this.probe.onWeightChange((hash) => {
       const block = this.store.get(hash);
       if (block) this.blocks.notifyChanged(block);
     });
@@ -190,7 +190,7 @@ export class NodeContext {
       coordinator: this.coordinator,
       store: this.store,
       consensus: this.consensus,
-      sampling: this.sampling,
+      probe: this.probe,
       strategies,
       blockCreator,
       draftManager: this.draftManager,
@@ -257,7 +257,10 @@ export class NodeContext {
     const aggregateOutputCounts: number[] = [];
     for (const aggHash of aggregates) {
       const aggBlock = this.store.get(aggHash);
-      if (!aggBlock) { aggregateOutputCounts.push(0); continue; }
+      if (!aggBlock) {
+        aggregateOutputCounts.push(0);
+        continue;
+      }
       const aggData = getAggregationData(aggBlock);
       const sc = aggBlock.claims.filter((c) => c < aggBlock.outputs.length).length;
       aggregateOutputCounts.push(aggData?.newOutputCount ?? (aggBlock.outputs.length - sc));

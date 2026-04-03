@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Block, BlockSource, BlockStore, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
-import { SamplingService } from '../src/core/SamplingService.ts';
+import { ProbeService } from '../src/core/ProbeService.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
@@ -44,7 +44,7 @@ function makeEvent(
     },
     store,
     consensus,
-    sampling: ctx.get(SamplingService),
+    probe: ctx.get(ProbeService),
   };
 }
 

@@ -15,11 +15,11 @@ const DEFAULT_CONFIG: Required<SamplingStrategyConfig> = {
 };
 
 /**
- * Reactive strategy that decides which blocks to verify via sampling.
+ * Reactive strategy that decides which blocks to verify via probing.
  *
- * On each event it checks for canonicality changes, queries the sampling module
- * for the highest-priority unverified block, and emits verify actions subject
- * to concurrency and priority thresholds.
+ * On each event it checks for canonicality changes, queries the probe module
+ * for the highest-priority unverified tree, initiates a probe descent, and
+ * emits verify actions for the terminal block.
  */
 export class SamplingStrategy implements Strategy {
   private readonly config: Required<SamplingStrategyConfig>;
@@ -39,40 +39,36 @@ export class SamplingStrategy implements Strategy {
 
     const actions: Action[] = [];
 
-    // Keep selecting the next highest-priority block until we hit our limits.
-    // We use a loop because selectNext might return the same block or blocks
-    // already in-flight; we collect candidates greedily.
+    // Keep selecting the next highest-priority tree until we hit our limits.
     const considered = new Set<HashPrimitive>();
 
     while (this.inFlight.size < this.config.maxConcurrent) {
-      const nextHash = event.sampling.selectNext();
+      const nextHash = event.probe.selectNext();
       if (!nextHash) break;
 
       const key = nextHash.toPrimitive();
 
-      // Avoid considering the same block twice in one evaluation.
+      // Avoid considering the same tree twice in one evaluation.
       if (considered.has(key)) break;
       considered.add(key);
 
-      // Skip blocks already being verified.
+      // Skip trees already being verified.
       if (this.inFlight.has(key)) continue;
 
-      const priority = event.sampling.getPriority(nextHash);
+      const priority = event.probe.getPriority(nextHash);
       if (priority <= this.config.minPriority) break;
 
-      const state = event.sampling.getState(nextHash);
-      if (!state) continue;
+      // Initiate a probe to find the terminal block
+      const probeResult = event.probe.initProbe(nextHash);
+      if (!probeResult.terminal) continue;
 
-      // Mark as in-flight immediately so subsequent loop iterations account for it.
+      const terminalHash = probeResult.blockHash;
       this.inFlight.add(key);
-
-      // Record the sample request so the sampling module's priority updates.
-      event.sampling.recordSampleRequested(nextHash);
 
       actions.push({
         type: 'verify',
-        block: nextHash,
-        contract: state.hash, // The tree root hash serves as the contract identifier.
+        block: terminalHash,
+        contract: nextHash, // tree root -- used for tracking
         params: new Uint8Array(),
       });
     }

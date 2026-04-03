@@ -1,19 +1,15 @@
 // Protocol spec: docs/protocol/overview.md (module orchestration)
 
-import { Hash, ZERO_HASH } from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { ProbeService } from './ProbeService.ts';
-import { SamplingService } from './SamplingService.ts';
 import { GossipService } from './GossipService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
-import { ExecutionService } from './ExecutionService.ts';
 import { VerificationService } from './VerificationService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
-import { Output } from './BlockCreationModule.ts';
-import { ExecutionResult } from './ExecutionModule.ts';
 import { VerificationResult } from './VerificationModule.ts';
 
 /** Result of processing a block received event. */
@@ -26,16 +22,14 @@ export interface BlockReceivedResult {
 /**
  * Two-event orchestrator that coordinates all protocol modules.
  *
- * Event 1: blockReceived — processes a new block through all modules.
- * Event 2: canonicality changes — derived from diffing before/after canonical views.
+ * Event 1: blockReceived -- processes a new block through all modules.
+ * Event 2: canonicality changes -- derived from diffing before/after canonical views.
  */
 export class Coordinator {
   private readonly ctx: ProtocolContext;
   private readonly store: BlockStore;
   private readonly consensus: ConsensusService;
   private readonly probe: ProbeService;
-  /** @deprecated Will be removed when VerificationService migrates to ProbeService. */
-  private readonly sampling: SamplingService;
   private readonly gossip: GossipService;
   private readonly blockCreation: BlockCreationService;
   private readonly outputClaims: OutputClaimService;
@@ -51,7 +45,6 @@ export class Coordinator {
     this.store = ctx.get(BlockStore);
     this.consensus = ctx.get(ConsensusService);
     this.probe = ctx.get(ProbeService);
-    this.sampling = ctx.get(SamplingService);
     this.gossip = ctx.get(GossipService);
     this.blockCreation = ctx.get(BlockCreationService);
     this.outputClaims = ctx.get(OutputClaimService);
@@ -66,6 +59,40 @@ export class Coordinator {
     this.consensus.onCanonicalityChange((hash, canonical) => {
       this.canonicalityChanges.push({ hash, canonical });
     });
+
+    // Wire probe weight changes to consensus verified weights
+    this.probe.onWeightChange((hash) => {
+      const block = this.store.get(hash);
+      if (!block) return;
+      const wf = this.probe.getWeightFactor(hash);
+      const declared = getBlockWeightVector(block);
+      this.consensus.setVerifiedWeight(hash, declared.map((w) => w * wf));
+    });
+
+    // Wire conflict info from consensus to probe scheduling
+    this.probe.setConflictInfoSupplier((hash) => {
+      const conflicts = this.consensus.getConflicts(hash);
+      if (conflicts.size === 0) return undefined;
+
+      const myWeight = this.consensus.getEffectiveWeight(hash);
+      let closestGap = Infinity;
+      let closestRivalWeight = 0;
+
+      for (const rivalKey of conflicts) {
+        const rivalHash = Hash.fromPrimitive(rivalKey);
+        const rivalWeight = this.consensus.getEffectiveWeight(rivalHash);
+        const gap = Math.abs(myWeight - rivalWeight);
+        if (gap < closestGap) {
+          closestGap = gap;
+          closestRivalWeight = rivalWeight;
+        }
+      }
+
+      return {
+        weightGap: closestGap,
+        contestedWeight: myWeight + closestRivalWeight,
+      };
+    });
   }
 
   /**
@@ -74,10 +101,10 @@ export class Coordinator {
    * 1. Store the block
    * 2. Reset pendingConflicts, register output claims and trigger migration
    *    (conflicts fire via callback -> addConflict + collect)
-   * 3. Add to consensus module + set initial weight
+   * 3. Add to consensus module + set initial weight (unverified = 0)
    * 4. Gossip notification
    * 5. Flush canonical view changes
-   * 6. For newly canonical blocks, add to sampling
+   * 6. Update probe module on canonicality changes
    */
   blockReceived(block: Block, fromPeer: string | null): BlockReceivedResult {
     // 1. Store the block
@@ -89,10 +116,8 @@ export class Coordinator {
     this.outputClaims.addBlock(block.hash, block.claims);
     this.outputClaims.onBlockLoaded(block.hash);
 
-    // 3. Consensus
+    // 3. Consensus -- start with declared weight (probing will refine)
     this.consensus.addBlock(block.hash);
-
-    // Trust declared weight initially -- reconstruct weight vector from block
     const weightVector = getBlockWeightVector(block);
     this.consensus.setVerifiedWeight(block.hash, weightVector);
 
@@ -104,11 +129,10 @@ export class Coordinator {
     this.consensus.flushChanges();
     const canonicalityChanges = [...this.canonicalityChanges];
 
-    // 6. Update probe module and legacy sampling on canonicality changes
+    // 6. Update probe module on canonicality changes
     for (const change of canonicalityChanges) {
       if (change.canonical) {
         this.probe.addBlock(change.hash);
-        this.sampling.addTree(change.hash);
       } else {
         this.probe.removeBlock(change.hash);
       }

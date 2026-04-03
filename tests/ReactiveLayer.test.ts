@@ -5,7 +5,7 @@ import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
-import { SamplingService } from '../src/core/SamplingService.ts';
+import { ProbeService } from '../src/core/ProbeService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
@@ -55,13 +55,13 @@ function setupStack() {
   const ctx = new ProtocolContext();
   const store = ctx.get(BlockStore);
   const consensus = ctx.get(ConsensusService);
-  const sampling = ctx.get(SamplingService);
+  const probe = ctx.get(ProbeService);
   ctx.get(TrustService);
   ctx.get(GossipService);
   ctx.get(BlockCreationService);
   const coordinator = ctx.get(Coordinator);
 
-  return { ctx, store, coordinator, consensus, sampling };
+  return { ctx, store, coordinator, consensus, probe };
 }
 
 /** A mock strategy that records every event it receives and returns configured actions. */
@@ -109,7 +109,7 @@ class MockBlockCreator implements BlockCreator {
 // -- Tests ----------------------------------------------------------
 
 Deno.test('ReactiveLayer: passes block through coordinator and strategies', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
   const strategy = new RecordingStrategy();
   const creator = new MockBlockCreator();
 
@@ -117,7 +117,7 @@ Deno.test('ReactiveLayer: passes block through coordinator and strategies', () =
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -138,7 +138,7 @@ Deno.test('ReactiveLayer: passes block through coordinator and strategies', () =
 });
 
 Deno.test('ReactiveLayer: passes fromPeer to event', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
   const strategy = new RecordingStrategy();
   const creator = new MockBlockCreator();
 
@@ -146,7 +146,7 @@ Deno.test('ReactiveLayer: passes fromPeer to event', () => {
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -158,7 +158,7 @@ Deno.test('ReactiveLayer: passes fromPeer to event', () => {
 });
 
 Deno.test('ReactiveLayer: collects actions from multiple strategies', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const strategy1 = new RecordingStrategy();
   strategy1.actionsToReturn = [
@@ -182,7 +182,7 @@ Deno.test('ReactiveLayer: collects actions from multiple strategies', () => {
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy1, strategy2],
     blockCreator: creator,
   });
@@ -198,7 +198,7 @@ Deno.test('ReactiveLayer: collects actions from multiple strategies', () => {
 });
 
 Deno.test('ReactiveLayer: createBlock action triggers recursion', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const genesis = createGenesisBlock([makeOutput(100, 'out0')]);
 
@@ -228,7 +228,7 @@ Deno.test('ReactiveLayer: createBlock action triggers recursion', () => {
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -249,7 +249,7 @@ Deno.test('ReactiveLayer: createBlock action triggers recursion', () => {
 });
 
 Deno.test('ReactiveLayer: recursion guard prevents strategies from evaluating cycle-created blocks', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const genesis = createGenesisBlock([makeOutput(100, 'out0')]);
   const childBlock = makeLeafBlock('guarded-child', genesis, [makeOutput(50, 'c-out')], 10);
@@ -280,7 +280,7 @@ Deno.test('ReactiveLayer: recursion guard prevents strategies from evaluating cy
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -298,7 +298,7 @@ Deno.test('ReactiveLayer: recursion guard prevents strategies from evaluating cy
 });
 
 Deno.test('ReactiveLayer: createBlock action with null return from creator does not recurse', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const genesis = createGenesisBlock([makeOutput(100, 'out0')]);
 
@@ -326,7 +326,7 @@ Deno.test('ReactiveLayer: createBlock action with null return from creator does 
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -345,7 +345,7 @@ Deno.test('ReactiveLayer: createBlock action with null return from creator does 
 });
 
 Deno.test('ReactiveLayer: event exposes coordinator result', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
   const strategy = new RecordingStrategy();
   const creator = new MockBlockCreator();
 
@@ -353,7 +353,7 @@ Deno.test('ReactiveLayer: event exposes coordinator result', () => {
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -370,7 +370,7 @@ Deno.test('ReactiveLayer: event exposes coordinator result', () => {
 });
 
 Deno.test('ReactiveLayer: event exposes services', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
   const strategy = new RecordingStrategy();
   const creator = new MockBlockCreator();
 
@@ -378,7 +378,7 @@ Deno.test('ReactiveLayer: event exposes services', () => {
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -389,18 +389,18 @@ Deno.test('ReactiveLayer: event exposes services', () => {
   const event = strategy.calls[0];
   assert(event.store === store);
   assert(event.consensus === consensus);
-  assert(event.sampling === sampling);
+  assert(event.probe === probe);
 });
 
 Deno.test('ReactiveLayer: no strategies means no actions', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
   const creator = new MockBlockCreator();
 
   const layer = new ReactiveLayer({
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [],
     blockCreator: creator,
   });
@@ -413,7 +413,7 @@ Deno.test('ReactiveLayer: no strategies means no actions', () => {
 });
 
 Deno.test('ReactiveLayer: multiple createBlock actions in one evaluation', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const genesis = createGenesisBlock([makeOutput(100, 'out0')]);
   const child1 = makeLeafBlock('multi-child1', genesis, [makeOutput(30, 'c1')], 5);
@@ -455,7 +455,7 @@ Deno.test('ReactiveLayer: multiple createBlock actions in one evaluation', () =>
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -475,7 +475,7 @@ Deno.test('ReactiveLayer: multiple createBlock actions in one evaluation', () =>
 });
 
 Deno.test('ReactiveLayer: recursive block creation with chained strategies', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const genesis = createGenesisBlock([makeOutput(100, 'out0')]);
   const child = makeLeafBlock('chain-child', genesis, [makeOutput(50, 'ch')], 10);
@@ -508,7 +508,7 @@ Deno.test('ReactiveLayer: recursive block creation with chained strategies', () 
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });
@@ -525,7 +525,7 @@ Deno.test('ReactiveLayer: recursive block creation with chained strategies', () 
 });
 
 Deno.test('ReactiveLayer: non-createBlock actions do not trigger block creator', () => {
-  const { store, coordinator, consensus, sampling } = setupStack();
+  const { store, coordinator, consensus, probe } = setupStack();
 
   const strategy = new RecordingStrategy();
   strategy.actionsToReturn = [
@@ -545,7 +545,7 @@ Deno.test('ReactiveLayer: non-createBlock actions do not trigger block creator',
     coordinator,
     store,
     consensus,
-    sampling,
+    probe,
     strategies: [strategy],
     blockCreator: creator,
   });

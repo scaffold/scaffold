@@ -1,38 +1,39 @@
 import { Hash } from '../util/Hash.ts';
 import { ExecutionResult } from './ExecutionModule.ts';
 import { ExecutionService } from './ExecutionService.ts';
-import { SamplingService } from './SamplingService.ts';
+import { ProbeResult } from './ProbeModule.ts';
+import { ProbeService } from './ProbeService.ts';
 import { VerificationModule, VerificationProvider } from './VerificationModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
 class VerificationProviderAdapter implements VerificationProvider {
   constructor(
-    private readonly sampling: SamplingService,
+    private readonly probe: ProbeService,
     private readonly execution: ExecutionService,
   ) {}
 
   selectNextTree(): Hash | undefined {
-    return this.sampling.selectNext();
+    return this.probe.selectNext();
+  }
+
+  initProbe(treeHash: Hash): ProbeResult {
+    return this.probe.initProbe(treeHash);
   }
 
   verifyBlock(blockHash: Hash): ExecutionResult {
     return this.execution.verifyBlock(blockHash);
   }
 
-  reportSuccess(treeHash: Hash): void {
-    this.sampling.recordSampleSuccess(treeHash);
-  }
-
-  reportFailure(treeHash: Hash): void {
-    this.sampling.recordSampleFailure(treeHash);
+  recordVerification(blockHash: Hash, success: boolean): void {
+    this.probe.recordVerification(blockHash, success);
   }
 }
 
-/** VerificationModule wired to SamplingService and ExecutionService via ProtocolContext. */
+/** VerificationModule wired to ProbeService and ExecutionService via ProtocolContext. */
 export class VerificationService extends VerificationModule {
   constructor(ctx: ProtocolContext) {
-    const sampling = ctx.get(SamplingService);
+    const probe = ctx.get(ProbeService);
     const execution = ctx.get(ExecutionService);
-    super(new VerificationProviderAdapter(sampling, execution));
+    super(new VerificationProviderAdapter(probe, execution));
   }
 }

@@ -41,7 +41,7 @@ function makeEvent(
     result,
     store: new BlockStore(),
     consensus: mockConsensus(canonicalHashes),
-    sampling: {} as ReactiveEvent['sampling'],
+    probe: {} as ReactiveEvent['probe'],
   };
 }
 

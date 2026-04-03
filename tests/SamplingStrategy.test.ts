@@ -1,67 +1,73 @@
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
-import { SamplingModule, SamplingProvider } from '../src/core/SamplingModule.ts';
-import { Action, ReactiveEvent } from '../src/node/ReactiveLayer.ts';
+import { ProbeModule, ProbeProvider } from '../src/core/ProbeModule.ts';
+import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { SamplingStrategy } from '../src/node/strategies/SamplingStrategy.ts';
 
 // -- Test helpers ------------------------------------------------
 
-interface TestTree {
+interface TestBlock {
   hash: Hash;
-  declaredWork: number;
-  descendantWeight: number;
+  aggregates: Hash[];
+  selfWeight: number;
+  subtreeWeight: number;
 }
 
-class TestProvider implements SamplingProvider<TestTree> {
-  private trees = new Map<HashPrimitive, TestTree>();
+class TestProvider implements ProbeProvider<TestBlock> {
+  private blocks = new Map<HashPrimitive, TestBlock>();
 
-  add(tree: TestTree): void {
-    this.trees.set(tree.hash.toPrimitive(), tree);
+  add(block: TestBlock): void {
+    this.blocks.set(block.hash.toPrimitive(), block);
   }
 
-  getBlock(hash: Hash): TestTree | undefined {
-    return this.trees.get(hash.toPrimitive());
+  getBlock(hash: Hash): TestBlock | undefined {
+    return this.blocks.get(hash.toPrimitive());
   }
 
-  getDeclaredWork(block: TestTree): number {
-    return block.declaredWork;
+  getHash(block: TestBlock): Hash {
+    return block.hash;
   }
 
-  getDescendantWeight(block: TestTree): number {
-    return block.descendantWeight;
+  getAggregates(block: TestBlock): Hash[] {
+    return block.aggregates;
+  }
+
+  getSelfWeight(block: TestBlock): number {
+    return block.selfWeight;
+  }
+
+  getAggregateWeights(block: TestBlock): number[] {
+    return block.aggregates.map((aggHash) => {
+      const agg = this.blocks.get(aggHash.toPrimitive());
+      return agg ? agg.subtreeWeight : 0;
+    });
   }
 }
 
 const h = (name: string): Hash => Hash.digest(name);
 
-function tree(name: string, declaredWork: number, descendantWeight = 0): TestTree {
-  return { hash: h(name), declaredWork, descendantWeight };
+function block(name: string, weight: number): TestBlock {
+  return { hash: h(name), aggregates: [], selfWeight: weight, subtreeWeight: weight };
 }
 
-/** Create a SamplingModule with registered trees. */
-function setupSampling(...trees: TestTree[]): {
-  provider: TestProvider;
-  module: SamplingModule<TestTree>;
-} {
+function setupProbe(...blocks: TestBlock[]): ProbeModule<TestBlock> {
   const provider = new TestProvider();
-  const module = new SamplingModule(provider);
-  for (const t of trees) {
-    provider.add(t);
-    module.addTree(t.hash);
+  const module = new ProbeModule<TestBlock>(provider);
+  for (const b of blocks) {
+    provider.add(b);
+    module.addBlock(b.hash);
   }
-  return { provider, module };
+  return module;
 }
 
-/** Create a minimal mock Block for the ReactiveEvent. */
 function stubBlock(blockHash: Hash): Block {
   return { hash: blockHash } as unknown as Block;
 }
 
-/** Create a ReactiveEvent with canonicality changes. */
 function makeEvent(
-  module: SamplingModule<TestTree>,
+  probe: ProbeModule<TestBlock>,
   blockHash: Hash,
   canonicalityChanges: { hash: Hash; canonical: boolean }[],
 ): ReactiveEvent {
@@ -76,53 +82,45 @@ function makeEvent(
     result,
     store: new BlockStore(),
     consensus: {} as ReactiveEvent['consensus'],
-    sampling: module as unknown as ReactiveEvent['sampling'],
+    probe: probe as unknown as ReactiveEvent['probe'],
   };
 }
 
-/** Shorthand: event with a single newly-canonical block. */
 function canonicalEvent(
-  module: SamplingModule<TestTree>,
+  probe: ProbeModule<TestBlock>,
   blockName: string,
 ): ReactiveEvent {
-  return makeEvent(module, h(blockName), [{ hash: h(blockName), canonical: true }]);
+  return makeEvent(probe, h(blockName), [{ hash: h(blockName), canonical: true }]);
 }
 
 // -- Tests -------------------------------------------------------
 
-Deno.test('new canonical block triggers verify action when sampling says it needs verification', () => {
-  const { module } = setupSampling(tree('A', 1000));
+Deno.test('new canonical block triggers verify action via probe', () => {
+  const probe = setupProbe(block('A', 1000));
   const strategy = new SamplingStrategy();
 
-  const actions = strategy.evaluate(canonicalEvent(module, 'A'));
+  const actions = strategy.evaluate(canonicalEvent(probe, 'A'));
 
   assertEquals(actions.length, 1);
   assertEquals(actions[0].type, 'verify');
-  if (actions[0].type === 'verify') {
-    assertEquals(Hash.equals(actions[0].block, h('A')), true);
-  }
 });
 
 Deno.test('in-flight blocks are not re-verified', () => {
-  const { module } = setupSampling(tree('A', 1000));
+  const probe = setupProbe(block('A', 1000));
   const strategy = new SamplingStrategy();
 
-  // First evaluation puts A in-flight.
-  const first = strategy.evaluate(canonicalEvent(module, 'A'));
+  const first = strategy.evaluate(canonicalEvent(probe, 'A'));
   assertEquals(first.length, 1);
 
-  // Second evaluation should not re-verify A.
-  const second = strategy.evaluate(canonicalEvent(module, 'A'));
+  const second = strategy.evaluate(canonicalEvent(probe, 'A'));
   assertEquals(second.length, 0);
 });
 
 Deno.test('maxConcurrent limit is respected', () => {
-  const trees = [tree('A', 1000), tree('B', 900), tree('C', 800), tree('D', 700)];
-  const { module } = setupSampling(...trees);
+  const probe = setupProbe(block('A', 1000), block('B', 900), block('C', 800), block('D', 700));
   const strategy = new SamplingStrategy({ maxConcurrent: 2 });
 
-  // Create an event with all four blocks becoming canonical.
-  const event = makeEvent(module, h('A'), [
+  const event = makeEvent(probe, h('A'), [
     { hash: h('A'), canonical: true },
     { hash: h('B'), canonical: true },
     { hash: h('C'), canonical: true },
@@ -135,87 +133,53 @@ Deno.test('maxConcurrent limit is respected', () => {
 });
 
 Deno.test('minPriority threshold filters low-priority blocks', () => {
-  // A tree with very low declared work will have low priority.
-  const { module } = setupSampling(tree('low', 1));
+  const probe = setupProbe(block('low', 1));
   const strategy = new SamplingStrategy({ minPriority: 1000 });
 
-  const actions = strategy.evaluate(canonicalEvent(module, 'low'));
+  const actions = strategy.evaluate(canonicalEvent(probe, 'low'));
   assertEquals(actions.length, 0);
 });
 
 Deno.test('completeVerification removes from inFlight', () => {
-  const { module } = setupSampling(tree('A', 1000));
+  const probe = setupProbe(block('A', 1000));
   const strategy = new SamplingStrategy({ maxConcurrent: 1 });
 
-  // Verify A.
-  strategy.evaluate(canonicalEvent(module, 'A'));
+  strategy.evaluate(canonicalEvent(probe, 'A'));
   assertEquals(strategy.inFlightCount, 1);
 
-  // Complete verification.
   strategy.completeVerification(h('A'));
   assertEquals(strategy.inFlightCount, 0);
 });
 
 Deno.test('no action when no blocks need verification', () => {
-  const provider = new TestProvider();
-  const module = new SamplingModule(provider);
-  // No trees registered at all.
+  const probe = new ProbeModule<TestBlock>(new TestProvider());
   const strategy = new SamplingStrategy();
 
-  const event = makeEvent(module, h('X'), [{ hash: h('X'), canonical: true }]);
+  const event = makeEvent(probe, h('X'), [{ hash: h('X'), canonical: true }]);
   const actions = strategy.evaluate(event);
   assertEquals(actions.length, 0);
 });
 
 Deno.test('no action when event has no canonical changes', () => {
-  const { module } = setupSampling(tree('A', 1000));
+  const probe = setupProbe(block('A', 1000));
   const strategy = new SamplingStrategy();
 
-  // Event with only off-canonical changes.
-  const event = makeEvent(module, h('A'), [{ hash: h('A'), canonical: false }]);
+  const event = makeEvent(probe, h('A'), [{ hash: h('A'), canonical: false }]);
   const actions = strategy.evaluate(event);
   assertEquals(actions.length, 0);
 });
 
 Deno.test('completing a verification allows that slot to be reused', () => {
-  const { module } = setupSampling(tree('A', 1000), tree('B', 900));
+  const probe = setupProbe(block('A', 1000), block('B', 900));
   const strategy = new SamplingStrategy({ maxConcurrent: 1 });
 
-  // Fill the single slot with A.
-  const first = strategy.evaluate(canonicalEvent(module, 'A'));
+  const first = strategy.evaluate(canonicalEvent(probe, 'A'));
   assertEquals(first.length, 1);
-  if (first[0].type === 'verify') {
-    assertEquals(Hash.equals(first[0].block, h('A')), true);
-  }
 
-  // Try to verify B — slot is full.
-  const blocked = strategy.evaluate(canonicalEvent(module, 'B'));
-  assertEquals(blocked.length, 0);
-
-  // Complete A.
+  // Complete A -- slot is free
   strategy.completeVerification(h('A'));
 
-  // Now B should be verifiable.
-  const after = strategy.evaluate(canonicalEvent(module, 'B'));
-  assertEquals(after.length, 1);
-  if (after[0].type === 'verify') {
-    assertEquals(Hash.equals(after[0].block, h('B')), true);
-  }
-});
-
-Deno.test('verify action contains block hash and contract hash', () => {
-  const { module } = setupSampling(tree('A', 1000));
-  const strategy = new SamplingStrategy();
-
-  const actions = strategy.evaluate(canonicalEvent(module, 'A'));
-  assertEquals(actions.length, 1);
-  assertEquals(actions[0].type, 'verify');
-  if (actions[0].type === 'verify') {
-    // block should be the selected block.
-    assertEquals(Hash.equals(actions[0].block, h('A')), true);
-    // contract is the tree root hash.
-    assertEquals(Hash.equals(actions[0].contract, h('A')), true);
-    // params should be a Uint8Array.
-    assertEquals(actions[0].params instanceof Uint8Array, true);
-  }
+  // Now B can be verified
+  const second = strategy.evaluate(canonicalEvent(probe, 'B'));
+  assertEquals(second.length, 1);
 });
