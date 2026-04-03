@@ -505,7 +505,7 @@ function IOOverlay(
             className="detail-value mono"
             style={{ wordBreak: "break-all" }}
           >
-            {data.output.data.length > 0
+            {data.output.data && data.output.data.length > 0
               ? toHex(data.output.data)
               : <span className="muted">empty</span>}
           </span>
