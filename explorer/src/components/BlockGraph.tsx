@@ -19,7 +19,10 @@ import type {
   SimulationNodeDatum,
 } from "d3-force";
 import { useHighlightRegistry } from "../highlight/HighlightContext.ts";
-import { getContractName } from "../contracts.ts";
+import { getContract, getContractName } from "../contracts.ts";
+import { FieldTree } from "./FieldTree.tsx";
+import { RecordingWalkerHost } from "scaffold.io/core/RecordingWalkerHost.ts";
+import type { FieldNode } from "scaffold.io/core/RecordingWalkerHost.ts";
 import { DateSummary } from "./DateSummary.tsx";
 import { Hash } from "scaffold.io/util/Hash.ts";
 import { SIGNATURE_CONTRACT } from "scaffold.io/core/Block.ts";
@@ -81,6 +84,27 @@ function toHex(bytes: Uint8Array): string {
     hex += bytes[i].toString(16).padStart(2, "0");
   }
   return hex;
+}
+
+function tryWalkParams(contractHash: Hash, params: Uint8Array): FieldNode[] | null {
+  const contract = getContract(contractHash);
+  if (!contract?.walkParams) return null;
+  const host = new RecordingWalkerHost();
+  contract.walkParams(params, host);
+  return host.getTree();
+}
+
+function tryWalkData(contractHash: Hash, data: Uint8Array): FieldNode[] | null {
+  if (data.length === 0) return null;
+  const contract = getContract(contractHash);
+  if (!contract?.walkData) return null;
+  try {
+    const host = new RecordingWalkerHost();
+    contract.walkData(data, host);
+    return host.getTree();
+  } catch {
+    return null;
+  }
 }
 
 function computeGraphData(
@@ -494,9 +518,16 @@ function IOOverlay(
             className="detail-value mono"
             style={{ wordBreak: "break-all" }}
           >
-            {data.output.verifier.params.length > 0
-              ? toHex(data.output.verifier.params)
-              : <span className="muted">empty</span>}
+            {(() => {
+              const tree = tryWalkParams(
+                data.output.verifier.contract,
+                data.output.verifier.params,
+              );
+              if (tree && tree.length > 0) return <FieldTree nodes={tree} />;
+              return data.output.verifier.params.length > 0
+                ? toHex(data.output.verifier.params)
+                : <span className="muted">empty</span>;
+            })()}
           </span>
         </div>
         <div className="io-overlay-row">
@@ -505,9 +536,17 @@ function IOOverlay(
             className="detail-value mono"
             style={{ wordBreak: "break-all" }}
           >
-            {data.output.data && data.output.data.length > 0
-              ? toHex(data.output.data)
-              : <span className="muted">empty</span>}
+            {(() => {
+              if (!data.output.data || data.output.data.length === 0) {
+                return <span className="muted">empty</span>;
+              }
+              const tree = tryWalkData(
+                data.output.verifier.contract,
+                data.output.data,
+              );
+              if (tree && tree.length > 0) return <FieldTree nodes={tree} />;
+              return toHex(data.output.data);
+            })()}
           </span>
         </div>
         <div className="io-overlay-row">
