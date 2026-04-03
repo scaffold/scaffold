@@ -104,11 +104,13 @@ export class Coordinator {
     this.consensus.flushChanges();
     const canonicalityChanges = [...this.canonicalityChanges];
 
-    // 6. For newly canonical blocks, add to probe module (and legacy sampling)
+    // 6. Update probe module and legacy sampling on canonicality changes
     for (const change of canonicalityChanges) {
       if (change.canonical) {
         this.probe.addBlock(change.hash);
         this.sampling.addTree(change.hash);
+      } else {
+        this.probe.removeBlock(change.hash);
       }
     }
 

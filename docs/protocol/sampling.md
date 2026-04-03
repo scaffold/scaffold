@@ -164,26 +164,35 @@ swing(T) = 2I(r + 1)(q - r + 1) / [(q + 2)^2(q + 3)]
 
 Unknown trees get maximum priority per unit of incentive. Maximum uncertainty (r = q/2) maximizes swing. Well-characterized trees (high or low weight factor) have minimal swing -- we already know enough about them.
 
-### Conflict Proximity Multiplier
+### Expected Canonicality Change
 
-Trees in close conflicts benefit more from probing -- one probe could flip the conflict outcome. The proximity multiplier scales priority by the inverse of the weight gap:
+For trees in a conflict, priority should reflect the expected change to the canonical set from one probe. This depends on three factors:
+
+1. **Swing**: How much could the tree's weight change? (from the formula above)
+2. **Gap**: How close is the conflict? A small gap means one probe could flip the winner.
+3. **Contested weight**: How much canonical weight is at stake? Two large trees flipping is a bigger deal than two small ones.
+
+One probe changes T's weight by approximately `swing`. The probability of flipping the conflict winner is roughly `swing / gap`. If a flip occurs, the canonical set changes by `contested_weight = w_T + w_R` (one tree enters canonical, the other leaves).
+
+The expected canonicality change:
 
 ```
-proximity(T) = 1 / max(|weight_T - weight_rival|, epsilon)
+E[DC] = swing * contested_weight / max(gap, epsilon)
 ```
 
-Where `weight_rival` is the weight of T's closest conflict partner. Trees far from any conflict boundary have low proximity (low urgency). Trees at the decision boundary have high proximity (one probe could flip the canonical set).
-
-For trees with no active conflicts, proximity defaults to 1 (no multiplier).
+Where:
+- `contested_weight = w_T + w_R` (sum of both trees' weights)
+- `gap = |w_T - w_R|` (absolute weight difference)
+- `epsilon` prevents division by zero when the gap is negligible
 
 ### Full Priority Formula
 
 ```
-priority(T) = swing(T) * proximity(T)
-            = [2I(r+1)(q-r+1) / ((q+2)^2(q+3))] * [1 / max(|gap|, epsilon)]
+priority(T) = swing(T)                                              [no conflict]
+priority(T) = swing(T) * contested_weight / max(gap, epsilon)      [in conflict]
 ```
 
-The tree with the highest priority is selected for probing.
+Two large trees (w=1000 each) with a tiny gap (1) produce `swing * 2000` -- very high priority. The same trees with a large gap (500) produce `swing * 4` -- much lower. The tree with the highest priority is selected for probing.
 
 ### Pending Backpressure
 

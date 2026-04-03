@@ -30,10 +30,6 @@ export interface ProbeProvider<BlockType> {
 
 /** Per-block probe state tracking probe history and verification outcomes. */
 export interface BlockProbeState {
-  /** Verification cost per aggregate subtree. */
-  readonly aggregateWeights: number[];
-  /** This block's own verification cost. */
-  readonly selfWeight: number;
   /** Probe log: -1 = self (terminal), i = aggregate index. */
   readonly queries: number[];
   /** Whether this block's own verification passed. */
@@ -43,12 +39,17 @@ export interface BlockProbeState {
 /** Result of initiating a probe on a block. */
 export type ProbeResult =
   | { terminal: true; blockHash: Hash }
-  | { terminal: false; reason: 'missing' | 'no_weight' };
+  | { terminal: false; reason: 'missing' | 'no_weight' | 'reused' };
 
-/** Configuration for conflict proximity in priority computation. */
+/**
+ * Conflict info for a tree, used to compute expected canonicality change.
+ * The priority multiplier is: contested_weight / max(gap, epsilon).
+ */
 export interface ProbeConflictInfo {
   /** The absolute weight gap to the closest conflict rival. */
   weightGap: number;
+  /** Sum of this tree's weight and the rival's weight. */
+  contestedWeight: number;
 }
 
 // -- Module ---------------------------------------------------------
@@ -74,7 +75,7 @@ export class ProbeModule<BlockType> {
   /** Listeners for weight factor changes. */
   private readonly _weightListeners: ((hash: Hash) => void)[] = [];
 
-  /** Optional: conflict info supplier for proximity multiplier. */
+  /** Optional: conflict info supplier for canonicality change multiplier. */
   private _conflictInfo?: (hash: Hash) => ProbeConflictInfo | undefined;
 
   /** Optional: random number generator (defaults to Math.random). */
@@ -87,7 +88,7 @@ export class ProbeModule<BlockType> {
 
   // -- Configuration ------------------------------------------------
 
-  /** Set the conflict info supplier for priority proximity multiplier. */
+  /** Set the conflict info supplier for priority canonicality change multiplier. */
   setConflictInfoSupplier(supplier: (hash: Hash) => ProbeConflictInfo | undefined): void {
     this._conflictInfo = supplier;
   }
@@ -101,7 +102,7 @@ export class ProbeModule<BlockType> {
 
   // -- Mutations ----------------------------------------------------
 
-  /** Register a block for probing. Computes initial state from provider. */
+  /** Register a block for probing. Creates initial probe state. */
   addBlock(hash: Hash): void {
     const key = hash.toPrimitive();
     if (this._states.has(key)) return;
@@ -109,12 +110,7 @@ export class ProbeModule<BlockType> {
     const block = this._provider.getBlock(hash);
     if (!block) return;
 
-    const aggregateWeights = this._provider.getAggregateWeights(block);
-    const selfWeight = this._provider.getSelfWeight(block);
-
     this._states.set(key, {
-      aggregateWeights,
-      selfWeight,
       queries: [],
       selfVerified: false,
     });
@@ -133,7 +129,7 @@ export class ProbeModule<BlockType> {
    * tree proportionally to weight until a terminal is reached.
    *
    * Returns the terminal block to verify, or a reason the probe could not
-   * complete (missing block, zero weight).
+   * complete (missing block, zero weight, or reused existing probe).
    */
   initProbe(hash: Hash): ProbeResult {
     const key = hash.toPrimitive();
@@ -148,21 +144,29 @@ export class ProbeModule<BlockType> {
       return { terminal: false, reason: 'missing' };
     }
 
-    const totalWeight = state.selfWeight + state.aggregateWeights.reduce((a, b) => a + b, 0);
+    const block = this._provider.getBlock(hash);
+    if (!block) {
+      return { terminal: false, reason: 'missing' };
+    }
+
+    // Query weights dynamically from the provider each time
+    const selfWeight = this._provider.getSelfWeight(block);
+    const aggregateWeights = this._provider.getAggregateWeights(block);
+    const totalWeight = selfWeight + aggregateWeights.reduce((a, b) => a + b, 0);
+
     if (totalWeight <= 0) {
       return { terminal: false, reason: 'no_weight' };
     }
 
     // Random descent proportional to weight
     let probeAt = this._random() * totalWeight;
-    for (let i = 0; i < state.aggregateWeights.length; i++) {
-      const w = state.aggregateWeights[i];
+    const aggregates = this._provider.getAggregates(block);
+    for (let i = 0; i < aggregateWeights.length; i++) {
+      const w = aggregateWeights[i];
       if (probeAt < w) {
         // Probe descends into aggregate i
         state.queries.push(i);
 
-        const block = this._provider.getBlock(hash)!;
-        const aggregates = this._provider.getAggregates(block);
         const aggHash = aggregates[i];
 
         // Ensure the aggregate has enough probes to match what we've sent
@@ -175,9 +179,8 @@ export class ProbeModule<BlockType> {
         }
 
         // Aggregate already has enough probes -- reuse existing result.
-        // No new terminal needs to be verified; the query is recorded
-        // and will be counted via countVerifications.
-        return { terminal: false, reason: 'no_weight' };
+        // The query is recorded and will be counted via countVerifications.
+        return { terminal: false, reason: 'reused' };
       }
       probeAt -= w;
     }
@@ -189,7 +192,7 @@ export class ProbeModule<BlockType> {
 
   /**
    * Record verification result for a terminal block.
-   * Sets selfVerified and notifies listeners up the tree.
+   * Sets selfVerified and notifies listeners.
    */
   recordVerification(hash: Hash, success: boolean): void {
     const state = this._states.get(hash.toPrimitive());
@@ -238,7 +241,8 @@ export class ProbeModule<BlockType> {
     let verifications = 0;
 
     // Count verified terminals in each aggregate subtree
-    const block = this._provider.getBlock(this._blocks.get(hash.toPrimitive())!);
+    const blockHash = this._blocks.get(hash.toPrimitive());
+    const block = blockHash ? this._provider.getBlock(blockHash) : undefined;
     if (block) {
       const aggregates = this._provider.getAggregates(block);
       for (let i = 0; i < aggregates.length; i++) {
@@ -256,12 +260,26 @@ export class ProbeModule<BlockType> {
     return verifications;
   }
 
+  /** Get total weight for a block (self + aggregates), queried dynamically. */
+  getTotalWeight(hash: Hash): number {
+    const block = this._provider.getBlock(hash);
+    if (!block) return 0;
+    const selfWeight = this._provider.getSelfWeight(block);
+    const aggregateWeights = this._provider.getAggregateWeights(block);
+    return selfWeight + aggregateWeights.reduce((a, b) => a + b, 0);
+  }
+
   /**
-   * Compute the scheduling priority for a block using the expected
-   * weight swing formula with optional conflict proximity multiplier.
+   * Compute the scheduling priority for a block.
    *
-   * swing = 2I(r+1)(q-r+1) / [(q+2)^2(q+3)]
-   * priority = swing * proximity
+   * Base priority is the expected weight swing from one probe:
+   *   swing = 2I(r+1)(q-r+1) / [(q+2)^2(q+3)]
+   *
+   * For trees in a conflict, priority is the expected canonicality change:
+   *   priority = swing * contested_weight / max(gap, epsilon)
+   *
+   * This represents "how much canonical weight could shift from one probe."
+   * Two large trees with a small gap have a very high expected change.
    */
   getPriority(hash: Hash): number {
     const state = this._states.get(hash.toPrimitive());
@@ -269,7 +287,7 @@ export class ProbeModule<BlockType> {
 
     const q = state.queries.length;
     const r = q > 0 ? this.countVerifications(hash, q) : 0;
-    const incentive = state.selfWeight + state.aggregateWeights.reduce((a, b) => a + b, 0);
+    const incentive = this.getTotalWeight(hash);
 
     if (incentive <= 0) return 0;
 
@@ -279,17 +297,16 @@ export class ProbeModule<BlockType> {
     const s = alpha + beta; // = q + 2
     const swing = (2 * incentive * alpha * beta) / (s * s * (s + 1));
 
-    // Conflict proximity multiplier
-    let proximity = 1;
+    // Expected canonicality change multiplier
     if (this._conflictInfo) {
       const info = this._conflictInfo(hash);
       if (info) {
         const epsilon = 1; // minimum gap to avoid division by zero
-        proximity = 1 / Math.max(info.weightGap, epsilon);
+        return swing * info.contestedWeight / Math.max(info.weightGap, epsilon);
       }
     }
 
-    return swing * proximity;
+    return swing;
   }
 
   /** Select the highest-priority block to probe next, or undefined if none. */

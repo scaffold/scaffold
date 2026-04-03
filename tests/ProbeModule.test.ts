@@ -13,8 +13,8 @@ interface TestBlock {
 
 class TestProvider implements ProbeProvider<TestBlock> {
   private blocks = new Map<HashPrimitive, TestBlock>();
-  /** Override weights for aggregates that might be missing. */
-  private weightOverrides = new Map<HashPrimitive, number>();
+  /** Override subtree weights for aggregates that might be missing. */
+  private subtreeWeights = new Map<HashPrimitive, number>();
 
   add(block: TestBlock): void {
     this.blocks.set(block.hash.toPrimitive(), block);
@@ -24,9 +24,8 @@ class TestProvider implements ProbeProvider<TestBlock> {
     this.blocks.delete(hash.toPrimitive());
   }
 
-  /** Set a weight override for a hash (useful for missing blocks). */
-  setWeightOverride(hash: Hash, weight: number): void {
-    this.weightOverrides.set(hash.toPrimitive(), weight);
+  setSubtreeWeight(hash: Hash, weight: number): void {
+    this.subtreeWeights.set(hash.toPrimitive(), weight);
   }
 
   getBlock(hash: Hash): TestBlock | undefined {
@@ -47,7 +46,7 @@ class TestProvider implements ProbeProvider<TestBlock> {
 
   getAggregateWeights(block: TestBlock): number[] {
     return block.aggregates.map((aggHash) => {
-      const override = this.weightOverrides.get(aggHash.toPrimitive());
+      const override = this.subtreeWeights.get(aggHash.toPrimitive());
       if (override !== undefined) return override;
       const agg = this.blocks.get(aggHash.toPrimitive());
       return agg ? agg.subtreeWeight : 0;
@@ -57,11 +56,11 @@ class TestProvider implements ProbeProvider<TestBlock> {
 
 const h = (name: string): Hash => Hash.digest(name);
 
-function leaf(name: string, weight: number): TestBlock {
-  return { hash: h(name), aggregates: [], selfWeight: weight, subtreeWeight: weight };
-}
-
-function agg(name: string, selfWeight: number, children: TestBlock[]): TestBlock {
+function block(
+  name: string,
+  selfWeight: number,
+  children: TestBlock[] = [],
+): TestBlock {
   const subtreeWeight = selfWeight + children.reduce((s, c) => s + c.subtreeWeight, 0);
   return {
     hash: h(name),
@@ -83,390 +82,424 @@ function setup(
 ): { provider: TestProvider; module: ProbeModule<TestBlock> } {
   const provider = new TestProvider();
   const module = new ProbeModule(provider, random);
-  // Add all blocks to provider first, then register with module.
-  // This ensures aggregate weights resolve correctly.
-  for (const block of blocks) {
-    provider.add(block);
+  for (const b of blocks) {
+    provider.add(b);
   }
-  for (const block of blocks) {
-    module.addBlock(block.hash);
+  for (const b of blocks) {
+    module.addBlock(b.hash);
   }
   return { provider, module };
 }
 
-// -- Tests -------------------------------------------------------
+/** Compute expected swing formula: 2I(r+1)(q-r+1) / [(q+2)^2(q+3)] */
+function swing(I: number, q: number, r: number): number {
+  const alpha = r + 1;
+  const beta = q - r + 1;
+  const s = alpha + beta;
+  return (2 * I * alpha * beta) / (s * s * (s + 1));
+}
 
-// Weight factor basics
+// -- Probe descent -----------------------------------------------
 
-Deno.test('Probe: unprobed block has weight factor 0', () => {
-  const { module } = setup([leaf('A', 100)]);
-  assertEquals(module.getWeightFactor(h('A')), 0);
-});
+Deno.test('Probe: descent distributes proportionally to weight', () => {
+  const A = block('A', 40);
+  const B = block('B', 30);
+  const G = block('G', 10, [A, B]); // total: 80
 
-Deno.test('Probe: self-verified leaf has weight factor 1 after one probe', () => {
-  // Random value > 0 always hits self (no aggregates)
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
-
-  const result = module.initProbe(h('A'));
-  assertEquals(result.terminal, true);
-  if (result.terminal) {
-    assertEquals(Hash.equals(result.blockHash, h('A')), true);
-  }
-
-  module.recordVerification(h('A'), true);
-  assertEquals(module.getWeightFactor(h('A')), 1.0);
-});
-
-Deno.test('Probe: failed verification keeps weight factor at 0', () => {
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
-
-  module.initProbe(h('A'));
-  module.recordVerification(h('A'), false);
-
-  // Query logged, but selfVerified remains false
-  const state = module.getProbeState(h('A'))!;
-  assertEquals(state.queries.length, 1);
-  assertEquals(state.selfVerified, false);
-  assertEquals(module.getWeightFactor(h('A')), 0);
-});
-
-Deno.test('Probe: weight factor is ratio of verified to total queries', () => {
-  // Use a tree with two aggregates to get a mix of verified and unverified
-  const B = leaf('B', 50);
-  const C = leaf('C', 50);
-  const A = agg('A', 0, [B, C]); // selfWeight=0, probes always go to aggregates
-
-  // Seeded: 0.1 -> B, 0.9 -> C, 0.1 -> B
-  const { module } = setup([A, B, C], seededRandom([0.1, 0.9, 0.1]));
-
-  module.initProbe(A.hash); // -> B
-  module.recordVerification(B.hash, true);
-  module.initProbe(A.hash); // -> C (not verified)
-  module.initProbe(A.hash); // -> B (reuse, already has enough probes)
-
-  // A has 3 queries: [0(B), 1(C), 0(B)]
-  const state = module.getProbeState(A.hash)!;
-  assertEquals(state.queries.length, 3);
-  // B verified, C not -- 2 out of 3 queries hit B (verified), 1 hits C (not)
-  // countVerifications: B limited to 2 probes -> 2 verified; C limited to 1 -> 0
-  assertAlmostEquals(module.getWeightFactor(A.hash), 2 / 3);
-});
-
-// Probe descent
-
-Deno.test('Probe: descent follows weight proportions', () => {
-  // A has selfWeight=10, aggregate B with subtreeWeight=90
-  // So B should get ~90% of probes, self ~10%
-  const B = leaf('B', 90);
-  const A = agg('A', 10, [B]);
-
+  let aCount = 0;
+  let bCount = 0;
   let selfCount = 0;
-  let aggCount = 0;
-  const N = 1000;
+  const N = 5000;
 
   for (let i = 0; i < N; i++) {
-    const provider = new TestProvider();
-    provider.add(A);
-    provider.add(B);
-    const module = new ProbeModule(provider); // real randomness
-    module.addBlock(A.hash);
-    module.addBlock(B.hash);
-
-    const result = module.initProbe(A.hash);
-    if (result.terminal) {
-      const state = module.getProbeState(A.hash)!;
-      if (state.queries[0] === -1) selfCount++;
-      else aggCount++;
-    } else {
-      aggCount++;
-    }
+    const { module } = setup([G, A, B]);
+    module.initProbe(G.hash);
+    const q = module.getProbeState(G.hash)!.queries[0];
+    if (q === 0) aCount++;
+    else if (q === 1) bCount++;
+    else selfCount++;
   }
 
-  // B should get ~90% of probes (allow 5% tolerance)
-  const aggFraction = aggCount / N;
-  assertEquals(aggFraction > 0.82, true, `aggFraction ${aggFraction} should be > 0.82`);
-  assertEquals(aggFraction < 0.98, true, `aggFraction ${aggFraction} should be < 0.98`);
+  // A ~50%, B ~37.5%, self ~12.5% (tolerance +/-5%)
+  assertEquals(aCount / N > 0.45, true, `A fraction ${aCount / N}`);
+  assertEquals(aCount / N < 0.55, true, `A fraction ${aCount / N}`);
+  assertEquals(bCount / N > 0.32, true, `B fraction ${bCount / N}`);
+  assertEquals(bCount / N < 0.43, true, `B fraction ${bCount / N}`);
+  assertEquals(selfCount / N > 0.07, true, `self fraction ${selfCount / N}`);
+  assertEquals(selfCount / N < 0.18, true, `self fraction ${selfCount / N}`);
+});
+
+Deno.test('Probe: deterministic descent picks aggregate when random < agg weight', () => {
+  const A = block('A', 40);
+  const B = block('B', 30);
+  const G = block('G', 10, [A, B]);
+  const { module } = setup([G, A, B], seededRandom([0.0]));
+
+  module.initProbe(G.hash);
+  assertEquals(module.getProbeState(G.hash)!.queries[0], 0);
+});
+
+Deno.test('Probe: deterministic descent picks self when in self-weight range', () => {
+  const A = block('A', 40);
+  const B = block('B', 30);
+  const G = block('G', 10, [A, B]); // self range: [70/80, 80/80] = [0.875, 1.0]
+  const { module } = setup([G, A, B], seededRandom([0.999]));
+
+  module.initProbe(G.hash);
+  assertEquals(module.getProbeState(G.hash)!.queries[0], -1);
+});
+
+Deno.test('Probe: block with selfWeight > 0 and no aggregates is always terminal', () => {
+  const G = block('G', 10);
+  const { module } = setup([G], seededRandom([0.5]));
+
+  const result = module.initProbe(G.hash);
+  assertEquals(result.terminal, true);
+  if (result.terminal) assertEquals(Hash.equals(result.blockHash, G.hash), true);
+  assertEquals(module.getProbeState(G.hash)!.queries[0], -1);
 });
 
 Deno.test('Probe: block with selfWeight=0 always descends to aggregates', () => {
-  const B = leaf('B', 50);
-  const A = agg('A', 0, [B]);
-  // Any random value should descend to B (selfWeight=0 is never selected)
-  const { module } = setup([A, B], seededRandom([0.1]));
+  const A = block('A', 50);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A], seededRandom([0.5]));
 
-  module.initProbe(A.hash);
-  const state = module.getProbeState(A.hash)!;
-  assertEquals(state.queries[0], 0); // went to aggregate 0 (B)
-});
-
-Deno.test('Probe: descent into multiple aggregates follows weights', () => {
-  // C has two aggregates: B1 (weight 30) and B2 (weight 70)
-  const B1 = leaf('B1', 30);
-  const B2 = leaf('B2', 70);
-  const C = agg('C', 0, [B1, B2]);
-
-  // Random value 0.2 -> 0.2 * 100 = 20 < 30 -> B1
-  const { module: m1 } = setup([C, B1, B2], seededRandom([0.2]));
-  m1.initProbe(C.hash);
-  assertEquals(m1.getProbeState(C.hash)!.queries[0], 0); // B1
-
-  // Random value 0.5 -> 0.5 * 100 = 50, 50 >= 30 -> skip B1, 50 - 30 = 20 < 70 -> B2
-  const { module: m2 } = setup([C, B1, B2], seededRandom([0.5]));
-  m2.initProbe(C.hash);
-  assertEquals(m2.getProbeState(C.hash)!.queries[0], 1); // B2
-});
-
-// countVerifications with limit
-
-Deno.test('Probe: countVerifications respects limit parameter', () => {
-  const B = leaf('B', 50);
-  const A = agg('A', 10, [B]);
-
-  // Set up A to probe B many times (seeded to always go to B)
-  // First, use a random that alternates: 0.0 -> aggregate, 0.99 -> self
-  const { module } = setup([A, B], seededRandom([0.0]));
-
-  // Probe A 5 times, all going to aggregate B
-  for (let i = 0; i < 5; i++) {
-    module.initProbe(A.hash);
+  for (let i = 0; i < 100; i++) {
+    module.initProbe(G.hash);
   }
 
-  // Verify all of B
-  module.recordVerification(B.hash, true);
-
-  // B has 5 queries, all verified (selfVerified=true, all queries are -1)
-  assertEquals(module.countVerifications(B.hash, 5), 5);
-
-  // But if we limit to 2, only 2 count
-  assertEquals(module.countVerifications(B.hash, 2), 2);
-
-  // A's weight factor uses all 5 queries, limited to 5 from B
-  assertEquals(module.countVerifications(A.hash, 5), 5);
-
-  // If we limit A to 3, only 3 of B's results count
-  assertEquals(module.countVerifications(A.hash, 3), 3);
+  const state = module.getProbeState(G.hash)!;
+  for (const q of state.queries) {
+    assertEquals(q, 0);
+  }
 });
 
-Deno.test('Probe: parent with mixed self/aggregate probes counts correctly', () => {
-  const B = leaf('B', 50);
-  const A = agg('A', 50, [B]); // equal weights
+Deno.test('Probe: leaf block (no aggregates) is always terminal', () => {
+  const L = block('L', 50);
+  const { module } = setup([L], seededRandom([0.1]));
+  const result = module.initProbe(L.hash);
+  assertEquals(result.terminal, true);
+});
 
-  // Seeded: 0.0 -> aggregate B, 0.99 -> self
-  const { module } = setup([A, B], seededRandom([0.0, 0.99, 0.0, 0.99]));
+Deno.test('Probe: recursively descends through multiple levels', () => {
+  const A1 = block('A1', 50);
+  const A = block('A', 0, [A1]);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A, A1], seededRandom([0.5, 0.5, 0.5]));
 
-  module.initProbe(A.hash); // -> B
-  module.initProbe(A.hash); // -> self
-  module.initProbe(A.hash); // -> B
-  module.initProbe(A.hash); // -> self
+  const result = module.initProbe(G.hash);
+  assertEquals(result.terminal, true);
+  if (result.terminal) assertEquals(Hash.equals(result.blockHash, A1.hash), true);
 
-  // Verify both A and B
+  assertEquals(module.getProbeState(G.hash)!.queries, [0]);
+  assertEquals(module.getProbeState(A.hash)!.queries, [0]);
+  assertEquals(module.getProbeState(A1.hash)!.queries, [-1]);
+});
+
+Deno.test('Probe: multiple aggregates receive proportional probes', () => {
+  const A = block('A', 60);
+  const B = block('B', 30);
+  const C = block('C', 10);
+  const G = block('G', 0, [A, B, C]);
+
+  const counts = [0, 0, 0];
+  const N = 3000;
+  for (let i = 0; i < N; i++) {
+    const { module } = setup([G, A, B, C]);
+    module.initProbe(G.hash);
+    counts[module.getProbeState(G.hash)!.queries[0]]++;
+  }
+
+  assertEquals(counts[0] / N > 0.55, true, `A fraction ${counts[0] / N}`);
+  assertEquals(counts[0] / N < 0.65, true, `A fraction ${counts[0] / N}`);
+  assertEquals(counts[1] / N > 0.25, true, `B fraction ${counts[1] / N}`);
+  assertEquals(counts[1] / N < 0.35, true, `B fraction ${counts[1] / N}`);
+  assertEquals(counts[2] / N > 0.05, true, `C fraction ${counts[2] / N}`);
+  assertEquals(counts[2] / N < 0.15, true, `C fraction ${counts[2] / N}`);
+});
+
+Deno.test('Probe: ensures child has at least as many probes as parent sent', () => {
+  const A = block('A', 100);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A], seededRandom([0.5]));
+
+  for (let i = 0; i < 5; i++) module.initProbe(G.hash);
+
+  assertEquals(module.getProbeState(A.hash)!.queries.length >= 5, true);
+});
+
+// -- countVerifications with limit --------------------------------
+
+Deno.test('Probe: countVerifications respects limit from parent', () => {
+  const A = block('A', 100);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A], seededRandom([0.5]));
+
+  // Independently probe A 10 times
+  for (let i = 0; i < 10; i++) module.initProbe(A.hash);
   module.recordVerification(A.hash, true);
-  module.recordVerification(B.hash, true);
+  assertEquals(module.countVerifications(A.hash, 10), 10);
 
-  // A has 4 queries: [0, -1, 0, -1]
-  // 2 went to B (both verified), 2 to self (both verified)
-  assertEquals(module.countVerifications(A.hash, 4), 4);
-  assertAlmostEquals(module.getWeightFactor(A.hash), 1.0);
+  // Parent G probes A twice
+  module.initProbe(G.hash);
+  module.initProbe(G.hash);
+
+  // Parent's perspective: only 2 of A's results count
+  assertEquals(module.countVerifications(G.hash, 2), 2);
 });
 
-Deno.test('Probe: unverified self queries contribute 0', () => {
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
+Deno.test('Probe: self-verification counted only for self-queries', () => {
+  const A = block('A', 50);
+  const G = block('G', 50, [A]);
+  // 0.0 -> aggregate, 0.99 -> self
+  const { module } = setup([G, A], seededRandom([0.0, 0.99]));
 
+  module.initProbe(G.hash); // -> A
+  module.initProbe(G.hash); // -> self
+  module.recordVerification(G.hash, true);
+  module.recordVerification(A.hash, true);
+
+  assertEquals(module.countVerifications(G.hash, 2), 2);
+  assertEquals(module.countVerifications(G.hash, 1), 1); // only the first query (A)
+});
+
+Deno.test('Probe: countVerifications returns 0 when nothing verified', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
   module.initProbe(h('A'));
-  module.initProbe(h('A'));
-  // selfVerified is still false
-  assertEquals(module.countVerifications(h('A'), 2), 0);
+  assertEquals(module.countVerifications(h('A'), 1), 0);
+});
+
+// -- Weight factor ------------------------------------------------
+
+Deno.test('Probe: 0 queries gives weight factor 0', () => {
+  const { module } = setup([block('A', 100)]);
   assertEquals(module.getWeightFactor(h('A')), 0);
 });
 
-// Missing blocks
+Deno.test('Probe: all verified gives weight factor 1.0', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+  for (let i = 0; i < 5; i++) module.initProbe(h('A'));
+  module.recordVerification(h('A'), true);
+  assertAlmostEquals(module.getWeightFactor(h('A')), 1.0);
+});
 
-Deno.test('Probe: missing aggregate block returns missing result', () => {
-  // A references aggregate B, but B is not in the provider
+Deno.test('Probe: mixed verification gives correct ratio', () => {
+  const A1 = block('A1', 50);
+  const A2 = block('A2', 50);
+  const G = block('G', 0, [A1, A2]);
+  const { module } = setup([G, A1, A2]);
+
+  // Use real randomness and run many probes for convergence
+  for (let i = 0; i < 200; i++) module.initProbe(G.hash);
+  module.recordVerification(A1.hash, true);
+  // A1 verified, A2 not -> converges to 0.5
+
+  const wf = module.getWeightFactor(G.hash);
+  assertEquals(wf > 0.40, true, `weight factor ${wf} should be > 0.40`);
+  assertEquals(wf < 0.60, true, `weight factor ${wf} should be < 0.60`);
+});
+
+Deno.test('Probe: weight factor for unknown block is 0', () => {
+  const provider = new TestProvider();
+  const module = new ProbeModule(provider);
+  assertEquals(module.getWeightFactor(h('unknown')), 0);
+});
+
+// -- Missing blocks -----------------------------------------------
+
+Deno.test('Probe: missing block result is non-terminal with reason missing', () => {
   const A: TestBlock = {
     hash: h('A'),
     aggregates: [h('B')],
     selfWeight: 10,
     subtreeWeight: 110,
   };
-
   const provider = new TestProvider();
   provider.add(A);
-  // Set weight override so A knows B's expected weight
-  provider.setWeightOverride(h('B'), 100);
-  const module = new ProbeModule(provider, seededRandom([0.0])); // always descend
+  provider.setSubtreeWeight(h('B'), 100);
+  const module = new ProbeModule(provider, seededRandom([0.0]));
   module.addBlock(A.hash);
 
   const result = module.initProbe(A.hash);
-
-  // Query is still logged on A
-  const state = module.getProbeState(A.hash)!;
-  assertEquals(state.queries.length, 1);
-  assertEquals(state.queries[0], 0); // attempted aggregate 0
-
-  // Result indicates missing block
   assertEquals(result.terminal, false);
-  if (!result.terminal) {
-    assertEquals(result.reason, 'missing');
-  }
+  if (!result.terminal) assertEquals(result.reason, 'missing');
 });
 
-Deno.test('Probe: missing block reduces weight factor', () => {
-  const B = leaf('B', 90);
-  const A = agg('A', 10, [B]);
+Deno.test('Probe: missing block increments queries but not verifications', () => {
+  const A: TestBlock = {
+    hash: h('A'),
+    aggregates: [h('B')],
+    selfWeight: 10,
+    subtreeWeight: 110,
+  };
+  const provider = new TestProvider();
+  provider.add(A);
+  provider.setSubtreeWeight(h('B'), 100);
+  const module = new ProbeModule(provider, seededRandom([0.0]));
+  module.addBlock(A.hash);
+
+  module.initProbe(A.hash);
+  assertEquals(module.getProbeState(A.hash)!.queries.length, 1);
+  assertEquals(module.countVerifications(A.hash, 1), 0);
+  assertEquals(module.getWeightFactor(A.hash), 0);
+});
+
+Deno.test('Probe: weight factor recovers when missing block arrives and is verified', () => {
+  const B = block('B', 90);
+  const A: TestBlock = {
+    hash: h('A'),
+    aggregates: [B.hash],
+    selfWeight: 10,
+    subtreeWeight: 100,
+  };
 
   const provider = new TestProvider();
   provider.add(A);
-  // Don't add B -- it's "missing", but A knows B's expected weight
-  provider.setWeightOverride(h('B'), 90);
-  const module = new ProbeModule(provider, seededRandom([0.0])); // always descend to B
+  provider.setSubtreeWeight(B.hash, 90);
+  const module = new ProbeModule(provider, seededRandom([0.0]));
   module.addBlock(A.hash);
 
-  // Probe twice -- both hit missing B
+  // 2 probes hit missing B
   module.initProbe(A.hash);
   module.initProbe(A.hash);
-
-  // A has 2 queries, 0 verified
   assertEquals(module.getWeightFactor(A.hash), 0);
 
-  // Now B arrives
+  // B arrives
   provider.add(B);
   module.addBlock(B.hash);
 
-  // Probe A again, this time B exists
+  // Probe again -- B now reachable
   module.initProbe(A.hash);
   module.recordVerification(B.hash, true);
 
-  // A has 3 queries, 1 verified (only the 3rd counted)
+  // 3 queries, 1 verified
   assertAlmostEquals(module.getWeightFactor(A.hash), 1 / 3);
 });
 
-// Probe scheduling (swing formula)
+// -- Priority (swing formula) ------------------------------------
 
-Deno.test('Probe: unknown block has priority I/6', () => {
-  const { module } = setup([leaf('A', 120)]);
-  // swing = 2*120*1*1 / (4*3) = 240/12 = 20
-  assertAlmostEquals(module.getPriority(h('A')), 20);
+Deno.test('Probe: unknown tree (q=0) has priority I/6', () => {
+  const { module } = setup([block('A', 100)]);
+  assertAlmostEquals(module.getPriority(h('A')), 100 / 6);
 });
 
-Deno.test('Probe: well-verified block has low priority', () => {
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
-  const p0 = module.getPriority(h('A'));
-
-  // 10 successful probes
+Deno.test('Probe: well-verified tree has low priority', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
   for (let i = 0; i < 10; i++) {
+    module.initProbe(h('A'));
+  }
+  module.recordVerification(h('A'), true);
+  // r=10, q=10
+  assertAlmostEquals(module.getPriority(h('A')), swing(100, 10, 10));
+});
+
+Deno.test('Probe: likely-fraud tree has low priority', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+  for (let i = 0; i < 10; i++) module.initProbe(h('A'));
+  // r=0, q=10
+  assertAlmostEquals(module.getPriority(h('A')), swing(100, 10, 0));
+});
+
+Deno.test('Probe: maximum uncertainty (r ~ q/2) has highest priority for given q', () => {
+  // Pure formula test
+  const uncertain = swing(100, 10, 5);
+  const verified = swing(100, 10, 10);
+  const fraud = swing(100, 10, 0);
+
+  assertEquals(uncertain > verified, true);
+  assertEquals(uncertain > fraud, true);
+  assertAlmostEquals(verified, fraud); // symmetric
+});
+
+Deno.test('Probe: priority matches swing formula for concrete case', () => {
+  // Use a leaf to get exact control over q and r
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+
+  // 5 probes, then verify -> r=5, q=5
+  for (let i = 0; i < 5; i++) module.initProbe(h('A'));
+  module.recordVerification(h('A'), true);
+
+  const state = module.getProbeState(h('A'))!;
+  const q = state.queries.length;
+  const r = module.countVerifications(h('A'), q);
+  assertEquals(q, 5);
+  assertEquals(r, 5);
+
+  assertAlmostEquals(module.getPriority(h('A')), swing(100, 5, 5));
+});
+
+Deno.test('Probe: priority values from spec table', () => {
+  // q=0, r=0: swing = I/6
+  assertAlmostEquals(swing(100, 0, 0), 100 / 6);
+  // q=1, r=1: swing = 2*100*2*1 / (9*4) = 400/36
+  assertAlmostEquals(swing(100, 1, 1), 400 / 36);
+  // q=10, r=10: swing = 2*100*11*1 / (144*13) = 2200/1872
+  assertAlmostEquals(swing(100, 10, 10), 2200 / 1872);
+  // q=10, r=0: swing = 2*100*1*11 / (144*13) = 2200/1872
+  assertAlmostEquals(swing(100, 10, 0), 2200 / 1872);
+});
+
+Deno.test('Probe: unknown tree has higher priority than well-probed tree', () => {
+  const { module } = setup(
+    [block('A', 100), block('B', 100)],
+    seededRandom([0.5]),
+  );
+
+  for (let i = 0; i < 20; i++) {
     module.initProbe(h('A'));
     module.recordVerification(h('A'), true);
   }
 
-  const p1 = module.getPriority(h('A'));
-  assertEquals(p1 < p0, true);
-  // With r=10, q=10: swing = 2*100*11*1 / (144*13) = 2200/1872
-  assertAlmostEquals(p1, 2200 / 1872);
+  assertEquals(module.getPriority(h('B')) > module.getPriority(h('A')), true);
 });
 
-Deno.test('Probe: likely-fraud block has low priority', () => {
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
-  const p0 = module.getPriority(h('A'));
+// -- Expected canonicality change ---------------------------------
 
-  // 10 failed probes
-  for (let i = 0; i < 10; i++) {
-    module.initProbe(h('A'));
-    // Don't record verification -- selfVerified stays false
-  }
-
-  const p1 = module.getPriority(h('A'));
-  assertEquals(p1 < p0, true);
-  // With r=0, q=10: swing = 2*100*1*11 / (144*13) = 2200/1872
-  assertAlmostEquals(p1, 2200 / 1872);
-});
-
-Deno.test('Probe: maximum uncertainty gives highest priority for given q', () => {
-  // Directly test the swing formula math rather than relying on complex probe setup.
-  // Create 3 leaves, probe them to specific (q, r) states, verify priority ordering.
-  const { module: m1 } = setup([leaf('A1', 100)], seededRandom([0.5]));
-  const { module: m2 } = setup([leaf('A2', 100)], seededRandom([0.5]));
-  const { module: m3 } = setup([leaf('A3', 100)], seededRandom([0.5]));
-
-  // m1: uncertain -- probe 10 times, verify only some via tree structure
-  // Since leaf selfVerified is all-or-nothing, we just test the formula directly
-  // by probing different amounts with different verification states.
-
-  // m2: well-verified (10 probes, all verified)
-  for (let i = 0; i < 10; i++) {
-    m2.initProbe(h('A2'));
-  }
-  m2.recordVerification(h('A2'), true);
-
-  // m3: likely fraud (10 probes, none verified)
-  for (let i = 0; i < 10; i++) {
-    m3.initProbe(h('A3'));
-  }
-
-  // For m2: q=10, r=10, swing = 2*100*11*1 / (144*13)
-  // For m3: q=10, r=0, swing = 2*100*1*11 / (144*13)
-  // These are equal (symmetric around r=q/2)
-  assertAlmostEquals(m2.getPriority(h('A2')), m3.getPriority(h('A3')));
-
-  // A tree with fewer probes has higher priority (more to learn)
-  // m1: only 2 probes, 1 verified
-  m1.initProbe(h('A1'));
-  m1.recordVerification(h('A1'), true);
-  m1.initProbe(h('A1'));
-  // q=2, r=2 (both count since selfVerified=true)
-  // swing = 2*100*3*1 / (16*5) = 600/80 = 7.5
-
-  const p1 = m1.getPriority(h('A1'));
-  const p2 = m2.getPriority(h('A2'));
-
-  // Fewer probes -> higher priority (more uncertainty)
-  assertEquals(p1 > p2, true, `less probed (${p1}) should be > well-probed (${p2})`);
-});
-
-// Conflict proximity multiplier
-
-Deno.test('Probe: conflict proximity multiplier scales priority by 1/gap', () => {
-  const { module } = setup([leaf('A', 100)]);
-
+Deno.test('Probe: conflict multiplier uses contested_weight / gap', () => {
+  const { module } = setup([block('A', 100)]);
   const basePriority = module.getPriority(h('A'));
 
-  // Set up proximity: A is in a conflict with gap = 5
-  module.setConflictInfoSupplier(() => ({ weightGap: 5 }));
+  // w_A = 100, w_rival = 80, gap = 5, contested = 180
+  module.setConflictInfoSupplier(() => ({ weightGap: 5, contestedWeight: 180 }));
 
-  const withProximity = module.getPriority(h('A'));
-  // proximity = 1/max(5, 1) = 0.2
-  assertAlmostEquals(withProximity, basePriority * 0.2);
+  const withConflict = module.getPriority(h('A'));
+  assertAlmostEquals(withConflict, basePriority * 180 / 5);
 });
 
-Deno.test('Probe: closer conflict gives higher priority than distant conflict', () => {
-  const { module } = setup([leaf('A', 100), leaf('B', 100)]);
+Deno.test('Probe: close contest with large trees gives very high priority', () => {
+  const { module } = setup([block('A', 100), block('B', 100)]);
 
   module.setConflictInfoSupplier((hash) => {
-    if (Hash.equals(hash, h('A'))) return { weightGap: 2 };
-    if (Hash.equals(hash, h('B'))) return { weightGap: 100 };
+    if (Hash.equals(hash, h('A'))) return { weightGap: 1, contestedWeight: 2000 };
+    if (Hash.equals(hash, h('B'))) return { weightGap: 500, contestedWeight: 2000 };
     return undefined;
   });
 
   const pA = module.getPriority(h('A'));
   const pB = module.getPriority(h('B'));
-  assertEquals(pA > pB, true, `close conflict (${pA}) should be > distant (${pB})`);
+  assertEquals(pA > pB, true, `close contest (${pA}) should be > distant (${pB})`);
+  // A: swing * 2000/1 = swing * 2000
+  // B: swing * 2000/500 = swing * 4
+  assertAlmostEquals(pA / pB, 500);
 });
 
-// Pending backpressure
+Deno.test('Probe: no conflict info leaves priority unchanged (just swing)', () => {
+  const { module } = setup([block('A', 100)]);
+  assertAlmostEquals(module.getPriority(h('A')), swing(100, 0, 0));
+});
+
+// -- Pending backpressure -----------------------------------------
 
 Deno.test('Probe: pending probes reduce priority', () => {
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
-
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
   const priorities: number[] = [];
   priorities.push(module.getPriority(h('A')));
 
-  // Launch 5 probes without resolving
   for (let i = 0; i < 5; i++) {
     module.initProbe(h('A'));
     priorities.push(module.getPriority(h('A')));
   }
 
-  // Each priority should be lower than the previous
   for (let i = 1; i < priorities.length; i++) {
     assertEquals(
       priorities[i] < priorities[i - 1],
@@ -476,129 +509,228 @@ Deno.test('Probe: pending probes reduce priority', () => {
   }
 });
 
-Deno.test('Probe: priority recovers when pending probes resolve', () => {
-  const { module } = setup([leaf('A', 100)], seededRandom([0.5]));
+Deno.test('Probe: each additional pending probe further reduces priority', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+  const prev = module.getPriority(h('A'));
+  const reductions: number[] = [];
 
-  // Launch 3 probes
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 5; i++) {
     module.initProbe(h('A'));
+    const current = module.getPriority(h('A'));
+    reductions.push(prev - current);
   }
-  const _pendingPriority = module.getPriority(h('A'));
 
-  // Verify all 3
-  module.recordVerification(h('A'), true);
-
-  // Priority should increase (verified queries are better than pending ones)
-  // Actually, priority doesn't directly depend on verified/unverified ratio
-  // for the swing formula -- it depends on r and q. After verification,
-  // r increases, changing the swing. Let's just verify the swing changes.
-  const verifiedPriority = module.getPriority(h('A'));
-  // With q=3, r=3: swing = 2*100*4*1 / (25*6) = 800/150
-  // With q=3, r=0: swing = 2*100*1*4 / (25*6) = 800/150
-  // Actually these are the same! The swing is symmetric around r=q/2.
-  // The key is that the WEIGHT FACTOR changes (from 0 to 1), not the priority.
-  // Swing measures information value, not weight gain.
-  // This test verifies the module doesn't crash and returns valid numbers.
-  assertEquals(verifiedPriority > 0, true);
+  // All reductions are positive (priority strictly decreasing)
+  for (const r of reductions) {
+    assertEquals(r > 0, true);
+  }
 });
 
-// selectNext
+// -- Propagation boundary -----------------------------------------
+
+Deno.test('Probe: child independent probes do not leak to parent beyond limit', () => {
+  const A = block('A', 100);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A], seededRandom([0.5]));
+
+  // Probe A independently 100 times
+  for (let i = 0; i < 100; i++) {
+    module.initProbe(A.hash);
+  }
+  module.recordVerification(A.hash, true);
+
+  // A has 100 verified queries
+  assertEquals(module.countVerifications(A.hash, 100), 100);
+
+  // G hasn't been probed -- weight factor still 0
+  assertEquals(module.getWeightFactor(G.hash), 0);
+
+  // Probe G twice
+  module.initProbe(G.hash);
+  module.initProbe(G.hash);
+
+  // G sees only 2 of A's results
+  assertEquals(module.countVerifications(G.hash, 2), 2);
+  assertAlmostEquals(module.getWeightFactor(G.hash), 1.0);
+});
+
+Deno.test('Probe: parent with 3 probes only sees 3 results from heavily-probed child', () => {
+  const A = block('A', 100);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A], seededRandom([0.5]));
+
+  // Probe A 50 times independently
+  for (let i = 0; i < 50; i++) module.initProbe(A.hash);
+  module.recordVerification(A.hash, true);
+
+  // Probe G 3 times
+  module.initProbe(G.hash);
+  module.initProbe(G.hash);
+  module.initProbe(G.hash);
+
+  assertEquals(module.countVerifications(G.hash, 3), 3);
+});
+
+// -- selectNext ---------------------------------------------------
 
 Deno.test('Probe: selectNext returns highest priority block', () => {
-  const { module } = setup([leaf('A', 1000), leaf('B', 500), leaf('C', 200)]);
-  const next = module.selectNext()!;
-  assertEquals(Hash.equals(next, h('A')), true);
+  const { module } = setup([block('A', 1000), block('B', 500), block('C', 200)]);
+  assertEquals(Hash.equals(module.selectNext()!, h('A')), true);
 });
 
 Deno.test('Probe: selectNext shifts after probing reduces priority', () => {
-  const { module } = setup(
-    [leaf('A', 100), leaf('B', 90)],
-    seededRandom([0.5]),
-  );
-
+  const { module } = setup([block('A', 1000), block('B', 900)], seededRandom([0.5]));
   assertEquals(Hash.equals(module.selectNext()!, h('A')), true);
 
-  // Probe A many times
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 30; i++) {
     module.initProbe(h('A'));
     module.recordVerification(h('A'), true);
   }
-
-  // Now B should have higher priority (fewer probes)
   assertEquals(Hash.equals(module.selectNext()!, h('B')), true);
 });
 
 Deno.test('Probe: selectNext returns undefined when no blocks registered', () => {
-  const provider = new TestProvider();
-  const module = new ProbeModule(provider);
+  const module = new ProbeModule(new TestProvider());
   assertEquals(module.selectNext(), undefined);
 });
 
-// Propagation boundary
+// -- State management ---------------------------------------------
 
-Deno.test('Probe: child independent probes do not inflate parent weight factor', () => {
-  const B = leaf('B', 90);
-  const A = agg('A', 10, [B]);
-
-  const { module } = setup([A, B], seededRandom([0.5]));
-
-  // Independently probe B 100 times (all verified)
-  for (let i = 0; i < 100; i++) {
-    module.initProbe(B.hash);
-    module.recordVerification(B.hash, true);
-  }
-
-  // A hasn't been probed at all -- weight factor should still be 0
-  assertEquals(module.getWeightFactor(A.hash), 0);
-
-  // Now probe A twice in a fresh module (seeded to go to aggregate B)
-  const p2 = new TestProvider();
-  p2.add(A);
-  p2.add(B);
-  const module2 = new ProbeModule(p2, seededRandom([0.0, 0.0]));
-  module2.addBlock(A.hash);
-  module2.addBlock(B.hash);
-
-  module2.initProbe(A.hash);
-  module2.initProbe(A.hash);
-  module2.recordVerification(B.hash, true);
-
-  // A has 2 queries to B, B has 2 queries (from A's probes)
-  // B verified, so both count
-  assertAlmostEquals(module2.getWeightFactor(A.hash), 1.0);
-
-  // B's 100 independent probes in the first module didn't leak to A
-  assertEquals(module.getWeightFactor(A.hash), 0);
+Deno.test('Probe: getProbeState returns undefined for unknown block', () => {
+  const module = new ProbeModule(new TestProvider());
+  assertEquals(module.getProbeState(h('unknown')), undefined);
 });
 
-// Recursive multi-level tree
+Deno.test('Probe: addBlock creates initial probe state', () => {
+  const A = block('A', 10, [block('B', 20), block('C', 30)]);
+  const { module } = setup([A, block('B', 20), block('C', 30)]);
+  const state = module.getProbeState(A.hash)!;
+  assertEquals(state.queries.length, 0);
+  assertEquals(state.selfVerified, false);
+});
 
-Deno.test('Probe: three-level tree verifications propagate correctly', () => {
-  const C = leaf('C', 40);
-  const B = agg('B', 10, [C]);
-  const A = agg('A', 10, [B]);
+Deno.test('Probe: removeBlock cleans up state', () => {
+  const { module } = setup([block('A', 100)]);
+  assertEquals(module.getProbeState(h('A')) !== undefined, true);
+  module.removeBlock(h('A'));
+  assertEquals(module.getProbeState(h('A')), undefined);
+});
 
-  // Seed so all probes descend: A -> B -> C
-  // A's total: 10 + 50 = 60. Random 0.5 -> 0.5*60=30, 30 >= 10 (self), 30-10=20 < 50 (B) -> B
-  // B's total: 10 + 40 = 50. Random 0.5 -> 0.5*50=25, 25 >= 10, 25-10=15 < 40 -> C
-  // C's total: 40. Random 0.5 -> self
-  const { module } = setup([A, B, C], seededRandom([0.5, 0.5, 0.5]));
+Deno.test('Probe: recordVerification sets selfVerified to true on success', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+  module.initProbe(h('A'));
+  assertEquals(module.getProbeState(h('A'))!.selfVerified, false);
+  module.recordVerification(h('A'), true);
+  assertEquals(module.getProbeState(h('A'))!.selfVerified, true);
+});
 
-  const result = module.initProbe(A.hash);
-  assertEquals(result.terminal, true);
-  if (result.terminal) {
-    assertEquals(Hash.equals(result.blockHash, C.hash), true);
+Deno.test('Probe: recordVerification with failure does not set selfVerified', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+  module.initProbe(h('A'));
+  module.recordVerification(h('A'), false);
+  assertEquals(module.getProbeState(h('A'))!.selfVerified, false);
+});
+
+Deno.test('Probe: onWeightChange fires when verification recorded', () => {
+  const { module } = setup([block('A', 100)], seededRandom([0.5]));
+  const fired: Hash[] = [];
+  module.onWeightChange((hash) => fired.push(hash));
+
+  module.initProbe(h('A'));
+  module.recordVerification(h('A'), true);
+
+  assertEquals(fired.length, 1);
+  assertEquals(Hash.equals(fired[0], h('A')), true);
+});
+
+// -- Dynamic aggregate weights ------------------------------------
+
+Deno.test('Probe: aggregate weights update when blocks arrive later', () => {
+  // G references A, but A arrives after G is registered
+  const A = block('A', 50);
+  const G: TestBlock = {
+    hash: h('G'),
+    aggregates: [A.hash],
+    selfWeight: 10,
+    subtreeWeight: 60,
+  };
+
+  const provider = new TestProvider();
+  provider.add(G);
+  // A not yet in provider -- weight returns 0
+  const module = new ProbeModule(provider, seededRandom([0.0]));
+  module.addBlock(G.hash);
+
+  // G's total weight: selfWeight(10) + aggregateWeights([0]) = 10
+  // All probes go to self since aggregate weight is 0
+  module.initProbe(G.hash);
+  assertEquals(module.getProbeState(G.hash)!.queries[0], -1); // went to self
+
+  // Now A arrives -- provider returns its weight
+  provider.add(A);
+  module.addBlock(A.hash);
+
+  // Next probe on G now sees A's weight dynamically
+  // Total: 10 + 50 = 60, random 0.0 -> 0.0 * 60 = 0 < 50 -> aggregate A
+  module.initProbe(G.hash);
+  assertEquals(module.getProbeState(G.hash)!.queries[1], 0); // went to aggregate
+});
+
+// -- Convergence --------------------------------------------------
+
+Deno.test('Probe: fraud subtree converges weight factor toward correct value', () => {
+  // Tree: G (self=10) -> A (self=5, sub=60) -> A1(15), A2(20,FRAUD)
+  //                    -> B (self=8, sub=22) -> B1(22,FRAUD... no, just B)
+  // Simpler: G has A (valid, weight 60) and B (fraud, weight 20), self=0
+  // True weight factor should converge to 60/80 = 0.75
+  const A = block('A', 60);
+  const B = block('B', 20);
+  const G = block('G', 0, [A, B]); // total 80
+
+  const { module } = setup([G, A, B]);
+
+  // Verify A (valid), don't verify B (fraud)
+  module.recordVerification(A.hash, true);
+  // B.selfVerified stays false
+
+  // Run 2000 probes
+  for (let i = 0; i < 2000; i++) {
+    module.initProbe(G.hash);
   }
 
-  // Verify C
-  module.recordVerification(C.hash, true);
+  const wf = module.getWeightFactor(G.hash);
+  // Should converge to 60/80 = 0.75 (+/-5%)
+  assertEquals(wf > 0.70, true, `weight factor ${wf} should be > 0.70`);
+  assertEquals(wf < 0.80, true, `weight factor ${wf} should be < 0.80`);
+});
 
-  // C: 1 query, 1 verified -> wf = 1.0
-  assertAlmostEquals(module.getWeightFactor(C.hash), 1.0);
+// -- ProbeResult reason -------------------------------------------
 
-  // B: 1 query to aggregate C, C verified -> 1/1 = 1.0
-  assertAlmostEquals(module.getWeightFactor(B.hash), 1.0);
+Deno.test('Probe: reused aggregate returns reason reused, not no_weight', () => {
+  const A = block('A', 50);
+  const G = block('G', 0, [A]);
+  const { module } = setup([G, A], seededRandom([0.5]));
 
-  // A: 1 query to aggregate B, B counts 1 from C -> 1/1 = 1.0
-  assertAlmostEquals(module.getWeightFactor(A.hash), 1.0);
+  // First probe descends to A (terminal)
+  const r1 = module.initProbe(G.hash);
+  assertEquals(r1.terminal, true);
+
+  // Second probe: A already has 1 query >= requested 1... wait, G now has 2 queries to A
+  // requestedCount = 2, A has 1 query, so it will recurse again
+  const r2 = module.initProbe(G.hash);
+  assertEquals(r2.terminal, true); // new terminal on A
+
+  // Third probe: A now has 2 queries. requestedCount = 3 > 2, recurse again
+  // Actually every G probe to A will recurse since requestedCount keeps growing.
+  // To test reuse, we need to probe A independently first.
+
+  // Probe A independently so it has extra queries
+  module.initProbe(A.hash);
+  module.initProbe(A.hash);
+  // A now has 4 queries total (2 from G, 2 independent)
+
+  // Next G probe: requestedCount=3, A.queries.length=4 (4 >= 3), so reuse
+  const r3 = module.initProbe(G.hash);
+  assertEquals(r3.terminal, false);
+  if (!r3.terminal) assertEquals(r3.reason, 'reused');
 });
