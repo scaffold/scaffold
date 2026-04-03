@@ -1,11 +1,14 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { BlockGraphExplorer } from "@scaffold/explorer";
+import { BlockCreationModal, BlockGraphExplorer } from "@scaffold/explorer";
+import type { InitialClaim } from "@scaffold/explorer";
+import { YamlEditorField } from "./YamlEditorField.tsx";
 import { Scaffold } from "scaffold.io/Scaffold.ts";
 import { Hash } from "scaffold.io/util/Hash.ts";
 import { WELL_KNOWN_PRIVATE_KEY } from "scaffold.io/genesis.ts";
 import type { Strategy } from "scaffold.io/node/ReactiveLayer.ts";
 import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.ts";
 import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
+import yaml from "yaml";
 
 interface StrategyDef {
   key: string;
@@ -48,6 +51,26 @@ export function App() {
   }, [version]);
 
   const [count, setCount] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [initialClaims, setInitialClaims] = useState<InitialClaim[] | undefined>();
+
+  const handleOpenCreateModal = useCallback((claims?: InitialClaim[]) => {
+    setInitialClaims(claims);
+    setShowCreateModal(true);
+  }, []);
+
+  const handleCloseCreateModal = useCallback(() => {
+    setShowCreateModal(false);
+    setInitialClaims(undefined);
+  }, []);
+
+  const parseYaml = useCallback((text: string): Record<string, unknown> | null => {
+    try {
+      return yaml.parse(text) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }, []);
 
   const handleAddBlock = useCallback(() => {
     scaffold.put({
@@ -128,6 +151,9 @@ export function App() {
         <button onClick={handleAdd5} style={btnSecondary}>
           Add 5
         </button>
+        <button onClick={() => handleOpenCreateModal()} style={btnSecondary}>
+          Create Block
+        </button>
         <span style={hintStyle}>
           {count > 0 ? `+${count} added` : "Click to add blocks"}
         </span>
@@ -157,7 +183,23 @@ export function App() {
         </button>
       </div>
 
-      <BlockGraphExplorer scaffold={scaffold} />
+      <BlockGraphExplorer scaffold={scaffold} onCreateBlock={handleOpenCreateModal} />
+
+      {showCreateModal && (
+        <BlockCreationModal
+          scaffold={scaffold}
+          initialClaims={initialClaims}
+          onClose={handleCloseCreateModal}
+          parseYaml={parseYaml}
+          renderYamlEditor={(props) => (
+            <YamlEditorField
+              value={props.value}
+              onChange={props.onChange}
+              schema={props.schema}
+            />
+          )}
+        />
+      )}
     </div>
   );
 }

@@ -33,6 +33,7 @@ import { parseQuery } from "../filter/parse.ts";
 import { evaluateQuery } from "../filter/evaluate.ts";
 import type { BlockInfo } from "../filter/evaluate.ts";
 import { computeGhostHashes } from "../filter/ghost.ts";
+import type { InitialClaim } from "./BlockCreationModal.tsx";
 
 // -- Types ------------------------------------------------------------------
 
@@ -468,12 +469,13 @@ interface OverlayData {
 }
 
 function IOOverlay(
-  { data, blocks, scaffold, onNavigate, onClose }: {
+  { data, blocks, scaffold, onNavigate, onClose, onCreateBlock }: {
     data: OverlayData;
     blocks: Block[];
     scaffold: Scaffold;
     onNavigate: (hex: string) => void;
     onClose: () => void;
+    onCreateBlock?: (claims?: InitialClaim[]) => void;
   },
 ) {
   const contractName = getContractName(data.output.verifier.contract);
@@ -582,6 +584,24 @@ function IOOverlay(
               )}
           </span>
         </div>
+        {onCreateBlock && claimers.length === 0 && (
+          <div className="io-overlay-row" style={{ justifyContent: "center" }}>
+            <button
+              className="create-btn"
+              onClick={() => {
+                onCreateBlock([{
+                  blockHash: Hash.fromHex(data.ownerHash),
+                  outputIndex: data.ownerOutputIndex,
+                  output: data.output,
+                  extendedIndex: data.index,
+                }]);
+                onClose();
+              }}
+            >
+              Claim This Output
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -591,9 +611,10 @@ function IOOverlay(
 
 interface BlockGraphProps {
   scaffold: Scaffold;
+  onCreateBlock?: (claims?: InitialClaim[]) => void;
 }
 
-export function BlockGraph({ scaffold }: BlockGraphProps) {
+export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
   const [blocks, setBlocks] = useState<Block[]>(
     () => [...scaffold.blocks.getAll()],
   );
@@ -1376,6 +1397,7 @@ export function BlockGraph({ scaffold }: BlockGraphProps) {
           scaffold={scaffold}
           onNavigate={handleOverlayNavigate}
           onClose={() => setOverlayData(null)}
+          onCreateBlock={onCreateBlock}
         />
       )}
 

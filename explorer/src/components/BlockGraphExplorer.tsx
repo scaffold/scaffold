@@ -3,12 +3,16 @@ import { HighlightRegistry } from "../highlight/HighlightRegistry.ts";
 import { HighlightContext } from "../highlight/HighlightContext.ts";
 import { BlockGraph } from "./BlockGraph.tsx";
 import type { Scaffold } from "scaffold.io/Scaffold.ts";
+import type { InitialClaim } from "./BlockCreationModal.tsx";
 
 interface BlockGraphExplorerProps {
   scaffold: Scaffold;
+  onCreateBlock?: (claims?: InitialClaim[]) => void;
 }
 
-export function BlockGraphExplorer({ scaffold }: BlockGraphExplorerProps) {
+export function BlockGraphExplorer(
+  { scaffold, onCreateBlock }: BlockGraphExplorerProps,
+) {
   const registry = useMemo(() => new HighlightRegistry(), []);
 
   return (
@@ -17,7 +21,7 @@ export function BlockGraphExplorer({ scaffold }: BlockGraphExplorerProps) {
         <div className="explorer-header">
           <h1>Block Graph Explorer</h1>
         </div>
-        <BlockGraph scaffold={scaffold} />
+        <BlockGraph scaffold={scaffold} onCreateBlock={onCreateBlock} />
       </div>
     </HighlightContext.Provider>
   );

@@ -33,3 +33,11 @@ export function getContract(hash: Hash): Contract | null {
   }
   return null;
 }
+
+export function getWellKnownContracts(): {
+  hash: Hash;
+  name: string;
+  contract: Contract;
+}[] {
+  return WELL_KNOWN.map(([hash, name, contract]) => ({ hash, name, contract }));
+}
