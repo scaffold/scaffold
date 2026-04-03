@@ -58,7 +58,7 @@ export function App() {
             params: new Uint8Array(0),
           },
           value: Math.floor(Math.random() * 100),
-          detail: new TextEncoder().encode(`block-${Date.now()}`),
+          data: new TextEncoder().encode(`block-${Date.now()}`),
         },
       ],
     });
@@ -75,7 +75,7 @@ export function App() {
             params: new Uint8Array(0),
           },
           value: Math.floor(Math.random() * 100),
-          detail: new TextEncoder().encode(`block-${Date.now()}-0`),
+          data: new TextEncoder().encode(`block-${Date.now()}-0`),
         },
       ],
     }).hash;
@@ -90,7 +90,7 @@ export function App() {
               params: new Uint8Array(0),
             },
             value: Math.floor(Math.random() * 100),
-            detail: new TextEncoder().encode(`block-${Date.now()}-${i}`),
+            data: new TextEncoder().encode(`block-${Date.now()}-${i}`),
           },
         ],
       });

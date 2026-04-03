@@ -437,10 +437,10 @@ function IOOverlay(
           </span>
         </div>
         <div className="io-overlay-row">
-          <span className="detail-label">Detail</span>
+          <span className="detail-label">Data</span>
           <span className="detail-value mono" style={{ wordBreak: 'break-all' }}>
-            {data.output.detail.length > 0
-              ? toHex(data.output.detail)
+            {data.output.data.length > 0
+              ? toHex(data.output.data)
               : <span className="muted">empty</span>}
           </span>
         </div>

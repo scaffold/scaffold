@@ -61,8 +61,8 @@ function OutputEntry({ output, index }: { output: Output; index: number }) {
         )}
       <ByteArray bytes={output.verifier.params} />
       <span className="output-value">v={output.value}</span>
-      {output.detail.length > 0
-        ? <ByteArray bytes={output.detail} />
+      {output.data.length > 0
+        ? <ByteArray bytes={output.data} />
         : <span className="muted">0B</span>}
     </div>
   );
@@ -110,8 +110,8 @@ function ClaimEntry(
         )}
       <ByteArray bytes={output.verifier.params} />
       <span className="output-value">v={output.value}</span>
-      {output.detail.length > 0
-        ? <ByteArray bytes={output.detail} />
+      {output.data.length > 0
+        ? <ByteArray bytes={output.data} />
         : <span className="muted">0B</span>}
     </div>
   );
