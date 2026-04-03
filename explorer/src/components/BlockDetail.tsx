@@ -1,14 +1,52 @@
 import React from "react";
 import { HashSpan } from "./HashSpan.tsx";
 import { ByteArray } from "./ByteArray.tsx";
-import { getContractName } from "../contracts.ts";
+import { FieldTree } from "./FieldTree.tsx";
+import { getContract, getContractName } from "../contracts.ts";
+import { RecordingWalkerHost } from "scaffold.io/core/RecordingWalkerHost.ts";
+import type { FieldNode } from "scaffold.io/core/RecordingWalkerHost.ts";
 import type { Block } from "scaffold.io/core/Block.ts";
 import type { Output } from "scaffold.io/core/BlockCreationModule.ts";
 import type { Scaffold } from "scaffold.io/Scaffold.ts";
+import type { Hash } from "scaffold.io/util/Hash.ts";
 
 interface BlockDetailProps {
   block: Block;
   scaffold: Scaffold;
+}
+
+function walkParams(contractHash: Hash, params: Uint8Array): FieldNode[] | null {
+  const contract = getContract(contractHash);
+  if (!contract?.walkParams) return null;
+  const host = new RecordingWalkerHost();
+  contract.walkParams(params, host);
+  return host.getTree();
+}
+
+function walkData(contractHash: Hash, data: Uint8Array): FieldNode[] | null {
+  if (data.length === 0) return null;
+  const contract = getContract(contractHash);
+  if (!contract?.walkData) return null;
+  try {
+    const host = new RecordingWalkerHost();
+    contract.walkData(data, host);
+    return host.getTree();
+  } catch {
+    return null;
+  }
+}
+
+function WalkedParams({ contractHash, params }: { contractHash: Hash; params: Uint8Array }) {
+  const tree = walkParams(contractHash, params);
+  if (tree && tree.length > 0) return <FieldTree nodes={tree} />;
+  return <ByteArray bytes={params} />;
+}
+
+function WalkedData({ contractHash, data }: { contractHash: Hash; data: Uint8Array }) {
+  if (data.length === 0) return <span className="muted">0B</span>;
+  const tree = walkData(contractHash, data);
+  if (tree && tree.length > 0) return <FieldTree nodes={tree} />;
+  return <ByteArray bytes={data} />;
 }
 
 function OutputEntry({ output, index }: { output: Output; index: number }) {
@@ -19,11 +57,9 @@ function OutputEntry({ output, index }: { output: Output; index: number }) {
       {contractName
         ? <span className="contract-name">{contractName}</span>
         : <HashSpan hash={output.verifier.contract} chars={6} />}
-      <ByteArray bytes={output.verifier.params} />
+      <WalkedParams contractHash={output.verifier.contract} params={output.verifier.params} />
       <span className="output-value">v={output.value}</span>
-      {output.data.length > 0
-        ? <ByteArray bytes={output.data} />
-        : <span className="muted">0B</span>}
+      <WalkedData contractHash={output.verifier.contract} data={output.data} />
     </div>
   );
 }
@@ -64,11 +100,9 @@ function ClaimEntry(
       {contractName
         ? <span className="contract-name">{contractName}</span>
         : <HashSpan hash={output.verifier.contract} chars={6} />}
-      <ByteArray bytes={output.verifier.params} />
+      <WalkedParams contractHash={output.verifier.contract} params={output.verifier.params} />
       <span className="output-value">v={output.value}</span>
-      {output.data.length > 0
-        ? <ByteArray bytes={output.data} />
-        : <span className="muted">0B</span>}
+      <WalkedData contractHash={output.verifier.contract} data={output.data} />
     </div>
   );
 }

@@ -205,7 +205,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Weight](weight.md) | Weight derivation | How do blocks earn consensus influence through verified computation? |
 | [Anchoring](anchoring.md) | Anchor resolution & output mapping | Where does a block attach, and how are outputs addressed across blocks? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
-| [Output Data](output-data.md) | Data format | How is output data encoded and inspected? |
+| [Output Data](output-data.md) | Data format & contract UI | How do contracts expose params/data for reading and construction? |
 | [Output Claims](output-claims.md) | Claim tracking | Who claims each output on a given block? |
 | [Output Space](output-space.md) | UTXO state model | How are output spaces constructed, indexed, and transformed? |
 | [Aggregation](aggregation.md) | Subtree composition | How does aggregation define ordering and cache transformations? |

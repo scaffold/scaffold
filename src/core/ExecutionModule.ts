@@ -3,13 +3,14 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
 import { RESULT_CONTRACT } from './Block.ts';
-import { type ContractFn, ContractRejection } from './ContractEnv.ts';
+import { ContractRejection } from './ContractEnv.ts';
+import type { Contract } from './Contract.ts';
 import { VerifyingEnv } from './VerifyingEnv.ts';
 
-// -- Re-exports from ContractEnv ------------------------------------
+// -- Re-exports -------------------------------------------------------
 
 export { ExecutionMode } from './ContractEnv.ts';
-export type { ContractFn } from './ContractEnv.ts';
+export type { Contract } from './Contract.ts';
 
 // -- Types ----------------------------------------------------------
 
@@ -56,21 +57,26 @@ export interface ExecutionProvider<BlockType> {
  * and runs it with a VerifyingEnv. All contracts must accept for the block
  * to be valid.
  *
- * Uses a mock contract registry (Hash -> TypeScript function) instead of
- * real WASM instantiation. The interface is the same -- real WASM can be
- * layered in later.
+ * Uses a contract registry (Hash -> Contract object) instead of raw WASM
+ * instantiation. The interface mirrors WASM module exports -- real WASM
+ * can be layered in later.
  */
 export class ExecutionModule<BlockType> {
   private readonly _provider: ExecutionProvider<BlockType>;
-  private readonly _contracts = new Map<HashPrimitive, ContractFn>();
+  private readonly _contracts = new Map<HashPrimitive, Contract>();
 
   constructor(provider: ExecutionProvider<BlockType>) {
     this._provider = provider;
   }
 
-  /** Register a TypeScript mock contract function for a contract hash. */
-  registerContract(contractHash: Hash, fn: ContractFn): void {
-    this._contracts.set(contractHash.toPrimitive(), fn);
+  /** Register a contract for a contract hash. */
+  registerContract(contractHash: Hash, contract: Contract): void {
+    this._contracts.set(contractHash.toPrimitive(), contract);
+  }
+
+  /** Look up a registered contract by hash. */
+  getContract(contractHash: Hash): Contract | undefined {
+    return this._contracts.get(contractHash.toPrimitive());
   }
 
   /**
@@ -164,8 +170,8 @@ export class ExecutionModule<BlockType> {
     outputs: Output[],
     claims: number[],
   ): ExecutionResult {
-    const contractFn = this._contracts.get(contractHash.toPrimitive());
-    if (!contractFn) {
+    const contract = this._contracts.get(contractHash.toPrimitive());
+    if (!contract) {
       return { accepted: false, reason: `contract not found: ${contractHash.toHex()}` };
     }
 
@@ -183,7 +189,7 @@ export class ExecutionModule<BlockType> {
     });
 
     try {
-      contractFn(env);
+      contract.run(env);
     } catch (e) {
       if (e instanceof ContractRejection) {
         return { accepted: false, reason: e.message };

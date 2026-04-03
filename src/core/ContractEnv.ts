@@ -119,7 +119,7 @@ export interface ContractEnv {
   getTimestamp(): number;
 }
 
-/** A contract function receives a ContractEnv and performs verification/generation. */
+/** @deprecated Use Contract interface from './Contract.ts' instead. */
 export type ContractFn = (env: ContractEnv) => MaybePromise<void>;
 
 // -- Internal providers -------------------------------------------

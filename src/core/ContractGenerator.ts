@@ -7,10 +7,10 @@ import { BlockDraft, DraftStore, ResolvedClaim } from './BlockDraft.ts';
 import { GeneratorHandle, GeneratorProvider } from './Generator.ts';
 import {
   type AvailableInput,
-  type ContractFn,
   ContractRejection,
   type GeneratingEnvProvider,
 } from './ContractEnv.ts';
+import type { Contract } from './Contract.ts';
 import { GeneratingEnv, type WaitForInputFn } from './GeneratingEnv.ts';
 import { OutputClaimModule } from './OutputClaimModule.ts';
 import { UtxoIndex } from '../node/UtxoIndex.ts';
@@ -141,7 +141,7 @@ interface BlockedGenerator {
  * are resumed before new drafts are created.
  */
 export class ContractGenerator implements GeneratorProvider {
-  private readonly _lookupContract: (hash: Hash) => ContractFn | undefined;
+  private readonly _lookupContract: (hash: Hash) => Contract | undefined;
   private readonly _adapter: GeneratingEnvAdapter;
   private readonly _draftStore: DraftStore;
   private readonly _outputClaims: OutputClaimModule<Block>;
@@ -150,7 +150,7 @@ export class ContractGenerator implements GeneratorProvider {
   private readonly _blocked = new Map<string, BlockedGenerator[]>();
 
   constructor(opts: {
-    lookupContract: (hash: Hash) => ContractFn | undefined;
+    lookupContract: (hash: Hash) => Contract | undefined;
     store: BlockStore;
     utxoIndex: UtxoIndex;
     outputClaims: OutputClaimModule<Block>;
@@ -189,8 +189,8 @@ export class ContractGenerator implements GeneratorProvider {
 
     const contractHash = output.verifier.contract;
     const params = output.verifier.params;
-    const contractFn = this._lookupContract(contractHash);
-    if (!contractFn) {
+    const contract = this._lookupContract(contractHash);
+    if (!contract) {
       this._draftStore.transition(draft.draftId, 'cancelled');
       return { draftId: draft.draftId, cancel: () => {} };
     }
@@ -216,7 +216,7 @@ export class ContractGenerator implements GeneratorProvider {
     });
 
     // Run the contract (may be sync or async)
-    const result = this._runContract(contractFn, env, draft, () => cancelled);
+    const result = this._runContract(contract, env, draft, () => cancelled);
     if (result instanceof Promise) {
       result.catch(() => {
         // Errors handled inside _runContract
@@ -288,13 +288,13 @@ export class ContractGenerator implements GeneratorProvider {
   }
 
   private _runContract(
-    contractFn: ContractFn,
+    contract: Contract,
     env: GeneratingEnv<Block>,
     draft: BlockDraft,
     isCancelled: () => boolean,
   ): MaybePromise<void> {
     try {
-      const result = contractFn(env);
+      const result = contract.run(env);
       return maybeThen(result, () => {
         if (isCancelled()) return;
         this._applyResults(env, draft);

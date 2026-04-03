@@ -19,7 +19,7 @@ import { ContractGenerator } from '../core/ContractGenerator.ts';
 import { aggregationContract } from '../core/AggregationContract.ts';
 import { collateralContract } from '../core/CollateralContract.ts';
 import { insuranceContract } from '../core/InsuranceContract.ts';
-import { type ContractFn } from '../core/ContractEnv.ts';
+import type { Contract } from '../core/Contract.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
@@ -124,7 +124,7 @@ export class NodeContext {
     this.utxoIndex = new UtxoIndex(this.store);
 
     // 5c. Create ContractGenerator with built-in contracts
-    const contracts = new Map<string, ContractFn>();
+    const contracts = new Map<string, Contract>();
     contracts.set(AGGREGATION_CONTRACT.toHex(), aggregationContract);
     contracts.set(COLLATERAL_CONTRACT.toHex(), collateralContract);
     contracts.set(INSURANCE_CONTRACT.toHex(), insuranceContract);

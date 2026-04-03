@@ -3,7 +3,7 @@ import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { createSelfClaimedOutput, RESULT_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import {
-  type ContractFn,
+  type Contract,
   ExecutionMode,
   ExecutionModule,
   type ExecutionProvider,
@@ -135,10 +135,12 @@ Deno.test('ExecutionModule: signature contract -- accept when params match pubke
   const sigContract = h('sig-contract');
 
   // Contract checks that params match pubkey
-  const sigFn: ContractFn = (env: ContractEnv) => {
-    env.requireSignature(env.getParams());
+  const sigContract_: Contract = {
+    run(env: ContractEnv) {
+      env.requireSignature(env.getParams());
+    },
   };
-  module.registerContract(sigContract, sigFn);
+  module.registerContract(sigContract, sigContract_);
 
   // Anchor block with a signature-locked output
   const anchor: TestBlock = {
@@ -174,11 +176,13 @@ Deno.test('ExecutionModule: signature contract -- reject when pubkey mismatch', 
 
   const sigContract = h('sig-contract');
 
-  const sigFn: ContractFn = (env: ContractEnv) => {
-    // Contract checks that params match a specific pubkey
-    env.requireSignature(enc('expected-pubkey'));
+  const sigContract_: Contract = {
+    run(env: ContractEnv) {
+      // Contract checks that params match a specific pubkey
+      env.requireSignature(enc('expected-pubkey'));
+    },
   };
-  module.registerContract(sigContract, sigFn);
+  module.registerContract(sigContract, sigContract_);
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -212,10 +216,12 @@ Deno.test('ExecutionModule: requireResult checks self-claimed data', () => {
   const gameContract = h('game-contract');
 
   // Contract that verifies result output exists
-  const gameFn: ContractFn = (env: ContractEnv) => {
-    env.requireResult(enc('state'), enc('valid-state'));
+  const gameContractImpl: Contract = {
+    run(env: ContractEnv) {
+      env.requireResult(enc('state'), enc('valid-state'));
+    },
   };
-  module.registerContract(gameContract, gameFn);
+  module.registerContract(gameContract, gameContractImpl);
 
   // Anchor with a game output to claim
   const anchor: TestBlock = {
@@ -252,10 +258,12 @@ Deno.test('ExecutionModule: requireResult rejects wrong value', () => {
 
   const gameContract = h('game-contract');
 
-  const gameFn: ContractFn = (env: ContractEnv) => {
-    env.requireResult(enc('state'), enc('expected-state'));
+  const gameContractImpl: Contract = {
+    run(env: ContractEnv) {
+      env.requireResult(enc('state'), enc('expected-state'));
+    },
   };
-  module.registerContract(gameContract, gameFn);
+  module.registerContract(gameContract, gameContractImpl);
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -296,12 +304,14 @@ Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
   const gameVerifier = { contract: gameContract, params: new Uint8Array(0) };
 
   // Contract reads state from a ref block that claims gameVerifier
-  const gameFn: ContractFn = (env: ContractEnv) => {
-    const prevState = env.fetch(gameVerifier, enc('state')) as Uint8Array;
-    const prev = new TextDecoder().decode(prevState);
-    env.requireResult(enc('state'), enc(`${prev}+1`));
+  const gameContractImpl: Contract = {
+    run(env: ContractEnv) {
+      const prevState = env.fetch(gameVerifier, enc('state')) as Uint8Array;
+      const prev = new TextDecoder().decode(prevState);
+      env.requireResult(enc('state'), enc(`${prev}+1`));
+    },
   };
-  module.registerContract(gameContract, gameFn);
+  module.registerContract(gameContract, gameContractImpl);
 
   // Anchor for the previous block (has a game output to claim)
   const prevAnchor: TestBlock = {
@@ -362,14 +372,16 @@ Deno.test('ExecutionModule: requireOutput checks matching output exists', () => 
   const targetContract = h('target-contract');
   const targetParams = enc('target-params');
 
-  const fn: ContractFn = (env: ContractEnv) => {
-    env.requireOutput(
-      { contract: targetContract, params: targetParams },
-      42,
-      enc('payload'),
-    );
+  const contractImpl: Contract = {
+    run(env: ContractEnv) {
+      env.requireOutput(
+        { contract: targetContract, params: targetParams },
+        42,
+        enc('payload'),
+      );
+    },
   };
-  module.registerContract(contract, fn);
+  module.registerContract(contract, contractImpl);
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -423,8 +435,10 @@ Deno.test('ExecutionModule: contract throws ContractRejection -> block invalid',
 
   const contract = h('always-reject');
 
-  module.registerContract(contract, (_env) => {
-    throw new ContractRejection('nope');
+  module.registerContract(contract, {
+    run(_env) {
+      throw new ContractRejection('nope');
+    },
   });
 
   const anchor: TestBlock = {
@@ -462,8 +476,8 @@ Deno.test('ExecutionModule: multiple claimed outputs from different contracts --
   const contractA = h('contract-a');
   const contractB = h('contract-b');
 
-  module.registerContract(contractA, (_env) => {});
-  module.registerContract(contractB, (_env) => {});
+  module.registerContract(contractA, { run(_env) {} });
+  module.registerContract(contractB, { run(_env) {} });
 
   const anchor: TestBlock = {
     hash: h('anchor'),
@@ -504,9 +518,11 @@ Deno.test('ExecutionModule: multiple contracts -- one rejects -> block invalid',
   const contractA = h('contract-a');
   const contractB = h('contract-b');
 
-  module.registerContract(contractA, (_env) => {});
-  module.registerContract(contractB, (_env) => {
-    throw new ContractRejection('contract B rejects');
+  module.registerContract(contractA, { run(_env) {} });
+  module.registerContract(contractB, {
+    run(_env) {
+      throw new ContractRejection('contract B rejects');
+    },
   });
 
   const anchor: TestBlock = {
@@ -580,8 +596,10 @@ Deno.test('ExecutionModule: silent contract (no-op) is accepted', () => {
   const { provider, module } = setup();
 
   const contract = h('silent-contract');
-  module.registerContract(contract, (_env) => {
-    // does nothing -- normal return = accept
+  module.registerContract(contract, {
+    run(_env) {
+      // does nothing -- normal return = accept
+    },
   });
 
   const anchor: TestBlock = {
@@ -614,8 +632,10 @@ Deno.test('ExecutionModule: contract throws non-rejection error -> block invalid
   const { provider, module } = setup();
 
   const contract = h('throwing-contract');
-  module.registerContract(contract, (_env) => {
-    throw new Error('boom');
+  module.registerContract(contract, {
+    run(_env) {
+      throw new Error('boom');
+    },
   });
 
   const anchor: TestBlock = {
@@ -653,9 +673,11 @@ Deno.test('ExecutionModule: verifyClaim verifies a single claim', () => {
   const contractA = h('contract-a');
   const contractB = h('contract-b');
 
-  module.registerContract(contractA, (_env) => {});
-  module.registerContract(contractB, (_env) => {
-    throw new ContractRejection('B rejects');
+  module.registerContract(contractA, { run(_env) {} });
+  module.registerContract(contractB, {
+    run(_env) {
+      throw new ContractRejection('B rejects');
+    },
   });
 
   const anchor: TestBlock = {
@@ -730,10 +752,12 @@ Deno.test('ExecutionModule: ContractEnv mode and contract info', () => {
   let capturedContract: Hash | undefined;
   let capturedParams: Uint8Array | undefined;
 
-  module.registerContract(contract, (env) => {
-    capturedMode = env.mode;
-    capturedContract = env.getContractHash();
-    capturedParams = env.getParams();
+  module.registerContract(contract, {
+    run(env) {
+      capturedMode = env.mode;
+      capturedContract = env.getContractHash();
+      capturedParams = env.getParams();
+    },
   });
 
   const params = enc('my-params');
@@ -774,14 +798,16 @@ Deno.test('ExecutionModule: collectInputs returns claimed outputs matching verif
   let inputCount = 0;
   let inputDetail: Uint8Array | undefined;
 
-  module.registerContract(contract, (env) => {
-    const inputs = env.collectInputs();
-    // In verification mode, collectInputs is synchronous
-    const resolvedInputs = inputs as import('../src/core/ContractEnv.ts').Input[];
-    inputCount = resolvedInputs.length;
-    if (resolvedInputs.length > 0) {
-      inputDetail = resolvedInputs[0].data;
-    }
+  module.registerContract(contract, {
+    run(env) {
+      const inputs = env.collectInputs();
+      // In verification mode, collectInputs is synchronous
+      const resolvedInputs = inputs as import('../src/core/ContractEnv.ts').Input[];
+      inputCount = resolvedInputs.length;
+      if (resolvedInputs.length > 0) {
+        inputDetail = resolvedInputs[0].data;
+      }
+    },
   });
 
   const anchor: TestBlock = {

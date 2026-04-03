@@ -10,7 +10,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
 import { createGenesisBlock } from '../../src/core/Block.ts';
-import { ContractFn, makeAggregationBlock, makeBlock, makeGenesis, makeOutput } from './helpers.ts';
+import { type Contract, makeAggregationBlock, makeBlock, makeGenesis, makeOutput } from './helpers.ts';
 import { TestNetwork } from './TestNetwork.ts';
 
 // -- Helpers --------------------------------------------------------
@@ -19,14 +19,14 @@ function registerContract(
   net: TestNetwork,
   nodeId: string,
   contract: Hash,
-  fn: ContractFn,
+  impl: Contract,
 ): void {
-  net.getNode(nodeId).execution.registerContract(contract, fn);
+  net.getNode(nodeId).execution.registerContract(contract, impl);
 }
 
-function registerOnAll(net: TestNetwork, contract: Hash, fn: ContractFn): void {
+function registerOnAll(net: TestNetwork, contract: Hash, impl: Contract): void {
   for (const id of net.nodeIds) {
-    registerContract(net, id, contract, fn);
+    registerContract(net, id, contract, impl);
   }
 }
 
@@ -105,7 +105,7 @@ Deno.test('Probing: weight factor converges on all nodes for valid leaf', () => 
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
-  registerOnAll(net, validContract, () => {});
+  registerOnAll(net, validContract, { run() {} });
 
   const genesis = makeGenesis(4);
   net.broadcastGenesis(genesis);
@@ -148,9 +148,11 @@ Deno.test('Probing: invalid subtree detected via weight factor', () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
-  registerOnAll(net, validContract, () => {});
-  registerOnAll(net, invalidContract, () => {
-    throw new Error('contract rejects');
+  registerOnAll(net, validContract, { run() {} });
+  registerOnAll(net, invalidContract, {
+    run() {
+      throw new Error('contract rejects');
+    },
   });
 
   // Custom genesis with outputs using our registered contracts.
@@ -307,7 +309,7 @@ Deno.test('Probing: verification updates consensus weight', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
-  registerContract(net, 'A', validContract, () => {});
+  registerContract(net, 'A', validContract, { run() {} });
 
   const genesis = makeGenesis(4);
   net.broadcastGenesis(genesis);
@@ -347,7 +349,7 @@ Deno.test('Probing: attemptVerification runs the full probe-verify cycle', () =>
   const net = new TestNetwork();
   net.addNode('A');
 
-  registerContract(net, 'A', validContract, () => {});
+  registerContract(net, 'A', validContract, { run() {} });
 
   const genesis = makeGenesis(4);
   net.broadcastGenesis(genesis);

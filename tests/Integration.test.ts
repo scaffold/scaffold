@@ -19,7 +19,7 @@ import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { ExecutionService } from '../src/core/ExecutionService.ts';
-import { type ContractFn } from '../src/core/ExecutionModule.ts';
+import type { Contract } from '../src/core/Contract.ts';
 import { type ContractEnv, ContractRejection } from '../src/core/ContractEnv.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { SimNetwork, SimNode } from './SimNetwork.ts';
@@ -400,8 +400,10 @@ Deno.test('Integration: computation block with self-claims → verify → valid'
 
   // Register a trivial contract that accepts any block
   const trivialContract = Hash.digest('trivial-contract');
-  node.execution.registerContract(trivialContract, (_env: ContractEnv) => {
-    // normal return = accept
+  node.execution.registerContract(trivialContract, {
+    run(_env: ContractEnv) {
+      // normal return = accept
+    },
   });
 
   // Genesis
@@ -433,11 +435,13 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
 
   // Contract reads previous state via fetch and verifies new state
   const gameVerifier = { contract: gameContract, params: new Uint8Array(0) };
-  node.execution.registerContract(gameContract, (env: ContractEnv) => {
-    const prevState = new TextDecoder().decode(
-      env.fetch(gameVerifier, enc('state')) as Uint8Array,
-    );
-    env.requireResult(enc('state'), enc(prevState + '-next'));
+  node.execution.registerContract(gameContract, {
+    run(env: ContractEnv) {
+      const prevState = new TextDecoder().decode(
+        env.fetch(gameVerifier, enc('state')) as Uint8Array,
+      );
+      env.requireResult(enc('state'), enc(prevState + '-next'));
+    },
   });
 
   // Genesis with two game outputs (one for A, one for B)
@@ -509,7 +513,7 @@ Deno.test('Integration: coordinator.attemptVerification works end-to-end', () =>
 
   // Register a contract that always accepts
   const contract = Hash.digest('always-accept');
-  node.execution.registerContract(contract, (_env: ContractEnv) => {});
+  node.execution.registerContract(contract, { run(_env: ContractEnv) {} });
 
   // Genesis
   const genesis = createGenesisBlock([{

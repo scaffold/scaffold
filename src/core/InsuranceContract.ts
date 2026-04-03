@@ -1,20 +1,14 @@
 // Protocol spec: docs/protocol/collateral-resolution.md
 
-import { Hash } from '../util/Hash.ts';
-import { type MaybePromise, maybeThen } from '../util/MaybePromise.ts';
+import { maybeThen } from '../util/MaybePromise.ts';
 import {
-  INSURANCE_CONTRACT,
-  SIGNATURE_CONTRACT,
   decodeInsuranceDetail,
+  encodeInsuranceDetail,
   type InsuranceDetail,
+  SIGNATURE_CONTRACT,
 } from './Block.ts';
-import {
-  type ContractEnv,
-  type ContractFn,
-  ContractRejection,
-  type Input,
-} from './ContractEnv.ts';
-import type { Verifier } from './BlockCreationModule.ts';
+import { ContractRejection } from './ContractEnv.ts';
+import type { Contract } from './Contract.ts';
 
 // -- Constants --------------------------------------------------------
 
@@ -47,49 +41,81 @@ export const MIN_RETURN_RATE = 0.95;
  *
  * 4. **Non-canonical reclaim**: Full return to owner.
  */
-export const insuranceContract: ContractFn = (env) => {
-  const inputsResult = env.collectInputs();
+export const insuranceContract: Contract = {
+  run(env) {
+    const inputsResult = env.collectInputs();
 
-  return maybeThen(inputsResult, (inputs) => {
-    if (inputs.length === 0) {
-      throw new ContractRejection('no insurance inputs');
-    }
+    return maybeThen(inputsResult, (inputs) => {
+      if (inputs.length === 0) {
+        throw new ContractRejection('no insurance inputs');
+      }
 
-    const now = env.getTimestamp();
-    const input = inputs[0];
-    const detail = decodeInsuranceDetail(input.data);
+      const now = env.getTimestamp();
+      const input = inputs[0];
+      const detail = decodeInsuranceDetail(input.data);
 
-    // The resolution mode is determined by what outputs the claiming block produces.
-    // The contract enforces the minimum return to the original author.
-    //
-    // If the claiming block is signed by the owner (author or aggregator),
-    // it's a solidification return or non-canonical reclaim.
-    // Otherwise, it's an aggregation claim (must return most to author).
-    //
-    // For aggregation claim: require output returning at least MIN_RETURN_RATE * deposit.
-    // For rectification: require finder reward + victim restoration outputs.
-    // For solidification/reclaim: require full return to owner.
+      // The resolution mode is determined by what outputs the claiming block produces.
+      // The contract enforces the minimum return to the original author.
+      //
+      // If the claiming block is signed by the owner (author or aggregator),
+      // it's a solidification return or non-canonical reclaim.
+      // Otherwise, it's an aggregation claim (must return most to author).
+      //
+      // For aggregation claim: require output returning at least MIN_RETURN_RATE * deposit.
+      // For rectification: require finder reward + victim restoration outputs.
+      // For solidification/reclaim: require full return to owner.
 
-    // Check if signed by the insurance owner (solidification or non-canonical reclaim)
-    try {
-      env.requireSignature(detail.pubkey);
-      // Owner is reclaiming -- full return
+      // Check if signed by the insurance owner (solidification or non-canonical reclaim)
+      try {
+        env.requireSignature(detail.pubkey);
+        // Owner is reclaiming -- full return
+        env.requireOutput(
+          { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
+          input.value,
+        );
+        return;
+      } catch {
+        // Not signed by owner -- aggregation claim or rectification
+      }
+
+      // Aggregation claim: someone else claiming, must return most to author
+      const minReturn = Math.floor(input.value * MIN_RETURN_RATE);
       env.requireOutput(
         { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
-        input.value,
+        minReturn,
       );
-      return;
-    } catch {
-      // Not signed by owner -- aggregation claim or rectification
-    }
+    });
+  },
 
-    // Aggregation claim: someone else claiming, must return most to author
-    const minReturn = Math.floor(input.value * MIN_RETURN_RATE);
-    env.requireOutput(
-      { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
-      minReturn,
-    );
-  });
+  walkParams(params, host) {
+    host.emitBytes('', params, {
+      type: 'bytes/hash/sha256/scaffold/block',
+      shortDescription: 'Target block hash',
+    });
+  },
+
+  walkData(data, host) {
+    const detail = decodeInsuranceDetail(data);
+    host.emitBytes('pubkey', detail.pubkey, {
+      type: 'bytes/public_key/ed25519',
+      shortDescription: 'Owner public key',
+    });
+  },
+
+  buildParams(host) {
+    return host.requestBytes('targetBlock', {
+      type: 'bytes/hash/sha256/scaffold/block',
+      shortDescription: 'Target block hash',
+    });
+  },
+
+  buildData(host) {
+    const pubkey = host.requestBytes('pubkey', {
+      type: 'bytes/public_key/ed25519',
+      shortDescription: 'Owner public key',
+    });
+    return encodeInsuranceDetail({ pubkey });
+  },
 };
 
 export { type InsuranceDetail };

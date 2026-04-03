@@ -12,7 +12,7 @@ import { createDraft, DraftStore } from '../src/core/BlockDraft.ts';
 import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
-import { type ContractFn } from '../src/core/ContractEnv.ts';
+import type { Contract } from '../src/core/Contract.ts';
 import { aggregationContract, AGGREGATION_THRESHOLD } from '../src/core/AggregationContract.ts';
 
 // -- Helpers -------------------------------------------------------
@@ -69,7 +69,7 @@ function makeTestSetup() {
   const utxoIndex = new UtxoIndex(store);
   const outputClaims = new OutputClaimModule(new TestOutputClaimProvider(store));
   const draftStore = new DraftStore();
-  const contracts = new Map<string, ContractFn>();
+  const contracts = new Map<string, Contract>();
 
   // Register the aggregation contract
   contracts.set(AGGREGATION_CONTRACT.toHex(), aggregationContract);

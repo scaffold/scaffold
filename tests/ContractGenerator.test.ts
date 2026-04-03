@@ -12,7 +12,8 @@ import { createDraft, DraftStore, ResolvedClaim } from '../src/core/BlockDraft.t
 import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
-import { type ContractEnv, ContractRejection, type ContractFn } from '../src/core/ContractEnv.ts';
+import { type ContractEnv, ContractRejection } from '../src/core/ContractEnv.ts';
+import type { Contract } from '../src/core/Contract.ts';
 
 // -- Helpers -------------------------------------------------------
 
@@ -76,7 +77,7 @@ function makeTestSetup() {
   const utxoIndex = new UtxoIndex(store);
   const outputClaims = new OutputClaimModule(new TestOutputClaimProvider(store));
   const draftStore = new DraftStore();
-  const contracts = new Map<string, ContractFn>();
+  const contracts = new Map<string, Contract>();
 
   const generator = new ContractGenerator({
     lookupContract: (hash) => contracts.get(hash.toHex()),
@@ -98,9 +99,11 @@ Deno.test('ContractGenerator: runs contract and populates draft', () => {
   const gameVerifier: Verifier = { contract: gameContract, params: enc('cfg') };
 
   // Register a contract that produces a result output
-  contracts.set(gameContract.toHex(), (env: ContractEnv) => {
-    env.requireResult(enc('state'), enc('new-state'));
-    env.requireOutput({ contract: SIG_CONTRACT, params: enc('pk') }, 10);
+  contracts.set(gameContract.toHex(), {
+    run(env: ContractEnv) {
+      env.requireResult(enc('state'), enc('new-state'));
+      env.requireOutput({ contract: SIG_CONTRACT, params: enc('pk') }, 10);
+    },
   });
 
   // Create a genesis block with a game output
@@ -139,8 +142,10 @@ Deno.test('ContractGenerator: contract rejection cancels draft', () => {
   const gameContract = h('reject-contract');
   const gameVerifier: Verifier = { contract: gameContract, params: enc('cfg') };
 
-  contracts.set(gameContract.toHex(), (_env: ContractEnv) => {
-    throw new ContractRejection('nope');
+  contracts.set(gameContract.toHex(), {
+    run(_env: ContractEnv) {
+      throw new ContractRejection('nope');
+    },
   });
 
   const genesis = makeBlock({
@@ -173,9 +178,11 @@ Deno.test('ContractGenerator: cancel handle removes claims', () => {
   const sigVerifier = makeSignatureVerifier(enc('pk'));
 
   // Contract that consumes an input
-  contracts.set(gameContract.toHex(), (env: ContractEnv) => {
-    env.collectInputs();
-    env.requireResult(enc('state'), enc('done'));
+  contracts.set(gameContract.toHex(), {
+    run(env: ContractEnv) {
+      env.collectInputs();
+      env.requireResult(enc('state'), enc('done'));
+    },
   });
 
   // Genesis with a game output and a sig output
@@ -218,10 +225,12 @@ Deno.test('ContractGenerator: findInputs filters already-claimed outputs', () =>
 
   // Contract that collects all inputs and reports how many
   let inputCount = 0;
-  contracts.set(gameContract.toHex(), (env: ContractEnv) => {
-    const inputs = env.collectInputs() as { value: number }[];
-    inputCount = inputs.length;
-    env.requireResult(enc('count'), enc(String(inputs.length)));
+  contracts.set(gameContract.toHex(), {
+    run(env: ContractEnv) {
+      const inputs = env.collectInputs() as { value: number }[];
+      inputCount = inputs.length;
+      env.requireResult(enc('count'), enc(String(inputs.length)));
+    },
   });
 
   // Genesis with two game outputs
@@ -259,9 +268,11 @@ Deno.test('ContractGenerator: resolved claims from inputs are merged into draft'
   const gameContract = h('game-claims');
   const gameVerifier: Verifier = { contract: gameContract, params: enc('cfg') };
 
-  contracts.set(gameContract.toHex(), (env: ContractEnv) => {
-    env.requireInput();
-    env.requireResult(enc('state'), enc('done'));
+  contracts.set(gameContract.toHex(), {
+    run(env: ContractEnv) {
+      env.requireInput();
+      env.requireResult(enc('state'), enc('done'));
+    },
   });
 
   const genesis = makeBlock({
@@ -323,9 +334,11 @@ Deno.test('ContractGenerator: fetch adds refs to draft', () => {
   utxoIndex.blockBecameCanonical(genesis);
 
   // Contract that fetches state from prev block
-  contracts.set(gameContract.toHex(), (env: ContractEnv) => {
-    const state = env.fetch(gameVerifier, enc('state'));
-    env.requireResult(enc('state'), state as Uint8Array);
+  contracts.set(gameContract.toHex(), {
+    run(env: ContractEnv) {
+      const state = env.fetch(gameVerifier, enc('state'));
+      env.requireResult(enc('state'), state as Uint8Array);
+    },
   });
 
   const draft = createDraft({

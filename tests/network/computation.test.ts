@@ -18,18 +18,22 @@ const trivialContract = Hash.digest('trivial-contract');
 const gameContract = Hash.digest('game-contract');
 
 function registerTrivialContract(net: TestNetwork, nodeId: string): void {
-  net.getNode(nodeId).execution.registerContract(trivialContract, (_env: ContractEnv) => {
-    // Accept everything
+  net.getNode(nodeId).execution.registerContract(trivialContract, {
+    run(_env: ContractEnv) {
+      // Accept everything
+    },
   });
 }
 
 function registerGameContract(net: TestNetwork, nodeId: string): void {
   const gameVerifier = { contract: gameContract, params: new Uint8Array(0) };
-  net.getNode(nodeId).execution.registerContract(gameContract, (env: ContractEnv) => {
-    const prevState = new TextDecoder().decode(
-      env.fetch(gameVerifier, enc('state')) as Uint8Array,
-    );
-    env.requireResult(enc('state'), enc(prevState + '-next'));
+  net.getNode(nodeId).execution.registerContract(gameContract, {
+    run(env: ContractEnv) {
+      const prevState = new TextDecoder().decode(
+        env.fetch(gameVerifier, enc('state')) as Uint8Array,
+      );
+      env.requireResult(enc('state'), enc(prevState + '-next'));
+    },
   });
 }
 
@@ -134,8 +138,10 @@ Deno.test('Computation: invalid computation detected on all nodes', () => {
   // Register a strict contract that rejects blocks without specific outputs
   const strictContract = Hash.digest('strict-contract');
   for (const id of net.nodeIds) {
-    net.getNode(id).execution.registerContract(strictContract, (env: ContractEnv) => {
-      env.requireResult(enc('required-key'), enc('required-value'));
+    net.getNode(id).execution.registerContract(strictContract, {
+      run(env: ContractEnv) {
+        env.requireResult(enc('required-key'), enc('required-value'));
+      },
     });
   }
 

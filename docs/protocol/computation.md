@@ -343,36 +343,25 @@ This interacts with the existing weight-ratio balancing constraint from [DAG str
 
 ---
 
-## Observability
+## Observability and Construction
 
-Contracts can optionally export functions for generic tools (block explorers, debuggers, CLI) to inspect output data without contract-specific decoders. Two approaches are supported:
-
-### Option 1: JSON Serialization
-
-The contract exports `toJson` and `fromJson` functions for each data type (params, data, self-claimed values). Simple, but adds 14--100 KB to the WASM binary for JSON encoding/decoding.
-
-### Option 2: Host-Driven Walker (Preferred)
-
-The contract walks its data structure, calling host-imported functions for each branch and leaf:
+Contracts optionally export functions for generic tools to **read** (inspect) and **write** (construct) `params` and `data` fields without contract-specific code:
 
 ```
-// Contract exports:
-walk_data(data_ptr, data_len) → void
+// Reading: contract walks existing bytes, calling host emit functions
 walk_params(params_ptr, params_len) → void
+walk_data(data_ptr, data_len) → void
 
-// Host-imported functions used by the walker:
-emit_map_start(key_ptr, key_len) → bool     // returns false to skip this branch
-emit_map_end() → void
-emit_string(key_ptr, key_len, value_ptr, value_len) → void
-emit_number(key_ptr, key_len, value) → void
-emit_bytes(key_ptr, key_len, value_ptr, value_len) → void
-emit_list_start(key_ptr, key_len, count) → bool
-emit_list_end() → void
+// Writing: contract requests field values from host, serializes to bytes
+build_params() → void
+build_data() → void
 ```
 
-The host decides which branches to descend (returning `false` from `emit_map_start` to skip). This supports lazy exploration of large or infinite data structures. For large or paginated data, the WASM can request specific keys to descend into.
+The walker emits a tree of typed, annotated values. The builder mirrors this -- it requests values from the host (with the same type annotations), letting the host render appropriate input widgets. Both directions use **value descriptors** carrying a MIME-ish type hierarchy (e.g. `bytes/public_key/ed25519`, `bytes/hash/sha256/scaffold/contract`) that the host matches from most specific to least specific for UI rendering.
 
-Both approaches are optional. See [output data format](output-data.md) for the existing contract-as-explorer design.
+The builder uses a **default-then-refine** execution model: the host runs the builder, returns defaults for all fields, records the field tree, and renders a form. When the user edits a field, the host re-runs the builder with updated values, which may produce different fields (conditional branches).
+
+All four exports are optional. See [output data format](output-data.md) for the full specification: value descriptors, type hierarchy, WASM host interface, TypeScript bridge, and examples.
 
 ---
 

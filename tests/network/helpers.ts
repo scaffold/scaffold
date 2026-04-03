@@ -14,13 +14,13 @@ import {
   RESULT_CONTRACT,
 } from '../../src/core/Block.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
-import { type ContractFn } from '../../src/core/ContractEnv.ts';
+import type { Contract } from '../../src/core/Contract.ts';
 
 export const h = (name: string): Hash => Hash.digest(name);
 export const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 export { AGGREGATION_CONTRACT, RESULT_CONTRACT };
-export type { ContractFn };
+export type { Contract };
 
 export function makeOutput(value: number, label?: string): Output {
   return {

@@ -502,6 +502,63 @@
   font-style: italic;
 }
 
+/* -- Field Tree (walker output) ----------------------------- */
+
+.field-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.field-leaf {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.field-key {
+  font-size: 10px;
+  color: #6e6e73;
+  font-weight: 500;
+}
+
+.field-string {
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #1d7a48;
+}
+
+.field-number {
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #0071e3;
+}
+
+.field-bool {
+  font-family: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #8e44ad;
+}
+
+.field-type-hint {
+  font-size: 9px;
+  color: #c7c7cc;
+  font-style: italic;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.field-children {
+  padding-left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 /* -- Footer ------------------------------------------------- */
 
 .table-footer {
