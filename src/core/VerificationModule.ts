@@ -15,7 +15,7 @@ export interface VerificationProvider {
   initSample(treeHash: Hash): SampleResult;
 
   /** Verify a block by running its contracts. */
-  verifyBlock(blockHash: Hash): ExecutionResult;
+  verifyBlock(blockHash: Hash): Promise<ExecutionResult>;
 
   /** Record verification result for a terminal block. */
   recordVerification(blockHash: Hash, success: boolean): void;
@@ -49,7 +49,7 @@ export class VerificationModule {
    * 3. verifyBlock() runs the contract on the terminal
    * 4. recordVerification() reports the result to the sampling module
    */
-  verifyNext(): VerificationResult {
+  async verifyNext(): Promise<VerificationResult> {
     const treeHash = this._provider.selectNextTree();
     if (!treeHash) {
       return { verified: false, treeHash: undefined, reason: 'no trees to verify' };
@@ -61,7 +61,7 @@ export class VerificationModule {
     }
 
     const terminalHash = sampleResult.blockHash;
-    const execResult = this._provider.verifyBlock(terminalHash);
+    const execResult = await this._provider.verifyBlock(terminalHash);
 
     this._provider.recordVerification(terminalHash, execResult.accepted);
 

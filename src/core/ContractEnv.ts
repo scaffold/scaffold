@@ -17,6 +17,8 @@ export interface Input {
   readonly verifier: Verifier;
   readonly value: number;
   readonly data: Uint8Array;
+  /** True when the claimed output belongs to the same block that is claiming it. */
+  readonly isSelfClaim: boolean;
 }
 
 /** An input with its provenance -- where it lives in the DAG. */

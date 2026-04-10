@@ -7,8 +7,8 @@
 
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
-import { createGenesisBlock } from '../../src/core/Block.ts';
-import { makeRecordOutput } from '../../src/contracts/RecordContract.ts';
+import { createGenesisBlock, RECORD_CONTRACT } from '../../src/core/Block.ts';
+import { makeRecordOutput, recordContract } from '../../src/contracts/RecordContract.ts';
 import { type ContractEnv } from '../../src/core/ContractEnv.ts';
 import { TestNetwork } from './TestNetwork.ts';
 import { enc, makeBlock, makeOutput } from './helpers.ts';
@@ -49,7 +49,7 @@ function makeContractGenesis(contract: Hash, count = 1) {
 
 // -- Tests ------------------------------------------------------------
 
-Deno.test('Computation: contract verified consistently on all nodes', () => {
+Deno.test('Computation: contract verified consistently on all nodes', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -64,16 +64,19 @@ Deno.test('Computation: contract verified consistently on all nodes', () => {
 
   // All nodes should verify it as valid
   for (const id of net.nodeIds) {
-    const result = net.getNode(id).execution.verifyBlock(block.hash);
+    const result = await net.getNode(id).execution.verifyBlock(block.hash);
     assert(result.accepted, `Node ${id}: block should be accepted`);
   }
 });
 
-Deno.test('Computation: self-claimed outputs verified across network', () => {
+Deno.test('Computation: self-claimed outputs verified across network', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
-  for (const id of net.nodeIds) registerTrivialContract(net, id);
+  for (const id of net.nodeIds) {
+    registerTrivialContract(net, id);
+    net.getNode(id).execution.registerContract(RECORD_CONTRACT, recordContract);
+  }
 
   const genesis = makeContractGenesis(trivialContract);
   net.broadcastGenesis(genesis);
@@ -87,12 +90,12 @@ Deno.test('Computation: self-claimed outputs verified across network', () => {
   net.deliverToAll(block, 'A');
 
   for (const id of net.nodeIds) {
-    const result = net.getNode(id).execution.verifyBlock(block.hash);
+    const result = await net.getNode(id).execution.verifyBlock(block.hash);
     assert(result.accepted, `Node ${id}: self-claimed block should be accepted`);
   }
 });
 
-Deno.test('Computation: cross-block references work across nodes', () => {
+Deno.test('Computation: cross-block references work across nodes', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B']) net.addNode(id);
 
@@ -127,12 +130,12 @@ Deno.test('Computation: cross-block references work across nodes', () => {
 
   // Both nodes should verify B
   for (const id of net.nodeIds) {
-    const result = net.getNode(id).execution.verifyBlock(blockB.hash);
+    const result = await net.getNode(id).execution.verifyBlock(blockB.hash);
     assert(result.accepted, `Node ${id}: ref block should be accepted`);
   }
 });
 
-Deno.test('Computation: invalid computation detected on all nodes', () => {
+Deno.test('Computation: invalid computation detected on all nodes', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -154,7 +157,7 @@ Deno.test('Computation: invalid computation detected on all nodes', () => {
   net.deliverToAll(badBlock, 'A');
 
   for (const id of net.nodeIds) {
-    const result = net.getNode(id).execution.verifyBlock(badBlock.hash);
+    const result = await net.getNode(id).execution.verifyBlock(badBlock.hash);
     assert(!result.accepted, `Node ${id}: invalid block should be rejected`);
   }
 });
@@ -180,7 +183,7 @@ Deno.test('Computation: verification sampling selects highest priority tree', ()
   assert(next !== undefined, 'Should select a tree to verify');
 });
 
-Deno.test('Computation: multiple nodes independently verify same block', () => {
+Deno.test('Computation: multiple nodes independently verify same block', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -193,10 +196,10 @@ Deno.test('Computation: multiple nodes independently verify same block', () => {
   net.deliverToAll(block, 'A');
 
   // All nodes independently verify
-  const results = net.nodeIds.map((id) => ({
+  const results = await Promise.all(net.nodeIds.map(async (id) => ({
     id,
-    result: net.getNode(id).execution.verifyBlock(block.hash),
-  }));
+    result: await net.getNode(id).execution.verifyBlock(block.hash),
+  })));
 
   // All should agree on the outcome
   const firstResult = results[0].result.accepted;

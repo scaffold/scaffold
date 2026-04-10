@@ -38,7 +38,7 @@ class MockVerificationProvider implements VerificationProvider {
       { terminal: false, reason: 'missing' as const };
   }
 
-  verifyBlock(blockHash: Hash): ExecutionResult {
+  async verifyBlock(blockHash: Hash): Promise<ExecutionResult> {
     const result = this.execResults.get(blockHash.toHex());
     if (!result) return { accepted: false, reason: 'no mock result configured' };
     return result;
@@ -57,7 +57,7 @@ function setup() {
 
 // -- Tests -----------------------------------------------------------
 
-Deno.test('VerificationModule: verifyNext selects tree, samples, and verifies', () => {
+Deno.test('VerificationModule: verifyNext selects tree, samples, and verifies', async () => {
   const { provider, module } = setup();
 
   const tree = h('tree-1');
@@ -66,7 +66,7 @@ Deno.test('VerificationModule: verifyNext selects tree, samples, and verifies', 
   provider.setSampleResult(tree, { terminal: true, blockHash: terminal });
   provider.setExecResult(terminal, { accepted: true });
 
-  const result = module.verifyNext();
+  const result = await module.verifyNext();
   assert(result.verified);
   if (result.verified) {
     assertEquals(result.treeHash.toHex(), tree.toHex());
@@ -74,10 +74,10 @@ Deno.test('VerificationModule: verifyNext selects tree, samples, and verifies', 
   }
 });
 
-Deno.test('VerificationModule: verifyNext returns "nothing to verify" when no trees', () => {
+Deno.test('VerificationModule: verifyNext returns "nothing to verify" when no trees', async () => {
   const { module } = setup();
 
-  const result = module.verifyNext();
+  const result = await module.verifyNext();
   assert(!result.verified);
   if (!result.verified) {
     assertEquals(result.treeHash, undefined);
@@ -85,7 +85,7 @@ Deno.test('VerificationModule: verifyNext returns "nothing to verify" when no tr
   }
 });
 
-Deno.test('VerificationModule: successful verification records success', () => {
+Deno.test('VerificationModule: successful verification records success', async () => {
   const { provider, module } = setup();
 
   const tree = h('valid-tree');
@@ -94,14 +94,14 @@ Deno.test('VerificationModule: successful verification records success', () => {
   provider.setSampleResult(tree, { terminal: true, blockHash: terminal });
   provider.setExecResult(terminal, { accepted: true });
 
-  module.verifyNext();
+  await module.verifyNext();
 
   assertEquals(provider.verifications.length, 1);
   assertEquals(provider.verifications[0].hash.toHex(), terminal.toHex());
   assertEquals(provider.verifications[0].success, true);
 });
 
-Deno.test('VerificationModule: failed verification records failure', () => {
+Deno.test('VerificationModule: failed verification records failure', async () => {
   const { provider, module } = setup();
 
   const tree = h('invalid-tree');
@@ -110,7 +110,7 @@ Deno.test('VerificationModule: failed verification records failure', () => {
   provider.setSampleResult(tree, { terminal: true, blockHash: terminal });
   provider.setExecResult(terminal, { accepted: false, reason: 'contract rejected' });
 
-  const result = module.verifyNext();
+  const result = await module.verifyNext();
   assert(!result.verified);
   if (!result.verified && result.treeHash) {
     assertEquals(result.reason, 'contract rejected');
@@ -120,14 +120,14 @@ Deno.test('VerificationModule: failed verification records failure', () => {
   assertEquals(provider.verifications[0].success, false);
 });
 
-Deno.test('VerificationModule: non-terminal sample returns sample reason', () => {
+Deno.test('VerificationModule: non-terminal sample returns sample reason', async () => {
   const { provider, module } = setup();
 
   const tree = h('missing-tree');
   provider.addTree(tree);
   provider.setSampleResult(tree, { terminal: false, reason: 'missing' });
 
-  const result = module.verifyNext();
+  const result = await module.verifyNext();
   assert(!result.verified);
   if (!result.verified) {
     assertEquals(result.reason, 'missing');
@@ -137,7 +137,7 @@ Deno.test('VerificationModule: non-terminal sample returns sample reason', () =>
   assertEquals(provider.verifications.length, 0);
 });
 
-Deno.test('VerificationModule: multiple verifyNext calls process in order', () => {
+Deno.test('VerificationModule: multiple verifyNext calls process in order', async () => {
   const { provider, module } = setup();
 
   const tree1 = h('tree-1');
@@ -157,12 +157,12 @@ Deno.test('VerificationModule: multiple verifyNext calls process in order', () =
   provider.setExecResult(t2, { accepted: false, reason: 'bad' });
   provider.setExecResult(t3, { accepted: true });
 
-  assert(module.verifyNext().verified);
-  assert(!module.verifyNext().verified);
-  assert(module.verifyNext().verified);
+  assert((await module.verifyNext()).verified);
+  assert(!(await module.verifyNext()).verified);
+  assert((await module.verifyNext()).verified);
 
   // Fourth call has no more trees
-  const r4 = module.verifyNext();
+  const r4 = await module.verifyNext();
   assert(!r4.verified);
   if (!r4.verified) assertEquals(r4.treeHash, undefined);
 

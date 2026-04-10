@@ -101,7 +101,7 @@ Deno.test('Sampling: non-canonical block loses sample state', () => {
 
 // Weight factor convergence
 
-Deno.test('Sampling: weight factor converges on all nodes for valid leaf', () => {
+Deno.test('Sampling: weight factor converges on all nodes for valid leaf', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -129,7 +129,7 @@ Deno.test('Sampling: weight factor converges on all nodes for valid leaf', () =>
     for (let i = 0; i < 5; i++) {
       const result = node.sampling.initSample(block.hash);
       if (result.terminal) {
-        const exec = node.execution.verifyBlock(result.blockHash);
+        const exec = await node.execution.verifyBlock(result.blockHash);
         node.sampling.recordVerification(result.blockHash, exec.accepted);
       }
     }
@@ -144,7 +144,7 @@ Deno.test('Sampling: weight factor converges on all nodes for valid leaf', () =>
 
 // Invalid block detection
 
-Deno.test('Sampling: invalid subtree detected via weight factor', () => {
+Deno.test('Sampling: invalid subtree detected via weight factor', async () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -202,7 +202,7 @@ Deno.test('Sampling: invalid subtree detected via weight factor', () => {
     for (let i = 0; i < 200; i++) {
       const result = node.sampling.initSample(agg.hash);
       if (result.terminal) {
-        const exec = node.execution.verifyBlock(result.blockHash);
+        const exec = await node.execution.verifyBlock(result.blockHash);
         node.sampling.recordVerification(result.blockHash, exec.accepted);
       }
     }
@@ -305,7 +305,7 @@ Deno.test('Sampling: conflict winner has sample state, loser does not', () => {
 
 // Verification -> consensus feedback loop
 
-Deno.test('Sampling: verification updates consensus weight', () => {
+Deno.test('Sampling: verification updates consensus weight', async () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -337,7 +337,7 @@ Deno.test('Sampling: verification updates consensus weight', () => {
   const result = node.sampling.initSample(block.hash);
   assert(result.terminal);
   if (result.terminal) {
-    const exec = node.execution.verifyBlock(result.blockHash);
+    const exec = await node.execution.verifyBlock(result.blockHash);
     node.sampling.recordVerification(result.blockHash, exec.accepted);
   }
 
@@ -345,7 +345,7 @@ Deno.test('Sampling: verification updates consensus weight', () => {
   assertEquals(node.sampling.getWeightFactor(block.hash), 1.0);
 });
 
-Deno.test('Sampling: attemptVerification runs the full sample-verify cycle', () => {
+Deno.test('Sampling: attemptVerification runs the full sample-verify cycle', async () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -371,7 +371,7 @@ Deno.test('Sampling: attemptVerification runs the full sample-verify cycle', () 
   const node = net.getNode('A');
 
   // attemptVerification should do the full cycle
-  const verifyResult = node.coordinator.attemptVerification();
+  const verifyResult = await node.coordinator.attemptVerification();
   if (verifyResult && verifyResult.verified) {
     // Weight factor should now be non-zero
     const wf = node.sampling.getWeightFactor(block.hash);

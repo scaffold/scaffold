@@ -185,12 +185,12 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     for (const claimIdx of this._claims) {
       const output = this._extendedOutputs[claimIdx];
       if (!output) continue;
-      if (Hash.equals(output.verifier.contract, RECORD_CONTRACT)) continue;
       if (verifierEquals(output.verifier, thisVerifier)) {
         inputs.push({
           verifier: output.verifier,
           value: output.value,
           data: output.data,
+          isSelfClaim: claimIdx < this._outputs.length,
         });
       }
     }

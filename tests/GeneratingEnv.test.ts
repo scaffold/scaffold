@@ -169,8 +169,8 @@ Deno.test('GeneratingEnv: collectInputs queries provider', () => {
   const verifier: Verifier = { contract: contractHash, params };
 
   const available: AvailableInput[] = [
-    { verifier, value: 10, data: enc('move1'), block: h('b1'), outputIndex: 0 },
-    { verifier, value: 20, data: enc('move2'), block: h('b2'), outputIndex: 1 },
+    { verifier, value: 10, data: enc('move1'), isSelfClaim: false, block: h('b1'), outputIndex: 0 },
+    { verifier, value: 20, data: enc('move2'), isSelfClaim: false, block: h('b2'), outputIndex: 1 },
   ];
   provider.setAvailableInputs(verifier, available);
 
@@ -205,7 +205,7 @@ Deno.test('GeneratingEnv: requireInput returns first available input', () => {
   const verifier: Verifier = { contract: contractHash, params };
 
   const available: AvailableInput[] = [
-    { verifier, value: 5, data: enc('data'), block: h('b1'), outputIndex: 2 },
+    { verifier, value: 5, data: enc('data'), isSelfClaim: false, block: h('b1'), outputIndex: 2 },
   ];
   provider.setAvailableInputs(verifier, available);
 

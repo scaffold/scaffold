@@ -43,7 +43,7 @@ function makeSignedBlock(
 
 // -- Tests ------------------------------------------------------------
 
-Deno.test('SignatureContract: signed block with matching key is accepted', () => {
+Deno.test('SignatureContract: signed block with matching key is accepted', async () => {
   const node = new SimNode('sig-test');
   node.execution.registerContract(SIGNATURE_CONTRACT, signatureContract);
 
@@ -55,11 +55,11 @@ Deno.test('SignatureContract: signed block with matching key is accepted', () =>
   const block = makeSignedBlock(genesis, [], 10, [0], privateKeyA);
   node.receiveBlock(block, null);
 
-  const result = node.execution.verifyBlock(block.hash);
+  const result = await node.execution.verifyBlock(block.hash);
   assert(result.accepted, `Should accept: signed by correct key`);
 });
 
-Deno.test('SignatureContract: signed block with wrong key is rejected', () => {
+Deno.test('SignatureContract: signed block with wrong key is rejected', async () => {
   const node = new SimNode('sig-test-wrong');
   node.execution.registerContract(SIGNATURE_CONTRACT, signatureContract);
 
@@ -71,11 +71,11 @@ Deno.test('SignatureContract: signed block with wrong key is rejected', () => {
   const block = makeSignedBlock(genesis, [], 10, [0], privateKeyB);
   node.receiveBlock(block, null);
 
-  const result = node.execution.verifyBlock(block.hash);
+  const result = await node.execution.verifyBlock(block.hash);
   assertFalse(result.accepted, `Should reject: signed by wrong key`);
 });
 
-Deno.test('SignatureContract: unsigned block is rejected', () => {
+Deno.test('SignatureContract: unsigned block is rejected', async () => {
   const node = new SimNode('sig-test-unsigned');
   node.execution.registerContract(SIGNATURE_CONTRACT, signatureContract);
 
@@ -99,7 +99,7 @@ Deno.test('SignatureContract: unsigned block is rejected', () => {
   };
   node.receiveBlock(unsignedBlock, null);
 
-  const result = node.execution.verifyBlock(unsignedBlock.hash);
+  const result = await node.execution.verifyBlock(unsignedBlock.hash);
   assertFalse(result.accepted, `Should reject: block is not signed`);
 });
 

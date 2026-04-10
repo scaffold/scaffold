@@ -68,6 +68,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
         verifier: output.verifier,
         value: output.value,
         data: output.data,
+        isSelfClaim: false,
         block: entry.blockHash,
         outputIndex: entry.outputIndex,
       });
@@ -260,6 +261,7 @@ export class ContractGenerator implements GeneratorProvider {
       verifier: output.verifier,
       value: output.value,
       data: output.data,
+      isSelfClaim: false,
       block: blockHash,
       outputIndex,
     });

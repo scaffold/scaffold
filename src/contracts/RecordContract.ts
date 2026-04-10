@@ -2,6 +2,7 @@
 
 import { type Block, RECORD_CONTRACT } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
+import { ContractRejection } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 
@@ -45,15 +46,16 @@ export function findRecordOutput(block: Block, key: string | Uint8Array): Output
 /**
  * Record contract: key-value outputs that are always self-claimed.
  *
- * Currently a no-op -- record outputs are verified structurally by the
- * execution module (self-claims of RECORD_CONTRACT are accepted without
- * running a contract). A proper implementation would need a ContractEnv
- * primitive like `requireSelfClaim()` to assert the input originated from
- * the same block.
+ * Verifies that every input is a self-claim (the claimed output belongs
+ * to the same block that is claiming it).
  */
 export const recordContract: Contract = {
-  run() {
-    // Self-claim verification is handled structurally by ExecutionModule.
-    // See the ContractEnv gap note above.
+  async run(env) {
+    const inputs = await env.collectInputs();
+    for (const input of inputs) {
+      if (!input.isSelfClaim) {
+        throw new ContractRejection('record outputs must be self-claimed');
+      }
+    }
   },
 };

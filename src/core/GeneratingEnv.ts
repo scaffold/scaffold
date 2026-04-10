@@ -92,7 +92,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
           outputIndex: ai.outputIndex,
           value: ai.value,
         });
-        this._inputs.push({ verifier: ai.verifier, value: ai.value, data: ai.data });
+        this._inputs.push({ verifier: ai.verifier, value: ai.value, data: ai.data, isSelfClaim: false });
         this._addIncludeConstraint(ai.block);
       }
       return this._inputs.slice(-available.length);
@@ -192,7 +192,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       outputIndex: ai.outputIndex,
       value: ai.value,
     });
-    const input: Input = { verifier: ai.verifier, value: ai.value, data: ai.data };
+    const input: Input = { verifier: ai.verifier, value: ai.value, data: ai.data, isSelfClaim: false };
     this._inputs.push(input);
     this._addIncludeConstraint(ai.block);
     return input;

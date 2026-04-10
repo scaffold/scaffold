@@ -2,7 +2,6 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
-import { RECORD_CONTRACT } from './Block.ts';
 import { ContractRejection } from './ContractEnv.ts';
 import type { Contract } from '../contracts/Contract.ts';
 import { VerifyingEnv } from './VerifyingEnv.ts';
@@ -83,7 +82,7 @@ export class ExecutionModule<BlockType> {
    * Verify an entire block: run all claimed output contracts.
    * Returns accepted if all contracts accept (or there are no non-self claims).
    */
-  verifyBlock(blockHash: Hash): ExecutionResult {
+  async verifyBlock(blockHash: Hash): Promise<ExecutionResult> {
     const block = this._provider.getBlock(blockHash);
     if (!block) return { accepted: false, reason: 'block not found' };
 
@@ -101,10 +100,6 @@ export class ExecutionModule<BlockType> {
         return { accepted: false, reason: `claim index ${claimIdx} out of bounds` };
       }
 
-      // Self-claimed outputs (RECORD_CONTRACT) are trivially valid:
-      // the claiming block IS the producing block
-      if (Hash.equals(claimedOutput.verifier.contract, RECORD_CONTRACT)) continue;
-
       const key = claimedOutput.verifier.contract.toPrimitive();
       let group = contractClaims.get(key);
       if (!group) {
@@ -115,15 +110,11 @@ export class ExecutionModule<BlockType> {
     }
 
     // Run each contract
-    for (const [contractKey, _claimIndices] of contractClaims) {
+    for (const [contractKey, claimIndices] of contractClaims) {
       const contractHash = Hash.fromPrimitive(contractKey);
-      const claimedOutput = extendedOutputs[claims[_claimIndices[0]]];
-      const result = this._runContract(
-        contractHash,
-        claimedOutput.verifier.params,
-        block,
-        outputs,
-        claims,
+      const claimedOutput = extendedOutputs[claims[claimIndices[0]]];
+      const result = await this._runContract(
+        contractHash, claimedOutput.verifier.params, block, outputs, claims,
       );
       if (!result.accepted) return result;
     }
@@ -134,7 +125,7 @@ export class ExecutionModule<BlockType> {
   /**
    * Verify a single claimed output by its index in the claims array.
    */
-  verifyClaim(blockHash: Hash, claimIndex: number): ExecutionResult {
+  async verifyClaim(blockHash: Hash, claimIndex: number): Promise<ExecutionResult> {
     const block = this._provider.getBlock(blockHash);
     if (!block) return { accepted: false, reason: 'block not found' };
 
@@ -149,11 +140,6 @@ export class ExecutionModule<BlockType> {
       return { accepted: false, reason: 'claimed output not found' };
     }
 
-    // Self-claimed outputs are trivially valid
-    if (Hash.equals(claimedOutput.verifier.contract, RECORD_CONTRACT)) {
-      return { accepted: true };
-    }
-
     return this._runContract(
       claimedOutput.verifier.contract,
       claimedOutput.verifier.params,
@@ -163,13 +149,13 @@ export class ExecutionModule<BlockType> {
     );
   }
 
-  private _runContract(
+  private async _runContract(
     contractHash: Hash,
     params: Uint8Array,
     block: BlockType,
     outputs: Output[],
     claims: number[],
-  ): ExecutionResult {
+  ): Promise<ExecutionResult> {
     const contract = this._contracts.get(contractHash.toPrimitive());
     if (!contract) {
       return { accepted: false, reason: `contract not found: ${contractHash.toHex()}` };
@@ -189,14 +175,13 @@ export class ExecutionModule<BlockType> {
     });
 
     try {
-      contract.run(env);
+      await contract.run(env);
+      return { accepted: true };
     } catch (e) {
       if (e instanceof ContractRejection) {
         return { accepted: false, reason: e.message };
       }
       return { accepted: false, reason: `contract threw: ${e}` };
     }
-
-    return { accepted: true };
   }
 }

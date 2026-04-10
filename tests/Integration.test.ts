@@ -395,7 +395,7 @@ Deno.test('Integration: block creation through stack — BlockCreationService.bu
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
-Deno.test('Integration: computation block with self-claims → verify → valid', () => {
+Deno.test('Integration: computation block with self-claims → verify → valid', async () => {
   const node = new SimNode('compute-node');
 
   // Register a trivial contract that accepts any block
@@ -424,11 +424,11 @@ Deno.test('Integration: computation block with self-claims → verify → valid'
   node.receiveBlock(compBlock, null);
 
   // Verify the computation block
-  const result = node.execution.verifyBlock(compBlock.hash);
+  const result = await node.execution.verifyBlock(compBlock.hash);
   assert(result.accepted, `Expected accepted but got: ${!result.accepted ? result.reason : ''}`);
 });
 
-Deno.test('Integration: cross-block references — block B refs A and reads state', () => {
+Deno.test('Integration: cross-block references — block B refs A and reads state', async () => {
   const node = new SimNode('ref-node');
 
   const gameContract = Hash.digest('game-contract');
@@ -504,11 +504,11 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
   node.receiveBlock(blockB, null);
 
   // Verify block B reads A's state and produces correct new state
-  const result = node.execution.verifyBlock(blockB.hash);
+  const result = await node.execution.verifyBlock(blockB.hash);
   assert(result.accepted, `Expected accepted but got: ${!result.accepted ? result.reason : ''}`);
 });
 
-Deno.test('Integration: coordinator.attemptVerification works end-to-end', () => {
+Deno.test('Integration: coordinator.attemptVerification works end-to-end', async () => {
   const node = new SimNode('verify-node');
 
   // Register a contract that always accepts
@@ -528,7 +528,7 @@ Deno.test('Integration: coordinator.attemptVerification works end-to-end', () =>
   node.receiveBlock(block, null);
 
   // The block should now be in sampling. Attempt verification.
-  const verifyResult = node.coordinator.attemptVerification();
+  const verifyResult = await node.coordinator.attemptVerification();
   // May return null if no tree is selected (genesis has MAX_SAFE_INTEGER priority edge case)
   // or a verification result
   if (verifyResult) {

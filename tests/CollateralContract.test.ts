@@ -6,7 +6,7 @@ import {
   RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
-import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
+import { makeRecordOutput, recordContract } from '../src/contracts/RecordContract.ts';
 import {
   type ChallengeTarget,
   type CollateralDetail,
@@ -109,6 +109,7 @@ function setup(): { provider: TestProvider; module: ExecutionModule<TestBlock> }
   const provider = new TestProvider();
   const module = new ExecutionModule(provider);
   module.registerContract(COLLATERAL_CONTRACT, collateralContract);
+  module.registerContract(RECORD_CONTRACT, recordContract);
   return { provider, module };
 }
 
@@ -136,7 +137,7 @@ Deno.test('decayedValue: negative elapsed returns full value', () => {
 
 // -- Tests: decay return (no AGAINST) --------------------------------
 
-Deno.test('Collateral: decay return -- publisher reclaims FOR when no AGAINST', () => {
+Deno.test('Collateral: decay return -- publisher reclaims FOR when no AGAINST', async () => {
   const { provider, module } = setup();
 
   const pk = pubkey('author');
@@ -161,11 +162,11 @@ Deno.test('Collateral: decay return -- publisher reclaims FOR when no AGAINST', 
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
-Deno.test('Collateral: decay return rejects if not signed by FOR pubkey', () => {
+Deno.test('Collateral: decay return rejects if not signed by FOR pubkey', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -192,11 +193,11 @@ Deno.test('Collateral: decay return rejects if not signed by FOR pubkey', () => 
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result.accepted, false);
 });
 
-Deno.test('Collateral: decay return rejects wrong output value', () => {
+Deno.test('Collateral: decay return rejects wrong output value', async () => {
   const { provider, module } = setup();
 
   const pk = pubkey('author');
@@ -222,13 +223,13 @@ Deno.test('Collateral: decay return rejects wrong output value', () => {
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result.accepted, false);
 });
 
 // -- Tests: unresolved challenge (AGAINST wins) -----------------------
 
-Deno.test('Collateral: unresolved challenge -- challenger claims FOR + own bond', () => {
+Deno.test('Collateral: unresolved challenge -- challenger claims FOR + own bond', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -255,11 +256,11 @@ Deno.test('Collateral: unresolved challenge -- challenger claims FOR + own bond'
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
-Deno.test('Collateral: unresolved challenge rejects wrong payout', () => {
+Deno.test('Collateral: unresolved challenge rejects wrong payout', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -286,13 +287,13 @@ Deno.test('Collateral: unresolved challenge rejects wrong payout', () => {
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result.accepted, false);
 });
 
 // -- Tests: hash challenge response -----------------------------------
 
-Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond', () => {
+Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -327,13 +328,13 @@ Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond',
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
 // -- Tests: non-canonical reclaim ------------------------------------
 
-Deno.test('Collateral: non-canonical reclaim -- full return to both sides', () => {
+Deno.test('Collateral: non-canonical reclaim -- full return to both sides', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -369,13 +370,13 @@ Deno.test('Collateral: non-canonical reclaim -- full return to both sides', () =
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
 // -- Tests: multiple AGAINST on same block ----------------------------
 
-Deno.test('Collateral: multiple AGAINST challengers each get FOR + own bond', () => {
+Deno.test('Collateral: multiple AGAINST challengers each get FOR + own bond', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -413,13 +414,13 @@ Deno.test('Collateral: multiple AGAINST challengers each get FOR + own bond', ()
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
 // -- Tests: challenge targets -----------------------------------------
 
-Deno.test('Collateral: AGAINST with each ChallengeTarget type', () => {
+Deno.test('Collateral: AGAINST with each ChallengeTarget type', async () => {
   const targets: ChallengeTarget[] = [
     { type: 'validity' },
     { type: 'anchor' },
@@ -454,7 +455,7 @@ Deno.test('Collateral: AGAINST with each ChallengeTarget type', () => {
     };
     provider.addBlock(claimBlock);
 
-    const result = module.verifyBlock(claimBlock.hash);
+    const result = await module.verifyBlock(claimBlock.hash);
     assertEquals(result, { accepted: true }, `failed for target type: ${target.type}`);
   }
 });

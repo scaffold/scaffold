@@ -20,7 +20,7 @@ class VerificationProviderAdapter implements VerificationProvider {
     return this.sampling.initSample(treeHash);
   }
 
-  verifyBlock(blockHash: Hash): ExecutionResult {
+  verifyBlock(blockHash: Hash): Promise<ExecutionResult> {
     return this.execution.verifyBlock(blockHash);
   }
 

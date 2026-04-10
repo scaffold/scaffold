@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { RECORD_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
-import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
+import { makeRecordOutput, recordContract } from '../src/contracts/RecordContract.ts';
 import {
   type Contract,
   ExecutionMode,
@@ -91,12 +91,13 @@ class TestProvider implements ExecutionProvider<TestBlock> {
 function setup(): { provider: TestProvider; module: ExecutionModule<TestBlock> } {
   const provider = new TestProvider();
   const module = new ExecutionModule(provider);
+  module.registerContract(RECORD_CONTRACT, recordContract);
   return { provider, module };
 }
 
 // -- Tests -----------------------------------------------------------
 
-Deno.test('ExecutionModule: block with no claims is trivially valid', () => {
+Deno.test('ExecutionModule: block with no claims is trivially valid', async () => {
   const { provider, module } = setup();
 
   const block: TestBlock = {
@@ -108,11 +109,11 @@ Deno.test('ExecutionModule: block with no claims is trivially valid', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: self-claimed outputs are trivially valid', () => {
+Deno.test('ExecutionModule: self-claimed outputs are trivially valid', async () => {
   const { provider, module } = setup();
 
   const selfOutput = makeRecordOutput('state', enc('value'));
@@ -125,11 +126,11 @@ Deno.test('ExecutionModule: self-claimed outputs are trivially valid', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: signature contract -- accept when params match pubkey', () => {
+Deno.test('ExecutionModule: signature contract -- accept when params match pubkey', async () => {
   const { provider, module } = setup();
 
   const pubkey = enc('eagle-pubkey');
@@ -168,11 +169,11 @@ Deno.test('ExecutionModule: signature contract -- accept when params match pubke
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: signature contract -- reject when pubkey mismatch', () => {
+Deno.test('ExecutionModule: signature contract -- reject when pubkey mismatch', async () => {
   const { provider, module } = setup();
 
   const sigContract = h('sig-contract');
@@ -207,11 +208,11 @@ Deno.test('ExecutionModule: signature contract -- reject when pubkey mismatch', 
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(!result.accepted);
 });
 
-Deno.test('ExecutionModule: requireResult checks self-claimed data', () => {
+Deno.test('ExecutionModule: requireResult checks self-claimed data', async () => {
   const { provider, module } = setup();
 
   const gameContract = h('game-contract');
@@ -250,11 +251,11 @@ Deno.test('ExecutionModule: requireResult checks self-claimed data', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: requireResult rejects wrong value', () => {
+Deno.test('ExecutionModule: requireResult rejects wrong value', async () => {
   const { provider, module } = setup();
 
   const gameContract = h('game-contract');
@@ -291,14 +292,14 @@ Deno.test('ExecutionModule: requireResult rejects wrong value', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(!result.accepted);
   if (!result.accepted) {
     assert(result.reason.includes('wrong value'));
   }
 });
 
-Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
+Deno.test('ExecutionModule: cross-block fetch -- reads previous state', async () => {
   const { provider, module } = setup();
 
   const gameContract = h('game-contract');
@@ -362,11 +363,11 @@ Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: requireOutput checks matching output exists', () => {
+Deno.test('ExecutionModule: requireOutput checks matching output exists', async () => {
   const { provider, module } = setup();
 
   const contract = h('test-contract');
@@ -411,7 +412,7 @@ Deno.test('ExecutionModule: requireOutput checks matching output exists', () => 
   };
   provider.addBlock(goodBlock);
 
-  const result = module.verifyBlock(goodBlock.hash);
+  const result = await module.verifyBlock(goodBlock.hash);
   assert(result.accepted);
 
   // Block WITHOUT the required output
@@ -424,14 +425,14 @@ Deno.test('ExecutionModule: requireOutput checks matching output exists', () => 
   };
   provider.addBlock(badBlock);
 
-  const badResult = module.verifyBlock(badBlock.hash);
+  const badResult = await module.verifyBlock(badBlock.hash);
   assert(!badResult.accepted);
   if (!badResult.accepted) {
     assert(badResult.reason.includes('required output not found'));
   }
 });
 
-Deno.test('ExecutionModule: contract throws ContractRejection -> block invalid', () => {
+Deno.test('ExecutionModule: contract throws ContractRejection -> block invalid', async () => {
   const { provider, module } = setup();
 
   const contract = h('always-reject');
@@ -464,14 +465,14 @@ Deno.test('ExecutionModule: contract throws ContractRejection -> block invalid',
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(!result.accepted);
   if (!result.accepted) {
     assertEquals(result.reason, 'nope');
   }
 });
 
-Deno.test('ExecutionModule: multiple claimed outputs from different contracts -- all must accept', () => {
+Deno.test('ExecutionModule: multiple claimed outputs from different contracts -- all must accept', async () => {
   const { provider, module } = setup();
 
   const contractA = h('contract-a');
@@ -509,11 +510,11 @@ Deno.test('ExecutionModule: multiple claimed outputs from different contracts --
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: multiple contracts -- one rejects -> block invalid', () => {
+Deno.test('ExecutionModule: multiple contracts -- one rejects -> block invalid', async () => {
   const { provider, module } = setup();
 
   const contractA = h('contract-a');
@@ -555,11 +556,11 @@ Deno.test('ExecutionModule: multiple contracts -- one rejects -> block invalid',
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(!result.accepted);
 });
 
-Deno.test('ExecutionModule: contract not found -> block invalid', () => {
+Deno.test('ExecutionModule: contract not found -> block invalid', async () => {
   const { provider, module } = setup();
 
   const unknownContract = h('unknown-contract');
@@ -586,14 +587,14 @@ Deno.test('ExecutionModule: contract not found -> block invalid', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(!result.accepted);
   if (!result.accepted) {
     assert(result.reason.includes('contract not found'));
   }
 });
 
-Deno.test('ExecutionModule: silent contract (no-op) is accepted', () => {
+Deno.test('ExecutionModule: silent contract (no-op) is accepted', async () => {
   const { provider, module } = setup();
 
   const contract = h('silent-contract');
@@ -625,11 +626,11 @@ Deno.test('ExecutionModule: silent contract (no-op) is accepted', () => {
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: contract throws non-rejection error -> block invalid', () => {
+Deno.test('ExecutionModule: contract throws non-rejection error -> block invalid', async () => {
   const { provider, module } = setup();
 
   const contract = h('throwing-contract');
@@ -661,14 +662,14 @@ Deno.test('ExecutionModule: contract throws non-rejection error -> block invalid
   };
   provider.addBlock(block);
 
-  const result = module.verifyBlock(block.hash);
+  const result = await module.verifyBlock(block.hash);
   assert(!result.accepted);
   if (!result.accepted) {
     assert(result.reason.includes('contract threw'));
   }
 });
 
-Deno.test('ExecutionModule: verifyClaim verifies a single claim', () => {
+Deno.test('ExecutionModule: verifyClaim verifies a single claim', async () => {
   const { provider, module } = setup();
 
   const contractA = h('contract-a');
@@ -711,15 +712,15 @@ Deno.test('ExecutionModule: verifyClaim verifies a single claim', () => {
   provider.addBlock(block);
 
   // Claim 0 (contractA) should accept
-  const result0 = module.verifyClaim(block.hash, 0);
+  const result0 = await module.verifyClaim(block.hash, 0);
   assert(result0.accepted);
 
   // Claim 1 (contractB) should reject
-  const result1 = module.verifyClaim(block.hash, 1);
+  const result1 = await module.verifyClaim(block.hash, 1);
   assert(!result1.accepted);
 });
 
-Deno.test('ExecutionModule: verifyClaim for self-claimed output is trivially valid', () => {
+Deno.test('ExecutionModule: verifyClaim for self-claimed output is trivially valid', async () => {
   const { provider, module } = setup();
 
   const block: TestBlock = {
@@ -731,14 +732,14 @@ Deno.test('ExecutionModule: verifyClaim for self-claimed output is trivially val
   };
   provider.addBlock(block);
 
-  const result = module.verifyClaim(block.hash, 0);
+  const result = await module.verifyClaim(block.hash, 0);
   assert(result.accepted);
 });
 
-Deno.test('ExecutionModule: block not found returns error', () => {
+Deno.test('ExecutionModule: block not found returns error', async () => {
   const { module } = setup();
 
-  const result = module.verifyBlock(h('nonexistent'));
+  const result = await module.verifyBlock(h('nonexistent'));
   assert(!result.accepted);
   if (!result.accepted) {
     assert(result.reason.includes('block not found'));

@@ -4,6 +4,7 @@ import {
   BlockStore,
   COLLATERAL_CONTRACT,
   INSURANCE_CONTRACT,
+  RECORD_CONTRACT,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
 import { BlockBlueprint, BlockSpec, type ClaimEntry, Output } from '../core/BlockCreationModule.ts';
@@ -21,6 +22,7 @@ import {
 } from '../contracts/AggregationContract.ts';
 import { collateralContract } from '../contracts/CollateralContract.ts';
 import { insuranceContract } from '../contracts/InsuranceContract.ts';
+import { recordContract } from '../contracts/RecordContract.ts';
 import type { Contract } from '../contracts/Contract.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
@@ -130,6 +132,7 @@ export class NodeContext {
     contracts.set(AGGREGATION_CONTRACT.toHex(), aggregationContract);
     contracts.set(COLLATERAL_CONTRACT.toHex(), collateralContract);
     contracts.set(INSURANCE_CONTRACT.toHex(), insuranceContract);
+    contracts.set(RECORD_CONTRACT.toHex(), recordContract);
 
     const contractGenerator = new ContractGenerator({
       lookupContract: (hash) => contracts.get(hash.toHex()),

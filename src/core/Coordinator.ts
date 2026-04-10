@@ -148,7 +148,7 @@ export class Coordinator {
    * Run verification on the next highest-priority tree.
    * Requires ExecutionService and VerificationService to be registered.
    */
-  attemptVerification(): VerificationResult | null {
+  attemptVerification(): Promise<VerificationResult> | null {
     const verification = this.ctx.maybeGet(VerificationService);
     if (!verification) return null;
     return verification.verifyNext();

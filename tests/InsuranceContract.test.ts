@@ -101,7 +101,7 @@ function setup(): { provider: TestProvider; module: ExecutionModule<TestBlock> }
 
 // -- Tests: aggregation claim ----------------------------------------
 
-Deno.test('Insurance: aggregation claim -- returns deposit minus fee to author', () => {
+Deno.test('Insurance: aggregation claim -- returns deposit minus fee to author', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -130,11 +130,11 @@ Deno.test('Insurance: aggregation claim -- returns deposit minus fee to author',
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
-Deno.test('Insurance: aggregation claim rejects if return too small', () => {
+Deno.test('Insurance: aggregation claim rejects if return too small', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -162,13 +162,13 @@ Deno.test('Insurance: aggregation claim rejects if return too small', () => {
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result.accepted, false);
 });
 
 // -- Tests: solidification return ------------------------------------
 
-Deno.test('Insurance: solidification return -- owner reclaims full value', () => {
+Deno.test('Insurance: solidification return -- owner reclaims full value', async () => {
   const { provider, module } = setup();
 
   const aggregatorPk = pubkey('aggregator');
@@ -201,13 +201,13 @@ Deno.test('Insurance: solidification return -- owner reclaims full value', () =>
   const module2 = new ExecutionModule(provider);
   module2.registerContract(INSURANCE_CONTRACT, insuranceContract);
 
-  const result = module2.verifyBlock(claimBlock.hash);
+  const result = await module2.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
 // -- Tests: non-canonical reclaim ------------------------------------
 
-Deno.test('Insurance: non-canonical reclaim -- owner gets full return', () => {
+Deno.test('Insurance: non-canonical reclaim -- owner gets full return', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -234,11 +234,11 @@ Deno.test('Insurance: non-canonical reclaim -- owner gets full return', () => {
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
-Deno.test('Insurance: non-canonical reclaim rejects wrong return value', () => {
+Deno.test('Insurance: non-canonical reclaim rejects wrong return value', async () => {
   const { provider, module } = setup();
 
   const authorPk = pubkey('author');
@@ -265,13 +265,13 @@ Deno.test('Insurance: non-canonical reclaim rejects wrong return value', () => {
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result.accepted, false);
 });
 
 // -- Tests: re-aggregation -------------------------------------------
 
-Deno.test('Insurance: re-aggregation -- new aggregator claims old insurance', () => {
+Deno.test('Insurance: re-aggregation -- new aggregator claims old insurance', async () => {
   const { provider, module } = setup();
 
   const aggregator1Pk = pubkey('aggregator1');
@@ -301,7 +301,7 @@ Deno.test('Insurance: re-aggregation -- new aggregator claims old insurance', ()
   };
   provider.addBlock(claimBlock);
 
-  const result = module.verifyBlock(claimBlock.hash);
+  const result = await module.verifyBlock(claimBlock.hash);
   assertEquals(result, { accepted: true });
 });
 
