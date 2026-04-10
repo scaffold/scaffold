@@ -9,6 +9,11 @@ import { Coordinator } from '../src/core/Coordinator.ts';
 import { GossipService } from '../src/node/GossipService.ts';
 import { PushAction } from '../src/node/GossipModule.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
+import { SignalingService, SignalEnvelope } from '../src/node/SignalingService.ts';
+import { secp } from '../src/util/secp.ts';
+import { bin2hex } from '../src/util/hex.ts';
+import { deriveAesKey, encryptSignal, uint8ToBase64 } from '../src/util/crypto.ts';
+import { NetworkProvider, SignalingDriver, SignalingProvider } from '../src/interfaces/network.ts';
 
 // -- Mock helpers -------------------------------------------------------
 
@@ -315,4 +320,319 @@ Deno.test('NetworkBridge: close shuts down all connections', () => {
   assert(t2.closed, 'transport 2 should be closed');
   assert(plugin.stopped, 'plugin should be stopped');
   assertEquals(bridge.peers.size, 0);
+});
+
+// -- Signal relay tests -------------------------------------------------
+
+function setupBridgeWithSignaling(selfId: string) {
+  const { store, gossip } = setupProtocol();
+  const plugin = new MockNetworkPlugin();
+
+  const delivered: SignalEnvelope[] = [];
+  const mockSignalingService = {
+    recvSignal: (envelope: SignalEnvelope) => {
+      delivered.push(envelope);
+      return Promise.resolve();
+    },
+    dispose: () => {},
+  } as unknown as SignalingService;
+
+  const bridge = new NetworkBridge({
+    plugins: [plugin],
+    store,
+    gossip,
+    processBlock: () => {},
+    serializer: fakeSerializer,
+    signalingService: mockSignalingService,
+    selfId,
+  });
+
+  bridge.start();
+  return { bridge, plugin, delivered };
+}
+
+Deno.test('NetworkBridge: signal addressed to self is delivered to SignalingService', () => {
+  const { bridge, plugin, delivered } = setupBridgeWithSignaling('node-A');
+
+  const transport = new MockTransport('peer-B');
+  plugin.injectConnection(transport);
+
+  const envelope: SignalEnvelope = {
+    signalingNonce: 'abc123',
+    senderPublicKey: 'deadbeef',
+    signalIdx: 0,
+    receivedIdxMask: '0',
+    encrypted: 'xxx',
+    iv: 'yyy',
+  };
+
+  transport.simulateMessage(JSON.stringify({
+    type: 'signal',
+    data: { to: 'node-A', from: 'peer-B', payload: envelope },
+  }));
+
+  assertEquals(delivered.length, 1);
+  assertEquals(delivered[0].signalingNonce, 'abc123');
+
+  bridge.close();
+});
+
+Deno.test('NetworkBridge: signal addressed to other peer is forwarded, not delivered locally', () => {
+  const { bridge, plugin, delivered } = setupBridgeWithSignaling('node-A');
+
+  const tB = new MockTransport('peer-B');
+  const tC = new MockTransport('peer-C');
+  plugin.injectConnection(tB);
+  plugin.injectConnection(tC);
+
+  // Signal from B, addressed to C
+  tB.simulateMessage(JSON.stringify({
+    type: 'signal',
+    data: { to: 'node-X', from: 'peer-B', payload: { test: true } },
+  }));
+
+  // Should NOT be delivered locally
+  assertEquals(delivered.length, 0);
+
+  // Should be forwarded to C but not echoed back to B
+  assertEquals(tB.sent.length, 0, 'should not echo back to sender');
+  assertEquals(tC.sent.length, 1, 'should forward to other peer');
+
+  const forwarded = JSON.parse(tC.sent[0]);
+  assertEquals(forwarded.type, 'signal');
+  assertEquals(forwarded.data.to, 'node-X');
+  assertEquals(forwarded.data.from, 'peer-B');
+
+  bridge.close();
+});
+
+Deno.test('NetworkBridge: signal forwarded to multiple peers, excluding sender', () => {
+  const { bridge, plugin, delivered: _ } = setupBridgeWithSignaling('node-A');
+
+  const tB = new MockTransport('peer-B');
+  const tC = new MockTransport('peer-C');
+  const tD = new MockTransport('peer-D');
+  plugin.injectConnection(tB);
+  plugin.injectConnection(tC);
+  plugin.injectConnection(tD);
+
+  // Signal from C, addressed to someone else
+  tC.simulateMessage(JSON.stringify({
+    type: 'signal',
+    data: { to: 'peer-X', from: 'peer-C', payload: {} },
+  }));
+
+  // Forwarded to B and D, not back to C
+  assertEquals(tB.sent.length, 1);
+  assertEquals(tC.sent.length, 0, 'sender should not receive echo');
+  assertEquals(tD.sent.length, 1);
+
+  bridge.close();
+});
+
+Deno.test('NetworkBridge: broadcastSignal sends to all connected peers', () => {
+  const { bridge, plugin } = setupBridgeWithSignaling('node-A');
+
+  const tB = new MockTransport('peer-B');
+  const tC = new MockTransport('peer-C');
+  plugin.injectConnection(tB);
+  plugin.injectConnection(tC);
+
+  const envelope: SignalEnvelope = {
+    signalingNonce: 'test',
+    senderPublicKey: 'aabb',
+    signalIdx: 0,
+    receivedIdxMask: '0',
+    encrypted: 'enc',
+    iv: 'iv',
+  };
+
+  bridge.broadcastSignal('target-peer', 'node-A', envelope);
+
+  // Both peers should receive the signal
+  assertEquals(tB.sent.length, 1);
+  assertEquals(tC.sent.length, 1);
+
+  const msgB = JSON.parse(tB.sent[0]);
+  assertEquals(msgB.type, 'signal');
+  assertEquals(msgB.data.to, 'target-peer');
+  assertEquals(msgB.data.from, 'node-A');
+
+  bridge.close();
+});
+
+Deno.test('NetworkBridge: addConnection registers new peer through bridge', () => {
+  const { bridge, plugin } = setupBridgeWithSignaling('node-A');
+
+  // Start with one regular peer
+  const tB = new MockTransport('peer-B');
+  plugin.injectConnection(tB);
+  assertEquals(bridge.peers.size, 1);
+
+  // Add an externally-established connection (like from WebRTC signaling)
+  const externalTransport = new MockTransport('peer-webrtc');
+  bridge.addConnection(externalTransport);
+
+  assertEquals(bridge.peers.size, 2);
+  assert(bridge.peers.has('peer-webrtc'));
+
+  bridge.close();
+});
+
+Deno.test('NetworkBridge: end-to-end signal relay between two bridges', async () => {
+  // Setup: Node A <-> Relay Node <-> Node B
+  // A and B each have a SignalingService, Relay just forwards
+
+  const privA = secp.utils.randomPrivateKey();
+  const pubA = new Uint8Array(secp.getPublicKey(privA, true));
+  const privB = secp.utils.randomPrivateKey();
+  const pubB = new Uint8Array(secp.getPublicKey(privB, true));
+
+  const idA = bin2hex(pubA);
+  const idB = bin2hex(pubB);
+
+  // Track signals received by each service
+  const signalsReceivedByA: string[] = [];
+  const signalsReceivedByB: string[] = [];
+
+  // Mock providers that send an initial signal on creation (like WebrtcProvider)
+  const mockProviderA: NetworkProvider = {
+    providesProtocol: 'mock@test',
+    createInstance: (driver: SignalingDriver): SignalingProvider => {
+      driver.sendSignal(JSON.stringify({ init: 'from-A' }));
+      return {
+        recvSignal: (signal: string) => signalsReceivedByA.push(signal),
+      };
+    },
+  };
+
+  const mockProviderB: NetworkProvider = {
+    providesProtocol: 'mock@test',
+    createInstance: (driver: SignalingDriver): SignalingProvider => {
+      driver.sendSignal(JSON.stringify({ init: 'from-B' }));
+      return {
+        recvSignal: (signal: string) => signalsReceivedByB.push(signal),
+      };
+    },
+  };
+
+  // Create protocol contexts
+  const protoA = setupProtocol();
+  const protoB = setupProtocol();
+  const protoRelay = setupProtocol();
+
+  const pluginA = new MockNetworkPlugin();
+  const pluginB = new MockNetworkPlugin();
+  const pluginRelay = new MockNetworkPlugin();
+
+  // Create services -- sendRelay goes through the bridge
+  let bridgeA: NetworkBridge;
+  let bridgeB: NetworkBridge;
+
+  const serviceA = new SignalingService({
+    selfPrivateKey: privA,
+    selfPublicKey: pubA,
+    networkProviders: [mockProviderA],
+    sendRelay: (to, from, payload) => bridgeA!.broadcastSignal(to, from, payload),
+    onNewConnection: () => {},
+    retryIntervalMs: 100000, // prevent interference
+  });
+
+  const serviceB = new SignalingService({
+    selfPrivateKey: privB,
+    selfPublicKey: pubB,
+    networkProviders: [mockProviderB],
+    sendRelay: (to, from, payload) => bridgeB!.broadcastSignal(to, from, payload),
+    onNewConnection: () => {},
+    retryIntervalMs: 100000,
+  });
+
+  // Create bridges
+  bridgeA = new NetworkBridge({
+    plugins: [pluginA],
+    store: protoA.store,
+    gossip: protoA.gossip,
+    processBlock: () => {},
+    serializer: fakeSerializer,
+    signalingService: serviceA,
+    selfId: idA,
+  });
+
+  const bridgeRelay = new NetworkBridge({
+    plugins: [pluginRelay],
+    store: protoRelay.store,
+    gossip: protoRelay.gossip,
+    processBlock: () => {},
+    serializer: fakeSerializer,
+    selfId: 'relay-node',
+  });
+
+  bridgeB = new NetworkBridge({
+    plugins: [pluginB],
+    store: protoB.store,
+    gossip: protoB.gossip,
+    processBlock: () => {},
+    serializer: fakeSerializer,
+    signalingService: serviceB,
+    selfId: idB,
+  });
+
+  bridgeA.start();
+  bridgeRelay.start();
+  bridgeB.start();
+
+  // Wire up: A <-> Relay <-> B (simulating transport connections)
+  const tAtoRelay = new MockTransport('relay-node');
+  const tRelayToA = new MockTransport(idA);
+  const tBtoRelay = new MockTransport('relay-node');
+  const tRelayToB = new MockTransport(idB);
+
+  pluginA.injectConnection(tAtoRelay);
+  pluginRelay.injectConnection(tRelayToA);
+  pluginRelay.injectConnection(tRelayToB);
+  pluginB.injectConnection(tBtoRelay);
+
+  // Cross-wire the transports: when A sends to relay, relay receives it
+  // We'll manually relay messages since MockTransport isn't actually connected
+  function relayMessages() {
+    for (let round = 0; round < 10; round++) {
+      let moved = 0;
+      while (tAtoRelay.sent.length > 0) {
+        tRelayToA.simulateMessage(tAtoRelay.sent.shift()!);
+        moved++;
+      }
+      while (tRelayToB.sent.length > 0) {
+        tBtoRelay.simulateMessage(tRelayToB.sent.shift()!);
+        moved++;
+      }
+      while (tBtoRelay.sent.length > 0) {
+        tRelayToB.simulateMessage(tBtoRelay.sent.shift()!);
+        moved++;
+      }
+      while (tRelayToA.sent.length > 0) {
+        tAtoRelay.simulateMessage(tRelayToA.sent.shift()!);
+        moved++;
+      }
+      if (moved === 0) break;
+    }
+  }
+
+  // A initiates connection to B
+  await serviceA.initiate(pubB);
+
+  // Wait for async encryption, relay, wait for async decryption.
+  // Multiple rounds because: encrypt is async -> relay -> decrypt is async.
+  for (let i = 0; i < 3; i++) {
+    await new Promise((r) => setTimeout(r, 50));
+    relayMessages();
+  }
+
+  // B should have received a signal
+  assert(signalsReceivedByB.length > 0, 'B should have received at least one signal from A');
+
+  serviceA.dispose();
+  serviceB.dispose();
+  bridgeA.close();
+  bridgeRelay.close();
+  bridgeB.close();
 });
