@@ -129,8 +129,6 @@ descendant_weight(C) = sum of B.verified_weight[i]
     where B's anchor chain at depth i equals C
 ```
 
-Descendant weight includes **all** descendants, regardless of their canonicality. This is what makes effective weight canonical-independent (see below).
-
 ### Effective Weight (for conflict resolution)
 
 When two blocks B1 and B2 conflict, we compare their **effective weight**:
@@ -143,14 +141,38 @@ Where:
 - `sum(B.verified_weight)` is B's own total verified work (across all chain levels)
 - `descendant_weight(B)` is the total verified work of all blocks that anchor to B (directly or transitively)
 
-Effective weight is **canonical-independent**: it includes all descendants, regardless of whether those descendants win their own conflicts. This ensures stable weight computation -- a block's effective weight does not change based on which iteration of conflict resolution we are in.
-
 Descendant weight is recursive:
 
 ```
 descendant_weight(B) = sum of effective_weight(D)
     for each D that directly anchors to B
 ```
+
+### Weight Modes
+
+The consensus module supports two modes for computing effective weight, configured at construction:
+
+#### All-descendants mode (default)
+
+Effective weight includes **all** descendants regardless of their canonicality. This makes conflict resolution a single-pass computation -- a block's effective weight never depends on canonicality, so there is no circularity.
+
+This is simpler and sufficient for most scenarios. A block that attracted heavy descendants signals quality (it was chosen as an anchor by high-weight workers), even if some of those descendants later lose their own conflicts.
+
+#### Canonical-only mode
+
+Effective weight includes only **canonical** descendants. A descendant that lost its own conflict (or whose anchor is non-canonical) does not contribute weight to its ancestors.
+
+This produces a "purer" weight signal but introduces a dependency between weight and canonicality. The dependency is resolved by iterative refinement:
+
+1. Compute effective weights using all descendants (same as all-descendants mode).
+2. Determine conflict winners and propagate canonicality (Phase 1 + Phase 2).
+3. Recompute effective weights, this time excluding non-canonical descendants.
+4. Re-determine conflict winners with the new weights.
+5. If the canonical set changed, go to step 3. If stable, done.
+
+**Convergence guarantee:** The canonical set can only shrink or stay the same between iterations. A block that loses a conflict also loses its descendants' weight, reinforcing its loss. A block that wins retains its canonical descendants, reinforcing its win. Since the loser set grows monotonically and the block set is finite, the iteration converges. In practice it stabilizes in 1-2 rounds.
+
+Both modes produce identical results when no block's conflict outcome depends on weight from non-canonical descendants -- which is the common case. The modes diverge only when a block wins a conflict partly due to weight from descendants that themselves lost conflicts elsewhere in the DAG.
 
 ### Verified vs. Declared Weight
 
@@ -202,15 +224,13 @@ For each pair of directly conflicting blocks A and B:
 3. Ties are broken deterministically by block hash (lexicographic ordering).
 4. The winner can change at any time as weights update, new blocks arrive, or new conflicts are discovered.
 
-Effective weight is **canonical-independent** (see [Weight](#weight) below), so conflict winners can be determined without first knowing canonicality. This makes the computation non-circular.
-
 ### Canonicality Algorithm
 
 Canonicality is computed in topological order using Kahn's algorithm over the dependency graph (anchor + aggregate edges).
 
 **Phase 1 -- Determine conflict winners:**
 
-For each block that has direct conflicts, compare effective weights. This can be done independently for each conflict pair because effective weight does not depend on canonicality.
+For each block that has direct conflicts, compare effective weights. Ties broken by lower hash.
 
 **Phase 2 -- Topological canonicality sweep:**
 
@@ -223,7 +243,9 @@ For each block that has direct conflicts, compare effective weights. This can be
    - If all pass, mark canonical. Otherwise, mark non-canonical.
    - Decrement in-degree for all blocks that depend on this block (blocks that anchor to it, and blocks that aggregate it). Enqueue any that reach zero.
 
-This runs in O(|blocks| + |edges|) time. The topological order guarantees that when a block is processed, all its dependencies have already been resolved.
+In **all-descendants mode**, this runs once in O(|blocks| + |edges|) time. Effective weight does not depend on canonicality, so conflict winners are determined once in Phase 1 and propagated structurally in Phase 2.
+
+In **canonical-only mode**, Phases 1 and 2 are wrapped in a convergence loop. After each pass, effective weights are recomputed excluding non-canonical descendants, and the phases re-run. The loop terminates when the canonical set stabilizes.
 
 ### Canonical View
 
@@ -318,7 +340,7 @@ Now descendant weight matters:
 - `effective_weight(A) = 90 + effective_weight(E) = 90 + 50 = 140`
 - `effective_weight(B) = 80 + effective_weight(D) = 80 + 200 = 280`
 
-Note: effective weight includes **all** descendants regardless of their canonicality. D contributes to B's weight even though D's own canonicality depends on B's. This is what makes the computation non-circular.
+In **all-descendants mode**, effective weight includes all descendants regardless of their canonicality. D contributes to B's weight even though D's own canonicality depends on B's. In **canonical-only mode**, the same result holds here because D is canonical (its anchor B wins), so D's weight counts either way.
 
 **B overtakes A.** Now re-evaluate canonicality (topological order):
 - G: canonical.
@@ -351,6 +373,27 @@ Continuing with B winning: further verification of D reveals 50% fake work.
 - `effective_weight(B) = 80 + 100 = 180`
 
 A's branch is at 140. B still wins, but the gap has narrowed. If more real work arrives on A's branch, A could reclaim the lead -- and all of A's descendants (E) and aggregators (S) would become canonical again.
+
+### Mode Divergence Example
+
+Setup: genesis G. Block A (`weight = [7]`) and block B (`weight = [3]`) both anchor to G and conflict. Block C (`weight = [10]`) anchors to B. Block D (`weight = [12]`) anchors to G. C and D conflict.
+
+**All-descendants mode:**
+
+- `effective_weight(A) = 7`
+- `effective_weight(B) = 3 + 10 = 13`
+- B wins (13 > 7). B and C canonical, A non-canonical.
+- C vs D: C = 10, D = 12. D wins. C non-canonical.
+
+But B's victory relied on C's weight (10), and C lost its own conflict with D. In all-descendants mode, this does not matter -- B still wins.
+
+**Canonical-only mode:**
+
+- Round 1 (same as all-descendants): B wins, C loses to D.
+- Round 2: C is non-canonical, so B's canonical-only weight = 3 + 0 = 3. A = 7. A wins.
+- Round 3: A canonical, B non-canonical. C non-canonical (anchor B lost). D canonical. Stable.
+
+Result: A wins instead of B, because B's weight advantage came entirely from a descendant (C) that itself lost a conflict.
 
 ---
 

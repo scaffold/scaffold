@@ -2,6 +2,15 @@
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 
+/** Configuration for the consensus module. */
+export interface ConsensusConfig {
+  /**
+   * When true, effective weight for conflict resolution only counts canonical
+   * descendants. Resolved via iterative convergence. Default: false (all descendants).
+   */
+  canonicalOnlyWeight?: boolean;
+}
+
 /** Provider interface for the consensus module to access block data. */
 export interface ConsensusProvider<BlockType> {
   /** Return the block object for a given hash, or undefined if unknown. */
@@ -38,6 +47,7 @@ export interface ConsensusProvider<BlockType> {
  */
 export class ConsensusModule<BlockType> {
   private readonly provider: ConsensusProvider<BlockType>;
+  private readonly canonicalOnlyWeight: boolean;
 
   /** All registered block hashes, keyed by hash primitive. */
   private blocks = new Map<HashPrimitive, Hash>();
@@ -72,8 +82,9 @@ export class ConsensusModule<BlockType> {
   /** Listeners for canonicality changes. */
   private canonicalityListeners: ((hash: Hash, canonical: boolean) => void)[] = [];
 
-  constructor(provider: ConsensusProvider<BlockType>) {
+  constructor(provider: ConsensusProvider<BlockType>, config?: ConsensusConfig) {
     this.provider = provider;
+    this.canonicalOnlyWeight = config?.canonicalOnlyWeight ?? false;
   }
 
   /** Register a listener for canonicality changes. */
@@ -333,16 +344,18 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
-   * Compute effective weight of a block. Canonical-independent: includes
-   * ALL children (a child contributes to its parent's weight regardless
-   * of whether the child wins its own conflicts).
+   * Compute effective weight of a block.
    *
    * effective_weight(B) = sum(verified_weight) + sum(effective_weight(child))
    *   for each child that anchors to B.
+   *
+   * When `canonicalFilter` is provided, only children in the filter set
+   * contribute descendant weight (canonical-only mode).
    */
   private computeEffectiveWeight(
     blockKey: HashPrimitive,
     memo: Map<HashPrimitive, number>,
+    canonicalFilter?: ReadonlySet<HashPrimitive>,
   ): number {
     const cached = memo.get(blockKey);
     if (cached !== undefined) return cached;
@@ -359,12 +372,13 @@ export class ConsensusModule<BlockType> {
       }
     }
 
-    // Descendant weight from all children
+    // Descendant weight from children (optionally filtered by canonical set)
     let descWeight = 0;
     const kids = this.children.get(blockKey);
     if (kids) {
       for (const childKey of kids) {
-        descWeight += this.computeEffectiveWeight(childKey, memo);
+        if (canonicalFilter && !canonicalFilter.has(childKey)) continue;
+        descWeight += this.computeEffectiveWeight(childKey, memo, canonicalFilter);
       }
     }
 
@@ -374,7 +388,31 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
-   * Compute the canonical view using a two-phase topological algorithm.
+   * Compute the canonical view using a two-phase topological algorithm,
+   * optionally iterated until convergence in canonical-only weight mode.
+   */
+  private ensureCanonical(): void {
+    if (this.canonicalCache !== null) return;
+
+    // First pass: no canonical filter (all descendants contribute weight)
+    let canonical = this.computeCanonicalPass();
+
+    if (this.canonicalOnlyWeight) {
+      // Iterate: recompute weights using only canonical descendants, re-run
+      // until the canonical set stabilizes. Converges because the loser set
+      // grows monotonically.
+      for (;;) {
+        const next = this.computeCanonicalPass(canonical);
+        if (setsEqual(canonical, next)) break;
+        canonical = next;
+      }
+    }
+
+    this.canonicalCache = canonical;
+  }
+
+  /**
+   * Single pass of conflict resolution + topological propagation.
    *
    * Phase 1: Determine direct conflict outcomes. For each block with
    *   direct conflicts, compare effective weights (ties broken by lower hash)
@@ -385,10 +423,13 @@ export class ConsensusModule<BlockType> {
    *     Rule 1 -- its anchor is canonical (or it is genesis)
    *     Rule 2 -- every aggregate it references is canonical
    *     Rule 3 -- it won its direct conflict (or has none)
+   *
+   * @param canonicalFilter When provided, effective weight only counts
+   *   descendants in this set (canonical-only weight mode).
    */
-  private ensureCanonical(): void {
-    if (this.canonicalCache !== null) return;
-
+  private computeCanonicalPass(
+    canonicalFilter?: ReadonlySet<HashPrimitive>,
+  ): Set<HashPrimitive> {
     const canonical = new Set<HashPrimitive>();
     const memo = new Map<HashPrimitive, number>();
 
@@ -403,12 +444,12 @@ export class ConsensusModule<BlockType> {
       if (!dc || dc.size === 0) continue;
 
       const blockHash = this.blocks.get(blockKey)!;
-      const blockWeight = this.computeEffectiveWeight(blockKey, memo);
+      const blockWeight = this.computeEffectiveWeight(blockKey, memo, canonicalFilter);
 
       for (const partnerKey of dc) {
         if (!this.blocks.has(partnerKey)) continue;
         const partnerHash = this.blocks.get(partnerKey)!;
-        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo);
+        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo, canonicalFilter);
 
         if (
           partnerWeight > blockWeight ||
@@ -498,7 +539,7 @@ export class ConsensusModule<BlockType> {
       this.decrementSuccessors(blockKey, inDegree, queue);
     }
 
-    this.canonicalCache = canonical;
+    return canonical;
   }
 
   /**
@@ -530,4 +571,13 @@ export class ConsensusModule<BlockType> {
       }
     }
   }
+}
+
+/** Check if two sets contain the same elements. */
+function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
+  if (a.size !== b.size) return false;
+  for (const v of a) {
+    if (!b.has(v)) return false;
+  }
+  return true;
 }

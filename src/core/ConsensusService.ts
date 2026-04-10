@@ -1,7 +1,7 @@
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { BlockDraft, DraftStore } from './BlockDraft.ts';
-import { ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
+import { ConsensusConfig, ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
 /** Entity type that consensus operates on: either a finalized Block or a local BlockDraft. */
@@ -47,10 +47,10 @@ class ConsensusProviderAdapter implements ConsensusProvider<ConsensusEntity> {
 export class ConsensusService extends ConsensusModule<ConsensusEntity> {
   private readonly adapter: ConsensusProviderAdapter;
 
-  constructor(ctx: ProtocolContext) {
+  constructor(ctx: ProtocolContext, config?: ConsensusConfig) {
     const store = ctx.get(BlockStore);
     const adapter = new ConsensusProviderAdapter(store);
-    super(adapter);
+    super(adapter, config);
     this.adapter = adapter;
   }
 
