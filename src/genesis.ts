@@ -11,7 +11,8 @@
 import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
 import { hex2bin } from './util/hex.ts';
-import { Block, BlockSource, makeSignatureOutput } from './core/Block.ts';
+import { Block, BlockSource } from './core/Block.ts';
+import { makeSignatureOutput } from './core/SignatureContract.ts';
 import { BlockPayload } from './core/Block.ts';
 import { parsePacket } from './core/Packet.ts';
 import { composeGenesisPacket } from './core/Packet.ts';

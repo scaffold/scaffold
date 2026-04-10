@@ -4,11 +4,13 @@ import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
 import {
   INSURANCE_CONTRACT,
   SIGNATURE_CONTRACT,
-  makeInsuranceOutput,
-  encodeInsuranceDetail,
-  decodeInsuranceDetail,
-  type InsuranceDetail,
 } from '../src/core/Block.ts';
+import {
+  decodeInsuranceDetail,
+  encodeInsuranceDetail,
+  type InsuranceDetail,
+  makeInsuranceOutput,
+} from '../src/core/InsuranceContract.ts';
 import { ExecutionModule, type ExecutionProvider } from '../src/core/ExecutionModule.ts';
 import { insuranceContract, FINDER_SHARE, MIN_RETURN_RATE } from '../src/core/InsuranceContract.ts';
 

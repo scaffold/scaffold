@@ -1,12 +1,78 @@
 // Protocol spec: docs/protocol/aggregation.md
 
 import type { Contract } from './Contract.ts';
-import {
-  AGGREGATION_CONTRACT,
-  type AggregationData,
-  decodeAggregationData,
-  encodeAggregationData,
-} from './Block.ts';
+import { type Block, AGGREGATION_CONTRACT } from './Block.ts';
+import type { Output } from './BlockCreationModule.ts';
+import { Hash } from '../util/Hash.ts';
+
+// -- AggregationData -----------------------------------------------
+
+/**
+ * Aggregation summary carried in an aggregation contract output's data field.
+ * Contains the cached UTXO transformation state computed from subtrees.
+ */
+export interface AggregationData {
+  /** Sorted anchor output indices claimed by the subtree. */
+  claimMask: number[];
+  /** Surviving new outputs added by this subtree (excludes anchor's surviving outputs). */
+  newOutputCount: number;
+  /** Per-subtree new output counts. */
+  aggregateOutputCounts: number[];
+  /** Weight vector from subtrees only (excludes own declaredWeight). */
+  chainWeights: number[];
+  /** Per-subtree declared weights. */
+  aggregateWeights: number[];
+}
+
+/** Encode AggregationData to a Uint8Array for use in Output.data. */
+export function encodeAggregationData(data: AggregationData): Uint8Array {
+  const json = JSON.stringify({
+    claimMask: data.claimMask,
+    newOutputCount: data.newOutputCount,
+    aggregateOutputCounts: data.aggregateOutputCounts,
+    chainWeights: data.chainWeights,
+    aggregateWeights: data.aggregateWeights,
+  });
+  return new TextEncoder().encode(json);
+}
+
+/** Decode AggregationData from an Output.data Uint8Array. */
+export function decodeAggregationData(bytes: Uint8Array): AggregationData {
+  const json = JSON.parse(new TextDecoder().decode(bytes));
+  return {
+    claimMask: json.claimMask as number[],
+    newOutputCount: json.newOutputCount,
+    aggregateOutputCounts: json.aggregateOutputCounts,
+    chainWeights: json.chainWeights,
+    aggregateWeights: json.aggregateWeights,
+  };
+}
+
+/**
+ * Find and decode the aggregation contract output from a block's outputs.
+ * Returns null if the block has no aggregation contract output (leaf block).
+ */
+export function getAggregationData(block: Block): AggregationData | null {
+  for (const output of block.outputs) {
+    if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
+      if (output.data.length === 0) continue; // Skip marker outputs
+      return decodeAggregationData(output.data);
+    }
+  }
+  return null;
+}
+
+/**
+ * Create an aggregation marker output. Every non-genesis block carries one
+ * of these so that the aggregation contract can collect them.
+ */
+export function makeAggregationOutput(): Output {
+  return {
+    verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
+    value: 0,
+    data: new Uint8Array(0),
+  };
+}
 
 /** Number of aggregation marker inputs required to produce an aggregation block. */
 export const AGGREGATION_THRESHOLD = 4;

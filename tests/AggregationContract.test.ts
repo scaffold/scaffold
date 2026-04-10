@@ -6,8 +6,8 @@ import {
   Block,
   BlockSource,
   BlockStore,
-  makeAggregationOutput,
 } from '../src/core/Block.ts';
+import { makeAggregationOutput } from '../src/core/AggregationContract.ts';
 import { createDraft, DraftStore } from '../src/core/BlockDraft.ts';
 import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';

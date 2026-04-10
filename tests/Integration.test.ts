@@ -8,10 +8,10 @@ import {
   createBlock,
   createGenesisBlock,
   createSelfClaimedOutput,
-  encodeAggregationData,
   getBlockWeightVector,
   RESULT_CONTRACT,
 } from '../src/core/Block.ts';
+import { encodeAggregationData } from '../src/core/AggregationContract.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';

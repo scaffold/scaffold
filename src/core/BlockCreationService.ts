@@ -2,9 +2,9 @@ import { Hash } from '../util/Hash.ts';
 import {
   Block,
   BlockStore,
-  getAggregationData,
   getBlockWeightVector,
 } from './Block.ts';
+import { getAggregationData } from './AggregationContract.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
 import {
   OutputSpaceModule,

@@ -10,9 +10,9 @@ import {
   BlockSource,
   createGenesisBlock,
   createSelfClaimedOutput,
-  encodeAggregationData,
   RESULT_CONTRACT,
 } from '../../src/core/Block.ts';
+import { encodeAggregationData } from '../../src/core/AggregationContract.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
 import type { Contract } from '../../src/core/Contract.ts';
 

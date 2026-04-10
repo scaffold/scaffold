@@ -5,14 +5,16 @@ import {
   COLLATERAL_CONTRACT,
   RESULT_CONTRACT,
   SIGNATURE_CONTRACT,
-  encodeCollateralDetail,
-  decodeCollateralDetail,
   createSelfClaimedOutput,
-  makeCollateralOutput,
-  makeAgainstOutput,
+} from '../src/core/Block.ts';
+import {
   type ChallengeTarget,
   type CollateralDetail,
-} from '../src/core/Block.ts';
+  decodeCollateralDetail,
+  encodeCollateralDetail,
+  makeAgainstOutput,
+  makeCollateralOutput,
+} from '../src/core/CollateralContract.ts';
 import { ExecutionModule, type ExecutionProvider } from '../src/core/ExecutionModule.ts';
 import {
   collateralContract,

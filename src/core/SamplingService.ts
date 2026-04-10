@@ -1,4 +1,5 @@
-import { Block, BlockStore, getAggregationData } from './Block.ts';
+import { Block, BlockStore } from './Block.ts';
+import { getAggregationData } from './AggregationContract.ts';
 import { Hash } from '../util/Hash.ts';
 import { SamplingModule, SamplingProvider } from './SamplingModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';

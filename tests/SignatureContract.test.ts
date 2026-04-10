@@ -5,9 +5,9 @@ import {
   Block,
   BlockSource,
   createGenesisBlock,
-  makeSignatureOutput,
   SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
+import { makeSignatureOutput } from '../src/core/SignatureContract.ts';
 import { composeBlockPacket } from '../src/core/Packet.ts';
 import { signatureContract } from '../src/core/SignatureContract.ts';
 import { type ContractEnv } from '../src/core/ContractEnv.ts';

@@ -1,6 +1,8 @@
 import { composeBlockPacket } from './core/Packet.ts';
 import { secp } from './util/secp.ts';
-import { Block, makeAggregationOutput, makeSignatureOutput, SIGNATURE_CONTRACT } from './core/Block.ts';
+import { Block, SIGNATURE_CONTRACT } from './core/Block.ts';
+import { makeSignatureOutput } from './core/SignatureContract.ts';
+import { makeAggregationOutput } from './core/AggregationContract.ts';
 import { BlockBlueprint, BlockSpec } from './core/BlockCreationModule.ts';
 import { Hash } from './util/Hash.ts';
 import { NodeContext } from './node/NodeContext.ts';

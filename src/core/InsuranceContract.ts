@@ -1,14 +1,42 @@
 // Protocol spec: docs/protocol/collateral-resolution.md
 
 import { maybeThen } from '../util/MaybePromise.ts';
-import {
-  decodeInsuranceDetail,
-  encodeInsuranceDetail,
-  type InsuranceDetail,
-  SIGNATURE_CONTRACT,
-} from './Block.ts';
+import { INSURANCE_CONTRACT, SIGNATURE_CONTRACT } from './Block.ts';
+import type { Output } from './BlockCreationModule.ts';
 import { ContractRejection } from './ContractEnv.ts';
 import type { Contract } from './Contract.ts';
+import { Hash } from '../util/Hash.ts';
+
+// -- Insurance types --------------------------------------------------
+
+/** Detail payload for an insurance contract output. */
+export interface InsuranceDetail {
+  pubkey: Uint8Array;
+}
+
+/** Encode InsuranceDetail to Uint8Array. */
+export function encodeInsuranceDetail(detail: InsuranceDetail): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify({ pubkey: Array.from(detail.pubkey) }));
+}
+
+/** Decode InsuranceDetail from Uint8Array. */
+export function decodeInsuranceDetail(bytes: Uint8Array): InsuranceDetail {
+  const json = JSON.parse(new TextDecoder().decode(bytes));
+  return { pubkey: new Uint8Array(json.pubkey) };
+}
+
+/** Create an insurance deposit output for a target block. */
+export function makeInsuranceOutput(
+  targetBlockHash: Hash,
+  value: number,
+  pubkey: Uint8Array,
+): Output {
+  return {
+    verifier: { contract: INSURANCE_CONTRACT, params: targetBlockHash.toBytes() },
+    value,
+    data: encodeInsuranceDetail({ pubkey }),
+  };
+}
 
 // -- Constants --------------------------------------------------------
 
@@ -118,4 +146,3 @@ export const insuranceContract: Contract = {
   },
 };
 
-export { type InsuranceDetail };

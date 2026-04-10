@@ -1,5 +1,6 @@
 import { Hash } from '../../util/Hash.ts';
-import { BlockStore, makeAggregationOutput } from '../../core/Block.ts';
+import { BlockStore } from '../../core/Block.ts';
+import { makeAggregationOutput } from '../../core/AggregationContract.ts';
 import { ResolvedClaim } from '../../core/BlockDraft.ts';
 import { Output } from '../../core/BlockCreationModule.ts';
 import { ConsensusService } from '../../core/ConsensusService.ts';

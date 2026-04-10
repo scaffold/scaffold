@@ -4,17 +4,21 @@ import { DefaultBuilderHost } from '../src/core/DefaultBuilderHost.ts';
 import { signatureContract } from '../src/core/SignatureContract.ts';
 import { collateralContract } from '../src/core/CollateralContract.ts';
 import { insuranceContract } from '../src/core/InsuranceContract.ts';
-import { aggregationContract } from '../src/core/AggregationContract.ts';
 import {
+  aggregationContract,
   type AggregationData,
+  encodeAggregationData,
+} from '../src/core/AggregationContract.ts';
+import {
   type CollateralDetail,
   decodeCollateralDetail,
-  decodeInsuranceDetail,
-  encodeAggregationData,
   encodeCollateralDetail,
+} from '../src/core/CollateralContract.ts';
+import {
+  decodeInsuranceDetail,
   encodeInsuranceDetail,
   type InsuranceDetail,
-} from '../src/core/Block.ts';
+} from '../src/core/InsuranceContract.ts';
 
 // -- Helpers ----------------------------------------------------------
 

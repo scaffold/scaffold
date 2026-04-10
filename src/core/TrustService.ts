@@ -1,5 +1,6 @@
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore, getAggregationData } from './Block.ts';
+import { Block, BlockStore } from './Block.ts';
+import { getAggregationData } from './AggregationContract.ts';
 import { TrustModule, TrustProvider } from './TrustModule.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';

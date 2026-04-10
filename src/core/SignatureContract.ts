@@ -1,6 +1,20 @@
 // Protocol spec: docs/protocol/contracts.md (signature contract)
 
+import { SIGNATURE_CONTRACT } from './Block.ts';
+import type { Output } from './BlockCreationModule.ts';
 import type { Contract } from './Contract.ts';
+
+/**
+ * Create a signature (payment) contract output.
+ * Public key goes in verifier.params (33-byte compressed secp256k1).
+ */
+export function makeSignatureOutput(publicKey: Uint8Array, value: number): Output {
+  return {
+    verifier: { contract: SIGNATURE_CONTRACT, params: publicKey },
+    value,
+    data: new Uint8Array(0),
+  };
+}
 
 /**
  * Signature contract: verifies that the block was signed by the public

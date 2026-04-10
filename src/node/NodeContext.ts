@@ -3,8 +3,6 @@ import {
   Block,
   BlockStore,
   COLLATERAL_CONTRACT,
-  encodeAggregationData,
-  getAggregationData,
   INSURANCE_CONTRACT,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
@@ -16,7 +14,11 @@ import {
 } from '../core/OutputSpace.ts';
 import { DraftManager } from '../core/DraftManager.ts';
 import { ContractGenerator } from '../core/ContractGenerator.ts';
-import { aggregationContract } from '../core/AggregationContract.ts';
+import {
+  aggregationContract,
+  encodeAggregationData,
+  getAggregationData,
+} from '../core/AggregationContract.ts';
 import { collateralContract } from '../core/CollateralContract.ts';
 import { insuranceContract } from '../core/InsuranceContract.ts';
 import type { Contract } from '../core/Contract.ts';

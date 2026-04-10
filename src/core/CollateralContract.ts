@@ -1,15 +1,75 @@
 // Protocol spec: docs/protocol/collateral-resolution.md
 
 import { maybeThen } from '../util/MaybePromise.ts';
-import {
-  type ChallengeTarget,
-  type CollateralDetail,
-  decodeCollateralDetail,
-  encodeCollateralDetail,
-  SIGNATURE_CONTRACT,
-} from './Block.ts';
+import { COLLATERAL_CONTRACT, SIGNATURE_CONTRACT } from './Block.ts';
+import type { Output } from './BlockCreationModule.ts';
 import { type ContractEnv, ContractRejection, type Input } from './ContractEnv.ts';
 import type { Contract } from './Contract.ts';
+import { Hash } from '../util/Hash.ts';
+
+// -- Collateral types -------------------------------------------------
+
+/** What aspect of a block an AGAINST challenge contests. */
+export type ChallengeTarget =
+  | { type: 'validity' }
+  | { type: 'anchor' }
+  | { type: 'ref'; index: number }
+  | { type: 'aggregate'; index: number }
+  | { type: 'output_verifier_contract'; index: number };
+
+/** Detail payload for a collateral contract output. */
+export type CollateralDetail =
+  | { side: 'for'; pubkey: Uint8Array }
+  | { side: 'against'; pubkey: Uint8Array; target: ChallengeTarget };
+
+/** Encode CollateralDetail to Uint8Array. */
+export function encodeCollateralDetail(detail: CollateralDetail): Uint8Array {
+  const obj: Record<string, unknown> = {
+    side: detail.side,
+    pubkey: Array.from(detail.pubkey),
+  };
+  if (detail.side === 'against') {
+    obj.target = detail.target;
+  }
+  return new TextEncoder().encode(JSON.stringify(obj));
+}
+
+/** Decode CollateralDetail from Uint8Array. */
+export function decodeCollateralDetail(bytes: Uint8Array): CollateralDetail {
+  const json = JSON.parse(new TextDecoder().decode(bytes));
+  const pubkey = new Uint8Array(json.pubkey);
+  if (json.side === 'for') {
+    return { side: 'for', pubkey };
+  }
+  return { side: 'against', pubkey, target: json.target as ChallengeTarget };
+}
+
+/** Create a FOR collateral output for a target block. */
+export function makeCollateralOutput(
+  targetBlockHash: Hash,
+  value: number,
+  pubkey: Uint8Array,
+): Output {
+  return {
+    verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
+    value,
+    data: encodeCollateralDetail({ side: 'for', pubkey }),
+  };
+}
+
+/** Create an AGAINST collateral output challenging a target block. */
+export function makeAgainstOutput(
+  targetBlockHash: Hash,
+  value: number,
+  pubkey: Uint8Array,
+  target: ChallengeTarget,
+): Output {
+  return {
+    verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
+    value,
+    data: encodeCollateralDetail({ side: 'against', pubkey, target }),
+  };
+}
 
 // -- Constants --------------------------------------------------------
 
@@ -352,4 +412,3 @@ function nonCanonicalReclaim(
   }
 }
 
-export { type ChallengeTarget, type CollateralDetail };
