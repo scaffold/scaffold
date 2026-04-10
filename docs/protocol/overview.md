@@ -211,6 +211,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Aggregation](aggregation.md) | Subtree composition | How does aggregation define ordering and cache transformations? |
 | [Deception](deception.md) | Verification incentives | How does strategic fraud sustain the verification layer? |
 | [Collateral Resolution](collateral-resolution.md) | Collateral contract | How are blocks challenged, validated, and rectified? |
+| [Execution Queue](execution-queue.md) | Execution scheduling | How is contract execution prioritized and resource-limited? |
 | [Attacks](attacks.md) | Security catalog | What attacks exist and how does the protocol defend against them? |
 
 Each module defines its own view of what a block looks like (only the fields it cares about), its own state, and clean interfaces with the other modules. No module reaches into another's internals.
@@ -229,6 +230,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
 | Anchoring | [`AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | — |
+| Execution Queue | [`ExecutionQueueModule.ts`](../../src/core/ExecutionQueueModule.ts) | [`ExecutionQueueService.ts`](../../src/core/ExecutionQueueService.ts) |
 | Output Claims | [`OutputClaimModule.ts`](../../src/core/OutputClaimModule.ts) | [`OutputClaimService.ts`](../../src/core/OutputClaimService.ts) |
 
 Supporting files:

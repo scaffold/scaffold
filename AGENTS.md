@@ -55,6 +55,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [output-claims.md](docs/protocol/output-claims.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
 | [output-space.md](docs/protocol/output-space.md) | — (structural, spans modules) | — | [OutputSpace.ts](src/core/OutputSpace.ts), [Block.ts](src/core/Block.ts) |
 | [aggregation.md](docs/protocol/aggregation.md) | — | — | [AggregationContract.ts](src/contracts/AggregationContract.ts), [Block.ts](src/core/Block.ts), [ContractGenerator.ts](src/core/ContractGenerator.ts) |
+| [execution-queue.md](docs/protocol/execution-queue.md) | [ExecutionQueueModule.ts](src/core/ExecutionQueueModule.ts) | [ExecutionQueueService.ts](src/core/ExecutionQueueService.ts) | |
 
 ## Key Protocol Invariant: Outputs Before Claims
 

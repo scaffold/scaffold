@@ -8,6 +8,7 @@ import { GossipService } from './GossipService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
 import { VerificationService } from './VerificationService.ts';
+import { ExecutionQueueService } from './ExecutionQueueService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { PushAction } from './GossipModule.ts';
 import { VerificationResult } from './VerificationModule.ts';
@@ -60,13 +61,16 @@ export class Coordinator {
       this.canonicalityChanges.push({ hash, canonical });
     });
 
-    // Wire sampling weight changes to consensus verified weights
+    // Wire sampling weight changes to consensus verified weights + queue reprioritization
     this.sampling.onWeightChange((hash) => {
       const block = this.store.get(hash);
       if (!block) return;
       const wf = this.sampling.getWeightFactor(hash);
       const declared = getBlockWeightVector(block);
       this.consensus.setVerifiedWeight(hash, declared.map((w) => w * wf));
+
+      const queue = this.ctx.maybeGet(ExecutionQueueService);
+      if (queue) queue.reprioritize();
     });
 
     // Wire conflict info from consensus to sampling scheduling
