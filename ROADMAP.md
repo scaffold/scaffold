@@ -8,12 +8,12 @@ Last updated: 2026-04-03
 
 Two nodes can discover each other, sync blocks, and gossip.
 
-- [ ] Wire NetworkManager -> Coordinator (incoming blocks -> consensus pipeline)
-- [ ] Wire gossip push actions -> NetworkManager send, respecting bandwidth budgets and immediate/deferred flags
-- [ ] Register PeerConnection handlers: onSync, onRequest, onDelivery, onPeerInfo
+- [x] Wire NetworkManager -> Coordinator (incoming blocks -> consensus pipeline)
+- [x] Wire gossip push actions -> NetworkManager send, respecting bandwidth budgets and immediate/deferred flags
+- [x] Register PeerConnection handlers: onSync, onRequest, onDelivery, onPeerInfo
 - [ ] Block fetching in SyncProtocol: recursive ancestor fetch, request batching, timeout/retry with peer rotation
-- [ ] WebRTC signaling exchanged over WebSocket bootstrap connections
-- [ ] Basic peer lifecycle: connect, disconnect, reconnect, bootstrap address list
+- [x] WebRTC signaling exchanged over WebSocket bootstrap connections
+- [x] Basic peer lifecycle: connect, disconnect, reconnect, bootstrap address list
 - [ ] Integration tests: multi-node sync over WebSocket, browser-to-browser over WebRTC
 
 ### M2: Trust & Verification Automation (May 12 -- Jun 20)
