@@ -1,7 +1,8 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { createSelfClaimedOutput, RESULT_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
+import { RECORD_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
+import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import {
   type Contract,
   ExecutionMode,
@@ -114,7 +115,7 @@ Deno.test('ExecutionModule: block with no claims is trivially valid', () => {
 Deno.test('ExecutionModule: self-claimed outputs are trivially valid', () => {
   const { provider, module } = setup();
 
-  const selfOutput = createSelfClaimedOutput('state', enc('value'));
+  const selfOutput = makeRecordOutput('state', enc('value'));
   const block: TestBlock = {
     hash: h('self-claim-block'),
     anchor: ZERO_HASH,
@@ -242,7 +243,7 @@ Deno.test('ExecutionModule: requireResult checks self-claimed data', () => {
     hash: h('game-block'),
     anchor: anchor.hash,
     outputs: [
-      createSelfClaimedOutput('state', enc('valid-state')),
+      makeRecordOutput('state', enc('valid-state')),
     ],
     claims: [1], // claims extended index 1 -> anchor's output[0]
     refs: [],
@@ -283,7 +284,7 @@ Deno.test('ExecutionModule: requireResult rejects wrong value', () => {
     hash: h('bad-block'),
     anchor: anchor.hash,
     outputs: [
-      createSelfClaimedOutput('state', enc('wrong-state')),
+      makeRecordOutput('state', enc('wrong-state')),
     ],
     claims: [1],
     refs: [],
@@ -331,7 +332,7 @@ Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
   const prevBlock: TestBlock = {
     hash: h('prev-block'),
     anchor: prevAnchor.hash,
-    outputs: [createSelfClaimedOutput('state', enc('S0'))],
+    outputs: [makeRecordOutput('state', enc('S0'))],
     claims: [1], // claims extended index 1 = prevAnchor's game output
     refs: [],
   };
@@ -355,7 +356,7 @@ Deno.test('ExecutionModule: cross-block fetch -- reads previous state', () => {
   const block: TestBlock = {
     hash: h('new-block'),
     anchor: anchor.hash,
-    outputs: [createSelfClaimedOutput('state', enc('S0+1'))],
+    outputs: [makeRecordOutput('state', enc('S0+1'))],
     claims: [1], // claims anchor's output[0]
     refs: [prevBlock.hash],
   };
@@ -724,7 +725,7 @@ Deno.test('ExecutionModule: verifyClaim for self-claimed output is trivially val
   const block: TestBlock = {
     hash: h('block'),
     anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('key', enc('val'))],
+    outputs: [makeRecordOutput('key', enc('val'))],
     claims: [0],
     refs: [],
   };

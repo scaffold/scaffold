@@ -2,7 +2,7 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
-import { RESULT_CONTRACT } from './Block.ts';
+import { RECORD_CONTRACT } from './Block.ts';
 import { ContractRejection } from './ContractEnv.ts';
 import type { Contract } from '../contracts/Contract.ts';
 import { VerifyingEnv } from './VerifyingEnv.ts';
@@ -101,9 +101,9 @@ export class ExecutionModule<BlockType> {
         return { accepted: false, reason: `claim index ${claimIdx} out of bounds` };
       }
 
-      // Self-claimed outputs (RESULT_CONTRACT) are trivially valid:
+      // Self-claimed outputs (RECORD_CONTRACT) are trivially valid:
       // the claiming block IS the producing block
-      if (Hash.equals(claimedOutput.verifier.contract, RESULT_CONTRACT)) continue;
+      if (Hash.equals(claimedOutput.verifier.contract, RECORD_CONTRACT)) continue;
 
       const key = claimedOutput.verifier.contract.toPrimitive();
       let group = contractClaims.get(key);
@@ -150,7 +150,7 @@ export class ExecutionModule<BlockType> {
     }
 
     // Self-claimed outputs are trivially valid
-    if (Hash.equals(claimedOutput.verifier.contract, RESULT_CONTRACT)) {
+    if (Hash.equals(claimedOutput.verifier.contract, RECORD_CONTRACT)) {
       return { accepted: true };
     }
 

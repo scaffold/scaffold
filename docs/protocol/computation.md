@@ -83,7 +83,7 @@ A self-claimed output uses a well-known SELF contract whose spending condition i
 ```
 // Self-claimed output example: storing game state
 Output {
-    verifier: { contract: RESULT_CONTRACT, params: encode("state") },
+    verifier: { contract: RECORD_CONTRACT, params: encode("state") },
     value: 0,
     data: <game_state_bytes>
 }
@@ -137,7 +137,7 @@ A contract can iterate a referenced block's outputs, find the one with the expec
 // In game tick contract:
 for i in 0..ref_output_count(0) {
     let (contract, params) = ref_output_verifier(0, i);
-    if contract == RESULT_CONTRACT && params == "state" {
+    if contract == RECORD_CONTRACT && params == "state" {
         let prev_state = ref_output_data(0, i);
         // ... use prev_state
     }
@@ -176,7 +176,7 @@ current_params() → (ptr, len)       // this verifier's params
 set_data(key_ptr, key_len, value_ptr, value_len) → void
 ```
 
-Adds a self-claimed output with verifier `(RESULT_CONTRACT, key)` and data `value`. In generation mode, creates the output and adds a self-claim. In verification mode, checks that a matching self-claimed output exists with the expected data.
+Adds a self-claimed output with verifier `(RECORD_CONTRACT, key)` and data `value`. In generation mode, creates the output and adds a self-claim. In verification mode, checks that a matching self-claimed output exists with the expected data.
 
 #### Claimed Outputs
 
@@ -471,5 +471,5 @@ The rectification contract verifies the proof chain from the aggregation tree ro
 | [`src/core/GeneratingEnv.ts`](../../src/core/GeneratingEnv.ts) | `GeneratingEnv` -- generation-mode implementation (possibly async, builds the draft) |
 | [`src/core/ContractGenerator.ts`](../../src/core/ContractGenerator.ts) | `ContractGenerator` -- runs contracts via `GeneratingEnv` to build block drafts |
 | [`src/core/ExecutionModule.ts`](../../src/core/ExecutionModule.ts) | `ExecutionModule` -- contract registry and block verification |
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `RESULT_CONTRACT`, result output helpers, block structure |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `RECORD_CONTRACT`, result output helpers, block structure |
 | Future: WASM runtime | Contract execution engine with host function bindings |

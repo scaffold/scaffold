@@ -7,11 +7,11 @@ import {
   BlockStore,
   createBlock,
   createGenesisBlock,
-  createSelfClaimedOutput,
   getBlockWeightVector,
-  RESULT_CONTRACT,
+  RECORD_CONTRACT,
 } from '../src/core/Block.ts';
 import { encodeAggregationData } from '../src/contracts/AggregationContract.ts';
+import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
@@ -417,7 +417,7 @@ Deno.test('Integration: computation block with self-claims → verify → valid'
   // Computation block: self-claims state, claims genesis output
   const compBlock = makeLeafBlock(
     genesis,
-    [createSelfClaimedOutput('state', enc('game-state-1'))],
+    [makeRecordOutput('state', enc('game-state-1'))],
     10,
     [1], // claim extended index 1 = genesis output[0]
   );
@@ -454,7 +454,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
   node.receiveBlock(genesis, null);
 
   // Block A: claims genesis game output[0], produces self-claimed state
-  const blockAOutputs = [createSelfClaimedOutput('state', enc('S0'))];
+  const blockAOutputs = [makeRecordOutput('state', enc('S0'))];
   const blockAHashParts: Uint8Array[] = [
     genesis.hash.toBytes(),
     new Uint8Array(new Float64Array([10]).buffer),
@@ -479,7 +479,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
   node.receiveBlock(blockA, null);
 
   // Block B: references block A, claims genesis game output[1], produces new state
-  const blockBOutputs = [createSelfClaimedOutput('state', enc('S0-next'))];
+  const blockBOutputs = [makeRecordOutput('state', enc('S0-next'))];
   const blockBHashParts: Uint8Array[] = [
     genesis.hash.toBytes(),
     new Uint8Array(new Float64Array([10]).buffer),

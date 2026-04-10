@@ -1,7 +1,8 @@
 import { assert, assertEquals, assertRejects } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
-import { createSelfClaimedOutput, RESULT_CONTRACT } from '../src/core/Block.ts';
+import { RECORD_CONTRACT } from '../src/core/Block.ts';
+import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { ExecutionMode } from '../src/core/ExecutionModule.ts';
 import {
   type AvailableInput,
@@ -124,7 +125,7 @@ Deno.test('GeneratingEnv: requireResult creates a result output', () => {
 
   const results = env.getGeneratedResults();
   assertEquals(results.length, 1);
-  assert(Hash.equals(results[0].verifier.contract, RESULT_CONTRACT));
+  assert(Hash.equals(results[0].verifier.contract, RECORD_CONTRACT));
   assertEquals(results[0].verifier.params, enc('state'));
   assertEquals(results[0].data, enc('value'));
   assertEquals(results[0].value, 0);
@@ -239,7 +240,7 @@ Deno.test('GeneratingEnv: fetch queries provider and records ref', () => {
   const refBlock: TestBlock = {
     hash: h('ref-block'),
     anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('state', enc('S0'))],
+    outputs: [makeRecordOutput('state', enc('S0'))],
     claims: [],
     refs: [],
   };
@@ -274,7 +275,7 @@ Deno.test('GeneratingEnv: getAllOutputs returns results then regular outputs', (
 
   const all = env.getAllOutputs();
   assertEquals(all.length, 2);
-  assert(Hash.equals(all[0].verifier.contract, RESULT_CONTRACT));
+  assert(Hash.equals(all[0].verifier.contract, RECORD_CONTRACT));
   assert(Hash.equals(all[1].verifier.contract, h('pay')));
 });
 
@@ -303,7 +304,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
   const refBlock: TestBlock = {
     hash: h('prev'),
     anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('state', enc('S'))],
+    outputs: [makeRecordOutput('state', enc('S'))],
     claims: [],
     refs: [],
   };

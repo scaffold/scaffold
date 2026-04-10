@@ -7,7 +7,8 @@
 
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
-import { createGenesisBlock, createSelfClaimedOutput } from '../../src/core/Block.ts';
+import { createGenesisBlock } from '../../src/core/Block.ts';
+import { makeRecordOutput } from '../../src/contracts/RecordContract.ts';
 import { type ContractEnv } from '../../src/core/ContractEnv.ts';
 import { TestNetwork } from './TestNetwork.ts';
 import { enc, makeBlock, makeOutput } from './helpers.ts';
@@ -78,7 +79,7 @@ Deno.test('Computation: self-claimed outputs verified across network', () => {
   net.broadcastGenesis(genesis);
 
   // Block with self-claimed state output
-  const stateOutput = createSelfClaimedOutput('key', enc('value'));
+  const stateOutput = makeRecordOutput('key', enc('value'));
   const block = makeBlock('self-claim', genesis, [stateOutput], 10, [0, 1]);
   // claims index 0 = self-claimed output (trivially valid)
   // claims index 1 = genesis contract output
@@ -107,7 +108,7 @@ Deno.test('Computation: cross-block references work across nodes', () => {
   const blockA = makeBlock(
     'ref-blockA',
     genesis,
-    [createSelfClaimedOutput('state', enc('S0'))],
+    [makeRecordOutput('state', enc('S0'))],
     10,
     [1], // claim genesis output 0
   );
@@ -117,7 +118,7 @@ Deno.test('Computation: cross-block references work across nodes', () => {
   const blockB = makeBlock(
     'ref-blockB',
     genesis,
-    [createSelfClaimedOutput('state', enc('S0-next'))],
+    [makeRecordOutput('state', enc('S0-next'))],
     10,
     [2], // claim genesis output 1
     [blockA.hash], // refs

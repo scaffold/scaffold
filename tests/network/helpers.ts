@@ -9,9 +9,9 @@ import {
   Block,
   BlockSource,
   createGenesisBlock,
-  createSelfClaimedOutput,
-  RESULT_CONTRACT,
+  RECORD_CONTRACT,
 } from '../../src/core/Block.ts';
+import { makeRecordOutput } from '../../src/contracts/RecordContract.ts';
 import { encodeAggregationData } from '../../src/contracts/AggregationContract.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
 import type { Contract } from '../../src/contracts/Contract.ts';
@@ -19,7 +19,7 @@ import type { Contract } from '../../src/contracts/Contract.ts';
 export const h = (name: string): Hash => Hash.digest(name);
 export const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
-export { AGGREGATION_CONTRACT, RESULT_CONTRACT };
+export { AGGREGATION_CONTRACT, RECORD_CONTRACT };
 export type { Contract };
 
 export function makeOutput(value: number, label?: string): Output {
@@ -136,4 +136,4 @@ export function makeAggregationBlock(
   };
 }
 
-export { createSelfClaimedOutput };
+export { makeRecordOutput };

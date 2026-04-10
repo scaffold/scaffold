@@ -18,8 +18,8 @@ export const INSURANCE_CONTRACT = Hash.digest('insurance-contract');
 /** Well-known contract hash for signature (payment) contract outputs. */
 export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 
-/** Well-known contract hash for result outputs (key-value store on a block). */
-export const RESULT_CONTRACT = Hash.digest('result-contract');
+/** Well-known contract hash for record outputs (key-value store on a block). */
+export const RECORD_CONTRACT = Hash.digest('result-contract');
 
 import { getAggregationData } from '../contracts/AggregationContract.ts';
 
@@ -166,45 +166,6 @@ export class BlockStore {
 
     return undefined;
   }
-}
-
-// -- Self-claim and ref helpers -------------------------------------
-
-/**
- * Create a result output. Result outputs use the RESULT_CONTRACT
- * verifier with the key encoded in params. They act as a key-value store
- * within a block.
- */
-export function createSelfClaimedOutput(key: string | Uint8Array, value: Uint8Array): Output {
-  const params = typeof key === 'string' ? new TextEncoder().encode(key) : key;
-  return {
-    verifier: { contract: RESULT_CONTRACT, params },
-    value: 0,
-    data: value,
-  };
-}
-
-/** Check whether an output is a result output (uses RESULT_CONTRACT). */
-export function isResultOutput(output: Output): boolean {
-  return Hash.equals(output.verifier.contract, RESULT_CONTRACT);
-}
-
-/** Get the key from a result output's verifier params. */
-export function getResultKey(output: Output): Uint8Array {
-  return output.verifier.params;
-}
-
-/** Find the first result output in a block matching the given key. */
-export function findResultOutput(block: Block, key: string | Uint8Array): Output | undefined {
-  const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
-  for (const output of block.outputs) {
-    if (!isResultOutput(output)) continue;
-    const params = output.verifier.params;
-    if (params.length === keyBytes.length && params.every((b, i) => b === keyBytes[i])) {
-      return output;
-    }
-  }
-  return undefined;
 }
 
 /**

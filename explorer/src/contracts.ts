@@ -4,7 +4,7 @@ import {
   AGGREGATION_CONTRACT,
   COLLATERAL_CONTRACT,
   INSURANCE_CONTRACT,
-  RESULT_CONTRACT,
+  RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
 } from "scaffold.io/core/Block.ts";
 import { signatureContract } from "scaffold.io/contracts/SignatureContract.ts";
@@ -17,7 +17,7 @@ const WELL_KNOWN: [Hash, string, Contract][] = [
   [AGGREGATION_CONTRACT, "Aggregation", aggregationContract],
   [COLLATERAL_CONTRACT, "Collateral", collateralContract],
   [INSURANCE_CONTRACT, "Insurance", insuranceContract],
-  [RESULT_CONTRACT, "Self", { run() {} }],
+  [RECORD_CONTRACT, "Self", { run() {} }],
 ];
 
 export function getContractName(hash: Hash): string | null {

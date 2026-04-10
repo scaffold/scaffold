@@ -3,7 +3,7 @@
 import { Hash } from '../util/Hash.ts';
 import { type MaybePromise, maybeThen } from '../util/MaybePromise.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
-import { RESULT_CONTRACT } from './Block.ts';
+import { RECORD_CONTRACT } from './Block.ts';
 import {
   type AvailableInput,
   type ContractEnv,
@@ -142,7 +142,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   requireResult(key: Uint8Array, value: Uint8Array): void {
     this._resultOutputs.push({
-      verifier: { contract: RESULT_CONTRACT, params: key },
+      verifier: { contract: RECORD_CONTRACT, params: key },
       value: 0,
       data: value,
     });
@@ -164,7 +164,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       const outputs = this._provider.getOutputs(block);
       for (const output of outputs) {
         if (
-          Hash.equals(output.verifier.contract, RESULT_CONTRACT) &&
+          Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
         ) {
           return output.data;

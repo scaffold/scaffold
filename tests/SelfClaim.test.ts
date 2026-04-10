@@ -4,13 +4,15 @@ import {
   Block,
   BlockSource,
   BlockStore,
-  createSelfClaimedOutput,
-  findResultOutput,
   getRefOutputs,
-  getResultKey,
-  isResultOutput,
-  RESULT_CONTRACT,
+  RECORD_CONTRACT,
 } from '../src/core/Block.ts';
+import {
+  findRecordOutput,
+  getRecordKey,
+  isRecordOutput,
+  makeRecordOutput,
+} from '../src/contracts/RecordContract.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 
 // -- Helpers --------------------------------------------------------
@@ -34,47 +36,47 @@ function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
 
 // -- Tests ----------------------------------------------------------
 
-Deno.test('createSelfClaimedOutput produces correct verifier with string key', () => {
-  const output = createSelfClaimedOutput('state', new Uint8Array([1, 2, 3]));
+Deno.test('makeRecordOutput produces correct verifier with string key', () => {
+  const output = makeRecordOutput('state', new Uint8Array([1, 2, 3]));
 
-  assert(Hash.equals(output.verifier.contract, RESULT_CONTRACT));
+  assert(Hash.equals(output.verifier.contract, RECORD_CONTRACT));
   assertEquals(output.verifier.params, new TextEncoder().encode('state'));
   assertEquals(output.value, 0);
   assertEquals(output.data, new Uint8Array([1, 2, 3]));
 });
 
-Deno.test('createSelfClaimedOutput produces correct verifier with Uint8Array key', () => {
+Deno.test('makeRecordOutput produces correct verifier with Uint8Array key', () => {
   const key = new Uint8Array([10, 20, 30]);
-  const output = createSelfClaimedOutput(key, new Uint8Array([4, 5]));
+  const output = makeRecordOutput(key, new Uint8Array([4, 5]));
 
-  assert(Hash.equals(output.verifier.contract, RESULT_CONTRACT));
+  assert(Hash.equals(output.verifier.contract, RECORD_CONTRACT));
   assertEquals(output.verifier.params, key);
   assertEquals(output.data, new Uint8Array([4, 5]));
 });
 
-Deno.test('isResultOutput returns true for self-claimed outputs', () => {
-  const output = createSelfClaimedOutput('key', new Uint8Array(0));
-  assert(isResultOutput(output));
+Deno.test('isRecordOutput returns true for self-claimed outputs', () => {
+  const output = makeRecordOutput('key', new Uint8Array(0));
+  assert(isRecordOutput(output));
 });
 
-Deno.test('isResultOutput returns false for non-self-claimed outputs', () => {
+Deno.test('isRecordOutput returns false for non-self-claimed outputs', () => {
   const output: Output = {
     verifier: { contract: Hash.digest('other-contract'), params: new Uint8Array(0) },
     value: 42,
     data: new Uint8Array(0),
   };
-  assertFalse(isResultOutput(output));
+  assertFalse(isRecordOutput(output));
 });
 
-Deno.test('getResultKey returns the params from a self-claimed output', () => {
-  const output = createSelfClaimedOutput('myKey', new Uint8Array(0));
-  const key = getResultKey(output);
+Deno.test('getRecordKey returns the params from a self-claimed output', () => {
+  const output = makeRecordOutput('myKey', new Uint8Array(0));
+  const key = getRecordKey(output);
   assertEquals(key, new TextEncoder().encode('myKey'));
 });
 
-Deno.test('findResultOutput finds by string key', () => {
-  const target = createSelfClaimedOutput('state', new Uint8Array([1]));
-  const other = createSelfClaimedOutput('counter', new Uint8Array([2]));
+Deno.test('findRecordOutput finds by string key', () => {
+  const target = makeRecordOutput('state', new Uint8Array([1]));
+  const other = makeRecordOutput('counter', new Uint8Array([2]));
   const nonSelf: Output = {
     verifier: { contract: Hash.digest('x'), params: new Uint8Array(0) },
     value: 0,
@@ -82,43 +84,43 @@ Deno.test('findResultOutput finds by string key', () => {
   };
   const block = makeBlock([nonSelf, target, other]);
 
-  const found = findResultOutput(block, 'state');
+  const found = findRecordOutput(block, 'state');
   assert(found !== undefined);
   assertEquals(found!.data, new Uint8Array([1]));
 });
 
-Deno.test('findResultOutput finds by Uint8Array key', () => {
+Deno.test('findRecordOutput finds by Uint8Array key', () => {
   const key = new Uint8Array([7, 8, 9]);
-  const target = createSelfClaimedOutput(key, new Uint8Array([42]));
+  const target = makeRecordOutput(key, new Uint8Array([42]));
   const block = makeBlock([target]);
 
-  const found = findResultOutput(block, key);
+  const found = findRecordOutput(block, key);
   assert(found !== undefined);
   assertEquals(found!.data, new Uint8Array([42]));
 });
 
-Deno.test('findResultOutput returns undefined when key not found', () => {
-  const output = createSelfClaimedOutput('state', new Uint8Array([1]));
+Deno.test('findRecordOutput returns undefined when key not found', () => {
+  const output = makeRecordOutput('state', new Uint8Array([1]));
   const block = makeBlock([output]);
 
-  const found = findResultOutput(block, 'missing');
+  const found = findRecordOutput(block, 'missing');
   assertEquals(found, undefined);
 });
 
-Deno.test('findResultOutput returns undefined for empty block', () => {
+Deno.test('findRecordOutput returns undefined for empty block', () => {
   const block = makeBlock([]);
-  assertEquals(findResultOutput(block, 'key'), undefined);
+  assertEquals(findRecordOutput(block, 'key'), undefined);
 });
 
 Deno.test('self-claimed outputs have value=0', () => {
-  const output = createSelfClaimedOutput('k', new Uint8Array(0));
+  const output = makeRecordOutput('k', new Uint8Array(0));
   assertEquals(output.value, 0);
 });
 
 Deno.test('getRefOutputs returns referenced block outputs', () => {
   const store = new BlockStore();
 
-  const refOutput = createSelfClaimedOutput('state', new Uint8Array([10]));
+  const refOutput = makeRecordOutput('state', new Uint8Array([10]));
   const refBlock = makeBlock([refOutput]);
   store.put(refBlock);
 
@@ -148,8 +150,8 @@ Deno.test('getRefOutputs returns undefined when referenced block not in store', 
 Deno.test('getRefOutputs with multiple refs returns correct block', () => {
   const store = new BlockStore();
 
-  const refBlock0 = makeBlock([createSelfClaimedOutput('a', new Uint8Array([1]))]);
-  const refBlock1 = makeBlock([createSelfClaimedOutput('b', new Uint8Array([2]))]);
+  const refBlock0 = makeBlock([makeRecordOutput('a', new Uint8Array([1]))]);
+  const refBlock1 = makeBlock([makeRecordOutput('b', new Uint8Array([2]))]);
   store.put(refBlock0);
   store.put(refBlock1);
 

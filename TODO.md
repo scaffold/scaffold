@@ -41,9 +41,9 @@ Standard contracts are specified in [contracts.md](docs/protocol/contracts.md). 
 | Contract | Spec | Implementation | Status |
 |----------|------|----------------|--------|
 | Signature | contracts.md | `SIGNATURE_CONTRACT` constant + `makeSignatureOutput` helper | Needs contract function that verifies block signature against pubkey in params |
-| Aggregation | contracts.md | [AggregationContract.ts](src/core/AggregationContract.ts) | Done (threshold-based, uses `requireInput`) |
+| Aggregation | contracts.md | [AggregationContract.ts](src/contracts/AggregationContract.ts) | Done (threshold-based, uses `requireInput`) |
 | Collateral | contracts.md | [CollateralContract.ts](src/contracts/CollateralContract.ts) | Exists from old codebase; needs adapter to new ContractEnv interface |
-| Self/Result | contracts.md | `RESULT_CONTRACT` + `createSelfClaimedOutput` | Working (trivially valid -- claiming block is producing block) |
+| Record | contracts.md | [RecordContract.ts](src/contracts/RecordContract.ts) | Working (trivially valid -- claiming block is producing block). Needs `requireSelfClaim()` on ContractEnv for proper verification. |
 | Timelock | contracts.md | — | Needs implementation (verify anchor chain depth >= minDepth in params) |
 | Computation | contracts.md | ExecutionModule mock registry | Working for TypeScript mocks; needs WASM runtime for real contracts |
 

@@ -86,7 +86,7 @@ export interface ContractEnv {
 
   /**
    * Require a result (self-claimed key-value output) on this block.
-   * Creates/checks an output with { contract: RESULT_CONTRACT, params: key, data: value }.
+   * Creates/checks an output with { contract: RECORD_CONTRACT, params: key, data: value }.
    *
    * Verification: checks the result output exists with the expected value.
    * Generation: creates the result output and self-claim.
@@ -98,7 +98,7 @@ export interface ContractEnv {
    *
    * Finds the first block (in refs for verification, or via search for generation)
    * that claims an output matching the given verifier, adds it to refs,
-   * then reads the RESULT_CONTRACT output keyed by `key` from that block.
+   * then reads the RECORD_CONTRACT output keyed by `key` from that block.
    *
    * Throws ContractRejection if no matching block is found.
    */

@@ -3,10 +3,10 @@ import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
 import {
   COLLATERAL_CONTRACT,
-  RESULT_CONTRACT,
+  RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
-  createSelfClaimedOutput,
 } from '../src/core/Block.ts';
+import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import {
   type ChallengeTarget,
   type CollateralDetail,
@@ -318,7 +318,7 @@ Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond',
     outputs: [
       sigOutput(authorPk, 1000), // FOR returned
       sigOutput(authorPk, 50), // AGAINST bond earned
-      createSelfClaimedOutput(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY), // preimage result
+      makeRecordOutput(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY), // preimage result
     ],
     claims: [3, 4, 2], // claims anchor's FOR (ext[3]) and AGAINST (ext[4]), self-claims result (own[2])
     refs: [],

@@ -12,13 +12,15 @@ export {
   createBlock,
   createBlockFromPacket,
   createGenesisBlock,
-  createSelfClaimedOutput,
-  findResultOutput,
   getRefOutputs,
-  getResultKey,
-  isResultOutput,
-  RESULT_CONTRACT,
+  RECORD_CONTRACT,
 } from './core/Block.ts';
+export {
+  findRecordOutput,
+  getRecordKey,
+  isRecordOutput,
+  makeRecordOutput,
+} from './contracts/RecordContract.ts';
 export type { BlockPayload } from './core/Block.ts';
 export {
   composeBlockPacket,

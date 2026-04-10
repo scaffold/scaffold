@@ -1,7 +1,8 @@
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
-import { createSelfClaimedOutput, RESULT_CONTRACT } from '../src/core/Block.ts';
+import { RECORD_CONTRACT } from '../src/core/Block.ts';
+import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { ExecutionMode } from '../src/core/ExecutionModule.ts';
 import { ContractRejection, type VerifyingEnvProvider } from '../src/core/ContractEnv.ts';
 import { VerifyingEnv } from '../src/core/VerifyingEnv.ts';
@@ -115,7 +116,7 @@ Deno.test('VerifyingEnv: requireResult accepts when result matches', () => {
   const block: TestBlock = {
     hash: h('b'),
     anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('state', enc('value'))],
+    outputs: [makeRecordOutput('state', enc('value'))],
     claims: [],
     refs: [],
   };
@@ -130,7 +131,7 @@ Deno.test('VerifyingEnv: requireResult throws on wrong value', () => {
   const block: TestBlock = {
     hash: h('b'),
     anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('state', enc('actual'))],
+    outputs: [makeRecordOutput('state', enc('actual'))],
     claims: [],
     refs: [],
   };
@@ -332,7 +333,7 @@ Deno.test('VerifyingEnv: fetch reads result from ref block that claims verifier'
     hash: h('prev'),
     anchor: prevAnchor.hash,
     outputs: [
-      createSelfClaimedOutput('state', enc('S0')),
+      makeRecordOutput('state', enc('S0')),
     ],
     claims: [1], // claims extended index 1 = anchor's game output
     refs: [],
@@ -472,7 +473,7 @@ Deno.test('VerifyingEnv: contract returning normally means accept', () => {
   const block: TestBlock = {
     hash: h('b'),
     anchor: ZERO_HASH,
-    outputs: [createSelfClaimedOutput('k', enc('v'))],
+    outputs: [makeRecordOutput('k', enc('v'))],
     claims: [],
     refs: [],
   };

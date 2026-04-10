@@ -2,7 +2,7 @@
 
 import { Hash } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
-import { RESULT_CONTRACT } from './Block.ts';
+import { RECORD_CONTRACT } from './Block.ts';
 import {
   type ContractEnv,
   ContractRejection,
@@ -109,7 +109,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
   requireResult(key: Uint8Array, value: Uint8Array): void {
     for (const output of this._outputs) {
-      if (!Hash.equals(output.verifier.contract, RESULT_CONTRACT)) continue;
+      if (!Hash.equals(output.verifier.contract, RECORD_CONTRACT)) continue;
       if (!bytesEqual(output.verifier.params, key)) continue;
       if (!bytesEqual(output.data, value)) {
         throw new ContractRejection(
@@ -145,7 +145,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       const refOutputs = this._provider.getOutputs(refBlock);
       for (const output of refOutputs) {
         if (
-          Hash.equals(output.verifier.contract, RESULT_CONTRACT) &&
+          Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
         ) {
           return output.data;
@@ -185,7 +185,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     for (const claimIdx of this._claims) {
       const output = this._extendedOutputs[claimIdx];
       if (!output) continue;
-      if (Hash.equals(output.verifier.contract, RESULT_CONTRACT)) continue;
+      if (Hash.equals(output.verifier.contract, RECORD_CONTRACT)) continue;
       if (verifierEquals(output.verifier, thisVerifier)) {
         inputs.push({
           verifier: output.verifier,

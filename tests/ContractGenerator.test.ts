@@ -5,9 +5,9 @@ import {
   Block,
   BlockSource,
   BlockStore,
-  RESULT_CONTRACT,
-  createSelfClaimedOutput,
+  RECORD_CONTRACT,
 } from '../src/core/Block.ts';
+import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { createDraft, DraftStore, ResolvedClaim } from '../src/core/BlockDraft.ts';
 import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
@@ -132,7 +132,7 @@ Deno.test('ContractGenerator: runs contract and populates draft', () => {
   assert(updated, 'draft should exist');
   assertEquals(updated.status, 'ready');
   assertEquals(updated.outputs.length, 2); // result + sig output
-  assert(Hash.equals(updated.outputs[0].verifier.contract, RESULT_CONTRACT));
+  assert(Hash.equals(updated.outputs[0].verifier.contract, RECORD_CONTRACT));
   assertEquals(updated.outputs[1].value, 10);
 });
 
@@ -320,7 +320,7 @@ Deno.test('ContractGenerator: fetch adds refs to draft', () => {
   const prevBlock = makeBlock({
     name: 'prev-block',
     anchor: prevAnchor.hash,
-    outputs: [createSelfClaimedOutput('state', enc('S0'))],
+    outputs: [makeRecordOutput('state', enc('S0'))],
     claims: [1], // claims the game output from prev-anchor
   });
   store.put(prevBlock);
