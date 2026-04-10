@@ -61,6 +61,9 @@ export class ConsensusModule<BlockType> {
   /** Verified weight vectors per block. Defaults to empty (zero weight). */
   private verifiedWeights = new Map<HashPrimitive, number[]>();
 
+  /** Per-block boost applied only during conflict comparison (not propagated). */
+  private boosts = new Map<HashPrimitive, number>();
+
   /** Anchor -> set of blocks that directly anchor to it. */
   private children = new Map<HashPrimitive, Set<HashPrimitive>>();
 
@@ -203,8 +206,9 @@ export class ConsensusModule<BlockType> {
     // Remove this block's own contribution entry
     this.chainContributions.delete(key);
 
-    // Clean up verified weights
+    // Clean up verified weights and boosts
     this.verifiedWeights.delete(key);
+    this.boosts.delete(key);
 
     // Clean up direct conflicts
     const conflicts = this.directConflicts.get(key);
@@ -240,6 +244,12 @@ export class ConsensusModule<BlockType> {
   /** Set the verified weight vector for a block. */
   setVerifiedWeight(hash: Hash, weight: number[]): void {
     this.verifiedWeights.set(hash.toPrimitive(), weight);
+    this.markDirty();
+  }
+
+  /** Set a conflict-resolution boost for a block. Does not propagate to ancestors. */
+  setBoost(hash: Hash, boost: number): void {
+    this.boosts.set(hash.toPrimitive(), boost);
     this.markDirty();
   }
 
@@ -307,12 +317,14 @@ export class ConsensusModule<BlockType> {
     const memo = new Map<HashPrimitive, number>();
 
     let bestHash = hash;
-    let bestWeight = this.computeEffectiveWeight(key, memo);
+    let bestWeight = this.computeEffectiveWeight(key, memo)
+      + (this.boosts.get(key) ?? 0);
 
     for (const cKey of conflicts) {
       const cHash = this.blocks.get(cKey);
       if (!cHash) continue;
-      const cWeight = this.computeEffectiveWeight(cKey, memo);
+      const cWeight = this.computeEffectiveWeight(cKey, memo)
+        + (this.boosts.get(cKey) ?? 0);
       if (
         cWeight > bestWeight ||
         (cWeight === bestWeight && Hash.compare(cHash, bestHash) < 0)
@@ -444,12 +456,14 @@ export class ConsensusModule<BlockType> {
       if (!dc || dc.size === 0) continue;
 
       const blockHash = this.blocks.get(blockKey)!;
-      const blockWeight = this.computeEffectiveWeight(blockKey, memo, canonicalFilter);
+      const blockWeight = this.computeEffectiveWeight(blockKey, memo, canonicalFilter)
+        + (this.boosts.get(blockKey) ?? 0);
 
       for (const partnerKey of dc) {
         if (!this.blocks.has(partnerKey)) continue;
         const partnerHash = this.blocks.get(partnerKey)!;
-        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo, canonicalFilter);
+        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo, canonicalFilter)
+          + (this.boosts.get(partnerKey) ?? 0);
 
         if (
           partnerWeight > blockWeight ||

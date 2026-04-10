@@ -219,10 +219,14 @@ These three rules replace the previous system of conflict propagation and confli
 
 For each pair of directly conflicting blocks A and B:
 
-1. Compute `effective_weight` for each.
-2. The block with higher `effective_weight` wins.
+1. Compute `effective_weight + boost` for each.
+2. The block with higher total wins.
 3. Ties are broken deterministically by block hash (lexicographic ordering).
-4. The winner can change at any time as weights update, new blocks arrive, or new conflicts are discovered.
+4. The winner can change at any time as weights update, boosts change, new blocks arrive, or new conflicts are discovered.
+
+### Boost
+
+An external subsystem can supply a per-block **boost** -- a non-negative number added to a block's effective weight during conflict comparison only. The boost does **not** propagate: it is not included in `effective_weight` and does not contribute to any ancestor's or descendant's weight. It exists solely to let other subsystems (e.g., collateral, local policy) tip the scales for a specific block's conflicts without distorting the weight of the broader DAG.
 
 ### Canonicality Algorithm
 

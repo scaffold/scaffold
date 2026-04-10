@@ -399,3 +399,134 @@ Deno.test('canonical-only: descendant losing strips weight from ancestor', () =>
     }
   }
 });
+
+// =====================================================================
+// Boost tests
+// =====================================================================
+
+Deno.test('boost flips conflict outcome', () => {
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [5] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [7] };
+  const { layer } = setup([G, A, B], false);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [5]);
+  layer.setVerifiedWeight(B.hash, [7]);
+
+  // B wins without boost
+  assertFalse(layer.isCanonical(A.hash));
+  assert(layer.isCanonical(B.hash));
+
+  // Boost A by 3 -> A's comparison weight = 8 > 7
+  layer.setBoost(A.hash, 3);
+  assert(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(B.hash));
+});
+
+Deno.test('boost does NOT affect effective weight', () => {
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [5] };
+  const { layer } = setup([G, A], false);
+
+  layer.setVerifiedWeight(A.hash, [5]);
+  layer.setBoost(A.hash, 100);
+
+  // Effective weight should NOT include boost
+  assertEquals(layer.getEffectiveWeight(A.hash), 5);
+});
+
+Deno.test('boost does NOT propagate to parent conflict', () => {
+  // Parent P1 vs P2 conflict. Child C of P1 has a large boost.
+  // The boost should NOT help P1 win.
+  const P1: TestBlock = { hash: h('P1'), anchor: G.hash, aggregates: [], weight: [10] };
+  const P2: TestBlock = { hash: h('P2'), anchor: G.hash, aggregates: [], weight: [12] };
+  const C: TestBlock = { hash: h('C'), anchor: P1.hash, aggregates: [], weight: [1] };
+  const { layer } = setup([G, P1, P2, C], false);
+
+  layer.addConflict(P1.hash, P2.hash);
+  layer.setVerifiedWeight(P1.hash, [10]);
+  layer.setVerifiedWeight(P2.hash, [12]);
+  layer.setVerifiedWeight(C.hash, [1]);
+  layer.setBoost(C.hash, 1000);
+
+  // P1 effective = 10 + 1 = 11, P2 = 12. Boost on C doesn't help P1.
+  assertFalse(layer.isCanonical(P1.hash));
+  assert(layer.isCanonical(P2.hash));
+});
+
+Deno.test('boost does NOT affect descendant weight', () => {
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [5] };
+  const B: TestBlock = { hash: h('B'), anchor: A.hash, aggregates: [], weight: [10] };
+  const { layer } = setup([G, A, B], false);
+
+  layer.setVerifiedWeight(A.hash, [5]);
+  layer.setVerifiedWeight(B.hash, [10]);
+  layer.setBoost(B.hash, 1000);
+
+  // Descendant weight of A should only be B's verified weight, not boost
+  assertEquals(layer.getDescendantWeight(A.hash), 10);
+});
+
+Deno.test('boost works with canonical-only mode', () => {
+  // Same divergence scenario, but boost on B compensates for lost descendant weight.
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [7] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [3] };
+  const C: TestBlock = { hash: h('C'), anchor: B.hash, aggregates: [], weight: [10] };
+  const D: TestBlock = { hash: h('D'), anchor: G.hash, aggregates: [], weight: [12] };
+
+  const { layer } = setup([G, A, B, C, D], true);
+  layer.addConflict(A.hash, B.hash);
+  layer.addConflict(C.hash, D.hash);
+  layer.setVerifiedWeight(A.hash, [7]);
+  layer.setVerifiedWeight(B.hash, [3]);
+  layer.setVerifiedWeight(C.hash, [10]);
+  layer.setVerifiedWeight(D.hash, [12]);
+
+  // Without boost: canonical-only makes A win (B=3 after C loses)
+  assert(layer.isCanonical(A.hash));
+  assertFalse(layer.isCanonical(B.hash));
+
+  // Boost B by 5 -> B comparison weight = 3+5=8 > A=7. B wins.
+  layer.setBoost(B.hash, 5);
+  assert(layer.isCanonical(B.hash));
+  assertFalse(layer.isCanonical(A.hash));
+});
+
+Deno.test('removeBlock cleans up boost', () => {
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [5] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [7] };
+  const { layer } = setup([G, A, B], false);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [5]);
+  layer.setVerifiedWeight(B.hash, [7]);
+  layer.setBoost(A.hash, 10);
+
+  // A wins with boost
+  assert(layer.isCanonical(A.hash));
+
+  // Remove A and re-add without boost
+  layer.removeBlock(A.hash);
+  layer.addBlock(A.hash);
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [5]);
+
+  // B should win now (boost was cleaned up)
+  assertFalse(layer.isCanonical(A.hash));
+  assert(layer.isCanonical(B.hash));
+});
+
+Deno.test('getConflictWinner reflects boost', () => {
+  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [5] };
+  const B: TestBlock = { hash: h('B'), anchor: G.hash, aggregates: [], weight: [7] };
+  const { layer } = setup([G, A, B], false);
+
+  layer.addConflict(A.hash, B.hash);
+  layer.setVerifiedWeight(A.hash, [5]);
+  layer.setVerifiedWeight(B.hash, [7]);
+
+  assertEquals(layer.getConflictWinner(A.hash), B.hash);
+
+  layer.setBoost(A.hash, 3);
+  assertEquals(layer.getConflictWinner(A.hash), A.hash);
+  assertEquals(layer.getConflictWinner(B.hash), A.hash);
+});
