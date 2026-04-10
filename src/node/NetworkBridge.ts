@@ -5,6 +5,8 @@ import { BlockSerializer, createDefaultBlockSerializer, PeerConnection } from '.
 import { GossipService } from './GossipService.ts';
 import { BlockAwareness, PushAction } from './GossipModule.ts';
 import { DeliveryTracker } from './DeliveryTracker.ts';
+import { SignalingService, SignalEnvelope } from './SignalingService.ts';
+import { TransportConnection } from './PeerConnection.ts';
 
 /** Simple set-based block awareness tracker. */
 class SetAwareness implements BlockAwareness {
@@ -25,6 +27,8 @@ export interface NetworkBridgeDeps {
   gossip: GossipService;
   processBlock: (block: Block, peerId: string) => void;
   serializer?: BlockSerializer;
+  signalingService?: SignalingService;
+  selfId?: string;
 }
 
 /**
@@ -40,11 +44,15 @@ export class NetworkBridge {
   private readonly gossip: GossipService;
   private readonly store: BlockStore;
   private readonly delivery: DeliveryTracker;
+  private readonly signalingService?: SignalingService;
+  private readonly selfId?: string;
 
   constructor(deps: NetworkBridgeDeps) {
     this.gossip = deps.gossip;
     this.store = deps.store;
     this.delivery = new DeliveryTracker();
+    this.signalingService = deps.signalingService;
+    this.selfId = deps.selfId;
 
     this.network = new NetworkManager(
       deps.plugins,
@@ -117,9 +125,42 @@ export class NetworkBridge {
         this.gossip.reportDelivery(hash, peer.peerId, true);
       }
     });
+
+    peer.onSignal((data) => {
+      this.handleSignalMessage(data, peer.peerId);
+    });
   }
 
   private handlePeerDisconnected(peerId: string): void {
     this.gossip.removePeer(peerId);
+  }
+
+  private handleSignalMessage(
+    data: { to: string; from: string; payload: unknown },
+    senderPeerId: string,
+  ): void {
+    if (this.selfId && data.to === this.selfId) {
+      // Signal is for us -- deliver to signaling service
+      this.signalingService?.recvSignal(data.payload as SignalEnvelope);
+    } else {
+      // Forward to all connected peers except the sender
+      for (const [peerId, peer] of this.network.peers) {
+        if (peerId !== senderPeerId) {
+          peer.sendSignal(data.to, data.from, data.payload);
+        }
+      }
+    }
+  }
+
+  /** Broadcast a signal to all connected peers (used by SignalingService). */
+  broadcastSignal(to: string, from: string, payload: SignalEnvelope): void {
+    for (const peer of this.network.peers.values()) {
+      peer.sendSignal(to, from, payload);
+    }
+  }
+
+  /** Register an externally-established connection (e.g. from WebRTC signaling). */
+  addConnection(transport: TransportConnection): void {
+    this.network.addConnection(transport);
   }
 }

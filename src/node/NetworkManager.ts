@@ -91,6 +91,11 @@ export class NetworkManager {
     }
   }
 
+  /** Register an externally-established transport (e.g. from WebRTC signaling). */
+  addConnection(transport: TransportConnection): void {
+    this.handleNewConnection(transport);
+  }
+
   /** Close every peer connection and stop every plugin. */
   close(): void {
     for (const peer of this._peers.values()) {

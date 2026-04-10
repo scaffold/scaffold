@@ -16,6 +16,9 @@ import { UtxoIndex } from './node/UtxoIndex.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
 import { NetworkPlugin } from './node/NetworkManager.ts';
 import { PushAction } from './node/GossipModule.ts';
+import { SignalingService } from './node/SignalingService.ts';
+import { NetworkProvider } from './interfaces/network.ts';
+import { bin2hex } from './util/hex.ts';
 
 export interface ScaffoldConfig {
   /** Private key for signing blocks. Defaults to a random key. */
@@ -26,6 +29,8 @@ export interface ScaffoldConfig {
   strategies?: Strategy[];
   /** Network transport plugins. When provided, enables P2P networking. */
   plugins?: NetworkPlugin[];
+  /** Network providers for signaling (e.g. WebrtcProvider). */
+  networkProviders?: NetworkProvider[];
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -37,6 +42,7 @@ export class Scaffold {
   private readonly putManager: PutManager;
   private readonly fetchManager: FetchManager;
   private readonly networkBridge?: NetworkBridge;
+  private readonly signalingService?: SignalingService;
 
   constructor(config: ScaffoldConfig = {}) {
     const privateKey = config.privateKey ?? secp.utils.randomPrivateKey();
@@ -75,6 +81,23 @@ export class Scaffold {
     // 6. Create NetworkBridge if plugins are provided
     if (config.plugins && config.plugins.length > 0) {
       const nodeContext = this.nodeContext;
+      const selfIdHex = bin2hex(publicKey);
+
+      // Create SignalingService if network providers are given
+      if (config.networkProviders && config.networkProviders.length > 0) {
+        this.signalingService = new SignalingService({
+          selfPrivateKey: privateKey,
+          selfPublicKey: publicKey,
+          networkProviders: config.networkProviders,
+          sendRelay: (to, from, payload) => {
+            this.networkBridge!.broadcastSignal(to, from, payload);
+          },
+          onNewConnection: (transport) => {
+            this.networkBridge!.addConnection(transport);
+          },
+        });
+      }
+
       this.networkBridge = new NetworkBridge({
         plugins: config.plugins,
         store: nodeContext.store,
@@ -82,6 +105,8 @@ export class Scaffold {
         processBlock: (block, peerId) => {
           nodeContext.processBlock(block, peerId);
         },
+        signalingService: this.signalingService,
+        selfId: selfIdHex,
       });
       pushActionHandler = (actions, block) => {
         this.networkBridge!.handlePushActions(actions, block);
@@ -149,8 +174,17 @@ export class Scaffold {
     this.networkBridge?.bootstrap(addresses);
   }
 
+  /** Initiate a direct connection to a remote peer via signaling relay. */
+  async connectToPeer(remotePublicKey: Uint8Array): Promise<void> {
+    if (!this.signalingService) {
+      throw new Error('No signaling service configured -- provide networkProviders in config');
+    }
+    await this.signalingService.initiate(remotePublicKey);
+  }
+
   /** Close the scaffold instance and all network connections. */
   close(): void {
+    this.signalingService?.dispose();
     this.networkBridge?.close();
   }
 
