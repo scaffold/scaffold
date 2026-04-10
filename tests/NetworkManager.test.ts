@@ -2,7 +2,12 @@ import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Block } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { BlockSerializer, TransportConnection } from '../src/node/PeerConnection.ts';
-import { NetworkDriver, NetworkManager, NetworkPlugin } from '../src/node/NetworkManager.ts';
+import {
+  NetworkDriver,
+  NetworkManager,
+  NetworkManagerCallbacks,
+  NetworkPlugin,
+} from '../src/node/NetworkManager.ts';
 
 // -- Mock helpers -----------------------------------------------------
 
@@ -94,7 +99,7 @@ Deno.test({
   const received: { block: Block; peerId: string }[] = [];
   const mgr = new NetworkManager(
     [plugin],
-    (block, peerId) => received.push({ block, peerId }),
+    { onBlockReceived: (block, peerId) => received.push({ block, peerId }) },
     fakeSerializer,
   );
   mgr.start();
@@ -115,7 +120,7 @@ Deno.test({
   const received: { block: Block; peerId: string }[] = [];
   const mgr = new NetworkManager(
     [plugin],
-    (block, peerId) => received.push({ block, peerId }),
+    { onBlockReceived: (block, peerId) => received.push({ block, peerId }) },
     fakeSerializer,
   );
   mgr.start();
@@ -148,7 +153,7 @@ Deno.test({
   const plugin = new MockNetworkPlugin();
   const mgr = new NetworkManager(
     [plugin],
-    () => {},
+    { onBlockReceived: () => {} },
     fakeSerializer,
   );
   mgr.start();
@@ -173,7 +178,7 @@ Deno.test({
   const plugin = new MockNetworkPlugin();
   const mgr = new NetworkManager(
     [plugin],
-    () => {},
+    { onBlockReceived: () => {} },
     fakeSerializer,
   );
   mgr.start();
@@ -202,7 +207,7 @@ Deno.test({
   const p2 = new MockNetworkPlugin();
   const mgr = new NetworkManager(
     [p1, p2],
-    () => {},
+    { onBlockReceived: () => {} },
     fakeSerializer,
   );
   mgr.start();
@@ -221,7 +226,7 @@ Deno.test({
   const plugin = new MockNetworkPlugin();
   const mgr = new NetworkManager(
     [plugin],
-    () => {},
+    { onBlockReceived: () => {} },
     fakeSerializer,
   );
   mgr.start();
@@ -245,7 +250,7 @@ Deno.test({
   const plugin = new MockNetworkPlugin();
   const mgr = new NetworkManager(
     [plugin],
-    () => {},
+    { onBlockReceived: () => {} },
     fakeSerializer,
   );
   mgr.start();

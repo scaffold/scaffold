@@ -38,6 +38,7 @@ import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from './GossipService.ts';
+import { PushAction } from './GossipModule.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
 import { Hash } from '../util/Hash.ts';
@@ -56,6 +57,8 @@ export interface NodeConfig {
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
   enableVerification?: (contractHash: Hash) => boolean;
+  /** Callback when gossip produces push actions for a block */
+  onPushActions?: (actions: PushAction[], block: Block) => void;
 }
 
 /**
@@ -201,6 +204,7 @@ export class NodeContext {
       gossip: this.gossip,
       draftManager: this.draftManager,
       onNotifyFetch: config.onNotifyFetch,
+      onPushActions: config.onPushActions,
       onBlockProcessed: (block: Block) => {
         blocks.add(block);
       },

@@ -13,6 +13,9 @@ import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 import { getGenesisBlock } from './genesis.ts';
 import { UtxoIndex } from './node/UtxoIndex.ts';
+import { NetworkBridge } from './node/NetworkBridge.ts';
+import { NetworkPlugin } from './node/NetworkManager.ts';
+import { PushAction } from './node/GossipModule.ts';
 
 export interface ScaffoldConfig {
   /** Private key for signing blocks. Defaults to a random key. */
@@ -21,6 +24,8 @@ export interface ScaffoldConfig {
   genesis?: Block;
   /** Strategies to register */
   strategies?: Strategy[];
+  /** Network transport plugins. When provided, enables P2P networking. */
+  plugins?: NetworkPlugin[];
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -31,6 +36,7 @@ export class Scaffold {
   private readonly nodeContext: NodeContext;
   private readonly putManager: PutManager;
   private readonly fetchManager: FetchManager;
+  private readonly networkBridge?: NetworkBridge;
 
   constructor(config: ScaffoldConfig = {}) {
     const privateKey = config.privateKey ?? secp.utils.randomPrivateKey();
@@ -48,8 +54,11 @@ export class Scaffold {
       ...(config.strategies ?? []),
     ];
 
-    // 3. Create NodeContext with notifyFetch wired to FetchManager
+    // 3. Create NodeContext with notifyFetch wired to FetchManager.
+    //    If network plugins are provided, onPushActions is set up after
+    //    the bridge is created (see step 6).
     const fetchManager = this.fetchManager;
+    let pushActionHandler: ((actions: PushAction[], block: Block) => void) | undefined;
     this.nodeContext = new NodeContext({
       genesis,
       strategies,
@@ -58,7 +67,27 @@ export class Scaffold {
       onNotifyFetch: (verifierKey, result) => {
         fetchManager.notify(verifierKey, result);
       },
+      onPushActions: (actions, block) => {
+        pushActionHandler?.(actions, block);
+      },
     });
+
+    // 6. Create NetworkBridge if plugins are provided
+    if (config.plugins && config.plugins.length > 0) {
+      const nodeContext = this.nodeContext;
+      this.networkBridge = new NetworkBridge({
+        plugins: config.plugins,
+        store: nodeContext.store,
+        consensus: nodeContext.consensus,
+        gossip: nodeContext.gossip,
+        processBlock: (block, peerId) => {
+          nodeContext.processBlock(block, peerId);
+        },
+      });
+      pushActionHandler = (actions, block) => {
+        this.networkBridge!.handlePushActions(actions, block);
+      };
+    }
 
     // 4. Get UtxoIndex from NodeContext (created and wired there)
     const utxoIndex = this.nodeContext.utxoIndex;
@@ -111,9 +140,19 @@ export class Scaffold {
     return this.putManager.put(request);
   }
 
-  /** Close the scaffold instance */
-  async close(): Promise<void> {
-    // Cleanup - stub for now (will be fleshed out with plugin lifecycle)
+  /** Start network plugins (if configured). */
+  start(): void {
+    this.networkBridge?.start();
+  }
+
+  /** Connect to bootstrap addresses. Requires network plugins. */
+  connect(addresses: string[]): void {
+    this.networkBridge?.bootstrap(addresses);
+  }
+
+  /** Close the scaffold instance and all network connections. */
+  close(): void {
+    this.networkBridge?.close();
   }
 
   /** Reactive block record set for observing block graph changes. */

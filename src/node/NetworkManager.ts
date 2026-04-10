@@ -20,6 +20,13 @@ export interface NetworkDriver {
 /** Callback for when a block arrives from the network. */
 type BlockReceivedHandler = (block: Block, peerId: string) => void;
 
+/** Callbacks for peer lifecycle events. */
+export interface NetworkManagerCallbacks {
+  onBlockReceived: BlockReceivedHandler;
+  onPeerConnected?: (peer: PeerConnection) => void;
+  onPeerDisconnected?: (peerId: string) => void;
+}
+
 /**
  * Manages the lifecycle of network plugins and peer connections, and
  * routes blocks between the local library and the wider network.
@@ -27,6 +34,7 @@ type BlockReceivedHandler = (block: Block, peerId: string) => void;
 export class NetworkManager {
   private _peers = new Map<string, PeerConnection>();
   private driver: NetworkDriver;
+  private callbacks: NetworkManagerCallbacks;
 
   /** Read-only view of currently connected peers. */
   get peers(): ReadonlyMap<string, PeerConnection> {
@@ -35,9 +43,10 @@ export class NetworkManager {
 
   constructor(
     private plugins: NetworkPlugin[],
-    private onBlockReceived: BlockReceivedHandler,
+    callbacks: NetworkManagerCallbacks,
     private serializer: BlockSerializer,
   ) {
+    this.callbacks = callbacks;
     this.driver = {
       onConnection: (transport: TransportConnection) => {
         this.handleNewConnection(transport);
@@ -99,14 +108,16 @@ export class NetworkManager {
   private handleNewConnection(transport: TransportConnection): void {
     const peer = new PeerConnection(
       transport,
-      this.onBlockReceived,
+      this.callbacks.onBlockReceived,
       this.serializer,
     );
 
     this._peers.set(peer.peerId, peer);
+    this.callbacks.onPeerConnected?.(peer);
 
     peer.onClose(() => {
       this._peers.delete(peer.peerId);
+      this.callbacks.onPeerDisconnected?.(peer.peerId);
     });
   }
 }
