@@ -78,7 +78,6 @@ export class Scaffold {
       this.networkBridge = new NetworkBridge({
         plugins: config.plugins,
         store: nodeContext.store,
-        consensus: nodeContext.consensus,
         gossip: nodeContext.gossip,
         processBlock: (block, peerId) => {
           nodeContext.processBlock(block, peerId);

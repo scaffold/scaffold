@@ -5,7 +5,6 @@ import { BlockSerializer, TransportConnection } from '../src/node/PeerConnection
 import { NetworkDriver, NetworkPlugin } from '../src/node/NetworkManager.ts';
 import { NetworkBridge } from '../src/node/NetworkBridge.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
-import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { GossipService } from '../src/node/GossipService.ts';
 import { PushAction } from '../src/node/GossipModule.ts';
@@ -101,27 +100,25 @@ class MockNetworkPlugin implements NetworkPlugin {
   }
 }
 
-/** Create a minimal protocol context with store and consensus. */
+/** Create a minimal protocol context with store. */
 function setupProtocol() {
   const ctx = new ProtocolContext();
   const store = ctx.get(BlockStore);
-  const consensus = ctx.get(ConsensusService);
   const coordinator = ctx.get(Coordinator);
   const gossip = new GossipService(ctx);
-  return { ctx, store, consensus, coordinator, gossip };
+  return { ctx, store, coordinator, gossip };
 }
 
 // -- Tests --------------------------------------------------------------
 
 Deno.test('NetworkBridge: inbound block flows to processBlock', () => {
-  const { store, consensus, gossip } = setupProtocol();
+  const { store, gossip } = setupProtocol();
   const received: { block: Block; peerId: string }[] = [];
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: (block, peerId) => received.push({ block, peerId }),
     serializer: fakeSerializer,
@@ -146,13 +143,12 @@ Deno.test('NetworkBridge: inbound block flows to processBlock', () => {
 });
 
 Deno.test('NetworkBridge: peer connect registers with gossip', () => {
-  const { store, consensus, gossip } = setupProtocol();
+  const { store, gossip } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: () => {},
     serializer: fakeSerializer,
@@ -171,13 +167,12 @@ Deno.test('NetworkBridge: peer connect registers with gossip', () => {
 });
 
 Deno.test('NetworkBridge: peer disconnect removes from gossip', () => {
-  const { store, consensus, gossip } = setupProtocol();
+  const { store, gossip } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: () => {},
     serializer: fakeSerializer,
@@ -196,13 +191,12 @@ Deno.test('NetworkBridge: peer disconnect removes from gossip', () => {
 });
 
 Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
-  const { store, consensus, gossip } = setupProtocol();
+  const { store, gossip } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: () => {},
     serializer: fakeSerializer,
@@ -215,10 +209,6 @@ Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
   plugin.injectConnection(t1);
   plugin.injectConnection(t2);
 
-  // Clear sync messages sent on connect
-  const t1Before = t1.sent.length;
-  const t2Before = t2.sent.length;
-
   const block = fakeBlock('push-block');
   const actions: PushAction[] = [
     { block: block.hash, peer: 'peer-1', priority: 1, immediate: true },
@@ -227,21 +217,20 @@ Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
 
   bridge.handlePushActions(actions, block);
 
-  // Both peers should have received one additional message (the block)
-  assertEquals(t1.sent.length - t1Before, 1, 'peer-1 should receive the block');
-  assertEquals(t2.sent.length - t2Before, 1, 'peer-2 should receive the block');
+  // Both peers should have received a message
+  assertEquals(t1.sent.length, 1, 'peer-1 should receive the block');
+  assertEquals(t2.sent.length, 1, 'peer-2 should receive the block');
 
   bridge.close();
 });
 
 Deno.test('NetworkBridge: handlePushActions skips already-sent blocks', () => {
-  const { store, consensus, gossip } = setupProtocol();
+  const { store, gossip } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: () => {},
     serializer: fakeSerializer,
@@ -252,8 +241,6 @@ Deno.test('NetworkBridge: handlePushActions skips already-sent blocks', () => {
   const t1 = new MockTransport('peer-1');
   plugin.injectConnection(t1);
 
-  const t1Before = t1.sent.length;
-
   const block = fakeBlock('dedup-block');
   const actions: PushAction[] = [
     { block: block.hash, peer: 'peer-1', priority: 1, immediate: true },
@@ -261,17 +248,17 @@ Deno.test('NetworkBridge: handlePushActions skips already-sent blocks', () => {
 
   // Send once
   bridge.handlePushActions(actions, block);
-  assertEquals(t1.sent.length - t1Before, 1);
+  assertEquals(t1.sent.length, 1);
 
   // Send again -- should be skipped (delivery tracker)
   bridge.handlePushActions(actions, block);
-  assertEquals(t1.sent.length - t1Before, 1, 'duplicate send should be skipped');
+  assertEquals(t1.sent.length, 1, 'duplicate send should be skipped');
 
   bridge.close();
 });
 
 Deno.test('NetworkBridge: block request handler responds with blocks from store', () => {
-  const { store, consensus, gossip, coordinator } = setupProtocol();
+  const { store, gossip, coordinator } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   // Put a genesis block in the store via coordinator
@@ -281,7 +268,6 @@ Deno.test('NetworkBridge: block request handler responds with blocks from store'
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: () => {},
     serializer: fakeSerializer,
@@ -291,9 +277,6 @@ Deno.test('NetworkBridge: block request handler responds with blocks from store'
 
   const transport = new MockTransport('peer-req');
   plugin.injectConnection(transport);
-
-  // Clear the sync message that was sent on connect
-  transport.sent.length = 0;
 
   // Simulate a block request from the peer
   transport.simulateMessage(JSON.stringify({
@@ -307,41 +290,13 @@ Deno.test('NetworkBridge: block request handler responds with blocks from store'
   bridge.close();
 });
 
-Deno.test('NetworkBridge: sync initiated on peer connect', () => {
-  const { store, consensus, gossip } = setupProtocol();
-  const plugin = new MockNetworkPlugin();
-
-  const bridge = new NetworkBridge({
-    plugins: [plugin],
-    store,
-    consensus,
-    gossip,
-    processBlock: () => {},
-    serializer: fakeSerializer,
-  });
-
-  bridge.start();
-
-  const transport = new MockTransport('peer-sync');
-  plugin.injectConnection(transport);
-
-  // On connect, sync protocol should send our tips
-  assert(transport.sent.length > 0, 'should send sync message on connect');
-
-  const msg = JSON.parse(transport.sent[0]);
-  assertEquals(msg.type, 'sync');
-
-  bridge.close();
-});
-
 Deno.test('NetworkBridge: close shuts down all connections', () => {
-  const { store, consensus, gossip } = setupProtocol();
+  const { store, gossip } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    consensus,
     gossip,
     processBlock: () => {},
     serializer: fakeSerializer,
