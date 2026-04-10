@@ -2,17 +2,17 @@
 
 import { Hash } from '../util/Hash.ts';
 import { ExecutionResult } from './ExecutionModule.ts';
-import { ProbeResult } from './ProbeModule.ts';
+import { SampleResult } from './SamplingModule.ts';
 
 // -- Provider -------------------------------------------------------
 
 /** Provider interface for the verification module. */
 export interface VerificationProvider {
-  /** Select the highest-priority tree to probe next. */
+  /** Select the highest-priority tree to sample next. */
   selectNextTree(): Hash | undefined;
 
-  /** Initiate a probe descent on a tree, returning the terminal block to verify. */
-  initProbe(treeHash: Hash): ProbeResult;
+  /** Initiate a sample descent on a tree, returning the terminal block to verify. */
+  initSample(treeHash: Hash): SampleResult;
 
   /** Verify a block by running its contracts. */
   verifyBlock(blockHash: Hash): ExecutionResult;
@@ -28,10 +28,10 @@ export type VerificationResult =
   | { verified: false; treeHash: undefined; reason: string };
 
 /**
- * The verification module bridges probing (what to verify) with
- * execution (how to verify). It selects trees based on probe priority,
- * descends to a terminal via probe, runs contract verification, and
- * reports results back to the probe module.
+ * The verification module bridges sampling (what to verify) with
+ * execution (how to verify). It selects trees based on sampling priority,
+ * descends to a terminal via sampling, runs contract verification, and
+ * reports results back to the sampling module.
  */
 export class VerificationModule {
   private readonly _provider: VerificationProvider;
@@ -41,13 +41,13 @@ export class VerificationModule {
   }
 
   /**
-   * Select the next tree to verify, probe it, and verify the terminal.
+   * Select the next tree to verify, sample it, and verify the terminal.
    *
    * Flow:
    * 1. selectNextTree() picks the highest-priority tree
-   * 2. initProbe() descends to a terminal block
+   * 2. initSample() descends to a terminal block
    * 3. verifyBlock() runs the contract on the terminal
-   * 4. recordVerification() reports the result to the probe module
+   * 4. recordVerification() reports the result to the sampling module
    */
   verifyNext(): VerificationResult {
     const treeHash = this._provider.selectNextTree();
@@ -55,12 +55,12 @@ export class VerificationModule {
       return { verified: false, treeHash: undefined, reason: 'no trees to verify' };
     }
 
-    const probeResult = this._provider.initProbe(treeHash);
-    if (!probeResult.terminal) {
-      return { verified: false, treeHash, reason: probeResult.reason };
+    const sampleResult = this._provider.initSample(treeHash);
+    if (!sampleResult.terminal) {
+      return { verified: false, treeHash, reason: sampleResult.reason };
     }
 
-    const terminalHash = probeResult.blockHash;
+    const terminalHash = sampleResult.blockHash;
     const execResult = this._provider.verifyBlock(terminalHash);
 
     this._provider.recordVerification(terminalHash, execResult.accepted);

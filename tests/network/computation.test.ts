@@ -175,7 +175,7 @@ Deno.test('Computation: verification sampling selects highest priority tree', ()
   net.deliverDirect(light, 'A');
 
   // The sampling module should have trees to verify
-  const next = net.getNode('A').probe.selectNext();
+  const next = net.getNode('A').sampling.selectNext();
   assert(next !== undefined, 'Should select a tree to verify');
 });
 

@@ -1,10 +1,10 @@
 /**
- * Network-level probing tests.
+ * Network-level sampling tests.
  *
- * These tests verify that the probe-based weight sampling mechanism works
+ * These tests verify that the weight sampling mechanism works
  * correctly across multiple nodes, including weight factor convergence,
  * invalid block detection, conflict-driven scheduling, and the feedback
- * loop from probing through consensus.
+ * loop from sampling through consensus.
  */
 
 import { assert, assertEquals } from '@std/assert';
@@ -37,7 +37,7 @@ const invalidContract = Hash.digest('invalid-contract');
 
 // Probe state lifecycle
 
-Deno.test('Probing: canonical blocks get probe state on all nodes', () => {
+Deno.test('Sampling: canonical blocks get sample state on all nodes', () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -47,16 +47,16 @@ Deno.test('Probing: canonical blocks get probe state on all nodes', () => {
   const block = makeBlock('probe-state', genesis, [makeOutput(100)], 50, [0]);
   net.submitAndFlush(block, 'A');
 
-  // All nodes should have probe state for the block
+  // All nodes should have sample state for the block
   for (const id of net.nodeIds) {
-    const state = net.getNode(id).probe.getProbeState(block.hash);
-    assert(state !== undefined, `Node ${id} should have probe state`);
+    const state = net.getNode(id).sampling.getSampleState(block.hash);
+    assert(state !== undefined, `Node ${id} should have sample state`);
     assertEquals(state.queries.length, 0);
     assertEquals(state.selfVerified, false);
   }
 });
 
-Deno.test('Probing: non-canonical block loses probe state', () => {
+Deno.test('Sampling: non-canonical block loses sample state', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -71,8 +71,8 @@ Deno.test('Probing: non-canonical block loses probe state', () => {
 
   assert(node.consensus.isCanonical(blockB.hash), 'Block B should be canonical initially');
   assert(
-    node.probe.getProbeState(blockB.hash) !== undefined,
-    'Block B should have probe state when canonical',
+    node.sampling.getSampleState(blockB.hash) !== undefined,
+    'Block B should have sample state when canonical',
   );
 
   // Block C also claims genesis output 0 (same anchor output) -- creates a conflict
@@ -87,21 +87,21 @@ Deno.test('Probing: non-canonical block loses probe state', () => {
   assert(node.consensus.isCanonical(blockC.hash), 'C should be canonical');
   assert(!node.consensus.isCanonical(blockB.hash), 'B should not be canonical');
 
-  // B's probe state should be removed, C's should exist
+  // B's sample state should be removed, C's should exist
   assertEquals(
-    node.probe.getProbeState(blockB.hash),
+    node.sampling.getSampleState(blockB.hash),
     undefined,
-    'Non-canonical block should not have probe state',
+    'Non-canonical block should not have sample state',
   );
   assert(
-    node.probe.getProbeState(blockC.hash) !== undefined,
-    'Canonical block should have probe state',
+    node.sampling.getSampleState(blockC.hash) !== undefined,
+    'Canonical block should have sample state',
   );
 });
 
 // Weight factor convergence
 
-Deno.test('Probing: weight factor converges on all nodes for valid leaf', () => {
+Deno.test('Sampling: weight factor converges on all nodes for valid leaf', () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -123,28 +123,28 @@ Deno.test('Probing: weight factor converges on all nodes for valid leaf', () => 
   );
   net.submitAndFlush(block, 'A');
 
-  // Each node probes and verifies independently
+  // Each node samples and verifies independently
   for (const id of net.nodeIds) {
     const node = net.getNode(id);
     for (let i = 0; i < 5; i++) {
-      const result = node.probe.initProbe(block.hash);
+      const result = node.sampling.initSample(block.hash);
       if (result.terminal) {
         const exec = node.execution.verifyBlock(result.blockHash);
-        node.probe.recordVerification(result.blockHash, exec.accepted);
+        node.sampling.recordVerification(result.blockHash, exec.accepted);
       }
     }
   }
 
   // All nodes should converge to weight factor 1.0
   for (const id of net.nodeIds) {
-    const wf = net.getNode(id).probe.getWeightFactor(block.hash);
+    const wf = net.getNode(id).sampling.getWeightFactor(block.hash);
     assertEquals(wf, 1.0, `Node ${id} weight factor should be 1.0`);
   }
 });
 
 // Invalid block detection
 
-Deno.test('Probing: invalid subtree detected via weight factor', () => {
+Deno.test('Sampling: invalid subtree detected via weight factor', () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B', 'C']) net.addNode(id);
 
@@ -200,16 +200,16 @@ Deno.test('Probing: invalid subtree detected via weight factor', () => {
     const node = net.getNode(id);
 
     for (let i = 0; i < 200; i++) {
-      const result = node.probe.initProbe(agg.hash);
+      const result = node.sampling.initSample(agg.hash);
       if (result.terminal) {
         const exec = node.execution.verifyBlock(result.blockHash);
-        node.probe.recordVerification(result.blockHash, exec.accepted);
+        node.sampling.recordVerification(result.blockHash, exec.accepted);
       }
     }
 
     // Weight factor should converge toward 60/80 = 0.75
     // (validSub weight=60 passes, invalidSub weight=20 fails, total=80)
-    const wf = node.probe.getWeightFactor(agg.hash);
+    const wf = node.sampling.getWeightFactor(agg.hash);
     assert(wf > 0.65, `Node ${id} wf=${wf} should be > 0.65`);
     assert(wf < 0.85, `Node ${id} wf=${wf} should be < 0.85`);
   }
@@ -217,7 +217,7 @@ Deno.test('Probing: invalid subtree detected via weight factor', () => {
 
 // Probe scheduling
 
-Deno.test('Probing: selectNext picks highest-weight unprobed tree', () => {
+Deno.test('Sampling: selectNext picks highest-weight unsampled tree', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -231,12 +231,12 @@ Deno.test('Probing: selectNext picks highest-weight unprobed tree', () => {
   net.deliverDirect(light, 'A');
 
   // selectNext should prefer the heavier block (higher priority)
-  const next = net.getNode('A').probe.selectNext();
+  const next = net.getNode('A').sampling.selectNext();
   assert(next !== undefined);
   assertEquals(Hash.equals(next, heavy.hash), true);
 });
 
-Deno.test('Probing: selectNext shifts to unprobed tree after probing', () => {
+Deno.test('Sampling: selectNext shifts to unsampled tree after sampling', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -252,21 +252,21 @@ Deno.test('Probing: selectNext shifts to unprobed tree after probing', () => {
   const node = net.getNode('A');
 
   // Initially A has higher priority
-  assertEquals(Hash.equals(node.probe.selectNext()!, blockA.hash), true);
+  assertEquals(Hash.equals(node.sampling.selectNext()!, blockA.hash), true);
 
   // Probe A many times
   for (let i = 0; i < 20; i++) {
-    const result = node.probe.initProbe(blockA.hash);
-    if (result.terminal) node.probe.recordVerification(result.blockHash, true);
+    const result = node.sampling.initSample(blockA.hash);
+    if (result.terminal) node.sampling.recordVerification(result.blockHash, true);
   }
 
-  // Now B should have higher priority (fewer probes)
-  assertEquals(Hash.equals(node.probe.selectNext()!, blockB.hash), true);
+  // Now B should have higher priority (fewer samples)
+  assertEquals(Hash.equals(node.sampling.selectNext()!, blockB.hash), true);
 });
 
 // Conflict-driven probing
 
-Deno.test('Probing: conflict winner has probe state, loser does not', () => {
+Deno.test('Sampling: conflict winner has sample state, loser does not', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -287,25 +287,25 @@ Deno.test('Probing: conflict winner has probe state, loser does not', () => {
   const conflicts = node.consensus.getConflicts(block1.hash);
   assert(conflicts.size > 0, 'Conflict should be detected');
 
-  // Winner (block2, weight 80) should have probe state
+  // Winner (block2, weight 80) should have sample state
   const winner = node.consensus.getConflictWinner(block1.hash);
   assert(
-    node.probe.getProbeState(winner) !== undefined,
-    'Conflict winner should have probe state',
+    node.sampling.getSampleState(winner) !== undefined,
+    'Conflict winner should have sample state',
   );
 
-  // Loser should not have probe state
+  // Loser should not have sample state
   const loser = Hash.equals(winner, block1.hash) ? block2.hash : block1.hash;
   assertEquals(
-    node.probe.getProbeState(loser),
+    node.sampling.getSampleState(loser),
     undefined,
-    'Conflict loser should not have probe state',
+    'Conflict loser should not have sample state',
   );
 });
 
 // Verification -> consensus feedback loop
 
-Deno.test('Probing: verification updates consensus weight', () => {
+Deno.test('Sampling: verification updates consensus weight', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -331,21 +331,21 @@ Deno.test('Probing: verification updates consensus weight', () => {
   const node = net.getNode('A');
 
   // Before probing: weight factor is 0 (unverified)
-  assertEquals(node.probe.getWeightFactor(block.hash), 0);
+  assertEquals(node.sampling.getWeightFactor(block.hash), 0);
 
   // Probe and verify
-  const result = node.probe.initProbe(block.hash);
+  const result = node.sampling.initSample(block.hash);
   assert(result.terminal);
   if (result.terminal) {
     const exec = node.execution.verifyBlock(result.blockHash);
-    node.probe.recordVerification(result.blockHash, exec.accepted);
+    node.sampling.recordVerification(result.blockHash, exec.accepted);
   }
 
   // After probing: weight factor is 1.0
-  assertEquals(node.probe.getWeightFactor(block.hash), 1.0);
+  assertEquals(node.sampling.getWeightFactor(block.hash), 1.0);
 });
 
-Deno.test('Probing: attemptVerification runs the full probe-verify cycle', () => {
+Deno.test('Sampling: attemptVerification runs the full sample-verify cycle', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -374,14 +374,14 @@ Deno.test('Probing: attemptVerification runs the full probe-verify cycle', () =>
   const verifyResult = node.coordinator.attemptVerification();
   if (verifyResult && verifyResult.verified) {
     // Weight factor should now be non-zero
-    const wf = node.probe.getWeightFactor(block.hash);
+    const wf = node.sampling.getWeightFactor(block.hash);
     assert(wf > 0, `Weight factor should be > 0 after verification, got ${wf}`);
   }
 });
 
 // Multi-node convergence with aggregation
 
-Deno.test('Probing: aggregation tree probed consistently across nodes', () => {
+Deno.test('Sampling: aggregation tree sampled consistently across nodes', () => {
   const net = new TestNetwork();
   for (const id of ['A', 'B']) net.addNode(id);
 
@@ -402,29 +402,29 @@ Deno.test('Probing: aggregation tree probed consistently across nodes', () => {
   net.deliverToAll(sub2, 'A');
   net.deliverToAll(agg, 'A');
 
-  // Each node probes independently, marking all terminals as verified
+  // Each node samples independently, marking all terminals as verified
   // (simulating successful contract execution)
   for (const id of net.nodeIds) {
     const node = net.getNode(id);
     // Mark subtrees as verified
-    node.probe.recordVerification(sub1.hash, true);
-    node.probe.recordVerification(sub2.hash, true);
+    node.sampling.recordVerification(sub1.hash, true);
+    node.sampling.recordVerification(sub2.hash, true);
 
     for (let i = 0; i < 100; i++) {
-      node.probe.initProbe(agg.hash);
+      node.sampling.initSample(agg.hash);
     }
   }
 
   // Both nodes should converge to weight factor ~1.0 (all subtrees verified)
   for (const id of net.nodeIds) {
-    const wf = net.getNode(id).probe.getWeightFactor(agg.hash);
+    const wf = net.getNode(id).sampling.getWeightFactor(agg.hash);
     assert(wf > 0.90, `Node ${id} wf=${wf} should be > 0.90`);
   }
 });
 
-// Pending probes on missing blocks
+// Pending samples on missing blocks
 
-Deno.test('Probing: missing aggregate blocks cause pending failures', () => {
+Deno.test('Sampling: missing aggregate blocks cause pending failures', () => {
   const net = new TestNetwork();
   net.addNode('A');
 
@@ -448,15 +448,15 @@ Deno.test('Probing: missing aggregate blocks cause pending failures', () => {
 
   // Probes should fail since subtrees are missing
   // But the agg block itself might not be canonical without subtrees being present
-  // Let's check if it has probe state
-  const aggState = node.probe.getProbeState(agg.hash);
+  // Let's check if it has sample state
+  const aggState = node.sampling.getSampleState(agg.hash);
   if (aggState) {
-    // Try to probe -- should get missing results
+    // Try to sample -- should get missing results
     for (let i = 0; i < 5; i++) {
-      node.probe.initProbe(agg.hash);
+      node.sampling.initSample(agg.hash);
     }
     // Weight factor should be 0 or very low
-    assertEquals(node.probe.getWeightFactor(agg.hash), 0);
+    assertEquals(node.sampling.getWeightFactor(agg.hash), 0);
   }
 
   // Now deliver the subtrees
@@ -464,10 +464,10 @@ Deno.test('Probing: missing aggregate blocks cause pending failures', () => {
   node.receiveBlock(sub2, null);
 
   // After subtrees arrive, probing should work
-  const state = node.probe.getProbeState(agg.hash);
+  const state = node.sampling.getSampleState(agg.hash);
   if (state) {
     for (let i = 0; i < 10; i++) {
-      node.probe.initProbe(agg.hash);
+      node.sampling.initSample(agg.hash);
     }
     // Weight factor may improve if subtrees get verified
     // (but we haven't registered contracts, so self-verification won't help)

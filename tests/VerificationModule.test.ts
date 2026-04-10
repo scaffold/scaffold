@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { ExecutionResult } from '../src/core/ExecutionModule.ts';
-import { ProbeResult } from '../src/core/ProbeModule.ts';
+import { SampleResult } from '../src/core/SamplingModule.ts';
 import { VerificationModule, VerificationProvider } from '../src/core/VerificationModule.ts';
 
 // -- Test helpers ----------------------------------------------------
@@ -10,7 +10,7 @@ const h = (name: string): Hash => Hash.digest(name);
 
 class MockVerificationProvider implements VerificationProvider {
   private readonly trees: Hash[] = [];
-  private readonly probeResults = new Map<string, ProbeResult>();
+  private readonly sampleResults = new Map<string, SampleResult>();
   private readonly execResults = new Map<string, ExecutionResult>();
   readonly verifications: { hash: Hash; success: boolean }[] = [];
 
@@ -19,9 +19,9 @@ class MockVerificationProvider implements VerificationProvider {
     this.trees.push(hash);
   }
 
-  /** Set the probe result for a tree. */
-  setProbeResult(treeHash: Hash, result: ProbeResult): void {
-    this.probeResults.set(treeHash.toHex(), result);
+  /** Set the sample result for a tree. */
+  setSampleResult(treeHash: Hash, result: SampleResult): void {
+    this.sampleResults.set(treeHash.toHex(), result);
   }
 
   /** Set the execution result for a specific block. */
@@ -33,8 +33,8 @@ class MockVerificationProvider implements VerificationProvider {
     return this.trees.shift();
   }
 
-  initProbe(treeHash: Hash): ProbeResult {
-    return this.probeResults.get(treeHash.toHex()) ??
+  initSample(treeHash: Hash): SampleResult {
+    return this.sampleResults.get(treeHash.toHex()) ??
       { terminal: false, reason: 'missing' as const };
   }
 
@@ -57,13 +57,13 @@ function setup() {
 
 // -- Tests -----------------------------------------------------------
 
-Deno.test('VerificationModule: verifyNext selects tree, probes, and verifies', () => {
+Deno.test('VerificationModule: verifyNext selects tree, samples, and verifies', () => {
   const { provider, module } = setup();
 
   const tree = h('tree-1');
   const terminal = h('terminal-1');
   provider.addTree(tree);
-  provider.setProbeResult(tree, { terminal: true, blockHash: terminal });
+  provider.setSampleResult(tree, { terminal: true, blockHash: terminal });
   provider.setExecResult(terminal, { accepted: true });
 
   const result = module.verifyNext();
@@ -91,7 +91,7 @@ Deno.test('VerificationModule: successful verification records success', () => {
   const tree = h('valid-tree');
   const terminal = h('terminal');
   provider.addTree(tree);
-  provider.setProbeResult(tree, { terminal: true, blockHash: terminal });
+  provider.setSampleResult(tree, { terminal: true, blockHash: terminal });
   provider.setExecResult(terminal, { accepted: true });
 
   module.verifyNext();
@@ -107,7 +107,7 @@ Deno.test('VerificationModule: failed verification records failure', () => {
   const tree = h('invalid-tree');
   const terminal = h('terminal');
   provider.addTree(tree);
-  provider.setProbeResult(tree, { terminal: true, blockHash: terminal });
+  provider.setSampleResult(tree, { terminal: true, blockHash: terminal });
   provider.setExecResult(terminal, { accepted: false, reason: 'contract rejected' });
 
   const result = module.verifyNext();
@@ -120,12 +120,12 @@ Deno.test('VerificationModule: failed verification records failure', () => {
   assertEquals(provider.verifications[0].success, false);
 });
 
-Deno.test('VerificationModule: non-terminal probe returns probe reason', () => {
+Deno.test('VerificationModule: non-terminal sample returns sample reason', () => {
   const { provider, module } = setup();
 
   const tree = h('missing-tree');
   provider.addTree(tree);
-  provider.setProbeResult(tree, { terminal: false, reason: 'missing' });
+  provider.setSampleResult(tree, { terminal: false, reason: 'missing' });
 
   const result = module.verifyNext();
   assert(!result.verified);
@@ -133,7 +133,7 @@ Deno.test('VerificationModule: non-terminal probe returns probe reason', () => {
     assertEquals(result.reason, 'missing');
   }
 
-  // No verification recorded since probe didn't reach a terminal
+  // No verification recorded since sample didn't reach a terminal
   assertEquals(provider.verifications.length, 0);
 });
 
@@ -150,9 +150,9 @@ Deno.test('VerificationModule: multiple verifyNext calls process in order', () =
   provider.addTree(tree1);
   provider.addTree(tree2);
   provider.addTree(tree3);
-  provider.setProbeResult(tree1, { terminal: true, blockHash: t1 });
-  provider.setProbeResult(tree2, { terminal: true, blockHash: t2 });
-  provider.setProbeResult(tree3, { terminal: true, blockHash: t3 });
+  provider.setSampleResult(tree1, { terminal: true, blockHash: t1 });
+  provider.setSampleResult(tree2, { terminal: true, blockHash: t2 });
+  provider.setSampleResult(tree3, { terminal: true, blockHash: t3 });
   provider.setExecResult(t1, { accepted: true });
   provider.setExecResult(t2, { accepted: false, reason: 'bad' });
   provider.setExecResult(t3, { accepted: true });

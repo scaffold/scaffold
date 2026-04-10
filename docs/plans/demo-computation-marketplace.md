@@ -15,7 +15,7 @@ Demonstrate Scaffold's core value proposition: a browser posts a computation req
 - **Scaffold.put()**: Block creation with auto-balancing.
 - **ContractGenerator**: Generator execution with coroutine-style resumption (requireInput, requireResult).
 - **GeneratingEnv / VerifyingEnv**: Dual-mode contract execution environments.
-- **ProbeModule + SamplingStrategy**: Weight verification through statistical sampling.
+- **SamplingModule + SamplingStrategy**: Weight verification through statistical sampling.
 - **ReactiveLayer**: Full strategy evaluation pipeline.
 
 ## What Needs Building
@@ -87,8 +87,8 @@ The end-to-end flow:
    - `FetchNotifyStrategy` detects the result matches a subscribed verifier
    - `FetchManager` notifies the callback with the canonical result
 
-6. **Verifiers** probe the response via `SamplingStrategy`:
-   - `ProbeModule` selects the response block for verification
+6. **Verifiers** sample the response via `SamplingStrategy`:
+   - `SamplingModule` selects the response block for verification
    - `VerificationModule` runs the contract in verification mode
    - Weight factor updated based on verification result
 

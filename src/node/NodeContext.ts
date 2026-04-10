@@ -32,7 +32,7 @@ import {
 } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
-import { ProbeService } from '../core/ProbeService.ts';
+import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from '../core/GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
@@ -69,7 +69,7 @@ export class NodeContext {
 
   // Protocol services (convenience accessors)
   readonly consensus: ConsensusService;
-  readonly probe: ProbeService;
+  readonly sampling: SamplingService;
   readonly gossip: GossipService;
   readonly trust: TrustService;
   readonly blockCreation: BlockCreationService;
@@ -93,7 +93,7 @@ export class NodeContext {
     // 3. Get all services from ProtocolContext
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
-    this.probe = this.protocolContext.get(ProbeService);
+    this.sampling = this.protocolContext.get(SamplingService);
     this.gossip = this.protocolContext.get(GossipService);
     this.trust = this.protocolContext.get(TrustService);
     this.blockCreation = this.protocolContext.get(BlockCreationService);
@@ -161,7 +161,7 @@ export class NodeContext {
       const block = this.store.get(hash);
       if (block) this.blocks.notifyChanged(block);
     });
-    this.probe.onWeightChange((hash) => {
+    this.sampling.onWeightChange((hash) => {
       const block = this.store.get(hash);
       if (block) this.blocks.notifyChanged(block);
     });
@@ -190,7 +190,7 @@ export class NodeContext {
       coordinator: this.coordinator,
       store: this.store,
       consensus: this.consensus,
-      probe: this.probe,
+      sampling: this.sampling,
       strategies,
       blockCreator,
       draftManager: this.draftManager,

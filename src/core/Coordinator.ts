@@ -3,7 +3,7 @@
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { ConsensusService } from './ConsensusService.ts';
-import { ProbeService } from './ProbeService.ts';
+import { SamplingService } from './SamplingService.ts';
 import { GossipService } from './GossipService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
@@ -29,7 +29,7 @@ export class Coordinator {
   private readonly ctx: ProtocolContext;
   private readonly store: BlockStore;
   private readonly consensus: ConsensusService;
-  private readonly probe: ProbeService;
+  private readonly sampling: SamplingService;
   private readonly gossip: GossipService;
   private readonly blockCreation: BlockCreationService;
   private readonly outputClaims: OutputClaimService;
@@ -44,7 +44,7 @@ export class Coordinator {
     this.ctx = ctx;
     this.store = ctx.get(BlockStore);
     this.consensus = ctx.get(ConsensusService);
-    this.probe = ctx.get(ProbeService);
+    this.sampling = ctx.get(SamplingService);
     this.gossip = ctx.get(GossipService);
     this.blockCreation = ctx.get(BlockCreationService);
     this.outputClaims = ctx.get(OutputClaimService);
@@ -60,17 +60,17 @@ export class Coordinator {
       this.canonicalityChanges.push({ hash, canonical });
     });
 
-    // Wire probe weight changes to consensus verified weights
-    this.probe.onWeightChange((hash) => {
+    // Wire sampling weight changes to consensus verified weights
+    this.sampling.onWeightChange((hash) => {
       const block = this.store.get(hash);
       if (!block) return;
-      const wf = this.probe.getWeightFactor(hash);
+      const wf = this.sampling.getWeightFactor(hash);
       const declared = getBlockWeightVector(block);
       this.consensus.setVerifiedWeight(hash, declared.map((w) => w * wf));
     });
 
-    // Wire conflict info from consensus to probe scheduling
-    this.probe.setConflictInfoSupplier((hash) => {
+    // Wire conflict info from consensus to sampling scheduling
+    this.sampling.setConflictInfoSupplier((hash) => {
       const conflicts = this.consensus.getConflicts(hash);
       if (conflicts.size === 0) return undefined;
 
@@ -104,7 +104,7 @@ export class Coordinator {
    * 3. Add to consensus module + set initial weight (unverified = 0)
    * 4. Gossip notification
    * 5. Flush canonical view changes
-   * 6. Update probe module on canonicality changes
+   * 6. Update sampling module on canonicality changes
    */
   blockReceived(block: Block, fromPeer: string | null): BlockReceivedResult {
     // 1. Store the block
@@ -116,7 +116,7 @@ export class Coordinator {
     this.outputClaims.addBlock(block.hash, block.claims);
     this.outputClaims.onBlockLoaded(block.hash);
 
-    // 3. Consensus -- start with declared weight (probing will refine)
+    // 3. Consensus -- start with declared weight (sampling will refine)
     this.consensus.addBlock(block.hash);
     const weightVector = getBlockWeightVector(block);
     this.consensus.setVerifiedWeight(block.hash, weightVector);
@@ -129,12 +129,12 @@ export class Coordinator {
     this.consensus.flushChanges();
     const canonicalityChanges = [...this.canonicalityChanges];
 
-    // 6. Update probe module on canonicality changes
+    // 6. Update sampling module on canonicality changes
     for (const change of canonicalityChanges) {
       if (change.canonical) {
-        this.probe.addBlock(change.hash);
+        this.sampling.addBlock(change.hash);
       } else {
-        this.probe.removeBlock(change.hash);
+        this.sampling.removeBlock(change.hash);
       }
     }
 

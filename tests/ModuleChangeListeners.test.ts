@@ -1,7 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { ConsensusModule, ConsensusProvider } from '../src/core/ConsensusModule.ts';
-import { SamplingModule, SamplingProvider } from '../src/core/SamplingModule.ts';
 import { CollateralSide, TrustModule, TrustProvider } from '../src/core/TrustModule.ts';
 
 // -- Consensus test helpers ------------------------------------------
@@ -136,74 +135,6 @@ Deno.test('ConsensusModule: flushChanges does not fire when nothing changed', ()
   // Flush again with no changes
   consensus.flushChanges();
   assertEquals(callCount, 0);
-});
-
-// -- SamplingModule listener tests -----------------------------------
-
-interface TestTree {
-  hash: Hash;
-  declaredWork: number;
-  descendantWeight: number;
-}
-
-class TestSamplingProvider implements SamplingProvider<TestTree> {
-  private trees = new Map<HashPrimitive, TestTree>();
-
-  add(tree: TestTree): void {
-    this.trees.set(tree.hash.toPrimitive(), tree);
-  }
-
-  getBlock(hash: Hash): TestTree | undefined {
-    return this.trees.get(hash.toPrimitive());
-  }
-
-  getDeclaredWork(block: TestTree): number {
-    return block.declaredWork;
-  }
-
-  getDescendantWeight(block: TestTree): number {
-    return block.descendantWeight;
-  }
-}
-
-Deno.test('SamplingModule: listener fires on recordSampleSuccess', () => {
-  const provider = new TestSamplingProvider();
-  const sampling = new SamplingModule(provider);
-
-  const tree: TestTree = { hash: h('tree'), declaredWork: 100, descendantWeight: 0 };
-  provider.add(tree);
-  sampling.addTree(tree.hash);
-  sampling.recordSampleRequested(tree.hash);
-
-  const notifications: string[] = [];
-  sampling.onVerificationChange((hash) => {
-    notifications.push(hash.toHex());
-  });
-
-  sampling.recordSampleSuccess(tree.hash);
-
-  assertEquals(notifications.length, 1);
-  assertEquals(notifications[0], h('tree').toHex());
-});
-
-Deno.test('SamplingModule: listener fires on recordSampleFailure', () => {
-  const provider = new TestSamplingProvider();
-  const sampling = new SamplingModule(provider);
-
-  const tree: TestTree = { hash: h('tree'), declaredWork: 100, descendantWeight: 0 };
-  provider.add(tree);
-  sampling.addTree(tree.hash);
-  sampling.recordSampleRequested(tree.hash);
-
-  const notifications: string[] = [];
-  sampling.onVerificationChange((hash) => {
-    notifications.push(hash.toHex());
-  });
-
-  sampling.recordSampleFailure(tree.hash);
-
-  assertEquals(notifications.length, 1);
-  assertEquals(notifications[0], h('tree').toHex());
 });
 
 // -- TrustModule listener tests --------------------------------------

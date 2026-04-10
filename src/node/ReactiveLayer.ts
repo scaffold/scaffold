@@ -4,7 +4,7 @@ import { ResolvedClaim } from '../core/BlockDraft.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { BlockSpec, Output } from '../core/BlockCreationModule.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
-import { ProbeService } from '../core/ProbeService.ts';
+import { SamplingService } from '../core/SamplingService.ts';
 import { DraftManager } from '../core/DraftManager.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 
@@ -28,7 +28,7 @@ export interface ReactiveEvent {
   readonly result: BlockReceivedResult;
   readonly store: BlockStore;
   readonly consensus: ConsensusService;
-  readonly probe: ProbeService;
+  readonly sampling: SamplingService;
 }
 
 /** Actions that strategies can request. */
@@ -82,7 +82,7 @@ export class ReactiveLayer {
   private readonly coordinator: Coordinator;
   private readonly store: BlockStore;
   private readonly consensus: ConsensusService;
-  private readonly probe: ProbeService;
+  private readonly sampling: SamplingService;
   private readonly strategies: Strategy[];
   private readonly blockCreator: BlockCreator;
   private readonly privateKey: Uint8Array | null;
@@ -96,7 +96,7 @@ export class ReactiveLayer {
     coordinator: Coordinator;
     store: BlockStore;
     consensus: ConsensusService;
-    probe: ProbeService;
+    sampling: SamplingService;
     strategies: Strategy[];
     blockCreator: BlockCreator;
     privateKey?: Uint8Array | null;
@@ -107,7 +107,7 @@ export class ReactiveLayer {
     this.coordinator = deps.coordinator;
     this.store = deps.store;
     this.consensus = deps.consensus;
-    this.probe = deps.probe;
+    this.sampling = deps.sampling;
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
     this.privateKey = deps.privateKey ?? null;
@@ -155,7 +155,7 @@ export class ReactiveLayer {
       result,
       store: this.store,
       consensus: this.consensus,
-      probe: this.probe,
+      sampling: this.sampling,
     };
 
     // 4. Evaluate all strategies and collect actions

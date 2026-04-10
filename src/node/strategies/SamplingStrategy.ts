@@ -17,8 +17,8 @@ const DEFAULT_CONFIG: Required<SamplingStrategyConfig> = {
 /**
  * Reactive strategy that decides which blocks to verify via probing.
  *
- * On each event it checks for canonicality changes, queries the probe module
- * for the highest-priority unverified tree, initiates a probe descent, and
+ * On each event it checks for canonicality changes, queries the sampling module
+ * for the highest-priority unverified tree, initiates a sample descent, and
  * emits verify actions for the terminal block.
  */
 export class SamplingStrategy implements Strategy {
@@ -43,7 +43,7 @@ export class SamplingStrategy implements Strategy {
     const considered = new Set<HashPrimitive>();
 
     while (this.inFlight.size < this.config.maxConcurrent) {
-      const nextHash = event.probe.selectNext();
+      const nextHash = event.sampling.selectNext();
       if (!nextHash) break;
 
       const key = nextHash.toPrimitive();
@@ -55,14 +55,14 @@ export class SamplingStrategy implements Strategy {
       // Skip trees already being verified.
       if (this.inFlight.has(key)) continue;
 
-      const priority = event.probe.getPriority(nextHash);
+      const priority = event.sampling.getPriority(nextHash);
       if (priority <= this.config.minPriority) break;
 
-      // Initiate a probe to find the terminal block
-      const probeResult = event.probe.initProbe(nextHash);
-      if (!probeResult.terminal) continue;
+      // Initiate a sample to find the terminal block
+      const sampleResult = event.sampling.initSample(nextHash);
+      if (!sampleResult.terminal) continue;
 
-      const terminalHash = probeResult.blockHash;
+      const terminalHash = sampleResult.blockHash;
       this.inFlight.add(key);
 
       actions.push({

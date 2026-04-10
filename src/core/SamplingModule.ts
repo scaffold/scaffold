@@ -2,166 +2,321 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 
-/** Provider interface for the sampling module to access tree data. */
+// -- Provider -------------------------------------------------------
+
+/** Provider interface for the sampling module to access block data. */
 export interface SamplingProvider<BlockType> {
   /** Return the block for a given hash, or undefined if unknown. */
   getBlock(hash: Hash): BlockType | undefined;
 
-  /** Return the declared work of the tree rooted at this block. */
-  getDeclaredWork(block: BlockType): number;
+  /** Return the hash of a block. */
+  getHash(block: BlockType): Hash;
 
-  /** Return the verified descendant weight of the tree (from the consensus module). */
-  getDescendantWeight(block: BlockType): number;
+  /** Return the hashes of blocks this block aggregates. */
+  getAggregates(block: BlockType): Hash[];
+
+  /** Return the block's own verification cost (excluding subtrees). */
+  getSelfWeight(block: BlockType): number;
+
+  /**
+   * Return the subtree weights for each aggregate, as known by the parent block.
+   * These weights are available even when the aggregate blocks themselves are missing,
+   * because they come from the parent's aggregation cache.
+   */
+  getAggregateWeights(block: BlockType): number[];
 }
 
-/** Beta distribution parameters representing belief about a tree's work authenticity. */
-export interface WorkDistribution {
-  /** Successful samples (alpha parameter). */
-  readonly successes: number;
-  /** Failed samples including pending (beta - 1 parameter). */
-  readonly failures: number;
-  /** Expected value of the realness fraction: n / (n + f + 1). */
-  readonly mean: number;
+// -- Types ----------------------------------------------------------
+
+/** Per-block sample state tracking sample history and verification outcomes. */
+export interface BlockSampleState {
+  /** Sample log: -1 = self (terminal), i = aggregate index. */
+  readonly queries: number[];
+  /** Whether this block's own verification passed. */
+  selfVerified: boolean;
 }
 
-/** Snapshot of a tree's full sampling state. */
-export interface TreeSamplingState {
-  /** The tree's root block hash. */
-  readonly hash: Hash;
-  /** Declared work of the tree. */
-  readonly declaredWork: number;
-  /** The output Beta distribution. */
-  readonly distribution: WorkDistribution;
-  /** Verified weight: W * mean. */
-  readonly verifiedWork: number;
-  /** Current sampling priority score. */
-  readonly priority: number;
-}
+/** Result of initiating a sample on a block. */
+export type SampleResult =
+  | { terminal: true; blockHash: Hash }
+  | { terminal: false; reason: 'missing' | 'no_weight' | 'reused' };
 
 /**
- * The sampling module determines which trees to verify and maintains a
- * statistical model of each tree's work authenticity.
+ * Conflict info for a tree, used to compute expected canonicality change.
+ * The priority multiplier is: contested_weight / max(gap, epsilon).
+ */
+export interface SamplingConflictInfo {
+  /** The absolute weight gap to the closest conflict rival. */
+  weightGap: number;
+  /** Sum of this tree's weight and the rival's weight. */
+  contestedWeight: number;
+}
+
+// -- Module ---------------------------------------------------------
+
+/**
+ * The sampling module implements recursive weight sampling for the protocol.
  *
- * It outputs a Beta distribution per tree, consumed by the consensus module
- * for weight computation and used internally for verification prioritization.
+ * It maintains per-block sample state, descends through aggregation trees
+ * proportionally to weight, and computes a weight factor (responses/queries)
+ * that scales declared weight to verified weight.
  *
  * Fully self-contained -- depends only on SamplingProvider and Hash.
  */
 export class SamplingModule<BlockType> {
   private readonly _provider: SamplingProvider<BlockType>;
 
-  /** Per-tree sampling state: successes and failures (including pending). */
-  private _trees = new Map<HashPrimitive, { n: number; f: number }>();
+  /** Per-block sample state, keyed by hash primitive. */
+  private readonly _states = new Map<HashPrimitive, BlockSampleState>();
 
-  /** Listener for verification state changes. */
-  private _verificationListener?: (hash: Hash) => void;
+  /** Registered block hashes. */
+  private readonly _blocks = new Map<HashPrimitive, Hash>();
 
-  constructor(provider: SamplingProvider<BlockType>) {
+  /** Listeners for weight factor changes. */
+  private readonly _weightListeners: ((hash: Hash) => void)[] = [];
+
+  /** Optional: conflict info supplier for canonicality change multiplier. */
+  private _conflictInfo?: (hash: Hash) => SamplingConflictInfo | undefined;
+
+  /** Optional: random number generator (defaults to Math.random). */
+  private _random: () => number = Math.random;
+
+  constructor(provider: SamplingProvider<BlockType>, random?: () => number) {
     this._provider = provider;
+    if (random) this._random = random;
   }
 
-  /** Register a listener for verification state changes. */
-  onVerificationChange(cb: (hash: Hash) => void): void {
-    this._verificationListener = cb;
+  // -- Configuration ------------------------------------------------
+
+  /** Set the conflict info supplier for priority canonicality change multiplier. */
+  setConflictInfoSupplier(supplier: (hash: Hash) => SamplingConflictInfo | undefined): void {
+    this._conflictInfo = supplier;
   }
 
-  /** Register a tree to be tracked for sampling. */
-  addTree(hash: Hash): void {
+  // -- Listeners ----------------------------------------------------
+
+  /** Register a listener for weight factor changes. */
+  onWeightChange(cb: (hash: Hash) => void): void {
+    this._weightListeners.push(cb);
+  }
+
+  // -- Mutations ----------------------------------------------------
+
+  /** Register a block for sampling. Creates initial sample state. */
+  addBlock(hash: Hash): void {
     const key = hash.toPrimitive();
-    if (this._trees.has(key)) return;
-    this._trees.set(key, { n: 0, f: 0 });
+    if (this._states.has(key)) return;
+
+    const block = this._provider.getBlock(hash);
+    if (!block) return;
+
+    this._states.set(key, {
+      queries: [],
+      selfVerified: false,
+    });
+    this._blocks.set(key, hash);
   }
 
-  /** Record that a sample has been requested (counts as pending/failure). */
-  recordSampleRequested(treeHash: Hash): void {
-    const state = this._trees.get(treeHash.toPrimitive());
-    if (!state) return;
-    state.f += 1;
-  }
-
-  /** Record that a pending sample succeeded. Flips one failure to a success. */
-  recordSampleSuccess(treeHash: Hash): void {
-    const state = this._trees.get(treeHash.toPrimitive());
-    if (!state) return;
-    state.n += 1;
-    state.f -= 1;
-    this._verificationListener?.(treeHash);
-  }
-
-  /** Record that a pending sample failed (no state change -- already counted). */
-  recordSampleFailure(treeHash: Hash): void {
-    // Intentionally empty: pending samples are already counted as failures.
-    // But still notify listeners that verification state was evaluated.
-    this._verificationListener?.(treeHash);
-  }
-
-  /** Get the work distribution for a tree. Returns Beta(n, f+1) parameters. */
-  getDistribution(treeHash: Hash): WorkDistribution | undefined {
-    const state = this._trees.get(treeHash.toPrimitive());
-    if (!state) return undefined;
-    const { n, f } = state;
-    const mean = n === 0 ? 0 : n / (n + f + 1);
-    return { successes: n, failures: f, mean };
-  }
-
-  /** Get the verified work for a tree: W * n / (n + f + 1). */
-  getVerifiedWork(treeHash: Hash): number {
-    const block = this._provider.getBlock(treeHash);
-    if (!block) return 0;
-    const state = this._trees.get(treeHash.toPrimitive());
-    if (!state) return 0;
-    const { n, f } = state;
-    if (n === 0) return 0;
-    return this._provider.getDeclaredWork(block) * n / (n + f + 1);
+  /** Remove a block from sampling. */
+  removeBlock(hash: Hash): void {
+    const key = hash.toPrimitive();
+    this._states.delete(key);
+    this._blocks.delete(key);
   }
 
   /**
-   * Compute the sampling priority for a tree.
+   * Initiate a sample on a block. Randomly descends through the aggregation
+   * tree proportionally to weight until a terminal is reached.
    *
-   * priority = 2W(n+1)(f+1) / [(s+2)^2(s+3)] * W / (W+D)
-   *
-   * Uses proper Beta(n+1, f+1) for information value (how much could we learn),
-   * not the pessimistic output prior.
+   * Returns the terminal block to verify, or a reason the sample could not
+   * complete (missing block, zero weight, or reused existing sample).
    */
-  getPriority(treeHash: Hash): number {
-    const block = this._provider.getBlock(treeHash);
-    if (!block) return 0;
-    const state = this._trees.get(treeHash.toPrimitive());
+  initSample(hash: Hash): SampleResult {
+    const key = hash.toPrimitive();
+    let state = this._states.get(key);
+
+    // If we don't have state for this block yet, try to create it
+    if (!state) {
+      this.addBlock(hash);
+      state = this._states.get(key);
+    }
+    if (!state) {
+      return { terminal: false, reason: 'missing' };
+    }
+
+    const block = this._provider.getBlock(hash);
+    if (!block) {
+      return { terminal: false, reason: 'missing' };
+    }
+
+    // Query weights dynamically from the provider each time
+    const selfWeight = this._provider.getSelfWeight(block);
+    const aggregateWeights = this._provider.getAggregateWeights(block);
+    const totalWeight = selfWeight + aggregateWeights.reduce((a, b) => a + b, 0);
+
+    if (totalWeight <= 0) {
+      return { terminal: false, reason: 'no_weight' };
+    }
+
+    // Random descent proportional to weight
+    let sampleAt = this._random() * totalWeight;
+    const aggregates = this._provider.getAggregates(block);
+    for (let i = 0; i < aggregateWeights.length; i++) {
+      const w = aggregateWeights[i];
+      if (sampleAt < w) {
+        // Sample descends into aggregate i
+        state.queries.push(i);
+
+        const aggHash = aggregates[i];
+
+        // Ensure the aggregate has enough samples to match what we've sent
+        const requestedCount = state.queries.filter((q) => q === i).length;
+        const aggState = this._states.get(aggHash.toPrimitive());
+
+        if (!aggState || aggState.queries.length < requestedCount) {
+          // Recurse into the aggregate to generate a new sample
+          return this.initSample(aggHash);
+        }
+
+        // Aggregate already has enough samples -- reuse existing result.
+        // The query is recorded and will be counted via countVerifications.
+        return { terminal: false, reason: 'reused' };
+      }
+      sampleAt -= w;
+    }
+
+    // Self-weight was selected: this block is the terminal
+    state.queries.push(-1);
+    return { terminal: true, blockHash: hash };
+  }
+
+  /**
+   * Record verification result for a terminal block.
+   * Sets selfVerified and notifies listeners.
+   */
+  recordVerification(hash: Hash, success: boolean): void {
+    const state = this._states.get(hash.toPrimitive());
+    if (!state) return;
+
+    if (success) {
+      state.selfVerified = true;
+    }
+
+    // Notify listeners
+    for (const cb of this._weightListeners) cb(hash);
+  }
+
+  // -- Queries ------------------------------------------------------
+
+  /** Get the sample state for a block. */
+  getSampleState(hash: Hash): BlockSampleState | undefined {
+    return this._states.get(hash.toPrimitive());
+  }
+
+  /**
+   * Compute the weight factor for a block: verified responses / total queries.
+   * Returns 0 when no queries have been made (pessimistic default).
+   */
+  getWeightFactor(hash: Hash): number {
+    const state = this._states.get(hash.toPrimitive());
+    if (!state || state.queries.length === 0) return 0;
+
+    const verified = this.countVerifications(hash, state.queries.length);
+    return verified / state.queries.length;
+  }
+
+  /**
+   * Recursively count verified terminals, bounded by a limit.
+   *
+   * The limit ensures that a parent sampling a child N times only counts
+   * N of the child's results, preventing heavily-sampled subtrees from
+   * inflating their parent's confidence.
+   */
+  countVerifications(hash: Hash, limit: number): number {
+    const state = this._states.get(hash.toPrimitive());
     if (!state) return 0;
 
-    const w = this._provider.getDeclaredWork(block);
-    const d = this._provider.getDescendantWeight(block);
-    const { n, f } = state;
-    const s = n + f;
+    // Only consider the first `limit` queries at this level
+    const queries = state.queries.slice(0, limit);
+    let verifications = 0;
 
-    const swing = 2 * w * (n + 1) * (f + 1) / ((s + 2) * (s + 2) * (s + 3));
-    const dampening = w / (w + d);
-    return swing * dampening;
+    // Count verified terminals in each aggregate subtree
+    const blockHash = this._blocks.get(hash.toPrimitive());
+    const block = blockHash ? this._provider.getBlock(blockHash) : undefined;
+    if (block) {
+      const aggregates = this._provider.getAggregates(block);
+      for (let i = 0; i < aggregates.length; i++) {
+        const sampleCount = queries.filter((q) => q === i).length;
+        if (sampleCount === 0) continue;
+        verifications += this.countVerifications(aggregates[i], sampleCount);
+      }
+    }
+
+    // Count self-queries (only if self-verified)
+    if (state.selfVerified) {
+      verifications += queries.filter((q) => q === -1).length;
+    }
+
+    return verifications;
   }
 
-  /** Get full sampling state snapshot for a tree. */
-  getState(treeHash: Hash): TreeSamplingState | undefined {
-    const block = this._provider.getBlock(treeHash);
-    if (!block) return undefined;
-    if (!this._trees.has(treeHash.toPrimitive())) return undefined;
-
-    const distribution = this.getDistribution(treeHash)!;
-    return {
-      hash: treeHash,
-      declaredWork: this._provider.getDeclaredWork(block),
-      distribution,
-      verifiedWork: this.getVerifiedWork(treeHash),
-      priority: this.getPriority(treeHash),
-    };
+  /** Get total weight for a block (self + aggregates), queried dynamically. */
+  getTotalWeight(hash: Hash): number {
+    const block = this._provider.getBlock(hash);
+    if (!block) return 0;
+    const selfWeight = this._provider.getSelfWeight(block);
+    const aggregateWeights = this._provider.getAggregateWeights(block);
+    return selfWeight + aggregateWeights.reduce((a, b) => a + b, 0);
   }
 
-  /** Select the highest-priority tree to sample next, or undefined if none. */
+  /**
+   * Compute the scheduling priority for a block.
+   *
+   * Base priority is the expected weight swing from one sample:
+   *   swing = 2I(r+1)(q-r+1) / [(q+2)^2(q+3)]
+   *
+   * For trees in a conflict, priority is the expected canonicality change:
+   *   priority = swing * contested_weight / max(gap, epsilon)
+   *
+   * This represents "how much canonical weight could shift from one sample."
+   * Two large trees with a small gap have a very high expected change.
+   */
+  getPriority(hash: Hash): number {
+    const state = this._states.get(hash.toPrimitive());
+    if (!state) return 0;
+
+    const q = state.queries.length;
+    const r = q > 0 ? this.countVerifications(hash, q) : 0;
+    const incentive = this.getTotalWeight(hash);
+
+    if (incentive <= 0) return 0;
+
+    // Expected weight swing: 2I(r+1)(q-r+1) / [(q+2)^2(q+3)]
+    const alpha = r + 1;
+    const beta = q - r + 1;
+    const s = alpha + beta; // = q + 2
+    const swing = (2 * incentive * alpha * beta) / (s * s * (s + 1));
+
+    // Expected canonicality change multiplier
+    if (this._conflictInfo) {
+      const info = this._conflictInfo(hash);
+      if (info) {
+        const epsilon = 1; // minimum gap to avoid division by zero
+        return swing * info.contestedWeight / Math.max(info.weightGap, epsilon);
+      }
+    }
+
+    return swing;
+  }
+
+  /** Select the highest-priority block to sample next, or undefined if none. */
   selectNext(): Hash | undefined {
     let bestHash: Hash | undefined;
     let bestPriority = -1;
 
-    for (const [key] of this._trees) {
-      const hash = Hash.fromPrimitive(key);
+    for (const [key] of this._states) {
+      const hash = this._blocks.get(key);
+      if (!hash) continue;
       const priority = this.getPriority(hash);
       if (priority > bestPriority) {
         bestPriority = priority;

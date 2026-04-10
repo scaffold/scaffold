@@ -1,7 +1,7 @@
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
-import { ProbeModule, ProbeProvider } from '../src/core/ProbeModule.ts';
+import { SamplingModule, SamplingProvider } from '../src/core/SamplingModule.ts';
 import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { SamplingStrategy } from '../src/node/strategies/SamplingStrategy.ts';
@@ -15,7 +15,7 @@ interface TestBlock {
   subtreeWeight: number;
 }
 
-class TestProvider implements ProbeProvider<TestBlock> {
+class TestProvider implements SamplingProvider<TestBlock> {
   private blocks = new Map<HashPrimitive, TestBlock>();
 
   add(block: TestBlock): void {
@@ -52,9 +52,9 @@ function block(name: string, weight: number): TestBlock {
   return { hash: h(name), aggregates: [], selfWeight: weight, subtreeWeight: weight };
 }
 
-function setupProbe(...blocks: TestBlock[]): ProbeModule<TestBlock> {
+function setupSampling(...blocks: TestBlock[]): SamplingModule<TestBlock> {
   const provider = new TestProvider();
-  const module = new ProbeModule<TestBlock>(provider);
+  const module = new SamplingModule<TestBlock>(provider);
   for (const b of blocks) {
     provider.add(b);
     module.addBlock(b.hash);
@@ -67,7 +67,7 @@ function stubBlock(blockHash: Hash): Block {
 }
 
 function makeEvent(
-  probe: ProbeModule<TestBlock>,
+  sampling: SamplingModule<TestBlock>,
   blockHash: Hash,
   canonicalityChanges: { hash: Hash; canonical: boolean }[],
 ): ReactiveEvent {
@@ -82,45 +82,45 @@ function makeEvent(
     result,
     store: new BlockStore(),
     consensus: {} as ReactiveEvent['consensus'],
-    probe: probe as unknown as ReactiveEvent['probe'],
+    sampling: sampling as unknown as ReactiveEvent['sampling'],
   };
 }
 
 function canonicalEvent(
-  probe: ProbeModule<TestBlock>,
+  sampling: SamplingModule<TestBlock>,
   blockName: string,
 ): ReactiveEvent {
-  return makeEvent(probe, h(blockName), [{ hash: h(blockName), canonical: true }]);
+  return makeEvent(sampling, h(blockName), [{ hash: h(blockName), canonical: true }]);
 }
 
 // -- Tests -------------------------------------------------------
 
-Deno.test('new canonical block triggers verify action via probe', () => {
-  const probe = setupProbe(block('A', 1000));
+Deno.test('new canonical block triggers verify action via sampling', () => {
+  const sampling = setupSampling(block('A', 1000));
   const strategy = new SamplingStrategy();
 
-  const actions = strategy.evaluate(canonicalEvent(probe, 'A'));
+  const actions = strategy.evaluate(canonicalEvent(sampling, 'A'));
 
   assertEquals(actions.length, 1);
   assertEquals(actions[0].type, 'verify');
 });
 
 Deno.test('in-flight blocks are not re-verified', () => {
-  const probe = setupProbe(block('A', 1000));
+  const sampling = setupSampling(block('A', 1000));
   const strategy = new SamplingStrategy();
 
-  const first = strategy.evaluate(canonicalEvent(probe, 'A'));
+  const first = strategy.evaluate(canonicalEvent(sampling, 'A'));
   assertEquals(first.length, 1);
 
-  const second = strategy.evaluate(canonicalEvent(probe, 'A'));
+  const second = strategy.evaluate(canonicalEvent(sampling, 'A'));
   assertEquals(second.length, 0);
 });
 
 Deno.test('maxConcurrent limit is respected', () => {
-  const probe = setupProbe(block('A', 1000), block('B', 900), block('C', 800), block('D', 700));
+  const sampling = setupSampling(block('A', 1000), block('B', 900), block('C', 800), block('D', 700));
   const strategy = new SamplingStrategy({ maxConcurrent: 2 });
 
-  const event = makeEvent(probe, h('A'), [
+  const event = makeEvent(sampling, h('A'), [
     { hash: h('A'), canonical: true },
     { hash: h('B'), canonical: true },
     { hash: h('C'), canonical: true },
@@ -133,18 +133,18 @@ Deno.test('maxConcurrent limit is respected', () => {
 });
 
 Deno.test('minPriority threshold filters low-priority blocks', () => {
-  const probe = setupProbe(block('low', 1));
+  const sampling = setupSampling(block('low', 1));
   const strategy = new SamplingStrategy({ minPriority: 1000 });
 
-  const actions = strategy.evaluate(canonicalEvent(probe, 'low'));
+  const actions = strategy.evaluate(canonicalEvent(sampling, 'low'));
   assertEquals(actions.length, 0);
 });
 
 Deno.test('completeVerification removes from inFlight', () => {
-  const probe = setupProbe(block('A', 1000));
+  const sampling = setupSampling(block('A', 1000));
   const strategy = new SamplingStrategy({ maxConcurrent: 1 });
 
-  strategy.evaluate(canonicalEvent(probe, 'A'));
+  strategy.evaluate(canonicalEvent(sampling, 'A'));
   assertEquals(strategy.inFlightCount, 1);
 
   strategy.completeVerification(h('A'));
@@ -152,34 +152,34 @@ Deno.test('completeVerification removes from inFlight', () => {
 });
 
 Deno.test('no action when no blocks need verification', () => {
-  const probe = new ProbeModule<TestBlock>(new TestProvider());
+  const sampling = new SamplingModule<TestBlock>(new TestProvider());
   const strategy = new SamplingStrategy();
 
-  const event = makeEvent(probe, h('X'), [{ hash: h('X'), canonical: true }]);
+  const event = makeEvent(sampling, h('X'), [{ hash: h('X'), canonical: true }]);
   const actions = strategy.evaluate(event);
   assertEquals(actions.length, 0);
 });
 
 Deno.test('no action when event has no canonical changes', () => {
-  const probe = setupProbe(block('A', 1000));
+  const sampling = setupSampling(block('A', 1000));
   const strategy = new SamplingStrategy();
 
-  const event = makeEvent(probe, h('A'), [{ hash: h('A'), canonical: false }]);
+  const event = makeEvent(sampling, h('A'), [{ hash: h('A'), canonical: false }]);
   const actions = strategy.evaluate(event);
   assertEquals(actions.length, 0);
 });
 
 Deno.test('completing a verification allows that slot to be reused', () => {
-  const probe = setupProbe(block('A', 1000), block('B', 900));
+  const sampling = setupSampling(block('A', 1000), block('B', 900));
   const strategy = new SamplingStrategy({ maxConcurrent: 1 });
 
-  const first = strategy.evaluate(canonicalEvent(probe, 'A'));
+  const first = strategy.evaluate(canonicalEvent(sampling, 'A'));
   assertEquals(first.length, 1);
 
   // Complete A -- slot is free
   strategy.completeVerification(h('A'));
 
   // Now B can be verified
-  const second = strategy.evaluate(canonicalEvent(probe, 'B'));
+  const second = strategy.evaluate(canonicalEvent(sampling, 'B'));
   assertEquals(second.length, 1);
 });

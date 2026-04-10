@@ -2,7 +2,7 @@ import { Hash } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
-import { ProbeService } from '../src/core/ProbeService.ts';
+import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
@@ -31,7 +31,7 @@ export class SimNode {
   readonly store: BlockStore;
   readonly coordinator: Coordinator;
   readonly consensus: ConsensusService;
-  readonly probe: ProbeService;
+  readonly sampling: SamplingService;
   readonly trust: TrustService;
   readonly gossip: GossipService;
   readonly blockCreation: BlockCreationService;
@@ -45,7 +45,7 @@ export class SimNode {
     // Eagerly initialize all services so they're wired up
     this.store = this.ctx.get(BlockStore);
     this.consensus = this.ctx.get(ConsensusService);
-    this.probe = this.ctx.get(ProbeService);
+    this.sampling = this.ctx.get(SamplingService);
     this.trust = this.ctx.get(TrustService);
     this.gossip = this.ctx.get(GossipService);
     this.blockCreation = this.ctx.get(BlockCreationService);

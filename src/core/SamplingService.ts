@@ -1,33 +1,44 @@
+import { Block, BlockStore, getAggregationData } from './Block.ts';
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore } from './Block.ts';
 import { SamplingModule, SamplingProvider } from './SamplingModule.ts';
-import { ConsensusService } from './ConsensusService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
 class SamplingProviderAdapter implements SamplingProvider<Block> {
   constructor(
     private readonly store: BlockStore,
-    private readonly consensus: ConsensusService,
   ) {}
 
   getBlock(hash: Hash): Block | undefined {
     return this.store.get(hash);
   }
 
-  getDeclaredWork(block: Block): number {
-    return block.declaredWeight;
+  getHash(block: Block): Hash {
+    return block.hash;
   }
 
-  getDescendantWeight(block: Block): number {
-    return this.consensus.getDescendantWeight(block.hash);
+  getAggregates(block: Block): Hash[] {
+    return block.aggregates;
+  }
+
+  getSelfWeight(block: Block): number {
+    return block.selfWeight ?? block.declaredWeight;
+  }
+
+  // TODO(@joel): aggregateWeights from the aggregation cache stores throughput
+  // (per-subtree declared weights), but sample descent should be proportional to
+  // verification cost. These are related (effective_weight = verification_cost)
+  // but may diverge. Revisit when the aggregation incentive derivation is finalized.
+  getAggregateWeights(block: Block): number[] {
+    const aggData = getAggregationData(block);
+    if (aggData) return aggData.aggregateWeights;
+    return [];
   }
 }
 
-/** SamplingModule wired to BlockStore and ConsensusService via ProtocolContext. */
+/** SamplingModule wired to BlockStore via ProtocolContext. */
 export class SamplingService extends SamplingModule<Block> {
   constructor(ctx: ProtocolContext) {
     const store = ctx.get(BlockStore);
-    const consensus = ctx.get(ConsensusService);
-    super(new SamplingProviderAdapter(store, consensus));
+    super(new SamplingProviderAdapter(store));
   }
 }

@@ -69,7 +69,7 @@ function makeEvent(
     result,
     store,
     consensus: {} as ReactiveEvent['consensus'],
-    probe: {} as ReactiveEvent['probe'],
+    sampling: {} as ReactiveEvent['sampling'],
   };
 }
 
