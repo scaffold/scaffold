@@ -1,10 +1,10 @@
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { BlockAwareness } from '../src/core/GossipModule.ts';
+import { BlockAwareness } from '../src/node/GossipModule.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
-import { GossipService } from '../src/core/GossipService.ts';
+import { GossipService } from '../src/node/GossipService.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { Scaffold } from '../src/Scaffold.ts';

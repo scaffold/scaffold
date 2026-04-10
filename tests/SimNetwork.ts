@@ -4,12 +4,17 @@ import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
-import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { ExecutionService } from '../src/core/ExecutionService.ts';
 import { VerificationService } from '../src/core/VerificationService.ts';
 import { BlockReceivedResult, Coordinator } from '../src/core/Coordinator.ts';
-import { BlockAwareness, PushAction } from '../src/core/GossipModule.ts';
+import { BlockAwareness, PushAction } from '../src/node/GossipModule.ts';
+import { GossipService } from '../src/node/GossipService.ts';
+
+/** Result of SimNode.receiveBlock: protocol result + gossip push actions. */
+export interface SimBlockResult extends BlockReceivedResult {
+  pushActions: PushAction[];
+}
 
 /** Simple set-based block awareness tracker. */
 class SetAwareness implements BlockAwareness {
@@ -47,16 +52,18 @@ export class SimNode {
     this.consensus = this.ctx.get(ConsensusService);
     this.sampling = this.ctx.get(SamplingService);
     this.trust = this.ctx.get(TrustService);
-    this.gossip = this.ctx.get(GossipService);
+    this.gossip = new GossipService(this.ctx);
     this.blockCreation = this.ctx.get(BlockCreationService);
     this.execution = this.ctx.get(ExecutionService);
     this.verification = this.ctx.get(VerificationService);
     this.coordinator = this.ctx.get(Coordinator);
   }
 
-  /** Process a received block. */
-  receiveBlock(block: Block, fromPeer: string | null): BlockReceivedResult {
-    return this.coordinator.blockReceived(block, fromPeer);
+  /** Process a received block through coordinator and gossip. */
+  receiveBlock(block: Block, fromPeer: string | null): SimBlockResult {
+    const result = this.coordinator.blockReceived(block, fromPeer);
+    const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
+    return { ...result, pushActions };
   }
 }
 
@@ -89,8 +96,8 @@ export class SimNetwork {
    * The source node receives it as self-originated (fromPeer=null).
    * All other nodes receive it from the source node.
    */
-  deliverToAll(block: Block, sourceNodeId: string): Map<string, BlockReceivedResult> {
-    const results = new Map<string, BlockReceivedResult>();
+  deliverToAll(block: Block, sourceNodeId: string): Map<string, SimBlockResult> {
+    const results = new Map<string, SimBlockResult>();
 
     for (const [nodeId, node] of this.nodes) {
       const fromPeer = nodeId === sourceNodeId ? null : sourceNodeId;
@@ -109,8 +116,8 @@ export class SimNetwork {
     sourceNodeId: string,
     block: Block,
     pushActions: PushAction[],
-  ): Map<string, BlockReceivedResult> {
-    const results = new Map<string, BlockReceivedResult>();
+  ): Map<string, SimBlockResult> {
+    const results = new Map<string, SimBlockResult>();
 
     for (const action of pushActions) {
       const targetNode = this.nodes.get(action.peer);

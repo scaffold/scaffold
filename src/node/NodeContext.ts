@@ -37,7 +37,7 @@ import {
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
-import { GossipService } from '../core/GossipService.ts';
+import { GossipService } from './GossipService.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
 import { Hash } from '../util/Hash.ts';
@@ -98,7 +98,7 @@ export class NodeContext {
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
     this.sampling = this.protocolContext.get(SamplingService);
-    this.gossip = this.protocolContext.get(GossipService);
+    this.gossip = new GossipService(this.protocolContext);
     this.trust = this.protocolContext.get(TrustService);
     this.blockCreation = this.protocolContext.get(BlockCreationService);
     this.outputClaims = this.protocolContext.get(OutputClaimService);
@@ -198,6 +198,7 @@ export class NodeContext {
       sampling: this.sampling,
       strategies,
       blockCreator,
+      gossip: this.gossip,
       draftManager: this.draftManager,
       onNotifyFetch: config.onNotifyFetch,
       onBlockProcessed: (block: Block) => {

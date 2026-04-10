@@ -7,6 +7,8 @@ import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { DraftManager } from '../core/DraftManager.ts';
 import { Coordinator } from '../core/Coordinator.ts';
+import { GossipService } from './GossipService.ts';
+import { PushAction } from './GossipModule.ts';
 
 // -- Future types (placeholders until their modules exist) ----------
 
@@ -87,9 +89,11 @@ export class ReactiveLayer {
   private readonly blockCreator: BlockCreator;
   private readonly privateKey: Uint8Array | null;
 
+  private readonly gossip?: GossipService;
   private readonly draftManager?: DraftManager;
 
   private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
+  private readonly onPushActions?: (actions: PushAction[], block: Block) => void;
   private readonly onBlockProcessed?: (block: Block) => void;
 
   constructor(deps: {
@@ -100,8 +104,10 @@ export class ReactiveLayer {
     strategies: Strategy[];
     blockCreator: BlockCreator;
     privateKey?: Uint8Array | null;
+    gossip?: GossipService;
     draftManager?: DraftManager;
     onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
+    onPushActions?: (actions: PushAction[], block: Block) => void;
     onBlockProcessed?: (block: Block) => void;
   }) {
     this.coordinator = deps.coordinator;
@@ -111,8 +117,10 @@ export class ReactiveLayer {
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
     this.privateKey = deps.privateKey ?? null;
+    this.gossip = deps.gossip;
     this.draftManager = deps.draftManager;
     this.onNotifyFetch = deps.onNotifyFetch;
+    this.onPushActions = deps.onPushActions;
     this.onBlockProcessed = deps.onBlockProcessed;
   }
 
@@ -140,15 +148,23 @@ export class ReactiveLayer {
     // 1. Run the block through the coordinator
     const result = this.coordinator.blockReceived(block, fromPeer);
 
+    // 2. Gossip: compute push targets (node-layer concern)
+    if (this.gossip) {
+      const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
+      if (pushActions.length > 0) {
+        this.onPushActions?.(pushActions, block);
+      }
+    }
+
     // Notify that block was processed (for BlockRecordSet)
     this.onBlockProcessed?.(block);
 
-    // 2. Skip strategy evaluation for blocks created in this cycle
+    // 3. Skip strategy evaluation for blocks created in this cycle
     if (cycleCreated.has(block.hash.toPrimitive())) {
       return;
     }
 
-    // 3. Build the reactive event
+    // 4. Build the reactive event
     const event: ReactiveEvent = {
       block,
       fromPeer,
@@ -158,7 +174,7 @@ export class ReactiveLayer {
       sampling: this.sampling,
     };
 
-    // 4. Evaluate all strategies and collect actions
+    // 5. Evaluate all strategies and collect actions
     const actions: Action[] = [];
     for (const strategy of this.strategies) {
       const strategyActions = strategy.evaluate(event);
@@ -167,7 +183,7 @@ export class ReactiveLayer {
 
     allActions.push(...actions);
 
-    // 5. Execute actions
+    // 6. Execute actions
     for (const action of actions) {
       switch (action.type) {
         case 'createBlock': {

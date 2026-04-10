@@ -4,8 +4,8 @@ import { BlockSpec } from '../core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
-import { GossipService } from '../core/GossipService.ts';
-import { BlockAwareness } from '../core/GossipModule.ts';
+import { GossipService } from '../node/GossipService.ts';
+import { BlockAwareness } from '../node/GossipModule.ts';
 import { composeGenesisPacket } from '../core/Packet.ts';
 import { Scaffold } from '../Scaffold.ts';
 

@@ -42,7 +42,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [conflict.md](docs/protocol/conflict.md) | [OutputClaimModule.ts](src/core/OutputClaimModule.ts) | [OutputClaimService.ts](src/core/OutputClaimService.ts) | |
 | [sampling.md](docs/protocol/sampling.md) | [SamplingModule.ts](src/core/SamplingModule.ts) | [SamplingService.ts](src/core/SamplingService.ts) | |
 | [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
-| [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/core/GossipModule.ts) | [GossipService.ts](src/core/GossipService.ts) | |
+| [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/node/GossipModule.ts) | [GossipService.ts](src/node/GossipService.ts) | |
 | [block-creation.md](docs/protocol/block-creation.md) | [BlockCreationModule.ts](src/core/BlockCreationModule.ts) | [BlockCreationService.ts](src/core/BlockCreationService.ts) | [Block.ts](src/core/Block.ts) |
 | [anchoring.md](docs/protocol/anchoring.md) | [AnchoringModule.ts](src/core/AnchoringModule.ts) | — | [OutputMapping.ts](src/core/OutputMapping.ts), [Block.ts](src/core/Block.ts) |
 | [dag.md](docs/protocol/dag.md) | — (structural, spans modules) | — | [Block.ts](src/core/Block.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |

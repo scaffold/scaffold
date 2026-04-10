@@ -227,7 +227,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Consensus | [`ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | [`ConsensusService.ts`](../../src/core/ConsensusService.ts) |
 | Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
-| Gossip | [`GossipModule.ts`](../../src/core/GossipModule.ts) | [`GossipService.ts`](../../src/core/GossipService.ts) |
+| Gossip | [`GossipModule.ts`](../../src/node/GossipModule.ts) | [`GossipService.ts`](../../src/node/GossipService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
 | Anchoring | [`AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | — |
 | Execution Queue | [`ExecutionQueueModule.ts`](../../src/core/ExecutionQueueModule.ts) | [`ExecutionQueueService.ts`](../../src/core/ExecutionQueueService.ts) |

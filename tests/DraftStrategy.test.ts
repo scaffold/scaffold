@@ -38,7 +38,6 @@ function makeEvent(
     block,
     fromPeer: null,
     result: {
-      pushActions: [],
       canonicalityChanges,
       newConflicts: [],
     },

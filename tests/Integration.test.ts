@@ -16,7 +16,6 @@ import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
-import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { ExecutionService } from '../src/core/ExecutionService.ts';
 import type { Contract } from '../src/contracts/Contract.ts';

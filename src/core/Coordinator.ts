@@ -4,18 +4,15 @@ import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
-import { GossipService } from './GossipService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
 import { VerificationService } from './VerificationService.ts';
 import { ExecutionQueueService } from './ExecutionQueueService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
-import { PushAction } from './GossipModule.ts';
 import { VerificationResult } from './VerificationModule.ts';
 
 /** Result of processing a block received event. */
 export interface BlockReceivedResult {
-  pushActions: PushAction[];
   canonicalityChanges: { hash: Hash; canonical: boolean }[];
   newConflicts: [Hash, Hash][];
 }
@@ -31,7 +28,6 @@ export class Coordinator {
   private readonly store: BlockStore;
   private readonly consensus: ConsensusService;
   private readonly sampling: SamplingService;
-  private readonly gossip: GossipService;
   private readonly blockCreation: BlockCreationService;
   private readonly outputClaims: OutputClaimService;
 
@@ -46,7 +42,6 @@ export class Coordinator {
     this.store = ctx.get(BlockStore);
     this.consensus = ctx.get(ConsensusService);
     this.sampling = ctx.get(SamplingService);
-    this.gossip = ctx.get(GossipService);
     this.blockCreation = ctx.get(BlockCreationService);
     this.outputClaims = ctx.get(OutputClaimService);
 
@@ -106,9 +101,8 @@ export class Coordinator {
    * 2. Reset pendingConflicts, register output claims and trigger migration
    *    (conflicts fire via callback -> addConflict + collect)
    * 3. Add to consensus module + set initial weight (unverified = 0)
-   * 4. Gossip notification
-   * 5. Flush canonical view changes
-   * 6. Update sampling module on canonicality changes
+   * 4. Flush canonical view changes
+   * 5. Update sampling module on canonicality changes
    */
   blockReceived(block: Block, fromPeer: string | null): BlockReceivedResult {
     // 1. Store the block
@@ -125,15 +119,12 @@ export class Coordinator {
     const weightVector = getBlockWeightVector(block);
     this.consensus.setVerifiedWeight(block.hash, weightVector);
 
-    // 4. Gossip
-    const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
-
-    // 5. Flush canonical view -- fires listener which populates canonicalityChanges
+    // 4. Flush canonical view -- fires listener which populates canonicalityChanges
     this.canonicalityChanges.length = 0;
     this.consensus.flushChanges();
     const canonicalityChanges = [...this.canonicalityChanges];
 
-    // 6. Update sampling module on canonicality changes
+    // 5. Update sampling module on canonicality changes
     for (const change of canonicalityChanges) {
       if (change.canonical) {
         this.sampling.addBlock(change.hash);
@@ -143,7 +134,7 @@ export class Coordinator {
     }
 
     const newConflicts = [...this.pendingConflicts];
-    return { pushActions, canonicalityChanges, newConflicts };
+    return { canonicalityChanges, newConflicts };
   }
 
   // -- Computation methods -------------------------------------------

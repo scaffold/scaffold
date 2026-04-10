@@ -10,9 +10,8 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive } from '../../src/util/Hash.ts';
 import { Block } from '../../src/core/Block.ts';
-import { BlockReceivedResult } from '../../src/core/Coordinator.ts';
-import { BlockAwareness, PushAction } from '../../src/core/GossipModule.ts';
-import { SimNode } from '../SimNetwork.ts';
+import { BlockAwareness, PushAction } from '../../src/node/GossipModule.ts';
+import { SimBlockResult, SimNode } from '../SimNetwork.ts';
 
 /** Simple set-based block awareness tracker. */
 class SetAwareness implements BlockAwareness {
@@ -97,7 +96,7 @@ export class TestNetwork {
     block: Block,
     nodeId: string,
     fromPeer: string | null = null,
-  ): BlockReceivedResult {
+  ): SimBlockResult {
     const node = this.nodes.get(nodeId);
     if (!node) throw new Error(`Node ${nodeId} not found`);
     return node.receiveBlock(block, fromPeer);
@@ -115,7 +114,7 @@ export class TestNetwork {
    * Submit a block to a source node and queue gossip propagation.
    * The source node receives the block as self-originated (fromPeer=null).
    */
-  submitBlock(block: Block, sourceNodeId: string): BlockReceivedResult {
+  submitBlock(block: Block, sourceNodeId: string): SimBlockResult {
     const node = this.nodes.get(sourceNodeId);
     if (!node) throw new Error(`Node ${sourceNodeId} not found`);
     const result = node.receiveBlock(block, null);
@@ -127,7 +126,7 @@ export class TestNetwork {
    * Submit a block and immediately flush all gossip propagation.
    * Convenience for tests that don't need timing control.
    */
-  submitAndFlush(block: Block, sourceNodeId: string): BlockReceivedResult {
+  submitAndFlush(block: Block, sourceNodeId: string): SimBlockResult {
     const result = this.submitBlock(block, sourceNodeId);
     this.flush();
     return result;
@@ -247,7 +246,7 @@ export class TestNetwork {
    * Manually synchronize a block from one node to another.
    * Useful after partitions heal to manually propagate blocks.
    */
-  syncBlock(hash: Hash, fromNodeId: string, toNodeId: string): BlockReceivedResult | null {
+  syncBlock(hash: Hash, fromNodeId: string, toNodeId: string): SimBlockResult | null {
     const fromNode = this.nodes.get(fromNodeId);
     const toNode = this.nodes.get(toNodeId);
     if (!fromNode || !toNode) return null;

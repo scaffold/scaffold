@@ -7,7 +7,6 @@ import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
-import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import {
@@ -57,7 +56,6 @@ function setupStack() {
   const consensus = ctx.get(ConsensusService);
   const sampling = ctx.get(SamplingService);
   ctx.get(TrustService);
-  ctx.get(GossipService);
   ctx.get(BlockCreationService);
   const coordinator = ctx.get(Coordinator);
 
@@ -364,7 +362,6 @@ Deno.test('ReactiveLayer: event exposes coordinator result', () => {
   // The event should have a result with the expected shape
   const event = strategy.calls[0];
   assert(event.result !== undefined);
-  assert(Array.isArray(event.result.pushActions));
   assert(Array.isArray(event.result.canonicalityChanges));
   assert(Array.isArray(event.result.newConflicts));
 });

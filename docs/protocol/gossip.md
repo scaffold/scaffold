@@ -357,5 +357,5 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 
 | File | Description |
 |------|-------------|
-| [`src/core/GossipModule.ts`](../../src/core/GossipModule.ts) | Core algorithm: utility scoring, delivery matrix, bandwidth budgeting |
-| [`src/core/GossipService.ts`](../../src/core/GossipService.ts) | Wired adapter using concrete `Block` type |
+| [`src/node/GossipModule.ts`](../../src/node/GossipModule.ts) | Core algorithm: utility scoring, delivery matrix, bandwidth budgeting |
+| [`src/node/GossipService.ts`](../../src/node/GossipService.ts) | Wired adapter using concrete `Block` type |

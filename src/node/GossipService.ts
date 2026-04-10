@@ -6,10 +6,10 @@ import {
   INSURANCE_CONTRACT,
   getBlockWeightVector,
   SIGNATURE_CONTRACT,
-} from './Block.ts';
+} from '../core/Block.ts';
 import { GossipConfig, GossipModule, GossipProvider } from './GossipModule.ts';
-import { TrustService } from './TrustService.ts';
-import { ProtocolContext } from './ProtocolContext.ts';
+import { TrustService } from '../core/TrustService.ts';
+import { ProtocolContext } from '../core/ProtocolContext.ts';
 
 class GossipProviderAdapter implements GossipProvider {
   constructor(

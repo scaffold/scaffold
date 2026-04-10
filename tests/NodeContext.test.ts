@@ -235,6 +235,5 @@ Deno.test('NodeContext: processBlock result includes canonicality changes', () =
   // The result should contain the coordinator's full BlockReceivedResult
   assert(lastEvent.event.result);
   assert(Array.isArray(lastEvent.event.result.canonicalityChanges));
-  assert(Array.isArray(lastEvent.event.result.pushActions));
   assert(Array.isArray(lastEvent.event.result.newConflicts));
 });

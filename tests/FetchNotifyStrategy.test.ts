@@ -59,7 +59,6 @@ function makeEvent(
   canonicalityChanges: { hash: Hash; canonical: boolean }[],
 ): ReactiveEvent {
   const result: BlockReceivedResult = {
-    pushActions: [],
     canonicalityChanges,
     newConflicts: [],
   };
