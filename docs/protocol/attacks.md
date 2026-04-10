@@ -458,7 +458,7 @@ Attacks targeting the contract execution or verification layer.
 
 **Status**: Defended (by cryptographic hardness of secp256k1).
 
-**Refs**: `src/core/Packet.ts` lines 130-165, `src/core/SignatureContract.ts`.
+**Refs**: `src/core/Packet.ts` lines 130-165, `src/contracts/SignatureContract.ts`.
 
 ---
 

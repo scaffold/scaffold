@@ -270,8 +270,8 @@ Anchor and aggregates are determined simultaneously. See [draft-blocks.md](draft
 
 | File | Description |
 |------|-------------|
-| [`src/core/AggregationContract.ts`](../../src/core/AggregationContract.ts) | Aggregation contract function and threshold constant |
+| [`src/contracts/AggregationContract.ts`](../../src/contracts/AggregationContract.ts) | Aggregation contract, `AggregationData`, `makeAggregationOutput()`, cache encode/decode, threshold constant |
 | [`src/core/OutputSpace.ts`](../../src/core/OutputSpace.ts) | Claim resolution, claim masks, UTXO computation, total ordering |
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData`, `makeAggregationOutput()`, cache encode/decode |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `AGGREGATION_CONTRACT` hash, `getBlockClaimMask()`, `getBlockWeightVector()` |
 | [`src/core/ContractGenerator.ts`](../../src/core/ContractGenerator.ts) | Runs contracts via GeneratingEnv to build drafts |
 | [`src/node/strategies/DraftStrategy.ts`](../../src/node/strategies/DraftStrategy.ts) | Triggers drafts for unclaimed outputs (including aggregation markers) |

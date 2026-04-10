@@ -159,7 +159,8 @@ Each protocol module interacts with contract output data through its provider in
 
 | File | Description |
 |------|-------------|
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `AggregationData` type, encode/decode helpers, `AGGREGATION_CONTRACT` hash |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `AGGREGATION_CONTRACT` hash |
+| [`src/contracts/AggregationContract.ts`](../../src/contracts/AggregationContract.ts) | `AggregationData` type, encode/decode helpers |
 | [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Produces aggregation contract output during block construction |
 | [`src/core/ConsensusService.ts`](../../src/core/ConsensusService.ts) | Reconstructs weight vector from `declaredWeight` + `chainWeights` |
 | [`src/core/GossipService.ts`](../../src/core/GossipService.ts) | Scans outputs for collateral target and payment target |

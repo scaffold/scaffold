@@ -13,7 +13,7 @@ import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
 import { type ContractEnv, ContractRejection } from '../src/core/ContractEnv.ts';
-import type { Contract } from '../src/core/Contract.ts';
+import type { Contract } from '../src/contracts/Contract.ts';
 
 // -- Helpers -------------------------------------------------------
 

@@ -4,7 +4,7 @@ import {
   BlockStore,
   getBlockWeightVector,
 } from './Block.ts';
-import { getAggregationData } from './AggregationContract.ts';
+import { getAggregationData } from '../contracts/AggregationContract.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
 import {
   OutputSpaceModule,

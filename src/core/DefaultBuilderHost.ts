@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/output-data.md
 
-import type { BuilderHost, ValueDescriptor } from './Contract.ts';
+import type { BuilderHost, ValueDescriptor } from '../contracts/Contract.ts';
 
 /** Metadata about a field the builder requested. */
 export interface FieldRequest {

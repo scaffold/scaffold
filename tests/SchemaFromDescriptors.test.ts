@@ -5,9 +5,9 @@ import {
   fieldsToDefaultObject,
   yamlToBuilderValues,
 } from "../explorer/src/schemaFromDescriptors.ts";
-import { signatureContract } from "../src/core/SignatureContract.ts";
-import { collateralContract } from "../src/core/CollateralContract.ts";
-import { insuranceContract } from "../src/core/InsuranceContract.ts";
+import { signatureContract } from "../src/contracts/SignatureContract.ts";
+import { collateralContract } from "../src/contracts/CollateralContract.ts";
+import { insuranceContract } from "../src/contracts/InsuranceContract.ts";
 
 Deno.test("descriptorToJsonSchema: signature params produces bytes field", () => {
   const host = new DefaultBuilderHost();

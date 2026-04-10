@@ -11,7 +11,7 @@ import {
   getBlockWeightVector,
   RESULT_CONTRACT,
 } from '../src/core/Block.ts';
-import { encodeAggregationData } from '../src/core/AggregationContract.ts';
+import { encodeAggregationData } from '../src/contracts/AggregationContract.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
@@ -19,7 +19,7 @@ import { TrustService } from '../src/core/TrustService.ts';
 import { GossipService } from '../src/core/GossipService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { ExecutionService } from '../src/core/ExecutionService.ts';
-import type { Contract } from '../src/core/Contract.ts';
+import type { Contract } from '../src/contracts/Contract.ts';
 import { type ContractEnv, ContractRejection } from '../src/core/ContractEnv.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { SimNetwork, SimNode } from './SimNetwork.ts';

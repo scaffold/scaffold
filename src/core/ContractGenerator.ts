@@ -10,7 +10,7 @@ import {
   ContractRejection,
   type GeneratingEnvProvider,
 } from './ContractEnv.ts';
-import type { Contract } from './Contract.ts';
+import type { Contract } from '../contracts/Contract.ts';
 import { GeneratingEnv, type WaitForInputFn } from './GeneratingEnv.ts';
 import { OutputClaimModule } from './OutputClaimModule.ts';
 import { UtxoIndex } from '../node/UtxoIndex.ts';

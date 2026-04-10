@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/output-data.md
 
-import type { ContractEnv } from './ContractEnv.ts';
+import type { ContractEnv } from '../core/ContractEnv.ts';
 import type { MaybePromise } from '../util/MaybePromise.ts';
 
 // -- Value Descriptors ------------------------------------------------

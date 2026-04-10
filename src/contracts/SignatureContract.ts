@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/contracts.md (signature contract)
 
-import { SIGNATURE_CONTRACT } from './Block.ts';
-import type { Output } from './BlockCreationModule.ts';
+import { SIGNATURE_CONTRACT } from '../core/Block.ts';
+import type { Output } from '../core/BlockCreationModule.ts';
 import type { Contract } from './Contract.ts';
 
 /**

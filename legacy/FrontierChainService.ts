@@ -2,7 +2,7 @@ import { Hash, HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 import { BlockFact } from './FactMeta.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';
 import { Context } from './Context.ts';
-import { frontierInputCount } from './contracts/FrontierContract.ts';
+import { frontierInputCount } from '../legacy2/contracts/FrontierContract.ts';
 import { error, todo } from './util/functional.ts';
 import { FactService } from './FactService.ts';
 import { setsIntersect } from './util/set.ts';

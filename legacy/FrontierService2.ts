@@ -5,7 +5,7 @@ import { BlockService } from './BlockService.ts';
 import { InputSpec } from './BlockBuilder.ts';
 import { WeightService } from './WeightService.ts';
 import { BlockOutput, FrontierTreeIoBranch, FrontierTreeIoEntry } from './messages.ts';
-import { frontierInputCount } from './contracts/FrontierContract.ts';
+import { frontierInputCount } from '../legacy2/contracts/FrontierContract.ts';
 import { todo } from './util/functional.ts';
 import { ClockService } from './ClockService.ts';
 import { ZERO_BLOCK } from './BlockMeta.ts';

@@ -1,5 +1,5 @@
 import { Hash } from "scaffold.io/util/Hash.ts";
-import type { Contract } from "scaffold.io/core/Contract.ts";
+import type { Contract } from "scaffold.io/contracts/Contract.ts";
 import {
   AGGREGATION_CONTRACT,
   COLLATERAL_CONTRACT,
@@ -7,10 +7,10 @@ import {
   RESULT_CONTRACT,
   SIGNATURE_CONTRACT,
 } from "scaffold.io/core/Block.ts";
-import { signatureContract } from "scaffold.io/core/SignatureContract.ts";
-import { aggregationContract } from "scaffold.io/core/AggregationContract.ts";
-import { collateralContract } from "scaffold.io/core/CollateralContract.ts";
-import { insuranceContract } from "scaffold.io/core/InsuranceContract.ts";
+import { signatureContract } from "scaffold.io/contracts/SignatureContract.ts";
+import { aggregationContract } from "scaffold.io/contracts/AggregationContract.ts";
+import { collateralContract } from "scaffold.io/contracts/CollateralContract.ts";
+import { insuranceContract } from "scaffold.io/contracts/InsuranceContract.ts";
 
 const WELL_KNOWN: [Hash, string, Contract][] = [
   [SIGNATURE_CONTRACT, "Signature", signatureContract],

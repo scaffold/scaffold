@@ -10,9 +10,9 @@ import {
   encodeInsuranceDetail,
   type InsuranceDetail,
   makeInsuranceOutput,
-} from '../src/core/InsuranceContract.ts';
+} from '../src/contracts/InsuranceContract.ts';
 import { ExecutionModule, type ExecutionProvider } from '../src/core/ExecutionModule.ts';
-import { insuranceContract, FINDER_SHARE, MIN_RETURN_RATE } from '../src/core/InsuranceContract.ts';
+import { insuranceContract, FINDER_SHARE, MIN_RETURN_RATE } from '../src/contracts/InsuranceContract.ts';
 
 // -- Test block type -------------------------------------------------
 

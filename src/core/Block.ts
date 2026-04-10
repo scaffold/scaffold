@@ -21,7 +21,7 @@ export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 /** Well-known contract hash for result outputs (key-value store on a block). */
 export const RESULT_CONTRACT = Hash.digest('result-contract');
 
-import { getAggregationData } from './AggregationContract.ts';
+import { getAggregationData } from '../contracts/AggregationContract.ts';
 
 /**
  * Get the claim mask for a block: from aggregation data if present,

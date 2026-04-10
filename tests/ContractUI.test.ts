@@ -1,24 +1,24 @@
 import { assertEquals } from '@std/assert';
 import { type FieldNode, RecordingWalkerHost } from '../src/core/RecordingWalkerHost.ts';
 import { DefaultBuilderHost } from '../src/core/DefaultBuilderHost.ts';
-import { signatureContract } from '../src/core/SignatureContract.ts';
-import { collateralContract } from '../src/core/CollateralContract.ts';
-import { insuranceContract } from '../src/core/InsuranceContract.ts';
+import { signatureContract } from '../src/contracts/SignatureContract.ts';
+import { collateralContract } from '../src/contracts/CollateralContract.ts';
+import { insuranceContract } from '../src/contracts/InsuranceContract.ts';
 import {
   aggregationContract,
   type AggregationData,
   encodeAggregationData,
-} from '../src/core/AggregationContract.ts';
+} from '../src/contracts/AggregationContract.ts';
 import {
   type CollateralDetail,
   decodeCollateralDetail,
   encodeCollateralDetail,
-} from '../src/core/CollateralContract.ts';
+} from '../src/contracts/CollateralContract.ts';
 import {
   decodeInsuranceDetail,
   encodeInsuranceDetail,
   type InsuranceDetail,
-} from '../src/core/InsuranceContract.ts';
+} from '../src/contracts/InsuranceContract.ts';
 
 // -- Helpers ----------------------------------------------------------
 

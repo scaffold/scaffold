@@ -7,13 +7,13 @@ import {
   BlockSource,
   BlockStore,
 } from '../src/core/Block.ts';
-import { makeAggregationOutput } from '../src/core/AggregationContract.ts';
+import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
 import { createDraft, DraftStore } from '../src/core/BlockDraft.ts';
 import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
-import type { Contract } from '../src/core/Contract.ts';
-import { aggregationContract, AGGREGATION_THRESHOLD } from '../src/core/AggregationContract.ts';
+import type { Contract } from '../src/contracts/Contract.ts';
+import { aggregationContract, AGGREGATION_THRESHOLD } from '../src/contracts/AggregationContract.ts';
 
 // -- Helpers -------------------------------------------------------
 

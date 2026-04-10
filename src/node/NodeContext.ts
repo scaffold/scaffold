@@ -18,10 +18,10 @@ import {
   aggregationContract,
   encodeAggregationData,
   getAggregationData,
-} from '../core/AggregationContract.ts';
-import { collateralContract } from '../core/CollateralContract.ts';
-import { insuranceContract } from '../core/InsuranceContract.ts';
-import type { Contract } from '../core/Contract.ts';
+} from '../contracts/AggregationContract.ts';
+import { collateralContract } from '../contracts/CollateralContract.ts';
+import { insuranceContract } from '../contracts/InsuranceContract.ts';
+import type { Contract } from '../contracts/Contract.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';

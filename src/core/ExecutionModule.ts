@@ -4,13 +4,13 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
 import { RESULT_CONTRACT } from './Block.ts';
 import { ContractRejection } from './ContractEnv.ts';
-import type { Contract } from './Contract.ts';
+import type { Contract } from '../contracts/Contract.ts';
 import { VerifyingEnv } from './VerifyingEnv.ts';
 
 // -- Re-exports -------------------------------------------------------
 
 export { ExecutionMode } from './ContractEnv.ts';
-export type { Contract } from './Contract.ts';
+export type { Contract } from '../contracts/Contract.ts';
 
 // -- Types ----------------------------------------------------------
 

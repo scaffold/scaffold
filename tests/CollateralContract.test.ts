@@ -14,14 +14,14 @@ import {
   encodeCollateralDetail,
   makeAgainstOutput,
   makeCollateralOutput,
-} from '../src/core/CollateralContract.ts';
+} from '../src/contracts/CollateralContract.ts';
 import { ExecutionModule, type ExecutionProvider } from '../src/core/ExecutionModule.ts';
 import {
   collateralContract,
   decayedValue,
   DECAY_CONSTANT,
   PREIMAGE_RESULT_KEY,
-} from '../src/core/CollateralContract.ts';
+} from '../src/contracts/CollateralContract.ts';
 
 // -- Test block type -------------------------------------------------
 

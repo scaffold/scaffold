@@ -17,7 +17,7 @@ import { DenoKvStorageProvider } from '../plugins/deno/DenoKvStorageProvider.ts'
 import { FilterAction, Logger, LogLevel } from '../src/Logger2.ts';
 import { NetworkService } from '../src/NetworkService.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
-import { RootContract } from '../src/contracts/RootContract.ts';
+import { RootContract } from '../legacy2/contracts/RootContract.ts';
 import { ConnectionService } from '../src/ConnectionService.ts';
 import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
 import { bootstrapFromGlobs } from './bootstrapUtils.ts';

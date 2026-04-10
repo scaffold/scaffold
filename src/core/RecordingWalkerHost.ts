@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/output-data.md
 
-import type { ValueDescriptor, WalkerHost } from './Contract.ts';
+import type { ValueDescriptor, WalkerHost } from '../contracts/Contract.ts';
 
 /** A node in the recorded field tree. */
 export type FieldNode =

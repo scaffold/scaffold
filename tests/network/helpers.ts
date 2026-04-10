@@ -12,9 +12,9 @@ import {
   createSelfClaimedOutput,
   RESULT_CONTRACT,
 } from '../../src/core/Block.ts';
-import { encodeAggregationData } from '../../src/core/AggregationContract.ts';
+import { encodeAggregationData } from '../../src/contracts/AggregationContract.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
-import type { Contract } from '../../src/core/Contract.ts';
+import type { Contract } from '../../src/contracts/Contract.ts';
 
 export const h = (name: string): Hash => Hash.digest(name);
 export const enc = (s: string): Uint8Array => new TextEncoder().encode(s);

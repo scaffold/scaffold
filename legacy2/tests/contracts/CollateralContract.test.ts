@@ -4,7 +4,7 @@ import { BlockBuilder } from '../../src/BlockBuilder.ts';
 import { accountHash, collateralHash } from '../../src/hashes.ts';
 import { KeyService } from '../../src/KeyService.ts';
 import { BlockService } from '../../src/BlockService.ts';
-import { CollateralContract } from '../../src/contracts/CollateralContract.ts';
+import { CollateralContract } from '../../contracts/CollateralContract.ts';
 import { EMPTY_ARR, str2bin } from '../../src/util/buffer.ts';
 import { encodeDataTree } from '../../src/DataTreeHelper.ts';
 import { baseContractProviders, waitForVerifiedOutput } from '../../tests/contracts/util.ts';

@@ -9,7 +9,7 @@
  */
 
 import { bin2hex } from '../src/util/hex.ts';
-import { makeSignatureOutput } from '../src/core/SignatureContract.ts';
+import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { WELL_KNOWN_PUBLIC_KEY } from '../src/genesis.ts';
 

@@ -7,9 +7,9 @@ import {
   createGenesisBlock,
   SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
-import { makeSignatureOutput } from '../src/core/SignatureContract.ts';
+import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { composeBlockPacket } from '../src/core/Packet.ts';
-import { signatureContract } from '../src/core/SignatureContract.ts';
+import { signatureContract } from '../src/contracts/SignatureContract.ts';
 import { type ContractEnv } from '../src/core/ContractEnv.ts';
 import { SimNode } from './SimNetwork.ts';
 

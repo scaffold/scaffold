@@ -1,6 +1,6 @@
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore } from './Block.ts';
-import { getAggregationData } from './AggregationContract.ts';
+import { getAggregationData } from '../contracts/AggregationContract.ts';
 import { OutputClaimModule, OutputClaimProvider } from './OutputClaimModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
