@@ -8,6 +8,7 @@ import { WELL_KNOWN_PRIVATE_KEY } from "scaffold.io/genesis.ts";
 import type { Strategy } from "scaffold.io/node/ReactiveLayer.ts";
 import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.ts";
 import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
+import { installDebugAPI } from "scaffold.io/debug/ScaffoldDebug.ts";
 import yaml from "yaml";
 
 interface StrategyDef {
@@ -43,10 +44,12 @@ export function App() {
     const strategies = STRATEGIES
       .filter((s) => enabledStrategies.has(s.key))
       .map((s) => s.create());
-    return new Scaffold({
+    const s = new Scaffold({
       privateKey: WELL_KNOWN_PRIVATE_KEY,
       strategies,
     });
+    installDebugAPI(s);
+    return s;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 

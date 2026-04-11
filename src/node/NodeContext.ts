@@ -45,6 +45,7 @@ import { Hash } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { UtxoIndex } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
+import { EventLog } from '../core/EventLog.ts';
 
 export interface NodeConfig {
   /** Genesis block (pre-built). */
@@ -59,6 +60,8 @@ export interface NodeConfig {
   enableVerification?: (contractHash: Hash) => boolean;
   /** Callback when gossip produces push actions for a block */
   onPushActions?: (actions: PushAction[], block: Block) => void;
+  /** Event log for structured observability. */
+  eventLog?: EventLog;
 }
 
 /**
@@ -89,7 +92,7 @@ export class NodeContext {
 
   constructor(config: NodeConfig) {
     // 1. Create ProtocolContext (DI container)
-    this.protocolContext = new ProtocolContext();
+    this.protocolContext = new ProtocolContext(config.eventLog);
 
     // 2. Get BlockStore from context (lazily created by DI)
     this.store = this.protocolContext.get(BlockStore);
@@ -203,6 +206,7 @@ export class NodeContext {
       blockCreator,
       gossip: this.gossip,
       draftManager: this.draftManager,
+      logger: this.protocolContext.logger('reactive'),
       onNotifyFetch: config.onNotifyFetch,
       onPushActions: config.onPushActions,
       onBlockProcessed: (block: Block) => {

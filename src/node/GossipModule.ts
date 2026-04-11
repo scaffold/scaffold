@@ -174,6 +174,11 @@ export class GossipModule {
     this.config = { ...DEFAULT_GOSSIP_CONFIG, ...config };
   }
 
+  /** Get IDs of all connected peers. */
+  getPeerIds(): string[] {
+    return [...this.peers.keys()];
+  }
+
   // -- Peer Lifecycle -----------------------------------------------
 
   /** Register a new peer. */

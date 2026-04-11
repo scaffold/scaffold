@@ -9,6 +9,7 @@ import { DraftManager } from '../core/DraftManager.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 import { GossipService } from './GossipService.ts';
 import { PushAction } from './GossipModule.ts';
+import { ScopedLogger } from '../core/EventLog.ts';
 
 // -- Future types (placeholders until their modules exist) ----------
 
@@ -91,6 +92,7 @@ export class ReactiveLayer {
 
   private readonly gossip?: GossipService;
   private readonly draftManager?: DraftManager;
+  private readonly _log?: ScopedLogger;
 
   private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
   private readonly onPushActions?: (actions: PushAction[], block: Block) => void;
@@ -106,6 +108,7 @@ export class ReactiveLayer {
     privateKey?: Uint8Array | null;
     gossip?: GossipService;
     draftManager?: DraftManager;
+    logger?: ScopedLogger;
     onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
     onPushActions?: (actions: PushAction[], block: Block) => void;
     onBlockProcessed?: (block: Block) => void;
@@ -119,6 +122,7 @@ export class ReactiveLayer {
     this.privateKey = deps.privateKey ?? null;
     this.gossip = deps.gossip;
     this.draftManager = deps.draftManager;
+    this._log = deps.logger;
     this.onNotifyFetch = deps.onNotifyFetch;
     this.onPushActions = deps.onPushActions;
     this.onBlockProcessed = deps.onBlockProcessed;
@@ -181,6 +185,13 @@ export class ReactiveLayer {
       actions.push(...strategyActions);
     }
 
+    if (actions.length > 0) {
+      this._log?.debug('strategyActions', {
+        hash: block.hash.toHex(),
+        actions: actions.map((a) => a.type),
+      });
+    }
+
     allActions.push(...actions);
 
     // 6. Execute actions
@@ -190,6 +201,11 @@ export class ReactiveLayer {
           const key = action.sign ? this.privateKey : null;
           const newBlock = this.blockCreator.createBlock(action.spec, key);
           if (newBlock) {
+            this._log?.info('blockCreatedByStrategy', {
+              hash: newBlock.hash.toHex(),
+              anchor: action.spec.anchor.toHex(),
+              outputCount: action.spec.outputs.length,
+            });
             // Mark as created in this cycle so strategies don't re-evaluate it
             cycleCreated.add(newBlock.hash.toPrimitive());
             // Recurse: process the new block through coordinator and strategies

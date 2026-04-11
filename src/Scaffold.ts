@@ -19,6 +19,7 @@ import { PushAction } from './node/GossipModule.ts';
 import { SignalingService } from './node/SignalingService.ts';
 import { NetworkProvider } from './interfaces/network.ts';
 import { bin2hex } from './util/hex.ts';
+import { EventLog, ScopedLogger } from './core/EventLog.ts';
 
 export interface ScaffoldConfig {
   /** Private key for signing blocks. Defaults to a random key. */
@@ -35,6 +36,8 @@ export interface ScaffoldConfig {
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
   enableVerification?: (contractHash: Hash) => boolean;
+  /** Enable structured event logging for debugging. Default: true. */
+  enableLogging?: boolean;
 }
 
 export class Scaffold {
@@ -44,11 +47,17 @@ export class Scaffold {
   private readonly networkBridge?: NetworkBridge;
   private readonly signalingService?: SignalingService;
 
+  /** Structured event log. Available for debugging and introspection. */
+  readonly eventLog: EventLog;
+
   constructor(config: ScaffoldConfig = {}) {
     const privateKey = config.privateKey ?? secp.utils.randomPrivateKey();
     const publicKey = secp.getPublicKey(privateKey, true);
 
     const genesis = config.genesis ?? getGenesisBlock();
+
+    // 0. Create EventLog (enabled by default)
+    this.eventLog = (config.enableLogging !== false) ? new EventLog({ console: true }) : new EventLog();
 
     // 1. Create FetchManager and the strategy that notifies it
     this.fetchManager = new FetchManager();
@@ -70,6 +79,7 @@ export class Scaffold {
       strategies,
       enableGeneration: config.enableGeneration,
       enableVerification: config.enableVerification,
+      eventLog: this.eventLog,
       onNotifyFetch: (verifierKey, result) => {
         fetchManager.notify(verifierKey, result);
       },
@@ -107,6 +117,7 @@ export class Scaffold {
         },
         signalingService: this.signalingService,
         selfId: selfIdHex,
+        logger: this.eventLog ? new ScopedLogger(this.eventLog, 'network') : undefined,
       });
       pushActionHandler = (actions, block) => {
         this.networkBridge!.handlePushActions(actions, block);

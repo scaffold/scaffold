@@ -7,9 +7,10 @@ import {
   getBlockWeightVector,
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
-import { GossipConfig, GossipModule, GossipProvider } from './GossipModule.ts';
+import { GossipConfig, GossipModule, GossipProvider, PushAction } from './GossipModule.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
+import { ScopedLogger } from '../core/EventLog.ts';
 
 class GossipProviderAdapter implements GossipProvider {
   constructor(
@@ -96,9 +97,47 @@ class GossipProviderAdapter implements GossipProvider {
 
 /** GossipModule wired to BlockStore and TrustService via ProtocolContext. */
 export class GossipService extends GossipModule {
+  private readonly _log?: ScopedLogger;
+
   constructor(ctx: ProtocolContext, config?: Partial<GossipConfig>) {
     const store = ctx.get(BlockStore);
     const trust = ctx.get(TrustService);
     super(new GossipProviderAdapter(store, trust), config);
+    this._log = ctx.logger('gossip');
+  }
+
+  override blockReceived(hash: Hash, fromPeer: string | null): PushAction[] {
+    const actions = super.blockReceived(hash, fromPeer);
+    if (actions.length > 0) {
+      this._log?.debug('pushDecisions', {
+        hash: hash.toHex(),
+        fromPeer,
+        targets: actions.map((a) => ({
+          peer: a.peer,
+          priority: Math.round(a.priority * 1000) / 1000,
+          immediate: a.immediate,
+        })),
+      });
+    }
+    return actions;
+  }
+
+  override addPeer(peerId: string, pubkey: string, awareness: import('./GossipModule.ts').BlockAwareness): void {
+    super.addPeer(peerId, pubkey, awareness);
+    this._log?.info('peerAdded', { peerId });
+  }
+
+  override removePeer(peerId: string): void {
+    super.removePeer(peerId);
+    this._log?.info('peerRemoved', { peerId });
+  }
+
+  override reportDelivery(hash: Hash, toPeer: string, wasNovel: boolean): void {
+    super.reportDelivery(hash, toPeer, wasNovel);
+    this._log?.debug('deliveryConfirmed', {
+      hash: hash.toHex(),
+      toPeer,
+      wasNovel,
+    });
   }
 }

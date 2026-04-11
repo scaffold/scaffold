@@ -90,6 +90,28 @@ Planning -> Documentation -> Testing -> Coding
 - For logical parts, don't use Context or assume anything about the BlockType except what you can access through the provider.
 - Glue code using Context should be minimal; it's much more difficult to test.
 
+## Logging and Debugging
+
+Scaffold has a structured event logging system for debugging. See `.claude/skills/debug-browser.md` for the full debugging reference.
+
+### Key components
+- **`src/core/EventLog.ts`** -- Ring buffer event log with `ScopedLogger`. Queryable by system, event, block hash, level, and seq range.
+- **`src/debug/ScaffoldDebug.ts`** -- Debug API exposed on `window.__scaffold` for browser DevTools introspection. Methods for querying blocks, consensus, conflicts, UTXOs, output space, and the event log.
+- **`src/core/ProtocolContext.ts`** -- Provides `ctx.logger('system')` for any DI-constructed service.
+
+### Instrumented systems
+`coordinator` (block lifecycle, canonicality, conflicts, weight), `reactive` (strategy evaluation), `gossip` (push decisions, peer lifecycle, delivery), `network` (connections, block send/receive).
+
+### Keeping instrumentation up to date
+When adding a new module or service:
+1. Get a logger via `ctx.logger('mymodule')` in the service constructor
+2. Log state transitions at `info` level and decisions at `debug` level
+3. Include block hashes in data so `__scaffold.history(prefix)` works
+4. If the module has queryable state, add a method to `ScaffoldDebugAPI`
+
+### Demo dev workflow
+The demo app at `demo/` resolves `scaffold.io` imports directly to `src/` via Vite aliases. Changes are picked up instantly -- no npm rebuild needed for development.
+
 ## 4-Step Development Sequence
 1. Build `docs/protocol/` as markdown documents covering protocol concepts and mechanics.
 2. Write a skeleton in `src/core/`. Create the classes and interfaces you're going to need. If you're building a module, keep it very encapsulated, don't use any Context or assume anything about the BlockType except what you can access through the provider.

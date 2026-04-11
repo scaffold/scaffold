@@ -7,6 +7,7 @@ import { BlockAwareness, PushAction } from './GossipModule.ts';
 import { DeliveryTracker } from './DeliveryTracker.ts';
 import { SignalingService, SignalEnvelope } from './SignalingService.ts';
 import { TransportConnection } from './PeerConnection.ts';
+import { ScopedLogger } from '../core/EventLog.ts';
 
 /** Simple set-based block awareness tracker. */
 class SetAwareness implements BlockAwareness {
@@ -29,6 +30,7 @@ export interface NetworkBridgeDeps {
   serializer?: BlockSerializer;
   signalingService?: SignalingService;
   selfId?: string;
+  logger?: ScopedLogger;
 }
 
 /**
@@ -46,6 +48,7 @@ export class NetworkBridge {
   private readonly delivery: DeliveryTracker;
   private readonly signalingService?: SignalingService;
   private readonly selfId?: string;
+  private readonly _log?: ScopedLogger;
 
   constructor(deps: NetworkBridgeDeps) {
     this.gossip = deps.gossip;
@@ -53,11 +56,16 @@ export class NetworkBridge {
     this.delivery = new DeliveryTracker();
     this.signalingService = deps.signalingService;
     this.selfId = deps.selfId;
+    this._log = deps.logger;
 
     this.network = new NetworkManager(
       deps.plugins,
       {
         onBlockReceived: (block, peerId) => {
+          this._log?.info('blockReceived', {
+            hash: block.hash.toHex(),
+            fromPeer: peerId,
+          });
           deps.processBlock(block, peerId);
         },
         onPeerConnected: (peer) => {
@@ -88,6 +96,10 @@ export class NetworkBridge {
       this.network.sendBlock(block, [action.peer]);
       this.delivery.markSent(block.hash, action.peer);
       this.gossip.reportPush(block.hash, action.peer);
+      this._log?.debug('blockSent', {
+        hash: block.hash.toHex(),
+        toPeer: action.peer,
+      });
     }
   }
 
@@ -104,6 +116,7 @@ export class NetworkBridge {
   // -- Internal ---------------------------------------------------------
 
   private handlePeerConnected(peer: PeerConnection): void {
+    this._log?.info('peerConnected', { peerId: peer.peerId });
     // Register peer with gossip (using peerId as pubkey placeholder)
     this.gossip.addPeer(peer.peerId, peer.peerId, new SetAwareness());
 
@@ -132,6 +145,7 @@ export class NetworkBridge {
   }
 
   private handlePeerDisconnected(peerId: string): void {
+    this._log?.info('peerDisconnected', { peerId });
     this.gossip.removePeer(peerId);
   }
 

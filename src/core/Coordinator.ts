@@ -10,6 +10,7 @@ import { VerificationService } from './VerificationService.ts';
 import { ExecutionQueueService } from './ExecutionQueueService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { VerificationResult } from './VerificationModule.ts';
+import { ScopedLogger } from './EventLog.ts';
 
 /** Result of processing a block received event. */
 export interface BlockReceivedResult {
@@ -30,6 +31,7 @@ export class Coordinator {
   private readonly sampling: SamplingService;
   private readonly blockCreation: BlockCreationService;
   private readonly outputClaims: OutputClaimService;
+  private readonly _log?: ScopedLogger;
 
   /** Collects canonicality changes from flushChanges(). */
   private readonly canonicalityChanges: { hash: Hash; canonical: boolean }[] = [];
@@ -38,6 +40,7 @@ export class Coordinator {
   private pendingConflicts: [Hash, Hash][] = [];
 
   constructor(ctx: ProtocolContext) {
+    this._log = ctx.logger('coordinator');
     this.ctx = ctx;
     this.store = ctx.get(BlockStore);
     this.consensus = ctx.get(ConsensusService);
@@ -62,7 +65,14 @@ export class Coordinator {
       if (!block) return;
       const wf = this.sampling.getWeightFactor(hash);
       const declared = getBlockWeightVector(block);
-      this.consensus.setVerifiedWeight(hash, declared.map((w) => w * wf));
+      const verified = declared.map((w) => w * wf);
+      this.consensus.setVerifiedWeight(hash, verified);
+
+      this._log?.debug('weightUpdate', {
+        hash: hash.toHex(),
+        weightFactor: wf,
+        verifiedWeight: verified,
+      });
 
       const queue = this.ctx.maybeGet(ExecutionQueueService);
       if (queue) queue.reprioritize();
@@ -105,6 +115,16 @@ export class Coordinator {
    * 5. Update sampling module on canonicality changes
    */
   blockReceived(block: Block, fromPeer: string | null): BlockReceivedResult {
+    const hash = block.hash.toHex();
+    this._log?.info('blockReceived', {
+      hash,
+      fromPeer,
+      anchor: block.anchor.toHex(),
+      outputCount: block.outputs.length,
+      claimCount: block.claims.length,
+      aggregateCount: block.aggregates.length,
+    });
+
     // 1. Store the block
     this.store.put(block);
 
@@ -134,6 +154,18 @@ export class Coordinator {
     }
 
     const newConflicts = [...this.pendingConflicts];
+
+    if (canonicalityChanges.length > 0 || newConflicts.length > 0) {
+      this._log?.info('blockProcessed', {
+        hash,
+        canonicalityChanges: canonicalityChanges.map((c) => ({
+          hash: c.hash.toHex(),
+          canonical: c.canonical,
+        })),
+        newConflicts: newConflicts.map(([a, b]) => [a.toHex(), b.toHex()]),
+      });
+    }
+
     return { canonicalityChanges, newConflicts };
   }
 
