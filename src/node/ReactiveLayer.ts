@@ -7,8 +7,8 @@ import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { DraftManager } from '../core/DraftManager.ts';
 import { Coordinator } from '../core/Coordinator.ts';
-import { GossipService } from './GossipService.ts';
-import { PushAction } from './GossipModule.ts';
+import { RoutingService } from './RoutingService.ts';
+import { PushAction } from './RoutingModule.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
 // -- Future types (placeholders until their modules exist) ----------
@@ -90,13 +90,16 @@ export class ReactiveLayer {
   private readonly blockCreator: BlockCreator;
   private readonly privateKey: Uint8Array | null;
 
-  private readonly gossip?: GossipService;
+  private readonly routing?: RoutingService;
   private readonly draftManager?: DraftManager;
   private readonly _log?: ScopedLogger;
 
   private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
   private readonly onPushActions?: (actions: PushAction[], block: Block) => void;
   private readonly onBlockProcessed?: (block: Block) => void;
+
+  /** Accumulated push actions from current block processing cycle. */
+  private pendingPushActions: PushAction[] = [];
 
   constructor(deps: {
     coordinator: Coordinator;
@@ -106,7 +109,7 @@ export class ReactiveLayer {
     strategies: Strategy[];
     blockCreator: BlockCreator;
     privateKey?: Uint8Array | null;
-    gossip?: GossipService;
+    routing?: RoutingService;
     draftManager?: DraftManager;
     logger?: ScopedLogger;
     onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
@@ -120,12 +123,19 @@ export class ReactiveLayer {
     this.strategies = deps.strategies;
     this.blockCreator = deps.blockCreator;
     this.privateKey = deps.privateKey ?? null;
-    this.gossip = deps.gossip;
+    this.routing = deps.routing;
     this.draftManager = deps.draftManager;
     this._log = deps.logger;
     this.onNotifyFetch = deps.onNotifyFetch;
     this.onPushActions = deps.onPushActions;
     this.onBlockProcessed = deps.onBlockProcessed;
+
+    // Register routing listener to accumulate push actions per block
+    if (this.routing) {
+      this.routing.onPushAction((action) => {
+        this.pendingPushActions.push(action);
+      });
+    }
   }
 
   /**
@@ -152,11 +162,12 @@ export class ReactiveLayer {
     // 1. Run the block through the coordinator
     const result = this.coordinator.blockReceived(block, fromPeer);
 
-    // 2. Gossip: compute push targets (node-layer concern)
-    if (this.gossip) {
-      const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
-      if (pushActions.length > 0) {
-        this.onPushActions?.(pushActions, block);
+    // 2. Routing: compute push targets (node-layer concern)
+    if (this.routing) {
+      this.pendingPushActions = [];
+      this.routing.blockReceived(block.hash, fromPeer);
+      if (this.pendingPushActions.length > 0) {
+        this.onPushActions?.(this.pendingPushActions, block);
       }
     }
 

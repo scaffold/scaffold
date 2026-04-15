@@ -7,7 +7,8 @@ import { NetworkBridge } from '../src/node/NetworkBridge.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { Coordinator } from '../src/core/Coordinator.ts';
 import { GossipService } from '../src/node/GossipService.ts';
-import { PushAction } from '../src/node/GossipModule.ts';
+import { RoutingService } from '../src/node/RoutingService.ts';
+import { PushAction } from '../src/node/RoutingModule.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { SignalingService, SignalEnvelope } from '../src/node/SignalingService.ts';
 import { secp } from '../src/util/secp.ts';
@@ -111,20 +112,21 @@ function setupProtocol() {
   const store = ctx.get(BlockStore);
   const coordinator = ctx.get(Coordinator);
   const gossip = new GossipService(ctx);
-  return { ctx, store, coordinator, gossip };
+  const routing = new RoutingService(ctx, gossip);
+  return { ctx, store, coordinator, gossip, routing };
 }
 
 // -- Tests --------------------------------------------------------------
 
 Deno.test('NetworkBridge: inbound block flows to processBlock', () => {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const received: { block: Block; peerId: string }[] = [];
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: (block, peerId) => received.push({ block, peerId }),
     serializer: fakeSerializer,
   });
@@ -148,13 +150,13 @@ Deno.test('NetworkBridge: inbound block flows to processBlock', () => {
 });
 
 Deno.test('NetworkBridge: peer connect registers with gossip', () => {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
   });
@@ -172,13 +174,13 @@ Deno.test('NetworkBridge: peer connect registers with gossip', () => {
 });
 
 Deno.test('NetworkBridge: peer disconnect removes from gossip', () => {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
   });
@@ -196,13 +198,13 @@ Deno.test('NetworkBridge: peer disconnect removes from gossip', () => {
 });
 
 Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
   });
@@ -230,13 +232,13 @@ Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
 });
 
 Deno.test('NetworkBridge: handlePushActions skips already-sent blocks', () => {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
   });
@@ -263,7 +265,7 @@ Deno.test('NetworkBridge: handlePushActions skips already-sent blocks', () => {
 });
 
 Deno.test('NetworkBridge: block request handler responds with blocks from store', () => {
-  const { store, gossip, coordinator } = setupProtocol();
+  const { store, routing, coordinator } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   // Put a genesis block in the store via coordinator
@@ -273,7 +275,7 @@ Deno.test('NetworkBridge: block request handler responds with blocks from store'
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
   });
@@ -296,13 +298,13 @@ Deno.test('NetworkBridge: block request handler responds with blocks from store'
 });
 
 Deno.test('NetworkBridge: close shuts down all connections', () => {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
   });
@@ -325,7 +327,7 @@ Deno.test('NetworkBridge: close shuts down all connections', () => {
 // -- Signal relay tests -------------------------------------------------
 
 function setupBridgeWithSignaling(selfId: string) {
-  const { store, gossip } = setupProtocol();
+  const { store, routing } = setupProtocol();
   const plugin = new MockNetworkPlugin();
 
   const delivered: SignalEnvelope[] = [];
@@ -340,7 +342,7 @@ function setupBridgeWithSignaling(selfId: string) {
   const bridge = new NetworkBridge({
     plugins: [plugin],
     store,
-    gossip,
+    routing,
     processBlock: () => {},
     serializer: fakeSerializer,
     signalingService: mockSignalingService,
@@ -551,7 +553,7 @@ Deno.test('NetworkBridge: end-to-end signal relay between two bridges', async ()
   bridgeA = new NetworkBridge({
     plugins: [pluginA],
     store: protoA.store,
-    gossip: protoA.gossip,
+    routing: protoA.routing,
     processBlock: () => {},
     serializer: fakeSerializer,
     signalingService: serviceA,
@@ -561,7 +563,7 @@ Deno.test('NetworkBridge: end-to-end signal relay between two bridges', async ()
   const bridgeRelay = new NetworkBridge({
     plugins: [pluginRelay],
     store: protoRelay.store,
-    gossip: protoRelay.gossip,
+    routing: protoRelay.routing,
     processBlock: () => {},
     serializer: fakeSerializer,
     selfId: 'relay-node',
@@ -570,7 +572,7 @@ Deno.test('NetworkBridge: end-to-end signal relay between two bridges', async ()
   bridgeB = new NetworkBridge({
     plugins: [pluginB],
     store: protoB.store,
-    gossip: protoB.gossip,
+    routing: protoB.routing,
     processBlock: () => {},
     serializer: fakeSerializer,
     signalingService: serviceB,

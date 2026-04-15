@@ -8,10 +8,11 @@ import { BlockCreationService } from '../src/core/BlockCreationService.ts';
 import { ExecutionService } from '../src/core/ExecutionService.ts';
 import { VerificationService } from '../src/core/VerificationService.ts';
 import { BlockReceivedResult, Coordinator } from '../src/core/Coordinator.ts';
-import { BlockAwareness, PushAction } from '../src/node/GossipModule.ts';
+import { BlockAwareness, PushAction } from '../src/node/RoutingModule.ts';
 import { GossipService } from '../src/node/GossipService.ts';
+import { RoutingService } from '../src/node/RoutingService.ts';
 
-/** Result of SimNode.receiveBlock: protocol result + gossip push actions. */
+/** Result of SimNode.receiveBlock: protocol result + routing push actions. */
 export interface SimBlockResult extends BlockReceivedResult {
   pushActions: PushAction[];
 }
@@ -39,6 +40,7 @@ export class SimNode {
   readonly sampling: SamplingService;
   readonly trust: TrustService;
   readonly gossip: GossipService;
+  readonly routing: RoutingService;
   readonly blockCreation: BlockCreationService;
   readonly execution: ExecutionService;
   readonly verification: VerificationService;
@@ -53,16 +55,25 @@ export class SimNode {
     this.sampling = this.ctx.get(SamplingService);
     this.trust = this.ctx.get(TrustService);
     this.gossip = new GossipService(this.ctx);
+    this.routing = new RoutingService(this.ctx, this.gossip);
     this.blockCreation = this.ctx.get(BlockCreationService);
     this.execution = this.ctx.get(ExecutionService);
     this.verification = this.ctx.get(VerificationService);
     this.coordinator = this.ctx.get(Coordinator);
   }
 
-  /** Process a received block through coordinator and gossip. */
+  /** Process a received block through coordinator and routing. */
   receiveBlock(block: Block, fromPeer: string | null): SimBlockResult {
     const result = this.coordinator.blockReceived(block, fromPeer);
-    const pushActions = this.gossip.blockReceived(block.hash, fromPeer);
+    const pushActions: PushAction[] = [];
+    const listener = (action: PushAction) => pushActions.push(action);
+    this.routing.onPushAction(listener);
+    this.routing.blockReceived(block.hash, fromPeer);
+    // Remove the temporary listener
+    // deno-lint-ignore no-explicit-any
+    const listeners = (this.routing as any).pushActionListeners as ((action: PushAction) => void)[];
+    const idx = listeners.indexOf(listener);
+    if (idx !== -1) listeners.splice(idx, 1);
     return { ...result, pushActions };
   }
 }
@@ -76,11 +87,11 @@ export class SimNetwork {
     const node = new SimNode(id);
     this.nodes.set(id, node);
 
-    // Connect all nodes to each other via gossip
+    // Connect all nodes to each other via routing
     for (const [otherId, otherNode] of this.nodes) {
       if (otherId === id) continue;
-      node.gossip.addPeer(otherId, otherId, new SetAwareness());
-      otherNode.gossip.addPeer(id, id, new SetAwareness());
+      node.routing.addPeer(otherId, otherId, new SetAwareness());
+      otherNode.routing.addPeer(id, id, new SetAwareness());
     }
 
     return node;

@@ -45,7 +45,7 @@ Deno.test('Sampling: canonical blocks get sample state on all nodes', () => {
   net.broadcastGenesis(genesis);
 
   const block = makeBlock('probe-state', genesis, [makeOutput(100)], 50, [0]);
-  net.submitAndFlush(block, 'A');
+  net.deliverToAll(block, 'A');
 
   // All nodes should have sample state for the block
   for (const id of net.nodeIds) {
@@ -121,7 +121,7 @@ Deno.test('Sampling: weight factor converges on all nodes for valid leaf', async
     50,
     [0],
   );
-  net.submitAndFlush(block, 'A');
+  net.deliverToAll(block, 'A');
 
   // Each node samples and verifies independently
   for (const id of net.nodeIds) {

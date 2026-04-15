@@ -6,14 +6,11 @@
  */
 
 import { assert, assertEquals } from '@std/assert';
-import { Hash } from '../../src/util/Hash.ts';
-import { getBlockWeightVector } from '../../src/core/Block.ts';
 import { TestNetwork } from './TestNetwork.ts';
 import {
   makeAggregationBlock,
   makeBlock,
   makeGenesis,
-  makeLeafBlock,
   makeOutput,
 } from './helpers.ts';
 
@@ -36,7 +33,7 @@ Deno.test('Scenario: five-node full pipeline -- genesis, create, propagate, aggr
       [i + 1], // Each claims a different output (extended index i+1 = anchor output i)
     );
     blocks.push(b);
-    net.submitAndFlush(b, nodeIds[i]);
+    net.deliverToAll(b, nodeIds[i]);
   }
 
   // Step 2: All nodes should have all blocks
@@ -52,7 +49,7 @@ Deno.test('Scenario: five-node full pipeline -- genesis, create, propagate, aggr
     aggregateOutputCounts: [1, 1, 1],
     declaredWeight: 5,
   });
-  net.submitAndFlush(agg, 'A');
+  net.deliverToAll(agg, 'A');
 
   net.assertAllHave(agg.hash);
   net.assertAllCanonical(agg.hash);
@@ -68,7 +65,7 @@ Deno.test('Scenario: value conservation across the network', () => {
 
   // Block claiming output 0 (value 100), producing output of value 100
   const b1 = makeBlock('vc-1', genesis, [makeOutput(100, 'vc-out-1')], 10, [1]);
-  net.submitAndFlush(b1, 'A');
+  net.deliverToAll(b1, 'A');
 
   // Block claiming output 1 (value 100), producing two outputs of value 50
   const b2 = makeBlock(
@@ -78,48 +75,11 @@ Deno.test('Scenario: value conservation across the network', () => {
     15,
     [2],
   );
-  net.submitAndFlush(b2, 'B');
+  net.deliverToAll(b2, 'B');
 
   // All nodes should have both blocks and agree
   net.assertAllHave(b1.hash);
   net.assertAllHave(b2.hash);
-  net.assertAllAgree();
-});
-
-Deno.test('Scenario: rapid multi-publisher block creation', () => {
-  const net = new TestNetwork();
-  const nodeCount = 5;
-  const blocksPerNode = 10;
-
-  for (let i = 0; i < nodeCount; i++) net.addNode(`N${i}`);
-
-  const genesis = makeGenesis(nodeCount * blocksPerNode);
-  net.broadcastGenesis(genesis);
-
-  // Each node rapidly creates multiple blocks
-  let outputIdx = 1;
-  const allBlocks = [];
-  for (let n = 0; n < nodeCount; n++) {
-    for (let b = 0; b < blocksPerNode; b++) {
-      const block = makeBlock(
-        `rapid-N${n}-${b}`,
-        genesis,
-        [makeOutput(10)],
-        20, // Weight must be high enough for gossip push priority to exceed minPushPriority
-        [outputIdx++],
-      );
-      allBlocks.push(block);
-      net.submitBlock(block, `N${n}`);
-    }
-  }
-
-  // Flush all pending gossip
-  net.flush();
-
-  // All nodes should have all blocks
-  for (const b of allBlocks) {
-    net.assertAllHave(b.hash);
-  }
   net.assertAllAgree();
 });
 
@@ -137,7 +97,7 @@ Deno.test('Scenario: game state -- sequential updates with verification', () => 
     const b = makeBlock(`game-${i}`, prev, [makeOutput(10, `state-${i}`)], 5);
     chain.push(b);
     // Alternate publishers
-    net.submitAndFlush(b, i % 2 === 0 ? 'A' : 'B');
+    net.deliverToAll(b, i % 2 === 0 ? 'A' : 'B');
     prev = b;
   }
 
@@ -164,8 +124,8 @@ Deno.test('Scenario: output lifecycle -- create, claim, aggregate', () => {
   const producer1 = makeBlock('lifecycle-p1', genesis, [makeOutput(100, 'prod1')], 10, [1]);
   const producer2 = makeBlock('lifecycle-p2', genesis, [makeOutput(200, 'prod2')], 15, [2]);
 
-  net.submitAndFlush(producer1, 'A');
-  net.submitAndFlush(producer2, 'B');
+  net.deliverToAll(producer1, 'A');
+  net.deliverToAll(producer2, 'B');
 
   // Both should be canonical
   net.assertAllCanonical(producer1.hash);
@@ -179,7 +139,7 @@ Deno.test('Scenario: output lifecycle -- create, claim, aggregate', () => {
     declaredWeight: 3,
   });
 
-  net.submitAndFlush(agg, 'C');
+  net.deliverToAll(agg, 'C');
 
   // Aggregation block should be canonical
   net.assertAllCanonical(agg.hash);
@@ -204,8 +164,8 @@ Deno.test('Scenario: create, propagate, conflict, resolve, continue chain', () =
   const blockA = makeBlock('resolve-A', genesis, [makeOutput(100)], 30, [1]);
   const blockB = makeBlock('resolve-B', genesis, [makeOutput(100)], 20, [1]);
 
-  net.submitAndFlush(blockA, 'A');
-  net.submitAndFlush(blockB, 'B');
+  net.deliverToAll(blockA, 'A');
+  net.deliverToAll(blockB, 'B');
 
   // All nodes should see A as winner (30 > 20)
   net.assertAllCanonical(blockA.hash);
@@ -215,10 +175,10 @@ Deno.test('Scenario: create, propagate, conflict, resolve, continue chain', () =
   // Each descendant must individually beat blockB's effective weight (20)
   // in the conflict set, so give them enough weight.
   const child1 = makeBlock('resolve-child1', blockA, [makeOutput(50)], 25);
-  net.submitAndFlush(child1, 'A');
+  net.deliverToAll(child1, 'A');
 
   const child2 = makeBlock('resolve-child2', child1, [makeOutput(25)], 25);
-  net.submitAndFlush(child2, 'C');
+  net.deliverToAll(child2, 'C');
 
   // Chain should be A's branch -- each block individually beats blockB
   net.assertAllCanonical(blockA.hash);

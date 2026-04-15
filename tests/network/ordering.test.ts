@@ -149,14 +149,11 @@ Deno.test('Ordering: concurrent block creation on multiple nodes', () => {
     blocks.push(b);
   }
 
-  // All nodes create their blocks (self-originated)
+  // Deliver each block to all nodes
   const nodeIds = ['A', 'B', 'C', 'D', 'E'];
   for (let i = 0; i < 5; i++) {
-    net.submitBlock(blocks[i], nodeIds[i]);
+    net.deliverToAll(blocks[i], nodeIds[i]);
   }
-
-  // Flush all gossip
-  net.flush();
 
   // All nodes should have all blocks and agree
   for (const b of blocks) {

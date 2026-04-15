@@ -676,3 +676,86 @@ Deno.test('OutputClaimModule conflict detection', async (t) => {
     assertEquals(pairExists(C2.hash, C3.hash), true);
   });
 });
+
+// -- Resolution callback tests ------------------------------------
+
+Deno.test('onResolution: fires on immediate resolution', () => {
+  const G = genesis(h('G'), 3);
+  const C = leaf({ hash: h('C'), anchor: G.hash, ownOutputCount: 1 });
+  const { module } = setup(G, C);
+
+  const resolutions: { claimant: Hash; block: Hash; outputIndex: number }[] = [];
+  module.onResolution((claimant, target) => {
+    resolutions.push({ claimant, block: target.block, outputIndex: target.outputIndex });
+  });
+
+  // C claims index 1, which is G output 0 (index 1 - C.ownOutputCount(1) = 0)
+  module.addBlock(C.hash, [1]);
+
+  assertEquals(resolutions.length, 1);
+  assertEquals(Hash.equals(resolutions[0].claimant, C.hash), true);
+  assertEquals(Hash.equals(resolutions[0].block, G.hash), true);
+  assertEquals(resolutions[0].outputIndex, 0);
+});
+
+Deno.test('onResolution: fires for self-claim', () => {
+  const G = genesis(h('G'), 3);
+  const C = leaf({ hash: h('C'), anchor: G.hash, ownOutputCount: 2 });
+  const { module } = setup(G, C);
+
+  const resolutions: { claimant: Hash; block: Hash; outputIndex: number }[] = [];
+  module.onResolution((claimant, target) => {
+    resolutions.push({ claimant, block: target.block, outputIndex: target.outputIndex });
+  });
+
+  // C claims index 0 (self-claim: 0 < ownOutputCount=2)
+  module.addBlock(C.hash, [0]);
+
+  assertEquals(resolutions.length, 1);
+  assertEquals(Hash.equals(resolutions[0].claimant, C.hash), true);
+  assertEquals(Hash.equals(resolutions[0].block, C.hash), true);
+  assertEquals(resolutions[0].outputIndex, 0);
+});
+
+Deno.test('onResolution: fires on deferred resolution via onBlockLoaded', () => {
+  // C claims an output on G, but G is not loaded yet
+  const G = genesis(h('G'), 3);
+  const C = leaf({ hash: h('C'), anchor: G.hash, ownOutputCount: 1 });
+  const { provider, module } = setup(C); // G not loaded
+
+  const resolutions: { claimant: Hash; block: Hash; outputIndex: number }[] = [];
+  module.onResolution((claimant, target) => {
+    resolutions.push({ claimant, block: target.block, outputIndex: target.outputIndex });
+  });
+
+  // C claims index 1 -> targets G output 0, but G not loaded -> stuck
+  module.addBlock(C.hash, [1]);
+  assertEquals(resolutions.length, 0); // not resolved yet
+
+  // Load G -> migration completes
+  provider.add(G);
+  module.onBlockLoaded(G.hash);
+
+  assertEquals(resolutions.length, 1);
+  assertEquals(Hash.equals(resolutions[0].claimant, C.hash), true);
+  assertEquals(Hash.equals(resolutions[0].block, G.hash), true);
+  assertEquals(resolutions[0].outputIndex, 0);
+});
+
+Deno.test('onResolution: fires for each resolved claim', () => {
+  const G = genesis(h('G'), 5);
+  const C = leaf({ hash: h('C'), anchor: G.hash, ownOutputCount: 1 });
+  const { module } = setup(G, C);
+
+  const resolutions: { claimant: Hash; block: Hash; outputIndex: number }[] = [];
+  module.onResolution((claimant, target) => {
+    resolutions.push({ claimant, block: target.block, outputIndex: target.outputIndex });
+  });
+
+  // C claims indices 1 and 3 -> G outputs 0 and 2
+  module.addBlock(C.hash, [1, 3]);
+
+  assertEquals(resolutions.length, 2);
+  assertEquals(resolutions[0].outputIndex, 0);
+  assertEquals(resolutions[1].outputIndex, 2);
+});

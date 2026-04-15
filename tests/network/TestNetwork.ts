@@ -10,7 +10,7 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive } from '../../src/util/Hash.ts';
 import { Block } from '../../src/core/Block.ts';
-import { BlockAwareness, PushAction } from '../../src/node/GossipModule.ts';
+import { BlockAwareness, PushAction } from '../../src/node/RoutingModule.ts';
 import { SimBlockResult, SimNode } from '../SimNetwork.ts';
 
 /** Simple set-based block awareness tracker. */
@@ -51,8 +51,8 @@ export class TestNetwork {
     if (connectToAll) {
       for (const [otherId, otherNode] of this.nodes) {
         if (otherId === id) continue;
-        node.gossip.addPeer(otherId, otherId, new SetAwareness());
-        otherNode.gossip.addPeer(id, id, new SetAwareness());
+        node.routing.addPeer(otherId, otherId, new SetAwareness());
+        otherNode.routing.addPeer(id, id, new SetAwareness());
       }
     }
 
@@ -64,8 +64,8 @@ export class TestNetwork {
     const nodeA = this.nodes.get(a);
     const nodeB = this.nodes.get(b);
     if (!nodeA || !nodeB) throw new Error(`Node not found: ${!nodeA ? a : b}`);
-    nodeA.gossip.addPeer(b, b, new SetAwareness());
-    nodeB.gossip.addPeer(a, a, new SetAwareness());
+    nodeA.routing.addPeer(b, b, new SetAwareness());
+    nodeB.routing.addPeer(a, a, new SetAwareness());
   }
 
   getNode(id: string): SimNode {

@@ -77,6 +77,10 @@ export class OutputClaimModule<BlockType> {
   private readonly waitingFor = new Map<HashPrimitive, Set<HashPrimitive>>();
 
   private readonly conflictListeners: ((a: Hash, b: Hash) => void)[] = [];
+  private readonly resolutionListeners: ((
+    claimant: Hash,
+    target: ResolvedClaim,
+  ) => void)[] = [];
 
   constructor(provider: OutputClaimProvider<BlockType>) {
     this.provider = provider;
@@ -85,6 +89,15 @@ export class OutputClaimModule<BlockType> {
   /** Register a callback for conflict detection. Fires when two different blocks claim the same output. */
   onConflict(cb: (a: Hash, b: Hash) => void): void {
     this.conflictListeners.push(cb);
+  }
+
+  /**
+   * Register a callback for claim resolution. Fires when a claim reaches its
+   * producing block -- both for immediate resolutions (in addBlock) and
+   * deferred resolutions (in onBlockLoaded when a stuck migration completes).
+   */
+  onResolution(cb: (claimant: Hash, target: ResolvedClaim) => void): void {
+    this.resolutionListeners.push(cb);
   }
 
   // -- Mutations --------------------------------------------------
@@ -263,11 +276,15 @@ export class OutputClaimModule<BlockType> {
 
     // Case 1: Resolved -- claim targets this block's own output
     if (index < ownOutputCount) {
-      return {
+      const resolved: ResolvedClaim = {
         block: blockHash,
         outputIndex: index,
         value: 0, // value not tracked here; caller can fill in
       };
+      for (const cb of this.resolutionListeners) {
+        cb(entry.claimant, resolved);
+      }
+      return resolved;
     }
 
     // Case 2: Descend through aggregates or to anchor

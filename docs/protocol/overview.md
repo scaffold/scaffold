@@ -199,7 +199,8 @@ The protocol is specified across several module documents, each responsible for 
 | [Conflict](conflict.md) | Double-spend detection | Do two blocks claim the same output? |
 | [Sampling](sampling.md) | Weight verification & probe scheduling | How is declared work converted to verified weight? |
 | [Trust](trust.md) | Economic incentives | What happens if a block is fraudulent? |
-| [Gossip](gossip.md) | Block distribution | Which peers should receive this block? |
+| [Gossip](gossip.md) | Subscription protocol | Which blocks are relevant to which subscriptions? |
+| [Routing](routing.md) | Block delivery | How are blocks delivered to the right peers? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
 | [Weight](weight.md) | Weight derivation | How do blocks earn consensus influence through verified computation? |
@@ -228,6 +229,7 @@ All modules live in `src/core/` and follow a provider pattern: pure logic in `*M
 | Sampling | [`SamplingModule.ts`](../../src/core/SamplingModule.ts) | [`SamplingService.ts`](../../src/core/SamplingService.ts) |
 | Trust | [`TrustModule.ts`](../../src/core/TrustModule.ts) | [`TrustService.ts`](../../src/core/TrustService.ts) |
 | Gossip | [`GossipModule.ts`](../../src/node/GossipModule.ts) | [`GossipService.ts`](../../src/node/GossipService.ts) |
+| Routing | [`RoutingModule.ts`](../../src/node/RoutingModule.ts) | [`RoutingService.ts`](../../src/node/RoutingService.ts) |
 | Block Creation | [`BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | [`BlockCreationService.ts`](../../src/core/BlockCreationService.ts) |
 | Anchoring | [`AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | — |
 | Execution Queue | [`ExecutionQueueModule.ts`](../../src/core/ExecutionQueueModule.ts) | [`ExecutionQueueService.ts`](../../src/core/ExecutionQueueService.ts) |

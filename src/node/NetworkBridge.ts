@@ -2,8 +2,8 @@ import { Block, BlockStore } from '../core/Block.ts';
 import { Hash } from '../util/Hash.ts';
 import { NetworkManager, NetworkPlugin } from './NetworkManager.ts';
 import { BlockSerializer, createDefaultBlockSerializer, PeerConnection } from './PeerConnection.ts';
-import { GossipService } from './GossipService.ts';
-import { BlockAwareness, PushAction } from './GossipModule.ts';
+import { RoutingService } from './RoutingService.ts';
+import { BlockAwareness, PushAction } from './RoutingModule.ts';
 import { DeliveryTracker } from './DeliveryTracker.ts';
 import { SignalingService, SignalEnvelope } from './SignalingService.ts';
 import { TransportConnection } from './PeerConnection.ts';
@@ -25,7 +25,7 @@ class SetAwareness implements BlockAwareness {
 export interface NetworkBridgeDeps {
   plugins: NetworkPlugin[];
   store: BlockStore;
-  gossip: GossipService;
+  routing: RoutingService;
   processBlock: (block: Block, peerId: string) => void;
   serializer?: BlockSerializer;
   signalingService?: SignalingService;
@@ -43,7 +43,7 @@ export interface NetworkBridgeDeps {
  */
 export class NetworkBridge {
   private readonly network: NetworkManager;
-  private readonly gossip: GossipService;
+  private readonly routing: RoutingService;
   private readonly store: BlockStore;
   private readonly delivery: DeliveryTracker;
   private readonly signalingService?: SignalingService;
@@ -51,7 +51,7 @@ export class NetworkBridge {
   private readonly _log?: ScopedLogger;
 
   constructor(deps: NetworkBridgeDeps) {
-    this.gossip = deps.gossip;
+    this.routing = deps.routing;
     this.store = deps.store;
     this.delivery = new DeliveryTracker();
     this.signalingService = deps.signalingService;
@@ -95,7 +95,7 @@ export class NetworkBridge {
       if (this.delivery.wasSent(block.hash, action.peer)) continue;
       this.network.sendBlock(block, [action.peer]);
       this.delivery.markSent(block.hash, action.peer);
-      this.gossip.reportPush(block.hash, action.peer);
+      this.routing.reportPush(block.hash, action.peer);
       this._log?.debug('blockSent', {
         hash: block.hash.toHex(),
         toPeer: action.peer,
@@ -118,7 +118,7 @@ export class NetworkBridge {
   private handlePeerConnected(peer: PeerConnection): void {
     this._log?.info('peerConnected', { peerId: peer.peerId });
     // Register peer with gossip (using peerId as pubkey placeholder)
-    this.gossip.addPeer(peer.peerId, peer.peerId, new SetAwareness());
+    this.routing.addPeer(peer.peerId, peer.peerId, new SetAwareness());
 
     // Register message handlers on the peer
     peer.onRequest((data) => {
@@ -135,7 +135,7 @@ export class NetworkBridge {
       if (data.delivered) {
         const hash = Hash.fromHex(data.hash);
         this.delivery.markDelivered(hash, peer.peerId);
-        this.gossip.reportDelivery(hash, peer.peerId, true);
+        this.routing.reportDelivery(hash, peer.peerId, true);
       }
     });
 
@@ -146,7 +146,7 @@ export class NetworkBridge {
 
   private handlePeerDisconnected(peerId: string): void {
     this._log?.info('peerDisconnected', { peerId });
-    this.gossip.removePeer(peerId);
+    this.routing.removePeer(peerId);
   }
 
   private handleSignalMessage(

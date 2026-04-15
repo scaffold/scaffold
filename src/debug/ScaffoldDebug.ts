@@ -244,9 +244,9 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
     },
 
     peers(): Record<string, unknown>[] {
-      // NetworkBridge is private on Scaffold, but we can access gossip peer state
-      const gossip = ctx.gossip;
-      const peerIds = gossip.getPeerIds();
+      // NetworkBridge is private on Scaffold, but we can access routing peer state
+      const routing = ctx.routing;
+      const peerIds = routing.getPeerIds();
       return peerIds.map((id) => ({ peerId: id }));
     },
 

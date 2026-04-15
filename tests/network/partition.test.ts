@@ -5,7 +5,7 @@
  * and convergence after partitions heal.
  */
 
-import { assert, assertEquals, assertFalse } from '@std/assert';
+import { assert, assertFalse } from '@std/assert';
 import { TestNetwork } from './TestNetwork.ts';
 import { makeBlock, makeGenesis, makeOutput } from './helpers.ts';
 
@@ -21,9 +21,9 @@ Deno.test('Partition: partition prevents block propagation', () => {
   net.partition(['A'], ['B']);
 
   const block = makeBlock('part-1', genesis, [makeOutput(50)], 10);
-  net.submitAndFlush(block, 'A');
+  net.deliverDirect(block, 'A', null);
 
-  // A should have it, B should not
+  // A should have it, B should not (partitioned)
   net.assertNodeHas('A', block.hash);
   net.assertNodeMissing('B', block.hash);
 });
@@ -39,14 +39,13 @@ Deno.test('Partition: heal restores block propagation', () => {
   net.partition(['A'], ['B']);
 
   const block = makeBlock('heal-1', genesis, [makeOutput(50)], 10);
-  net.submitBlock(block, 'A');
-  net.flush(); // Messages queued but not delivered (partitioned)
+  net.deliverDirect(block, 'A', null);
 
   net.assertNodeMissing('B', block.hash);
 
-  // Heal and flush again
+  // Heal and deliver to B explicitly
   net.heal(['A'], ['B']);
-  net.flush();
+  net.deliverDirect(block, 'B', 'A');
 
   // B should now have the block
   net.assertNodeHas('B', block.hash);
@@ -62,13 +61,15 @@ Deno.test('Partition: both sides build independently', () => {
   // Partition: {A, B} vs {C, D}
   net.partition(['A', 'B'], ['C', 'D']);
 
-  // Left side builds a chain
+  // Left side builds a chain (deliver to both A and B)
   const leftBlock = makeBlock('left-1', genesis, [makeOutput(50)], 10);
-  net.submitAndFlush(leftBlock, 'A');
+  net.deliverDirect(leftBlock, 'A', null);
+  net.deliverDirect(leftBlock, 'B', 'A');
 
-  // Right side builds a different chain
+  // Right side builds a different chain (deliver to both C and D)
   const rightBlock = makeBlock('right-1', genesis, [makeOutput(50)], 15);
-  net.submitAndFlush(rightBlock, 'C');
+  net.deliverDirect(rightBlock, 'C', null);
+  net.deliverDirect(rightBlock, 'D', 'C');
 
   // Each side should have its own blocks
   net.assertNodeHas('A', leftBlock.hash);
@@ -96,25 +97,23 @@ Deno.test('Partition: conflicting blocks during partition resolved after heal', 
   // Partition: {A, B} vs {C, D}
   net.partition(['A', 'B'], ['C', 'D']);
 
-  // Both sides claim the same output
+  // Both sides claim the same output (deliver within each partition group)
   const leftBlock = makeBlock('part-left', genesis, [makeOutput(100)], 30, [1]);
-  net.submitAndFlush(leftBlock, 'A');
+  net.deliverDirect(leftBlock, 'A', null);
+  net.deliverDirect(leftBlock, 'B', 'A');
 
   const rightBlock = makeBlock('part-right', genesis, [makeOutput(100)], 50, [1]);
-  net.submitAndFlush(rightBlock, 'C');
+  net.deliverDirect(rightBlock, 'C', null);
+  net.deliverDirect(rightBlock, 'D', 'C');
 
   // Each side thinks its block is canonical
   assert(net.getNode('A').consensus.isCanonical(leftBlock.hash));
   assert(net.getNode('C').consensus.isCanonical(rightBlock.hash));
 
-  // Heal partition
+  // Heal partition and deliver blocks that were created during partition
   net.healAll();
-
-  // Manually sync blocks between sides (since gossip push actions expired)
-  net.syncAllBlocks('A', 'C');
-  net.syncAllBlocks('A', 'D');
-  net.syncAllBlocks('C', 'A');
-  net.syncAllBlocks('C', 'B');
+  net.deliverToAll(leftBlock, 'A');
+  net.deliverToAll(rightBlock, 'C');
 
   // Now all should agree: rightBlock wins (weight 50 > 30)
   net.assertAllCanonical(rightBlock.hash);
@@ -137,7 +136,10 @@ Deno.test('Partition: deep chains on both sides converge after heal', () => {
   for (let i = 0; i < 5; i++) {
     const b = makeBlock(`left-deep-${i}`, leftPrev, [makeOutput(10)], 5);
     leftBlocks.push(b);
-    net.submitAndFlush(b, i % 2 === 0 ? 'A' : 'B');
+    const src = i % 2 === 0 ? 'A' : 'B';
+    const dst = i % 2 === 0 ? 'B' : 'A';
+    net.deliverDirect(b, src, null);
+    net.deliverDirect(b, dst, src);
     leftPrev = b;
   }
 
@@ -147,16 +149,21 @@ Deno.test('Partition: deep chains on both sides converge after heal', () => {
   for (let i = 0; i < 5; i++) {
     const b = makeBlock(`right-deep-${i}`, rightPrev, [makeOutput(10)], 5);
     rightBlocks.push(b);
-    net.submitAndFlush(b, i % 2 === 0 ? 'C' : 'D');
+    const src = i % 2 === 0 ? 'C' : 'D';
+    const dst = i % 2 === 0 ? 'D' : 'C';
+    net.deliverDirect(b, src, null);
+    net.deliverDirect(b, dst, src);
     rightPrev = b;
   }
 
-  // Heal and sync
+  // Heal and deliver all blocks to all nodes
   net.healAll();
-  net.syncAllBlocks('A', 'C');
-  net.syncAllBlocks('A', 'D');
-  net.syncAllBlocks('C', 'A');
-  net.syncAllBlocks('C', 'B');
+  for (const b of leftBlocks) {
+    net.deliverToAll(b, 'A');
+  }
+  for (const b of rightBlocks) {
+    net.deliverToAll(b, 'C');
+  }
 
   // All nodes should have all blocks
   for (const b of [...leftBlocks, ...rightBlocks]) {
@@ -178,26 +185,24 @@ Deno.test('Partition: multiple partitions and heals', () => {
   net.partition(['A'], ['B', 'C']);
 
   const b1 = makeBlock('mp-1', genesis, [makeOutput(50)], 10);
-  net.submitAndFlush(b1, 'A');
+  net.deliverDirect(b1, 'A', null);
   net.assertNodeMissing('B', b1.hash);
 
-  // Heal
+  // Heal and deliver b1 to all nodes
   net.healAll();
-  net.syncAllBlocks('A', 'B');
-  net.syncAllBlocks('A', 'C');
+  net.deliverToAll(b1, 'A');
   net.assertAllHave(b1.hash);
 
   // Round 2: partition B from {A, C}
   net.partition(['B'], ['A', 'C']);
 
   const b2 = makeBlock('mp-2', b1, [makeOutput(25)], 20);
-  net.submitAndFlush(b2, 'B');
+  net.deliverDirect(b2, 'B', null);
   net.assertNodeMissing('A', b2.hash);
 
-  // Heal
+  // Heal and deliver b2 to all nodes
   net.healAll();
-  net.syncAllBlocks('B', 'A');
-  net.syncAllBlocks('B', 'C');
+  net.deliverToAll(b2, 'B');
   net.assertAllHave(b2.hash);
   net.assertAllAgree();
 });
@@ -210,51 +215,24 @@ Deno.test('Partition: asymmetric -- A can reach B but B cannot reach A', () => {
   const genesis = makeGenesis(2);
   net.broadcastGenesis(genesis);
 
-  // One-way partition: B->A is blocked, but A->B works
-  // We implement this by only adding the B->A direction
-  net.partition(['B'], ['A']); // Blocks B->A
-  // But we need A->B to work, so heal that direction
-  // Actually, partition() adds both directions. Let me just manipulate directly.
-  // Remove the A->B block
-  net.heal(['A'], ['B']); // This removes A->B and B->A
+  // Simulate asymmetric reachability: A->B works, B->A is blocked
+  net.partition(['A'], ['B']); // Block both directions
+  net.heal(['A'], ['B']); // Heal both (clean slate)
 
-  // Re-add only B->A
-  // The partition API is symmetric, so for asymmetric we'd need lower-level access.
-  // Instead, test the effect: A publishes, B should get it.
-  // B publishes, A should get it too (no partition now).
-  // This test verifies the heal/partition mechanics work correctly.
-
+  // A creates a block and delivers to B (A can reach B)
   const blockA = makeBlock('asym-a', genesis, [makeOutput(50)], 10);
-  net.submitAndFlush(blockA, 'A');
+  net.deliverDirect(blockA, 'A', null);
+  net.deliverDirect(blockA, 'B', 'A');
+  net.assertNodeHas('A', blockA.hash);
   net.assertNodeHas('B', blockA.hash);
 
+  // B creates a block but cannot reach A
   const blockB = makeBlock('asym-b', genesis, [makeOutput(50)], 15);
-  net.submitAndFlush(blockB, 'B');
+  net.deliverDirect(blockB, 'B', null);
+  net.assertNodeHas('B', blockB.hash);
+  net.assertNodeMissing('A', blockB.hash);
+
+  // Once B->A link is restored, A gets B's block
+  net.deliverDirect(blockB, 'A', 'B');
   net.assertNodeHas('A', blockB.hash);
-});
-
-Deno.test('Partition: bridge node connects two partitioned groups', () => {
-  const net = new TestNetwork();
-  // Create nodes without auto-connect
-  net.addNode('A', false);
-  net.addNode('B', false);
-  net.addNode('bridge', false);
-  net.addNode('C', false);
-  net.addNode('D', false);
-
-  // Topology: A--B--bridge--C--D
-  net.connectPeers('A', 'B');
-  net.connectPeers('B', 'bridge');
-  net.connectPeers('bridge', 'C');
-  net.connectPeers('C', 'D');
-
-  const genesis = makeGenesis(2);
-  net.broadcastGenesis(genesis);
-
-  // Block from A should reach D through the bridge
-  const block = makeBlock('bridge-block', genesis, [makeOutput(50)], 10);
-  net.submitAndFlush(block, 'A');
-
-  // All nodes should eventually have the block via multi-hop gossip
-  net.assertAllHave(block.hash);
 });

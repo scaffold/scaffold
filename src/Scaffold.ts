@@ -15,7 +15,7 @@ import { getGenesisBlock } from './genesis.ts';
 import { UtxoIndex } from './node/UtxoIndex.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
 import { NetworkPlugin } from './node/NetworkManager.ts';
-import { PushAction } from './node/GossipModule.ts';
+import { PushAction } from './node/RoutingModule.ts';
 import { SignalingService } from './node/SignalingService.ts';
 import { NetworkProvider } from './interfaces/network.ts';
 import { bin2hex } from './util/hex.ts';
@@ -111,7 +111,7 @@ export class Scaffold {
       this.networkBridge = new NetworkBridge({
         plugins: config.plugins,
         store: nodeContext.store,
-        gossip: nodeContext.gossip,
+        routing: nodeContext.routing,
         processBlock: (block, peerId) => {
           nodeContext.processBlock(block, peerId);
         },

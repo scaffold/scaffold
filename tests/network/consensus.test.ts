@@ -22,7 +22,7 @@ Deno.test('Consensus: linear chain -- all nodes agree on canonical order', () =>
   for (let i = 0; i < 5; i++) {
     const b = makeBlock(`chain-${i}`, prev, [makeOutput(10)], 10 + i);
     blocks.push(b);
-    net.submitAndFlush(b, ['A', 'B', 'C', 'D', 'E'][i]);
+    net.deliverToAll(b, ['A', 'B', 'C', 'D', 'E'][i]);
     prev = b;
   }
 
@@ -45,8 +45,8 @@ Deno.test('Consensus: competing branches -- higher weight wins everywhere', () =
   const light = makeBlock('light', genesis, [makeOutput(100)], 10, [1]);
 
   // Deliver both to all nodes
-  net.submitAndFlush(heavy, 'A');
-  net.submitAndFlush(light, 'B');
+  net.deliverToAll(heavy, 'A');
+  net.deliverToAll(light, 'B');
 
   // Higher weight should win on all nodes
   net.assertAllCanonical(heavy.hash);
@@ -65,8 +65,8 @@ Deno.test('Consensus: descendant weight flips winner across all nodes', () => {
   const blockA = makeBlock('flipA', genesis, [makeOutput(100)], 10, [1]);
   const blockB = makeBlock('flipB', genesis, [makeOutput(100)], 15, [1]);
 
-  net.submitAndFlush(blockA, 'A');
-  net.submitAndFlush(blockB, 'B');
+  net.deliverToAll(blockA, 'A');
+  net.deliverToAll(blockB, 'B');
 
   // B should be winning initially (15 > 10)
   net.assertAllCanonical(blockB.hash);
@@ -74,7 +74,7 @@ Deno.test('Consensus: descendant weight flips winner across all nodes', () => {
 
   // Heavy descendant of A flips the winner
   const childA = makeBlock('childA', blockA, [], 100);
-  net.submitAndFlush(childA, 'A');
+  net.deliverToAll(childA, 'A');
 
   // A should now win (effective 10 + 100 = 110 vs 15)
   net.assertAllCanonical(blockA.hash);
@@ -153,7 +153,7 @@ Deno.test('Consensus: deep chain stability', () => {
   let prev = genesis;
   for (let i = 0; i < 20; i++) {
     const b = makeBlock(`deep-${i}`, prev, [makeOutput(10)], 5);
-    net.submitAndFlush(b, ['A', 'B', 'C'][i % 3]);
+    net.deliverToAll(b, ['A', 'B', 'C'][i % 3]);
     prev = b;
   }
 

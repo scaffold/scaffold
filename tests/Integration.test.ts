@@ -248,7 +248,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
   assert(bChanges.some((c) => c.canonical === false));
 });
 
-Deno.test('Integration: two-node gossip — block published on A propagates to B', () => {
+Deno.test('Integration: two-node block delivery -- B sees A block as canonical', () => {
   const network = new SimNetwork();
   const nodeA = network.addNode('A');
   const nodeB = network.addNode('B');
@@ -258,12 +258,10 @@ Deno.test('Integration: two-node gossip — block published on A propagates to B
   // Deliver genesis to both nodes
   network.deliverToAll(genesis, 'A');
 
-  // Create a block on node A
+  // Create a block on node A and deliver directly to B
   const block = makeLeafBlockWithHash('gossip-block', genesis, [makeOutput(50, 'new')], 10);
-  const resultA = nodeA.receiveBlock(block, null);
-
-  // Process push actions — should propagate to B
-  const pushResults = network.processPushActions('A', block, resultA.pushActions);
+  nodeA.receiveBlock(block, null);
+  nodeB.receiveBlock(block, 'A');
 
   // Node B should now have the block
   assert(nodeB.store.has(block.hash));

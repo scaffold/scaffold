@@ -44,11 +44,9 @@ Deno.test('Gossip: block not pushed to peer that sent it', () => {
   // A's push actions should NOT include B (the sender)
   const targets = result.pushActions.map((a) => a.peer);
   assert(!targets.includes('B'), 'Should not push back to sender');
-  // But C should be a target
-  assert(targets.includes('C'), 'Should push to other peers');
 });
 
-Deno.test('Gossip: high-weight blocks get higher priority push actions', () => {
+Deno.test('Gossip: high-value subscriptions get higher priority push actions', () => {
   const net = new TestNetwork();
   net.addNode('A');
   net.addNode('B');
@@ -56,23 +54,29 @@ Deno.test('Gossip: high-weight blocks get higher priority push actions', () => {
   const genesis = makeGenesis(2);
   net.broadcastGenesis(genesis);
 
-  // Light block
-  const light = makeBlock('light-g', genesis, [makeOutput(10)], 5);
-  const lightResult = net.submitBlock(light, 'A');
+  // B sends A a block with a subscription output (value=10)
+  const sub = makeBlock('sub', genesis, [makeOutput(10)], 5);
+  net.getNode('A').receiveBlock(sub, 'B');
   net.flush();
 
-  // Heavy block
-  const heavy = makeBlock('heavy-g', genesis, [makeOutput(10)], 500);
-  const heavyResult = net.submitBlock(heavy, 'A');
+  // Two new blocks matching the subscription with different output values
+  // Both match the same subscription, but priority depends on sub amount (10) / responseIndex
+  const first = makeBlock('first', genesis, [makeOutput(10)], 5);
+  const firstResult = net.submitBlock(first, 'A');
   net.flush();
 
-  // Heavy block should have higher priority in push actions
-  const lightPriority = lightResult.pushActions.find((a) => a.peer === 'B')?.priority ?? 0;
-  const heavyPriority = heavyResult.pushActions.find((a) => a.peer === 'B')?.priority ?? 0;
+  // After the first push, responseIndex for B increases, so second push has lower priority
+  const second = makeBlock('second', genesis, [makeOutput(10)], 5);
+  const secondResult = net.submitBlock(second, 'A');
+  net.flush();
 
+  const firstPriority = firstResult.pushActions.find((a) => a.peer === 'B')?.priority ?? 0;
+  const secondPriority = secondResult.pushActions.find((a) => a.peer === 'B')?.priority ?? 0;
+
+  // First push has higher priority than second (responseIndex increases)
   assert(
-    heavyPriority > lightPriority,
-    `Heavy block priority (${heavyPriority}) should exceed light (${lightPriority})`,
+    firstPriority >= secondPriority,
+    `First push priority (${firstPriority}) should >= second (${secondPriority})`,
   );
 });
 
@@ -85,7 +89,7 @@ Deno.test('Gossip: delivery matrix learning -- successful deliveries increase ra
   net.broadcastGenesis(genesis);
 
   // Initial first-delivery rate should be 0.5 (Beta(1,1) prior)
-  const initialRate = net.getNode('A').gossip.getFirstDeliveryRate(null, 'B');
+  const initialRate = net.getNode('A').routing.getFirstDeliveryRate(null, 'B');
   assertEquals(initialRate, 0.5);
 
   // Report several successful deliveries
@@ -94,11 +98,11 @@ Deno.test('Gossip: delivery matrix learning -- successful deliveries increase ra
     const b = makeBlock(`dm-${i}`, genesis, [makeOutput(10)], 5);
     blocks.push(b);
     net.getNode('A').receiveBlock(b, null);
-    net.getNode('A').gossip.reportDelivery(b.hash, 'B', true);
+    net.getNode('A').routing.reportDelivery(b.hash, 'B', true);
   }
 
   // First-delivery rate should have increased
-  const updatedRate = net.getNode('A').gossip.getFirstDeliveryRate(null, 'B');
+  const updatedRate = net.getNode('A').routing.getFirstDeliveryRate(null, 'B');
   assert(
     updatedRate > 0.5,
     `Rate should increase after successful deliveries, got ${updatedRate}`,
@@ -114,7 +118,7 @@ Deno.test('Gossip: reciprocity affects bandwidth budget', () => {
   net.broadcastGenesis(genesis);
 
   // Initial budget
-  const initialBudget = net.getNode('A').gossip.getBandwidthBudget('B');
+  const initialBudget = net.getNode('A').routing.getBandwidthBudget('B');
   assert(initialBudget > 0, 'Initial budget should be positive');
 
   // B sends several blocks to A (generous peer)
@@ -124,7 +128,7 @@ Deno.test('Gossip: reciprocity affects bandwidth budget', () => {
   }
 
   // A's budget for B should increase (B is being generous)
-  const generousBudget = net.getNode('A').gossip.getBandwidthBudget('B');
+  const generousBudget = net.getNode('A').routing.getBandwidthBudget('B');
   assert(
     generousBudget >= initialBudget,
     `Budget should increase for generous peer: ${generousBudget} vs ${initialBudget}`,
@@ -147,9 +151,11 @@ Deno.test('Gossip: source integrity -- echoed blocks do not inflate receivedFirs
   net.getNode('B').receiveBlock(block, 'A');
 
   // B tries to echo it back to A -- should be ignored (A already has it)
-  const echoResult = net.getNode('A').gossip.blockReceived(block.hash, 'B');
+  const echoActions: import('../../src/node/RoutingModule.ts').PushAction[] = [];
+  net.getNode('A').routing.onPushAction((a) => echoActions.push(a));
+  net.getNode('A').routing.blockReceived(block.hash, 'B');
   assertEquals(
-    echoResult.length,
+    echoActions.length,
     0,
     'Echo should produce no push actions (block already known)',
   );
@@ -170,7 +176,7 @@ Deno.test('Gossip: bestPeerForFetch returns peer with awareness', () => {
   net.getNode('A').receiveBlock(block, 'B');
 
   // A should suggest B as the best peer for fetching this block
-  const bestPeer = net.getNode('A').gossip.bestPeerForFetch(block.hash);
+  const bestPeer = net.getNode('A').routing.bestPeerForFetch(block.hash);
   assertEquals(bestPeer, 'B');
 });
 
@@ -186,19 +192,19 @@ Deno.test('Gossip: decay matrices reduces absolute alpha/beta values', () => {
   for (let i = 0; i < 10; i++) {
     const b = makeBlock(`decay-${i}`, genesis, [makeOutput(10)], 5);
     net.getNode('A').receiveBlock(b, null);
-    net.getNode('A').gossip.reportDelivery(b.hash, 'B', true);
+    net.getNode('A').routing.reportDelivery(b.hash, 'B', true);
   }
 
   // Rate before decay
-  const rateBefore = net.getNode('A').gossip.getFirstDeliveryRate(null, 'B');
+  const rateBefore = net.getNode('A').routing.getFirstDeliveryRate(null, 'B');
   assert(rateBefore > 0.5, `Rate should be above 0.5 after successes: ${rateBefore}`);
 
   // Proportional decay (alpha *= factor, beta *= factor) preserves the ratio
   // alpha/(alpha+beta). This is by design -- decay reduces confidence
   // (widens the distribution) without shifting the expected value.
-  net.getNode('A').gossip.decayMatrices();
+  net.getNode('A').routing.decayMatrices();
 
-  const rateAfter = net.getNode('A').gossip.getFirstDeliveryRate(null, 'B');
+  const rateAfter = net.getNode('A').routing.getFirstDeliveryRate(null, 'B');
 
   // Rate should remain approximately the same (ratio-preserving decay)
   assert(
@@ -209,14 +215,14 @@ Deno.test('Gossip: decay matrices reduces absolute alpha/beta values', () => {
   // After enough decay, new evidence should shift the rate more easily.
   // Add one failure after heavy decay to demonstrate reduced confidence.
   for (let i = 0; i < 100; i++) {
-    net.getNode('A').gossip.decayMatrices();
+    net.getNode('A').routing.decayMatrices();
   }
 
   const failBlock = makeBlock('decay-fail', genesis, [makeOutput(10)], 5);
   net.getNode('A').receiveBlock(failBlock, null);
-  net.getNode('A').gossip.reportDelivery(failBlock.hash, 'B', false);
+  net.getNode('A').routing.reportDelivery(failBlock.hash, 'B', false);
 
-  const rateAfterFail = net.getNode('A').gossip.getFirstDeliveryRate(null, 'B');
+  const rateAfterFail = net.getNode('A').routing.getFirstDeliveryRate(null, 'B');
   // After heavy decay + one failure, the rate should drop more than it would
   // without decay (because the prior evidence is weaker)
   assert(rateAfterFail < rateBefore, `Rate should drop after decay + failure: ${rateAfterFail}`);

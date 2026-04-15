@@ -4,8 +4,7 @@ import { BlockSpec } from '../core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
-import { GossipService } from '../node/GossipService.ts';
-import { BlockAwareness } from '../node/GossipModule.ts';
+import { BlockAwareness } from '../node/RoutingModule.ts';
 import { composeGenesisPacket } from '../core/Packet.ts';
 import { Scaffold } from '../Scaffold.ts';
 
@@ -65,8 +64,8 @@ export class DemoNode {
     return this.scaffold.context.blockCreation;
   }
 
-  get gossip(): GossipService {
-    return this.scaffold.context.gossip;
+  get routing(): import('../node/RoutingModule.ts').RoutingModule {
+    return this.scaffold.context.routing;
   }
 
   /** Receive a packet from a peer. Validate, accept if valid, forward to other peers. */
@@ -154,7 +153,7 @@ export class DemoNode {
   /** Register a new peer and sync current chain. */
   addPeer(peerId: string, ws: WebSocket): void {
     this.peers.set(peerId, ws);
-    this.gossip.addPeer(peerId, peerId, new SetAwareness());
+    this.routing.addPeer(peerId, peerId, new SetAwareness());
 
     // Sync: send all blocks in chain order (excluding genesis, peers compute it themselves)
     const chain = this.getCanonicalChain();

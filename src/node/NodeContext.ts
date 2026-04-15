@@ -38,7 +38,8 @@ import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { GossipService } from './GossipService.ts';
-import { PushAction } from './GossipModule.ts';
+import { RoutingService } from './RoutingService.ts';
+import { PushAction } from './RoutingModule.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
 import { Hash } from '../util/Hash.ts';
@@ -81,6 +82,7 @@ export class NodeContext {
   readonly consensus: ConsensusService;
   readonly sampling: SamplingService;
   readonly gossip: GossipService;
+  readonly routing: RoutingService;
   readonly trust: TrustService;
   readonly blockCreation: BlockCreationService;
   readonly outputClaims: OutputClaimService;
@@ -106,6 +108,7 @@ export class NodeContext {
     this.sampling = this.protocolContext.get(SamplingService);
     this.gossip = new GossipService(this.protocolContext);
     this.trust = this.protocolContext.get(TrustService);
+    this.routing = new RoutingService(this.protocolContext, this.gossip);
     this.blockCreation = this.protocolContext.get(BlockCreationService);
     this.outputClaims = this.protocolContext.get(OutputClaimService);
 
@@ -204,7 +207,7 @@ export class NodeContext {
       sampling: this.sampling,
       strategies,
       blockCreator,
-      gossip: this.gossip,
+      routing: this.routing,
       draftManager: this.draftManager,
       logger: this.protocolContext.logger('reactive'),
       onNotifyFetch: config.onNotifyFetch,
