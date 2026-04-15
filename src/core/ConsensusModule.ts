@@ -95,23 +95,30 @@ export class ConsensusModule<BlockType> {
     this.canonicalityListeners.push(cb);
   }
 
-  /** Diff canonical set against previous snapshot, fire listeners for each change. */
+  /**
+   * Diff canonical set against previous snapshot, fire listeners for each change.
+   * Non-canonical changes fire first (undo old state), then canonical changes
+   * (apply new state). This ordering ensures that consumers tracking claimed
+   * state see the correct final state after conflict flips.
+   */
   flushChanges(): void {
     const current = this.getCanonicalView();
     if (!this.previousCanonical) {
       this.previousCanonical = new Set(current);
       return;
     }
-    for (const key of current) {
-      if (!this.previousCanonical.has(key)) {
-        const hash = Hash.fromPrimitive(key);
-        for (const cb of this.canonicalityListeners) cb(hash, true);
-      }
-    }
+    // Fire non-canonical first: undo old state
     for (const key of this.previousCanonical) {
       if (!current.has(key)) {
         const hash = Hash.fromPrimitive(key);
         for (const cb of this.canonicalityListeners) cb(hash, false);
+      }
+    }
+    // Then fire canonical: apply new state
+    for (const key of current) {
+      if (!this.previousCanonical.has(key)) {
+        const hash = Hash.fromPrimitive(key);
+        for (const cb of this.canonicalityListeners) cb(hash, true);
       }
     }
     this.previousCanonical = new Set(current);

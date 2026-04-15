@@ -102,6 +102,18 @@ export class TestNetwork {
     return node.receiveBlock(block, fromPeer);
   }
 
+  /**
+   * Deliver a block to a node as if from a specific peer,
+   * and queue resulting push actions for propagation via flush().
+   */
+  deliverFromPeer(block: Block, nodeId: string, fromPeer: string): SimBlockResult {
+    const node = this.nodes.get(nodeId);
+    if (!node) throw new Error(`Node ${nodeId} not found`);
+    const result = node.receiveBlock(block, fromPeer);
+    this.queuePushActions(nodeId, block, result.pushActions);
+    return result;
+  }
+
   /** Deliver a block directly to all nodes (bypasses gossip, like old SimNetwork). */
   deliverToAll(block: Block, sourceNodeId: string): void {
     for (const [nodeId, node] of this.nodes) {
@@ -360,8 +372,15 @@ export class TestNetwork {
 
   // -- Private --------------------------------------------------------
 
-  private queuePushActions(source: string, block: Block, actions: PushAction[]): void {
+  private queuePushActions(source: string, _triggerBlock: Block, actions: PushAction[]): void {
+    const node = this.nodes.get(source);
+    if (!node) return;
     for (const action of actions) {
+      // Look up the block specified by the push action (may differ from the
+      // trigger block in backfill scenarios where existing content is pushed
+      // toward a new subscriber).
+      const block = node.store.get(action.block);
+      if (!block) continue;
       const latency = this.getLatency(source, action.peer);
       this.pending.push({
         from: source,

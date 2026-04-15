@@ -465,6 +465,98 @@ Deno.test('many subscribers to same verifier: O(n) send actions', () => {
   assertEquals(triggers.size, 20);
 });
 
+// -- Subscription lifecycle: send action effects ----------------------
+
+Deno.test('outputClaimed: no send actions for claimed subscription', () => {
+  const { provider, module } = setup();
+  const V = vk('game');
+  const actions = collectActions(module);
+
+  // A subscribes to V
+  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
+  module.addSubscriptionSource(h('A'));
+
+  // Claim A's output
+  module.outputClaimed(h('A'), 0);
+
+  // New block matching V should NOT trigger send actions -- subscription is gone
+  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 5 }]);
+  module.blockReceived(h('B'));
+
+  assertEquals(actions.length, 0);
+});
+
+Deno.test('outputUnclaimed: send actions restored after unclaim', () => {
+  const { provider, module } = setup();
+  const V = vk('game');
+  const actions = collectActions(module);
+
+  // A subscribes to V
+  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
+  module.addSubscriptionSource(h('A'));
+
+  // Claim then unclaim
+  module.outputClaimed(h('A'), 0);
+  module.outputUnclaimed(h('A'), 0);
+
+  // New block matching V should trigger send actions again
+  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 5 }]);
+  module.blockReceived(h('B'));
+
+  assertEquals(actions.length, 1);
+  assertEquals(Hash.equals(actions[0].trigger, h('A')), true);
+});
+
+Deno.test('outputClaimed: only claimed output removed, sibling survives', () => {
+  const { provider, module } = setup();
+  const V = vk('game');
+
+  // A has two outputs to V
+  provider.addBlock(h('A'), [
+    { index: 0, verifierKey: V, value: 10 },
+    { index: 1, verifierKey: V, value: 20 },
+  ]);
+  module.addSubscriptionSource(h('A'));
+  assertEquals(module.getSubscriptionCount(V), 2);
+
+  // Claim only index 0
+  module.outputClaimed(h('A'), 0);
+  assertEquals(module.getSubscriptionCount(V), 1);
+
+  // Register listener AFTER setup to avoid backfill noise
+  const actions = collectActions(module);
+
+  // New block matching V should still trigger for the surviving subscription
+  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 5 }]);
+  module.blockReceived(h('B'));
+
+  assertEquals(actions.length, 1);
+  assertEquals(actions[0].amount, 20); // surviving entry's value
+});
+
+Deno.test('outputClaimed: different verifiers independent', () => {
+  const { provider, module } = setup();
+  const V1 = vk('game');
+  const V2 = vk('pay');
+  const actions = collectActions(module);
+
+  provider.addBlock(h('A'), [
+    { index: 0, verifierKey: V1, value: 10 },
+    { index: 1, verifierKey: V2, value: 20 },
+  ]);
+  module.addSubscriptionSource(h('A'));
+
+  // Claim only V1 output
+  module.outputClaimed(h('A'), 0);
+
+  // V2 subscription should survive
+  provider.addBlock(h('B'), [{ index: 0, verifierKey: V2, value: 5 }]);
+  module.blockReceived(h('B'));
+
+  assertEquals(actions.length, 1);
+  assertEquals(actions[0].verifier, V2);
+});
+
 Deno.test('multiple outputs to same verifier on one block: separate entries', () => {
   const { provider, module } = setup();
   const V = vk('game');

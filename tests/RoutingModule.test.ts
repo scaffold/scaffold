@@ -210,25 +210,31 @@ Deno.test('send action: trigger not in any receivedFirst -> only baseline push',
   assertEquals(subscriptionMatched.length, 0);
 });
 
-Deno.test('send action: multiple peers have trigger -> push to all', () => {
+Deno.test('send action: different triggers per peer -> push to both', () => {
   const { gossipProvider, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 10 }]);
+  // Each peer sends a different V block (separate triggers)
+  gossipProvider.addBlock(h('from_alice'), [{ index: 0, verifierKey: V, value: 10 }]);
+  gossipProvider.addBlock(h('from_bob'), [{ index: 0, verifierKey: V, value: 10 }]);
   gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
   routing.addPeer('bob', 'pk_bob', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice');
 
-  // Now bob also sends us the trigger
-  // Can't do this since trigger is already in localBlocks.
-  // Instead, set up both peers to have the trigger:
-  // We need both to have it. Let's reset and have trigger sent by both.
-  // Actually, the same block can only enter receivedFirst for the FIRST sender.
-  // So if alice sends trigger first, bob doesn't get it in receivedFirst.
-  // This tests that only alice gets the push.
+  routing.blockReceived(h('from_alice'), 'alice');
+  routing.blockReceived(h('from_bob'), 'bob');
+  routing.blockReceived(h('new'), null);
+
+  const toAlice = actions.filter((a) =>
+    a.peer === 'alice' && Hash.equals(a.block, h('new'))
+  );
+  const toBob = actions.filter((a) =>
+    a.peer === 'bob' && Hash.equals(a.block, h('new'))
+  );
+  assert(toAlice.length >= 1, 'new block should be pushed to alice');
+  assert(toBob.length >= 1, 'new block should be pushed to bob');
 });
 
 Deno.test('send action: dedup by (block, peer) keeps highest priority', () => {

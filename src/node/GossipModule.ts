@@ -122,10 +122,11 @@ export class GossipModule {
    *   emit SendAction(block=B, trigger=A) for each subscriber A.
    *
    * For each of B's resolved claims with verifier V in the index:
-   *   emit SendAction(block=B, trigger=A) for each subscriber A,
-   *   then remove the claimed output from the index.
+   *   emit SendAction(block=B, trigger=A) for each subscriber A.
    *
    * Does NOT add B to the subscription index -- that's addSubscriptionSource.
+   * Does NOT remove claimed outputs -- that's outputClaimed, driven by
+   * canonical state changes.
    */
   blockReceived(block: Hash): void {
     const key = block.toPrimitive();

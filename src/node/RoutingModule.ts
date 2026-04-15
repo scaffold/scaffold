@@ -26,7 +26,6 @@ export interface RoutingConfig {
   matrixDecayFactor: number;
   /** Decay factor (0-1) for reciprocity accumulators. */
   reciprocityDecayFactor: number;
-
 }
 
 export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
@@ -38,7 +37,6 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
 
   matrixDecayFactor: 0.95,
   reciprocityDecayFactor: 0.95,
-
 };
 
 // --- Provider ---
@@ -133,7 +131,6 @@ export class RoutingModule {
   /** Whether we're inside a blockReceived cycle (for batching). */
   private inCycle = false;
 
-
   constructor(
     provider: RoutingProvider,
     gossip: GossipModule,
@@ -189,7 +186,6 @@ export class RoutingModule {
    * 2. Calls gossip.addSubscriptionSource for new receivedFirst entries
    * 3. Calls gossip.blockReceived (which emits send actions via callback)
    * 4. handleSendAction maps each to PushAction via trigger->peer routing
-   * 5. Adds baseline propagation if no subscription matches
    *
    * Emits PushAction via onPushAction callback.
    */

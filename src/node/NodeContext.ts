@@ -44,9 +44,10 @@ import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
 import { Hash } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
-import { UtxoIndex } from './UtxoIndex.ts';
+import { UtxoIndex, verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
 import { EventLog } from '../core/EventLog.ts';
+import { HashPrimitive } from '../util/Hash.ts';
 
 export interface NodeConfig {
   /** Genesis block (pre-built). */
@@ -165,6 +166,50 @@ export class NodeContext {
         this.utxoIndex.blockBecameCanonical(block);
       } else {
         this.utxoIndex.blockBecameNonCanonical(block);
+      }
+    });
+
+    // 5f. Wire gossip subscription lifecycle to claim resolution and canonicality.
+    //     Cache resolved claims so canonicality changes can update the
+    //     gossip subscription index without re-resolving through the anchor chain.
+    const resolvedClaimCache = new Map<
+      HashPrimitive,
+      { block: Hash; outputIndex: number }[]
+    >();
+    this.outputClaims.onResolution((claimant, target) => {
+      // Cache the resolved claim for canonicality wiring
+      const key = claimant.toPrimitive();
+      let entries = resolvedClaimCache.get(key);
+      if (!entries) {
+        entries = [];
+        resolvedClaimCache.set(key, entries);
+      }
+      entries.push({ block: target.block, outputIndex: target.outputIndex });
+
+      // Notify gossip for deferred claim routing
+      const source = this.store.get(target.block);
+      if (!source) return;
+      const output = source.outputs[target.outputIndex];
+      if (!output) return;
+      const vk = verifierKey(output.verifier.contract, output.verifier.params);
+      this.gossip.notifyClaimResolved(claimant, vk, target.value);
+
+      // If the claimant is already canonical, immediately update subscriptions.
+      // This handles the case where claims resolve after canonicality is decided.
+      if (this.consensus.isCanonical(claimant)) {
+        this.gossip.outputClaimed(target.block, target.outputIndex);
+      }
+    });
+
+    this.consensus.onCanonicalityChange((hash, canonical) => {
+      const targets = resolvedClaimCache.get(hash.toPrimitive());
+      if (!targets) return;
+      for (const t of targets) {
+        if (canonical) {
+          this.gossip.outputClaimed(t.block, t.outputIndex);
+        } else {
+          this.gossip.outputUnclaimed(t.block, t.outputIndex);
+        }
       }
     });
 
