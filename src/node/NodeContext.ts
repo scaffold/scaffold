@@ -5,9 +5,11 @@ import {
   COLLATERAL_CONTRACT,
   INSURANCE_CONTRACT,
   RECORD_CONTRACT,
+  SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
 import { BlockBlueprint, BlockSpec, type ClaimEntry, Output } from '../core/BlockCreationModule.ts';
+import { makeSignatureOutput } from '../contracts/SignatureContract.ts';
 import {
   type OutputSpaceBlock,
   OutputSpaceModule,
@@ -51,10 +53,16 @@ import { EventLog } from '../core/EventLog.ts';
 export interface NodeConfig {
   /** Genesis block (pre-built). */
   genesis: Block;
+  /** Private key for signing blocks. If provided, solidified drafts will be signed. */
+  privateKey?: Uint8Array;
+  /** Public key (compressed, 33 bytes). Derived from privateKey. Used for auto-balance. */
+  publicKey?: Uint8Array;
   /** Strategies to register with the reactive layer */
   strategies?: Strategy[];
   /** Callback when a notifyFetch action is dispatched */
   onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
+  /** Check if a fetch subscription exists for a verifier key */
+  hasFetchSubscription?: (verifierKey: string) => boolean;
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -91,8 +99,22 @@ export class NodeContext {
   readonly blocks: BlockRecordSet;
 
   private readonly _genesisHash: Hash;
+  private readonly _privateKey: Uint8Array | null;
+  private readonly _publicKey: Uint8Array | null;
+  private readonly _contracts: Map<string, Contract>;
+  private readonly _blockCreator: BlockCreator;
+
+  /** Cache of resolved claims relevant to active fetch subscriptions. */
+  private readonly _claimFetchCache = new Map<
+    string,
+    { claimant: Hash; target: { block: Hash; outputIndex: number } }
+  >();
 
   constructor(config: NodeConfig) {
+    // 0. Store key material
+    this._privateKey = config.privateKey ?? null;
+    this._publicKey = config.publicKey ?? null;
+
     // 1. Create ProtocolContext (DI container)
     this.protocolContext = new ProtocolContext(config.eventLog);
 
@@ -119,13 +141,17 @@ export class NodeContext {
     // 4. Create Coordinator
     this.coordinator = this.protocolContext.get(Coordinator);
 
-    // 5. Create a BlockCreator that uses BlockCreationService
+    // 5. Create a BlockCreator that uses BlockCreationService.
+    //    Auto-balances throughput if a publicKey is configured.
     const blockCreationService = this.blockCreation;
-    const blockCreator: BlockCreator = {
+    const publicKey = this._publicKey;
+    const utxoIndex = this.utxoIndex;
+    this._blockCreator = {
       createBlock: (spec, privateKey) => {
+        const balanced = publicKey ? autoBalance(spec, utxoIndex, publicKey) : spec;
         let blueprint: BlockBlueprint;
         try {
-          blueprint = blockCreationService.buildBlock(spec);
+          blueprint = blockCreationService.buildBlock(balanced);
         } catch (e) {
           console.debug('createBlock failed:', (e as Error).message);
           return null;
@@ -138,12 +164,13 @@ export class NodeContext {
     };
 
     // 5c. Create ContractGenerator with built-in contracts
-    const contracts = new Map<string, Contract>();
-    contracts.set(AGGREGATION_CONTRACT.toHex(), aggregationContract);
-    contracts.set(COLLATERAL_CONTRACT.toHex(), collateralContract);
-    contracts.set(INSURANCE_CONTRACT.toHex(), insuranceContract);
-    contracts.set(RECORD_CONTRACT.toHex(), recordContract);
+    this._contracts = new Map<string, Contract>();
+    this._contracts.set(AGGREGATION_CONTRACT.toHex(), aggregationContract);
+    this._contracts.set(COLLATERAL_CONTRACT.toHex(), collateralContract);
+    this._contracts.set(INSURANCE_CONTRACT.toHex(), insuranceContract);
+    this._contracts.set(RECORD_CONTRACT.toHex(), recordContract);
 
+    const contracts = this._contracts;
     const contractGenerator = new ContractGenerator({
       lookupContract: (hash) => contracts.get(hash.toHex()),
       store: this.store,
@@ -169,10 +196,11 @@ export class NodeContext {
       }
     });
 
-    // 5f. Wire claim resolutions to gossip claim history.
+    // 5f. Wire claim resolutions to gossip claim history and fetch notifications.
     //     When a claim resolves, add it to claim history and route the
-    //     claiming block toward the claimed output. No canonical state
-    //     tracking needed -- claim history is append-only.
+    //     claiming block toward the claimed output. Also check if the claimed
+    //     output has an active fetch subscription -- if so, cache the resolution
+    //     for canonical state tracking.
     this.outputClaims.onResolution((claimant, target) => {
       const source = this.store.get(target.block);
       if (!source) return;
@@ -180,6 +208,32 @@ export class NodeContext {
       if (!output) return;
       const vk = verifierKey(output.verifier.contract, output.verifier.params);
       this.gossip.notifyClaimResolved(claimant, vk, output.value, target.block);
+
+      // Check if a fetch subscription exists for this verifier
+      if (config.hasFetchSubscription?.(vk)) {
+        this._claimFetchCache.set(vk, {
+          claimant,
+          target: { block: target.block, outputIndex: target.outputIndex },
+        });
+        // If already canonical, notify immediately
+        if (this.consensus.isCanonical(claimant) && config.onNotifyFetch) {
+          this._notifyFetchFromClaim(vk, claimant, config.onNotifyFetch);
+        }
+      }
+    });
+
+    // 5g. Wire canonicality changes to fetch notifications for claim-based results.
+    this.consensus.onCanonicalityChange((hash, canonical) => {
+      for (const [vk, entry] of this._claimFetchCache) {
+        if (!Hash.equals(entry.claimant, hash)) continue;
+        if (config.onNotifyFetch) {
+          if (canonical) {
+            this._notifyFetchFromClaim(vk, entry.claimant, config.onNotifyFetch);
+          } else {
+            config.onNotifyFetch(vk, null);
+          }
+        }
+      }
     });
 
     // 6. Create BlockRecordSet and wire module listeners
@@ -220,7 +274,7 @@ export class NodeContext {
       consensus: this.consensus,
       sampling: this.sampling,
       strategies,
-      blockCreator,
+      blockCreator: this._blockCreator,
       routing: this.routing,
       draftManager: this.draftManager,
       logger: this.protocolContext.logger('reactive'),
@@ -239,7 +293,7 @@ export class NodeContext {
       for (const rc of draft.resolvedClaims) {
         draftStrategy.complete(rc.block, rc.outputIndex);
       }
-      this._solidifyDraft(draft, blockCreator);
+      this._solidifyDraft(draft);
     });
 
     // 10. Process genesis block through coordinator directly
@@ -260,6 +314,16 @@ export class NodeContext {
     this.reactiveLayer.processBlock(block, fromPeer ?? null);
   }
 
+  /** Register a contract at runtime for generation and verification. */
+  registerContract(hash: Hash, contract: Contract): void {
+    this._contracts.set(hash.toHex(), contract);
+  }
+
+  /** Create a block from a spec, with auto-balance and optional signing. */
+  createBlock(spec: BlockSpec, privateKey: Uint8Array | null): Block | null {
+    return this._blockCreator.createBlock(spec, privateKey);
+  }
+
   /**
    * Solidify a ready draft into a real block and process it.
    *
@@ -267,7 +331,7 @@ export class NodeContext {
    * uses OutputSpaceModule to compute claim indices and the composed
    * aggregation claim mask.
    */
-  private _solidifyDraft(draft: BlockDraft, blockCreator: BlockCreator): void {
+  private _solidifyDraft(draft: BlockDraft): void {
     const includes = draft.includeConstraints;
     if (includes.length === 0) {
       this.draftManager.cancelDraft(draft.draftId);
@@ -368,7 +432,7 @@ export class NodeContext {
       refs: draft.refs,
     };
 
-    const block = blockCreator.createBlock(spec, null);
+    const block = this._blockCreator.createBlock(spec, this._privateKey);
     if (block) {
       this.reactiveLayer.processBlock(block, null);
     }
@@ -440,8 +504,132 @@ export class NodeContext {
     });
   }
 
+  /** Notify fetch subscribers when a claim resolves on a canonical block. */
+  private _notifyFetchFromClaim(
+    vk: string,
+    claimant: Hash,
+    onNotifyFetch: (verifier: VerifierKey, result: FetchResult | null) => void,
+  ): void {
+    const claimantBlock = this.store.get(claimant);
+    if (!claimantBlock) return;
+
+    // Find the first self-claimed RECORD_CONTRACT output
+    const selfClaimSet = new Set(
+      claimantBlock.claims.filter((c) => c < claimantBlock.outputs.length),
+    );
+    let resultData: Uint8Array = new Uint8Array(0);
+    for (let i = 0; i < claimantBlock.outputs.length; i++) {
+      if (!selfClaimSet.has(i)) continue;
+      const output = claimantBlock.outputs[i];
+      if (Hash.equals(output.verifier.contract, RECORD_CONTRACT)) {
+        resultData = output.data;
+        break;
+      }
+    }
+
+    onNotifyFetch(vk, { block: claimantBlock, data: resultData });
+  }
+
   /** Get the genesis block hash (first block in store) */
   get genesisHash(): Hash {
     return this._genesisHash;
   }
+}
+
+// -- Module-level helpers -------------------------------------------
+
+/**
+ * Find the canonical tip: the deepest block in the canonical view.
+ * Falls back to genesis if no other blocks are canonical.
+ */
+export function findCanonicalTip(ctx: NodeContext): Hash {
+  const canonical = ctx.consensus.getCanonicalView();
+  let bestHash = ctx.genesisHash;
+  let bestDepth = 0;
+
+  for (const key of canonical) {
+    const hash = Hash.fromPrimitive(key);
+    const depth = ctx.store.getAnchorDepth(hash, ctx.genesisHash);
+    if (depth !== undefined && depth > bestDepth) {
+      bestDepth = depth;
+      bestHash = hash;
+    }
+  }
+
+  return bestHash;
+}
+
+/**
+ * Auto-balance a BlockSpec so that throughput (inputs == outputs) is satisfied.
+ *
+ * If outputs > claims (deficit): query UTXO index for unspent outputs owned by
+ * our key, greedily select enough to cover the deficit, add change output for excess.
+ * If claims > outputs: add a change output for the excess.
+ */
+function autoBalance(
+  spec: BlockSpec,
+  utxoIndex: UtxoIndex,
+  publicKey: Uint8Array,
+): BlockSpec {
+  // Compute totals excluding self-claims
+  const ownOutputCount = spec.outputs.length;
+  let claimTotal = 0;
+  let outputTotal = 0;
+
+  for (const claim of spec.claims) {
+    if (claim.index >= ownOutputCount) {
+      claimTotal += claim.value;
+    }
+  }
+  for (let i = 0; i < spec.outputs.length; i++) {
+    const isSelfClaimed = spec.claims.some(
+      (c) => c.index === i && i < ownOutputCount,
+    );
+    if (!isSelfClaimed) {
+      outputTotal += spec.outputs[i].value;
+    }
+  }
+
+  if (outputTotal === claimTotal) return spec;
+
+  const newOutputs = [...spec.outputs];
+  const newClaims = [...spec.claims];
+
+  if (outputTotal > claimTotal) {
+    // Need more inputs -- find UTXOs to claim
+    const deficit = outputTotal - claimTotal;
+    const utxos = utxoIndex.getByVerifier(SIGNATURE_CONTRACT, publicKey);
+
+    // Phase 1: Select UTXOs
+    const selected: { extendedIndex: number; value: number }[] = [];
+    let gathered = 0;
+    for (const utxo of utxos) {
+      if (gathered >= deficit) break;
+      selected.push({ extendedIndex: utxo.extendedIndex, value: utxo.value });
+      gathered += utxo.value;
+    }
+
+    if (gathered < deficit) {
+      // Not enough funds -- proceed anyway and let validation catch it
+      return spec;
+    }
+
+    // Phase 2: Determine if change output needed
+    const excess = gathered - deficit;
+    if (excess > 0) {
+      newOutputs.push(makeSignatureOutput(publicKey, excess));
+    }
+
+    // Phase 3: Compute claim indices based on FINAL output count
+    const finalOutputCount = newOutputs.length;
+    for (const utxo of selected) {
+      newClaims.push({ index: finalOutputCount + utxo.extendedIndex, value: utxo.value });
+    }
+  } else {
+    // Claims exceed outputs -- add change output
+    const excess = claimTotal - outputTotal;
+    newOutputs.push(makeSignatureOutput(publicKey, excess));
+  }
+
+  return { ...spec, outputs: newOutputs, claims: newClaims };
 }

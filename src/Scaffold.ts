@@ -1,18 +1,15 @@
-import { composeBlockPacket } from './core/Packet.ts';
 import { secp } from './util/secp.ts';
-import { Block, SIGNATURE_CONTRACT } from './core/Block.ts';
-import { makeSignatureOutput } from './contracts/SignatureContract.ts';
+import { Block } from './core/Block.ts';
 import { makeAggregationOutput } from './contracts/AggregationContract.ts';
-import { BlockBlueprint, BlockSpec } from './core/BlockCreationModule.ts';
+import type { Contract } from './contracts/Contract.ts';
 import { Hash } from './util/Hash.ts';
-import { NodeContext } from './node/NodeContext.ts';
+import { findCanonicalTip, NodeContext } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
 import { FetchHandle, FetchManager, FetchOptions, Verifier } from './node/FetchManager.ts';
 import { FetchNotifyStrategy } from './node/strategies/FetchNotifyStrategy.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 import { getGenesisBlock } from './genesis.ts';
-import { UtxoIndex } from './node/UtxoIndex.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
 import { NetworkPlugin } from './node/NetworkManager.ts';
 import { PushAction } from './node/RoutingModule.ts';
@@ -57,7 +54,9 @@ export class Scaffold {
     const genesis = config.genesis ?? getGenesisBlock();
 
     // 0. Create EventLog (enabled by default)
-    this.eventLog = (config.enableLogging !== false) ? new EventLog({ console: true }) : new EventLog();
+    this.eventLog = (config.enableLogging !== false)
+      ? new EventLog({ console: true })
+      : new EventLog();
 
     // 1. Create FetchManager and the strategy that notifies it
     this.fetchManager = new FetchManager();
@@ -76,6 +75,8 @@ export class Scaffold {
     let pushActionHandler: ((actions: PushAction[], block: Block) => void) | undefined;
     this.nodeContext = new NodeContext({
       genesis,
+      privateKey,
+      publicKey,
       strategies,
       enableGeneration: config.enableGeneration,
       enableVerification: config.enableVerification,
@@ -83,6 +84,7 @@ export class Scaffold {
       onNotifyFetch: (verifierKey, result) => {
         fetchManager.notify(verifierKey, result);
       },
+      hasFetchSubscription: (key) => fetchManager.hasSubscription(key),
       onPushActions: (actions, block) => {
         pushActionHandler?.(actions, block);
       },
@@ -124,10 +126,7 @@ export class Scaffold {
       };
     }
 
-    // 4. Get UtxoIndex from NodeContext (created and wired there)
-    const utxoIndex = this.nodeContext.utxoIndex;
-
-    // 5. Create PutManager with a BlockProcessor that delegates to NodeContext.
+    // 4. Create PutManager with a BlockProcessor that delegates to NodeContext.
     const nodeContext = this.nodeContext;
     const processor: BlockProcessor = {
       buildBlock: (spec) => {
@@ -141,21 +140,11 @@ export class Scaffold {
         // Every non-genesis block carries an aggregation marker output
         const outputs = [...spec.outputs, makeAggregationOutput()];
 
-        // Auto-balance throughput
-        const balancedSpec = autoBalance(
+        // Delegate to NodeContext's createBlock (auto-balances + signs)
+        return nodeContext.createBlock(
           { ...spec, anchor: anchorHash, outputs },
-          utxoIndex,
-          publicKey,
+          privateKey,
         );
-
-        let blueprint: BlockBlueprint;
-        try {
-          blueprint = nodeContext.blockCreation.buildBlock(balancedSpec);
-        } catch (e) {
-          console.debug('buildBlock failed:', (e as Error).message);
-          return null;
-        }
-        return composeBlockPacket(blueprint, privateKey).block;
       },
       processBlock: (block) => {
         nodeContext.processBlock(block);
@@ -163,6 +152,11 @@ export class Scaffold {
     };
 
     this.putManager = new PutManager(processor);
+  }
+
+  /** Register a contract for generation and verification at runtime. */
+  registerContract(hash: Hash, contract: Contract): void {
+    this.nodeContext.registerContract(hash, contract);
   }
 
   /** Request a computation result and subscribe to canonical state changes. */
@@ -208,100 +202,4 @@ export class Scaffold {
   get context(): NodeContext {
     return this.nodeContext;
   }
-}
-
-/**
- * Find the canonical tip: the deepest block in the canonical view.
- * Falls back to genesis if no other blocks are canonical.
- */
-function findCanonicalTip(ctx: NodeContext): Hash {
-  const canonical = ctx.consensus.getCanonicalView();
-  let bestHash = ctx.genesisHash;
-  let bestDepth = 0;
-
-  for (const key of canonical) {
-    const hash = Hash.fromPrimitive(key);
-    const depth = ctx.store.getAnchorDepth(hash, ctx.genesisHash);
-    if (depth !== undefined && depth > bestDepth) {
-      bestDepth = depth;
-      bestHash = hash;
-    }
-  }
-
-  return bestHash;
-}
-
-/**
- * Auto-balance a BlockSpec so that throughput (inputs == outputs) is satisfied.
- *
- * If outputs > claims (deficit): query UTXO index for unspent outputs owned by
- * our key, greedily select enough to cover the deficit, add change output for excess.
- * If claims > outputs: add a change output for the excess.
- */
-function autoBalance(
-  spec: BlockSpec,
-  utxoIndex: UtxoIndex,
-  publicKey: Uint8Array,
-): BlockSpec {
-  // Compute totals excluding self-claims
-  const ownOutputCount = spec.outputs.length;
-  let claimTotal = 0;
-  let outputTotal = 0;
-
-  for (const claim of spec.claims) {
-    if (claim.index >= ownOutputCount) {
-      claimTotal += claim.value;
-    }
-  }
-  for (let i = 0; i < spec.outputs.length; i++) {
-    const isSelfClaimed = spec.claims.some(
-      (c) => c.index === i && i < ownOutputCount,
-    );
-    if (!isSelfClaimed) {
-      outputTotal += spec.outputs[i].value;
-    }
-  }
-
-  if (outputTotal === claimTotal) return spec;
-
-  const newOutputs = [...spec.outputs];
-  const newClaims = [...spec.claims];
-
-  if (outputTotal > claimTotal) {
-    // Need more inputs -- find UTXOs to claim
-    const deficit = outputTotal - claimTotal;
-    const utxos = utxoIndex.getByVerifier(SIGNATURE_CONTRACT, publicKey);
-
-    // Phase 1: Select UTXOs
-    const selected: { extendedIndex: number; value: number }[] = [];
-    let gathered = 0;
-    for (const utxo of utxos) {
-      if (gathered >= deficit) break;
-      selected.push({ extendedIndex: utxo.extendedIndex, value: utxo.value });
-      gathered += utxo.value;
-    }
-
-    if (gathered < deficit) {
-      // Not enough funds -- proceed anyway and let validation catch it
-      return spec;
-    }
-
-    // Phase 2: Determine if change output needed
-    const excess = gathered - deficit;
-    if (excess > 0) {
-      newOutputs.push(makeSignatureOutput(publicKey, excess));
-    }
-
-    // Phase 3: Compute claim indices based on FINAL output count
-    const finalOutputCount = newOutputs.length;
-    for (const utxo of selected) {
-      newClaims.push({ index: finalOutputCount + utxo.extendedIndex, value: utxo.value });
-    }
-  } else {
-    // Claims exceed outputs -- add change output
-    const excess = claimTotal - outputTotal;
-    newOutputs.push(makeSignatureOutput(publicKey, excess));
-  }
-
-  return { ...spec, outputs: newOutputs, claims: newClaims };
 }
