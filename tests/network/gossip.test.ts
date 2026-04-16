@@ -46,7 +46,7 @@ Deno.test('Gossip: block not pushed to peer that sent it', () => {
   assert(!targets.includes('B'), 'Should not push back to sender');
 });
 
-Deno.test('Gossip: high-value subscriptions get higher priority push actions', () => {
+Deno.test('Gossip: response index demotes later pushes for same verifier', () => {
   const net = new TestNetwork();
   net.addNode('A');
   net.addNode('B');
@@ -54,13 +54,19 @@ Deno.test('Gossip: high-value subscriptions get higher priority push actions', (
   const genesis = makeGenesis(2);
   net.broadcastGenesis(genesis);
 
-  // B sends A a block with a subscription output (value=10)
-  const sub = makeBlock('sub', genesis, [makeOutput(10)], 5);
-  net.getNode('A').receiveBlock(sub, 'B');
+  // B sends A a claiming block -- establishes claim history on A
+  const claim = {
+    ...makeBlock('claim', genesis, [makeOutput(10)], 5),
+    resolvedClaims: [{
+      block: genesis.hash,
+      outputIndex: 0,
+      value: 100,
+    }],
+  };
+  net.getNode('A').receiveBlock(claim, 'B');
   net.flush();
 
-  // Two new blocks matching the subscription with different output values
-  // Both match the same subscription, but priority depends on sub amount (10) / responseIndex
+  // Two new blocks matching the claim history's verifier
   const first = makeBlock('first', genesis, [makeOutput(10)], 5);
   const firstResult = net.submitBlock(first, 'A');
   net.flush();

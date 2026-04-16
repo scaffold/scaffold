@@ -10,6 +10,7 @@ import { GossipService } from '../src/node/GossipService.ts';
 import { RoutingService } from '../src/node/RoutingService.ts';
 import { PushAction } from '../src/node/RoutingModule.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
+import { UtxoIndex } from '../src/node/UtxoIndex.ts';
 import { SignalingService, SignalEnvelope } from '../src/node/SignalingService.ts';
 import { secp } from '../src/util/secp.ts';
 import { bin2hex } from '../src/util/hex.ts';
@@ -111,7 +112,8 @@ function setupProtocol() {
   const ctx = new ProtocolContext();
   const store = ctx.get(BlockStore);
   const coordinator = ctx.get(Coordinator);
-  const gossip = new GossipService(ctx);
+  const utxoIndex = new UtxoIndex(store);
+  const gossip = new GossipService(ctx, utxoIndex);
   const routing = new RoutingService(ctx, gossip);
   return { ctx, store, coordinator, gossip, routing };
 }

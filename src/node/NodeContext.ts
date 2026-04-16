@@ -47,7 +47,6 @@ import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { UtxoIndex, verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
 import { EventLog } from '../core/EventLog.ts';
-import { HashPrimitive } from '../util/Hash.ts';
 
 export interface NodeConfig {
   /** Genesis block (pre-built). */
@@ -107,8 +106,12 @@ export class NodeContext {
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
     this.sampling = this.protocolContext.get(SamplingService);
-    this.gossip = new GossipService(this.protocolContext);
     this.trust = this.protocolContext.get(TrustService);
+
+    // 3b. Create UtxoIndex early (needed by GossipService for backfill queries)
+    this.utxoIndex = new UtxoIndex(this.store);
+
+    this.gossip = new GossipService(this.protocolContext, this.utxoIndex);
     this.routing = new RoutingService(this.protocolContext, this.gossip);
     this.blockCreation = this.protocolContext.get(BlockCreationService);
     this.outputClaims = this.protocolContext.get(OutputClaimService);
@@ -133,9 +136,6 @@ export class NodeContext {
         return composeUnsignedBlockPacket(blueprint).block;
       },
     };
-
-    // 5b. Create UtxoIndex
-    this.utxoIndex = new UtxoIndex(this.store);
 
     // 5c. Create ContractGenerator with built-in contracts
     const contracts = new Map<string, Contract>();
@@ -169,48 +169,17 @@ export class NodeContext {
       }
     });
 
-    // 5f. Wire gossip subscription lifecycle to claim resolution and canonicality.
-    //     Cache resolved claims so canonicality changes can update the
-    //     gossip subscription index without re-resolving through the anchor chain.
-    const resolvedClaimCache = new Map<
-      HashPrimitive,
-      { block: Hash; outputIndex: number }[]
-    >();
+    // 5f. Wire claim resolutions to gossip claim history.
+    //     When a claim resolves, add it to claim history and route the
+    //     claiming block toward the claimed output. No canonical state
+    //     tracking needed -- claim history is append-only.
     this.outputClaims.onResolution((claimant, target) => {
-      // Cache the resolved claim for canonicality wiring
-      const key = claimant.toPrimitive();
-      let entries = resolvedClaimCache.get(key);
-      if (!entries) {
-        entries = [];
-        resolvedClaimCache.set(key, entries);
-      }
-      entries.push({ block: target.block, outputIndex: target.outputIndex });
-
-      // Notify gossip for deferred claim routing
       const source = this.store.get(target.block);
       if (!source) return;
       const output = source.outputs[target.outputIndex];
       if (!output) return;
       const vk = verifierKey(output.verifier.contract, output.verifier.params);
-      this.gossip.notifyClaimResolved(claimant, vk, target.value);
-
-      // If the claimant is already canonical, immediately update subscriptions.
-      // This handles the case where claims resolve after canonicality is decided.
-      if (this.consensus.isCanonical(claimant)) {
-        this.gossip.outputClaimed(target.block, target.outputIndex);
-      }
-    });
-
-    this.consensus.onCanonicalityChange((hash, canonical) => {
-      const targets = resolvedClaimCache.get(hash.toPrimitive());
-      if (!targets) return;
-      for (const t of targets) {
-        if (canonical) {
-          this.gossip.outputClaimed(t.block, t.outputIndex);
-        } else {
-          this.gossip.outputUnclaimed(t.block, t.outputIndex);
-        }
-      }
+      this.gossip.notifyClaimResolved(claimant, vk, output.value, target.block);
     });
 
     // 6. Create BlockRecordSet and wire module listeners

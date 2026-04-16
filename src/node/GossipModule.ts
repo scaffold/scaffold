@@ -2,7 +2,6 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { verifierKey as computeVerifierKey } from './UtxoIndex.ts';
-import type { Verifier } from '../core/BlockCreationModule.ts';
 
 // --- Types ---
 
@@ -11,45 +10,59 @@ export type VerifierKey = string;
 
 export { computeVerifierKey as verifierKey };
 
-/** An entry in the subscription index. */
-export interface SubscriptionEntry {
+/** An entry in the claim history index. */
+export interface ClaimHistoryEntry {
   readonly block: Hash;
-  readonly outputIndex: number;
-  readonly value: number;
+  readonly amount: number;
+  readonly seq: number;
 }
 
 /**
- * A directive to deliver a block toward a subscription source.
+ * A directive to deliver a block toward a claim history source.
  * Emitted via onSendAction callback.
  */
 export interface SendAction {
   /** The block to deliver. */
   readonly block: Hash;
-  /** The subscription source block this responds to. */
+  /** The target block (routes toward this block's publisher path). */
   readonly trigger: Hash;
   /** The matching verifier key. */
   readonly verifier: VerifierKey;
-  /** Value of the matched subscription output (for priority). */
+  /** Value for priority computation. */
   readonly amount: number;
 }
+
+/** Configuration for claim history bounds. */
+export interface GossipConfig {
+  /** Maximum entries per verifier in claim history. */
+  maxEntriesPerVerifier: number;
+  /** Maximum entries per contract in fallback index. */
+  maxEntriesPerContract: number;
+}
+
+export const DEFAULT_GOSSIP_CONFIG: GossipConfig = {
+  maxEntriesPerVerifier: 64,
+  maxEntriesPerContract: 128,
+};
 
 // --- Provider ---
 
 /** Output entry returned by the provider. */
-export interface SubscribableOutput {
+export interface BlockOutput {
   readonly index: number;
   readonly verifierKey: VerifierKey;
   readonly value: number;
 }
 
-/** Resolved claim verifier entry returned by the provider. */
-export interface ResolvedClaimVerifier {
+/** An unclaimed output returned by the provider (for backfill). */
+export interface UnclaimedOutput {
+  readonly blockHash: Hash;
   readonly verifierKey: VerifierKey;
   readonly value: number;
 }
 
 /**
- * Provider interface for the gossip module to access block output/claim data.
+ * Provider interface for the gossip module.
  * The module does not inspect blocks directly -- all data flows through this.
  */
 export interface GossipProvider {
@@ -57,49 +70,53 @@ export interface GossipProvider {
    * Returns non-self-claimed outputs for a block.
    * Each entry has the output index, verifier key, and value.
    */
-  getSubscribableOutputs(block: Hash): SubscribableOutput[];
+  getBlockOutputs(block: Hash): BlockOutput[];
 
   /**
-   * Returns the verifier key for each resolved claim on this block.
-   * Uses block.resolvedClaims directly. May return incomplete results
-   * if some claims haven't resolved yet; deferred resolutions are
-   * handled via notifyClaimResolved.
+   * Query unclaimed outputs for a given verifier key.
+   * Used for backfill when new claim history entries appear.
    */
-  getResolvedClaimVerifiers(block: Hash): ResolvedClaimVerifier[];
+  getUnclaimedOutputs(verifierKey: VerifierKey): UnclaimedOutput[];
 }
 
 // --- Module ---
 
 /**
- * The gossip module determines which blocks are relevant to which
- * subscriptions. Its mechanism is verifier-based subscriptions: blocks
- * with unclaimed outputs create implicit subscriptions, and new blocks
- * that match those subscriptions generate send actions.
+ * The gossip module determines which blocks are relevant based on
+ * claim history. Its mechanism is claim-history routing: blocks are
+ * routed toward peers who have previously claimed outputs of matching
+ * verifiers.
  *
- * This module is the "what to send" layer. It has no knowledge of peers,
- * bandwidth, or network topology. The routing module handles delivery.
+ * Two rules:
+ * - Rule 1 (via notifyClaimResolved): Route claims back toward their
+ *   claimed output. Add to claim history. Backfill existing unclaimed
+ *   outputs toward the new claimer.
+ * - Rule 2 (via blockReceived): Route blocks with V outputs toward
+ *   peers in V's claim history.
  *
  * Fully self-contained -- depends only on GossipProvider and Hash.
  */
 export class GossipModule {
   private readonly provider: GossipProvider;
+  private readonly config: GossipConfig;
 
-  /**
-   * Subscription index: verifierKey -> Map<entryKey, SubscriptionEntry>
-   * where entryKey is "blockHash:outputIndex".
-   */
-  private readonly index = new Map<VerifierKey, Map<string, SubscriptionEntry>>();
+  /** Claim history: verifierKey -> ClaimHistoryEntry[] (bounded). */
+  private readonly claimHistory = new Map<VerifierKey, ClaimHistoryEntry[]>();
 
-  /** Set of blocks that have been added as subscription sources (dedup). */
-  private readonly subscribedBlocks = new Set<HashPrimitive>();
+  /** Contract-level fallback: contractHashHex -> ClaimHistoryEntry[]. */
+  private readonly contractFallback = new Map<string, ClaimHistoryEntry[]>();
+
+  /** Monotonic sequence counter for recency ordering. */
+  private seq = 0;
 
   /** Set of blocks that have been processed by blockReceived (dedup). */
   private readonly processedBlocks = new Set<HashPrimitive>();
 
   private readonly sendActionListeners: ((action: SendAction) => void)[] = [];
 
-  constructor(provider: GossipProvider) {
+  constructor(provider: GossipProvider, config?: Partial<GossipConfig>) {
     this.provider = provider;
+    this.config = { ...DEFAULT_GOSSIP_CONFIG, ...config };
   }
 
   // -- Listener Registration ----------------------------------------
@@ -107,7 +124,7 @@ export class GossipModule {
   /**
    * Register a callback for send actions.
    * Called whenever the module determines a block should be delivered
-   * toward a subscription source.
+   * toward a claim history source.
    */
   onSendAction(cb: (action: SendAction) => void): void {
     this.sendActionListeners.push(cb);
@@ -116,199 +133,169 @@ export class GossipModule {
   // -- Block Events -------------------------------------------------
 
   /**
-   * Process a new block against the subscription index.
+   * Process a new block against the claim history index (Rule 2).
    *
-   * For each of B's outputs with verifier V in the index:
-   *   emit SendAction(block=B, trigger=A) for each subscriber A.
+   * For each of B's non-self-claimed outputs with verifier V:
+   *   look up claimHistory[V] (with contract fallback)
+   *   emit SendAction(block=B, trigger=entry.block) for each entry.
    *
-   * For each of B's resolved claims with verifier V in the index:
-   *   emit SendAction(block=B, trigger=A) for each subscriber A.
-   *
-   * Does NOT add B to the subscription index -- that's addSubscriptionSource.
-   * Does NOT remove claimed outputs -- that's outputClaimed, driven by
-   * canonical state changes.
+   * Does NOT process claims or update claim history -- that happens
+   * in notifyClaimResolved, which fires as claims resolve gradually
+   * through OutputClaimModule.
    */
   blockReceived(block: Hash): void {
     const key = block.toPrimitive();
     if (this.processedBlocks.has(key)) return;
     this.processedBlocks.add(key);
 
-    // Match outputs against existing subscriptions
-    const outputs = this.provider.getSubscribableOutputs(block);
+    // Rule 2: match outputs against claim history
+    const outputs = this.provider.getBlockOutputs(block);
     for (const output of outputs) {
-      const subscribers = this.index.get(output.verifierKey);
-      if (!subscribers) continue;
-      for (const entry of subscribers.values()) {
+      const entries = this.getClaimHistoryEntries(output.verifierKey);
+      for (const entry of entries) {
         this.emit({
           block,
           trigger: entry.block,
           verifier: output.verifierKey,
-          amount: entry.value,
-        });
-      }
-    }
-
-    // Match claims against existing subscriptions and expire claimed outputs
-    const claimVerifiers = this.provider.getResolvedClaimVerifiers(block);
-    for (const cv of claimVerifiers) {
-      const subscribers = this.index.get(cv.verifierKey);
-      if (!subscribers) continue;
-      for (const entry of subscribers.values()) {
-        this.emit({
-          block,
-          trigger: entry.block,
-          verifier: cv.verifierKey,
-          amount: entry.value,
+          amount: entry.amount,
         });
       }
     }
   }
 
+  // -- Claim Resolution ---------------------------------------------
+
   /**
-   * Add a block's unclaimed outputs to the subscription index.
+   * Handle a resolved claim. This is the primary entry point for
+   * Rule 1, claim history population, and backfill.
    *
-   * For each new V subscription, emits backfill send actions: existing
-   * V content is pushed toward this block's subscriber path, and this
-   * block's V outputs are pushed toward existing V subscribers.
-   */
-  addSubscriptionSource(block: Hash): void {
-    const key = block.toPrimitive();
-    if (this.subscribedBlocks.has(key)) return;
-    this.subscribedBlocks.add(key);
-
-    const outputs = this.provider.getSubscribableOutputs(block);
-
-    for (const output of outputs) {
-      const entryKey = entryKeyFor(block, output.index);
-      const entry: SubscriptionEntry = {
-        block,
-        outputIndex: output.index,
-        value: output.value,
-      };
-
-      // Snapshot existing entries BEFORE adding (the Map is mutable)
-      const bucket = this.index.get(output.verifierKey);
-      const existingEntries = bucket ? [...bucket.values()] : [];
-
-      // Add to index
-      let target = bucket;
-      if (!target) {
-        target = new Map();
-        this.index.set(output.verifierKey, target);
-      }
-      target.set(entryKey, entry);
-
-      // Backfill: push existing V content toward new subscriber
-      if (existingEntries.length > 0) {
-        for (const existing of existingEntries) {
-          // Push existing block to new subscriber's path
-          this.emit({
-            block: existing.block,
-            trigger: block,
-            verifier: output.verifierKey,
-            amount: output.value,
-          });
-          // Push new block to existing subscriber's path
-          this.emit({
-            block,
-            trigger: existing.block,
-            verifier: output.verifierKey,
-            amount: existing.value,
-          });
-        }
-      }
-    }
-  }
-
-  // -- Subscription Lifecycle ---------------------------------------
-
-  /**
-   * Remove a specific output from the subscription index.
-   * Called when an output is claimed by a canonical block.
-   */
-  outputClaimed(block: Hash, outputIndex: number): void {
-    const outputs = this.provider.getSubscribableOutputs(block);
-    const output = outputs.find((o) => o.index === outputIndex);
-    if (!output) return;
-
-    const bucket = this.index.get(output.verifierKey);
-    if (!bucket) return;
-    bucket.delete(entryKeyFor(block, outputIndex));
-    if (bucket.size === 0) this.index.delete(output.verifierKey);
-  }
-
-  /**
-   * Re-add a specific output to the subscription index.
-   * Called when a claim is reversed due to canonical state change.
-   */
-  outputUnclaimed(block: Hash, outputIndex: number): void {
-    const outputs = this.provider.getSubscribableOutputs(block);
-    const output = outputs.find((o) => o.index === outputIndex);
-    if (!output) return;
-
-    let bucket = this.index.get(output.verifierKey);
-    if (!bucket) {
-      bucket = new Map();
-      this.index.set(output.verifierKey, bucket);
-    }
-
-    const ek = entryKeyFor(block, outputIndex);
-    if (!bucket.has(ek)) {
-      bucket.set(ek, {
-        block,
-        outputIndex,
-        value: output.value,
-      });
-    }
-  }
-
-  /**
-   * Handle a deferred claim resolution.
-   * Called when OutputClaimModule.onResolution fires for a claim that
-   * wasn't resolvable when the block first arrived. Checks the verifier
-   * against the subscription index and emits send actions via callback.
+   * Called when OutputClaimModule.onResolution fires -- both for
+   * immediate resolutions (in addBlock) and deferred resolutions
+   * (when stuck migrations complete). For network blocks, this is
+   * the only path for claim processing (block.resolvedClaims is
+   * undefined on network-received blocks).
+   *
+   * @param claimant - Hash of the block making the claim
+   * @param verifier - Verifier key of the claimed output
+   * @param value - Value of the claimed output
+   * @param claimedBlock - Hash of the block whose output was claimed
    */
   notifyClaimResolved(
     claimant: Hash,
     verifier: VerifierKey,
-    _value: number,
+    value: number,
+    claimedBlock: Hash,
   ): void {
-    const subscribers = this.index.get(verifier);
-    if (!subscribers) return;
-    for (const entry of subscribers.values()) {
-      this.emit({
-        block: claimant,
-        trigger: entry.block,
-        verifier,
-        amount: entry.value,
-      });
-    }
+    // Rule 1: route the claiming block toward the claimed output
+    this.emit({
+      block: claimant,
+      trigger: claimedBlock,
+      verifier,
+      amount: value,
+    });
+
+    // Add to claim history (with backfill)
+    this.addClaimHistory(verifier, claimant, value);
   }
 
   // -- Queries (for testing/debugging) ------------------------------
 
-  /** Number of subscription entries for a verifier. */
-  getSubscriptionCount(verifier: VerifierKey): number {
-    return this.index.get(verifier)?.size ?? 0;
+  /** Number of claim history entries for a verifier (specific only). */
+  getClaimHistoryCount(verifier: VerifierKey): number {
+    return this.claimHistory.get(verifier)?.length ?? 0;
   }
 
-  /** All subscription entries for a verifier. */
-  getSubscriptionEntries(verifier: VerifierKey): SubscriptionEntry[] {
-    const bucket = this.index.get(verifier);
-    if (!bucket) return [];
-    return [...bucket.values()];
+  /** All claim history entries for a verifier (specific only, no fallback). */
+  getClaimHistoryDirect(verifier: VerifierKey): readonly ClaimHistoryEntry[] {
+    return this.claimHistory.get(verifier) ?? [];
   }
 
-  /** Total number of active subscriptions across all verifiers. */
-  get totalSubscriptionCount(): number {
+  /** Total claim history entries across all verifiers. */
+  get totalClaimHistoryCount(): number {
     let total = 0;
-    for (const bucket of this.index.values()) {
-      total += bucket.size;
+    for (const entries of this.claimHistory.values()) {
+      total += entries.length;
     }
     return total;
   }
 
   // -- Internals ----------------------------------------------------
+
+  /**
+   * Add an entry to the claim history and trigger backfill.
+   * Appends to both verifier-specific and contract-level fallback indices.
+   * Prunes if bounds exceeded.
+   */
+  private addClaimHistory(
+    verifierKey: VerifierKey,
+    block: Hash,
+    amount: number,
+  ): void {
+    const entry: ClaimHistoryEntry = {
+      block,
+      amount,
+      seq: this.seq++,
+    };
+
+    // Add to verifier-specific history
+    let entries = this.claimHistory.get(verifierKey);
+    if (!entries) {
+      entries = [];
+      this.claimHistory.set(verifierKey, entries);
+    }
+    entries.push(entry);
+    this.pruneEntries(entries, this.config.maxEntriesPerVerifier);
+
+    // Add to contract-level fallback
+    const contractHash = extractContractHash(verifierKey);
+    let fallback = this.contractFallback.get(contractHash);
+    if (!fallback) {
+      fallback = [];
+      this.contractFallback.set(contractHash, fallback);
+    }
+    fallback.push(entry);
+    this.pruneEntries(fallback, this.config.maxEntriesPerContract);
+
+    // Backfill: route existing unclaimed V-output blocks toward new claimer
+    const blockPrimitive = block.toPrimitive();
+    const unclaimed = this.provider.getUnclaimedOutputs(verifierKey);
+    for (const utxo of unclaimed) {
+      // Skip self-referential backfill
+      if (utxo.blockHash.toPrimitive() === blockPrimitive) continue;
+      this.emit({
+        block: utxo.blockHash,
+        trigger: block,
+        verifier: verifierKey,
+        amount,
+      });
+    }
+  }
+
+  /**
+   * Look up claim history entries for a verifier, with contract-level fallback.
+   */
+  private getClaimHistoryEntries(verifierKey: VerifierKey): ClaimHistoryEntry[] {
+    const specific = this.claimHistory.get(verifierKey);
+    if (specific && specific.length > 0) return specific;
+
+    const contractHash = extractContractHash(verifierKey);
+    return this.contractFallback.get(contractHash) ?? [];
+  }
+
+  /**
+   * Prune entries in-place if they exceed maxSize.
+   * Keeps highest-scoring entries by recency-weighted amount.
+   */
+  private pruneEntries(entries: ClaimHistoryEntry[], maxSize: number): void {
+    if (entries.length <= maxSize) return;
+    const currentSeq = this.seq;
+    entries.sort((a, b) => {
+      const scoreA = a.amount * (1 / (1 + (currentSeq - a.seq) / maxSize));
+      const scoreB = b.amount * (1 / (1 + (currentSeq - b.seq) / maxSize));
+      return scoreB - scoreA;
+    });
+    entries.length = maxSize;
+  }
 
   private emit(action: SendAction): void {
     for (const cb of this.sendActionListeners) {
@@ -319,6 +306,8 @@ export class GossipModule {
 
 // --- Utilities ---
 
-function entryKeyFor(block: Hash, outputIndex: number): string {
-  return `${block.toPrimitive()}:${outputIndex}`;
+/** Extract the contract hash portion of a verifier key (before the ':'). */
+function extractContractHash(verifierKey: VerifierKey): string {
+  const colonIdx = verifierKey.indexOf(':');
+  return colonIdx >= 0 ? verifierKey.substring(0, colonIdx) : verifierKey;
 }

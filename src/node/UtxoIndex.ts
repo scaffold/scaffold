@@ -60,6 +60,13 @@ export class UtxoIndex {
     return [...entries.values()];
   }
 
+  /** Query all unspent outputs by pre-computed verifier key string. */
+  getByVerifierKey(key: string): UtxoEntry[] {
+    const entries = this.index.get(key);
+    if (!entries) return [];
+    return [...entries.values()];
+  }
+
   /** Called when a block becomes canonical. */
   blockBecameCanonical(block: Block): void {
     // 1. Add this block's own outputs to the index

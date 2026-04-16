@@ -5,7 +5,7 @@ import {
   assertGreater,
   assertLess,
 } from '@std/assert';
-import { Hash, HashPrimitive } from '../src/util/Hash.ts';
+import { Hash } from '../src/util/Hash.ts';
 import {
   BlockAwareness,
   PushAction,
@@ -13,11 +13,11 @@ import {
   RoutingProvider,
 } from '../src/node/RoutingModule.ts';
 import {
+  BlockOutput,
   GossipModule,
   GossipProvider,
   SendAction,
-  SubscribableOutput,
-  ResolvedClaimVerifier,
+  UnclaimedOutput,
   VerifierKey,
 } from '../src/node/GossipModule.ts';
 
@@ -52,31 +52,29 @@ class TestRoutingProvider implements RoutingProvider {
   }
 
   getBlockSize(hash: Hash): number {
-    return this.sizes.get(hash.toPrimitive()) ?? 100; // default 100 bytes
+    return this.sizes.get(hash.toPrimitive()) ?? 100;
   }
 }
 
 /** In-memory gossip provider. */
 class TestGossipProvider implements GossipProvider {
-  private blocks = new Map<string, {
-    outputs: SubscribableOutput[];
-    claimVerifiers: ResolvedClaimVerifier[];
-  }>();
+  private blocks = new Map<string, BlockOutput[]>();
+  private utxos = new Map<string, UnclaimedOutput[]>();
 
-  addBlock(
-    hash: Hash,
-    outputs: SubscribableOutput[],
-    claimVerifiers: ResolvedClaimVerifier[] = [],
-  ): void {
-    this.blocks.set(hash.toPrimitive(), { outputs, claimVerifiers });
+  addBlock(hash: Hash, outputs: BlockOutput[]): void {
+    this.blocks.set(hash.toPrimitive(), outputs);
   }
 
-  getSubscribableOutputs(block: Hash): SubscribableOutput[] {
-    return this.blocks.get(block.toPrimitive())?.outputs ?? [];
+  setUnclaimed(verifierKey: VerifierKey, entries: UnclaimedOutput[]): void {
+    this.utxos.set(verifierKey, entries);
   }
 
-  getResolvedClaimVerifiers(block: Hash): ResolvedClaimVerifier[] {
-    return this.blocks.get(block.toPrimitive())?.claimVerifiers ?? [];
+  getBlockOutputs(block: Hash): BlockOutput[] {
+    return this.blocks.get(block.toPrimitive()) ?? [];
+  }
+
+  getUnclaimedOutputs(verifierKey: VerifierKey): UnclaimedOutput[] {
+    return this.utxos.get(verifierKey) ?? [];
   }
 }
 
@@ -92,6 +90,30 @@ function collectPushActions(routing: RoutingModule): PushAction[] {
   const actions: PushAction[] = [];
   routing.onPushAction((a) => actions.push(a));
   return actions;
+}
+
+/**
+ * Helper: establish claim history for a verifier via a block that is
+ * in a peer's receivedFirst. This simulates the Coordinator -> Gossip flow
+ * where a claim resolves before the routing module processes the block.
+ */
+function establishClaimHistory(
+  gossip: GossipModule,
+  routing: RoutingModule,
+  gossipProvider: TestGossipProvider,
+  claimerHash: Hash,
+  verifier: VerifierKey,
+  amount: number,
+  fromPeer: string,
+): void {
+  // Register the claimer block so gossip can read its outputs (may be empty)
+  if (!gossipProvider.getBlockOutputs(claimerHash).length) {
+    gossipProvider.addBlock(claimerHash, []);
+  }
+  // Simulate: claim resolves -> gossip claim history updated
+  gossip.notifyClaimResolved(claimerHash, verifier, amount, h('source'));
+  // Block arrives from peer -> enters receivedFirst
+  routing.blockReceived(claimerHash, fromPeer);
 }
 
 // -- Peer lifecycle -----------------------------------------------
@@ -126,51 +148,55 @@ Deno.test('getPeerIds: returns current peers', () => {
 // -- receivedFirst management ---------------------------------------
 
 Deno.test('blockReceived: block from peer enters receivedFirst', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
-  gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V, value: 10 }]);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('B1'), 'alice');
 
-  // Verify indirectly: a second block matching V should produce a push toward alice
+  // Alice sends a claiming block -> enters receivedFirst + claim history
+  establishClaimHistory(gossip, routing, gossipProvider, h('claimer'), V, 10, 'alice');
+
+  // New V-output block arrives -- should route toward alice (via claim history)
   const actions = collectPushActions(routing);
-  gossipProvider.addBlock(h('B2'), [{ index: 0, verifierKey: V, value: 5 }]);
-  routing.blockReceived(h('B2'), null);
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
+  routing.blockReceived(h('new'), null);
 
   assert(actions.some((a) => a.peer === 'alice'));
 });
 
 Deno.test('blockReceived: self-originated block enters no receivedFirst', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
-  gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V, value: 10 }]);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('B1'), null); // self-originated
 
-  // B1 not in alice's receivedFirst, so no subscription created
+  // Claim history exists for V, but the claiming block was self-originated
+  gossipProvider.addBlock(h('claimer'), []);
+  gossip.notifyClaimResolved(h('claimer'), V, 10, h('source'));
+  routing.blockReceived(h('claimer'), null); // self-originated, not in receivedFirst
+
   const actions = collectPushActions(routing);
-  gossipProvider.addBlock(h('B2'), [{ index: 0, verifierKey: V, value: 5 }]);
-  routing.blockReceived(h('B2'), null);
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
+  routing.blockReceived(h('new'), null);
 
+  // No peer has h('claimer') in receivedFirst, so no routing
   assertEquals(actions.filter((a) => a.peer === 'alice' && a.verifier === V).length, 0);
 });
 
 Deno.test('blockReceived: source integrity (duplicate is no-op)', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
-  gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V, value: 10 }]);
   const actions = collectPushActions(routing);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('B1'), 'alice');
-  routing.blockReceived(h('B1'), 'alice'); // duplicate
+  establishClaimHistory(gossip, routing, gossipProvider, h('claimer'), V, 10, 'alice');
 
-  gossipProvider.addBlock(h('B2'), [{ index: 0, verifierKey: V, value: 5 }]);
-  routing.blockReceived(h('B2'), null);
+  // Duplicate blockReceived
+  routing.blockReceived(h('claimer'), 'alice'); // no-op (already processed)
 
-  // Should only have one subscription-matched action for alice
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
+  routing.blockReceived(h('new'), null);
+
   const aliceActions = actions.filter((a) => a.peer === 'alice' && a.verifier === V);
   assertEquals(aliceActions.length, 1);
 });
@@ -178,16 +204,14 @@ Deno.test('blockReceived: source integrity (duplicate is no-op)', () => {
 // -- Send action -> PushAction mapping -----------------------------
 
 Deno.test('send action routes to peer with trigger in receivedFirst', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 10 }]);
-  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
-
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice'); // trigger in alice's receivedFirst
+  establishClaimHistory(gossip, routing, gossipProvider, h('trigger'), V, 10, 'alice');
 
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
 
   const matched = actions.filter((a) => a.peer === 'alice' && Hash.equals(a.block, h('new')));
@@ -195,36 +219,38 @@ Deno.test('send action routes to peer with trigger in receivedFirst', () => {
 });
 
 Deno.test('send action: trigger not in any receivedFirst -> only baseline push', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
-  // No peer has h('trigger') in receivedFirst
-  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
-
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
+
+  // Claim history exists but the claiming block is not in any receivedFirst
+  gossipProvider.addBlock(h('claimer'), []);
+  gossip.notifyClaimResolved(h('claimer'), V, 10, h('source'));
+  // Don't call routing.blockReceived for claimer -- it's not in receivedFirst
+
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
 
-  // Only baseline pushes (no subscription match, no verifier field)
+  // Only baseline pushes (no claim history match routes through receivedFirst)
   const subscriptionMatched = actions.filter((a) => a.verifier !== undefined);
   assertEquals(subscriptionMatched.length, 0);
 });
 
 Deno.test('send action: different triggers per peer -> push to both', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
-
-  // Each peer sends a different V block (separate triggers)
-  gossipProvider.addBlock(h('from_alice'), [{ index: 0, verifierKey: V, value: 10 }]);
-  gossipProvider.addBlock(h('from_bob'), [{ index: 0, verifierKey: V, value: 10 }]);
-  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
   routing.addPeer('bob', 'pk_bob', new TestAwareness());
 
-  routing.blockReceived(h('from_alice'), 'alice');
-  routing.blockReceived(h('from_bob'), 'bob');
+  // Each peer sends a different claiming block
+  establishClaimHistory(gossip, routing, gossipProvider, h('from_alice'), V, 10, 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('from_bob'), V, 10, 'bob');
+
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
 
   const toAlice = actions.filter((a) =>
@@ -238,23 +264,24 @@ Deno.test('send action: different triggers per peer -> push to both', () => {
 });
 
 Deno.test('send action: dedup by (block, peer) keeps highest priority', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V1 = vk('game');
   const V2 = vk('pay');
   const actions = collectPushActions(routing);
 
-  // Alice's block has two verifier outputs
-  gossipProvider.addBlock(h('trigger'), [
-    { index: 0, verifierKey: V1, value: 10 },
-    { index: 1, verifierKey: V2, value: 100 },
-  ]);
+  routing.addPeer('alice', 'pk_alice', new TestAwareness());
+
+  // Alice sends a block that establishes claim history for both verifiers
+  const trigger = h('trigger');
+  gossipProvider.addBlock(trigger, []);
+  gossip.notifyClaimResolved(trigger, V1, 10, h('src1'));
+  gossip.notifyClaimResolved(trigger, V2, 100, h('src2'));
+  routing.blockReceived(trigger, 'alice');
+
   gossipProvider.addBlock(h('new'), [
     { index: 0, verifierKey: V1, value: 5 },
     { index: 1, verifierKey: V2, value: 5 },
   ]);
-
-  routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice');
   routing.blockReceived(h('new'), null);
 
   // Only one push action for alice (deduped), with the higher priority
@@ -262,23 +289,22 @@ Deno.test('send action: dedup by (block, peer) keeps highest priority', () => {
     a.peer === 'alice' && Hash.equals(a.block, h('new'))
   );
   assertEquals(aliceActions.length, 1);
-  // V2 subscription has higher amount (100 vs 10), so its priority should win
+  // V2 claim history has higher amount (100 vs 10), so its priority should win
   assertEquals(aliceActions[0].verifier, V2);
 });
 
 Deno.test('send action: skip peer whose awareness already has block', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
   const awareness = new TestAwareness();
   awareness.add(h('new')); // alice already knows about h('new')
 
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 10 }]);
-  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
-
   routing.addPeer('alice', 'pk_alice', awareness);
-  routing.blockReceived(h('trigger'), 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('trigger'), V, 10, 'alice');
+
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
 
   // Alice already has 'new', so no push
@@ -291,16 +317,16 @@ Deno.test('send action: skip peer whose awareness already has block', () => {
 // -- Push priority computation -------------------------------------
 
 Deno.test('push priority: amount / responseIndex * deliveryRate / size', () => {
-  const { routingProvider, gossipProvider, routing } = setup();
+  const { routingProvider, gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
-  routingProvider.setSize(h('new'), 200); // 200 bytes
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 100 }]);
-  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 50 }]);
+  routingProvider.setSize(h('new'), 200);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('trigger'), V, 100, 'alice');
+
+  gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 50 }]);
   routing.blockReceived(h('new'), null);
 
   // priority = (amount=100 / responseIndex=1) * deliveryRate(0.5) / size(200)
@@ -310,18 +336,16 @@ Deno.test('push priority: amount / responseIndex * deliveryRate / size', () => {
 });
 
 Deno.test('push priority: response index starts at 1', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 100 }]);
-  gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V, value: 50 }]);
-
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('trigger'), V, 100, 'alice');
+
+  gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V, value: 50 }]);
   routing.blockReceived(h('B1'), null);
 
-  // First push: responseIndex = 0 + 1 = 1. Priority uses amount/1.
   assert(actions.length >= 1);
   const p1 = actions[0].priority;
 
@@ -331,24 +355,20 @@ Deno.test('push priority: response index starts at 1', () => {
   gossipProvider.addBlock(h('B2'), [{ index: 0, verifierKey: V, value: 50 }]);
   routing.blockReceived(h('B2'), null);
 
-  // Second push: responseIndex = 1 + 1 = 2. Priority uses amount/2 (halved).
   const b2Actions = actions.filter((a) => Hash.equals(a.block, h('B2')));
   assert(b2Actions.length >= 1);
   assertAlmostEquals(b2Actions[0].priority, p1 / 2, 0.01);
 });
 
 Deno.test('push priority: response index is per-verifier per-peer', () => {
-  const { gossipProvider, routing } = setup();
+  const { gossipProvider, gossip, routing } = setup();
   const V1 = vk('game');
   const V2 = vk('pay');
   const actions = collectPushActions(routing);
 
-  gossipProvider.addBlock(h('t1'), [{ index: 0, verifierKey: V1, value: 100 }]);
-  gossipProvider.addBlock(h('t2'), [{ index: 0, verifierKey: V2, value: 100 }]);
-
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('t1'), 'alice');
-  routing.blockReceived(h('t2'), 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('t1'), V1, 100, 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('t2'), V2, 100, 'alice');
 
   // Push B1 (V1) and report
   gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V1, value: 50 }]);
@@ -359,8 +379,6 @@ Deno.test('push priority: response index is per-verifier per-peer', () => {
   gossipProvider.addBlock(h('B2'), [{ index: 0, verifierKey: V2, value: 50 }]);
   routing.blockReceived(h('B2'), null);
 
-  // V1 responseIndex=1, V2 responseIndex=0
-  // B2 priority should be same as B1's first push (not halved)
   const b1Actions = actions.filter((a) => Hash.equals(a.block, h('B1')));
   const b2Actions = actions.filter((a) => Hash.equals(a.block, h('B2')));
   assert(b1Actions.length >= 1);
@@ -369,19 +387,18 @@ Deno.test('push priority: response index is per-verifier per-peer', () => {
 });
 
 Deno.test('push priority: block size inversely affects priority', () => {
-  const { routingProvider, gossipProvider, routing } = setup();
+  const { routingProvider, gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
 
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 100 }]);
+  routing.addPeer('alice', 'pk_alice', new TestAwareness());
+  establishClaimHistory(gossip, routing, gossipProvider, h('trigger'), V, 100, 'alice');
 
   routingProvider.setSize(h('small'), 50);
   routingProvider.setSize(h('large'), 500);
   gossipProvider.addBlock(h('small'), [{ index: 0, verifierKey: V, value: 10 }]);
   gossipProvider.addBlock(h('large'), [{ index: 0, verifierKey: V, value: 10 }]);
 
-  routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice');
   routing.blockReceived(h('small'), null);
   routing.blockReceived(h('large'), null);
 
@@ -406,9 +423,8 @@ Deno.test('delivery matrix: novel delivery increments alpha', () => {
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
 
   routing.blockReceived(h('B'), null);
-  routing.reportDelivery(h('B'), 'alice', true); // novel
+  routing.reportDelivery(h('B'), 'alice', true);
 
-  // Beta(1+1, 1) = Beta(2, 1) -> E = 2/3
   assertAlmostEquals(routing.getFirstDeliveryRate(null, 'alice'), 2 / 3, 0.01);
 });
 
@@ -418,9 +434,8 @@ Deno.test('delivery matrix: redundant delivery increments beta', () => {
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
 
   routing.blockReceived(h('B'), null);
-  routing.reportDelivery(h('B'), 'alice', false); // redundant
+  routing.reportDelivery(h('B'), 'alice', false);
 
-  // Beta(1, 1+1) = Beta(1, 2) -> E = 1/3
   assertAlmostEquals(routing.getFirstDeliveryRate(null, 'alice'), 1 / 3, 0.01);
 });
 
@@ -430,7 +445,6 @@ Deno.test('delivery matrix: decay preserves ratio, reduces confidence', () => {
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
 
   routing.blockReceived(h('B'), null);
-  // 3 novel, 1 redundant -> Beta(4, 2) -> E = 4/6
   routing.reportDelivery(h('B'), 'alice', true);
   routing.reportDelivery(h('B'), 'alice', true);
   routing.reportDelivery(h('B'), 'alice', true);
@@ -440,7 +454,6 @@ Deno.test('delivery matrix: decay preserves ratio, reduces confidence', () => {
   routing.decayMatrices();
   const rateAfter = routing.getFirstDeliveryRate(null, 'alice');
 
-  // Ratio preserved (proportional decay)
   assertAlmostEquals(rateBefore, rateAfter, 0.01);
 });
 
@@ -455,7 +468,6 @@ Deno.test('reciprocity: new peer starts at 1 (neutral)', () => {
 Deno.test('bandwidth: neutral peer gets base + half bonus', () => {
   const { routing } = setup({ baseRate: 100, bonusRate: 200 });
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  // reciprocity = 1 -> sigmoid(0) = 0.5 -> 100 + 200*0.5 = 200
   assertAlmostEquals(routing.getBandwidthBudget('alice'), 200, 1);
 });
 
@@ -464,11 +476,9 @@ Deno.test('bandwidth: freeloader gets near base rate', () => {
   gossipProvider.addBlock(h('B'), []);
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
 
-  // We push to alice but she never sends anything useful
   routing.blockReceived(h('B'), null);
   routing.reportPush(h('B'), 'alice');
 
-  // reciprocity = 0/1 = 0 -> sigmoid(-1) ~= 0.27 -> ~154
   assertLess(routing.getBandwidthBudget('alice'), 160);
   assertGreater(routing.getBandwidthBudget('alice'), 100);
 });
@@ -507,7 +517,6 @@ Deno.test('fetch: falls back to most-connected peer', () => {
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
   routing.addPeer('bob', 'pk_bob', new TestAwareness());
 
-  // Give bob more receivedFirst entries
   gossipProvider.addBlock(h('b1'), []);
   gossipProvider.addBlock(h('b2'), []);
   gossipProvider.addBlock(h('b3'), []);
@@ -523,46 +532,37 @@ Deno.test('fetch: undefined when no peers', () => {
   assertEquals(routing.bestPeerForFetch(h('target')), undefined);
 });
 
-// -- Integration: full subscription routing flow --------------------
+// -- Integration: claim history routing flow --------------------
 
-Deno.test('integration: peer sends V block, matching V block arrives, push targets peer', () => {
-  const { gossipProvider, routing } = setup();
+Deno.test('integration: claim history routes V-output block toward claimer peer', () => {
+  const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
   const actions = collectPushActions(routing);
-
-  gossipProvider.addBlock(h('from_alice'), [{ index: 0, verifierKey: V, value: 10 }]);
-  gossipProvider.addBlock(h('from_bob'), [{ index: 0, verifierKey: V, value: 5 }]);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
   routing.addPeer('bob', 'pk_bob', new TestAwareness());
 
-  // Alice sends us a V block
-  routing.blockReceived(h('from_alice'), 'alice');
+  // Alice sends us a claiming block for V
+  establishClaimHistory(gossip, routing, gossipProvider, h('alice_claim'), V, 10, 'alice');
 
-  // Bob sends us another V block
-  routing.blockReceived(h('from_bob'), 'bob');
+  // Bob sends us a V-output block
+  gossipProvider.addBlock(h('bob_request'), [{ index: 0, verifierKey: V, value: 5 }]);
+  routing.blockReceived(h('bob_request'), 'bob');
 
-  // from_bob should be pushed to alice (alice subscribes to V via from_alice)
-  // from_alice should be pushed to bob (bob subscribes to V via from_bob, via backfill)
+  // Bob's V-output block should be pushed to alice (claim history match)
   const toAlice = actions.filter((a) =>
-    a.peer === 'alice' && Hash.equals(a.block, h('from_bob'))
+    a.peer === 'alice' && Hash.equals(a.block, h('bob_request'))
   );
-  const toBob = actions.filter((a) =>
-    a.peer === 'bob' && Hash.equals(a.block, h('from_alice'))
-  );
-  assert(toAlice.length >= 1, 'from_bob should be pushed to alice');
-  assert(toBob.length >= 1, 'from_alice should be pushed to bob');
+  assert(toAlice.length >= 1, 'bob_request should be pushed to alice via claim history');
 });
 
-Deno.test('integration: subscription source feeding from receivedFirst', () => {
+Deno.test('integration: claim history count reflects resolved claims', () => {
   const { gossipProvider, gossip, routing } = setup();
   const V = vk('game');
 
-  gossipProvider.addBlock(h('trigger'), [{ index: 0, verifierKey: V, value: 10 }]);
-
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  routing.blockReceived(h('trigger'), 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('claim1'), V, 10, 'alice');
+  establishClaimHistory(gossip, routing, gossipProvider, h('claim2'), V, 20, 'alice');
 
-  // The gossip module should now have h('trigger') as a subscription source
-  assertEquals(gossip.getSubscriptionCount(V), 1);
+  assertEquals(gossip.getClaimHistoryCount(V), 2);
 });

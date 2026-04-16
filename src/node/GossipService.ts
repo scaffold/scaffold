@@ -1,20 +1,23 @@
 import { Hash } from '../util/Hash.ts';
 import { BlockStore } from '../core/Block.ts';
 import {
+  BlockOutput,
   GossipModule,
   GossipProvider,
-  ResolvedClaimVerifier,
-  SubscribableOutput,
+  UnclaimedOutput,
   VerifierKey,
 } from './GossipModule.ts';
-import { verifierKey } from './UtxoIndex.ts';
+import { UtxoIndex, verifierKey } from './UtxoIndex.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
 class GossipProviderAdapter implements GossipProvider {
-  constructor(private readonly store: BlockStore) {}
+  constructor(
+    private readonly store: BlockStore,
+    private readonly utxoIndex: UtxoIndex,
+  ) {}
 
-  getSubscribableOutputs(hash: Hash): SubscribableOutput[] {
+  getBlockOutputs(hash: Hash): BlockOutput[] {
     const block = this.store.get(hash);
     if (!block) return [];
 
@@ -32,33 +35,22 @@ class GossipProviderAdapter implements GossipProvider {
       .filter((_, i) => !selfClaims.has(i));
   }
 
-  getResolvedClaimVerifiers(hash: Hash): ResolvedClaimVerifier[] {
-    const block = this.store.get(hash);
-    if (!block?.resolvedClaims) return [];
-
-    return block.resolvedClaims
-      .filter((rc) => !Hash.equals(rc.block, hash)) // exclude self-claims
-      .map((rc) => {
-        const source = this.store.get(rc.block);
-        if (!source) return null;
-        const output = source.outputs[rc.outputIndex];
-        if (!output) return null;
-        return {
-          verifierKey: verifierKey(output.verifier.contract, output.verifier.params),
-          value: output.value,
-        };
-      })
-      .filter((x): x is ResolvedClaimVerifier => x !== null);
+  getUnclaimedOutputs(vk: VerifierKey): UnclaimedOutput[] {
+    return this.utxoIndex.getByVerifierKey(vk).map((entry) => ({
+      blockHash: entry.blockHash,
+      verifierKey: vk,
+      value: entry.value,
+    }));
   }
 }
 
-/** GossipModule wired to BlockStore via ProtocolContext. */
+/** GossipModule wired to BlockStore and UtxoIndex via ProtocolContext. */
 export class GossipService extends GossipModule {
   private readonly _log?: ScopedLogger;
 
-  constructor(ctx: ProtocolContext) {
+  constructor(ctx: ProtocolContext, utxoIndex: UtxoIndex) {
     const store = ctx.get(BlockStore);
-    super(new GossipProviderAdapter(store));
+    super(new GossipProviderAdapter(store, utxoIndex));
     this._log = ctx.logger('gossip');
 
     // Log send actions
@@ -72,45 +64,18 @@ export class GossipService extends GossipModule {
     });
   }
 
-  override addSubscriptionSource(block: Hash): void {
-    const before = this.totalSubscriptionCount;
-    super.addSubscriptionSource(block);
-    const after = this.totalSubscriptionCount;
-    if (after > before) {
-      this._log?.debug('subscriptionAdded', {
-        block: block.toHex(),
-        newEntries: after - before,
-        totalSubscriptions: after,
-      });
-    }
-  }
-
-  override outputClaimed(block: Hash, outputIndex: number): void {
-    super.outputClaimed(block, outputIndex);
-    this._log?.debug('outputClaimed', {
-      block: block.toHex(),
-      outputIndex,
-    });
-  }
-
-  override outputUnclaimed(block: Hash, outputIndex: number): void {
-    super.outputUnclaimed(block, outputIndex);
-    this._log?.debug('outputUnclaimed', {
-      block: block.toHex(),
-      outputIndex,
-    });
-  }
-
   override notifyClaimResolved(
     claimant: Hash,
     verifier: VerifierKey,
     value: number,
+    claimedBlock: Hash,
   ): void {
-    super.notifyClaimResolved(claimant, verifier, value);
+    super.notifyClaimResolved(claimant, verifier, value, claimedBlock);
     this._log?.debug('claimResolved', {
       claimant: claimant.toHex(),
       verifier,
       value,
+      claimedBlock: claimedBlock.toHex(),
     });
   }
 }

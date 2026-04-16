@@ -40,7 +40,7 @@ PeerState {
 `receivedFirst` tracks blocks where P was genuinely upstream -- P sent the block to us before we had it. This serves two purposes:
 
 1. **Send action routing**: When the gossip protocol emits a send action with `trigger=A`, this module looks up which peer has A in their receivedFirst -- that peer is the target.
-2. **Subscription feeding**: Blocks in P's receivedFirst are added to the [gossip protocol's](gossip.md) subscription index. The unclaimed outputs of these blocks define what P (or peers upstream of P) are interested in.
+2. **Trigger-to-peer mapping**: The gossip protocol emits send actions with a `trigger` block. This module maps that trigger to a peer via receivedFirst. The gossip module's [claim history](gossip.md) determines *which* triggers to use; this module determines *which peer* each trigger maps to.
 
 **Source integrity rule**: Blocks we sent to P that P later echoes back are **not** added to this set. Only blocks where P was the first sender count. This prevents circular inference.
 
@@ -239,43 +239,31 @@ Three peers connected to us: Alice, Bob, Carol.
 - Alice and Bob are directly connected to each other.
 - Carol is only connected to us.
 
-### Subscription Routing
+### Claim History Routing
 
-Alice sends us block B_A (output to `{G, config}`, value=10). B_A enters `Alice.receivedFirst`. The gossip protocol adds B_A to its subscription index.
+Game executor D previously claimed `{G, config}` outputs. D's claiming block B_D is in our claim history. D sent us B_D, so B_D is in `D.receivedFirst`.
 
-Bob sends us block B_B (output to `{G, config}`, value=8). B_B enters `Bob.receivedFirst`.
+Alice sends us block B_A (output to `{G, config}`, value=10). B_A enters `Alice.receivedFirst`. The gossip protocol matches B_A's output against `claimHistory[{G, config}]`, finding B_D. It emits:
+- `SendAction(block=B_A, trigger=B_D, verifier={G, config}, amount=...)` -- push Alice's request toward executor D.
 
-The gossip protocol emits two send actions:
-- `SendAction(block=B_B, trigger=B_A, verifier={G, config}, amount=10)` -- push B_B toward Alice
-- `SendAction(block=B_A, trigger=B_B, verifier={G, config}, amount=8)` -- push B_A toward Bob
-
-Processing `SendAction(B_B, trigger=B_A)`:
-- B_A is in `Alice.receivedFirst` -> target = Alice
-- `responseIndex[Alice][{G, config}]` = 1 (first push)
-- `push_priority = 10/1 * E[deliveryMatrix[Bob][Alice]] / B_B.size`
-- E[deliveryMatrix[Bob][Alice]] is initially 0.5 (uniform prior)
+Processing:
+- B_D is in D's receivedFirst -> target = D
+- `responseIndex[D][{G, config}]` = 1 (first push)
+- `push_priority = amount/1 * E[deliveryMatrix[Alice][D]] / B_A.size`
+- E[deliveryMatrix[Alice][D]] is initially 0.5 (uniform prior)
 - Enqueue or push immediately depending on threshold
 
-Processing `SendAction(B_A, trigger=B_B)`:
-- B_B is in `Bob.receivedFirst` -> target = Bob
-- `push_priority = 8/1 * E[deliveryMatrix[Alice][Bob]] / B_A.size`
-- Enqueue or push immediately
+Bob sends us block B_B (output to `{G, config}`, value=8). Same matching -- routed toward D. Alice and Bob don't see each other's requests; only the executor does.
 
 ### Delivery Matrix Learning
 
-We push B_B to Alice. Alice already has B_B (from her direct connection to Bob). Awareness exchange reveals this. Update: `deliveryMatrix[Bob][Alice]` shifts toward 0 -- Alice doesn't need us to relay Bob's blocks.
+We push B_A to D. D didn't have it. Success: `deliveryMatrix[Alice][D]` shifts toward 1.0.
 
-We push B_A to Bob. Bob already has B_A (from his direct connection to Alice). Same learning.
-
-After several rounds: `E[deliveryMatrix[Bob][Alice]] ~= 0.18`, `E[deliveryMatrix[Alice][Bob]] ~= 0.18`. We learn that Alice<->Bob relay is mostly wasteful.
-
-We push B_A to Carol (baseline propagation -- Carol has no {G, config} subscriptions). Carol doesn't have it. Success: `deliveryMatrix[Alice][Carol]` shifts toward 1.0. Carol depends on us for Alice's blocks.
+We push B_A to Carol (baseline propagation -- Carol has no `{G, config}` claim history). Carol doesn't have it. Success: `deliveryMatrix[Alice][Carol]` shifts toward 1.0. Carol depends on us for Alice's blocks.
 
 ### Topology Change
 
-Alice disconnects from Bob. Bob stops receiving Alice's blocks directly.
-
-When the gossip protocol emits send actions pushing Alice-origin blocks toward Bob, they are now consistently novel. `deliveryMatrix[Alice][Bob]` adapts upward. We become the relay for Alice->Bob traffic.
+D disconnects from us and reconnects through a relay. Blocks from Alice that we push to D are now sometimes redundant (D gets them through the relay). `deliveryMatrix[Alice][D]` adapts downward. We reduce relay effort for Alice->D traffic.
 
 ### Reciprocity
 
@@ -299,9 +287,9 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 
 **Topology-aware routing.** The delivery matrix learns which peer pairs are connected without explicit topology discovery. Redundant relay paths are deprioritized; bridging paths are promoted.
 
-**Interest clustering.** Through `receivedFirst` and the subscription mechanism, peers that participate in related economic activity naturally cluster. Blocks about game G propagate efficiently among G participants without flooding the entire network.
+**Interest clustering.** Through `receivedFirst` and claim history, peers that participate in related economic activity naturally cluster. Blocks about game G propagate efficiently among G participants without flooding the entire network.
 
-**Natural backpressure.** Bandwidth budgets and response index create natural backpressure. High-activity verifiers see later responses deprioritized. When the network is busy, only high-value subscription responses propagate immediately.
+**Natural backpressure.** Bandwidth budgets and response index create natural backpressure. High-activity verifiers see later responses deprioritized. When the network is busy, only high-value responses propagate immediately.
 
 **Freeloader isolation.** Peers that consume gossip without reciprocating see their bandwidth drop to `BASE_RATE`. They still participate (preventing fragmentation) but at reduced priority. Useful peers naturally receive better service.
 
@@ -309,9 +297,9 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 
 ## Interaction with Other Modules
 
-**Gossip protocol**: Provides send actions. This module feeds the gossip protocol's subscription index by reporting which blocks enter peer receivedFirst sets. See [gossip protocol](gossip.md).
+**Gossip protocol**: Provides send actions. This module maintains `receivedFirst` sets that map trigger blocks to peers, enabling the gossip protocol's send actions to reach the correct network destinations. See [gossip protocol](gossip.md).
 
-**Consensus module**: Provides canonical view for subscription expiry decisions (forwarded to the gossip protocol).
+**Consensus module**: Provides canonical view for the UTXO index, which the gossip protocol queries during backfill.
 
 **Sampling module**: Submits fetch requests for specific blocks needed during verification. This module fulfills them through the fetch interface.
 
@@ -354,5 +342,5 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 
 | File | Description |
 |------|-------------|
-| [`src/node/GossipModule.ts`](../../src/node/GossipModule.ts) | Currently contains both gossip and routing logic; to be split |
-| [`src/node/GossipService.ts`](../../src/node/GossipService.ts) | Wired adapter using concrete `Block` type |
+| [`src/node/RoutingModule.ts`](../../src/node/RoutingModule.ts) | Send action processing, peer state, delivery matrix, bandwidth |
+| [`src/node/RoutingService.ts`](../../src/node/RoutingService.ts) | Wired adapter using concrete `Block` type |

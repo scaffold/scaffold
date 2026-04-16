@@ -214,12 +214,8 @@ export class RoutingModule {
     // Begin cycle: collect push actions, dedup by (block, peer)
     this.inCycle = true;
     this.currentCyclePushes.clear();
-    // Feed the gossip subscription index from receivedFirst
-    if (fromPeer !== null) {
-      this.gossip.addSubscriptionSource(hash);
-    }
 
-    // Process the block against subscriptions
+    // Process the block against claim history
     this.gossip.blockReceived(hash);
 
     // End cycle: emit collected push actions

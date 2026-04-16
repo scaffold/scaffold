@@ -11,6 +11,8 @@ import { BlockReceivedResult, Coordinator } from '../src/core/Coordinator.ts';
 import { BlockAwareness, PushAction } from '../src/node/RoutingModule.ts';
 import { GossipService } from '../src/node/GossipService.ts';
 import { RoutingService } from '../src/node/RoutingService.ts';
+import { UtxoIndex, verifierKey } from '../src/node/UtxoIndex.ts';
+import { OutputClaimService } from '../src/core/OutputClaimService.ts';
 
 /** Result of SimNode.receiveBlock: protocol result + routing push actions. */
 export interface SimBlockResult extends BlockReceivedResult {
@@ -54,12 +56,33 @@ export class SimNode {
     this.consensus = this.ctx.get(ConsensusService);
     this.sampling = this.ctx.get(SamplingService);
     this.trust = this.ctx.get(TrustService);
-    this.gossip = new GossipService(this.ctx);
+
+    // UtxoIndex + canonicality wiring (needed for gossip backfill)
+    const utxoIndex = new UtxoIndex(this.store);
+    this.consensus.onCanonicalityChange((hash, canonical) => {
+      const block = this.store.get(hash);
+      if (!block) return;
+      if (canonical) utxoIndex.blockBecameCanonical(block);
+      else utxoIndex.blockBecameNonCanonical(block);
+    });
+
+    this.gossip = new GossipService(this.ctx, utxoIndex);
     this.routing = new RoutingService(this.ctx, this.gossip);
     this.blockCreation = this.ctx.get(BlockCreationService);
     this.execution = this.ctx.get(ExecutionService);
     this.verification = this.ctx.get(VerificationService);
     this.coordinator = this.ctx.get(Coordinator);
+
+    // Wire claim resolutions to gossip claim history
+    const outputClaims = this.ctx.get(OutputClaimService);
+    outputClaims.onResolution((claimant, target) => {
+      const source = this.store.get(target.block);
+      if (!source) return;
+      const output = source.outputs[target.outputIndex];
+      if (!output) return;
+      const vk = verifierKey(output.verifier.contract, output.verifier.params);
+      this.gossip.notifyClaimResolved(claimant, vk, output.value, target.block);
+    });
   }
 
   /** Process a received block through coordinator and routing. */

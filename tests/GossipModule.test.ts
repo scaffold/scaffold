@@ -1,578 +1,374 @@
-import { assertEquals, assert } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import {
+  BlockOutput,
   GossipModule,
   GossipProvider,
   SendAction,
-  SubscribableOutput,
-  ResolvedClaimVerifier,
+  UnclaimedOutput,
   VerifierKey,
 } from '../src/node/GossipModule.ts';
+import { verifierKey as computeVk } from '../src/node/UtxoIndex.ts';
 
-// -- Test helpers ------------------------------------------------
+// --- Test Helpers ---
 
 const h = (name: string): Hash => Hash.digest(name);
 
-/** Deterministic verifier key from a label. */
 function vk(label: string): VerifierKey {
-  return Hash.digest(`contract:${label}`).toHex() + ':' +
-    Array.from(new TextEncoder().encode(label))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+  return computeVk(Hash.digest(`contract:${label}`), new TextEncoder().encode(label));
 }
 
-/** In-memory test provider for the gossip module. */
+/** Two verifiers sharing the same contract but different params. */
+function vkWithParams(contractLabel: string, params: string): VerifierKey {
+  return computeVk(Hash.digest(`contract:${contractLabel}`), new TextEncoder().encode(params));
+}
+
+// --- Test Provider ---
+
 class TestGossipProvider implements GossipProvider {
-  private blocks = new Map<string, {
-    outputs: SubscribableOutput[];
-    claimVerifiers: ResolvedClaimVerifier[];
-  }>();
+  private blocks = new Map<string, BlockOutput[]>();
+  private utxos = new Map<string, UnclaimedOutput[]>();
 
-  addBlock(
-    hash: Hash,
-    outputs: SubscribableOutput[],
-    claimVerifiers: ResolvedClaimVerifier[] = [],
-  ): void {
-    this.blocks.set(hash.toPrimitive(), { outputs, claimVerifiers });
+  addBlock(hash: Hash, outputs: BlockOutput[]): void {
+    this.blocks.set(hash.toPrimitive(), outputs);
   }
 
-  getSubscribableOutputs(block: Hash): SubscribableOutput[] {
-    return this.blocks.get(block.toPrimitive())?.outputs ?? [];
+  setUnclaimed(verifierKey: VerifierKey, entries: UnclaimedOutput[]): void {
+    this.utxos.set(verifierKey, entries);
   }
 
-  getResolvedClaimVerifiers(block: Hash): ResolvedClaimVerifier[] {
-    return this.blocks.get(block.toPrimitive())?.claimVerifiers ?? [];
+  getBlockOutputs(block: Hash): BlockOutput[] {
+    return this.blocks.get(block.toPrimitive()) ?? [];
+  }
+
+  getUnclaimedOutputs(verifierKey: VerifierKey): UnclaimedOutput[] {
+    return this.utxos.get(verifierKey) ?? [];
   }
 }
 
-function setup() {
+function setup(config?: { maxEntriesPerVerifier?: number; maxEntriesPerContract?: number }) {
   const provider = new TestGossipProvider();
-  const module = new GossipModule(provider);
-  return { provider, module };
-}
-
-function collectActions(module: GossipModule): SendAction[] {
+  const module = new GossipModule(provider, config);
   const actions: SendAction[] = [];
   module.onSendAction((a) => actions.push(a));
-  return actions;
+  return { provider, module, actions };
 }
 
-// -- Subscription index tests ------------------------------------
+// --- Tests ---
 
-Deno.test('addSubscriptionSource: adds non-self-claimed outputs to index', () => {
-  const { provider, module } = setup();
+// == Rule 1: notifyClaimResolved ==
+
+Deno.test('Rule 1: notifyClaimResolved emits send action with trigger=claimedBlock', () => {
+  const { module, actions } = setup();
+  const claimant = h('claimant');
+  const claimed = h('claimed');
   const V = vk('game');
-  provider.addBlock(h('A'), [
-    { index: 0, verifierKey: V, value: 10 },
-    { index: 1, verifierKey: vk('other'), value: 5 },
-  ]);
 
-  module.addSubscriptionSource(h('A'));
+  module.notifyClaimResolved(claimant, V, 100, claimed);
 
-  assertEquals(module.getSubscriptionCount(V), 1);
-  assertEquals(module.getSubscriptionCount(vk('other')), 1);
-  assertEquals(module.totalSubscriptionCount, 2);
-});
-
-Deno.test('addSubscriptionSource: self-claimed outputs excluded by provider', () => {
-  // The provider is responsible for filtering self-claims.
-  // If the provider returns only non-self-claimed outputs, they all enter the index.
-  const { provider, module } = setup();
-  const V = vk('game');
-  // Provider returns only 1 output (output 1); output 0 was self-claimed and filtered
-  provider.addBlock(h('A'), [
-    { index: 1, verifierKey: V, value: 10 },
-  ]);
-
-  module.addSubscriptionSource(h('A'));
-  assertEquals(module.getSubscriptionCount(V), 1);
-});
-
-Deno.test('addSubscriptionSource: idempotent', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-
-  module.addSubscriptionSource(h('A'));
-  module.addSubscriptionSource(h('A'));
-
-  assertEquals(module.getSubscriptionCount(V), 1);
-});
-
-Deno.test('addSubscriptionSource: exact verifier matching', () => {
-  const { provider, module } = setup();
-  const V1 = vk('game:config1');
-  const V2 = vk('game:config2');
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V1, value: 10 }]);
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V2, value: 10 }]);
-
-  module.addSubscriptionSource(h('A'));
-  module.addSubscriptionSource(h('B'));
-
-  assertEquals(module.getSubscriptionCount(V1), 1);
-  assertEquals(module.getSubscriptionCount(V2), 1);
-});
-
-Deno.test('addSubscriptionSource: empty block produces no subscriptions', () => {
-  const { provider, module } = setup();
-  provider.addBlock(h('A'), []);
-
-  module.addSubscriptionSource(h('A'));
-  assertEquals(module.totalSubscriptionCount, 0);
-});
-
-// -- New content matching (blockReceived) --------------------------
-
-Deno.test('blockReceived: block with V output triggers send actions to V subscribers', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 8 }]);
-
-  module.addSubscriptionSource(h('A'));
-  module.blockReceived(h('B'));
-
-  // B has V output, A subscribes to V -> send B toward A
   assertEquals(actions.length, 1);
-  assertEquals(Hash.equals(actions[0].block, h('B')), true);
-  assertEquals(Hash.equals(actions[0].trigger, h('A')), true);
+  assertEquals(actions[0].block, claimant);
+  assertEquals(actions[0].trigger, claimed);
   assertEquals(actions[0].verifier, V);
-  assertEquals(actions[0].amount, 10); // A's subscription value
+  assertEquals(actions[0].amount, 100);
 });
 
-Deno.test('blockReceived: no subscribers -> no send actions', () => {
-  const { provider, module } = setup();
-  const actions = collectActions(module);
-
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: vk('game'), value: 8 }]);
-  module.blockReceived(h('B'));
-
-  assertEquals(actions.length, 0);
-});
-
-Deno.test('blockReceived: block matching multiple verifiers -> actions for each', () => {
-  const { provider, module } = setup();
+Deno.test('Rule 1: multiple claim resolutions emit separate actions', () => {
+  const { module, actions } = setup();
+  const claimant = h('claimant');
+  const claimed1 = h('claimed1');
+  const claimed2 = h('claimed2');
   const V1 = vk('game');
-  const V2 = vk('pay');
-  const actions = collectActions(module);
+  const V2 = vk('data');
 
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V1, value: 10 }]);
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V2, value: 20 }]);
-  provider.addBlock(h('C'), [
-    { index: 0, verifierKey: V1, value: 5 },
-    { index: 1, verifierKey: V2, value: 5 },
-  ]);
+  module.notifyClaimResolved(claimant, V1, 50, claimed1);
+  module.notifyClaimResolved(claimant, V2, 30, claimed2);
 
-  module.addSubscriptionSource(h('A'));
-  module.addSubscriptionSource(h('B'));
-  module.blockReceived(h('C'));
-
-  // C matches V1 (trigger A) and V2 (trigger B)
   assertEquals(actions.length, 2);
-  const triggers = actions.map((a) => a.trigger.toPrimitive()).sort();
-  assert(triggers.includes(h('A').toPrimitive()));
-  assert(triggers.includes(h('B').toPrimitive()));
+  assertEquals(actions[0].trigger, claimed1);
+  assertEquals(actions[1].trigger, claimed2);
 });
 
-Deno.test('blockReceived: idempotent (duplicate calls ignored)', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
+// == Rule 2: blockReceived ==
 
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 8 }]);
-
-  module.addSubscriptionSource(h('A'));
-  module.blockReceived(h('B'));
-  module.blockReceived(h('B')); // second call
-
-  assertEquals(actions.length, 1); // only one action
-});
-
-// -- Claim notifications (blockReceived) ---------------------------
-
-Deno.test('blockReceived: claim notification to V subscribers', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  // B claims a V output (no V outputs of its own)
-  provider.addBlock(h('B'), [], [{ verifierKey: V, value: 10 }]);
-
-  module.addSubscriptionSource(h('A'));
-  module.blockReceived(h('B'));
-
-  assertEquals(actions.length, 1);
-  assertEquals(Hash.equals(actions[0].block, h('B')), true);
-  assertEquals(Hash.equals(actions[0].trigger, h('A')), true);
-});
-
-Deno.test('blockReceived: claim on non-subscribed verifier -> no actions', () => {
-  const { provider, module } = setup();
-  const actions = collectActions(module);
-
-  provider.addBlock(h('B'), [], [{ verifierKey: vk('unknown'), value: 10 }]);
-  module.blockReceived(h('B'));
-
-  assertEquals(actions.length, 0);
-});
-
-// -- Backfill (addSubscriptionSource) ------------------------------
-
-Deno.test('addSubscriptionSource: backfill pushes existing V content to new subscriber', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 8 }]);
-
-  module.addSubscriptionSource(h('A'));
-  // No actions yet (A is alone)
-  assertEquals(actions.length, 0);
-
-  module.addSubscriptionSource(h('B'));
-  // Backfill: A pushed toward B, B pushed toward A
-  assertEquals(actions.length, 2);
-
-  const blockTriggerPairs = actions.map((a) => [
-    a.block.toPrimitive(),
-    a.trigger.toPrimitive(),
-  ]);
-  // A -> B (existing content pushed to new subscriber)
-  assert(blockTriggerPairs.some(([b, t]) =>
-    b === h('A').toPrimitive() && t === h('B').toPrimitive()
-  ));
-  // B -> A (new subscriber's content pushed to existing subscriber)
-  assert(blockTriggerPairs.some(([b, t]) =>
-    b === h('B').toPrimitive() && t === h('A').toPrimitive()
-  ));
-});
-
-Deno.test('addSubscriptionSource: backfill for new verifier (no existing content) -> empty', () => {
-  const { provider, module } = setup();
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: vk('new'), value: 10 }]);
-  module.addSubscriptionSource(h('A'));
-
-  assertEquals(actions.length, 0);
-});
-
-Deno.test('addSubscriptionSource: backfill is bidirectional with 3 subscribers', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 8 }]);
-  provider.addBlock(h('C'), [{ index: 0, verifierKey: V, value: 6 }]);
-
-  module.addSubscriptionSource(h('A')); // 0 actions
-  module.addSubscriptionSource(h('B')); // 2 actions (A<->B)
-  module.addSubscriptionSource(h('C')); // 4 actions (A<->C, B<->C)
-
-  assertEquals(actions.length, 6);
-});
-
-// -- Send action fields -------------------------------------------
-
-Deno.test('send action: trigger points to subscription source block', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('sub'), [{ index: 0, verifierKey: V, value: 100 }]);
-  provider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 50 }]);
-
-  module.addSubscriptionSource(h('sub'));
-  module.blockReceived(h('new'));
-
-  assertEquals(actions.length, 1);
-  assertEquals(Hash.equals(actions[0].trigger, h('sub')), true);
-});
-
-Deno.test('send action: amount reflects subscription output value', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('sub'), [{ index: 0, verifierKey: V, value: 42 }]);
-  provider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 999 }]);
-
-  module.addSubscriptionSource(h('sub'));
-  module.blockReceived(h('new'));
-
-  assertEquals(actions[0].amount, 42); // subscription value, not new block's value
-});
-
-Deno.test('send action: verifier field is the matched verifierKey', () => {
-  const { provider, module } = setup();
-  const V = vk('specific-game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('sub'), [{ index: 0, verifierKey: V, value: 10 }]);
-  provider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
-
-  module.addSubscriptionSource(h('sub'));
-  module.blockReceived(h('new'));
-
-  assertEquals(actions[0].verifier, V);
-});
-
-// -- Subscription lifecycle ----------------------------------------
-
-Deno.test('outputClaimed: removes entry from index', () => {
-  const { provider, module } = setup();
+Deno.test('Rule 2: block with V output emits action toward V claim history', () => {
+  const { provider, module, actions } = setup();
   const V = vk('game');
 
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  module.addSubscriptionSource(h('A'));
-  assertEquals(module.getSubscriptionCount(V), 1);
-
-  module.outputClaimed(h('A'), 0);
-  assertEquals(module.getSubscriptionCount(V), 0);
-});
-
-Deno.test('outputUnclaimed: re-adds entry to index', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  module.addSubscriptionSource(h('A'));
-  module.outputClaimed(h('A'), 0);
-  assertEquals(module.getSubscriptionCount(V), 0);
-
-  module.outputUnclaimed(h('A'), 0);
-  assertEquals(module.getSubscriptionCount(V), 1);
-});
-
-Deno.test('outputClaimed: non-existent entry is no-op', () => {
-  const { module } = setup();
-  // Should not throw
-  module.outputClaimed(h('nonexistent'), 0);
-});
-
-Deno.test('claim + output to same verifier in one block: both rules fire', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  // B both outputs to V and claims a V output
-  provider.addBlock(h('B'), [
-    { index: 0, verifierKey: V, value: 8 },
-  ], [
-    { verifierKey: V, value: 10 },
-  ]);
-
-  module.addSubscriptionSource(h('A'));
-  module.blockReceived(h('B'));
-
-  // Two send actions: one for the V output match, one for the V claim match
-  assertEquals(actions.length, 2);
-  // Both trigger A
-  assert(actions.every((a) => Hash.equals(a.trigger, h('A'))));
-});
-
-Deno.test('aggregation marker migration: claim marker, add new marker', () => {
-  const { provider, module } = setup();
-  const V_marker_A = vk('agg:A');
-  const V_marker_E = vk('agg:E');
-  const actions = collectActions(module);
-
-  // Block A has an aggregation marker
-  provider.addBlock(h('A'), [{ index: 1, verifierKey: V_marker_A, value: 0 }]);
-  // Aggregator E claims A's marker and produces its own
-  provider.addBlock(h('E'), [
-    { index: 1, verifierKey: V_marker_E, value: 0 },
-  ], [
-    { verifierKey: V_marker_A, value: 0 },
-  ]);
-
-  module.addSubscriptionSource(h('A'));
-  assertEquals(module.getSubscriptionCount(V_marker_A), 1);
-
-  module.blockReceived(h('E'));
-  // E's claim on A's marker triggers a send action (claim notification)
-  assert(actions.some((a) => Hash.equals(a.block, h('E'))));
-});
-
-// -- Deferred resolution -------------------------------------------
-
-Deno.test('notifyClaimResolved: emits send actions to V subscribers', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  module.addSubscriptionSource(h('A'));
-
-  module.notifyClaimResolved(h('claimer'), V, 10);
-
-  assertEquals(actions.length, 1);
-  assertEquals(Hash.equals(actions[0].block, h('claimer')), true);
-  assertEquals(Hash.equals(actions[0].trigger, h('A')), true);
-});
-
-Deno.test('notifyClaimResolved: unsubscribed verifier -> empty', () => {
-  const { module } = setup();
-  const actions = collectActions(module);
-
-  module.notifyClaimResolved(h('claimer'), vk('unknown'), 10);
-
-  assertEquals(actions.length, 0);
-});
-
-// -- Edge cases ---------------------------------------------------
-
-Deno.test('blockReceived: unknown block (provider returns empty) -> no actions', () => {
-  const { module } = setup();
-  const actions = collectActions(module);
-
-  // h('unknown') not added to provider
-  module.blockReceived(h('unknown'));
-  assertEquals(actions.length, 0);
-});
-
-Deno.test('many subscribers to same verifier: O(n) send actions', () => {
-  const { provider, module } = setup();
-  const V = vk('popular');
-  const actions = collectActions(module);
-
-  // 20 subscribers
-  for (let i = 0; i < 20; i++) {
-    provider.addBlock(h(`sub${i}`), [{ index: 0, verifierKey: V, value: i + 1 }]);
-    module.addSubscriptionSource(h(`sub${i}`));
-  }
-
-  // Clear backfill actions
+  // Establish claim history for V
+  module.notifyClaimResolved(h('claimer'), V, 100, h('source'));
   actions.length = 0;
 
   // New block with V output
-  provider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
-  module.blockReceived(h('new'));
+  const block = h('new-block');
+  provider.addBlock(block, [{ index: 0, verifierKey: V, value: 50 }]);
+  module.blockReceived(block);
 
-  // 20 send actions, one per subscriber
-  assertEquals(actions.length, 20);
-  // All point to h('new') as block
-  assert(actions.every((a) => Hash.equals(a.block, h('new'))));
-  // All have different triggers
-  const triggers = new Set(actions.map((a) => a.trigger.toPrimitive()));
-  assertEquals(triggers.size, 20);
+  assertEquals(actions.length, 1);
+  assertEquals(actions[0].block, block);
+  assertEquals(actions[0].trigger, h('claimer'));
+  assertEquals(actions[0].verifier, V);
+  assertEquals(actions[0].amount, 100);
 });
 
-// -- Subscription lifecycle: send action effects ----------------------
-
-Deno.test('outputClaimed: no send actions for claimed subscription', () => {
-  const { provider, module } = setup();
+Deno.test('Rule 2: no claim history for V -> no actions for outputs', () => {
+  const { provider, module, actions } = setup();
   const V = vk('game');
-  const actions = collectActions(module);
 
-  // A subscribes to V
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  module.addSubscriptionSource(h('A'));
-
-  // Claim A's output
-  module.outputClaimed(h('A'), 0);
-
-  // New block matching V should NOT trigger send actions -- subscription is gone
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 5 }]);
-  module.blockReceived(h('B'));
+  const block = h('block');
+  provider.addBlock(block, [{ index: 0, verifierKey: V, value: 50 }]);
+  module.blockReceived(block);
 
   assertEquals(actions.length, 0);
 });
 
-Deno.test('outputUnclaimed: send actions restored after unclaim', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-  const actions = collectActions(module);
-
-  // A subscribes to V
-  provider.addBlock(h('A'), [{ index: 0, verifierKey: V, value: 10 }]);
-  module.addSubscriptionSource(h('A'));
-
-  // Claim then unclaim
-  module.outputClaimed(h('A'), 0);
-  module.outputUnclaimed(h('A'), 0);
-
-  // New block matching V should trigger send actions again
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 5 }]);
-  module.blockReceived(h('B'));
-
-  assertEquals(actions.length, 1);
-  assertEquals(Hash.equals(actions[0].trigger, h('A')), true);
-});
-
-Deno.test('outputClaimed: only claimed output removed, sibling survives', () => {
-  const { provider, module } = setup();
+Deno.test('Rule 2: multiple claim history entries -> action per entry', () => {
+  const { provider, module, actions } = setup();
   const V = vk('game');
 
-  // A has two outputs to V
-  provider.addBlock(h('A'), [
-    { index: 0, verifierKey: V, value: 10 },
-    { index: 1, verifierKey: V, value: 20 },
-  ]);
-  module.addSubscriptionSource(h('A'));
-  assertEquals(module.getSubscriptionCount(V), 2);
+  module.notifyClaimResolved(h('claimer1'), V, 100, h('src1'));
+  module.notifyClaimResolved(h('claimer2'), V, 50, h('src2'));
+  actions.length = 0;
 
-  // Claim only index 0
-  module.outputClaimed(h('A'), 0);
-  assertEquals(module.getSubscriptionCount(V), 1);
+  const block = h('new-block');
+  provider.addBlock(block, [{ index: 0, verifierKey: V, value: 30 }]);
+  module.blockReceived(block);
 
-  // Register listener AFTER setup to avoid backfill noise
-  const actions = collectActions(module);
-
-  // New block matching V should still trigger for the surviving subscription
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V, value: 5 }]);
-  module.blockReceived(h('B'));
-
-  assertEquals(actions.length, 1);
-  assertEquals(actions[0].amount, 20); // surviving entry's value
+  assertEquals(actions.length, 2);
+  assertEquals(actions[0].trigger, h('claimer1'));
+  assertEquals(actions[1].trigger, h('claimer2'));
 });
 
-Deno.test('outputClaimed: different verifiers independent', () => {
-  const { provider, module } = setup();
+Deno.test('Rule 2: blockReceived is idempotent', () => {
+  const { provider, module, actions } = setup();
+  const V = vk('game');
+
+  module.notifyClaimResolved(h('claimer'), V, 100, h('src'));
+  actions.length = 0;
+
+  const block = h('block');
+  provider.addBlock(block, [{ index: 0, verifierKey: V, value: 50 }]);
+  module.blockReceived(block);
+  module.blockReceived(block); // duplicate
+
+  assertEquals(actions.length, 1);
+});
+
+// == Claim History Population ==
+
+Deno.test('claim history: notifyClaimResolved adds entries', () => {
+  const { module } = setup();
+  const V = vk('game');
+
+  assertEquals(module.getClaimHistoryCount(V), 0);
+
+  module.notifyClaimResolved(h('claimer1'), V, 100, h('src1'));
+  assertEquals(module.getClaimHistoryCount(V), 1);
+
+  module.notifyClaimResolved(h('claimer2'), V, 50, h('src2'));
+  assertEquals(module.getClaimHistoryCount(V), 2);
+});
+
+Deno.test('claim history: multiple verifiers tracked independently', () => {
+  const { module } = setup();
   const V1 = vk('game');
-  const V2 = vk('pay');
-  const actions = collectActions(module);
+  const V2 = vk('data');
 
-  provider.addBlock(h('A'), [
-    { index: 0, verifierKey: V1, value: 10 },
+  module.notifyClaimResolved(h('claimer1'), V1, 100, h('src1'));
+  module.notifyClaimResolved(h('claimer2'), V2, 50, h('src2'));
+
+  assertEquals(module.getClaimHistoryCount(V1), 1);
+  assertEquals(module.getClaimHistoryCount(V2), 1);
+  assertEquals(module.totalClaimHistoryCount, 2);
+});
+
+// == Contract-Level Fallback ==
+
+Deno.test('fallback: falls back to contract-level when specific verifier is empty', () => {
+  const { provider, module, actions } = setup();
+
+  // Claim with params "A"
+  const vA = vkWithParams('game', 'A');
+  module.notifyClaimResolved(h('claimer'), vA, 100, h('src'));
+  actions.length = 0;
+
+  // Block with params "B" -- no specific history, but same contract
+  const vB = vkWithParams('game', 'B');
+  const block = h('block');
+  provider.addBlock(block, [{ index: 0, verifierKey: vB, value: 50 }]);
+  module.blockReceived(block);
+
+  // Should match via contract fallback
+  assertEquals(actions.length, 1);
+  assertEquals(actions[0].trigger, h('claimer'));
+});
+
+Deno.test('fallback: prefers specific verifier over contract fallback', () => {
+  const { provider, module, actions } = setup();
+
+  const vA = vkWithParams('game', 'A');
+  const vB = vkWithParams('game', 'B');
+
+  // Both verifiers have claim history
+  module.notifyClaimResolved(h('claimer-a'), vA, 100, h('src-a'));
+  module.notifyClaimResolved(h('claimer-b'), vB, 50, h('src-b'));
+  actions.length = 0;
+
+  // Block with params "A" -- should match specific, not fallback
+  const block = h('block');
+  provider.addBlock(block, [{ index: 0, verifierKey: vA, value: 30 }]);
+  module.blockReceived(block);
+
+  // Should only get claimer-a (specific match)
+  assertEquals(actions.length, 1);
+  assertEquals(actions[0].trigger, h('claimer-a'));
+});
+
+Deno.test('fallback: different contracts do not cross-match', () => {
+  const { provider, module, actions } = setup();
+
+  module.notifyClaimResolved(h('claimer'), vk('game'), 100, h('src'));
+  actions.length = 0;
+
+  // Block with different contract
+  const block = h('block');
+  provider.addBlock(block, [{ index: 0, verifierKey: vk('data'), value: 50 }]);
+  module.blockReceived(block);
+
+  assertEquals(actions.length, 0);
+});
+
+// == Backfill ==
+
+Deno.test('backfill: new claim history entry routes existing unclaimed outputs', () => {
+  const { provider, module, actions } = setup();
+  const V = vk('game');
+
+  // Set up unclaimed outputs for V
+  const existingBlock = h('existing');
+  provider.setUnclaimed(V, [
+    { blockHash: existingBlock, verifierKey: V, value: 80 },
+  ]);
+
+  // Resolve a claim -- should trigger backfill
+  module.notifyClaimResolved(h('claimer'), V, 100, h('src'));
+
+  // Rule 1 action + backfill action
+  assertEquals(actions.length, 2);
+  assertEquals(actions[0].block, h('claimer'));
+  assertEquals(actions[0].trigger, h('src'));
+  assertEquals(actions[1].block, existingBlock);
+  assertEquals(actions[1].trigger, h('claimer'));
+  assertEquals(actions[1].verifier, V);
+});
+
+Deno.test('backfill: empty UTXO index -> no backfill actions', () => {
+  const { module, actions } = setup();
+  const V = vk('game');
+
+  module.notifyClaimResolved(h('claimer'), V, 100, h('src'));
+
+  assertEquals(actions.length, 1); // only Rule 1 action
+});
+
+Deno.test('backfill: skips self-referential entries', () => {
+  const { provider, module, actions } = setup();
+  const V = vk('game');
+  const claimer = h('claimer');
+
+  // The claimer's own block is in the UTXO index
+  provider.setUnclaimed(V, [
+    { blockHash: claimer, verifierKey: V, value: 80 },
+    { blockHash: h('other'), verifierKey: V, value: 60 },
+  ]);
+
+  module.notifyClaimResolved(claimer, V, 100, h('src'));
+
+  // Rule 1 + backfill for 'other' only (not self)
+  assertEquals(actions.length, 2);
+  assertEquals(actions[1].block, h('other'));
+});
+
+// == Pruning ==
+
+Deno.test('pruning: entries within limit are not pruned', () => {
+  const { module } = setup({ maxEntriesPerVerifier: 5 });
+  const V = vk('game');
+
+  for (let i = 0; i < 5; i++) {
+    module.notifyClaimResolved(h(`claimer-${i}`), V, 10, h(`src-${i}`));
+  }
+
+  assertEquals(module.getClaimHistoryCount(V), 5);
+});
+
+Deno.test('pruning: excess entries pruned to max size', () => {
+  const { module } = setup({ maxEntriesPerVerifier: 3 });
+  const V = vk('game');
+
+  for (let i = 0; i < 10; i++) {
+    module.notifyClaimResolved(h(`claimer-${i}`), V, 10, h(`src-${i}`));
+  }
+
+  assertEquals(module.getClaimHistoryCount(V), 3);
+});
+
+Deno.test('pruning: recent high-value entries survive over old low-value', () => {
+  const { module } = setup({ maxEntriesPerVerifier: 2 });
+  const V = vk('game');
+
+  // Old low-value entry
+  module.notifyClaimResolved(h('old-low'), V, 1, h('src1'));
+  // Recent high-value entries
+  module.notifyClaimResolved(h('recent-high1'), V, 100, h('src2'));
+  module.notifyClaimResolved(h('recent-high2'), V, 100, h('src3'));
+
+  const entries = module.getClaimHistoryDirect(V);
+  assertEquals(entries.length, 2);
+  const blocks = entries.map((e) => e.block.toPrimitive());
+  assertEquals(blocks.includes(h('old-low').toPrimitive()), false);
+});
+
+// == Ordering ==
+
+Deno.test('ordering: notifyClaimResolved before blockReceived populates history', () => {
+  const { provider, module, actions } = setup();
+  const V = vk('game');
+
+  // Simulate Coordinator -> Routing ordering:
+  // 1. Claim resolves (populates history)
+  module.notifyClaimResolved(h('claimer'), V, 100, h('src'));
+  actions.length = 0;
+
+  // 2. Block arrives with V output (matches against history)
+  const block = h('block');
+  provider.addBlock(block, [{ index: 0, verifierKey: V, value: 50 }]);
+  module.blockReceived(block);
+
+  assertEquals(actions.length, 1);
+  assertEquals(actions[0].block, block);
+  assertEquals(actions[0].trigger, h('claimer'));
+});
+
+// == Combined Scenarios ==
+
+Deno.test('combined: multiple outputs on one block match different histories', () => {
+  const { provider, module, actions } = setup();
+  const V1 = vk('game');
+  const V2 = vk('data');
+
+  module.notifyClaimResolved(h('game-claimer'), V1, 100, h('gs'));
+  module.notifyClaimResolved(h('data-claimer'), V2, 50, h('ds'));
+  actions.length = 0;
+
+  const block = h('multi-output');
+  provider.addBlock(block, [
+    { index: 0, verifierKey: V1, value: 30 },
     { index: 1, verifierKey: V2, value: 20 },
   ]);
-  module.addSubscriptionSource(h('A'));
+  module.blockReceived(block);
 
-  // Claim only V1 output
-  module.outputClaimed(h('A'), 0);
-
-  // V2 subscription should survive
-  provider.addBlock(h('B'), [{ index: 0, verifierKey: V2, value: 5 }]);
-  module.blockReceived(h('B'));
-
-  assertEquals(actions.length, 1);
-  assertEquals(actions[0].verifier, V2);
-});
-
-Deno.test('multiple outputs to same verifier on one block: separate entries', () => {
-  const { provider, module } = setup();
-  const V = vk('game');
-
-  // Block A has two outputs to the same verifier
-  provider.addBlock(h('A'), [
-    { index: 0, verifierKey: V, value: 10 },
-    { index: 1, verifierKey: V, value: 20 },
-  ]);
-
-  module.addSubscriptionSource(h('A'));
-  // Two entries (different output indices)
-  assertEquals(module.getSubscriptionCount(V), 2);
-
-  const entries = module.getSubscriptionEntries(V);
-  assertEquals(entries.length, 2);
-  assertEquals(entries[0].outputIndex, 0);
-  assertEquals(entries[1].outputIndex, 1);
+  assertEquals(actions.length, 2);
+  assertEquals(actions[0].trigger, h('game-claimer'));
+  assertEquals(actions[1].trigger, h('data-claimer'));
 });

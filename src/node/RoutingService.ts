@@ -21,7 +21,7 @@ class RoutingProviderAdapter implements RoutingProvider {
     size += block.aggregates.length * 32;
     size += block.claims.length * 4;
     for (const out of block.outputs) {
-      size += 32 + out.verifier.params.length + 8 + out.data.length;
+      size += 32 + out.verifier.params.length + 8 + (out.data?.length ?? 0);
     }
     return size;
   }
