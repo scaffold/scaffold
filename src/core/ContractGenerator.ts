@@ -3,7 +3,7 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { Block, BlockStore, collectExtendedOutputs } from './Block.ts';
-import { BlockDraft, DraftStore, ResolvedClaim } from './BlockDraft.ts';
+import { BlockDraft, ClaimIntent, DraftStore } from './BlockDraft.ts';
 import { GeneratorHandle, GeneratorProvider } from './Generator.ts';
 import {
   type AvailableInput,

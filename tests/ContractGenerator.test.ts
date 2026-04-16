@@ -8,7 +8,7 @@ import {
   RECORD_CONTRACT,
 } from '../src/core/Block.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
-import { createDraft, DraftStore, ResolvedClaim } from '../src/core/BlockDraft.ts';
+import { ClaimIntent, createDraft, DraftStore } from '../src/core/BlockDraft.ts';
 import { ContractGenerator } from '../src/core/ContractGenerator.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
@@ -284,7 +284,7 @@ Deno.test('ContractGenerator: resolved claims from inputs are merged into draft'
   store.put(genesis);
   utxoIndex.blockBecameCanonical(genesis);
 
-  const initialClaim: ResolvedClaim = { block: genesis.hash, outputIndex: 0, value: 7 };
+  const initialClaim: ClaimIntent = { block: genesis.hash, outputIndex: 0, value: 7 };
   const draft = createDraft({
     resolvedClaims: [initialClaim],
     outputs: [],

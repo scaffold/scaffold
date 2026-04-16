@@ -1,10 +1,22 @@
 // Protocol spec: docs/protocol/output-claims.md
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { ResolvedClaim } from './BlockDraft.ts';
 import { mapSurvivingToOriginal } from './OutputSpace.ts';
 
 // -- Types --------------------------------------------------------
+
+/**
+ * A resolved claim -- identifies which block and output index a claim
+ * migrated to. Emitted by OutputClaimModule when a claim reaches its
+ * producing block. Does not carry economic value; consumers look up
+ * the output directly if they need it.
+ */
+export interface ClaimResolution {
+  /** Hash of the block containing the claimed output. */
+  readonly block: Hash;
+  /** Index into that block's output array. */
+  readonly outputIndex: number;
+}
 
 /** A record of a block claiming an output. */
 export interface OutputClaimEntry {
@@ -79,7 +91,7 @@ export class OutputClaimModule<BlockType> {
   private readonly conflictListeners: ((a: Hash, b: Hash) => void)[] = [];
   private readonly resolutionListeners: ((
     claimant: Hash,
-    target: ResolvedClaim,
+    target: ClaimResolution,
   ) => void)[] = [];
 
   constructor(provider: OutputClaimProvider<BlockType>) {
@@ -96,7 +108,7 @@ export class OutputClaimModule<BlockType> {
    * producing block -- both for immediate resolutions (in addBlock) and
    * deferred resolutions (in onBlockLoaded when a stuck migration completes).
    */
-  onResolution(cb: (claimant: Hash, target: ResolvedClaim) => void): void {
+  onResolution(cb: (claimant: Hash, target: ClaimResolution) => void): void {
     this.resolutionListeners.push(cb);
   }
 
@@ -107,8 +119,8 @@ export class OutputClaimModule<BlockType> {
    * outputClaims and immediately attempts migration.
    * Returns any claims that resolved (reached their producing block).
    */
-  addBlock(hash: Hash, claimIndices: number[]): ResolvedClaim[] {
-    const resolved: ResolvedClaim[] = [];
+  addBlock(hash: Hash, claimIndices: number[]): ClaimResolution[] {
+    const resolved: ClaimResolution[] = [];
 
     for (let i = 0; i < claimIndices.length; i++) {
       const entry: OutputClaimEntry = { claimant: hash, claimIndex: i };
@@ -125,8 +137,8 @@ export class OutputClaimModule<BlockType> {
    * Triggers migration for any stuck entries waiting for this block.
    * Returns any claims that resolved during migration.
    */
-  onBlockLoaded(hash: Hash): ResolvedClaim[] {
-    const resolved: ResolvedClaim[] = [];
+  onBlockLoaded(hash: Hash): ClaimResolution[] {
+    const resolved: ClaimResolution[] = [];
     const key = hash.toPrimitive();
 
     const waiters = this.waitingFor.get(key);
@@ -262,13 +274,13 @@ export class OutputClaimModule<BlockType> {
 
   /**
    * Attempt to migrate an entry from block B at index I toward the producing block.
-   * Returns a ResolvedClaim if the entry reached the producing block, undefined otherwise.
+   * Returns a ClaimResolution if the entry reached the producing block, undefined otherwise.
    */
   private tryMigrate(
     blockHash: Hash,
     index: number,
     entry: OutputClaimEntry,
-  ): ResolvedClaim | undefined {
+  ): ClaimResolution | undefined {
     const block = this.provider.getBlock(blockHash);
     if (!block) return undefined;
 
@@ -276,10 +288,9 @@ export class OutputClaimModule<BlockType> {
 
     // Case 1: Resolved -- claim targets this block's own output
     if (index < ownOutputCount) {
-      const resolved: ResolvedClaim = {
+      const resolved: ClaimResolution = {
         block: blockHash,
         outputIndex: index,
-        value: 0, // value not tracked here; caller can fill in
       };
       for (const cb of this.resolutionListeners) {
         cb(entry.claimant, resolved);
@@ -328,7 +339,7 @@ export class OutputClaimModule<BlockType> {
     entry: OutputClaimEntry,
     targetHash: Hash,
     targetIndex: number,
-  ): ResolvedClaim | undefined {
+  ): ClaimResolution | undefined {
     const targetBlock = this.provider.getBlock(targetHash);
 
     if (!targetBlock) {

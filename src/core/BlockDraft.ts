@@ -11,8 +11,12 @@ export type DraftID = Hash;
 /** Draft lifecycle status. */
 export type DraftStatus = 'pending' | 'generating' | 'ready' | 'cancelled';
 
-/** A resolved claim -- the concrete output being claimed. */
-export interface ResolvedClaim {
+/**
+ * A claim with known economic value, used during draft/block construction.
+ * Produced by the draft system (GeneratingEnv, DraftStrategy) which has
+ * access to UTXO values. Value is needed for throughput balancing.
+ */
+export interface ClaimIntent {
   /** Hash of the block containing the claimed output. */
   readonly block: Hash;
   /** Index into that block's output array. */
@@ -24,7 +28,7 @@ export interface ResolvedClaim {
 /** Local-only placeholder for a block being constructed. */
 export interface BlockDraft {
   readonly draftId: DraftID;
-  readonly resolvedClaims: ResolvedClaim[];
+  readonly resolvedClaims: ClaimIntent[];
   readonly outputs: Output[];
   readonly declaredWeight: number;
   readonly anchor: Hash;
@@ -48,7 +52,7 @@ const VALID_TRANSITIONS: Record<DraftStatus, DraftStatus[]> = {
 
 /** Create a new BlockDraft with a random draftId and 'pending' status. */
 export function createDraft(fields: {
-  resolvedClaims: ResolvedClaim[];
+  resolvedClaims: ClaimIntent[];
   outputs: Output[];
   declaredWeight: number;
   anchor: Hash;

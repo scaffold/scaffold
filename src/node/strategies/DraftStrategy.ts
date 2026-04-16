@@ -1,7 +1,7 @@
 import { Hash } from '../../util/Hash.ts';
 import { BlockStore } from '../../core/Block.ts';
 import { makeAggregationOutput } from '../../contracts/AggregationContract.ts';
-import { ResolvedClaim } from '../../core/BlockDraft.ts';
+import { ClaimIntent } from '../../core/BlockDraft.ts';
 import { Output } from '../../core/BlockCreationModule.ts';
 import { ConsensusService } from '../../core/ConsensusService.ts';
 import { ContractGenerator } from '../../core/ContractGenerator.ts';
@@ -10,7 +10,7 @@ import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 /** Action type for creating a draft (handled by ReactiveLayer). */
 export interface CreateDraftAction {
   type: 'createDraft';
-  claim: ResolvedClaim;
+  claim: ClaimIntent;
   outputs: Output[];
   declaredWeight: number;
   anchor: Hash;
@@ -105,7 +105,7 @@ export class DraftStrategy implements Strategy {
         // Find canonical tip for anchor
         const anchor = findCanonicalTip(event.store, event.consensus);
 
-        const claim: ResolvedClaim = {
+        const claim: ClaimIntent = {
           block: change.hash,
           outputIndex: i,
           value: output.value,

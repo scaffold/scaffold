@@ -12,7 +12,7 @@ import {
   type GeneratingEnvProvider,
   type Input,
 } from './ContractEnv.ts';
-import { ResolvedClaim } from './BlockDraft.ts';
+import { ClaimIntent } from './BlockDraft.ts';
 
 // -- Helpers ------------------------------------------------------
 
@@ -54,7 +54,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   /** Self-claimed result outputs (also added as outputs + claims). */
   private readonly _resultOutputs: Output[] = [];
   /** Resolved claims from consumed inputs (with provenance). */
-  private readonly _resolvedClaims: ResolvedClaim[] = [];
+  private readonly _resolvedClaims: ClaimIntent[] = [];
   /** Input data returned to the contract (without provenance). */
   private readonly _inputs: Input[] = [];
   /** Block hashes added to refs. */
@@ -227,7 +227,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   }
 
   /** Get resolved claims (inputs with provenance) for the draft. */
-  getResolvedClaims(): ResolvedClaim[] {
+  getResolvedClaims(): ClaimIntent[] {
     return this._resolvedClaims;
   }
 

@@ -82,7 +82,7 @@ export interface Block {
   /** Cross-block references for read-only data access. */
   readonly refs: Hash[];
   /** Resolved claims -- concrete output references for uniform claim handling. */
-  readonly resolvedClaims?: import('./BlockDraft.ts').ResolvedClaim[];
+  readonly resolvedClaims?: import('./BlockDraft.ts').ClaimIntent[];
   /** Compressed public key (33 bytes) of the block signer. Node-local, not serialized. */
   readonly signer?: Uint8Array;
   /** Creation time, set by block creator (wire format). */

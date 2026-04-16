@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/draft-blocks.md
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { BlockDraft, createDraft, DraftStore, ResolvedClaim } from './BlockDraft.ts';
+import { BlockDraft, ClaimIntent, createDraft, DraftStore } from './BlockDraft.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
 import { GeneratorHandle, GeneratorProvider } from './Generator.ts';
@@ -34,7 +34,7 @@ export class DraftManager {
    * Returns the created draft.
    */
   createDraft(fields: {
-    resolvedClaims: ResolvedClaim[];
+    resolvedClaims: ClaimIntent[];
     outputs: Output[];
     declaredWeight: number;
     anchor: Hash;

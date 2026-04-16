@@ -1,6 +1,6 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
-import { ResolvedClaim } from '../core/BlockDraft.ts';
+import { ClaimIntent } from '../core/BlockDraft.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { BlockSpec, Output } from '../core/BlockCreationModule.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
@@ -42,7 +42,7 @@ export type Action =
   | { type: 'notifyFetch'; verifier: VerifierKey; result: FetchResult | null }
   | {
     type: 'createDraft';
-    claim: ResolvedClaim;
+    claim: ClaimIntent;
     outputs: Output[];
     declaredWeight: number;
     anchor: Hash;

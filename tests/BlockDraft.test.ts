@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertNotEquals, assertThrows } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { BlockDraft, createDraft, DraftStore, ResolvedClaim } from '../src/core/BlockDraft.ts';
+import { BlockDraft, ClaimIntent, createDraft, DraftStore } from '../src/core/BlockDraft.ts';
 
 const anchor = Hash.digest('anchor');
 
@@ -17,7 +17,7 @@ function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Bloc
 // -- createDraft factory ------------------------------------------
 
 Deno.test('createDraft: sets all fields, random draftId, status pending', () => {
-  const claim: ResolvedClaim = { block: Hash.digest('b'), outputIndex: 1, value: 50 };
+  const claim: ClaimIntent = { block: Hash.digest('b'), outputIndex: 1, value: 50 };
   const draft = createDraft({
     resolvedClaims: [claim],
     outputs: [],
