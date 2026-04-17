@@ -4,9 +4,6 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 
 ## Core Protocol
 
-### Block Weight
-How is the weight of a block determined and verified? [weight.md](docs/protocol/weight.md) discusses four options (contract-declared, economic, collateral-backed, hybrid) but no decision has been made. This is the highest-priority protocol design decision -- it affects block creation, consensus, and trust.
-
 ### Collateral Posting Strategy
 The TrustModule tracks collateral and the DisputeStrategy emits `dispute` actions for invalid blocks, but there is no strategy for **posting** collateral. Need a `CollateralStrategy` that:
 - Posts FOR collateral on blocks we generated (publisher obligation for hard contracts)
@@ -17,7 +14,7 @@ The TrustModule tracks collateral and the DisputeStrategy emits `dispute` action
 The reactive action types (`createBlock` with collateral outputs) exist, but the decision logic for when and how much to stake is unimplemented. The [CollateralContract](src/contracts/CollateralContract.ts) handles resolution; this is about the posting side.
 
 ### WASM Contract Runtime
-The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as a stub.
+The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as an in-memory binary store but is not yet consumed for actual WASM execution.
 
 ### Generator Implementation
 [Generator.ts](src/core/Generator.ts) is a `StubGenerator` that records generate/cancel signals without performing real computation. Replace with a real generator that:
@@ -29,10 +26,10 @@ The ExecutionModule currently uses a TypeScript mock contract registry. Replace 
 The [GenerationStrategy](src/node/strategies/GenerationStrategy.ts) already detects incentive blocks and emits `createBlock` actions, but the actual contract execution is stubbed.
 
 ### Deception Module
-Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (done) and economic equilibrium analysis.
+Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (done) and economic equilibrium analysis. No core module exists yet.
 
 ### Query and Promise Mechanism
-Design the offline state mechanism from [computation.md](docs/protocol/computation.md#query-and-promise-mechanism): promise outputs committing to data, query outputs requesting specific data, and weight reduction for unanswered queries.
+Design the offline state mechanism from [computation.md](docs/protocol/computation.md#query-and-promise-mechanism): promise outputs committing to data, query outputs requesting specific data, and weight reduction for unanswered queries. A scoping plan lives at [docs/plans/query-promise.md](docs/plans/query-promise.md).
 
 ## Contracts
 
@@ -40,44 +37,24 @@ Standard contracts are specified in [contracts.md](docs/protocol/contracts.md). 
 
 | Contract | Spec | Implementation | Status |
 |----------|------|----------------|--------|
-| Signature | contracts.md | `SIGNATURE_CONTRACT` constant + `makeSignatureOutput` helper | Needs contract function that verifies block signature against pubkey in params |
+| Signature | contracts.md | [SignatureContract.ts](src/contracts/SignatureContract.ts) | Done |
 | Aggregation | contracts.md | [AggregationContract.ts](src/contracts/AggregationContract.ts) | Done (threshold-based, uses `requireInput`) |
-| Collateral | contracts.md | [CollateralContract.ts](src/contracts/CollateralContract.ts) | Exists from old codebase; needs adapter to new ContractEnv interface |
-| Record | contracts.md | [RecordContract.ts](src/contracts/RecordContract.ts) | Working (trivially valid -- claiming block is producing block). Needs `requireSelfClaim()` on ContractEnv for proper verification. |
+| Collateral | contracts.md | [CollateralContract.ts](src/contracts/CollateralContract.ts) | Done |
+| Insurance | collateral-resolution.md | [InsuranceContract.ts](src/contracts/InsuranceContract.ts) | Done |
+| Record | contracts.md | [RecordContract.ts](src/contracts/RecordContract.ts) | Done (self-claim enforced via `collectInputs().isSelfClaim`) |
 | Timelock | contracts.md | — | Needs implementation (verify anchor chain depth >= minDepth in params) |
 | Computation | contracts.md | ExecutionModule mock registry | Working for TypeScript mocks; needs WASM runtime for real contracts |
 
-Additional contracts from `src/contracts/` that predate the current module system and need review/adaptation:
-- `AccountContract.ts`, `DataContract.ts`, `TimeContract.ts`, `FrontierContract.ts`
-- `BurnContract.ts`, `CollatzContract.ts`, `NameContract.ts`, `RootContract.ts`
-- `GeneratorContract.ts`, `TrueContract.ts`
-
-These use the old `ContractProvider<Hash>` / `ComputationDriver` interface. They need to be ported to the new `ContractFn` / `ContractEnv` interface, or evaluated for whether they're still needed.
-
 ## Infrastructure
 
-### Wire Up Network Plugins
-Network transport plugins exist but are not wired into the node layer:
-
-| Plugin | Location | Status |
-|--------|----------|--------|
-| WebRTC | [plugins/browser/WebrtcProvider.ts](plugins/browser/WebrtcProvider.ts) | Implemented (data channels, STUN, NAT traversal) |
-| WebSocket server | [plugins/deno/WebsocketServerProvider.ts](plugins/deno/WebsocketServerProvider.ts) | Implemented (Deno HTTP upgrade) |
-| WebSocket client | [plugins/WebsocketClientProvider.ts](plugins/WebsocketClientProvider.ts) | Implemented (browser-side) |
-| Mock network | [plugins/MockNetworkProvider.ts](plugins/MockNetworkProvider.ts) | Implemented (in-memory, configurable latency/loss) |
-
-[NetworkManager](src/node/NetworkManager.ts) defines the plugin interface. The gap is wiring these providers into `NodeContext` / `Scaffold` so that blocks received from the network flow through the coordinator and blocks produced locally get pushed to peers via gossip.
-
-Specific work:
-- Adapter from NetworkManager's message events → `coordinator.blockReceived`
-- Adapter from gossip push actions → NetworkManager send
-- Connection lifecycle: peer add/remove synced to gossip module's `addPeer`/`removePeer`
-- Signaling server for WebRTC (the provider handles negotiation, but needs a signaling channel)
-
-Storage plugins also exist but need wiring:
+### Storage Plugin Wiring
+[StorageManager](src/node/StorageManager.ts) defines the plugin interface and load/save semantics, but it is not instantiated from `Scaffold`. Existing plugins that still need to be wired:
 - [DenoKvStorageProvider](plugins/deno/DenoKvStorageProvider.ts) -- Deno KV backend
 - [OpfsStorageProvider](plugins/browser/OpfsStorageProvider.ts) -- browser OPFS
 - [LocalStorageProvider](plugins/browser/LocalStorageProvider.ts) -- browser localStorage
+- [NullStorageProvider](plugins/NullStorageProvider.ts) -- ephemeral fallback
+
+Specific work: add a `storage?` config field to `Scaffold`, construct `StorageManager` when provided, replay persisted blocks through the coordinator on startup, and persist new canonical blocks.
 
 ### Peer Module
 Peer discovery, connection management, and disconnection of useless peers. The gossip module exports per-peer quality scores and consumes the peer set + transport metrics (latency, throughput). This module decides who to connect to, how to find new peers, and when to drop unproductive connections.
