@@ -160,9 +160,12 @@ export class NodeContext {
     const publicKey = this._publicKey;
     const utxoIndex = this.utxoIndex;
     const packetStore = this.packetStore;
+    const store = this.store;
     this._blockCreator = {
       createBlock: (spec, privateKey) => {
-        const balanced = publicKey ? autoBalance(spec, utxoIndex, publicKey) : spec;
+        const balanced = publicKey
+          ? autoBalance(spec, utxoIndex, publicKey, makeStoreOutputSpace(store))
+          : spec;
         let blueprint: BlockBlueprint;
         try {
           blueprint = blockCreationService.buildBlock(balanced);
@@ -589,16 +592,48 @@ export function findCanonicalTip(ctx: NodeContext): Hash {
 }
 
 /**
+ * Build an OutputSpaceProvider that reads blocks out of a BlockStore.
+ * Mirrors the provider used in _solidifyDraft.
+ */
+function makeStoreOutputSpace(store: BlockStore): OutputSpaceModule {
+  const provider: OutputSpaceProvider = {
+    getBlock(hash: Hash): OutputSpaceBlock | undefined {
+      const block = store.get(hash);
+      if (!block) return undefined;
+      const aggData = getAggregationData(block);
+      const sc = block.claims.filter((c) => c < block.outputs.length).length;
+      return {
+        hash: block.hash,
+        anchor: block.anchor,
+        aggregates: block.aggregates,
+        outputs: block.outputs.map((o) => ({ value: o.value })),
+        claims: [...block.claims].sort((a, b) => a - b),
+        aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
+        newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
+      };
+    },
+  };
+  return new OutputSpaceModule(provider);
+}
+
+/**
  * Auto-balance a BlockSpec so that throughput (inputs == outputs) is satisfied.
  *
  * If outputs > claims (deficit): query UTXO index for unspent outputs owned by
- * our key, greedily select enough to cover the deficit, add change output for excess.
- * If claims > outputs: add a change output for the excess.
+ * our key, greedily select enough to cover the deficit, add change output for
+ * excess, and emit claim indices resolved against the anchor's extended
+ * vector via OutputSpaceModule -- the producer's local index would only be
+ * valid when the anchor is the producer itself.
+ *
+ * If claims > outputs: add a change output for the excess and shift any
+ * pre-existing external claim indices by one (adding an own output moves
+ * the own/external boundary forward).
  */
 function autoBalance(
   spec: BlockSpec,
   utxoIndex: UtxoIndex,
   publicKey: Uint8Array,
+  outputSpace: OutputSpaceModule,
 ): BlockSpec {
   // Compute totals excluding self-claims
   const ownOutputCount = spec.outputs.length;
@@ -629,17 +664,29 @@ function autoBalance(
     const deficit = outputTotal - claimTotal;
     const utxos = utxoIndex.getByVerifier(SIGNATURE_CONTRACT, publicKey);
 
-    // Phase 1: Select UTXOs
-    const selected: { extendedIndex: number; value: number }[] = [];
+    // Phase 1: Select UTXOs. Resolve each candidate's position in the
+    // anchor's extended vector; skip any that don't survive that far
+    // (already claimed on the way down, aggregated away, etc.).
+    // A child claim indexes into the anchor's POST-SUBTREE vector (the
+    // survivors after the anchor's own claims), not the anchor's full
+    // extended vector. computeOutputSpaceIndex does exactly that mapping:
+    // it is computeClaimIndex followed by mapOriginalToSurviving over the
+    // anchor's claims.
+    const selected: { postSubtreeIdx: number; value: number }[] = [];
     let gathered = 0;
     for (const utxo of utxos) {
       if (gathered >= deficit) break;
-      selected.push({ extendedIndex: utxo.extendedIndex, value: utxo.value });
+      const postSubtreeIdx = outputSpace.computeOutputSpaceIndex(spec.anchor, {
+        block: utxo.blockHash,
+        outputIndex: utxo.outputIndex,
+      });
+      if (postSubtreeIdx === undefined) continue;
+      selected.push({ postSubtreeIdx, value: utxo.value });
       gathered += utxo.value;
     }
 
     if (gathered < deficit) {
-      // Not enough funds -- proceed anyway and let validation catch it
+      // Not enough reachable funds -- proceed anyway and let validation catch it
       return spec;
     }
 
@@ -649,10 +696,11 @@ function autoBalance(
       newOutputs.push(makeSignatureOutput(publicKey, excess));
     }
 
-    // Phase 3: Compute claim indices based on FINAL output count
-    const finalOutputCount = newOutputs.length;
-    for (const utxo of selected) {
-      newClaims.push({ index: finalOutputCount + utxo.extendedIndex, value: utxo.value });
+    // Phase 3: Emit claim indices against the final own-output count.
+    //   claim.index = finalOwnCount + positionInAnchorPostSubtree
+    const finalOwnCount = newOutputs.length;
+    for (const u of selected) {
+      newClaims.push({ index: finalOwnCount + u.postSubtreeIdx, value: u.value });
     }
   } else {
     // Claims exceed outputs -- add change output.

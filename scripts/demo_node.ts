@@ -198,7 +198,6 @@ async function handleCommand(line: string): Promise<void> {
       if (!name) throw new Error('usage: request <name>');
       const result = scaffold.put({
         outputs: [makeHelloRequest(name, 1_000)],
-        anchor: genesis.hash,
       });
       emit({
         type: 'request_published',

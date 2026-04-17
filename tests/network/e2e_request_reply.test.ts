@@ -145,11 +145,11 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
     },
   );
 
-  // 4. A publishes the request. Anchored to genesis to work around the
-  //    known UtxoIndex/auto-balance bug when anchoring to a deeper block.
+  // 4. A publishes the request. Auto-balance resolves the funding UTXO
+  //    against the canonical tip's post-subtree vector, so an explicit
+  //    anchor isn't needed.
   nodeA.put({
     outputs: [makeHelloRequest('world', 1_000)],
-    anchor: genesis.hash,
   });
 
   // 5. Wait for the response to land.
