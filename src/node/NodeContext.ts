@@ -45,7 +45,7 @@ import { PushAction } from './RoutingModule.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
 import { ExecutionService } from '../core/ExecutionService.ts';
-import { Hash } from '../util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { UtxoIndex, verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
@@ -100,6 +100,14 @@ export class NodeContext {
   /** Reactive block record set - notifies listeners on block add/update. */
   readonly blocks: BlockRecordSet;
 
+  /**
+   * Raw packet bytes keyed by block hash. Populated when blocks are
+   * locally composed and when block packets arrive over the network.
+   * NetworkBridge and StorageManager read from this so peers and
+   * persistence both see the original signed wire bytes.
+   */
+  readonly packetStore = new Map<HashPrimitive, Uint8Array>();
+
   private readonly _genesisHash: Hash;
   private readonly _privateKey: Uint8Array | null;
   private readonly _publicKey: Uint8Array | null;
@@ -146,9 +154,12 @@ export class NodeContext {
 
     // 5. Create a BlockCreator that uses BlockCreationService.
     //    Auto-balances throughput if a publicKey is configured.
+    //    The composed packet's raw bytes are stashed in packetStore so
+    //    NetworkBridge and StorageManager can replay them as-is.
     const blockCreationService = this.blockCreation;
     const publicKey = this._publicKey;
     const utxoIndex = this.utxoIndex;
+    const packetStore = this.packetStore;
     this._blockCreator = {
       createBlock: (spec, privateKey) => {
         const balanced = publicKey ? autoBalance(spec, utxoIndex, publicKey) : spec;
@@ -159,10 +170,11 @@ export class NodeContext {
           console.debug('createBlock failed:', (e as Error).message);
           return null;
         }
-        if (privateKey) {
-          return composeBlockPacket(blueprint, privateKey).block;
-        }
-        return composeUnsignedBlockPacket(blueprint).block;
+        const composed = privateKey
+          ? composeBlockPacket(blueprint, privateKey)
+          : composeUnsignedBlockPacket(blueprint);
+        packetStore.set(composed.block.hash.toPrimitive(), composed.packet.raw);
+        return composed.block;
       },
     };
 

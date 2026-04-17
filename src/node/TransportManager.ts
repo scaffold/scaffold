@@ -16,12 +16,12 @@ import {
   TransportService,
   TransportSession,
 } from '../interfaces/transport.ts';
-import { BlockSerializer, PeerConnection, TransportConnection } from './PeerConnection.ts';
+import { PeerConnection, TransportConnection } from './PeerConnection.ts';
 import { SignalEnvelope, SignalingService, SignalingSessionHandle } from './SignalingService.ts';
 
 // -- Callbacks ---------------------------------------------------------
 
-type BlockReceivedHandler = (block: Block, peerId: string) => void;
+type BlockReceivedHandler = (block: Block, peerId: string, raw: Uint8Array) => void;
 
 export interface TransportManagerCallbacks {
   onBlockReceived: BlockReceivedHandler;
@@ -35,7 +35,6 @@ export interface TransportManagerDeps {
   selfPrivateKey: Uint8Array;
   selfPublicKey: Uint8Array;
   callbacks: TransportManagerCallbacks;
-  serializer: BlockSerializer;
   sendRelay: (to: string, from: string, payload: SignalEnvelope) => void;
   logger?: ScopedLogger;
 }
@@ -120,15 +119,15 @@ export class TransportManager {
     await this.signaling?.recvSignal(envelope);
   }
 
-  /** Broadcast or target a block to connected peers. */
-  sendBlock(block: Block, targets?: string[]): void {
+  /** Broadcast or target a raw block packet to connected peers. */
+  sendBlock(raw: Uint8Array, targets?: string[]): void {
     if (targets && targets.length > 0) {
       for (const id of targets) {
-        this._peers.get(id)?.sendBlock(block);
+        this._peers.get(id)?.sendBlock(raw);
       }
     } else {
       for (const peer of this._peers.values()) {
-        peer.sendBlock(block);
+        peer.sendBlock(raw);
       }
     }
   }
@@ -230,11 +229,7 @@ export class TransportManager {
 
   private registerConnection(peerId: string, conn: ConnectionProvider): ConnectionDriver {
     const { transport, driver } = wrapConnection(peerId, conn);
-    const peer = new PeerConnection(
-      transport,
-      this.deps.callbacks.onBlockReceived,
-      this.deps.serializer,
-    );
+    const peer = new PeerConnection(transport, this.deps.callbacks.onBlockReceived);
     this._peers.set(peer.peerId, peer);
     this.deps.callbacks.onPeerConnected?.(peer);
     peer.onClose(() => {
@@ -248,19 +243,19 @@ export class TransportManager {
 // -- Adapter: ConnectionProvider -> TransportConnection ----------------
 
 /**
- * Wraps a byte-level ConnectionProvider into the string-level
- * TransportConnection that PeerConnection expects.
+ * Adapter that exposes a plugin's byte-level ConnectionProvider as the
+ * byte-level TransportConnection PeerConnection consumes.
  */
 export function wrapConnection(
   peerId: string,
   conn: ConnectionProvider,
 ): { transport: TransportConnection; driver: ConnectionDriver } {
-  let messageHandler: ((data: string) => void) | null = null;
+  let messageHandler: ((data: Uint8Array) => void) | null = null;
   let closeHandler: (() => void) | null = null;
 
   const driver: ConnectionDriver = {
     recvData: (data: Uint8Array) => {
-      messageHandler?.(new TextDecoder().decode(data));
+      messageHandler?.(data);
     },
     close: () => {
       closeHandler?.();
@@ -269,10 +264,10 @@ export function wrapConnection(
 
   const transport: TransportConnection = {
     peerId,
-    send: (data: string) => {
-      conn.sendReliable(new TextEncoder().encode(data));
+    send: (data: Uint8Array) => {
+      conn.sendReliable(data);
     },
-    onMessage: (handler: (data: string) => void) => {
+    onMessage: (handler: (data: Uint8Array) => void) => {
       messageHandler = handler;
     },
     onClose: (handler: () => void) => {

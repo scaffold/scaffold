@@ -1,70 +1,48 @@
 import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
+import { BlockStore, createGenesisBlock } from '../src/core/Block.ts';
+import { PacketType, parsePacket } from '../src/core/Packet.ts';
 import { SyncProtocol } from '../src/node/SyncProtocol.ts';
-import {
-  BlockSerializer,
-  PeerConnection,
-  PeerMessage,
-  TransportConnection,
-} from '../src/node/PeerConnection.ts';
+import { PeerConnection, TransportConnection } from '../src/node/PeerConnection.ts';
 
 // -- Test Helpers ---------------------------------------------------
 
 /** Deterministic hash from a string. */
 const h = (name: string): Hash => Hash.digest(name);
 
-/** Captures strings sent through the transport so we can inspect messages. */
+/** Captures bytes sent through the transport so we can inspect packets. */
 class MockTransport implements TransportConnection {
-  readonly sent: string[] = [];
-
-  private messageHandler: ((data: string) => void) | undefined;
-  private closeHandler: (() => void) | undefined;
+  readonly sent: Uint8Array[] = [];
 
   constructor(readonly peerId: string) {}
 
-  send(data: string): void {
+  send(data: Uint8Array): void {
     this.sent.push(data);
   }
 
-  onMessage(handler: (data: string) => void): void {
-    this.messageHandler = handler;
+  onMessage(_handler: (data: Uint8Array) => void): void {
+    // no-op for these tests; we only inspect outbound traffic.
   }
 
-  onClose(handler: () => void): void {
-    this.closeHandler = handler;
-  }
+  onClose(_handler: () => void): void {}
 
-  close(): void {
-    // no-op
-  }
+  close(): void {}
 
-  /** Decode the last sent message as JSON. */
+  /** Parse the last sent packet and flatten its payload for test assertions. */
   lastMessage(): Record<string, unknown> | undefined {
     if (this.sent.length === 0) return undefined;
-    const msg = JSON.parse(this.sent[this.sent.length - 1]) as PeerMessage;
-    // Flatten the PeerMessage envelope for easier test assertions
-    return { type: msg.type, ...msg.data } as unknown as Record<string, unknown>;
+    const packet = parsePacket<Record<string, unknown>>(this.sent[this.sent.length - 1]);
+    if (!packet) return undefined;
+    return {
+      type: PacketType[packet.type].toLowerCase(),
+      ...packet.payload,
+    };
   }
 }
 
-/** A no-op block serializer for testing (we never actually send blocks here). */
-const stubSerializer: BlockSerializer = {
-  serialize(_block: Block): object {
-    return {};
-  },
-  deserialize(_data: object): Block {
-    return {} as unknown as Block;
-  },
-};
-
 function makePeer(id = 'peer-1'): { peer: PeerConnection; transport: MockTransport } {
   const transport = new MockTransport(id);
-  const peer = new PeerConnection(
-    transport,
-    () => {}, // onBlockReceived - not used in sync tests
-    stubSerializer,
-  );
+  const peer = new PeerConnection(transport, () => {});
   return { peer, transport };
 }
 

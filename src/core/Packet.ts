@@ -12,9 +12,19 @@ import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 
 // -- PacketType enum ------------------------------------------------
 
+/**
+ * Every wire packet is `[SCF magic][type byte][payload][signature?]`.
+ * Block packets are signed; everything else (control messages and
+ * unsigned blocks like genesis) carries an unsigned JSON payload.
+ */
 export enum PacketType {
   Block = 0,
   UnsignedBlock = 1,
+  Signal = 2,
+  Sync = 3,
+  Request = 4,
+  Delivery = 5,
+  PeerInfo = 6,
 }
 
 // -- Constants ------------------------------------------------------
@@ -26,6 +36,17 @@ export const SIGNATURE_SIZE = 65; // 64-byte compact + 1-byte recovery
 /** Returns whether a packet type includes a trailing signature. */
 export function isSigned(type: PacketType): boolean {
   return type === PacketType.Block;
+}
+
+/** Returns whether the byte is a known PacketType value. */
+function isKnownPacketType(b: number): b is PacketType {
+  return b === PacketType.Block ||
+    b === PacketType.UnsignedBlock ||
+    b === PacketType.Signal ||
+    b === PacketType.Sync ||
+    b === PacketType.Request ||
+    b === PacketType.Delivery ||
+    b === PacketType.PeerInfo;
 }
 
 // -- Packet interface -----------------------------------------------
@@ -99,10 +120,11 @@ export function parsePacket<T>(raw: Uint8Array): Packet<T> | null {
   }
 
   // Read type
-  const type = raw[3] as PacketType;
-  if (type !== PacketType.Block && type !== PacketType.UnsignedBlock) {
+  const typeByte = raw[3];
+  if (!isKnownPacketType(typeByte)) {
     return null;
   }
+  const type = typeByte;
 
   const signed = isSigned(type);
 
