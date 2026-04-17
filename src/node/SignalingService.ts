@@ -14,6 +14,7 @@ import {
   encryptSignal,
   uint8ToBase64,
 } from '../util/crypto.ts';
+import { ScopedLogger } from '../core/EventLog.ts';
 
 // -- Wire format --------------------------------------------------------
 
@@ -75,6 +76,7 @@ export interface SignalingServiceConfig {
   sendRelay: (to: string, from: string, payload: SignalEnvelope) => void;
   onInboundSession: (handle: SignalingSessionHandle, firstSignal: string) => void;
   retryIntervalMs?: number;
+  logger?: ScopedLogger;
 }
 
 // -- Service ------------------------------------------------------------
@@ -122,12 +124,18 @@ export class SignalingService {
 
     // Skip duplicate signals
     const bit = 1n << BigInt(envelope.signalIdx);
-    if (session.localReceivedMask & bit) return;
+    if (session.localReceivedMask & bit) {
+      this.config.logger?.debug('duplicateSignalDropped', {
+        nonce: envelope.signalingNonce,
+        signalIdx: envelope.signalIdx,
+      });
+      return;
+    }
     session.localReceivedMask |= bit;
 
-    // Decrypt; silently drop envelopes that fail to decrypt (bad sender,
-    // stale session, tampered payload). If this was a brand-new responder
-    // session, close it -- it's an orphan.
+    // Decrypt; drop envelopes that fail to decrypt (bad sender, stale session,
+    // tampered payload). If this was a brand-new responder session, close it
+    // -- it's an orphan.
     let signal: string;
     try {
       const encrypted = base64ToUint8(envelope.encrypted);
@@ -135,6 +143,12 @@ export class SignalingService {
       const plaintext = await decryptSignal(encrypted, iv, session.aesKey);
       signal = new TextDecoder().decode(plaintext);
     } catch {
+      this.config.logger?.warn('signalDecryptFailed', {
+        nonce: envelope.signalingNonce,
+        senderPublicKey: envelope.senderPublicKey,
+        signalIdx: envelope.signalIdx,
+        isNewResponder,
+      });
       if (isNewResponder) this.closeSession(session);
       return;
     }

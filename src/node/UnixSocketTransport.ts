@@ -13,15 +13,24 @@ import {
   TransportPlugin,
   TransportService,
 } from '../interfaces/transport.ts';
+import { ScopedLogger } from '../core/EventLog.ts';
+
+export interface UnixSocketTransportOptions {
+  socketPath?: string;
+  logger?: ScopedLogger;
+}
 
 export class UnixSocketTransport implements TransportPlugin {
   readonly emitsProtocol = 'unix';
   readonly acceptsProtocols = ['unix'];
 
   readonly socketPath: string;
+  private readonly logger?: ScopedLogger;
 
-  constructor(socketPath?: string) {
-    this.socketPath = socketPath ?? `/tmp/scaffold-${crypto.randomUUID()}.sock`;
+  constructor(options: UnixSocketTransportOptions | string = {}) {
+    const opts = typeof options === 'string' ? { socketPath: options } : options;
+    this.socketPath = opts.socketPath ?? `/tmp/scaffold-${crypto.randomUUID()}.sock`;
+    this.logger = opts.logger;
   }
 
   start(driver: AnonymousTransportDriver): TransportService {
@@ -54,8 +63,11 @@ export class UnixSocketTransport implements TransportPlugin {
             const connDriver = driver.createAnonymousConnection(provider);
             wireConnectionDriver(conn, connDriver, onConnClosed);
           },
-          () => {
-            // connection failed -- nothing to do
+          (err) => {
+            this.logger?.warn('dialFailed', {
+              address,
+              error: String(err),
+            });
           },
         );
       },

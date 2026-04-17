@@ -70,6 +70,7 @@ export class TransportManager {
         onInboundSession: (handle, firstSignal) => {
           this.handleInboundSession(handle, firstSignal);
         },
+        logger: this.deps.logger?.child('signaling'),
       });
     }
 
@@ -187,6 +188,10 @@ export class TransportManager {
       this.services.get(p)?.initializeAuthenticatedTransport !== undefined
     );
     if (!plugin) {
+      this.deps.logger?.warn('inboundSessionRejected', {
+        protocol: handle.protocol,
+        reason: 'no plugin accepts this protocol',
+      });
       handle.close();
       return;
     }

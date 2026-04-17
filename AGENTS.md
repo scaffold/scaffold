@@ -111,6 +111,9 @@ When adding a new module or service:
 3. Include block hashes in data so `__scaffold.history(prefix)` works
 4. If the module has queryable state, add a method to `ScaffoldDebugAPI`
 
+### Never drop errors silently
+Any path that catches an exception, drops a malformed input, or silently rejects a request SHOULD emit a log event. Default to `warn` for anything unexpected from outside the node (malformed peer input, failed connections, rejected handshakes) and `debug` for internal conditions that are expected but worth tracing (duplicate messages, deduplication hits, fallback paths). A silent `try { ... } catch { }` or `if (!valid) return;` without a log makes production debugging much harder later -- the cost of adding the log is trivial compared to the cost of not having it when you need it.
+
 ### Demo dev workflow
 The demo app at `demo/` resolves `scaffold.io` imports directly to `src/` via Vite aliases. Changes are picked up instantly -- no npm rebuild needed for development.
 
