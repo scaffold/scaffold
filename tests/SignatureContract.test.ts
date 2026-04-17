@@ -1,16 +1,24 @@
-import { assert, assertFalse } from '@std/assert';
+import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
 import {
   Block,
+  BlockPayload,
   BlockSource,
+  createBlockFromPacket,
   createGenesisBlock,
   SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import { composeBlockPacket } from '../src/core/Packet.ts';
+import {
+  composeBlockPacket,
+  composeGenesisPacket,
+  parsePacket,
+  recoverPacketSigner,
+} from '../src/core/Packet.ts';
 import { signatureContract } from '../src/contracts/SignatureContract.ts';
 import { type ContractEnv } from '../src/core/ContractEnv.ts';
+import { Scaffold } from '../src/Scaffold.ts';
 import { SimNode } from './SimNetwork.ts';
 
 // -- Helpers ----------------------------------------------------------
@@ -129,4 +137,105 @@ Deno.test('SignatureContract: block signer is populated by composeBlockPacket', 
       `Signer byte ${i} mismatch`,
     );
   }
+});
+
+Deno.test('SignatureContract: ingest path recovers signer from wire packet', async () => {
+  const node = new SimNode('sig-ingest');
+  node.execution.registerContract(SIGNATURE_CONTRACT, signatureContract);
+
+  const genesis = createGenesisBlock([makeSignatureOutput(publicKeyA, 100)]);
+  node.receiveBlock(genesis, null);
+
+  // Compose a signed packet, then simulate wire transit by parsing the
+  // raw bytes and reconstructing the block via createBlockFromPacket --
+  // mirroring what an ingest path (e.g. DemoNode.receivePacket) does.
+  const { packet } = composeBlockPacket(
+    {
+      anchor: genesis.hash,
+      aggregates: [],
+      claims: [0],
+      outputs: [],
+      declaredWeight: 10,
+      refs: [],
+    },
+    privateKeyA,
+  );
+
+  const parsed = parsePacket<BlockPayload>(packet.raw);
+  assert(parsed !== null);
+  const recoveredSigner = recoverPacketSigner(parsed!);
+  assert(recoveredSigner !== undefined, 'Signer should be recoverable from packet');
+
+  const ingestedBlock = createBlockFromPacket(
+    parsed!.payload,
+    parsed!.hash,
+    BlockSource.Remote,
+    recoveredSigner,
+  );
+  assertEquals(ingestedBlock.signer, recoveredSigner);
+
+  node.receiveBlock(ingestedBlock, 'peerA');
+  const result = await node.execution.verifyBlock(ingestedBlock.hash);
+  assert(result.accepted, 'Ingested signed block should pass signature contract');
+});
+
+Deno.test('SignatureContract: ingest path rejects wrong-key signature contract', async () => {
+  const node = new SimNode('sig-ingest-wrong');
+  node.execution.registerContract(SIGNATURE_CONTRACT, signatureContract);
+
+  // Output requires keyA, but we sign and ingest with keyB.
+  const genesis = createGenesisBlock([makeSignatureOutput(publicKeyA, 100)]);
+  node.receiveBlock(genesis, null);
+
+  const { packet } = composeBlockPacket(
+    {
+      anchor: genesis.hash,
+      aggregates: [],
+      claims: [0],
+      outputs: [],
+      declaredWeight: 10,
+      refs: [],
+    },
+    privateKeyB,
+  );
+
+  const parsed = parsePacket<BlockPayload>(packet.raw)!;
+  const ingestedBlock = createBlockFromPacket(
+    parsed.payload,
+    parsed.hash,
+    BlockSource.Remote,
+    recoverPacketSigner(parsed),
+  );
+
+  node.receiveBlock(ingestedBlock, 'peerA');
+  const result = await node.execution.verifyBlock(ingestedBlock.hash);
+  assertFalse(result.accepted, 'Wrong signer should be rejected after ingest');
+});
+
+Deno.test('SignatureContract: Scaffold auto-registers signatureContract for verification', async () => {
+  const { block: genesis } = composeGenesisPacket([makeSignatureOutput(publicKeyA, 100)]);
+  const scaffold = new Scaffold({ genesis, privateKey: privateKeyA });
+
+  // The execution service should know about SIGNATURE_CONTRACT without any
+  // explicit registerContract() call -- it's wired in NodeContext.
+  const contract = scaffold.context.execution.getContract(SIGNATURE_CONTRACT);
+  assert(contract !== undefined, 'SIGNATURE_CONTRACT should be auto-registered');
+  assertEquals(contract, signatureContract);
+
+  // End-to-end: a signed block claiming the genesis signature output should
+  // verify successfully via the execution service.
+  const { block } = composeBlockPacket(
+    {
+      anchor: genesis.hash,
+      aggregates: [],
+      claims: [0],
+      outputs: [],
+      declaredWeight: 1,
+      refs: [],
+    },
+    privateKeyA,
+  );
+  scaffold.context.coordinator.blockReceived(block, null);
+  const result = await scaffold.context.execution.verifyBlock(block.hash);
+  assert(result.accepted, 'auto-registered signatureContract should verify the block');
 });
