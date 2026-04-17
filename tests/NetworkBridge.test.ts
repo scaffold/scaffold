@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
-import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
+import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
 import { bin2hex } from '../src/util/hex.ts';
-import { BlockSerializer } from '../src/node/PeerConnection.ts';
+import { composeBlockPacket, composeUnsignedPacket, PacketType } from '../src/core/Packet.ts';
 import { NetworkBridge } from '../src/node/NetworkBridge.ts';
 import { SignalEnvelope } from '../src/node/SignalingService.ts';
 import { PushAction } from '../src/node/RoutingModule.ts';
@@ -25,30 +25,29 @@ function makeOutput(value: number, label?: string): Output {
   };
 }
 
-function fakeBlock(name: string, anchor?: Hash): Block {
-  return {
-    hash: Hash.digest(name),
-    anchor: anchor ?? ZERO_HASH,
-    aggregates: [],
-    claims: [],
-    outputs: [makeOutput(10)],
-    declaredWeight: 1,
-    refs: [],
-    timestamp: Date.now(),
-    receivedAt: Date.now(),
-    source: 'local',
-  } as unknown as Block;
+/**
+ * Compose a real signed block packet anchored at `anchor`. We use real
+ * packets (not stubs) because NetworkBridge's outbound path forwards
+ * the original raw packet bytes.
+ */
+function makeBlockPacket(
+  anchor: Block,
+  outputs: Output[] = [makeOutput(10, 'test')],
+): { block: Block; raw: Uint8Array } {
+  const privateKey = secp.utils.randomPrivateKey();
+  const { block, packet } = composeBlockPacket(
+    {
+      anchor: anchor.hash,
+      aggregates: [],
+      claims: [],
+      outputs,
+      declaredWeight: 1,
+      refs: [],
+    },
+    privateKey,
+  );
+  return { block, raw: packet.raw };
 }
-
-const fakeSerializer: BlockSerializer = {
-  serialize(block: Block): object {
-    return { hash: block.hash.toHex() };
-  },
-  deserialize(data: object): Block {
-    const d = data as { hash: string };
-    return fakeBlock(d.hash);
-  },
-};
 
 function generateKeyPair() {
   const privateKey = secp.utils.randomPrivateKey();
@@ -69,6 +68,7 @@ function setupProtocol() {
 interface Harness {
   bridge: NetworkBridge;
   plugin: MockTransportPlugin;
+  packetStore: Map<HashPrimitive, Uint8Array>;
   received: { block: Block; peerId: string }[];
   selfId: string;
 }
@@ -78,68 +78,53 @@ function makeBridge(selfId?: string): Harness {
   const plugin = new MockTransportPlugin();
   const keys = generateKeyPair();
   const received: { block: Block; peerId: string }[] = [];
+  const packetStore = new Map<HashPrimitive, Uint8Array>();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
+    packetStore,
     routing,
     processBlock: (block, peerId) => received.push({ block, peerId }),
-    serializer: fakeSerializer,
     selfId: selfId ?? bin2hex(keys.publicKey),
   });
   bridge.start();
 
-  return { bridge, plugin, received, selfId: selfId ?? bin2hex(keys.publicKey) };
+  return {
+    bridge,
+    plugin,
+    packetStore,
+    received,
+    selfId: selfId ?? bin2hex(keys.publicKey),
+  };
+}
+
+function controlPacket<T>(type: PacketType, payload: T): Uint8Array {
+  return composeUnsignedPacket<T>(type, payload).raw;
 }
 
 // -- Tests ------------------------------------------------------------
 
-Deno.test('NetworkBridge: inbound block flows to processBlock', () => {
-  const { bridge, plugin, received } = makeBridge();
+Deno.test('NetworkBridge: inbound block flows to processBlock and stashes raw bytes', () => {
+  const { bridge, plugin, packetStore, received } = makeBridge();
 
-  const { provider } = plugin.injectAnonymousConnection();
-  const block = fakeBlock('inbound-block');
-  const wire = JSON.stringify({
-    type: 'block',
-    data: fakeSerializer.serialize(block),
-  });
+  const { driver } = plugin.injectAnonymousConnection();
+  const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
+  const { block, raw } = makeBlockPacket(genesis);
 
-  // Simulate the remote peer sending the block over the connection.
-  // The ConnectionDriver returned by createAnonymousConnection has a recvData
-  // hook -- but here we feed the data through the ConnectionProvider side
-  // effect by calling the driver directly via the internal wiring.
-  // We access the driver through the plugin's captured record.
-  const drivers = plugin.anonymousDriver!;
-  // Re-inject an explicit driver path:
-  // Instead, mirror the flow: the plugin already produced a connection, and
-  // TransportManager wrapped it into a PeerConnection that listens on the
-  // wire. We invoke the underlying recvData by using the provider's captured
-  // writes in reverse: the registered connection driver accepts bytes.
-  // Since the MockConnectionProvider captures sent bytes but doesn't feed
-  // them back, we instead simulate via the ConnectionDriver returned from
-  // createAnonymousConnection.
-
-  // The easiest approach: track the returned ConnectionDriver.
-  // MockTransportPlugin doesn't expose it, so we use a fresh connection here.
-  const conn = new (class extends Object {
-    sendReliable(_: Uint8Array) {}
-    sendFast(_: Uint8Array) {}
-    shutdown() {}
-  })();
-  const connDriver = drivers.createAnonymousConnection(
-    conn as unknown as {
-      sendReliable: (data: Uint8Array) => void;
-      sendFast: (data: Uint8Array) => void;
-      shutdown: () => void;
-    },
-  );
-  connDriver.recvData(new TextEncoder().encode(wire));
+  driver.recvData(raw);
 
   assertEquals(received.length, 1);
+  assertEquals(received[0].block.hash.toHex(), block.hash.toHex());
+  // Signer is recovered from the packet signature, not trusted from any
+  // wire field -- so it must be present and 33 bytes.
+  assert(received[0].block.signer !== undefined);
+  assertEquals(received[0].block.signer!.length, 33);
+  // Raw bytes were stashed for later forwarding.
+  assertEquals(packetStore.get(block.hash.toPrimitive()), raw);
 
-  void provider; // silence unused-warning
   void bridge.close();
 });
 
@@ -164,13 +149,16 @@ Deno.test('NetworkBridge: peer disconnect removes from peer map', () => {
   void bridge.close();
 });
 
-Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
-  const { bridge, plugin } = makeBridge();
+Deno.test('NetworkBridge: handlePushActions sends raw packet bytes to peers', () => {
+  const { bridge, plugin, packetStore } = makeBridge();
 
   const { provider: p1 } = plugin.injectAnonymousConnection();
   const { provider: p2 } = plugin.injectAnonymousConnection();
 
-  const block = fakeBlock('push-block');
+  const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
+  const { block, raw } = makeBlockPacket(genesis);
+  packetStore.set(block.hash.toPrimitive(), raw);
+
   const peerIds = [...bridge.peers.keys()];
   const actions: PushAction[] = [
     { block: block.hash, peer: peerIds[0], priority: 1, immediate: true },
@@ -181,17 +169,23 @@ Deno.test('NetworkBridge: handlePushActions sends blocks to peers', () => {
 
   assertEquals(p1.sent.length, 1);
   assertEquals(p2.sent.length, 1);
+  // The exact wire bytes are forwarded -- not a re-serialization.
+  assertEquals(p1.sent[0], raw);
+  assertEquals(p2.sent[0], raw);
 
   void bridge.close();
 });
 
 Deno.test('NetworkBridge: handlePushActions skips duplicate sends', () => {
-  const { bridge, plugin } = makeBridge();
+  const { bridge, plugin, packetStore } = makeBridge();
 
   const { provider } = plugin.injectAnonymousConnection();
   const peerId = [...bridge.peers.keys()][0];
 
-  const block = fakeBlock('dedup-block');
+  const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
+  const { block, raw } = makeBlockPacket(genesis);
+  packetStore.set(block.hash.toPrimitive(), raw);
+
   const actions: PushAction[] = [
     { block: block.hash, peer: peerId, priority: 1, immediate: true },
   ];
@@ -205,34 +199,62 @@ Deno.test('NetworkBridge: handlePushActions skips duplicate sends', () => {
   void bridge.close();
 });
 
-Deno.test('NetworkBridge: block request responds with blocks from the store', () => {
+Deno.test('NetworkBridge: handlePushActions skips blocks not in packetStore', () => {
+  const { bridge, plugin } = makeBridge();
+
+  const { provider } = plugin.injectAnonymousConnection();
+  const peerId = [...bridge.peers.keys()][0];
+
+  const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
+  const { block } = makeBlockPacket(genesis);
+  // Intentionally NOT putting block in packetStore.
+
+  bridge.handlePushActions(
+    [{ block: block.hash, peer: peerId, priority: 1, immediate: true }],
+    block,
+  );
+
+  assertEquals(provider.sent.length, 0);
+
+  void bridge.close();
+});
+
+Deno.test('NetworkBridge: block request responds with raw packet bytes from store', () => {
   const { store, routing, coordinator } = setupProtocol();
   const plugin = new MockTransportPlugin();
   const keys = generateKeyPair();
+  const packetStore = new Map<HashPrimitive, Uint8Array>();
 
   const genesis = createGenesisBlock([makeOutput(100)]);
   coordinator.blockReceived(genesis, null);
+  // Persist some raw bytes for genesis (any bytes -- the test verifies
+  // forwarding by lookup, not signature).
+  const genesisRaw = composeUnsignedPacket(
+    PacketType.UnsignedBlock,
+    { hash: genesis.hash.toHex() },
+  ).raw;
+  packetStore.set(genesis.hash.toPrimitive(), genesisRaw);
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
+    packetStore,
     routing,
     processBlock: () => {},
-    serializer: fakeSerializer,
     selfId: bin2hex(keys.publicKey),
   });
   bridge.start();
 
   const { provider, driver } = plugin.injectAnonymousConnection();
 
-  driver.recvData(new TextEncoder().encode(JSON.stringify({
-    type: 'request',
-    data: { hashes: [genesis.hash.toHex()] },
-  })));
+  driver.recvData(controlPacket(PacketType.Request, {
+    hashes: [genesis.hash.toHex()],
+  }));
 
-  assertEquals(provider.sent.length, 1, 'should respond with the requested block');
+  assertEquals(provider.sent.length, 1, 'should respond with the requested raw bytes');
+  assertEquals(provider.sent[0], genesisRaw);
 
   void bridge.close();
 });
@@ -261,17 +283,15 @@ Deno.test('NetworkBridge: signal addressed to self is delivered to signaling', a
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
+    packetStore: new Map(),
     routing,
     processBlock: () => {},
-    serializer: fakeSerializer,
     selfId,
   });
   bridge.start();
 
   const { driver } = plugin.injectAnonymousConnection();
 
-  // Construct a signaling envelope we can't decrypt (the test just verifies
-  // routing, not delivery success). Using a made-up sender key and nonce.
   const otherKeys = generateKeyPair();
   const envelope: SignalEnvelope = {
     signalingNonce: Hash.random().toHex(),
@@ -283,17 +303,14 @@ Deno.test('NetworkBridge: signal addressed to self is delivered to signaling', a
     iv: 'yy',
   };
 
-  // Send a "signal" peer message addressed to self. Decryption will fail,
-  // but we're only verifying it reaches the signaling path (no forwarding).
-  driver.recvData(new TextEncoder().encode(JSON.stringify({
-    type: 'signal',
-    data: { to: selfId, from: 'peer-B', payload: envelope },
-  })));
+  driver.recvData(controlPacket(PacketType.Signal, {
+    to: selfId,
+    from: 'peer-B',
+    payload: envelope,
+  }));
 
-  // Give any async decrypt attempt a chance to settle/fail silently.
   await new Promise((r) => setTimeout(r, 50));
 
-  // No crash = routing succeeded.
   void bridge.close();
 });
 
@@ -304,11 +321,11 @@ Deno.test('NetworkBridge: signal addressed to other peer is forwarded', () => {
   const c = plugin.injectAnonymousConnection();
   const peerIds = [...bridge.peers.keys()];
 
-  // Simulate a signal from peer B to some third peer -- should forward to C
-  b.driver.recvData(new TextEncoder().encode(JSON.stringify({
-    type: 'signal',
-    data: { to: 'some-other-peer', from: peerIds[0], payload: {} },
-  })));
+  b.driver.recvData(controlPacket(PacketType.Signal, {
+    to: 'some-other-peer',
+    from: peerIds[0],
+    payload: {},
+  }));
 
   assertEquals(b.provider.sent.length, 0, 'should not echo back to sender');
   assertEquals(c.provider.sent.length, 1, 'should forward to other peer');
@@ -324,10 +341,11 @@ Deno.test('NetworkBridge: signal forwarded to multiple peers, excluding sender',
   const d = plugin.injectAnonymousConnection();
   const peerIds = [...bridge.peers.keys()];
 
-  b.driver.recvData(new TextEncoder().encode(JSON.stringify({
-    type: 'signal',
-    data: { to: 'far-peer', from: peerIds[0], payload: {} },
-  })));
+  b.driver.recvData(controlPacket(PacketType.Signal, {
+    to: 'far-peer',
+    from: peerIds[0],
+    payload: {},
+  }));
 
   assertEquals(b.provider.sent.length, 0);
   assertEquals(c.provider.sent.length, 1);
@@ -346,9 +364,9 @@ Deno.test('NetworkBridge: stores peers by public key for authenticated connectio
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
+    packetStore: new Map(),
     routing,
     processBlock: () => {},
-    serializer: fakeSerializer,
     selfId: bin2hex(keys.publicKey),
   });
   bridge.start();
@@ -356,7 +374,6 @@ Deno.test('NetworkBridge: stores peers by public key for authenticated connectio
   const remote = generateKeyPair();
   await bridge.connectToPeer(remote.publicKey);
 
-  // The plugin should have received one authenticated session
   assertEquals(plugin.authSessions.length, 1);
 
   await bridge.close();
@@ -372,9 +389,9 @@ Deno.test('NetworkBridge: connectToPeer produces a peer keyed by remote pubkey o
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
+    packetStore: new Map(),
     routing,
     processBlock: () => {},
-    serializer: fakeSerializer,
     selfId: bin2hex(keys.publicKey),
   });
   bridge.start();
@@ -388,4 +405,44 @@ Deno.test('NetworkBridge: connectToPeer produces a peer keyed by remote pubkey o
   assertFalse([...bridge.peers.keys()].some((k) => k.startsWith('anon:')));
 
   await bridge.close();
+});
+
+// -- Security: tampered signer can't impersonate -----------------------
+
+Deno.test('NetworkBridge: signer always recovered from signature, never trusted from payload', () => {
+  // Create a packet signed with keyA. The recovered signer must match
+  // keyA -- a malicious sender can't claim to be keyB by setting a
+  // payload field, because there is no such field; signer comes from
+  // the cryptographic signature only.
+  const { bridge, plugin, received } = makeBridge();
+
+  const keyA = secp.utils.randomPrivateKey();
+  const keyAPub = secp.getPublicKey(keyA, true);
+  const keyB = secp.utils.randomPrivateKey();
+  const keyBPub = secp.getPublicKey(keyB, true);
+
+  const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
+  const { packet } = composeBlockPacket(
+    {
+      anchor: genesis.hash,
+      aggregates: [],
+      claims: [],
+      outputs: [makeOutput(10, 'test')],
+      declaredWeight: 1,
+      refs: [],
+    },
+    keyA,
+  );
+
+  const { driver } = plugin.injectAnonymousConnection();
+  driver.recvData(packet.raw);
+
+  assertEquals(received.length, 1);
+  assertEquals(received[0].block.signer, keyAPub);
+  assertFalse(
+    received[0].block.signer === keyBPub,
+    'signer must match the actual signing key, never an attacker-claimed key',
+  );
+
+  void bridge.close();
 });

@@ -1,6 +1,8 @@
 # Wire Format
 
-The wire format defines the binary envelope used to serialize blocks and other message types for network transmission and storage. A **packet** wraps a JSON payload with a header and optional cryptographic signature. The block's identity hash is the SHA3-256 digest of the entire packet bytes.
+The wire format defines the binary envelope for everything Scaffold sends over the network or persists to storage. A **packet** wraps a JSON payload with a header and optional cryptographic signature. The block's identity hash is the SHA3-256 digest of the entire packet bytes.
+
+Every byte stream Scaffold puts on a peer connection -- blocks, signaling envelopes, sync requests, delivery acks, peer info -- is a packet. Receivers multiplex on the leading `SCF` magic + type byte; bytes that don't start with `SCF` are silently dropped (not a Scaffold packet).
 
 ---
 
@@ -12,9 +14,9 @@ The wire format defines the binary envelope used to serialize blocks and other m
 
 | Field | Size | Description |
 |-------|------|-------------|
-| Magic | 3 bytes | `SCF` = `[83, 67, 70]` — identifies the protocol |
-| Type | 1 byte | `PacketType` enum — determines structure |
-| Payload | variable | JSON-encoded block data via `BlockSerializer` |
+| Magic | 3 bytes | `SCF` = `[83, 67, 70]` -- identifies the protocol |
+| Type | 1 byte | `PacketType` enum -- determines structure |
+| Payload | variable | UTF-8 JSON bytes (type-tagged via `BlockSerializer`) |
 | Signature | 65 bytes | Present only for signed types |
 
 The header is 4 bytes (magic + type). The minimum packet size is 4 bytes (unsigned, empty payload).
@@ -27,10 +29,13 @@ The header is 4 bytes (magic + type). The minimum packet size is 4 bytes (unsign
 |-------|------|--------|-------------|
 | 0 | `Block` | Yes | Standard signed block |
 | 1 | `UnsignedBlock` | No | Aggregation blocks, genesis |
+| 2 | `Signal` | No | Encrypted handshake / WebRTC signaling envelope |
+| 3 | `Sync` | No | Canonical-tip + depth advertisement |
+| 4 | `Request` | No | Block hash request |
+| 5 | `Delivery` | No | Delivery acknowledgement |
+| 6 | `PeerInfo` | No | Peer identity + supported contracts |
 
-Whether a packet includes a signature is determined entirely by the type — not by a flag or field. Signed types always have exactly 65 signature bytes appended. Unsigned types have no signature section.
-
-Future types (e.g., `PeerInfo`, `ConnectionSignal`) will be added as the protocol grows.
+Whether a packet includes a signature is determined entirely by the type -- not by a flag or field. Only `Block` packets are signed; control messages and unsigned blocks (e.g. genesis, aggregation) carry only the JSON payload.
 
 ---
 
@@ -84,6 +89,8 @@ block.hash = SHA3-256(raw_packet_bytes)
 
 This means the hash covers the magic, type, payload, and signature (if present). Two packets with different signatures (e.g., different signers for the same payload) produce different block hashes.
 
+The original packet bytes are the canonical form. They are stashed in `NodeContext.packetStore` (keyed by hash) when blocks are locally composed and when block packets arrive from the network. `NetworkBridge` forwards these exact bytes to other peers, and `StorageManager` persists them so signatures survive restarts and signer recovery is always cryptographic -- never trusted from a payload field.
+
 ---
 
 ## Signing Process
@@ -123,5 +130,8 @@ For **signer recovery** (no expected key):
 |------|-------------|
 | [`src/core/Packet.ts`](../../src/core/Packet.ts) | Packet compose, parse, sign, verify |
 | [`src/core/BlockSerializer.ts`](../../src/core/BlockSerializer.ts) | Type-tagged JSON serialization |
+| [`src/node/PeerConnection.ts`](../../src/node/PeerConnection.ts) | Multiplexes inbound packets by type byte |
+| [`src/node/NetworkBridge.ts`](../../src/node/NetworkBridge.ts) | Reads `packetStore` to forward original bytes |
+| [`src/node/StorageManager.ts`](../../src/node/StorageManager.ts) | Persists raw packet bytes; restores via `parsePacket` |
 | [`src/util/Hash.ts`](../../src/util/Hash.ts) | SHA3-256 hashing |
 | [`src/util/secp.ts`](../../src/util/secp.ts) | secp256k1 ECDSA |

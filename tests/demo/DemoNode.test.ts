@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from '@std/assert';
+import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert';
 import { DemoNode } from '../../src/demo/DemoNode.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
@@ -96,6 +96,50 @@ Deno.test('DemoNode: multiple updates by same identity chain correctly', () => {
 
   // Chain should have genesis + 3 blocks
   assertEquals(node.getCanonicalChain().length, 4);
+});
+
+Deno.test('DemoNode: receivePacket recovers signer so contract verification can run', async () => {
+  // Status contract is its own check; SIGNATURE_CONTRACT is what would be
+  // gated by block.signer in the auto-registered contract registry. Here
+  // we verify the ingest path actually populates block.signer from the
+  // packet signature rather than leaving it undefined.
+  const nodeA = new DemoNode('eagle');
+  const nodeB = new DemoNode('badger');
+
+  nodeA.publishStatus('eagle', 'Signed update');
+
+  const chain = nodeA.getCanonicalChain();
+  const lastBlock = chain[chain.length - 1];
+  const raw = nodeA.packetStore.get(lastBlock.hash.toPrimitive())!;
+  const packet = parsePacket<BlockPayload>(raw)!;
+
+  nodeB.receivePacket(packet, 'nodeA');
+  const ingested = nodeB.store.get(lastBlock.hash);
+  assert(ingested, 'Block should have been ingested');
+  assert(ingested!.signer !== undefined, 'Ingested block must have signer recovered');
+
+  const eagle = deriveIdentity('eagle');
+  assertEquals(ingested!.signer!.length, 33);
+  for (let i = 0; i < eagle.publicKey.length; i++) {
+    assert(ingested!.signer![i] === eagle.publicKey[i], `Signer byte ${i} mismatch`);
+  }
+
+  // The execution service (auto-registered with signatureContract) should
+  // see this block's signer and could enforce signature contracts on it.
+  // Here, the block claims a status output, not a signature output, so
+  // verification has no signature requirement; we just confirm signer is
+  // available for any contract that asks.
+  const result = await nodeB.scaffold.context.execution.verifyBlock(ingested!.hash);
+  // Status contract is not registered on Scaffold, so verifyBlock fails on
+  // missing contract -- but the failure mode is "contract not found", not
+  // "block is not signed", which is what we care about here.
+  assertFalse(result.accepted);
+  if (!result.accepted) {
+    assert(
+      result.reason.includes('contract not found'),
+      `Expected 'contract not found', got: ${result.reason}`,
+    );
+  }
 });
 
 Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject', () => {

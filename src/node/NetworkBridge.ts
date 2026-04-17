@@ -5,9 +5,9 @@
 // signaling envelopes across the mesh.
 
 import { Block, BlockStore } from '../core/Block.ts';
-import { Hash } from '../util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { TransportManager } from './TransportManager.ts';
-import { BlockSerializer, createDefaultBlockSerializer, PeerConnection } from './PeerConnection.ts';
+import { PeerConnection } from './PeerConnection.ts';
 import { RoutingService } from './RoutingService.ts';
 import { BlockAwareness, PushAction } from './RoutingModule.ts';
 import { DeliveryTracker } from './DeliveryTracker.ts';
@@ -33,9 +33,14 @@ export interface NetworkBridgeDeps {
   selfPrivateKey: Uint8Array;
   selfPublicKey: Uint8Array;
   store: BlockStore;
+  /**
+   * Raw packet bytes keyed by block hash. NetworkBridge stashes inbound
+   * packet bytes here and reads from it when forwarding so peers always
+   * see the original signed wire bytes.
+   */
+  packetStore: Map<HashPrimitive, Uint8Array>;
   routing: RoutingService;
   processBlock: (block: Block, peerId: string) => void;
-  serializer?: BlockSerializer;
   selfId?: string;
   logger?: ScopedLogger;
 }
@@ -52,6 +57,7 @@ export class NetworkBridge {
   private readonly transport: TransportManager;
   private readonly routing: RoutingService;
   private readonly store: BlockStore;
+  private readonly packetStore: Map<HashPrimitive, Uint8Array>;
   private readonly delivery: DeliveryTracker;
   private readonly selfId?: string;
   private readonly _log?: ScopedLogger;
@@ -59,6 +65,7 @@ export class NetworkBridge {
   constructor(deps: NetworkBridgeDeps) {
     this.routing = deps.routing;
     this.store = deps.store;
+    this.packetStore = deps.packetStore;
     this.delivery = new DeliveryTracker();
     this.selfId = deps.selfId;
     this._log = deps.logger;
@@ -68,11 +75,14 @@ export class NetworkBridge {
       selfPrivateKey: deps.selfPrivateKey,
       selfPublicKey: deps.selfPublicKey,
       callbacks: {
-        onBlockReceived: (block, peerId) => {
+        onBlockReceived: (block, peerId, raw) => {
           this._log?.info('blockReceived', {
             hash: block.hash.toHex(),
             fromPeer: peerId,
           });
+          // Stash raw packet bytes so this block can be re-emitted to
+          // other peers and persisted to storage as-is.
+          this.packetStore.set(block.hash.toPrimitive(), raw);
           deps.processBlock(block, peerId);
         },
         onPeerConnected: (peer) => {
@@ -82,7 +92,6 @@ export class NetworkBridge {
           this.handlePeerDisconnected(peerId);
         },
       },
-      serializer: deps.serializer ?? createDefaultBlockSerializer(),
       sendRelay: (to, from, payload) => {
         this.broadcastSignalEnvelope(to, from, payload);
       },
@@ -108,9 +117,19 @@ export class NetworkBridge {
 
   /** Handle gossip push actions -- send blocks to targeted peers. */
   handlePushActions(actions: PushAction[], block: Block): void {
+    const raw = this.packetStore.get(block.hash.toPrimitive());
+    if (!raw) {
+      // Without raw bytes we can't forward without re-signing -- which we
+      // can't do without the original signer's key. Drop and log.
+      this._log?.warn('blockSendDropped', {
+        hash: block.hash.toHex(),
+        reason: 'no raw packet bytes in packetStore',
+      });
+      return;
+    }
     for (const action of actions) {
       if (this.delivery.wasSent(block.hash, action.peer)) continue;
-      this.transport.sendBlock(block, [action.peer]);
+      this.transport.sendBlock(raw, [action.peer]);
       this.delivery.markSent(block.hash, action.peer);
       this.routing.reportPush(block.hash, action.peer);
       this._log?.debug('blockSent', {
@@ -139,9 +158,9 @@ export class NetworkBridge {
     peer.onRequest((data) => {
       for (const hashHex of data.hashes) {
         const hash = Hash.fromHex(hashHex);
-        const block = this.store.get(hash);
-        if (block) {
-          peer.sendBlock(block);
+        const raw = this.packetStore.get(hash.toPrimitive());
+        if (raw) {
+          peer.sendBlock(raw);
         }
       }
     });

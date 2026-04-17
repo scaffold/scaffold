@@ -1,11 +1,17 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { Block, BlockPayload, BlockStore, createBlockFromPacket } from '../core/Block.ts';
+import {
+  Block,
+  BlockPayload,
+  BlockSource,
+  BlockStore,
+  createBlockFromPacket,
+} from '../core/Block.ts';
 import { BlockSpec } from '../core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { BlockAwareness } from '../node/RoutingModule.ts';
-import { composeGenesisPacket } from '../core/Packet.ts';
+import { composeGenesisPacket, recoverPacketSigner } from '../core/Packet.ts';
 import { Scaffold } from '../Scaffold.ts';
 
 import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
@@ -81,8 +87,16 @@ export class DemoNode {
       return;
     }
 
-    // Accept: store raw packet, process block through reactive layer
-    const block = createBlockFromPacket(packet.payload, packet.hash);
+    // Accept: recover signer from packet signature, store raw packet,
+    // process block through reactive layer. Signer is node-local -- we
+    // derive it from the packet's cryptographic signature rather than
+    // trusting any field on the wire payload.
+    const block = createBlockFromPacket(
+      packet.payload,
+      packet.hash,
+      BlockSource.Remote,
+      recoverPacketSigner(packet),
+    );
     this.packetStore.set(packet.hash.toPrimitive(), packet.raw);
     this.scaffold.context.processBlock(block, fromPeer);
 

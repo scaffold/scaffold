@@ -1,27 +1,12 @@
 import { assert, assertEquals, assertFalse, assertRejects, assertThrows } from '@std/assert';
 import { Block } from '../src/core/Block.ts';
-import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
-import { BlockSerializer } from '../src/node/PeerConnection.ts';
+import { composeUnsignedPacket, PacketType } from '../src/core/Packet.ts';
 import { TransportManager } from '../src/node/TransportManager.ts';
 import { SignalEnvelope } from '../src/node/SignalingService.ts';
 import { MockTransportPlugin } from './helpers/MockTransportPlugin.ts';
 
 // -- Helpers ----------------------------------------------------------
-
-function fakeBlock(name: string): Block {
-  return { hash: Hash.digest(name) } as unknown as Block;
-}
-
-const fakeSerializer: BlockSerializer = {
-  serialize(block: Block): object {
-    return { hash: block.hash.toHex() };
-  },
-  deserialize(data: object): Block {
-    const d = data as { hash: string };
-    return { hash: Hash.fromHex(d.hash) } as unknown as Block;
-  },
-};
 
 function generateKeyPair() {
   const privateKey = secp.utils.randomPrivateKey();
@@ -31,7 +16,7 @@ function generateKeyPair() {
 
 function makeManager(
   plugins: MockTransportPlugin[],
-  onBlockReceived: (block: Block, peerId: string) => void = () => {},
+  onBlockReceived: (block: Block, peerId: string, raw: Uint8Array) => void = () => {},
 ): {
   manager: TransportManager;
   sentRelays: { to: string; from: string; payload: SignalEnvelope }[];
@@ -44,7 +29,6 @@ function makeManager(
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     callbacks: { onBlockReceived },
-    serializer: fakeSerializer,
     sendRelay: (to, from, payload) => sentRelays.push({ to, from, payload }),
   });
 
@@ -159,7 +143,7 @@ Deno.test('TransportManager: connectToPeer with a capable plugin produces a sign
   await manager.close();
 });
 
-Deno.test('TransportManager: sendBlock broadcasts to all peers', () => {
+Deno.test('TransportManager: sendBlock broadcasts raw bytes to all peers', () => {
   const plugin = new MockTransportPlugin();
   const { manager } = makeManager([plugin]);
   manager.start();
@@ -167,10 +151,15 @@ Deno.test('TransportManager: sendBlock broadcasts to all peers', () => {
   const { provider: p1 } = plugin.injectAnonymousConnection();
   const { provider: p2 } = plugin.injectAnonymousConnection();
 
-  manager.sendBlock(fakeBlock('b'));
+  // We don't need a real signed block here -- TransportManager just
+  // forwards bytes. Use an unsigned-block packet as a stand-in.
+  const raw = composeUnsignedPacket(PacketType.UnsignedBlock, { hash: 'abc' }).raw;
+  manager.sendBlock(raw);
 
   assertEquals(p1.sent.length, 1);
   assertEquals(p2.sent.length, 1);
+  assertEquals(p1.sent[0], raw);
+  assertEquals(p2.sent[0], raw);
 });
 
 Deno.test('TransportManager: anonymous peer disconnect removes from peers map', () => {
