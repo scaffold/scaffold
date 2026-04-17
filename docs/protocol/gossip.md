@@ -13,7 +13,7 @@ This module is responsible for:
 This module is **not** responsible for:
 - Choosing which peer receives a block (routing module)
 - Bandwidth allocation or delivery optimization (routing module)
-- Peer discovery or connection management (PeerModule)
+- Peer discovery or connection management (see [transport layer](transport.md))
 - Block validation or verification (verification module)
 
 ---

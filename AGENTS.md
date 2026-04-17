@@ -44,6 +44,7 @@ Each protocol module has a spec in `docs/protocol/` and an implementation in `sr
 | [trust.md](docs/protocol/trust.md) | [TrustModule.ts](src/core/TrustModule.ts) | [TrustService.ts](src/core/TrustService.ts) | |
 | [gossip.md](docs/protocol/gossip.md) | [GossipModule.ts](src/node/GossipModule.ts) | [GossipService.ts](src/node/GossipService.ts) | |
 | [routing.md](docs/protocol/routing.md) | [RoutingModule.ts](src/node/RoutingModule.ts) | [RoutingService.ts](src/node/RoutingService.ts) | |
+| [transport.md](docs/protocol/transport.md) | — | [TransportManager.ts](src/node/TransportManager.ts), [SignalingService.ts](src/node/SignalingService.ts), [NetworkBridge.ts](src/node/NetworkBridge.ts) | [transport.ts](src/interfaces/transport.ts), [PeerConnection.ts](src/node/PeerConnection.ts) |
 | [block-creation.md](docs/protocol/block-creation.md) | [BlockCreationModule.ts](src/core/BlockCreationModule.ts) | [BlockCreationService.ts](src/core/BlockCreationService.ts) | [Block.ts](src/core/Block.ts) |
 | [anchoring.md](docs/protocol/anchoring.md) | [AnchoringModule.ts](src/core/AnchoringModule.ts) | — | [OutputMapping.ts](src/core/OutputMapping.ts), [Block.ts](src/core/Block.ts) |
 | [dag.md](docs/protocol/dag.md) | — (structural, spans modules) | — | [Block.ts](src/core/Block.ts), [ConsensusModule.ts](src/core/ConsensusModule.ts) |

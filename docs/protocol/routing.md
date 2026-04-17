@@ -15,7 +15,7 @@ This module is responsible for:
 
 This module is **not** responsible for:
 - Determining which blocks are relevant to which subscriptions (gossip protocol)
-- Peer discovery or connection management (PeerModule)
+- Peer discovery or connection management (see [transport layer](transport.md))
 - Block validation or verification (verification module)
 
 ---
@@ -303,7 +303,7 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 
 **Sampling module**: Submits fetch requests for specific blocks needed during verification. This module fulfills them through the fetch interface.
 
-**PeerModule**: Provides the current peer set and transport-level metrics (latency, throughput). Receives gossip quality scores for connection decisions. Gossip quality for peer P is a function of: first-delivery novelty, reciprocity, and fetch responsiveness.
+**Transport layer**: Provides the current peer set and transport-level metrics (latency, throughput). Receives gossip quality scores for connection decisions. Gossip quality for peer P is a function of: first-delivery novelty, reciprocity, and fetch responsiveness. See [transport layer](transport.md).
 
 ---
 
@@ -315,7 +315,7 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 |-------|--------|-------------|
 | Send actions | Gossip protocol | `(block, trigger, verifier, amount)` tuples to deliver |
 | New blocks | Network / local creation | Blocks received from peers (updates receivedFirst, knownBlocks) |
-| Peer set + transport metrics | PeerModule | Current peers, latency, throughput |
+| Peer set + transport metrics | Transport layer | Current peers, latency, throughput |
 | Fetch requests | Sampling module | Specific blocks needed for verification |
 
 ### This Module Provides
@@ -325,7 +325,7 @@ Bob gets more bandwidth; Carol gets less. Both remain connected.
 | Pushed blocks | Peers (network) | Blocks sent to specific peers |
 | Subscription sources | Gossip protocol | Blocks entering receivedFirst (to add to subscription index) |
 | Fetched blocks | Sampling module | Blocks retrieved on request |
-| Gossip quality scores | PeerModule | Per-peer usefulness metric for connection decisions |
+| Gossip quality scores | Transport layer | Per-peer usefulness metric for connection decisions |
 | Block availability | All modules | Whether a block is locally available |
 
 ### Invariants

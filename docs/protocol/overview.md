@@ -201,6 +201,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Trust](trust.md) | Economic incentives | What happens if a block is fraudulent? |
 | [Gossip](gossip.md) | Subscription protocol | Which blocks are relevant to which subscriptions? |
 | [Routing](routing.md) | Block delivery | How are blocks delivered to the right peers? |
+| [Transport](transport.md) | Peer connectivity | How do peers establish authenticated connections? |
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
 | [Weight](weight.md) | Weight derivation | How do blocks earn consensus influence through verified computation? |

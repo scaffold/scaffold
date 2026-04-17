@@ -1,29 +1,47 @@
+// Protocol spec: docs/protocol/transport.md
+//
+// SignalingService owns the encrypted envelope wire format for authenticated
+// transport handshakes. It does not know about plugins -- TransportManager
+// wires session handles returned here into plugin lifecycles.
+
 import { Hash } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
 import { secp } from '../util/secp.ts';
-import { deriveAesKey, decryptSignal, encryptSignal, uint8ToBase64, base64ToUint8 } from '../util/crypto.ts';
 import {
-  ConnectionDriver,
-  ConnectionProvider,
-  NetworkProvider,
-  SignalingDriver,
-  SignalingProvider,
-} from '../interfaces/network.ts';
-import { TransportConnection } from './PeerConnection.ts';
+  base64ToUint8,
+  decryptSignal,
+  deriveAesKey,
+  encryptSignal,
+  uint8ToBase64,
+} from '../util/crypto.ts';
 
 // -- Wire format --------------------------------------------------------
 
-/** Encrypted signal envelope sent over the relay network. */
+/** Encrypted signal envelope relayed through the mesh. */
 export interface SignalEnvelope {
   signalingNonce: string;
   senderPublicKey: string;
+  protocol: string;
   signalIdx: number;
   receivedIdxMask: string;
   encrypted: string;
   iv: string;
 }
 
-// -- Session state ------------------------------------------------------
+// -- Public handle ------------------------------------------------------
+
+/** Handle for one authenticated handshake session. */
+export interface SignalingSessionHandle {
+  readonly remotePublicKey: Uint8Array;
+  readonly protocol: string;
+  readonly isInitiator: boolean;
+
+  sendSignal(plaintext: string): void;
+  onSignal(handler: (plaintext: string) => void): void;
+  close(): void;
+}
+
+// -- Session state (internal) -------------------------------------------
 
 interface PendingSignal {
   idx: number;
@@ -35,16 +53,18 @@ interface SignalingSession {
   nonceHex: string;
   remotePublicKey: Uint8Array;
   remotePublicKeyHex: string;
+  protocol: string;
   isInitiator: boolean;
   aesKey: CryptoKey;
-  myToken: Hash;
-  provider: SignalingProvider;
   nextEmitIdx: number;
   localReceivedMask: bigint;
   remoteReceivedMask: bigint;
   pending: PendingSignal[];
   retryTimer: ReturnType<typeof setInterval> | null;
   closed: boolean;
+  signalHandler: ((plaintext: string) => void) | null;
+  nextDeliverIdx: number;
+  deliveryBuffer: Map<number, string>;
 }
 
 // -- Config -------------------------------------------------------------
@@ -52,9 +72,8 @@ interface SignalingSession {
 export interface SignalingServiceConfig {
   selfPrivateKey: Uint8Array;
   selfPublicKey: Uint8Array;
-  networkProviders: NetworkProvider[];
   sendRelay: (to: string, from: string, payload: SignalEnvelope) => void;
-  onNewConnection: (transport: TransportConnection) => void;
+  onInboundSession: (handle: SignalingSessionHandle, firstSignal: string) => void;
   retryIntervalMs?: number;
 }
 
@@ -70,26 +89,31 @@ export class SignalingService {
     this.selfPublicKeyHex = bin2hex(config.selfPublicKey);
   }
 
-  /** Initiate a signaling session to a remote peer. */
-  async initiate(remotePublicKey: Uint8Array): Promise<void> {
+  /** Initiate a signaling session to a remote peer for a specific protocol. */
+  async initiate(
+    remotePublicKey: Uint8Array,
+    protocol: string,
+  ): Promise<SignalingSessionHandle> {
     const nonce = Hash.random().toBytes();
-    await this.createSession(nonce, remotePublicKey, true);
+    const session = await this.createSession(nonce, remotePublicKey, protocol, true);
+    return this.makeHandle(session);
   }
 
   /** Handle an inbound signal envelope from the relay network. */
   async recvSignal(envelope: SignalEnvelope): Promise<void> {
     let session = this.sessions.get(envelope.signalingNonce);
+    let isNewResponder = false;
 
     if (!session) {
-      // Create responder session
       const remotePublicKey = hexToBytes(envelope.senderPublicKey);
       const nonce = hexToBytes(envelope.signalingNonce);
-      session = await this.createSession(nonce, remotePublicKey, false);
+      session = await this.createSession(nonce, remotePublicKey, envelope.protocol, false);
+      isNewResponder = true;
     }
 
     if (session.closed) return;
 
-    // Update remote's ACK state -- prune acknowledged signals from retry queue
+    // Update remote's ACK state
     const remoteMask = BigInt('0x' + (envelope.receivedIdxMask || '0'));
     session.remoteReceivedMask |= remoteMask;
     session.pending = session.pending.filter(
@@ -101,13 +125,38 @@ export class SignalingService {
     if (session.localReceivedMask & bit) return;
     session.localReceivedMask |= bit;
 
-    // Decrypt and deliver
-    const encrypted = base64ToUint8(envelope.encrypted);
-    const iv = base64ToUint8(envelope.iv);
-    const plaintext = await decryptSignal(encrypted, iv, session.aesKey);
-    const signal = new TextDecoder().decode(plaintext);
+    // Decrypt; silently drop envelopes that fail to decrypt (bad sender,
+    // stale session, tampered payload). If this was a brand-new responder
+    // session, close it -- it's an orphan.
+    let signal: string;
+    try {
+      const encrypted = base64ToUint8(envelope.encrypted);
+      const iv = base64ToUint8(envelope.iv);
+      const plaintext = await decryptSignal(encrypted, iv, session.aesKey);
+      signal = new TextDecoder().decode(plaintext);
+    } catch {
+      if (isNewResponder) this.closeSession(session);
+      return;
+    }
 
-    session.provider.recvSignal(signal, envelope.signalIdx);
+    if (isNewResponder) {
+      // The first signal (idx 0) is delivered as firstSignal; subsequent ones
+      // go through the normal ordered-delivery path.
+      session.nextDeliverIdx = envelope.signalIdx + 1;
+      this.config.onInboundSession(this.makeHandle(session), signal);
+    } else {
+      session.deliveryBuffer.set(envelope.signalIdx, signal);
+      this.drainBuffer(session);
+    }
+  }
+
+  private drainBuffer(session: SignalingSession): void {
+    while (session.deliveryBuffer.has(session.nextDeliverIdx)) {
+      const next = session.deliveryBuffer.get(session.nextDeliverIdx)!;
+      session.deliveryBuffer.delete(session.nextDeliverIdx);
+      session.nextDeliverIdx += 1;
+      session.signalHandler?.(next);
+    }
   }
 
   /** Shut down all sessions. */
@@ -123,24 +172,13 @@ export class SignalingService {
   private async createSession(
     nonce: Uint8Array,
     remotePublicKey: Uint8Array,
+    protocol: string,
     isInitiator: boolean,
   ): Promise<SignalingSession> {
     const nonceHex = bin2hex(nonce);
 
-    // Derive crypto material
     const sharedSecret = secp.getSharedSecret(this.config.selfPrivateKey, remotePublicKey);
     const aesKey = await deriveAesKey(sharedSecret);
-    const myToken = Hash.digestParts(
-      this.config.selfPublicKey,
-      sharedSecret,
-      nonce,
-    );
-
-    // Find a matching network provider
-    const provider = this.config.networkProviders[0];
-    if (!provider) {
-      throw new Error('No network providers available');
-    }
 
     const remotePublicKeyHex = bin2hex(remotePublicKey);
     const retryMs = this.config.retryIntervalMs ?? 1000;
@@ -150,47 +188,45 @@ export class SignalingService {
       nonceHex,
       remotePublicKey,
       remotePublicKeyHex,
+      protocol,
       isInitiator,
       aesKey,
-      myToken,
-      provider: null!, // set below
       nextEmitIdx: 0,
       localReceivedMask: 0n,
       remoteReceivedMask: 0n,
       pending: [],
       retryTimer: null,
       closed: false,
+      signalHandler: null,
+      nextDeliverIdx: 0,
+      deliveryBuffer: new Map(),
     };
 
     this.sessions.set(nonceHex, session);
 
-    // Build the SignalingDriver for the NetworkProvider
-    const driver: SignalingDriver = {
-      ctx: null,
-      protocol: provider.providesProtocol,
-      isInitiator,
-      myToken,
-
-      sendSignal: (signal: string, _priority?: number) => {
-        this.sendSignalEncrypted(session, signal);
-      },
-
-      createConnection: (
-        remoteToken: Hash | undefined,
-        conn: ConnectionProvider,
-      ): ConnectionDriver => {
-        return this.handleConnection(session, remoteToken, conn);
-      },
-    };
-
-    session.provider = provider.createInstance(driver);
-
-    // Start retry timer
     session.retryTimer = setInterval(() => {
       this.retryPending(session);
     }, retryMs);
 
     return session;
+  }
+
+  private makeHandle(session: SignalingSession): SignalingSessionHandle {
+    return {
+      remotePublicKey: session.remotePublicKey,
+      protocol: session.protocol,
+      isInitiator: session.isInitiator,
+      sendSignal: (plaintext: string) => {
+        this.sendSignalEncrypted(session, plaintext);
+      },
+      onSignal: (handler: (plaintext: string) => void) => {
+        session.signalHandler = handler;
+        this.drainBuffer(session);
+      },
+      close: () => {
+        this.closeSession(session);
+      },
+    };
   }
 
   private sendSignalEncrypted(session: SignalingSession, signal: string): void {
@@ -199,11 +235,11 @@ export class SignalingService {
     const idx = session.nextEmitIdx++;
     const plaintext = new TextEncoder().encode(signal);
 
-    // Encrypt and send (async, fire-and-forget)
     encryptSignal(plaintext, session.aesKey).then(({ encrypted, iv }) => {
       const envelope: SignalEnvelope = {
         signalingNonce: session.nonceHex,
         senderPublicKey: this.selfPublicKeyHex,
+        protocol: session.protocol,
         signalIdx: idx,
         receivedIdxMask: session.localReceivedMask.toString(16),
         encrypted: uint8ToBase64(encrypted),
@@ -223,7 +259,6 @@ export class SignalingService {
   private retryPending(session: SignalingSession): void {
     if (session.closed) return;
 
-    // Prune acknowledged signals
     session.pending = session.pending.filter(
       (p) => (session.remoteReceivedMask & (1n << BigInt(p.idx))) === 0n,
     );
@@ -231,48 +266,13 @@ export class SignalingService {
     if (session.pending.length === 0) return;
 
     for (const p of session.pending) {
-      // Update the ACK mask in the envelope before resending
       p.envelope.receivedIdxMask = session.localReceivedMask.toString(16);
-
       this.config.sendRelay(
         session.remotePublicKeyHex,
         this.selfPublicKeyHex,
         p.envelope,
       );
     }
-  }
-
-  private handleConnection(
-    session: SignalingSession,
-    remoteToken: Hash | undefined,
-    conn: ConnectionProvider,
-  ): ConnectionDriver {
-    // Validate remote token
-    const sharedSecret = secp.getSharedSecret(
-      this.config.selfPrivateKey,
-      session.remotePublicKey,
-    );
-    const expectedToken = Hash.digestParts(
-      session.remotePublicKey,
-      sharedSecret,
-      session.nonce,
-    );
-
-    if (!remoteToken || !Hash.equals(remoteToken, expectedToken)) {
-      conn.shutdown();
-      return { recvData: () => {}, close: () => {} };
-    }
-
-    // Wrap ConnectionProvider as TransportConnection
-    const transport = createTransportAdapter(
-      session.remotePublicKeyHex,
-      conn,
-    );
-
-    this.config.onNewConnection(transport);
-    this.closeSession(session);
-
-    return transport._driver;
   }
 
   private closeSession(session: SignalingSession): void {
@@ -282,57 +282,11 @@ export class SignalingService {
       clearInterval(session.retryTimer);
       session.retryTimer = null;
     }
-    session.provider?.dispose?.();
     this.sessions.delete(session.nonceHex);
   }
 }
 
-// -- Transport adapter --------------------------------------------------
-
-interface TransportAdapter extends TransportConnection {
-  _driver: ConnectionDriver;
-}
-
-/**
- * Wraps a byte-level ConnectionProvider into the string-level
- * TransportConnection that PeerConnection expects.
- */
-function createTransportAdapter(
-  peerId: string,
-  conn: ConnectionProvider,
-): TransportAdapter {
-  let messageHandler: ((data: string) => void) | null = null;
-  let closeHandler: (() => void) | null = null;
-
-  const driver: ConnectionDriver = {
-    recvData: (data: Uint8Array) => {
-      const str = new TextDecoder().decode(data);
-      messageHandler?.(str);
-    },
-    close: () => {
-      closeHandler?.();
-    },
-  };
-
-  return {
-    peerId,
-    _driver: driver,
-    send: (data: string) => {
-      conn.sendReliable(new TextEncoder().encode(data));
-    },
-    onMessage: (handler: (data: string) => void) => {
-      messageHandler = handler;
-    },
-    onClose: (handler: () => void) => {
-      closeHandler = handler;
-    },
-    close: () => {
-      conn.shutdown();
-    },
-  };
-}
-
-// -- Hex helper ---------------------------------------------------------
+// -- Helpers ------------------------------------------------------------
 
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);

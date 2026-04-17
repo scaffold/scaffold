@@ -11,10 +11,8 @@ import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 import { getGenesisBlock } from './genesis.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
-import { NetworkPlugin } from './node/NetworkManager.ts';
+import { TransportPlugin } from './interfaces/transport.ts';
 import { PushAction } from './node/RoutingModule.ts';
-import { SignalingService } from './node/SignalingService.ts';
-import { NetworkProvider } from './interfaces/network.ts';
 import { bin2hex } from './util/hex.ts';
 import { EventLog, ScopedLogger } from './core/EventLog.ts';
 
@@ -25,10 +23,8 @@ export interface ScaffoldConfig {
   genesis?: Block;
   /** Strategies to register */
   strategies?: Strategy[];
-  /** Network transport plugins. When provided, enables P2P networking. */
-  plugins?: NetworkPlugin[];
-  /** Network providers for signaling (e.g. WebrtcProvider). */
-  networkProviders?: NetworkProvider[];
+  /** Transport plugins. When provided, enables P2P networking. */
+  plugins?: TransportPlugin[];
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -42,7 +38,6 @@ export class Scaffold {
   private readonly putManager: PutManager;
   private readonly fetchManager: FetchManager;
   private readonly networkBridge?: NetworkBridge;
-  private readonly signalingService?: SignalingService;
 
   /** Structured event log. Available for debugging and introspection. */
   readonly eventLog: EventLog;
@@ -95,29 +90,15 @@ export class Scaffold {
       const nodeContext = this.nodeContext;
       const selfIdHex = bin2hex(publicKey);
 
-      // Create SignalingService if network providers are given
-      if (config.networkProviders && config.networkProviders.length > 0) {
-        this.signalingService = new SignalingService({
-          selfPrivateKey: privateKey,
-          selfPublicKey: publicKey,
-          networkProviders: config.networkProviders,
-          sendRelay: (to, from, payload) => {
-            this.networkBridge!.broadcastSignal(to, from, payload);
-          },
-          onNewConnection: (transport) => {
-            this.networkBridge!.addConnection(transport);
-          },
-        });
-      }
-
       this.networkBridge = new NetworkBridge({
         plugins: config.plugins,
+        selfPrivateKey: privateKey,
+        selfPublicKey: publicKey,
         store: nodeContext.store,
         routing: nodeContext.routing,
         processBlock: (block, peerId) => {
           nodeContext.processBlock(block, peerId);
         },
-        signalingService: this.signalingService,
         selfId: selfIdHex,
         logger: this.eventLog ? new ScopedLogger(this.eventLog, 'network') : undefined,
       });
@@ -174,23 +155,25 @@ export class Scaffold {
     this.networkBridge?.start();
   }
 
-  /** Connect to bootstrap addresses. Requires network plugins. */
-  connect(addresses: string[]): void {
-    this.networkBridge?.bootstrap(addresses);
+  /** Connect to a bootstrap address via the plugin that accepts this protocol. */
+  bootstrapConnection(protocol: string, address: string): void {
+    if (!this.networkBridge) {
+      throw new Error('No network plugins configured');
+    }
+    this.networkBridge.bootstrapConnection(protocol, address);
   }
 
-  /** Initiate a direct connection to a remote peer via signaling relay. */
+  /** Initiate a direct authenticated connection to a remote peer. */
   async connectToPeer(remotePublicKey: Uint8Array): Promise<void> {
-    if (!this.signalingService) {
-      throw new Error('No signaling service configured -- provide networkProviders in config');
+    if (!this.networkBridge) {
+      throw new Error('No network plugins configured');
     }
-    await this.signalingService.initiate(remotePublicKey);
+    await this.networkBridge.connectToPeer(remotePublicKey);
   }
 
   /** Close the scaffold instance and all network connections. */
-  close(): void {
-    this.signalingService?.dispose();
-    this.networkBridge?.close();
+  async close(): Promise<void> {
+    await this.networkBridge?.close();
   }
 
   /** Reactive block record set for observing block graph changes. */
