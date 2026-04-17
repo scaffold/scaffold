@@ -61,6 +61,8 @@ export class NetworkBridge {
   private readonly delivery: DeliveryTracker;
   private readonly selfId?: string;
   private readonly _log?: ScopedLogger;
+  private readonly peerConnectedListeners: ((peerId: string) => void)[] = [];
+  private readonly peerDisconnectedListeners: ((peerId: string) => void)[] = [];
 
   constructor(deps: NetworkBridgeDeps) {
     this.routing = deps.routing;
@@ -97,6 +99,30 @@ export class NetworkBridge {
       },
       logger: deps.logger,
     });
+  }
+
+  /** Subscribe to peer-connected events (peerId = pubkey hex for authenticated peers). */
+  onPeerConnected(cb: (peerId: string) => void): void {
+    this.peerConnectedListeners.push(cb);
+  }
+
+  /** Subscribe to peer-disconnected events. */
+  onPeerDisconnected(cb: (peerId: string) => void): void {
+    this.peerDisconnectedListeners.push(cb);
+  }
+
+  /** Send a block directly to a specific peer by peerId. Used for manual seeding. */
+  sendBlockToPeer(block: Block, peerId: string): void {
+    const raw = this.packetStore.get(block.hash.toPrimitive());
+    if (!raw) {
+      this._log?.warn('sendBlockToPeerDropped', {
+        hash: block.hash.toHex(),
+        reason: 'no raw packet bytes in packetStore',
+      });
+      return;
+    }
+    this.transport.sendBlock(raw, [peerId]);
+    this.delivery.markSent(block.hash, peerId);
   }
 
   /** Start all transport plugins. */
@@ -154,6 +180,7 @@ export class NetworkBridge {
   private handlePeerConnected(peer: PeerConnection): void {
     this._log?.info('peerConnected', { peerId: peer.peerId });
     this.routing.addPeer(peer.peerId, peer.peerId, new SetAwareness());
+    for (const cb of this.peerConnectedListeners) cb(peer.peerId);
 
     peer.onRequest((data) => {
       for (const hashHex of data.hashes) {
@@ -181,6 +208,7 @@ export class NetworkBridge {
   private handlePeerDisconnected(peerId: string): void {
     this._log?.info('peerDisconnected', { peerId });
     this.routing.removePeer(peerId);
+    for (const cb of this.peerDisconnectedListeners) cb(peerId);
   }
 
   private handleSignalMessage(

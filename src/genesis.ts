@@ -55,3 +55,31 @@ export function computeGenesisBlock(): Block {
 export function setGenesisHex(hex: string): void {
   GENESIS_PACKET_HEX = hex;
 }
+
+// -- Demo helpers --------------------------------------------------
+//
+// Deterministic keypairs for the request/reply CLI demo. Each "seed" maps
+// to a stable private key so every node computes the same genesis when
+// given the same seed list.
+
+/** Derive a deterministic demo private key from a short string seed. */
+export function demoPrivateKey(seed: string): Uint8Array {
+  return Hash.digest(`scaffold:demo:${seed}`).toBytes();
+}
+
+/** Compressed secp256k1 public key for a demo seed. */
+export function demoPublicKey(seed: string): Uint8Array {
+  return secp.getPublicKey(demoPrivateKey(seed), true);
+}
+
+/**
+ * Compute a demo genesis that funds the given seed list with 1M each.
+ * Does NOT include the well-known key -- demos are self-contained.
+ * Every node passing the same seeds in the same order computes the
+ * identical genesis block.
+ */
+export function computeDemoGenesis(seeds: readonly string[]): Block {
+  const outputs = seeds.map((seed) => makeSignatureOutput(demoPublicKey(seed), 1_000_000));
+  const { block } = composeGenesisPacket(outputs);
+  return block;
+}

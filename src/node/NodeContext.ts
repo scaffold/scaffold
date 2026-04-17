@@ -536,19 +536,25 @@ export class NodeContext {
     const claimantBlock = this.store.get(claimant);
     if (!claimantBlock) return;
 
-    // Find the first self-claimed RECORD_CONTRACT output
+    // Find the first RECORD_CONTRACT output. Prefer self-claimed (the
+    // protocol-intended "result" flagging), but fall back to any record
+    // output when the solidify path hasn't marked them self-claimed yet.
     const selfClaimSet = new Set(
       claimantBlock.claims.filter((c) => c < claimantBlock.outputs.length),
     );
     let resultData: Uint8Array = new Uint8Array(0);
+    let fallback: Uint8Array | undefined;
     for (let i = 0; i < claimantBlock.outputs.length; i++) {
-      if (!selfClaimSet.has(i)) continue;
       const output = claimantBlock.outputs[i];
-      if (Hash.equals(output.verifier.contract, RECORD_CONTRACT)) {
+      if (!Hash.equals(output.verifier.contract, RECORD_CONTRACT)) continue;
+      if (selfClaimSet.has(i)) {
         resultData = output.data;
+        fallback = undefined;
         break;
       }
+      fallback ??= output.data;
     }
+    if (fallback) resultData = fallback;
 
     onNotifyFetch(vk, { block: claimantBlock, data: resultData });
   }
@@ -649,9 +655,16 @@ function autoBalance(
       newClaims.push({ index: finalOutputCount + utxo.extendedIndex, value: utxo.value });
     }
   } else {
-    // Claims exceed outputs -- add change output
+    // Claims exceed outputs -- add change output.
+    // Shift any external claim indices by 1 because adding an own output
+    // moves the extended-vector boundary forward by one.
     const excess = claimTotal - outputTotal;
     newOutputs.push(makeSignatureOutput(publicKey, excess));
+    for (let i = 0; i < newClaims.length; i++) {
+      if (newClaims[i].index >= ownOutputCount) {
+        newClaims[i] = { ...newClaims[i], index: newClaims[i].index + 1 };
+      }
+    }
   }
 
   return { ...spec, outputs: newOutputs, claims: newClaims };

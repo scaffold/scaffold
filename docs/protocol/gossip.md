@@ -247,6 +247,16 @@ Aggregator E claims B_A's aggregation marker (output 1):
 3. **Backfill correctness**: When a new claim history entry appears for verifier V, all existing unclaimed V-outputs are routed toward the new claimer.
 4. **Self-claim exclusion**: Self-claimed outputs never generate claim history entries or send actions.
 
+### Bootstrapping claim history (cold start)
+
+Claim-history routing is self-perpetuating in a mature network -- every new claim populates more history -- but it has no built-in cold-start mechanism. In a fresh network, no node has observed any claims yet, so `claimHistory` and `contractFallback` are empty and new request outputs have nowhere to be routed.
+
+Two approaches fill this gap:
+
+1. **Capability-seed blocks + manual relay.** A node that can resolve contract C publishes a block that self-claims a C-output, then ships the block directly to peers via a non-gossip channel. Each recipient records the block in the sender's `receivedFirst` and processes its self-claim through `notifyClaimResolved`, populating `contractFallback[C]` with an entry whose trigger points along the relay path. Subsequent C-outputs then route along the seeded path. `Scaffold.sendBlockToPeer(hash, peerId)` exposes this as a tool for demos and tests that need to simulate a warm network.
+
+2. **Contract-interest advertisement via peerInfo (future work).** Peers announce contracts they can execute as part of peerInfo. The gossip module uses this as a relevance signal for routing, equivalent to claim history with a tunable decay. TODO.md tracks this as the "Request Routing" open problem; it is the planned long-term solution.
+
 ---
 
 ## Implementation

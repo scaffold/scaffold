@@ -63,8 +63,10 @@ export class DraftStrategy implements Strategy {
       for (const change of newlyCanonical) {
         const block = event.store.get(change.hash);
         if (!block) continue;
+        const selfClaimed = new Set(block.claims.filter((c) => c < block.outputs.length));
 
         for (let i = 0; i < block.outputs.length; i++) {
+          if (selfClaimed.has(i)) continue;
           const output = block.outputs[i];
           const trackingKey = `${change.hash.toPrimitive()}:${i}`;
           if (this.inFlight.has(trackingKey)) continue;
@@ -89,9 +91,12 @@ export class DraftStrategy implements Strategy {
 
       const block = event.store.get(change.hash);
       if (!block) continue;
+      const selfClaimed = new Set(block.claims.filter((c) => c < block.outputs.length));
 
       for (let i = 0; i < block.outputs.length; i++) {
         if (this.inFlight.size >= this.config.maxConcurrent) break;
+
+        if (selfClaimed.has(i)) continue;
 
         const output = block.outputs[i];
         if (output.value < this.config.minValue) continue;

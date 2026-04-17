@@ -1,5 +1,5 @@
 import { secp } from './util/secp.ts';
-import { Block } from './core/Block.ts';
+import { AGGREGATION_CONTRACT, Block } from './core/Block.ts';
 import { makeAggregationOutput } from './contracts/AggregationContract.ts';
 import type { Contract } from './contracts/Contract.ts';
 import { Hash } from './util/Hash.ts';
@@ -38,6 +38,7 @@ export class Scaffold {
   private readonly putManager: PutManager;
   private readonly fetchManager: FetchManager;
   private readonly networkBridge?: NetworkBridge;
+  private readonly _publicKey: Uint8Array;
 
   /** Structured event log. Available for debugging and introspection. */
   readonly eventLog: EventLog;
@@ -45,6 +46,7 @@ export class Scaffold {
   constructor(config: ScaffoldConfig = {}) {
     const privateKey = config.privateKey ?? secp.utils.randomPrivateKey();
     const publicKey = secp.getPublicKey(privateKey, true);
+    this._publicKey = publicKey;
 
     const genesis = config.genesis ?? getGenesisBlock();
 
@@ -119,8 +121,18 @@ export class Scaffold {
           anchorHash = findCanonicalTip(nodeContext);
         }
 
-        // Every non-genesis block carries an aggregation marker output
-        const outputs = [...spec.outputs, makeAggregationOutput()];
+        // Every non-genesis block carries an aggregation marker output.
+        // Only append if the spec doesn't already carry one (the draft
+        // solidification path pre-populates it and has already computed
+        // claim indices against that layout -- appending again would
+        // shift claim targets by one).
+        const hasAggMarker = spec.outputs.some((o) =>
+          o.data.length === 0 &&
+          o.verifier.contract.toHex() === AGGREGATION_CONTRACT.toHex()
+        );
+        const outputs = hasAggMarker
+          ? spec.outputs
+          : [...spec.outputs, makeAggregationOutput()];
 
         // Delegate to NodeContext's createBlock (auto-balances + signs)
         return nodeContext.createBlock(
@@ -170,6 +182,44 @@ export class Scaffold {
       throw new Error('No network plugins configured');
     }
     await this.networkBridge.connectToPeer(remotePublicKey);
+  }
+
+  /** Subscribe to peer-connected events. peerId is the pubkey hex for authenticated peers. */
+  onPeerConnected(cb: (peerId: string) => void): void {
+    this.networkBridge?.onPeerConnected(cb);
+  }
+
+  /** Subscribe to peer-disconnected events. */
+  onPeerDisconnected(cb: (peerId: string) => void): void {
+    this.networkBridge?.onPeerDisconnected(cb);
+  }
+
+  /**
+   * Send a stored block directly to a specific peer, bypassing gossip.
+   *
+   * Used for manual bootstrapping of claim-history routing in demos/tests:
+   * the recipient will process the block with fromPeer=<this peer>, populating
+   * receivedFirst and claim history as if it had arrived via gossip.
+   */
+  sendBlockToPeer(blockHash: Hash, peerId: string): void {
+    if (!this.networkBridge) {
+      throw new Error('No network plugins configured');
+    }
+    const block = this.nodeContext.store.get(blockHash);
+    if (!block) {
+      throw new Error(`Block not found in store: ${blockHash.toHex()}`);
+    }
+    this.networkBridge.sendBlockToPeer(block, peerId);
+  }
+
+  /** This node's compressed secp256k1 public key. */
+  get publicKey(): Uint8Array {
+    return this._publicKey;
+  }
+
+  /** This node's public key as a hex string (the canonical peerId for authenticated peers). */
+  get publicKeyHex(): string {
+    return bin2hex(this._publicKey);
   }
 
   /** Close the scaffold instance and all network connections. */

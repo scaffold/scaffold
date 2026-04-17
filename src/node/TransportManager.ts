@@ -152,7 +152,13 @@ export class TransportManager {
   // -- Internal -------------------------------------------------------
 
   private hasAuthenticatedCapability(): boolean {
-    return this.deps.plugins.some((p) => p.emitsProtocol !== undefined);
+    // Signaling is needed whenever a plugin can participate in an
+    // authenticated handshake in either direction: initiate (emitsProtocol)
+    // or accept (acceptsProtocols). A client-only plugin still needs
+    // signaling to decrypt inbound handshake envelopes.
+    return this.deps.plugins.some(
+      (p) => p.emitsProtocol !== undefined || p.acceptsProtocols.length > 0,
+    );
   }
 
   private pickAuthenticatedInitiatorPlugin(): TransportPlugin | undefined {

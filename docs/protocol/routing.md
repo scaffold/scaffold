@@ -75,6 +75,10 @@ When the gossip protocol emits a send action `(block=B, trigger=A, verifier=V, a
 - **`E[deliveryMatrix[B.source][P]]`**: Probability we'll be first to deliver. High when P is poorly connected to B's source. Low when P likely already has B from another path.
 - **`1 / B.size`**: Prefer smaller blocks. Aggregation blocks are small despite representing large subtrees, giving them a natural advantage.
 
+### Consequence: outputs must have positive value to be routed
+
+`push_priority` is linear in `amount`. An unclaimed output with `value = 0` yields `push_priority = 0`, below `minPushPriority`, and is dropped. Request outputs (the "bounty" on a contract invocation) therefore need a strictly positive value. The minimum threshold depends on serialized block size -- for a ~500-byte block at `minPushPriority = 0.01`, the smallest routable bounty is about `10` at the default delivery-rate prior of `0.5`. Demo/CLI code should default to something well above that; `1_000_000` is a safe round number.
+
 ---
 
 ## Push Mechanism
