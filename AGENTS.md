@@ -111,11 +111,32 @@ When adding a new module or service:
 3. Include block hashes in data so `__scaffold.history(prefix)` works
 4. If the module has queryable state, add a method to `ScaffoldDebugAPI`
 
+### Think Before Coding
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
 ### Never drop errors silently
 Any path that catches an exception, drops a malformed input, or silently rejects a request SHOULD emit a log event. Default to `warn` for anything unexpected from outside the node (malformed peer input, failed connections, rejected handshakes) and `debug` for internal conditions that are expected but worth tracing (duplicate messages, deduplication hits, fallback paths). A silent `try { ... } catch { }` or `if (!valid) return;` without a log makes production debugging much harder later -- the cost of adding the log is trivial compared to the cost of not having it when you need it.
 
 ### Demo dev workflow
 The demo app at `demo/` resolves `scaffold.io` imports directly to `src/` via Vite aliases. Changes are picked up instantly -- no npm rebuild needed for development.
+
+## Never Hack Around Bugs or Gaps
+
+If a bug, missing feature, or design gap is preventing you from completing a task or making a test pass, **stop and ask Joel for direction**. Do NOT silently work around it, weaken an assertion, skip the problematic path, or paper over the symptom. A failing test that documents a real gap is more valuable than a passing test that hides a bug we could have fixed.
+
+When you hit a gap, surface it explicitly and offer the options. Joel may want to:
+- Mark the test as `ignore` if we aren't going to fix it soon.
+- Accept a failing test that will pass later when we address the issue.
+- Hack a fix for now and document a future TODO to clean it up.
+- Pause the main task so Joel can address the gap in another session, then resume work with it fixed.
+
+In every case where you find a gap or bug -- whether you work around it under direction, ignore the test, or pause -- **notify Joel and add an entry to `TODO.md`**. You have absolute freedom (and are expected) to autonomously add things you discover to `TODO.md`. There should be no unreported gaps or bugs that Claude saw and worked around.
+
+This is a team effort and Joel depends on you. Always strive for quality. If you see something, say something.
 
 ## 4-Step Development Sequence
 1. Build `docs/protocol/` as markdown documents covering protocol concepts and mechanics.
