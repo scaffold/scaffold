@@ -1,0 +1,514 @@
+/* ============================================================
+   SCAFFOLD DESIGN SYSTEM v2
+   Unified tokens across marketing + explorer.
+   Three palette themes × light/dark. Switch via data-theme + data-mode.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Sunflower:wght@300;500;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Type families --------------------------------------------- */
+  --font-display: 'Space Grotesk', 'Sunflower', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-serif: 'Fraunces', 'Times New Roman', serif;
+
+  /* Type scale ------------------------------------------------ */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --fs-3xl: 28px;
+  --fs-4xl: 36px;
+  --fs-5xl: 48px;
+  --fs-6xl: 64px;
+  --fs-7xl: 88px;
+  --fs-hero: clamp(48px, 9vw, 128px);
+
+  /* Spacing scale (4px base) --------------------------------- */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+  --sp-32: 128px;
+
+  /* Radii ----------------------------------------------------- */
+  --r-0: 0;
+  --r-1: 2px;
+  --r-2: 4px;
+  --r-3: 6px;
+  --r-4: 8px;
+  --r-5: 12px;
+  --r-pill: 999px;
+
+  /* Grid (blueprint) ----------------------------------------- */
+  --grid-unit: 8px;
+  --grid-line: color-mix(in srgb, var(--fg) 8%, transparent);
+  --grid-line-bold: color-mix(in srgb, var(--fg) 14%, transparent);
+}
+
+/* ============================================================
+   THEME: RAW  (default) — brutalist off-white + ink + signal orange
+   ============================================================ */
+:root,
+[data-theme="raw"] {
+  --accent: #FF4A1C;
+  --accent-hover: #E53A0D;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--bg));
+
+  --bg: #FAFAF7;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #F2F1EC;
+  --fg: #0A0A0A;
+  --fg-2: #3A3A38;
+  --fg-3: #737371;
+  --fg-muted: #9E9E9C;
+  --border: #E5E5E0;
+  --border-strong: #C4C4BE;
+  --border-hair: #EEEDE8;
+
+  /* Code: matched saturation/vibe of Raw — warm, high-contrast, dev-tool */
+  --code-bg: #141210;
+  --code-fg: #EDE5DA;
+  --code-kw: #FF7A4A;        /* keywords: softened signal orange */
+  --code-str: #C8B87A;       /* strings: warm olive/mustard */
+  --code-com: #6B6158;       /* comments: low-contrast taupe */
+  --code-fn: #E8A870;        /* function names: bronze */
+  --code-num: #D89A58;       /* numbers: amber */
+  --code-punct: #8A7E70;     /* punctuation: muted */
+}
+[data-theme="raw"][data-mode="dark"] {
+  --bg: #0E0E0C;
+  --bg-elev: #18181500;
+  --bg-elev: #181815;
+  --bg-sunken: #07070600;
+  --bg-sunken: #060605;
+  --fg: #F5F4EE;
+  --fg-2: #C9C8C1;
+  --fg-3: #89887F;
+  --fg-muted: #5A5952;
+  --border: #2A2A26;
+  --border-strong: #3E3E38;
+  --border-hair: #1E1E1B;
+  --accent: #FF5A2E;
+  --code-bg: #050505;
+  --code-fg: #EDE5DA;
+  --code-kw: #FF8B5E;
+  --code-str: #D4C584;
+  --code-com: #5A5048;
+  --code-fn: #F0B880;
+  --code-num: #E0A860;
+  --code-punct: #7A6E60;
+}
+
+/* ============================================================
+   THEME: BLUEPRINT — cream paper + ink blue + ochre
+   ============================================================ */
+[data-theme="blueprint"] {
+  --accent: #D97706;
+  --accent-hover: #B45309;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--bg));
+
+  --bg: #F5F0E4;
+  --bg-elev: #FBF7EC;
+  --bg-sunken: #EBE4D0;
+  --fg: #0E2A47;
+  --fg-2: #2A456B;
+  --fg-3: #5E7A9A;
+  --fg-muted: #8FA3BF;
+  --border: #D9CDB0;
+  --border-strong: #B8A782;
+  --border-hair: #E4DBC4;
+
+  --code-bg: #0E2A47;
+  --code-fg: #F5F0E4;
+  --code-kw: #F59E0B;
+  --code-str: #A7F3D0;
+  --code-com: #5E7A9A;
+  --code-fn: #FBF7EC;
+
+  --grid-line: color-mix(in srgb, #0E2A47 10%, transparent);
+  --grid-line-bold: color-mix(in srgb, #0E2A47 18%, transparent);
+}
+[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #0A1F36;
+  --bg-elev: #0E2A47;
+  --bg-sunken: #061426;
+  --fg: #F5F0E4;
+  --fg-2: #D9CDB0;
+  --fg-3: #8FA3BF;
+  --fg-muted: #5E7A9A;
+  --border: #1E3A5C;
+  --border-strong: #2A456B;
+  --border-hair: #14294A;
+  --accent: #F59E0B;
+  --code-bg: #061426;
+}
+
+/* ============================================================
+   THEME: GRAPHITE — warm near-black + bone + amber
+   ============================================================ */
+[data-theme="graphite"] {
+  --accent: #E8A33D;
+  --accent-hover: #D68B1E;
+  --accent-contrast: #171513;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--bg));
+
+  --bg: #FBF9F4;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #F2EEE5;
+  --fg: #171513;
+  --fg-2: #3D3834;
+  --fg-3: #7A7268;
+  --fg-muted: #ACA59A;
+  --border: #E8E1D2;
+  --border-strong: #C4BBA8;
+  --border-hair: #F0EBDE;
+
+  --code-bg: #171513;
+  --code-fg: #F2EDE5;
+  --code-kw: #E8A33D;
+  --code-str: #B8D4A3;
+  --code-com: #6E665E;
+  --code-fn: #F2EDE5;
+}
+[data-theme="graphite"][data-mode="dark"] {
+  --bg: #141210;
+  --bg-elev: #1E1B17;
+  --bg-sunken: #0A0908;
+  --fg: #F2EDE5;
+  --fg-2: #BFB6A6;
+  --fg-3: #807668;
+  --fg-muted: #514A42;
+  --border: #2D2923;
+  --border-strong: #403A31;
+  --border-hair: #1F1C18;
+  --accent: #F0B45A;
+  --code-bg: #0A0908;
+}
+
+/* ============================================================
+   THEME: MOSS — Deep forest green. Established, trustworthy, old-growth.
+   ============================================================ */
+[data-theme="bone"] {
+  --accent: #2F5D3A;
+  --accent-hover: #26482E;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--bg));
+
+  --bg: #FAFAF4;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #F0F0E6;
+  --fg: #0A1008;
+  --fg-2: #2A3828;
+  --fg-3: #6B7868;
+  --fg-muted: #A0A89E;
+  --border: #DDE1D4;
+  --border-strong: #B0B8A6;
+  --border-hair: #E8ECDF;
+
+  --code-bg: #0A1008;
+  --code-fg: #E4EADC;
+  --code-kw: #5E9470;        /* keywords: sage */
+  --code-str: #A8C4A0;       /* strings: pale moss */
+  --code-com: #4A5A48;       /* comments: olive shade */
+  --code-fn: #C8DCBE;        /* function names: bright moss */
+  --code-num: #3E8050;       /* numbers: deep moss */
+  --code-punct: #788078;
+}
+[data-theme="bone"][data-mode="dark"] {
+  --bg: #07100A;
+  --bg-elev: #101A12;
+  --bg-sunken: #040805;
+  --fg: #E8EEE0;
+  --fg-2: #B6C0AE;
+  --fg-3: #78846E;
+  --fg-muted: #4A5448;
+  --border: #1A241C;
+  --border-strong: #2C382E;
+  --border-hair: #121A14;
+  --accent: #5FAE75;
+  --code-bg: #040805;
+  --code-fg: #E8EEE0;
+  --code-kw: #78BC8E;
+  --code-str: #B8CFB0;
+  --code-com: #3E4A3A;
+  --code-fn: #D4E4CA;
+  --code-num: #4EA062;
+  --code-punct: #6C746C;
+}
+
+/* ============================================================
+   THEME: GLACIER — cool paper + ink + deep teal accent
+   ============================================================ */
+[data-theme="lime"] {
+  --accent: #0E7490;
+  --accent-hover: #0B5A73;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--bg));
+
+  --bg: #F6F8F9;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #EAEFF2;
+  --fg: #0A1014;
+  --fg-2: #2E3A42;
+  --fg-3: #64727B;
+  --fg-muted: #97A4AD;
+  --border: #D8E0E5;
+  --border-strong: #B2BFC8;
+  --border-hair: #E7ECEF;
+
+  --code-bg: #0B141A;
+  --code-fg: #E5EEF3;
+  --code-kw: #3FA3C2;        /* keywords: brighter teal sibling of accent */
+  --code-str: #A8C4D4;       /* strings: cool slate */
+  --code-com: #4A5A64;       /* comments: muted blue-gray */
+  --code-fn: #C6DCE8;        /* function names: pale mist */
+  --code-num: #5BB0C9;       /* numbers: bright teal */
+  --code-punct: #7A8A94;     /* punctuation: cool gray */
+}
+[data-theme="lime"][data-mode="dark"] {
+  --bg: #0A1014;
+  --bg-elev: #111A20;
+  --bg-sunken: #060A0D;
+  --fg: #E8F0F4;
+  --fg-2: #B6C4CC;
+  --fg-3: #7A8994;
+  --fg-muted: #4E5C66;
+  --border: #1E2A32;
+  --border-strong: #2E3C46;
+  --border-hair: #15202A;
+  --accent: #22B8DC;
+  --code-bg: #05090C;
+  --code-fg: #E8F0F4;
+  --code-kw: #5BC8E8;
+  --code-str: #B6D0DE;
+  --code-com: #3E4E58;
+  --code-fn: #D2E4EE;
+  --code-num: #7AD0E6;
+  --code-punct: #697883;
+}
+
+/* ============================================================
+   THEME: COPPER — Rich metallic orange-brown. Refined, mechanical.
+   ============================================================ */
+[data-theme="mono"] {
+  --accent: #A84A1E;
+  --accent-hover: #8A3A14;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--bg));
+
+  --bg: #FAF6F0;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #F0E8DB;
+  --fg: #140B06;
+  --fg-2: #3A2C22;
+  --fg-3: #7A6A5C;
+  --fg-muted: #AEA094;
+  --border: #E4D6C2;
+  --border-strong: #BFA888;
+  --border-hair: #EEE2D0;
+
+  --code-bg: #140B06;
+  --code-fg: #EDE0D0;
+  --code-kw: #C86A38;        /* keywords: bright copper */
+  --code-str: #C89A70;       /* strings: warm tan */
+  --code-com: #6A5848;       /* comments: dusty brown */
+  --code-fn: #E0B088;        /* function names: pale copper */
+  --code-num: #A84A1E;       /* numbers: deep copper */
+  --code-punct: #857060;
+}
+[data-theme="mono"][data-mode="dark"] {
+  --bg: #100805;
+  --bg-elev: #1A100A;
+  --bg-sunken: #080402;
+  --fg: #F0E4D4;
+  --fg-2: #C4B098;
+  --fg-3: #847060;
+  --fg-muted: #584838;
+  --border: #281C14;
+  --border-strong: #3E2C20;
+  --border-hair: #1A100A;
+  --accent: #E87A42;
+  --code-bg: #080402;
+  --code-fg: #F0E4D4;
+  --code-kw: #E08A4E;
+  --code-str: #D4AA82;
+  --code-com: #5A4838;
+  --code-fn: #F0C09A;
+  --code-num: #E87238;
+  --code-punct: #7A6858;
+}
+
+/* ============================================================
+   THEME: INK — Glacier's clinical, but with conviction. Fountain pen navy.
+   ============================================================ */
+[data-theme="graphite"] {
+  --accent: #1E3A8A;
+  --accent-hover: #1E2F6B;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, var(--bg));
+
+  --bg: #FCFCFD;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #F1F2F5;
+  --fg: #0A0E1A;
+  --fg-2: #2A304A;
+  --fg-3: #606880;
+  --fg-muted: #9098AC;
+  --border: #DDE1EA;
+  --border-strong: #B8BFD0;
+  --border-hair: #EAEDF3;
+
+  --code-bg: #0A0E1A;
+  --code-fg: #E6EAF4;
+  --code-kw: #5B7AD0;        /* keywords: mid-navy */
+  --code-str: #A8B4D0;       /* strings: slate */
+  --code-com: #484E66;       /* comments: deep slate */
+  --code-fn: #C8D0E4;        /* function names: pale ink */
+  --code-num: #7A90D8;       /* numbers: bright navy */
+  --code-punct: #747C94;
+}
+[data-theme="graphite"][data-mode="dark"] {
+  --bg: #08091266;
+  --bg: #080912;
+  --bg-elev: #10131F;
+  --bg-sunken: #040509;
+  --fg: #E6EAF4;
+  --fg-2: #B4BCD0;
+  --fg-3: #7A8298;
+  --fg-muted: #4A5266;
+  --border: #1A1E2E;
+  --border-strong: #2A2F44;
+  --border-hair: #12141F;
+  --accent: #6B8AE0;
+  --code-bg: #040509;
+  --code-fg: #E6EAF4;
+  --code-kw: #8AA0E8;
+  --code-str: #B8C4E0;
+  --code-com: #3E4460;
+  --code-fn: #D0D8EC;
+  --code-num: #9AB0F0;
+  --code-punct: #646C80;
+}
+
+/* ============================================================
+   THEME: COAL — Near-black ink, restrained red-orange accent. Editorial.
+   ============================================================ */
+[data-theme="blueprint"] {
+  --accent: #C53A18;
+  --accent-hover: #A52E10;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 8%, var(--bg));
+
+  --bg: #FAFAF6;
+  --bg-elev: #FFFFFF;
+  --bg-sunken: #EFEFE8;
+  --fg: #0A0A08;
+  --fg-2: #2A2A26;
+  --fg-3: #6A6A64;
+  --fg-muted: #9E9E98;
+  --border: #DEDED6;
+  --border-strong: #B4B4AA;
+  --border-hair: #E8E8E0;
+
+  --code-bg: #0A0A08;
+  --code-fg: #E8E8E0;
+  --code-kw: #D04820;        /* keywords: coal accent */
+  --code-str: #B8B8AE;       /* strings: stone */
+  --code-com: #4A4A44;       /* comments: deep gray */
+  --code-fn: #D0D0C8;        /* function names: pale stone */
+  --code-num: #C53A18;       /* numbers: coal accent */
+  --code-punct: #6A6A60;
+}
+[data-theme="blueprint"][data-mode="dark"] {
+  --bg: #08080600;
+  --bg: #080806;
+  --bg-elev: #12120E;
+  --bg-sunken: #040403;
+  --fg: #F0F0E8;
+  --fg-2: #B8B8B0;
+  --fg-3: #76766E;
+  --fg-muted: #464640;
+  --border: #1E1E1A;
+  --border-strong: #2E2E28;
+  --border-hair: #141410;
+  --accent: #E85838;
+  --code-bg: #040403;
+  --code-fg: #F0F0E8;
+  --code-kw: #F06040;
+  --code-str: #C8C8BE;
+  --code-com: #3E3E38;
+  --code-fn: #DCDCD2;
+  --code-num: #E85838;
+  --code-punct: #606058;
+}
+
+/* ============================================================
+   SEMANTIC
+   ============================================================ */
+:root {
+  /* Semantic — deliberately distinct from Raw brand orange */
+  --success: #2E7D4A;        /* forest green */
+  --warning: #B88410;        /* amber/ochre */
+  --danger:  #C41E3A;        /* crimson — red-pink, not orange */
+  --info:    #2D6FA8;        /* steel blue */
+}
+
+/* ============================================================
+   ELEVATION
+   ============================================================ */
+:root {
+  --shadow-1: 0 1px 0 color-mix(in srgb, var(--fg) 6%, transparent);
+  --shadow-2: 0 1px 2px color-mix(in srgb, var(--fg) 8%, transparent),
+              0 2px 8px color-mix(in srgb, var(--fg) 6%, transparent);
+  --shadow-3: 0 4px 16px color-mix(in srgb, var(--fg) 8%, transparent),
+              0 12px 32px color-mix(in srgb, var(--fg) 10%, transparent);
+  --shadow-inset: inset 0 0 0 1px var(--border);
+}
+
+/* ============================================================
+   ELEMENT DEFAULTS
+   ============================================================ */
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-wrap: balance;
+  margin: 0;
+}
+h1 { font-size: var(--fs-6xl); }
+h2 { font-size: var(--fs-4xl); }
+h3 { font-size: var(--fs-2xl); letter-spacing: -0.02em; }
+h4 { font-size: var(--fs-lg); letter-spacing: -0.01em; }
+
+p { margin: 0 0 1em; color: var(--fg-2); }
+
+code, kbd, pre, .mono { font-family: var(--font-mono); }
+code { font-size: 0.92em; }
+
+hr { border: none; border-top: 1px solid var(--border); margin: var(--sp-8) 0; }
+
+::selection { background: var(--accent); color: var(--accent-contrast); }
+
+/* Utility classes ------------------------------------------- */
+.u-mono { font-family: var(--font-mono); font-feature-settings: "ss01"; }
+.u-display { font-family: var(--font-display); letter-spacing: -0.03em; }
+.u-serif { font-family: var(--font-serif); }
+.u-label { font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-3); }
+.u-rule { height: 1px; background: var(--border); }
+.u-rule-strong { height: 1px; background: var(--fg); }

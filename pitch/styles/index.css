@@ -1,0 +1,436 @@
+@import './tokens.css';
+
+/* ============================================================
+   Scaffold pitch deck — Raw / dark
+   Inherits tokens.css. Activates Raw + dark, forces the palette
+   globally (Slidev's own light/dark toggles stay out of the way).
+   ============================================================ */
+
+:root,
+html,
+html.dark,
+html[data-theme='raw'][data-mode='dark'],
+html[data-theme='raw'] {
+  --bg: #0E0E0C;
+  --bg-elev: #181815;
+  --bg-sunken: #060605;
+  --fg: #F5F4EE;
+  --fg-2: #C9C8C1;
+  --fg-3: #89887F;
+  --fg-muted: #5A5952;
+  --border: #2A2A26;
+  --border-strong: #3E3E38;
+  --border-hair: #1E1E1B;
+  --accent: #FF5A2E;
+  --accent-hover: #E53A0D;
+  --accent-contrast: #FFFFFF;
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--bg));
+  --code-bg: #050505;
+  --code-fg: #EDE5DA;
+  --code-kw: #FF8B5E;
+  --code-str: #D4C584;
+  --code-com: #5A5048;
+  --code-fn: #F0B880;
+  --code-num: #E0A860;
+  --code-punct: #7A6E60;
+}
+
+html { color-scheme: dark; }
+
+/* ============================================================
+   Slidev frame
+   ============================================================ */
+.slidev-layout,
+#slidev-app {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+}
+
+.slidev-layout {
+  padding: 40px 56px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.slidev-layout * { box-sizing: border-box; }
+
+.slidev-layout h1,
+.slidev-layout h2,
+.slidev-layout h3,
+.slidev-layout h4 {
+  font-family: var(--font-display) !important;
+  color: var(--fg) !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.035em !important;
+  line-height: 0.98 !important;
+  text-wrap: balance;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Type scale tuned to Slidev's 980x552 design canvas */
+.slidev-layout h1,
+.slidev-layout.cover h1,
+.slidev-layout.statement h1,
+.slidev-layout.section h1,
+.slidev-layout.end h1,
+.slidev-layout.split h1,
+.slidev-layout.default-s h1 {
+  font-size: 64px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.045em !important;
+  line-height: 0.96 !important;
+}
+
+.slidev-layout h2,
+.slidev-layout.cover h2,
+.slidev-layout.statement h2,
+.slidev-layout.section h2,
+.slidev-layout.end h2,
+.slidev-layout.split h2,
+.slidev-layout.default-s h2 {
+  font-size: 42px !important;
+  letter-spacing: -0.035em !important;
+  line-height: 1 !important;
+}
+
+.slidev-layout h3,
+.slidev-layout.cover h3,
+.slidev-layout.statement h3,
+.slidev-layout.section h3,
+.slidev-layout.end h3,
+.slidev-layout.split h3,
+.slidev-layout.default-s h3 {
+  font-size: 19px !important;
+  letter-spacing: -0.015em !important;
+  line-height: 1.12 !important;
+}
+
+.slidev-layout h4 { font-size: 14px !important; letter-spacing: -0.01em !important; line-height: 1.2 !important; }
+
+.slidev-layout em {
+  font-style: normal;
+  color: var(--accent);
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.slidev-layout p,
+.slidev-layout li {
+  color: var(--fg-2);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.slidev-layout p { margin: 0 0 12px; max-width: 68ch; }
+
+.slidev-layout a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.slidev-layout code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+/* inside display type: no background, keep mono */
+.slidev-layout h1 code,
+.slidev-layout h2 code,
+.slidev-layout h3 code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.88em;
+  color: var(--accent);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.slidev-layout pre,
+.slidev-code {
+  background: var(--code-bg) !important;
+  color: var(--code-fg) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 14px;
+  line-height: 1.65;
+  border: 1px solid var(--border);
+  padding: 22px 26px !important;
+  border-radius: 0 !important;
+  box-shadow: var(--shadow-3);
+}
+
+.slidev-layout ul,
+.slidev-layout ol {
+  padding-left: 20px;
+  margin: 0 0 16px;
+}
+
+.slidev-layout ul li { list-style: none; padding-left: 0; position: relative; margin: 8px 0; }
+.slidev-layout ul li::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 0.7em;
+  width: 10px;
+  height: 1px;
+  background: var(--accent);
+}
+
+.slidev-layout hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+}
+
+/* ============================================================
+   Reusable pieces
+   ============================================================ */
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 28px;
+}
+.kicker::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.section-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg-3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+  display: block;
+}
+
+.sub {
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--fg-2);
+  max-width: 58ch;
+  margin-top: 20px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.rule { height: 1px; background: var(--border); margin: 24px 0; }
+.rule-strong { height: 1px; background: var(--fg); margin: 24px 0; }
+
+/* Brand row for cover */
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.brand-row img { width: 30px; height: 30px; }
+.brand-row .v {
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-left: 10px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+/* Hairline grid */
+.hair-grid {
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.hair-grid > * {
+  background: var(--bg);
+  padding: 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hair-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.hair-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.hair-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+
+.hair-grid .idx {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  display: block;
+  margin-bottom: 4px;
+}
+.hair-grid h3 { margin-bottom: 4px !important; font-size: 17px !important; line-height: 1.1 !important; }
+.hair-grid p { color: var(--fg-2); font-size: 13px; line-height: 1.5; max-width: 38ch; margin: 0; }
+
+/* Stats row */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--fg);
+  border-bottom: 1px solid var(--fg);
+  margin-top: 24px;
+}
+.stats .stat {
+  padding: 36px 20px;
+  border-right: 1px solid var(--border);
+}
+.stats .stat:last-child { border-right: none; }
+.stats .stat .n {
+  font-family: var(--font-display);
+  font-size: 52px;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  font-weight: 500;
+}
+.stats .stat .n sub {
+  font-size: 0.4em;
+  color: var(--fg-3);
+  margin-left: 4px;
+  vertical-align: baseline;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-family: var(--font-mono);
+}
+.stats .stat .l {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  margin-top: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.stats .stat .c {
+  font-size: 13px;
+  color: var(--fg-2);
+  margin-top: 10px;
+  line-height: 1.5;
+}
+
+/* Spec list */
+.spec {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.spec .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px dotted var(--border);
+  color: var(--fg-2);
+}
+.spec .row b { color: var(--fg); font-weight: 500; }
+
+/* Two-col block */
+.two {
+  display: grid;
+  grid-template-columns: 5fr 7fr;
+  gap: 56px;
+  align-items: start;
+}
+.two.even { grid-template-columns: 1fr 1fr; }
+
+/* Quote */
+.pullquote {
+  font-family: var(--font-serif);
+  font-size: 42px;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  font-weight: 400;
+  color: var(--fg);
+  max-width: 20ch;
+}
+.pullquote .attr {
+  display: block;
+  margin-top: 28px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-strong);
+  color: var(--fg-2);
+}
+.badge.accent { border-color: var(--accent); color: var(--accent); }
+
+/* Big type for bench-style standalone slides */
+.megaword {
+  font-family: var(--font-display);
+  font-size: 120px;
+  font-weight: 500;
+  line-height: 0.92;
+  letter-spacing: -0.05em;
+}
+
+.tag-floating {
+  position: absolute;
+  top: 28px;
+  left: 72px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--fg-3);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Footer pagination is handled by Slidev's own hooks, but style mono */
+#slidev-page-root,
+.slidev-page-label {
+  font-family: var(--font-mono) !important;
+  color: var(--fg-3);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 10px !important;
+}
+
+/* Reduce Slidev default slide transition drama */
+.slidev-layout.slidev-page { transition: none; }
+
+/* Dashed connector line used in some slides */
+.dashed-rule {
+  border-top: 1px dashed var(--border-strong);
+  width: 100%;
+}
