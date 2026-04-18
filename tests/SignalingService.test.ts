@@ -277,3 +277,63 @@ Deno.test('SignalingService: end-to-end two services exchange signals', async ()
   serviceA.dispose();
   serviceB.dispose();
 });
+
+Deno.test('SignalingService: duplicate inbound envelope after close does not spawn a second session', async () => {
+  // Regression test for the handshake storm: the mesh relay bounces
+  // the initial envelope through multiple paths back to the responder.
+  // If the responder deletes its session on close, each echo looks like
+  // a brand-new handshake and spawns a fresh responder session -- which
+  // in the WS-client plugin means a fresh dial to the server for every
+  // echo, creating an unbounded stream of anonymous connections.
+  const keyA = generateKeyPair();
+  const keyB = generateKeyPair();
+
+  let initiatorEnvelope: SignalEnvelope | null = null;
+  const sigA = new SignalingService({
+    selfPrivateKey: keyA.privateKey,
+    selfPublicKey: keyA.publicKey,
+    sendRelay: (_to, _from, payload) => {
+      initiatorEnvelope ??= payload;
+    },
+    onInboundSession: () => {
+      throw new Error('A should not receive inbound sessions in this test');
+    },
+  });
+
+  let inboundCount = 0;
+  const sigB = new SignalingService({
+    selfPrivateKey: keyB.privateKey,
+    selfPublicKey: keyB.publicKey,
+    sendRelay: () => {},
+    onInboundSession: (handle) => {
+      inboundCount++;
+      // Simulate the normal lifecycle: once the transport-level handshake
+      // completes, the signaling session is closed.
+      handle.close();
+    },
+  });
+
+  const handle = await sigA.initiate(keyB.publicKey, 'websocket');
+  handle.sendSignal('hello');
+
+  // Wait for the async encrypt so the captured envelope is populated.
+  await new Promise((r) => setTimeout(r, 10));
+  assert(initiatorEnvelope, 'expected sendRelay to fire');
+
+  // First delivery: creates B's responder session, then B closes it.
+  await sigB.recvSignal(initiatorEnvelope);
+
+  // Simulated mesh echoes of the same envelope. None may spawn new sessions.
+  await sigB.recvSignal(initiatorEnvelope);
+  await sigB.recvSignal(initiatorEnvelope);
+  await sigB.recvSignal(initiatorEnvelope);
+
+  assertEquals(
+    inboundCount,
+    1,
+    'duplicate envelopes after session close must not create new responder sessions',
+  );
+
+  sigA.dispose();
+  sigB.dispose();
+});

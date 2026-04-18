@@ -70,6 +70,10 @@ interface SignalingSession {
 
 // -- Config -------------------------------------------------------------
 
+/** Closed sessions kept around to deduplicate in-flight duplicate envelopes. */
+const MAX_RETAINED_SESSIONS = 256;
+
+
 export interface SignalingServiceConfig {
   selfPrivateKey: Uint8Array;
   selfPublicKey: Uint8Array;
@@ -296,7 +300,22 @@ export class SignalingService {
       clearInterval(session.retryTimer);
       session.retryTimer = null;
     }
-    this.sessions.delete(session.nonceHex);
+    // Keep the closed session in the map so duplicate envelopes still in
+    // flight through the mesh relay are ignored (recvSignal short-circuits
+    // on `session.closed`). Removing it would let echoes of the initial
+    // envelope create brand-new responder sessions, each of which spawns a
+    // fresh plugin-level handshake (e.g. a new WS dial).
+    //
+    // Cap total retained entries by evicting the oldest closed session.
+    // Map preserves insertion order, so we iterate until we find one to drop.
+    if (this.sessions.size > MAX_RETAINED_SESSIONS) {
+      for (const [key, s] of this.sessions) {
+        if (s.closed) {
+          this.sessions.delete(key);
+          break;
+        }
+      }
+    }
   }
 }
 
