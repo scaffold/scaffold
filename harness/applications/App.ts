@@ -83,11 +83,14 @@ export async function runApplication(behavior: Behavior): Promise<void> {
     fleetFallbackMs: parseFloat(env.FLEET_FALLBACK_MS),
   });
 
+  // enableLogging: false means EventLog still records entries but doesn't
+  // mirror them to console.info/debug, which would corrupt our JSONL
+  // stdout stream. We consume entries via onAppend instead.
   const scaffold = new Scaffold({
     privateKey,
     genesis,
     plugins: [transport],
-    enableLogging: true,
+    enableLogging: false,
   });
 
   // Stream EventLog -> stdout. Use writeSync on Deno.stdout so lines don't

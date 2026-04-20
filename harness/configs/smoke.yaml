@@ -1,0 +1,43 @@
+run:
+  id: auto
+  duration_s: 15
+  force_close_rate: 0.3
+  base_seed: 1
+
+users:
+  count: 30
+  seed_prefix: smoke
+  balance_distribution:
+    zero_fraction: 0.2
+    power_law:
+      alpha: 1.5
+      min: 100
+      max: 100000
+
+geography:
+  kind: random_uniform
+  latency:
+    speed_factor: 0.5
+    jitter_min_ms: 2
+    jitter_max_ms: 15
+    min_ms: 2
+    fleet_fallback_ms: 40
+
+bootstrap:
+  anchor_count: 2
+  peers_per_new_app: 4
+
+applications:
+  - name: anchor
+    entrypoint: harness/applications/behaviors/anchor.ts
+    is_anchor: true
+
+observer:
+  postgres_url: postgres://localhost/scaffold_harness
+  batch_size: 500
+  flush_interval_ms: 250
+  lag_threshold_bytes: 100000000
+
+paths:
+  runs_root: ./runs
+  socket_root: /tmp
