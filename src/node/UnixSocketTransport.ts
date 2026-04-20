@@ -1,23 +1,52 @@
 // Protocol spec: docs/protocol/transport.md
 //
-// TransportPlugin for Unix domain sockets. Anonymous-only: used for local
-// testing and bootstrap between processes on the same host. No cryptographic
-// peer authentication.
+// TransportPlugin for Unix domain sockets. Supports both anonymous mode
+// (bootstrap, local testing) and authenticated mode (pubkey-identified
+// peers). There is no cryptographic authentication at the socket layer:
+// each authenticated handshake mints a fresh per-session listener at a
+// random filesystem path, and that path itself is the shared secret,
+// delivered to the dialing peer via Scaffold's encrypted signaling mesh.
 //
-// Wire format is length-prefixed: [4-byte big-endian length][payload].
+// Wire format: length-prefixed [4-byte big-endian length][payload].
+//
+// Authenticated handshake:
+//   1. Initiator's initializeAuthenticatedTransport() schedules a microtask.
+//      If recvSignal has not fired by the time it runs (initiator role),
+//      the plugin mints a dedicated socket path, opens a listener on it,
+//      and emits `unix:<authPath>` via driver.sendSignal.
+//   2. The receiver's initializeAuthenticatedTransport() is called, then
+//      session.recvSignal(signal) is invoked synchronously by the
+//      TransportManager. recvSignal sets mode='recv' (preempting the
+//      microtask's send-path), parses the signal, and dials the remote
+//      auth socket. The new connection is handed to the driver as
+//      authenticated.
+//   3. The initiator's auth listener accepts the first connection,
+//      promotes it via driver.createAuthenticatedConnection, then closes
+//      the listener and removes the socket file.
+//
+// The main listener (this.socketPath) remains anonymous-only and preserves
+// its prior behavior: every accepted connection becomes an anonymous
+// ConnectionDriver before any data flows.
 
 import {
   AnonymousTransportDriver,
+  AuthenticatedTransportDriver,
   ConnectionDriver,
   ConnectionProvider,
   TransportPlugin,
   TransportService,
+  TransportSession,
 } from '../interfaces/transport.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
 export interface UnixSocketTransportOptions {
   socketPath?: string;
   logger?: ScopedLogger;
+  /**
+   * Directory used to mint per-handshake authenticated socket paths.
+   * Defaults to the directory containing `socketPath`, or /tmp.
+   */
+  authPathDir?: string;
 }
 
 export class UnixSocketTransport implements TransportPlugin {
@@ -26,22 +55,28 @@ export class UnixSocketTransport implements TransportPlugin {
 
   readonly socketPath: string;
   private readonly logger?: ScopedLogger;
+  private readonly authPathDir: string;
 
   constructor(options: UnixSocketTransportOptions | string = {}) {
     const opts = typeof options === 'string' ? { socketPath: options } : options;
     this.socketPath = opts.socketPath ?? `/tmp/scaffold-${crypto.randomUUID()}.sock`;
     this.logger = opts.logger;
+    this.authPathDir = opts.authPathDir ?? defaultAuthDir(this.socketPath);
   }
 
-  start(driver: AnonymousTransportDriver): TransportService {
+  start(anonymousDriver: AnonymousTransportDriver): TransportService {
     const listener = Deno.listen({ path: this.socketPath, transport: 'unix' });
     const activeConns = new Set<Deno.Conn>();
+    const authListeners = new Set<Deno.Listener>();
+    const socketPath = this.socketPath;
+    const authPathDir = this.authPathDir;
+    const logger = this.logger;
 
     const acceptLoop = async () => {
       try {
         for await (const conn of listener) {
           const { provider, onConnClosed } = wrapDenoConn(conn, activeConns);
-          const connDriver = driver.createAnonymousConnection(provider);
+          const connDriver = anonymousDriver.createAnonymousConnection(provider);
           wireConnectionDriver(conn, connDriver, onConnClosed);
         }
       } catch {
@@ -50,31 +85,103 @@ export class UnixSocketTransport implements TransportPlugin {
     };
     acceptLoop();
 
-    const socketPath = this.socketPath;
-
     return {
       announceAddresses: () => {
-        driver.broadcastAddress(socketPath);
+        anonymousDriver.broadcastAddress(socketPath);
       },
+
       dialAddress: (address: string) => {
+        // Anonymous bootstrap dial. Authenticated dials go through the
+        // session's recvSignal handler, not this entry point.
         Deno.connect({ path: address, transport: 'unix' }).then(
           (conn) => {
             const { provider, onConnClosed } = wrapDenoConn(conn, activeConns);
-            const connDriver = driver.createAnonymousConnection(provider);
+            const connDriver = anonymousDriver.createAnonymousConnection(provider);
             wireConnectionDriver(conn, connDriver, onConnClosed);
           },
           (err) => {
-            this.logger?.warn('dialFailed', {
-              address,
-              error: String(err),
-            });
+            logger?.warn('dialFailed', { address, error: String(err) });
           },
         );
       },
+
+      initializeAuthenticatedTransport: (
+        driver: AuthenticatedTransportDriver,
+      ): TransportSession => {
+        let mode: 'init' | 'recv' | undefined;
+        let sessionListener: Deno.Listener | undefined;
+        let sessionPath: string | undefined;
+
+        // Defer the initiator-side work. If recvSignal fires synchronously
+        // (receiver role), mode becomes 'recv' first and the microtask
+        // skips its send-path.
+        queueMicrotask(() => {
+          if (mode !== undefined) return;
+          mode = 'init';
+          sessionPath = mintAuthPath(authPathDir);
+          try {
+            sessionListener = Deno.listen({ path: sessionPath, transport: 'unix' });
+          } catch (err) {
+            logger?.warn('authListenFailed', { path: sessionPath, error: String(err) });
+            return;
+          }
+          authListeners.add(sessionListener);
+          const listenerRef = sessionListener;
+          const pathRef = sessionPath;
+          (async () => {
+            try {
+              const conn = await listenerRef.accept();
+              const { provider, onConnClosed } = wrapDenoConn(conn, activeConns);
+              const connDriver = driver.createAuthenticatedConnection(provider);
+              wireConnectionDriver(conn, connDriver, onConnClosed);
+            } catch {
+              // listener closed or accept errored
+            }
+            closeAuthListener(listenerRef, pathRef, authListeners);
+          })();
+          driver.sendSignal(`unix:${sessionPath}`);
+        });
+
+        return {
+          recvSignal: (signal: string) => {
+            if (mode === undefined) mode = 'recv';
+            if (mode !== 'recv') return;
+
+            const path = parseUnixSignal(signal);
+            if (!path) {
+              logger?.warn('authSignalMalformed', { signal });
+              return;
+            }
+
+            Deno.connect({ path, transport: 'unix' }).then(
+              (conn) => {
+                const { provider, onConnClosed } = wrapDenoConn(conn, activeConns);
+                const connDriver = driver.createAuthenticatedConnection(provider);
+                wireConnectionDriver(conn, connDriver, onConnClosed);
+              },
+              (err) => {
+                logger?.warn('authDialFailed', { path, error: String(err) });
+              },
+            );
+          },
+          close: () => {
+            if (sessionListener && sessionPath) {
+              closeAuthListener(sessionListener, sessionPath, authListeners);
+            }
+          },
+        };
+      },
+
       stop: () => {
         try {
           listener.close();
         } catch { /* already closed */ }
+        for (const authListener of authListeners) {
+          try {
+            authListener.close();
+          } catch { /* already closed */ }
+        }
+        authListeners.clear();
         for (const conn of activeConns) {
           try {
             conn.close();
@@ -157,7 +264,7 @@ function wireConnectionDriver(
         if (!await readFull(conn, headerBuf)) break;
         const len = new DataView(headerBuf.buffer).getUint32(0);
         const payload = new Uint8Array(len);
-        if (!await readFull(conn, payload)) break;
+        if (len > 0 && !await readFull(conn, payload)) break;
         driver.recvData(payload);
       }
     } catch {
@@ -184,4 +291,48 @@ async function writeAll(conn: Deno.Conn, data: Uint8Array): Promise<void> {
     const n = await conn.write(data.subarray(offset));
     offset += n;
   }
+}
+
+// -- Auth helpers -------------------------------------------------------
+
+function defaultAuthDir(socketPath: string): string {
+  const idx = socketPath.lastIndexOf('/');
+  return idx > 0 ? socketPath.slice(0, idx) : '/tmp';
+}
+
+function mintAuthPath(dir: string): string {
+  const hex = randomHex(16);
+  const base = dir.endsWith('/') ? dir.slice(0, -1) : dir;
+  return `${base}/scaffold-auth-${hex}.sock`;
+}
+
+function randomHex(byteCount: number): string {
+  const bytes = new Uint8Array(byteCount);
+  crypto.getRandomValues(bytes);
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += bytes[i].toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+function parseUnixSignal(signal: string): string | null {
+  const scheme = 'unix:';
+  if (!signal.startsWith(scheme)) return null;
+  const path = signal.slice(scheme.length);
+  return path.length > 0 ? path : null;
+}
+
+function closeAuthListener(
+  listener: Deno.Listener,
+  path: string,
+  authListeners: Set<Deno.Listener>,
+): void {
+  authListeners.delete(listener);
+  try {
+    listener.close();
+  } catch { /* already closed */ }
+  try {
+    Deno.removeSync(path);
+  } catch { /* already gone */ }
 }

@@ -2,6 +2,7 @@ import { assert, assertEquals } from '@std/assert';
 import { UnixSocketTransport } from '../src/node/UnixSocketTransport.ts';
 import {
   AnonymousTransportDriver,
+  AuthenticatedTransportDriver,
   ConnectionDriver,
   ConnectionProvider,
   TransportService,
@@ -229,6 +230,151 @@ Deno.test({
     await server.service.stop();
     await client1.service.stop();
     await client2.service.stop();
+  },
+});
+
+// -- Authenticated mode tests --------------------------------------------
+
+interface AuthHarness {
+  driver: AuthenticatedTransportDriver;
+  emittedSignals: string[];
+  authConn: OpenConn | null;
+}
+
+function makeAuthHarness(): AuthHarness {
+  const emittedSignals: string[] = [];
+  let authConn: OpenConn | null = null;
+
+  const driver: AuthenticatedTransportDriver = {
+    sendSignal: (s) => {
+      emittedSignals.push(s);
+    },
+    createAuthenticatedConnection: (provider: ConnectionProvider): ConnectionDriver => {
+      const open: OpenConn = {
+        provider,
+        driver: null as unknown as ConnectionDriver,
+        received: [],
+        closed: false,
+      };
+      open.driver = {
+        recvData: (data: Uint8Array) => {
+          open.received.push(data);
+        },
+        close: () => {
+          open.closed = true;
+        },
+      };
+      authConn = open;
+      return open.driver;
+    },
+  };
+
+  // authConn is mutated via closure; expose it via a getter property
+  return {
+    driver,
+    emittedSignals,
+    get authConn() {
+      return authConn;
+    },
+  } as AuthHarness;
+}
+
+Deno.test({
+  name: 'UnixSocketTransport: authenticated handshake end-to-end',
+  async fn() {
+    const initiator = startPlugin();
+    const receiver = startPlugin();
+
+    const initAuth = makeAuthHarness();
+    const recvAuth = makeAuthHarness();
+
+    // Initiator side: start an authenticated session. Do not pass an
+    // inbound signal, so the microtask elects 'init' role and emits one.
+    const initSession = initiator.service.initializeAuthenticatedTransport!(initAuth.driver);
+
+    // Yield to let the microtask fire.
+    await new Promise((r) => setTimeout(r, 0));
+
+    assertEquals(initAuth.emittedSignals.length, 1);
+    const signal = initAuth.emittedSignals[0];
+    assert(signal.startsWith('unix:/'), `expected unix: signal, got ${signal}`);
+
+    // Receiver side: the TransportManager would call
+    // initializeAuthenticatedTransport followed synchronously by
+    // recvSignal(signal). Emulate that ordering here.
+    const recvSession = receiver.service.initializeAuthenticatedTransport!(recvAuth.driver);
+    recvSession.recvSignal(signal);
+
+    // Wait for both sides to register authenticated connections.
+    await waitFor(() => initAuth.authConn !== null && recvAuth.authConn !== null);
+
+    // Bidirectional data exchange over the authenticated channel.
+    recvAuth.authConn!.provider.sendReliable(new TextEncoder().encode('hi from receiver'));
+    await waitFor(() => initAuth.authConn!.received.length === 1);
+    assertEquals(
+      new TextDecoder().decode(initAuth.authConn!.received[0]),
+      'hi from receiver',
+    );
+
+    initAuth.authConn!.provider.sendReliable(new TextEncoder().encode('hi from initiator'));
+    await waitFor(() => recvAuth.authConn!.received.length === 1);
+    assertEquals(
+      new TextDecoder().decode(recvAuth.authConn!.received[0]),
+      'hi from initiator',
+    );
+
+    // No anonymous connections should have been created.
+    assertEquals(initiator.harness.connections.length, 0);
+    assertEquals(receiver.harness.connections.length, 0);
+
+    initSession.close();
+    recvSession.close();
+    await initiator.service.stop();
+    await receiver.service.stop();
+  },
+});
+
+Deno.test({
+  name: 'UnixSocketTransport: receiver role does not emit a signal',
+  async fn() {
+    const plugin = startPlugin();
+    const auth = makeAuthHarness();
+
+    const session = plugin.service.initializeAuthenticatedTransport!(auth.driver);
+    // Fire recvSignal synchronously before the microtask runs. This
+    // should preempt the init-role send-path.
+    session.recvSignal('unix:/tmp/nonexistent-scaffold-auth.sock');
+
+    await new Promise((r) => setTimeout(r, 10));
+    assertEquals(auth.emittedSignals.length, 0);
+
+    session.close();
+    await plugin.service.stop();
+  },
+});
+
+Deno.test({
+  name: 'UnixSocketTransport: authenticated session close cleans up listener',
+  async fn() {
+    const plugin = startPlugin();
+    const auth = makeAuthHarness();
+
+    const session = plugin.service.initializeAuthenticatedTransport!(auth.driver);
+    await new Promise((r) => setTimeout(r, 0));
+    assertEquals(auth.emittedSignals.length, 1);
+
+    const authPath = auth.emittedSignals[0].slice('unix:'.length);
+    const statBefore = await Deno.stat(authPath).catch(() => null);
+    assert(statBefore !== null, 'auth socket should exist after init');
+
+    session.close();
+
+    // Allow the async close/unlink to complete.
+    await new Promise((r) => setTimeout(r, 20));
+    const statAfter = await Deno.stat(authPath).catch(() => null);
+    assertEquals(statAfter, null, 'auth socket should be removed after session close');
+
+    await plugin.service.stop();
   },
 });
 
