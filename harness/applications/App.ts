@@ -96,6 +96,7 @@ export async function runApplication(behavior: Behavior): Promise<void> {
   // Stream EventLog -> stdout. Use writeSync on Deno.stdout so lines don't
   // get buffered and lost when SIGKILL arrives.
   const encoder = new TextEncoder();
+  let appSeq = 0;
   const emitLine = (line: Record<string, unknown>) => {
     const body = JSON.stringify({
       runId: env.RUN_ID,
@@ -108,6 +109,9 @@ export async function runApplication(behavior: Behavior): Promise<void> {
     } catch {
       // stdout closed; we're exiting
     }
+  };
+  const emitApp = (event: string, data: Record<string, unknown> = {}, level: string = 'info') => {
+    emitLine({ kind: 'app', seq: appSeq++, event, level, data });
   };
 
   scaffold.eventLog.onAppend((entry) => {
@@ -122,16 +126,12 @@ export async function runApplication(behavior: Behavior): Promise<void> {
     });
   });
 
-  emitLine({
-    kind: 'app',
-    event: 'started',
-    data: {
-      application: env.APPLICATION,
-      pubkey: scaffold.publicKeyHex,
-      coord,
-      socketPath: env.SOCKET_PATH,
-      isAnchor: env.IS_ANCHOR === '1',
-    },
+  emitApp('started', {
+    application: env.APPLICATION,
+    pubkey: scaffold.publicKeyHex,
+    coord,
+    socketPath: env.SOCKET_PATH,
+    isAnchor: env.IS_ANCHOR === '1',
   });
 
   scaffold.start();
@@ -141,21 +141,17 @@ export async function runApplication(behavior: Behavior): Promise<void> {
   for (const addr of bootstrapAddrs) {
     try {
       scaffold.bootstrapConnection('unix', addr);
-      emitLine({ kind: 'app', event: 'bootstrap_dialed', data: { address: addr } });
+      emitApp('bootstrap_dialed', { address: addr });
     } catch (err) {
-      emitLine({
-        kind: 'app',
-        event: 'bootstrap_failed',
-        data: { address: addr, error: String(err) },
-      });
+      emitApp('bootstrap_failed', { address: addr, error: String(err) }, 'warn');
     }
   }
 
   scaffold.onPeerConnected((peerId) => {
-    emitLine({ kind: 'app', event: 'peer_connected', data: { peerId } });
+    emitApp('peer_connected', { peerId });
   });
   scaffold.onPeerDisconnected((peerId) => {
-    emitLine({ kind: 'app', event: 'peer_disconnected', data: { peerId } });
+    emitApp('peer_disconnected', { peerId });
   });
 
   // SIGTERM handler: graceful stop path. Coordinator sends SIGTERM; we
@@ -165,7 +161,7 @@ export async function runApplication(behavior: Behavior): Promise<void> {
   let stopRequested = false;
   Deno.addSignalListener('SIGTERM', () => {
     stopRequested = true;
-    emitLine({ kind: 'app', event: 'sigterm_received' });
+    emitApp('sigterm_received');
   });
 
   // Session timer for graceful exits. Anchors pass "" as duration and
@@ -176,7 +172,7 @@ export async function runApplication(behavior: Behavior): Promise<void> {
   if (isFinite(sessionDurationMs)) {
     setTimeout(() => {
       stopRequested = true;
-      emitLine({ kind: 'app', event: 'session_timer_elapsed' });
+      emitApp('session_timer_elapsed');
     }, sessionDurationMs);
   }
 
@@ -191,7 +187,7 @@ export async function runApplication(behavior: Behavior): Promise<void> {
     params,
     directory,
     random: rand,
-    log: (event, data) => emitLine({ kind: 'app', event, data: data ?? {} }),
+    log: (event, data) => emitApp(event, data ?? {}),
     sleep: async (ms) => {
       const deadline = Date.now() + ms;
       while (Date.now() < deadline && !stopRequested) {
@@ -205,27 +201,21 @@ export async function runApplication(behavior: Behavior): Promise<void> {
   try {
     await behavior(ctx);
   } catch (err) {
-    emitLine({
-      kind: 'app',
-      event: 'behavior_error',
-      level: 'error',
-      data: { error: String(err), stack: (err as Error).stack },
-    });
+    emitApp(
+      'behavior_error',
+      { error: String(err), stack: (err as Error).stack },
+      'error',
+    );
   }
 
-  emitLine({ kind: 'app', event: 'closing' });
+  emitApp('closing');
   try {
     await scaffold.close();
   } catch (err) {
-    emitLine({
-      kind: 'app',
-      event: 'close_error',
-      level: 'error',
-      data: { error: String(err) },
-    });
+    emitApp('close_error', { error: String(err) }, 'error');
   }
   directory.stop();
-  emitLine({ kind: 'app', event: 'exited' });
+  emitApp('exited');
   Deno.exit(0);
 }
 
