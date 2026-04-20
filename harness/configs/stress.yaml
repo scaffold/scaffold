@@ -1,31 +1,31 @@
 run:
   id: auto
-  duration_s: 20
+  duration_s: 600
   force_close_rate: 0.3
-  base_seed: 1
+  base_seed: 42
 
 users:
-  count: 50
-  seed_prefix: smoke
+  count: 500
+  seed_prefix: stress
   balance_distribution:
-    zero_fraction: 0.2
+    zero_fraction: 0.3
     power_law:
       alpha: 1.5
       min: 100
-      max: 100000
+      max: 1000000
 
 geography:
   kind: random_uniform
   latency:
     speed_factor: 0.5
-    jitter_min_ms: 2
-    jitter_max_ms: 15
-    min_ms: 2
-    fleet_fallback_ms: 40
+    jitter_min_ms: 5
+    jitter_max_ms: 30
+    min_ms: 5
+    fleet_fallback_ms: 60
 
 bootstrap:
-  anchor_count: 2
-  peers_per_new_app: 4
+  anchor_count: 3
+  peers_per_new_app: 5
 
 applications:
   - name: anchor
@@ -36,30 +36,31 @@ applications:
     is_anchor: true
   - name: social_media
     entrypoint: harness/applications/behaviors/social_media.ts
-    spawn_rate_per_s: 0.8
-    session_duration_s: { mean: 8, stddev: 2 }
+    # ~1 spawn/sec for 10 minutes = ~600 sessions over the run.
+    spawn_rate_per_s: 1.0
+    session_duration_s: { mean: 240, stddev: 60 }
     params:
-      scrollIntervalMs: { mean: 500, stddev: 100 }
-      feedSize: 30
-      peerMigrationRate: 0.1
+      scrollIntervalMs: { mean: 2000, stddev: 400 }
+      feedSize: 200
+      peerMigrationRate: 0.05
   - name: money_send
     entrypoint: harness/applications/behaviors/money_send.ts
-    spawn_rate_per_s: 0.3
-    session_duration_s: { mean: 6, stddev: 2 }
+    spawn_rate_per_s: 0.2
+    session_duration_s: { mean: 60, stddev: 20 }
     params:
-      sendIntervalMs: { mean: 1500, stddev: 400 }
+      sendIntervalMs: { mean: 5000, stddev: 1500 }
       amount: { min: 1, max: 100 }
-      sendCount: 5
+      sendCount: 10
   - name: validator
     entrypoint: harness/applications/behaviors/validator.ts
-    spawn_rate_per_s: 0.1
-    session_duration_s: { mean: 10, stddev: 2 }
+    spawn_rate_per_s: 0.05
+    session_duration_s: { mean: 300, stddev: 60 }
 
 observer:
   postgres_url: postgres://localhost/scaffold_harness
   batch_size: 500
   flush_interval_ms: 250
-  lag_threshold_bytes: 100000000
+  lag_threshold_bytes: 1000000000
 
 paths:
   runs_root: ./runs
