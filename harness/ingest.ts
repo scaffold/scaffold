@@ -70,26 +70,37 @@ export class PgIngester {
       this.flushTimer = undefined;
     }
     try {
-      // postgres.js' helper types don't accept arbitrary jsonb objects,
-      // so we pre-stringify `data` and cast on the SQL side.
-      const rows = batch.map((e) => ({
-        run_id: e.runId,
-        session_id: e.sessionId,
-        seq: e.seq,
-        wall_ts: e.wallTs,
-        ts: e.ts ?? null,
-        system: e.system,
-        event: e.event,
-        level: e.level ?? 'info',
-        kind: e.kind ?? 'event',
-        data_json: JSON.stringify(e.data ?? {}),
-      }));
-      await this.sql`
-        INSERT INTO events (run_id, session_id, seq, wall_ts, ts, system, event, level, kind, data)
-        SELECT run_id, session_id, seq, wall_ts, ts, system, event, level, kind, data_json::jsonb
-        FROM ${this.sql(rows as unknown as Record<string, unknown>[])}
-        ON CONFLICT (run_id, session_id, kind, seq) DO NOTHING
-      `;
+      // Multi-row INSERT via postgres.js helper. Pass `data` as a
+      // pre-stringified JSON string; the schema column is jsonb and
+      // postgres will cast string literals on input.
+      const rows = batch.map((e) => [
+        e.runId,
+        e.sessionId,
+        e.seq,
+        e.wallTs,
+        e.ts ?? null,
+        e.system,
+        e.event,
+        e.level ?? 'info',
+        e.kind ?? 'event',
+        JSON.stringify(e.data ?? {}),
+      ]);
+      // deno-lint-ignore no-explicit-any
+      const sqlAny = this.sql as any;
+      await sqlAny.unsafe(
+        `INSERT INTO events
+           (run_id, session_id, seq, wall_ts, ts, system, event, level, kind, data)
+         VALUES ${
+          rows.map((_, i) => {
+            const off = i * 10;
+            return `($${off + 1}, $${off + 2}, $${off + 3}, $${off + 4}, $${off + 5}, $${
+              off + 6
+            }, $${off + 7}, $${off + 8}, $${off + 9}, $${off + 10}::jsonb)`;
+          }).join(',')
+        }
+         ON CONFLICT (run_id, session_id, kind, seq) DO NOTHING`,
+        rows.flat(),
+      );
     } catch (err) {
       // Re-queue the batch so we don't lose data on transient pg errors.
       this.buf = batch.concat(this.buf);

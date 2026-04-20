@@ -1,9 +1,70 @@
-No evaluation run committed yet.
+Evaluation metrics for run r-1776671134293  (git ad65d2e, 10m 16s)
+Config:   evaluation
+Ran at:   2026-04-20T07:56:43.027Z
+Sessions: 598 spawned, 496 clean, 75 force
 
-Run the evaluation config and the analyzer to populate this file:
+Latency + fetch reliability
+---------------------------
+  fetch_unanswered_pct              global                      n=0         (not classified)
+  req_reply_latency_ms              global                      n=0         (not classified)
 
-    deno run --allow-all harness/coordinator.ts harness/configs/evaluation.yaml
-    deno run --allow-all harness/observer.ts ./runs <run-id>
-    deno run --allow-all harness/analysis/analyzer.ts <run-id>
+Connection
+----------
+  peers_per_session                 global                      mean  =6.93      [PASS] by +16%  (n=602)
+  peers_per_session                 global                      p50   =6         [PASS] by +20%  (n=602)
+  peers_per_session                 global                      p90   =8         [PASS] by +0%  (n=602)
+  peers_per_session                 app=aggregator              mean  =162       [PASS] by +2600%  (n=1)
+  peers_per_session                 app=aggregator              p50   =162       [PASS] by +3140%  (n=1)
+  peers_per_session                 app=aggregator              p90   =162       [PASS] by +1925%  (n=1)
+  peers_per_session                 app=anchor                  mean  =162       [PASS] by +2600%  (n=2)
+  peers_per_session                 app=anchor                  p50   =162       [PASS] by +3140%  (n=2)
+  peers_per_session                 app=anchor                  p90   =162       [PASS] by +1925%  (n=2)
+  peers_per_session                 app=money_send              mean  =5.91      [WARN] by -1%  (n=214)
+  peers_per_session                 app=money_send              p50   =5         [PASS] by +0%  (n=214)
+  peers_per_session                 app=money_send              p90   =7         [WARN] by -12%  (n=214)
+  peers_per_session                 app=unknown                 mean  =7         [PASS] by +17%  (n=1)
+  peers_per_session                 app=unknown                 p50   =7         [PASS] by +40%  (n=1)
+  peers_per_session                 app=unknown                 p90   =7         [WARN] by -12%  (n=1)
+  peers_per_session                 app=social_media            mean  =6.18      [PASS] by +3%  (n=191)
+  peers_per_session                 app=social_media            p50   =6         [PASS] by +20%  (n=191)
+  peers_per_session                 app=social_media            p90   =8         [PASS] by +0%  (n=191)
+  peers_per_session                 app=validator               mean  =6.4       [PASS] by +7%  (n=193)
+  peers_per_session                 app=validator               p50   =6         [PASS] by +20%  (n=193)
+  peers_per_session                 app=validator               p90   =8         [PASS] by +0%  (n=193)
+  time_to_first_block_ms            global                      n=0         (not classified)
+  time_to_first_peer_ms             global                      p50   =2ms       [PASS] by +99%  (n=602)
+  time_to_first_peer_ms             global                      p90   =3ms       [PASS] by +100%  (n=602)
+  time_to_first_peer_ms             app=social_media            p50   =2ms       [PASS] by +99%  (n=191)
+  time_to_first_peer_ms             app=social_media            p90   =2ms       [PASS] by +100%  (n=191)
+  time_to_first_peer_ms             app=validator               p50   =2ms       [PASS] by +99%  (n=193)
+  time_to_first_peer_ms             app=validator               p90   =2ms       [PASS] by +100%  (n=193)
+  time_to_first_peer_ms             app=money_send              p50   =2ms       [PASS] by +99%  (n=214)
+  time_to_first_peer_ms             app=money_send              p90   =3ms       [PASS] by +100%  (n=214)
+  time_to_first_peer_ms             app=unknown                 p50   =5ms       [PASS] by +98%  (n=1)
+  time_to_first_peer_ms             app=unknown                 p90   =5ms       [PASS] by +99%  (n=1)
+  time_to_first_peer_ms             app=anchor                  p50   =103ms     [PASS] by +49%  (n=2)
+  time_to_first_peer_ms             app=anchor                  p90   =184ms     [PASS] by +77%  (n=2)
+  time_to_first_peer_ms             app=aggregator              p50   =2ms       [PASS] by +99%  (n=1)
+  time_to_first_peer_ms             app=aggregator              p90   =2ms       [PASS] by +100%  (n=1)
 
-See harness/metrics/README.md.
+Propagation + throughput
+------------------------
+  block_propagation_ms              global                      n=0         (not classified)
+  blocks_per_sec_per_session        global                      n=0         (not classified)
+  contracts_per_sec_per_session     global                      n=0         (not classified)
+
+Reliability + balance
+---------------------
+  balance_delta_per_session         global                      n=0         (not classified)
+  clean_exit_pct                    global                      mean  =86.9%     [WARN] by -9%  (n=571)
+  clean_exit_pct                    app=money_send              mean  =90%       [WARN] by -5%  (n=210)
+  clean_exit_pct                    app=social_media            mean  =88.5%     [WARN] by -7%  (n=182)
+  clean_exit_pct                    app=validator               mean  =81.6%     [WARN] by -14%  (n=179)
+  errors_per_session                global                      mean  =0         [PASS]  (n=601)
+  errors_per_session                app=anchor                  mean  =0         [PASS]  (n=2)
+  errors_per_session                app=money_send              mean  =0         [PASS]  (n=214)
+  errors_per_session                app=social_media            mean  =0         [PASS]  (n=191)
+  errors_per_session                app=validator               mean  =0         [PASS]  (n=193)
+  errors_per_session                app=aggregator              mean  =0         [PASS]  (n=1)
+
+Summary: 38 PASS  |  7 WARN  |  0 FAIL
