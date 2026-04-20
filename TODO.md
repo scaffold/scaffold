@@ -82,6 +82,34 @@ Key design questions:
 - Cycle detection: contract A requests B, B requests A. Must be detected and reported as an error.
 - Caching: if the same verifier is requested by multiple contracts, the result should be computed once. The fetch deduplication in FetchManager may handle this naturally.
 
+## Harness (v2)
+
+The v1 harness (`harness/`) targets 100 processes with simulated latency and
+anonymous/authenticated Unix sockets. Known gaps to address before scaling:
+
+- **Peer-aware latency for accepted connections.** `LatencyTransport` wraps
+  outbound sends; for inbound accepted connections it has no peer identity
+  and falls back to `fleet_fallback_ms`. Needs a mechanism to learn the peer
+  pubkey after Scaffold signaling completes and update the per-connection
+  delay.
+- **Concurrent dial coord queue.** The FIFO queue in `LatencyTransport`
+  assumes dial completion order matches dial order; concurrent dials can
+  swap coords. Switch to a map keyed by the dial promise.
+- **Real scaffold traffic in behaviors.** `social_media`, `money_send`, and
+  the others emit intent events but do not call `scaffold.put()` /
+  `scaffold.fetch()` against real contracts. Wire them up once the
+  harness is proven.
+- **Persistent per-user state (StorageProvider).** Each session currently
+  cold-starts. A mock StorageProvider that restores prior BlockStore state
+  by user pubkey would let us test realistic re-join flows.
+- **Packet loss, partitions, byzantine behaviors.** V1 deferred these; add
+  as optional features on top of LatencyTransport and `peerManifest`.
+- **Bandwidth / compute caps.** Trusted Scaffold to self-limit for v1. If
+  host OOMs or hangs under stress, add explicit limits here.
+- **coordinator ↔ observer backpressure.** Coordinator should pause spawns
+  when `runs/<id>/events/` size exceeds `lag_threshold_bytes`; currently
+  just configured, not enforced.
+
 ## Application Layer
 
 These sit on top of the core protocol and can be specified later.
