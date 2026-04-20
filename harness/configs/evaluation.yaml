@@ -1,0 +1,75 @@
+# Canonical evaluation config. Runs a balanced mix of all application
+# types over 10 minutes with 300 end users. The metrics committed to
+# harness/metrics/evaluation.json + evaluation.txt come from this
+# configuration; changes to this file should be accompanied by an
+# explanation of why the baseline is moving.
+
+run:
+  id: auto
+  duration_s: 600
+  force_close_rate: 0.2
+  base_seed: 7
+
+users:
+  count: 300
+  seed_prefix: eval
+  balance_distribution:
+    zero_fraction: 0.25
+    power_law:
+      alpha: 1.5
+      min: 100
+      max: 1000000
+
+geography:
+  kind: random_uniform
+  latency:
+    speed_factor: 0.5
+    jitter_min_ms: 5
+    jitter_max_ms: 30
+    min_ms: 5
+    fleet_fallback_ms: 60
+
+bootstrap:
+  anchor_count: 3
+  peers_per_new_app: 5
+
+# Equal spawn rates for all non-anchor apps: balanced stress across
+# consumer-style apps (social_media, money_send) and protocol-facing
+# apps (validator). Aggregator runs long-lived in the anchor pool.
+applications:
+  - name: anchor
+    entrypoint: harness/applications/behaviors/anchor.ts
+    is_anchor: true
+  - name: aggregator
+    entrypoint: harness/applications/behaviors/aggregator.ts
+    is_anchor: true
+  - name: social_media
+    entrypoint: harness/applications/behaviors/social_media.ts
+    spawn_rate_per_s: 0.33
+    session_duration_s: { mean: 180, stddev: 60 }
+    params:
+      scrollIntervalMs: { mean: 2000, stddev: 400 }
+      feedSize: 90
+      peerMigrationRate: 0.05
+  - name: money_send
+    entrypoint: harness/applications/behaviors/money_send.ts
+    spawn_rate_per_s: 0.33
+    session_duration_s: { mean: 90, stddev: 30 }
+    params:
+      sendIntervalMs: { mean: 4000, stddev: 1200 }
+      amount: { min: 1, max: 100 }
+      sendCount: 20
+  - name: validator
+    entrypoint: harness/applications/behaviors/validator.ts
+    spawn_rate_per_s: 0.33
+    session_duration_s: { mean: 240, stddev: 60 }
+
+observer:
+  postgres_url: postgres://localhost/scaffold_harness
+  batch_size: 500
+  flush_interval_ms: 250
+  lag_threshold_bytes: 1000000000
+
+paths:
+  runs_root: ./runs
+  socket_root: /tmp

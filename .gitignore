@@ -8,3 +8,6 @@ coverage/
 lcov.info
 render.svg
 .claude/worktrees/
+
+# Harness per-run artifacts; committed baselines live in harness/metrics/
+runs/

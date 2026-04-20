@@ -1,0 +1,20 @@
+{
+  "runId": "(none)",
+  "ranAt": "(none)",
+  "gitSha": "(none)",
+  "configName": "evaluation",
+  "durationS": 0,
+  "sessions": {
+    "spawned": 0,
+    "cleanExit": 0,
+    "forceExit": 0
+  },
+  "thresholdsSha256": "(none)",
+  "summary": {
+    "pass": 0,
+    "warn": 0,
+    "fail": 0
+  },
+  "metrics": [],
+  "note": "Placeholder. Populated by harness/analysis/analyzer.ts. See harness/metrics/README.md."
+}

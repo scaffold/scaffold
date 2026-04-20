@@ -1,0 +1,9 @@
+No evaluation run committed yet.
+
+Run the evaluation config and the analyzer to populate this file:
+
+    deno run --allow-all harness/coordinator.ts harness/configs/evaluation.yaml
+    deno run --allow-all harness/observer.ts ./runs <run-id>
+    deno run --allow-all harness/analysis/analyzer.ts <run-id>
+
+See harness/metrics/README.md.

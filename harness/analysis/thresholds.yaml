@@ -1,0 +1,75 @@
+# Harness metrics thresholds (pass/fail per stat).
+#
+# Ordering:
+#   pass <  fail  ->  metric is "lower is better" (e.g. latency)
+#   pass >  fail  ->  metric is "higher is better" (e.g. clean_exit_pct)
+#
+# Anything between pass and fail is WARN. The analyzer reports a
+# `buffer` ratio relative to `pass`:
+#   lower_is_better:  1 - value / pass
+#   higher_is_better: value / pass - 1
+# Positive buffer means the metric is past the PASS threshold. Prefer
+# non-zero thresholds; a pass = 0 yields a null buffer (classification
+# still works, but you lose the relative-distance reading).
+#
+# Thresholds are v1-optimistic defaults. Expect most metrics to report
+# WARN or FAIL on first runs; tighten toward PASS as the protocol
+# improves. The goal is trend tracking, not gating.
+
+metrics:
+  # Request/reply latency (ms), from a behavior's `send_intent` event to
+  # its matching `reply` on the destination side.
+  req_reply_latency_ms:
+    mean: { pass: 150, fail: 800 }
+    p50: { pass: 100, fail: 500 }
+    p90: { pass: 300, fail: 1500 }
+    p99: { pass: 500, fail: 3000 }
+
+  # Fraction of `send_intent` events without a matching reply before
+  # the sender session exited.
+  fetch_unanswered_pct:
+    mean: { pass: 0.02, fail: 0.30 }
+
+  # Connection stats.
+  peers_per_session:
+    mean: { pass: 6, fail: 1 } # higher is better
+    p50: { pass: 5, fail: 1 }
+    p90: { pass: 8, fail: 2 }
+
+  time_to_first_peer_ms:
+    p50: { pass: 200, fail: 3000 }
+    p90: { pass: 800, fail: 10000 }
+
+  time_to_first_block_ms:
+    p50: { pass: 400, fail: 5000 }
+    p90: { pass: 1500, fail: 15000 }
+
+  # Block propagation: per block, ms from first-seen-anywhere to seen
+  # by 90% of sessions that were alive when the block was first seen.
+  block_propagation_ms:
+    p50: { pass: 500, fail: 5000 }
+    p90: { pass: 2000, fail: 10000 }
+
+  # Throughput.
+  blocks_per_sec_per_session:
+    mean: { pass: 0.5, fail: 0.05 } # higher is better
+
+  contracts_per_sec_per_session:
+    mean: { pass: 0.2, fail: 0.01 } # higher is better
+
+  # Reliability.
+  # One observation per non-anchor session: 1 for clean (SIGTERM +
+  # scaffold.close), 0 for SIGKILL / error exit. Mean is the ratio.
+  clean_exit_pct:
+    mean: { pass: 0.95, fail: 0.5 } # higher is better
+
+  # Count of level=error EventLog entries per session.
+  errors_per_session:
+    mean: { pass: 0, fail: 10 } # pass = 0 -> buffer will be null
+
+  # Per-app, per-contract session balance delta (end balance - start
+  # balance). Populated only once money_send submits real transfers.
+  # `pass` held at zero (break-even is neutral) and `fail` at -100 to
+  # flag sustained drains; prefer nonzero thresholds where possible.
+  balance_delta_per_session:
+    mean: { pass: 0, fail: -100 }

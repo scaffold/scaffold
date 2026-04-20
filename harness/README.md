@@ -2,109 +2,65 @@
 
 Large-scale real-process simulation for the Scaffold protocol. Targets
 100 concurrent Deno processes on a single host, each running a simulated
-"application" (social media scroller, money sender, aggregator,
-validator, etc.) on top of a real `Scaffold` instance with latency-
+"application" on top of a real `Scaffold` instance with latency-
 wrapped Unix-socket transport.
 
-## Components
+**Full docs live in [`docs/harness/`](../docs/harness/overview.md).**
+This file is a quick-start; the subtree has details on configs,
+applications, transport, observer, and analyzer.
 
-| Piece                        | Role                                                      |
-|------------------------------|-----------------------------------------------------------|
-| `coordinator.ts`             | Loads YAML, builds keypool + genesis, spawns app processes |
-| `observer.ts`                | Tails JSONL, batched-inserts to postgres                  |
-| `applications/App.ts`        | Runtime each behavior imports: Scaffold + stdout JSONL    |
-| `applications/behaviors/`    | Per-application behavior functions                        |
-| `transports/LatencyTransport`| Wraps UnixSocketTransport with haversine + jitter         |
-| `db/schema.sql`              | Postgres schema for events + sessions + offsets           |
-| `db/queries/`                | Canned SQL for common introspection                       |
-
-## Running a smoke test
-
-Prereqs: Deno; postgres if you want to ingest events.
+## Quick start
 
 ```sh
-# 1. (optional) set up postgres
+# 1. set up postgres once
 createdb scaffold_harness
 deno run --allow-all harness/db/migrate.ts postgres://localhost/scaffold_harness
 
-# 2. run the coordinator
-deno run --allow-all harness/coordinator.ts harness/configs/smoke.yaml
+# 2. run the evaluation config (10 minutes, 300 users, ~80 concurrent)
+deno run --allow-all harness/coordinator.ts harness/configs/evaluation.yaml
+# prints `run.started` with `runId: r-<ts>`
 
-# 3. in another terminal: run the observer against the same run
-deno run --allow-all harness/observer.ts ./runs r-<timestamp> \
+# 3. in another terminal, ingest events as they come
+deno run --allow-all harness/observer.ts ./runs r-<ts> \
   postgres://localhost/scaffold_harness
+
+# 4. when the run ends, compute metrics
+deno run --allow-all harness/analysis/analyzer.ts r-<ts>
+# writes harness/metrics/evaluation.{json,txt}
+
+# 5. review and commit
+git diff harness/metrics/evaluation.txt
+git add harness/metrics/evaluation.{json,txt}
+git commit
 ```
 
-`r-<timestamp>` is printed to the coordinator's stdout as `run.started`.
-
-## Anatomy of a run directory
+## Layout
 
 ```
-runs/
-  <run-id>/
-    coordinator.jsonl          # coordinator's own event stream
-    genesis.hex                # serialized genesis packet (deterministic)
-    peers.json                 # live peer manifest (atomic writes)
-    events/
-      <session-id>.jsonl       # one file per app session (scaffold + app events)
-    stderr/
-      <session-id>.log         # per-session stderr capture
+harness/
+  coordinator.ts              # spawns apps; see docs/harness/overview.md
+  observer.ts                 # postgres ingest; see docs/harness/observer.md
+  analysis/analyzer.ts        # metrics; see docs/harness/analyzer.md
+  analysis/thresholds.yaml    # PASS/FAIL per metric stat
+  applications/App.ts         # shared app runtime
+  applications/behaviors/     # one file per app (anchor, social_media, etc.)
+  transports/LatencyTransport # simulated latency wrapper
+  transports/PeerDirectory    # live peers.json view
+  configs/                    # smoke.yaml, stress.yaml, evaluation.yaml
+  db/                         # schema.sql + canned queries
+  metrics/                    # committed evaluation.{json,txt}
+
+docs/harness/                 # the authoritative docs
+runs/<run-id>/                # per-run artifacts (gitignored)
 ```
 
-## Postgres queries
+## When to read what
 
-After a run has ingested:
-
-```sh
-# Find packets sent without a matching recv (silent-leave evidence).
-psql scaffold_harness -v run_id=r-1234 -f harness/db/queries/packets_without_recv.sql
-
-# Trace propagation of a specific block across the fleet.
-psql scaffold_harness -v run_id=r-1234 -v block_hash=deadbeef.. \
-  -f harness/db/queries/block_propagation.sql
-
-# Per-app throughput over time.
-psql scaffold_harness -v run_id=r-1234 -f harness/db/queries/per_app_throughput.sql
-
-# Request/reply latency (for behaviors that tag requests).
-psql scaffold_harness -v run_id=r-1234 -f harness/db/queries/req_reply_latency.sql
-```
-
-## Configuration
-
-See `configs/smoke.yaml` and `configs/stress.yaml`. Keys of note:
-
-- `run.force_close_rate` — fraction of non-anchor sessions that exit via
-  SIGKILL (abrupt) rather than SIGTERM + `scaffold.close()`. SIGKILL'd
-  sessions abandon their latency-transport send queue mid-flight, which
-  produces the "send without recv" postgres evidence.
-- `bootstrap.anchor_count` — number of long-lived anchor processes to
-  spawn at startup. New apps always include all anchors + random recent
-  peers in their bootstrap set.
-- `geography.latency.speed_factor` — fraction of c (speed of light).
-  Real fiber is ~0.6-0.7; 0.5 gives recognizable trans-continental RTTs.
-- `applications[].is_anchor` — when true, the app is treated as a long-
-  lived fleet participant (no session timer, no exit).
-
-## Scope (v1)
-
-- Single host, up to ~100 processes (1 per session).
-- Unix socket transport with authenticated handshake via
-  `UnixSocketTransport` (session socket path is the shared secret).
-- Random-uniform geography + haversine one-way latency + uniform jitter.
-- No packet loss, no partitions, no bandwidth/compute caps (Scaffold is
-  expected to self-limit; if it doesn't, file a TODO.md entry).
-- Cold-start per session: no persistent per-user storage.
-- Behaviors are v1 stubs emitting intent events; wiring them to real
-  `scaffold.put()` / `scaffold.fetch()` against application contracts
-  is future work.
-
-## Hacking
-
-- Add a new behavior: drop a file in `applications/behaviors/`, import
-  `runApplication`, call it with an async function receiving
-  `AppContext`. Register it in a YAML config.
-- Add a new metric query: drop a SQL file in `db/queries/`. Query events
-  via JSONB `data->>'...'` or `data @> '{...}'::jsonb`.
-- Custom geography: implement the `Geography` interface in
-  `harness/geography.ts`, extend `config.ts` to select it.
+| I want to...                              | Go to                               |
+|-------------------------------------------|-------------------------------------|
+| Understand the lifecycle of a run         | [overview.md](../docs/harness/overview.md) |
+| Tune a config                             | [configs.md](../docs/harness/configs.md)   |
+| Write a new application behavior          | [applications.md](../docs/harness/applications.md) |
+| Understand the LatencyTransport           | [transport.md](../docs/harness/transport.md) |
+| Query events in postgres                  | [observer.md](../docs/harness/observer.md) |
+| Understand or add a metric                | [analyzer.md](../docs/harness/analyzer.md) |
