@@ -47,15 +47,14 @@ const LEVEL_ORDER: Record<LogLevel, number> = {
   error: 3,
 };
 
-const now = typeof performance !== 'undefined'
-  ? () => performance.now()
-  : () => Date.now();
+const now = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
 
 export class EventLog {
   private buffer: LogEntry[] = [];
   private seq = 0;
   private readonly maxSize: number;
   private readonly consoleOutput: boolean;
+  private subscribers: Set<(entry: LogEntry) => void> = new Set();
 
   constructor(opts?: { maxSize?: number; console?: boolean }) {
     this.maxSize = opts?.maxSize ?? 10_000;
@@ -88,7 +87,28 @@ export class EventLog {
       this._consoleEmit(entry);
     }
 
+    for (const cb of this.subscribers) {
+      try {
+        cb(entry);
+      } catch {
+        // subscriber error must not affect other subscribers or the append
+      }
+    }
+
     return entry.seq;
+  }
+
+  /**
+   * Subscribe to every appended entry. Fires synchronously after the entry
+   * is pushed to the ring buffer and after optional console emission, so
+   * subscribers see the same entry ordering as the buffer. Returns an
+   * unsubscribe function.
+   */
+  onAppend(cb: (entry: LogEntry) => void): () => void {
+    this.subscribers.add(cb);
+    return () => {
+      this.subscribers.delete(cb);
+    };
   }
 
   /** Query entries matching the filter. */
