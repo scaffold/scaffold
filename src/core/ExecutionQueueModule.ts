@@ -160,6 +160,15 @@ export class ExecutionQueueModule {
     this._tasks.clear();
   }
 
+  /**
+   * ProtocolContext's BaseContext picks up Symbol.dispose on registered
+   * services. Wired here so `ctx.destruct()` (and `Scaffold.close()`)
+   * clears any in-flight task timeouts.
+   */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   // -- Queries ------------------------------------------------------
 
   /** Number of tasks in the queue (pending only). */

@@ -7,13 +7,21 @@ import { ConsensusService } from '../../core/ConsensusService.ts';
 import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 
 /**
- * Minimal interface DraftStrategy needs from the generation layer --
- * waking a blocked contract when a matching output becomes available.
- * Both the legacy `ContractGenerator` and the new `GenerationService`
- * satisfy this.
+ * Minimal interface DraftStrategy needs from the generation layer.
+ *
+ * `notifyNewOutput` absorbs a fresh UTXO into an existing generation if
+ * possible (wake blocked, or adopt into an active draft). It returns
+ * `true` iff the output is absorbed; `false` means no generation knows
+ * about it yet.
+ *
+ * `hasActiveGenerationFor` lets the strategy skip creating a new draft
+ * when one already exists for the same target (necessary to serialize
+ * queue-dispatched generations for contracts like aggregation that
+ * share a pool of inputs).
  */
 export interface BlockedGeneratorNotifier {
   notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean;
+  hasActiveGenerationFor?(verifier: { contract: Hash; params: Uint8Array }): boolean;
 }
 
 /** Action type for creating a draft (handled by ReactiveLayer). */
@@ -110,6 +118,12 @@ export class DraftStrategy implements Strategy {
         const output = block.outputs[i];
         if (output.value < this.config.minValue) continue;
         if (!this._enableGeneration(output.verifier.contract)) continue;
+
+        // Skip if a generation is already running for this verifier.
+        // Aggregation-style contracts share a UTXO pool; spawning a
+        // second draft while the first is still running causes both to
+        // grab a subset of the pool and deadlock.
+        if (this._notifier?.hasActiveGenerationFor?.(output.verifier)) continue;
 
         const trackingKey = `${change.hash.toPrimitive()}:${i}`;
         if (this.inFlight.has(trackingKey)) continue;

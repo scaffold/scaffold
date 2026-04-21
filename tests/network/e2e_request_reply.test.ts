@@ -160,4 +160,8 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
     'Hello, world',
     'A should receive the Hello response',
   );
+
+  await nodeA.close();
+  await nodeB.close();
+  await nodeC.close();
 });

@@ -162,6 +162,14 @@ export class GenerationModule {
     return this._drafts.get(draftId.toPrimitive())?.spec;
   }
 
+  /** True if at least one draft for the given target is currently tracked. */
+  hasActiveTarget(targetKey: TargetKey): boolean {
+    for (const entry of this._drafts.values()) {
+      if (entry.spec.targetKey === targetKey) return true;
+    }
+    return false;
+  }
+
   /** Number of drafts currently tracked. */
   get size(): number {
     return this._drafts.size;

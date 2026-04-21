@@ -38,7 +38,6 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   constructor(
     private readonly store: BlockStore,
     private readonly utxoIndex: UtxoIndexService,
-    private readonly outputClaims: OutputClaimService,
   ) {}
 
   getBlock(hash: Hash): Block | undefined {
@@ -62,11 +61,11 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   }
 
   findInputs(verifier: Verifier): AvailableInput[] {
+    // UtxoIndex now filters canonicality + claim status at read time, so
+    // no additional filtering is needed here.
     const entries = this.utxoIndex.getByVerifier(verifier.contract, verifier.params);
     const result: AvailableInput[] = [];
     for (const entry of entries) {
-      const claimants = this.outputClaims.getClaimantsAt(entry.blockHash, entry.outputIndex);
-      if (claimants && claimants.length > 0) continue;
       const block = this.store.get(entry.blockHash);
       if (!block || entry.outputIndex >= block.outputs.length) continue;
       const output = block.outputs[entry.outputIndex];
@@ -146,12 +145,29 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   private readonly _queue: ExecutionQueueService;
   private readonly _host: ContractHostService;
   private readonly _outputClaims: OutputClaimService;
+  private readonly _utxoIndex: UtxoIndexService;
   private readonly _adapter: GeneratingEnvAdapter;
   /** Hook for draft cancellation. Set by NodeContext after construction. */
   private _cancelDraft: (draftId: Hash) => void = () => {};
 
+  /**
+   * Hook notified when an output is released back to the system -- either
+   * because a draft completed without consuming its pre-queue or because
+   * the draft was cancelled. DraftStrategy uses this to clear its
+   * per-output in-flight tracking so subsequent drafts can claim the
+   * output. Set by NodeContext after construction.
+   */
+  private _onOutputReleased: (block: Hash, outputIndex: number) => void = () => {};
+
   /** Blocked generators waiting for inputs, keyed by verifier. */
   private readonly _blocked = new Map<string, BlockedEntry[]>();
+
+  /**
+   * Outputs adopted into an active draft before its contract blocked --
+   * keyed by draftId. When the contract calls `waitForInput`, these are
+   * consumed first; if empty, the waiter parks in `_blocked`.
+   */
+  private readonly _preQueue = new Map<HashPrimitive, AvailableInput[]>();
 
   /** Draft-level cancellation flags. Checked by the run loop. */
   private readonly _cancelled = new Set<HashPrimitive>();
@@ -179,7 +195,8 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     this._queue = queue;
     this._host = host;
     this._outputClaims = outputClaims;
-    this._adapter = new GeneratingEnvAdapter(store, utxoIndex, outputClaims);
+    this._utxoIndex = utxoIndex;
+    this._adapter = new GeneratingEnvAdapter(store, utxoIndex);
 
     consensus.onCanonicalityChange((hash, canonical) => {
       this.onCanonicalityChange(hash, canonical);
@@ -198,6 +215,11 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    */
   setCancelHook(cancel: (draftId: Hash) => void): void {
     this._cancelDraft = cancel;
+  }
+
+  /** Hook so DraftStrategy can clear its per-output inFlight tracking. */
+  setOutputReleasedHook(cb: (block: Hash, outputIndex: number) => void): void {
+    this._onOutputReleased = cb;
   }
 
   // -- GeneratorProvider ---------------------------------------------
@@ -242,25 +264,54 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     this.register(draft.draftId, spec);
 
     const draftId = draft.draftId;
-
-    // TODO: route through ExecutionQueueService so generation shares a
-    // priority queue with verification and honors per-node cost budgets.
-    // Doing that cleanly requires (a) the queue knowing how to run work
-    // inline when possible to preserve the old sync-chain-of-puts
-    // behavior some tests rely on, and (b) draft cancellation that
-    // cooperates with queued task eviction -- both tracked in TODO.md
-    // under "Execution Queue Preemption" and "GenerationModule Priority
-    // Calibration". For now, run inline like the old ContractGenerator
-    // did; priority()/register/forget are still live so the module-level
-    // canonicality tracking works.
-    const pending = this._runGeneration(draft, spec);
-    if (pending instanceof Promise) pending.catch(() => {});
+    // Budget: declaredWeight * msPerCostUnit, but floor at 30s until
+    // we have real contract-cost data. declaredWeight today is a nominal
+    // 1-or-small-integer and `msPerCostUnit` defaults to 1, which would
+    // yield a 1ms budget -- enough to time out every real contract run.
+    // See TODO.md "GenerationModule Priority Calibration".
+    const budget = Math.max(
+      spec.declaredWeight * this._queue.msPerCostUnit,
+      30_000,
+    );
+    const executable = {
+      priority: () => this.priority(draftId),
+      maxCostMs: budget,
+      run: async () => {
+        const pending = this._runGeneration(draft, spec);
+        if (pending instanceof Promise) await pending;
+      },
+    };
+    this._queue.enqueue(executable);
 
     return {
       draftId,
       cancel: () => {
         this._cancelled.add(draftId.toPrimitive());
+        // Release the draft's claim entries first so subsequent
+        // notifyNewOutput calls don't see a self-conflict.
         this._outputClaims.removeClaims(draftId);
+
+        // Re-route any pre-queued inputs the contract didn't consume
+        // through `notifyNewOutput`: wake a blocked generator, adopt
+        // into another active draft, or fall back to `reAddUnspentOutput`
+        // so DraftStrategy sees the UTXO on the next canonicality event.
+        // In every case, tell DraftStrategy the output is no longer
+        // tracked by *this* draft so its inFlight counter stays accurate.
+        const pre = this._preQueue.get(draftId.toPrimitive());
+        if (pre) {
+          for (const ai of pre) {
+            this._onOutputReleased(ai.block, ai.outputIndex);
+            const absorbed = this.notifyNewOutput(ai.block, ai.outputIndex, {
+              verifier: ai.verifier,
+              value: ai.value,
+              data: ai.data,
+            });
+            if (!absorbed) {
+              this._utxoIndex.reAddUnspentOutput(ai.block, ai.outputIndex);
+            }
+          }
+          this._preQueue.delete(draftId.toPrimitive());
+        }
         this._removeBlocked(draftId);
         this.forget(draftId);
       },
@@ -297,8 +348,16 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     spec: GenerationSpec,
   ): Promise<void> | void {
     const draftId = draft.draftId;
-    const waitForInput: WaitForInputFn = (verifier) =>
-      new Promise<AvailableInput>((resolve) => {
+    const waitForInput: WaitForInputFn = (verifier) => {
+      // Drain the pre-queue first: outputs adopted by `notifyNewOutput`
+      // before this contract reached `waitForInput`.
+      const pre = this._preQueue.get(draftId.toPrimitive());
+      if (pre && pre.length > 0) {
+        const ai = pre.shift()!;
+        if (pre.length === 0) this._preQueue.delete(draftId.toPrimitive());
+        return Promise.resolve(ai);
+      }
+      return new Promise<AvailableInput>((resolve) => {
         const vKey = utxoVerifierKey(verifier.contract, verifier.params);
         let queue = this._blocked.get(vKey);
         if (!queue) {
@@ -307,6 +366,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
         }
         queue.push({ draftId, verifierKey: vKey, resolve });
       });
+    };
 
     let maybeResult;
     try {
@@ -379,12 +439,29 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const stored = this._draftStore.get(draftId);
     if (!stored) return; // explicitly cancelled during run
 
-    this._draftStore.update(draftId, {
+    const updated = this._draftStore.update(draftId, {
       outputs: [...stored.outputs, ...result.outputs],
       resolvedClaims: [...stored.resolvedClaims, ...newClaims],
       refs: [...stored.refs, ...result.refs],
       includeConstraints: [...stored.includeConstraints, ...newIncludes],
     });
+
+    // Reconcile UtxoIndex with the draft's new `resolvedClaims`. Consensus
+    // doesn't fire a canonicality-change event for an already-canonical
+    // draft whose internal state changed, so we trigger the reconciliation
+    // directly. Both methods are idempotent (Map.delete / Map.set).
+    if (this._consensus.isCanonical(draftId)) {
+      this._utxoIndex.draftBecameCanonical(updated);
+    } else {
+      this._utxoIndex.draftBecameNonCanonical(updated);
+    }
+
+    // Forget the draft from module tracking before transitioning to
+    // 'ready': solidification runs synchronously in the ready-transition
+    // listener and produces a real block whose outputs may trigger new
+    // drafts for the same target. Keeping the old draft in the active
+    // set would (incorrectly) suppress those via `hasActiveTarget`.
+    this.forget(draftId);
 
     this._draftStore.transition(draftId, 'ready');
   }
@@ -392,32 +469,74 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   // -- Blocked-generator wakeup --------------------------------------
 
   /**
-   * Notify that a new unclaimed output exists on a canonical block. Wakes
-   * exactly one blocked generator waiting on the matching verifier, if any.
-   * Returns true iff a generator was unblocked.
+   * Notify that a new unclaimed output exists on a canonical block.
+   * Returns `true` iff the output was absorbed into an existing generation
+   * (either by waking a blocked generator or by being adopted by an
+   * actively-running draft for the same target).
    *
-   * Called from `DraftStrategy` on a canonicality event, same role that
-   * `ContractGenerator.notifyNewOutput` used to play.
+   * Resolution order:
+   *   1. If any generator is blocked on this verifier, wake it and return.
+   *   2. Else if any active draft has a matching targetKey, claim the
+   *      output on its behalf so `UtxoIndex` reflects the reservation.
+   *      The running contract will pick it up on its next `findInputs`
+   *      call (or via `_blocked` if it has blocked in the meantime).
+   *   3. Else return `false`, signalling the caller (`DraftStrategy`)
+   *      that this output isn't claimed yet and may warrant a new draft.
    */
   notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean {
-    const key = utxoVerifierKey(output.verifier.contract, output.verifier.params);
-    const queue = this._blocked.get(key);
-    if (!queue || queue.length === 0) return false;
+    const vKey = utxoVerifierKey(output.verifier.contract, output.verifier.params);
 
-    const entry = queue.shift()!;
-    if (queue.length === 0) this._blocked.delete(key);
+    // 1. Wake blocked generator.
+    const queue = this._blocked.get(vKey);
+    if (queue && queue.length > 0) {
+      const entry = queue.shift()!;
+      if (queue.length === 0) this._blocked.delete(vKey);
+      this._outputClaims.addClaim(entry.draftId, blockHash, outputIndex);
+      entry.resolve({
+        verifier: output.verifier,
+        value: output.value,
+        data: output.data,
+        isSelfClaim: false,
+        block: blockHash,
+        outputIndex,
+      });
+      return true;
+    }
 
-    this._outputClaims.addClaim(entry.draftId, blockHash, outputIndex);
+    // 2. Adopt into an active draft with matching target.
+    const targetKey = targetKeyForBytes(output.verifier);
+    const draftsForTarget = this.draftsForTarget(targetKey);
+    if (draftsForTarget.length > 0) {
+      const claimant = draftsForTarget[0];
+      this._outputClaims.addClaim(claimant, blockHash, outputIndex);
+      // Reflect in the UTXO view so parallel `findInputs` calls don't
+      // re-pick this output, and `autoBalance` doesn't double-spend.
+      this._utxoIndex.removeSpentOutput(blockHash, outputIndex);
+      // Park the AvailableInput for the draft's next waitForInput call.
+      const ai: AvailableInput = {
+        verifier: output.verifier,
+        value: output.value,
+        data: output.data,
+        isSelfClaim: false,
+        block: blockHash,
+        outputIndex,
+      };
+      const claimantKey = claimant.toPrimitive();
+      let pre = this._preQueue.get(claimantKey);
+      if (!pre) {
+        pre = [];
+        this._preQueue.set(claimantKey, pre);
+      }
+      pre.push(ai);
+      return true;
+    }
 
-    entry.resolve({
-      verifier: output.verifier,
-      value: output.value,
-      data: output.data,
-      isSelfClaim: false,
-      block: blockHash,
-      outputIndex,
-    });
-    return true;
+    return false;
+  }
+
+  /** True iff an active generation exists for the given verifier. */
+  hasActiveGenerationFor(verifier: Verifier): boolean {
+    return this.hasActiveTarget(targetKeyForBytes(verifier));
   }
 
   /** Number of currently-blocked generators. For introspection/tests. */
@@ -439,4 +558,9 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 /** Stable target key derived from a verifier. */
 function targetKeyFor(v: Verifier): string {
   return `${v.contract.toPrimitive()}:${Array.from(v.params).join(',')}`;
+}
+
+/** Same key, re-exported for call sites with a `Verifier` literal. */
+function targetKeyForBytes(v: Verifier): string {
+  return targetKeyFor(v);
 }

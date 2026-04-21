@@ -225,6 +225,10 @@ export class Scaffold {
   /** Close the scaffold instance and all network connections. */
   async close(): Promise<void> {
     await this.networkBridge?.close();
+    // Destruct the protocol context so services with Symbol.dispose
+    // (e.g. ExecutionQueueService clears its setTimeout handles) can
+    // clean up.
+    await this.nodeContext.protocolContext.destruct();
   }
 
   /** Reactive block record set for observing block graph changes. */

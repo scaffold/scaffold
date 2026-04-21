@@ -1,18 +1,28 @@
 /**
  * Incremental UTXO index keyed by verifier (contract + params).
  *
- * Maintains the set of unspent outputs across canonical blocks.
- * Generic -- not specific to SIGNATURE_CONTRACT. Any consumer can query
- * by {contract, params} to find unspent outputs for that verifier.
+ * The index reflects the current canonical UTXO set. It is maintained
+ * eagerly: every canonicality change on a block or draft mutates the
+ * index so `getByVerifier` returns a pre-built, correct set with no
+ * read-time filtering.
  *
- * Index maintenance is wired into canonical change callbacks:
- * - Block becomes canonical: add its outputs, remove outputs it claims.
- * - Block becomes non-canonical: reverse (remove its outputs, re-add claimed).
+ *   - Canonical block: add its own outputs, remove the outputs it claims.
+ *   - Non-canonical block: reverse.
+ *   - Canonical draft: remove the outputs its `resolvedClaims` point at.
+ *     (Drafts don't produce indexable outputs -- only the real block
+ *     produced on publication does.)
+ *   - Non-canonical draft: re-add the outputs its `resolvedClaims`
+ *     reserved.
+ *
+ * Wire via `ConsensusService.onCanonicalityChange`: resolve the hash via
+ * `BlockStore` first, then `DraftStore`, and call the appropriate method
+ * on this index.
  */
 
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
 import { Block, BlockStore, collectExtendedOutputs } from '../core/Block.ts';
+import type { BlockDraft } from '../core/BlockDraft.ts';
 
 /** A single unspent output tracked by the index. */
 export interface UtxoEntry {
@@ -24,8 +34,7 @@ export interface UtxoEntry {
   value: number;
   /**
    * Index in the anchor block's extended output vector.
-   * Used to compute claim indices for blocks anchored to blockHash's anchor chain.
-   * For outputs of the genesis block, this equals outputIndex.
+   * For outputs of the genesis block, this equals `outputIndex`.
    */
   extendedIndex: number;
 }
@@ -41,11 +50,8 @@ function outputKey(blockHash: Hash, outputIndex: number): string {
 }
 
 export class UtxoIndex {
-  /**
-   * Map: verifierKey -> Map<outputKey, UtxoEntry>
-   */
+  /** verifierKey -> Map<outputKey, UtxoEntry>. */
   private readonly index = new Map<string, Map<string, UtxoEntry>>();
-
   private readonly store: BlockStore;
 
   constructor(store: BlockStore) {
@@ -60,32 +66,52 @@ export class UtxoIndex {
     return [...entries.values()];
   }
 
-  /** Query all unspent outputs by pre-computed verifier key string. */
+  /** Same as `getByVerifier`, with a pre-computed verifier key string. */
   getByVerifierKey(key: string): UtxoEntry[] {
     const entries = this.index.get(key);
     if (!entries) return [];
     return [...entries.values()];
   }
 
-  /** Called when a block becomes canonical. */
+  // -- Block-level canonicality ------------------------------------
+
+  /** Called when a real block becomes canonical. */
   blockBecameCanonical(block: Block): void {
-    // 1. Add this block's own outputs to the index
     this.addBlockOutputs(block);
-
-    // 2. Remove outputs claimed by this block
-    this.removeClaimedOutputs(block);
+    this.removeBlockClaimedOutputs(block);
   }
 
-  /** Called when a block becomes non-canonical. Reverses the above. */
+  /** Called when a real block becomes non-canonical. Reverses the above. */
   blockBecameNonCanonical(block: Block): void {
-    // 1. Remove this block's own outputs from the index
     this.removeBlockOutputs(block);
-
-    // 2. Re-add outputs that this block had claimed
-    this.reAddClaimedOutputs(block);
+    this.reAddBlockClaimedOutputs(block);
   }
 
-  /** Add a block's outputs to the index. */
+  // -- Draft-level canonicality ------------------------------------
+
+  /**
+   * Called when a draft becomes canonical. Removes each output in the
+   * draft's `resolvedClaims` from the index -- these UTXOs are now
+   * reserved for this (local-only, phantom) draft.
+   *
+   * Drafts do not produce UTXOs: their own outputs are not indexed,
+   * since they become spendable only when the draft publishes as a real
+   * block (at which point `blockBecameCanonical` adds them).
+   */
+  draftBecameCanonical(draft: BlockDraft): void {
+    this.removeDraftClaimedOutputs(draft);
+  }
+
+  /**
+   * Called when a draft becomes non-canonical. Re-adds the outputs its
+   * `resolvedClaims` had reserved.
+   */
+  draftBecameNonCanonical(draft: BlockDraft): void {
+    this.reAddDraftClaimedOutputs(draft);
+  }
+
+  // -- Internal: block path ----------------------------------------
+
   private addBlockOutputs(block: Block): void {
     for (let i = 0; i < block.outputs.length; i++) {
       const output = block.outputs[i];
@@ -97,12 +123,6 @@ export class UtxoIndex {
         entries = new Map();
         this.index.set(vKey, entries);
       }
-
-      // Compute extendedIndex: for blocks anchored to this block's parent,
-      // this output appears at index i in the block's own outputs, which
-      // maps to index i in the extended vector of the parent chain.
-      // For the consuming block, claim index = ownOutputs.length + extendedIndex.
-      // We store the position within the extended vector of the block itself.
       entries.set(oKey, {
         blockHash: block.hash,
         outputIndex: i,
@@ -112,7 +132,6 @@ export class UtxoIndex {
     }
   }
 
-  /** Remove a block's outputs from the index. */
   private removeBlockOutputs(block: Block): void {
     for (let i = 0; i < block.outputs.length; i++) {
       const output = block.outputs[i];
@@ -128,17 +147,16 @@ export class UtxoIndex {
   }
 
   /**
-   * Remove outputs claimed by a block.
-   * Claims with index >= block.outputs.length target the anchor's extended vector.
+   * Remove outputs a real block claims via its index-based `claims: Index[]`
+   * (walking the anchor's extended output vector).
    */
-  private removeClaimedOutputs(block: Block): void {
-    if (Hash.equals(block.anchor, ZERO_HASH)) return; // genesis
+  private removeBlockClaimedOutputs(block: Block): void {
+    if (Hash.equals(block.anchor, ZERO_HASH)) return;
     if (block.claims.length === 0) return;
 
     const anchorBlock = this.store.get(block.anchor);
     if (!anchorBlock) return;
 
-    // Collect the extended outputs of the anchor to resolve claim targets
     const anchorExtended = collectExtendedOutputs(anchorBlock, this.store);
     const anchorExtendedSources = this.resolveExtendedSources(anchorBlock);
     const ownOutputCount = block.outputs.length;
@@ -154,7 +172,6 @@ export class UtxoIndex {
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
       const oKey = outputKey(source.blockHash, source.outputIndex);
-
       const entries = this.index.get(vKey);
       if (entries) {
         entries.delete(oKey);
@@ -163,10 +180,8 @@ export class UtxoIndex {
     }
   }
 
-  /**
-   * Re-add outputs that were claimed by a now-non-canonical block.
-   */
-  private reAddClaimedOutputs(block: Block): void {
+  /** Re-add outputs a non-canonical block had claimed via index-based claims. */
+  private reAddBlockClaimedOutputs(block: Block): void {
     if (Hash.equals(block.anchor, ZERO_HASH)) return;
     if (block.claims.length === 0) return;
 
@@ -188,7 +203,6 @@ export class UtxoIndex {
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
       const oKey = outputKey(source.blockHash, source.outputIndex);
-
       let entries = this.index.get(vKey);
       if (!entries) {
         entries = new Map();
@@ -204,9 +218,104 @@ export class UtxoIndex {
   }
 
   /**
-   * Resolve which original (blockHash, outputIndex) each position in the
-   * extended output vector maps to. Walks the anchor chain.
+   * Remove a single `{blockHash, outputIndex}` from the index. Used when
+   * a canonical draft adopts an output mid-generation (not via its
+   * initial `resolvedClaims`, so no `draftBecameCanonical` would fire).
+   * Idempotent: if the entry is already removed, no-op.
    */
+  removeSpentOutput(blockHash: Hash, outputIndex: number): void {
+    const block = this.store.get(blockHash);
+    if (!block) return;
+    if (outputIndex >= block.outputs.length) return;
+    const output = block.outputs[outputIndex];
+
+    const vKey = verifierKey(output.verifier.contract, output.verifier.params);
+    const oKey = outputKey(blockHash, outputIndex);
+    const entries = this.index.get(vKey);
+    if (entries) {
+      entries.delete(oKey);
+      if (entries.size === 0) this.index.delete(vKey);
+    }
+  }
+
+  /**
+   * Re-add a single `{blockHash, outputIndex}` to the index. Symmetric
+   * counterpart to `removeSpentOutput`: used when a draft releases an
+   * adopted-but-unconsumed output (e.g. on draft cancellation after
+   * publishing, when the contract didn't need all pre-queued inputs).
+   * Idempotent.
+   */
+  reAddUnspentOutput(blockHash: Hash, outputIndex: number): void {
+    const block = this.store.get(blockHash);
+    if (!block) return;
+    if (outputIndex >= block.outputs.length) return;
+    const output = block.outputs[outputIndex];
+
+    const vKey = verifierKey(output.verifier.contract, output.verifier.params);
+    const oKey = outputKey(blockHash, outputIndex);
+    let entries = this.index.get(vKey);
+    if (!entries) {
+      entries = new Map();
+      this.index.set(vKey, entries);
+    }
+    entries.set(oKey, {
+      blockHash,
+      outputIndex,
+      value: output.value,
+      extendedIndex: outputIndex,
+    });
+  }
+
+  // -- Internal: draft path ----------------------------------------
+
+  /**
+   * Remove each `{block, outputIndex}` in the draft's `resolvedClaims`.
+   * Resolved claims are direct references -- no extended-vector walk
+   * needed.
+   */
+  private removeDraftClaimedOutputs(draft: BlockDraft): void {
+    for (const rc of draft.resolvedClaims) {
+      const producing = this.store.get(rc.block);
+      if (!producing) continue;
+      if (rc.outputIndex >= producing.outputs.length) continue;
+      const output = producing.outputs[rc.outputIndex];
+
+      const vKey = verifierKey(output.verifier.contract, output.verifier.params);
+      const oKey = outputKey(rc.block, rc.outputIndex);
+      const entries = this.index.get(vKey);
+      if (entries) {
+        entries.delete(oKey);
+        if (entries.size === 0) this.index.delete(vKey);
+      }
+    }
+  }
+
+  /** Re-add outputs a non-canonical draft had reserved. */
+  private reAddDraftClaimedOutputs(draft: BlockDraft): void {
+    for (const rc of draft.resolvedClaims) {
+      const producing = this.store.get(rc.block);
+      if (!producing) continue;
+      if (rc.outputIndex >= producing.outputs.length) continue;
+      const output = producing.outputs[rc.outputIndex];
+
+      const vKey = verifierKey(output.verifier.contract, output.verifier.params);
+      const oKey = outputKey(rc.block, rc.outputIndex);
+      let entries = this.index.get(vKey);
+      if (!entries) {
+        entries = new Map();
+        this.index.set(vKey, entries);
+      }
+      entries.set(oKey, {
+        blockHash: rc.block,
+        outputIndex: rc.outputIndex,
+        value: output.value,
+        extendedIndex: rc.outputIndex,
+      });
+    }
+  }
+
+  // -- Extended-vector source resolution ----------------------------
+
   private resolveExtendedSources(
     block: Block,
   ): ({ blockHash: Hash; outputIndex: number } | null)[] {
@@ -216,7 +325,6 @@ export class UtxoIndex {
   private resolveExtendedSourcesInner(
     block: Block,
   ): ({ blockHash: Hash; outputIndex: number } | null)[] {
-    // Own outputs
     const result: ({ blockHash: Hash; outputIndex: number } | null)[] = [];
     for (let i = 0; i < block.outputs.length; i++) {
       result.push({ blockHash: block.hash, outputIndex: i });
@@ -230,7 +338,6 @@ export class UtxoIndex {
     const anchorSources = this.resolveExtendedSourcesInner(anchorBlock);
     const anchorExtended = collectExtendedOutputs(anchorBlock, this.store);
 
-    // Build claim mask to identify surviving outputs
     const ownOutputCount = block.outputs.length;
     const claimedExtIndices = new Set<number>();
     for (const claimIdx of block.claims) {
@@ -239,7 +346,6 @@ export class UtxoIndex {
       }
     }
 
-    // Add surviving anchor outputs (not claimed by this block)
     for (let i = 0; i < anchorExtended.length; i++) {
       if (!claimedExtIndices.has(i)) {
         result.push(i < anchorSources.length ? anchorSources[i] : null);

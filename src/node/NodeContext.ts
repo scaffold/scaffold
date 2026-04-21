@@ -233,14 +233,20 @@ export class NodeContext {
     // removed -- anchor-chain Rule 1/2 in ConsensusModule is stricter
     // than the old margin check. See docs/protocol/draft-blocks.md.
 
-    // 5e. Wire UtxoIndex to canonicality changes
+    // 5e. Eagerly mirror canonicality into the UtxoIndex. Resolve via
+    //     BlockStore first, then DraftStore: consensus fires for both
+    //     phantom drafts and real blocks.
     this.consensus.onCanonicalityChange((hash, canonical) => {
       const block = this.store.get(hash);
-      if (!block) return;
-      if (canonical) {
-        this.utxoIndex.blockBecameCanonical(block);
-      } else {
-        this.utxoIndex.blockBecameNonCanonical(block);
+      if (block) {
+        if (canonical) this.utxoIndex.blockBecameCanonical(block);
+        else this.utxoIndex.blockBecameNonCanonical(block);
+        return;
+      }
+      const draft = this.draftStore.get(hash);
+      if (draft) {
+        if (canonical) this.utxoIndex.draftBecameCanonical(draft);
+        else this.utxoIndex.draftBecameNonCanonical(draft);
       }
     });
 
@@ -301,15 +307,26 @@ export class NodeContext {
     });
 
     // 7. Create built-in DraftStrategy and combine with user strategies.
-    //    Default enableGeneration to only registered contracts so that
-    //    outputs for unregistered contracts don't waste inFlight slots.
+    //    Default enableGeneration to registered contracts EXCEPT SIGNATURE
+    //    (signature outputs have no generation semantics -- they're
+    //    consumed by whoever holds the matching private key, not "generated
+    //    against"). Otherwise every autoBalance-produced change output
+    //    would trigger a spurious draft that reserves it against future
+    //    funding needs.
     const contracts = this._contracts;
     const enableGeneration = config.enableGeneration ??
-      ((hash: Hash) => contracts.has(hash.toHex()));
+      ((hash: Hash) =>
+        contracts.has(hash.toHex()) && !Hash.equals(hash, SIGNATURE_CONTRACT));
     const draftStrategy = new DraftStrategy(
       { enableGeneration },
       this.generation,
     );
+    // DraftStrategy tracks in-flight per {block, outputIndex}. When a
+    // draft releases an unused pre-queue output, tell the strategy so
+    // it can clear the corresponding in-flight entry.
+    this.generation.setOutputReleasedHook((block, outputIndex) => {
+      draftStrategy.complete(block, outputIndex);
+    });
     const strategies: Strategy[] = [
       draftStrategy,
       ...(config.strategies ?? []),
@@ -489,11 +506,15 @@ export class NodeContext {
     };
 
     const block = this._blockCreator.createBlock(spec, this._privateKey);
+    // Cancel the draft BEFORE processing the published block so the
+    // draft's phantom claims are cleared out of OutputClaimService and
+    // consensus before the real block (which claims the same outputs)
+    // is evaluated. Otherwise the two claimants conflict and the newly
+    // published block loses canonicality to its own source draft.
+    this.draftManager.cancelDraft(draft.draftId);
     if (block) {
       this.reactiveLayer.processBlock(block, null);
     }
-
-    this.draftManager.cancelDraft(draft.draftId);
   }
 
   /** Find the deepest common ancestor of a set of block hashes. */

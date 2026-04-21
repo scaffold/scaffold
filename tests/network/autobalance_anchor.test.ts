@@ -23,7 +23,7 @@ import { Scaffold } from '../../src/Scaffold.ts';
 import { computeDemoGenesis, demoPrivateKey } from '../../src/genesis.ts';
 import { makeHelloRequest } from '../../src/contracts/HelloContract.ts';
 
-Deno.test('autoBalance: claim resolves correctly when anchor is not the UTXO producer', () => {
+Deno.test('autoBalance: claim resolves correctly when anchor is not the UTXO producer', async () => {
   const genesis = computeDemoGenesis(['a']);
   const node = new Scaffold({
     privateKey: demoPrivateKey('a'),
@@ -57,4 +57,6 @@ Deno.test('autoBalance: claim resolves correctly when anchor is not the UTXO pro
       funded.hash.toHex().slice(0, 10)
     })`,
   );
+
+  await node.close();
 });

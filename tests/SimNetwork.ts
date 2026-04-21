@@ -68,7 +68,9 @@ export class SimNode {
     this.sampling = this.ctx.get(SamplingService);
     this.trust = this.ctx.get(TrustService);
 
-    // UtxoIndex + canonicality wiring (needed for gossip backfill)
+    // UtxoIndex: eagerly mirror canonicality. SimNetwork has no
+    // DraftStore wired, so only real-block events need handling.
+    const outputClaims = this.ctx.get(OutputClaimService);
     const utxoIndex = new UtxoIndex(this.store);
     this.consensus.onCanonicalityChange((hash, canonical) => {
       const block = this.store.get(hash);
@@ -93,7 +95,6 @@ export class SimNode {
     };
 
     // Wire claim resolutions to gossip claim history
-    const outputClaims = this.ctx.get(OutputClaimService);
     outputClaims.onResolution((claimant, target) => {
       const source = this.store.get(target.block);
       if (!source) return;

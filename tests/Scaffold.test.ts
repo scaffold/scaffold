@@ -55,7 +55,7 @@ Deno.test('Scaffold: context getter returns NodeContext', () => {
   assert(scaffold.context instanceof NodeContext);
 });
 
-Deno.test('Scaffold: put() creates and processes a block', () => {
+Deno.test('Scaffold: put() creates and processes a block', async () => {
   const scaffold = new Scaffold(defaultConfig());
   const ctx = scaffold.context;
   const genesis = ctx.store.get(ctx.genesisHash)!;
@@ -75,9 +75,11 @@ Deno.test('Scaffold: put() creates and processes a block', () => {
 
   // The block should be canonical (no conflicts)
   assert(ctx.consensus.isCanonical(result.hash));
+
+  await scaffold.close();
 });
 
-Deno.test('Scaffold: fetch() returns a handle with close()', () => {
+Deno.test('Scaffold: fetch() returns a handle with close()', async () => {
   const scaffold = new Scaffold(defaultConfig());
 
   const results: unknown[] = [];
@@ -91,9 +93,10 @@ Deno.test('Scaffold: fetch() returns a handle with close()', () => {
 
   // Close should not throw
   handle.close();
+  await scaffold.close();
 });
 
-Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', () => {
+Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', async () => {
   const scaffold = new Scaffold(defaultConfig());
 
   const contractHash = Hash.digest('fetch-contract');
@@ -119,6 +122,7 @@ Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', ()
   assert(results[0] !== null);
 
   handle.close();
+  await scaffold.close();
 });
 
 Deno.test('Scaffold: close() does not throw', async () => {
@@ -163,6 +167,8 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
 
   // The aggregation block should aggregate the chain blocks
   assert(aggBlock.aggregates.length > 0, 'aggregation block should have aggregates');
+
+  await scaffold.close();
 });
 
 Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async () => {
@@ -195,6 +201,8 @@ Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async (
     aggBlocks.length >= 2,
     `expected at least 2 aggregation blocks, got ${aggBlocks.length}`,
   );
+
+  await scaffold.close();
 });
 
 Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', async () => {

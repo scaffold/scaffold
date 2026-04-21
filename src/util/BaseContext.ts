@@ -44,12 +44,12 @@ export abstract class BaseContext<DerivedType> {
 
         const disposer = obj[Symbol.dispose];
         if (disposer !== undefined) {
-          this.destructors.push(disposer);
+          this.destructors.push(disposer.bind(obj));
         }
 
         const asyncDisposer = obj[Symbol.asyncDispose];
         if (asyncDisposer !== undefined) {
-          this.destructors.push(asyncDisposer);
+          this.destructors.push(asyncDisposer.bind(obj));
         }
       } finally {
         this.constructing.delete(Type);
