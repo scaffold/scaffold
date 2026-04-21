@@ -269,3 +269,86 @@ Deno.test('BlockVerification: getStatus unknown stays unknown for unqueried bloc
   const module = new BlockVerificationModule(w.provider);
   assertEquals(module.getStatus(hashOf('feed')), 'unknown');
 });
+
+Deno.test('BlockVerification: onStatusChanged fires verifying then passed', async () => {
+  const w = makeWorld();
+  const block = hashOf('ab');
+  const target = hashOf('11');
+  w.claimCounts.set(block.toPrimitive(), 1);
+  w.verifiers.set(outputKey(target, 0), verifier('aa'));
+
+  const module = new BlockVerificationModule(w.provider);
+  const events: { hash: string; status: string }[] = [];
+  module.onStatusChanged((h, s) => events.push({ hash: h.toHex(), status: s }));
+
+  const p = module.verify(block);
+  assertEquals(events, [{ hash: block.toHex(), status: 'verifying' }]);
+
+  w.fireResolution(block, { block: target, outputIndex: 0 });
+  await p;
+  assertEquals(events, [
+    { hash: block.toHex(), status: 'verifying' },
+    { hash: block.toHex(), status: 'passed' },
+  ]);
+});
+
+Deno.test('BlockVerification: onStatusChanged fires failed on rejection', async () => {
+  const w = makeWorld();
+  const block = hashOf('cd');
+  const target = hashOf('22');
+  const v = verifier('bb');
+  w.claimCounts.set(block.toPrimitive(), 1);
+  w.verifiers.set(outputKey(target, 0), v);
+  w.verifyResults.set(verifyKey(block, v), { accepted: false, reason: 'nope' });
+
+  const module = new BlockVerificationModule(w.provider);
+  const events: string[] = [];
+  module.onStatusChanged((_h, s) => events.push(s));
+
+  const p = module.verify(block);
+  w.fireResolution(block, { block: target, outputIndex: 0 });
+  await p;
+  assertEquals(events, ['verifying', 'failed']);
+});
+
+Deno.test('BlockVerification: onStatusChanged does not fire for cached-hit verify()', async () => {
+  const w = makeWorld();
+  const block = hashOf('ab');
+  const target = hashOf('11');
+  w.claimCounts.set(block.toPrimitive(), 1);
+  w.verifiers.set(outputKey(target, 0), verifier('aa'));
+
+  const module = new BlockVerificationModule(w.provider);
+
+  // First verify() completes so the result is cached.
+  w.fireResolution(block, { block: target, outputIndex: 0 });
+  await module.verify(block);
+
+  // Only NOW subscribe. A second verify() should short-circuit to the
+  // cached result and fire nothing.
+  const events: string[] = [];
+  module.onStatusChanged((_h, s) => events.push(s));
+
+  await module.verify(block);
+  assertEquals(events, []);
+});
+
+Deno.test('BlockVerification: onStatusChanged unsubscribe stops further events', async () => {
+  const w = makeWorld();
+  const block = hashOf('ab');
+  const target = hashOf('11');
+  w.claimCounts.set(block.toPrimitive(), 1);
+  w.verifiers.set(outputKey(target, 0), verifier('aa'));
+
+  const module = new BlockVerificationModule(w.provider);
+  const events: string[] = [];
+  const unsubscribe = module.onStatusChanged((_h, s) => events.push(s));
+
+  const p = module.verify(block);
+  assertEquals(events, ['verifying']);
+  unsubscribe();
+
+  w.fireResolution(block, { block: target, outputIndex: 0 });
+  await p;
+  assertEquals(events, ['verifying']); // 'passed' event suppressed
+});

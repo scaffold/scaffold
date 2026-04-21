@@ -93,6 +93,11 @@ export class BlockVerificationModule {
     import('./ContractHost.ts').ExecutionResult
   >();
 
+  /** Listeners notified on each status transition. */
+  private readonly _statusListeners: (
+    (hash: Hash, status: VerificationStatus) => void
+  )[] = [];
+
   /** Resumption waiters: when a new resolution arrives, check if any deferred verify can proceed. */
   private readonly _waiters = new Map<HashPrimitive, (() => void)[]>();
 
@@ -122,9 +127,11 @@ export class BlockVerificationModule {
 
     const promise = this._verifyOnce(blockHash).then((result) => {
       this._results.set(key, result);
+      this._fireStatus(blockHash, result.accepted ? 'passed' : 'failed');
       return result;
     });
     this._inflight.set(key, promise);
+    this._fireStatus(blockHash, 'verifying');
     promise.finally(() => {
       if (this._inflight.get(key) === promise) this._inflight.delete(key);
     });
@@ -143,6 +150,29 @@ export class BlockVerificationModule {
     if (cached) return cached.accepted ? 'passed' : 'failed';
     if (this._inflight.has(key)) return 'verifying';
     return 'unknown';
+  }
+
+  /**
+   * Register a listener for status transitions. Fires on each change:
+   * `unknown -> verifying` when a fresh `verify()` call begins, and
+   * `verifying -> passed|failed` when it settles. Returns an unsubscribe
+   * function.
+   *
+   * Does not fire for cached-hit `verify()` calls (status was already
+   * terminal).
+   */
+  onStatusChanged(
+    cb: (hash: Hash, status: VerificationStatus) => void,
+  ): () => void {
+    this._statusListeners.push(cb);
+    return () => {
+      const i = this._statusListeners.indexOf(cb);
+      if (i >= 0) this._statusListeners.splice(i, 1);
+    };
+  }
+
+  private _fireStatus(hash: Hash, status: VerificationStatus): void {
+    for (const cb of this._statusListeners) cb(hash, status);
   }
 
   // -- Internals --------------------------------------------------
