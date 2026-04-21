@@ -5,6 +5,9 @@ import type { Verifier } from './BlockCreationModule.ts';
 
 // -- Types ----------------------------------------------------------
 
+/** Block-level verification status, as reported by `getStatus`. */
+export type VerificationStatus = 'unknown' | 'verifying' | 'passed' | 'failed';
+
 /**
  * Provider interface for BlockVerificationModule.
  *
@@ -79,6 +82,17 @@ export class BlockVerificationModule {
     Promise<import('./ContractHost.ts').ExecutionResult>
   >();
 
+  /**
+   * Final results per block, populated once the corresponding verify()
+   * promise settles. Block content is immutable, so a result is valid
+   * forever -- we never evict, and `getStatus` reports `passed`/`failed`
+   * from this map once set.
+   */
+  private readonly _results = new Map<
+    HashPrimitive,
+    import('./ContractHost.ts').ExecutionResult
+  >();
+
   /** Resumption waiters: when a new resolution arrives, check if any deferred verify can proceed. */
   private readonly _waiters = new Map<HashPrimitive, (() => void)[]>();
 
@@ -98,15 +112,37 @@ export class BlockVerificationModule {
    */
   verify(blockHash: Hash): Promise<import('./ContractHost.ts').ExecutionResult> {
     const key = blockHash.toPrimitive();
+
+    // Cache hit: block content is immutable, so past results are final.
+    const cached = this._results.get(key);
+    if (cached) return Promise.resolve(cached);
+
     const existing = this._inflight.get(key);
     if (existing) return existing;
 
-    const promise = this._verifyOnce(blockHash);
+    const promise = this._verifyOnce(blockHash).then((result) => {
+      this._results.set(key, result);
+      return result;
+    });
     this._inflight.set(key, promise);
     promise.finally(() => {
       if (this._inflight.get(key) === promise) this._inflight.delete(key);
     });
     return promise;
+  }
+
+  /**
+   * Synchronous status query. Returns `'unknown'` before verification
+   * has ever been requested, `'verifying'` while a verify() promise is
+   * in flight, and `'passed'`/`'failed'` once it has settled. The latter
+   * two are final -- block content is immutable.
+   */
+  getStatus(blockHash: Hash): VerificationStatus {
+    const key = blockHash.toPrimitive();
+    const cached = this._results.get(key);
+    if (cached) return cached.accepted ? 'passed' : 'failed';
+    if (this._inflight.has(key)) return 'verifying';
+    return 'unknown';
   }
 
   // -- Internals --------------------------------------------------

@@ -229,3 +229,43 @@ Deno.test('BlockVerification: duplicate resolutions are deduplicated', async () 
   w.fireResolution(block, { block: targetB, outputIndex: 0 });
   assertEquals((await promise).accepted, true);
 });
+
+Deno.test('BlockVerification: getStatus reports unknown / verifying / passed / failed', async () => {
+  const w = makeWorld();
+  const block = hashOf('ab');
+  const target = hashOf('11');
+  w.claimCounts.set(block.toPrimitive(), 1);
+  w.verifiers.set(outputKey(target, 0), verifier('aa'));
+
+  const module = new BlockVerificationModule(w.provider);
+
+  // Before anything: unknown.
+  assertEquals(module.getStatus(block), 'unknown');
+
+  // In-flight: verifying (claim not resolved yet).
+  const p = module.verify(block);
+  assertEquals(module.getStatus(block), 'verifying');
+
+  // Settles -> passed.
+  w.fireResolution(block, { block: target, outputIndex: 0 });
+  await p;
+  assertEquals(module.getStatus(block), 'passed');
+
+  // Failed case on a different block.
+  const block2 = hashOf('cd');
+  const target2 = hashOf('22');
+  const v2 = verifier('bb');
+  w.claimCounts.set(block2.toPrimitive(), 1);
+  w.verifiers.set(outputKey(target2, 0), v2);
+  w.verifyResults.set(verifyKey(block2, v2), { accepted: false, reason: 'bad' });
+
+  w.fireResolution(block2, { block: target2, outputIndex: 0 });
+  await module.verify(block2);
+  assertEquals(module.getStatus(block2), 'failed');
+});
+
+Deno.test('BlockVerification: getStatus unknown stays unknown for unqueried blocks', () => {
+  const w = makeWorld();
+  const module = new BlockVerificationModule(w.provider);
+  assertEquals(module.getStatus(hashOf('feed')), 'unknown');
+});
