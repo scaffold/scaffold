@@ -145,72 +145,10 @@ Deno.test('cancelDraft: removes from consensus, cancels generator, removes from 
   assertEquals(ctx.draftStore.get(draft.draftId), undefined);
 });
 
-Deno.test('margin-based cancel: draft stays alive when non-canonical but margin < declaredWeight', () => {
-  const ctx = setupWithGenesis();
-
-  // Create two drafts on the same anchor -- they'll conflict once
-  // we declare a conflict between them
-  const draft1 = ctx.manager.createDraft({
-    resolvedClaims: [],
-    outputs: [],
-    declaredWeight: 50,
-    anchor: ctx.genesis.hash,
-  });
-
-  // Add a competing block that's slightly stronger
-  const competitor: TestEntity = {
-    kind: 'block',
-    hash: h('competitor'),
-    anchor: ctx.genesis.hash,
-    weight: [55],
-  };
-  ctx.provider.add(competitor);
-  ctx.consensus.addBlock(competitor.hash);
-  ctx.consensus.setVerifiedWeight(competitor.hash, [55]);
-
-  // Declare conflict
-  ctx.consensus.addConflict(draft1.draftId, competitor.hash);
-
-  // Draft loses (50 < 55), margin = 5 which is < declaredWeight (50)
-  assertFalse(ctx.consensus.isCanonical(draft1.draftId));
-  ctx.manager.checkMargin(draft1.draftId);
-
-  // Draft should still be alive
-  assert(ctx.draftStore.get(draft1.draftId) !== undefined);
-});
-
-Deno.test('margin-based cancel: draft cancelled when margin exceeds declaredWeight', () => {
-  const ctx = setupWithGenesis();
-
-  const draft = ctx.manager.createDraft({
-    resolvedClaims: [],
-    outputs: [],
-    declaredWeight: 10,
-    anchor: ctx.genesis.hash,
-  });
-
-  // Add a much stronger competitor
-  const competitor: TestEntity = {
-    kind: 'block',
-    hash: h('strong-competitor'),
-    anchor: ctx.genesis.hash,
-    weight: [100],
-  };
-  ctx.provider.add(competitor);
-  ctx.consensus.addBlock(competitor.hash);
-  ctx.consensus.setVerifiedWeight(competitor.hash, [100]);
-
-  // Declare conflict
-  ctx.consensus.addConflict(draft.draftId, competitor.hash);
-
-  // Draft loses (10 < 100), margin = 90 which is > declaredWeight (10)
-  assertFalse(ctx.consensus.isCanonical(draft.draftId));
-  ctx.manager.checkMargin(draft.draftId);
-
-  // Draft should be cancelled
-  assertEquals(ctx.draftStore.get(draft.draftId), undefined);
-  assert(ctx.generator.cancelled.has(draft.draftId.toPrimitive()));
-});
+// Margin-based draft cancellation is intentionally removed; canonicality-
+// driven deprioritization in GenerationModule + anchor-chain Rule 1/2 in
+// ConsensusModule cover the same ground more strictly. See
+// docs/protocol/draft-blocks.md#generation-deprioritization-and-restart.
 
 Deno.test('recreation: cancel old draft, create new -- no double-counting', () => {
   const ctx = setupWithGenesis();

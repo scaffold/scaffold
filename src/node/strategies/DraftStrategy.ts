@@ -4,8 +4,17 @@ import { makeAggregationOutput } from '../../contracts/AggregationContract.ts';
 import { ClaimIntent } from '../../core/BlockDraft.ts';
 import { Output } from '../../core/BlockCreationModule.ts';
 import { ConsensusService } from '../../core/ConsensusService.ts';
-import { ContractGenerator } from '../../core/ContractGenerator.ts';
 import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
+
+/**
+ * Minimal interface DraftStrategy needs from the generation layer --
+ * waking a blocked contract when a matching output becomes available.
+ * Both the legacy `ContractGenerator` and the new `GenerationService`
+ * satisfy this.
+ */
+export interface BlockedGeneratorNotifier {
+  notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean;
+}
 
 /** Action type for creating a draft (handled by ReactiveLayer). */
 export interface CreateDraftAction {
@@ -42,12 +51,12 @@ const DEFAULT_CONFIG = {
 export class DraftStrategy implements Strategy {
   private readonly config: { minValue: number; maxConcurrent: number };
   private readonly inFlight = new Set<string>();
-  private readonly _contractGenerator?: ContractGenerator;
+  private readonly _notifier?: BlockedGeneratorNotifier;
   private readonly _enableGeneration: (contractHash: Hash) => boolean;
 
-  constructor(config?: DraftStrategyConfig, contractGenerator?: ContractGenerator) {
+  constructor(config?: DraftStrategyConfig, notifier?: BlockedGeneratorNotifier) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this._contractGenerator = contractGenerator;
+    this._notifier = notifier;
     this._enableGeneration = config?.enableGeneration ?? (() => true);
   }
 
@@ -59,7 +68,7 @@ export class DraftStrategy implements Strategy {
 
     // First pass: resume blocked generators (no concurrency limit --
     // resuming feeds an existing draft, doesn't create a new one).
-    if (this._contractGenerator) {
+    if (this._notifier) {
       for (const change of newlyCanonical) {
         const block = event.store.get(change.hash);
         if (!block) continue;
@@ -71,7 +80,7 @@ export class DraftStrategy implements Strategy {
           const trackingKey = `${change.hash.toPrimitive()}:${i}`;
           if (this.inFlight.has(trackingKey)) continue;
 
-          const resumed = this._contractGenerator.notifyNewOutput(
+          const resumed = this._notifier.notifyNewOutput(
             change.hash,
             i,
             output,

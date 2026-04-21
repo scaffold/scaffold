@@ -75,7 +75,7 @@ Deno.test('BlockVerification: empty-claims block resolves true immediately', asy
   w.claimCounts.set(block.toPrimitive(), 0);
 
   const module = new BlockVerificationModule(w.provider);
-  assertEquals(await module.verify(block), true);
+  assertEquals((await module.verify(block)).accepted, true);
   assertEquals(w.verifyCalls.length, 0);
 });
 
@@ -94,7 +94,7 @@ Deno.test('BlockVerification: all claims accept -> true', async () => {
   w.fireResolution(block, { block: targetA, outputIndex: 0 });
   w.fireResolution(block, { block: targetB, outputIndex: 0 });
 
-  assertEquals(await module.verify(block), true);
+  assertEquals((await module.verify(block)).accepted, true);
   assertEquals(w.verifyCalls.length, 2);
 });
 
@@ -116,7 +116,7 @@ Deno.test('BlockVerification: fail-fast on first reject', async () => {
   w.fireResolution(block, { block: targetA, outputIndex: 0 });
   w.fireResolution(block, { block: targetB, outputIndex: 0 });
 
-  assertEquals(await module.verify(block), false);
+  assertEquals((await module.verify(block)).accepted, false);
   // Note: we still dispatch both (no cancellation today). Fail-fast is on the aggregate
   // result, not on in-flight tasks.
   assertEquals(w.verifyCalls.length, 2);
@@ -150,7 +150,7 @@ Deno.test('BlockVerification: deferred on unresolved claims; resumes when resolu
   // Second resolution arrives.
   w.fireResolution(block, { block: targetB, outputIndex: 0 });
 
-  assertEquals(await promise, true);
+  assertEquals((await promise).accepted, true);
   assertEquals(w.verifyCalls.length, 2);
 });
 
@@ -168,8 +168,8 @@ Deno.test('BlockVerification: concurrent verify() calls share the in-flight prom
   const b = module.verify(block);
   // They must be the same promise instance.
   assert(a === b, 'concurrent verify() should share one promise');
-  assertEquals(await a, true);
-  assertEquals(await b, true);
+  assertEquals((await a).accepted, true);
+  assertEquals((await b).accepted, true);
   assertEquals(w.verifyCalls.length, 1);
 });
 
@@ -183,7 +183,7 @@ Deno.test('BlockVerification: unknown target verifier rejects', async () => {
   const module = new BlockVerificationModule(w.provider);
   w.fireResolution(block, { block: target, outputIndex: 0 });
 
-  assertEquals(await module.verify(block), false);
+  assertEquals((await module.verify(block)).accepted, false);
   assertEquals(w.verifyCalls.length, 0);
 });
 
@@ -199,7 +199,7 @@ Deno.test('BlockVerification: resolutions accumulated before verify() call are u
 
   // Now the block arrives with claim count.
   w.claimCounts.set(block.toPrimitive(), 1);
-  assertEquals(await module.verify(block), true);
+  assertEquals((await module.verify(block)).accepted, true);
   assertEquals(w.verifyCalls.length, 1);
 });
 
@@ -227,5 +227,5 @@ Deno.test('BlockVerification: duplicate resolutions are deduplicated', async () 
   assertEquals(settled, false, 'duplicate should not unblock second claim');
 
   w.fireResolution(block, { block: targetB, outputIndex: 0 });
-  assertEquals(await promise, true);
+  assertEquals((await promise).accepted, true);
 });

@@ -4,7 +4,7 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { BlockDraft, ClaimIntent, createDraft, DraftStore } from './BlockDraft.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
-import { GeneratorHandle, GeneratorProvider } from './Generator.ts';
+import { type GeneratorHandle, type GeneratorProvider } from './Generator.ts';
 
 /**
  * Orchestrates the draft lifecycle: creation, consensus registration,
@@ -81,41 +81,4 @@ export class DraftManager {
     }
   }
 
-  /**
-   * Check a draft for margin-based cancellation.
-   * Cancels when the draft's branch is losing by more than its own declaredWeight.
-   */
-  checkMargin(draftId: Hash): void {
-    const draft = this.store.get(draftId);
-    if (!draft) return;
-
-    if (!this.consensus.isCanonical(draftId)) {
-      // Draft is non-canonical -- check the margin
-      const draftWeight = this.consensus.getEffectiveWeight(draftId);
-      const winner = this.consensus.getConflictWinner(draftId);
-
-      if (!Hash.equals(winner, draftId)) {
-        const winnerWeight = this.consensus.getEffectiveWeight(winner);
-        const margin = winnerWeight - draftWeight;
-
-        if (margin > draft.declaredWeight) {
-          this.cancelDraft(draftId);
-        }
-      }
-    }
-  }
-
-  /**
-   * Handle canonicality changes. Called from consensus listener.
-   * Checks margin-based cancellation for non-canonical drafts.
-   */
-  onCanonicalityChange(hash: Hash, canonical: boolean): void {
-    if (canonical) return;
-
-    // Only care about our drafts
-    const draft = this.store.get(hash);
-    if (!draft) return;
-
-    this.checkMargin(hash);
-  }
 }

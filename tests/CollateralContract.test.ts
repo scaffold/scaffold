@@ -15,7 +15,10 @@ import {
   makeAgainstOutput,
   makeCollateralOutput,
 } from '../src/contracts/CollateralContract.ts';
-import { ExecutionModule, type ExecutionProvider } from '../src/core/ExecutionModule.ts';
+import {
+  ExecutionModuleShim as ExecutionModule,
+  type ExecutionProvider,
+} from './testutil/ExecutionModuleShim.ts';
 import {
   collateralContract,
   decayedValue,

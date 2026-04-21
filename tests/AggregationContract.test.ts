@@ -9,7 +9,7 @@ import {
 } from '../src/core/Block.ts';
 import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
 import { createDraft, DraftStore } from '../src/core/BlockDraft.ts';
-import { ContractGenerator } from '../src/core/ContractGenerator.ts';
+import { ContractGeneratorShim as ContractGenerator } from './testutil/ContractGeneratorShim.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
 import type { Contract } from '../src/contracts/Contract.ts';

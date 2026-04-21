@@ -19,14 +19,11 @@ export type TargetKey = string;
 /** One entry in the module's active-draft registry. */
 interface DraftEntry {
   readonly draftId: Hash;
-  readonly targetKey: TargetKey;
-  readonly anchor: Hash;
-  readonly verifier: Verifier;
-  readonly declaredWeight: number;
+  readonly spec: GenerationSpec;
   canonical: boolean;
 }
 
-/** Fields needed to start a generation. */
+/** Fields describing a generation target. */
 export interface GenerationSpec {
   readonly targetKey: TargetKey;
   readonly anchor: Hash;
@@ -35,36 +32,27 @@ export interface GenerationSpec {
 }
 
 /**
- * Provider interface. The module delegates draft creation, scheduling,
- * and canonicality queries to the caller's environment, keeping the
- * module itself concerned only with target-based lifecycle.
+ * Provider interface. The module delegates restart to the caller's
+ * environment, keeping the module itself concerned only with target-
+ * based tracking and priority.
  */
 export interface GenerationProvider {
   /**
-   * Create a draft in the draft store, register it with consensus, and
-   * return its id. The module passes through `anchor`, `verifier`, and
-   * `declaredWeight` for the draft's initial state. The caller is
-   * responsible for also enqueuing any work needed to produce the draft's
-   * outputs -- the module does not own the execution queue.
-   */
-  createDraft(spec: GenerationSpec): Hash;
-
-  /**
    * Notify the caller that a draft became non-canonical and a restart is
-   * needed. Implementations typically call back into `startGeneration`
-   * after gathering fresh inputs; the module does not force a specific
-   * mechanism.
+   * needed. Implementations typically allocate a new draft (via
+   * DraftManager or equivalent) and re-register it via `register`. The
+   * module does not force a specific mechanism.
    */
-  triggerRestart(previousDraftId: Hash, targetKey: TargetKey): void;
+  requestRestart(previousDraftId: Hash, spec: GenerationSpec): void;
 }
 
 // -- Module ---------------------------------------------------------
 
 /**
  * Tracks in-progress generation drafts and orchestrates restart-on-
- * uncanonical. The module does NOT own contract execution, queue
- * scheduling, or consensus wiring -- those are the service's job (see
- * `GenerationService`).
+ * uncanonical. The module does NOT own draft creation, contract
+ * execution, queue scheduling, or consensus wiring -- those are the
+ * service's job (see `GenerationService`).
  *
  * Key invariants:
  *  - Old drafts are never implicitly cancelled. A draft that lost
@@ -84,9 +72,6 @@ export class GenerationModule {
   /** draftId -> entry. */
   private readonly _drafts = new Map<HashPrimitive, DraftEntry>();
 
-  /** targetKey -> most recent draftId for that target. */
-  private readonly _latestByTarget = new Map<TargetKey, Hash>();
-
   /**
    * Scale factor applied to priority when a draft is non-canonical.
    * Placeholder value -- see TODO.md ("GenerationModule Priority Calibration").
@@ -99,28 +84,25 @@ export class GenerationModule {
   }
 
   /**
-   * Start a new generation for the given target. Creates a draft via the
-   * provider, tracks it, and returns the new draft id.
+   * Register a draft the caller has already created (via DraftManager or
+   * equivalent) as an in-progress generation for the given spec.
    *
-   * If `targetKey` already has an active draft, the new draft is
-   * registered alongside it (caller is restarting). The module does not
-   * cancel the old draft; it simply tracks both until untracked via
-   * `forget`.
+   * Tracking the draft means:
+   *  - `priority(draftId)` returns the draft's current priority.
+   *  - `onCanonicalityChange(draftId, false)` triggers `provider.requestRestart`.
+   *  - The draft is visible to `draftsForTarget(targetKey)`.
+   *
+   * If `targetKey` already has tracked drafts, the new entry coexists --
+   * the caller is typically restarting. The module does not cancel the
+   * old draft.
    */
-  startGeneration(spec: GenerationSpec): Hash {
-    const draftId = this._provider.createDraft(spec);
-
+  register(draftId: Hash, spec: GenerationSpec): void {
     this._drafts.set(draftId.toPrimitive(), {
       draftId,
-      targetKey: spec.targetKey,
-      anchor: spec.anchor,
-      verifier: spec.verifier,
-      declaredWeight: spec.declaredWeight,
+      spec,
       // Draft is assumed canonical at creation; consensus will revise if not.
       canonical: true,
     });
-    this._latestByTarget.set(spec.targetKey, draftId);
-    return draftId;
   }
 
   /**
@@ -128,7 +110,8 @@ export class GenerationModule {
    * consensus's `onCanonicalityChange` fires on one of our drafts.
    *
    * Flipping to `false`: update entry, ask provider to restart. The
-   * provider is responsible for calling `startGeneration` with fresh inputs.
+   * provider is responsible for allocating a new draft and calling
+   * `register` on it.
    *
    * Flipping to `true`: update entry. Priority naturally returns to full.
    */
@@ -139,7 +122,7 @@ export class GenerationModule {
 
     entry.canonical = canonical;
     if (!canonical) {
-      this._provider.triggerRestart(draftId, entry.targetKey);
+      this._provider.requestRestart(draftId, entry.spec);
     }
   }
 
@@ -151,7 +134,7 @@ export class GenerationModule {
   priority(draftId: Hash): number {
     const entry = this._drafts.get(draftId.toPrimitive());
     if (!entry) return 0;
-    const base = entry.declaredWeight;
+    const base = entry.spec.declaredWeight;
     return entry.canonical ? base : base * this._uncanonicalFactor;
   }
 
@@ -162,22 +145,21 @@ export class GenerationModule {
    * own that.
    */
   forget(draftId: Hash): void {
-    const key = draftId.toPrimitive();
-    const entry = this._drafts.get(key);
-    if (!entry) return;
-    this._drafts.delete(key);
-    if (this._latestByTarget.get(entry.targetKey)?.toPrimitive() === key) {
-      this._latestByTarget.delete(entry.targetKey);
-    }
+    this._drafts.delete(draftId.toPrimitive());
   }
 
   /** Return all tracked draft ids for a given target, in no particular order. */
   draftsForTarget(targetKey: TargetKey): Hash[] {
     const out: Hash[] = [];
     for (const entry of this._drafts.values()) {
-      if (entry.targetKey === targetKey) out.push(entry.draftId);
+      if (entry.spec.targetKey === targetKey) out.push(entry.draftId);
     }
     return out;
+  }
+
+  /** Spec associated with a tracked draft, or undefined. */
+  getSpec(draftId: Hash): GenerationSpec | undefined {
+    return this._drafts.get(draftId.toPrimitive())?.spec;
   }
 
   /** Number of drafts currently tracked. */

@@ -5,8 +5,8 @@ import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { TrustService } from '../src/core/TrustService.ts';
 import { BlockCreationService } from '../src/core/BlockCreationService.ts';
-import { ExecutionService } from '../src/core/ExecutionService.ts';
-import { VerificationService } from '../src/core/VerificationService.ts';
+import { ContractHostService } from '../src/core/ContractHostService.ts';
+import { BlockVerificationService } from '../src/core/BlockVerificationService.ts';
 import { BlockReceivedResult, Coordinator } from '../src/core/Coordinator.ts';
 import { BlockAwareness, PushAction } from '../src/node/RoutingModule.ts';
 import { GossipService } from '../src/node/GossipService.ts';
@@ -44,8 +44,19 @@ export class SimNode {
   readonly gossip: GossipService;
   readonly routing: RoutingService;
   readonly blockCreation: BlockCreationService;
-  readonly execution: ExecutionService;
-  readonly verification: VerificationService;
+  readonly contractHost: ContractHostService;
+  readonly blockVerification: BlockVerificationService;
+
+  /**
+   * Compatibility shim used by older integration tests. Delegates to the
+   * new `contractHost` / `blockVerification` services; new code should
+   * call those directly.
+   */
+  readonly execution: {
+    registerContract(hash: Hash, contract: import('../src/contracts/Contract.ts').Contract): void;
+    getContract(hash: Hash): import('../src/contracts/Contract.ts').Contract | undefined;
+    verifyBlock(hash: Hash): Promise<import('../src/core/ContractHost.ts').ExecutionResult>;
+  };
 
   constructor(id: string) {
     this.id = id;
@@ -69,9 +80,17 @@ export class SimNode {
     this.gossip = new GossipService(this.ctx, utxoIndex);
     this.routing = new RoutingService(this.ctx, this.gossip);
     this.blockCreation = this.ctx.get(BlockCreationService);
-    this.execution = this.ctx.get(ExecutionService);
-    this.verification = this.ctx.get(VerificationService);
+    this.contractHost = this.ctx.get(ContractHostService);
+    this.blockVerification = this.ctx.get(BlockVerificationService);
     this.coordinator = this.ctx.get(Coordinator);
+
+    const host = this.contractHost;
+    const bvs = this.blockVerification;
+    this.execution = {
+      registerContract: (hash, contract) => host.registerContract(hash, contract),
+      getContract: (hash) => host.getContract(hash),
+      verifyBlock: (hash) => bvs.verify(hash),
+    };
 
     // Wire claim resolutions to gossip claim history
     const outputClaims = this.ctx.get(OutputClaimService);

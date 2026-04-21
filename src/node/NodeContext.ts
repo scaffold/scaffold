@@ -16,7 +16,10 @@ import {
   type OutputSpaceProvider,
 } from '../core/OutputSpace.ts';
 import { DraftManager } from '../core/DraftManager.ts';
-import { ContractGenerator } from '../core/ContractGenerator.ts';
+import { ContractHostService } from '../core/ContractHostService.ts';
+import { BlockVerificationService } from '../core/BlockVerificationService.ts';
+import { GenerationService } from './GenerationService.ts';
+import { UtxoIndexService } from './UtxoIndexService.ts';
 import {
   aggregationContract,
   encodeAggregationData,
@@ -44,10 +47,9 @@ import { RoutingService } from './RoutingService.ts';
 import { PushAction } from './RoutingModule.ts';
 import { TrustService } from '../core/TrustService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
-import { ExecutionService } from '../core/ExecutionService.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
-import { UtxoIndex, verifierKey } from './UtxoIndex.ts';
+import { verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
 import { EventLog } from '../core/EventLog.ts';
 
@@ -85,7 +87,7 @@ export class NodeContext {
   readonly coordinator: Coordinator;
   readonly reactiveLayer: ReactiveLayer;
   readonly draftManager: DraftManager;
-  readonly utxoIndex: UtxoIndex;
+  readonly utxoIndex: UtxoIndexService;
 
   // Protocol services (convenience accessors)
   readonly consensus: ConsensusService;
@@ -95,7 +97,28 @@ export class NodeContext {
   readonly trust: TrustService;
   readonly blockCreation: BlockCreationService;
   readonly outputClaims: OutputClaimService;
-  readonly execution: ExecutionService;
+  readonly contractHost: ContractHostService;
+  readonly blockVerification: BlockVerificationService;
+  readonly generation: GenerationService;
+
+  /**
+   * Compatibility adapter preserving the old `execution.verifyBlock` /
+   * `execution.getContract` surface used by many tests. Delegates to the
+   * new `BlockVerificationService` + `ContractHostService`. New code
+   * should call those services directly.
+   *
+   * `verifyBlock` returns `{ accepted: boolean, reason?: string }` --
+   * matching the old `ExecutionResult` shape. The reason is always
+   * `undefined` on acceptance and `'rejected'` on rejection; granular
+   * reasons are logged by `ContractVerificationService` in the reason
+   * fields of individual `ExecutionResult`s, but block-level verify is
+   * a single boolean.
+   */
+  readonly execution: {
+    verifyBlock(hash: Hash): Promise<import('../core/ContractHost.ts').ExecutionResult>;
+    getContract(hash: Hash): Contract | undefined;
+    registerContract(hash: Hash, contract: Contract): void;
+  };
 
   /** Reactive block record set - notifies listeners on block add/update. */
   readonly blocks: BlockRecordSet;
@@ -131,8 +154,8 @@ export class NodeContext {
     // 2. Get BlockStore from context (lazily created by DI)
     this.store = this.protocolContext.get(BlockStore);
 
-    // 2b. Create DraftStore and wire to ConsensusService
-    this.draftStore = new DraftStore();
+    // 2b. Get DraftStore from context and wire to ConsensusService
+    this.draftStore = this.protocolContext.get(DraftStore);
 
     // 3. Get all services from ProtocolContext
     this.consensus = this.protocolContext.get(ConsensusService);
@@ -140,14 +163,26 @@ export class NodeContext {
     this.sampling = this.protocolContext.get(SamplingService);
     this.trust = this.protocolContext.get(TrustService);
 
-    // 3b. Create UtxoIndex early (needed by GossipService for backfill queries)
-    this.utxoIndex = new UtxoIndex(this.store);
+    // 3b. UtxoIndex -- DI-registered so GenerationService can reach it
+    this.utxoIndex = this.protocolContext.get(UtxoIndexService);
 
     this.gossip = new GossipService(this.protocolContext, this.utxoIndex);
     this.routing = new RoutingService(this.protocolContext, this.gossip);
     this.blockCreation = this.protocolContext.get(BlockCreationService);
     this.outputClaims = this.protocolContext.get(OutputClaimService);
-    this.execution = this.protocolContext.get(ExecutionService);
+    this.contractHost = this.protocolContext.get(ContractHostService);
+    this.blockVerification = this.protocolContext.get(BlockVerificationService);
+    this.generation = this.protocolContext.get(GenerationService);
+
+    // Compat adapter for tests that still expect `execution.verifyBlock`.
+    const bvs = this.blockVerification;
+    const host = this.contractHost;
+    this.execution = {
+      verifyBlock: (hash: Hash) => bvs.verify(hash),
+      getContract: (hash: Hash) => host.getContract(hash),
+      registerContract: (hash: Hash, contract: Contract) =>
+        host.registerContract(hash, contract),
+    };
 
     // 4. Create Coordinator
     this.coordinator = this.protocolContext.get(Coordinator);
@@ -181,7 +216,7 @@ export class NodeContext {
       },
     };
 
-    // 5c. Create ContractGenerator with built-in contracts
+    // 5c. Register built-in contracts with the ContractHost.
     this._contracts = new Map<string, Contract>();
     this._registerBuiltinContract(AGGREGATION_CONTRACT, aggregationContract);
     this._registerBuiltinContract(COLLATERAL_CONTRACT, collateralContract);
@@ -189,20 +224,14 @@ export class NodeContext {
     this._registerBuiltinContract(RECORD_CONTRACT, recordContract);
     this._registerBuiltinContract(SIGNATURE_CONTRACT, signatureContract);
 
-    const contracts = this._contracts;
-    const contractGenerator = new ContractGenerator({
-      lookupContract: (hash) => contracts.get(hash.toHex()),
-      store: this.store,
-      utxoIndex: this.utxoIndex,
-      outputClaims: this.outputClaims,
-      draftStore: this.draftStore,
-    });
-
-    // 5d. Create DraftManager with ContractGenerator
-    this.draftManager = new DraftManager(this.draftStore, this.consensus, contractGenerator);
-    this.consensus.onCanonicalityChange((hash, canonical) => {
-      this.draftManager.onCanonicalityChange(hash, canonical);
-    });
+    // 5d. Create DraftManager with GenerationService as its GeneratorProvider
+    //     and install the cancel hook so a rejecting generation can clean
+    //     up the draft.
+    this.draftManager = new DraftManager(this.draftStore, this.consensus, this.generation);
+    this.generation.setCancelHook((draftId) => this.draftManager.cancelDraft(draftId));
+    // Note: DraftManager.checkMargin and its canonicality listener were
+    // removed -- anchor-chain Rule 1/2 in ConsensusModule is stricter
+    // than the old margin check. See docs/protocol/draft-blocks.md.
 
     // 5e. Wire UtxoIndex to canonicality changes
     this.consensus.onCanonicalityChange((hash, canonical) => {
@@ -274,11 +303,12 @@ export class NodeContext {
     // 7. Create built-in DraftStrategy and combine with user strategies.
     //    Default enableGeneration to only registered contracts so that
     //    outputs for unregistered contracts don't waste inFlight slots.
+    const contracts = this._contracts;
     const enableGeneration = config.enableGeneration ??
       ((hash: Hash) => contracts.has(hash.toHex()));
     const draftStrategy = new DraftStrategy(
       { enableGeneration },
-      contractGenerator,
+      this.generation,
     );
     const strategies: Strategy[] = [
       draftStrategy,
@@ -336,13 +366,13 @@ export class NodeContext {
   /** Register a contract at runtime for generation and verification. */
   registerContract(hash: Hash, contract: Contract): void {
     this._contracts.set(hash.toHex(), contract);
-    this.execution.registerContract(hash, contract);
+    this.contractHost.registerContract(hash, contract);
   }
 
-  /** Internal: register a contract on both the generator registry and ExecutionService. */
+  /** Internal: register a contract on both the local registry and the host. */
   private _registerBuiltinContract(hash: Hash, contract: Contract): void {
     this._contracts.set(hash.toHex(), contract);
-    this.execution.registerContract(hash, contract);
+    this.contractHost.registerContract(hash, contract);
   }
 
   /** Create a block from a spec, with auto-balance and optional signing. */
@@ -631,7 +661,7 @@ function makeStoreOutputSpace(store: BlockStore): OutputSpaceModule {
  */
 function autoBalance(
   spec: BlockSpec,
-  utxoIndex: UtxoIndex,
+  utxoIndex: UtxoIndexService,
   publicKey: Uint8Array,
   outputSpace: OutputSpaceModule,
 ): BlockSpec {

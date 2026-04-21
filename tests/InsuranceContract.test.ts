@@ -11,7 +11,10 @@ import {
   type InsuranceDetail,
   makeInsuranceOutput,
 } from '../src/contracts/InsuranceContract.ts';
-import { ExecutionModule, type ExecutionProvider } from '../src/core/ExecutionModule.ts';
+import {
+  ExecutionModuleShim as ExecutionModule,
+  type ExecutionProvider,
+} from './testutil/ExecutionModuleShim.ts';
 import { insuranceContract, FINDER_SHARE, MIN_RETURN_RATE } from '../src/contracts/InsuranceContract.ts';
 
 // -- Test block type -------------------------------------------------

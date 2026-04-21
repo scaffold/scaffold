@@ -74,7 +74,10 @@ export class BlockVerificationModule {
   >();
 
   /** In-flight block-level verify() promises. */
-  private readonly _inflight = new Map<HashPrimitive, Promise<boolean>>();
+  private readonly _inflight = new Map<
+    HashPrimitive,
+    Promise<import('./ContractHost.ts').ExecutionResult>
+  >();
 
   /** Resumption waiters: when a new resolution arrives, check if any deferred verify can proceed. */
   private readonly _waiters = new Map<HashPrimitive, (() => void)[]>();
@@ -85,20 +88,21 @@ export class BlockVerificationModule {
   }
 
   /**
-   * Verify a block end-to-end. Returns a promise that resolves to `true`
-   * iff every claim's contract accepts, `false` on first rejection.
+   * Verify a block end-to-end. Returns a promise that resolves to
+   * `{accepted: true}` iff every claim's contract accepts. On the first
+   * rejection resolves `{accepted: false, reason}` with the contract-
+   * level reason from the rejecting verifier.
    *
    * If any claim is still unresolved, the promise stays pending until the
    * output-claims module delivers the resolution.
    */
-  verify(blockHash: Hash): Promise<boolean> {
+  verify(blockHash: Hash): Promise<import('./ContractHost.ts').ExecutionResult> {
     const key = blockHash.toPrimitive();
     const existing = this._inflight.get(key);
     if (existing) return existing;
 
     const promise = this._verifyOnce(blockHash);
     this._inflight.set(key, promise);
-    // Clean up the in-flight entry once the promise settles.
     promise.finally(() => {
       if (this._inflight.get(key) === promise) this._inflight.delete(key);
     });
@@ -135,22 +139,19 @@ export class BlockVerificationModule {
     }
   }
 
-  private async _verifyOnce(blockHash: Hash): Promise<boolean> {
+  private async _verifyOnce(
+    blockHash: Hash,
+  ): Promise<import('./ContractHost.ts').ExecutionResult> {
     const key = blockHash.toPrimitive();
 
-    // Loop: check resolutions, dispatch if complete, otherwise await next resolution.
     for (;;) {
       const claimCount = this._provider.getClaimCount(blockHash);
       if (claimCount === undefined) {
-        // Block unknown locally. Wait for the coordinator to load it; it
-        // will trigger the same path again. For now treat as "pending" --
-        // defer and wait for any resolution to re-drive the check.
         await this._waitForResolution(key);
         continue;
       }
 
-      // A block with zero claims trivially passes.
-      if (claimCount === 0) return true;
+      if (claimCount === 0) return { accepted: true as const };
 
       const targets = this._resolutions.get(key) ?? [];
       if (targets.length < claimCount) {
@@ -158,24 +159,21 @@ export class BlockVerificationModule {
         continue;
       }
 
-      // All claims resolved. Dispatch per-verifier verification in parallel.
       const promises: Promise<import('./ContractHost.ts').ExecutionResult>[] = [];
       for (const target of targets.slice(0, claimCount)) {
         const verifier = this._provider.getVerifier(target.block, target.outputIndex);
         if (!verifier) {
-          // Claim points at an output we don't know. Treat as reject --
-          // a malformed or orphan claim.
-          return false;
+          return { accepted: false, reason: 'claimed output not found' };
         }
         promises.push(this._provider.verifyContract(blockHash, verifier));
       }
 
-      // Fail-fast on first reject.
+      // Fail-fast on first reject; carry the reason up.
       for (const p of promises) {
         const result = await p;
-        if (!result.accepted) return false;
+        if (!result.accepted) return result;
       }
-      return true;
+      return { accepted: true as const };
     }
   }
 

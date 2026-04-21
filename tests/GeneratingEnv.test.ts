@@ -3,7 +3,7 @@ import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
 import { RECORD_CONTRACT } from '../src/core/Block.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
-import { ExecutionMode } from '../src/core/ExecutionModule.ts';
+import { ExecutionMode } from '../src/core/ContractEnv.ts';
 import {
   type AvailableInput,
   type ContractEnv,

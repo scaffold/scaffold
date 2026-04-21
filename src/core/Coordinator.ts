@@ -6,10 +6,15 @@ import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
-import { VerificationService } from './VerificationService.ts';
+import { BlockVerificationService } from './BlockVerificationService.ts';
 import { ExecutionQueueService } from './ExecutionQueueService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
-import { VerificationResult } from './VerificationModule.ts';
+
+/** Result of attempting verification of the next-priority tree. */
+export type VerificationResult =
+  | { verified: true; treeHash: Hash; terminalHash: Hash }
+  | { verified: false; treeHash: Hash; reason: string }
+  | { verified: false; treeHash: undefined; reason: string };
 import { ScopedLogger } from './EventLog.ts';
 
 /** Result of processing a block received event. */
@@ -172,12 +177,46 @@ export class Coordinator {
   // -- Computation methods -------------------------------------------
 
   /**
-   * Run verification on the next highest-priority tree.
-   * Requires ExecutionService and VerificationService to be registered.
+   * Run verification on the next highest-priority tree: select via sampling,
+   * descend to a terminal, and dispatch block-level verification. Resolves
+   * with `{ verified: true | false, ... }` so strategies can react.
+   *
+   * Requires BlockVerificationService + SamplingService to be registered.
    */
   attemptVerification(): Promise<VerificationResult> | null {
-    const verification = this.ctx.maybeGet(VerificationService);
-    if (!verification) return null;
-    return verification.verifyNext();
+    const verification = this.ctx.maybeGet(BlockVerificationService);
+    const sampling = this.ctx.maybeGet(SamplingService);
+    if (!verification || !sampling) return null;
+
+    const treeHash = sampling.selectNext();
+    if (!treeHash) {
+      return Promise.resolve({
+        verified: false as const,
+        treeHash: undefined,
+        reason: 'no trees to verify',
+      });
+    }
+
+    const sampleResult = sampling.initSample(treeHash);
+    if (!sampleResult.terminal) {
+      return Promise.resolve({
+        verified: false as const,
+        treeHash,
+        reason: sampleResult.reason,
+      });
+    }
+
+    const terminalHash = sampleResult.blockHash;
+    return verification.verify(terminalHash).then((result) => {
+      sampling.recordVerification(terminalHash, result.accepted);
+      if (result.accepted) {
+        return { verified: true as const, treeHash, terminalHash };
+      }
+      return {
+        verified: false as const,
+        treeHash,
+        reason: result.reason,
+      };
+    });
   }
 }
