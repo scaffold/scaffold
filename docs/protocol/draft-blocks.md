@@ -128,11 +128,36 @@ This has concrete effects:
 - **Ancestors become heavier**. If a draft with weight 10 builds on chain C, the effective weight of C increases by 10. If C was losing a conflict by 7, the draft tips it to winning by 3.
 - **Conflict resolution shifts**. The draft's weight can flip which branch wins a conflict, even before the draft is published. The node's local canonical view reflects the work it is about to contribute.
 
-### Generation Cancellation
+### Generation Deprioritization and Restart
 
-The draft's own canonicality is continuously monitored. If the draft becomes non-canonical — meaning even with its own weight contribution, its branch loses — then the generation should be cancelled. The block, once published, would be non-canonical immediately, so the work is wasted.
+The draft's own canonicality is continuously monitored. When a draft becomes non-canonical — because one of the blocks in its anchor chain or aggregates reorged out — the node does **not** cancel the generation. Instead:
 
-More precisely: the draft should be cancelled when its **canonicality margin** (the weight difference between its branch and the strongest competing branch) goes negative by more than the draft's own declared weight. At that point, even publishing the draft wouldn't rescue the branch.
+1. **Deprioritize, don't cancel.** The in-flight generation's scheduling priority on the [execution queue](execution-queue.md) drops (priority function multiplies by a canonicality factor < 1). The work isn't thrown away, because canonicality can flip back as peers and local state evolve.
+2. **Launch a new generation.** The generation module starts a fresh draft (new `draftId`, fresh phantom anchor against the current canonical tip, fresh `collectInputs()`) for the same logical target. If the old draft had claimed inputs A and B, and B reorged out, the new draft calls `collectInputs()` and may select A and C instead.
+3. **Old and new drafts coexist.** Both remain in `DraftStore` and in consensus. If both end up claiming a shared input (e.g., A), the [output-claims module](output-claims.md) registers the conflict between them and the existing consensus resolution chooses the heavier anchor chain. The losing draft is uncanonical and further deprioritized; it is eventually evicted once [execution-queue preemption](execution-queue.md) lands.
+
+There is no explicit per-draft margin check — anchor-chain canonicality (Rule 1/Rule 2 of the [consensus module](consensus.md)) already enforces that a draft whose anchor-chain is losing a conflict becomes non-canonical, which is a stricter condition than the margin check used by earlier designs. Drafts are cancelled only when a strategy explicitly cancels them or when the node shuts down.
+
+### Progress-as-Weight (Local)
+
+While a generation is running, the module periodically updates the draft's verified weight toward its `declaredWeight`:
+
+```
+consensus.setVerifiedWeight(draftId, [partialWeight])
+// partialWeight grows monotonically from 0 toward declaredWeight
+```
+
+This reflects "work the node has actually invested so far." Effect:
+
+- **Ancestors become heavier.** Each update propagates through the anchor chain, firming up the local canonical view along the chain the draft is building on.
+- **In-progress drafts are resilient.** A partially-generated draft contributes real weight, so a new external conflict can't cheaply sweep the draft away.
+- **Still local.** Nothing is gossiped. On publication, the draft is removed and the real block's own weight takes its place — net zero if the anchor didn't move.
+
+### Default `collectInputs()` at End of Generation
+
+If the contract finishes without calling `collectInputs()` or `requireInput()`, the generation module calls `collectInputs()` once before applying results. This is a convenience default: if the node is spending cycles generating a block, it might as well claim as many matching UTXOs as it can find. An empty result is fine — the block is still valid with zero additional inputs.
+
+Contracts that explicitly call `collectInputs` / `requireInput` override the default; nothing is added that the contract didn't ask for.
 
 ### Weight Transition
 
@@ -150,10 +175,13 @@ The delete-and-recreate pattern handles this naturally — publication is just a
 
 ### Pre-claiming
 
-A draft's `ResolvedClaim` entries are registered in the conflict module. For each claim `{ block: X, outputIndex: i }`, the output is marked as claimed by the draft. This has two effects:
+A draft's `ResolvedClaim` entries are registered in the [output-claims module](output-claims.md) via `addClaim(draftId, block, outputIndex)`. For each claim `{ block: X, outputIndex: i }`, the draft is recorded as a claimant on X's output i. This has three effects:
 
 1. **Prevents double-generation**. If two strategies both want to generate a response to the same output, the second one sees the output is already pre-claimed and does not start.
-2. **Detects external conflicts**. If a peer publishes a block that claims the same output, a conflict is detected between the peer's block and the draft. The node can then decide whether to continue generating (if it expects to win the conflict) or cancel.
+2. **Detects external conflicts**. If a peer publishes a block that claims the same output, the output-claims module reports a conflict between the peer's block and the draft. Consensus then resolves by anchor-chain effective weight.
+3. **Detects draft-draft conflicts**. When generation restarts against a reorged input set (see [Generation Deprioritization and Restart](#generation-deprioritization-and-restart)), the old and new drafts may both claim a common input. The output-claims module reports the draft-draft conflict; consensus resolves in favor of the heavier anchor chain.
+
+Conflict detection in the output-claims module treats drafts and blocks uniformly — any two distinct claimants on the same output produce a conflict event.
 
 ### Scatter-to-Source
 
@@ -224,12 +252,11 @@ The draft has been converted to a real block. The draft is deleted from the loca
 ### Cancelled
 
 The draft is no longer viable. Reasons include:
-- The claimed output became non-canonical and unrecoverable.
-- A competing block claimed the same output and won the conflict.
-- The canonicality margin went negative beyond the draft's weight.
 - The user or strategy explicitly cancelled the generation.
+- Node shutdown.
+- (Future) Execution-queue preemption evicts the draft's executable under resource pressure.
 
-The draft is removed from consensus and conflict. Any in-progress computation is aborted.
+Note: canonicality loss alone does **not** cancel a draft — see [Generation Deprioritization and Restart](#generation-deprioritization-and-restart). The draft is removed from consensus and conflict only when explicitly cancelled. Any in-progress computation is not forcibly aborted today; the queue lets it run to completion.
 
 ---
 

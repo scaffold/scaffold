@@ -14,16 +14,36 @@ The TrustModule tracks collateral and the DisputeStrategy emits `dispute` action
 The reactive action types (`createBlock` with collateral outputs) exist, but the decision logic for when and how much to stake is unimplemented. The [CollateralContract](src/contracts/CollateralContract.ts) handles resolution; this is about the posting side.
 
 ### WASM Contract Runtime
-The ExecutionModule currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The module interface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as an in-memory binary store but is not yet consumed for actual WASM execution.
+`ContractHost` currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The `runVerifying` / `runGenerating` surface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as an in-memory binary store but is not yet consumed for actual WASM execution.
 
 ### Generator Implementation
-[Generator.ts](src/core/Generator.ts) is a `StubGenerator` that records generate/cancel signals without performing real computation. Replace with a real generator that:
-- Runs contracts in generation mode via [GeneratingEnv](src/core/GeneratingEnv.ts)
-- Produces block specs from [ContractGenerator](src/core/ContractGenerator.ts) draft pipeline
-- Handles async WASM execution
-- Cancels running generations when canonicality changes invalidate the draft
+[Generator.ts](src/core/Generator.ts) is a `StubGenerator` that records generate/cancel signals without performing real computation. The new [GenerationModule](src/node/GenerationModule.ts) / [GenerationService](src/node/GenerationService.ts) replace the old `ContractGenerator`, but still depend on a real contract host.  Need to:
+- Run contracts in generation mode via [GeneratingEnv](src/core/GeneratingEnv.ts) through `ContractHost.runGenerating`
+- Handle async WASM execution
+- Integrate with execution-queue priority (canonicality-driven deprioritization, restart-on-uncanonical)
 
 The [GenerationStrategy](src/node/strategies/GenerationStrategy.ts) already detects incentive blocks and emits `createBlock` actions, but the actual contract execution is stubbed.
+
+### Execution Queue Preemption
+Today the queue only terminates tasks via wall-clock timeout. Need cooperative cancellation + pressure-driven eviction so the queue can:
+- Abort a running task before its budget expires (requires `Executable.abort?: AbortSignal` or equivalent).
+- Evict the lowest-priority running task when a higher-priority task arrives and the pool is full.
+- Track a pressure signal: running workers today; live WASM instance count once WASM lands.
+- Propagate eviction back to callers via `onComplete` with `{ outcome: 'terminated' }` -- verification/generation modules then decide whether to re-enqueue.
+
+Blocks: making `GenerationModule`'s canonicality-driven deprioritization actually reclaim resources for stale drafts. See [execution-queue.md](docs/protocol/execution-queue.md#deferred-preemption-and-cooperative-cancellation).
+
+### Block-Level Verification Budget Cap
+`ContractVerificationModule` currently gives each `{block, verifier}` its own full budget. A block with many verifiers can consume N × budget wall-clock time. Need a per-block cumulative cap that terminates all in-flight verifiers for a block once the block's cumulative wall-clock exceeds the cap. Gated on execution-queue preemption (needs the abort surface to cancel running verifiers).
+
+### GenerationModule Priority Calibration
+`GenerationModule.priority()` multiplies `declaredWeight` by a canonicality factor when the draft is non-canonical. Current factor is a placeholder. Needs calibration once we observe real generation cadence:
+- How aggressive should the demotion be? (Low enough that canonical work always wins; high enough that a transient flip doesn't permanently bury a draft.)
+- Should the factor decay over time, or only respond to canonicality flips?
+- Should it distinguish "anchor-chain uncanonical" (recoverable) from "lost a direct conflict" (structural)?
+
+### Weight-Ramp Cadence
+`GenerationModule` updates a draft's verified weight toward `declaredWeight` during generation. Cadence choices: on-timer, on-env-step, on-contract-host-tick. Pick once WASM-based contracts land and we see typical instruction counts between yield points.
 
 ### Deception Module
 Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (done) and economic equilibrium analysis. No core module exists yet.

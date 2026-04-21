@@ -62,7 +62,7 @@ The effect: expensive contracts need economic support proportional to their cost
 
 ## Termination
 
-When a running task exceeds its wall-clock budget, the worker is terminated:
+The only termination mechanism today is the **wall-clock timeout**. Callers do not cancel tasks, and the queue does not evict running tasks under resource pressure. When a running task exceeds its wall-clock budget, the worker is terminated:
 
 ### Verification Termination
 
@@ -76,11 +76,36 @@ This distinction matters: a timeout reflects the node's resource limits, not the
 
 ### Generation Termination
 
-A terminated generation **cancels the draft**:
+A terminated generation leaves the draft intact. The generation module does not cancel the draft on timeout; callers observe the terminated result via `onComplete` and may choose to restart, but the draft (including its pre-claims and phantom weight) continues to exist until explicitly cancelled. See [draft-blocks: generation deprioritization and restart](draft-blocks.md#generation-deprioritization-and-restart).
 
-- The in-progress block draft is discarded.
-- The generation slot is freed for other work.
-- The node may retry later if conditions change (e.g., higher expected profit justifies a larger budget).
+This is a deliberate departure from the older design where timeout cancelled the draft. Keeping the draft alive preserves the work that already influenced the local canonical view (anchors heavier, inputs pre-claimed) and lets a restart coexist with the original.
+
+---
+
+## Deferred: Preemption and Cooperative Cancellation
+
+Today, the queue has no way to:
+
+- Cancel a queued task at the caller's request.
+- Abort a running task before its wall-clock budget expires.
+- Evict the lowest-priority running task when a higher-priority task arrives and the worker pool is full.
+
+These are all forms of **preemption** — stopping work based on something other than elapsed time. Preemption matters when:
+
+- A generation becomes uncanonical and we'd like to reclaim its worker for something more valuable (see [draft-blocks](draft-blocks.md#generation-deprioritization-and-restart)).
+- A new high-priority verification arrives while low-priority verifications are running.
+- Resource pressure (live WASM instances, memory) forces the node to shed work.
+
+The intended contract when this lands:
+
+1. **`Executable.abort?: AbortSignal`** (or equivalent) — a cooperative cancellation signal the task can observe to wind down cleanly. WASM hosts honor it at instruction boundaries; JS-implemented contracts check it at yield points.
+2. **Pressure signals** — worker count today; live WASM instance count once WASM lands; possibly memory pressure later. Node-configurable thresholds.
+3. **Eviction policy** — on enqueue of a higher-priority task when the pool is full, abort the lowest-priority running task whose priority is now below the new task's. On priority re-evaluation, running tasks whose priority has dropped below the queue's highest pending priority become eviction candidates.
+4. **Termination propagation** — the queue notifies callers of abort-driven terminations via `onComplete` with `{ outcome: 'terminated' }`, matching the existing timeout path. Callers (verification, generation modules) register the failure and decide whether to re-enqueue.
+
+Until this exists, callers **must not** implement ad-hoc cancellation on their own side. The queue is the single source of truth for task lifecycle. Any cancellation-like logic (e.g., "stop this verification because the block is no longer canonical") should be encoded as priority decay; the task continues until the queue evicts it in the future, or it runs to completion.
+
+Tracked in `TODO.md`.
 
 ---
 
@@ -155,4 +180,4 @@ The [sampling module](sampling.md#pending-backpressure) already provides natural
 | File | Description |
 |------|-------------|
 | [`src/core/ExecutionQueueModule.ts`](../../src/core/ExecutionQueueModule.ts) | Generic priority queue with worker pool and wall-clock timeouts. Agnostic to what it runs. |
-| [`src/core/ExecutionQueueService.ts`](../../src/core/ExecutionQueueService.ts) | Protocol-specific layer: `enqueueVerification()` and `enqueueGeneration()` construct `Executable` objects with the right priority, budget, and completion callbacks. |
+| [`src/core/ExecutionQueueService.ts`](../../src/core/ExecutionQueueService.ts) | Thin wiring layer: holds node-local config (`msPerCostUnit`, `feeRate`), exposes the generic `enqueue(executable)` from the module. Callers (`ContractVerificationService`, `GenerationService`) construct their own `Executable` objects — there are no protocol-specific enqueue helpers here. |

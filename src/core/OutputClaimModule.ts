@@ -236,12 +236,15 @@ export class OutputClaimModule<BlockType> {
 
     entries.push(entry);
 
-    // Conflict detection: if 2+ claimants on this output, fire conflicts.
-    // Filter out draft claims (claimIndex === -1) and self-conflicts.
-    if (entries.length > 1 && entry.claimIndex >= 0) {
+    // Conflict detection: if 2+ distinct claimants on this output, fire conflicts.
+    // Drafts (claimIndex === -1) participate uniformly with published blocks --
+    // two drafts claiming the same output conflict, as does a draft vs a block
+    // or two blocks. Only self-conflicts (same claimant re-registered) are
+    // filtered. See docs/protocol/draft-blocks.md#conflict-integration.
+    if (entries.length > 1) {
       for (let i = 0; i < entries.length - 1; i++) {
         const existing = entries[i];
-        if (existing.claimIndex >= 0 && !Hash.equals(existing.claimant, entry.claimant)) {
+        if (!Hash.equals(existing.claimant, entry.claimant)) {
           for (const cb of this.conflictListeners) {
             cb(existing.claimant, entry.claimant);
           }

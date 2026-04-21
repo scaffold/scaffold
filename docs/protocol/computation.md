@@ -231,17 +231,39 @@ End execution. `accept()` means the spending condition is satisfied. `reject()` 
 
 ## Verification Flow
 
-When a block claims outputs, each claimed output's contract runs independently:
+Verification is organized in three layers, each with a single responsibility:
+
+1. **Contract host** (primitive): Given a `{block, verifier}`, load the contract WASM, construct a `VerifyingEnv`, and run it to produce an `ExecutionResult` (`{ accepted: true }` or `{ accepted: false, reason }`). Knows nothing about claims, blocks-under-verification, or scheduling.
+2. **Contract verification** (per-verifier dedupe): Memoize `{block, verifier}` → `Promise<ExecutionResult>`. If the same tuple is requested while in-flight, share the in-flight promise; if completed, return the cached result. Result is valid forever — verification is pure over block content. Each request that isn't cached enqueues an `Executable` on the [execution queue](execution-queue.md) with a full per-verifier budget (see [Per-Verifier Budget](#per-verifier-budget)).
+3. **Block verification** (per-block orchestration): Given a block hash, enumerate its resolved claims, look up each claimed output's verifier, and dispatch per-verifier verification. All verifiers must accept for the block to be valid (fail-fast on first rejection).
+
+### Per-Claim, Not Per-Contract
+
+Each `{verifier.contract, verifier.params}` combination runs independently. Two claims with the same contract hash but different params are **two separate verifications** — params are inputs that may change the accept/reject decision. An earlier implementation grouped claims by contract hash and ran the contract once with the first claim's params; that is incorrect and has been removed.
+
+### Deferred Verification for Unresolved Claims
+
+A block's `claims: Index[]` are indices into the block's **extended output vector** (own outputs + aggregates' output spaces + anchor's surviving outputs). Resolving a claim index to a concrete `{block, verifier}` requires the ancestor chain (anchor and aggregates) to be loaded locally, per [output claims: migration](output-claims.md#migration). If a claim cannot yet be resolved, block verification **defers** — it registers a one-shot callback on `OutputClaimModule.onResolution` for the claiming block, and re-drives verification when the resolution arrives. Verification is never failed due to unresolved claims; it waits.
+
+### Per-Verifier Budget
+
+The verification budget for a single `{block, verifier}` is derived from the block's total weight and the risk transfer fee, per [execution queue: verification budget](execution-queue.md#verification-budget). Every distinct verifier on a block receives the **full** budget — budgets are not split across N verifiers. Two consequences:
+
+- A block with many verifiers may consume up to N × budget of wall-clock time. This keeps per-verifier decisions independent and maximizes the chance any given rejection catches fraud.
+- A cumulative per-block cap is a future concern — when it lands, it will terminate all in-flight verifiers for a block once the block's cumulative budget is exceeded. Tracked in `TODO.md`.
+
+### Contract Semantics
+
+Within a single contract invocation:
 
 1. The host loads the contract WASM identified by the output's `verifier.contract`.
 2. The host passes the verifier's `params` via `current_params()`.
 3. The contract executes, reading claimed outputs, checking constraints, and validating the block's self-claimed data and outputs.
 4. The contract calls `accept()` or `reject()`.
-5. **All** claimed output contracts must accept for the block to be valid.
 
 Most simple contracts (signature checks) do not constrain the block's self-claimed outputs — they only check the signature. Complex contracts (game ticks) validate that the self-claimed state is a correct computation given the inputs.
 
-If two claimed outputs' contracts would require different self-claimed data values, they are incompatible and cannot be on the same block.
+If two claimed outputs' contracts would require different self-claimed data values, they are incompatible and cannot be on the same block — both run, and one will `reject()`.
 
 ---
 
@@ -469,7 +491,14 @@ The rectification contract verifies the proof chain from the aggregation tree ro
 | [`src/core/ContractEnv.ts`](../../src/core/ContractEnv.ts) | `ContractEnv` interface, `Input` type, `ContractFn`, `ContractRejection`, internal provider interfaces |
 | [`src/core/VerifyingEnv.ts`](../../src/core/VerifyingEnv.ts) | `VerifyingEnv` -- verification-mode implementation (synchronous, reads from block) |
 | [`src/core/GeneratingEnv.ts`](../../src/core/GeneratingEnv.ts) | `GeneratingEnv` -- generation-mode implementation (possibly async, builds the draft) |
-| [`src/core/ContractGenerator.ts`](../../src/core/ContractGenerator.ts) | `ContractGenerator` -- runs contracts via `GeneratingEnv` to build block drafts |
-| [`src/core/ExecutionModule.ts`](../../src/core/ExecutionModule.ts) | `ExecutionModule` -- contract registry and block verification |
+| [`src/core/ContractHost.ts`](../../src/core/ContractHost.ts) | Contract registry and primitive `runVerifying` / `runGenerating` entry points. Layer 1 of the verification flow. |
+| [`src/core/ContractVerificationModule.ts`](../../src/core/ContractVerificationModule.ts) | `{block, verifier}` dedupe cache; enqueues `Executable` per miss. Layer 2 of the verification flow. |
+| [`src/core/ContractVerificationService.ts`](../../src/core/ContractVerificationService.ts) | Wires `ContractVerificationModule` to `ContractHost`, `ExecutionQueueService`, and `SamplingService` for budget. |
+| [`src/core/BlockVerificationModule.ts`](../../src/core/BlockVerificationModule.ts) | Per-block orchestrator: enumerates `resolvedClaims`, dispatches per-verifier verification, fail-fast aggregation, defers on unresolved claims. Layer 3 of the verification flow. |
+| [`src/core/BlockVerificationService.ts`](../../src/core/BlockVerificationService.ts) | Wires `BlockVerificationModule` to `ContractVerificationService`, `OutputClaimService` (for claim resolution events), and `BlockStore`. |
+| [`src/node/GenerationModule.ts`](../../src/node/GenerationModule.ts) | Per-draft generation lifecycle: priority from canonicality, restart-on-uncanonical, default `collectInputs()` at end. |
+| [`src/node/GenerationService.ts`](../../src/node/GenerationService.ts) | Wires `GenerationModule` to `ContractHost`, `ExecutionQueueService`, `ConsensusService`, `UtxoIndex`, `DraftStore`, `OutputClaimService`. |
 | [`src/core/Block.ts`](../../src/core/Block.ts) | `RECORD_CONTRACT`, result output helpers, block structure |
 | Future: WASM runtime | Contract execution engine with host function bindings |
+
+Historical note: `ContractGenerator`, `ExecutionModule`, and `VerificationModule` predated this split and are removed. The single contract-run primitive now lives in `ContractHost`; scheduling and dedupe moved to the verification modules above; generation orchestration moved to `GenerationModule`.

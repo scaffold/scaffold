@@ -572,12 +572,14 @@ Deno.test('OutputClaimModule conflict detection', async (t) => {
   });
 
   // ---------------------------------------------------------------
-  // Draft claims do not fire conflicts
+  // Draft <-> block conflict fires (drafts participate in conflict pipeline)
   // ---------------------------------------------------------------
-  await t.step('draft claims do not fire conflicts', () => {
+  await t.step('draft <-> block conflict fires', () => {
     // G has 5 outputs. C1 claims G output 0 via addBlock (claimIndex >= 0).
-    // Draft D1 claims G output 0 via addClaim (claimIndex = -1).
-    // No conflict should fire because draft claims are filtered.
+    // Draft D1 also claims G output 0 via addClaim (claimIndex = -1).
+    // A conflict between C1 and D1 must fire: draft claimants participate
+    // in conflict detection uniformly with blocks (see
+    // docs/protocol/draft-blocks.md#conflict-integration).
     const G = genesis(h('G'), 5);
     const C1 = leaf({ hash: h('C1'), anchor: G.hash, ownOutputCount: 1 });
     const { module } = setup(G, C1);
@@ -585,10 +587,34 @@ Deno.test('OutputClaimModule conflict detection', async (t) => {
     const conflicts: { a: Hash; b: Hash }[] = [];
     module.onConflict((a, b) => conflicts.push({ a, b }));
 
-    module.addBlock(C1.hash, [1]); // claims G output 0 (claimIndex = 0)
-    module.addClaim(h('D1'), G.hash, 0); // draft claims G output 0 (claimIndex = -1)
+    module.addBlock(C1.hash, [1]); // claims G output 0
+    module.addClaim(h('D1'), G.hash, 0); // draft claims G output 0
 
-    assertEquals(conflicts.length, 0);
+    assertEquals(conflicts.length, 1);
+    // Order: existing claimant (C1) first, new claimant (D1) second.
+    assertEquals(conflicts[0].a.toHex(), C1.hash.toHex());
+    assertEquals(conflicts[0].b.toHex(), h('D1').toHex());
+  });
+
+  // ---------------------------------------------------------------
+  // Draft <-> draft conflict fires (restart scenario)
+  // ---------------------------------------------------------------
+  await t.step('draft <-> draft conflict fires on shared input', () => {
+    // Simulates the generation-restart scenario: two drafts both claim
+    // the same UTXO after an input reorg. See
+    // docs/protocol/draft-blocks.md#generation-deprioritization-and-restart.
+    const G = genesis(h('G'), 3);
+    const { module } = setup(G);
+
+    const conflicts: { a: Hash; b: Hash }[] = [];
+    module.onConflict((a, b) => conflicts.push({ a, b }));
+
+    module.addClaim(h('D1'), G.hash, 0);
+    module.addClaim(h('D2'), G.hash, 0);
+
+    assertEquals(conflicts.length, 1);
+    assertEquals(conflicts[0].a.toHex(), h('D1').toHex());
+    assertEquals(conflicts[0].b.toHex(), h('D2').toHex());
   });
 
   // ---------------------------------------------------------------
