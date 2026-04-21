@@ -201,6 +201,18 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     consensus.onCanonicalityChange((hash, canonical) => {
       this.onCanonicalityChange(hash, canonical);
     });
+
+    // Wake blocked contracts when a reorg frees up an output. Without
+    // this hook, a contract that called `requireInput()` before the
+    // matching UTXO existed would stay parked forever if the only way
+    // the UTXO appears is via an existing claimant becoming non-canonical
+    // (DraftStrategy only reacts to newly-canonical events).
+    utxoIndex.onOutputReAdded((blockHash, outputIndex) => {
+      const block = store.get(blockHash);
+      if (!block) return;
+      if (outputIndex >= block.outputs.length) return;
+      this.notifyNewOutput(blockHash, outputIndex, block.outputs[outputIndex]);
+    });
   }
 
   /**

@@ -221,7 +221,8 @@ Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', as
     await new Promise((r) => setTimeout(r, 10));
   }
 
-  await new Promise((r) => setTimeout(r, 100));
+  // Queue-dispatched generation may take a few ticks to settle.
+  await new Promise((r) => setTimeout(r, 500));
 
   const aggBlocks: Block[] = [];
   for (const block of ctx.store.values()) {

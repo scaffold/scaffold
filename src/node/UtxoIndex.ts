@@ -54,8 +54,72 @@ export class UtxoIndex {
   private readonly index = new Map<string, Map<string, UtxoEntry>>();
   private readonly store: BlockStore;
 
+  /**
+   * Listeners for outputs that become spendable via a reorg (a block or
+   * draft claiming the output becomes non-canonical) rather than via a
+   * new canonical block. The "new canonical block" path is already
+   * covered by DraftStrategy reacting to newly-canonical events, so the
+   * hook only fires from the re-add paths below -- never from the
+   * initial add of a block's own outputs.
+   *
+   * Use: `GenerationService` wakes blocked contracts waiting on the
+   * output's verifier; without this hook a reorg that frees up the only
+   * matching UTXO would leave the contract parked indefinitely.
+   */
+  private readonly _reAddListeners: (
+    (blockHash: Hash, outputIndex: number) => void
+  )[] = [];
+
+  /**
+   * Pending re-added outputs batched within a single canonicality flush.
+   * Consensus fires non-canonical events BEFORE canonical ones within a
+   * single `flushChanges`, so an output claimed by both a now-aggregated
+   * block and its aggregator is transiently re-added and then immediately
+   * removed again. Firing listeners synchronously would expose that
+   * intermediate state. We defer firing to a microtask so observers see
+   * only the settled set.
+   */
+  private _pendingReAdded: { blockHash: Hash; outputIndex: number }[] = [];
+  private _flushScheduled = false;
+
   constructor(store: BlockStore) {
     this.store = store;
+  }
+
+  /**
+   * Register a listener for outputs re-added to the index after being
+   * claimed (i.e. made spendable again by a reorg). Fired on a microtask,
+   * once the current canonicality batch has fully drained.
+   */
+  onOutputReAdded(cb: (blockHash: Hash, outputIndex: number) => void): void {
+    this._reAddListeners.push(cb);
+  }
+
+  private _fireReAdded(blockHash: Hash, outputIndex: number): void {
+    this._pendingReAdded.push({ blockHash, outputIndex });
+    if (this._flushScheduled) return;
+    this._flushScheduled = true;
+    queueMicrotask(() => this._flushPendingReAdded());
+  }
+
+  private _flushPendingReAdded(): void {
+    this._flushScheduled = false;
+    const pending = this._pendingReAdded;
+    this._pendingReAdded = [];
+    for (const { blockHash, outputIndex } of pending) {
+      // Drop events whose output is no longer in the index -- i.e. a
+      // subsequent canonical event already removed it. Only the settled
+      // state is worth reporting.
+      const block = this.store.get(blockHash);
+      if (!block) continue;
+      if (outputIndex >= block.outputs.length) continue;
+      const output = block.outputs[outputIndex];
+      const vKey = verifierKey(output.verifier.contract, output.verifier.params);
+      const oKey = outputKey(blockHash, outputIndex);
+      const entries = this.index.get(vKey);
+      if (!entries || !entries.has(oKey)) continue;
+      for (const cb of this._reAddListeners) cb(blockHash, outputIndex);
+    }
   }
 
   /** Query all unspent outputs for a given verifier. */
@@ -214,6 +278,7 @@ export class UtxoIndex {
         value: output.value,
         extendedIndex: extIdx,
       });
+      this._fireReAdded(source.blockHash, source.outputIndex);
     }
   }
 
@@ -311,6 +376,7 @@ export class UtxoIndex {
         value: output.value,
         extendedIndex: rc.outputIndex,
       });
+      this._fireReAdded(rc.block, rc.outputIndex);
     }
   }
 
