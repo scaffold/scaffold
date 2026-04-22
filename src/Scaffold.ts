@@ -5,8 +5,13 @@ import type { Contract } from './contracts/Contract.ts';
 import { Hash } from './util/Hash.ts';
 import { findCanonicalTip, NodeContext } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
-import { FetchHandle, FetchManager, FetchOptions, Verifier } from './node/FetchManager.ts';
-import { FetchNotifyStrategy } from './node/strategies/FetchNotifyStrategy.ts';
+import {
+  FetchHandle,
+  FetchInput,
+  FetchManager,
+  FetchResult,
+} from './node/FetchManager.ts';
+import type { Verifier } from './core/BlockCreationModule.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 import { getGenesisBlock } from './genesis.ts';
@@ -31,6 +36,12 @@ export interface ScaffoldConfig {
   enableVerification?: (contractHash: Hash) => boolean;
   /** Enable structured event logging for debugging. Default: true. */
   enableLogging?: boolean;
+  /**
+   * Node-level policy for outgoing fetch incentives. Called per-verifier on
+   * fetch(). Defaults to 0 (no economic participation; gossip still routes
+   * on claim history).
+   */
+  getOutgoingIncentive?: (verifier: Verifier) => number;
 }
 
 export class Scaffold {
@@ -50,46 +61,44 @@ export class Scaffold {
 
     const genesis = config.genesis ?? getGenesisBlock();
 
-    // 0. Create EventLog (enabled by default)
     this.eventLog = (config.enableLogging !== false)
       ? new EventLog({ console: true })
       : new EventLog();
 
-    // 1. Create FetchManager and the strategy that notifies it
-    this.fetchManager = new FetchManager();
-    const fetchNotifyStrategy = new FetchNotifyStrategy(this.fetchManager);
-
-    // 2. Prepend FetchNotifyStrategy to user-provided strategies
-    const strategies: Strategy[] = [
-      fetchNotifyStrategy,
-      ...(config.strategies ?? []),
-    ];
-
-    // 3. Create NodeContext with notifyFetch wired to FetchManager.
-    //    If network plugins are provided, onPushActions is set up after
-    //    the bridge is created (see step 6).
-    const fetchManager = this.fetchManager;
+    // 1. Create NodeContext (protocol layer + reactive + piggyback).
     let pushActionHandler: ((actions: PushAction[], block: Block) => void) | undefined;
     this.nodeContext = new NodeContext({
       genesis,
       privateKey,
       publicKey,
-      strategies,
+      strategies: config.strategies,
       enableGeneration: config.enableGeneration,
       enableVerification: config.enableVerification,
       eventLog: this.eventLog,
-      onNotifyFetch: (verifierKey, result) => {
-        fetchManager.notify(verifierKey, result);
-      },
-      hasFetchSubscription: (key) => fetchManager.hasSubscription(key),
       onPushActions: (actions, block) => {
         pushActionHandler?.(actions, block);
       },
     });
 
-    // 6. Create NetworkBridge if plugins are provided
+    // 2. Create FetchManager, wired to the already-constructed node services.
+    const nodeContext = this.nodeContext;
+    this.fetchManager = new FetchManager({
+      dispatcher: nodeContext.reactiveLayer,
+      consensus: nodeContext.consensus,
+      outputClaims: nodeContext.outputClaims,
+      blockStore: nodeContext.store,
+      trustGate: nodeContext.trustGate,
+      blockVerification: nodeContext.blockVerification,
+      contractHost: nodeContext.contractHost,
+      config: {
+        getOutgoingIncentive: config.getOutgoingIncentive ?? (() => 0),
+      },
+      findCanonicalTip: () => findCanonicalTip(nodeContext),
+      logger: this.eventLog ? new ScopedLogger(this.eventLog, 'fetch') : undefined,
+    });
+
+    // 3. Create NetworkBridge if plugins are provided
     if (config.plugins && config.plugins.length > 0) {
-      const nodeContext = this.nodeContext;
       const selfIdHex = bin2hex(publicKey);
 
       this.networkBridge = new NetworkBridge({
@@ -111,7 +120,6 @@ export class Scaffold {
     }
 
     // 4. Create PutManager with a BlockProcessor that delegates to NodeContext.
-    const nodeContext = this.nodeContext;
     const processor: BlockProcessor = {
       buildBlock: (spec) => {
         // Resolve anchor: if the spec's anchor isn't in the store,
@@ -134,7 +142,6 @@ export class Scaffold {
           ? spec.outputs
           : [...spec.outputs, makeAggregationOutput()];
 
-        // Delegate to NodeContext's createBlock (auto-balances + signs)
         return nodeContext.createBlock(
           { ...spec, anchor: anchorHash, outputs },
           privateKey,
@@ -153,9 +160,20 @@ export class Scaffold {
     this.nodeContext.registerContract(hash, contract);
   }
 
-  /** Request a computation result and subscribe to canonical state changes. */
-  fetch(verifier: Verifier, options: FetchOptions): FetchHandle {
-    return this.fetchManager.fetch(verifier, options);
+  /**
+   * Request a computation result from the network.
+   *
+   * With `verify: true`, returns a Promise that resolves with the first
+   * canonical claim whose response contract accepts locally. Otherwise
+   * returns a `FetchHandle` with streaming callbacks that track canonical
+   * changes. See docs/design/fetch.md for the full surface.
+   */
+  fetch<T = unknown>(input: FetchInput<T> & { verify: true }): Promise<FetchResult<T>>;
+  fetch<T = unknown>(input: FetchInput<T>): FetchHandle;
+  fetch<T = unknown>(
+    input: FetchInput<T>,
+  ): FetchHandle | Promise<FetchResult<T>> {
+    return this.fetchManager.fetch<T>(input);
   }
 
   /** Put data into the network */
@@ -225,9 +243,6 @@ export class Scaffold {
   /** Close the scaffold instance and all network connections. */
   async close(): Promise<void> {
     await this.networkBridge?.close();
-    // Destruct the protocol context so services with Symbol.dispose
-    // (e.g. ExecutionQueueService clears its setTimeout handles) can
-    // clean up.
     await this.nodeContext.protocolContext.destruct();
   }
 

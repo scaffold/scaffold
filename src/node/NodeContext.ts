@@ -34,10 +34,8 @@ import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 import {
   BlockCreator,
-  FetchResult,
   ReactiveLayer,
   Strategy,
-  VerifierKey,
 } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
@@ -65,10 +63,6 @@ export interface NodeConfig {
   publicKey?: Uint8Array;
   /** Strategies to register with the reactive layer */
   strategies?: Strategy[];
-  /** Callback when a notifyFetch action is dispatched */
-  onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
-  /** Check if a fetch subscription exists for a verifier key */
-  hasFetchSubscription?: (verifierKey: string) => boolean;
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -141,12 +135,6 @@ export class NodeContext {
   private readonly _publicKey: Uint8Array | null;
   private readonly _contracts: Map<string, Contract>;
   private readonly _blockCreator: BlockCreator;
-
-  /** Cache of resolved claims relevant to active fetch subscriptions. */
-  private readonly _claimFetchCache = new Map<
-    string,
-    { claimant: Hash; target: { block: Hash; outputIndex: number } }
-  >();
 
   constructor(config: NodeConfig) {
     // 0. Store key material
@@ -263,11 +251,11 @@ export class NodeContext {
       }
     });
 
-    // 5f. Wire claim resolutions to gossip claim history and fetch notifications.
+    // 5f. Wire claim resolutions to gossip claim history.
     //     When a claim resolves, add it to claim history and route the
-    //     claiming block toward the claimed output. Also check if the claimed
-    //     output has an active fetch subscription -- if so, cache the resolution
-    //     for canonical state tracking.
+    //     claiming block toward the claimed output. FetchManager also
+    //     subscribes to outputClaims.onResolution for its own response
+    //     detection — both listeners fire in parallel.
     this.outputClaims.onResolution((claimant, target) => {
       const source = this.store.get(target.block);
       if (!source) return;
@@ -275,32 +263,6 @@ export class NodeContext {
       if (!output) return;
       const vk = verifierKey(output.verifier.contract, output.verifier.params);
       this.gossip.notifyClaimResolved(claimant, vk, output.value, target.block);
-
-      // Check if a fetch subscription exists for this verifier
-      if (config.hasFetchSubscription?.(vk)) {
-        this._claimFetchCache.set(vk, {
-          claimant,
-          target: { block: target.block, outputIndex: target.outputIndex },
-        });
-        // If already canonical, notify immediately
-        if (this.consensus.isCanonical(claimant) && config.onNotifyFetch) {
-          this._notifyFetchFromClaim(vk, claimant, config.onNotifyFetch);
-        }
-      }
-    });
-
-    // 5g. Wire canonicality changes to fetch notifications for claim-based results.
-    this.consensus.onCanonicalityChange((hash, canonical) => {
-      for (const [vk, entry] of this._claimFetchCache) {
-        if (!Hash.equals(entry.claimant, hash)) continue;
-        if (config.onNotifyFetch) {
-          if (canonical) {
-            this._notifyFetchFromClaim(vk, entry.claimant, config.onNotifyFetch);
-          } else {
-            config.onNotifyFetch(vk, null);
-          }
-        }
-      }
     });
 
     // 6. Create BlockRecordSet and wire module listeners
@@ -376,7 +338,6 @@ export class NodeContext {
       routing: this.routing,
       draftManager: this.draftManager,
       logger: this.protocolContext.logger('reactive'),
-      onNotifyFetch: config.onNotifyFetch,
       onPushActions: config.onPushActions,
       onBlockProcessed: (block: Block) => {
         blocks.add(block);
@@ -612,38 +573,6 @@ export class NodeContext {
         }),
       };
     });
-  }
-
-  /** Notify fetch subscribers when a claim resolves on a canonical block. */
-  private _notifyFetchFromClaim(
-    vk: string,
-    claimant: Hash,
-    onNotifyFetch: (verifier: VerifierKey, result: FetchResult | null) => void,
-  ): void {
-    const claimantBlock = this.store.get(claimant);
-    if (!claimantBlock) return;
-
-    // Find the first RECORD_CONTRACT output. Prefer self-claimed (the
-    // protocol-intended "result" flagging), but fall back to any record
-    // output when the solidify path hasn't marked them self-claimed yet.
-    const selfClaimSet = new Set(
-      claimantBlock.claims.filter((c) => c < claimantBlock.outputs.length),
-    );
-    let resultData: Uint8Array = new Uint8Array(0);
-    let fallback: Uint8Array | undefined;
-    for (let i = 0; i < claimantBlock.outputs.length; i++) {
-      const output = claimantBlock.outputs[i];
-      if (!Hash.equals(output.verifier.contract, RECORD_CONTRACT)) continue;
-      if (selfClaimSet.has(i)) {
-        resultData = output.data;
-        fallback = undefined;
-        break;
-      }
-      fallback ??= output.data;
-    }
-    if (fallback) resultData = fallback;
-
-    onNotifyFetch(vk, { block: claimantBlock, data: resultData });
   }
 
   /** Get the genesis block hash (first block in store) */

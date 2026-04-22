@@ -70,6 +70,8 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
     privateKey: demoPrivateKey('a'),
     genesis,
     enableLogging: false,
+    // Pay 1000 per request so gossip clears claim-history priority.
+    getOutgoingIncentive: () => 1_000,
   });
   const nodeB = new Scaffold({
     privateKey: demoPrivateKey('b'),
@@ -85,6 +87,12 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
     enableGeneration: (hash) => Hash.equals(hash, HELLO_CONTRACT),
   });
 
+  // All three nodes register HELLO so they can locally verify responses.
+  // The trust gate surfaces a fetch result only after local verification
+  // or canonical collateral; without the contract, A cannot verify the
+  // response and would never surface it to the caller.
+  nodeA.registerContract(HELLO_CONTRACT, helloContract);
+  nodeB.registerContract(HELLO_CONTRACT, helloContract);
   nodeC.registerContract(HELLO_CONTRACT, helloContract);
 
   const hexA = nodeA.publicKeyHex;
@@ -131,25 +139,21 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   nodeB.context.processBlock(seed.block, hexC);
   nodeA.context.processBlock(seed.block, hexB);
 
-  // 3. A subscribes to the response. The subscription fires once for A's
-  //    own request block (data=empty) and again for C's response.
+  // 3. A subscribes via an onClaim observer: we want the claiming block
+  //    (not just the record data) so we can assert provenance in step 5.
+  //    fetch() itself publishes the incentive block — no separate put()
+  //    is needed. The incentive value comes from getOutgoingIncentive in
+  //    the Scaffold config.
   let response: { data: Uint8Array; block: Block } | null = null;
-  nodeA.fetch(
-    { contractHash: HELLO_CONTRACT, params: new TextEncoder().encode('world') },
-    {
-      onResult: (result) => {
-        if (!result) return;
-        const text = new TextDecoder().decode(result.data);
-        if (text.startsWith('Hello')) response = result;
-      },
+  nodeA.fetch({
+    contract: HELLO_CONTRACT,
+    params: new TextEncoder().encode('world'),
+    recordKey: 'response',
+    onClaim: (c) => {
+      if (!c) return;
+      const text = new TextDecoder().decode(c.data);
+      if (text.startsWith('Hello')) response = { data: c.data, block: c.block };
     },
-  );
-
-  // 4. A publishes the request. Auto-balance resolves the funding UTXO
-  //    against the canonical tip's post-subtree vector, so an explicit
-  //    anchor isn't needed.
-  nodeA.put({
-    outputs: [makeHelloRequest('world', 1_000)],
   });
 
   // 5. Wait for the response to land.

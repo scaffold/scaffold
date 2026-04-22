@@ -11,17 +11,6 @@ import { RoutingService } from './RoutingService.ts';
 import { PushAction } from './RoutingModule.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
-// -- Future types (placeholders until their modules exist) ----------
-
-/** Opaque verifier key. */
-export type VerifierKey = string;
-
-/** Result of a fetch operation. */
-export interface FetchResult {
-  readonly block: Block;
-  readonly data: Uint8Array;
-}
-
 // -- Reactive event and action types --------------------------------
 
 /** Event passed to strategies for evaluation. */
@@ -56,7 +45,6 @@ export type Action =
   | { type: 'submitBlock'; hash: Hash }
   | { type: 'verify'; block: Hash; contract: Hash; params: Uint8Array }
   | { type: 'dispute'; block: Hash; side: 'for' | 'against' }
-  | { type: 'notifyFetch'; verifier: VerifierKey; result: FetchResult | null }
   | {
     type: 'createDraft';
     claim: ClaimIntent;
@@ -111,7 +99,6 @@ export class ReactiveLayer {
   private readonly draftManager?: DraftManager;
   private readonly _log?: ScopedLogger;
 
-  private readonly onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
   private readonly onPushActions?: (actions: PushAction[], block: Block) => void;
   private readonly onBlockProcessed?: (block: Block) => void;
 
@@ -129,7 +116,6 @@ export class ReactiveLayer {
     routing?: RoutingService;
     draftManager?: DraftManager;
     logger?: ScopedLogger;
-    onNotifyFetch?: (verifier: VerifierKey, result: FetchResult | null) => void;
     onPushActions?: (actions: PushAction[], block: Block) => void;
     onBlockProcessed?: (block: Block) => void;
   }) {
@@ -143,7 +129,6 @@ export class ReactiveLayer {
     this.routing = deps.routing;
     this.draftManager = deps.draftManager;
     this._log = deps.logger;
-    this.onNotifyFetch = deps.onNotifyFetch;
     this.onPushActions = deps.onPushActions;
     this.onBlockProcessed = deps.onBlockProcessed;
 
@@ -301,11 +286,6 @@ export class ReactiveLayer {
           break;
         case 'dispute':
           // Async: started but does not block.
-          break;
-        case 'notifyFetch':
-          if (this.onNotifyFetch) {
-            this.onNotifyFetch(action.verifier, action.result);
-          }
           break;
         case 'createDraft':
           if (this.draftManager) {

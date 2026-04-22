@@ -82,44 +82,14 @@ Deno.test('Scaffold: put() creates and processes a block', async () => {
 Deno.test('Scaffold: fetch() returns a handle with close()', async () => {
   const scaffold = new Scaffold(defaultConfig());
 
-  const results: unknown[] = [];
-  const handle = scaffold.fetch(
-    { contractHash: Hash.digest('test-contract'), params: new Uint8Array([1, 2, 3]) },
-    { onResult: (result) => results.push(result) },
-  );
+  const handle = scaffold.fetch({
+    contract: Hash.digest('test-contract'),
+    params: new Uint8Array([1, 2, 3]),
+    onResult: () => {},
+  });
 
   assert(handle);
   assert(typeof handle.close === 'function');
-
-  // Close should not throw
-  handle.close();
-  await scaffold.close();
-});
-
-Deno.test('Scaffold: fetch() notifies when matching block becomes canonical', async () => {
-  const scaffold = new Scaffold(defaultConfig());
-
-  const contractHash = Hash.digest('fetch-contract');
-  const params = new Uint8Array([10, 20]);
-
-  const results: unknown[] = [];
-  const handle = scaffold.fetch(
-    { contractHash, params },
-    { onResult: (result) => results.push(result) },
-  );
-
-  // Put a block whose output matches the verifier (contract + params as data)
-  scaffold.put({
-    outputs: [{
-      verifier: { contract: contractHash, params },
-      value: 0,
-      data: new Uint8Array(0),
-    }],
-  });
-
-  // The FetchNotifyStrategy should have noticed the canonical block and notified
-  assertEquals(results.length, 1);
-  assert(results[0] !== null);
 
   handle.close();
   await scaffold.close();

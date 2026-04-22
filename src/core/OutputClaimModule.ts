@@ -16,6 +16,8 @@ export interface ClaimResolution {
   readonly block: Hash;
   /** Index into that block's output array. */
   readonly outputIndex: number;
+  /** Index into the claimant's claims[] array that this resolution was for. */
+  readonly claimIndex: number;
 }
 
 /** A record of a block claiming an output. */
@@ -294,6 +296,7 @@ export class OutputClaimModule<BlockType> {
       const resolved: ClaimResolution = {
         block: blockHash,
         outputIndex: index,
+        claimIndex: entry.claimIndex,
       };
       for (const cb of this.resolutionListeners) {
         cb(entry.claimant, resolved);

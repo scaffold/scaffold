@@ -210,24 +210,20 @@ async function handleCommand(line: string): Promise<void> {
     case 'expect': {
       const name = parts.slice(1).join(' ');
       if (!name) throw new Error('usage: expect <name>');
-      scaffold.fetch(
-        {
-          contractHash: HELLO_CONTRACT,
-          params: new TextEncoder().encode(name),
+      scaffold.fetch({
+        contract: HELLO_CONTRACT,
+        params: new TextEncoder().encode(name),
+        onClaim: (c) => {
+          if (!c) return;
+          const data = new TextDecoder().decode(c.data);
+          emit({
+            type: 'fetch_result',
+            name,
+            block: c.block.hash.toHex(),
+            data,
+          });
         },
-        {
-          onResult: (result) => {
-            if (!result) return;
-            const data = new TextDecoder().decode(result.data);
-            emit({
-              type: 'fetch_result',
-              name,
-              block: result.block.hash.toHex(),
-              data,
-            });
-          },
-        },
-      );
+      });
       emit({ type: 'expect_subscribed', name });
       break;
     }

@@ -533,7 +533,6 @@ Deno.test('ReactiveLayer: non-createBlock actions do not trigger block creator',
       params: new Uint8Array([]),
     },
     { type: 'dispute', block: Hash.digest('d1'), side: 'for' },
-    { type: 'notifyFetch', verifier: 'vk1', result: null },
   ];
 
   const creator = new MockBlockCreator();
@@ -553,6 +552,5 @@ Deno.test('ReactiveLayer: non-createBlock actions do not trigger block creator',
   // Creator should NOT have been called
   assertEquals(creator.calls.length, 0);
 
-  // All 3 actions should be collected
-  assertEquals(result.actions.length, 3);
+  assertEquals(result.actions.length, 2);
 });

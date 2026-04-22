@@ -89,6 +89,11 @@ Both are valid. Defer the policy to node config.
 
 ## Local-only piggyback (pre-publish and `publish: false`)
 
+> **Phase 4 status**: not implemented. Both cases below are tracked in
+> [`TODO.md`](../../TODO.md) (*Pre-publish Piggyback*, *Phase 4b*). Current
+> piggyback only acts on canonical unspent incentives already broadcast
+> on the network.
+
 Two cases produce a piggyback that is constructed locally and **never
 broadcast**:
 

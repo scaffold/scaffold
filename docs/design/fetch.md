@@ -1,6 +1,9 @@
 # `fetch()` — Design
 
-> Status: design, not yet implemented. Companion to `put()`.
+> Status: implemented (Phase 4) with two deferrals: `publish: false` throws
+> `NotImplementedError`, and the trust gate is currently bypassed for
+> streaming callbacks (only applies to `verify: true` callers). Both are
+> tracked in [`TODO.md`](../../TODO.md). See [FetchManager.ts](../../src/node/FetchManager.ts).
 
 `scaffold.fetch()` is the read-side entrypoint for Scaffold: "ask the network
 to produce data matching this verifier, and tell me when (or if) someone
@@ -190,6 +193,10 @@ canonical answer without verification can trivially build this on top of
 that answer is later invalidated.
 
 ### `publish: false` — local-only machinery
+
+> **Phase 4 status**: throws `NotImplementedError` at call time. The local
+> piggyback mechanism it depends on is tracked in [`TODO.md`](../../TODO.md)
+> under *Phase 4b*.
 
 `publish: false` is "run the full fetch pipeline, but don't broadcast
 anything." Every code path runs exactly as in `publish: true`:
@@ -475,3 +482,10 @@ const h = scaffold.fetch({
    arguably protocol-normal if we're offline). Current leaning: `onError`
    for programmable failures (parse, verify, walker), a separate status
    hook or logger for connectivity concerns.
+4. **Trust gate re-enablement for streaming callbacks.** Currently, only
+   `verify: true` callers are gated on trust. Streaming `onClaim` /
+   `onResult` callbacks fire on canonicality alone because local
+   verification fails on responses that use aggregate subtree outputs
+   (`collectExtendedOutputs` in `src/core/Block.ts` does not walk
+   aggregates — see `TODO.md`). Once the extended-vector construction
+   is fixed, re-enable the trust gate in `FetchManager._reevaluate`.
