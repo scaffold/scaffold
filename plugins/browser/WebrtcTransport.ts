@@ -72,8 +72,8 @@ export class WebrtcTransport implements TransportPlugin {
 
       const provider: ConnectionProvider = {
         maxMsgSize,
-        sendReliable: (data: Uint8Array) => reliableChannel!.send(data as Uint8Array<ArrayBuffer>),
-        sendFast: (data: Uint8Array) => fastChannel!.send(data as Uint8Array<ArrayBuffer>),
+        sendReliable: (data: Uint8Array) => reliableChannel!.send(data),
+        sendFast: (data: Uint8Array) => fastChannel!.send(data),
         shutdown: () => conn.close(),
       };
 

@@ -7,6 +7,13 @@ import {
   ConnectionProvider,
   TransportService,
 } from '../src/interfaces/transport.ts';
+import { unixSocketsAvailable } from './helpers/unixSocketsAvailable.ts';
+
+// Tests that bind unix sockets cannot run in sandboxed environments that
+// deny AF_UNIX bind(). Skip the live-socket tests there; the plugin
+// interface contract is covered by TransportManager.test.ts via the
+// in-memory MockTransportPlugin.
+const needsUnix = !unixSocketsAvailable();
 
 // -- Helpers --------------------------------------------------------------
 
@@ -90,6 +97,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: announceAddresses broadcasts the socket path',
+  ignore: needsUnix,
   async fn() {
     const { plugin, service, harness } = startPlugin();
     service.announceAddresses!();
@@ -100,6 +108,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: dialAddress connects to a running listener',
+  ignore: needsUnix,
   async fn() {
     const server = startPlugin();
     const client = startPlugin();
@@ -120,6 +129,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: bidirectional message exchange',
+  ignore: needsUnix,
   async fn() {
     const server = startPlugin();
     const client = startPlugin();
@@ -149,6 +159,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: multiple rapid frames maintain order',
+  ignore: needsUnix,
   async fn() {
     const server = startPlugin();
     const client = startPlugin();
@@ -177,6 +188,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: close propagates to peer',
+  ignore: needsUnix,
   async fn() {
     const server = startPlugin();
     const client = startPlugin();
@@ -201,6 +213,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: stop cleans up socket file',
+  ignore: needsUnix,
   async fn() {
     const { plugin, service } = startPlugin();
 
@@ -216,6 +229,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: multiple clients connect to one server',
+  ignore: needsUnix,
   async fn() {
     const server = startPlugin();
     const client1 = startPlugin();
@@ -281,6 +295,7 @@ function makeAuthHarness(): AuthHarness {
 
 Deno.test({
   name: 'UnixSocketTransport: authenticated handshake end-to-end',
+  ignore: needsUnix,
   async fn() {
     const initiator = startPlugin();
     const receiver = startPlugin();
@@ -336,6 +351,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: receiver role does not emit a signal',
+  ignore: needsUnix,
   async fn() {
     const plugin = startPlugin();
     const auth = makeAuthHarness();
@@ -355,6 +371,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: authenticated session close cleans up listener',
+  ignore: needsUnix,
   async fn() {
     const plugin = startPlugin();
     const auth = makeAuthHarness();
@@ -380,6 +397,7 @@ Deno.test({
 
 Deno.test({
   name: 'UnixSocketTransport: large frames are transmitted correctly',
+  ignore: needsUnix,
   async fn() {
     const server = startPlugin();
     const client = startPlugin();

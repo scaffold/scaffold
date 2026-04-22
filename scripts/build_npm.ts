@@ -22,6 +22,8 @@ for await (
       './src/demo/**/*.ts',
       './src/worker/**/*.ts',
       './src/util/QueueMuxer.ts',
+      // Deno-only: uses Deno.listen/Deno.connect with unix transport.
+      './src/node/UnixSocketTransport.ts',
     ],
   })
 ) {

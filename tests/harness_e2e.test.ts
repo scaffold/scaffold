@@ -11,6 +11,7 @@ import { Hash } from '../src/util/Hash.ts';
 import { buildHarnessGenesis } from '../harness/genesisBuilder.ts';
 import { writePeerManifest } from '../harness/peerManifest.ts';
 import type { PeerEntry, UserKey } from '../harness/types.ts';
+import { unixSocketsAvailable } from './helpers/unixSocketsAvailable.ts';
 
 interface SpawnedAnchor {
   sessionId: string;
@@ -153,6 +154,11 @@ async function waitFor(
 
 Deno.test({
   name: 'harness e2e: 3 anchors mesh-connect via UnixSocketTransport',
+  // The harness App runtime is hardcoded to UnixSocketTransport, and this
+  // test spawns real subprocesses. Sandboxed environments that deny
+  // AF_UNIX bind() cannot run it; subprocesses lack shared memory for an
+  // in-process transport, and TCP loopback is similarly blocked.
+  ignore: !unixSocketsAvailable(),
   sanitizeOps: false,
   sanitizeResources: false,
   async fn() {
