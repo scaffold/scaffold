@@ -93,18 +93,22 @@ export class TrustGate {
       let settled = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
 
-      const unsubscribe = this.onTrustChanged((h, s) => {
+      const settle = (fn: () => void) => {
         if (settled) return;
+        settled = true;
+        cleanup();
+        fn();
+      };
+
+      const check = () => {
+        const s = this.status(hash);
+        if (s.kind === 'trusted') settle(() => resolve(s));
+        else if (s.kind === 'rejected') settle(() => reject(rejectionError(s)));
+      };
+
+      const unsubscribe = this.onTrustChanged((h, _s) => {
         if (h.toHex() !== hash.toHex()) return;
-        if (s.kind === 'trusted') {
-          settled = true;
-          cleanup();
-          resolve(s);
-        } else if (s.kind === 'rejected') {
-          settled = true;
-          cleanup();
-          reject(rejectionError(s));
-        }
+        check();
       });
 
       const cleanup = () => {
@@ -113,19 +117,18 @@ export class TrustGate {
       };
 
       if (opts.timeoutMs !== undefined) {
-        timer = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          cleanup();
-          reject(new TrustTimeoutError(opts.timeoutMs!));
-        }, opts.timeoutMs);
+        timer = setTimeout(
+          () => settle(() => reject(new TrustTimeoutError(opts.timeoutMs!))),
+          opts.timeoutMs,
+        );
       }
 
-      // Kick off verification. We intentionally ignore the returned
-      // promise -- transitions flow through onVerificationStatusChanged.
-      // Errors from requestVerification are swallowed; if verification
-      // actually fails, we'll see a 'failed' status transition.
-      this.provider.requestVerification(hash).catch(() => {});
+      // Kick off verification. Dedup-aware in the underlying service;
+      // a no-op if already in-flight or settled. Race: if status flipped
+      // between the initial read and listener wiring, check() catches it.
+      this.provider.requestVerification(hash).then(check, check);
+
+      check();
     });
   }
 

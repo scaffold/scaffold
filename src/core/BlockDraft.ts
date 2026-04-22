@@ -80,9 +80,13 @@ export class DraftStore {
   private readonly drafts = new Map<HashPrimitive, BlockDraft>();
   private readonly _transitionListeners: ((draft: BlockDraft) => void)[] = [];
 
-  /** Register a listener that fires after any status transition. */
-  onTransition(cb: (draft: BlockDraft) => void): void {
+  /** Register a listener that fires after any status transition. Returns an unsubscribe function. */
+  onTransition(cb: (draft: BlockDraft) => void): () => void {
     this._transitionListeners.push(cb);
+    return () => {
+      const i = this._transitionListeners.indexOf(cb);
+      if (i >= 0) this._transitionListeners.splice(i, 1);
+    };
   }
 
   get size(): number {

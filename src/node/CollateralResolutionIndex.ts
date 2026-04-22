@@ -60,6 +60,14 @@ export interface CollateralResolutionIndexProvider {
   isCanonical(h: Hash): boolean;
   /** Canonicality flips for any hash (blocks + drafts). */
   onCanonicalityChanged(cb: (h: Hash, canonical: boolean) => void): () => void;
+
+  /**
+   * Optional sink for malformed verdict outputs. A source that has a
+   * verdict record output but fails to decode is dropped from the index
+   * (a malformed verdict carries no signal). The hook lets the wiring
+   * layer log it via whatever logging facility it has.
+   */
+  onMalformedVerdict?(source: SourceRef, err: unknown): void;
 }
 
 // -- Implementation ---------------------------------------------------
@@ -136,13 +144,10 @@ export class CollateralResolutionIndex {
   // -- Ingestion --------------------------------------------------
 
   private _ingestBlock(block: Block): void {
-    const v = readVerdictFromBlock(block);
+    const source: SourceRef = { kind: 'block', hash: block.hash };
+    const v = this._readVerdict(block, source);
     if (!v) return;
-    const entry: Entry = {
-      source: { kind: 'block', hash: block.hash },
-      target: v.target,
-      verdict: v.verdict,
-    };
+    const entry: Entry = { source, target: v.target, verdict: v.verdict };
     const status = this.provider.getVerificationStatus(block.hash);
     if (status === 'passed') {
       this._activate(entry);
@@ -155,17 +160,26 @@ export class CollateralResolutionIndex {
   }
 
   private _ingestDraft(draft: BlockDraft): void {
-    const v = readVerdictFromBlock(draft);
+    const source: SourceRef = { kind: 'draft', hash: draft.draftId };
+    const v = this._readVerdict(draft, source);
     if (!v) return;
-    const entry: Entry = {
-      source: { kind: 'draft', hash: draft.draftId },
-      target: v.target,
-      verdict: v.verdict,
-    };
+    const entry: Entry = { source, target: v.target, verdict: v.verdict };
     // Drafts don't participate in block verification -- treat status==='ready'
     // as the activation gate. `_onDraftTransition` routes non-ready drafts.
     if (draft.status === 'ready') {
       this._activate(entry);
+    }
+  }
+
+  private _readVerdict(
+    block: { outputs: Block['outputs'] },
+    source: SourceRef,
+  ): ReturnType<typeof readVerdictFromBlock> {
+    try {
+      return readVerdictFromBlock(block);
+    } catch (err) {
+      this.provider.onMalformedVerdict?.(source, err);
+      return undefined;
     }
   }
 

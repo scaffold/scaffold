@@ -117,19 +117,19 @@ export function decodeVerdict(bytes: Uint8Array): VerdictRecord {
 }
 
 /**
- * Read the verdict record output from a block, if present and decodable.
- * Returns `undefined` if no verdict record output exists or decoding fails.
+ * Read the verdict record output from a block.
+ *
+ * Returns `undefined` when no verdict record output is present (the
+ * common, expected case for non-resolution blocks). Throws when a
+ * record output is present but malformed -- callers must catch and
+ * log so we don't drop bad input silently.
  */
 export function readVerdictFromBlock(
   block: { outputs: Output[] },
 ): VerdictRecord | undefined {
   const out = findRecordOutput(block as Block, VERDICT_RECORD_KEY);
   if (!out) return undefined;
-  try {
-    return decodeVerdict(out.data);
-  } catch {
-    return undefined;
-  }
+  return decodeVerdict(out.data);
 }
 
 // -- Helpers ----------------------------------------------------------

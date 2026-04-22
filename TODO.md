@@ -4,6 +4,9 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 
 ## Core Protocol
 
+### Fold `SamplingModule.selfVerified` into BlockVerificationModule
+Phase 1 of the verification-state unification left `SamplingModule` tracking its own per-block `selfVerified: boolean` inside `BlockSampleState`. `BlockVerificationModule` is now the authoritative source of "did the contract accept" via `getStatus()`. Sampling's weight-factor computation should read from there instead of its own shadow flag. Non-blocking; both are always updated together via `Coordinator.attemptVerification`. See `src/core/SamplingModule.ts:32-37`.
+
 ### Collateral Posting Strategy
 The TrustModule tracks collateral and the DisputeStrategy emits `dispute` actions for invalid blocks, but there is no strategy for **posting** collateral. Need a `CollateralStrategy` that:
 - Posts FOR collateral on blocks we generated (publisher obligation for hard contracts)

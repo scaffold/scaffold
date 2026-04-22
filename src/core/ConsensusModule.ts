@@ -90,9 +90,13 @@ export class ConsensusModule<BlockType> {
     this.canonicalOnlyWeight = config?.canonicalOnlyWeight ?? false;
   }
 
-  /** Register a listener for canonicality changes. */
-  onCanonicalityChange(cb: (hash: Hash, canonical: boolean) => void): void {
+  /** Register a listener for canonicality changes. Returns an unsubscribe function. */
+  onCanonicalityChange(cb: (hash: Hash, canonical: boolean) => void): () => void {
     this.canonicalityListeners.push(cb);
+    return () => {
+      const i = this.canonicalityListeners.indexOf(cb);
+      if (i >= 0) this.canonicalityListeners.splice(i, 1);
+    };
   }
 
   /**

@@ -20,6 +20,7 @@ export class CollateralResolutionIndexService extends CollateralResolutionIndex 
     const draftStore = ctx.get(DraftStore);
     const blockVerification = ctx.get(BlockVerificationService);
     const consensus = ctx.get(ConsensusService);
+    const log = ctx.logger('trustgate');
 
     const provider: CollateralResolutionIndexProvider = {
       iterateBlocks(): Iterable<Block> {
@@ -32,26 +33,26 @@ export class CollateralResolutionIndexService extends CollateralResolutionIndex 
         return store.onAdded(cb);
       },
       onDraftTransition(cb) {
-        // DraftStore.onTransition does not return an unsubscribe handle today;
-        // we keep the same contract and return a no-op.
-        draftStore.onTransition(cb);
-        return () => {};
+        return draftStore.onTransition(cb);
       },
       getVerificationStatus(h: Hash): VerificationStatus {
         return blockVerification.getStatus(h);
       },
       onVerificationStatusChanged(cb) {
-        // BlockVerificationModule.onStatusChanged takes a callback with
-        // the same shape -- forward it.
-        blockVerification.onStatusChanged((hash, status) => cb(hash, status));
-        return () => {};
+        return blockVerification.onStatusChanged(cb);
       },
       isCanonical(h: Hash): boolean {
         return consensus.isCanonical(h);
       },
       onCanonicalityChanged(cb) {
-        consensus.onCanonicalityChange(cb);
-        return () => {};
+        return consensus.onCanonicalityChange(cb);
+      },
+      onMalformedVerdict(source, err) {
+        log?.warn('malformedVerdict', {
+          sourceKind: source.kind,
+          source: source.hash.toHex(),
+          error: err instanceof Error ? err.message : String(err),
+        });
       },
     };
 

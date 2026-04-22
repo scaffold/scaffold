@@ -23,8 +23,7 @@ export class TrustGateService extends TrustGate {
         return blockVerification.getStatus(h);
       },
       onVerificationStatusChanged(cb) {
-        blockVerification.onStatusChanged(cb);
-        return () => {};
+        return blockVerification.onStatusChanged(cb);
       },
       requestVerification(h: Hash) {
         return blockVerification.verify(h);
@@ -33,8 +32,7 @@ export class TrustGateService extends TrustGate {
         return index.verdict(h);
       },
       onVerdictChanged(cb) {
-        index.onVerdictChanged(cb);
-        return () => {};
+        return index.onVerdictChanged(cb);
       },
     };
 
