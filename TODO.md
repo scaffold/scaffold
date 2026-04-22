@@ -13,8 +13,12 @@ The TrustModule tracks collateral and the DisputeStrategy emits `dispute` action
 - Posts FOR collateral on blocks we verified as valid (earn resolution reward)
 - Posts AGAINST collateral when verification fails (trigger dispute)
 - Manages collateral lifecycle: redemption after aggregation, reclaim when non-canonical
+- **Auto-stake on locally-verified piggybacks.** [PiggybackStrategy](src/node/strategies/PiggybackStrategy.ts) builds + verifies + broadcasts a piggyback but does not currently post FOR collateral on it. Without a stake the piggyback loses on weight to any responder that did stake; wire piggyback's verify-pass step into the same node policy that decides "would we stake on anything we verified?".
 
 The reactive action types (`createBlock` with collateral outputs) exist, but the decision logic for when and how much to stake is unimplemented. The [CollateralContract](src/contracts/CollateralContract.ts) handles resolution; this is about the posting side.
+
+### Pre-publish Piggyback (incentive cancellation)
+[PiggybackStrategy](src/node/strategies/PiggybackStrategy.ts) only piggybacks against already-published incentives. The [piggyback design](docs/design/piggyback.md) sketches a "pre-publish" path: when a trusted satisfying block appears before our own incentive has been broadcast, build a local-only piggyback and cancel the enqueued incentive instead of paying. Requires PutManager-side introspection of queued-but-unpublished incentive blocks (not exposed today). Defer until there's user demand or the `publish: false` fetch path needs it.
 
 ### WASM Contract Runtime
 `ContractHost` currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The `runVerifying` / `runGenerating` surface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as an in-memory binary store but is not yet consumed for actual WASM execution.

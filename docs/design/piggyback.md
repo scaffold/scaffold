@@ -1,6 +1,7 @@
 # Piggyback — Design
 
-> Status: design sketch, not yet implemented. Consumed by [fetch](fetch.md).
+> Status: implemented (Phase 3). Universal-piggyback variant; the
+> earlier fetch-subscription-scoped design has been superseded.
 > Depends on the [trust gate](trust-gate.md).
 
 ## Problem
@@ -18,46 +19,54 @@ long-term value:
    should be *reusable* — otherwise the only rational strategy is "answer
    once, discard, never cache," which is bad for the network.
 
-Piggyback fixes both. When the node sees a trusted block containing the
-answer to V, it **builds its own claiming block** that references the
-source, reproduces the record, and claims our pending incentive. No new
-responder work, no duplicate payment, and Carol's old block stays
-economically alive as a source.
+Piggyback fixes both by turning every node into a competitive responder.
+When the node sees a trusted block containing the answer to V and a
+canonical unspent incentive for V exists in the network (whether ours or
+anyone else's), it **builds its own claiming block** that references the
+source, reproduces the record, and claims that incentive. No new
+responder work, no duplicate payment, and the original responder's old
+block stays economically alive as a source.
 
 ---
 
 ## Core flow
 
-Triggered whenever a block enters `Trusted` state and one of our active
-fetch subscriptions might be served by it.
+Triggered for every {canonical unspent output O with verifier V, trusted
+block B that already serves V but does not claim O}. Three event sources
+funnel into the same loop:
+
+- **New trusted block.** A block becomes `Trusted` (verified or
+  collateralized). Scan its resolved claims to discover which verifiers
+  V it serves; for each V, look up unspent canonical UTXOs in the index.
+- **New unspent UTXO.** A canonical UTXO with verifier V appears (e.g.
+  via reorg). Look up trusted sources for V from the inverted index.
+- **New claim resolution.** OutputClaimService delivers a resolution
+  for an already-trusted block; treat as the "new trusted block" path.
 
 ```
-1. Scan block.claims. Does it claim an output whose verifier matches
-   any of our active fetch subscriptions V?
-       No  → not a source.
-       Yes → we have a trusted response to V. Continue.
+For each (V, B, O) tuple matched above:
 
-2. Does this block claim OUR incentive output for V?
-       Yes → nothing to do; FetchNotifyStrategy already handles it.
-       No  → piggyback candidate.
-
-3. For each active fetch (contract V, recordKey K) whose incentive is
-   unspent:
-     a. Construct a piggyback block:
-          anchor:     our canonical tip
-          refs:       [source block]
-          outputs:    [self-claimed RECORD at K copied from source]
-          claims:     [our incentive output]
-          collateral: none (yet)
-     b. Run local verification against the piggyback.
-          Accept  → surface as a FetchClaim to callbacks.
-          Reject  → discard. Wait for a real responder.
-     c. Publish the piggyback (best-effort race to claim our incentive
-        before the original responder does).
-     d. Optionally, stake FOR collateral on the piggyback. This is the
-        same decision as "would we stake on anything we verified?" —
-        governed by node policy, not fetch-local.
+  1. Skip if (V, B, O) was already attempted.
+  2. Skip if O is the same output B already claims (B == responder).
+  3. Construct a piggyback block:
+       anchor:  our canonical tip
+       refs:    [B]
+       outputs: [copies of B's self-claimed RECORD outputs]
+       claims:  [self-claim of each copied record, claim of O]
+       declaredWeight: 0
+       aggregates: []
+  4. Locally ingest the piggyback (broadcast: false). Force
+     verification via BlockVerificationService.verify(piggybackHash).
+  5. On verify pass:  dispatch submitBlock -> network broadcast.
+       (Optional: separately post FOR collateral on the piggyback as
+       a node-policy decision; deferred to a later phase.)
+     On verify fail: discard; reopen the (V, B, O) attempt slot so a
+       different source can be tried later.
 ```
+
+Piggyback is **not scoped to the node's own fetch subscriptions**. Any
+open V request in the network is fair game once we have a trusted answer
+for V — this is what makes piggyback the competitive-responder market.
 
 ---
 
@@ -172,43 +181,55 @@ causes too much piggyback churn.
 ## Interface sketch
 
 ```ts
-// New reactive strategy, sibling to FetchNotifyStrategy.
+// Reactive strategy. Wired in NodeContext alongside DraftStrategy and
+// any user-supplied strategies.
 class PiggybackStrategy implements Strategy {
-  constructor(
-    private fetchManager: FetchManager,
-    private trustGate: TrustGate,
-    private blockBuilder: BlockCreationService,
-    private executor: ExecutionService,   // for local verify
-  ) {}
+  constructor(deps: {
+    trustGate: TrustGate;
+    blockVerification: BlockVerificationService;
+    blockStore: BlockStore;
+    consensus: ConsensusService;
+    utxoIndex: UtxoIndex;
+    outputClaims: OutputClaimService;
+    dispatcher: { dispatchActions(a: Action[]): void };
+    outputSpace: () => OutputSpaceModule;
+    logger?: ScopedLogger;
+  });
 
-  evaluate(event: ReactiveEvent): Action[] { ... }
+  evaluate(event: ReactiveEvent): Action[];
 }
 ```
 
-It emits `buildAndSubmit` actions (piggyback blocks) and `notifyFetch`
-actions (surfacing pre-publish copies).
+Emits `createBlock { broadcast: false }` (locally-ingested piggyback) and
+`submitBlock { hash }` (graduate to network broadcast after local
+verification passes). Both action types live on `ReactiveLayer.Action`.
 
 ---
 
 ## Open questions
 
 1. **Bounded piggyback attempts.** A popular verifier might have many
-   trusted sources. Do we piggyback on the first trusted one we see, or
-   keep updating when a better one arrives? Leaning: first-trusted to
-   avoid churn; upgrade only if current source loses canonicality.
-2. **Incentive cancellation timing.** Pre-publish piggyback cancels the
-   enqueued incentive. If multiple fetches share the incentive (dedup)
-   and one piggybacks while another is still waiting, who wins? Leaning:
-   cancel the incentive only when *all* deduped subscribers have been
-   served by piggyback; otherwise publish. Note that `publish: false`
-   subscribers alone never force publication — an incentive with *only*
-   `publish: false` subscribers stays local forever; adding a
-   `publish: true` subscriber graduates the incentive to the network.
-3. **Copy fidelity.** We copy the record bytes verbatim. What if the
+   trusted sources. Currently the strategy attempts piggyback against
+   every trusted source for every unspent UTXO. Dedup keys
+   `(V, source, candidate)` triples so we don't re-try the same combo,
+   but if N sources all serve V we'll build N piggybacks per UTXO.
+   Revisit if this produces visible churn; "first-trusted-only" is a
+   simple bound to add.
+2. **Pre-publish piggyback (incentive cancellation).** Deferred. The
+   design doc previously discussed cancelling an enqueued incentive when
+   a trusted source appears before publication. This requires PutManager
+   introspection that doesn't exist; tracked in `TODO.md` and not yet
+   scoped.
+3. **Collateral staking on verified piggybacks.** Deferred to a node-
+   policy hook (TODO.md). Phase 3 ships piggyback without auto-staking;
+   the broadcast piggyback racing against the original responder will
+   typically lose if the original posted FOR collateral. Acceptable
+   trade-off for the first implementation.
+4. **Copy fidelity.** We copy the record bytes verbatim. What if the
    contract requires the record data to be *re-derived* (e.g. includes
    timestamps, block-specific identifiers)? Local verify catches this;
    we discard. Flag as contract-incompat if frequent.
-4. **Claim-history pollution.** Piggyback blocks appear in claim history
+5. **Claim-history pollution.** Piggyback blocks appear in claim history
    too. Do they skew gossip routing? Probably fine — they legitimately
    claim V and legitimately serve future V-requesters. Monitor.
 

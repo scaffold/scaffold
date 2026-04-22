@@ -36,7 +36,24 @@ export interface ReactiveEvent {
 
 /** Actions that strategies can request. */
 export type Action =
-  | { type: 'createBlock'; spec: BlockSpec; sign: boolean }
+  | {
+    type: 'createBlock';
+    spec: BlockSpec;
+    sign: boolean;
+    /**
+     * When false, build + sign + ingest locally but suppress the network
+     * publish (no routing / push-action computation). Defaults to true.
+     * Used by PiggybackStrategy to gate broadcast on local verification.
+     */
+    broadcast?: boolean;
+    /**
+     * Optional continuation called with the just-built block (or null on
+     * build failure). Lets the emitting strategy track the produced
+     * block hash for follow-up actions (e.g. submitBlock once verified).
+     */
+    onCreated?: (block: Block | null) => void;
+  }
+  | { type: 'submitBlock'; hash: Hash }
   | { type: 'verify'; block: Hash; contract: Hash; params: Uint8Array }
   | { type: 'dispute'; block: Hash; side: 'for' | 'against' }
   | { type: 'notifyFetch'; verifier: VerifierKey; result: FetchResult | null }
@@ -158,12 +175,15 @@ export class ReactiveLayer {
     fromPeer: string | null,
     cycleCreated: Set<HashPrimitive>,
     allActions: Action[],
+    broadcast: boolean = true,
   ): void {
     // 1. Run the block through the coordinator
     const result = this.coordinator.blockReceived(block, fromPeer);
 
-    // 2. Routing: compute push targets (node-layer concern)
-    if (this.routing) {
+    // 2. Routing: compute push targets (node-layer concern). Skipped when
+    //    broadcast=false so locally-ingested piggyback blocks never touch
+    //    the network until a follow-up `submitBlock` action graduates them.
+    if (this.routing && broadcast) {
       this.pendingPushActions = [];
       this.routing.blockReceived(block.hash, fromPeer);
       if (this.pendingPushActions.length > 0) {
@@ -206,6 +226,33 @@ export class ReactiveLayer {
     allActions.push(...actions);
 
     // 6. Execute actions
+    this._dispatchActions(actions, cycleCreated, allActions);
+  }
+
+  /**
+   * Dispatch actions emitted outside the block-receive cycle. Used by
+   * strategies that observe events from non-block sources (e.g.
+   * PiggybackStrategy subscribing to `TrustGate.onTrustChanged`,
+   * `UtxoIndex.onOutputReAdded`, or settled verification promises).
+   *
+   * Drives the same switch used by `processBlockInner`'s post-evaluate
+   * step. createBlock actions still recurse through the block pipeline.
+   */
+  dispatchActions(actions: Action[]): void {
+    if (actions.length === 0) return;
+    this._log?.debug('externalActions', {
+      actions: actions.map((a) => a.type),
+    });
+    const cycleCreated = new Set<HashPrimitive>();
+    const allActions: Action[] = [];
+    this._dispatchActions(actions, cycleCreated, allActions);
+  }
+
+  private _dispatchActions(
+    actions: Action[],
+    cycleCreated: Set<HashPrimitive>,
+    allActions: Action[],
+  ): void {
     for (const action of actions) {
       switch (action.type) {
         case 'createBlock': {
@@ -216,12 +263,37 @@ export class ReactiveLayer {
               hash: newBlock.hash.toHex(),
               anchor: action.spec.anchor.toHex(),
               outputCount: action.spec.outputs.length,
+              broadcast: action.broadcast !== false,
             });
             // Mark as created in this cycle so strategies don't re-evaluate it
             cycleCreated.add(newBlock.hash.toPrimitive());
             // Recurse: process the new block through coordinator and strategies
-            this.processBlockInner(newBlock, null, cycleCreated, allActions);
+            this.processBlockInner(
+              newBlock,
+              null,
+              cycleCreated,
+              allActions,
+              action.broadcast !== false,
+            );
           }
+          action.onCreated?.(newBlock);
+          break;
+        }
+        case 'submitBlock': {
+          if (!this.routing) break;
+          const stored = this.store.get(action.hash);
+          if (!stored) {
+            this._log?.warn('submitBlockUnknown', {
+              hash: action.hash.toHex(),
+            });
+            break;
+          }
+          this.pendingPushActions = [];
+          this.routing.blockReceived(stored.hash, null);
+          if (this.pendingPushActions.length > 0) {
+            this.onPushActions?.(this.pendingPushActions, stored);
+          }
+          this._log?.info('submitBlock', { hash: stored.hash.toHex() });
           break;
         }
         case 'verify':

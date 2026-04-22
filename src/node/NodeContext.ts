@@ -51,6 +51,7 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
+import { PiggybackStrategy } from './strategies/PiggybackStrategy.ts';
 import { EventLog } from '../core/EventLog.ts';
 import { CollateralResolutionIndexService } from './CollateralResolutionIndexService.ts';
 import { TrustGateService } from './TrustGateService.ts';
@@ -193,8 +194,7 @@ export class NodeContext {
     this.execution = {
       verifyBlock: (hash: Hash) => bvs.verify(hash),
       getContract: (hash: Hash) => host.getContract(hash),
-      registerContract: (hash: Hash, contract: Contract) =>
-        host.registerContract(hash, contract),
+      registerContract: (hash: Hash, contract: Contract) => host.registerContract(hash, contract),
     };
 
     // 4. Create Coordinator
@@ -328,8 +328,7 @@ export class NodeContext {
     //    funding needs.
     const contracts = this._contracts;
     const enableGeneration = config.enableGeneration ??
-      ((hash: Hash) =>
-        contracts.has(hash.toHex()) && !Hash.equals(hash, SIGNATURE_CONTRACT));
+      ((hash: Hash) => contracts.has(hash.toHex()) && !Hash.equals(hash, SIGNATURE_CONTRACT));
     const draftStrategy = new DraftStrategy(
       { enableGeneration },
       this.generation,
@@ -340,8 +339,28 @@ export class NodeContext {
     this.generation.setOutputReleasedHook((block, outputIndex) => {
       draftStrategy.complete(block, outputIndex);
     });
+    // PiggybackStrategy needs ReactiveLayer.dispatchActions for its
+    // out-of-cycle triggers (trust transitions, late UTXO arrivals,
+    // settled verifications). ReactiveLayer doesn't exist yet, so we
+    // bind via a late-resolved holder.
+    const reactiveLayerRef: { current?: ReactiveLayer } = {};
+    const piggybackStrategy = new PiggybackStrategy({
+      trustGate: this.trustGate,
+      blockVerification: this.blockVerification,
+      blockStore: this.store,
+      consensus: this.consensus,
+      utxoIndex: this.utxoIndex,
+      outputClaims: this.outputClaims,
+      dispatcher: {
+        dispatchActions: (actions) => reactiveLayerRef.current?.dispatchActions(actions),
+      },
+      outputSpace: () => makeStoreOutputSpace(this.store),
+      logger: this.protocolContext.logger('piggyback'),
+    });
+
     const strategies: Strategy[] = [
       draftStrategy,
+      piggybackStrategy,
       ...(config.strategies ?? []),
     ];
 
@@ -363,6 +382,7 @@ export class NodeContext {
         blocks.add(block);
       },
     });
+    reactiveLayerRef.current = this.reactiveLayer;
 
     // 9. Wire draft solidification: when a draft becomes ready, build and process it.
     //    Release inFlight slots BEFORE solidification so that when the new
@@ -659,7 +679,7 @@ export function findCanonicalTip(ctx: NodeContext): Hash {
  * Build an OutputSpaceProvider that reads blocks out of a BlockStore.
  * Mirrors the provider used in _solidifyDraft.
  */
-function makeStoreOutputSpace(store: BlockStore): OutputSpaceModule {
+export function makeStoreOutputSpace(store: BlockStore): OutputSpaceModule {
   const provider: OutputSpaceProvider = {
     getBlock(hash: Hash): OutputSpaceBlock | undefined {
       const block = store.get(hash);
