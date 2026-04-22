@@ -27,7 +27,6 @@
         "recommended"
       ],
       "include": [
-        "ban-untagged-todo",
         "camelcase",
         "default-param-last",
         "eqeqeq",
