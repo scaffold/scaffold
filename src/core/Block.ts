@@ -103,17 +103,36 @@ export interface Block {
 export class BlockStore {
   private readonly blocks = new Map<HashPrimitive, Block>();
   private readonly aggregated = new Set<HashPrimitive>();
+  private readonly _addListeners: ((block: Block) => void)[] = [];
 
   get(hash: Hash): Block | undefined {
     return this.blocks.get(hash.toPrimitive());
   }
 
+  /**
+   * Register a listener fired after a new block is inserted via `put()`.
+   * Not fired on re-puts of an already-stored hash.
+   */
+  onAdded(cb: (block: Block) => void): () => void {
+    this._addListeners.push(cb);
+    return () => {
+      const i = this._addListeners.indexOf(cb);
+      if (i >= 0) this._addListeners.splice(i, 1);
+    };
+  }
+
   put(block: Block): void {
-    this.blocks.set(block.hash.toPrimitive(), block);
+    const key = block.hash.toPrimitive();
+    const isNew = !this.blocks.has(key);
+    this.blocks.set(key, block);
 
     // Track which blocks get aggregated
     for (const agg of block.aggregates) {
       this.aggregated.add(agg.toPrimitive());
+    }
+
+    if (isNew) {
+      for (const cb of this._addListeners) cb(block);
     }
   }
 

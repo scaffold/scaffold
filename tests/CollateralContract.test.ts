@@ -23,7 +23,11 @@ import {
   collateralContract,
   decayedValue,
   DECAY_CONSTANT,
+  decodeVerdict,
+  encodeVerdict,
   PREIMAGE_RESULT_KEY,
+  readVerdictFromBlock,
+  VERDICT_RECORD_KEY,
 } from '../src/contracts/CollateralContract.ts';
 
 // -- Test block type -------------------------------------------------
@@ -60,6 +64,10 @@ function sigOutput(pk: Uint8Array, value: number): Output {
     value,
     data: new Uint8Array(0),
   };
+}
+
+function verdictOutput(target: Hash, verdict: 'valid' | 'invalid'): Output {
+  return makeRecordOutput(VERDICT_RECORD_KEY, encodeVerdict({ target, verdict }));
 }
 
 // -- Test provider ---------------------------------------------------
@@ -157,8 +165,10 @@ Deno.test('Collateral: decay return -- publisher reclaims FOR when no AGAINST', 
   const claimBlock: TestBlock = {
     hash: h('claim'),
     anchor: anchor.hash,
-    outputs: [sigOutput(pk, 1000)],
-    claims: [1],
+    // own: [sig, verdict]; anchor.own: [FOR]
+    // ext: [sig(0), verdict(1), FOR(2)]
+    outputs: [sigOutput(pk, 1000), verdictOutput(TARGET_BLOCK, 'valid')],
+    claims: [2, 1],
     refs: [],
     signer: pk,
     timestamp: 2000,
@@ -251,8 +261,10 @@ Deno.test('Collateral: unresolved challenge -- challenger claims FOR + own bond'
   const claimBlock: TestBlock = {
     hash: h('claim'),
     anchor: anchor.hash,
-    outputs: [sigOutput(challengerPk, 50 + 1000)],
-    claims: [1, 2],
+    // own: [sig, verdict]; anchor.own: [FOR, AGAINST]
+    // ext: [sig(0), verdict(1), FOR(2), AGAINST(3)]
+    outputs: [sigOutput(challengerPk, 50 + 1000), verdictOutput(TARGET_BLOCK, 'invalid')],
+    claims: [2, 3, 1],
     refs: [],
     signer: challengerPk,
     timestamp: 5000,
@@ -319,12 +331,15 @@ Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond',
   const claimBlock: TestBlock = {
     hash: h('claim'),
     anchor: anchor.hash,
+    // own: [sig1000, sig50, preimage, verdict]; anchor.own: [FOR, AGAINST]
+    // ext: [own0(0), own1(1), preimage(2), verdict(3), FOR(4), AGAINST(5)]
     outputs: [
       sigOutput(authorPk, 1000), // FOR returned
       sigOutput(authorPk, 50), // AGAINST bond earned
       makeRecordOutput(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY), // preimage result
+      verdictOutput(TARGET_BLOCK, 'valid'),
     ],
-    claims: [3, 4, 2], // claims anchor's FOR (ext[3]) and AGAINST (ext[4]), self-claims result (own[2])
+    claims: [4, 5, 2, 3], // FOR, AGAINST, self-claim preimage, self-claim verdict
     refs: [],
     signer: authorPk,
     timestamp: 2000,
@@ -406,11 +421,14 @@ Deno.test('Collateral: multiple AGAINST challengers each get FOR + own bond', as
   const claimBlock: TestBlock = {
     hash: h('claim'),
     anchor: anchor.hash,
+    // own: [sig-ch1, sig-ch2, verdict]; anchor.own: [FOR, A1, A2]
+    // ext: [own0(0), own1(1), verdict(2), FOR(3), A1(4), A2(5)]
     outputs: [
       sigOutput(ch1, 30 + 1000),
       sigOutput(ch2, 20 + 1000),
+      verdictOutput(TARGET_BLOCK, 'invalid'),
     ],
-    claims: [2, 3, 4], // anchor's FOR (ext[2]) + both AGAINST (ext[3], ext[4])
+    claims: [3, 4, 5, 2], // FOR + both AGAINST + self-claim verdict
     refs: [],
     signer: ch1,
     timestamp: 5000,
@@ -450,8 +468,10 @@ Deno.test('Collateral: AGAINST with each ChallengeTarget type', async () => {
     const claimBlock: TestBlock = {
       hash: h(`claim-${target.type}`),
       anchor: anchor.hash,
-      outputs: [sigOutput(challengerPk, 25 + 500)],
-      claims: [1, 2],
+      // own: [sig, verdict]; anchor.own: [FOR, AGAINST]
+      // ext: [sig(0), verdict(1), FOR(2), AGAINST(3)]
+      outputs: [sigOutput(challengerPk, 25 + 500), verdictOutput(TARGET_BLOCK, 'invalid')],
+      claims: [2, 3, 1],
       refs: [],
       signer: challengerPk,
       timestamp: 2000,
@@ -485,3 +505,170 @@ Deno.test('Collateral: AGAINST detail round-trips through encode/decode', () => 
     assertEquals(result.target, target);
   }
 });
+
+// -- Tests: verdict record output ------------------------------------
+
+Deno.test('Collateral: verdict record round-trips through encode/decode', () => {
+  const v = { target: TARGET_BLOCK, verdict: 'valid' as const };
+  assertEquals(decodeVerdict(encodeVerdict(v)), v);
+  const v2 = { target: TARGET_BLOCK, verdict: 'invalid' as const };
+  assertEquals(decodeVerdict(encodeVerdict(v2)), v2);
+});
+
+Deno.test('Collateral: Mode 1 (decay return) emits verdict=valid', async () => {
+  const { provider, module } = setup();
+  const pk = pubkey('author');
+  const anchor: TestBlock = {
+    hash: h('anchor-m1-verdict'),
+    anchor: ZERO_HASH,
+    outputs: [forOutput(1000, pk)],
+    claims: [],
+    refs: [],
+    timestamp: 1000,
+  };
+  provider.addBlock(anchor);
+  const claimBlock: TestBlock = {
+    hash: h('claim-m1-verdict'),
+    anchor: anchor.hash,
+    outputs: [sigOutput(pk, 1000), verdictOutput(TARGET_BLOCK, 'valid')],
+    claims: [2, 1],
+    refs: [],
+    signer: pk,
+    timestamp: 2000,
+  };
+  provider.addBlock(claimBlock);
+  assertEquals((await module.verifyBlock(claimBlock.hash)).accepted, true);
+  const v = readVerdictFromBlock(claimBlock);
+  assertEquals(v?.verdict, 'valid');
+  assertEquals(v?.target.toHex(), TARGET_BLOCK.toHex());
+});
+
+Deno.test('Collateral: Mode 1 rejects block with wrong verdict value', async () => {
+  const { provider, module } = setup();
+  const pk = pubkey('author');
+  const anchor: TestBlock = {
+    hash: h('anchor-m1-bad'),
+    anchor: ZERO_HASH,
+    outputs: [forOutput(1000, pk)],
+    claims: [],
+    refs: [],
+    timestamp: 1000,
+  };
+  provider.addBlock(anchor);
+  // Attempt to lie: Mode 1 must be 'valid', but we post 'invalid'.
+  const claimBlock: TestBlock = {
+    hash: h('claim-m1-bad'),
+    anchor: anchor.hash,
+    outputs: [sigOutput(pk, 1000), verdictOutput(TARGET_BLOCK, 'invalid')],
+    claims: [2, 1],
+    refs: [],
+    signer: pk,
+    timestamp: 2000,
+  };
+  provider.addBlock(claimBlock);
+  assertEquals((await module.verifyBlock(claimBlock.hash)).accepted, false);
+});
+
+Deno.test('Collateral: Mode 2 (hash challenge response) emits verdict=valid', async () => {
+  const { provider, module } = setup();
+  const authorPk = pubkey('author');
+  const challengerPk = pubkey('challenger');
+  const anchor: TestBlock = {
+    hash: h('anchor-m2-verdict'),
+    anchor: ZERO_HASH,
+    outputs: [
+      forOutput(1000, authorPk),
+      againstOutput(50, challengerPk, { type: 'anchor' }),
+    ],
+    claims: [],
+    refs: [],
+    timestamp: 1000,
+  };
+  provider.addBlock(anchor);
+  const claimBlock: TestBlock = {
+    hash: h('claim-m2-verdict'),
+    anchor: anchor.hash,
+    outputs: [
+      sigOutput(authorPk, 1000),
+      sigOutput(authorPk, 50),
+      makeRecordOutput(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY),
+      verdictOutput(TARGET_BLOCK, 'valid'),
+    ],
+    claims: [4, 5, 2, 3],
+    refs: [],
+    signer: authorPk,
+    timestamp: 2000,
+  };
+  provider.addBlock(claimBlock);
+  assertEquals((await module.verifyBlock(claimBlock.hash)).accepted, true);
+  assertEquals(readVerdictFromBlock(claimBlock)?.verdict, 'valid');
+});
+
+Deno.test('Collateral: Mode 3 (unresolved challenge) emits verdict=invalid', async () => {
+  const { provider, module } = setup();
+  const authorPk = pubkey('author');
+  const challengerPk = pubkey('challenger');
+  const anchor: TestBlock = {
+    hash: h('anchor-m3-verdict'),
+    anchor: ZERO_HASH,
+    outputs: [
+      forOutput(1000, authorPk),
+      againstOutput(50, challengerPk, { type: 'validity' }),
+    ],
+    claims: [],
+    refs: [],
+    timestamp: 1000,
+  };
+  provider.addBlock(anchor);
+  const claimBlock: TestBlock = {
+    hash: h('claim-m3-verdict'),
+    anchor: anchor.hash,
+    outputs: [
+      sigOutput(challengerPk, 50 + 1000),
+      verdictOutput(TARGET_BLOCK, 'invalid'),
+    ],
+    claims: [2, 3, 1],
+    refs: [],
+    signer: challengerPk,
+    timestamp: 5000,
+  };
+  provider.addBlock(claimBlock);
+  assertEquals((await module.verifyBlock(claimBlock.hash)).accepted, true);
+  assertEquals(readVerdictFromBlock(claimBlock)?.verdict, 'invalid');
+  assertEquals(readVerdictFromBlock(claimBlock)?.target.toHex(), TARGET_BLOCK.toHex());
+});
+
+Deno.test('Collateral: Mode 4 (non-canonical reclaim) emits NO verdict output', async () => {
+  const { provider, module } = setup();
+  const authorPk = pubkey('author');
+  const challengerPk = pubkey('challenger');
+  const reclaimerPk = pubkey('reclaimer');
+  const anchor: TestBlock = {
+    hash: h('anchor-m4-verdict'),
+    anchor: ZERO_HASH,
+    outputs: [
+      forOutput(1000, authorPk),
+      againstOutput(50, challengerPk, { type: 'validity' }),
+    ],
+    claims: [],
+    refs: [],
+    timestamp: 1000,
+  };
+  provider.addBlock(anchor);
+  const claimBlock: TestBlock = {
+    hash: h('claim-m4-verdict'),
+    anchor: anchor.hash,
+    outputs: [
+      sigOutput(authorPk, 1000),
+      sigOutput(challengerPk, 50),
+    ],
+    claims: [2, 3],
+    refs: [],
+    signer: reclaimerPk,
+    timestamp: 2000,
+  };
+  provider.addBlock(claimBlock);
+  assertEquals((await module.verifyBlock(claimBlock.hash)).accepted, true);
+  assertEquals(readVerdictFromBlock(claimBlock), undefined);
+});
+

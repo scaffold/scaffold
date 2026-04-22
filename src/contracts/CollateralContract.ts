@@ -1,11 +1,12 @@
 // Protocol spec: docs/protocol/collateral-resolution.md
 
 import { maybeThen } from '../util/MaybePromise.ts';
-import { COLLATERAL_CONTRACT, SIGNATURE_CONTRACT } from '../core/Block.ts';
+import { type Block, COLLATERAL_CONTRACT, SIGNATURE_CONTRACT } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
 import { type ContractEnv, ContractRejection, type Input } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
+import { findRecordOutput } from './RecordContract.ts';
 
 // -- Collateral types -------------------------------------------------
 
@@ -78,6 +79,58 @@ export const DECAY_CONSTANT = 0.0003;
 
 /** Result key used to provide a hash preimage for challenge response. */
 export const PREIMAGE_RESULT_KEY = new TextEncoder().encode('collateral:preimage');
+
+// -- Verdict record output --------------------------------------------
+
+/**
+ * Stable record-output key declaring the resolution verdict about the
+ * target block. Consumed by `CollateralResolutionIndex` (node-policy).
+ *
+ * Modes 1 and 2 emit `verdict: 'valid'`. Mode 3 emits `verdict: 'invalid'`.
+ * Mode 4 (non-canonical reclaim) emits no verdict output at all.
+ *
+ * The record is self-claimed via `env.requireResult` so it participates
+ * in the block's claim structure like any other result.
+ */
+export const VERDICT_RECORD_KEY = 'verdict';
+export const VERDICT_RECORD_KEY_BYTES = new TextEncoder().encode(VERDICT_RECORD_KEY);
+
+export type CollateralVerdict = 'valid' | 'invalid';
+
+export interface VerdictRecord {
+  target: Hash;
+  verdict: CollateralVerdict;
+}
+
+export function encodeVerdict(v: VerdictRecord): Uint8Array {
+  return new TextEncoder().encode(
+    JSON.stringify({ target: v.target.toHex(), verdict: v.verdict }),
+  );
+}
+
+export function decodeVerdict(bytes: Uint8Array): VerdictRecord {
+  const obj = JSON.parse(new TextDecoder().decode(bytes));
+  if (obj.verdict !== 'valid' && obj.verdict !== 'invalid') {
+    throw new Error(`invalid verdict value: ${obj.verdict}`);
+  }
+  return { target: Hash.fromHex(obj.target), verdict: obj.verdict };
+}
+
+/**
+ * Read the verdict record output from a block, if present and decodable.
+ * Returns `undefined` if no verdict record output exists or decoding fails.
+ */
+export function readVerdictFromBlock(
+  block: { outputs: Output[] },
+): VerdictRecord | undefined {
+  const out = findRecordOutput(block as Block, VERDICT_RECORD_KEY);
+  if (!out) return undefined;
+  try {
+    return decodeVerdict(out.data);
+  } catch {
+    return undefined;
+  }
+}
 
 // -- Helpers ----------------------------------------------------------
 
@@ -331,6 +384,7 @@ function decayReturn(
       input.value,
     );
   }
+  emitVerdict(env, 'valid');
 }
 
 /**
@@ -366,6 +420,8 @@ function hashChallengeResponse(
     { contract: SIGNATURE_CONTRACT, params: forPubkey },
     totalAgainst,
   );
+
+  emitVerdict(env, 'valid');
 }
 
 /**
@@ -388,6 +444,21 @@ function unresolvedChallenge(
       againstInput.value + totalForValue,
     );
   }
+
+  emitVerdict(env, 'invalid');
+}
+
+/**
+ * Emit the verdict record output for this resolution block. The target
+ * hash is taken from the contract's verifier params (all collateral
+ * inputs for a single invocation share the same target, since the
+ * contract is dispatched per distinct verifier).
+ *
+ * Mode 4 (non-canonical reclaim) does NOT call this -- no trust signal.
+ */
+function emitVerdict(env: ContractEnv, verdict: CollateralVerdict): void {
+  const target = Hash.fromBytes(env.getParams());
+  env.requireResult(VERDICT_RECORD_KEY_BYTES, encodeVerdict({ target, verdict }));
 }
 
 /**

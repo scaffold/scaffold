@@ -90,6 +90,27 @@ The challenger gets the decayed FOR value plus their own bond back.
 
 **Non-canonical reclaim** -- Target block became non-canonical. Full value returned to both FOR and AGAINST posters. No penalty for losing a consensus race.
 
+### Verdict Record Output
+
+On successful resolution, the contract emits a **verdict record output** declaring what the resolution concluded about the target block. This is a stable, contract-enforced interface consumed by node-policy modules (notably the `TrustGate` / `CollateralResolutionIndex`) to answer "did the network decide this block is valid?" without re-deriving the resolution mode.
+
+| Mode | Verdict |
+|---|---|
+| Decay return (no AGAINST) | `valid` |
+| Hash challenge response (FOR signer responded) | `valid` |
+| Unresolved challenge (AGAINST signer won) | `invalid` |
+| Non-canonical reclaim | *no verdict output emitted* |
+
+The verdict is a `RECORD_CONTRACT` output (self-claimed, value=0) with key `"verdict"` and payload:
+
+```json
+{ "target": "<hex block hash>", "verdict": "valid" | "invalid" }
+```
+
+The contract enforces this output via `env.requireResult()` in each resolution mode. Mode 4 (non-canonical reclaim) emits no verdict output -- it carries no trust signal.
+
+The resolution contract's internal logic may evolve, but as long as each mode continues to emit the correct verdict output (or abstain, in Mode 4), consumers of the verdict interface continue to work unchanged.
+
 ### Decay Formula
 
 ```

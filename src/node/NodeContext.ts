@@ -52,6 +52,8 @@ import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
 import { EventLog } from '../core/EventLog.ts';
+import { CollateralResolutionIndexService } from './CollateralResolutionIndexService.ts';
+import { TrustGateService } from './TrustGateService.ts';
 
 export interface NodeConfig {
   /** Genesis block (pre-built). */
@@ -100,6 +102,8 @@ export class NodeContext {
   readonly contractHost: ContractHostService;
   readonly blockVerification: BlockVerificationService;
   readonly generation: GenerationService;
+  readonly collateralResolutionIndex: CollateralResolutionIndexService;
+  readonly trustGate: TrustGateService;
 
   /**
    * Compatibility adapter preserving the old `execution.verifyBlock` /
@@ -173,6 +177,15 @@ export class NodeContext {
     this.contractHost = this.protocolContext.get(ContractHostService);
     this.blockVerification = this.protocolContext.get(BlockVerificationService);
     this.generation = this.protocolContext.get(GenerationService);
+
+    // 3c. TrustGate + supporting CollateralResolutionIndex. Both are
+    //     node-policy (src/node/), not protocol primitives. Constructed
+    //     eagerly so their listeners bind during NodeContext init.
+    //     Consumed by FetchManager / PiggybackStrategy in later phases.
+    this.collateralResolutionIndex = this.protocolContext.get(
+      CollateralResolutionIndexService,
+    );
+    this.trustGate = this.protocolContext.get(TrustGateService);
 
     // Compat adapter for tests that still expect `execution.verifyBlock`.
     const bvs = this.blockVerification;
