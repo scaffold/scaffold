@@ -431,14 +431,26 @@ export class NodeContext {
     // Create a virtual OutputSpaceBlock for the block being solidified.
     // This lets OutputSpaceModule compute claim indices and claim masks
     // even though the block doesn't exist in the store yet.
-    const selfClaimCount = 0; // Solidified blocks don't self-claim
+    //
+    // Self-claimed indices: every RECORD_CONTRACT output is self-claimed
+    // at solidification. Records are atomically produced+consumed on the
+    // emitting block -- downstream assembly handles the claim bookkeeping
+    // here, keeping it out of contract code. See
+    // docs/protocol/computation.md#self-claimed-outputs.
+    const selfClaimedIndices: number[] = [];
+    for (let i = 0; i < draft.outputs.length; i++) {
+      if (Hash.equals(draft.outputs[i].verifier.contract, RECORD_CONTRACT)) {
+        selfClaimedIndices.push(i);
+      }
+    }
+    const selfClaimCount = selfClaimedIndices.length;
     const virtualHash = draft.draftId;
     const virtualBlock: OutputSpaceBlock = {
       hash: virtualHash,
       anchor,
       aggregates,
       outputs: draft.outputs.map((o) => ({ value: o.value })),
-      claims: [], // Will be filled after computation
+      claims: [...selfClaimedIndices].sort((a, b) => a - b),
       aggregateOutputCounts,
       newOutputCount: draft.outputs.length - selfClaimCount +
         aggregateOutputCounts.reduce((a, b) => a + b, 0),
@@ -477,6 +489,13 @@ export class NodeContext {
       if (idx !== undefined) {
         claims.push({ index: idx, value: rc.value });
       }
+    }
+    // Add self-claim entries for record outputs. These use the raw
+    // output index (< draft.outputs.length) because self-claims target
+    // this block's own outputs directly. Value is 0 (records are
+    // economically neutral).
+    for (const idx of selfClaimedIndices) {
+      claims.push({ index: idx, value: 0 });
     }
 
     // Compute the composed claim mask for the aggregation data output
