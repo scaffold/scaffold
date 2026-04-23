@@ -4,6 +4,30 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
 
+// -- Draft merger disjointness ------------------------------------
+
+/**
+ * Two drafts are mergeable into a single block only if the sets of
+ * output namespaces owned by their claims are disjoint. Overlapping
+ * namespaces would collide the block-level partition check
+ * (see docs/protocol/computation.md#output-namespaces).
+ *
+ * `namespacesForDraft` maps a draft to the union of its claims'
+ * contracts' declared outputNamespaces -- typically callers pass a
+ * closure over `ContractHost.getOutputNamespaces` + the draft's
+ * resolvedClaims' verifiers.
+ */
+export function draftsAreMergeable(
+  a: Hash[],
+  b: Hash[],
+): boolean {
+  const keys = new Set(a.map((h) => h.toPrimitive()));
+  for (const h of b) {
+    if (keys.has(h.toPrimitive())) return false;
+  }
+  return true;
+}
+
 // -- Types --------------------------------------------------------
 
 /** Unique identifier for a draft. */
