@@ -36,10 +36,14 @@ const STRATEGIES: StrategyDef[] = [
 
 type Route = "explorer" | "chess";
 
+function isChessHash(hash: string): boolean {
+  return hash === "#chess" || hash.startsWith("#chess?");
+}
+
 export function App() {
   const [route, setRoute] = useState<Route>(() => {
     if (typeof globalThis !== "undefined" && globalThis.location) {
-      return globalThis.location.hash === "#chess" ? "chess" : "explorer";
+      return isChessHash(globalThis.location.hash) ? "chess" : "explorer";
     }
     return "explorer";
   });
@@ -47,7 +51,14 @@ export function App() {
   const navigate = useCallback((r: Route) => {
     setRoute(r);
     if (typeof globalThis !== "undefined" && globalThis.location) {
-      globalThis.location.hash = r === "chess" ? "#chess" : "";
+      // Preserve any existing chess query params when navigating back to chess.
+      if (r === "chess") {
+        if (!isChessHash(globalThis.location.hash)) {
+          globalThis.location.hash = "#chess";
+        }
+      } else {
+        globalThis.location.hash = "";
+      }
     }
   }, []);
 

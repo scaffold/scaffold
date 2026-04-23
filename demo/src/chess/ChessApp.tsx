@@ -1,17 +1,33 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scaffold } from 'scaffold.io/Scaffold.ts';
-import { composeGenesisPacket } from 'scaffold.io/core/Packet.ts';
-import { makeSignatureOutput } from 'scaffold.io/contracts/SignatureContract.ts';
-import { secp } from 'scaffold.io/util/secp.ts';
+import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from 'scaffold.io/genesis.ts';
 import { bin2hex } from 'scaffold.io/util/hex.ts';
 import { ChessGame } from 'scaffold.io/demo/chess/ChessGame.ts';
 import { ChessIndex } from 'scaffold.io/demo/chess/ChessIndex.ts';
 import { BalanceIndex } from 'scaffold.io/demo/chess/BalanceIndex.ts';
 import { encodeMove } from 'scaffold.io/demo/chess/GameStateCodec.ts';
+import { WebsocketClientTransport } from '../../../plugins/WebsocketClientTransport.ts';
+import { WebrtcTransport } from '../../../plugins/browser/WebrtcTransport.ts';
 import { Board } from './Board.tsx';
 import { Clock } from './Clock.tsx';
 import { Wallet } from './Wallet.tsx';
 import { GameList } from './GameList.tsx';
+
+const DEMO_SEEDS = ['a', 'b', 'c'] as const;
+type DemoSeed = typeof DEMO_SEEDS[number];
+
+const DEFAULT_HUB_URL = 'ws://127.0.0.1:8314/';
+
+function parseSeed(): DemoSeed {
+  if (typeof globalThis === 'undefined' || !globalThis.location) return 'a';
+  const hash = globalThis.location.hash; // e.g. "#chess?seed=b"
+  const q = hash.indexOf('?');
+  if (q < 0) return 'a';
+  const params = new URLSearchParams(hash.slice(q + 1));
+  const s = params.get('seed');
+  if (s && (DEMO_SEEDS as readonly string[]).includes(s)) return s as DemoSeed;
+  return 'a';
+}
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -28,13 +44,17 @@ interface Toast {
 let toastCounter = 0;
 
 export function ChessApp() {
+  const seed = useMemo(() => parseSeed(), []);
+
   const { scaffold, chess, chessIndex, balanceIndex } = useMemo(() => {
-    const priv = secp.utils.randomPrivateKey();
-    const pub = secp.getPublicKey(priv, true);
-    const { block: genesis } = composeGenesisPacket([
-      makeSignatureOutput(pub, 10_000),
-    ]);
-    const sc = new Scaffold({ privateKey: priv, genesis });
+    const priv = demoPrivateKey(seed);
+    const genesis = computeDemoGenesis(DEMO_SEEDS);
+    const sc = new Scaffold({
+      privateKey: priv,
+      genesis,
+      plugins: [new WebsocketClientTransport(), new WebrtcTransport()],
+      enableLogging: false,
+    });
     const g = new ChessGame(sc);
     return {
       scaffold: sc,
@@ -42,7 +62,7 @@ export function ChessApp() {
       chessIndex: new ChessIndex(sc, g),
       balanceIndex: new BalanceIndex(sc),
     };
-  }, []);
+  }, [seed]);
 
   const myPubkey = scaffold.publicKey;
   const myPubkeyHex = bin2hex(myPubkey);
@@ -50,6 +70,8 @@ export function ChessApp() {
   const [version, setVersion] = useState(0);
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [connectedPeers, setConnectedPeers] = useState<Set<string>>(() => new Set());
+  const connectedPeersRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const u1 = chessIndex.onChange(() => setVersion((v) => v + 1));
@@ -61,6 +83,59 @@ export function ChessApp() {
       u3();
     };
   }, [chessIndex, balanceIndex, chess]);
+
+  // Bootstrap to the signaling hub and auto-dial the other demo seeds.
+  // On every peer-connected event we re-attempt connectToPeer for any
+  // missing seed: that way when seed B's tab comes up after seed A's, A
+  // sees B via the hub and initiates a WebRTC handshake.
+  useEffect(() => {
+    scaffold.start();
+
+    const tryDialOthers = () => {
+      for (const s of DEMO_SEEDS) {
+        if (s === seed) continue;
+        const otherPub = demoPublicKey(s);
+        const otherHex = bin2hex(otherPub);
+        if (otherHex === myPubkeyHex) continue;
+        if (connectedPeersRef.current.has(otherHex)) continue;
+        scaffold.connectToPeer(otherPub).catch(() => {
+          // Transport failure (peer not online yet); will retry on next peer event.
+        });
+      }
+    };
+
+    scaffold.onPeerConnected((peerId) => {
+      setConnectedPeers((prev) => {
+        const next = new Set(prev);
+        next.add(peerId);
+        connectedPeersRef.current = next;
+        return next;
+      });
+      // Seed B just joined? Try the remaining known seeds.
+      tryDialOthers();
+    });
+    scaffold.onPeerDisconnected((peerId) => {
+      setConnectedPeers((prev) => {
+        const next = new Set(prev);
+        next.delete(peerId);
+        connectedPeersRef.current = next;
+        return next;
+      });
+    });
+
+    try {
+      scaffold.bootstrapConnection('websocket', DEFAULT_HUB_URL);
+    } catch (err) {
+      console.error('bootstrap failed', err);
+    }
+
+    // Initial fan-out attempt; most likely nothing answers until the hub relays.
+    tryDialOthers();
+
+    return () => {
+      void scaffold.close();
+    };
+  }, [scaffold, seed, myPubkeyHex]);
 
   const pushToast = useCallback(
     (message: string, kind: 'info' | 'error' = 'info') => {
@@ -167,8 +242,32 @@ export function ChessApp() {
     ((selected.state.state.toMove === 0 && amWhite) ||
       (selected.state.state.toMove === 1 && amBlack));
 
+  // Known peers map: seed letter → pubkey hex. Used to label the status pills.
+  const knownPeerLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of DEMO_SEEDS) map.set(bin2hex(demoPublicKey(s)), s.toUpperCase());
+    map.set(bin2hex(demoPublicKey('hub')), 'hub');
+    return map;
+  }, []);
+
   return (
-    <div style={{ ...pageStyle, fontFamily: '-apple-system, sans-serif' }}>
+    <div style={{ fontFamily: '-apple-system, sans-serif' }}>
+      <div style={statusBarStyle}>
+        <span style={seedPillStyle}>
+          You are seed <strong>{seed.toUpperCase()}</strong> · {myPubkeyHex.slice(0, 10)}...
+        </span>
+        {[...connectedPeers].map((peerId) => (
+          <span key={peerId} style={peerPillStyle}>
+            {knownPeerLabels.get(peerId) ?? peerId.slice(0, 6)}
+          </span>
+        ))}
+        {connectedPeers.size === 0 && (
+          <span style={noPeersStyle}>
+            waiting for signaling hub at {DEFAULT_HUB_URL}
+          </span>
+        )}
+      </div>
+      <div style={pageStyle}>
       <div style={leftPaneStyle}>
         <Wallet pubkeyHex={myPubkeyHex} free={free} locked={locked} />
         <GameList
@@ -238,6 +337,7 @@ export function ChessApp() {
               </div>
             </div>
           )}
+      </div>
       </div>
 
       <div style={toastContainerStyle}>
@@ -365,4 +465,36 @@ const toastStyle: React.CSSProperties = {
   fontSize: 13,
   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
   maxWidth: 320,
+};
+
+const statusBarStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '8px 24px',
+  background: '#fff',
+  borderBottom: '1px solid #e5e5ea',
+  fontSize: 12,
+};
+
+const seedPillStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  background: '#1d1d1f',
+  color: '#fff',
+  borderRadius: 999,
+  fontFamily: 'ui-monospace, monospace',
+};
+
+const peerPillStyle: React.CSSProperties = {
+  padding: '4px 10px',
+  background: '#e8f4ff',
+  color: '#0071e3',
+  borderRadius: 999,
+  fontFamily: 'ui-monospace, monospace',
+  fontWeight: 600,
+};
+
+const noPeersStyle: React.CSSProperties = {
+  color: '#8e8e93',
+  fontStyle: 'italic',
 };

@@ -1,34 +1,54 @@
-import { Context } from '../src/Context.ts';
-import { makeDefaultConfig } from '../src/Config.ts';
-import { WebsocketServerProvider } from '../plugins/deno/WebsocketServerProvider.ts';
-import { WebsocketClientProvider } from '../plugins/WebsocketClientProvider.ts';
-import { NetworkService } from '../src/NetworkService.ts';
-import { NullStorageProvider } from '../plugins/NullStorageProvider.ts';
-import { hex2bin } from '../src/util/hex.ts';
-import { BlockIngestor } from '../src/ingestors/BlockIngestor.ts';
-import { defaultIngestionProviders } from '../src/ingestors/defaultIngestionProviders.ts';
+#!/usr/bin/env -S deno run --allow-all
+/**
+ * Signaling hub for the two-browser chess demo.
+ *
+ * This is just a `Scaffold` node that speaks WebSocket server. Browser
+ * tabs dial it via `scaffold.bootstrapConnection('websocket', ...)`;
+ * once connected they use it to mesh-relay encrypted signaling payloads
+ * and complete WebRTC handshakes with each other.
+ *
+ * Usage:
+ *
+ *   deno run --allow-all scripts/signalingServer.ts [--port 8314]
+ *
+ * See docs/design/chess-two-browser-demo.md for the broader setup.
+ */
 
-const ctx = new Context({
-  ...makeDefaultConfig(),
+import { parseArgs } from '@std/cli/parse-args';
+import { Scaffold } from '../src/Scaffold.ts';
+import {
+  computeDemoGenesis,
+  demoPrivateKey,
+  demoPublicKey,
+} from '../src/genesis.ts';
+import { WebsocketServerTransport } from '../plugins/deno/WebsocketServerTransport.ts';
+import { bin2hex } from '../src/util/hex.ts';
 
-  debugName: 'signaling server',
-  userdata: JSON.stringify({ name: 'signaling server' }),
+const flags = parseArgs(Deno.args, { string: ['port'] });
+const port = flags.port ? Number(flags.port) : 8314;
 
-  selfPrivateKey: hex2bin(
-    '4b84b37d0432660e441bb1c61370264780e28abe74598571b2d5e908ea4a5784',
-  ),
+const DEMO_SEEDS = ['a', 'b', 'c'] as const;
+const HUB_SEED = 'hub';
 
-  networkProviders: [
-    new WebsocketServerProvider(),
-    new WebsocketClientProvider(),
-  ],
-
-  storageProvider: new NullStorageProvider(),
-
-  ingestionProviders: defaultIngestionProviders.filter((x) => x !== BlockIngestor),
+const scaffold = new Scaffold({
+  privateKey: demoPrivateKey(HUB_SEED),
+  genesis: computeDemoGenesis(DEMO_SEEDS),
+  plugins: [new WebsocketServerTransport({ port })],
+  enableLogging: false,
 });
 
-ctx.get(NetworkService).initConnection(
-  'websocket@0.0.1/server',
-  (signal) => console.log(`Listening on ${signal}`),
-);
+scaffold.onPeerConnected((peerId) => {
+  // deno-lint-ignore no-console
+  console.log(`peer_connected ${peerId}`);
+});
+scaffold.onPeerDisconnected((peerId) => {
+  // deno-lint-ignore no-console
+  console.log(`peer_disconnected ${peerId}`);
+});
+
+scaffold.start();
+
+// deno-lint-ignore no-console
+console.log(`signaling hub listening ws://127.0.0.1:${port}/`);
+// deno-lint-ignore no-console
+console.log(`hub pubkey: ${bin2hex(demoPublicKey(HUB_SEED))}`);
