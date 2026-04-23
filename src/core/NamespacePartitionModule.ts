@@ -101,6 +101,27 @@ export class NamespacePartitionModule {
             } slot ${i}: verifier mismatch`,
           };
         }
+        // Null-data outputs (pure-incentive) must live in unowned
+        // namespaces -- contracts cannot emit them, so a null-data slot
+        // in an owned namespace is a partition violation.
+        if (onBlock.data === null) {
+          return {
+            ok: false,
+            reason: `namespace ${
+              Hash.fromPrimitive(namespaceKey).toHex()
+            } slot ${i}: null-data output in owned namespace`,
+          };
+        }
+        // `emitted.data` is always non-null by construction (the env
+        // only records non-null data for require/get slots).
+        if (emitted.data === null) {
+          return {
+            ok: false,
+            reason: `namespace ${
+              Hash.fromPrimitive(namespaceKey).toHex()
+            } slot ${i}: emitted slot has null data (should be impossible)`,
+          };
+        }
         if (!bytesEqual(onBlock.data, emitted.data)) {
           return {
             ok: false,

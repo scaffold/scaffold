@@ -27,6 +27,7 @@ function overrideGetOutputValues(
     const slot = slots[i];
     if (!slot || slot.origin !== 'get') return output;
     if (!fn) return output;
+    if (output.data === null) return output;
     const newValue = fn(output.verifier, output.data, output.value);
     if (newValue === output.value) return output;
     return { ...output, value: newValue };

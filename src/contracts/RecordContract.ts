@@ -30,14 +30,22 @@ export function getRecordKey(output: Output): Uint8Array {
   return output.verifier.params;
 }
 
-/** Find the first record output in a block matching the given key. */
-export function findRecordOutput(block: Block, key: string | Uint8Array): Output | undefined {
+/**
+ * Find the first record output in a block matching the given key. Record
+ * outputs always carry non-null data (they encode a value), so null-data
+ * outputs are skipped.
+ */
+export function findRecordOutput(
+  block: Block,
+  key: string | Uint8Array,
+): (Output & { data: Uint8Array }) | undefined {
   const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
   for (const output of block.outputs) {
     if (!isRecordOutput(output)) continue;
+    if (output.data === null) continue;
     const params = output.verifier.params;
     if (params.length === keyBytes.length && params.every((b, i) => b === keyBytes[i])) {
-      return output;
+      return output as Output & { data: Uint8Array };
     }
   }
   return undefined;

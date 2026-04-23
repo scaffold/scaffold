@@ -429,6 +429,121 @@ Deno.test('VerifyingEnv: requireInput throws when no more inputs', () => {
   assertThrows(() => env.requireInput(), ContractRejection, 'no more inputs');
 });
 
+// -- Tests: null-data outputs are invisible to contracts -----------
+
+Deno.test('VerifyingEnv: collectInputs skips null-data outputs', () => {
+  const provider = new TestProvider();
+  const contractHash = h('game');
+  const params = enc('cfg');
+  const verifier: Verifier = { contract: contractHash, params };
+
+  const anchor: TestBlock = {
+    hash: h('anchor'),
+    anchor: ZERO_HASH,
+    outputs: [
+      { verifier, value: 10, data: enc('move1') },
+      { verifier, value: 99, data: null }, // pure-incentive output -- invisible
+      { verifier, value: 20, data: enc('move2') },
+    ],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(anchor);
+
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: anchor.hash,
+    outputs: [],
+    claims: [0, 1, 2],
+    refs: [],
+  };
+  provider.addBlock(block);
+
+  const env = makeEnv({ contractHash, params, block, provider });
+  const inputs = env.collectInputs();
+  assertEquals(inputs.length, 2);
+  assertEquals(inputs[0].data, enc('move1'));
+  assertEquals(inputs[1].data, enc('move2'));
+});
+
+Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
+  const provider = new TestProvider();
+  const contractHash = h('game');
+  const params = enc('cfg');
+  const verifier: Verifier = { contract: contractHash, params };
+
+  const anchor: TestBlock = {
+    hash: h('anchor'),
+    anchor: ZERO_HASH,
+    outputs: [
+      { verifier, value: 1, data: enc('a') },
+      { verifier, value: 9, data: null },
+      { verifier, value: 2, data: enc('b') },
+    ],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(anchor);
+
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: anchor.hash,
+    outputs: [],
+    claims: [0, 1, 2],
+    refs: [],
+  };
+  provider.addBlock(block);
+
+  const env = makeEnv({ contractHash, params, block, provider });
+  const first = env.requireInput();
+  const second = env.requireInput();
+  assertEquals(first.data, enc('a'));
+  assertEquals(second.data, enc('b'));
+  // Third requireInput() must exhaust -- the null-data output is not counted.
+  assertThrows(() => env.requireInput(), ContractRejection, 'no more inputs');
+});
+
+Deno.test('VerifyingEnv: fetch skips null-data record outputs', () => {
+  const provider = new TestProvider();
+  const gameVerifier: Verifier = { contract: h('game'), params: enc('cfg') };
+
+  const prevAnchor: TestBlock = {
+    hash: h('prev-anchor'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: gameVerifier, value: 10, data: new Uint8Array(0) }],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(prevAnchor);
+
+  const prevBlock: TestBlock = {
+    hash: h('prev'),
+    anchor: prevAnchor.hash,
+    outputs: [
+      // A null-data output that shares the RECORD_CONTRACT contract +
+      // same params as the requested key must NOT be returned by fetch.
+      { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0, data: null },
+      makeRecordOutput('state', enc('S0')),
+    ],
+    claims: [2], // claims extended index 2 = anchor's game output (anchor is at indices 2..)
+    refs: [],
+  };
+  provider.addBlock(prevBlock);
+
+  const block: TestBlock = {
+    hash: h('current'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claims: [],
+    refs: [prevBlock.hash],
+  };
+  provider.addBlock(block);
+
+  const env = makeEnv({ block, provider });
+  const result = env.fetch(gameVerifier, enc('state'));
+  assertEquals(result, enc('S0'));
+});
+
 // -- Tests: fetch --------------------------------------------------
 
 Deno.test('VerifyingEnv: fetch reads result from ref block that claims verifier', () => {

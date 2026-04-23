@@ -65,13 +65,15 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
 
   findInputs(verifier: Verifier): AvailableInput[] {
     // UtxoIndex now filters canonicality + claim status at read time, so
-    // no additional filtering is needed here.
+    // no additional filtering is needed here. Null-data outputs are
+    // pure-incentive and invisible to contracts, so drop them here.
     const entries = this.utxoIndex.getByVerifier(verifier.contract, verifier.params);
     const result: AvailableInput[] = [];
     for (const entry of entries) {
       const block = this.store.get(entry.blockHash);
       if (!block || entry.outputIndex >= block.outputs.length) continue;
       const output = block.outputs[entry.outputIndex];
+      if (output.data === null) continue;
       result.push({
         verifier: output.verifier,
         value: output.value,
@@ -515,6 +517,9 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    *      that this output isn't claimed yet and may warrant a new draft.
    */
   notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean {
+    // Null-data outputs are pure-incentive and invisible to contracts --
+    // they cannot be waked into or adopted by a running generator.
+    if (output.data === null) return false;
     const vKey = utxoVerifierKey(output.verifier.contract, output.verifier.params);
 
     // 1. Wake blocked generator.

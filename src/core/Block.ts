@@ -285,7 +285,12 @@ export function createBlock(
     hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(out.verifier.params);
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    hashParts.push(out.data);
+    if (out.data === null) {
+      hashParts.push(new Uint8Array([0]));
+    } else {
+      hashParts.push(new Uint8Array([1]));
+      hashParts.push(out.data);
+    }
   }
   for (const idx of blueprint.claims) {
     hashParts.push(new Uint8Array(new Float64Array([idx]).buffer));
@@ -324,7 +329,12 @@ export function createGenesisBlock(outputs: Output[]): Block {
     hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(out.verifier.params);
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    hashParts.push(out.data);
+    if (out.data === null) {
+      hashParts.push(new Uint8Array([0]));
+    } else {
+      hashParts.push(new Uint8Array([1]));
+      hashParts.push(out.data);
+    }
   }
   const hash = Hash.digestParts(...hashParts);
 

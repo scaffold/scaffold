@@ -55,7 +55,8 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
 export function getAggregationData(block: Block): AggregationData | null {
   for (const output of block.outputs) {
     if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
-      if (output.data.length === 0) continue; // Skip marker outputs
+      if (output.data === null) continue; // null-data marker (if any)
+      if (output.data.length === 0) continue; // empty-bytes marker (legacy)
       return decodeAggregationData(output.data);
     }
   }

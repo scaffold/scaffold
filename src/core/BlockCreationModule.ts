@@ -19,8 +19,19 @@ export interface Output {
   verifier: Verifier;
   /** Economic value. */
   value: number;
-  /** Application-specific payload. */
-  data: Uint8Array;
+  /**
+   * Application-specific payload, or null for a pure-incentive output.
+   *
+   * Null-data outputs are invisible to contracts: they never surface in
+   * `collectInputs` / `requireInput`, and contracts cannot emit them via
+   * `requireOutput` / `getOutput` / `requireResult`. They are still
+   * tracked in the UTXO index and block-level claiming still balances
+   * their value -- they are just outside contract execution.
+   *
+   * Null-data outputs must live in namespaces that no running contract
+   * declares (unowned by the output-namespace partition check).
+   */
+  data: Uint8Array | null;
 }
 
 /** A claim against an output in the extended vector. */

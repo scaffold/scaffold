@@ -43,6 +43,7 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
   // Check if any claimed output is a status output
   let requiredPublicKey: Uint8Array | undefined;
   for (const output of claimedOutputs) {
+    if (output.data === null) continue;
     if (Hash.equals(output.verifier.contract, statusHash)) {
       const { publicKey } = decodeStatusData(output.data);
       if (requiredPublicKey) {
@@ -58,6 +59,7 @@ export function validateBlockPacket(packet: Packet<BlockPayload>, store: BlockSt
 
   // Also check produced status outputs — their publicKey must match the signer
   for (const output of block.outputs) {
+    if (output.data === null) continue;
     if (Hash.equals(output.verifier.contract, statusHash)) {
       const { publicKey } = decodeStatusData(output.data);
       if (requiredPublicKey) {

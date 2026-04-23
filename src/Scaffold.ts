@@ -143,7 +143,7 @@ export class Scaffold {
         // claim indices against that layout -- appending again would
         // shift claim targets by one).
         const hasAggMarker = spec.outputs.some((o) =>
-          o.data.length === 0 &&
+          (o.data === null || o.data.length === 0) &&
           o.verifier.contract.toHex() === AGGREGATION_CONTRACT.toHex()
         );
         const outputs = hasAggMarker

@@ -631,7 +631,8 @@ export class NodeContext {
   ): Output[] {
     return outputs.map((output) => {
       if (!Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
-      if (output.data.length === 0) return output; // marker, not data
+      if (output.data === null) return output; // null-data marker (if any)
+      if (output.data.length === 0) return output; // empty-bytes marker (legacy)
 
       // Decode, patch claimMask, re-encode
       const aggData = getAggregationData({
@@ -666,6 +667,9 @@ export class NodeContext {
       const slot = slots[i];
       if (!slot || slot.origin !== 'get') return output;
       if (!this._valueOverride) return output;
+      // 'get'-origin outputs always carry non-null data (synthesized by
+      // OutputHandler which returns {value, data: Uint8Array}).
+      if (output.data === null) return output;
       const newValue = this._valueOverride(output.verifier, output.data, output.value);
       if (newValue === output.value) return output;
       return { ...output, value: newValue };

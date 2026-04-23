@@ -169,3 +169,60 @@ Deno.test('partition: block output count exceeds emitted rejects', () => {
   const result = mod.check([emitted, extra], [contrib]);
   assertEquals(result.ok, false);
 });
+
+Deno.test('partition: null-data output in unowned namespace accepted', () => {
+  const mod = new NamespacePartitionModule();
+  const sig = hashOf('signature');
+  const incentive = hashOf('incentive');
+  const c1 = hashOf('c1');
+
+  // Contract owns SIGNATURE. An INCENTIVE namespace output with null data
+  // is unowned (no claim declares it) -- partition check should pass.
+  const emitted = out(sig, 5);
+  const nullIncentive: Output = {
+    verifier: { contract: incentive, params: new Uint8Array(0) },
+    value: 100,
+    data: null,
+  };
+  const contrib: OwnerContribution = {
+    runningVerifier: verifier(c1),
+    declaredNamespaces: [sig],
+    emittedSlots: [slot(emitted)],
+  };
+  const result = mod.check([emitted, nullIncentive], [contrib]);
+  assertEquals(result.ok, true);
+});
+
+Deno.test('partition: null-data output in owned namespace rejected', () => {
+  const mod = new NamespacePartitionModule();
+  const sig = hashOf('signature');
+  const c1 = hashOf('c1');
+
+  // Contract owns SIGNATURE and emits a normal slot, but the block also
+  // has a null-data output in the same namespace -- contracts cannot
+  // emit null, so this is a protocol violation.
+  const emitted = out(sig, 5, enc('payload'));
+  const nullInOwned: Output = {
+    verifier: { contract: sig, params: new Uint8Array(0) },
+    value: 0,
+    data: null,
+  };
+  const contrib: OwnerContribution = {
+    runningVerifier: verifier(c1),
+    declaredNamespaces: [sig],
+    emittedSlots: [slot(emitted)],
+  };
+  // Two block outputs in the owned namespace but only one emitted --
+  // this will fail on count mismatch. Adjust emitted to match:
+  const contrib2: OwnerContribution = {
+    runningVerifier: verifier(c1),
+    declaredNamespaces: [sig],
+    emittedSlots: [slot(nullInOwned), slot(emitted)],
+  };
+  const result = mod.check([nullInOwned, emitted], [contrib2]);
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    // Should mention null-data.
+    assertEquals(result.reason.includes('null-data'), true);
+  }
+});
