@@ -3,6 +3,10 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import type { Verifier } from './BlockCreationModule.ts';
 import type { ProtocolContext } from './ProtocolContext.ts';
+import {
+  makeBlobRegistryResolver,
+  makeUtxoResolver,
+} from './builtinResolvers.ts';
 
 /**
  * A handler that can synthesize the `(value, data)` for a `getOutput`
@@ -32,8 +36,15 @@ export class OutputHandlerRegistry {
   private readonly _builtins: OutputHandler[] = [];
   private readonly _userHandlers = new Map<HashPrimitive, OutputHandler[]>();
 
-  /** Context-registrable constructor. Arg is ignored; registry has no deps. */
-  constructor(_ctx?: ProtocolContext) {}
+  /**
+   * Context-registrable constructor. Wires up the built-in resolver
+   * chain (blob registry, UTXO). The built-ins are stubs today; real
+   * implementations land as follow-ups.
+   */
+  constructor(_ctx?: ProtocolContext) {
+    this.registerBuiltin(makeBlobRegistryResolver());
+    this.registerBuiltin(makeUtxoResolver());
+  }
 
   /**
    * Register a built-in resolver. Built-ins are tried before any user
