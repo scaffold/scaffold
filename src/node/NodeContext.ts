@@ -9,6 +9,7 @@ import {
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
+import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import {
   BlockBlueprint,
   BlockSpec,
@@ -60,6 +61,19 @@ import { PiggybackStrategy } from './strategies/PiggybackStrategy.ts';
 import { EventLog } from '../core/EventLog.ts';
 import { CollateralResolutionIndexService } from './CollateralResolutionIndexService.ts';
 import { TrustGateService } from './TrustGateService.ts';
+
+/**
+ * Solidification-time value-override function. Called for every slot
+ * whose origin is `'get'`. Return the final `value` for that output
+ * (must be `>= defaultValue` -- the partition check at verification
+ * rejects lowered values). `verifier` and `data` are frozen at
+ * generation time and are supplied here for context.
+ */
+export type ValueOverrideFn = (
+  verifier: Verifier,
+  data: Uint8Array,
+  defaultValue: number,
+) => number;
 
 export interface NodeConfig {
   /** Genesis block (pre-built). */
@@ -142,6 +156,12 @@ export class NodeContext {
   private readonly _publicKey: Uint8Array | null;
   private readonly _contracts: Map<string, Contract>;
   private readonly _blockCreator: BlockCreator;
+  /**
+   * Optional solidification-time hook that raises `value` on
+   * `getOutput`-produced slots before the block is signed. See
+   * docs/protocol/computation.md#output-requirements.
+   */
+  private _valueOverride: ValueOverrideFn | null = null;
 
   constructor(config: NodeConfig) {
     // 0. Store key material
@@ -397,6 +417,17 @@ export class NodeContext {
     this.contractHost.registerContract(hash, contract);
   }
 
+  /**
+   * Configure the solidification-time value-override hook. Called for
+   * every `getOutput` slot before the block is signed. See
+   * docs/protocol/computation.md#output-requirements.
+   *
+   * Only one hook is installed at a time; passing `null` clears it.
+   */
+  setValueOverride(fn: ValueOverrideFn | null): void {
+    this._valueOverride = fn;
+  }
+
   /** Internal: register a contract on both the local registry and the host. */
   private _registerBuiltinContract(hash: Hash, contract: Contract): void {
     this._contracts.set(hash.toHex(), contract);
@@ -519,12 +550,21 @@ export class NodeContext {
     const composedClaimMask = outputSpace.subtreeClaimMask(virtualHash) ?? [];
 
     // Update the aggregation data output with the composed claim mask
-    const outputs = this._patchAggregationOutput(
+    let outputs = this._patchAggregationOutput(
       draft.outputs,
       composedClaimMask,
       aggregateOutputCounts,
       virtualBlock.newOutputCount,
     );
+
+    // Solidification value override: allow the configured hook to raise
+    // `value` on `getOutput`-produced slots. `verifier` and `data` are
+    // frozen at generation time; only `value` may change, and only
+    // upward (the namespace partition check rejects lowered values).
+    // See docs/protocol/computation.md#output-requirements.
+    if (this._valueOverride) {
+      outputs = this._overrideGetOutputValues(outputs, draft.outputSlots);
+    }
 
     const spec: BlockSpec = {
       anchor,
@@ -608,6 +648,27 @@ export class NodeContext {
           newOutputCount,
         }),
       };
+    });
+  }
+
+  /**
+   * Apply the configured value-override hook to every `getOutput`-sourced
+   * output slot. The hook sees the verifier + data + default value and
+   * returns the final value. Verifier and data are frozen; only value
+   * changes. Non-`get` slots pass through unchanged.
+   *
+   * Outputs and outputSlots are parallel arrays (outputSlots may be
+   * shorter for drafts created outside generation, which default to
+   * 'require' origin -- those also pass through unchanged).
+   */
+  private _overrideGetOutputValues(outputs: Output[], slots: OutputSlot[]): Output[] {
+    return outputs.map((output, i) => {
+      const slot = slots[i];
+      if (!slot || slot.origin !== 'get') return output;
+      if (!this._valueOverride) return output;
+      const newValue = this._valueOverride(output.verifier, output.data, output.value);
+      if (newValue === output.value) return output;
+      return { ...output, value: newValue };
     });
   }
 

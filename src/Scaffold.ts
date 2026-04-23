@@ -3,7 +3,11 @@ import { AGGREGATION_CONTRACT, Block } from './core/Block.ts';
 import { makeAggregationOutput } from './contracts/AggregationContract.ts';
 import type { Contract } from './contracts/Contract.ts';
 import { Hash } from './util/Hash.ts';
-import { findCanonicalTip, NodeContext } from './node/NodeContext.ts';
+import {
+  findCanonicalTip,
+  NodeContext,
+  type ValueOverrideFn,
+} from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
 import {
   OutputHandler,
@@ -177,6 +181,15 @@ export class Scaffold {
     return this.nodeContext.protocolContext
       .get(OutputHandlerRegistry)
       .registerUser(runningContract, handler);
+  }
+
+  /**
+   * Configure the solidification-time value-override hook. Called per
+   * `getOutput` slot before signing; lets the node raise the output's
+   * `value` (only). See docs/protocol/computation.md#output-requirements.
+   */
+  setValueOverride(fn: ValueOverrideFn | null): void {
+    this.nodeContext.setValueOverride(fn);
   }
 
   /**
