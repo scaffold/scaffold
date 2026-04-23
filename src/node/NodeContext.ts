@@ -40,11 +40,7 @@ import type { Contract } from '../contracts/Contract.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Packet.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
-import {
-  BlockCreator,
-  ReactiveLayer,
-  Strategy,
-} from './ReactiveLayer.ts';
+import { BlockCreator, ReactiveLayer, Strategy } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
@@ -84,6 +80,13 @@ export interface NodeConfig {
   publicKey?: Uint8Array;
   /** Strategies to register with the reactive layer */
   strategies?: Strategy[];
+  /**
+   * Whether PiggybackStrategy should run. Default: true. Disable in
+   * application contexts where contract outputs are authoritative and
+   * competitive piggybacking on every registered verifier would create
+   * conflicts (e.g., the chess demo, where moves are user-driven).
+   */
+  enablePiggyback?: boolean;
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -357,9 +360,10 @@ export class NodeContext {
       logger: this.protocolContext.logger('piggyback'),
     });
 
+    const enablePiggyback = config.enablePiggyback ?? true;
     const strategies: Strategy[] = [
       draftStrategy,
-      piggybackStrategy,
+      ...(enablePiggyback ? [piggybackStrategy] : []),
       ...(config.strategies ?? []),
     ];
 
@@ -861,6 +865,14 @@ function autoBalance(
     const excess = gathered - deficit;
     if (excess > 0) {
       newOutputs.push(makeSignatureOutput(publicKey, excess));
+      // Shift any pre-existing external claim indices by 1 because adding
+      // an own output moves the extended-vector boundary forward. Mirrors
+      // the same shift in branch 2 below.
+      for (let i = 0; i < newClaims.length; i++) {
+        if (newClaims[i].index >= ownOutputCount) {
+          newClaims[i] = { ...newClaims[i], index: newClaims[i].index + 1 };
+        }
+      }
     }
 
     // Phase 3: Emit claim indices against the final own-output count.

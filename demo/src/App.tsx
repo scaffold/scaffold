@@ -10,6 +10,7 @@ import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.t
 import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
 import { installDebugAPI } from "scaffold.io/debug/ScaffoldDebug.ts";
 import yaml from "yaml";
+import { ChessApp } from "./chess/ChessApp.tsx";
 
 interface StrategyDef {
   key: string;
@@ -33,7 +34,50 @@ const STRATEGIES: StrategyDef[] = [
   },
 ];
 
+type Route = "explorer" | "chess";
+
 export function App() {
+  const [route, setRoute] = useState<Route>(() => {
+    if (typeof globalThis !== "undefined" && globalThis.location) {
+      return globalThis.location.hash === "#chess" ? "chess" : "explorer";
+    }
+    return "explorer";
+  });
+
+  const navigate = useCallback((r: Route) => {
+    setRoute(r);
+    if (typeof globalThis !== "undefined" && globalThis.location) {
+      globalThis.location.hash = r === "chess" ? "#chess" : "";
+    }
+  }, []);
+
+  if (route === "chess") {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
+        <div style={toolbarStyle}>
+          <span style={logoStyle}>Scaffold</span>
+          <span style={dividerStyle} />
+          <button onClick={() => navigate("explorer")} style={btnSecondary}>
+            Explorer
+          </button>
+          <span style={{ ...hintStyle, marginLeft: 8 }}>
+            Chess demo - each move is a block, verified by the game-state
+            contract.
+          </span>
+        </div>
+        <ChessApp />
+      </div>
+    );
+  }
+
+  return <ExplorerApp onNavigateChess={() => navigate("chess")} />;
+}
+
+interface ExplorerAppProps {
+  onNavigateChess: () => void;
+}
+
+function ExplorerApp({ onNavigateChess }: ExplorerAppProps) {
   const [enabledStrategies, setEnabledStrategies] = useState<Set<string>>(
     () => new Set(),
   );
@@ -183,6 +227,11 @@ export function App() {
           style={dirty ? btnPrimary : btnSecondary}
         >
           {dirty ? "Restart" : "Restart"}
+        </button>
+
+        <span style={dividerStyle} />
+        <button onClick={onNavigateChess} style={btnSecondary}>
+          Chess Demo
         </button>
       </div>
 

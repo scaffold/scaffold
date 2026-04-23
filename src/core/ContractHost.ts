@@ -136,10 +136,19 @@ export class ContractHost<BlockType> {
 
     try {
       const result = contract.run(env);
-      return maybeThen(result, () => ({
+      if (result instanceof Promise) {
+        return result.then(
+          () => ({
+            accepted: true as const,
+            emittedSlots: env.getEmittedSlots(),
+          }),
+          (e) => toErrorResult(e),
+        );
+      }
+      return {
         accepted: true as const,
         emittedSlots: env.getEmittedSlots(),
-      }));
+      };
     } catch (e) {
       return toErrorResult(e);
     }

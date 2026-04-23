@@ -21,6 +21,13 @@ export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 /** Well-known contract hash for record outputs (key-value store on a block). */
 export const RECORD_CONTRACT = Hash.digest('result-contract');
 
+/**
+ * Well-known contract hash for the chess-demo game-state contract. Lives in
+ * core so tests and services can reference a stable hash without depending on
+ * the demo module.
+ */
+export const GAME_STATE_CONTRACT = Hash.digest('chess-game-state-contract');
+
 import { getAggregationData } from '../contracts/AggregationContract.ts';
 
 /**

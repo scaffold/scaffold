@@ -3,22 +3,10 @@ import { AGGREGATION_CONTRACT, Block } from './core/Block.ts';
 import { makeAggregationOutput } from './contracts/AggregationContract.ts';
 import type { Contract } from './contracts/Contract.ts';
 import { Hash } from './util/Hash.ts';
-import {
-  findCanonicalTip,
-  NodeContext,
-  type ValueOverrideFn,
-} from './node/NodeContext.ts';
+import { findCanonicalTip, NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
-import {
-  OutputHandler,
-  OutputHandlerRegistry,
-} from './core/OutputHandlerRegistry.ts';
-import {
-  FetchHandle,
-  FetchInput,
-  FetchManager,
-  FetchResult,
-} from './node/FetchManager.ts';
+import { OutputHandler, OutputHandlerRegistry } from './core/OutputHandlerRegistry.ts';
+import { FetchHandle, FetchInput, FetchManager, FetchResult } from './node/FetchManager.ts';
 import type { Verifier } from './core/BlockCreationModule.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
@@ -42,6 +30,13 @@ export interface ScaffoldConfig {
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
   enableVerification?: (contractHash: Hash) => boolean;
+  /**
+   * Whether PiggybackStrategy should run. Default: true. Applications that
+   * drive their own block construction (chess, interactive games) typically
+   * want this off -- piggyback would otherwise generate competing claims
+   * on every registered verifier.
+   */
+  enablePiggyback?: boolean;
   /** Enable structured event logging for debugging. Default: true. */
   enableLogging?: boolean;
   /**
@@ -82,6 +77,7 @@ export class Scaffold {
       strategies: config.strategies,
       enableGeneration: config.enableGeneration,
       enableVerification: config.enableVerification,
+      enablePiggyback: config.enablePiggyback,
       eventLog: this.eventLog,
       onPushActions: (actions, block) => {
         pushActionHandler?.(actions, block);
@@ -146,9 +142,7 @@ export class Scaffold {
           (o.data === null || o.data.length === 0) &&
           o.verifier.contract.toHex() === AGGREGATION_CONTRACT.toHex()
         );
-        const outputs = hasAggMarker
-          ? spec.outputs
-          : [...spec.outputs, makeAggregationOutput()];
+        const outputs = hasAggMarker ? spec.outputs : [...spec.outputs, makeAggregationOutput()];
 
         return nodeContext.createBlock(
           { ...spec, anchor: anchorHash, outputs },

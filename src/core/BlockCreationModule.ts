@@ -263,11 +263,13 @@ export class BlockCreationModule<BlockType> {
     // 5. Validate throughput
     this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
 
-    // 9. Build blueprint
+    // 9. Build blueprint. Sort claim indices so downstream `mapOriginalToSurviving`
+    // (binary search) sees a sorted mask. Duplicates are already rejected by the
+    // earlier classification pass.
     const blueprint: BlockBlueprint = {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
-      claims: spec.claims.map((c) => c.index),
+      claims: spec.claims.map((c) => c.index).sort((a, b) => a - b),
       outputs: spec.outputs,
       declaredWeight: spec.declaredWeight,
       refs: spec.refs,
@@ -359,5 +361,4 @@ export class BlockCreationModule<BlockType> {
       throw new Error(`throughput imbalance: inputs ${claimTotal}, outputs ${outputTotal}`);
     }
   }
-
 }
