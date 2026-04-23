@@ -81,10 +81,34 @@ export interface ContractEnv {
   /**
    * Require the block to produce a specific output.
    *
-   * Verification: checks a matching output exists on the block.
-   * Generation: adds the output to the draft.
+   * Verification: checks the next output in the contract's namespace
+   * sequence matches exactly (verifier + value + data). The contract's
+   * own call order determines the namespace's expected sequence.
+   * Generation: adds the output to the draft with `origin: 'require'`.
+   *
+   * See docs/protocol/computation.md#output-namespaces.
    */
   requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void;
+
+  /**
+   * Ask the host for an output under the given verifier. The host (in
+   * generation) or the wire (in verification) supplies `(value, data)`.
+   *
+   * Generation: the host handler chain synthesizes the output. If no
+   * handler matches, the contract blocks until one does (like
+   * `requireInput`). Returns `{value, data}` so the contract can use
+   * them in downstream logic.
+   *
+   * Verification: reads the next output in the contract's namespace
+   * sequence. `verifier` and `data` must match exactly; `value` on the
+   * wire must be `>=` what was emitted at generation time
+   * (solidification may raise `value` but not lower it).
+   *
+   * See docs/protocol/computation.md#output-requirements.
+   */
+  getOutput(
+    verifier: Verifier,
+  ): MaybePromise<{ value: number; data: Uint8Array }>;
 
   /**
    * Require a result (self-claimed key-value output) on this block.
@@ -145,4 +169,14 @@ export interface GeneratingEnvProvider<BlockType> extends VerifyingEnvProvider<B
   findInputs(verifier: Verifier): MaybePromise<AvailableInput[]>;
   /** Find a block that claims the given verifier. Returns its hash. */
   findBlockClaiming(verifier: Verifier): MaybePromise<Hash | undefined>;
+  /**
+   * Synthesize a `(value, data)` pair for a `getOutput` request. Returns
+   * `null` to indicate the handler chain found nothing; the contract then
+   * blocks on restart-on-uncanonical. See `OutputHandlerRegistry`.
+   */
+  resolveGetOutput(
+    runningContract: Hash,
+    runningParams: Uint8Array,
+    outputVerifier: Verifier,
+  ): Promise<{ value: number; data: Uint8Array } | null>;
 }

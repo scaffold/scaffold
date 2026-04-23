@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/computation.md
 
-import { Hash } from '../util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import {
@@ -10,6 +10,7 @@ import {
   type Input,
   type VerifyingEnvProvider,
 } from './ContractEnv.ts';
+import type { OutputSlot } from './GeneratingEnv.ts';
 
 // -- Helpers ------------------------------------------------------
 
@@ -48,6 +49,21 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   /** Tracks which matching inputs have been consumed by requireInput(). */
   private _inputCursor = 0;
   private _matchingInputs: Input[] | null = null;
+
+  /**
+   * Per-contract cursor into block.outputs, indexed by the output's
+   * `verifier.contract`. Increments each time requireOutput / getOutput
+   * consumes a slot for that contract. Enables positional matching
+   * within a namespace (see docs/protocol/computation.md#output-namespaces).
+   */
+  private readonly _namespaceCursor = new Map<HashPrimitive, number>();
+
+  /**
+   * Slots this contract emitted during the run, in call order. Used by
+   * the block-level namespace partition check to compare against the
+   * actual block layout.
+   */
+  private readonly _emittedSlots: OutputSlot[] = [];
 
   constructor(opts: {
     contractHash: Hash;
@@ -95,30 +111,46 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
   requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
     const dataBytes = data ?? new Uint8Array(0);
-    for (const output of this._outputs) {
-      if (
-        verifierEquals(output.verifier, verifier) &&
-        output.value === value &&
-        bytesEqual(output.data, dataBytes)
-      ) {
-        return;
-      }
+    const slot = this._consumeNextInNamespace(verifier.contract);
+    if (!verifierEquals(slot.verifier, verifier)) {
+      throw new ContractRejection(
+        'required output verifier mismatch at namespace slot',
+      );
     }
-    throw new ContractRejection('required output not found on block');
+    if (slot.value !== value) {
+      throw new ContractRejection(
+        'required output value mismatch at namespace slot',
+      );
+    }
+    if (!bytesEqual(slot.data, dataBytes)) {
+      throw new ContractRejection(
+        'required output data mismatch at namespace slot',
+      );
+    }
+    this._emittedSlots.push({
+      output: { verifier, value, data: dataBytes },
+      origin: 'require',
+    });
+  }
+
+  getOutput(verifier: Verifier): { value: number; data: Uint8Array } {
+    const slot = this._consumeNextInNamespace(verifier.contract);
+    if (!verifierEquals(slot.verifier, verifier)) {
+      throw new ContractRejection(
+        'getOutput verifier mismatch at namespace slot',
+      );
+    }
+    this._emittedSlots.push({
+      output: { verifier: slot.verifier, value: slot.value, data: slot.data },
+      origin: 'get',
+    });
+    return { value: slot.value, data: slot.data };
   }
 
   requireResult(key: Uint8Array, value: Uint8Array): void {
-    for (const output of this._outputs) {
-      if (!Hash.equals(output.verifier.contract, RECORD_CONTRACT)) continue;
-      if (!bytesEqual(output.verifier.params, key)) continue;
-      if (!bytesEqual(output.data, value)) {
-        throw new ContractRejection(
-          `result key has wrong value`,
-        );
-      }
-      return;
-    }
-    throw new ContractRejection(`result output not found`);
+    // Sugar over requireOutput for RECORD_CONTRACT outputs. Matches positionally
+    // within the RECORD_CONTRACT namespace (value = 0 for records).
+    this.requireOutput({ contract: RECORD_CONTRACT, params: key }, 0, value);
   }
 
   fetch(verifier: Verifier, key: Uint8Array): Uint8Array {
@@ -170,7 +202,38 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return this._timestamp;
   }
 
+  /**
+   * The slots this contract emitted during verification (requireOutput +
+   * getOutput calls). Used by the block-level namespace partition check.
+   */
+  getEmittedSlots(): OutputSlot[] {
+    return this._emittedSlots;
+  }
+
   // -- Private ----------------------------------------------------
+
+  /**
+   * Consume and return the next block output under the given namespace
+   * (matching `verifier.contract`). Throws ContractRejection if the
+   * namespace is exhausted.
+   */
+  private _consumeNextInNamespace(namespace: Hash): Output {
+    const key = namespace.toPrimitive();
+    const cursor = this._namespaceCursor.get(key) ?? 0;
+    // Find the Nth output whose verifier.contract equals `namespace`.
+    let count = 0;
+    for (const output of this._outputs) {
+      if (!Hash.equals(output.verifier.contract, namespace)) continue;
+      if (count === cursor) {
+        this._namespaceCursor.set(key, cursor + 1);
+        return output;
+      }
+      count++;
+    }
+    throw new ContractRejection(
+      'namespace slot exhausted: contract requested more outputs than the block has',
+    );
+  }
 
   /** Lazily compute and cache inputs matching this contract's verifier. */
   private _getMatchingInputs(): Input[] {

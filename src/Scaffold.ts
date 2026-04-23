@@ -6,6 +6,10 @@ import { Hash } from './util/Hash.ts';
 import { findCanonicalTip, NodeContext } from './node/NodeContext.ts';
 import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
 import {
+  OutputHandler,
+  OutputHandlerRegistry,
+} from './core/OutputHandlerRegistry.ts';
+import {
   FetchHandle,
   FetchInput,
   FetchManager,
@@ -158,6 +162,21 @@ export class Scaffold {
   /** Register a contract for generation and verification at runtime. */
   registerContract(hash: Hash, contract: Contract): void {
     this.nodeContext.registerContract(hash, contract);
+  }
+
+  /**
+   * Register a handler for `env.getOutput(verifier)` calls during generation.
+   * `runningContract` scopes the handler to contracts whose verifier's
+   * contract matches. Handlers for the same contract run in registration
+   * order; each returns `null` to defer to the next, or a concrete
+   * `{value, data}` to terminate the chain. Returns an unsubscribe fn.
+   *
+   * See docs/protocol/computation.md#host-handler-registration.
+   */
+  registerOutputHandler(runningContract: Hash, handler: OutputHandler): () => void {
+    return this.nodeContext.protocolContext
+      .get(OutputHandlerRegistry)
+      .registerUser(runningContract, handler);
   }
 
   /**

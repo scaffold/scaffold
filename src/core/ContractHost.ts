@@ -13,6 +13,7 @@ import { VerifyingEnv } from './VerifyingEnv.ts';
 import {
   GeneratingEnv,
   type OutputSlot,
+  type WaitForGetOutputFn,
   type WaitForInputFn,
 } from './GeneratingEnv.ts';
 
@@ -25,7 +26,7 @@ export type { Contract } from '../contracts/Contract.ts';
 
 /** Result of executing a contract for a single claimed output. */
 export type ExecutionResult =
-  | { accepted: true }
+  | { accepted: true; emittedSlots?: OutputSlot[] }
   | { accepted: false; reason: string };
 
 /** Inputs to a single verification run. */
@@ -45,6 +46,7 @@ export interface GeneratingRunInput<BlockType> {
   readonly verifier: Verifier;
   readonly provider: GeneratingEnvProvider<BlockType>;
   readonly waitForInput?: WaitForInputFn;
+  readonly waitForGetOutput?: WaitForGetOutputFn;
 }
 
 /**
@@ -134,7 +136,10 @@ export class ContractHost<BlockType> {
 
     try {
       const result = contract.run(env);
-      return maybeThen(result, () => ({ accepted: true as const }));
+      return maybeThen(result, () => ({
+        accepted: true as const,
+        emittedSlots: env.getEmittedSlots(),
+      }));
     } catch (e) {
       return toErrorResult(e);
     }
@@ -161,6 +166,7 @@ export class ContractHost<BlockType> {
       params: input.verifier.params,
       provider: input.provider,
       waitForInput: input.waitForInput,
+      waitForGetOutput: input.waitForGetOutput,
     });
 
     const result = contract.run(env);

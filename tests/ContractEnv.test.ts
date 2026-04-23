@@ -140,7 +140,7 @@ Deno.test('VerifyingEnv: requireResult throws on wrong value', () => {
   assertThrows(
     () => env.requireResult(enc('state'), enc('expected')),
     ContractRejection,
-    'wrong value',
+    'data mismatch',
   );
 });
 
@@ -155,7 +155,11 @@ Deno.test('VerifyingEnv: requireResult throws when key not found', () => {
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  assertThrows(() => env.requireResult(enc('missing'), enc('val')), ContractRejection, 'not found');
+  assertThrows(
+    () => env.requireResult(enc('missing'), enc('val')),
+    ContractRejection,
+    'namespace slot exhausted',
+  );
 });
 
 // -- Tests: requireOutput ------------------------------------------
@@ -204,8 +208,120 @@ Deno.test('VerifyingEnv: requireOutput throws when output missing', () => {
   assertThrows(
     () => env.requireOutput({ contract: h('x'), params: new Uint8Array(0) }, 1),
     ContractRejection,
-    'required output not found',
+    'namespace slot exhausted',
   );
+});
+
+// -- Tests: positional namespace matching --------------------------
+
+Deno.test('VerifyingEnv: requireOutput matches positionally within namespace', () => {
+  const provider = new TestProvider();
+  const contract = h('pay');
+  const vA: Verifier = { contract, params: enc('a') };
+  const vB: Verifier = { contract, params: enc('b') };
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: ZERO_HASH,
+    outputs: [
+      { verifier: vA, value: 5, data: new Uint8Array(0) },
+      { verifier: vB, value: 7, data: new Uint8Array(0) },
+    ],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  env.requireOutput(vA, 5);
+  env.requireOutput(vB, 7);
+});
+
+Deno.test('VerifyingEnv: requireOutput positional mismatch rejects', () => {
+  const provider = new TestProvider();
+  const contract = h('pay');
+  const vA: Verifier = { contract, params: enc('a') };
+  const vB: Verifier = { contract, params: enc('b') };
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: ZERO_HASH,
+    outputs: [
+      { verifier: vA, value: 5, data: new Uint8Array(0) },
+      { verifier: vB, value: 7, data: new Uint8Array(0) },
+    ],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  // Contract asked for B first, but block has A at slot 0.
+  assertThrows(
+    () => env.requireOutput(vB, 7),
+    ContractRejection,
+    'verifier mismatch',
+  );
+});
+
+Deno.test('VerifyingEnv: getOutput returns value/data from next namespace slot', () => {
+  const provider = new TestProvider();
+  const contract = h('pay');
+  const v: Verifier = { contract, params: enc('a') };
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: v, value: 42, data: enc('payload') }],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  const result = env.getOutput(v);
+  assertEquals(result.value, 42);
+  assertEquals(result.data, enc('payload'));
+});
+
+Deno.test('VerifyingEnv: getOutput rejects when block slot uses a different verifier', () => {
+  const provider = new TestProvider();
+  const contract = h('pay');
+  const vA: Verifier = { contract, params: enc('a') };
+  const vB: Verifier = { contract, params: enc('b') };
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: vA, value: 5, data: new Uint8Array(0) }],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  assertThrows(
+    () => env.getOutput(vB),
+    ContractRejection,
+    'getOutput verifier mismatch',
+  );
+});
+
+Deno.test('VerifyingEnv: getEmittedSlots records origin per call', () => {
+  const provider = new TestProvider();
+  const contract = h('pay');
+  const vA: Verifier = { contract, params: enc('a') };
+  const vB: Verifier = { contract, params: enc('b') };
+  const block: TestBlock = {
+    hash: h('b'),
+    anchor: ZERO_HASH,
+    outputs: [
+      { verifier: vA, value: 5, data: new Uint8Array(0) },
+      { verifier: vB, value: 7, data: enc('payload') },
+    ],
+    claims: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  env.requireOutput(vA, 5);
+  env.getOutput(vB);
+  const slots = env.getEmittedSlots();
+  assertEquals(slots.length, 2);
+  assertEquals(slots[0].origin, 'require');
+  assertEquals(slots[1].origin, 'get');
 });
 
 // -- Tests: collectInputs ------------------------------------------

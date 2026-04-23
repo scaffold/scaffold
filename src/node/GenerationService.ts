@@ -17,6 +17,7 @@ import { ContractHostService } from '../core/ContractHostService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { ExecutionQueueService } from '../core/ExecutionQueueService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
+import { OutputHandlerRegistry } from '../core/OutputHandlerRegistry.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { verifierKey as utxoVerifierKey } from './UtxoIndex.ts';
 import { UtxoIndexService } from './UtxoIndexService.ts';
@@ -39,6 +40,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   constructor(
     private readonly store: BlockStore,
     private readonly utxoIndex: UtxoIndexService,
+    private readonly outputHandlers: OutputHandlerRegistry,
   ) {}
 
   getBlock(hash: Hash): Block | undefined {
@@ -103,6 +105,18 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       }
     }
     return undefined;
+  }
+
+  resolveGetOutput(
+    runningContract: Hash,
+    runningParams: Uint8Array,
+    outputVerifier: Verifier,
+  ): Promise<{ value: number; data: Uint8Array } | null> {
+    return this.outputHandlers.resolve(
+      runningContract,
+      runningParams,
+      outputVerifier,
+    );
   }
 }
 
@@ -181,6 +195,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const host = ctx.get(ContractHostService);
     const outputClaims = ctx.get(OutputClaimService);
     const utxoIndex = ctx.get(UtxoIndexService);
+    const outputHandlers = ctx.get(OutputHandlerRegistry);
 
     const deferred: { service?: GenerationService } = {};
     const provider: GenerationProvider = {
@@ -197,7 +212,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     this._host = host;
     this._outputClaims = outputClaims;
     this._utxoIndex = utxoIndex;
-    this._adapter = new GeneratingEnvAdapter(store, utxoIndex);
+    this._adapter = new GeneratingEnvAdapter(store, utxoIndex, outputHandlers);
 
     consensus.onCanonicalityChange((hash, canonical) => {
       this.onCanonicalityChange(hash, canonical);

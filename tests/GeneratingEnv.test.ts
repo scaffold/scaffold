@@ -86,6 +86,26 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
     const key = verifier.contract.toHex() + ':' + Array.from(verifier.params).join(',');
     return this._blocksClaiming.get(key);
   }
+
+  /** Handler chain for getOutput. Tests can override by assigning _resolveGetOutput. */
+  _resolveGetOutput:
+    | ((
+      runningContract: Hash,
+      runningParams: Uint8Array,
+      outputVerifier: Verifier,
+    ) => Promise<{ value: number; data: Uint8Array } | null>)
+    | null = null;
+
+  resolveGetOutput(
+    runningContract: Hash,
+    runningParams: Uint8Array,
+    outputVerifier: Verifier,
+  ): Promise<{ value: number; data: Uint8Array } | null> {
+    if (this._resolveGetOutput) {
+      return this._resolveGetOutput(runningContract, runningParams, outputVerifier);
+    }
+    return Promise.resolve(null);
+  }
 }
 
 function makeGenEnv(opts?: {

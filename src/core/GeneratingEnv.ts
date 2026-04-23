@@ -49,6 +49,15 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
  */
 export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableInput>;
 
+/**
+ * Callback the GeneratingEnv calls when `getOutput` has no resolver match.
+ * Mirrors `WaitForInputFn`: parks the contract and resolves later once a
+ * handler produces a result (e.g., after user input arrives).
+ */
+export type WaitForGetOutputFn = (
+  outputVerifier: Verifier,
+) => Promise<{ value: number; data: Uint8Array }>;
+
 // -- GeneratingEnv ------------------------------------------------
 
 /**
@@ -62,6 +71,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _params: Uint8Array;
   private readonly _provider: GeneratingEnvProvider<BlockType>;
   private readonly _waitForInput?: WaitForInputFn;
+  private readonly _waitForGetOutput?: WaitForGetOutputFn;
 
   /**
    * Outputs to add to the draft, in call order, tagged by origin. The
@@ -85,11 +95,14 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     provider: GeneratingEnvProvider<BlockType>;
     /** Optional callback for blocking requireInput(). If not provided, throws on no input. */
     waitForInput?: WaitForInputFn;
+    /** Optional callback for blocking getOutput(). If not provided, throws on no handler match. */
+    waitForGetOutput?: WaitForGetOutputFn;
   }) {
     this._contractHash = opts.contractHash;
     this._params = opts.params;
     this._provider = opts.provider;
     this._waitForInput = opts.waitForInput;
+    this._waitForGetOutput = opts.waitForGetOutput;
   }
 
   getContractHash(): Hash {
@@ -154,6 +167,29 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       output: { verifier, value, data: data ?? new Uint8Array(0) },
       origin: 'require',
     });
+  }
+
+  async getOutput(
+    verifier: Verifier,
+  ): Promise<{ value: number; data: Uint8Array }> {
+    let resolved = await this._provider.resolveGetOutput(
+      this._contractHash,
+      this._params,
+      verifier,
+    );
+    if (resolved === null) {
+      if (!this._waitForGetOutput) {
+        throw new ContractRejection(
+          'no getOutput handler matched (and no wait callback configured)',
+        );
+      }
+      resolved = await this._waitForGetOutput(verifier);
+    }
+    this._slots.push({
+      output: { verifier, value: resolved.value, data: resolved.data },
+      origin: 'get',
+    });
+    return { value: resolved.value, data: resolved.data };
   }
 
   requireResult(key: Uint8Array, value: Uint8Array): void {

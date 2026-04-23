@@ -70,6 +70,15 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     }
     return undefined;
   }
+  resolveGetOutput(
+    _runningContract: Hash,
+    _runningParams: Uint8Array,
+    _outputVerifier: Verifier,
+  ): Promise<{ value: number; data: Uint8Array } | null> {
+    // Test shim: no handlers registered, never resolves. Tests that
+    // exercise getOutput should use the real OutputHandlerRegistry.
+    return Promise.resolve(null);
+  }
 }
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
