@@ -74,6 +74,61 @@ The separation of `params` from `data` is deliberate:
 
 ---
 
+## Output Namespaces
+
+Every contract declares, as part of its static metadata, the set of output
+contract hashes it is permitted to produce:
+
+```
+ContractMeta {
+    outputNamespaces: Hash[]    // contract hashes this contract may produce
+    // ... walker/builder descriptors, cost hints, etc.
+}
+```
+
+The declaration is published alongside the contract's WASM (as record outputs
+on the block that introduces the contract; see [contracts](contracts.md#contract-registration)).
+The set is an **exact closed set**: the contract may produce only outputs
+whose `verifier.contract` is in this list; no output outside the list; nothing
+else may produce outputs inside the list on the same block.
+
+### Namespace Ownership Rule
+
+A block's outputs partition by `verifier.contract`. For every contract hash
+H that is *owned* on this block (i.e., some claim on the block invokes a
+verifier whose `contract == H'` where H is in H'`s `outputNamespaces`), the
+block's outputs under H **must equal exactly** the sequence the owning
+contract declared during its run, matched positionally.
+
+A contract hash with no owner on the block is **unowned** on that block. Its
+outputs are governed by whatever other protocol rules apply (e.g., every
+non-genesis block carries one `AGGREGATION_CONTRACT` marker). Unowned
+namespaces are the mechanism for block-level protocol outputs that no
+contract computed.
+
+### Draft Merger
+
+Two drafts are mergeable into a single block iff their `outputNamespaces`
+sets are disjoint. If the intersection is non-empty, the claims must live on
+separate blocks. One consequence: two claims of the same contract with
+different params (e.g., resolving collateral on two different target blocks)
+cannot share a block if that contract declares any output namespace.
+
+### Implications
+
+- **Attribution is structural.** Given a block and its claims, every output's
+  producer is known by the partition. No re-execution needed.
+- **Records are collision-free by construction.** A contract that emits
+  records declares `RECORD_CONTRACT` in its namespaces. Two record-emitting
+  contracts cannot coexist on a block, so record keys never collide across
+  producers. Optional records are meaningful -- a reader checking for the
+  absence of a key cannot be deceived by a second contract forging it.
+- **Multiple identical outputs are honest.** If one contract calls
+  `requireOutput({SIGNATURE/alice, 5})` twice, the block has two `{SIGNATURE/alice, 5}`
+  outputs. No merging, no overpayment confusion.
+
+---
+
 ## Self-Claimed Outputs
 
 Computation results are stored as **self-claimed outputs** — outputs that a block produces and claims atomically in the same block. The self-claim mechanism is already part of the protocol (see [block creation: output transformation](block-creation.md#output-transformation)).
@@ -193,9 +248,85 @@ Iterate over all outputs being claimed by this block. The contract can read each
 ```
 add_output(contract_ptr, contract_len, params_ptr, params_len,
            value, data_ptr, data_len) → void
+
+get_output(contract_ptr, contract_len, params_ptr, params_len)
+    → (value, data_ptr, data_len)
 ```
 
-In generation mode, creates an output on the block. In verification mode, checks that a matching output exists (same verifier, value, and data).
+Both functions append an output to the running contract's namespace slot
+(its position in the block's namespace sequence is the order of the calls).
+The contract's declared `outputNamespaces` must include the supplied
+`contract` hash, or the runtime rejects.
+
+- **`add_output`**: the contract fully specifies `(verifier, value, data)`.
+  Generation: creates the output. Verification: matches the next slot's
+  output against the contract's spec exactly.
+- **`get_output`**: the contract names the verifier only. Generation: the
+  host synthesizes `(value, data)` via its registered handler chain (see
+  [Host handler registration](#host-handler-registration)) and appends the
+  output; the return value is reported back to the contract for use.
+  Verification: the host reads the next slot's output from the block and
+  returns its `(value, data)` to the contract. The contract's view of gen
+  and verify is identical -- both appear as "I asked for an output under
+  this verifier, here is what got produced."
+
+`get_output` is the mechanism for values the contract cannot fully
+pin down: aggregation incentive amounts set by market dynamics, user input
+for multiplayer games, data blobs resolved by hash, oracle fetches.
+
+**Solidification-time value override.** The block-creation layer (not the
+contract) may raise the `value` of a `get_output`-produced slot during
+solidification, before the block is signed. This is how aggregation
+incentives get their final amount without the contract knowing it.
+The override may change `value` only; `verifier` and `data` are fixed at
+generation time. Verification has no special case -- it reads whatever
+value ended up on the wire and hands it to the contract.
+
+<!-- TODO(@joel): consider collapsing add_output and get_output into a single
+     request method, e.g.
+       request_output(verifier, data?, value?) -> { value, data }
+     Semantics would vary by argument count:
+       - (verifier, data, value)  -- behaves like today's add_output
+       - (verifier, data)         -- contract supplies data; host supplies value
+       - (verifier)               -- host supplies both data and value
+     An extra twist: value could always be host-raisable beyond the contract's
+     declared floor, unifying the solidification override. Deferring for now
+     because it complicates the verification-side read path and the two-method
+     split reads cleanly in contract code. Revisit once we have more real
+     contracts than just aggregation/collateral/signature. -->
+
+#### Host Handler Registration
+
+`get_output` is resolved during generation by a chain of handlers keyed on
+the **running contract's hash** (not the requested output's contract). Each
+handler is:
+
+```
+Handler = (runningParams: Uint8Array, outputVerifier: Verifier)
+    → Promise<{ value: Number, data: Uint8Array } | null>
+```
+
+Handlers return `null` to defer to the next handler; a non-null result
+terminates the chain. The host resolves in this order:
+
+1. **Built-in Scaffold resolvers** -- protocol-aware lookups run first, in a
+   fixed order. Examples: blob-registry hash lookup (returns stored data
+   when the requested verifier is a hash-lock contract), UTXO lookup,
+   aggregation-incentive computation. These compose deterministically from
+   block state so honest nodes converge.
+2. **Userspace handlers** -- application code registers handlers via the
+   node API, keyed by the running contract hash. Handlers run in
+   registration order. This is where user-code for interactive games, app
+   state contributions, or external data sources plugs in.
+3. **No resolver matched** -- generation blocks, with the same
+   restart-on-uncanonical lifecycle as `requireInput`. A handler that needs
+   to wait for user input, for example, resolves its promise when input
+   arrives.
+
+Registration is additive; there is no protocol-level ordering guarantee
+between userspace handlers beyond registration order. Handlers are scoped
+to a single node's runtime -- they are not part of the protocol and
+cannot affect verification.
 
 #### Constraints
 

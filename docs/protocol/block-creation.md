@@ -248,7 +248,14 @@ When the canonical view updates:
 Multiple drafts can sometimes be merged into a single block if:
 - Their input claims don't overlap.
 - They can share the same anchor.
+- Their contracts' [output namespaces](computation.md#output-namespaces) are disjoint (no two mergeable claims write outputs in the same namespace).
 - The combined computation is valid.
+
+The namespace disjointness rule means two claims of the same contract with
+different params cannot share a block if the contract declares any output
+namespace. A multi-collateral resolution, for example, becomes one block per
+collateral target rather than one block that resolves many. Signature-only
+(pure gate) contracts declare no namespace and merge freely.
 
 Merging reduces block count, gossip overhead, and collateral requirements. However, drafts with different urgency or anchor requirements should remain separate.
 
@@ -264,6 +271,7 @@ The structural verification module checks block-specific properties that are com
 2. **Claim indices**: All claim indices are valid — self-claims have index < `outputs.length`, shared-resource claims have index < `outputs.length` + post-subtree vector length.
 3. **Throughput balance**: `sum(input_values) == sum(output_values)` (value conservation).
 4. **Signature**: The block's [packet-level signature](wire-format.md) is valid for the declared creator. Signature verification uses the secp256k1 signature embedded in the packet envelope, verified against the hash of the header+payload portion.
+5. **Output namespace partition**: Outputs partition by `verifier.contract`. Within each owned namespace (a namespace H where some claim's contract declares H in its `outputNamespaces`), the sequence of outputs is exactly what the owning contract emitted during its run, matched positionally. Unowned namespaces are governed by other protocol rules (e.g., the mandatory aggregation marker). See [output namespaces](computation.md#output-namespaces).
 
 Checks that were previously structural — claim mask consistency, output count, weight vector derivation, aggregate output counts — are now [contractual verification](contracts.md). The aggregation contract output carries this data, and its correctness is verified (and disputable) through the same sampling/collateral mechanism as any other contract.
 
@@ -318,6 +326,7 @@ The separation rule is a property of the [collateral contract's](contracts.md) s
 6. **Self-claim exclusion**: Self-claims (index < `outputs.length`) never appear in the claim mask.
 7. **Collateral independence**: Collateral blocks are never the same block as the work they vouch for, and never descendants of it (enforced by the [collateral contract](contracts.md)).
 8. **Aggregation minimality**: Aggregation blocks have minimal I/O — only what's needed to collect fees and incentivize further aggregation.
+9. **Output namespace partition**: For every contract H owned on the block (via some claim's contract declaring H in its `outputNamespaces`), the block's outputs under H equal exactly the owning contract's emitted sequence, matched positionally. At most one contract owns any namespace on a given block. See [output namespaces](computation.md#output-namespaces).
 
 ---
 

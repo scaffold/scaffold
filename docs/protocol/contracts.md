@@ -6,6 +6,37 @@ Standard contracts are **conventions**, not protocol primitives. They carry doma
 
 ---
 
+## Contract Registration
+
+A contract is introduced to the network via a **contract block** -- a block
+that publishes the WASM binary together with its static metadata. The
+contract's hash is the hash of its WASM binary; that hash is what every
+`verifier.contract` field references.
+
+The contract block carries record outputs keyed for generic consumption:
+
+| Record key | Data |
+|------------|------|
+| `contract:wasm` | The WASM binary. |
+| `contract:outputNamespaces` | Encoded `Hash[]` -- the contract's declared output namespaces. See [output namespaces](computation.md#output-namespaces). |
+| `contract:walker` / `contract:builder` | Optional walker/builder exports for observability and construction. See [output data](output-data.md). |
+| `contract:costHint` | Optional verification cost estimate for sampling priority. |
+
+Any node that needs to load contract H:
+1. Resolves the contract block via H (using the hash-lookup mechanism from
+   the host handler chain -- blob registry first, then peers).
+2. Reads the records above.
+3. Caches the WASM and metadata locally.
+
+Because the declarations are themselves record outputs, they fit the "records
+are a per-contract key-value map" semantics described in the [record
+contract](#record-contract-aka-self-contract). The block that publishes the
+contract owns the `RECORD_CONTRACT` namespace on that block and is therefore
+the sole author of these records -- no other contract running on the same
+block could fake them.
+
+---
+
 ## Signature Contract
 
 **Purpose**: Balance ownership. The simplest spending condition.
@@ -108,17 +139,23 @@ Any application-specific WASM that exports `verify()` is a computation contract.
 
 See [computation](computation.md) for the full specification: dual-mode execution, self-claimed outputs, cross-block references, the WASM host interface, and examples.
 
-## Self Contract
+## Record Contract (a.k.a. Self Contract)
 
-**Purpose**: Mark outputs as self-claimed — produced and consumed atomically by the same block.
+**Purpose**: Self-claimed key-value outputs — produced and consumed atomically by the same block. Acts as the producing contract's per-block key-value map.
 
-**Verification**: The claiming block must be the producing block.
+**Verification**: Every input matching this contract's verifier must be a self-claim (claimed on the same block that produced it).
 
 **Verifier params**: A key (arbitrary bytes) identifying this entry in the block's key-value store.
 
 **Detail**: The value (arbitrary bytes) associated with the key.
 
-Self-claimed outputs store computation results. Other blocks read them via [cross-block references](computation.md#cross-block-references). See [computation](computation.md#self-claimed-outputs).
+**Output namespace owner**: any contract whose `outputNamespaces` metadata includes `RECORD_CONTRACT`. Because an output namespace has at most one owning contract per block (see [output namespaces](computation.md#output-namespaces)), **at most one record-emitting contract can run on a block**. Two contracts that both want to emit records must live on separate blocks.
+
+This strictness is intentional. Optional records -- a record whose presence or absence carries meaning to a downstream reader -- are only trustworthy if no other contract on the block could forge the key. Allowing multiple record-emitting contracts per block would let one contract fill in a key that another contract deliberately omitted. Restricting to one owner per block eliminates the forgery.
+
+Downstream self-claiming is handled by the block-assembly layer, not the contract. A record output is trivially self-claimable (the SELF/RECORD spending condition is "the claiming block is the producing block"), so assembly adds the self-claim as a matter of course. Contracts call `require_result(key, value)` -- sugar for `add_output({RECORD_CONTRACT, key}, 0, value)` -- without worrying about claim bookkeeping.
+
+Other blocks read these outputs via [cross-block references](computation.md#cross-block-references).
 
 ---
 
