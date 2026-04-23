@@ -43,8 +43,12 @@ function makeWorld(): MockWorld {
     verifyContract: async (block, v) => {
       verifyCalls.push({ block, verifier: v });
       const key = `${block.toPrimitive()}:${v.contract.toPrimitive()}:${Array.from(v.params).join(',')}`;
-      return verifyResults.get(key) ?? { accepted: true };
+      return verifyResults.get(key) ?? { accepted: true, emittedSlots: [] };
     },
+    // Partition check defaults: no outputs, no declared namespaces.
+    // Tests that don't care about partitioning will trivially pass.
+    getOutputs: () => [],
+    getOutputNamespaces: () => [],
   };
 
   return {

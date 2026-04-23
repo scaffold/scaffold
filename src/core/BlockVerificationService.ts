@@ -7,6 +7,7 @@ import {
   BlockVerificationModule,
   type BlockVerificationProvider,
 } from './BlockVerificationModule.ts';
+import { ContractHostService } from './ContractHostService.ts';
 import { ContractVerificationService } from './ContractVerificationService.ts';
 import { OutputClaimService } from './OutputClaimService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
@@ -22,6 +23,7 @@ export class BlockVerificationService extends BlockVerificationModule {
     const store = ctx.get(BlockStore);
     const outputClaims = ctx.get(OutputClaimService);
     const contractVerification = ctx.get(ContractVerificationService);
+    const contractHost = ctx.get(ContractHostService);
 
     const provider: BlockVerificationProvider = {
       getClaimCount: (blockHash: Hash) => {
@@ -37,6 +39,9 @@ export class BlockVerificationService extends BlockVerificationModule {
       onResolution: (cb) => outputClaims.onResolution(cb),
       verifyContract: (blockHash: Hash, verifier: Verifier) =>
         contractVerification.verify(blockHash, verifier),
+      getOutputs: (blockHash: Hash) => store.get(blockHash)?.outputs,
+      getOutputNamespaces: (contractHash: Hash) =>
+        contractHost.getOutputNamespaces(contractHash),
     };
 
     super(provider);

@@ -3,12 +3,19 @@ import {
   Block,
   BlockStore,
   COLLATERAL_CONTRACT,
+  collectExtendedOutputs,
   INSURANCE_CONTRACT,
   RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
-import { BlockBlueprint, BlockSpec, type ClaimEntry, Output } from '../core/BlockCreationModule.ts';
+import {
+  BlockBlueprint,
+  BlockSpec,
+  type ClaimEntry,
+  Output,
+  type Verifier,
+} from '../core/BlockCreationModule.ts';
 import { makeSignatureOutput, signatureContract } from '../contracts/SignatureContract.ts';
 import {
   type OutputSpaceBlock,
@@ -197,10 +204,20 @@ export class NodeContext {
     const utxoIndex = this.utxoIndex;
     const packetStore = this.packetStore;
     const store = this.store;
+    const contractHost = this.contractHost;
+    const ctxLogger = this.protocolContext.logger('autoBalance');
     this._blockCreator = {
       createBlock: (spec, privateKey) => {
         const balanced = publicKey
-          ? autoBalance(spec, utxoIndex, publicKey, makeStoreOutputSpace(store))
+          ? autoBalance(
+            spec,
+            utxoIndex,
+            publicKey,
+            makeStoreOutputSpace(store),
+            store,
+            (h) => contractHost.getOutputNamespaces(h),
+            ctxLogger,
+          )
           : spec;
         let blueprint: BlockBlueprint;
         try {
@@ -624,6 +641,44 @@ export function findCanonicalTip(ctx: NodeContext): Hash {
 }
 
 /**
+ * True iff any of the block's claims resolves to a verifier whose
+ * contract declares SIGNATURE_CONTRACT in its outputNamespaces. Walks
+ * the anchor's extended vector to resolve external claim indices; own-
+ * output claims (index < ownOutputCount) are resolved directly from
+ * `spec.outputs`.
+ *
+ * This is a leaf-block-friendly resolver. Aggregation blocks and
+ * complex cases where claims resolve deeper than the anchor's own
+ * outputs return false (autoBalance proceeds normally) -- the partition
+ * check at verification time catches any actual violation.
+ */
+function ownsSignatureNamespace(
+  spec: BlockSpec,
+  store: BlockStore,
+  getOutputNamespaces: (contractHash: Hash) => Hash[],
+): boolean {
+  const ownOutputCount = spec.outputs.length;
+  const anchor = store.get(spec.anchor);
+  const anchorExtended = anchor ? collectExtendedOutputs(anchor, store) : [];
+
+  for (const claim of spec.claims) {
+    let claimedVerifier: Verifier | undefined;
+    if (claim.index < ownOutputCount) {
+      claimedVerifier = spec.outputs[claim.index]?.verifier;
+    } else {
+      const extIdx = claim.index - ownOutputCount;
+      claimedVerifier = anchorExtended[extIdx]?.verifier;
+    }
+    if (!claimedVerifier) continue;
+    const namespaces = getOutputNamespaces(claimedVerifier.contract);
+    if (namespaces.some((h) => Hash.equals(h, SIGNATURE_CONTRACT))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Build an OutputSpaceProvider that reads blocks out of a BlockStore.
  * Mirrors the provider used in _solidifyDraft.
  */
@@ -666,7 +721,22 @@ function autoBalance(
   utxoIndex: UtxoIndexService,
   publicKey: Uint8Array,
   outputSpace: OutputSpaceModule,
+  store: BlockStore,
+  getOutputNamespaces: (contractHash: Hash) => Hash[],
+  logger: { warn?: (event: string, data?: Record<string, unknown>) => void } | undefined,
 ): BlockSpec {
+  // Namespace gate: if any claim's contract declares SIGNATURE_CONTRACT as an
+  // owned namespace, autoBalance cannot drop a change output there without
+  // violating the namespace partition rule. The contract is responsible for
+  // emitting creator compensation itself in that case. See
+  // docs/protocol/computation.md#output-namespaces.
+  if (ownsSignatureNamespace(spec, store, getOutputNamespaces)) {
+    logger?.warn?.('skipChangeOutput', {
+      reason: 'SIGNATURE_CONTRACT namespace owned by claimed verifier',
+    });
+    return spec;
+  }
+
   // Compute totals excluding self-claims
   const ownOutputCount = spec.outputs.length;
   let claimTotal = 0;

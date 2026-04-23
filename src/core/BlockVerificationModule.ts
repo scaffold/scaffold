@@ -1,7 +1,11 @@
 // Protocol spec: docs/protocol/computation.md
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import type { Verifier } from './BlockCreationModule.ts';
+import type { Output, Verifier } from './BlockCreationModule.ts';
+import {
+  NamespacePartitionModule,
+  type OwnerContribution,
+} from './NamespacePartitionModule.ts';
 
 // -- Types ----------------------------------------------------------
 
@@ -41,6 +45,19 @@ export interface BlockVerificationProvider {
    * Typically forwards to `ContractVerificationModule.verify`.
    */
   verifyContract(blockHash: Hash, verifier: Verifier): Promise<import('./ContractHost.ts').ExecutionResult>;
+
+  /**
+   * Look up a block's outputs for the namespace-partition check.
+   * Returns undefined if the block is unknown locally.
+   */
+  getOutputs(blockHash: Hash): Output[] | undefined;
+
+  /**
+   * Look up a contract's declared output namespaces. Returns [] if the
+   * contract declares nothing or is unregistered. See
+   * docs/protocol/computation.md#output-namespaces.
+   */
+  getOutputNamespaces(contractHash: Hash): Hash[];
 }
 
 // -- Module ---------------------------------------------------------
@@ -65,6 +82,7 @@ export interface BlockVerificationProvider {
  */
 export class BlockVerificationModule {
   private readonly _provider: BlockVerificationProvider;
+  private readonly _partition = new NamespacePartitionModule();
 
   /**
    * Per-claimant accumulated resolutions. Populated by onResolution events
@@ -225,19 +243,44 @@ export class BlockVerificationModule {
         continue;
       }
 
-      const promises: Promise<import('./ContractHost.ts').ExecutionResult>[] = [];
+      const dispatch: { verifier: Verifier; promise: Promise<import('./ContractHost.ts').ExecutionResult> }[] = [];
       for (const target of targets.slice(0, claimCount)) {
         const verifier = this._provider.getVerifier(target.block, target.outputIndex);
         if (!verifier) {
           return { accepted: false, reason: 'claimed output not found' };
         }
-        promises.push(this._provider.verifyContract(blockHash, verifier));
+        dispatch.push({ verifier, promise: this._provider.verifyContract(blockHash, verifier) });
       }
 
-      // Fail-fast on first reject; carry the reason up.
-      for (const p of promises) {
-        const result = await p;
+      // Fail-fast on first reject, but all dispatches are already in flight
+      // (no cancellation today -- see TODO on cumulative budget cap).
+      const resultsByVerifier: { verifier: Verifier; result: import('./ContractHost.ts').ExecutionResult }[] = [];
+      for (const { verifier, promise } of dispatch) {
+        const result = await promise;
         if (!result.accepted) return result;
+        resultsByVerifier.push({ verifier, result });
+      }
+
+      // Block-level namespace partition check. Runs after every claim's
+      // contract has accepted; confirms the block's outputs layout matches
+      // the owning contracts' emitted sequences. See
+      // docs/protocol/computation.md#output-namespaces.
+      const blockOutputs = this._provider.getOutputs(blockHash);
+      if (!blockOutputs) {
+        // Block vanished between claim check and output lookup -- benign.
+        return { accepted: true as const };
+      }
+      const contributions: OwnerContribution[] = resultsByVerifier.map(
+        ({ verifier, result }) => ({
+          runningVerifier: verifier,
+          declaredNamespaces: this._provider.getOutputNamespaces(verifier.contract),
+          emittedSlots: (result as { accepted: true; emittedSlots?: import('./GeneratingEnv.ts').OutputSlot[] })
+            .emittedSlots ?? [],
+        }),
+      );
+      const partition = this._partition.check(blockOutputs, contributions);
+      if (!partition.ok) {
+        return { accepted: false, reason: `namespace partition: ${partition.reason}` };
       }
       return { accepted: true as const };
     }
