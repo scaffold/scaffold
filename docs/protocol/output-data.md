@@ -9,6 +9,13 @@ condition parameters) and `data` (application payload). The protocol treats
 both as raw `Uint8Array` -- only the contract identified by
 `verifier.contract` knows how to interpret them.
 
+`data` is additionally nullable: `data: null` denotes a **pure-incentive
+output** (value without payload, invisible to contracts, not emittable by
+contracts). See [Null-Data Outputs](computation.md#null-data-outputs) in the
+computation doc for semantics. The walker/builder interface described below
+applies only to non-null data -- null-data outputs have nothing to walk or
+build.
+
 The challenge: generic tools (block explorers, block creation UIs, debuggers)
 need to read and write these fields without contract-specific code. This
 document specifies the **bidirectional walker/builder** interface that

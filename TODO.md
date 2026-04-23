@@ -61,6 +61,9 @@ Blocks: making `GenerationModule`'s canonicality-driven deprioritization actuall
 ### Deception Module
 Formalize the strategic deception equilibrium from [deception.md](docs/protocol/deception.md): insurance commitments on FOR collateral, self-catch mechanism for trap blocks, and calibrated fraud rates. Requires the dispute module (done) and economic equilibrium analysis. No core module exists yet.
 
+### Aggregation marker migration to null-data
+With `Output.data: Uint8Array | null` landed, the aggregation marker -- currently `new Uint8Array(0)` as an overloaded sentinel in [AggregationContract.ts:73](src/contracts/AggregationContract.ts) and checked via `length === 0` in three sites (AggregationContract.ts:58, 111; [NodeContext.ts:634](src/node/NodeContext.ts); [Scaffold.ts:146](src/Scaffold.ts)) -- is semantically a null-data output. Direct migration is **blocked**: the aggregation contract declares `AGGREGATION_CONTRACT` as an `outputNamespace`, so null in that namespace would violate the partition rule (null must be unowned). Migration requires either (a) moving markers to a distinct unowned namespace (e.g., `AGGREGATION_MARKER_CONTRACT`) before flipping to null, or (b) deciding to leave empty-bytes as the marker convention and documenting it. Low priority; the current empty-bytes sentinel works. The Phase 1 null-data commit keeps both checks for compatibility.
+
 ### Query and Promise Mechanism
 Design the offline state mechanism from [computation.md](docs/protocol/computation.md#query-and-promise-mechanism): promise outputs committing to data, query outputs requesting specific data, and weight reduction for unanswered queries. A scoping plan lives at [docs/plans/query-promise.md](docs/plans/query-promise.md).
 

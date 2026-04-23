@@ -51,9 +51,9 @@ An **output** is a resource produced by a block:
 
 ```
 Output {
-    verifier:   Verifier  // spending condition
-    value:      Number    // economic value
-    data:       Bytes     // application-specific payload
+    verifier:   Verifier     // spending condition
+    value:      Number       // economic value
+    data:       Bytes | null // application-specific payload, or null
 }
 
 Verifier {
@@ -61,6 +61,10 @@ Verifier {
     params:     Bytes     // parameters to the contract
 }
 ```
+
+`data` may be `null` for pure-incentive outputs (value-only, invisible to
+contracts). Null-data outputs must live in unowned namespaces; see
+[null-data outputs](computation.md#null-data-outputs).
 
 A **verifier** defines the spending condition for an output. It combines a contract (identified by its WASM hash) with parameters that configure the condition. For example, a signature contract's params contain the owner's public key. When a block claims an output, the contract WASM is executed with the verifier's params — it accepts or rejects the claim. This is **contractual verification**, distinct from structural verification.
 
@@ -271,7 +275,7 @@ The structural verification module checks block-specific properties that are com
 2. **Claim indices**: All claim indices are valid — self-claims have index < `outputs.length`, shared-resource claims have index < `outputs.length` + post-subtree vector length.
 3. **Throughput balance**: `sum(input_values) == sum(output_values)` (value conservation).
 4. **Signature**: The block's [packet-level signature](wire-format.md) is valid for the declared creator. Signature verification uses the secp256k1 signature embedded in the packet envelope, verified against the hash of the header+payload portion.
-5. **Output namespace partition**: Outputs partition by `verifier.contract`. Within each owned namespace (a namespace H where some claim's contract declares H in its `outputNamespaces`), the sequence of outputs is exactly what the owning contract emitted during its run, matched positionally. Unowned namespaces are governed by other protocol rules (e.g., the mandatory aggregation marker). See [output namespaces](computation.md#output-namespaces).
+5. **Output namespace partition**: Outputs partition by `verifier.contract`. Within each owned namespace (a namespace H where some claim's contract declares H in its `outputNamespaces`), the sequence of outputs is exactly what the owning contract emitted during its run, matched positionally. Unowned namespaces are governed by other protocol rules (e.g., the mandatory aggregation marker). Null-data outputs (pure-incentive) must live in unowned namespaces -- a null-data output in an owned namespace is a violation since contracts cannot emit null. See [output namespaces](computation.md#output-namespaces) and [null-data outputs](computation.md#null-data-outputs).
 
 Checks that were previously structural — claim mask consistency, output count, weight vector derivation, aggregate output counts — are now [contractual verification](contracts.md). The aggregation contract output carries this data, and its correctness is verified (and disputable) through the same sampling/collateral mechanism as any other contract.
 
