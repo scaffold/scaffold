@@ -87,6 +87,14 @@ export interface ContractEnv {
    * Generation: adds the output to the draft with `origin: 'require'`.
    *
    * See docs/protocol/computation.md#output-namespaces.
+   *
+   * TODO(@joel): consider unifying requireOutput + getOutput into a
+   * single method that varies by argument count:
+   *   requireOutput(verifier, data?, value?): Promise<{value, data}>
+   *     (verifier, data, value) -- today's requireOutput
+   *     (verifier, data)        -- contract supplies data; host supplies value
+   *     (verifier)              -- host supplies both
+   * Revisit once more real contracts exercise getOutput.
    */
   requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void;
 
