@@ -134,10 +134,15 @@ function makeDraft(
   verdict: 'valid' | 'invalid',
   status: 'ready' | 'pending' | 'cancelled' = 'ready',
 ): BlockDraft {
+  const verdictOutput = makeRecordOutput(
+    VERDICT_RECORD_KEY,
+    encodeVerdict({ target, verdict }),
+  );
   return {
     draftId,
     resolvedClaims: [],
-    outputs: [makeRecordOutput(VERDICT_RECORD_KEY, encodeVerdict({ target, verdict }))],
+    outputs: [verdictOutput],
+    outputSlots: [{ output: verdictOutput, origin: 'require' }],
     declaredWeight: 0,
     anchor: Hash.digest('anchor'),
     refs: [],

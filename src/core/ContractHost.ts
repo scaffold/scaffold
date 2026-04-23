@@ -10,7 +10,11 @@ import {
   type VerifyingEnvProvider,
 } from './ContractEnv.ts';
 import { VerifyingEnv } from './VerifyingEnv.ts';
-import { GeneratingEnv, type WaitForInputFn } from './GeneratingEnv.ts';
+import {
+  GeneratingEnv,
+  type OutputSlot,
+  type WaitForInputFn,
+} from './GeneratingEnv.ts';
 
 // -- Re-exports -----------------------------------------------------
 
@@ -49,6 +53,14 @@ export interface GeneratingRunInput<BlockType> {
  */
 export interface GeneratingRunResult<BlockType> {
   readonly outputs: Output[];
+  /**
+   * Slot-tagged outputs in call order. `origin: 'get'` slots may have
+   * their `value` raised at solidification (see
+   * docs/protocol/computation.md#output-requirements). Same content as
+   * `outputs` -- both kept so callers that don't care about origin can
+   * keep using the simpler field.
+   */
+  readonly outputSlots: OutputSlot[];
   readonly resolvedClaims: { block: Hash; outputIndex: number; value: number }[];
   readonly refs: Hash[];
   readonly includeConstraints: Hash[];
@@ -154,6 +166,7 @@ export class ContractHost<BlockType> {
     const result = contract.run(env);
     return maybeThen(result, () => ({
       outputs: env.getAllOutputs(),
+      outputSlots: env.getGeneratedOutputSlots(),
       resolvedClaims: env.getResolvedClaims(),
       refs: env.getGeneratedRefs(),
       includeConstraints: env.getIncludeConstraints(),

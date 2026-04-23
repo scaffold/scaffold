@@ -12,6 +12,7 @@ import {
   type AvailableInput,
   type GeneratingEnvProvider,
 } from '../core/ContractEnv.ts';
+import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { ExecutionQueueService } from '../core/ExecutionQueueService.ts';
@@ -396,6 +397,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
     const finish = (result: {
       outputs: Output[];
+      outputSlots: OutputSlot[];
       resolvedClaims: { block: Hash; outputIndex: number; value: number }[];
       refs: Hash[];
       includeConstraints: Hash[];
@@ -421,6 +423,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     draft: BlockDraft,
     result: {
       outputs: Output[];
+      outputSlots: OutputSlot[];
       resolvedClaims: { block: Hash; outputIndex: number; value: number }[];
       refs: Hash[];
       includeConstraints: Hash[];
@@ -453,6 +456,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
     const updated = this._draftStore.update(draftId, {
       outputs: [...stored.outputs, ...result.outputs],
+      outputSlots: [...stored.outputSlots, ...result.outputSlots],
       resolvedClaims: [...stored.resolvedClaims, ...newClaims],
       refs: [...stored.refs, ...result.refs],
       includeConstraints: [...stored.includeConstraints, ...newIncludes],

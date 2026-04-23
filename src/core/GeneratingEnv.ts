@@ -14,6 +14,20 @@ import {
 } from './ContractEnv.ts';
 import { ClaimIntent } from './BlockDraft.ts';
 
+// -- Types --------------------------------------------------------
+
+/**
+ * A generated output paired with its origin. The origin tag is not on
+ * the wire -- it's used at solidification time to decide which outputs
+ * may have their `value` overridden (only 'get' slots can). Also drives
+ * positional matching for the output-namespace partition check.
+ * See docs/protocol/computation.md#output-namespaces.
+ */
+export interface OutputSlot {
+  readonly output: Output;
+  readonly origin: 'require' | 'get';
+}
+
 // -- Helpers ------------------------------------------------------
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -49,10 +63,13 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _provider: GeneratingEnvProvider<BlockType>;
   private readonly _waitForInput?: WaitForInputFn;
 
-  /** Outputs to add to the draft. */
-  private readonly _outputs: Output[] = [];
-  /** Self-claimed result outputs (also added as outputs + claims). */
-  private readonly _resultOutputs: Output[] = [];
+  /**
+   * Outputs to add to the draft, in call order, tagged by origin. The
+   * order reflects the sequence of `requireOutput` / `requireResult` /
+   * `getOutput` calls. Self-claim bookkeeping for record outputs happens
+   * downstream at solidification (see NodeContext._solidifyDraft).
+   */
+  private readonly _slots: OutputSlot[] = [];
   /** Resolved claims from consumed inputs (with provenance). */
   private readonly _resolvedClaims: ClaimIntent[] = [];
   /** Input data returned to the contract (without provenance). */
@@ -133,18 +150,20 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   }
 
   requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
-    this._outputs.push({
-      verifier,
-      value,
-      data: data ?? new Uint8Array(0),
+    this._slots.push({
+      output: { verifier, value, data: data ?? new Uint8Array(0) },
+      origin: 'require',
     });
   }
 
   requireResult(key: Uint8Array, value: Uint8Array): void {
-    this._resultOutputs.push({
-      verifier: { contract: RECORD_CONTRACT, params: key },
-      value: 0,
-      data: value,
+    this._slots.push({
+      output: {
+        verifier: { contract: RECORD_CONTRACT, params: key },
+        value: 0,
+        data: value,
+      },
+      origin: 'require',
     });
   }
 
@@ -206,19 +225,18 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   // -- Accessors for the generation harness -------------------------
 
-  /** Get the outputs the contract wants to produce. */
-  getGeneratedOutputs(): Output[] {
-    return this._outputs;
-  }
-
-  /** Get the self-claimed result outputs. */
-  getGeneratedResults(): Output[] {
-    return this._resultOutputs;
-  }
-
-  /** Get all outputs (results + regular) for inclusion in the draft. */
+  /**
+   * All outputs the contract wants to produce, in call order. For
+   * backward compatibility this returns bare `Output[]`; callers that
+   * need origin tags should use `getGeneratedOutputSlots()`.
+   */
   getAllOutputs(): Output[] {
-    return [...this._resultOutputs, ...this._outputs];
+    return this._slots.map((s) => s.output);
+  }
+
+  /** All output slots with origin tags, in call order. */
+  getGeneratedOutputSlots(): OutputSlot[] {
+    return this._slots;
   }
 
   /** Get the inputs consumed by this contract. */

@@ -123,12 +123,12 @@ Deno.test('GeneratingEnv: requireResult creates a result output', () => {
   const { env } = makeGenEnv();
   env.requireResult(enc('state'), enc('value'));
 
-  const results = env.getGeneratedResults();
-  assertEquals(results.length, 1);
-  assert(Hash.equals(results[0].verifier.contract, RECORD_CONTRACT));
-  assertEquals(results[0].verifier.params, enc('state'));
-  assertEquals(results[0].data, enc('value'));
-  assertEquals(results[0].value, 0);
+  const outputs = env.getAllOutputs();
+  assertEquals(outputs.length, 1);
+  assert(Hash.equals(outputs[0].verifier.contract, RECORD_CONTRACT));
+  assertEquals(outputs[0].verifier.params, enc('state'));
+  assertEquals(outputs[0].data, enc('value'));
+  assertEquals(outputs[0].value, 0);
 });
 
 Deno.test('GeneratingEnv: multiple requireResult calls', () => {
@@ -136,8 +136,8 @@ Deno.test('GeneratingEnv: multiple requireResult calls', () => {
   env.requireResult(enc('a'), enc('1'));
   env.requireResult(enc('b'), enc('2'));
 
-  const results = env.getGeneratedResults();
-  assertEquals(results.length, 2);
+  const outputs = env.getAllOutputs();
+  assertEquals(outputs.length, 2);
 });
 
 // -- Tests: requireOutput ------------------------------------------
@@ -147,7 +147,7 @@ Deno.test('GeneratingEnv: requireOutput adds output to list', () => {
   const verifier: Verifier = { contract: h('pay'), params: enc('pk') };
   env.requireOutput(verifier, 42, enc('data'));
 
-  const outputs = env.getGeneratedOutputs();
+  const outputs = env.getAllOutputs();
   assertEquals(outputs.length, 1);
   assert(Hash.equals(outputs[0].verifier.contract, verifier.contract));
   assertEquals(outputs[0].value, 42);
@@ -157,7 +157,24 @@ Deno.test('GeneratingEnv: requireOutput adds output to list', () => {
 Deno.test('GeneratingEnv: requireOutput defaults data to empty', () => {
   const { env } = makeGenEnv();
   env.requireOutput({ contract: h('x'), params: new Uint8Array(0) }, 10);
-  assertEquals(env.getGeneratedOutputs()[0].data, new Uint8Array(0));
+  assertEquals(env.getAllOutputs()[0].data, new Uint8Array(0));
+});
+
+Deno.test('GeneratingEnv: interleaved requireResult and requireOutput preserve call order', () => {
+  const { env } = makeGenEnv();
+  env.requireOutput({ contract: h('pay'), params: enc('pk') }, 5, enc('a'));
+  env.requireResult(enc('k1'), enc('v1'));
+  env.requireOutput({ contract: h('pay'), params: enc('pk') }, 3, enc('b'));
+  env.requireResult(enc('k2'), enc('v2'));
+
+  const slots = env.getGeneratedOutputSlots();
+  assertEquals(slots.length, 4);
+  assertEquals(slots.every((s) => s.origin === 'require'), true);
+  assertEquals(slots[0].output.data, enc('a'));
+  assert(Hash.equals(slots[1].output.verifier.contract, RECORD_CONTRACT));
+  assertEquals(slots[1].output.verifier.params, enc('k1'));
+  assertEquals(slots[2].output.data, enc('b'));
+  assertEquals(slots[3].output.verifier.params, enc('k2'));
 });
 
 // -- Tests: collectInputs ------------------------------------------

@@ -2,6 +2,7 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
+import type { OutputSlot } from './GeneratingEnv.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -30,6 +31,12 @@ export interface BlockDraft {
   readonly draftId: DraftID;
   readonly resolvedClaims: ClaimIntent[];
   readonly outputs: Output[];
+  /**
+   * Slot-tagged outputs (origin: 'require' | 'get'), in call order,
+   * parallel to `outputs`. Used at solidification to identify slots
+   * whose `value` may be overridden. Populated from `GeneratingRunResult.outputSlots`.
+   */
+  readonly outputSlots: OutputSlot[];
   readonly declaredWeight: number;
   readonly anchor: Hash;
   readonly refs: Hash[];
@@ -54,6 +61,7 @@ const VALID_TRANSITIONS: Record<DraftStatus, DraftStatus[]> = {
 export function createDraft(fields: {
   resolvedClaims: ClaimIntent[];
   outputs: Output[];
+  outputSlots?: OutputSlot[];
   declaredWeight: number;
   anchor: Hash;
   refs?: Hash[];
@@ -64,6 +72,11 @@ export function createDraft(fields: {
     draftId: Hash.random(),
     resolvedClaims: fields.resolvedClaims,
     outputs: fields.outputs,
+    // Default slots: treat any pre-populated outputs as 'require' origin.
+    // Generation fills this in via `_applyResult`; other entry points
+    // (e.g., test fixtures, phantom drafts) get a sensible default.
+    outputSlots: fields.outputSlots ??
+      fields.outputs.map((output) => ({ output, origin: 'require' as const })),
     declaredWeight: fields.declaredWeight,
     anchor: fields.anchor,
     refs: fields.refs ?? [],
