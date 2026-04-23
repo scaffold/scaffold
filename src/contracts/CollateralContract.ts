@@ -1,7 +1,12 @@
 // Protocol spec: docs/protocol/collateral-resolution.md
 
 import { maybeThen } from '../util/MaybePromise.ts';
-import { type Block, COLLATERAL_CONTRACT, SIGNATURE_CONTRACT } from '../core/Block.ts';
+import {
+  type Block,
+  COLLATERAL_CONTRACT,
+  RECORD_CONTRACT,
+  SIGNATURE_CONTRACT,
+} from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
 import { type ContractEnv, ContractRejection, type Input } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
@@ -199,6 +204,8 @@ function partitionInputs(inputs: Input[]): PartitionedInputs {
  *    (Non-canonical detection is external; the contract just returns funds.)
  */
 export const collateralContract: Contract = {
+  outputNamespaces: [SIGNATURE_CONTRACT, RECORD_CONTRACT],
+
   run(env) {
     const inputsResult = env.collectInputs();
 

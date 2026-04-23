@@ -89,6 +89,14 @@ export const AGGREGATION_THRESHOLD = 4;
  * when the next marker becomes canonical.
  */
 export const aggregationContract: Contract = {
+  // Getter (not field) to avoid a TDZ error: Block.ts has a circular import
+  // of this module for `getAggregationData`, so at object-literal eval time
+  // `AGGREGATION_CONTRACT` is not yet initialized. Lazy access defers the
+  // read until `outputNamespaces` is actually consulted.
+  get outputNamespaces() {
+    return [AGGREGATION_CONTRACT];
+  },
+
   async run(env) {
     const inputs = [];
 

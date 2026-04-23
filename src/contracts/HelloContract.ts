@@ -4,6 +4,7 @@
 // lives here so demos and tests can share the same well-known hash.
 
 import { Hash } from '../util/Hash.ts';
+import { RECORD_CONTRACT } from '../core/Block.ts';
 import type { Contract } from './Contract.ts';
 import type { Output, Verifier } from '../core/BlockCreationModule.ts';
 
@@ -20,6 +21,8 @@ export const HELLO_CONTRACT: Hash = Hash.digest('scaffold:demo:hello');
  * produces the record output here.
  */
 export const helloContract: Contract = {
+  outputNamespaces: [RECORD_CONTRACT],
+
   async run(env) {
     await env.requireInput();
     const name = new TextDecoder().decode(env.getParams());

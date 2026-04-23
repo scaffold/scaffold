@@ -83,6 +83,16 @@ export class ContractHost<BlockType> {
   }
 
   /**
+   * Declared output namespaces for a registered contract. Returns `[]` if
+   * the contract is unknown or declares nothing. See
+   * docs/protocol/computation.md#output-namespaces.
+   */
+  getOutputNamespaces(contractHash: Hash): Hash[] {
+    const contract = this._contracts.get(contractHash.toPrimitive());
+    return contract?.outputNamespaces ?? [];
+  }
+
+  /**
    * Run a contract in verification mode. Returns an ExecutionResult.
    * Never throws for contract-level outcomes -- ContractRejection becomes
    * `{ accepted: false, reason }`, other thrown errors become

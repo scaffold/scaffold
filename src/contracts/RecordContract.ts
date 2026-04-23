@@ -50,6 +50,8 @@ export function findRecordOutput(block: Block, key: string | Uint8Array): Output
  * to the same block that is claiming it).
  */
 export const recordContract: Contract = {
+  outputNamespaces: [],
+
   async run(env) {
     const inputs = await env.collectInputs();
     for (const input of inputs) {

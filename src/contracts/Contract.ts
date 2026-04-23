@@ -2,6 +2,7 @@
 
 import type { ContractEnv } from '../core/ContractEnv.ts';
 import type { MaybePromise } from '../util/MaybePromise.ts';
+import type { Hash } from '../util/Hash.ts';
 
 // -- Value Descriptors ------------------------------------------------
 
@@ -76,6 +77,20 @@ export interface BuilderHost {
 export interface Contract {
   /** Verify or generate a block (the spending condition). Required. */
   run(env: ContractEnv): MaybePromise<void>;
+
+  /**
+   * The set of output contract-hashes this contract may produce.
+   *
+   * On a block, outputs partition by `verifier.contract`. For every owned
+   * namespace H (some claim's contract declares H here), the block's outputs
+   * under H must equal exactly what the owning contract emitted, matched
+   * positionally. Two claims whose contracts' namespaces overlap cannot
+   * share a block. See docs/protocol/computation.md#output-namespaces.
+   *
+   * Undeclared / empty means the contract produces no outputs (e.g., pure
+   * gate contracts like signature/timelock). Undefined is treated as [].
+   */
+  outputNamespaces?: Hash[];
 
   /** Walk verifier params bytes for display in generic tools. */
   walkParams?(params: Uint8Array, host: WalkerHost): void;

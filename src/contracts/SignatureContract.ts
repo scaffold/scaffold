@@ -24,6 +24,8 @@ export function makeSignatureOutput(publicKey: Uint8Array, value: number): Outpu
  * block whose packet signature corresponds to that pubkey.
  */
 export const signatureContract: Contract = {
+  outputNamespaces: [],
+
   run(env) {
     env.requireSignature(env.getParams());
   },

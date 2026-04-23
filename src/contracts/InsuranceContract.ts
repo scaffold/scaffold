@@ -70,6 +70,8 @@ export const MIN_RETURN_RATE = 0.95;
  * 4. **Non-canonical reclaim**: Full return to owner.
  */
 export const insuranceContract: Contract = {
+  outputNamespaces: [SIGNATURE_CONTRACT],
+
   run(env) {
     const inputsResult = env.collectInputs();
 
