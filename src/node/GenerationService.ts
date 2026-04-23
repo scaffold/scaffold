@@ -3,15 +3,8 @@
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import type { Output, Verifier } from '../core/BlockCreationModule.ts';
 import { Block, BlockStore, collectExtendedOutputs } from '../core/Block.ts';
-import {
-  BlockDraft,
-  ClaimIntent,
-  DraftStore,
-} from '../core/BlockDraft.ts';
-import {
-  type AvailableInput,
-  type GeneratingEnvProvider,
-} from '../core/ContractEnv.ts';
+import { BlockDraft, ClaimIntent, DraftStore } from '../core/BlockDraft.ts';
+import { type AvailableInput, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
@@ -21,7 +14,7 @@ import { OutputHandlerRegistry } from '../core/OutputHandlerRegistry.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { verifierKey as utxoVerifierKey } from './UtxoIndex.ts';
 import { UtxoIndexService } from './UtxoIndexService.ts';
-import { type WaitForInputFn } from '../core/GeneratingEnv.ts';
+import { type WaitForGetOutputFn, type WaitForInputFn } from '../core/GeneratingEnv.ts';
 import type { GeneratorHandle, GeneratorProvider } from '../core/Generator.ts';
 import {
   GenerationModule,
@@ -138,6 +131,15 @@ interface BlockedEntry {
   resolve: (input: AvailableInput) => void;
 }
 
+/** A generator parked in `getOutput` waiting for a user handler to match. */
+interface ParkedGetOutput {
+  draftId: Hash;
+  runningContract: Hash;
+  runningParams: Uint8Array;
+  outputVerifier: Verifier;
+  resolve: (result: { value: number; data: Uint8Array }) => void;
+}
+
 // -- Service --------------------------------------------------------
 
 /**
@@ -180,6 +182,15 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   private readonly _blocked = new Map<string, BlockedEntry[]>();
 
   /**
+   * Generators parked in `getOutput` waiting for a user handler to match.
+   * Keyed by the running contract hash (OutputHandlerRegistry dispatches by
+   * running contract). When a user handler registers for that contract, we
+   * re-run the resolver for each parked entry; entries whose handler now
+   * returns non-null resolve.
+   */
+  private readonly _parkedGetOutput = new Map<HashPrimitive, ParkedGetOutput[]>();
+
+  /**
    * Outputs adopted into an active draft before its contract blocked --
    * keyed by draftId. When the contract calls `waitForInput`, these are
    * consumed first; if empty, the waiter parks in `_blocked`.
@@ -188,6 +199,9 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
   /** Draft-level cancellation flags. Checked by the run loop. */
   private readonly _cancelled = new Set<HashPrimitive>();
+
+  /** The node's public key, used for requireSignature in generation. */
+  private _signerPubkey: Uint8Array | undefined;
 
   constructor(ctx: ProtocolContext) {
     const store = ctx.get(BlockStore);
@@ -220,6 +234,14 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       this.onCanonicalityChange(hash, canonical);
     });
 
+    // Wake generators parked in `getOutput` when a new user handler lands
+    // for the running contract. The handler may or may not actually resolve
+    // the parked request -- we re-run the resolver chain and keep the entry
+    // parked if everything still returns null.
+    outputHandlers.onUserHandlerRegistered((runningContract) => {
+      this._retryParkedGetOutput(runningContract);
+    });
+
     // Wake blocked contracts when a reorg frees up an output. Without
     // this hook, a contract that called `requireInput()` before the
     // matching UTXO existed would stay parked forever if the only way
@@ -250,6 +272,16 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   /** Hook so DraftStrategy can clear its per-output inFlight tracking. */
   setOutputReleasedHook(cb: (block: Hash, outputIndex: number) => void): void {
     this._onOutputReleased = cb;
+  }
+
+  /**
+   * Install the node's own public key. `requireSignature` in generation
+   * mode uses this to decide whether the draft can be signed by the
+   * required pubkey at solidification. Set by NodeContext after
+   * construction (since the key isn't part of ProtocolContext DI).
+   */
+  setSignerPubkey(pubkey: Uint8Array): void {
+    this._signerPubkey = pubkey;
   }
 
   // -- GeneratorProvider ---------------------------------------------
@@ -343,6 +375,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
           this._preQueue.delete(draftId.toPrimitive());
         }
         this._removeBlocked(draftId);
+        this._removeParkedGetOutput(draftId);
         this.forget(draftId);
       },
     };
@@ -398,12 +431,32 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       });
     };
 
+    const waitForGetOutput: WaitForGetOutputFn = (outputVerifier) => {
+      return new Promise((resolve) => {
+        const runningKey = spec.verifier.contract.toPrimitive();
+        let queue = this._parkedGetOutput.get(runningKey);
+        if (!queue) {
+          queue = [];
+          this._parkedGetOutput.set(runningKey, queue);
+        }
+        queue.push({
+          draftId,
+          runningContract: spec.verifier.contract,
+          runningParams: spec.verifier.params,
+          outputVerifier,
+          resolve,
+        });
+      });
+    };
+
     let maybeResult;
     try {
       maybeResult = this._host.runGenerating({
         verifier: spec.verifier,
         provider: this._adapter,
         waitForInput,
+        waitForGetOutput,
+        signerPubkey: this._signerPubkey,
       });
     } catch (_e) {
       if (!this._cancelled.has(draftId.toPrimitive())) {
@@ -454,9 +507,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     }
 
     const existing = new Set(
-      draft.resolvedClaims.map((rc: ClaimIntent) =>
-        `${rc.block.toPrimitive()}:${rc.outputIndex}`
-      ),
+      draft.resolvedClaims.map((rc: ClaimIntent) => `${rc.block.toPrimitive()}:${rc.outputIndex}`),
     );
     const newClaims = result.resolvedClaims.filter(
       (rc) => !existing.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`),
@@ -582,11 +633,93 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     return n;
   }
 
+  /** Number of generators parked in `getOutput`. For introspection/tests. */
+  get parkedGetOutputCount(): number {
+    let n = 0;
+    for (const q of this._parkedGetOutput.values()) n += q.length;
+    return n;
+  }
+
+  /** Debug: list parked getOutput entries. */
+  debugParkedGetOutput(): {
+    runningContract: string;
+    runningParamsHex: string;
+    outputContract: string;
+    outputParamsHex: string;
+  }[] {
+    const out: ReturnType<GenerationService['debugParkedGetOutput']> = [];
+    for (const queue of this._parkedGetOutput.values()) {
+      for (const e of queue) {
+        out.push({
+          runningContract: e.runningContract.toHex().slice(0, 8),
+          runningParamsHex: Array.from(e.runningParams)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join(''),
+          outputContract: e.outputVerifier.contract.toHex().slice(0, 8),
+          outputParamsHex: Array.from(e.outputVerifier.params)
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join(''),
+        });
+      }
+    }
+    return out;
+  }
+
   private _removeBlocked(draftId: Hash): void {
     for (const [key, queue] of this._blocked) {
       const filtered = queue.filter((e) => !Hash.equals(e.draftId, draftId));
       if (filtered.length === 0) this._blocked.delete(key);
       else this._blocked.set(key, filtered);
+    }
+  }
+
+  private _removeParkedGetOutput(draftId: Hash): void {
+    for (const [key, queue] of this._parkedGetOutput) {
+      const filtered = queue.filter((e) => !Hash.equals(e.draftId, draftId));
+      if (filtered.length === 0) this._parkedGetOutput.delete(key);
+      else this._parkedGetOutput.set(key, filtered);
+    }
+  }
+
+  /**
+   * Called when a new user handler registers for `runningContract`. Re-run
+   * the resolver chain for every parked getOutput on that contract hash and
+   * resolve any whose handler chain now returns non-null. Entries that still
+   * resolve to null stay parked.
+   *
+   * The registry resolves asynchronously; we iterate serially per-entry so
+   * that a handler that itself blocks (e.g., awaits user input) doesn't
+   * prevent other entries from being considered.
+   */
+  private _retryParkedGetOutput(runningContract: Hash): void {
+    const key = runningContract.toPrimitive();
+    const queue = this._parkedGetOutput.get(key);
+    if (!queue || queue.length === 0) return;
+    // Snapshot and clear; survivors get re-parked.
+    const snapshot = queue.splice(0);
+    this._parkedGetOutput.delete(key);
+
+    for (const entry of snapshot) {
+      if (this._cancelled.has(entry.draftId.toPrimitive())) continue;
+      // Re-run the resolver. If it returns non-null, resolve the parked
+      // promise. Otherwise re-park.
+      this._adapter.resolveGetOutput(
+        entry.runningContract,
+        entry.runningParams,
+        entry.outputVerifier,
+      ).then((resolved) => {
+        if (this._cancelled.has(entry.draftId.toPrimitive())) return;
+        if (resolved !== null) {
+          entry.resolve(resolved);
+          return;
+        }
+        let q = this._parkedGetOutput.get(key);
+        if (!q) {
+          q = [];
+          this._parkedGetOutput.set(key, q);
+        }
+        q.push(entry);
+      });
     }
   }
 }

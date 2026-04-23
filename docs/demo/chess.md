@@ -52,17 +52,29 @@ Verifier params for a GAME_STATE UTXO: `gameId (32 bytes) || turnId (u32 LE)`. `
 
 SIGNATURE_CONTRACT is deliberately **not** declared. Payouts use `env.requireOutput({contract: SIGNATURE, params: winner}, pot)` but the partition check doesn't enforce that all SIGNATURE outputs are contract-emitted — throughput balance makes additional SIGNATURE outputs economically untenable (they'd need their own funding). Leaving SIGNATURE unowned lets auto-balance add change outputs freely on the create and join blocks.
 
-## How getOutput + user input will work (future)
+## How getOutput + user input works
 
-The current `ChessGame` wrapper constructs move blocks directly via `scaffold.put()`. The intended long-term flow uses the generation path instead:
+The correct flow is generator-driven. An unclaimed GAME_STATE UTXO automatically spawns a generator on every node that has the contract registered -- no explicit `put` or `fetch` is needed to start one. The contract does the filtering:
 
-1. Frontend calls `scaffold.fetch({contract: GAME_STATE, params: <gameId||nextTurnId>})` → publishes an incentive block.
-2. Peer's DraftStrategy sees the canonical incentive, kicks off generation of `gameStateContract`.
-3. The contract calls `await env.getOutput({contract: RECORD, params: "move"})`.
-4. The peer's `registerOutputHandler(GAME_STATE_CONTRACT, handler)` is invoked; the handler returns a Promise that resolves when the user picks a move on the board.
-5. Generation completes, block is signed, gossiped back to the original fetcher.
+1. White publishes the initial GAME_STATE UTXO via `scaffold.put()` (the only legitimate `put` in chess -- it introduces new data).
+2. DraftStrategy on every peer that has `gameStateContract` registered sees the new canonical UTXO and starts a generator.
+3. The generator calls `env.requireInput()` (claims the prev GAME_STATE), then `env.getOutput({contract: RECORD, params: "join" | "move"})`.
+4. `getOutput` consults `OutputHandlerRegistry`. If no handler returns non-null, the generator parks on a per-running-contract queue (`waitForGetOutput`).
+5. The React UI populates a reactive pending-prompt store (keyed by gameId + turnId + kind) whenever the user could act. On user click, the prompt's Promise resolves with the encoded move bytes.
+6. Registering an output handler -- or mutating the pending-prompt store that a registered handler reads -- wakes all parked generators for that contract. The resolver chain re-runs; the generator whose handler now returns non-null resumes.
+7. `env.requireSignature(mover)` gates which node's generator actually produces a block: only the mover has the key. Other nodes' generators either return `null` from their handler (no pending prompt on that node) or fail `requireSignature` and the draft is cancelled.
+8. The winning generator's block is solidified and gossiped.
 
-Blocked on the "application-driven put racing with reactive strategies" issue documented in [TODO.md](../../TODO.md#application-driven-put-racing-with-reactive-strategies).
+The `ChessGame` wrapper implements this model:
+
+- The only `put` entry point is `createGame(stake)`. It publishes the initial GAME_STATE UTXO.
+- A single persistent `registerOutputHandler(GAME_STATE_CONTRACT, ...)` is installed at construction, reading from an internal `pending: Map<key, PendingPrompt>` store keyed by `(gameId, turnId, kind)`.
+- The React UI calls `promptMove(gameId, turnId)` or `promptJoin(gameId, turnId)` to insert a prompt, and the returned prompt's `resolve(bytes)` is called on user click.
+- When a prompt is inserted or resolved, the wrapper calls `scaffold.notifyOutputHandlerRetry(GAME_STATE_CONTRACT)` to re-run parked generators.
+- The handler returns a Promise that resolves once the user clicks. The generator wakes and produces the block.
+- `requireSignature(mover)` in `GeneratingEnv` checks against the node's own pubkey (not verifier params); on the mover's node it passes, on other nodes it rejects. Only the right player's node produces a block.
+
+See `tests/ChessGame.test.ts` for the live end-to-end coverage: `createGame` publishes the awaiting-join state, a registered output handler drives the join flow, and black's generator produces a real join block.
 
 ## Testing
 

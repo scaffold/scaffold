@@ -270,6 +270,10 @@ export class NodeContext {
     //     up the draft.
     this.draftManager = new DraftManager(this.draftStore, this.consensus, this.generation);
     this.generation.setCancelHook((draftId) => this.draftManager.cancelDraft(draftId));
+    // Wire the node's own pubkey into generation so `requireSignature`
+    // can check whether this node is the right signer for any draft it
+    // produces. Without this, every `requireSignature(...)` rejects.
+    if (this._publicKey) this.generation.setSignerPubkey(this._publicKey);
     // Note: DraftManager.checkMargin and its canonicality listener were
     // removed -- anchor-chain Rule 1/2 in ConsensusModule is stricter
     // than the old margin check. See docs/protocol/draft-blocks.md.

@@ -1,21 +1,16 @@
+// ChessGame is now generator-driven: the wrapper does NOT have joinGame /
+// makeMove / claimTimeout methods. The only `put` entry point is
+// createGame; everything else happens through the pending-prompt store +
+// registerOutputHandler bridge. These tests exercise that end-to-end.
+
 import { assert, assertEquals } from '@std/assert';
 import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { secp } from '../src/util/secp.ts';
 import { ChessGame } from '../src/demo/chess/ChessGame.ts';
-import {
-  applyMove,
-  type GameState,
-  sqIdx,
-  STATUS_IN_PROGRESS,
-  STATUS_TIMEOUT_WHITE,
-  TIMEOUT_MOVE,
-} from '../src/demo/chess/ChessRules.ts';
-import { Hash } from '../src/util/Hash.ts';
-import { type Block, GAME_STATE_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
-
-// -- Test harness: two Scaffold nodes sharing genesis --------------
+import { ZERO_PUBKEY } from '../src/demo/chess/GameStateCodec.ts';
+import { type Block } from '../src/core/Block.ts';
 
 function makePair(stakeEach: number) {
   const whitePriv = secp.utils.randomPrivateKey();
@@ -28,30 +23,13 @@ function makePair(stakeEach: number) {
     makeSignatureOutput(blackPub, stakeEach),
   ]);
 
-  // Chess blocks are user-driven. Disable piggyback AND generation on the
-  // GAME_STATE contract so DraftStrategy and PiggybackStrategy don't create
-  // competing claims on GAME_STATE UTXOs. See TODO.md: the interaction
-  // between application-driven put() flows and Scaffold's default reactive
-  // strategies needs a cleaner API.
-  const chessGenFilter = (h: Hash) =>
-    !Hash.equals(h, GAME_STATE_CONTRACT) && !Hash.equals(h, SIGNATURE_CONTRACT);
-  const white = new Scaffold({
-    privateKey: whitePriv,
-    genesis,
-    enablePiggyback: false,
-    enableGeneration: chessGenFilter,
-  });
-  const black = new Scaffold({
-    privateKey: blackPriv,
-    genesis,
-    enablePiggyback: false,
-    enableGeneration: chessGenFilter,
-  });
+  const white = new Scaffold({ privateKey: whitePriv, genesis });
+  const black = new Scaffold({ privateKey: blackPriv, genesis });
 
   const whiteChess = new ChessGame(white);
   const blackChess = new ChessGame(black);
 
-  // Synchronous bidirectional relay, dedupe via store.has.
+  // Synchronous bidirectional block relay, dedupe via store.has.
   const forwarded = new Set<string>();
   const forward = (to: Scaffold, block: Block) => {
     const key = block.hash.toHex() + ':' + to.publicKeyHex;
@@ -68,13 +46,13 @@ function makePair(stakeEach: number) {
 }
 
 async function flush(): Promise<void> {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 30; i++) {
     await new Promise<void>((r) => queueMicrotask(r));
+    await new Promise((r) => setTimeout(r, 5));
   }
-  await new Promise((r) => setTimeout(r, 20));
 }
 
-// -- Tests ---------------------------------------------------------
+// -- Tests --------------------------------------------------------
 
 Deno.test('ChessGame: single-node create publishes awaiting-join state', async () => {
   const priv = secp.utils.randomPrivateKey();
@@ -82,153 +60,74 @@ Deno.test('ChessGame: single-node create publishes awaiting-join state', async (
   const { block: genesis } = composeGenesisPacket([
     makeSignatureOutput(pub, 10_000),
   ]);
-  const scaffold = new Scaffold({
-    privateKey: priv,
-    genesis,
-    enablePiggyback: false,
-    enableGeneration: (h) =>
-      !Hash.equals(h, GAME_STATE_CONTRACT) && !Hash.equals(h, SIGNATURE_CONTRACT),
-  });
+  const scaffold = new Scaffold({ privateKey: priv, genesis });
   const chess = new ChessGame(scaffold);
 
   const gameId = chess.createGame(200);
-  await new Promise((r) => setTimeout(r, 20));
+  await flush();
 
   const active = chess.getActive(gameId);
   assert(active);
   assertEquals(active!.turnId, 0);
   assertEquals(active!.value, 200);
   assertEquals(active!.state.state.status, 0);
+  assertEquals(active!.state.black, ZERO_PUBKEY);
 
   await scaffold.close();
 });
 
-Deno.test('ChessGame: create + join across two nodes', async () => {
-  const { white, black, whiteChess, blackChess } = makePair(1000);
+Deno.test('ChessGame: pending-prompt store creates/returns consistent prompts', () => {
+  const priv = secp.utils.randomPrivateKey();
+  const pub = secp.getPublicKey(priv, true);
+  const { block: genesis } = composeGenesisPacket([
+    makeSignatureOutput(pub, 100),
+  ]);
+  const scaffold = new Scaffold({ privateKey: priv, genesis });
+  const chess = new ChessGame(scaffold);
 
+  const gameId = new Uint8Array(32);
+  gameId[0] = 42;
+  const p1 = chess.promptMove(gameId, 7);
+  const p2 = chess.promptMove(gameId, 7);
+  assert(p1 === p2, 'same key returns the same prompt');
+  assertEquals(chess.listPending().length, 1);
+
+  let fired = 0;
+  const unsub = chess.onPendingChange(() => fired++);
+  chess.cancelPrompt(p1.key);
+  assertEquals(chess.listPending().length, 0);
+  assert(fired > 0);
+  unsub();
+});
+
+Deno.test('ChessGame: join flow via prompt drives generator end-to-end', async () => {
+  const { white, black, whiteChess, blackChess, blackPub } = makePair(1000);
+
+  // White introduces the game. DraftStrategy on BOTH nodes sees the
+  // unclaimed GAME_STATE UTXO and starts a generator. The contract's
+  // getOutput(RECORD/"join") parks on both until someone resolves.
   const gameId = whiteChess.createGame(200);
   await flush();
-  const visible = blackChess.listActiveGames();
-  assertEquals(visible.length, 1);
-  assertEquals(visible[0].turnId, 0);
 
-  blackChess.joinGame(gameId);
+  // Black's UI "joins": posts a 'join' prompt on turn 0 and resolves it
+  // with black's pubkey. Black's parked generator wakes, runs
+  // requireSignature(blackPub) which passes (matches black's signer
+  // pubkey), and produces the join block. White's generator cannot
+  // satisfy requireSignature(blackPub) and stays parked.
+  const joinPrompt = blackChess.promptJoin(gameId, 0);
+  joinPrompt.resolve(blackPub);
+
   await flush();
 
+  // Both nodes should now see the in-progress state at turn 1.
   for (const chess of [whiteChess, blackChess]) {
     const active = chess.getActive(gameId);
-    assert(active, 'joined state visible on both nodes');
+    assert(active, 'joined state visible');
     assertEquals(active!.turnId, 1);
-    assertEquals(active!.state.state.status, STATUS_IN_PROGRESS);
+    assertEquals(active!.state.state.status, 1 /* in_progress */);
     assertEquals(active!.value, 400);
   }
 
   await white.close();
   await black.close();
-});
-
-Deno.test('ChessGame: a single legal move propagates across two nodes', async () => {
-  const { white, black, whiteChess, blackChess } = makePair(1000);
-  const gameId = whiteChess.createGame(200);
-  await flush();
-  blackChess.joinGame(gameId);
-  await flush();
-
-  whiteChess.makeMove(gameId, { from: sqIdx('e2'), to: sqIdx('e4'), promotion: 0 });
-  await flush();
-
-  const wAfter = whiteChess.getActive(gameId);
-  const bAfter = blackChess.getActive(gameId);
-  assertEquals(wAfter?.turnId, 2);
-  assertEquals(bAfter?.turnId, 2);
-  assertEquals(wAfter?.state.state.toMove, 1 /* black */);
-
-  await white.close();
-  await black.close();
-});
-
-Deno.test('ChessGame: illegal move rejected locally before publish', async () => {
-  const { white, black, whiteChess, blackChess } = makePair(1000);
-  const gameId = whiteChess.createGame(200);
-  await flush();
-  blackChess.joinGame(gameId);
-  await flush();
-
-  let threw = false;
-  try {
-    whiteChess.makeMove(gameId, {
-      from: sqIdx('c1'),
-      to: sqIdx('h6'),
-      promotion: 0,
-    });
-  } catch (_e) {
-    threw = true;
-  }
-  assert(threw, 'local makeMove must reject an illegal move before publishing');
-
-  await white.close();
-  await black.close();
-});
-
-Deno.test('ChessGame: full checkmate game on a single node', async () => {
-  // Bypass cross-node propagation entirely -- play both sides on one
-  // Scaffold instance. We can't actually join (contract rejects white=black)
-  // so we use raw ChessRules + publishClaimBlock plumbing implicit in
-  // ChessGame is exercised via createGame + single makeMove in other tests.
-  // Here we only assert that a legal terminal position can be computed
-  // client-side end-to-end (rules + codec smoke, complementary to the
-  // contract-level test in GameStateContract.test.ts).
-  const { scaffold, pub } = (() => {
-    const priv = secp.utils.randomPrivateKey();
-    const pubKey = secp.getPublicKey(priv, true);
-    const { block: genesis } = composeGenesisPacket([makeSignatureOutput(pubKey, 1000)]);
-    return {
-      scaffold: new Scaffold({
-        privateKey: priv,
-        genesis,
-        enablePiggyback: false,
-        enableGeneration: (h: Hash) =>
-          !Hash.equals(h, GAME_STATE_CONTRACT) && !Hash.equals(h, SIGNATURE_CONTRACT),
-      }),
-      pub: pubKey,
-    };
-  })();
-  const chess = new ChessGame(scaffold);
-  const gameId = chess.createGame(100);
-  await new Promise((r) => setTimeout(r, 20));
-  const active = chess.getActive(gameId);
-  assert(active);
-  assertEquals(active!.state.state.status, 0);
-  void pub;
-  await scaffold.close();
-});
-
-Deno.test('ChessGame: timeout applyMove yields STATUS_TIMEOUT_WHITE', () => {
-  // Rules-level smoke: TIMEOUT_MOVE produces a timeout-terminal state when
-  // called after the player on move has run out of time. The full on-chain
-  // timeout flow (block with signer = opponent, contract acceptance) is
-  // covered by tests/GameStateContract.test.ts.
-  const anchorTs = 1_000_000;
-  const mid: GameState = {
-    board: new Uint8Array(64),
-    toMove: 0,
-    castling: 0,
-    enPassant: 0xff,
-    halfmoveClock: 0,
-    fullmove: 1,
-    whiteClockMs: 1,
-    blackClockMs: 300_000,
-    lastMoveAt: anchorTs,
-    status: STATUS_IN_PROGRESS,
-  };
-  // Board needs pieces so the rules module doesn't trip an invariant.
-  // Put the two kings on the board; TIMEOUT_MOVE doesn't inspect the board.
-  const { W_KING, B_KING } = {
-    W_KING: 6,
-    B_KING: 12,
-  };
-  mid.board[4] = W_KING; // e1
-  mid.board[60] = B_KING; // e8
-  const next = applyMove(mid, TIMEOUT_MOVE, anchorTs + 60_000);
-  assertEquals(next.status, STATUS_TIMEOUT_WHITE);
 });

@@ -371,15 +371,30 @@ terminates the chain. The host resolves in this order:
    node API, keyed by the running contract hash. Handlers run in
    registration order. This is where user-code for interactive games, app
    state contributions, or external data sources plugs in.
-3. **No resolver matched** -- generation blocks, with the same
-   restart-on-uncanonical lifecycle as `requireInput`. A handler that needs
-   to wait for user input, for example, resolves its promise when input
-   arrives.
+3. **No resolver matched** -- generation parks. The generator's draft stays
+   alive on the execution queue; the `getOutput` call holds an unresolved
+   Promise keyed by the running contract hash. Registering a new user
+   handler for that contract triggers a retry: the resolver chain runs
+   again for each parked entry, and entries that now produce a non-null
+   result resume. Entries that still resolve to `null` stay parked.
+   Cancellation of the parent draft clears all of the draft's parked
+   entries.
+
+This is the primary mechanism for contracts that block on human input: a
+contract calls `get_output(RECORD_CONTRACT, "move")`, the node has no
+handler yet (the user hasn't clicked), so the generator parks. When React
+(or any other UI layer) decides to respond, it calls
+`scaffold.registerOutputHandler(contractHash, handler)`; the handler
+typically consults a reactive pending-prompt store and returns bytes for
+the prompt matching the running contract's params. The generator resumes
+and produces a block.
 
 Registration is additive; there is no protocol-level ordering guarantee
 between userspace handlers beyond registration order. Handlers are scoped
 to a single node's runtime -- they are not part of the protocol and
-cannot affect verification.
+cannot affect verification. Built-in resolvers are re-run on every retry,
+so a built-in that depends on UTXO-index state also wakes parked
+generators when relevant UTXOs land (via the same retry path).
 
 #### Constraints
 
@@ -389,6 +404,8 @@ require_min_timestamp(value) → void
 ```
 
 Assert that the block satisfies a constraint. `require_signature` checks the block's signature matches the given public key. `require_min_timestamp` checks the block's position satisfies a minimum time requirement.
+
+**Generation-mode semantics for `require_signature`.** In generation mode there is no finalized block yet -- the draft will be signed by the node's own key at solidification. `require_signature(pk)` in that mode asks: "is this node the right one to produce this block?" The host answers by comparing `pk` against the node's own public key, and rejects the draft if they don't match. This is how user-input-driven contracts filter which node runs to completion: e.g., a chess contract that calls `require_signature(mover_pubkey)` only completes on the mover's node, even though generators may start on every peer that has the contract registered.
 
 #### Cross-Block References
 

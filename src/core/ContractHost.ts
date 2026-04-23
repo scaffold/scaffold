@@ -47,6 +47,8 @@ export interface GeneratingRunInput<BlockType> {
   readonly provider: GeneratingEnvProvider<BlockType>;
   readonly waitForInput?: WaitForInputFn;
   readonly waitForGetOutput?: WaitForGetOutputFn;
+  /** The node's own pubkey. Used by `requireSignature` in generation mode. */
+  readonly signerPubkey?: Uint8Array;
 }
 
 /**
@@ -176,6 +178,7 @@ export class ContractHost<BlockType> {
       provider: input.provider,
       waitForInput: input.waitForInput,
       waitForGetOutput: input.waitForGetOutput,
+      signerPubkey: input.signerPubkey,
     });
 
     const result = contract.run(env);

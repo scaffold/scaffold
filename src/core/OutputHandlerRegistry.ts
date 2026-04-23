@@ -3,10 +3,7 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import type { Verifier } from './BlockCreationModule.ts';
 import type { ProtocolContext } from './ProtocolContext.ts';
-import {
-  makeBlobRegistryResolver,
-  makeUtxoResolver,
-} from './builtinResolvers.ts';
+import { makeBlobRegistryResolver, makeUtxoResolver } from './builtinResolvers.ts';
 
 /**
  * A handler that can synthesize the `(value, data)` for a `getOutput`
@@ -35,6 +32,12 @@ export type OutputHandler = (
 export class OutputHandlerRegistry {
   private readonly _builtins: OutputHandler[] = [];
   private readonly _userHandlers = new Map<HashPrimitive, OutputHandler[]>();
+  /**
+   * Listeners notified when a user handler is registered. Used by
+   * `GenerationService` to wake generators parked in `waitForGetOutput`
+   * after their first resolve pass found no non-null handler.
+   */
+  private readonly _onRegisterListeners: ((runningContract: Hash) => void)[] = [];
 
   /**
    * Context-registrable constructor. Wires up the built-in resolver
@@ -44,6 +47,20 @@ export class OutputHandlerRegistry {
   constructor(_ctx?: ProtocolContext) {
     this.registerBuiltin(makeBlobRegistryResolver());
     this.registerBuiltin(makeUtxoResolver());
+  }
+
+  /**
+   * Subscribe to user-handler registrations. The callback fires every time
+   * a new user handler is installed (after `registerUser` returns). Returns
+   * an unsubscribe function. `GenerationService` uses this to retry parked
+   * generators whose first `getOutput` resolution saw no handlers.
+   */
+  onUserHandlerRegistered(cb: (runningContract: Hash) => void): () => void {
+    this._onRegisterListeners.push(cb);
+    return () => {
+      const i = this._onRegisterListeners.indexOf(cb);
+      if (i >= 0) this._onRegisterListeners.splice(i, 1);
+    };
   }
 
   /**
@@ -69,6 +86,7 @@ export class OutputHandlerRegistry {
       this._userHandlers.set(key, list);
     }
     list.push(handler);
+    for (const cb of this._onRegisterListeners) cb(runningContract);
     return () => {
       const current = this._userHandlers.get(key);
       if (!current) return;

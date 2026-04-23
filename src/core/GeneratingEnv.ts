@@ -72,6 +72,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _provider: GeneratingEnvProvider<BlockType>;
   private readonly _waitForInput?: WaitForInputFn;
   private readonly _waitForGetOutput?: WaitForGetOutputFn;
+  private readonly _signerPubkey: Uint8Array | undefined;
 
   /**
    * Outputs to add to the draft, in call order, tagged by origin. The
@@ -97,12 +98,21 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     waitForInput?: WaitForInputFn;
     /** Optional callback for blocking getOutput(). If not provided, throws on no handler match. */
     waitForGetOutput?: WaitForGetOutputFn;
+    /**
+     * The node's own public key, used to answer `requireSignature` in
+     * generation mode: the draft will be signed by this key at
+     * solidification, so any `requireSignature(pk)` call reduces to
+     * "does `pk === signerPubkey`?". If undefined, any signature
+     * requirement rejects.
+     */
+    signerPubkey?: Uint8Array;
   }) {
     this._contractHash = opts.contractHash;
     this._params = opts.params;
     this._provider = opts.provider;
     this._waitForInput = opts.waitForInput;
     this._waitForGetOutput = opts.waitForGetOutput;
+    this._signerPubkey = opts.signerPubkey;
   }
 
   getContractHash(): Hash {
@@ -239,8 +249,17 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   }
 
   requireSignature(pubkey: Uint8Array): void {
-    if (!bytesEqual(this._params, pubkey)) {
-      throw new ContractRejection('signature requirement not met');
+    // The draft will be signed at solidification by the node's own key.
+    // A contract asking for a signature from some other pubkey cannot be
+    // satisfied here -- reject so the generator aborts (and the block is
+    // never produced on this node). Only the node that actually holds the
+    // private key for `pubkey` can produce a block that satisfies this
+    // requirement at verification time.
+    if (!this._signerPubkey) {
+      throw new ContractRejection('signature required but no signer pubkey configured');
+    }
+    if (!bytesEqual(this._signerPubkey, pubkey)) {
+      throw new ContractRejection('signature requirement not met: signer pubkey mismatch');
     }
   }
 
@@ -256,7 +275,12 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       outputIndex: ai.outputIndex,
       value: ai.value,
     });
-    const input: Input = { verifier: ai.verifier, value: ai.value, data: ai.data, isSelfClaim: false };
+    const input: Input = {
+      verifier: ai.verifier,
+      value: ai.value,
+      data: ai.data,
+      isSelfClaim: false,
+    };
     this._inputs.push(input);
     this._addIncludeConstraint(ai.block);
     return input;

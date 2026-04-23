@@ -102,3 +102,21 @@ Deno.test('OutputHandlerRegistry: unsubscribe removes handler', async () => {
   const result = await reg.resolve(running, enc('p'), v('out', 'x'));
   assertEquals(result, null);
 });
+
+Deno.test('OutputHandlerRegistry: onUserHandlerRegistered fires on each registration', () => {
+  const reg = new OutputHandlerRegistry();
+  const fired: string[] = [];
+  const unsub = reg.onUserHandlerRegistered((h) => fired.push(h.toHex()));
+
+  const runningA = Hash.digest('A');
+  const runningB = Hash.digest('B');
+  reg.registerUser(runningA, async () => null);
+  reg.registerUser(runningB, async () => null);
+  reg.registerUser(runningA, async () => null);
+
+  assertEquals(fired, [runningA.toHex(), runningB.toHex(), runningA.toHex()]);
+  unsub();
+  reg.registerUser(runningA, async () => null);
+  // No further entries appended after unsub.
+  assertEquals(fired.length, 3);
+});

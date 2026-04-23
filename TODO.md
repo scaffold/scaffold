@@ -6,8 +6,8 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 
 The chess demo in `src/demo/chess/` exercises many protocol primitives (GAME_STATE UTXO threading, getOutput injection, signature-gated generation, terminal payouts via throughput) but defers several things:
 
-### Application-driven put() racing with reactive strategies
-The 2-node multi-move game test is flaky when DraftStrategy and PiggybackStrategy run. Even with `enablePiggyback: false` and `enableGeneration: (h) => h !== GAME_STATE_CONTRACT`, some code path still creates competing draft blocks that claim the prev GAME_STATE UTXO on one node while the legitimate move block claims it on the other. Two-node create+join and single-move propagation are stable (`tests/ChessGame.test.ts`); 4+ moves in sequence is not. The underlying issue is that Scaffold's reactive strategies assume they are the authoritative producer of response blocks for any registered contract, but `ChessGame` drives construction directly via `scaffold.put()`. We need either (a) a first-class "I'm driving this contract myself" API that tells all reactive strategies to keep hands off a given verifier, or (b) the draft/piggyback paths should yield when a local put() has already claimed the same UTXO within the current coordinator cycle.
+### Post-join move-turn generator not starting on the non-signing node
+In `tests/ChessGame.test.ts`, the join flow works end-to-end (black's generator wakes on `promptJoin(...).resolve(blackPub)` and produces the real join block), but a follow-up move on the white node does not complete. DraftStrategy creates the turn=1 draft on white (generator parks on `getOutput(RECORD/"move")`), the user posts a move prompt and resolves it, but the generator doesn't emit a block. Suspected cause: when black's draft solidifies into the real join block, black's DraftStrategy re-evaluates the block in a fresh cycle (_solidifyDraft re-enters the reactive layer), creating a competing turn=1 draft on black whose handler returns null forever (black has no move prompt). The two drafts interact in some way that prevents white's completing. Needs deeper investigation into DraftStrategy's `cycleCreated` semantics and whether the solidify path should skip strategy evaluation for blocks the current node just produced.
 
 ### Validity dispute resolution
 `CollateralContract`'s `'validity'` ChallengeTarget type exists but has no resolution path — only `hash_preimage` disputes are implemented. The chess demo would benefit from end-to-end "cheater publishes invalid move → their FOR collateral is slashed." Need at minimum a degenerate "anyone can re-run the contract and claim the FOR" mode; full bisection protocol is future work.
@@ -21,11 +21,8 @@ The chess contract relies on `block.timestamp` for clock arithmetic, but the pro
 ### Collateral posting for chess moves
 The chess demo publishes move blocks without FOR collateral, so verification-layer rejection prevents bad blocks from becoming canonical but there's no economic penalty for attempting fraud. Layering `CollateralStrategy` (tracked separately above) on top of `ChessGame` would complete the incentive story.
 
-### `scaffold.put` should handle agg-marker-aware claim indices
-`ChessGame.publishClaimBlock` has to prepend `makeAggregationOutput()` to its own spec.outputs so that claim indices aren't shifted by Scaffold's implicit agg-marker append. This is demo-layer glue that every application will re-invent. Either `scaffold.put` should shift external claim indices when it appends a marker, or the `PutRequest` API should grow a `consume: Hash[] | ResolvedClaim[]` field that resolves to indices AFTER marker placement.
-
-### ChessGame generation via `registerOutputHandler`
-The current ChessGame wrapper bypasses the generation path entirely — moves are constructed directly via `scaffold.put()`. The `getOutput` + `OutputHandlerRegistry` path (newly landed) should eventually drive move construction: black's `fetch({contract: GAME_STATE, params: nextTurn})` publishes an incentive; white's registered output handler resolves when the user picks a move; `GenerationService` runs the contract to build the response block. This would exercise the host handler chain end-to-end and is the "proper" demo of the whole generation mechanism. Blocked on the racing issue above.
+### `scaffold.put` should handle agg-marker-aware claim indices (create block only)
+`ChessGame.createGame` prepends `makeAggregationOutput()` to its own spec.outputs so that the RECORD self-claim index (own idx 1) stays stable after Scaffold's implicit agg-marker append. This is demo-layer glue that applications with external claims will re-invent. Either `scaffold.put` should shift claim indices when it appends a marker, or `PutRequest` should grow a `consume` field that resolves to indices AFTER marker placement.
 
 ## Core Protocol
 

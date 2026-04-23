@@ -4,11 +4,10 @@ import { composeGenesisPacket } from 'scaffold.io/core/Packet.ts';
 import { makeSignatureOutput } from 'scaffold.io/contracts/SignatureContract.ts';
 import { secp } from 'scaffold.io/util/secp.ts';
 import { bin2hex } from 'scaffold.io/util/hex.ts';
-import { GAME_STATE_CONTRACT, SIGNATURE_CONTRACT } from 'scaffold.io/core/Block.ts';
-import { Hash } from 'scaffold.io/util/Hash.ts';
 import { ChessGame } from 'scaffold.io/demo/chess/ChessGame.ts';
 import { ChessIndex } from 'scaffold.io/demo/chess/ChessIndex.ts';
 import { BalanceIndex } from 'scaffold.io/demo/chess/BalanceIndex.ts';
+import { encodeMove } from 'scaffold.io/demo/chess/GameStateCodec.ts';
 import { Board } from './Board.tsx';
 import { Clock } from './Clock.tsx';
 import { Wallet } from './Wallet.tsx';
@@ -29,22 +28,13 @@ interface Toast {
 let toastCounter = 0;
 
 export function ChessApp() {
-  // Stable per-session scaffold + chess/balance indexes.
   const { scaffold, chess, chessIndex, balanceIndex } = useMemo(() => {
     const priv = secp.utils.randomPrivateKey();
     const pub = secp.getPublicKey(priv, true);
-    // Self-funded genesis so the user can stake. In a real app, the
-    // balance would come from an external onboarding flow.
     const { block: genesis } = composeGenesisPacket([
       makeSignatureOutput(pub, 10_000),
     ]);
-    const sc = new Scaffold({
-      privateKey: priv,
-      genesis,
-      enablePiggyback: false,
-      enableGeneration: (h: Hash) =>
-        !Hash.equals(h, GAME_STATE_CONTRACT) && !Hash.equals(h, SIGNATURE_CONTRACT),
-    });
+    const sc = new Scaffold({ privateKey: priv, genesis });
     const g = new ChessGame(sc);
     return {
       scaffold: sc,
@@ -64,22 +54,27 @@ export function ChessApp() {
   useEffect(() => {
     const u1 = chessIndex.onChange(() => setVersion((v) => v + 1));
     const u2 = balanceIndex.onChange(() => setVersion((v) => v + 1));
+    const u3 = chess.onPendingChange(() => setVersion((v) => v + 1));
     return () => {
       u1();
       u2();
+      u3();
     };
-  }, [chessIndex, balanceIndex]);
+  }, [chessIndex, balanceIndex, chess]);
 
-  const pushToast = useCallback((message: string, kind: 'info' | 'error' = 'info') => {
-    const id = ++toastCounter;
-    setToasts((ts) => [...ts, { id, message, kind }]);
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 3500);
-  }, []);
+  const pushToast = useCallback(
+    (message: string, kind: 'info' | 'error' = 'info') => {
+      const id = ++toastCounter;
+      setToasts((ts) => [...ts, { id, message, kind }]);
+      setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 3500);
+    },
+    [],
+  );
 
   const myGames = chessIndex.myGames(myPubkey);
-  const openGames = chessIndex.openGames().filter(
-    (g) => !bytesEqual(g.state.white, myPubkey),
-  );
+  const openGames = chessIndex
+    .openGames()
+    .filter((g) => !bytesEqual(g.state.white, myPubkey));
 
   // Auto-select first active game.
   useEffect(() => {
@@ -89,6 +84,19 @@ export function ChessApp() {
   }, [activeGameId, myGames]);
 
   const selected = activeGameId ? chessIndex.get(activeGameId) : undefined;
+
+  // For the selected active game, if it's our turn, eagerly put a `move`
+  // prompt into the wrapper's store. The generator parks on getOutput
+  // waiting for our handler; when the user clicks a move, we resolve the
+  // prompt and the generator wakes.
+  useEffect(() => {
+    if (!selected) return;
+    const s = selected.state.state;
+    if (s.status !== 1 /* in_progress */) return;
+    const onMove = s.toMove === 0 ? selected.state.white : selected.state.black;
+    if (!bytesEqual(onMove, myPubkey)) return;
+    chess.promptMove(selected.gameId, selected.turnId);
+  }, [chess, selected, myPubkey, version]);
 
   const { free, locked } = balanceIndex.getBalance(myPubkey);
 
@@ -109,15 +117,25 @@ export function ChessApp() {
 
   const handleJoin = useCallback(
     (gameId: Uint8Array) => {
-      try {
-        chess.joinGame(gameId);
-        setActiveGameId(bin2hex(gameId));
-        pushToast(`Joined game #${bin2hex(gameId).slice(0, 8)}`);
-      } catch (e) {
-        pushToast((e as Error).message, 'error');
+      // Joining = telling the generator "I am black": post a 'join'
+      // prompt on the current (awaiting_join) turn, then resolve it with
+      // our pubkey. The generator's requireSignature will pass because
+      // we're the only node signing with this key.
+      const active = chessIndex.get(gameId);
+      if (!active) {
+        pushToast('game not found', 'error');
+        return;
       }
+      if (active.state.state.status !== 0 /* awaiting_join */) {
+        pushToast('game is not awaiting a join', 'error');
+        return;
+      }
+      const prompt = chess.promptJoin(active.gameId, active.turnId);
+      prompt.resolve(myPubkey);
+      setActiveGameId(bin2hex(active.gameId));
+      pushToast(`Joining #${bin2hex(active.gameId).slice(0, 8)}`);
     },
-    [chess, pushToast],
+    [chess, chessIndex, myPubkey, pushToast],
   );
 
   const handleSelect = useCallback((gameId: Uint8Array) => {
@@ -127,39 +145,27 @@ export function ChessApp() {
   const handleMove = useCallback(
     (from: number, to: number) => {
       if (!selected) return;
-      try {
-        // Default-promote to queen if it looks like a promotion. The board
-        // doesn't currently expose a promotion picker; for a demo this is
-        // adequate.
-        const promoting = isPromotion(selected.state.state.board, from, to);
-        const move = { from, to, promotion: promoting ? queenFor(selected.state.state.toMove) : 0 };
-        chess.makeMove(selected.gameId, move);
-      } catch (e) {
-        pushToast((e as Error).message, 'error');
-      }
+      const promoting = isPromotion(selected.state.state.board, from, to);
+      const move = {
+        from,
+        to,
+        promotion: promoting ? queenFor(selected.state.state.toMove) : 0,
+      };
+      const key = bin2hex(selected.gameId) + ':' + selected.turnId + ':move';
+      chess.resolvePrompt(key, encodeMove(move));
     },
-    [chess, selected, pushToast],
+    [chess, selected],
   );
-
-  const handleClaimTimeout = useCallback(() => {
-    if (!selected) return;
-    try {
-      chess.claimTimeout(selected.gameId);
-      pushToast(`Claimed timeout on #${bin2hex(selected.gameId).slice(0, 8)}`);
-    } catch (e) {
-      pushToast((e as Error).message, 'error');
-    }
-  }, [chess, selected, pushToast]);
 
   const amWhite = selected ? bytesEqual(selected.state.white, myPubkey) : false;
   const amBlack = selected ? bytesEqual(selected.state.black, myPubkey) : false;
   const orientation: 0 | 1 = amBlack ? 1 : 0;
   const status = selected?.state.state.status ?? -1;
   const terminal = status >= 2;
-  const amOnMove = selected && !terminal && (
-    (selected.state.state.toMove === 0 && amWhite) ||
-    (selected.state.state.toMove === 1 && amBlack)
-  );
+  const amOnMove = selected &&
+    !terminal &&
+    ((selected.state.state.toMove === 0 && amWhite) ||
+      (selected.state.state.toMove === 1 && amBlack));
 
   return (
     <div style={{ ...pageStyle, fontFamily: '-apple-system, sans-serif' }}>
@@ -177,59 +183,61 @@ export function ChessApp() {
       </div>
 
       <div style={boardPaneStyle}>
-        {selected ? (
-          <>
-            <div style={boardHeaderStyle}>
-              <div>
-                <div style={gameTitleStyle}>
-                  Game #{bin2hex(selected.gameId).slice(0, 8)}
+        {selected
+          ? (
+            <>
+              <div style={boardHeaderStyle}>
+                <div>
+                  <div style={gameTitleStyle}>
+                    Game #{bin2hex(selected.gameId).slice(0, 8)}
+                  </div>
+                  <div style={gameSubtitleStyle}>
+                    {describeStatus(status)} · pot {selected.value.toLocaleString()}
+                  </div>
                 </div>
-                <div style={gameSubtitleStyle}>
-                  {describeStatus(status)} · pot {selected.value.toLocaleString()}
+                <div style={clockRowStyle}>
+                  <Clock
+                    label={amBlack ? 'Opponent (White)' : 'White'}
+                    baseMs={selected.state.state.whiteClockMs}
+                    lastMoveAt={selected.state.state.lastMoveAt}
+                    ticking={!terminal && selected.state.state.toMove === 0}
+                  />
+                  <Clock
+                    label={amWhite ? 'Opponent (Black)' : 'Black'}
+                    baseMs={selected.state.state.blackClockMs}
+                    lastMoveAt={selected.state.state.lastMoveAt}
+                    ticking={!terminal && selected.state.state.toMove === 1}
+                  />
                 </div>
               </div>
-              <div style={clockRowStyle}>
-                <Clock
-                  label={amBlack ? 'Opponent (White)' : 'White'}
-                  baseMs={selected.state.state.whiteClockMs}
-                  lastMoveAt={selected.state.state.lastMoveAt}
-                  ticking={!terminal && selected.state.state.toMove === 0}
-                />
-                <Clock
-                  label={amWhite ? 'Opponent (Black)' : 'Black'}
-                  baseMs={selected.state.state.blackClockMs}
-                  lastMoveAt={selected.state.state.lastMoveAt}
-                  ticking={!terminal && selected.state.state.toMove === 1}
-                />
+              <Board
+                board={selected.state.state.board}
+                orientation={orientation}
+                onMove={handleMove}
+                disabled={terminal || !amOnMove}
+              />
+              {version < 0 && null /* re-render dep */}
+            </>
+          )
+          : (
+            <div style={placeholderStyle}>
+              <div style={{ fontSize: 72, marginBottom: 16 }}>♟</div>
+              <div style={{ fontSize: 18, marginBottom: 4, fontWeight: 600 }}>
+                Scaffold Chess
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: '#6e6e73',
+                  maxWidth: 360,
+                  textAlign: 'center',
+                }}
+              >
+                Create a game or join an open one. Each move flows through a generator: the contract
+                blocks on getOutput, and clicking a square resolves the pending prompt.
               </div>
             </div>
-            <Board
-              board={selected.state.state.board}
-              orientation={orientation}
-              onMove={handleMove}
-              disabled={terminal || !amOnMove}
-            />
-            {!terminal && (amWhite || amBlack) && (
-              <div style={actionRowStyle}>
-                <button onClick={handleClaimTimeout} style={secondaryBtnStyle}>
-                  Claim timeout
-                </button>
-              </div>
-            )}
-            {version < 0 && null /* force re-render dependency */}
-          </>
-        ) : (
-          <div style={placeholderStyle}>
-            <div style={{ fontSize: 72, marginBottom: 16 }}>♟</div>
-            <div style={{ fontSize: 18, marginBottom: 4, fontWeight: 600 }}>
-              Scaffold Chess
-            </div>
-            <div style={{ fontSize: 13, color: '#6e6e73', maxWidth: 360, textAlign: 'center' }}>
-              Create a game or join an open one. Each move publishes a block.
-              Illegal moves are rejected by the peer's contract verifier.
-            </div>
-          </div>
-        )}
+          )}
       </div>
 
       <div style={toastContainerStyle}>
@@ -327,23 +335,6 @@ const gameSubtitleStyle: React.CSSProperties = {
 const clockRowStyle: React.CSSProperties = {
   display: 'flex',
   gap: 10,
-};
-
-const actionRowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 8,
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: '6px 14px',
-  background: '#e8e8ed',
-  color: '#1d1d1f',
-  border: '1px solid #d2d2d7',
-  borderRadius: 8,
-  fontSize: 12,
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontFamily: '-apple-system, sans-serif',
 };
 
 const placeholderStyle: React.CSSProperties = {
