@@ -123,6 +123,29 @@ export function ChessApp() {
       });
     });
 
+    // HACK: cold-start fanout. RoutingModule only emits PushActions when a
+    // peer's claim history matches the block's verifier or contract; on a
+    // fresh network nobody has any claim history for GAME_STATE_CONTRACT,
+    // so locally-produced create-game and join blocks would never reach
+    // the wire. Until baseline propagation lands (see TODO entry "Baseline
+    // propagation for cold-start" / docs/protocol/gossip.md#bootstrapping-
+    // claim-history-cold-start), we manually fan out every block we signed
+    // to every connected peer. The recipient dedupes via store.has, so
+    // double-delivery is harmless. Remove this when real baseline routing
+    // exists.
+    const myKey = myPubkeyHex;
+    const unsubFanout = scaffold.context.store.onAdded((block) => {
+      if (!block.signer) return;
+      if (bin2hex(block.signer) !== myKey) return;
+      for (const peerId of connectedPeersRef.current) {
+        try {
+          scaffold.sendBlockToPeer(block.hash, peerId);
+        } catch {
+          // Peer disappeared between event and send; safe to ignore.
+        }
+      }
+    });
+
     try {
       scaffold.bootstrapConnection('websocket', DEFAULT_HUB_URL);
     } catch (err) {
@@ -133,6 +156,7 @@ export function ChessApp() {
     tryDialOthers();
 
     return () => {
+      unsubFanout();
       void scaffold.close();
     };
   }, [scaffold, seed, myPubkeyHex]);

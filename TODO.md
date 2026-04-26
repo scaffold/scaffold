@@ -24,7 +24,13 @@ The chess demo publishes move blocks without FOR collateral, so verification-lay
 ### `scaffold.put` should handle agg-marker-aware claim indices (create block only)
 `ChessGame.createGame` prepends `makeAggregationOutput()` to its own spec.outputs so that the RECORD self-claim index (own idx 1) stays stable after Scaffold's implicit agg-marker append. This is demo-layer glue that applications with external claims will re-invent. Either `scaffold.put` should shift claim indices when it appends a marker, or `PutRequest` should grow a `consume` field that resolves to indices AFTER marker placement.
 
+### Remove `sendBlockToPeer` fanout hack from `ChessApp`
+`demo/src/chess/ChessApp.tsx` subscribes to `store.onAdded` and manually calls `scaffold.sendBlockToPeer` for every locally-signed block, addressed to every connected peer. This is a workaround for the missing baseline-propagation step (see "Baseline propagation for cold-start" below) — without it, `createGame` and the generator-produced join/move blocks never leave the local node because no peer has any claim history for `GAME_STATE_CONTRACT`. Remove this `useEffect` once routing has a real cold-start mechanism.
+
 ## Core Protocol
+
+### Baseline propagation for cold-start
+`docs/protocol/gossip.md:250-258` and `routing.md:266` reference "baseline propagation" but `RoutingModule.handleSendAction` (src/node/RoutingModule.ts:237-279) only emits `PushAction`s when a peer's `receivedFirst` matches the trigger verifier — there's no fallback when both `claimHistory[V]` and `contractFallback[contract(V)]` are empty. Result: brand-new contracts (e.g. the chess demo's `GAME_STATE_CONTRACT`) have no propagation path on a fresh network. Two options documented in the spec: (a) push-to-all when local node is the origin and no claim-history match exists, with rate-limiting and abuse considerations; (b) peerInfo contract-interest advertisement (already tracked as the long-term "Request Routing" item). Until either lands, `Scaffold.sendBlockToPeer` is the only escape hatch and demos hand-roll fanout.
 
 ### Fold `SamplingModule.selfVerified` into BlockVerificationModule
 Phase 1 of the verification-state unification left `SamplingModule` tracking its own per-block `selfVerified: boolean` inside `BlockSampleState`. `BlockVerificationModule` is now the authoritative source of "did the contract accept" via `getStatus()`. Sampling's weight-factor computation should read from there instead of its own shadow flag. Non-blocking; both are always updated together via `Coordinator.attemptVerification`. See `src/core/SamplingModule.ts:32-37`.
