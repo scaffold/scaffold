@@ -20,6 +20,8 @@ function makeBlock(name: string): Block {
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 }

@@ -35,7 +35,14 @@ export const TEST_ATOM_BASE = {
   type: AtomType.Block as const,
   packetType: PacketType.JsonUnsignedBlock as const,
   raw: new Uint8Array(0),
+  // Transit fields are mutable; each call site needs its own freshly-
+  // allocated array/set, so make this a getter-style spread per-fixture.
 };
+
+/** Spread alongside TEST_ATOM_BASE for each fresh test atom fixture. */
+export function freshTransit(): { fromConnections: string[]; toConnections: Set<string> } {
+  return { fromConnections: [], toConnections: new Set() };
+}
 
 export function makeOutput(value: number, label?: string): Output {
   return {
@@ -63,6 +70,7 @@ export function makeLeafBlock(
   }
   return {
     ...TEST_ATOM_BASE,
+    ...freshTransit(),
     hash: Hash.digestParts(...hashParts),
     anchor: anchor.hash,
     aggregates: [],
@@ -87,6 +95,7 @@ export function makeBlock(
 ): Block {
   return {
     ...TEST_ATOM_BASE,
+    ...freshTransit(),
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: [],
@@ -138,6 +147,7 @@ export function makeAggregationBlock(
 
   return {
     ...TEST_ATOM_BASE,
+    ...freshTransit(),
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: subtrees.map((s) => s.hash),

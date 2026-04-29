@@ -78,6 +78,18 @@ export interface AtomBase {
 
   /** Reception time at this node (Date.now()). */
   readonly receivedAt: number;
+
+  /**
+   * Peers that sent us this atom, in arrival order. Index 0 is the
+   * first sender -- used as the reverse-path target for hash-addressed
+   * signaling. Empty for locally-composed atoms. The array is mutable
+   * (`readonly` on the field name only prevents reassignment) because
+   * transit accumulates over the atom's lifetime.
+   */
+  readonly fromConnections: string[];
+
+  /** Peers we've sent this atom to. Used for outbound dedup. */
+  readonly toConnections: Set<string>;
 }
 
 // -- Atom (discriminated union) -------------------------------------

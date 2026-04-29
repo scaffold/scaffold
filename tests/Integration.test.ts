@@ -70,6 +70,8 @@ function makeLeafBlock(
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 }
@@ -154,6 +156,8 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 
@@ -170,6 +174,8 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 
@@ -207,6 +213,8 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 
@@ -224,6 +232,8 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 
@@ -248,6 +258,8 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 
@@ -315,6 +327,8 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
   node.receiveBlock(subtreeA, null);
@@ -333,6 +347,8 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
   node.receiveBlock(subtreeB, null);
@@ -364,6 +380,8 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
 
@@ -504,6 +522,8 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
   node.receiveBlock(blockA, null);
@@ -532,6 +552,8 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     type: AtomType.Block,
     packetType: PacketType.JsonUnsignedBlock,
     raw: new Uint8Array(0),
+    fromConnections: [],
+    toConnections: new Set(),
     source: AtomSource.Local,
   };
   node.receiveBlock(blockB, null);

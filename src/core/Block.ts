@@ -142,17 +142,42 @@ export class BlockStore {
 
   put(block: Block): void {
     const key = block.hash.toPrimitive();
-    const isNew = !this.blocks.has(key);
-    this.blocks.set(key, block);
+    const existing = this.blocks.get(key);
+
+    if (existing) {
+      // Merge transit fields onto the canonical atom and discard the
+      // freshly-deserialized duplicate. fromConnections is order-
+      // preserving (first sender stays at index 0); toConnections is
+      // a Set so .add() handles dedup.
+      for (const peerId of block.fromConnections) {
+        if (!existing.fromConnections.includes(peerId)) {
+          existing.fromConnections.push(peerId);
+        }
+      }
+      for (const peerId of block.toConnections) {
+        existing.toConnections.add(peerId);
+      }
+      return;
+    }
+
+    // Allocate fresh transit arrays so the stored atom's transit state
+    // is decoupled from the input. Wire fields (raw, hash, payload) are
+    // immutable so sharing them is safe, but transit accumulates per
+    // node and must be isolated when the same input flows through
+    // multiple stores (e.g. in-process simulation tests).
+    const stored: Block = {
+      ...block,
+      fromConnections: [...block.fromConnections],
+      toConnections: new Set(block.toConnections),
+    };
+    this.blocks.set(key, stored);
 
     // Track which blocks get aggregated
-    for (const agg of block.aggregates) {
+    for (const agg of stored.aggregates) {
       this.aggregated.add(agg.toPrimitive());
     }
 
-    if (isNew) {
-      for (const cb of this._addListeners) cb(block);
-    }
+    for (const cb of this._addListeners) cb(stored);
   }
 
   has(hash: Hash): boolean {
@@ -282,6 +307,8 @@ export function createBlockFromPacket(
     signer,
     source,
     receivedAt: Date.now(),
+    fromConnections: [],
+    toConnections: new Set(),
     anchor: payload.anchor,
     aggregates: payload.aggregates,
     claims: payload.claims,
@@ -398,16 +425,23 @@ export const jsonUnsignedBlockSerializer = new JsonSerializer<BlockPayload>(
 /**
  * Parse raw bytes as a block packet (signed or unsigned), routing on
  * the type byte. Returns null on bad magic, non-block type, malformed
- * payload, or signer-recovery failure for signed blocks.
+ * payload, or signer-recovery failure for signed blocks. If
+ * `fromPeerId` is provided, it is recorded as `fromConnections[0]` --
+ * the reverse-path target for hash-addressed signaling.
  */
-export function parseBlockPacket(raw: Uint8Array, source: AtomSource): Block | null {
+export function parseBlockPacket(
+  raw: Uint8Array,
+  source: AtomSource,
+  fromPeerId?: string,
+): Block | null {
   const header = parseHeader(raw);
   if (!header) return null;
+  let block: Block | null = null;
   if (header.type === PacketType.JsonSignedBlock) {
-    return jsonSignedBlockSerializer.deserialize(raw, source) as Block | null;
+    block = jsonSignedBlockSerializer.deserialize(raw, source) as Block | null;
+  } else if (header.type === PacketType.JsonUnsignedBlock) {
+    block = jsonUnsignedBlockSerializer.deserialize(raw, source) as Block | null;
   }
-  if (header.type === PacketType.JsonUnsignedBlock) {
-    return jsonUnsignedBlockSerializer.deserialize(raw, source) as Block | null;
-  }
-  return null;
+  if (block && fromPeerId !== undefined) block.fromConnections.push(fromPeerId);
+  return block;
 }

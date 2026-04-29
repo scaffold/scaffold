@@ -57,6 +57,8 @@ export const jsonRequestSerializer = new JsonSerializer<RequestPayload>(
       signer,
       source,
       receivedAt: Date.now(),
+      fromConnections: [],
+      toConnections: new Set(),
       hashes,
     };
   },

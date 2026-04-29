@@ -25,6 +25,22 @@ class RoutingProviderAdapter implements RoutingProvider {
     }
     return size;
   }
+
+  hasBlock(hash: Hash): boolean {
+    return this.store.has(hash);
+  }
+
+  getBlockSource(hash: Hash): string | undefined {
+    return this.store.get(hash)?.fromConnections[0];
+  }
+
+  recordSource(hash: Hash, peerId: string): void {
+    const block = this.store.get(hash);
+    if (!block) return;
+    if (!block.fromConnections.includes(peerId)) {
+      block.fromConnections.push(peerId);
+    }
+  }
 }
 
 /** RoutingModule wired to BlockStore via ProtocolContext. */

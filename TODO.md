@@ -177,19 +177,24 @@ anonymous/authenticated Unix sockets. Known gaps to address before scaling:
 ## Atom Refactor Follow-ups
 
 Every wire packet is now an Atom. `Block`, `SignalAtom`, and
-`RequestAtom` all extend `AtomBase` and carry hash + raw +
-reception metadata. `JsonSerializer` instances in `Block.ts`,
-`SignalAtom.ts`, and `RequestAtom.ts` own both `serialize` and
-`deserialize`; `PeerConnection.handleMessage` and
-`StorageManager.restore` dispatch off the type byte (`parseHeader`)
-to the matching serializer. `Packet<T>` / `composePacket` /
-`composeUnsignedPacket` / `parsePacket` are gone, along with the
-unused `Delivery` and `PeerInfo` packet types. Open work:
+`RequestAtom` extend `AtomBase` and carry hash + raw + reception
+metadata + transit metadata (`fromConnections`, `toConnections`).
+`JsonSerializer` instances in `Block.ts`, `SignalAtom.ts`, and
+`RequestAtom.ts` own both `serialize` and `deserialize`;
+`PeerConnection.handleMessage` and `StorageManager.restore` dispatch
+off the type byte (`parseHeader`) to the matching serializer.
+`Packet<T>` / `composePacket` / `composeUnsignedPacket` /
+`parsePacket` are gone, along with the unused `Delivery` and
+`PeerInfo` packet types and the `DeliveryTracker` / `RoutingModule`'s
+`receivedFirst` / `blockSources` shadow state. Routing reads first
+sender directly from the atom; reverse-path signaling
+(`SignalAtom.replyTo`) follows the same chain to deliver signals
+back to a publisher without flooding. Open work:
 
-- **Atom transit fields.** Add `fromConnections: PeerConnection[]` (reverse-path; index 0 = first sender) and `toConnections: Set<PeerConnection>` to `AtomBase`. This replaces today's `RoutingModule.receivedFirst` and `DeliveryTracker.markSent` with the single substrate the legacy2 design used. Implicit delivery acknowledgement (a peer sending us a hash they could only know via us) replaces the deleted `Delivery` packet.
-- **Hash-addressed reverse-path signaling.** Add `replyTo: Hash` to `SignalAtom`; `NetworkBridge.handleSignalMessage` forwards by looking up `record.fromConnections[0]` for the addressed packet hash instead of broadcasting to all peers except the sender. Signal packets hop "backward" along the path the addressed packet originally took.
-- **Unified bandwidth-balanced sender.** Today gossip → routing → NetworkBridge sends blocks immediately. The legacy2 `FactEmitter` pattern (random-sampler weighted by `value/(size + overhead)`) lets every atom kind compete in one pipeline. Move outbound packet selection there; gossip becomes a `value` provider.
+- **Unified bandwidth-balanced sender.** Today gossip → routing → NetworkBridge sends blocks immediately. The legacy2 `FactEmitter` pattern (random-sampler weighted by `value/(size + overhead)`) lets every atom kind compete in one pipeline. Move outbound packet selection there; gossip becomes a `value` provider. `block.toConnections` already gives us per-atom outbound dedup; the pipeline can layer on top.
 - **`IndexAtom` for cheap announcements.** Mirrors legacy2's `HashInfo`: send the hash of an atom we have, peer sends a `RequestAtom` if it wants the body. Lets the unified pipeline pick between full body and index based on bandwidth budget. `RequestAtom` already exists but has no live producer -- this is its first real consumer.
+- **First real consumer of `replyTo`.** The substrate is in place (NetworkBridge routes by `target.fromConnections[0]`, `PeerConnection.sendSignal(... , replyTo)` plumbed) but no caller currently sets `replyTo`. Natural first use: incentive responders include `replyTo: incentiveBlock.hash` so reply signals route back to anonymous publishers.
+- **Atom GC respects transit pinning.** Atoms whose `fromConnections` chain is in active use for reverse-path signaling must not be GC'd or the path breaks (current `replyToPathBroken` log path). Once GC lands, "pin while a signal session names this hash" is the simplest policy.
 - **`PeerInfoAtom` (return when needed).** The old `PeerInfo` packet type was dead and got deleted. Reintroduce as a proper Atom subtype if/when contract-interest routing (TODO option 4 under "Request Routing") needs peers to advertise which contracts they can execute.
 
 ## Application Layer

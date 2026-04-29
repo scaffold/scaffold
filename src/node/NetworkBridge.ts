@@ -10,7 +10,6 @@ import { TransportManager } from './TransportManager.ts';
 import { PeerConnection } from './PeerConnection.ts';
 import { RoutingService } from './RoutingService.ts';
 import { BlockAwareness, PushAction } from './RoutingModule.ts';
-import { DeliveryTracker } from './DeliveryTracker.ts';
 import { SignalEnvelope } from './SignalingService.ts';
 import { SignalAtom } from '../core/SignalAtom.ts';
 import { TransportPlugin } from '../interfaces/transport.ts';
@@ -52,7 +51,6 @@ export class NetworkBridge {
   private readonly transport: TransportManager;
   private readonly routing: RoutingService;
   private readonly store: BlockStore;
-  private readonly delivery: DeliveryTracker;
   private readonly selfId?: string;
   private readonly _log?: ScopedLogger;
   private readonly peerConnectedListeners: ((peerId: string) => void)[] = [];
@@ -61,7 +59,6 @@ export class NetworkBridge {
   constructor(deps: NetworkBridgeDeps) {
     this.routing = deps.routing;
     this.store = deps.store;
-    this.delivery = new DeliveryTracker();
     this.selfId = deps.selfId;
     this._log = deps.logger;
 
@@ -104,7 +101,7 @@ export class NetworkBridge {
   /** Send a block directly to a specific peer by peerId. Used for manual seeding. */
   sendBlockToPeer(block: Block, peerId: string): void {
     this.transport.sendBlock(block.raw, [peerId]);
-    this.delivery.markSent(block.hash, peerId);
+    block.toConnections.add(peerId);
   }
 
   /** Start all transport plugins. */
@@ -127,9 +124,11 @@ export class NetworkBridge {
   handlePushActions(actions: PushAction[], block: Block): void {
     const raw = block.raw;
     for (const action of actions) {
-      if (this.delivery.wasSent(block.hash, action.peer)) continue;
+      if (block.toConnections.has(action.peer)) continue;
+      // Don't echo a block back to a peer who sent it to us.
+      if (block.fromConnections.includes(action.peer)) continue;
       this.transport.sendBlock(raw, [action.peer]);
-      this.delivery.markSent(block.hash, action.peer);
+      block.toConnections.add(action.peer);
       this.routing.reportPush(block.hash, action.peer);
       this._log?.debug('blockSent', {
         hash: block.hash.toHex(),
@@ -176,11 +175,49 @@ export class NetworkBridge {
   }
 
   private handleSignalMessage(atom: SignalAtom, senderPeerId: string): void {
+    // Reverse-path forwarding: the addressed atom's first sender is the
+    // next hop toward the publisher. If we have the atom and it's
+    // local-origin (empty fromConnections), we are the publisher and
+    // deliver to the local SignalingService.
+    if (atom.replyTo) {
+      const target = this.store.get(atom.replyTo);
+      if (!target) {
+        this._log?.warn('replyToHashUnknown', {
+          replyTo: atom.replyTo.toHex(),
+          fromPeer: senderPeerId,
+        });
+        return;
+      }
+      if (target.fromConnections.length === 0) {
+        // We published the addressed atom -- deliver locally if the
+        // signal is for us.
+        if (this.selfId && atom.to === this.selfId) {
+          void this.transport.recvSignalEnvelope(atom.payload as SignalEnvelope);
+        } else {
+          this._log?.warn('replyToOriginButNotForUs', {
+            replyTo: atom.replyTo.toHex(),
+            to: atom.to,
+          });
+        }
+        return;
+      }
+      const nextPeerId = target.fromConnections[0];
+      const nextPeer = this.transport.peers.get(nextPeerId);
+      if (!nextPeer) {
+        this._log?.warn('replyToPathBroken', {
+          replyTo: atom.replyTo.toHex(),
+          nextPeerId,
+        });
+        return;
+      }
+      nextPeer.sendSignal(atom.to, atom.from, atom.payload, atom.replyTo);
+      return;
+    }
+
+    // Legacy pubkey-only addressing: deliver to self or flood.
     if (this.selfId && atom.to === this.selfId) {
-      // Signal is for us -- deliver to transport manager's signaling
       void this.transport.recvSignalEnvelope(atom.payload as SignalEnvelope);
     } else {
-      // Forward to all connected peers except the sender
       for (const [peerId, peer] of this.transport.peers) {
         if (peerId !== senderPeerId) {
           peer.sendSignal(atom.to, atom.from, atom.payload);

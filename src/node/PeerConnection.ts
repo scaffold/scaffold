@@ -80,10 +80,17 @@ export class PeerConnection {
     this.transport.send(raw);
   }
 
-  /** Send a signal message (for WebRTC signaling). */
-  sendSignal(to: string, from: string, payload: unknown): void {
+  /**
+   * Send a signal message. If `replyTo` is provided, receiving peers
+   * route the signal one hop back along the path the addressed atom
+   * took (reverse-path forwarding). Otherwise the receiver floods.
+   */
+  sendSignal(to: string, from: string, payload: unknown, replyTo?: Hash): void {
     if (this.closed) return;
-    const atom = jsonSignalSerializer.serialize({ to, from, payload }, AtomSource.Local);
+    const atom = jsonSignalSerializer.serialize(
+      { to, from, payload, replyTo: replyTo?.toHex() },
+      AtomSource.Local,
+    );
     if (!atom) return;
     this.transport.send(atom.raw);
   }
@@ -139,7 +146,7 @@ export class PeerConnection {
     switch (header.type) {
       case PacketType.JsonSignedBlock:
       case PacketType.JsonUnsignedBlock: {
-        const block = parseBlockPacket(data, AtomSource.Remote);
+        const block = parseBlockPacket(data, AtomSource.Remote, this.peerId);
         if (block) this.onBlockReceived(block, this.peerId);
         break;
       }
@@ -147,14 +154,20 @@ export class PeerConnection {
         const atom = jsonSignalSerializer.deserialize(data, AtomSource.Remote) as
           | SignalAtom
           | null;
-        if (atom) this.signalHandler?.(atom);
+        if (atom) {
+          atom.fromConnections.push(this.peerId);
+          this.signalHandler?.(atom);
+        }
         break;
       }
       case PacketType.JsonRequest: {
         const atom = jsonRequestSerializer.deserialize(data, AtomSource.Remote) as
           | RequestAtom
           | null;
-        if (atom) this.requestHandler?.(atom);
+        if (atom) {
+          atom.fromConnections.push(this.peerId);
+          this.requestHandler?.(atom);
+        }
         break;
       }
     }

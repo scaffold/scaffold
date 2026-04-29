@@ -1,11 +1,11 @@
 // Protocol spec: docs/protocol/routing.md
 
-import { Hash, HashPrimitive } from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { GossipModule, SendAction, VerifierKey } from './GossipModule.ts';
 
 // --- Constants ---
 
-/** Sentinel source key for self-originated blocks. */
+/** Sentinel source key for self-originated blocks (no inbound peer). */
 const SELF_SOURCE = '__self__';
 
 // --- Configuration ---
@@ -47,6 +47,21 @@ export const DEFAULT_ROUTING_CONFIG: RoutingConfig = {
 export interface RoutingProvider {
   /** Serialized size of the block in bytes. */
   getBlockSize(hash: Hash): number;
+  /** Whether the block is in the local store. */
+  hasBlock(hash: Hash): boolean;
+  /**
+   * Source peer (first sender) for the block, or undefined for
+   * self-originated atoms. Reads `block.fromConnections[0]`.
+   */
+  getBlockSource(hash: Hash): string | undefined;
+  /**
+   * Record that `peerId` sent us this block. Idempotent; pushes onto
+   * the stored atom's `fromConnections` only if not already present.
+   * Called by `routing.blockReceived` so the source is canonical even
+   * when the input atom was constructed without per-peer attribution
+   * (e.g. in-process simulation tests).
+   */
+  recordSource(hash: Hash, peerId: string): void;
 }
 
 // --- Types ---
@@ -85,7 +100,13 @@ interface BetaState {
 
 interface RoutingPeerState {
   pubkey: string;
-  receivedFirst: Set<HashPrimitive>;
+  /**
+   * Count of distinct blocks for which this peer was the first sender
+   * (i.e. their peerId is `block.fromConnections[0]`). Replaces the
+   * legacy `receivedFirst: Set<HashPrimitive>` whose only consumers
+   * needed the cardinality.
+   */
+  noveltyCount: number;
   deliveryMatrix: Map<string, BetaState>;
   awareness: BlockAwareness;
   utilitySent: number;
@@ -109,12 +130,6 @@ export class RoutingModule {
   private readonly provider: RoutingProvider;
   private readonly gossip: GossipModule;
   private readonly config: RoutingConfig;
-
-  /** All blocks we have locally. */
-  private readonly localBlocks = new Set<HashPrimitive>();
-
-  /** Source peer for each block (PeerID or SELF_SOURCE). */
-  private readonly blockSources = new Map<HashPrimitive, string>();
 
   /** Per-peer state. */
   private readonly peers = new Map<string, RoutingPeerState>();
@@ -158,7 +173,7 @@ export class RoutingModule {
     if (this.peers.has(peer)) return;
     this.peers.set(peer, {
       pubkey,
-      receivedFirst: new Set(),
+      noveltyCount: 0,
       deliveryMatrix: new Map(),
       awareness,
       utilitySent: 0,
@@ -182,31 +197,28 @@ export class RoutingModule {
   /**
    * Record a new block and compute push targets.
    *
-   * 1. Updates receivedFirst for fromPeer
-   * 2. Calls gossip.addSubscriptionSource for new receivedFirst entries
-   * 3. Calls gossip.blockReceived (which emits send actions via callback)
-   * 4. handleSendAction maps each to PushAction via trigger->peer routing
+   * `fromPeer` is informational here -- the canonical source is the
+   * atom's `fromConnections[0]`, which `BlockStore.put` populated
+   * before this call. We use `fromPeer` only to update per-peer
+   * novelty/awareness counters.
    *
    * Emits PushAction via onPushAction callback.
    */
   blockReceived(hash: Hash, fromPeer: string | null): void {
-    const key = hash.toPrimitive();
-
-    // Source integrity: if we already have this block, ignore.
-    if (this.localBlocks.has(key)) return;
-    this.localBlocks.add(key);
-
-    // Record source
-    const sourceKey = fromPeer ?? SELF_SOURCE;
-    this.blockSources.set(key, sourceKey);
-
-    // Update sender's state
     if (fromPeer !== null) {
+      // Ensure the stored atom records this sender. In production
+      // PeerConnection populated fromConnections at deserialize time;
+      // this call is idempotent then. In sim tests the atom may have
+      // been constructed without attribution, and this is the only
+      // source-recording path.
+      this.provider.recordSource(hash, fromPeer);
+
       const senderState = this.peers.get(fromPeer);
       if (senderState) {
-        senderState.receivedFirst.add(key);
+        if (this.provider.getBlockSource(hash) === fromPeer) {
+          senderState.noveltyCount += 1;
+        }
         senderState.awareness.add(hash);
-        // Track utility received (one unit per novel block from this peer)
         senderState.utilityReceived += 1;
       }
     }
@@ -221,7 +233,6 @@ export class RoutingModule {
     // End cycle: emit collected push actions
     this.inCycle = false;
 
-    // Emit all collected push actions
     for (const action of this.currentCyclePushes.values()) {
       this.emitPushAction(action);
     }
@@ -231,50 +242,49 @@ export class RoutingModule {
 
   /**
    * Process a send action from the gossip module.
-   * Maps trigger -> peers via receivedFirst, computes priority,
-   * deduplicates by (block, peer) keeping highest priority.
+   * Targets the trigger atom's first sender (`fromConnections[0]`),
+   * which is the reverse-path peer that originally sent us the
+   * triggering block.
    */
   private handleSendAction(action: SendAction): void {
     const blockKey = action.block.toPrimitive();
-    const sourceKey = this.blockSources.get(blockKey) ?? SELF_SOURCE;
     const blockSize = this.provider.getBlockSize(action.block);
     if (blockSize <= 0) return;
 
-    for (const [peerId, peerState] of this.peers) {
-      // Trigger must be in this peer's receivedFirst
-      if (!peerState.receivedFirst.has(action.trigger.toPrimitive())) continue;
+    // Reverse-path target: the first sender of the trigger atom.
+    const triggerSource = this.provider.getBlockSource(action.trigger);
+    if (triggerSource === undefined) return; // self-originated trigger -- nothing to forward to
+    const peerState = this.peers.get(triggerSource);
+    if (!peerState) return; // peer disconnected
 
-      // Skip if peer already has the block
-      if (peerState.awareness.has(action.block)) continue;
+    // Skip if peer already has the block.
+    if (peerState.awareness.has(action.block)) return;
 
-      // Compute response index (default 1 for first push)
-      const responseIdx = (peerState.responseIndex.get(action.verifier) ?? 0) + 1;
+    const blockSourceRaw = this.provider.getBlockSource(action.block);
+    const blockSource = blockSourceRaw ?? null;
 
-      // Compute push priority
-      const deliveryRate = this.getFirstDeliveryRate(sourceKey, peerId);
-      const priority = (action.amount / responseIdx) * deliveryRate / blockSize;
+    const responseIdx = (peerState.responseIndex.get(action.verifier) ?? 0) + 1;
+    const deliveryRate = this.getFirstDeliveryRate(blockSource, triggerSource);
+    const priority = (action.amount / responseIdx) * deliveryRate / blockSize;
 
-      if (priority < this.config.minPushPriority) continue;
+    if (priority < this.config.minPushPriority) return;
 
-      const pushAction: PushAction = {
-        block: action.block,
-        peer: peerId,
-        priority,
-        immediate: priority > this.config.immediateThreshold,
-        verifier: action.verifier,
-      };
+    const pushAction: PushAction = {
+      block: action.block,
+      peer: triggerSource,
+      priority,
+      immediate: priority > this.config.immediateThreshold,
+      verifier: action.verifier,
+    };
 
-      // Dedup by (block, peer): keep highest priority
-      if (this.inCycle) {
-        const dedupKey = `${blockKey}:${peerId}`;
-        const existing = this.currentCyclePushes.get(dedupKey);
-        if (!existing || pushAction.priority > existing.priority) {
-          this.currentCyclePushes.set(dedupKey, pushAction);
-        }
-      } else {
-        // Outside a cycle (e.g., deferred resolution), emit directly
-        this.emitPushAction(pushAction);
+    if (this.inCycle) {
+      const dedupKey = `${blockKey}:${triggerSource}`;
+      const existing = this.currentCyclePushes.get(dedupKey);
+      if (!existing || pushAction.priority > existing.priority) {
+        this.currentCyclePushes.set(dedupKey, pushAction);
       }
+    } else {
+      this.emitPushAction(pushAction);
     }
   }
 
@@ -303,8 +313,7 @@ export class RoutingModule {
    * Updates the delivery matrix entry for (block.source, peer).
    */
   reportDelivery(block: Hash, peer: string, wasNovel: boolean): void {
-    const key = block.toPrimitive();
-    const sourceKey = this.blockSources.get(key) ?? SELF_SOURCE;
+    const sourceKey = this.provider.getBlockSource(block) ?? SELF_SOURCE;
     const state = this.peers.get(peer);
     if (!state) return;
 
@@ -361,9 +370,8 @@ export class RoutingModule {
   getGossipQuality(peer: string): number {
     const state = this.peers.get(peer);
     if (!state) return 0;
-    const novelty = state.receivedFirst.size;
     const reciprocity = this.getReciprocity(peer);
-    return novelty * Math.min(reciprocity, 2);
+    return state.noveltyCount * Math.min(reciprocity, 2);
   }
 
   // -- Fetch Interface -----------------------------------------------
@@ -379,10 +387,10 @@ export class RoutingModule {
     }
 
     let best: string | undefined;
-    let bestSize = 0;
+    let bestCount = 0;
     for (const [peerId, state] of this.peers) {
-      if (state.receivedFirst.size > bestSize) {
-        bestSize = state.receivedFirst.size;
+      if (state.noveltyCount > bestCount) {
+        bestCount = state.noveltyCount;
         best = peerId;
       }
     }

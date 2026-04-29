@@ -333,6 +333,98 @@ Deno.test('NetworkBridge: signal forwarded to multiple peers, excluding sender',
   void bridge.close();
 });
 
+// -- Reverse-path signaling (replyTo) ----------------------------------
+
+Deno.test('NetworkBridge: replyTo signal forwarded along atom.fromConnections[0]', () => {
+  const { bridge, plugin, store } = makeBridge();
+
+  const b = plugin.injectAnonymousConnection();
+  const c = plugin.injectAnonymousConnection();
+  const peerIds = [...bridge.peers.keys()];
+  const bId = peerIds[0];
+  const cId = peerIds[1];
+
+  // Seed the store with a block that "came from" peer C. Reverse-path
+  // forwarding should route the signal toward C.
+  const genesis = createGenesisBlock([makeOutput(100, 'g')]);
+  const { block: target } = makeBlockPacket(genesis);
+  store.put(target);
+  const stored = store.get(target.hash)!;
+  stored.fromConnections.push(cId);
+
+  // B sends a signal addressed to whoever published `target`.
+  b.driver.recvData(controlPacket(PacketType.JsonSignal, {
+    to: 'far-peer',
+    from: bId,
+    payload: {},
+    replyTo: target.hash.toHex(),
+  }));
+
+  // Should forward to C only -- not flood, not echo back to B.
+  assertEquals(b.provider.sent.length, 0, 'must not echo to sender');
+  assertEquals(c.provider.sent.length, 1, 'must forward toward source peer');
+
+  void bridge.close();
+});
+
+Deno.test('NetworkBridge: replyTo at origin (local-published atom) delivers to self', async () => {
+  const { bridge, plugin, store, selfId } = makeBridge();
+
+  const b = plugin.injectAnonymousConnection();
+
+  // Block in the store with empty fromConnections = local origin.
+  const genesis = createGenesisBlock([makeOutput(100, 'g')]);
+  const { block: target } = makeBlockPacket(genesis);
+  store.put(target);
+
+  // Signal addressed to self with replyTo pointing at our own atom.
+  // It should be delivered to the local SignalingService rather than
+  // forwarded.
+  const otherKeys = generateKeyPair();
+  const envelope: SignalEnvelope = {
+    signalingNonce: Hash.random().toHex(),
+    senderPublicKey: bin2hex(otherKeys.publicKey),
+    protocol: 'mock',
+    signalIdx: 0,
+    receivedIdxMask: '0',
+    encrypted: 'xxxx',
+    iv: 'yy',
+  };
+
+  b.driver.recvData(controlPacket(PacketType.JsonSignal, {
+    to: selfId,
+    from: 'peer-X',
+    payload: envelope,
+    replyTo: target.hash.toHex(),
+  }));
+
+  // No forwarding: there's no upstream peer.
+  assertEquals(b.provider.sent.length, 0);
+
+  await new Promise((r) => setTimeout(r, 20));
+  void bridge.close();
+});
+
+Deno.test('NetworkBridge: replyTo for unknown hash drops without forwarding', () => {
+  const { bridge, plugin } = makeBridge();
+
+  const b = plugin.injectAnonymousConnection();
+  const c = plugin.injectAnonymousConnection();
+  const peerIds = [...bridge.peers.keys()];
+
+  b.driver.recvData(controlPacket(PacketType.JsonSignal, {
+    to: 'far-peer',
+    from: peerIds[0],
+    payload: {},
+    replyTo: Hash.digest('not-in-store').toHex(),
+  }));
+
+  assertEquals(b.provider.sent.length, 0);
+  assertEquals(c.provider.sent.length, 0, 'unknown replyTo must not flood');
+
+  void bridge.close();
+});
+
 Deno.test('NetworkBridge: stores peers by public key for authenticated connections', async () => {
   const plugin = new MockTransportPlugin({ emitsProtocol: 'mock', acceptsProtocols: ['mock'] });
   const { store, routing } = setupProtocol();
