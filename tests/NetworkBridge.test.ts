@@ -43,6 +43,7 @@ function makeBlockPacket(
       outputs,
       declaredWeight: 1,
       refs: [],
+      timestamp: 0,
     },
     privateKey,
   );
@@ -397,6 +398,7 @@ Deno.test('NetworkBridge: signer always recovered from signature, never trusted 
       outputs: [makeOutput(10, 'test')],
       declaredWeight: 1,
       refs: [],
+      timestamp: 0,
     },
     keyA,
   );

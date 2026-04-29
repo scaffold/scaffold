@@ -42,6 +42,7 @@ Deno.test('ContractValidator: genesis is always valid', () => {
       outputs: genesis.outputs,
       declaredWeight: genesis.declaredWeight,
       refs: genesis.refs,
+      timestamp: genesis.timestamp,
     },
     eagle.privateKey,
   );

@@ -74,6 +74,7 @@ function makeSignedBlockPacket() {
       outputs: [],
       declaredWeight: 1,
       refs: [],
+      timestamp: 0,
     },
     privateKey,
   );

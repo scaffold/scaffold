@@ -41,6 +41,7 @@ function makeSignedBlock(
       outputs,
       declaredWeight,
       refs: [],
+      timestamp: 0,
     },
     privateKey,
   );
@@ -121,6 +122,7 @@ Deno.test('SignatureContract: block signer is populated by composeBlockPacket', 
       outputs: [],
       declaredWeight: 1,
       refs: [],
+      timestamp: 0,
     },
     privateKeyA,
   );
@@ -158,6 +160,7 @@ Deno.test('SignatureContract: ingest path recovers signer from wire packet', asy
       outputs: [],
       declaredWeight: 10,
       refs: [],
+      timestamp: 0,
     },
     privateKeyA,
   );
@@ -199,6 +202,7 @@ Deno.test('SignatureContract: ingest path rejects wrong-key signature contract',
       outputs: [],
       declaredWeight: 10,
       refs: [],
+      timestamp: 0,
     },
     privateKeyB,
   );
@@ -239,6 +243,7 @@ Deno.test('SignatureContract: Scaffold auto-registers signatureContract for veri
       outputs: [],
       declaredWeight: 1,
       refs: [],
+      timestamp: 0,
     },
     privateKeyA,
   );

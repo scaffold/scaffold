@@ -37,6 +37,7 @@ function makeSignedBlockPacket() {
     outputs: [makeStatusOutput(eagle.publicKey, 'update')],
     declaredWeight: 1,
     refs: [] as Hash[],
+    timestamp: 0,
   };
   const block = composeBlockPacket(blueprint, eagle.privateKey);
   return { block, eagle };
@@ -76,6 +77,7 @@ Deno.test('Packet: unsigned block compose/parse roundtrip', () => {
     outputs: [makeStatusOutput(eagle.publicKey, 'unsigned')],
     declaredWeight: 1,
     refs: [] as Hash[],
+    timestamp: 0,
   };
   const block = composeUnsignedBlockPacket(blueprint);
 
@@ -141,6 +143,7 @@ Deno.test('Packet: different signers produce different hashes', () => {
     outputs: [makeStatusOutput(eagle.publicKey, 'same payload')],
     declaredWeight: 1,
     refs: [] as Hash[],
+    timestamp: 0,
   };
 
   const p1 = composeBlockPacket(blueprint, eagle.privateKey);

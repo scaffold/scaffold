@@ -34,5 +34,5 @@ export {
 export type { Packet } from './core/Packet.ts';
 export { AtomSource, AtomType } from './core/Atom.ts';
 export type { Atom, AtomBase } from './core/Atom.ts';
-export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
+export type { BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';

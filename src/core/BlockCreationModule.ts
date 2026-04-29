@@ -2,6 +2,7 @@
 
 import { Hash } from '../util/Hash.ts';
 import { unionClaimMasks } from './OutputSpace.ts';
+import type { BlockPayload } from './Block.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -66,20 +67,10 @@ export interface BlockSpec {
   refs: Hash[];
 }
 
-/**
- * Fully computed block ready for signing and distribution.
- * Contains the wire-format fields plus any generated contract outputs.
- */
-export interface BlockBlueprint {
-  anchor: Hash;
-  aggregates: Hash[];
-  claims: number[];
-  /** All outputs: user-specified outputs + any generated contract outputs (e.g., aggregation). */
-  outputs: Output[];
-  declaredWeight: number;
-  /** Cross-block references for read-only data access. */
-  refs: Hash[];
-}
+// `BlockPayload` (declared in `Block.ts`) is the wire-encoded form of a
+// block. `buildBlock(spec): BlockPayload` derives all structural fields
+// and timestamps the payload; `composeBlockPacket(payload, privateKey)`
+// signs and serializes it. There is no separate `BlockBlueprint` type.
 
 /** Info about a subtree for weight vector derivation. */
 export interface SubtreeInfo {
@@ -162,7 +153,7 @@ export class BlockCreationModule<BlockType> {
    * Build a block from a spec. Derives all structural fields and validates
    * throughput balancing. Returns a blueprint ready for signing, or an error.
    */
-  buildBlock(spec: BlockSpec): BlockBlueprint {
+  buildBlock(spec: BlockSpec): BlockPayload {
     // 1. Resolve anchor
     const anchorBlock = this.provider.getBlock(spec.anchor);
     if (!anchorBlock) {
@@ -263,19 +254,18 @@ export class BlockCreationModule<BlockType> {
     // 5. Validate throughput
     this.validateThroughput(spec.claims, spec.outputs, ownOutputCount);
 
-    // 9. Build blueprint. Sort claim indices so downstream `mapOriginalToSurviving`
-    // (binary search) sees a sorted mask. Duplicates are already rejected by the
-    // earlier classification pass.
-    const blueprint: BlockBlueprint = {
+    // 9. Build the payload. Sort claim indices so downstream
+    // `mapOriginalToSurviving` (binary search) sees a sorted mask.
+    // Duplicates are already rejected by the earlier classification pass.
+    return {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
       claims: spec.claims.map((c) => c.index).sort((a, b) => a - b),
       outputs: spec.outputs,
       declaredWeight: spec.declaredWeight,
       refs: spec.refs,
+      timestamp: Date.now(),
     };
-
-    return blueprint;
   }
 
   // -- Pure computations (exposed for testing) --------------------

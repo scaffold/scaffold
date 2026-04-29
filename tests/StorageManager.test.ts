@@ -49,6 +49,7 @@ function makeSignedPacket(
       }],
       declaredWeight: 1,
       refs: [],
+      timestamp: 0,
     },
     privateKey,
   );

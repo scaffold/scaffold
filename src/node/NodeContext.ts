@@ -10,13 +10,8 @@ import {
 } from '../core/Block.ts';
 import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
-import {
-  BlockBlueprint,
-  BlockSpec,
-  type ClaimEntry,
-  Output,
-  type Verifier,
-} from '../core/BlockCreationModule.ts';
+import { BlockSpec, type ClaimEntry, Output, type Verifier } from '../core/BlockCreationModule.ts';
+import type { BlockPayload } from '../core/Block.ts';
 import { makeSignatureOutput, signatureContract } from '../contracts/SignatureContract.ts';
 import {
   type OutputSpaceBlock,
@@ -233,16 +228,16 @@ export class NodeContext {
             ctxLogger,
           )
           : spec;
-        let blueprint: BlockBlueprint;
+        let payload: BlockPayload;
         try {
-          blueprint = blockCreationService.buildBlock(balanced);
+          payload = blockCreationService.buildBlock(balanced);
         } catch (e) {
           console.debug('createBlock failed:', (e as Error).message);
           return null;
         }
         return privateKey
-          ? composeBlockPacket(blueprint, privateKey)
-          : composeUnsignedBlockPacket(blueprint);
+          ? composeBlockPacket(payload, privateKey)
+          : composeUnsignedBlockPacket(payload);
       },
     };
 
