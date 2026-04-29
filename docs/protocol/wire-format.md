@@ -2,13 +2,13 @@
 
 The wire format defines the binary envelope for everything Scaffold sends over the network or persists to storage. A **packet** wraps a JSON payload with a header and optional cryptographic signature. The block's identity hash is the SHA3-256 digest of the entire packet bytes.
 
-Every byte stream Scaffold puts on a peer connection -- blocks, signaling envelopes, requests, delivery acks, peer info -- is a packet. Receivers multiplex on the leading `SCF` magic + type byte; bytes that don't start with `SCF` are silently dropped (not a Scaffold packet).
+Every byte stream Scaffold puts on a peer connection -- blocks, signaling envelopes, requests -- is a packet. Receivers multiplex on the leading `SCF` magic + type byte; bytes that don't start with `SCF` are silently dropped (not a Scaffold packet).
 
 ## Two type enums
 
-The 4th byte of every packet is a **`PacketType`** that selects the wire-format ingestor (e.g. `JsonSignedBlock`, `JsonUnsignedBlock`). Multiple `PacketType`s can produce the same logical kind: a future `BinarySignedBlock` would join `JsonSignedBlock` in producing `AtomType.Block`. The result of ingestion is an **Atom** -- the durable, hash-identified record of one ingested wire artifact. `AtomType` (in `src/core/Atom.ts`) is the logical kind; `PacketType` (in `src/core/Packet.ts`) is the wire encoding.
+The 4th byte of every packet is a **`PacketType`** that selects the wire-format serializer (e.g. `JsonSignedBlock`, `JsonSignal`). Multiple `PacketType`s can produce the same logical kind: a future `BinarySignedBlock` would join `JsonSignedBlock` in producing `AtomType.Block`. The result of deserialization is an **Atom** -- the durable, hash-identified record of one ingested wire artifact. `AtomType` (in `src/core/Atom.ts`) is the logical kind; `PacketType` (in `src/core/Packet.ts`) is the wire encoding.
 
-Each registered `PacketType` has a `PacketIngestor` (today, `JsonIngestor` instances exported from `src/core/Block.ts`). The dispatcher (`PeerConnection.handleMessage`, `StorageManager.restore`) sniffs the type byte and calls `ingestor.ingest(raw, source)` to produce an Atom -- or null on validation failure (with a structured log entry per AGENTS.md "never drop errors silently"). Block atoms are subtypes of `AtomBase` and participate in the discriminated `Atom` union; consumers narrow via `switch (atom.type)` for exhaustiveness.
+Each registered `PacketType` has a `PacketSerializer` (today, `JsonSerializer` instances exported from `src/core/Block.ts`, `src/core/SignalAtom.ts`, and `src/core/RequestAtom.ts`). The dispatcher (`PeerConnection.handleMessage`, `StorageManager.restore`) sniffs the type byte via `parseHeader` and calls the matching serializer's `deserialize(raw, source)` to produce an Atom -- or null on validation failure (with a structured log entry per AGENTS.md "never drop errors silently"). Atom subtypes participate in the discriminated `Atom` union; consumers narrow via `switch (atom.type)` for exhaustiveness.
 
 ---
 
@@ -31,18 +31,16 @@ The header is 4 bytes (magic + type). The minimum packet size is 4 bytes (unsign
 
 ## PacketType Enum
 
-| Value | Name | Signed | Description |
-|-------|------|--------|-------------|
-| 0 | `JsonSignedBlock` | Yes | Signed block, JSON-encoded payload |
-| 1 | `JsonUnsignedBlock` | No | Unsigned block (aggregation, genesis), JSON-encoded payload |
-| 2 | `Signal` | No | Encrypted handshake / WebRTC signaling envelope |
-| 4 | `Request` | No | Block hash request |
-| 5 | `Delivery` | No | Delivery acknowledgement |
-| 6 | `PeerInfo` | No | Peer identity + supported contracts |
+| Value | Name | Signed | Produces | Description |
+|-------|------|--------|----------|-------------|
+| 0 | `JsonSignedBlock` | Yes | `AtomType.Block` | Signed block, JSON-encoded payload |
+| 1 | `JsonUnsignedBlock` | No | `AtomType.Block` | Unsigned block (aggregation, genesis), JSON-encoded payload |
+| 2 | `JsonSignal` | No | `AtomType.Signal` | Encrypted handshake / WebRTC signaling envelope |
+| 4 | `JsonRequest` | No | `AtomType.Request` | Block hash request |
 
-(Value 3 was previously `Sync`; removed when SyncProtocol was retired in favor of unified gossip-driven packet propagation.)
+(Value 3 was previously `Sync`; removed when SyncProtocol was retired in favor of unified gossip-driven packet propagation. Values 5/6 were previously `Delivery`/`PeerInfo`; both deleted -- delivery acknowledgement will be reintroduced implicitly via atom transit fields, and peer-contract advertisement will return as a `PeerInfoAtom` if/when contract-interest routing lands.)
 
-Whether a packet includes a signature is determined entirely by the type -- not by a flag or field. Only `Block` packets are signed; control messages and unsigned blocks (e.g. genesis, aggregation) carry only the JSON payload.
+Whether a packet includes a signature is determined entirely by the type -- not by a flag or field. Only `JsonSignedBlock` is signed today; control messages (signals, requests) and unsigned blocks (genesis, aggregation) carry only the JSON payload.
 
 ---
 
@@ -64,7 +62,15 @@ BlockPayload {
     outputs:        Output[]
     declaredWeight: number
     refs:           Hash[]
+    timestamp:      number
 }
+```
+
+Signal and Request payloads are simpler:
+
+```
+SignalPayload  { to: string, from: string, payload: unknown }
+RequestPayload { hashes: string[] }
 ```
 
 Future protocol versions may introduce binary payload encodings for efficiency. The type byte allows the parser to select the appropriate decoder.
@@ -96,7 +102,7 @@ block.hash = SHA3-256(raw_packet_bytes)
 
 This means the hash covers the magic, type, payload, and signature (if present). Two packets with different signatures (e.g., different signers for the same payload) produce different block hashes.
 
-The original packet bytes are the canonical form. They are stashed in `NodeContext.packetStore` (keyed by hash) when blocks are locally composed and when block packets arrive from the network. `NetworkBridge` forwards these exact bytes to other peers, and `StorageManager` persists them so signatures survive restarts and signer recovery is always cryptographic -- never trusted from a payload field.
+The original packet bytes are stored on the Block itself as `block.raw`. `NetworkBridge` forwards these exact bytes to other peers, and `StorageManager` persists them so signatures survive restarts and signer recovery is always cryptographic -- never trusted from a payload field.
 
 ---
 
@@ -136,12 +142,14 @@ For **signer recovery** (no expected key):
 | File | Description |
 |------|-------------|
 | [`src/core/Atom.ts`](../../src/core/Atom.ts) | `AtomType`, `AtomSource`, `AtomBase`, and the `Atom` discriminated union |
-| [`src/core/Packet.ts`](../../src/core/Packet.ts) | `PacketType`, `composePacket`/`composeUnsignedPacket`, `parsePacket`, sign/verify helpers |
-| [`src/core/PacketIngestor.ts`](../../src/core/PacketIngestor.ts) | `PacketIngestor` interface and `JsonIngestor` class; dispatched off the type byte |
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `Block extends AtomBase`; `composeBlockPacket`/`composeUnsignedBlockPacket`/`composeGenesisPacket`; `jsonSignedBlockIngestor` / `jsonUnsignedBlockIngestor` instances |
+| [`src/core/Packet.ts`](../../src/core/Packet.ts) | `PacketType`, `parseHeader`, `recoverPacketSigner`, `verifyPacketSignature`, `SignedBytes` |
+| [`src/core/PacketSerializer.ts`](../../src/core/PacketSerializer.ts) | `PacketSerializer` interface and `JsonSerializer` class; dispatched off the type byte |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `Block extends AtomBase, BlockPayload`; compose helpers; `jsonSignedBlockSerializer` / `jsonUnsignedBlockSerializer` / `parseBlockPacket` |
+| [`src/core/SignalAtom.ts`](../../src/core/SignalAtom.ts) | `SignalAtom`, `SignalPayload`, `jsonSignalSerializer` |
+| [`src/core/RequestAtom.ts`](../../src/core/RequestAtom.ts) | `RequestAtom`, `RequestPayload`, `jsonRequestSerializer` |
 | [`src/core/BlockSerializer.ts`](../../src/core/BlockSerializer.ts) | Type-tagged JSON serialization |
-| [`src/node/PeerConnection.ts`](../../src/node/PeerConnection.ts) | Multiplexes inbound packets by type byte |
+| [`src/node/PeerConnection.ts`](../../src/node/PeerConnection.ts) | Multiplexes inbound packets by type byte; dispatches to the matching serializer |
 | [`src/node/NetworkBridge.ts`](../../src/node/NetworkBridge.ts) | Forwards `block.raw` to peers; no separate raw-packet cache |
-| [`src/node/StorageManager.ts`](../../src/node/StorageManager.ts) | Persists raw packet bytes; restores via `parsePacket` + `createBlockFromPacket` |
+| [`src/node/StorageManager.ts`](../../src/node/StorageManager.ts) | Persists raw packet bytes; restores via `parseBlockPacket` |
 | [`src/util/Hash.ts`](../../src/util/Hash.ts) | SHA3-256 hashing |
 | [`src/util/secp.ts`](../../src/util/secp.ts) | secp256k1 ECDSA |

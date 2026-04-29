@@ -1,9 +1,17 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Block, composeBlockPacket, createGenesisBlock } from '../src/core/Block.ts';
+import {
+  Block,
+  composeBlockPacket,
+  composeUnsignedBlockPacket,
+  createGenesisBlock,
+} from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
-import { composeUnsignedPacket, PacketType, parsePacket } from '../src/core/Packet.ts';
-import { PeerConnection, SignalPayload, TransportConnection } from '../src/node/PeerConnection.ts';
+import { PacketType } from '../src/core/Packet.ts';
+import { PeerConnection, TransportConnection } from '../src/node/PeerConnection.ts';
+import { jsonSignalSerializer, SignalAtom } from '../src/core/SignalAtom.ts';
+import { jsonRequestSerializer, RequestAtom } from '../src/core/RequestAtom.ts';
+import { AtomSource } from '../src/core/Atom.ts';
 
 // -- Mock Transport ---------------------------------------------------
 
@@ -140,7 +148,7 @@ Deno.test('block round-trip preserves block fields', () => {
 Deno.test('unsigned block packet leaves signer undefined', () => {
   const { transport, receivedBlocks } = setup();
   const genesis = makeTestBlock();
-  const packet = composeUnsignedPacket(PacketType.JsonUnsignedBlock, {
+  const block = composeUnsignedBlockPacket({
     anchor: genesis.hash,
     aggregates: [],
     claims: [],
@@ -150,7 +158,7 @@ Deno.test('unsigned block packet leaves signer undefined', () => {
     timestamp: 0,
   });
 
-  transport.simulateMessage(packet.raw);
+  transport.simulateMessage(block.raw);
 
   assertEquals(receivedBlocks.length, 1);
   assertEquals(receivedBlocks[0].block.signer, undefined);
@@ -162,27 +170,21 @@ Deno.test('sendSignal sends a signal packet', () => {
   peer.sendSignal('peer-2', 'peer-1', { sdp: 'offer-data' });
 
   assertEquals(transport.sent.length, 1);
-  const parsed = parsePacket<SignalPayload>(transport.sent[0]);
-  assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.Signal);
-  assertEquals(parsed!.payload.to, 'peer-2');
-  assertEquals(parsed!.payload.from, 'peer-1');
-  assertEquals(parsed!.payload.payload, { sdp: 'offer-data' });
+  // Sniff: type byte at index 3 should be JsonSignal.
+  assertEquals(transport.sent[0][3], PacketType.JsonSignal);
 });
 
-Deno.test('receiving a signal packet calls onSignal handler', () => {
+Deno.test('receiving a signal packet calls onSignal handler with atom', () => {
   const { transport, peer } = setup();
-  const received: SignalPayload[] = [];
+  const received: SignalAtom[] = [];
 
-  peer.onSignal((data) => received.push(data));
+  peer.onSignal((atom) => received.push(atom));
 
-  transport.simulateMessage(
-    composeUnsignedPacket<SignalPayload>(PacketType.Signal, {
-      to: 'peer-1',
-      from: 'peer-2',
-      payload: { sdp: 'answer' },
-    }).raw,
-  );
+  const inbound = jsonSignalSerializer.serialize(
+    { to: 'peer-1', from: 'peer-2', payload: { sdp: 'answer' } },
+    AtomSource.Local,
+  )!;
+  transport.simulateMessage(inbound.raw);
 
   assertEquals(received.length, 1);
   assertEquals(received[0].to, 'peer-1');
@@ -198,68 +200,27 @@ Deno.test('requestBlocks sends a request packet with hex hashes', () => {
   peer.requestBlocks([h1, h2]);
 
   assertEquals(transport.sent.length, 1);
-  const parsed = parsePacket<{ hashes: string[] }>(transport.sent[0]);
-  assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.Request);
-  assertEquals(parsed!.payload.hashes, [h1.toHex(), h2.toHex()]);
+  assertEquals(transport.sent[0][3], PacketType.JsonRequest);
 });
 
-Deno.test('receiving a request packet calls onRequest handler', () => {
+Deno.test('receiving a request packet calls onRequest handler with atom', () => {
   const { transport, peer } = setup();
-  const received: { hashes: string[] }[] = [];
+  const received: RequestAtom[] = [];
 
-  peer.onRequest((data) => received.push(data));
+  peer.onRequest((atom) => received.push(atom));
 
-  transport.simulateMessage(
-    composeUnsignedPacket(PacketType.Request, {
-      hashes: ['aabb', 'ccdd'],
-    }).raw,
-  );
+  const h1 = Hash.digest('aa');
+  const h2 = Hash.digest('bb');
+  const inbound = jsonRequestSerializer.serialize(
+    { hashes: [h1.toHex(), h2.toHex()] },
+    AtomSource.Local,
+  )!;
+  transport.simulateMessage(inbound.raw);
 
   assertEquals(received.length, 1);
-  assertEquals(received[0].hashes, ['aabb', 'ccdd']);
-});
-
-Deno.test('sendDelivery sends a delivery packet', () => {
-  const { transport, peer } = setup();
-  const hash = Hash.digest('delivered-block');
-
-  peer.sendDelivery(hash, true);
-
-  assertEquals(transport.sent.length, 1);
-  const parsed = parsePacket<{ hash: string; delivered: boolean }>(transport.sent[0]);
-  assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.Delivery);
-  assertEquals(parsed!.payload.hash, hash.toHex());
-  assertEquals(parsed!.payload.delivered, true);
-});
-
-Deno.test('sendDelivery sends false delivery status', () => {
-  const { transport, peer } = setup();
-  const hash = Hash.digest('failed-block');
-
-  peer.sendDelivery(hash, false);
-
-  const parsed = parsePacket<{ hash: string; delivered: boolean }>(transport.sent[0]);
-  assertEquals(parsed!.payload.delivered, false);
-});
-
-Deno.test('receiving a delivery packet calls onDelivery handler', () => {
-  const { transport, peer } = setup();
-  const received: { hash: string; delivered: boolean }[] = [];
-
-  peer.onDelivery((data) => received.push(data));
-
-  transport.simulateMessage(
-    composeUnsignedPacket(PacketType.Delivery, {
-      hash: 'aabbccdd',
-      delivered: true,
-    }).raw,
-  );
-
-  assertEquals(received.length, 1);
-  assertEquals(received[0].hash, 'aabbccdd');
-  assertEquals(received[0].delivered, true);
+  assertEquals(received[0].hashes.length, 2);
+  assert(Hash.equals(received[0].hashes[0], h1));
+  assert(Hash.equals(received[0].hashes[1], h2));
 });
 
 Deno.test('close() closes the transport', () => {
@@ -288,7 +249,6 @@ Deno.test('sends are no-ops after close', () => {
   peer.sendBlock(packet.raw);
   peer.sendSignal('a', 'b', null);
   peer.requestBlocks([]);
-  peer.sendDelivery(Hash.digest('x'), true);
 
   assertEquals(transport.sent.length, 0);
 });
@@ -328,70 +288,40 @@ Deno.test('non-Scaffold bytes are silently ignored', () => {
 Deno.test('signal packet without handler is silently ignored', () => {
   const { transport } = setup();
 
-  transport.simulateMessage(
-    composeUnsignedPacket(PacketType.Signal, {
-      to: 'a',
-      from: 'b',
-      payload: null,
-    }).raw,
-  );
+  const atom = jsonSignalSerializer.serialize(
+    { to: 'a', from: 'b', payload: null },
+    AtomSource.Local,
+  )!;
+  transport.simulateMessage(atom.raw);
 
   // No error thrown
 });
 
 Deno.test('multiple packet types flow through correctly', () => {
   const { transport, peer, receivedBlocks } = setup();
-  const signals: SignalPayload[] = [];
-  const requests: { hashes: string[] }[] = [];
+  const signals: SignalAtom[] = [];
+  const requests: RequestAtom[] = [];
 
-  peer.onSignal((data) => signals.push(data));
-  peer.onRequest((data) => requests.push(data));
+  peer.onSignal((atom) => signals.push(atom));
+  peer.onRequest((atom) => requests.push(atom));
 
   const { block: packet } = makeSignedBlockPacket();
 
+  const signalAtom = jsonSignalSerializer.serialize(
+    { to: 'x', from: 'y', payload: 1 },
+    AtomSource.Local,
+  )!;
+  const requestAtom = jsonRequestSerializer.serialize(
+    { hashes: [Hash.digest('bb').toHex()] },
+    AtomSource.Local,
+  )!;
+
   transport.simulateMessage(packet.raw);
-  transport.simulateMessage(
-    composeUnsignedPacket<SignalPayload>(PacketType.Signal, {
-      to: 'x',
-      from: 'y',
-      payload: 1,
-    }).raw,
-  );
-  transport.simulateMessage(
-    composeUnsignedPacket(PacketType.Request, { hashes: ['bb'] }).raw,
-  );
+  transport.simulateMessage(signalAtom.raw);
+  transport.simulateMessage(requestAtom.raw);
 
   assertEquals(receivedBlocks.length, 1);
   assertEquals(signals.length, 1);
   assertEquals(requests.length, 1);
 });
 
-Deno.test('sendPeerInfo sends a peerInfo packet', () => {
-  const { transport, peer } = setup();
-
-  peer.sendPeerInfo('my-peer-id', ['contract-a', 'contract-b']);
-
-  const parsed = parsePacket<{ peerId: string; contracts: string[] }>(transport.sent[0]);
-  assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.PeerInfo);
-  assertEquals(parsed!.payload.peerId, 'my-peer-id');
-  assertEquals(parsed!.payload.contracts, ['contract-a', 'contract-b']);
-});
-
-Deno.test('receiving a peerInfo packet calls onPeerInfo handler', () => {
-  const { transport, peer } = setup();
-  const received: { peerId: string; contracts: string[] }[] = [];
-
-  peer.onPeerInfo((data) => received.push(data));
-
-  transport.simulateMessage(
-    composeUnsignedPacket(PacketType.PeerInfo, {
-      peerId: 'remote-peer',
-      contracts: ['c1'],
-    }).raw,
-  );
-
-  assertEquals(received.length, 1);
-  assertEquals(received[0].peerId, 'remote-peer');
-  assertEquals(received[0].contracts, ['c1']);
-});

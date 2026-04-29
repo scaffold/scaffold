@@ -1,19 +1,15 @@
 import { Hash } from '../util/Hash.ts';
 import {
   Block,
-  BlockPayload,
   BlockStore,
   composeBlockPacket,
   composeGenesisPacket,
-  createBlockFromPacket,
 } from '../core/Block.ts';
-import { AtomSource } from '../core/Atom.ts';
 import { BlockSpec } from '../core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { BlockAwareness } from '../node/RoutingModule.ts';
-import { Packet, PacketType, recoverPacketSigner } from '../core/Packet.ts';
 import { Scaffold } from '../Scaffold.ts';
 
 import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
@@ -74,26 +70,10 @@ export class DemoNode {
     return this.scaffold.context.routing;
   }
 
-  /** Receive a packet from a peer. Validate, accept if valid, forward to other peers. */
-  receivePacket(packet: Packet<BlockPayload>, fromPeer: string): void {
-    // Skip if already known
-    if (this.store.has(packet.hash)) return;
+  /** Receive a parsed Block from a peer. Validate, accept if valid, forward to other peers. */
+  receiveBlock(block: Block, fromPeer: string): void {
+    if (this.store.has(block.hash)) return;
 
-    // Build the Block from the wire packet first; signer is recovered
-    // cryptographically rather than trusted from any wire field.
-    const packetType = packet.signature ? PacketType.JsonSignedBlock : PacketType.JsonUnsignedBlock;
-    const block = createBlockFromPacket(
-      packet.payload,
-      packet.raw,
-      packet.hash,
-      packetType,
-      AtomSource.Remote,
-      packet.signature,
-      recoverPacketSigner(packet),
-    );
-
-    // Validate the constructed Block (signature checks etc. operate
-    // structurally on `block.raw` + `block.signature`).
     try {
       validateBlockPacket(block, this.store);
     } catch (e) {
@@ -102,18 +82,13 @@ export class DemoNode {
     }
 
     this.scaffold.context.processBlock(block, fromPeer);
-
-    // Update tip
     this.updateTipFromStore();
-
-    // Rebuild status index
     this.rebuildStatusIndex();
 
-    // Forward to other peers
     for (const [peerId, ws] of this.peers) {
       if (peerId === fromPeer) continue;
       if (ws.readyState === WebSocket.OPEN) {
-        this.sendPacket(ws, packet.raw);
+        this.sendPacket(ws, block.raw);
       }
     }
   }

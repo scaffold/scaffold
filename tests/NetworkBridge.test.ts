@@ -3,7 +3,10 @@ import { Block, BlockStore, composeBlockPacket, createGenesisBlock } from '../sr
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
 import { bin2hex } from '../src/util/hex.ts';
-import { composeUnsignedPacket, PacketType } from '../src/core/Packet.ts';
+import { PacketType } from '../src/core/Packet.ts';
+import { jsonSignalSerializer, SignalPayload } from '../src/core/SignalAtom.ts';
+import { jsonRequestSerializer, RequestPayload } from '../src/core/RequestAtom.ts';
+import { AtomSource } from '../src/core/Atom.ts';
 import { NetworkBridge } from '../src/node/NetworkBridge.ts';
 import { SignalEnvelope } from '../src/node/SignalingService.ts';
 import { PushAction } from '../src/node/RoutingModule.ts';
@@ -103,8 +106,14 @@ function makeBridge(selfId?: string): Harness {
   };
 }
 
-function controlPacket<T>(type: PacketType, payload: T): Uint8Array {
-  return composeUnsignedPacket<T>(type, payload).raw;
+function controlPacket(
+  type: PacketType.JsonSignal | PacketType.JsonRequest,
+  payload: SignalPayload | RequestPayload,
+): Uint8Array {
+  const atom = type === PacketType.JsonSignal
+    ? jsonSignalSerializer.serialize(payload as SignalPayload, AtomSource.Local)
+    : jsonRequestSerializer.serialize(payload as RequestPayload, AtomSource.Local);
+  return atom!.raw;
 }
 
 // -- Tests ------------------------------------------------------------
@@ -220,7 +229,7 @@ Deno.test('NetworkBridge: block request responds with raw bytes from BlockStore'
 
   const { provider, driver } = plugin.injectAnonymousConnection();
 
-  driver.recvData(controlPacket(PacketType.Request, {
+  driver.recvData(controlPacket(PacketType.JsonRequest, {
     hashes: [genesis.hash.toHex()],
   }));
 
@@ -273,7 +282,7 @@ Deno.test('NetworkBridge: signal addressed to self is delivered to signaling', a
     iv: 'yy',
   };
 
-  driver.recvData(controlPacket(PacketType.Signal, {
+  driver.recvData(controlPacket(PacketType.JsonSignal, {
     to: selfId,
     from: 'peer-B',
     payload: envelope,
@@ -291,7 +300,7 @@ Deno.test('NetworkBridge: signal addressed to other peer is forwarded', () => {
   const c = plugin.injectAnonymousConnection();
   const peerIds = [...bridge.peers.keys()];
 
-  b.driver.recvData(controlPacket(PacketType.Signal, {
+  b.driver.recvData(controlPacket(PacketType.JsonSignal, {
     to: 'some-other-peer',
     from: peerIds[0],
     payload: {},
@@ -311,7 +320,7 @@ Deno.test('NetworkBridge: signal forwarded to multiple peers, excluding sender',
   const d = plugin.injectAnonymousConnection();
   const peerIds = [...bridge.peers.keys()];
 
-  b.driver.recvData(controlPacket(PacketType.Signal, {
+  b.driver.recvData(controlPacket(PacketType.JsonSignal, {
     to: 'far-peer',
     from: peerIds[0],
     payload: {},

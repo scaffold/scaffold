@@ -3,7 +3,7 @@
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
 import { AtomBase, AtomSource, AtomType } from './Atom.ts';
-import { PacketType } from './Packet.ts';
+import { PacketType, parseHeader } from './Packet.ts';
 import { JsonSerializer } from './PacketSerializer.ts';
 
 // Re-export Atom types for callers that pull `Block` and source/kind
@@ -260,9 +260,9 @@ export function collectExtendedOutputs(block: Block, store: BlockStore): Output[
 
 /**
  * Construct a Block from a deserialized payload plus the wire-form
- * fields (raw bytes, hash, optional signature/signer). Used by ingest
- * paths in PeerConnection / StorageManager / demo code that already
- * have a parsed `Packet<T>` and want a Block.
+ * fields (raw bytes, hash, optional signature/signer). The block
+ * serializers (`jsonSignedBlockSerializer` / `jsonUnsignedBlockSerializer`)
+ * call this through the `AtomBuilder` callback during deserialize.
  */
 export function createBlockFromPacket(
   payload: BlockPayload,
@@ -301,12 +301,12 @@ export function createBlockFromPacket(
 
 /** Compose a signed block packet and return the resulting Block. */
 export function composeBlockPacket(payload: BlockPayload, privateKey: Uint8Array): Block {
-  return jsonSignedBlockSerializer.serialize(payload, AtomSource.Local, privateKey)!;
+  return jsonSignedBlockSerializer.serialize(payload, AtomSource.Local, privateKey) as Block;
 }
 
 /** Compose an unsigned block packet and return the resulting Block. */
 export function composeUnsignedBlockPacket(payload: BlockPayload): Block {
-  return jsonUnsignedBlockSerializer.serialize(payload, AtomSource.Local)!;
+  return jsonUnsignedBlockSerializer.serialize(payload, AtomSource.Local) as Block;
 }
 
 /** Compose a genesis block (unsigned, fixed-shape payload). */
@@ -392,3 +392,22 @@ export const jsonUnsignedBlockSerializer = new JsonSerializer<BlockPayload>(
   (payload, raw, hash, sig, signer, source) =>
     buildBlockAtom(payload, raw, hash, sig, signer, source, PacketType.JsonUnsignedBlock),
 );
+
+// -- Block packet dispatch ------------------------------------------
+
+/**
+ * Parse raw bytes as a block packet (signed or unsigned), routing on
+ * the type byte. Returns null on bad magic, non-block type, malformed
+ * payload, or signer-recovery failure for signed blocks.
+ */
+export function parseBlockPacket(raw: Uint8Array, source: AtomSource): Block | null {
+  const header = parseHeader(raw);
+  if (!header) return null;
+  if (header.type === PacketType.JsonSignedBlock) {
+    return jsonSignedBlockSerializer.deserialize(raw, source) as Block | null;
+  }
+  if (header.type === PacketType.JsonUnsignedBlock) {
+    return jsonUnsignedBlockSerializer.deserialize(raw, source) as Block | null;
+  }
+  return null;
+}

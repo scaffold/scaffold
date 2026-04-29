@@ -4,10 +4,9 @@
  * as keypairs in the pool but do not appear in genesis.
  */
 
-import type { Block, BlockPayload } from '../src/core/Block.ts';
-import { AtomSource, composeGenesisPacket, createBlockFromPacket } from '../src/core/Block.ts';
+import type { Block } from '../src/core/Block.ts';
+import { AtomSource, composeGenesisPacket, parseBlockPacket } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import { PacketType, parsePacket } from '../src/core/Packet.ts';
 import { bin2hex, hex2bin } from '../src/util/hex.ts';
 import type { UserKey } from './types.ts';
 
@@ -28,14 +27,7 @@ export function buildHarnessGenesis(users: readonly UserKey[]): HarnessGenesis {
 }
 
 export function loadGenesisFromHex(hex: string): Block {
-  const raw = hex2bin(hex);
-  const packet = parsePacket<BlockPayload>(raw);
-  if (!packet) throw new Error('failed to parse genesis packet hex');
-  return createBlockFromPacket(
-    packet.payload,
-    packet.raw,
-    packet.hash,
-    PacketType.JsonUnsignedBlock,
-    AtomSource.Local,
-  );
+  const block = parseBlockPacket(hex2bin(hex), AtomSource.Local);
+  if (!block) throw new Error('failed to parse genesis packet hex');
+  return block;
 }

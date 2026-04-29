@@ -2,7 +2,7 @@
 //
 // An Atom is the durable record of one wire packet (or local compose):
 // raw bytes, hash, optional signature, and reception metadata. Domain
-// subtypes (Block today; Signal/Request/Delivery/PeerInfo in future
+// subtypes (Block, Signal, Request today; Index and others in future
 // passes) extend `AtomBase` and narrow the `type` discriminator.
 //
 // Two enums separate concerns:
@@ -26,6 +26,8 @@ import { PacketType } from './Packet.ts';
  */
 export enum AtomType {
   Block = 0,
+  Signal = 1,
+  Request = 2,
 }
 
 // -- AtomSource (reception channel) ---------------------------------
@@ -80,14 +82,17 @@ export interface AtomBase {
 
 // -- Atom (discriminated union) -------------------------------------
 
-// Type-only import breaks the runtime cycle between Atom.ts and Block.ts.
-// At runtime, Block.ts imports the AtomBase/AtomType/AtomSource values
-// from this module; the union below is purely type-level.
+// Type-only imports break the runtime cycle between Atom.ts and the
+// subtype modules. At runtime each subtype imports AtomBase / AtomType /
+// AtomSource values from this module; the union below is purely
+// type-level.
 import type { Block } from './Block.ts';
+import type { SignalAtom } from './SignalAtom.ts';
+import type { RequestAtom } from './RequestAtom.ts';
 
 /**
  * Discriminated union of every concrete Atom subtype. As more wire
- * objects (Signal, Request, Delivery, PeerInfo, Index, ...) migrate
- * onto the Atom abstraction, they get added here.
+ * objects (Index, ...) migrate onto the Atom abstraction, they get
+ * added here.
  */
-export type Atom = Block;
+export type Atom = Block | SignalAtom | RequestAtom;

@@ -176,16 +176,21 @@ anonymous/authenticated Unix sockets. Known gaps to address before scaling:
 
 ## Atom Refactor Follow-ups
 
-Block was unified onto an `Atom` base type (see `src/core/Atom.ts`,
-`src/core/PacketIngestor.ts`). Block-only this pass; control packets
-still use `Packet<T>`. Open work:
+Every wire packet is now an Atom. `Block`, `SignalAtom`, and
+`RequestAtom` all extend `AtomBase` and carry hash + raw +
+reception metadata. `JsonSerializer` instances in `Block.ts`,
+`SignalAtom.ts`, and `RequestAtom.ts` own both `serialize` and
+`deserialize`; `PeerConnection.handleMessage` and
+`StorageManager.restore` dispatch off the type byte (`parseHeader`)
+to the matching serializer. `Packet<T>` / `composePacket` /
+`composeUnsignedPacket` / `parsePacket` are gone, along with the
+unused `Delivery` and `PeerInfo` packet types. Open work:
 
-- **Migrate Signal / Request / Delivery / PeerInfo onto Atom.** Each gets a `JsonIngestor` instance; `AtomType` gains a variant per logical kind. Once done, replace `parsePacket<T>` paths in `PeerConnection.handleMessage` and `StorageManager.restore` with a unified ingestor registry that dispatches off the type byte.
-- **Atom transit fields.** Add `fromConnections: PeerConnection[]` (reverse-path; index 0 = first sender) and `toConnections: Set<PeerConnection>` to `AtomBase`. This replaces today's `RoutingModule.receivedFirst` and `DeliveryTracker` with the single substrate the legacy2 design used.
-- **Hash-addressed reverse-path signaling.** Add `replyTo: Hash` to a future `SignalAtom`; `NetworkBridge.handleSignalMessage` forwards by looking up `record.fromConnections[0]` for the addressed packet hash instead of broadcasting to all peers except the sender. Signal packets hop "backward" along the path the addressed packet originally took.
+- **Atom transit fields.** Add `fromConnections: PeerConnection[]` (reverse-path; index 0 = first sender) and `toConnections: Set<PeerConnection>` to `AtomBase`. This replaces today's `RoutingModule.receivedFirst` and `DeliveryTracker.markSent` with the single substrate the legacy2 design used. Implicit delivery acknowledgement (a peer sending us a hash they could only know via us) replaces the deleted `Delivery` packet.
+- **Hash-addressed reverse-path signaling.** Add `replyTo: Hash` to `SignalAtom`; `NetworkBridge.handleSignalMessage` forwards by looking up `record.fromConnections[0]` for the addressed packet hash instead of broadcasting to all peers except the sender. Signal packets hop "backward" along the path the addressed packet originally took.
 - **Unified bandwidth-balanced sender.** Today gossip → routing → NetworkBridge sends blocks immediately. The legacy2 `FactEmitter` pattern (random-sampler weighted by `value/(size + overhead)`) lets every atom kind compete in one pipeline. Move outbound packet selection there; gossip becomes a `value` provider.
-- **`IndexAtom` for cheap announcements.** Mirrors legacy2's `HashInfo`: send the hash of an atom we have, peer sends a `Request` if it wants the body. Lets the unified pipeline pick between full body and index based on bandwidth budget.
-- **Wire ingestors into PeerConnection / StorageManager dispatch.** `PeerConnection.handleMessage` and `StorageManager.restore` still parse via `parsePacket` then call `createBlockFromPacket`. They can dispatch directly through `jsonSignedBlockIngestor` / `jsonUnsignedBlockIngestor` exported from `Block.ts`, deleting the manual block-construction branch.
+- **`IndexAtom` for cheap announcements.** Mirrors legacy2's `HashInfo`: send the hash of an atom we have, peer sends a `RequestAtom` if it wants the body. Lets the unified pipeline pick between full body and index based on bandwidth budget. `RequestAtom` already exists but has no live producer -- this is its first real consumer.
+- **`PeerInfoAtom` (return when needed).** The old `PeerInfo` packet type was dead and got deleted. Reintroduce as a proper Atom subtype if/when contract-interest routing (TODO option 4 under "Request Routing") needs peers to advertise which contracts they can execute.
 
 ## Application Layer
 

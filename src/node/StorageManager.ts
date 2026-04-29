@@ -1,7 +1,6 @@
-import { Block, BlockPayload, createBlockFromPacket } from '../core/Block.ts';
+import { Block, parseBlockPacket } from '../core/Block.ts';
 import { AtomSource } from '../core/Atom.ts';
 import { Hash } from '../util/Hash.ts';
-import { isSigned, PacketType, parsePacket, recoverPacketSigner } from '../core/Packet.ts';
 
 /**
  * Storage plugin: persists raw packet bytes keyed by block hash hex.
@@ -39,21 +38,8 @@ export class StorageManager {
     const entries = await this.storage.loadAll();
     let restored = 0;
     for (const entry of entries) {
-      const packet = parsePacket<BlockPayload>(entry.data);
-      if (!packet) continue;
-      if (
-        packet.type !== PacketType.JsonSignedBlock &&
-        packet.type !== PacketType.JsonUnsignedBlock
-      ) continue;
-      const block = createBlockFromPacket(
-        packet.payload,
-        packet.raw,
-        packet.hash,
-        packet.type,
-        AtomSource.Storage,
-        packet.signature,
-        isSigned(packet.type) ? recoverPacketSigner(packet) : undefined,
-      );
+      const block = parseBlockPacket(entry.data, AtomSource.Storage);
+      if (!block) continue;
       this.processBlock(block, entry.data);
       restored++;
     }

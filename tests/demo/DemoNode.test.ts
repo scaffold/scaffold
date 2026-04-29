@@ -3,9 +3,8 @@ import { DemoNode } from '../../src/demo/DemoNode.ts';
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
 import { BlockSpec } from '../../src/core/BlockCreationModule.ts';
-import { BlockPayload } from '../../src/core/Block.ts';
-import { composeBlockPacket } from '../../src/core/Block.ts';
-import { parsePacket } from '../../src/core/Packet.ts';
+import { composeBlockPacket, parseBlockPacket } from '../../src/core/Block.ts';
+import { AtomSource } from '../../src/core/Atom.ts';
 
 Deno.test('DemoNode: publish valid status update', () => {
   const node = new DemoNode('eagle');
@@ -24,10 +23,10 @@ Deno.test('DemoNode: two nodes — valid status propagates via method call', () 
   const chain = nodeA.getCanonicalChain();
   const latestBlock = chain[chain.length - 1];
 
-  const packet = parsePacket<BlockPayload>(latestBlock.raw);
-  assert(packet, 'Packet should parse');
+  const ingested = parseBlockPacket(latestBlock.raw, AtomSource.Remote);
+  assert(ingested, 'Packet should parse');
 
-  nodeB.receivePacket(packet!, 'nodeA');
+  nodeB.receiveBlock(ingested!, 'nodeA');
 
   assertEquals(nodeB.statusIndex.getStatus('eagle'), 'Eagle says hi');
 });
@@ -61,11 +60,11 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
 
   const blueprint = nodeA.blockCreation.buildBlock(spec);
   const block = composeBlockPacket(blueprint, eagle.privateKey); // signed by eagle, not badger!
-  const packet = parsePacket<BlockPayload>(block.raw)!;
+  const ingested = parseBlockPacket(block.raw, AtomSource.Remote)!;
 
   // nodeB should reject this
   const beforeTip = nodeB.tip.hash.toPrimitive();
-  nodeB.receivePacket(packet, 'nodeA');
+  nodeB.receiveBlock(ingested, 'nodeA');
   // Tip should not have changed (block rejected)
   assertEquals(nodeB.tip.hash.toPrimitive(), beforeTip);
   // Badger's status should not be updated
@@ -98,7 +97,7 @@ Deno.test('DemoNode: multiple updates by same identity chain correctly', () => {
   assertEquals(node.getCanonicalChain().length, 4);
 });
 
-Deno.test('DemoNode: receivePacket recovers signer so contract verification can run', async () => {
+Deno.test('DemoNode: receiveBlock recovers signer so contract verification can run', async () => {
   // Status contract is its own check; SIGNATURE_CONTRACT is what would be
   // gated by block.signer in the auto-registered contract registry. Here
   // we verify the ingest path actually populates block.signer from the
@@ -110,9 +109,9 @@ Deno.test('DemoNode: receivePacket recovers signer so contract verification can 
 
   const chain = nodeA.getCanonicalChain();
   const lastBlock = chain[chain.length - 1];
-  const packet = parsePacket<BlockPayload>(lastBlock.raw)!;
+  const wireBlock = parseBlockPacket(lastBlock.raw, AtomSource.Remote)!;
 
-  nodeB.receivePacket(packet, 'nodeA');
+  nodeB.receiveBlock(wireBlock, 'nodeA');
   const ingested = nodeB.store.get(lastBlock.hash);
   assert(ingested, 'Block should have been ingested');
   assert(ingested!.signer !== undefined, 'Ingested block must have signer recovered');
@@ -166,9 +165,9 @@ Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject',
 
   const blueprint = eagleNode.blockCreation.buildBlock(spec);
   const block = composeBlockPacket(blueprint, eagle.privateKey);
-  const packet = parsePacket<BlockPayload>(block.raw)!;
+  const ingested = parseBlockPacket(block.raw, AtomSource.Remote)!;
 
   // badgerNode should reject this impersonation
-  badgerNode.receivePacket(packet, 'eagle');
+  badgerNode.receiveBlock(ingested, 'eagle');
   assert(!badgerNode.store.has(block.hash));
 });

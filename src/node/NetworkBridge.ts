@@ -12,6 +12,7 @@ import { RoutingService } from './RoutingService.ts';
 import { BlockAwareness, PushAction } from './RoutingModule.ts';
 import { DeliveryTracker } from './DeliveryTracker.ts';
 import { SignalEnvelope } from './SignalingService.ts';
+import { SignalAtom } from '../core/SignalAtom.ts';
 import { TransportPlugin } from '../interfaces/transport.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
@@ -154,9 +155,8 @@ export class NetworkBridge {
     this.routing.addPeer(peer.peerId, peer.peerId, new SetAwareness());
     for (const cb of this.peerConnectedListeners) cb(peer.peerId);
 
-    peer.onRequest((data) => {
-      for (const hashHex of data.hashes) {
-        const hash = Hash.fromHex(hashHex);
+    peer.onRequest((atom) => {
+      for (const hash of atom.hashes) {
         const block = this.store.get(hash);
         if (block) {
           peer.sendBlock(block.raw);
@@ -164,16 +164,8 @@ export class NetworkBridge {
       }
     });
 
-    peer.onDelivery((data) => {
-      if (data.delivered) {
-        const hash = Hash.fromHex(data.hash);
-        this.delivery.markDelivered(hash, peer.peerId);
-        this.routing.reportDelivery(hash, peer.peerId, true);
-      }
-    });
-
-    peer.onSignal((data) => {
-      this.handleSignalMessage(data, peer.peerId);
+    peer.onSignal((atom) => {
+      this.handleSignalMessage(atom, peer.peerId);
     });
   }
 
@@ -183,18 +175,15 @@ export class NetworkBridge {
     for (const cb of this.peerDisconnectedListeners) cb(peerId);
   }
 
-  private handleSignalMessage(
-    data: { to: string; from: string; payload: unknown },
-    senderPeerId: string,
-  ): void {
-    if (this.selfId && data.to === this.selfId) {
+  private handleSignalMessage(atom: SignalAtom, senderPeerId: string): void {
+    if (this.selfId && atom.to === this.selfId) {
       // Signal is for us -- deliver to transport manager's signaling
-      void this.transport.recvSignalEnvelope(data.payload as SignalEnvelope);
+      void this.transport.recvSignalEnvelope(atom.payload as SignalEnvelope);
     } else {
       // Forward to all connected peers except the sender
       for (const [peerId, peer] of this.transport.peers) {
         if (peerId !== senderPeerId) {
-          peer.sendSignal(data.to, data.from, data.payload);
+          peer.sendSignal(atom.to, atom.from, atom.payload);
         }
       }
     }

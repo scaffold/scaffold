@@ -11,11 +11,9 @@
 import { secp } from './util/secp.ts';
 import { Hash } from './util/Hash.ts';
 import { hex2bin } from './util/hex.ts';
-import { Block, composeGenesisPacket, createBlockFromPacket } from './core/Block.ts';
+import { Block, composeGenesisPacket, parseBlockPacket } from './core/Block.ts';
 import { AtomSource } from './core/Atom.ts';
 import { makeSignatureOutput } from './contracts/SignatureContract.ts';
-import { BlockPayload } from './core/Block.ts';
-import { PacketType, parsePacket } from './core/Packet.ts';
 
 /** Well-known private key: first 32 bytes of Hash.digest('scaffold:testnet'). */
 export const WELL_KNOWN_PRIVATE_KEY: Uint8Array = Hash.digest('scaffold:testnet').toBytes();
@@ -31,18 +29,10 @@ let GENESIS_PACKET_HEX: string =
 /** Get the well-known genesis block. Computes from outputs if hex is empty. */
 export function getGenesisBlock(): Block {
   if (GENESIS_PACKET_HEX) {
-    const raw = hex2bin(GENESIS_PACKET_HEX);
-    const packet = parsePacket<BlockPayload>(raw);
-    if (!packet) throw new Error('Failed to parse genesis packet');
-    return createBlockFromPacket(
-      packet.payload,
-      packet.raw,
-      packet.hash,
-      PacketType.JsonUnsignedBlock,
-      AtomSource.Local,
-    );
+    const block = parseBlockPacket(hex2bin(GENESIS_PACKET_HEX), AtomSource.Local);
+    if (!block) throw new Error('Failed to parse genesis packet');
+    return block;
   }
-  // Compute fresh
   return computeGenesisBlock();
 }
 

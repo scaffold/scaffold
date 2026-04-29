@@ -1,5 +1,5 @@
-import { BlockPayload } from '../core/Block.ts';
-import { parsePacket } from '../core/Packet.ts';
+import { parseBlockPacket } from '../core/Block.ts';
+import { AtomSource } from '../core/Atom.ts';
 import { DemoNode } from './DemoNode.ts';
 
 /**
@@ -76,10 +76,10 @@ function handleMessage(node: DemoNode, peerId: string, data: unknown): void {
       return; // Ignore non-binary messages
     }
 
-    const packet = parsePacket<BlockPayload>(raw);
-    if (!packet) return;
+    const block = parseBlockPacket(raw, AtomSource.Remote);
+    if (!block) return;
 
-    node.receivePacket(packet, peerId);
+    node.receiveBlock(block, peerId);
   } catch {
     // Ignore malformed messages
   }

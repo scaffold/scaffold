@@ -1,27 +1,25 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 
-/** Per-peer delivery state for a single block. */
-type DeliveryState = 'sent' | 'delivered';
-
 /**
- * Tracks which blocks have been delivered to which peers.
+ * Tracks which blocks have been sent to which peers, used by the gossip
+ * layer to avoid re-sending blocks a peer already received from us.
  *
- * Used by the gossip layer to avoid re-sending blocks a peer already
- * has.  Each block is mapped to a set of (peerId -> state) entries
- * where state progresses from 'sent' to 'delivered' once the remote
- * peer acknowledges receipt.
+ * The current substrate is one-way: we mark on send, dedup on subsequent
+ * pushes. Inbound delivery acks were removed when the `Delivery` packet
+ * type was deleted; the future atom-transit-fields refactor reintroduces
+ * acknowledgement implicitly (a peer sending us a hash they could only
+ * know via us is its own ack).
  */
 export class DeliveryTracker {
-  private readonly tracking = new Map<HashPrimitive, Map<string, DeliveryState>>();
+  private readonly tracking = new Map<HashPrimitive, Set<string>>();
 
   // ---- Helpers -----------------------------------------------------
 
-  /** Get or create the peer-state map for a given block hash. */
-  private getOrCreate(hash: Hash): Map<string, DeliveryState> {
+  private getOrCreate(hash: Hash): Set<string> {
     const key = hash.toPrimitive();
     let peers = this.tracking.get(key);
     if (!peers) {
-      peers = new Map();
+      peers = new Set();
       this.tracking.set(key, peers);
     }
     return peers;
@@ -31,40 +29,17 @@ export class DeliveryTracker {
 
   /** Record that a block was sent to a peer. */
   markSent(hash: Hash, peerId: string): void {
-    const peers = this.getOrCreate(hash);
-    // Only set to 'sent' if we have not already recorded a state.
-    // Once delivered, we do not regress to sent.
-    if (!peers.has(peerId)) {
-      peers.set(peerId, 'sent');
-    }
+    this.getOrCreate(hash).add(peerId);
   }
 
-  /** Record delivery confirmation from a peer. */
-  markDelivered(hash: Hash, peerId: string): void {
-    const peers = this.getOrCreate(hash);
-    peers.set(peerId, 'delivered');
-  }
-
-  /** Check if a block was already sent to a peer (sent or delivered). */
+  /** Check if a block was already sent to a peer. */
   wasSent(hash: Hash, peerId: string): boolean {
-    const key = hash.toPrimitive();
-    const peers = this.tracking.get(key);
-    if (!peers) return false;
-    return peers.has(peerId);
-  }
-
-  /** Check if delivery was confirmed by the peer. */
-  wasDelivered(hash: Hash, peerId: string): boolean {
-    const key = hash.toPrimitive();
-    const peers = this.tracking.get(key);
-    if (!peers) return false;
-    return peers.get(peerId) === 'delivered';
+    return this.tracking.get(hash.toPrimitive())?.has(peerId) ?? false;
   }
 
   /** Get peer IDs (from allPeerIds) that have NOT been sent this block. */
   getUnsent(hash: Hash, allPeerIds: string[]): string[] {
-    const key = hash.toPrimitive();
-    const peers = this.tracking.get(key);
+    const peers = this.tracking.get(hash.toPrimitive());
     if (!peers) return [...allPeerIds];
     return allPeerIds.filter((id) => !peers.has(id));
   }

@@ -16,6 +16,7 @@ export {
   createBlockFromPacket,
   createGenesisBlock,
   getRefOutputs,
+  parseBlockPacket,
   RECORD_CONTRACT,
 } from './core/Block.ts';
 export {
@@ -27,12 +28,13 @@ export {
 export type { BlockPayload } from './core/Block.ts';
 export {
   PacketType,
-  parsePacket,
+  parseHeader,
   recoverPacketSigner,
   verifyPacketSignature,
 } from './core/Packet.ts';
-export type { Packet } from './core/Packet.ts';
 export { AtomSource, AtomType } from './core/Atom.ts';
 export type { Atom, AtomBase } from './core/Atom.ts';
+export type { SignalAtom, SignalPayload } from './core/SignalAtom.ts';
+export type { RequestAtom, RequestPayload } from './core/RequestAtom.ts';
 export type { BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';

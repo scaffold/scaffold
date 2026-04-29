@@ -5,15 +5,14 @@ import {
   AtomSource,
   AtomType,
   Block,
-  BlockPayload,
   composeBlockPacket,
   composeGenesisPacket,
-  createBlockFromPacket,
   createGenesisBlock,
+  parseBlockPacket,
   SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import { PacketType, parsePacket, recoverPacketSigner } from '../src/core/Packet.ts';
+import { PacketType } from '../src/core/Packet.ts';
 import { signatureContract } from '../src/contracts/SignatureContract.ts';
 import { type ContractEnv } from '../src/core/ContractEnv.ts';
 import { Scaffold } from '../src/Scaffold.ts';
@@ -150,8 +149,8 @@ Deno.test('SignatureContract: ingest path recovers signer from wire packet', asy
   node.receiveBlock(genesis, null);
 
   // Compose a signed packet, then simulate wire transit by parsing the
-  // raw bytes and reconstructing the block via createBlockFromPacket --
-  // mirroring what an ingest path (e.g. DemoNode.receivePacket) does.
+  // raw bytes back into a Block -- mirroring what an ingest path
+  // (e.g. PeerConnection.handleMessage) does.
   const composed = composeBlockPacket(
     {
       anchor: genesis.hash,
@@ -165,24 +164,12 @@ Deno.test('SignatureContract: ingest path recovers signer from wire packet', asy
     privateKeyA,
   );
 
-  const parsed = parsePacket<BlockPayload>(composed.raw);
-  assert(parsed !== null);
-  const recoveredSigner = recoverPacketSigner(parsed!);
-  assert(recoveredSigner !== undefined, 'Signer should be recoverable from packet');
+  const ingestedBlock = parseBlockPacket(composed.raw, AtomSource.Remote);
+  assert(ingestedBlock !== null);
+  assert(ingestedBlock!.signer !== undefined, 'Signer should be recoverable from packet');
 
-  const ingestedBlock = createBlockFromPacket(
-    parsed!.payload,
-    parsed!.raw,
-    parsed!.hash,
-    PacketType.JsonSignedBlock,
-    AtomSource.Remote,
-    parsed!.signature,
-    recoveredSigner,
-  );
-  assertEquals(ingestedBlock.signer, recoveredSigner);
-
-  node.receiveBlock(ingestedBlock, 'peerA');
-  const result = await node.execution.verifyBlock(ingestedBlock.hash);
+  node.receiveBlock(ingestedBlock!, 'peerA');
+  const result = await node.execution.verifyBlock(ingestedBlock!.hash);
   assert(result.accepted, 'Ingested signed block should pass signature contract');
 });
 
@@ -207,16 +194,7 @@ Deno.test('SignatureContract: ingest path rejects wrong-key signature contract',
     privateKeyB,
   );
 
-  const parsed = parsePacket<BlockPayload>(composed.raw)!;
-  const ingestedBlock = createBlockFromPacket(
-    parsed.payload,
-    parsed.raw,
-    parsed.hash,
-    PacketType.JsonSignedBlock,
-    AtomSource.Remote,
-    parsed.signature,
-    recoverPacketSigner(parsed),
-  );
+  const ingestedBlock = parseBlockPacket(composed.raw, AtomSource.Remote)!;
 
   node.receiveBlock(ingestedBlock, 'peerA');
   const result = await node.execution.verifyBlock(ingestedBlock.hash);

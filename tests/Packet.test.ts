@@ -5,16 +5,18 @@ import {
   composeBlockPacket,
   composeGenesisPacket,
   composeUnsignedBlockPacket,
+  parseBlockPacket,
 } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { deriveIdentity } from '../src/demo/Identity.ts';
 import { makeStatusOutput } from '../src/demo/StatusContract.ts';
+import { AtomSource, AtomType } from '../src/core/Atom.ts';
 import {
   HEADER_SIZE,
   isSigned,
   PACKET_MAGIC,
   PacketType,
-  parsePacket,
+  parseHeader,
   recoverPacketSigner,
   SIGNATURE_SIZE,
   verifyPacketSignature,
@@ -30,13 +32,13 @@ function makeGenesisOutputs(): Output[] {
 function makeSignedBlockPacket() {
   const eagle = deriveIdentity('eagle');
   const genesis = composeGenesisPacket(makeGenesisOutputs());
-  const blueprint = {
+  const blueprint: BlockPayload = {
     anchor: genesis.hash,
-    aggregates: [] as Hash[],
-    claims: [] as number[],
+    aggregates: [],
+    claims: [],
     outputs: [makeStatusOutput(eagle.publicKey, 'update')],
     declaredWeight: 1,
-    refs: [] as Hash[],
+    refs: [],
     timestamp: 0,
   };
   const block = composeBlockPacket(blueprint, eagle.privateKey);
@@ -56,13 +58,14 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 Deno.test('Packet: signed block compose/parse roundtrip', () => {
   const { block } = makeSignedBlockPacket();
 
-  const parsed = parsePacket<BlockPayload>(block.raw);
+  const parsed = parseBlockPacket(block.raw, AtomSource.Remote);
   assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.JsonSignedBlock);
+  assertEquals(parsed!.type, AtomType.Block);
+  assertEquals(parsed!.packetType, PacketType.JsonSignedBlock);
   assert(Hash.equals(parsed!.hash, block.hash));
-  assert(Hash.equals(parsed!.payload.anchor, block.anchor));
-  assertEquals(parsed!.payload.declaredWeight, block.declaredWeight);
-  assertEquals(parsed!.payload.outputs.length, block.outputs.length);
+  assert(Hash.equals(parsed!.anchor, block.anchor));
+  assertEquals(parsed!.declaredWeight, block.declaredWeight);
+  assertEquals(parsed!.outputs.length, block.outputs.length);
   assert(parsed!.signature !== undefined);
   assertEquals(parsed!.signature!.length, SIGNATURE_SIZE);
 });
@@ -70,33 +73,32 @@ Deno.test('Packet: signed block compose/parse roundtrip', () => {
 Deno.test('Packet: unsigned block compose/parse roundtrip', () => {
   const eagle = deriveIdentity('eagle');
   const genesis = composeGenesisPacket(makeGenesisOutputs());
-  const blueprint = {
+  const block = composeUnsignedBlockPacket({
     anchor: genesis.hash,
-    aggregates: [] as Hash[],
-    claims: [] as number[],
+    aggregates: [],
+    claims: [],
     outputs: [makeStatusOutput(eagle.publicKey, 'unsigned')],
     declaredWeight: 1,
-    refs: [] as Hash[],
+    refs: [],
     timestamp: 0,
-  };
-  const block = composeUnsignedBlockPacket(blueprint);
+  });
 
-  const parsed = parsePacket<BlockPayload>(block.raw);
+  const parsed = parseBlockPacket(block.raw, AtomSource.Remote);
   assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.JsonUnsignedBlock);
+  assertEquals(parsed!.packetType, PacketType.JsonUnsignedBlock);
   assert(Hash.equals(parsed!.hash, block.hash));
   assert(parsed!.signature === undefined);
-  assert(Hash.equals(parsed!.payload.anchor, block.anchor));
+  assert(Hash.equals(parsed!.anchor, block.anchor));
 });
 
 Deno.test('Packet: genesis compose/parse roundtrip', () => {
   const block = composeGenesisPacket(makeGenesisOutputs());
 
-  const parsed = parsePacket<BlockPayload>(block.raw);
+  const parsed = parseBlockPacket(block.raw, AtomSource.Remote);
   assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.JsonUnsignedBlock);
+  assertEquals(parsed!.packetType, PacketType.JsonUnsignedBlock);
   assert(Hash.equals(parsed!.hash, block.hash));
-  assertEquals(parsed!.payload.outputs.length, 1);
+  assertEquals(parsed!.outputs.length, 1);
   assertEquals(block.declaredWeight, Number.MAX_SAFE_INTEGER);
 });
 
@@ -126,7 +128,6 @@ Deno.test('Packet: hash equals Hash.digest(raw) invariant', () => {
   const recomputed = Hash.digest(packet.raw);
   assert(Hash.equals(packet.hash, recomputed));
 
-  // Also for unsigned
   const unsignedPacket = composeGenesisPacket(makeGenesisOutputs());
   const recomputed2 = Hash.digest(unsignedPacket.raw);
   assert(Hash.equals(unsignedPacket.hash, recomputed2));
@@ -136,13 +137,13 @@ Deno.test('Packet: different signers produce different hashes', () => {
   const eagle = deriveIdentity('eagle');
   const badger = deriveIdentity('badger');
   const genesis = composeGenesisPacket(makeGenesisOutputs());
-  const blueprint = {
+  const blueprint: BlockPayload = {
     anchor: genesis.hash,
-    aggregates: [] as Hash[],
-    claims: [] as number[],
+    aggregates: [],
+    claims: [],
     outputs: [makeStatusOutput(eagle.publicKey, 'same payload')],
     declaredWeight: 1,
-    refs: [] as Hash[],
+    refs: [],
     timestamp: 0,
   };
 
@@ -152,28 +153,27 @@ Deno.test('Packet: different signers produce different hashes', () => {
   assertFalse(Hash.equals(p1.hash, p2.hash));
 });
 
-Deno.test('Packet: rejects bad magic bytes', () => {
+Deno.test('parseHeader: rejects bad magic bytes', () => {
   const { block: packet } = makeSignedBlockPacket();
   const corrupted = new Uint8Array(packet.raw);
   corrupted[0] = 0; // corrupt magic
 
-  const parsed = parsePacket<BlockPayload>(corrupted);
-  assertEquals(parsed, null);
+  assertEquals(parseHeader(corrupted), null);
+  assertEquals(parseBlockPacket(corrupted, AtomSource.Remote), null);
 });
 
-Deno.test('Packet: rejects truncated data', () => {
+Deno.test('parseHeader: rejects truncated data', () => {
   const { block: packet } = makeSignedBlockPacket();
-  // Truncate to just header
   const truncated = packet.raw.subarray(0, HEADER_SIZE);
 
-  const parsed = parsePacket<BlockPayload>(truncated);
-  assertEquals(parsed, null);
+  // Header parse succeeds (magic+type ok); block parse fails (sig truncated).
+  assert(parseHeader(truncated) !== null);
+  assertEquals(parseBlockPacket(truncated, AtomSource.Remote), null);
 });
 
-Deno.test('Packet: rejects unknown type', () => {
+Deno.test('parseHeader: rejects unknown type', () => {
   const raw = new Uint8Array([PACKET_MAGIC[0], PACKET_MAGIC[1], PACKET_MAGIC[2], 255]);
-  const parsed = parsePacket<BlockPayload>(raw);
-  assertEquals(parsed, null);
+  assertEquals(parseHeader(raw), null);
 });
 
 Deno.test('Packet: isSigned returns correct values', () => {

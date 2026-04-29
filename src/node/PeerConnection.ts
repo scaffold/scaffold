@@ -1,34 +1,13 @@
-import { Block, BlockPayload, createBlockFromPacket } from '../core/Block.ts';
+import { Block, parseBlockPacket } from '../core/Block.ts';
 import { AtomSource } from '../core/Atom.ts';
 import { Hash } from '../util/Hash.ts';
-import {
-  composeUnsignedPacket,
-  PacketType,
-  parsePacket,
-  recoverPacketSigner,
-} from '../core/Packet.ts';
+import { PacketType, parseHeader } from '../core/Packet.ts';
+import { jsonSignalSerializer, SignalAtom, SignalPayload } from '../core/SignalAtom.ts';
+import { jsonRequestSerializer, RequestAtom } from '../core/RequestAtom.ts';
 
-// -- Wire payload shapes ---------------------------------------------
-
-export interface SignalPayload {
-  to: string;
-  from: string;
-  payload: unknown;
-}
-
-export interface RequestPayload {
-  hashes: string[];
-}
-
-export interface DeliveryPayload {
-  hash: string;
-  delivered: boolean;
-}
-
-export interface PeerInfoPayload {
-  peerId: string;
-  contracts: string[];
-}
+// Re-export SignalPayload for legacy callers; new code should consume
+// SignalAtom directly.
+export type { SignalPayload };
 
 // -- Transport interface ----------------------------------------------
 
@@ -66,10 +45,8 @@ export class PeerConnection {
   private readonly transport: TransportConnection;
   private readonly onBlockReceived: BlockReceivedHandler;
 
-  private signalHandler: ((data: SignalPayload) => void) | null = null;
-  private requestHandler: ((data: RequestPayload) => void) | null = null;
-  private deliveryHandler: ((data: DeliveryPayload) => void) | null = null;
-  private peerInfoHandler: ((data: PeerInfoPayload) => void) | null = null;
+  private signalHandler: ((atom: SignalAtom) => void) | null = null;
+  private requestHandler: ((atom: RequestAtom) => void) | null = null;
   private closeHandler: (() => void) | null = null;
 
   private closed = false;
@@ -105,42 +82,31 @@ export class PeerConnection {
 
   /** Send a signal message (for WebRTC signaling). */
   sendSignal(to: string, from: string, payload: unknown): void {
-    this.sendControl(PacketType.Signal, { to, from, payload });
+    if (this.closed) return;
+    const atom = jsonSignalSerializer.serialize({ to, from, payload }, AtomSource.Local);
+    if (!atom) return;
+    this.transport.send(atom.raw);
   }
 
   /** Request specific blocks by hash. */
   requestBlocks(hashes: Hash[]): void {
-    this.sendControl(PacketType.Request, {
-      hashes: hashes.map((h) => h.toHex()),
-    });
-  }
-
-  /** Report delivery status. */
-  sendDelivery(hash: Hash, delivered: boolean): void {
-    this.sendControl(PacketType.Delivery, { hash: hash.toHex(), delivered });
-  }
-
-  /** Send peer info. */
-  sendPeerInfo(peerId: string, contracts: string[]): void {
-    this.sendControl(PacketType.PeerInfo, { peerId, contracts });
+    if (this.closed) return;
+    const atom = jsonRequestSerializer.serialize(
+      { hashes: hashes.map((h) => h.toHex()) },
+      AtomSource.Local,
+    );
+    if (!atom) return;
+    this.transport.send(atom.raw);
   }
 
   // -- Event handler registration -------------------------------------
 
-  onSignal(handler: (data: SignalPayload) => void): void {
+  onSignal(handler: (atom: SignalAtom) => void): void {
     this.signalHandler = handler;
   }
 
-  onRequest(handler: (data: RequestPayload) => void): void {
+  onRequest(handler: (atom: RequestAtom) => void): void {
     this.requestHandler = handler;
-  }
-
-  onDelivery(handler: (data: DeliveryPayload) => void): void {
-    this.deliveryHandler = handler;
-  }
-
-  onPeerInfo(handler: (data: PeerInfoPayload) => void): void {
-    this.peerInfoHandler = handler;
   }
 
   onClose(handler: () => void): void {
@@ -161,60 +127,36 @@ export class PeerConnection {
 
   // -- Internal -------------------------------------------------------
 
-  private sendControl<T>(type: PacketType, payload: T): void {
-    if (this.closed) return;
-    const packet = composeUnsignedPacket(type, payload);
-    this.transport.send(packet.raw);
-  }
-
   private handleMessage(data: Uint8Array): void {
     if (this.closed) return;
 
-    const packet = parsePacket<unknown>(data);
-    if (!packet) {
+    const header = parseHeader(data);
+    if (!header) {
       // Silently drop unparseable bytes -- not a Scaffold packet.
       return;
     }
 
-    switch (packet.type) {
-      case PacketType.JsonSignedBlock: {
-        // Recover signer from the packet signature so the receiver can
-        // never be tricked into trusting a payload-encoded signer.
-        const block = createBlockFromPacket(
-          packet.payload as BlockPayload,
-          packet.raw,
-          packet.hash,
-          PacketType.JsonSignedBlock,
-          AtomSource.Remote,
-          packet.signature,
-          recoverPacketSigner(packet),
-        );
-        this.onBlockReceived(block, this.peerId);
-        break;
-      }
+    switch (header.type) {
+      case PacketType.JsonSignedBlock:
       case PacketType.JsonUnsignedBlock: {
-        const block = createBlockFromPacket(
-          packet.payload as BlockPayload,
-          packet.raw,
-          packet.hash,
-          PacketType.JsonUnsignedBlock,
-          AtomSource.Remote,
-        );
-        this.onBlockReceived(block, this.peerId);
+        const block = parseBlockPacket(data, AtomSource.Remote);
+        if (block) this.onBlockReceived(block, this.peerId);
         break;
       }
-      case PacketType.Signal:
-        this.signalHandler?.(packet.payload as SignalPayload);
+      case PacketType.JsonSignal: {
+        const atom = jsonSignalSerializer.deserialize(data, AtomSource.Remote) as
+          | SignalAtom
+          | null;
+        if (atom) this.signalHandler?.(atom);
         break;
-      case PacketType.Request:
-        this.requestHandler?.(packet.payload as RequestPayload);
+      }
+      case PacketType.JsonRequest: {
+        const atom = jsonRequestSerializer.deserialize(data, AtomSource.Remote) as
+          | RequestAtom
+          | null;
+        if (atom) this.requestHandler?.(atom);
         break;
-      case PacketType.Delivery:
-        this.deliveryHandler?.(packet.payload as DeliveryPayload);
-        break;
-      case PacketType.PeerInfo:
-        this.peerInfoHandler?.(packet.payload as PeerInfoPayload);
-        break;
+      }
     }
   }
 }

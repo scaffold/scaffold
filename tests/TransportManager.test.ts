@@ -1,7 +1,7 @@
 import { assert, assertEquals, assertFalse, assertRejects, assertThrows } from '@std/assert';
-import { Block } from '../src/core/Block.ts';
+import { Block, composeUnsignedBlockPacket } from '../src/core/Block.ts';
+import { ZERO_HASH } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
-import { composeUnsignedPacket, PacketType } from '../src/core/Packet.ts';
 import { TransportManager } from '../src/node/TransportManager.ts';
 import { SignalEnvelope } from '../src/node/SignalingService.ts';
 import { MockTransportPlugin } from './helpers/MockTransportPlugin.ts';
@@ -153,7 +153,15 @@ Deno.test('TransportManager: sendBlock broadcasts raw bytes to all peers', () =>
 
   // We don't need a real signed block here -- TransportManager just
   // forwards bytes. Use an unsigned-block packet as a stand-in.
-  const raw = composeUnsignedPacket(PacketType.JsonUnsignedBlock, { hash: 'abc' }).raw;
+  const raw = composeUnsignedBlockPacket({
+    anchor: ZERO_HASH,
+    aggregates: [],
+    claims: [],
+    outputs: [],
+    declaredWeight: 1,
+    refs: [],
+    timestamp: 0,
+  }).raw;
   manager.sendBlock(raw);
 
   assertEquals(p1.sent.length, 1);
