@@ -116,7 +116,12 @@ Deno.test('in-flight blocks are not re-verified', () => {
 });
 
 Deno.test('maxConcurrent limit is respected', () => {
-  const sampling = setupSampling(block('A', 1000), block('B', 900), block('C', 800), block('D', 700));
+  const sampling = setupSampling(
+    block('A', 1000),
+    block('B', 900),
+    block('C', 800),
+    block('D', 700),
+  );
   const strategy = new SamplingStrategy({ maxConcurrent: 2 });
 
   const event = makeEvent(sampling, h('A'), [

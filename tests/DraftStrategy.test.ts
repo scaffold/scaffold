@@ -1,6 +1,7 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block, BlockSource, BlockStore, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block, BlockStore, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
@@ -23,7 +24,10 @@ function makeBlock(hash: Hash, anchor: Hash, outputs: Block['outputs'] = []): Bl
     refs: [],
     timestamp: Date.now(),
     receivedAt: Date.now(),
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 

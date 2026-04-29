@@ -9,6 +9,9 @@ export { Hash, type HashPrimitive, ZERO_HASH } from './util/Hash.ts';
 export type { Block } from './core/Block.ts';
 export {
   BlockStore,
+  composeBlockPacket,
+  composeGenesisPacket,
+  composeUnsignedBlockPacket,
   createBlock,
   createBlockFromPacket,
   createGenesisBlock,
@@ -23,14 +26,13 @@ export {
 } from './contracts/RecordContract.ts';
 export type { BlockPayload } from './core/Block.ts';
 export {
-  composeBlockPacket,
-  composeGenesisPacket,
-  composeUnsignedBlockPacket,
   PacketType,
   parsePacket,
   recoverPacketSigner,
   verifyPacketSignature,
 } from './core/Packet.ts';
 export type { Packet } from './core/Packet.ts';
+export { AtomSource, AtomType } from './core/Atom.ts';
+export type { Atom, AtomBase } from './core/Atom.ts';
 export type { BlockBlueprint, BlockSpec, Output, Verifier } from './core/BlockCreationModule.ts';
 export type { BlockReceivedResult } from './core/Coordinator.ts';

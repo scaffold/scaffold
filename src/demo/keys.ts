@@ -1,8 +1,7 @@
 import { Hash } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
-import { composeGenesisPacket } from '../core/Packet.ts';
+import { Block, composeGenesisPacket } from '../core/Block.ts';
 import { makeSignatureOutput } from '../contracts/SignatureContract.ts';
-import { Block } from '../core/Block.ts';
 
 export interface DemoKey {
   privateKey: Uint8Array;
@@ -29,5 +28,5 @@ export function createDemoGenesis(): Block {
     makeSignatureOutput(DEMO_BOB.publicKey, 1_000_000),
     makeSignatureOutput(DEMO_CHARLIE.publicKey, 1_000_000),
   ];
-  return composeGenesisPacket(outputs).block;
+  return composeGenesisPacket(outputs);
 }

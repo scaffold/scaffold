@@ -1,22 +1,23 @@
-import { Hash, HashPrimitive } from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import {
   Block,
   BlockPayload,
-  BlockSource,
   BlockStore,
+  composeBlockPacket,
+  composeGenesisPacket,
   createBlockFromPacket,
 } from '../core/Block.ts';
+import { AtomSource } from '../core/Atom.ts';
 import { BlockSpec } from '../core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { BlockAwareness } from '../node/RoutingModule.ts';
-import { composeGenesisPacket, recoverPacketSigner } from '../core/Packet.ts';
+import { Packet, PacketType, recoverPacketSigner } from '../core/Packet.ts';
 import { Scaffold } from '../Scaffold.ts';
 
 import { AnimalName, ANIMALS, deriveIdentity, Identity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
-import { composeBlockPacket, Packet, parsePacket } from '../core/Packet.ts';
 import { validateBlockPacket } from './ContractValidator.ts';
 import { StatusIndex } from './StatusIndex.ts';
 
@@ -37,7 +38,6 @@ export class DemoNode {
   readonly identity: Identity;
   readonly scaffold: Scaffold;
   readonly statusIndex: StatusIndex;
-  readonly packetStore = new Map<HashPrimitive, Uint8Array>();
   readonly peers = new Map<string, WebSocket>();
 
   tip: Block;
@@ -50,7 +50,7 @@ export class DemoNode {
     const genesisOutputs = ANIMALS.map((name) =>
       makeStatusOutput(deriveIdentity(name).publicKey, '')
     );
-    const { block: genesisBlock } = composeGenesisPacket(genesisOutputs);
+    const genesisBlock = composeGenesisPacket(genesisOutputs);
     this.scaffold = new Scaffold({ genesis: genesisBlock });
     this.tip = this.scaffold.context.store.get(this.scaffold.context.genesisHash)!;
 
@@ -79,25 +79,28 @@ export class DemoNode {
     // Skip if already known
     if (this.store.has(packet.hash)) return;
 
-    // Validate
+    // Build the Block from the wire packet first; signer is recovered
+    // cryptographically rather than trusted from any wire field.
+    const packetType = packet.signature ? PacketType.JsonSignedBlock : PacketType.JsonUnsignedBlock;
+    const block = createBlockFromPacket(
+      packet.payload,
+      packet.raw,
+      packet.hash,
+      packetType,
+      AtomSource.Remote,
+      packet.signature,
+      recoverPacketSigner(packet),
+    );
+
+    // Validate the constructed Block (signature checks etc. operate
+    // structurally on `block.raw` + `block.signature`).
     try {
-      validateBlockPacket(packet, this.store);
+      validateBlockPacket(block, this.store);
     } catch (e) {
       console.debug('Rejected invalid block from peer:', (e as Error).message);
       return;
     }
 
-    // Accept: recover signer from packet signature, store raw packet,
-    // process block through reactive layer. Signer is node-local -- we
-    // derive it from the packet's cryptographic signature rather than
-    // trusting any field on the wire payload.
-    const block = createBlockFromPacket(
-      packet.payload,
-      packet.hash,
-      BlockSource.Remote,
-      recoverPacketSigner(packet),
-    );
-    this.packetStore.set(packet.hash.toPrimitive(), packet.raw);
     this.scaffold.context.processBlock(block, fromPeer);
 
     // Update tip
@@ -147,18 +150,17 @@ export class DemoNode {
 
     // Build block through protocol stack (throws on error)
     const blueprint = this.blockCreation.buildBlock(spec);
-    const { block, packet } = composeBlockPacket(blueprint, this.identity.privateKey);
+    const block = composeBlockPacket(blueprint, this.identity.privateKey);
 
     // Send to all peers regardless of local validation
     for (const [_peerId, ws] of this.peers) {
       if (ws.readyState === WebSocket.OPEN) {
-        this.sendPacket(ws, packet.raw);
+        this.sendPacket(ws, block.raw);
       }
     }
 
-    // Validate and accept locally (throws if invalid)
-    validateBlockPacket(packet, this.store);
-    this.packetStore.set(block.hash.toPrimitive(), packet.raw);
+    // Validate locally (throws if invalid -- after we've already broadcast).
+    validateBlockPacket(block, this.store);
     this.scaffold.context.processBlock(block);
     this.updateTipFromStore();
     this.rebuildStatusIndex();
@@ -172,10 +174,7 @@ export class DemoNode {
     // Sync: send all blocks in chain order (excluding genesis, peers compute it themselves)
     const chain = this.getCanonicalChain();
     for (const block of chain.slice(1)) { // skip genesis
-      const raw = this.packetStore.get(block.hash.toPrimitive());
-      if (raw) {
-        this.sendPacket(ws, raw);
-      }
+      this.sendPacket(ws, block.raw);
     }
   }
 

@@ -1,10 +1,4 @@
-import {
-  assert,
-  assertAlmostEquals,
-  assertEquals,
-  assertGreater,
-  assertLess,
-} from '@std/assert';
+import { assert, assertAlmostEquals, assertEquals, assertGreater, assertLess } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import {
   BlockAwareness,
@@ -253,12 +247,8 @@ Deno.test('send action: different triggers per peer -> push to both', () => {
   gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
 
-  const toAlice = actions.filter((a) =>
-    a.peer === 'alice' && Hash.equals(a.block, h('new'))
-  );
-  const toBob = actions.filter((a) =>
-    a.peer === 'bob' && Hash.equals(a.block, h('new'))
-  );
+  const toAlice = actions.filter((a) => a.peer === 'alice' && Hash.equals(a.block, h('new')));
+  const toBob = actions.filter((a) => a.peer === 'bob' && Hash.equals(a.block, h('new')));
   assert(toAlice.length >= 1, 'new block should be pushed to alice');
   assert(toBob.length >= 1, 'new block should be pushed to bob');
 });
@@ -285,9 +275,7 @@ Deno.test('send action: dedup by (block, peer) keeps highest priority', () => {
   routing.blockReceived(h('new'), null);
 
   // Only one push action for alice (deduped), with the higher priority
-  const aliceActions = actions.filter((a) =>
-    a.peer === 'alice' && Hash.equals(a.block, h('new'))
-  );
+  const aliceActions = actions.filter((a) => a.peer === 'alice' && Hash.equals(a.block, h('new')));
   assertEquals(aliceActions.length, 1);
   // V2 claim history has higher amount (100 vs 10), so its priority should win
   assertEquals(aliceActions[0].verifier, V2);
@@ -308,9 +296,7 @@ Deno.test('send action: skip peer whose awareness already has block', () => {
   routing.blockReceived(h('new'), null);
 
   // Alice already has 'new', so no push
-  const aliceActions = actions.filter((a) =>
-    a.peer === 'alice' && Hash.equals(a.block, h('new'))
-  );
+  const aliceActions = actions.filter((a) => a.peer === 'alice' && Hash.equals(a.block, h('new')));
   assertEquals(aliceActions.length, 0);
 });
 

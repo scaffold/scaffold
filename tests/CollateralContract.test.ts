@@ -1,11 +1,7 @@
 import { assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
-import {
-  COLLATERAL_CONTRACT,
-  RECORD_CONTRACT,
-  SIGNATURE_CONTRACT,
-} from '../src/core/Block.ts';
+import { COLLATERAL_CONTRACT, RECORD_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import { makeRecordOutput, recordContract } from '../src/contracts/RecordContract.ts';
 import {
   type ChallengeTarget,
@@ -21,8 +17,8 @@ import {
 } from './testutil/ExecutionModuleShim.ts';
 import {
   collateralContract,
-  decayedValue,
   DECAY_CONSTANT,
+  decayedValue,
   decodeVerdict,
   encodeVerdict,
   PREIMAGE_RESULT_KEY,
@@ -671,4 +667,3 @@ Deno.test('Collateral: Mode 4 (non-canonical reclaim) emits NO verdict output', 
   assertEquals((await module.verifyBlock(claimBlock.hash)).accepted, true);
   assertEquals(readVerdictFromBlock(claimBlock), undefined);
 });
-

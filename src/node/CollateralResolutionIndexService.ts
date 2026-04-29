@@ -3,7 +3,7 @@
 // via ProtocolContext.
 
 import type { Hash } from '../util/Hash.ts';
-import { BlockStore, type Block } from '../core/Block.ts';
+import { type Block, BlockStore } from '../core/Block.ts';
 import { BlockDraft, DraftStore } from '../core/BlockDraft.ts';
 import { BlockVerificationService } from '../core/BlockVerificationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';

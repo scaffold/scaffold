@@ -10,8 +10,8 @@ Two nodes can discover each other, sync blocks, and gossip.
 
 - [x] Wire NetworkManager -> Coordinator (incoming blocks -> consensus pipeline)
 - [x] Wire gossip push actions -> NetworkManager send, respecting bandwidth budgets and immediate/deferred flags
-- [x] Register PeerConnection handlers: onSync, onRequest, onDelivery, onPeerInfo
-- [ ] Block fetching in SyncProtocol: recursive ancestor fetch, request batching, timeout/retry with peer rotation
+- [x] Register PeerConnection handlers: onRequest, onDelivery, onPeerInfo
+- [ ] Unified packet pipeline: gossip module weighs and balances every packet (blocks, signals, indexes, peer info) against per-peer bandwidth -- replaces the dropped SyncProtocol tip-exchange path
 - [x] WebRTC signaling exchanged over WebSocket bootstrap connections
 - [x] Basic peer lifecycle: connect, disconnect, reconnect, bootstrap address list
 - [ ] Integration tests: multi-node sync over WebSocket, browser-to-browser over WebRTC

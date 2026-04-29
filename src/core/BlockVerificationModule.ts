@@ -2,10 +2,7 @@
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
-import {
-  NamespacePartitionModule,
-  type OwnerContribution,
-} from './NamespacePartitionModule.ts';
+import { NamespacePartitionModule, type OwnerContribution } from './NamespacePartitionModule.ts';
 
 // -- Types ----------------------------------------------------------
 
@@ -44,7 +41,10 @@ export interface BlockVerificationProvider {
    * Dispatch contract verification for a single {block, verifier}.
    * Typically forwards to `ContractVerificationModule.verify`.
    */
-  verifyContract(blockHash: Hash, verifier: Verifier): Promise<import('./ContractHost.ts').ExecutionResult>;
+  verifyContract(
+    blockHash: Hash,
+    verifier: Verifier,
+  ): Promise<import('./ContractHost.ts').ExecutionResult>;
 
   /**
    * Look up a block's outputs for the namespace-partition check.
@@ -208,9 +208,7 @@ export class BlockVerificationModule {
     // Dedupe by (block, outputIndex). Multiple migrations can in theory
     // re-fire the same resolution; keep only the first.
     if (
-      !list.some((r) =>
-        Hash.equals(r.block, target.block) && r.outputIndex === target.outputIndex
-      )
+      !list.some((r) => Hash.equals(r.block, target.block) && r.outputIndex === target.outputIndex)
     ) {
       list.push(target);
     }
@@ -243,7 +241,10 @@ export class BlockVerificationModule {
         continue;
       }
 
-      const dispatch: { verifier: Verifier; promise: Promise<import('./ContractHost.ts').ExecutionResult> }[] = [];
+      const dispatch: {
+        verifier: Verifier;
+        promise: Promise<import('./ContractHost.ts').ExecutionResult>;
+      }[] = [];
       for (const target of targets.slice(0, claimCount)) {
         const verifier = this._provider.getVerifier(target.block, target.outputIndex);
         if (!verifier) {
@@ -254,7 +255,10 @@ export class BlockVerificationModule {
 
       // Fail-fast on first reject, but all dispatches are already in flight
       // (no cancellation today -- see TODO on cumulative budget cap).
-      const resultsByVerifier: { verifier: Verifier; result: import('./ContractHost.ts').ExecutionResult }[] = [];
+      const resultsByVerifier: {
+        verifier: Verifier;
+        result: import('./ContractHost.ts').ExecutionResult;
+      }[] = [];
       for (const { verifier, promise } of dispatch) {
         const result = await promise;
         if (!result.accepted) return result;
@@ -274,8 +278,9 @@ export class BlockVerificationModule {
         ({ verifier, result }) => ({
           runningVerifier: verifier,
           declaredNamespaces: this._provider.getOutputNamespaces(verifier.contract),
-          emittedSlots: (result as { accepted: true; emittedSlots?: import('./GeneratingEnv.ts').OutputSlot[] })
-            .emittedSlots ?? [],
+          emittedSlots:
+            (result as { accepted: true; emittedSlots?: import('./GeneratingEnv.ts').OutputSlot[] })
+              .emittedSlots ?? [],
         }),
       );
       const partition = this._partition.check(blockOutputs, contributions);

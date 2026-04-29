@@ -7,12 +7,7 @@
 
 import { assert, assertEquals } from '@std/assert';
 import { TestNetwork } from './TestNetwork.ts';
-import {
-  makeAggregationBlock,
-  makeBlock,
-  makeGenesis,
-  makeOutput,
-} from './helpers.ts';
+import { makeAggregationBlock, makeBlock, makeGenesis, makeOutput } from './helpers.ts';
 
 Deno.test('Scenario: five-node full pipeline -- genesis, create, propagate, aggregate', () => {
   const net = new TestNetwork();

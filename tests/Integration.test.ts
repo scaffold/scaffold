@@ -1,9 +1,11 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import {
   AGGREGATION_CONTRACT,
+  AtomSource,
+  AtomType,
   Block,
-  BlockSource,
   BlockStore,
   createBlock,
   createGenesisBlock,
@@ -65,7 +67,10 @@ function makeLeafBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 
@@ -146,7 +151,10 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 
   const blockB: Block = {
@@ -159,7 +167,10 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 
   node.receiveBlock(blockA, null);
@@ -193,7 +204,10 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 
   // Block B: weight 15, claims same output 0
@@ -207,7 +221,10 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 
   node.receiveBlock(blockA, null);
@@ -228,7 +245,10 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 
   const result = node.receiveBlock(childA, null);
@@ -292,7 +312,10 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
   node.receiveBlock(subtreeA, null);
 
@@ -307,7 +330,10 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
   node.receiveBlock(subtreeB, null);
 
@@ -335,7 +361,10 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 
   const result = node.receiveBlock(aggBlock, null);
@@ -472,7 +501,10 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
   node.receiveBlock(blockA, null);
 
@@ -497,7 +529,10 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     refs: [blockA.hash],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
   node.receiveBlock(blockB, null);
 

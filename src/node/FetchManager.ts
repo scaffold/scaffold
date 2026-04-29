@@ -11,7 +11,7 @@ import { BlockVerificationService } from '../core/BlockVerificationService.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import type { TrustGate, TrustStatus } from './TrustGate.ts';
 import { DefaultBuilderHost } from '../core/DefaultBuilderHost.ts';
-import { RecordingWalkerHost, type FieldNode } from '../core/RecordingWalkerHost.ts';
+import { type FieldNode, RecordingWalkerHost } from '../core/RecordingWalkerHost.ts';
 import { findRecordOutput } from '../contracts/RecordContract.ts';
 import type { Action, ReactiveLayer } from './ReactiveLayer.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
@@ -318,8 +318,7 @@ export class FetchManager {
     // verify:true: return the Promise. The handle is implicitly owned
     // by the Promise lifecycle and auto-closes on resolve/reject.
     if (promiseAdapter) {
-      const auto = (fn: () => void) =>
-        promiseAdapter!.then(fn, fn);
+      const auto = (fn: () => void) => promiseAdapter!.then(fn, fn);
       auto(() => handle.close());
       return promiseAdapter;
     }
@@ -793,4 +792,10 @@ function fieldNodeValue(n: FieldNode): unknown {
 // -- Re-exports for external consumers -----------------------------
 
 export type { Verifier };
-export { SupersededError, InvalidatedError, VerificationRejectedError, NotImplementedError, FetchAbortError };
+export {
+  FetchAbortError,
+  InvalidatedError,
+  NotImplementedError,
+  SupersededError,
+  VerificationRejectedError,
+};

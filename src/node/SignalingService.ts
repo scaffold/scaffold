@@ -73,7 +73,6 @@ interface SignalingSession {
 /** Closed sessions kept around to deduplicate in-flight duplicate envelopes. */
 const MAX_RETAINED_SESSIONS = 256;
 
-
 export interface SignalingServiceConfig {
   selfPrivateKey: Uint8Array;
   selfPublicKey: Uint8Array;

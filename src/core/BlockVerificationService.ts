@@ -40,8 +40,7 @@ export class BlockVerificationService extends BlockVerificationModule {
       verifyContract: (blockHash: Hash, verifier: Verifier) =>
         contractVerification.verify(blockHash, verifier),
       getOutputs: (blockHash: Hash) => store.get(blockHash)?.outputs,
-      getOutputNamespaces: (contractHash: Hash) =>
-        contractHost.getOutputNamespaces(contractHash),
+      getOutputNamespaces: (contractHash: Hash) => contractHost.getOutputNamespaces(contractHash),
     };
 
     super(provider);

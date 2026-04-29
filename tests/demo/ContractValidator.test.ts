@@ -8,7 +8,7 @@ import { Coordinator } from '../../src/core/Coordinator.ts';
 
 import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
-import { composeBlockPacket } from '../../src/core/Packet.ts';
+import { composeBlockPacket } from '../../src/core/Block.ts';
 import { validateBlockPacket } from '../../src/demo/ContractValidator.ts';
 import { createDemoGenesis } from '../../src/demo/DemoGenesis.ts';
 
@@ -34,7 +34,7 @@ Deno.test('ContractValidator: genesis is always valid', () => {
   const eagle = deriveIdentity('eagle');
   // Genesis is unsigned, but for this test we compose a signed packet just to have a packet
   // Genesis blocks always pass validation regardless
-  const { packet } = composeBlockPacket(
+  const packet = composeBlockPacket(
     {
       anchor: genesis.anchor,
       aggregates: genesis.aggregates,
@@ -69,7 +69,7 @@ Deno.test('ContractValidator: correct signer passes', () => {
   };
 
   const blueprint = blockCreation.buildBlock(spec);
-  const { packet } = composeBlockPacket(blueprint, eagle.privateKey);
+  const packet = composeBlockPacket(blueprint, eagle.privateKey);
 
   validateBlockPacket(packet, store); // should not throw
 });
@@ -94,7 +94,7 @@ Deno.test('ContractValidator: wrong signer (eagle signs badger output) fails', (
   };
 
   const blueprint = blockCreation.buildBlock(spec);
-  const { packet } = composeBlockPacket(blueprint, eagle.privateKey); // eagle signs badger's output!
+  const packet = composeBlockPacket(blueprint, eagle.privateKey); // eagle signs badger's output!
 
   assertThrows(
     () => validateBlockPacket(packet, store),
@@ -129,7 +129,7 @@ Deno.test('ContractValidator: block without status outputs passes without signat
 
   // Sign with any key — doesn't matter since no status outputs
   const eagle = deriveIdentity('eagle');
-  const { packet } = composeBlockPacket(blueprint, eagle.privateKey);
+  const packet = composeBlockPacket(blueprint, eagle.privateKey);
 
   validateBlockPacket(packet, store); // should not throw
 });

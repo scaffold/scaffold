@@ -1,9 +1,9 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
-import { Hash, HashPrimitive } from '../src/util/Hash.ts';
+import { Block, BlockStore, composeBlockPacket, createGenesisBlock } from '../src/core/Block.ts';
+import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
 import { bin2hex } from '../src/util/hex.ts';
-import { composeBlockPacket, composeUnsignedPacket, PacketType } from '../src/core/Packet.ts';
+import { composeUnsignedPacket, PacketType } from '../src/core/Packet.ts';
 import { NetworkBridge } from '../src/node/NetworkBridge.ts';
 import { SignalEnvelope } from '../src/node/SignalingService.ts';
 import { PushAction } from '../src/node/RoutingModule.ts';
@@ -35,7 +35,7 @@ function makeBlockPacket(
   outputs: Output[] = [makeOutput(10, 'test')],
 ): { block: Block; raw: Uint8Array } {
   const privateKey = secp.utils.randomPrivateKey();
-  const { block, packet } = composeBlockPacket(
+  const block = composeBlockPacket(
     {
       anchor: anchor.hash,
       aggregates: [],
@@ -46,7 +46,7 @@ function makeBlockPacket(
     },
     privateKey,
   );
-  return { block, raw: packet.raw };
+  return { block, raw: block.raw };
 }
 
 function generateKeyPair() {
@@ -68,26 +68,27 @@ function setupProtocol() {
 interface Harness {
   bridge: NetworkBridge;
   plugin: MockTransportPlugin;
-  packetStore: Map<HashPrimitive, Uint8Array>;
+  store: BlockStore;
   received: { block: Block; peerId: string }[];
   selfId: string;
 }
 
 function makeBridge(selfId?: string): Harness {
-  const { store, routing } = setupProtocol();
+  const { store, routing, coordinator } = setupProtocol();
   const plugin = new MockTransportPlugin();
   const keys = generateKeyPair();
   const received: { block: Block; peerId: string }[] = [];
-  const packetStore = new Map<HashPrimitive, Uint8Array>();
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
-    packetStore,
     routing,
-    processBlock: (block, peerId) => received.push({ block, peerId }),
+    processBlock: (block, peerId) => {
+      received.push({ block, peerId });
+      coordinator.blockReceived(block, peerId);
+    },
     selfId: selfId ?? bin2hex(keys.publicKey),
   });
   bridge.start();
@@ -95,7 +96,7 @@ function makeBridge(selfId?: string): Harness {
   return {
     bridge,
     plugin,
-    packetStore,
+    store,
     received,
     selfId: selfId ?? bin2hex(keys.publicKey),
   };
@@ -107,8 +108,8 @@ function controlPacket<T>(type: PacketType, payload: T): Uint8Array {
 
 // -- Tests ------------------------------------------------------------
 
-Deno.test('NetworkBridge: inbound block flows to processBlock and stashes raw bytes', () => {
-  const { bridge, plugin, packetStore, received } = makeBridge();
+Deno.test('NetworkBridge: inbound block flows to processBlock with raw bytes on the Block', () => {
+  const { bridge, plugin, received } = makeBridge();
 
   const { driver } = plugin.injectAnonymousConnection();
   const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
@@ -122,8 +123,8 @@ Deno.test('NetworkBridge: inbound block flows to processBlock and stashes raw by
   // wire field -- so it must be present and 33 bytes.
   assert(received[0].block.signer !== undefined);
   assertEquals(received[0].block.signer!.length, 33);
-  // Raw bytes were stashed for later forwarding.
-  assertEquals(packetStore.get(block.hash.toPrimitive()), raw);
+  // The Block carries its canonical wire bytes for forwarding.
+  assertEquals(received[0].block.raw, raw);
 
   void bridge.close();
 });
@@ -150,14 +151,13 @@ Deno.test('NetworkBridge: peer disconnect removes from peer map', () => {
 });
 
 Deno.test('NetworkBridge: handlePushActions sends raw packet bytes to peers', () => {
-  const { bridge, plugin, packetStore } = makeBridge();
+  const { bridge, plugin } = makeBridge();
 
   const { provider: p1 } = plugin.injectAnonymousConnection();
   const { provider: p2 } = plugin.injectAnonymousConnection();
 
   const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
   const { block, raw } = makeBlockPacket(genesis);
-  packetStore.set(block.hash.toPrimitive(), raw);
 
   const peerIds = [...bridge.peers.keys()];
   const actions: PushAction[] = [
@@ -177,14 +177,13 @@ Deno.test('NetworkBridge: handlePushActions sends raw packet bytes to peers', ()
 });
 
 Deno.test('NetworkBridge: handlePushActions skips duplicate sends', () => {
-  const { bridge, plugin, packetStore } = makeBridge();
+  const { bridge, plugin } = makeBridge();
 
   const { provider } = plugin.injectAnonymousConnection();
   const peerId = [...bridge.peers.keys()][0];
 
   const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
-  const { block, raw } = makeBlockPacket(genesis);
-  packetStore.set(block.hash.toPrimitive(), raw);
+  const { block } = makeBlockPacket(genesis);
 
   const actions: PushAction[] = [
     { block: block.hash, peer: peerId, priority: 1, immediate: true },
@@ -199,48 +198,19 @@ Deno.test('NetworkBridge: handlePushActions skips duplicate sends', () => {
   void bridge.close();
 });
 
-Deno.test('NetworkBridge: handlePushActions skips blocks not in packetStore', () => {
-  const { bridge, plugin } = makeBridge();
-
-  const { provider } = plugin.injectAnonymousConnection();
-  const peerId = [...bridge.peers.keys()][0];
-
-  const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
-  const { block } = makeBlockPacket(genesis);
-  // Intentionally NOT putting block in packetStore.
-
-  bridge.handlePushActions(
-    [{ block: block.hash, peer: peerId, priority: 1, immediate: true }],
-    block,
-  );
-
-  assertEquals(provider.sent.length, 0);
-
-  void bridge.close();
-});
-
-Deno.test('NetworkBridge: block request responds with raw packet bytes from store', () => {
+Deno.test('NetworkBridge: block request responds with raw bytes from BlockStore', () => {
   const { store, routing, coordinator } = setupProtocol();
   const plugin = new MockTransportPlugin();
   const keys = generateKeyPair();
-  const packetStore = new Map<HashPrimitive, Uint8Array>();
 
   const genesis = createGenesisBlock([makeOutput(100)]);
   coordinator.blockReceived(genesis, null);
-  // Persist some raw bytes for genesis (any bytes -- the test verifies
-  // forwarding by lookup, not signature).
-  const genesisRaw = composeUnsignedPacket(
-    PacketType.UnsignedBlock,
-    { hash: genesis.hash.toHex() },
-  ).raw;
-  packetStore.set(genesis.hash.toPrimitive(), genesisRaw);
 
   const bridge = new NetworkBridge({
     plugins: [plugin],
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
-    packetStore,
     routing,
     processBlock: () => {},
     selfId: bin2hex(keys.publicKey),
@@ -254,7 +224,7 @@ Deno.test('NetworkBridge: block request responds with raw packet bytes from stor
   }));
 
   assertEquals(provider.sent.length, 1, 'should respond with the requested raw bytes');
-  assertEquals(provider.sent[0], genesisRaw);
+  assertEquals(provider.sent[0], genesis.raw);
 
   void bridge.close();
 });
@@ -283,7 +253,6 @@ Deno.test('NetworkBridge: signal addressed to self is delivered to signaling', a
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
-    packetStore: new Map(),
     routing,
     processBlock: () => {},
     selfId,
@@ -364,7 +333,6 @@ Deno.test('NetworkBridge: stores peers by public key for authenticated connectio
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
-    packetStore: new Map(),
     routing,
     processBlock: () => {},
     selfId: bin2hex(keys.publicKey),
@@ -389,7 +357,6 @@ Deno.test('NetworkBridge: connectToPeer produces a peer keyed by remote pubkey o
     selfPrivateKey: keys.privateKey,
     selfPublicKey: keys.publicKey,
     store,
-    packetStore: new Map(),
     routing,
     processBlock: () => {},
     selfId: bin2hex(keys.publicKey),
@@ -422,7 +389,7 @@ Deno.test('NetworkBridge: signer always recovered from signature, never trusted 
   const keyBPub = secp.getPublicKey(keyB, true);
 
   const genesis = createGenesisBlock([makeOutput(100, 'genesis')]);
-  const { packet } = composeBlockPacket(
+  const packet = composeBlockPacket(
     {
       anchor: genesis.hash,
       aggregates: [],

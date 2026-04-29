@@ -1,16 +1,16 @@
-import { assertEquals, assert } from '@std/assert';
+import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import {
-  type OutputSpaceBlock,
-  type OutputSpaceProvider,
-  type ResolvedOutput,
-  OutputSpaceModule,
+  claimMasksOverlap,
+  filterAboveAndShift,
+  mapOriginalToSurviving,
   mapSurvivingToOriginal,
   mapSurvivingToOriginalBatch,
-  mapOriginalToSurviving,
-  claimMasksOverlap,
+  type OutputSpaceBlock,
+  OutputSpaceModule,
+  type OutputSpaceProvider,
+  type ResolvedOutput,
   unionClaimMasks,
-  filterAboveAndShift,
 } from '../src/core/OutputSpace.ts';
 
 // -- Test helpers -------------------------------------------------
@@ -94,10 +94,12 @@ function assertResolved(
   msg?: string,
 ): void {
   assert(actual !== undefined, `Expected resolved output, got undefined. ${msg ?? ''}`);
-  assertEquals(Hash.equals(actual.block, h(expected.name)), true,
-    `Block mismatch: expected ${expected.name}. ${msg ?? ''}`);
-  assertEquals(actual.outputIndex, expected.outputIndex,
-    `Output index mismatch. ${msg ?? ''}`);
+  assertEquals(
+    Hash.equals(actual.block, h(expected.name)),
+    true,
+    `Block mismatch: expected ${expected.name}. ${msg ?? ''}`,
+  );
+  assertEquals(actual.outputIndex, expected.outputIndex, `Output index mismatch. ${msg ?? ''}`);
 }
 
 /**
@@ -147,12 +149,22 @@ function assertMatchesGroundTruth(
   const naive = naiveOutputSpace(mod, h(tipName), provider);
   const prefix = label ?? tipName;
 
-  assertEquals(space.length, naive.length, `${prefix}: length mismatch: ${space.length} vs ${naive.length}`);
+  assertEquals(
+    space.length,
+    naive.length,
+    `${prefix}: length mismatch: ${space.length} vs ${naive.length}`,
+  );
   for (let i = 0; i < space.length; i++) {
-    assertEquals(Hash.equals(space[i].block, naive[i].block), true,
-      `${prefix}[${i}]: block mismatch`);
-    assertEquals(space[i].outputIndex, naive[i].outputIndex,
-      `${prefix}[${i}]: outputIndex mismatch`);
+    assertEquals(
+      Hash.equals(space[i].block, naive[i].block),
+      true,
+      `${prefix}[${i}]: block mismatch`,
+    );
+    assertEquals(
+      space[i].outputIndex,
+      naive[i].outputIndex,
+      `${prefix}[${i}]: outputIndex mismatch`,
+    );
   }
 }
 
@@ -210,8 +222,11 @@ Deno.test('mapSurvivingToOriginal and mapOriginalToSurviving round-trip', () => 
   const claims = [1, 3, 5];
   for (let s = 0; s < 5; s++) {
     const original = mapSurvivingToOriginal(s, claims);
-    assertEquals(mapOriginalToSurviving(original, claims), s,
-      `Round-trip failed for surviving=${s}, original=${original}`);
+    assertEquals(
+      mapOriginalToSurviving(original, claims),
+      s,
+      `Round-trip failed for surviving=${s}, original=${original}`,
+    );
   }
 });
 
@@ -239,7 +254,10 @@ Deno.test('unionClaimMasks: overlapping', () => {
 // -- S1: Single leaf block ----------------------------------------
 
 Deno.test('S1: single leaf block - resolveClaimIndex', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] }),
+  ]);
 
   assertResolved(mod.resolveClaimIndex(h('B'), 0), { name: 'B', outputIndex: 0 });
   assertResolved(mod.resolveClaimIndex(h('B'), 1), { name: 'B', outputIndex: 1 });
@@ -248,19 +266,28 @@ Deno.test('S1: single leaf block - resolveClaimIndex', () => {
 });
 
 Deno.test('S1: single leaf block - computeClaimIndex round-trip', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] }),
+  ]);
 
   assertEquals(mod.computeClaimIndex(h('B'), { block: h('G'), outputIndex: 1 }), 3);
   assertEquals(mod.computeClaimIndex(h('B'), { block: h('B'), outputIndex: 0 }), 0);
 });
 
 Deno.test('S1: single leaf block - subtreeClaimMask', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] }),
+  ]);
   assertEquals(mod.subtreeClaimMask(h('B')), [1]);
 });
 
 Deno.test('S1: single leaf block - outputSpace', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 2, claims: [3] }),
+  ]);
   const space = mod.outputSpace(h('B'))!;
   assertEquals(space.length, 6);
   assertResolved(space[0], { name: 'B', outputIndex: 0 });
@@ -337,8 +364,13 @@ function s3Blocks() {
     makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [5] }),
     makeLeaf({ name: 'C', anchor: 'G', outputCount: 2, claims: [3] }),
     makeAggregator({
-      name: 'D', anchor: 'G', outputCount: 1, claims: [],
-      aggregates: ['B', 'C'], aggregateOutputCounts: [3, 2], newOutputCount: 6,
+      name: 'D',
+      anchor: 'G',
+      outputCount: 1,
+      claims: [],
+      aggregates: ['B', 'C'],
+      aggregateOutputCounts: [3, 2],
+      newOutputCount: 6,
     }),
   ];
 }
@@ -392,8 +424,13 @@ function s4Blocks() {
     makeLeaf({ name: 'B', anchor: 'A', outputCount: 1, claims: [2] }),
     makeLeaf({ name: 'C', anchor: 'B', outputCount: 1, claims: [] }),
     makeAggregator({
-      name: 'D', anchor: 'A', outputCount: 1, claims: [],
-      aggregates: ['C'], aggregateOutputCounts: [2], newOutputCount: 3,
+      name: 'D',
+      anchor: 'A',
+      outputCount: 1,
+      claims: [],
+      aggregates: ['C'],
+      aggregateOutputCounts: [2],
+      newOutputCount: 3,
     }),
   ];
 }
@@ -432,8 +469,13 @@ function s5Blocks() {
     makeLeaf({ name: 'C', anchor: 'G', outputCount: 2, claims: [3] }),
     makeLeaf({ name: 'F', anchor: 'C', outputCount: 1, claims: [] }),
     makeAggregator({
-      name: 'AGG', anchor: 'G', outputCount: 1, claims: [],
-      aggregates: ['E', 'F'], aggregateOutputCounts: [3, 3], newOutputCount: 7,
+      name: 'AGG',
+      anchor: 'G',
+      outputCount: 1,
+      claims: [],
+      aggregates: ['E', 'F'],
+      aggregateOutputCounts: [3, 3],
+      newOutputCount: 7,
     }),
   ];
 }
@@ -468,7 +510,10 @@ Deno.test('S5: multi-level aggregation - computeClaimIndex round-trip', () => {
 // -- S6: Self-claiming --------------------------------------------
 
 Deno.test('S6: self-claiming - resolveClaimIndex', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0, 1, 4] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0, 1, 4] }),
+  ]);
 
   assertResolved(mod.resolveClaimIndex(h('B'), 0), { name: 'B', outputIndex: 0 });
   assertResolved(mod.resolveClaimIndex(h('B'), 1), { name: 'B', outputIndex: 1 });
@@ -476,12 +521,18 @@ Deno.test('S6: self-claiming - resolveClaimIndex', () => {
 });
 
 Deno.test('S6: self-claiming - subtreeClaimMask excludes self-claims', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0, 1, 4] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0, 1, 4] }),
+  ]);
   assertEquals(mod.subtreeClaimMask(h('B')), [1]);
 });
 
 Deno.test('S6: self-claiming - outputSpace', () => {
-  const mod = buildModule([makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0, 1, 4] })]);
+  const mod = buildModule([
+    makeGenesis('G', 5),
+    makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0, 1, 4] }),
+  ]);
   const space = mod.outputSpace(h('B'))!;
   assertEquals(space.length, 5);
   assertResolved(space[0], { name: 'B', outputIndex: 2 });
@@ -510,8 +561,13 @@ function s7Blocks() {
     makeGenesis('G', 5),
     makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claims: [0] }),
     makeAggregator({
-      name: 'D', anchor: 'G', outputCount: 1, claims: [],
-      aggregates: ['B'], aggregateOutputCounts: [2], newOutputCount: 3,
+      name: 'D',
+      anchor: 'G',
+      outputCount: 1,
+      claims: [],
+      aggregates: ['B'],
+      aggregateOutputCounts: [2],
+      newOutputCount: 3,
     }),
   ];
 }

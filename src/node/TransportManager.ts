@@ -21,7 +21,7 @@ import { SignalEnvelope, SignalingService, SignalingSessionHandle } from './Sign
 
 // -- Callbacks ---------------------------------------------------------
 
-type BlockReceivedHandler = (block: Block, peerId: string, raw: Uint8Array) => void;
+type BlockReceivedHandler = (block: Block, peerId: string) => void;
 
 export interface TransportManagerCallbacks {
   onBlockReceived: BlockReceivedHandler;

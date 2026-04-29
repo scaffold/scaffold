@@ -10,7 +10,13 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
 import { createGenesisBlock } from '../../src/core/Block.ts';
-import { type Contract, makeAggregationBlock, makeBlock, makeGenesis, makeOutput } from './helpers.ts';
+import {
+  type Contract,
+  makeAggregationBlock,
+  makeBlock,
+  makeGenesis,
+  makeOutput,
+} from './helpers.ts';
 import { TestNetwork } from './TestNetwork.ts';
 
 // -- Helpers --------------------------------------------------------

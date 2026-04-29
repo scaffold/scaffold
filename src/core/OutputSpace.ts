@@ -170,7 +170,11 @@ export function unionClaimMasks(
   while (i < a.length && j < b.length) {
     if (a[i] < b[j]) result.push(a[i++]);
     else if (a[i] > b[j]) result.push(b[j++]);
-    else { result.push(a[i]); i++; j++; }
+    else {
+      result.push(a[i]);
+      i++;
+      j++;
+    }
   }
   while (i < a.length) result.push(a[i++]);
   while (j < b.length) result.push(b[j++]);

@@ -6,7 +6,7 @@ import { aggregationContract } from '../src/contracts/AggregationContract.ts';
 import { collateralContract } from '../src/contracts/CollateralContract.ts';
 import { insuranceContract } from '../src/contracts/InsuranceContract.ts';
 import { recordContract } from '../src/contracts/RecordContract.ts';
-import { helloContract, HELLO_CONTRACT } from '../src/contracts/HelloContract.ts';
+import { HELLO_CONTRACT, helloContract } from '../src/contracts/HelloContract.ts';
 import {
   AGGREGATION_CONTRACT,
   COLLATERAL_CONTRACT,

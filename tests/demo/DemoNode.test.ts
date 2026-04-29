@@ -4,7 +4,8 @@ import { deriveIdentity } from '../../src/demo/Identity.ts';
 import { makeStatusOutput } from '../../src/demo/StatusContract.ts';
 import { BlockSpec } from '../../src/core/BlockCreationModule.ts';
 import { BlockPayload } from '../../src/core/Block.ts';
-import { composeBlockPacket, parsePacket } from '../../src/core/Packet.ts';
+import { composeBlockPacket } from '../../src/core/Block.ts';
+import { parsePacket } from '../../src/core/Packet.ts';
 
 Deno.test('DemoNode: publish valid status update', () => {
   const node = new DemoNode('eagle');
@@ -22,10 +23,8 @@ Deno.test('DemoNode: two nodes — valid status propagates via method call', () 
   // Manually propagate the block from A to B via raw packet
   const chain = nodeA.getCanonicalChain();
   const latestBlock = chain[chain.length - 1];
-  const raw = nodeA.packetStore.get(latestBlock.hash.toPrimitive());
-  assert(raw, 'Raw packet should be stored');
 
-  const packet = parsePacket<BlockPayload>(raw!);
+  const packet = parsePacket<BlockPayload>(latestBlock.raw);
   assert(packet, 'Packet should parse');
 
   nodeB.receivePacket(packet!, 'nodeA');
@@ -61,7 +60,8 @@ Deno.test('DemoNode: invalid block (wrong signer) rejected by receiving node', (
   };
 
   const blueprint = nodeA.blockCreation.buildBlock(spec);
-  const { block, packet } = composeBlockPacket(blueprint, eagle.privateKey); // signed by eagle, not badger!
+  const block = composeBlockPacket(blueprint, eagle.privateKey); // signed by eagle, not badger!
+  const packet = parsePacket<BlockPayload>(block.raw)!;
 
   // nodeB should reject this
   const beforeTip = nodeB.tip.hash.toPrimitive();
@@ -110,8 +110,7 @@ Deno.test('DemoNode: receivePacket recovers signer so contract verification can 
 
   const chain = nodeA.getCanonicalChain();
   const lastBlock = chain[chain.length - 1];
-  const raw = nodeA.packetStore.get(lastBlock.hash.toPrimitive())!;
-  const packet = parsePacket<BlockPayload>(raw)!;
+  const packet = parsePacket<BlockPayload>(lastBlock.raw)!;
 
   nodeB.receivePacket(packet, 'nodeA');
   const ingested = nodeB.store.get(lastBlock.hash);
@@ -166,7 +165,8 @@ Deno.test('DemoNode: pub badger Hello as eagle → block sent but peers reject',
   };
 
   const blueprint = eagleNode.blockCreation.buildBlock(spec);
-  const { block, packet } = composeBlockPacket(blueprint, eagle.privateKey);
+  const block = composeBlockPacket(blueprint, eagle.privateKey);
+  const packet = parsePacket<BlockPayload>(block.raw)!;
 
   // badgerNode should reject this impersonation
   badgerNode.receivePacket(packet, 'eagle');

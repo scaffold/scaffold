@@ -1,8 +1,8 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { Block, BlockSource } from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block, composeGenesisPacket } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
+import { PacketType } from '../src/core/Packet.ts';
 import { NodeConfig, NodeContext } from '../src/node/NodeContext.ts';
 import { Action, ReactiveEvent, Strategy } from '../src/node/ReactiveLayer.ts';
 
@@ -43,13 +43,16 @@ function makeLeafBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 
 function defaultConfig(): NodeConfig {
   const outputs = [makeOutput(100, 'g0'), makeOutput(200, 'g1')];
-  const { block: genesis } = composeGenesisPacket(outputs);
+  const genesis = composeGenesisPacket(outputs);
   return { genesis };
 }
 

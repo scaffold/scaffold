@@ -6,11 +6,13 @@
 import { Hash } from '../../src/util/Hash.ts';
 import {
   AGGREGATION_CONTRACT,
+  AtomSource,
+  AtomType,
   Block,
-  BlockSource,
   createGenesisBlock,
   RECORD_CONTRACT,
 } from '../../src/core/Block.ts';
+import { PacketType } from '../../src/core/Packet.ts';
 import { makeRecordOutput } from '../../src/contracts/RecordContract.ts';
 import { encodeAggregationData } from '../../src/contracts/AggregationContract.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
@@ -19,8 +21,21 @@ import type { Contract } from '../../src/contracts/Contract.ts';
 export const h = (name: string): Hash => Hash.digest(name);
 export const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
-export { AGGREGATION_CONTRACT, RECORD_CONTRACT };
+export { AGGREGATION_CONTRACT, AtomType, RECORD_CONTRACT };
+export { PacketType };
 export type { Contract };
+
+/**
+ * Default Atom-base fields for test Block fixtures that don't go
+ * through `composeUnsignedBlockPacket`. The `raw` is a stub (empty
+ * bytes) -- such fixtures are not safe to round-trip over the wire,
+ * but they're sufficient for in-memory module-level tests.
+ */
+export const TEST_ATOM_BASE = {
+  type: AtomType.Block as const,
+  packetType: PacketType.JsonUnsignedBlock as const,
+  raw: new Uint8Array(0),
+};
 
 export function makeOutput(value: number, label?: string): Output {
   return {
@@ -47,6 +62,7 @@ export function makeLeafBlock(
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
   }
   return {
+    ...TEST_ATOM_BASE,
     hash: Hash.digestParts(...hashParts),
     anchor: anchor.hash,
     aggregates: [],
@@ -56,7 +72,7 @@ export function makeLeafBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    source: AtomSource.Local,
   };
 }
 
@@ -70,6 +86,7 @@ export function makeBlock(
   refs: Hash[] = [],
 ): Block {
   return {
+    ...TEST_ATOM_BASE,
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: [],
@@ -79,14 +96,15 @@ export function makeBlock(
     refs,
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    source: AtomSource.Local,
   };
 }
 
 /** Standard genesis for multi-node tests. */
 export function makeGenesis(outputCount = 4, valuePerOutput = 100): Block {
-  const outputs = Array.from({ length: outputCount }, (_, i) =>
-    makeOutput(valuePerOutput, `genesis-out-${i}`)
+  const outputs = Array.from(
+    { length: outputCount },
+    (_, i) => makeOutput(valuePerOutput, `genesis-out-${i}`),
   );
   return createGenesisBlock(outputs);
 }
@@ -119,6 +137,7 @@ export function makeAggregationBlock(
   });
 
   return {
+    ...TEST_ATOM_BASE,
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: subtrees.map((s) => s.hash),
@@ -132,7 +151,7 @@ export function makeAggregationBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    source: AtomSource.Local,
   };
 }
 

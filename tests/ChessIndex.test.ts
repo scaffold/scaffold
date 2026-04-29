@@ -1,5 +1,5 @@
 import { assert, assertEquals } from '@std/assert';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
+import { composeGenesisPacket } from '../src/core/Block.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { secp } from '../src/util/secp.ts';
@@ -12,7 +12,7 @@ import { GAME_STATE_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 function makeNode(bal: number) {
   const priv = secp.utils.randomPrivateKey();
   const pub = secp.getPublicKey(priv, true);
-  const { block: genesis } = composeGenesisPacket([makeSignatureOutput(pub, bal)]);
+  const genesis = composeGenesisPacket([makeSignatureOutput(pub, bal)]);
   const scaffold = new Scaffold({
     privateKey: priv,
     genesis,

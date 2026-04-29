@@ -225,7 +225,10 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
           const output = block.outputs[i];
           const contractHex = output.verifier.contract.toHex();
           if (contractPrefix && !contractHex.startsWith(contractPrefix.toLowerCase())) continue;
-          const utxoEntries = utxoIndex.getByVerifier(output.verifier.contract, output.verifier.params);
+          const utxoEntries = utxoIndex.getByVerifier(
+            output.verifier.contract,
+            output.verifier.params,
+          );
           const isUnspent = utxoEntries.some(
             (e) => Hash.equals(e.blockHash, block.hash) && e.outputIndex === i,
           );
@@ -268,7 +271,9 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
       // Walk anchor chain to show inherited outputs
       if (!Hash.equals(block.anchor, ZERO_HASH)) {
         const claimSet = new Set(
-          block.claims.filter((c) => c >= block.outputs.length).map((c) => c - block.outputs.length),
+          block.claims.filter((c) => c >= block.outputs.length).map((c) =>
+            c - block.outputs.length
+          ),
         );
         // Simple walk: show direct anchor's own outputs
         const anchorBlock = store.get(block.anchor);

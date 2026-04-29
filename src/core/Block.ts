@@ -2,6 +2,14 @@
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BlockBlueprint, Output } from './BlockCreationModule.ts';
+import { AtomBase, AtomSource, AtomType } from './Atom.ts';
+import { composePacket, composeUnsignedPacket, PacketType } from './Packet.ts';
+import { JsonIngestor } from './PacketIngestor.ts';
+import { secp } from '../util/secp.ts';
+
+// Re-export Atom types for callers that pull `Block` and source/kind
+// constants together. Keeps test fixtures compact.
+export { AtomSource, AtomType } from './Atom.ts';
 
 /** Genesis blocks use this as their declared weight (very high). */
 export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
@@ -63,24 +71,23 @@ export function getBlockWeightVector(block: Block): number[] {
   return [block.declaredWeight];
 }
 
-// -- Block metadata -------------------------------------------------
-
-/** How a block was received at this node. */
-export enum BlockSource {
-  Local = 'local',
-  Remote = 'remote',
-  Storage = 'storage',
-}
-
 // -- Block interface ------------------------------------------------
 
 /**
- * Concrete block type: wire format + computed hash + reception metadata.
- * Domain-specific data (aggregation state, collateral, payment) is
- * carried in contract outputs within the outputs array.
+ * Concrete block type: an Atom whose payload carries the consensus
+ * fields (anchor, claims, outputs, declaredWeight, refs).
+ *
+ * Wire identity (hash, raw, signature, signer, packetType) and
+ * reception metadata (source, receivedAt) are inherited from
+ * `AtomBase`. Domain-specific data (aggregation state, collateral,
+ * payment) lives in contract outputs within the `outputs` array.
  */
-export interface Block {
-  readonly hash: Hash;
+export interface Block extends AtomBase {
+  /** Discriminator for the `Atom` union. */
+  readonly type: AtomType.Block;
+  /** Block packets are JSON-encoded today; binary encodings will join later. */
+  readonly packetType: PacketType.JsonSignedBlock | PacketType.JsonUnsignedBlock;
+
   readonly anchor: Hash;
   readonly aggregates: Hash[];
   readonly claims: number[];
@@ -90,14 +97,8 @@ export interface Block {
   readonly refs: Hash[];
   /** Resolved claims -- concrete output references for uniform claim handling. */
   readonly resolvedClaims?: import('./BlockDraft.ts').ClaimIntent[];
-  /** Compressed public key (33 bytes) of the block signer. Node-local, not serialized. */
-  readonly signer?: Uint8Array;
   /** Creation time, set by block creator (wire format). */
   readonly timestamp: number;
-  /** Reception time at this node (Date.now()). Node-local, not serialized. */
-  readonly receivedAt: number;
-  /** How this block was received. Node-local, not serialized. */
-  readonly source: BlockSource;
   /** Block's own verification cost (excluding subtrees). Used by probing. */
   readonly selfWeight?: number;
   /** Total weight of the block's subtree (self + aggregates). Used by probing. */
@@ -246,70 +247,62 @@ export function collectExtendedOutputs(block: Block, store: BlockStore): Output[
 
 // -- BlockPayload ---------------------------------------------------
 
-/** Block fields minus hash and node-local metadata -- the payload carried in a Packet. */
-export type BlockPayload = Omit<Block, 'hash' | 'receivedAt' | 'source' | 'signer'>;
+/**
+ * Block fields carried in the wire payload -- everything except hash,
+ * the AtomBase identity/transit fields, and the new packet metadata.
+ * `signer` is node-local (recovered from the signature, not serialized).
+ */
+export type BlockPayload = Omit<
+  Block,
+  | 'hash'
+  | 'receivedAt'
+  | 'source'
+  | 'signer'
+  | 'type'
+  | 'packetType'
+  | 'raw'
+  | 'signature'
+>;
 
-/** Construct a Block from a deserialized packet payload and a precomputed hash. */
+/** Construct a Block from a deserialized packet payload and the wire metadata. */
 export function createBlockFromPacket(
   payload: BlockPayload,
+  raw: Uint8Array,
   hash: Hash,
-  source: BlockSource = BlockSource.Remote,
+  packetType: PacketType.JsonSignedBlock | PacketType.JsonUnsignedBlock,
+  source: AtomSource = AtomSource.Remote,
+  signature?: Uint8Array,
   signer?: Uint8Array,
 ): Block {
   const now = Date.now();
   return {
     hash,
+    type: AtomType.Block,
+    packetType,
+    raw,
+    signature,
+    signer,
+    source,
+    receivedAt: now,
     anchor: payload.anchor,
     aggregates: payload.aggregates,
     claims: payload.claims,
     outputs: payload.outputs,
     declaredWeight: payload.declaredWeight,
     refs: payload.refs,
-    signer,
     timestamp: payload.timestamp ?? now,
-    receivedAt: now,
-    source,
   };
 }
 
-// -- Factory functions ----------------------------------------------
+// -- Compose helpers -------------------------------------------------
+//
+// These produce signed/unsigned/genesis Blocks from blueprints. They
+// live in Block.ts (not Packet.ts) because they construct a Block --
+// keeping them here lets `createBlock` / `createGenesisBlock` reuse
+// them without a Block.ts <-> Packet.ts import cycle.
 
-/**
- * Create a Block from a BlockBlueprint and the resolved anchor block.
- * Computes the hash by digesting a canonical representation of the block data.
- */
-export function createBlock(
-  blueprint: BlockBlueprint,
-  anchorBlock: Block,
-): Block {
-  // Compute a deterministic hash from block contents
-  const hashParts: Uint8Array[] = [
-    blueprint.anchor.toBytes(),
-    ...blueprint.aggregates.map((a) => a.toBytes()),
-    new Uint8Array(new Float64Array([blueprint.declaredWeight]).buffer),
-  ];
-  for (const out of blueprint.outputs) {
-    hashParts.push(out.verifier.contract.toBytes());
-    hashParts.push(out.verifier.params);
-    hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    if (out.data === null) {
-      hashParts.push(new Uint8Array([0]));
-    } else {
-      hashParts.push(new Uint8Array([1]));
-      hashParts.push(out.data);
-    }
-  }
-  for (const idx of blueprint.claims) {
-    hashParts.push(new Uint8Array(new Float64Array([idx]).buffer));
-  }
-  for (const ref of blueprint.refs) {
-    hashParts.push(ref.toBytes());
-  }
-
-  const hash = Hash.digestParts(...hashParts);
-
-  const block: Block = {
-    hash,
+function blueprintToPayload(blueprint: BlockBlueprint): BlockPayload {
+  return {
     anchor: blueprint.anchor,
     aggregates: blueprint.aggregates,
     claims: blueprint.claims,
@@ -317,44 +310,130 @@ export function createBlock(
     declaredWeight: blueprint.declaredWeight,
     refs: blueprint.refs,
     timestamp: Date.now(),
-    receivedAt: Date.now(),
-    source: BlockSource.Local,
   };
-
-  return block;
 }
 
-/**
- * Create a genesis block with the given outputs.
- * Genesis blocks have no anchor and no claims.
- */
-export function createGenesisBlock(outputs: Output[]): Block {
-  const hashParts: Uint8Array[] = [
-    new Uint8Array([0]), // genesis marker
-  ];
-  for (const out of outputs) {
-    hashParts.push(out.verifier.contract.toBytes());
-    hashParts.push(out.verifier.params);
-    hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
-    if (out.data === null) {
-      hashParts.push(new Uint8Array([0]));
-    } else {
-      hashParts.push(new Uint8Array([1]));
-      hashParts.push(out.data);
-    }
-  }
-  const hash = Hash.digestParts(...hashParts);
+/** Compose a signed block packet and return the resulting Block. */
+export function composeBlockPacket(blueprint: BlockBlueprint, privateKey: Uint8Array): Block {
+  const payload = blueprintToPayload(blueprint);
+  const packet = composePacket<BlockPayload>(PacketType.JsonSignedBlock, payload, privateKey);
+  const signer = secp.getPublicKey(privateKey, true);
+  return createBlockFromPacket(
+    payload,
+    packet.raw,
+    packet.hash,
+    PacketType.JsonSignedBlock,
+    AtomSource.Local,
+    packet.signature,
+    signer,
+  );
+}
 
-  return {
-    hash,
+/** Compose an unsigned block packet and return the resulting Block. */
+export function composeUnsignedBlockPacket(blueprint: BlockBlueprint): Block {
+  const payload = blueprintToPayload(blueprint);
+  const packet = composeUnsignedPacket<BlockPayload>(PacketType.JsonUnsignedBlock, payload);
+  return createBlockFromPacket(
+    payload,
+    packet.raw,
+    packet.hash,
+    PacketType.JsonUnsignedBlock,
+    AtomSource.Local,
+  );
+}
+
+/** Compose a genesis block (unsigned, fixed-shape payload). */
+export function composeGenesisPacket(outputs: Output[]): Block {
+  const payload: BlockPayload = {
     anchor: ZERO_HASH,
     aggregates: [],
     claims: [],
     outputs,
     declaredWeight: GENESIS_WEIGHT,
     refs: [],
-    timestamp: Date.now(),
-    receivedAt: Date.now(),
-    source: BlockSource.Local,
+    timestamp: 0,
   };
+  const packet = composeUnsignedPacket<BlockPayload>(PacketType.JsonUnsignedBlock, payload);
+  return createBlockFromPacket(
+    payload,
+    packet.raw,
+    packet.hash,
+    PacketType.JsonUnsignedBlock,
+    AtomSource.Local,
+  );
 }
+
+// -- Factory functions ----------------------------------------------
+
+/**
+ * Test-friendly helper that composes an unsigned block packet from a
+ * blueprint. Identical to `composeUnsignedBlockPacket` but takes the
+ * resolved anchor block as a parameter for legacy call-site signature
+ * compatibility (the parameter is unused -- the blueprint already
+ * carries the anchor hash).
+ */
+export function createBlock(blueprint: BlockBlueprint, _anchorBlock: Block): Block {
+  return composeUnsignedBlockPacket(blueprint);
+}
+
+/**
+ * Create a genesis block with the given outputs. Hash and raw bytes
+ * derive from the wire encoding so all Blocks satisfy
+ * `Hash.digest(block.raw) === block.hash`.
+ */
+export function createGenesisBlock(outputs: Output[]): Block {
+  return composeGenesisPacket(outputs);
+}
+
+// -- Block ingestors -------------------------------------------------
+//
+// One JsonIngestor per block PacketType. Both produce `AtomType.Block`;
+// the signed instance recovers the signer from the trailing signature
+// and the unsigned one does not. PeerConnection / StorageManager
+// dispatch off the type byte to the appropriate ingestor.
+
+/**
+ * Validate a deserialized JSON payload as a `BlockPayload` and build
+ * the resulting Block. Returns null on shape mismatch (caller logs).
+ */
+function buildBlockAtom(
+  payload: unknown,
+  raw: Uint8Array,
+  hash: Hash,
+  signature: Uint8Array | undefined,
+  signer: Uint8Array | undefined,
+  source: AtomSource,
+  packetType: PacketType.JsonSignedBlock | PacketType.JsonUnsignedBlock,
+): Block | null {
+  if (!isBlockPayload(payload)) return null;
+  return createBlockFromPacket(payload, raw, hash, packetType, source, signature, signer);
+}
+
+function isBlockPayload(p: unknown): p is BlockPayload {
+  if (typeof p !== 'object' || p === null) return false;
+  const o = p as Record<string, unknown>;
+  return (
+    o.anchor instanceof Hash &&
+    Array.isArray(o.aggregates) &&
+    Array.isArray(o.claims) &&
+    Array.isArray(o.outputs) &&
+    typeof o.declaredWeight === 'number' &&
+    Array.isArray(o.refs)
+  );
+}
+
+export const jsonSignedBlockIngestor = new JsonIngestor(
+  PacketType.JsonSignedBlock,
+  AtomType.Block,
+  true,
+  (payload, raw, hash, sig, signer, source) =>
+    buildBlockAtom(payload, raw, hash, sig, signer, source, PacketType.JsonSignedBlock),
+);
+
+export const jsonUnsignedBlockIngestor = new JsonIngestor(
+  PacketType.JsonUnsignedBlock,
+  AtomType.Block,
+  false,
+  (payload, raw, hash, sig, signer, source) =>
+    buildBlockAtom(payload, raw, hash, sig, signer, source, PacketType.JsonUnsignedBlock),
+);

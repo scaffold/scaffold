@@ -1,6 +1,6 @@
-import { Hash } from "../util/Hash.ts";
-import { Block } from "../core/Block.ts";
-import { BlockSpec, ClaimEntry, Output } from "../core/BlockCreationModule.ts";
+import { Hash } from '../util/Hash.ts';
+import { Block } from '../core/Block.ts';
+import { BlockSpec, ClaimEntry, Output } from '../core/BlockCreationModule.ts';
 
 /** Request to put data into the network */
 export interface PutRequest {
@@ -48,7 +48,7 @@ export class PutManager {
     }
 
     const spec: BlockSpec = {
-      anchor: request.anchor ?? Hash.digest("pending"),
+      anchor: request.anchor ?? Hash.digest('pending'),
       outputs: request.outputs,
       claims,
       declaredWeight: request.declaredWeight ?? 1,
@@ -59,7 +59,7 @@ export class PutManager {
     const block = this.processor.buildBlock(spec);
 
     if (!block) {
-      throw new Error("Failed to build block from put request");
+      throw new Error('Failed to build block from put request');
     }
 
     this.processor.processBlock(block);

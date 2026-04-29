@@ -10,9 +10,10 @@
  * peers with unclaimed outputs of the same verifier.
  */
 
+import { PacketType } from '../../src/core/Packet.ts';
 import { assert } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
-import { Block, BlockSource, createGenesisBlock } from '../../src/core/Block.ts';
+import { AtomSource, AtomType, Block, createGenesisBlock } from '../../src/core/Block.ts';
 import { Output } from '../../src/core/BlockCreationModule.ts';
 import { TestNetwork } from './TestNetwork.ts';
 
@@ -44,7 +45,10 @@ function makeBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 

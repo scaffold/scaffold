@@ -1,10 +1,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import { AnchoringModule, AnchoringProvider } from '../src/core/AnchoringModule.ts';
-import {
-  mapOriginalToSurviving,
-  mapSurvivingToOriginal,
-} from '../src/core/OutputSpace.ts';
+import { mapOriginalToSurviving, mapSurvivingToOriginal } from '../src/core/OutputSpace.ts';
 
 // -- Test helpers ------------------------------------------------
 
@@ -257,17 +254,34 @@ Deno.test('T4: forward through aggregation', () => {
   const { provider, module } = setup();
   const G = genesisBlock(h('G'), 2);
   const S1: TestBlock = {
-    hash: h('S1'), anchor: G.hash, ownOutputCount: 1, outputCount: 2,
-    claimMask: null, ownClaims: [1], aggregates: [], aggregateOutputCounts: [],
+    hash: h('S1'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 2,
+    claimMask: null,
+    ownClaims: [1],
+    aggregates: [],
+    aggregateOutputCounts: [],
   };
   const S2: TestBlock = {
-    hash: h('S2'), anchor: G.hash, ownOutputCount: 1, outputCount: 2,
-    claimMask: null, ownClaims: [1], aggregates: [], aggregateOutputCounts: [],
+    hash: h('S2'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 2,
+    claimMask: null,
+    ownClaims: [1],
+    aggregates: [],
+    aggregateOutputCounts: [],
   };
   const D: TestBlock = {
-    hash: h('D'), anchor: G.hash, ownOutputCount: 1, outputCount: 5,
-    claimMask: [0, 1], ownClaims: [],
-    aggregates: [S1.hash, S2.hash], aggregateOutputCounts: [2, 2],
+    hash: h('D'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 5,
+    claimMask: [0, 1],
+    ownClaims: [],
+    aggregates: [S1.hash, S2.hash],
+    aggregateOutputCounts: [2, 2],
   };
   provider.add(G);
   provider.add(S1);
@@ -291,17 +305,34 @@ Deno.test('T5: aggregation with chained subtrees', () => {
   const { provider, module } = setup();
   const G = genesisBlock(h('G'), 3);
   const B: TestBlock = {
-    hash: h('B'), anchor: G.hash, ownOutputCount: 2, outputCount: 4,
-    claimMask: null, ownClaims: [2], aggregates: [], aggregateOutputCounts: [],
+    hash: h('B'),
+    anchor: G.hash,
+    ownOutputCount: 2,
+    outputCount: 4,
+    claimMask: null,
+    ownClaims: [2],
+    aggregates: [],
+    aggregateOutputCounts: [],
   };
   const C: TestBlock = {
-    hash: h('C'), anchor: B.hash, ownOutputCount: 1, outputCount: 4,
-    claimMask: null, ownClaims: [1], aggregates: [], aggregateOutputCounts: [],
+    hash: h('C'),
+    anchor: B.hash,
+    ownOutputCount: 1,
+    outputCount: 4,
+    claimMask: null,
+    ownClaims: [1],
+    aggregates: [],
+    aggregateOutputCounts: [],
   };
   const D: TestBlock = {
-    hash: h('D'), anchor: G.hash, ownOutputCount: 1, outputCount: 5,
-    claimMask: [0, 1, 2], ownClaims: [],
-    aggregates: [B.hash, C.hash], aggregateOutputCounts: [4, 4],
+    hash: h('D'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 5,
+    claimMask: [0, 1, 2],
+    ownClaims: [],
+    aggregates: [B.hash, C.hash],
+    aggregateOutputCounts: [4, 4],
   };
   provider.add(G);
   provider.add(B);
@@ -323,13 +354,24 @@ Deno.test('T10: forward through single-subtree aggregation', () => {
   const { provider, module } = setup();
   const G = genesisBlock(h('G'), 2);
   const S1: TestBlock = {
-    hash: h('S1'), anchor: G.hash, ownOutputCount: 1, outputCount: 2,
-    claimMask: null, ownClaims: [1], aggregates: [], aggregateOutputCounts: [],
+    hash: h('S1'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 2,
+    claimMask: null,
+    ownClaims: [1],
+    aggregates: [],
+    aggregateOutputCounts: [],
   };
   const D: TestBlock = {
-    hash: h('D'), anchor: G.hash, ownOutputCount: 1, outputCount: 3,
-    claimMask: [0, 1], ownClaims: [],
-    aggregates: [S1.hash], aggregateOutputCounts: [2],
+    hash: h('D'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 3,
+    claimMask: [0, 1],
+    ownClaims: [],
+    aggregates: [S1.hash],
+    aggregateOutputCounts: [2],
   };
   provider.add(G);
   provider.add(S1);
@@ -368,9 +410,14 @@ Deno.test('output consumed by intermediate block returns null', () => {
   const { provider, module } = setup();
   const G = genesisBlock(h('G'), 2);
   const A: TestBlock = {
-    hash: h('A'), anchor: G.hash, ownOutputCount: 1, outputCount: 2,
-    claimMask: [0], ownClaims: [1],
-    aggregates: [], aggregateOutputCounts: [],
+    hash: h('A'),
+    anchor: G.hash,
+    ownOutputCount: 1,
+    outputCount: 2,
+    claimMask: [0],
+    ownClaims: [1],
+    aggregates: [],
+    aggregateOutputCounts: [],
   };
   const B = leafBlock({ hash: h('B'), anchor: A.hash, ownOutputCount: 1, anchorOutputCount: 2 });
   provider.add(G);
@@ -394,8 +441,11 @@ Deno.test("self-claimed output: A's own output at same block", () => {
   const { provider, module } = setup();
   const G = genesisBlock(h('G'), 2);
   const A = leafBlock({
-    hash: h('A'), anchor: G.hash, ownOutputCount: 2,
-    anchorOutputCount: 2, claimIndices: [0],
+    hash: h('A'),
+    anchor: G.hash,
+    ownOutputCount: 2,
+    anchorOutputCount: 2,
+    claimIndices: [0],
   });
   provider.add(G);
   provider.add(A);

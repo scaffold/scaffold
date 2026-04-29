@@ -37,7 +37,10 @@ function overrideGetOutputValues(
 const enc = (s: string) => new TextEncoder().encode(s);
 const hashOf = (s: string) => Hash.digest(s);
 
-function out(value: number, origin: 'require' | 'get' = 'require'): { output: Output; slot: OutputSlot } {
+function out(
+  value: number,
+  origin: 'require' | 'get' = 'require',
+): { output: Output; slot: OutputSlot } {
   const output: Output = {
     verifier: { contract: hashOf('c'), params: new Uint8Array(0) },
     value,
@@ -73,7 +76,11 @@ Deno.test('override: hook returning same value produces no change', () => {
 
 Deno.test('override: hook sees verifier + data + default value', () => {
   const { output, slot } = out(3, 'get');
-  let seen: { verifier: { contract: Hash; params: Uint8Array }; data: Uint8Array; defaultValue: number } | undefined;
+  let seen: {
+    verifier: { contract: Hash; params: Uint8Array };
+    data: Uint8Array;
+    defaultValue: number;
+  } | undefined;
   overrideGetOutputValues([output], [slot], (verifier, data, defaultValue) => {
     seen = { verifier, data, defaultValue };
     return defaultValue;

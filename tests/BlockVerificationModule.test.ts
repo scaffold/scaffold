@@ -42,7 +42,9 @@ function makeWorld(): MockWorld {
     onResolution: (cb) => listeners.push(cb),
     verifyContract: async (block, v) => {
       verifyCalls.push({ block, verifier: v });
-      const key = `${block.toPrimitive()}:${v.contract.toPrimitive()}:${Array.from(v.params).join(',')}`;
+      const key = `${block.toPrimitive()}:${v.contract.toPrimitive()}:${
+        Array.from(v.params).join(',')
+      }`;
       return verifyResults.get(key) ?? { accepted: true, emittedSlots: [] };
     },
     // Partition check defaults: no outputs, no declared namespaces.

@@ -1,4 +1,5 @@
-import { Block, BlockPayload, BlockSource, createBlockFromPacket } from '../core/Block.ts';
+import { Block, BlockPayload, createBlockFromPacket } from '../core/Block.ts';
+import { AtomSource } from '../core/Atom.ts';
 import { Hash } from '../util/Hash.ts';
 import {
   composeUnsignedPacket,
@@ -13,11 +14,6 @@ export interface SignalPayload {
   to: string;
   from: string;
   payload: unknown;
-}
-
-export interface SyncPayload {
-  tips: string[];
-  depth: number;
 }
 
 export interface RequestPayload {
@@ -52,14 +48,14 @@ export interface TransportConnection {
 // -- Callback types ---------------------------------------------------
 
 /**
- * Callback when a block packet is received from a peer. The raw packet
- * bytes are passed alongside the block so callers (e.g. NetworkBridge)
- * can stash them for forwarding without re-serializing.
+ * Callback when a block packet is received from a peer. The block
+ * carries `block.raw` directly; callers re-emitting the block to other
+ * peers read those bytes off the Block instead of being passed them
+ * separately.
  */
 export type BlockReceivedHandler = (
   block: Block,
   peerId: string,
-  raw: Uint8Array,
 ) => void;
 
 // -- PeerConnection ---------------------------------------------------
@@ -71,7 +67,6 @@ export class PeerConnection {
   private readonly onBlockReceived: BlockReceivedHandler;
 
   private signalHandler: ((data: SignalPayload) => void) | null = null;
-  private syncHandler: ((data: SyncPayload) => void) | null = null;
   private requestHandler: ((data: RequestPayload) => void) | null = null;
   private deliveryHandler: ((data: DeliveryPayload) => void) | null = null;
   private peerInfoHandler: ((data: PeerInfoPayload) => void) | null = null;
@@ -113,14 +108,6 @@ export class PeerConnection {
     this.sendControl(PacketType.Signal, { to, from, payload });
   }
 
-  /** Send sync message with canonical tips. */
-  sendSync(tips: Hash[], depth: number): void {
-    this.sendControl(PacketType.Sync, {
-      tips: tips.map((t) => t.toHex()),
-      depth,
-    });
-  }
-
   /** Request specific blocks by hash. */
   requestBlocks(hashes: Hash[]): void {
     this.sendControl(PacketType.Request, {
@@ -142,10 +129,6 @@ export class PeerConnection {
 
   onSignal(handler: (data: SignalPayload) => void): void {
     this.signalHandler = handler;
-  }
-
-  onSync(handler: (data: SyncPayload) => void): void {
-    this.syncHandler = handler;
   }
 
   onRequest(handler: (data: RequestPayload) => void): void {
@@ -194,32 +177,34 @@ export class PeerConnection {
     }
 
     switch (packet.type) {
-      case PacketType.Block: {
+      case PacketType.JsonSignedBlock: {
         // Recover signer from the packet signature so the receiver can
         // never be tricked into trusting a payload-encoded signer.
         const block = createBlockFromPacket(
           packet.payload as BlockPayload,
+          packet.raw,
           packet.hash,
-          BlockSource.Remote,
+          PacketType.JsonSignedBlock,
+          AtomSource.Remote,
+          packet.signature,
           recoverPacketSigner(packet),
         );
-        this.onBlockReceived(block, this.peerId, packet.raw);
+        this.onBlockReceived(block, this.peerId);
         break;
       }
-      case PacketType.UnsignedBlock: {
+      case PacketType.JsonUnsignedBlock: {
         const block = createBlockFromPacket(
           packet.payload as BlockPayload,
+          packet.raw,
           packet.hash,
-          BlockSource.Remote,
+          PacketType.JsonUnsignedBlock,
+          AtomSource.Remote,
         );
-        this.onBlockReceived(block, this.peerId, packet.raw);
+        this.onBlockReceived(block, this.peerId);
         break;
       }
       case PacketType.Signal:
         this.signalHandler?.(packet.payload as SignalPayload);
-        break;
-      case PacketType.Sync:
-        this.syncHandler?.(packet.payload as SyncPayload);
         break;
       case PacketType.Request:
         this.requestHandler?.(packet.payload as RequestPayload);

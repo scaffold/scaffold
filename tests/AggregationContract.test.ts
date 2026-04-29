@@ -1,10 +1,12 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import type { Output, Verifier } from '../src/core/BlockCreationModule.ts';
 import {
   AGGREGATION_CONTRACT,
+  AtomSource,
+  AtomType,
   Block,
-  BlockSource,
   BlockStore,
 } from '../src/core/Block.ts';
 import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
@@ -13,7 +15,10 @@ import { ContractGeneratorShim as ContractGenerator } from './testutil/ContractG
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
 import type { Contract } from '../src/contracts/Contract.ts';
-import { aggregationContract, AGGREGATION_THRESHOLD } from '../src/contracts/AggregationContract.ts';
+import {
+  AGGREGATION_THRESHOLD,
+  aggregationContract,
+} from '../src/contracts/AggregationContract.ts';
 
 // -- Helpers -------------------------------------------------------
 
@@ -35,7 +40,10 @@ function makeBlock(opts: {
     declaredWeight: 1,
     timestamp: Date.now(),
     receivedAt: Date.now(),
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 

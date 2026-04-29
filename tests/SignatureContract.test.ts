@@ -2,20 +2,18 @@ import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
 import {
+  AtomSource,
+  AtomType,
   Block,
   BlockPayload,
-  BlockSource,
+  composeBlockPacket,
+  composeGenesisPacket,
   createBlockFromPacket,
   createGenesisBlock,
   SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import {
-  composeBlockPacket,
-  composeGenesisPacket,
-  parsePacket,
-  recoverPacketSigner,
-} from '../src/core/Packet.ts';
+import { PacketType, parsePacket, recoverPacketSigner } from '../src/core/Packet.ts';
 import { signatureContract } from '../src/contracts/SignatureContract.ts';
 import { type ContractEnv } from '../src/core/ContractEnv.ts';
 import { Scaffold } from '../src/Scaffold.ts';
@@ -35,7 +33,7 @@ function makeSignedBlock(
   claims: number[],
   privateKey: Uint8Array,
 ): Block {
-  const { block } = composeBlockPacket(
+  const block = composeBlockPacket(
     {
       anchor: anchor.hash,
       aggregates: [],
@@ -102,7 +100,10 @@ Deno.test('SignatureContract: unsigned block is rejected', async () => {
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
     // no signer field
   };
   node.receiveBlock(unsignedBlock, null);
@@ -112,7 +113,7 @@ Deno.test('SignatureContract: unsigned block is rejected', async () => {
 });
 
 Deno.test('SignatureContract: block signer is populated by composeBlockPacket', () => {
-  const { block } = composeBlockPacket(
+  const block = composeBlockPacket(
     {
       anchor: Hash.digest('test-anchor'),
       aggregates: [],
@@ -149,7 +150,7 @@ Deno.test('SignatureContract: ingest path recovers signer from wire packet', asy
   // Compose a signed packet, then simulate wire transit by parsing the
   // raw bytes and reconstructing the block via createBlockFromPacket --
   // mirroring what an ingest path (e.g. DemoNode.receivePacket) does.
-  const { packet } = composeBlockPacket(
+  const composed = composeBlockPacket(
     {
       anchor: genesis.hash,
       aggregates: [],
@@ -161,15 +162,18 @@ Deno.test('SignatureContract: ingest path recovers signer from wire packet', asy
     privateKeyA,
   );
 
-  const parsed = parsePacket<BlockPayload>(packet.raw);
+  const parsed = parsePacket<BlockPayload>(composed.raw);
   assert(parsed !== null);
   const recoveredSigner = recoverPacketSigner(parsed!);
   assert(recoveredSigner !== undefined, 'Signer should be recoverable from packet');
 
   const ingestedBlock = createBlockFromPacket(
     parsed!.payload,
+    parsed!.raw,
     parsed!.hash,
-    BlockSource.Remote,
+    PacketType.JsonSignedBlock,
+    AtomSource.Remote,
+    parsed!.signature,
     recoveredSigner,
   );
   assertEquals(ingestedBlock.signer, recoveredSigner);
@@ -187,7 +191,7 @@ Deno.test('SignatureContract: ingest path rejects wrong-key signature contract',
   const genesis = createGenesisBlock([makeSignatureOutput(publicKeyA, 100)]);
   node.receiveBlock(genesis, null);
 
-  const { packet } = composeBlockPacket(
+  const composed = composeBlockPacket(
     {
       anchor: genesis.hash,
       aggregates: [],
@@ -199,11 +203,14 @@ Deno.test('SignatureContract: ingest path rejects wrong-key signature contract',
     privateKeyB,
   );
 
-  const parsed = parsePacket<BlockPayload>(packet.raw)!;
+  const parsed = parsePacket<BlockPayload>(composed.raw)!;
   const ingestedBlock = createBlockFromPacket(
     parsed.payload,
+    parsed.raw,
     parsed.hash,
-    BlockSource.Remote,
+    PacketType.JsonSignedBlock,
+    AtomSource.Remote,
+    parsed.signature,
     recoverPacketSigner(parsed),
   );
 
@@ -213,7 +220,7 @@ Deno.test('SignatureContract: ingest path rejects wrong-key signature contract',
 });
 
 Deno.test('SignatureContract: Scaffold auto-registers signatureContract for verification', async () => {
-  const { block: genesis } = composeGenesisPacket([makeSignatureOutput(publicKeyA, 100)]);
+  const genesis = composeGenesisPacket([makeSignatureOutput(publicKeyA, 100)]);
   const scaffold = new Scaffold({ genesis, privateKey: privateKeyA });
 
   // The execution service should know about SIGNATURE_CONTRACT without any
@@ -224,7 +231,7 @@ Deno.test('SignatureContract: Scaffold auto-registers signatureContract for veri
 
   // End-to-end: a signed block claiming the genesis signature output should
   // verify successfully via the execution service.
-  const { block } = composeBlockPacket(
+  const block = composeBlockPacket(
     {
       anchor: genesis.hash,
       aggregates: [],

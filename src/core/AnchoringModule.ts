@@ -612,7 +612,12 @@ export class AnchoringModule<BlockType> {
             steps.push({ direction: 'forward', type: 'anchor', block: chain[j] });
           }
           // Last step is aggregate
-          steps.push({ direction: 'forward', type: 'aggregate', block: current, aggregateIndex: i });
+          steps.push({
+            direction: 'forward',
+            type: 'aggregate',
+            block: current,
+            aggregateIndex: i,
+          });
           return steps;
         }
       }

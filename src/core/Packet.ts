@@ -1,27 +1,26 @@
-import { Hash, ZERO_HASH } from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 import { deserialize, serialize } from './BlockSerializer.ts';
-import {
-  Block,
-  BlockPayload,
-  BlockSource,
-  createBlockFromPacket,
-  GENESIS_WEIGHT,
-} from './Block.ts';
-import { BlockBlueprint, Output } from './BlockCreationModule.ts';
 
 // -- PacketType enum ------------------------------------------------
 
 /**
- * Every wire packet is `[SCF magic][type byte][payload][signature?]`.
- * Block packets are signed; everything else (control messages and
- * unsigned blocks like genesis) carries an unsigned JSON payload.
+ * Wire format selector: the 4th byte of every packet is a `PacketType`
+ * value that selects the ingestor used to parse the rest of the bytes.
+ *
+ * `PacketType` is a *wire-encoding* tag, not a logical kind. Two
+ * different `PacketType`s can produce the same `AtomType` (e.g. a
+ * future `BinarySignedBlock` would join `JsonSignedBlock` in producing
+ * `AtomType.Block`). See `src/core/Atom.ts` for `AtomType`.
+ *
+ * Layout: `[SCF magic][type byte][payload][signature?]`. Whether a
+ * trailing signature is present is determined by the `PacketType` (via
+ * `isSigned`), not by a flag.
  */
 export enum PacketType {
-  Block = 0,
-  UnsignedBlock = 1,
+  JsonSignedBlock = 0,
+  JsonUnsignedBlock = 1,
   Signal = 2,
-  Sync = 3,
   Request = 4,
   Delivery = 5,
   PeerInfo = 6,
@@ -35,15 +34,14 @@ export const SIGNATURE_SIZE = 65; // 64-byte compact + 1-byte recovery
 
 /** Returns whether a packet type includes a trailing signature. */
 export function isSigned(type: PacketType): boolean {
-  return type === PacketType.Block;
+  return type === PacketType.JsonSignedBlock;
 }
 
 /** Returns whether the byte is a known PacketType value. */
-function isKnownPacketType(b: number): b is PacketType {
-  return b === PacketType.Block ||
-    b === PacketType.UnsignedBlock ||
+export function isKnownPacketType(b: number): b is PacketType {
+  return b === PacketType.JsonSignedBlock ||
+    b === PacketType.JsonUnsignedBlock ||
     b === PacketType.Signal ||
-    b === PacketType.Sync ||
     b === PacketType.Request ||
     b === PacketType.Delivery ||
     b === PacketType.PeerInfo;
@@ -151,8 +149,18 @@ export function parsePacket<T>(raw: Uint8Array): Packet<T> | null {
 
 // -- Signature verification -----------------------------------------
 
-/** Recover the compressed public key (33 bytes) from a signed packet. */
-export function recoverPacketSigner(packet: Packet<unknown>): Uint8Array | undefined {
+/**
+ * Structural shape needed to recover/verify a signature: just the wire
+ * bytes and the trailing signature. Both `Packet<T>` and `Block` (and
+ * any future signed Atom) satisfy this.
+ */
+export interface SignedBytes {
+  readonly raw: Uint8Array;
+  readonly signature?: Uint8Array;
+}
+
+/** Recover the compressed public key (33 bytes) from signed bytes. */
+export function recoverPacketSigner(packet: SignedBytes): Uint8Array | undefined {
   if (!packet.signature) return undefined;
 
   const headerPayload = packet.raw.subarray(0, packet.raw.length - SIGNATURE_SIZE);
@@ -170,7 +178,7 @@ export function recoverPacketSigner(packet: Packet<unknown>): Uint8Array | undef
 
 /** Verify a signed packet's signature against an expected public key. */
 export function verifyPacketSignature(
-  packet: Packet<unknown>,
+  packet: SignedBytes,
   expectedPublicKey: Uint8Array,
 ): boolean {
   if (!packet.signature) return false;
@@ -186,56 +194,7 @@ export function verifyPacketSignature(
   }
 }
 
-// -- Block convenience helpers --------------------------------------
-
-function blueprintToPayload(blueprint: BlockBlueprint): BlockPayload {
-  return {
-    anchor: blueprint.anchor,
-    aggregates: blueprint.aggregates,
-    claims: blueprint.claims,
-    outputs: blueprint.outputs,
-    declaredWeight: blueprint.declaredWeight,
-    refs: blueprint.refs,
-    timestamp: Date.now(),
-  };
-}
-
-/** Compose a signed block packet from a blueprint and private key. */
-export function composeBlockPacket(
-  blueprint: BlockBlueprint,
-  privateKey: Uint8Array,
-): { block: Block; packet: Packet<BlockPayload> } {
-  const payload = blueprintToPayload(blueprint);
-  const packet = composePacket<BlockPayload>(PacketType.Block, payload, privateKey);
-  const signer = secp.getPublicKey(privateKey, true);
-  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local, signer);
-  return { block, packet };
-}
-
-/** Compose an unsigned block packet from a blueprint. */
-export function composeUnsignedBlockPacket(
-  blueprint: BlockBlueprint,
-): { block: Block; packet: Packet<BlockPayload> } {
-  const payload = blueprintToPayload(blueprint);
-  const packet = composeUnsignedPacket<BlockPayload>(PacketType.UnsignedBlock, payload);
-  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local);
-  return { block, packet };
-}
-
-/** Compose a genesis packet (unsigned) with the given outputs. */
-export function composeGenesisPacket(
-  outputs: Output[],
-): { block: Block; packet: Packet<BlockPayload> } {
-  const payload: BlockPayload = {
-    anchor: ZERO_HASH,
-    aggregates: [],
-    claims: [],
-    outputs,
-    declaredWeight: GENESIS_WEIGHT,
-    refs: [],
-    timestamp: 0,
-  };
-  const packet = composeUnsignedPacket<BlockPayload>(PacketType.UnsignedBlock, payload);
-  const block = createBlockFromPacket(payload, packet.hash, BlockSource.Local);
-  return { block, packet };
-}
+// Block-specific compose helpers (`composeBlockPacket`,
+// `composeUnsignedBlockPacket`, `composeGenesisPacket`) live in
+// `Block.ts` -- they construct Block atoms and would create a circular
+// import if they lived here.

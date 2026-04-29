@@ -132,7 +132,11 @@ Deno.test('partition: unowned namespace outputs ignored by check', () => {
     emittedSlots: [slot(emitted)],
   };
   const result = mod.check(
-    [emitted, { verifier: { contract: agg, params: new Uint8Array(0) }, value: 0, data: new Uint8Array(0) }],
+    [emitted, {
+      verifier: { contract: agg, params: new Uint8Array(0) },
+      value: 0,
+      data: new Uint8Array(0),
+    }],
     [contrib],
   );
   assertEquals(result.ok, true);

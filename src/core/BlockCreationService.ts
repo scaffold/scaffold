@@ -1,14 +1,10 @@
 import { Hash } from '../util/Hash.ts';
-import {
-  Block,
-  BlockStore,
-  getBlockWeightVector,
-} from './Block.ts';
+import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { getAggregationData } from '../contracts/AggregationContract.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
 import {
-  OutputSpaceModule,
   type OutputSpaceBlock,
+  OutputSpaceModule,
   type OutputSpaceProvider,
 } from './OutputSpace.ts';
 import { ProtocolContext } from './ProtocolContext.ts';

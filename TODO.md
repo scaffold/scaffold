@@ -174,6 +174,19 @@ anonymous/authenticated Unix sockets. Known gaps to address before scaling:
   when `runs/<id>/events/` size exceeds `lag_threshold_bytes`; currently
   just configured, not enforced.
 
+## Atom Refactor Follow-ups
+
+Block was unified onto an `Atom` base type (see `src/core/Atom.ts`,
+`src/core/PacketIngestor.ts`). Block-only this pass; control packets
+still use `Packet<T>`. Open work:
+
+- **Migrate Signal / Request / Delivery / PeerInfo onto Atom.** Each gets a `JsonIngestor` instance; `AtomType` gains a variant per logical kind. Once done, replace `parsePacket<T>` paths in `PeerConnection.handleMessage` and `StorageManager.restore` with a unified ingestor registry that dispatches off the type byte.
+- **Atom transit fields.** Add `fromConnections: PeerConnection[]` (reverse-path; index 0 = first sender) and `toConnections: Set<PeerConnection>` to `AtomBase`. This replaces today's `RoutingModule.receivedFirst` and `DeliveryTracker` with the single substrate the legacy2 design used.
+- **Hash-addressed reverse-path signaling.** Add `replyTo: Hash` to a future `SignalAtom`; `NetworkBridge.handleSignalMessage` forwards by looking up `record.fromConnections[0]` for the addressed packet hash instead of broadcasting to all peers except the sender. Signal packets hop "backward" along the path the addressed packet originally took.
+- **Unified bandwidth-balanced sender.** Today gossip → routing → NetworkBridge sends blocks immediately. The legacy2 `FactEmitter` pattern (random-sampler weighted by `value/(size + overhead)`) lets every atom kind compete in one pipeline. Move outbound packet selection there; gossip becomes a `value` provider.
+- **`IndexAtom` for cheap announcements.** Mirrors legacy2's `HashInfo`: send the hash of an atom we have, peer sends a `Request` if it wants the body. Lets the unified pipeline pick between full body and index based on bandwidth budget.
+- **Wire ingestors into PeerConnection / StorageManager dispatch.** `PeerConnection.handleMessage` and `StorageManager.restore` still parse via `parsePacket` then call `createBlockFromPacket`. They can dispatch directly through `jsonSignedBlockIngestor` / `jsonUnsignedBlockIngestor` exported from `Block.ts`, deleting the manual block-construction branch.
+
 ## Application Layer
 
 These sit on top of the core protocol and can be specified later.

@@ -5,7 +5,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { Scaffold } from '../src/Scaffold.ts';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
+import { composeGenesisPacket } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { secp } from '../src/util/secp.ts';
 import { RECORD_CONTRACT } from '../src/core/Block.ts';
@@ -34,7 +34,7 @@ Deno.test(
     const priv = secp.utils.randomPrivateKey();
     const pub = secp.getPublicKey(priv, true);
 
-    const { block: genesis } = composeGenesisPacket([makeSignatureOutput(pub, 1000)]);
+    const genesis = composeGenesisPacket([makeSignatureOutput(pub, 1000)]);
     const scaffold = new Scaffold({
       privateKey: priv,
       genesis,
@@ -86,7 +86,7 @@ Deno.test(
   async () => {
     const priv = secp.utils.randomPrivateKey();
     const pub = secp.getPublicKey(priv, true);
-    const { block: genesis } = composeGenesisPacket([makeSignatureOutput(pub, 1000)]);
+    const genesis = composeGenesisPacket([makeSignatureOutput(pub, 1000)]);
     const scaffold = new Scaffold({
       privateKey: priv,
       genesis,

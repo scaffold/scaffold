@@ -1,6 +1,7 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
-import { Block, BlockSource, BlockStore } from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block, BlockStore } from '../src/core/Block.ts';
 import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ContractExecutor, ContractFn } from '../src/node/ContractExecutor.ts';
@@ -34,7 +35,10 @@ function stubBlock(blockHash: Hash, outputs: Output[] = []): Block {
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 

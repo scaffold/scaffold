@@ -1,5 +1,4 @@
-import { Block } from '../core/Block.ts';
-import { composeGenesisPacket } from '../core/Packet.ts';
+import { Block, composeGenesisPacket } from '../core/Block.ts';
 import { ANIMALS, deriveIdentity } from './Identity.ts';
 import { makeStatusOutput } from './StatusContract.ts';
 
@@ -15,5 +14,5 @@ export function createDemoGenesis(): Block {
     const identity = deriveIdentity(name);
     return makeStatusOutput(identity.publicKey, '');
   });
-  return composeGenesisPacket(outputs).block;
+  return composeGenesisPacket(outputs);
 }

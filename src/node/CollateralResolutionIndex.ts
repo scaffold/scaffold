@@ -17,7 +17,7 @@
 // This index is DI-agnostic; see CollateralResolutionIndexService for wiring.
 
 import type { Hash, HashPrimitive } from '../util/Hash.ts';
-import { readVerdictFromBlock, type CollateralVerdict } from '../contracts/CollateralContract.ts';
+import { type CollateralVerdict, readVerdictFromBlock } from '../contracts/CollateralContract.ts';
 import type { Block } from '../core/Block.ts';
 import type { BlockDraft } from '../core/BlockDraft.ts';
 
@@ -111,12 +111,8 @@ export class CollateralResolutionIndex {
 
     provider.onBlockAdded((block) => this._ingestBlock(block));
     provider.onDraftTransition((draft) => this._onDraftTransition(draft));
-    provider.onVerificationStatusChanged((h, s) =>
-      this._onVerificationChanged(h, s),
-    );
-    provider.onCanonicalityChanged((h, canonical) =>
-      this._onCanonicalityChanged(h, canonical),
-    );
+    provider.onVerificationStatusChanged((h, s) => this._onVerificationChanged(h, s));
+    provider.onCanonicalityChanged((h, canonical) => this._onCanonicalityChanged(h, canonical));
   }
 
   /** Best verdict for target H among all currently-eligible canonical sources. */

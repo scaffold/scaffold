@@ -37,7 +37,7 @@ Connect the existing network transport plugins (WebRTC, WebSocket, Mock) to the 
 
 4. **Block request handling**:
    - `PeerConnection.onRequest(hashes)` → look up blocks in store, send them back
-   - `PeerConnection.onSync(tips, depth)` → compare with local canonical tips, request missing blocks
+   - (Tip-exchange `Sync` packets removed; gossip drives propagation directly.)
 
 5. **Scaffold.connect(addresses)** — public API to bootstrap connections
 

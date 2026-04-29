@@ -110,7 +110,6 @@ export class Scaffold {
         selfPrivateKey: privateKey,
         selfPublicKey: publicKey,
         store: nodeContext.store,
-        packetStore: nodeContext.packetStore,
         routing: nodeContext.routing,
         processBlock: (block, peerId) => {
           nodeContext.processBlock(block, peerId);

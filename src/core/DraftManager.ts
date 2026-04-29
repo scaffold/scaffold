@@ -80,5 +80,4 @@ export class DraftManager {
       this.store.transition(draftId, 'cancelled');
     }
   }
-
 }

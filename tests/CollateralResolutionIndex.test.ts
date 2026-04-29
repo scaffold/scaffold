@@ -1,12 +1,10 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
-import { BlockSource, type Block } from '../src/core/Block.ts';
+import { AtomSource, AtomType, type Block } from '../src/core/Block.ts';
 import type { BlockDraft } from '../src/core/BlockDraft.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
-import {
-  encodeVerdict,
-  VERDICT_RECORD_KEY,
-} from '../src/contracts/CollateralContract.ts';
+import { encodeVerdict, VERDICT_RECORD_KEY } from '../src/contracts/CollateralContract.ts';
 import {
   CollateralResolutionIndex,
   type CollateralResolutionIndexProvider,
@@ -124,7 +122,10 @@ function makeBlock(
     refs: [],
     timestamp: 1000,
     receivedAt: 1000,
-    source: BlockSource.Remote,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Remote,
   };
 }
 

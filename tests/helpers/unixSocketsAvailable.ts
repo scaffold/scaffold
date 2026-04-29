@@ -7,9 +7,9 @@ let cached: boolean | undefined;
 
 export function unixSocketsAvailable(): boolean {
   if (cached !== undefined) return cached;
-  const probePath = `${Deno.env.get('TMPDIR') ?? '/tmp/'}scaffold-unix-probe-${
-    crypto.randomUUID()
-  }.sock`;
+  const probePath = `${
+    Deno.env.get('TMPDIR') ?? '/tmp/'
+  }scaffold-unix-probe-${crypto.randomUUID()}.sock`;
   try {
     const listener = Deno.listen({ path: probePath, transport: 'unix' });
     listener.close();

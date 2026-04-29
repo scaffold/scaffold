@@ -1,15 +1,10 @@
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
+import { composeGenesisPacket } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { WELL_KNOWN_PRIVATE_KEY, WELL_KNOWN_PUBLIC_KEY } from '../src/genesis.ts';
-import {
-  FetchClaim,
-  FetchHandle,
-  FetchManager,
-  FetchResult,
-} from '../src/node/FetchManager.ts';
+import { FetchClaim, FetchHandle, FetchManager, FetchResult } from '../src/node/FetchManager.ts';
 import {
   FetchAbortError,
   InvalidatedError,
@@ -21,7 +16,7 @@ import {
 
 function defaultConfig(): ScaffoldConfig {
   const outputs = [makeSignatureOutput(WELL_KNOWN_PUBLIC_KEY, 1_000_000)];
-  const { block: genesis } = composeGenesisPacket(outputs);
+  const genesis = composeGenesisPacket(outputs);
   return { genesis, privateKey: WELL_KNOWN_PRIVATE_KEY, enableLogging: false };
 }
 

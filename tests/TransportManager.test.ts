@@ -16,7 +16,7 @@ function generateKeyPair() {
 
 function makeManager(
   plugins: MockTransportPlugin[],
-  onBlockReceived: (block: Block, peerId: string, raw: Uint8Array) => void = () => {},
+  onBlockReceived: (block: Block, peerId: string) => void = () => {},
 ): {
   manager: TransportManager;
   sentRelays: { to: string; from: string; payload: SignalEnvelope }[];
@@ -153,7 +153,7 @@ Deno.test('TransportManager: sendBlock broadcasts raw bytes to all peers', () =>
 
   // We don't need a real signed block here -- TransportManager just
   // forwards bytes. Use an unsigned-block packet as a stand-in.
-  const raw = composeUnsignedPacket(PacketType.UnsignedBlock, { hash: 'abc' }).raw;
+  const raw = composeUnsignedPacket(PacketType.JsonUnsignedBlock, { hash: 'abc' }).raw;
   manager.sendBlock(raw);
 
   assertEquals(p1.sent.length, 1);

@@ -83,8 +83,9 @@ export class NamespacePartitionModule {
       if (blockOutputs.length !== emittedForThisNamespace.length) {
         return {
           ok: false,
-          reason:
-            `namespace ${Hash.fromPrimitive(namespaceKey).toHex()}: block has ${blockOutputs.length} outputs, contract emitted ${emittedForThisNamespace.length}`,
+          reason: `namespace ${
+            Hash.fromPrimitive(namespaceKey).toHex()
+          }: block has ${blockOutputs.length} outputs, contract emitted ${emittedForThisNamespace.length}`,
         };
       }
 

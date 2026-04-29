@@ -1,8 +1,10 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import {
+  AtomSource,
+  AtomType,
   Block,
-  BlockSource,
   BlockStore,
   getRefOutputs,
   RECORD_CONTRACT,
@@ -30,7 +32,10 @@ function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
     refs,
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 

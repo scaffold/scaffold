@@ -1,6 +1,7 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block, BlockSource } from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block } from '../src/core/Block.ts';
 import { BlockRecordSet } from '../src/reactive/BlockRecordSet.ts';
 
 // -- Helpers -------------------------------------------------------
@@ -16,7 +17,10 @@ function makeBlock(name: string): Block {
     refs: [],
     timestamp: 100,
     receivedAt: 200,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 
@@ -104,6 +108,6 @@ Deno.test('BlockRecordSet: block metadata (receivedAt, source) accessible', () =
   const retrieved = set.get(block.hash)!;
   assertEquals(retrieved.timestamp, 100);
   assertEquals(retrieved.receivedAt, 200);
-  assertEquals(retrieved.source, BlockSource.Local);
+  assertEquals(retrieved.source, AtomSource.Local);
   set.dispose();
 });

@@ -1,10 +1,7 @@
 import { assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
-import {
-  INSURANCE_CONTRACT,
-  SIGNATURE_CONTRACT,
-} from '../src/core/Block.ts';
+import { INSURANCE_CONTRACT, SIGNATURE_CONTRACT } from '../src/core/Block.ts';
 import {
   decodeInsuranceDetail,
   encodeInsuranceDetail,
@@ -15,7 +12,11 @@ import {
   ExecutionModuleShim as ExecutionModule,
   type ExecutionProvider,
 } from './testutil/ExecutionModuleShim.ts';
-import { insuranceContract, FINDER_SHARE, MIN_RETURN_RATE } from '../src/contracts/InsuranceContract.ts';
+import {
+  FINDER_SHARE,
+  insuranceContract,
+  MIN_RETURN_RATE,
+} from '../src/contracts/InsuranceContract.ts';
 
 // -- Test block type -------------------------------------------------
 

@@ -147,4 +147,3 @@ export const insuranceContract: Contract = {
     return encodeInsuranceDetail({ pubkey });
   },
 };
-

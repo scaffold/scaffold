@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/aggregation.md
 
 import type { Contract } from './Contract.ts';
-import { type Block, AGGREGATION_CONTRACT } from '../core/Block.ts';
+import { AGGREGATION_CONTRACT, type Block } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
 import { Hash } from '../util/Hash.ts';
 

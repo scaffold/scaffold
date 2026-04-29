@@ -1,6 +1,7 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
-import { Block, BlockSource } from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockProcessor, PutManager, PutRequest } from '../src/node/PutManager.ts';
 
@@ -28,7 +29,10 @@ function makeBlock(overrides?: Partial<Block>): Block {
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
     ...overrides,
   };
 }

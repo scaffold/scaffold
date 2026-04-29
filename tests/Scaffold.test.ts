@@ -1,8 +1,7 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { AGGREGATION_CONTRACT, Block } from '../src/core/Block.ts';
+import { AGGREGATION_CONTRACT, Block, composeGenesisPacket } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { NodeContext } from '../src/node/NodeContext.ts';
 import { WELL_KNOWN_PRIVATE_KEY } from '../src/genesis.ts';
@@ -19,7 +18,7 @@ function makeOutput(value: number, label?: string): Output {
 
 function defaultConfig(): ScaffoldConfig {
   const outputs = [makeOutput(100, 'g0'), makeOutput(200, 'g1')];
-  const { block: genesis } = composeGenesisPacket(outputs);
+  const genesis = composeGenesisPacket(outputs);
   return { genesis };
 }
 
@@ -125,7 +124,9 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
   let aggBlock: Block | undefined;
   for (const block of ctx.store.values()) {
     const hasAggData = block.outputs.some(
-      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null && o.data.length > 0,
+      (o) =>
+        Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null &&
+        o.data.length > 0,
     );
     if (hasAggData) {
       aggBlock = block;
@@ -160,7 +161,9 @@ Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async (
   const aggBlocks: Block[] = [];
   for (const block of ctx.store.values()) {
     const hasAggData = block.outputs.some(
-      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null && o.data.length > 0,
+      (o) =>
+        Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null &&
+        o.data.length > 0,
     );
     if (hasAggData) {
       aggBlocks.push(block);
@@ -197,7 +200,9 @@ Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', as
   const aggBlocks: Block[] = [];
   for (const block of ctx.store.values()) {
     const hasAggData = block.outputs.some(
-      (o) => Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null && o.data.length > 0,
+      (o) =>
+        Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null &&
+        o.data.length > 0,
     );
     if (hasAggData) {
       aggBlocks.push(block);
@@ -208,4 +213,6 @@ Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', as
     aggBlocks.length >= 2,
     `expected at least 2 aggregation blocks with async puts, got ${aggBlocks.length}`,
   );
+
+  await scaffold.close();
 });

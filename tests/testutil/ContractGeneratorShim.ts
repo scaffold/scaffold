@@ -27,11 +27,21 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     private readonly utxoIndex: UtxoIndex,
     private readonly outputClaims: OutputClaimModule<Block>,
   ) {}
-  getBlock(hash: Hash): Block | undefined { return this.store.get(hash); }
-  getOutputs(block: Block): Output[] { return block.outputs; }
-  getClaims(block: Block): number[] { return block.claims; }
-  getRefs(block: Block): Hash[] { return block.refs; }
-  getExtendedOutputs(block: Block): Output[] { return collectExtendedOutputs(block, this.store); }
+  getBlock(hash: Hash): Block | undefined {
+    return this.store.get(hash);
+  }
+  getOutputs(block: Block): Output[] {
+    return block.outputs;
+  }
+  getClaims(block: Block): number[] {
+    return block.claims;
+  }
+  getRefs(block: Block): Hash[] {
+    return block.refs;
+  }
+  getExtendedOutputs(block: Block): Output[] {
+    return collectExtendedOutputs(block, this.store);
+  }
   findInputs(verifier: Verifier): AvailableInput[] {
     const entries = this.utxoIndex.getByVerifier(verifier.contract, verifier.params);
     const result: AvailableInput[] = [];
@@ -66,8 +76,10 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
         const extIdx = claimIdx - ownOutputCount;
         if (extIdx >= anchorExtended.length) continue;
         const output = anchorExtended[extIdx];
-        if (Hash.equals(output.verifier.contract, verifier.contract) &&
-            bytesEqual(output.verifier.params, verifier.params)) return block.hash;
+        if (
+          Hash.equals(output.verifier.contract, verifier.contract) &&
+          bytesEqual(output.verifier.params, verifier.params)
+        ) return block.hash;
       }
     }
     return undefined;
@@ -247,9 +259,7 @@ export class ContractGeneratorShim {
       this._outputClaims.addClaim(draft.draftId, claim.block, claim.outputIndex);
     }
     const existingClaimKeys = new Set(
-      draft.resolvedClaims.map((rc: ClaimIntent) =>
-        `${rc.block.toPrimitive()}:${rc.outputIndex}`
-      ),
+      draft.resolvedClaims.map((rc: ClaimIntent) => `${rc.block.toPrimitive()}:${rc.outputIndex}`),
     );
     const dedupedClaims = newClaims.filter(
       (rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`),

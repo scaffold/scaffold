@@ -328,14 +328,14 @@ export class ConsensusModule<BlockType> {
     const memo = new Map<HashPrimitive, number>();
 
     let bestHash = hash;
-    let bestWeight = this.computeEffectiveWeight(key, memo)
-      + (this.boosts.get(key) ?? 0);
+    let bestWeight = this.computeEffectiveWeight(key, memo) +
+      (this.boosts.get(key) ?? 0);
 
     for (const cKey of conflicts) {
       const cHash = this.blocks.get(cKey);
       if (!cHash) continue;
-      const cWeight = this.computeEffectiveWeight(cKey, memo)
-        + (this.boosts.get(cKey) ?? 0);
+      const cWeight = this.computeEffectiveWeight(cKey, memo) +
+        (this.boosts.get(cKey) ?? 0);
       if (
         cWeight > bestWeight ||
         (cWeight === bestWeight && Hash.compare(cHash, bestHash) < 0)
@@ -467,14 +467,14 @@ export class ConsensusModule<BlockType> {
       if (!dc || dc.size === 0) continue;
 
       const blockHash = this.blocks.get(blockKey)!;
-      const blockWeight = this.computeEffectiveWeight(blockKey, memo, canonicalFilter)
-        + (this.boosts.get(blockKey) ?? 0);
+      const blockWeight = this.computeEffectiveWeight(blockKey, memo, canonicalFilter) +
+        (this.boosts.get(blockKey) ?? 0);
 
       for (const partnerKey of dc) {
         if (!this.blocks.has(partnerKey)) continue;
         const partnerHash = this.blocks.get(partnerKey)!;
-        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo, canonicalFilter)
-          + (this.boosts.get(partnerKey) ?? 0);
+        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo, canonicalFilter) +
+          (this.boosts.get(partnerKey) ?? 0);
 
         if (
           partnerWeight > blockWeight ||

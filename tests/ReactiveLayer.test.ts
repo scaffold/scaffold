@@ -1,6 +1,7 @@
+import { PacketType } from '../src/core/Packet.ts';
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { Block, BlockSource, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
 import { BlockSpec, Output } from '../src/core/BlockCreationModule.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
@@ -45,7 +46,10 @@ function makeLeafBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 

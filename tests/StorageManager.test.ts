@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert';
 import { secp } from '../src/util/secp.ts';
 import { Block, createGenesisBlock } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
-import { composeBlockPacket } from '../src/core/Packet.ts';
+import { composeBlockPacket } from '../src/core/Block.ts';
 import { StorageManager, StoragePlugin } from '../src/node/StorageManager.ts';
 
 // -- Mock storage plugin -------------------------------------------
@@ -37,7 +37,7 @@ function makeSignedPacket(
 ): { block: Block; raw: Uint8Array; publicKey: Uint8Array } {
   const privateKey = secp.utils.randomPrivateKey();
   const publicKey = secp.getPublicKey(privateKey, true);
-  const { block, packet } = composeBlockPacket(
+  const block = composeBlockPacket(
     {
       anchor: anchor.hash,
       aggregates: [],
@@ -52,7 +52,7 @@ function makeSignedPacket(
     },
     privateKey,
   );
-  return { block, raw: packet.raw, publicKey };
+  return { block, raw: block.raw, publicKey };
 }
 
 // -- Tests ---------------------------------------------------------

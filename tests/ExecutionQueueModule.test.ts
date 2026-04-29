@@ -1,9 +1,5 @@
 import { assertEquals } from '@std/assert';
-import {
-  Executable,
-  ExecutionQueueModule,
-  TaskResult,
-} from '../src/core/ExecutionQueueModule.ts';
+import { Executable, ExecutionQueueModule, TaskResult } from '../src/core/ExecutionQueueModule.ts';
 
 // -- Test helpers ------------------------------------------------
 

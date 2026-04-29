@@ -1,19 +1,9 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
-import { Block, createGenesisBlock } from '../src/core/Block.ts';
+import { Block, composeBlockPacket, createGenesisBlock } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
-import {
-  composeBlockPacket,
-  composeUnsignedPacket,
-  PacketType,
-  parsePacket,
-} from '../src/core/Packet.ts';
-import {
-  PeerConnection,
-  SignalPayload,
-  SyncPayload,
-  TransportConnection,
-} from '../src/node/PeerConnection.ts';
+import { composeUnsignedPacket, PacketType, parsePacket } from '../src/core/Packet.ts';
+import { PeerConnection, SignalPayload, TransportConnection } from '../src/node/PeerConnection.ts';
 
 // -- Mock Transport ---------------------------------------------------
 
@@ -76,7 +66,7 @@ function makeSignedBlockPacket() {
   const privateKey = secp.utils.randomPrivateKey();
   const publicKey = secp.getPublicKey(privateKey, true);
   const genesis = makeTestBlock();
-  const composed = composeBlockPacket(
+  const block = composeBlockPacket(
     {
       anchor: genesis.hash,
       aggregates: [],
@@ -87,14 +77,14 @@ function makeSignedBlockPacket() {
     },
     privateKey,
   );
-  return { ...composed, publicKey };
+  return { block, publicKey };
 }
 
 function setup() {
   const transport = new MockTransport('peer-1');
-  const receivedBlocks: { block: Block; peerId: string; raw: Uint8Array }[] = [];
-  const onBlockReceived = (block: Block, peerId: string, raw: Uint8Array) => {
-    receivedBlocks.push({ block, peerId, raw });
+  const receivedBlocks: { block: Block; peerId: string }[] = [];
+  const onBlockReceived = (block: Block, peerId: string) => {
+    receivedBlocks.push({ block, peerId });
   };
   const peer = new PeerConnection(transport, onBlockReceived);
   return { transport, receivedBlocks, peer };
@@ -109,7 +99,7 @@ Deno.test('PeerConnection exposes peerId from transport', () => {
 
 Deno.test('sendBlock writes raw packet bytes to the transport', () => {
   const { transport, peer } = setup();
-  const { packet } = makeSignedBlockPacket();
+  const { block: packet } = makeSignedBlockPacket();
 
   peer.sendBlock(packet.raw);
 
@@ -119,7 +109,8 @@ Deno.test('sendBlock writes raw packet bytes to the transport', () => {
 
 Deno.test('receiving a block packet calls onBlockReceived with recovered signer', () => {
   const { transport, receivedBlocks, peer: _peer } = setup();
-  const { block, packet, publicKey } = makeSignedBlockPacket();
+  const { block, publicKey } = makeSignedBlockPacket();
+  const packet = block;
 
   transport.simulateMessage(packet.raw);
 
@@ -127,12 +118,13 @@ Deno.test('receiving a block packet calls onBlockReceived with recovered signer'
   assertEquals(receivedBlocks[0].peerId, 'peer-1');
   assertEquals(receivedBlocks[0].block.hash.toHex(), block.hash.toHex());
   assertEquals(receivedBlocks[0].block.signer, publicKey);
-  assertEquals(receivedBlocks[0].raw, packet.raw);
+  assertEquals(receivedBlocks[0].block.raw, packet.raw);
 });
 
 Deno.test('block round-trip preserves block fields', () => {
   const { transport, receivedBlocks } = setup();
-  const { block, packet } = makeSignedBlockPacket();
+  const { block } = makeSignedBlockPacket();
+  const packet = block;
 
   transport.simulateMessage(packet.raw);
 
@@ -147,7 +139,7 @@ Deno.test('block round-trip preserves block fields', () => {
 Deno.test('unsigned block packet leaves signer undefined', () => {
   const { transport, receivedBlocks } = setup();
   const genesis = makeTestBlock();
-  const packet = composeUnsignedPacket(PacketType.UnsignedBlock, {
+  const packet = composeUnsignedPacket(PacketType.JsonUnsignedBlock, {
     anchor: genesis.hash,
     aggregates: [],
     claims: [],
@@ -195,39 +187,6 @@ Deno.test('receiving a signal packet calls onSignal handler', () => {
   assertEquals(received[0].to, 'peer-1');
   assertEquals(received[0].from, 'peer-2');
   assertEquals(received[0].payload, { sdp: 'answer' });
-});
-
-Deno.test('sendSync sends a sync packet with hex tips', () => {
-  const { transport, peer } = setup();
-  const tip1 = Hash.digest('tip1');
-  const tip2 = Hash.digest('tip2');
-
-  peer.sendSync([tip1, tip2], 10);
-
-  assertEquals(transport.sent.length, 1);
-  const parsed = parsePacket<SyncPayload>(transport.sent[0]);
-  assert(parsed !== null);
-  assertEquals(parsed!.type, PacketType.Sync);
-  assertEquals(parsed!.payload.tips, [tip1.toHex(), tip2.toHex()]);
-  assertEquals(parsed!.payload.depth, 10);
-});
-
-Deno.test('receiving a sync packet calls onSync handler', () => {
-  const { transport, peer } = setup();
-  const received: SyncPayload[] = [];
-
-  peer.onSync((data) => received.push(data));
-
-  transport.simulateMessage(
-    composeUnsignedPacket<SyncPayload>(PacketType.Sync, {
-      tips: ['aabb', 'ccdd'],
-      depth: 5,
-    }).raw,
-  );
-
-  assertEquals(received.length, 1);
-  assertEquals(received[0].tips, ['aabb', 'ccdd']);
-  assertEquals(received[0].depth, 5);
 });
 
 Deno.test('requestBlocks sends a request packet with hex hashes', () => {
@@ -321,13 +280,12 @@ Deno.test('close() is idempotent', () => {
 
 Deno.test('sends are no-ops after close', () => {
   const { transport, peer } = setup();
-  const { packet } = makeSignedBlockPacket();
+  const { block: packet } = makeSignedBlockPacket();
 
   peer.close();
 
   peer.sendBlock(packet.raw);
   peer.sendSignal('a', 'b', null);
-  peer.sendSync([], 0);
   peer.requestBlocks([]);
   peer.sendDelivery(Hash.digest('x'), true);
 
@@ -350,7 +308,7 @@ Deno.test('transport close triggers onClose handler', () => {
 
 Deno.test('messages after transport close are ignored', () => {
   const { transport, receivedBlocks } = setup();
-  const { packet } = makeSignedBlockPacket();
+  const { block: packet } = makeSignedBlockPacket();
 
   transport.simulateClose();
   transport.simulateMessage(packet.raw);
@@ -383,14 +341,12 @@ Deno.test('signal packet without handler is silently ignored', () => {
 Deno.test('multiple packet types flow through correctly', () => {
   const { transport, peer, receivedBlocks } = setup();
   const signals: SignalPayload[] = [];
-  const syncs: SyncPayload[] = [];
   const requests: { hashes: string[] }[] = [];
 
   peer.onSignal((data) => signals.push(data));
-  peer.onSync((data) => syncs.push(data));
   peer.onRequest((data) => requests.push(data));
 
-  const { packet } = makeSignedBlockPacket();
+  const { block: packet } = makeSignedBlockPacket();
 
   transport.simulateMessage(packet.raw);
   transport.simulateMessage(
@@ -401,15 +357,11 @@ Deno.test('multiple packet types flow through correctly', () => {
     }).raw,
   );
   transport.simulateMessage(
-    composeUnsignedPacket<SyncPayload>(PacketType.Sync, { tips: ['aa'], depth: 3 }).raw,
-  );
-  transport.simulateMessage(
     composeUnsignedPacket(PacketType.Request, { hashes: ['bb'] }).raw,
   );
 
   assertEquals(receivedBlocks.length, 1);
   assertEquals(signals.length, 1);
-  assertEquals(syncs.length, 1);
   assertEquals(requests.length, 1);
 });
 

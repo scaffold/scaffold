@@ -6,14 +6,10 @@
  * - Canonical flips do NOT affect claim history (append-only)
  * - Backfill routes existing unclaimed outputs to new claimers
  */
+import { PacketType } from '../src/core/Packet.ts';
 import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import {
-  Block,
-  BlockSource,
-  BlockStore,
-  createGenesisBlock,
-} from '../src/core/Block.ts';
+import { AtomSource, AtomType, Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { NodeConfig, NodeContext } from '../src/node/NodeContext.ts';
 import { verifierKey } from '../src/node/UtxoIndex.ts';
@@ -50,7 +46,10 @@ function makeBlock(
     refs: [],
     timestamp: 0,
     receivedAt: 0,
-    source: BlockSource.Local,
+    type: AtomType.Block,
+    packetType: PacketType.JsonUnsignedBlock,
+    raw: new Uint8Array(0),
+    source: AtomSource.Local,
   };
 }
 
@@ -142,8 +141,13 @@ Deno.test('gossip lifecycle: claim resolution emits Rule 1 send action', () => {
 
   // Should have at least one Rule 1 action: claimer -> genesis
   const rule1 = actions.filter(
-    (a) => a.block.toPrimitive() === claimer.hash.toPrimitive() &&
+    (a) =>
+      a.block.toPrimitive() === claimer.hash.toPrimitive() &&
       a.trigger.toPrimitive() === genesis.hash.toPrimitive(),
   );
-  assertEquals(rule1.length >= 1, true, 'Expected Rule 1 send action routing claimer toward genesis');
+  assertEquals(
+    rule1.length >= 1,
+    true,
+    'Expected Rule 1 send action routing claimer toward genesis',
+  );
 });

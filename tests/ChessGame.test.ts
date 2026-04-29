@@ -4,7 +4,7 @@
 // registerOutputHandler bridge. These tests exercise that end-to-end.
 
 import { assert, assertEquals } from '@std/assert';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
+import { composeGenesisPacket } from '../src/core/Block.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 import { secp } from '../src/util/secp.ts';
@@ -18,7 +18,7 @@ function makePair(stakeEach: number) {
   const whitePub = secp.getPublicKey(whitePriv, true);
   const blackPub = secp.getPublicKey(blackPriv, true);
 
-  const { block: genesis } = composeGenesisPacket([
+  const genesis = composeGenesisPacket([
     makeSignatureOutput(whitePub, stakeEach),
     makeSignatureOutput(blackPub, stakeEach),
   ]);
@@ -57,7 +57,7 @@ async function flush(): Promise<void> {
 Deno.test('ChessGame: single-node create publishes awaiting-join state', async () => {
   const priv = secp.utils.randomPrivateKey();
   const pub = secp.getPublicKey(priv, true);
-  const { block: genesis } = composeGenesisPacket([
+  const genesis = composeGenesisPacket([
     makeSignatureOutput(pub, 10_000),
   ]);
   const scaffold = new Scaffold({ privateKey: priv, genesis });
@@ -79,7 +79,7 @@ Deno.test('ChessGame: single-node create publishes awaiting-join state', async (
 Deno.test('ChessGame: pending-prompt store creates/returns consistent prompts', () => {
   const priv = secp.utils.randomPrivateKey();
   const pub = secp.getPublicKey(priv, true);
-  const { block: genesis } = composeGenesisPacket([
+  const genesis = composeGenesisPacket([
     makeSignatureOutput(pub, 100),
   ]);
   const scaffold = new Scaffold({ privateKey: priv, genesis });
