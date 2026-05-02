@@ -138,7 +138,16 @@ export class Scaffold {
       pushActionHandler = (actions, block) => {
         this.networkBridge!.handlePushActions(actions, block);
       };
-      getConnectedPeers = () => this.networkBridge!.peers.keys();
+      // Yield logical peerIds (deduplicated across connections) so flood
+      // mode emits one PushAction per peer; transport.sendBlock fans
+      // out to every active connection sharing that peerId.
+      getConnectedPeers = () => {
+        const seen = new Set<string>();
+        for (const peer of this.networkBridge!.peers.values()) {
+          seen.add(peer.peerId);
+        }
+        return seen;
+      };
     }
 
     // 4. Create PutManager with a BlockProcessor that delegates to NodeContext.

@@ -590,7 +590,14 @@ export class NodeContext {
     // published block loses canonicality to its own source draft.
     this.draftManager.cancelDraft(draft.draftId);
     if (block) {
-      this.reactiveLayer.processBlock(block, null);
+      // Defer the re-entrant processBlock to a microtask so the
+      // solidify frame unwinds before strategies re-evaluate the new
+      // block. Without this, DraftStrategy can spawn a downstream
+      // draft (e.g. chess turn=N+1) on the just-solidified block in
+      // the same stack frame, contending for worker slots and
+      // mid-transition draft state. See
+      // docs/design/chess-turn-one-bug.md.
+      queueMicrotask(() => this.reactiveLayer.processBlock(block, null));
     }
   }
 

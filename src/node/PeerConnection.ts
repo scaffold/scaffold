@@ -77,7 +77,14 @@ export class PeerConnection {
    */
   sendBlock(raw: Uint8Array): void {
     if (this.closed) return;
-    this.transport.send(raw);
+    try {
+      this.transport.send(raw);
+    } catch {
+      // Channel may be in a non-'open' state (e.g. WebRTC handshake
+      // raced and lost). Drop and let the higher layers retry via
+      // another connection if one exists; per-send errors are not
+      // recoverable here.
+    }
   }
 
   /**
@@ -92,7 +99,9 @@ export class PeerConnection {
       AtomSource.Local,
     );
     if (!atom) return;
-    this.transport.send(atom.raw);
+    try {
+      this.transport.send(atom.raw);
+    } catch { /* see sendBlock */ }
   }
 
   /** Request specific blocks by hash. */
@@ -103,7 +112,9 @@ export class PeerConnection {
       AtomSource.Local,
     );
     if (!atom) return;
-    this.transport.send(atom.raw);
+    try {
+      this.transport.send(atom.raw);
+    } catch { /* see sendBlock */ }
   }
 
   // -- Event handler registration -------------------------------------

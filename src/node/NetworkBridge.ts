@@ -187,8 +187,10 @@ export class NetworkBridge {
       // can answer too. (Non-flood: requests are RPC-style and not
       // forwarded; we just answer what we have.)
       if (this.useFloodGossip) {
-        for (const [otherPeerId, otherPeer] of this.transport.peers) {
-          if (otherPeerId === peer.peerId) continue;
+        const sentTo = new Set<string>([peer.peerId]);
+        for (const otherPeer of this.transport.peers.values()) {
+          if (sentTo.has(otherPeer.peerId)) continue;
+          sentTo.add(otherPeer.peerId);
           otherPeer.requestBlocks(atom.hashes);
         }
       }
@@ -217,8 +219,10 @@ export class NetworkBridge {
       if (this.selfId && atom.to === this.selfId) {
         void this.transport.recvSignalEnvelope(atom.payload as SignalEnvelope);
       }
-      for (const [peerId, peer] of this.transport.peers) {
-        if (peerId === senderPeerId) continue;
+      const sentTo = new Set<string>([senderPeerId]);
+      for (const peer of this.transport.peers.values()) {
+        if (sentTo.has(peer.peerId)) continue;
+        sentTo.add(peer.peerId);
         peer.sendSignal(atom.to, atom.from, atom.payload, atom.replyTo);
       }
       return;
@@ -251,15 +255,15 @@ export class NetworkBridge {
         return;
       }
       const nextPeerId = target.fromConnections[0];
-      const nextPeer = this.transport.peers.get(nextPeerId);
-      if (!nextPeer) {
+      const candidates = this.transport.connectionsByPeerId(nextPeerId);
+      if (candidates.length === 0) {
         this._log?.warn('replyToPathBroken', {
           replyTo: atom.replyTo.toHex(),
           nextPeerId,
         });
         return;
       }
-      nextPeer.sendSignal(atom.to, atom.from, atom.payload, atom.replyTo);
+      candidates[0].sendSignal(atom.to, atom.from, atom.payload, atom.replyTo);
       return;
     }
 
@@ -267,10 +271,11 @@ export class NetworkBridge {
     if (this.selfId && atom.to === this.selfId) {
       void this.transport.recvSignalEnvelope(atom.payload as SignalEnvelope);
     } else {
-      for (const [peerId, peer] of this.transport.peers) {
-        if (peerId !== senderPeerId) {
-          peer.sendSignal(atom.to, atom.from, atom.payload);
-        }
+      const sentTo = new Set<string>([senderPeerId]);
+      for (const peer of this.transport.peers.values()) {
+        if (sentTo.has(peer.peerId)) continue;
+        sentTo.add(peer.peerId);
+        peer.sendSignal(atom.to, atom.from, atom.payload);
       }
     }
   }
@@ -290,7 +295,10 @@ export class NetworkBridge {
       );
       if (atom) this.seenSignals.add(atom.hash.toPrimitive());
     }
+    const sentTo = new Set<string>();
     for (const peer of this.transport.peers.values()) {
+      if (sentTo.has(peer.peerId)) continue;
+      sentTo.add(peer.peerId);
       peer.sendSignal(to, from, payload);
     }
   }

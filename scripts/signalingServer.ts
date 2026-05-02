@@ -35,6 +35,12 @@ const scaffold = new Scaffold({
   genesis: computeDemoGenesis(DEMO_SEEDS),
   plugins: [new WebsocketServerTransport({ port })],
   enableLogging: false,
+  // Hub forwards every block/signal/request it sees to every other
+  // connected peer. Without this, brand-new chess blocks have no
+  // claim-history-based path through the hub. See TODO.md "Baseline
+  // propagation for cold-start".
+  useFloodGossip: true,
+  enablePiggyback: false,
 });
 
 scaffold.onPeerConnected((peerId) => {

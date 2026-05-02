@@ -340,9 +340,9 @@ Deno.test('NetworkBridge: replyTo signal forwarded along atom.fromConnections[0]
 
   const b = plugin.injectAnonymousConnection();
   const c = plugin.injectAnonymousConnection();
-  const peerIds = [...bridge.peers.keys()];
-  const bId = peerIds[0];
-  const cId = peerIds[1];
+  const peers = [...bridge.peers.values()];
+  const bId = peers[0].peerId;
+  const cId = peers[1].peerId;
 
   // Seed the store with a block that "came from" peer C. Reverse-path
   // forwarding should route the signal toward C.
@@ -410,11 +410,11 @@ Deno.test('NetworkBridge: replyTo for unknown hash drops without forwarding', ()
 
   const b = plugin.injectAnonymousConnection();
   const c = plugin.injectAnonymousConnection();
-  const peerIds = [...bridge.peers.keys()];
+  const peers = [...bridge.peers.values()];
 
   b.driver.recvData(controlPacket(PacketType.JsonSignal, {
     to: 'far-peer',
-    from: peerIds[0],
+    from: peers[0].peerId,
     payload: {},
     replyTo: Hash.digest('not-in-store').toHex(),
   }));
@@ -449,7 +449,7 @@ Deno.test('NetworkBridge: stores peers by public key for authenticated connectio
   await bridge.close();
 });
 
-Deno.test('NetworkBridge: connectToPeer produces a peer keyed by remote pubkey once connected', async () => {
+Deno.test('NetworkBridge: connectToPeer registers a connection with the remote pubkey as peerId', async () => {
   const plugin = new MockTransportPlugin({ emitsProtocol: 'mock', acceptsProtocols: ['mock'] });
   const { store, routing } = setupProtocol();
   const keys = generateKeyPair();
@@ -470,8 +470,12 @@ Deno.test('NetworkBridge: connectToPeer produces a peer keyed by remote pubkey o
 
   plugin.injectAuthenticatedConnection();
 
-  assert(bridge.peers.has(bin2hex(remote.publicKey)));
-  assertFalse([...bridge.peers.keys()].some((k) => k.startsWith('anon:')));
+  // peers is keyed by unique connection id; assert by logical peerId.
+  const remoteHex = bin2hex(remote.publicKey);
+  const logicalIds = new Set<string>();
+  for (const peer of bridge.peers.values()) logicalIds.add(peer.peerId);
+  assert(logicalIds.has(remoteHex));
+  assertFalse([...logicalIds].some((id) => id.startsWith('anon:')));
 
   await bridge.close();
 });

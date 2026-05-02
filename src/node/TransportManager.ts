@@ -42,7 +42,16 @@ export interface TransportManagerDeps {
 // -- Manager -----------------------------------------------------------
 
 export class TransportManager {
+  // Primary store: every active PeerConnection, keyed by a unique
+  // connection id. Multiple entries may share the same logical
+  // `peer.peerId` (pubkey hex / `anon:xxx`); duplicate connections to
+  // the same peer are explicitly allowed -- abuse is bounded by future
+  // utility-based eviction, not by pubkey uniqueness here.
   private readonly _peers = new Map<string, PeerConnection>();
+  // Secondary index: logical peerId -> set of connection ids. Lets
+  // callers that think in logical peers (sendBlock targets, routing)
+  // fan out to every active physical connection.
+  private readonly _byPeerId = new Map<string, Set<string>>();
   private readonly services = new Map<TransportPlugin, TransportService>();
   private readonly deps: TransportManagerDeps;
   private signaling?: SignalingService;
@@ -52,8 +61,21 @@ export class TransportManager {
     this.deps = deps;
   }
 
+  /** All active connections, keyed by unique connection id. */
   get peers(): ReadonlyMap<string, PeerConnection> {
     return this._peers;
+  }
+
+  /** Live connections sharing a logical peerId. May be empty. */
+  connectionsByPeerId(peerId: string): PeerConnection[] {
+    const ids = this._byPeerId.get(peerId);
+    if (!ids || ids.size === 0) return [];
+    const out: PeerConnection[] = [];
+    for (const id of ids) {
+      const peer = this._peers.get(id);
+      if (peer) out.push(peer);
+    }
+    return out;
   }
 
   /** Start all plugins and initialize signaling if any plugin supports authenticated transport. */
@@ -119,11 +141,23 @@ export class TransportManager {
     await this.signaling?.recvSignal(envelope);
   }
 
-  /** Broadcast or target a raw block packet to connected peers. */
+  /**
+   * Broadcast or target a raw block packet to connected peers. Each
+   * `target` is matched first against connection ids, then against
+   * logical peerIds -- a logical-peerId target fans out to every active
+   * connection sharing that peerId.
+   */
   sendBlock(raw: Uint8Array, targets?: string[]): void {
     if (targets && targets.length > 0) {
       for (const id of targets) {
-        this._peers.get(id)?.sendBlock(raw);
+        const direct = this._peers.get(id);
+        if (direct) {
+          direct.sendBlock(raw);
+          continue;
+        }
+        for (const peer of this.connectionsByPeerId(id)) {
+          peer.sendBlock(raw);
+        }
       }
     } else {
       for (const peer of this._peers.values()) {
@@ -138,6 +172,7 @@ export class TransportManager {
       peer.close();
     }
     this._peers.clear();
+    this._byPeerId.clear();
 
     const stops: Promise<void>[] = [];
     for (const service of this.services.values()) {
@@ -234,13 +269,33 @@ export class TransportManager {
   }
 
   private registerConnection(peerId: string, conn: ConnectionProvider): ConnectionDriver {
+    const connectionId = `${peerId}#${crypto.randomUUID().slice(0, 8)}`;
     const { transport, driver } = wrapConnection(peerId, conn);
     const peer = new PeerConnection(transport, this.deps.callbacks.onBlockReceived);
-    this._peers.set(peer.peerId, peer);
-    this.deps.callbacks.onPeerConnected?.(peer);
+    this._peers.set(connectionId, peer);
+    let group = this._byPeerId.get(peerId);
+    if (!group) {
+      group = new Set();
+      this._byPeerId.set(peerId, group);
+    }
+    const isFirstConnection = group.size === 0;
+    group.add(connectionId);
+    // Fire onPeerConnected only on the first connection to a logical
+    // peerId so RoutingModule / UI counters see one peer per pubkey,
+    // even when the transport holds multiple physical sessions.
+    if (isFirstConnection) {
+      this.deps.callbacks.onPeerConnected?.(peer);
+    }
     peer.onClose(() => {
-      this._peers.delete(peer.peerId);
-      this.deps.callbacks.onPeerDisconnected?.(peer.peerId);
+      this._peers.delete(connectionId);
+      const g = this._byPeerId.get(peerId);
+      if (g) {
+        g.delete(connectionId);
+        if (g.size === 0) {
+          this._byPeerId.delete(peerId);
+          this.deps.callbacks.onPeerDisconnected?.(peerId);
+        }
+      }
     });
     return driver;
   }
