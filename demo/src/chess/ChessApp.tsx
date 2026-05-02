@@ -9,8 +9,6 @@ import { encodeMove } from 'scaffold.io/demo/chess/GameStateCodec.ts';
 import { WebsocketClientTransport } from '../../../plugins/WebsocketClientTransport.ts';
 import { WebrtcTransport } from '../../../plugins/browser/WebrtcTransport.ts';
 import { installDebugAPI } from 'scaffold.io/debug/ScaffoldDebug.ts';
-import { GAME_STATE_CONTRACT } from 'scaffold.io/core/Block.ts';
-import { Hash } from 'scaffold.io/util/Hash.ts';
 import { Board } from './Board.tsx';
 import { Clock } from './Clock.tsx';
 import { Wallet } from './Wallet.tsx';
@@ -59,15 +57,6 @@ export function ChessApp() {
       enableLogging: false,
       useFloodGossip: true,
       enablePiggyback: false,
-      // Aggregation block claims now resolve correctly through
-      // OutputSpaceModule, but a separate issue remains: a parked chess
-      // GAME_STATE draft for the next turn marks its seed UTXO as
-      // canonically reserved, which makes the AGG draft consume it as
-      // an "input" and visually drops the pot from the locked balance.
-      // Track separately; for the demo, restrict drafting to GAME_STATE
-      // so the agg flow stays out of the picture. See
-      // docs/design/chess-turn-one-bug.md.
-      enableGeneration: (h) => Hash.equals(h, GAME_STATE_CONTRACT),
     });
     const g = new ChessGame(sc);
     const ci = new ChessIndex(sc, g);

@@ -14,6 +14,7 @@ import { Hash } from '../../util/Hash.ts';
 import { bin2hex } from '../../util/hex.ts';
 import { decodeGameState } from './GameStateCodec.ts';
 import { isTerminalStatus } from './ChessRules.ts';
+import { isUnspentByCanonicalBlock } from './ChessGame.ts';
 
 function pubkeyHex(pk: Uint8Array): string {
   return bin2hex(pk);
@@ -72,17 +73,18 @@ export class BalanceIndex {
     // fractionally is overkill -- just attribute the full pot to any
     // participant. Players who finish a game see locked drop by the pot and
     // free rise by their share in the same canonicality flip.
-    const store = this.scaffold.context.store;
+    const ctx = this.scaffold.context;
+    const store = ctx.store;
     let locked = 0;
     for (const block of store.values()) {
       for (let i = 0; i < block.outputs.length; i++) {
         const o = block.outputs[i];
         if (!Hash.equals(o.verifier.contract, GAME_STATE_CONTRACT)) continue;
-        const entries = utxoIndex.getByVerifier(o.verifier.contract, o.verifier.params);
-        const unspent = entries.some(
-          (e) => Hash.equals(e.blockHash, block.hash) && e.outputIndex === i,
-        );
-        if (!unspent) continue;
+        // See note on `isUnspentByCanonicalBlock` -- we ignore phantom
+        // draft claims here so the locked balance keeps reflecting the
+        // active game even while the mover's next-turn draft parks on
+        // getOutput awaiting user input.
+        if (!isUnspentByCanonicalBlock(ctx, block.hash, i)) continue;
         if (!o.data) continue;
         try {
           const env = decodeGameState(o.data);

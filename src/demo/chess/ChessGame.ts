@@ -349,14 +349,13 @@ export class ChessGame {
       for (let i = 0; i < block.outputs.length; i++) {
         const o = block.outputs[i];
         if (!Hash.equals(o.verifier.contract, GAME_STATE_CONTRACT)) continue;
-        const entries = ctx.utxoIndex.getByVerifier(
-          o.verifier.contract,
-          o.verifier.params,
-        );
-        const unspent = entries.some(
-          (e) => Hash.equals(e.blockHash, block.hash) && e.outputIndex === i,
-        );
-        if (!unspent) continue;
+        // "Unspent" for chess display means: no real canonical block has
+        // claimed this GAME_STATE. Phantom-draft claims (the mover's
+        // turn-N+1 draft parked on getOutput) reserve in UtxoIndex but
+        // don't actually consume the output until they publish a real
+        // block. Going through OutputClaimService lets us filter to
+        // real-block claimants only.
+        if (!isUnspentByCanonicalBlock(ctx, block.hash, i)) continue;
         if (!o.data) continue;
         let env: GameStateEnvelope;
         try {
@@ -403,4 +402,27 @@ function cloneBytes(b: Uint8Array): Uint8Array {
   const out = new Uint8Array(b.length);
   out.set(b);
   return out;
+}
+
+/**
+ * True if `(blockHash, outputIndex)` has no claim from any real
+ * canonical block. Phantom-draft claims (canonical drafts that haven't
+ * published) are filtered out -- they're identifiable by the claimant
+ * not being in the BlockStore.
+ */
+export function isUnspentByCanonicalBlock(
+  ctx: { outputClaims: import('../../core/OutputClaimService.ts').OutputClaimService;
+         store: { has(h: Hash): boolean };
+         consensus: { isCanonical(h: Hash): boolean } },
+  blockHash: Hash,
+  outputIndex: number,
+): boolean {
+  const claimants = ctx.outputClaims.getClaimantsAt(blockHash, outputIndex);
+  if (!claimants) return true;
+  for (const c of claimants) {
+    if (ctx.store.has(c.claimant) && ctx.consensus.isCanonical(c.claimant)) {
+      return false;
+    }
+  }
+  return true;
 }

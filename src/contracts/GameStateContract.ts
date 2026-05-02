@@ -156,9 +156,22 @@ export const gameStateContract: Contract = {
       throw new ContractRejection('game is already finished');
     }
 
-    // -- NORMAL OR TIMEOUT MOVE ---------------------------------------
+    // -- NORMAL MOVE ---------------------------------------------------
     const mover = prev.state.toMove === WHITE ? prev.white : prev.black;
-    const opponent = prev.state.toMove === WHITE ? prev.black : prev.white;
+
+    // Require the mover's signature BEFORE reading the move. In
+    // generation mode this throws ContractRejection on every node
+    // whose signing pubkey isn't the mover, so the parked-on-getOutput
+    // path never runs on the opponent or third-party observers --
+    // their drafts cancel before the phantom claim reserves the
+    // GAME_STATE UTXO.
+    //
+    // Timeout claims (currently sketched as `isTimeoutMove(move)` with
+    // an opponent-signed branch) are deferred until they get their own
+    // verifier-params slot or generator-side signer dispatch; with the
+    // signature gate first there's no way to honor them in the same
+    // entry point. See TODO.md.
+    env.requireSignature(mover);
 
     // Pull the user move from RECORD/"move". getOutput consumes one slot in
     // the RECORD namespace (positionally first).
@@ -173,17 +186,14 @@ export const gameStateContract: Contract = {
       throw new ContractRejection('move malformed: ' + (e as Error).message);
     }
 
-    if (now <= prev.state.lastMoveAt) {
-      throw new ContractRejection('block timestamp must be strictly after prev move');
+    if (isTimeoutMove(move)) {
+      throw new ContractRejection(
+        'timeout-move publishing temporarily disabled (needs separate signer-dispatched entry)',
+      );
     }
 
-    // Signer:
-    //   - normal move: the player on move.
-    //   - timeout claim: the OPPONENT (the mover obviously won't publish their own timeout).
-    if (isTimeoutMove(move)) {
-      env.requireSignature(opponent);
-    } else {
-      env.requireSignature(mover);
+    if (now <= prev.state.lastMoveAt) {
+      throw new ContractRejection('block timestamp must be strictly after prev move');
     }
 
     let next;
