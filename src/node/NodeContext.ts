@@ -90,6 +90,19 @@ export interface NodeConfig {
   onPushActions?: (actions: PushAction[], block: Block) => void;
   /** Event log for structured observability. */
   eventLog?: EventLog;
+  /**
+   * Demo flag: when true, ReactiveLayer skips claim-history routing and
+   * floods every newly-ingested block to every connected peer (via
+   * `getConnectedPeers`). Already-seen blocks are dropped early. See
+   * `ScaffoldConfig.useFloodGossip`.
+   */
+  useFloodGossip?: boolean;
+  /**
+   * Provider for the set of currently-connected peer IDs. Used by flood
+   * mode to build a synthetic PushAction list per block. Returns an empty
+   * iterable until the network bridge is up.
+   */
+  getConnectedPeers?: () => Iterable<string>;
 }
 
 /**
@@ -371,6 +384,8 @@ export class NodeContext {
       onBlockProcessed: (block: Block) => {
         blocks.add(block);
       },
+      useFloodGossip: config.useFloodGossip ?? false,
+      getConnectedPeers: config.getConnectedPeers,
     });
     reactiveLayerRef.current = this.reactiveLayer;
 

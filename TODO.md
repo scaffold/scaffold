@@ -24,8 +24,11 @@ The chess demo publishes move blocks without FOR collateral, so verification-lay
 ### `scaffold.put` should handle agg-marker-aware claim indices (create block only)
 `ChessGame.createGame` prepends `makeAggregationOutput()` to its own spec.outputs so that the RECORD self-claim index (own idx 1) stays stable after Scaffold's implicit agg-marker append. This is demo-layer glue that applications with external claims will re-invent. Either `scaffold.put` should shift claim indices when it appends a marker, or `PutRequest` should grow a `consume` field that resolves to indices AFTER marker placement.
 
-### Remove `sendBlockToPeer` fanout hack from `ChessApp`
-`demo/src/chess/ChessApp.tsx` subscribes to `store.onAdded` and manually calls `scaffold.sendBlockToPeer` for every locally-signed block, addressed to every connected peer. This is a workaround for the missing baseline-propagation step (see "Baseline propagation for cold-start" below) — without it, `createGame` and the generator-produced join/move blocks never leave the local node because no peer has any claim history for `GAME_STATE_CONTRACT`. Remove this `useEffect` once routing has a real cold-start mechanism.
+### Replace `useFloodGossip` demo escape hatch with real baseline routing
+`demo/src/chess/ChessApp.tsx` runs with `useFloodGossip: true` (and `enablePiggyback: false` because flood mode bypasses piggyback's `submitBlock` delayed-broadcast path). Flood mode bounds propagation via per-atom seen-sets in `ReactiveLayer` (blocks) and `NetworkBridge` (signals, requests). It exists because of the missing baseline-propagation step (see "Baseline propagation for cold-start" below). Once routing has a real cold-start mechanism, the chess demo can drop both flags and fall back to claim-history routing. Flood mode itself can stay as a deliberate testnet/demo option.
+
+### Bound flood-mode seen-sets before mainnet
+`NetworkBridge.seenSignals` / `seenRequests` and the implicit `BlockStore.has`-based block dedup all grow without bound under `useFloodGossip: true`. For demo and short-lived testnet sessions this is fine, but a long-running node would leak. Before mainnet, replace the `Set<string>` instances with an LRU or time-windowed structure (e.g. ring buffer of recent atom hashes), and let `BlockStore` evict cold history once weight is settled.
 
 ## Core Protocol
 

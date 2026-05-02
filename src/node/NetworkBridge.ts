@@ -11,7 +11,8 @@ import { PeerConnection } from './PeerConnection.ts';
 import { RoutingService } from './RoutingService.ts';
 import { BlockAwareness, PushAction } from './RoutingModule.ts';
 import { SignalEnvelope } from './SignalingService.ts';
-import { SignalAtom } from '../core/SignalAtom.ts';
+import { jsonSignalSerializer, SignalAtom } from '../core/SignalAtom.ts';
+import { AtomSource } from '../core/Atom.ts';
 import { TransportPlugin } from '../interfaces/transport.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
@@ -37,6 +38,13 @@ export interface NetworkBridgeDeps {
   processBlock: (block: Block, peerId: string) => void;
   selfId?: string;
   logger?: ScopedLogger;
+  /**
+   * Demo flag: when true, signals and requests are flooded to every peer
+   * (with per-atom seen-sets to bound propagation) instead of using
+   * reverse-path forwarding / RPC-style answer-only handling. Default
+   * false. See `ScaffoldConfig.useFloodGossip`.
+   */
+  useFloodGossip?: boolean;
 }
 
 /**
@@ -56,11 +64,19 @@ export class NetworkBridge {
   private readonly peerConnectedListeners: ((peerId: string) => void)[] = [];
   private readonly peerDisconnectedListeners: ((peerId: string) => void)[] = [];
 
+  private readonly useFloodGossip: boolean;
+  // Flood-mode seen-sets keyed by atom hash primitive. Bound propagation
+  // in mesh topologies; unbounded growth is acceptable for demo/testnet
+  // scope (see TODO.md).
+  private readonly seenSignals = new Set<string>();
+  private readonly seenRequests = new Set<string>();
+
   constructor(deps: NetworkBridgeDeps) {
     this.routing = deps.routing;
     this.store = deps.store;
     this.selfId = deps.selfId;
     this._log = deps.logger;
+    this.useFloodGossip = deps.useFloodGossip ?? false;
 
     this.transport = new TransportManager({
       plugins: deps.plugins,
@@ -155,10 +171,25 @@ export class NetworkBridge {
     for (const cb of this.peerConnectedListeners) cb(peer.peerId);
 
     peer.onRequest((atom) => {
+      if (this.useFloodGossip) {
+        const key = atom.hash.toPrimitive();
+        if (this.seenRequests.has(key)) return;
+        this.seenRequests.add(key);
+      }
+      // Answer locally for hashes we have.
       for (const hash of atom.hashes) {
         const block = this.store.get(hash);
         if (block) {
           peer.sendBlock(block.raw);
+        }
+      }
+      // In flood mode, forward the request to every other peer so they
+      // can answer too. (Non-flood: requests are RPC-style and not
+      // forwarded; we just answer what we have.)
+      if (this.useFloodGossip) {
+        for (const [otherPeerId, otherPeer] of this.transport.peers) {
+          if (otherPeerId === peer.peerId) continue;
+          otherPeer.requestBlocks(atom.hashes);
         }
       }
     });
@@ -175,6 +206,24 @@ export class NetworkBridge {
   }
 
   private handleSignalMessage(atom: SignalAtom, senderPeerId: string): void {
+    if (this.useFloodGossip) {
+      // Flood mode: dedup, deliver-if-for-us, then forward to every peer
+      // except the sender. Reverse-path is bypassed; flood reaches the
+      // publisher through the same mesh.
+      const key = atom.hash.toPrimitive();
+      if (this.seenSignals.has(key)) return;
+      this.seenSignals.add(key);
+
+      if (this.selfId && atom.to === this.selfId) {
+        void this.transport.recvSignalEnvelope(atom.payload as SignalEnvelope);
+      }
+      for (const [peerId, peer] of this.transport.peers) {
+        if (peerId === senderPeerId) continue;
+        peer.sendSignal(atom.to, atom.from, atom.payload, atom.replyTo);
+      }
+      return;
+    }
+
     // Reverse-path forwarding: the addressed atom's first sender is the
     // next hop toward the publisher. If we have the atom and it's
     // local-origin (empty fromConnections), we are the publisher and
@@ -232,6 +281,15 @@ export class NetworkBridge {
     from: string,
     payload: SignalEnvelope,
   ): void {
+    if (this.useFloodGossip) {
+      // Pre-mark the locally-composed signal as seen so peers echoing it
+      // back (via their own flood) don't trigger another fan-out from us.
+      const atom = jsonSignalSerializer.serialize(
+        { to, from, payload },
+        AtomSource.Local,
+      );
+      if (atom) this.seenSignals.add(atom.hash.toPrimitive());
+    }
     for (const peer of this.transport.peers.values()) {
       peer.sendSignal(to, from, payload);
     }

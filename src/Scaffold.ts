@@ -45,6 +45,20 @@ export interface ScaffoldConfig {
    * on claim history).
    */
   getOutgoingIncentive?: (verifier: Verifier) => number;
+  /**
+   * Demo flag: when true, disable claim-history routing and per-message
+   * RPC paths and instead flood every newly-ingested atom (Block, Signal,
+   * Request) to every connected peer except the sender. Already-seen
+   * atoms are dropped on receipt. Default: false.
+   *
+   * Caveats:
+   * - Incompatible with `PiggybackStrategy` delayed broadcast: the
+   *   `submitBlock` action still calls `RoutingModule` directly, which is
+   *   inert in flood mode. Set `enablePiggyback: false` alongside this.
+   * - Per-atom seen-sets are unbounded; intended for demos / testnet, not
+   *   long-running mainnet nodes.
+   */
+  useFloodGossip?: boolean;
 }
 
 export class Scaffold {
@@ -70,6 +84,7 @@ export class Scaffold {
 
     // 1. Create NodeContext (protocol layer + reactive + piggyback).
     let pushActionHandler: ((actions: PushAction[], block: Block) => void) | undefined;
+    let getConnectedPeers: (() => Iterable<string>) | undefined;
     this.nodeContext = new NodeContext({
       genesis,
       privateKey,
@@ -82,6 +97,8 @@ export class Scaffold {
       onPushActions: (actions, block) => {
         pushActionHandler?.(actions, block);
       },
+      useFloodGossip: config.useFloodGossip ?? false,
+      getConnectedPeers: () => getConnectedPeers ? getConnectedPeers() : [],
     });
 
     // 2. Create FetchManager, wired to the already-constructed node services.
@@ -116,10 +133,12 @@ export class Scaffold {
         },
         selfId: selfIdHex,
         logger: this.eventLog ? new ScopedLogger(this.eventLog, 'network') : undefined,
+        useFloodGossip: config.useFloodGossip ?? false,
       });
       pushActionHandler = (actions, block) => {
         this.networkBridge!.handlePushActions(actions, block);
       };
+      getConnectedPeers = () => this.networkBridge!.peers.keys();
     }
 
     // 4. Create PutManager with a BlockProcessor that delegates to NodeContext.

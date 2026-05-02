@@ -8,6 +8,7 @@ import { BalanceIndex } from 'scaffold.io/demo/chess/BalanceIndex.ts';
 import { encodeMove } from 'scaffold.io/demo/chess/GameStateCodec.ts';
 import { WebsocketClientTransport } from '../../../plugins/WebsocketClientTransport.ts';
 import { WebrtcTransport } from '../../../plugins/browser/WebrtcTransport.ts';
+import { installDebugAPI } from 'scaffold.io/debug/ScaffoldDebug.ts';
 import { Board } from './Board.tsx';
 import { Clock } from './Clock.tsx';
 import { Wallet } from './Wallet.tsx';
@@ -54,13 +55,21 @@ export function ChessApp() {
       genesis,
       plugins: [new WebsocketClientTransport(), new WebrtcTransport()],
       enableLogging: false,
+      useFloodGossip: true,
+      enablePiggyback: false,
     });
     const g = new ChessGame(sc);
+    const ci = new ChessIndex(sc, g);
+    const bi = new BalanceIndex(sc);
+    installDebugAPI(sc);
+    (globalThis as any).__chess = g;
+    (globalThis as any).__chessIndex = ci;
+    (globalThis as any).__balanceIndex = bi;
     return {
       scaffold: sc,
       chess: g,
-      chessIndex: new ChessIndex(sc, g),
-      balanceIndex: new BalanceIndex(sc),
+      chessIndex: ci,
+      balanceIndex: bi,
     };
   }, [seed]);
 
@@ -123,29 +132,6 @@ export function ChessApp() {
       });
     });
 
-    // HACK: cold-start fanout. RoutingModule only emits PushActions when a
-    // peer's claim history matches the block's verifier or contract; on a
-    // fresh network nobody has any claim history for GAME_STATE_CONTRACT,
-    // so locally-produced create-game and join blocks would never reach
-    // the wire. Until baseline propagation lands (see TODO entry "Baseline
-    // propagation for cold-start" / docs/protocol/gossip.md#bootstrapping-
-    // claim-history-cold-start), we manually fan out every block we signed
-    // to every connected peer. The recipient dedupes via store.has, so
-    // double-delivery is harmless. Remove this when real baseline routing
-    // exists.
-    const myKey = myPubkeyHex;
-    const unsubFanout = scaffold.context.store.onAdded((block) => {
-      if (!block.signer) return;
-      if (bin2hex(block.signer) !== myKey) return;
-      for (const peerId of connectedPeersRef.current) {
-        try {
-          scaffold.sendBlockToPeer(block.hash, peerId);
-        } catch {
-          // Peer disappeared between event and send; safe to ignore.
-        }
-      }
-    });
-
     try {
       scaffold.bootstrapConnection('websocket', DEFAULT_HUB_URL);
     } catch (err) {
@@ -156,7 +142,6 @@ export function ChessApp() {
     tryDialOthers();
 
     return () => {
-      unsubFanout();
       void scaffold.close();
     };
   }, [scaffold, seed, myPubkeyHex]);

@@ -102,6 +102,9 @@ export class ReactiveLayer {
   private readonly onPushActions?: (actions: PushAction[], block: Block) => void;
   private readonly onBlockProcessed?: (block: Block) => void;
 
+  private readonly useFloodGossip: boolean;
+  private readonly getConnectedPeers?: () => Iterable<string>;
+
   /** Accumulated push actions from current block processing cycle. */
   private pendingPushActions: PushAction[] = [];
 
@@ -118,6 +121,8 @@ export class ReactiveLayer {
     logger?: ScopedLogger;
     onPushActions?: (actions: PushAction[], block: Block) => void;
     onBlockProcessed?: (block: Block) => void;
+    useFloodGossip?: boolean;
+    getConnectedPeers?: () => Iterable<string>;
   }) {
     this.coordinator = deps.coordinator;
     this.store = deps.store;
@@ -131,6 +136,8 @@ export class ReactiveLayer {
     this._log = deps.logger;
     this.onPushActions = deps.onPushActions;
     this.onBlockProcessed = deps.onBlockProcessed;
+    this.useFloodGossip = deps.useFloodGossip ?? false;
+    this.getConnectedPeers = deps.getConnectedPeers;
 
     // Register routing listener to accumulate push actions per block
     if (this.routing) {
@@ -162,13 +169,37 @@ export class ReactiveLayer {
     allActions: Action[],
     broadcast: boolean = true,
   ): void {
+    // Flood-mode dedup: drop peer-sent blocks we already have. Locally
+    // created blocks (fromPeer === null) must always reach the coordinator,
+    // so this guard only fires for inbound duplicates. Without it,
+    // OutputClaimModule.addBlock (non-idempotent) would corrupt claim state
+    // on re-ingestion.
+    if (this.useFloodGossip && fromPeer !== null && this.store.has(block.hash)) {
+      return;
+    }
+
     // 1. Run the block through the coordinator
     const result = this.coordinator.blockReceived(block, fromPeer);
 
-    // 2. Routing: compute push targets (node-layer concern). Skipped when
-    //    broadcast=false so locally-ingested piggyback blocks never touch
-    //    the network until a follow-up `submitBlock` action graduates them.
-    if (this.routing && broadcast) {
+    // 2. Outbound: in flood mode, fan the block out to every connected
+    //    peer; NetworkBridge.handlePushActions filters fromConnections /
+    //    toConnections so we don't echo or double-send. Otherwise, defer
+    //    to claim-history routing. Skipped when broadcast=false so
+    //    locally-ingested piggyback blocks stay local until submitBlock.
+    if (this.useFloodGossip) {
+      if (broadcast && this.getConnectedPeers && this.onPushActions) {
+        const actions: PushAction[] = [];
+        for (const peerId of this.getConnectedPeers()) {
+          actions.push({
+            block: block.hash,
+            peer: peerId,
+            priority: 1,
+            immediate: true,
+          });
+        }
+        if (actions.length > 0) this.onPushActions(actions, block);
+      }
+    } else if (this.routing && broadcast) {
       this.pendingPushActions = [];
       this.routing.blockReceived(block.hash, fromPeer);
       if (this.pendingPushActions.length > 0) {
