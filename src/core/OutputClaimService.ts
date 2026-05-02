@@ -35,6 +35,12 @@ class OutputClaimProviderAdapter implements OutputClaimProvider<Block> {
   getSubtreeClaimMask(block: Block): readonly number[] {
     return getAggregationData(block)?.claimMask ?? [];
   }
+
+  getOwnClaimMask(block: Block): readonly number[] {
+    // block.claims is already sorted at construction time
+    // (BlockCreationModule sorts before serialization).
+    return block.claims;
+  }
 }
 
 /** OutputClaimModule wired to a BlockStore via ProtocolContext. */

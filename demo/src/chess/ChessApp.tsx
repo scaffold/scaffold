@@ -6,6 +6,8 @@ import { ChessGame } from 'scaffold.io/demo/chess/ChessGame.ts';
 import { ChessIndex } from 'scaffold.io/demo/chess/ChessIndex.ts';
 import { BalanceIndex } from 'scaffold.io/demo/chess/BalanceIndex.ts';
 import { encodeMove } from 'scaffold.io/demo/chess/GameStateCodec.ts';
+import { GAME_STATE_CONTRACT } from 'scaffold.io/core/Block.ts';
+import { Hash } from 'scaffold.io/util/Hash.ts';
 import { WebsocketClientTransport } from '../../../plugins/WebsocketClientTransport.ts';
 import { WebrtcTransport } from '../../../plugins/browser/WebrtcTransport.ts';
 import { installDebugAPI } from 'scaffold.io/debug/ScaffoldDebug.ts';
@@ -57,6 +59,11 @@ export function ChessApp() {
       enableLogging: false,
       useFloodGossip: true,
       enablePiggyback: false,
+      // Only draft against GAME_STATE outputs. The default filter would
+      // also draft on every AGGREGATION marker, which fills DraftStrategy's
+      // 3-slot inFlight cap (one parked AGG draft per block) and starves
+      // the next GAME_STATE turn. See docs/design/chess-turn-one-bug.md.
+      enableGeneration: (h) => Hash.equals(h, GAME_STATE_CONTRACT),
     });
     const g = new ChessGame(sc);
     const ci = new ChessIndex(sc, g);

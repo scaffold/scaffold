@@ -15,6 +15,7 @@ interface TestBlock {
   aggregateHashes: Hash[];
   aggregateOutputCounts: number[];
   subtreeClaimMask: number[];
+  ownClaimMask?: number[];
 }
 
 class TestProvider implements OutputClaimProvider<TestBlock> {
@@ -50,6 +51,10 @@ class TestProvider implements OutputClaimProvider<TestBlock> {
 
   getSubtreeClaimMask(block: TestBlock): readonly number[] {
     return block.subtreeClaimMask;
+  }
+
+  getOwnClaimMask(block: TestBlock): readonly number[] {
+    return block.ownClaimMask ?? [];
   }
 }
 

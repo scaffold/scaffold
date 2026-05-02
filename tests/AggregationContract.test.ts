@@ -72,6 +72,9 @@ class TestOutputClaimProvider implements OutputClaimProvider<Block> {
   getSubtreeClaimMask(_block: Block): readonly number[] {
     return [];
   }
+  getOwnClaimMask(block: Block): readonly number[] {
+    return block.claims;
+  }
 }
 
 function makeTestSetup() {

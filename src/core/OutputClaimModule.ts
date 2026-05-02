@@ -57,6 +57,15 @@ export interface OutputClaimProvider<BlockType> {
 
   /** Return the subtree claim mask (sorted anchor output indices claimed by aggregates). Empty for leaf blocks. */
   getSubtreeClaimMask(block: BlockType): readonly number[];
+
+  /**
+   * Return the block's own claims as a sorted list of indices into the
+   * block's extended vector. Used to translate an index in
+   * `output_space(block)` (what a descendant's anchor-portion claim
+   * indexes into) back to an index in `extended_vector(block)` (what
+   * `tryMigrate` recurses on).
+   */
+  getOwnClaimMask(block: BlockType): readonly number[];
 }
 
 // -- Module -------------------------------------------------------
@@ -329,9 +338,24 @@ export class OutputClaimModule<BlockType> {
     // Map through subtree claim mask for aggregation blocks.
     // For leaf blocks (empty mask), remaining maps directly.
     const subtreeClaimMask = this.provider.getSubtreeClaimMask(block);
-    const anchorIdx = subtreeClaimMask.length > 0
+    const anchorSpaceIdx = subtreeClaimMask.length > 0
       ? mapSurvivingToOriginal(remaining, subtreeClaimMask)
       : remaining;
+
+    // `anchorSpaceIdx` is an index into output_space(anchor). To
+    // recurse into anchor's tryMigrate (which interprets indices in
+    // anchor's extended_vector), apply anchor's own claims to map
+    // output_space → extended_vector. Without this, a descendant's
+    // claim that should resolve to an anchor's surviving output gets
+    // misattributed to whichever extended-vector slot happens to share
+    // its post-claim numeric index, e.g. a chess move's GAME_STATE
+    // claim resolves to the parent's self-claimed RECORD slot and
+    // creates a phantom conflict.
+    const anchorBlock = this.provider.getBlock(anchorHash);
+    const anchorIdx = anchorBlock
+      ? mapSurvivingToOriginal(anchorSpaceIdx, this.provider.getOwnClaimMask(anchorBlock))
+      : anchorSpaceIdx;
+
     return this.migrateEntry(blockHash, index, entry, anchorHash, anchorIdx);
   }
 

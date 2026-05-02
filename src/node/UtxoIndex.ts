@@ -21,8 +21,54 @@
 
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
-import { Block, BlockStore, collectExtendedOutputs } from '../core/Block.ts';
+import { Block, BlockStore } from '../core/Block.ts';
+import type { Output } from '../core/BlockCreationModule.ts';
 import type { BlockDraft } from '../core/BlockDraft.ts';
+
+/**
+ * Compute a block's output space (the post-claim survivor set descendants
+ * inherit) along with the producing-block source for each entry.
+ *
+ * Output_space(X) = filter(X.outputs ++ output_space(anchor), X.claims).
+ *
+ * Per spec (AGENTS.md, output-space.md): claim indices in `block.claims`
+ * refer to positions in the extended vector = own ++ output_space(anchor).
+ * A descendant's claim index 7 (with own_count 4) means
+ * output_space(anchor)[3], which already has anchor's own self-claims
+ * applied. The legacy `collectExtendedOutputs` only drops anchor-into-
+ * anchor's-anchor claims, missing self-claims, which produced wrong
+ * resolutions for blocks with self-claims (e.g. chess RECORD/"game").
+ */
+function outputSpaceWithSources(
+  block: Block,
+  store: BlockStore,
+): { outputs: Output[]; sources: ({ blockHash: Hash; outputIndex: number } | null)[] } {
+  const outputs: Output[] = [...block.outputs];
+  const sources: ({ blockHash: Hash; outputIndex: number } | null)[] = block.outputs.map(
+    (_, i) => ({ blockHash: block.hash, outputIndex: i }),
+  );
+
+  if (!Hash.equals(block.anchor, ZERO_HASH)) {
+    const anchorBlock = store.get(block.anchor);
+    if (anchorBlock) {
+      const anchorSpace = outputSpaceWithSources(anchorBlock, store);
+      outputs.push(...anchorSpace.outputs);
+      sources.push(...anchorSpace.sources);
+    }
+  }
+
+  // Apply this block's claims (self + external) -- both drop entries from
+  // the extended vector.
+  const claimSet = new Set(block.claims);
+  const filteredOutputs: Output[] = [];
+  const filteredSources: ({ blockHash: Hash; outputIndex: number } | null)[] = [];
+  for (let i = 0; i < outputs.length; i++) {
+    if (claimSet.has(i)) continue;
+    filteredOutputs.push(outputs[i]);
+    filteredSources.push(sources[i]);
+  }
+  return { outputs: filteredOutputs, sources: filteredSources };
+}
 
 /** A single unspent output tracked by the index. */
 export interface UtxoEntry {
@@ -212,7 +258,7 @@ export class UtxoIndex {
 
   /**
    * Remove outputs a real block claims via its index-based `claims: Index[]`
-   * (walking the anchor's extended output vector).
+   * (walking the anchor's output space).
    */
   private removeBlockClaimedOutputs(block: Block): void {
     if (Hash.equals(block.anchor, ZERO_HASH)) return;
@@ -221,17 +267,16 @@ export class UtxoIndex {
     const anchorBlock = this.store.get(block.anchor);
     if (!anchorBlock) return;
 
-    const anchorExtended = collectExtendedOutputs(anchorBlock, this.store);
-    const anchorExtendedSources = this.resolveExtendedSources(anchorBlock);
+    const anchorSpace = outputSpaceWithSources(anchorBlock, this.store);
     const ownOutputCount = block.outputs.length;
 
     for (const claimIdx of block.claims) {
       if (claimIdx < ownOutputCount) continue; // self-claim
       const extIdx = claimIdx - ownOutputCount;
-      if (extIdx >= anchorExtended.length) continue;
+      if (extIdx >= anchorSpace.outputs.length) continue;
 
-      const output = anchorExtended[extIdx];
-      const source = anchorExtendedSources[extIdx];
+      const output = anchorSpace.outputs[extIdx];
+      const source = anchorSpace.sources[extIdx];
       if (!source) continue;
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
@@ -252,17 +297,16 @@ export class UtxoIndex {
     const anchorBlock = this.store.get(block.anchor);
     if (!anchorBlock) return;
 
-    const anchorExtended = collectExtendedOutputs(anchorBlock, this.store);
-    const anchorExtendedSources = this.resolveExtendedSources(anchorBlock);
+    const anchorSpace = outputSpaceWithSources(anchorBlock, this.store);
     const ownOutputCount = block.outputs.length;
 
     for (const claimIdx of block.claims) {
       if (claimIdx < ownOutputCount) continue;
       const extIdx = claimIdx - ownOutputCount;
-      if (extIdx >= anchorExtended.length) continue;
+      if (extIdx >= anchorSpace.outputs.length) continue;
 
-      const output = anchorExtended[extIdx];
-      const source = anchorExtendedSources[extIdx];
+      const output = anchorSpace.outputs[extIdx];
+      const source = anchorSpace.sources[extIdx];
       if (!source) continue;
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
@@ -380,44 +424,4 @@ export class UtxoIndex {
     }
   }
 
-  // -- Extended-vector source resolution ----------------------------
-
-  private resolveExtendedSources(
-    block: Block,
-  ): ({ blockHash: Hash; outputIndex: number } | null)[] {
-    return this.resolveExtendedSourcesInner(block);
-  }
-
-  private resolveExtendedSourcesInner(
-    block: Block,
-  ): ({ blockHash: Hash; outputIndex: number } | null)[] {
-    const result: ({ blockHash: Hash; outputIndex: number } | null)[] = [];
-    for (let i = 0; i < block.outputs.length; i++) {
-      result.push({ blockHash: block.hash, outputIndex: i });
-    }
-
-    if (Hash.equals(block.anchor, ZERO_HASH)) return result;
-
-    const anchorBlock = this.store.get(block.anchor);
-    if (!anchorBlock) return result;
-
-    const anchorSources = this.resolveExtendedSourcesInner(anchorBlock);
-    const anchorExtended = collectExtendedOutputs(anchorBlock, this.store);
-
-    const ownOutputCount = block.outputs.length;
-    const claimedExtIndices = new Set<number>();
-    for (const claimIdx of block.claims) {
-      if (claimIdx >= ownOutputCount) {
-        claimedExtIndices.add(claimIdx - ownOutputCount);
-      }
-    }
-
-    for (let i = 0; i < anchorExtended.length; i++) {
-      if (!claimedExtIndices.has(i)) {
-        result.push(i < anchorSources.length ? anchorSources[i] : null);
-      }
-    }
-
-    return result;
-  }
 }
