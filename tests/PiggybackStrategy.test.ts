@@ -22,7 +22,7 @@ import {
 } from '../src/node/strategies/PiggybackStrategy.ts';
 import { TrustStatus } from '../src/node/TrustGate.ts';
 import { UtxoEntry, verifierKey } from '../src/node/UtxoIndex.ts';
-import { makeStoreOutputSpace } from '../src/node/NodeContext.ts';
+import { makeBlockStoreOutputSpace } from '../src/core/Block.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 
 // -- Test helpers ---------------------------------------------------
@@ -214,7 +214,7 @@ function makeFixture(): Fixture {
         for (const a of actions) dispatched.push(a);
       },
     },
-    outputSpace: () => makeStoreOutputSpace(store),
+    outputSpace: () => makeBlockStoreOutputSpace(store),
   });
   return {
     store,
@@ -223,7 +223,7 @@ function makeFixture(): Fixture {
     utxoIndex,
     outputClaims,
     consensus,
-    outputSpace: () => makeStoreOutputSpace(store),
+    outputSpace: () => makeBlockStoreOutputSpace(store),
     dispatched,
     strategy,
   };
@@ -690,7 +690,7 @@ Deno.test(
           for (const a of actions) dispatched.push(a);
         },
       },
-      outputSpace: () => makeStoreOutputSpace(store),
+      outputSpace: () => makeBlockStoreOutputSpace(store),
     });
     // No resolutions recorded yet -> evaluate sees trusted but no
     // claims to scan. Re-fire resolution to populate state, then

@@ -2,7 +2,13 @@
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import type { Output, Verifier } from '../core/BlockCreationModule.ts';
-import { Block, BlockStore, collectExtendedOutputs } from '../core/Block.ts';
+import {
+  Block,
+  BlockStore,
+  makeBlockStoreOutputSpace,
+  resolveClaimToOutput,
+} from '../core/Block.ts';
+import { OutputSpaceModule } from '../core/OutputSpace.ts';
 import { BlockDraft, ClaimIntent, DraftStore } from '../core/BlockDraft.ts';
 import { type AvailableInput, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
@@ -30,11 +36,15 @@ import {
  * `ContractGenerator` with no behavior changes.
  */
 class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
+  private readonly outputSpace: OutputSpaceModule;
+
   constructor(
     private readonly store: BlockStore,
     private readonly utxoIndex: UtxoIndexService,
     private readonly outputHandlers: OutputHandlerRegistry,
-  ) {}
+  ) {
+    this.outputSpace = makeBlockStoreOutputSpace(store);
+  }
 
   getBlock(hash: Hash): Block | undefined {
     return this.store.get(hash);
@@ -52,8 +62,8 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     return block.refs;
   }
 
-  getExtendedOutputs(block: Block): Output[] {
-    return collectExtendedOutputs(block, this.store);
+  resolveClaim(block: Block, claimIndex: number): Output | undefined {
+    return resolveClaimToOutput(block, claimIndex, this.store, this.outputSpace)?.output;
   }
 
   findInputs(verifier: Verifier): AvailableInput[] {
@@ -82,18 +92,14 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   findBlockClaiming(verifier: Verifier): Hash | undefined {
     for (const block of this.store.values()) {
       if (Hash.equals(block.anchor, ZERO_HASH)) continue;
-      const anchorBlock = this.store.get(block.anchor);
-      if (!anchorBlock) continue;
-      const anchorExtended = collectExtendedOutputs(anchorBlock, this.store);
       const ownOutputCount = block.outputs.length;
       for (const claimIdx of block.claims) {
-        if (claimIdx < ownOutputCount) continue;
-        const extIdx = claimIdx - ownOutputCount;
-        if (extIdx >= anchorExtended.length) continue;
-        const output = anchorExtended[extIdx];
+        if (claimIdx < ownOutputCount) continue; // self-claim -- doesn't count
+        const resolved = resolveClaimToOutput(block, claimIdx, this.store, this.outputSpace);
+        if (!resolved) continue;
         if (
-          Hash.equals(output.verifier.contract, verifier.contract) &&
-          bytesEqual(output.verifier.params, verifier.params)
+          Hash.equals(resolved.output.verifier.contract, verifier.contract) &&
+          bytesEqual(resolved.output.verifier.params, verifier.params)
         ) {
           return block.hash;
         }

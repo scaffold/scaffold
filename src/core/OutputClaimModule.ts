@@ -323,9 +323,18 @@ export class OutputClaimModule<BlockType> {
     for (let i = aggregateHashes.length - 1; i >= 0; i--) {
       const count = aggregateOutputCounts[i];
       if (remaining < count) {
-        // Belongs to this aggregate
+        // `remaining` is an index in aggregate's output_space (the
+        // post-claim survivor list). Recursing into the aggregate's
+        // tryMigrate interprets the index in aggregate's extended
+        // vector, so map output_space → extended_vector via the
+        // aggregate's own claims. Without this the descent skips over
+        // self-claims and misattributes the claim downstream.
         const aggHash = aggregateHashes[i];
-        return this.migrateEntry(blockHash, index, entry, aggHash, remaining);
+        const aggBlock = this.provider.getBlock(aggHash);
+        const aggExtIdx = aggBlock
+          ? mapSurvivingToOriginal(remaining, this.provider.getOwnClaimMask(aggBlock))
+          : remaining;
+        return this.migrateEntry(blockHash, index, entry, aggHash, aggExtIdx);
       }
       remaining -= count;
     }

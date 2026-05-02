@@ -95,12 +95,12 @@ class TestProvider implements ExecutionProvider<TestBlock> {
     return block.anchor;
   }
 
-  getExtendedOutputs(block: TestBlock): Output[] {
-    const result: Output[] = [...block.outputs];
-    if (Hash.equals(block.anchor, ZERO_HASH)) return result;
+  resolveClaim(block: TestBlock, claimIndex: number): Output | undefined {
+    if (claimIndex < block.outputs.length) return block.outputs[claimIndex];
+    if (Hash.equals(block.anchor, ZERO_HASH)) return undefined;
     const anchor = this.getBlock(block.anchor);
-    if (anchor) result.push(...anchor.outputs);
-    return result;
+    if (!anchor) return undefined;
+    return anchor.outputs[claimIndex - block.outputs.length];
   }
 
   getSigner(block: TestBlock): Uint8Array | undefined {

@@ -40,7 +40,6 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   private readonly _block: BlockType;
   private readonly _outputs: Output[];
   private readonly _claims: number[];
-  private readonly _extendedOutputs: Output[];
   private readonly _refs: Hash[];
   private readonly _provider: VerifyingEnvProvider<BlockType>;
   private readonly _signer: Uint8Array | undefined;
@@ -71,7 +70,6 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     block: BlockType;
     outputs: Output[];
     claims: number[];
-    extendedOutputs: Output[];
     refs: Hash[];
     provider: VerifyingEnvProvider<BlockType>;
     signer?: Uint8Array;
@@ -82,7 +80,6 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     this._block = opts.block;
     this._outputs = opts.outputs;
     this._claims = opts.claims;
-    this._extendedOutputs = opts.extendedOutputs;
     this._refs = opts.refs;
     this._provider = opts.provider;
     this._signer = opts.signer;
@@ -174,11 +171,10 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
       // Check if this ref block claims an output matching the verifier
       const refClaims = this._provider.getClaims(refBlock);
-      const refExtended = this._provider.getExtendedOutputs(refBlock);
 
       let claimsVerifier = false;
       for (const claimIdx of refClaims) {
-        const claimed = refExtended[claimIdx];
+        const claimed = this._provider.resolveClaim(refBlock, claimIdx);
         if (claimed && verifierEquals(claimed.verifier, verifier)) {
           claimsVerifier = true;
           break;
@@ -260,7 +256,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
     const inputs: Input[] = [];
     for (const claimIdx of this._claims) {
-      const output = this._extendedOutputs[claimIdx];
+      const output = this._provider.resolveClaim(this._block, claimIdx);
       if (!output) continue;
       // Null-data outputs are pure incentive -- invisible to contracts.
       if (output.data === null) continue;

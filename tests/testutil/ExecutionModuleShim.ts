@@ -23,7 +23,8 @@ export interface ExecutionProvider<BlockType> {
   getRefs(block: BlockType): Hash[];
   getClaims(block: BlockType): number[];
   getAnchor(block: BlockType): Hash;
-  getExtendedOutputs(block: BlockType): Output[];
+  /** Resolve a claim index in `block`'s extended vector to the underlying output. */
+  resolveClaim(block: BlockType, claimIndex: number): Output | undefined;
   getSigner(block: BlockType): Uint8Array | undefined;
   getTimestamp(block: BlockType): number;
 }
@@ -45,7 +46,7 @@ export class ExecutionModuleShim<BlockType> {
       getBlock: (h) => provider.getBlock(h),
       getOutputs: (b) => provider.getOutputs(b),
       getClaims: (b) => provider.getClaims(b),
-      getExtendedOutputs: (b) => provider.getExtendedOutputs(b),
+      resolveClaim: (b, i) => provider.resolveClaim(b, i),
       getRefs: (b) => provider.getRefs(b),
     };
   }
@@ -63,15 +64,15 @@ export class ExecutionModuleShim<BlockType> {
     if (!block) return { accepted: false, reason: 'block not found' };
 
     const claims = this._provider.getClaims(block);
-    const extended = this._provider.getExtendedOutputs(block);
 
     // One run per claim -- per-verifier, not grouped by contract hash.
     const seen = new Set<string>();
     for (const claimIdx of claims) {
-      if (claimIdx < 0 || claimIdx >= extended.length) {
+      const target = this._provider.resolveClaim(block, claimIdx);
+      if (!target) {
         return { accepted: false, reason: `claim index ${claimIdx} out of bounds` };
       }
-      const v = extended[claimIdx].verifier;
+      const v = target.verifier;
       const key = `${v.contract.toPrimitive()}:${Array.from(v.params).join(',')}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -81,7 +82,6 @@ export class ExecutionModuleShim<BlockType> {
         verifier: v,
         outputs: this._provider.getOutputs(block),
         claims,
-        extendedOutputs: extended,
         refs: this._provider.getRefs(block),
         signer: this._provider.getSigner(block),
         timestamp: this._provider.getTimestamp(block),
@@ -99,8 +99,7 @@ export class ExecutionModuleShim<BlockType> {
     if (claimIndex < 0 || claimIndex >= claims.length) {
       return { accepted: false, reason: 'claim index out of bounds' };
     }
-    const extended = this._provider.getExtendedOutputs(block);
-    const target = extended[claims[claimIndex]];
+    const target = this._provider.resolveClaim(block, claims[claimIndex]);
     if (!target) return { accepted: false, reason: 'claimed output not found' };
 
     return this._host.runVerifying({
@@ -108,7 +107,6 @@ export class ExecutionModuleShim<BlockType> {
       verifier: target.verifier,
       outputs: this._provider.getOutputs(block),
       claims,
-      extendedOutputs: extended,
       refs: this._provider.getRefs(block),
       signer: this._provider.getSigner(block),
       timestamp: this._provider.getTimestamp(block),

@@ -1,5 +1,5 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, collectExtendedOutputs } from '../core/Block.ts';
+import { Block, BlockStore, resolveClaimToOutput } from '../core/Block.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { verifyPacketSignature } from '../core/Packet.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
@@ -25,7 +25,10 @@ export function validateBlockPacket(block: Block, store: BlockStore): void {
     throw new Error('anchor block not found');
   }
 
-  const claimedOutputs = resolveClaimedOutputs(block, anchorBlock, store);
+  // anchorBlock is unused now (resolution goes through OutputSpaceModule),
+  // but we keep the existence check above so a missing anchor still throws.
+  void anchorBlock;
+  const claimedOutputs = resolveClaimedOutputs(block, store);
 
   // Check if any claimed output is a status output
   let requiredPublicKey: Uint8Array | undefined;
@@ -71,34 +74,19 @@ export function validateBlockPacket(block: Block, store: BlockStore): void {
 }
 
 /**
- * Resolve claimed outputs by mapping claim indices into the anchor block's
- * extended output vector.
- *
- * Extended vector layout from the claiming block's perspective:
- *   [own outputs (0..outputs.length-1), surviving anchor outputs...]
- *
- * For non-self claims (index >= outputs.length), we need to find the actual
- * Output object from the anchor's extended vector.
+ * Resolve each external claim to the producing block's output via
+ * `OutputSpaceModule`. Self-claims are skipped: by definition they
+ * point at one of `block.outputs` and aren't relevant to the
+ * status-output authorization check.
  */
-function resolveClaimedOutputs(block: Block, anchorBlock: Block, store: BlockStore): Output[] {
+function resolveClaimedOutputs(block: Block, store: BlockStore): Output[] {
   const results: Output[] = [];
-  const anchorExtended = collectExtendedOutputs(anchorBlock, store);
   const ownOutputCount = block.outputs.length;
-
   for (const claimIndex of block.claims) {
-    if (claimIndex < ownOutputCount) {
-      // Self-claim — claims own output, skip
-      continue;
-    }
-
-    // Map from extended vector index to anchor's extended outputs
-    // Index into anchor extended = claimIndex - ownOutputCount
-    const anchorIdx = claimIndex - ownOutputCount;
-    if (anchorIdx < anchorExtended.length) {
-      results.push(anchorExtended[anchorIdx]);
-    }
+    if (claimIndex < ownOutputCount) continue;
+    const resolved = resolveClaimToOutput(block, claimIndex, store);
+    if (resolved) results.push(resolved.output);
   }
-
   return results;
 }
 

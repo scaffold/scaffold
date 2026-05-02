@@ -3,8 +3,8 @@ import {
   Block,
   BlockStore,
   COLLATERAL_CONTRACT,
-  collectExtendedOutputs,
   INSURANCE_CONTRACT,
+  makeBlockStoreOutputSpace,
   RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
@@ -235,7 +235,7 @@ export class NodeContext {
             spec,
             utxoIndex,
             publicKey,
-            makeStoreOutputSpace(store),
+            makeBlockStoreOutputSpace(store),
             store,
             (h) => contractHost.getOutputNamespaces(h),
             ctxLogger,
@@ -358,7 +358,7 @@ export class NodeContext {
       dispatcher: {
         dispatchActions: (actions) => reactiveLayerRef.current?.dispatchActions(actions),
       },
-      outputSpace: () => makeStoreOutputSpace(this.store),
+      outputSpace: () => makeBlockStoreOutputSpace(this.store),
       logger: this.protocolContext.logger('piggyback'),
     });
 
@@ -735,19 +735,26 @@ export function findCanonicalTip(ctx: NodeContext): Hash {
 function ownsSignatureNamespace(
   spec: BlockSpec,
   store: BlockStore,
+  outputSpace: OutputSpaceModule,
   getOutputNamespaces: (contractHash: Hash) => Hash[],
 ): boolean {
   const ownOutputCount = spec.outputs.length;
-  const anchor = store.get(spec.anchor);
-  const anchorExtended = anchor ? collectExtendedOutputs(anchor, store) : [];
 
   for (const claim of spec.claims) {
     let claimedVerifier: Verifier | undefined;
     if (claim.index < ownOutputCount) {
       claimedVerifier = spec.outputs[claim.index]?.verifier;
     } else {
+      // External claim: index into output_space(anchor). Resolve via
+      // OutputSpaceModule so self-claims and aggregate subtrees are
+      // handled correctly (the legacy hand-rolled walk silently lost
+      // self-claims).
       const extIdx = claim.index - ownOutputCount;
-      claimedVerifier = anchorExtended[extIdx]?.verifier;
+      const target = outputSpace.resolveOutputSpaceIndex(spec.anchor, extIdx);
+      if (target) {
+        const producer = store.get(target.block);
+        claimedVerifier = producer?.outputs[target.outputIndex]?.verifier;
+      }
     }
     if (!claimedVerifier) continue;
     const namespaces = getOutputNamespaces(claimedVerifier.contract);
@@ -756,31 +763,6 @@ function ownsSignatureNamespace(
     }
   }
   return false;
-}
-
-/**
- * Build an OutputSpaceProvider that reads blocks out of a BlockStore.
- * Mirrors the provider used in _solidifyDraft.
- */
-export function makeStoreOutputSpace(store: BlockStore): OutputSpaceModule {
-  const provider: OutputSpaceProvider = {
-    getBlock(hash: Hash): OutputSpaceBlock | undefined {
-      const block = store.get(hash);
-      if (!block) return undefined;
-      const aggData = getAggregationData(block);
-      const sc = block.claims.filter((c) => c < block.outputs.length).length;
-      return {
-        hash: block.hash,
-        anchor: block.anchor,
-        aggregates: block.aggregates,
-        outputs: block.outputs.map((o) => ({ value: o.value })),
-        claims: [...block.claims].sort((a, b) => a - b),
-        aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
-        newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
-      };
-    },
-  };
-  return new OutputSpaceModule(provider);
 }
 
 /**
@@ -810,7 +792,7 @@ function autoBalance(
   // violating the namespace partition rule. The contract is responsible for
   // emitting creator compensation itself in that case. See
   // docs/protocol/computation.md#output-namespaces.
-  if (ownsSignatureNamespace(spec, store, getOutputNamespaces)) {
+  if (ownsSignatureNamespace(spec, store, outputSpace, getOutputNamespaces)) {
     logger?.warn?.('skipChangeOutput', {
       reason: 'SIGNATURE_CONTRACT namespace owned by claimed verifier',
     });

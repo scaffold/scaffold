@@ -1,8 +1,13 @@
 // Protocol spec: docs/protocol/computation.md
 
 import { Hash } from '../util/Hash.ts';
-import type { Verifier } from './BlockCreationModule.ts';
-import { BlockStore, collectExtendedOutputs } from './Block.ts';
+import type { Output, Verifier } from './BlockCreationModule.ts';
+import {
+  Block,
+  BlockStore,
+  makeBlockStoreOutputSpace,
+  resolveClaimToOutput,
+} from './Block.ts';
 import {
   ContractVerificationModule,
   type ContractVerificationProvider,
@@ -13,7 +18,7 @@ import { ExecutionQueueService } from './ExecutionQueueService.ts';
 import { SamplingService } from './SamplingService.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import type { VerifyingEnvProvider } from './ContractEnv.ts';
-import { Block } from './Block.ts';
+import { OutputSpaceModule } from './OutputSpace.ts';
 
 // -- Verifying provider adapter ------------------------------------
 
@@ -22,7 +27,11 @@ import { Block } from './Block.ts';
  * ContractHost so VerifyingEnv can walk refs/anchors for data access.
  */
 class VerifyingProviderAdapter implements VerifyingEnvProvider<Block> {
-  constructor(private readonly store: BlockStore) {}
+  private readonly outputSpace: OutputSpaceModule;
+
+  constructor(private readonly store: BlockStore) {
+    this.outputSpace = makeBlockStoreOutputSpace(store);
+  }
 
   getBlock(hash: Hash): Block | undefined {
     return this.store.get(hash);
@@ -40,8 +49,8 @@ class VerifyingProviderAdapter implements VerifyingEnvProvider<Block> {
     return block.refs;
   }
 
-  getExtendedOutputs(block: Block) {
-    return collectExtendedOutputs(block, this.store);
+  resolveClaim(block: Block, claimIndex: number): Output | undefined {
+    return resolveClaimToOutput(block, claimIndex, this.store, this.outputSpace)?.output;
   }
 }
 
@@ -85,7 +94,6 @@ export class ContractVerificationService extends ContractVerificationModule {
           verifier,
           outputs: block.outputs,
           claims: block.claims,
-          extendedOutputs: collectExtendedOutputs(block, store),
           refs: block.refs,
           signer: block.signer,
           timestamp: block.timestamp,

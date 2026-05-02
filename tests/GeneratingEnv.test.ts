@@ -69,12 +69,12 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
     return block.refs;
   }
 
-  getExtendedOutputs(block: TestBlock): Output[] {
-    const result: Output[] = [...block.outputs];
-    if (Hash.equals(block.anchor, ZERO_HASH)) return result;
+  resolveClaim(block: TestBlock, claimIndex: number): Output | undefined {
+    if (claimIndex < block.outputs.length) return block.outputs[claimIndex];
+    if (Hash.equals(block.anchor, ZERO_HASH)) return undefined;
     const anchor = this.getBlock(block.anchor);
-    if (anchor) result.push(...anchor.outputs);
-    return result;
+    if (!anchor) return undefined;
+    return anchor.outputs[claimIndex - block.outputs.length];
   }
 
   findInputs(verifier: Verifier): MaybePromise<AvailableInput[]> {
@@ -421,7 +421,6 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     block,
     outputs: block.outputs,
     claims: block.claims,
-    extendedOutputs: verProvider.getExtendedOutputs(block),
     refs: block.refs,
     provider: verProvider,
   });

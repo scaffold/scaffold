@@ -1,6 +1,5 @@
-import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, getBlockClaimMask } from '../core/Block.ts';
-import { Output } from '../core/BlockCreationModule.ts';
+import { Hash } from '../util/Hash.ts';
+import { Block, BlockStore, iterateExtendedOutputs } from '../core/Block.ts';
 import { AnimalName, ANIMALS, deriveIdentity } from './Identity.ts';
 import { decodeStatusData, statusHash } from './StatusContract.ts';
 
@@ -44,18 +43,14 @@ export class StatusIndex {
    */
   findClaimIndex(name: AnimalName, tipBlock: Block, store: BlockStore): number | undefined {
     const identity = deriveIdentity(name);
-    const extended = collectExtendedOutputs(tipBlock, store);
-
-    for (let i = 0; i < extended.length; i++) {
-      if (extended[i].data === null) continue;
-      if (Hash.equals(extended[i].verifier.contract, statusHash)) {
-        const { publicKey } = decodeStatusData(extended[i].data as Uint8Array);
-        if (bytesEqual(publicKey, identity.publicKey)) {
-          return i;
-        }
+    for (const { extendedIndex, output } of iterateExtendedOutputs(tipBlock, store)) {
+      if (output.data === null) continue;
+      if (!Hash.equals(output.verifier.contract, statusHash)) continue;
+      const { publicKey } = decodeStatusData(output.data);
+      if (bytesEqual(publicKey, identity.publicKey)) {
+        return extendedIndex;
       }
     }
-
     return undefined;
   }
 
@@ -83,33 +78,6 @@ export class StatusIndex {
   setOnStatusChange(cb: (name: AnimalName, message: string) => void): void {
     this.onStatusChange = cb;
   }
-}
-
-/**
- * Collect the full extended output vector of a block.
- * Extended vector = [own outputs, surviving anchor outputs after claims]
- */
-function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
-  const result: Output[] = [...block.outputs];
-
-  if (Hash.equals(block.anchor, ZERO_HASH)) {
-    return result;
-  }
-
-  const anchorBlock = store.get(block.anchor);
-  if (!anchorBlock) return result;
-
-  const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
-  const claimMask = getBlockClaimMask(block, anchorOutputs.length);
-
-  const claimSet = new Set(claimMask);
-  for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!claimSet.has(i)) {
-      result.push(anchorOutputs[i]);
-    }
-  }
-
-  return result;
 }
 
 /** Map a compressed public key to its animal name, or undefined. */

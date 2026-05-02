@@ -478,17 +478,15 @@ export class FetchManager {
   private _reevaluate(sub: Subscription): void {
     // Pick the first canonical claimant.
     //
-    // NOTE (Phase 4): Trust gating is designed to be the surfacing gate
-    // (see docs/design/trust-gate.md, docs/design/fetch.md). In practice,
-    // local verification on response blocks currently fails on any node
-    // that doesn't have a direct anchor path to the incentive (the
-    // `collectExtendedOutputs` helper does not walk aggregate subtrees,
-    // so claim indices referring to aggregated outputs resolve to the
-    // wrong slot, and HELLO-style contracts reject with "no more inputs
-    // available"). Until that gap is fixed, fetch surfaces on canonicality
-    // alone for non-verify:true callers. The trust-gate wiring is left
-    // in place (via `verify: true`) for callers who explicitly opt in.
-    // See TODO.md for the verification-layer follow-up.
+    // NOTE (Phase 4): Trust gating is the designed surfacing gate (see
+    // docs/design/trust-gate.md, docs/design/fetch.md). The previous
+    // blocker -- `collectExtendedOutputs` not walking aggregate subtrees
+    // and producing wrong claim resolutions for HELLO-style contracts --
+    // has been resolved by routing all claim resolution through
+    // `OutputSpaceModule`. Re-enabling the trust gate for streaming
+    // callbacks is now a follow-up rather than a deep blocker; for now
+    // fetch still surfaces on canonicality alone for non-verify:true
+    // callers, with `verify: true` as the explicit opt-in.
     let pickedHex: string | null = null;
     for (const [claimantHex] of sub.knownClaimants) {
       const claimantHash = Hash.fromHex(claimantHex);

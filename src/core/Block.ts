@@ -36,6 +36,11 @@ export const RECORD_CONTRACT = Hash.digest('result-contract');
 export const GAME_STATE_CONTRACT = Hash.digest('chess-game-state-contract');
 
 import { getAggregationData } from '../contracts/AggregationContract.ts';
+import {
+  OutputSpaceModule,
+  type OutputSpaceBlock,
+  type OutputSpaceProvider,
+} from './OutputSpace.ts';
 
 /**
  * Get the claim mask for a block: from aggregation data if present,
@@ -226,34 +231,84 @@ export function getRefOutputs(
 // -- Output space ---------------------------------------------------
 
 /**
- * Collect a block's output space: the final, post-claim set of surviving
- * outputs. This is the clean set that descendants inherit.
- *
- * Output space = [own outputs, surviving anchor outputs after claims]
+ * Build an `OutputSpaceModule` over a `BlockStore`. The single shared
+ * factory used by every site that needs to resolve claim indices --
+ * `UtxoIndex`, `ContractVerificationService`, `GenerationService`,
+ * `NodeContext.autoBalance`. Earlier code hand-rolled an `Output[]`
+ * walk via the now-removed `collectExtendedOutputs`, which silently
+ * lost self-claims and aggregate subtree outputs and produced wrong
+ * results for any block with self-claims (chess RECORD/"game") or
+ * aggregates (chess agg block). Always go through this.
  */
-export function collectExtendedOutputs(block: Block, store: BlockStore): Output[] {
-  const result: Output[] = [...block.outputs];
+export function makeBlockStoreOutputSpace(store: BlockStore): OutputSpaceModule {
+  const provider: OutputSpaceProvider = {
+    getBlock(hash: Hash): OutputSpaceBlock | undefined {
+      const block = store.get(hash);
+      if (!block) return undefined;
+      const aggData = getAggregationData(block);
+      const sc = block.claims.filter((c) => c < block.outputs.length).length;
+      return {
+        hash: block.hash,
+        anchor: block.anchor,
+        aggregates: block.aggregates,
+        outputs: block.outputs.map((o) => ({ value: o.value })),
+        claims: [...block.claims].sort((a, b) => a - b),
+        aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
+        newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
+      };
+    },
+  };
+  return new OutputSpaceModule(provider);
+}
 
-  if (Hash.equals(block.anchor, ZERO_HASH)) {
-    // Genesis -- only own outputs
-    return result;
+/**
+ * Resolve a single claim index in `block`'s extended vector to the
+ * concrete `{producerBlock, output}` it points at. Convenience wrapper
+ * for callers that just need the output object (UtxoIndex, contract
+ * envs).
+ */
+export function resolveClaimToOutput(
+  block: Block,
+  claimIndex: number,
+  store: BlockStore,
+  outputSpace?: OutputSpaceModule,
+): { block: Block; outputIndex: number; output: Output } | undefined {
+  const space = outputSpace ?? makeBlockStoreOutputSpace(store);
+  const target = space.resolveClaimIndex(block.hash, claimIndex);
+  if (!target) return undefined;
+  const producer = store.get(target.block);
+  if (!producer) return undefined;
+  const output = producer.outputs[target.outputIndex];
+  if (!output) return undefined;
+  return { block: producer, outputIndex: target.outputIndex, output };
+}
+
+/**
+ * Walk `block`'s extended vector position by position, yielding the
+ * concrete output and its producing source for each index. Stops as
+ * soon as resolution fails (end of vector or unreachable subtree).
+ *
+ * Use sparingly: search-by-content over the extended vector is
+ * O(extendedVectorLength) per call. For known producers prefer
+ * `OutputSpaceModule.computeClaimIndex`.
+ */
+export function* iterateExtendedOutputs(
+  block: Block,
+  store: BlockStore,
+  outputSpace?: OutputSpaceModule,
+): Generator<
+  { extendedIndex: number; output: Output; source: { block: Hash; outputIndex: number } }
+> {
+  const space = outputSpace ?? makeBlockStoreOutputSpace(store);
+  for (let i = 0;; i++) {
+    const target = space.resolveClaimIndex(block.hash, i);
+    if (!target) return;
+    const producer = store.get(target.block);
+    if (!producer) return;
+    const output = producer.outputs[target.outputIndex];
+    if (!output) return;
+    yield { extendedIndex: i, output, source: target };
   }
-
-  const anchorBlock = store.get(block.anchor);
-  if (!anchorBlock) return result;
-
-  const anchorOutputs = collectExtendedOutputs(anchorBlock, store);
-  const claimMask = getBlockClaimMask(block, anchorOutputs.length);
-
-  // Add surviving anchor outputs (those not claimed by this block)
-  const claimSet = new Set(claimMask);
-  for (let i = 0; i < anchorOutputs.length; i++) {
-    if (!claimSet.has(i)) {
-      result.push(anchorOutputs[i]);
-    }
-  }
-
-  return result;
 }
 
 // -- Construct from parsed payload + wire metadata -------------------

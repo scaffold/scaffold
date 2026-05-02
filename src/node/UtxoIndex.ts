@@ -21,54 +21,9 @@
 
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
-import { Block, BlockStore } from '../core/Block.ts';
-import type { Output } from '../core/BlockCreationModule.ts';
+import { Block, BlockStore, makeBlockStoreOutputSpace } from '../core/Block.ts';
 import type { BlockDraft } from '../core/BlockDraft.ts';
-
-/**
- * Compute a block's output space (the post-claim survivor set descendants
- * inherit) along with the producing-block source for each entry.
- *
- * Output_space(X) = filter(X.outputs ++ output_space(anchor), X.claims).
- *
- * Per spec (AGENTS.md, output-space.md): claim indices in `block.claims`
- * refer to positions in the extended vector = own ++ output_space(anchor).
- * A descendant's claim index 7 (with own_count 4) means
- * output_space(anchor)[3], which already has anchor's own self-claims
- * applied. The legacy `collectExtendedOutputs` only drops anchor-into-
- * anchor's-anchor claims, missing self-claims, which produced wrong
- * resolutions for blocks with self-claims (e.g. chess RECORD/"game").
- */
-function outputSpaceWithSources(
-  block: Block,
-  store: BlockStore,
-): { outputs: Output[]; sources: ({ blockHash: Hash; outputIndex: number } | null)[] } {
-  const outputs: Output[] = [...block.outputs];
-  const sources: ({ blockHash: Hash; outputIndex: number } | null)[] = block.outputs.map(
-    (_, i) => ({ blockHash: block.hash, outputIndex: i }),
-  );
-
-  if (!Hash.equals(block.anchor, ZERO_HASH)) {
-    const anchorBlock = store.get(block.anchor);
-    if (anchorBlock) {
-      const anchorSpace = outputSpaceWithSources(anchorBlock, store);
-      outputs.push(...anchorSpace.outputs);
-      sources.push(...anchorSpace.sources);
-    }
-  }
-
-  // Apply this block's claims (self + external) -- both drop entries from
-  // the extended vector.
-  const claimSet = new Set(block.claims);
-  const filteredOutputs: Output[] = [];
-  const filteredSources: ({ blockHash: Hash; outputIndex: number } | null)[] = [];
-  for (let i = 0; i < outputs.length; i++) {
-    if (claimSet.has(i)) continue;
-    filteredOutputs.push(outputs[i]);
-    filteredSources.push(sources[i]);
-  }
-  return { outputs: filteredOutputs, sources: filteredSources };
-}
+import { OutputSpaceModule } from '../core/OutputSpace.ts';
 
 /** A single unspent output tracked by the index. */
 export interface UtxoEntry {
@@ -99,6 +54,7 @@ export class UtxoIndex {
   /** verifierKey -> Map<outputKey, UtxoEntry>. */
   private readonly index = new Map<string, Map<string, UtxoEntry>>();
   private readonly store: BlockStore;
+  private readonly outputSpace: OutputSpaceModule;
 
   /**
    * Listeners for outputs that become spendable via a reorg (a block or
@@ -130,6 +86,7 @@ export class UtxoIndex {
 
   constructor(store: BlockStore) {
     this.store = store;
+    this.outputSpace = makeBlockStoreOutputSpace(store);
   }
 
   /**
@@ -269,30 +226,28 @@ export class UtxoIndex {
   }
 
   /**
-   * Remove outputs a real block claims via its index-based `claims: Index[]`
-   * (walking the anchor's output space).
+   * Remove outputs a real block claims via its index-based `claims:
+   * Index[]`. Each claim index resolves through `OutputSpaceModule` to
+   * the producing block + output index; we drop that entry from the
+   * UTXO set. Aggregation, self-claims, and arbitrary anchor depth all
+   * fall out of the same resolution path.
    */
   private removeBlockClaimedOutputs(block: Block): void {
     if (Hash.equals(block.anchor, ZERO_HASH)) return;
     if (block.claims.length === 0) return;
 
-    const anchorBlock = this.store.get(block.anchor);
-    if (!anchorBlock) return;
-
-    const anchorSpace = outputSpaceWithSources(anchorBlock, this.store);
     const ownOutputCount = block.outputs.length;
-
     for (const claimIdx of block.claims) {
       if (claimIdx < ownOutputCount) continue; // self-claim
-      const extIdx = claimIdx - ownOutputCount;
-      if (extIdx >= anchorSpace.outputs.length) continue;
-
-      const output = anchorSpace.outputs[extIdx];
-      const source = anchorSpace.sources[extIdx];
-      if (!source) continue;
+      const target = this.outputSpace.resolveClaimIndex(block.hash, claimIdx);
+      if (!target) continue;
+      const producer = this.store.get(target.block);
+      if (!producer) continue;
+      const output = producer.outputs[target.outputIndex];
+      if (!output) continue;
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
-      const oKey = outputKey(source.blockHash, source.outputIndex);
+      const oKey = outputKey(target.block, target.outputIndex);
       const entries = this.index.get(vKey);
       if (entries) {
         entries.delete(oKey);
@@ -306,35 +261,30 @@ export class UtxoIndex {
     if (Hash.equals(block.anchor, ZERO_HASH)) return;
     if (block.claims.length === 0) return;
 
-    const anchorBlock = this.store.get(block.anchor);
-    if (!anchorBlock) return;
-
-    const anchorSpace = outputSpaceWithSources(anchorBlock, this.store);
     const ownOutputCount = block.outputs.length;
-
     for (const claimIdx of block.claims) {
       if (claimIdx < ownOutputCount) continue;
-      const extIdx = claimIdx - ownOutputCount;
-      if (extIdx >= anchorSpace.outputs.length) continue;
-
-      const output = anchorSpace.outputs[extIdx];
-      const source = anchorSpace.sources[extIdx];
-      if (!source) continue;
+      const target = this.outputSpace.resolveClaimIndex(block.hash, claimIdx);
+      if (!target) continue;
+      const producer = this.store.get(target.block);
+      if (!producer) continue;
+      const output = producer.outputs[target.outputIndex];
+      if (!output) continue;
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
-      const oKey = outputKey(source.blockHash, source.outputIndex);
+      const oKey = outputKey(target.block, target.outputIndex);
       let entries = this.index.get(vKey);
       if (!entries) {
         entries = new Map();
         this.index.set(vKey, entries);
       }
       entries.set(oKey, {
-        blockHash: source.blockHash,
-        outputIndex: source.outputIndex,
+        blockHash: target.block,
+        outputIndex: target.outputIndex,
         value: output.value,
-        extendedIndex: extIdx,
+        extendedIndex: claimIdx - ownOutputCount,
       });
-      this._fireReAdded(source.blockHash, source.outputIndex);
+      this._fireReAdded(target.block, target.outputIndex);
     }
   }
 

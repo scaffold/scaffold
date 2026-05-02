@@ -59,16 +59,14 @@ export function ChessApp() {
       enableLogging: false,
       useFloodGossip: true,
       enablePiggyback: false,
-      // Restrict drafting to GAME_STATE for now.
-      //
-      // Aggregation across move blocks does work, but its block claims
-      // index into [own ++ aggregate.new ++ anchor.output_space] and
-      // UtxoIndex.removeBlockClaimedOutputs only resolves the anchor
-      // portion -- so an agg block's claims of aggregate AGG markers
-      // get reinterpreted as anchor.output_space slots and incorrectly
-      // remove unrelated UTXOs (e.g. the creator's signature change
-      // output). Until UtxoIndex delegates to OutputSpaceModule for
-      // resolution, keep the chess demo on a pure linear chain.
+      // Aggregation block claims now resolve correctly through
+      // OutputSpaceModule, but a separate issue remains: a parked chess
+      // GAME_STATE draft for the next turn marks its seed UTXO as
+      // canonically reserved, which makes the AGG draft consume it as
+      // an "input" and visually drops the pot from the locked balance.
+      // Track separately; for the demo, restrict drafting to GAME_STATE
+      // so the agg flow stays out of the picture. See
+      // docs/design/chess-turn-one-bug.md.
       enableGeneration: (h) => Hash.equals(h, GAME_STATE_CONTRACT),
     });
     const g = new ChessGame(sc);

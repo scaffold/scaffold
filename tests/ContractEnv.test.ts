@@ -58,12 +58,12 @@ class TestProvider implements VerifyingEnvProvider<TestBlock> {
     return block.refs;
   }
 
-  getExtendedOutputs(block: TestBlock): Output[] {
-    const result: Output[] = [...block.outputs];
-    if (Hash.equals(block.anchor, ZERO_HASH)) return result;
+  resolveClaim(block: TestBlock, claimIndex: number): Output | undefined {
+    if (claimIndex < block.outputs.length) return block.outputs[claimIndex];
+    if (Hash.equals(block.anchor, ZERO_HASH)) return undefined;
     const anchor = this.getBlock(block.anchor);
-    if (anchor) result.push(...anchor.outputs);
-    return result;
+    if (!anchor) return undefined;
+    return anchor.outputs[claimIndex - block.outputs.length];
   }
 }
 
@@ -81,7 +81,6 @@ function makeEnv(opts: {
     block: opts.block,
     outputs: provider.getOutputs(opts.block),
     claims: provider.getClaims(opts.block),
-    extendedOutputs: provider.getExtendedOutputs(opts.block),
     refs: provider.getRefs(opts.block),
     provider,
     signer: opts.signer,

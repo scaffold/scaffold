@@ -165,7 +165,21 @@ export interface VerifyingEnvProvider<BlockType> {
   getBlock(hash: Hash): BlockType | undefined;
   getOutputs(block: BlockType): Output[];
   getClaims(block: BlockType): number[];
-  getExtendedOutputs(block: BlockType): Output[];
+  /**
+   * Resolve a claim index in `block`'s extended vector to the
+   * concrete `Output` that index points at.
+   *
+   * The extended vector is `own ++ aggregate.new ++ output_space(anchor)`
+   * (see docs/protocol/output-space.md, AGENTS.md). Implementations should
+   * delegate to `OutputSpaceModule.resolveClaimIndex` rather than
+   * reconstructing the array; flat-array interpretations get aggregation
+   * and self-claim handling subtly wrong (see git log for the chess
+   * agg-block UTXO bug).
+   *
+   * Returns `undefined` if the index is out of range or the producing
+   * block isn't loaded.
+   */
+  resolveClaim(block: BlockType, claimIndex: number): Output | undefined;
   getRefs(block: BlockType): Hash[];
 }
 

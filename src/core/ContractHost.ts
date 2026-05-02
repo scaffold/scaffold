@@ -35,7 +35,6 @@ export interface VerifyingRunInput<BlockType> {
   readonly verifier: Verifier;
   readonly outputs: Output[];
   readonly claims: number[];
-  readonly extendedOutputs: Output[];
   readonly refs: Hash[];
   readonly signer?: Uint8Array;
   readonly timestamp: number;
@@ -129,7 +128,6 @@ export class ContractHost<BlockType> {
       block: input.block,
       outputs: input.outputs,
       claims: input.claims,
-      extendedOutputs: input.extendedOutputs,
       refs: input.refs,
       provider,
       signer: input.signer,
