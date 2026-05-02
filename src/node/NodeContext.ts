@@ -335,6 +335,7 @@ export class NodeContext {
     const draftStrategy = new DraftStrategy(
       { enableGeneration },
       this.generation,
+      this.utxoIndex,
     );
     // DraftStrategy tracks in-flight per {block, outputIndex}. When a
     // draft releases an unused pre-queue output, tell the strategy so

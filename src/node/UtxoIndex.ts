@@ -176,6 +176,18 @@ export class UtxoIndex {
     return [...entries.values()];
   }
 
+  /** True iff the (block, outputIndex) pair is currently in the canonical UTXO set. */
+  isUnspent(blockHash: Hash, outputIndex: number): boolean {
+    const block = this.store.get(blockHash);
+    if (!block) return false;
+    const output = block.outputs[outputIndex];
+    if (!output) return false;
+    const vKey = verifierKey(output.verifier.contract, output.verifier.params);
+    const entries = this.index.get(vKey);
+    if (!entries) return false;
+    return entries.has(outputKey(blockHash, outputIndex));
+  }
+
   /** Same as `getByVerifier`, with a pre-computed verifier key string. */
   getByVerifierKey(key: string): UtxoEntry[] {
     const entries = this.index.get(key);

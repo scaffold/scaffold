@@ -50,6 +50,14 @@ const DEFAULT_CONFIG = {
 };
 
 /**
+ * Optional UtxoIndex hook used to release stale `inFlight` entries when
+ * the seed output has been spent by a published canonical block.
+ */
+export interface InFlightSweepIndex {
+  isUnspent(blockHash: Hash, outputIndex: number): boolean;
+}
+
+/**
  * Strategy that creates drafts for unclaimed outputs on newly canonical blocks.
  *
  * Before creating a new draft, checks if a blocked generator can be
@@ -58,14 +66,31 @@ const DEFAULT_CONFIG = {
  */
 export class DraftStrategy implements Strategy {
   private readonly config: { minValue: number; maxConcurrent: number };
+  /**
+   * Outputs that have been used to start a *new* draft (counts toward
+   * `maxConcurrent`).
+   */
   private readonly inFlight = new Set<string>();
+  /**
+   * Outputs absorbed into an existing generator via
+   * `notifyNewOutput` — i.e. fed to a draft that already exists. These
+   * don't count toward the new-draft cap; they only suppress
+   * re-drafting the same seed.
+   */
+  private readonly resumed = new Set<string>();
   private readonly _notifier?: BlockedGeneratorNotifier;
   private readonly _enableGeneration: (contractHash: Hash) => boolean;
+  private readonly _utxoIndex?: InFlightSweepIndex;
 
-  constructor(config?: DraftStrategyConfig, notifier?: BlockedGeneratorNotifier) {
+  constructor(
+    config?: DraftStrategyConfig,
+    notifier?: BlockedGeneratorNotifier,
+    utxoIndex?: InFlightSweepIndex,
+  ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this._notifier = notifier;
     this._enableGeneration = config?.enableGeneration ?? (() => true);
+    this._utxoIndex = utxoIndex;
   }
 
   evaluate(event: ReactiveEvent): (Action | CreateDraftAction)[] {
@@ -73,6 +98,32 @@ export class DraftStrategy implements Strategy {
       (c) => c.canonical,
     );
     if (newlyCanonical.length === 0) return [];
+
+    // Sweep stale inFlight entries: a tracking key is for a (block,
+    // outputIndex) seed output that triggered draft creation. If the
+    // output was claimed by a later canonical block (and thus removed
+    // from the canonical UTXO view), the draft has long since published
+    // and the entry should be released. Without this sweep, parked
+    // drafts (chess GAME_STATE generators that wait on getOutput)
+    // accumulate `inFlight` entries forever, eventually hitting
+    // maxConcurrent and starving every new turn.
+    // See docs/design/chess-turn-one-bug.md item 1.
+    if (this._utxoIndex) {
+      const sweep = (set: Set<string>) => {
+        for (const key of [...set]) {
+          const sep = key.lastIndexOf(':');
+          if (sep < 0) continue;
+          const blockKey = key.slice(0, sep);
+          const outputIndex = Number(key.slice(sep + 1));
+          const blockHash = Hash.fromPrimitive(blockKey);
+          if (!this._utxoIndex!.isUnspent(blockHash, outputIndex)) {
+            set.delete(key);
+          }
+        }
+      };
+      sweep(this.inFlight);
+      sweep(this.resumed);
+    }
 
     // First pass: resume blocked generators (no concurrency limit --
     // resuming feeds an existing draft, doesn't create a new one).
@@ -86,7 +137,7 @@ export class DraftStrategy implements Strategy {
           if (selfClaimed.has(i)) continue;
           const output = block.outputs[i];
           const trackingKey = `${change.hash.toPrimitive()}:${i}`;
-          if (this.inFlight.has(trackingKey)) continue;
+          if (this.inFlight.has(trackingKey) || this.resumed.has(trackingKey)) continue;
 
           const resumed = this._notifier.notifyNewOutput(
             change.hash,
@@ -94,7 +145,7 @@ export class DraftStrategy implements Strategy {
             output,
           );
           if (resumed) {
-            this.inFlight.add(trackingKey);
+            this.resumed.add(trackingKey);
           }
         }
       }
@@ -126,7 +177,7 @@ export class DraftStrategy implements Strategy {
         if (this._notifier?.hasActiveGenerationFor?.(output.verifier)) continue;
 
         const trackingKey = `${change.hash.toPrimitive()}:${i}`;
-        if (this.inFlight.has(trackingKey)) continue;
+        if (this.inFlight.has(trackingKey) || this.resumed.has(trackingKey)) continue;
 
         this.inFlight.add(trackingKey);
 
@@ -154,7 +205,9 @@ export class DraftStrategy implements Strategy {
 
   /** Mark a tracking key as no longer in-flight. */
   complete(blockHash: Hash, outputIndex: number): void {
-    this.inFlight.delete(`${blockHash.toPrimitive()}:${outputIndex}`);
+    const key = `${blockHash.toPrimitive()}:${outputIndex}`;
+    this.inFlight.delete(key);
+    this.resumed.delete(key);
   }
 
   get inFlightCount(): number {
