@@ -3,6 +3,7 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
+import type { ClaimRef, Node } from './Node.ts';
 
 // -- Draft merger disjointness ------------------------------------
 
@@ -50,8 +51,45 @@ export interface ClaimIntent {
   readonly value: number;
 }
 
-/** Local-only placeholder for a block being constructed. */
+/**
+ * Local-only placeholder for a block being constructed.
+ *
+ * Satisfies the `Node` interface (`kind`, `outputs`, `claims`,
+ * `effectiveWeight`) so ConsensusModule, OutputClaimModule, weight
+ * propagation, and UtxoIndex can treat drafts uniformly with blocks.
+ *
+ * The shape today is transitional: legacy fields (`resolvedClaims`,
+ * `includeConstraints`, `anchor`, `aggregates`, the simple `status`
+ * string) are still here for back-compat with consumers that haven't
+ * migrated. Subsequent steps (BlockBuilderModule, lifecycle state
+ * machine) move callers off the legacy fields, after which they can be
+ * dropped.
+ */
 export interface BlockDraft {
+  // -- Node-projection fields ----------------------------------------
+  /** Discriminator for the `Node` union. */
+  readonly kind: 'draft';
+  /**
+   * Direct `(producer, outputIndex)` references for every input this
+   * draft consumes. Drafts only run when their producing blocks are
+   * present in the local store, so claims are always fully resolved
+   * (each `outputIndex < producer.outputs.length`). Mutable so the
+   * generator can append claims as it runs (requireInput / collectInputs).
+   *
+   * Today this mirrors `resolvedClaims`; once consumers migrate,
+   * `resolvedClaims` is dropped and `claims` becomes the only spelling.
+   */
+  readonly claims: ClaimRef[];
+  /**
+   * Live, sampled weight used by ConsensusModule to pick the canonical
+   * draft when multiple drafts claim the same outputs. Wall-clock based
+   * (planned: bumped on a ~1s tick by a `DraftWeightTicker`); initialized
+   * to 0. Block weight uses a different scale (declared + sampled
+   * subtree); both kinds compete on this field.
+   */
+  effectiveWeight: number;
+
+  // -- Existing fields (some legacy, some still load-bearing) --------
   readonly draftId: DraftID;
   readonly resolvedClaims: ClaimIntent[];
   readonly outputs: Output[];
@@ -70,6 +108,11 @@ export interface BlockDraft {
   readonly status: DraftStatus;
 }
 
+// Compile-time assertion: BlockDraft satisfies the Node interface.
+// (Type-only; the assignment is never executed.)
+const _blockDraftIsNode: Node = undefined as unknown as BlockDraft;
+void _blockDraftIsNode;
+
 // -- Valid transitions --------------------------------------------
 
 const VALID_TRANSITIONS: Record<DraftStatus, DraftStatus[]> = {
@@ -80,6 +123,11 @@ const VALID_TRANSITIONS: Record<DraftStatus, DraftStatus[]> = {
 };
 
 // -- Factory ------------------------------------------------------
+
+/** Project the value-carrying ClaimIntent form into the Node-shaped ClaimRef form. */
+function claimIntentsToRefs(claims: readonly ClaimIntent[]): ClaimRef[] {
+  return claims.map((c) => ({ producer: c.block, outputIndex: c.outputIndex }));
+}
 
 /** Create a new BlockDraft with a random draftId and 'pending' status. */
 export function createDraft(fields: {
@@ -93,6 +141,9 @@ export function createDraft(fields: {
   includeConstraints?: Hash[];
 }): BlockDraft {
   return {
+    kind: 'draft',
+    claims: claimIntentsToRefs(fields.resolvedClaims),
+    effectiveWeight: 0,
     draftId: Hash.random(),
     resolvedClaims: fields.resolvedClaims,
     outputs: fields.outputs,
@@ -198,7 +249,12 @@ export class DraftStore {
       throw new Error(`Draft ${key} not found`);
     }
 
-    const updated: BlockDraft = { ...existing, ...changes };
+    // Keep `claims` (Node projection) in sync if the legacy
+    // `resolvedClaims` field is being updated.
+    const claimsOverride = changes.resolvedClaims !== undefined && changes.claims === undefined
+      ? { claims: claimIntentsToRefs(changes.resolvedClaims) }
+      : {};
+    const updated: BlockDraft = { ...existing, ...changes, ...claimsOverride };
     this.drafts.set(key, updated);
     return updated;
   }
@@ -219,9 +275,13 @@ export class DraftStore {
 
     this.drafts.delete(key);
 
+    const claimsOverride = changes.resolvedClaims !== undefined && changes.claims === undefined
+      ? { claims: claimIntentsToRefs(changes.resolvedClaims) }
+      : {};
     const newDraft: BlockDraft = {
       ...existing,
       ...changes,
+      ...claimsOverride,
       draftId: Hash.random(),
       status: 'pending',
     };

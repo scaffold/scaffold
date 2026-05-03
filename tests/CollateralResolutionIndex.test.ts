@@ -144,6 +144,9 @@ function makeDraft(
     encodeVerdict({ target, verdict }),
   );
   return {
+    kind: 'draft',
+    claims: [],
+    effectiveWeight: 0,
     draftId,
     resolvedClaims: [],
     outputs: [verdictOutput],
