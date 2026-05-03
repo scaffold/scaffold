@@ -151,7 +151,6 @@ function makeDraft(
     outputs: [verdictOutput],
     outputSlots: [{ output: verdictOutput, origin: 'require' }],
     declaredWeight: 0,
-    anchor: Hash.digest('anchor'),
     refs: [],
     status,
   };

@@ -50,9 +50,7 @@ export type Action =
     claim: ClaimRef;
     outputs: Output[];
     declaredWeight: number;
-    anchor: Hash;
     refs?: Hash[];
-    aggregates?: Hash[];
   };
 
 // -- Block creator interface ----------------------------------------
@@ -324,9 +322,7 @@ export class ReactiveLayer {
               claims: [action.claim],
               outputs: action.outputs,
               declaredWeight: action.declaredWeight,
-              anchor: action.anchor,
               refs: action.refs,
-              aggregates: action.aggregates,
             });
           }
           break;

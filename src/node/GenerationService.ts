@@ -325,7 +325,6 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const verifier = output.verifier;
     const spec: GenerationSpec = {
       targetKey: targetKeyFor(verifier),
-      anchor: draft.anchor,
       verifier,
       declaredWeight: draft.declaredWeight,
     };

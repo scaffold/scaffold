@@ -37,7 +37,6 @@ function makeWorld(opts: { uncanonicalFactor?: number } = {}): World {
 }
 
 const baseSpec: Omit<GenerationSpec, 'targetKey'> = {
-  anchor: hashOf('a'),
   verifier: verifier('v'),
   declaredWeight: 100,
 };

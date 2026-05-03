@@ -26,7 +26,6 @@ interface DraftEntry {
 /** Fields describing a generation target. */
 export interface GenerationSpec {
   readonly targetKey: TargetKey;
-  readonly anchor: Hash;
   readonly verifier: Verifier;
   readonly declaredWeight: number;
 }

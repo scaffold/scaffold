@@ -2,14 +2,11 @@ import { assert, assertEquals, assertNotEquals, assertThrows } from '@std/assert
 import { Hash } from '../src/util/Hash.ts';
 import { Draft, ClaimIntent, createDraft, DraftStore } from '../src/core/Draft.ts';
 
-const anchor = Hash.digest('anchor');
-
 function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Draft {
   return createDraft({
     claims: [{ producer: Hash.digest('b'), outputIndex: 0 }],
     outputs: [],
     declaredWeight: 10,
-    anchor,
     ...overrides,
   });
 }
@@ -22,13 +19,11 @@ Deno.test('createDraft: sets all fields, random draftId, status pending', () => 
     claims: [claim],
     outputs: [],
     declaredWeight: 5,
-    anchor,
   });
 
   assertEquals(draft.claims, [claim]);
   assertEquals(draft.outputs, []);
   assertEquals(draft.declaredWeight, 5);
-  assert(Hash.equals(draft.anchor, anchor));
   assertEquals(draft.refs, []);
   assertEquals(draft.status, 'pending');
 
@@ -48,7 +43,6 @@ Deno.test('createDraft: optional refs', () => {
     claims: [],
     outputs: [],
     declaredWeight: 1,
-    anchor,
     refs: [r],
   });
   assertEquals(draft.refs.length, 1);
@@ -193,8 +187,8 @@ Deno.test('recreate: new draftId, old removed, changes applied, unspecified fiel
   const draft = makeDraft();
   store.add(draft);
 
-  const newAnchor = Hash.digest('new-anchor');
-  const recreated = store.recreate(draft.draftId, { anchor: newAnchor });
+  const newRefs = [Hash.digest('new-ref')];
+  const recreated = store.recreate(draft.draftId, { refs: newRefs });
 
   // Old removed
   assertEquals(store.get(draft.draftId), undefined);
@@ -204,7 +198,8 @@ Deno.test('recreate: new draftId, old removed, changes applied, unspecified fiel
   assertEquals(store.get(recreated.draftId), recreated);
 
   // Changes applied
-  assert(Hash.equals(recreated.anchor, newAnchor));
+  assertEquals(recreated.refs.length, 1);
+  assert(Hash.equals(recreated.refs[0], newRefs[0]));
 
   // Unspecified fields preserved
   assertEquals(recreated.declaredWeight, draft.declaredWeight);

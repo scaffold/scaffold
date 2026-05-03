@@ -38,10 +38,7 @@ export class DraftManager {
     claims: ClaimRef[];
     outputs: Output[];
     declaredWeight: number;
-    anchor: Hash;
     refs?: Hash[];
-    aggregates?: Hash[];
-    includeConstraints?: Hash[];
   }): Draft {
     const draft = createDraft(fields);
     this.store.add(draft);

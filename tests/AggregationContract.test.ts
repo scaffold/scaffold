@@ -125,7 +125,6 @@ Deno.test('aggregation contract blocks when fewer than 4 inputs available', asyn
     claims: [{ producer: genesis.hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
-    anchor: genesis.hash,
   });
   draftStore.add(draft);
   draftStore.transition(draft.draftId, 'generating');
@@ -154,7 +153,6 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   for (let i = 0; i < AGGREGATION_THRESHOLD; i++) {
     const block = makeBlock({
       name: `block-${i}`,
-      anchor: genesis.hash,
       outputs: [makeAggregationOutput()],
     });
     store.put(block);
@@ -173,7 +171,6 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
     claims: [{ producer: blocks[0].hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
-    anchor: genesis.hash,
   });
   draftStore.add(draft);
   draftStore.transition(draft.draftId, 'generating');
@@ -216,7 +213,6 @@ Deno.test('3 blocks are not enough -- aggregator blocks waiting for 4th input', 
   for (let i = 0; i < AGGREGATION_THRESHOLD - 1; i++) {
     const block = makeBlock({
       name: `block-${i}`,
-      anchor: genesis.hash,
       outputs: [makeAggregationOutput()],
     });
     store.put(block);
@@ -232,7 +228,6 @@ Deno.test('3 blocks are not enough -- aggregator blocks waiting for 4th input', 
     claims: [{ producer: firstBlock.hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
-    anchor: genesis.hash,
   });
   draftStore.add(draft);
   draftStore.transition(draft.draftId, 'generating');
@@ -260,7 +255,6 @@ Deno.test('merged resolvedClaims contain no duplicates', async () => {
   for (let i = 0; i < AGGREGATION_THRESHOLD; i++) {
     const block = makeBlock({
       name: `block-${i}`,
-      anchor: genesis.hash,
       outputs: [makeAggregationOutput()],
     });
     store.put(block);
@@ -272,7 +266,6 @@ Deno.test('merged resolvedClaims contain no duplicates', async () => {
     claims: [{ producer: blocks[0].hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
-    anchor: genesis.hash,
   });
   draftStore.add(draft);
   draftStore.transition(draft.draftId, 'generating');

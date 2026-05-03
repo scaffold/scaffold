@@ -30,9 +30,7 @@ export interface CreateDraftAction {
   claim: ClaimRef;
   outputs: Output[];
   declaredWeight: number;
-  anchor: Hash;
   refs?: Hash[];
-  aggregates?: Hash[];
 }
 
 export interface DraftStrategyConfig {
@@ -181,20 +179,19 @@ export class DraftStrategy implements Strategy {
 
         this.inFlight.add(trackingKey);
 
-        // Find canonical tip for anchor
-        const anchor = findCanonicalTip(event.store, event.consensus);
-
         const claim: ClaimRef = {
           producer: change.hash,
           outputIndex: i,
         };
 
+        // Anchor + aggregates are derived from the draft's claims at
+        // every consensus query (see ConsensusService.getAnchor for
+        // drafts), so we don't compute them here.
         actions.push({
           type: 'createDraft',
           claim,
           outputs: [makeAggregationOutput()],
           declaredWeight: 1,
-          anchor,
         });
       }
     }

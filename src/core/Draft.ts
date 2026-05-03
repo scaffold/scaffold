@@ -106,14 +106,6 @@ export interface Draft {
    */
   readonly outputSlots: OutputSlot[];
   readonly declaredWeight: number;
-  /**
-   * Speculative anchor for generation-time consensus participation.
-   * BlockBuilder ignores this and picks the real anchor from claims at
-   * solidification time. Generation still writes to it for the
-   * GenerationSpec record; once generation is refactored, the field
-   * can be dropped.
-   */
-  readonly anchor: Hash;
   readonly refs: Hash[];
   readonly status: DraftStatus;
 }
@@ -140,7 +132,6 @@ export function createDraft(fields: {
   outputs: Output[];
   outputSlots?: OutputSlot[];
   declaredWeight: number;
-  anchor: Hash;
   refs?: Hash[];
 }): Draft {
   return {
@@ -155,7 +146,6 @@ export function createDraft(fields: {
     outputSlots: fields.outputSlots ??
       fields.outputs.map((output) => ({ output, origin: 'require' as const })),
     declaredWeight: fields.declaredWeight,
-    anchor: fields.anchor,
     refs: fields.refs ?? [],
     status: 'pending',
   };
