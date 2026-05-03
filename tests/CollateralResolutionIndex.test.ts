@@ -5,6 +5,7 @@ import { AtomSource, AtomType, type Block } from '../src/core/Block.ts';
 import type { BlockDraft } from '../src/core/BlockDraft.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { encodeVerdict, VERDICT_RECORD_KEY } from '../src/contracts/CollateralContract.ts';
+import { blockNodeFields, withNodeFields } from './testutil/blockNodeFields.ts';
 import {
   CollateralResolutionIndex,
   type CollateralResolutionIndexProvider,
@@ -112,7 +113,7 @@ function makeBlock(
   const outputs = verdict && target
     ? [makeRecordOutput(VERDICT_RECORD_KEY, encodeVerdict({ target, verdict }))]
     : [];
-  return {
+  return withNodeFields({
     hash,
     anchor: Hash.digest('anchor'),
     aggregates: [],
@@ -127,7 +128,9 @@ function makeBlock(
     raw: new Uint8Array(0),
     fromConnections: [],
     toConnections: new Set(),
-    source: AtomSource.Remote,  };
+    source: AtomSource.Remote,
+    ...blockNodeFields(hash, [], 0),
+  });
 }
 
 function makeDraft(

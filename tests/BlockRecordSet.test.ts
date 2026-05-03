@@ -3,12 +3,13 @@ import { assert, assertEquals } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block } from '../src/core/Block.ts';
 import { BlockRecordSet } from '../src/reactive/BlockRecordSet.ts';
+import { blockNodeFields, withNodeFields } from './testutil/blockNodeFields.ts';
 
 // -- Helpers -------------------------------------------------------
 
 function makeBlock(name: string): Block {
   const hash = Hash.digest(name);
-  return {
+  return withNodeFields({
     hash,
     anchor: ZERO_HASH,
     aggregates: [],
@@ -23,7 +24,9 @@ function makeBlock(name: string): Block {
     raw: new Uint8Array(0),
     fromConnections: [],
     toConnections: new Set(),
-    source: AtomSource.Local,  };
+    source: AtomSource.Local,
+    ...blockNodeFields(hash, [], 1),
+  });
 }
 
 // -- Tests ---------------------------------------------------------

@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
@@ -26,7 +27,7 @@ function makeExecutor(...contractNames: string[]): ContractExecutor {
 
 /** Create a stub Block with the given hash and outputs. */
 function stubBlock(blockHash: Hash, outputs: Output[] = []): Block {
-  return {
+  return withNodeFields({
     hash: blockHash,
     anchor: ZERO_HASH,
     aggregates: [],
@@ -42,7 +43,7 @@ function stubBlock(blockHash: Hash, outputs: Output[] = []): Block {
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 /** Create an output with the given contract hash. */

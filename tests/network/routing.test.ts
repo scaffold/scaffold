@@ -11,6 +11,7 @@
  */
 
 import { PacketType } from '../../src/core/Packet.ts';
+import { withNodeFields } from '../testutil/blockNodeFields.ts';
 
 import { assert } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
@@ -36,7 +37,7 @@ function makeBlock(
   declaredWeight: number,
   claimIndices: number[] = [],
 ): Block {
-  return {
+  return withNodeFields({
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: [],
@@ -52,7 +53,7 @@ function makeBlock(
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 /** Genesis with outputs that use V_LABEL so claims resolve to the right verifier. */

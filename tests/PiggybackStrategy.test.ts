@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { assert, assertEquals } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
@@ -52,7 +53,7 @@ function makeBlock(
     declaredWeight?: number;
   } = {},
 ): Block {
-  return {
+  return withNodeFields({
     hash,
     anchor: opts.anchor ?? ZERO_HASH,
     aggregates: opts.aggregates ?? [],
@@ -68,7 +69,7 @@ function makeBlock(
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 class MockTrustGate implements PiggybackTrustGate {

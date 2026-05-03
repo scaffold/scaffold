@@ -12,6 +12,7 @@ import {
 import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
 import { createDraft, DraftStore } from '../src/core/BlockDraft.ts';
 import { ContractGeneratorShim as ContractGenerator } from './testutil/ContractGeneratorShim.ts';
+import { blockNodeFields, withNodeFields } from './testutil/blockNodeFields.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../src/node/UtxoIndex.ts';
 import type { Contract } from '../src/contracts/Contract.ts';
@@ -33,7 +34,7 @@ function makeBlock(opts: {
   const hash = h(opts.name);
   const claimIndices = opts.claimIndices ?? [];
   const declaredWeight = 1;
-  return {
+  return withNodeFields({
     hash,
     anchor: opts.anchor ?? ZERO_HASH,
     outputs: opts.outputs ?? [],
@@ -48,7 +49,9 @@ function makeBlock(opts: {
     raw: new Uint8Array(0),
     fromConnections: [],
     toConnections: new Set(),
-    source: AtomSource.Local,  };
+    source: AtomSource.Local,
+    ...blockNodeFields(hash, claimIndices, declaredWeight),
+  });
 }
 
 class TestOutputClaimProvider implements OutputClaimProvider<Block> {

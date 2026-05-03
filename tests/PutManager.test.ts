@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
@@ -20,7 +21,7 @@ function makeOutput(value: number, contractName?: string): Output {
 }
 
 function makeBlock(overrides?: Partial<Block>): Block {
-  return {
+  return withNodeFields({
     hash: Hash.random(),
     anchor: ZERO_HASH,
     aggregates: [],
@@ -37,7 +38,7 @@ function makeBlock(overrides?: Partial<Block>): Block {
     toConnections: new Set(),
     source: AtomSource.Local,
     ...overrides,
-  };
+  });
 }
 
 class MockProcessor implements BlockProcessor {

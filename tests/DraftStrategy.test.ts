@@ -8,13 +8,14 @@ import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { BlockReceivedResult } from '../src/core/Coordinator.ts';
 import { ReactiveEvent } from '../src/node/ReactiveLayer.ts';
 import { CreateDraftAction, DraftStrategy } from '../src/node/strategies/DraftStrategy.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 // -- Helpers ------------------------------------------------------
 
 const h = (name: string): Hash => Hash.digest(name);
 
 function makeBlock(hash: Hash, anchor: Hash, outputs: Block['outputs'] = []): Block {
-  return {
+  return withNodeFields({
     hash,
     anchor,
     aggregates: [],
@@ -30,7 +31,7 @@ function makeBlock(hash: Hash, anchor: Hash, outputs: Block['outputs'] = []): Bl
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 function makeEvent(

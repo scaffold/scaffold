@@ -5,6 +5,7 @@ import { Output } from './BlockCreationModule.ts';
 import { AtomBase, AtomSource, AtomType } from './Atom.ts';
 import { PacketType, parseHeader } from './Packet.ts';
 import { JsonSerializer } from './PacketSerializer.ts';
+import type { ClaimRef, Node } from './Node.ts';
 
 // Re-export Atom types for callers that pull `Block` and source/kind
 // constants together. Keeps test fixtures compact.
@@ -92,6 +93,10 @@ export interface BlockPayload {
    * Sorted indices into this block's extended vector identifying the
    * outputs this block consumes. The extended vector is
    * `[ownOutputs..., aggregateOutputs..., anchorSurvivingOutputs...]`.
+   *
+   * This is the wire-format claim representation; the canonical Node-level
+   * claim form is the upcoming `Block.claims: ClaimRef[]`, which carries
+   * direct `(producer, outputIndex)` references.
    */
   readonly claimIndices: number[];
   readonly outputs: Output[];
@@ -107,16 +112,40 @@ export interface BlockPayload {
 /**
  * Concrete block type: an Atom whose payload carries the consensus
  * fields. Wire identity and reception metadata come from `AtomBase`;
- * the consensus fields come from `BlockPayload`.
+ * the consensus fields come from `BlockPayload`; the unified graph-vertex
+ * surface (used by ConsensusModule, OutputClaimModule, weight propagation)
+ * comes from `Node`.
  *
- * The optional fields (`resolvedClaims`, `selfWeight`, `subtreeWeight`)
- * are node-local and never serialized.
+ * The optional fields (`selfWeight`, `subtreeWeight`) are node-local and
+ * never serialized.
  */
-export interface Block extends AtomBase, BlockPayload {
+export interface Block extends AtomBase, BlockPayload, Node {
   /** Discriminator for the `Atom` union. */
   readonly type: AtomType.Block;
   /** Block packets are JSON-encoded today; binary encodings will join later. */
   readonly packetType: PacketType.JsonSignedBlock | PacketType.JsonUnsignedBlock;
+
+  /** Discriminator for the `Node` union. */
+  readonly kind: 'block';
+
+  /**
+   * Direct `(producer, outputIndex)` references for every input this block
+   * consumes, parallel to `claimIndices`. At construction each entry is
+   * `{ producer: this.hash, outputIndex: claimIndices[i] }` -- the claim
+   * targets a position in this block's own extended vector. As ancestors
+   * become canonical, OutputClaimModule.tryMigrate rewrites these in place,
+   * eventually pointing each entry directly at the producing block's own
+   * outputs (where `outputIndex < producer.outputs.length`). See
+   * `Node.claims` for the full semantics.
+   */
+  readonly claims: ClaimRef[];
+
+  /**
+   * Live, sampled weight used by ConsensusModule to pick the canonical
+   * subgraph. Initialized to `declaredWeight`; refined by the sampling
+   * subsystem as descendant subtree weight is observed.
+   */
+  effectiveWeight: number;
 
   /** Resolved claims -- concrete output references for uniform claim handling. */
   readonly resolvedClaims?: import('./BlockDraft.ts').ClaimIntent[];
@@ -333,6 +362,14 @@ export function createBlockFromPacket(
   signature?: Uint8Array,
   signer?: Uint8Array,
 ): Block {
+  // Initial Node-projection claims: each ClaimRef points at this block's
+  // own extended vector. OutputClaimModule.tryMigrate rewrites them as
+  // ancestors become canonical, eventually replacing `producer` with the
+  // deepest block whose own outputs contain the target.
+  const claims: ClaimRef[] = payload.claimIndices.map((outputIndex) => ({
+    producer: hash,
+    outputIndex,
+  }));
   return {
     hash,
     type: AtomType.Block,
@@ -351,6 +388,9 @@ export function createBlockFromPacket(
     declaredWeight: payload.declaredWeight,
     refs: payload.refs,
     timestamp: payload.timestamp,
+    kind: 'block',
+    claims,
+    effectiveWeight: payload.declaredWeight,
   };
 }
 

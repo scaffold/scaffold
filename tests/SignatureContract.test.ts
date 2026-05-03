@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
@@ -91,7 +92,7 @@ Deno.test('SignatureContract: unsigned block is rejected', async () => {
   node.receiveBlock(genesis, null);
 
   // Unsigned block (no signer) claiming the signature output
-  const unsignedBlock: Block = {
+  const unsignedBlock: Block = withNodeFields({
     hash: Hash.digest('unsigned-block'),
     anchor: genesis.hash,
     aggregates: [],
@@ -108,7 +109,7 @@ Deno.test('SignatureContract: unsigned block is rejected', async () => {
     toConnections: new Set(),
     source: AtomSource.Local,
     // no signer field
-  };
+  });
   node.receiveBlock(unsignedBlock, null);
 
   const result = await node.execution.verifyBlock(unsignedBlock.hash);

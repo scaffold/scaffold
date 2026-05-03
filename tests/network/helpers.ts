@@ -4,6 +4,7 @@
  */
 
 import { Hash } from '../../src/util/Hash.ts';
+import { withNodeFields } from '../testutil/blockNodeFields.ts';
 
 import {
   AGGREGATION_CONTRACT,
@@ -69,7 +70,7 @@ export function makeLeafBlock(
     hashParts.push(out.verifier.contract.toBytes());
     hashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
   }
-  return {
+  return withNodeFields({
     ...TEST_ATOM_BASE,
     ...freshTransit(),
     hash: Hash.digestParts(...hashParts),
@@ -82,7 +83,7 @@ export function makeLeafBlock(
     timestamp: 0,
     receivedAt: 0,
     source: AtomSource.Local,
-  };
+  });
 }
 
 /** Create a leaf block with a deterministic hash based on name. */
@@ -94,7 +95,7 @@ export function makeBlock(
   claimIndices: number[] = [],
   refs: Hash[] = [],
 ): Block {
-  return {
+  return withNodeFields({
     ...TEST_ATOM_BASE,
     ...freshTransit(),
     hash: Hash.digest(name),
@@ -107,7 +108,7 @@ export function makeBlock(
     timestamp: 0,
     receivedAt: 0,
     source: AtomSource.Local,
-  };
+  });
 }
 
 /** Standard genesis for multi-node tests. */
@@ -146,7 +147,7 @@ export function makeAggregationBlock(
     aggregateWeights: subtreeWeights,
   });
 
-  return {
+  return withNodeFields({
     ...TEST_ATOM_BASE,
     ...freshTransit(),
     hash: Hash.digest(name),
@@ -163,7 +164,7 @@ export function makeAggregationBlock(
     timestamp: 0,
     receivedAt: 0,
     source: AtomSource.Local,
-  };
+  });
 }
 
 export { makeRecordOutput };

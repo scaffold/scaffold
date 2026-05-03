@@ -91,12 +91,15 @@ export interface Node {
   readonly kind: NodeKind;
 
   /**
-   * Outputs this Node produces. Immutable for blocks. For drafts, populated
-   * incrementally by the generator (via requireOutput / collectOutputs);
-   * append-only during the draft's `generating` / `awaitingInput` phases,
-   * frozen once the draft transitions to `readyToSolidify`.
+   * Outputs this Node produces. For blocks, never mutated after
+   * construction. For drafts, populated incrementally by the generator
+   * (via requireOutput / collectOutputs); append-only during the draft's
+   * `generating` / `awaitingInput` phases, frozen once the draft
+   * transitions to `readyToSolidify`. Typed as a plain array (rather than
+   * ReadonlyArray) so Block can satisfy this interface alongside
+   * BlockPayload, which uses Output[].
    */
-  readonly outputs: ReadonlyArray<Output>;
+  readonly outputs: Output[];
 
   /**
    * Outputs this Node spends, as direct `{ producer, outputIndex }` refs.
@@ -104,8 +107,12 @@ export interface Node {
    * extended vector); drafts are always fully resolved (index into
    * producer's own `outputs`). ConsensusModule and UtxoIndex read this
    * directly -- there is no separate "reservation" set for drafts.
+   *
+   * Mutable so OutputClaimModule.tryMigrate can rewrite block claim entries
+   * in place as ancestors become canonical, and so draft generators can
+   * append claims via requireInput.
    */
-  readonly claims: ReadonlyArray<ClaimRef>;
+  readonly claims: ClaimRef[];
 
   /**
    * Live, sampled weight used by ConsensusModule to pick the canonical

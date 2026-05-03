@@ -1,4 +1,5 @@
 import { assert, assertEquals } from '@std/assert';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { Hash } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block, composeGenesisPacket } from '../src/core/Block.ts';
@@ -34,7 +35,7 @@ function makeLeafBlock(
   }
   const hash = Hash.digestParts(...hashParts);
 
-  return {
+  return withNodeFields({
     hash,
     anchor: anchor.hash,
     aggregates: [],
@@ -50,7 +51,7 @@ function makeLeafBlock(
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 function defaultConfig(): NodeConfig {

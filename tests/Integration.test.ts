@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
@@ -58,7 +59,7 @@ function makeLeafBlock(
   }
   const hash = Hash.digestParts(...hashParts);
 
-  return {
+  return withNodeFields({
     hash,
     anchor: anchor.hash,
     aggregates: [],
@@ -74,7 +75,7 @@ function makeLeafBlock(
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 /** Create a simple leaf block with a specific hash for deterministic tests. */
@@ -144,7 +145,7 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
 
   // Two blocks anchored to genesis, both claiming output 0
   // Block A: claims output index 1 (which maps to anchor index 0 since outputs.length=1)
-  const blockA: Block = {
+  const blockA: Block = withNodeFields({
     hash: Hash.digest('blockA'),
     anchor: genesis.hash,
     aggregates: [],
@@ -160,9 +161,9 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 
-  const blockB: Block = {
+  const blockB: Block = withNodeFields({
     hash: Hash.digest('blockB'),
     anchor: genesis.hash,
     aggregates: [],
@@ -178,7 +179,7 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 
   node.receiveBlock(blockA, null);
   const result = node.receiveBlock(blockB, null);
@@ -201,7 +202,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
   node.receiveBlock(genesis, null);
 
   // Block A: weight 10, claims output 0
-  const blockA: Block = {
+  const blockA: Block = withNodeFields({
     hash: Hash.digest('flipA'),
     anchor: genesis.hash,
     aggregates: [],
@@ -217,10 +218,10 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 
   // Block B: weight 15, claims same output 0
-  const blockB: Block = {
+  const blockB: Block = withNodeFields({
     hash: Hash.digest('flipB'),
     anchor: genesis.hash,
     aggregates: [],
@@ -236,7 +237,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 
   node.receiveBlock(blockA, null);
   node.receiveBlock(blockB, null);
@@ -246,7 +247,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
   assertFalse(node.consensus.isCanonical(blockA.hash));
 
   // Now add a heavy descendant of A
-  const childA: Block = {
+  const childA: Block = withNodeFields({
     hash: Hash.digest('childA'),
     anchor: blockA.hash,
     aggregates: [],
@@ -262,7 +263,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 
   const result = node.receiveBlock(childA, null);
 
@@ -315,7 +316,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
   node.receiveBlock(genesis, null);
 
   // Subtree A: claims output 0 from genesis
-  const subtreeA: Block = {
+  const subtreeA: Block = withNodeFields({
     hash: Hash.digest('subtreeA'),
     anchor: genesis.hash,
     aggregates: [],
@@ -331,11 +332,11 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
   node.receiveBlock(subtreeA, null);
 
   // Subtree B: claims output 1 from genesis
-  const subtreeB: Block = {
+  const subtreeB: Block = withNodeFields({
     hash: Hash.digest('subtreeB'),
     anchor: genesis.hash,
     aggregates: [],
@@ -351,7 +352,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
   node.receiveBlock(subtreeB, null);
 
   // Aggregation block: aggregates both subtrees, anchored to genesis
@@ -364,7 +365,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     aggregateWeights: [10, 15],
   });
 
-  const aggBlock: Block = {
+  const aggBlock: Block = withNodeFields({
     hash: Hash.digest('aggBlock'),
     anchor: genesis.hash,
     aggregates: [subtreeA.hash, subtreeB.hash],
@@ -384,7 +385,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 
   const result = node.receiveBlock(aggBlock, null);
 
@@ -510,7 +511,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     blockAHashParts.push(out.verifier.contract.toBytes());
     blockAHashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
   }
-  const blockA: Block = {
+  const blockA: Block = withNodeFields({
     hash: Hash.digestParts(...blockAHashParts),
     anchor: genesis.hash,
     aggregates: [],
@@ -526,7 +527,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
   node.receiveBlock(blockA, null);
 
   // Block B: references block A, claims genesis game output[1], produces new state
@@ -540,7 +541,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     blockBHashParts.push(out.verifier.contract.toBytes());
     blockBHashParts.push(new Uint8Array(new Float64Array([out.value]).buffer));
   }
-  const blockB: Block = {
+  const blockB: Block = withNodeFields({
     hash: Hash.digestParts(...blockBHashParts),
     anchor: genesis.hash,
     aggregates: [],
@@ -556,7 +557,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
   node.receiveBlock(blockB, null);
 
   // Verify block B reads A's state and produces correct new state

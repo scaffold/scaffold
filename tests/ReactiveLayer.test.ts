@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
@@ -37,7 +38,7 @@ function makeLeafBlock(
 ): Block {
   const hash = Hash.digest(name);
 
-  return {
+  return withNodeFields({
     hash,
     anchor: anchor.hash,
     aggregates: [],
@@ -53,7 +54,7 @@ function makeLeafBlock(
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 /** Create a full protocol stack and return the pieces needed for ReactiveLayer. */

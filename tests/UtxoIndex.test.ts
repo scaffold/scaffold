@@ -18,6 +18,7 @@
 // aggregate subtree outputs are handled uniformly.
 
 import { assert, assertEquals } from '@std/assert';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { PacketType } from '../src/core/Packet.ts';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
@@ -50,7 +51,7 @@ function makeBlock(opts: {
   aggregates?: Hash[];
 }): Block {
   const claimIndices = (opts.claimIndices ?? []).slice().sort((a, b) => a - b);
-  return {
+  return withNodeFields({
     hash: h(opts.name),
     anchor: opts.anchor ?? ZERO_HASH,
     outputs: opts.outputs ?? [],
@@ -66,7 +67,7 @@ function makeBlock(opts: {
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 function sigOut(label: string, value: number): Output {

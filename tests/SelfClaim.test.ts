@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+import { withNodeFields } from './testutil/blockNodeFields.ts';
 
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
@@ -23,7 +24,7 @@ import { Output } from '../src/core/BlockCreationModule.ts';
 function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
   const hashParts = outputs.map((o) => o.verifier.contract.toBytes());
   hashParts.push(new Uint8Array(new Float64Array([Math.random()]).buffer));
-  return {
+  return withNodeFields({
     hash: Hash.digestParts(...hashParts),
     anchor: ZERO_HASH,
     aggregates: [],
@@ -39,7 +40,7 @@ function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
     fromConnections: [],
     toConnections: new Set(),
     source: AtomSource.Local,
-  };
+  });
 }
 
 // -- Tests ----------------------------------------------------------
