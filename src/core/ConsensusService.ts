@@ -1,11 +1,11 @@
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
-import { BlockDraft, DraftStore } from './BlockDraft.ts';
+import { Draft, DraftStore } from './Draft.ts';
 import { ConsensusConfig, ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 
-/** Entity type that consensus operates on: either a finalized Block or a local BlockDraft. */
-export type ConsensusEntity = Block | BlockDraft;
+/** Entity type that consensus operates on: either a finalized Block or a local Draft. */
+export type ConsensusEntity = Block | Draft;
 
 function isBlock(entity: ConsensusEntity): entity is Block {
   return 'hash' in entity;

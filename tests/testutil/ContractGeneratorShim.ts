@@ -14,7 +14,7 @@ import {
   resolveClaimToOutput,
 } from '../../src/core/Block.ts';
 import type { OutputSpaceModule } from '../../src/core/OutputSpace.ts';
-import { BlockDraft, ClaimIntent, DraftStore } from '../../src/core/BlockDraft.ts';
+import { Draft, ClaimIntent, DraftStore } from '../../src/core/Draft.ts';
 import { OutputClaimModule } from '../../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../../src/node/UtxoIndex.ts';
 import {
@@ -147,7 +147,7 @@ export class ContractGeneratorShim {
     this._outputClaims = opts.outputClaims;
   }
 
-  generate(draft: BlockDraft): GeneratorHandle {
+  generate(draft: Draft): GeneratorHandle {
     let cancelled = false;
     const claim = draft.resolvedClaims[0];
     if (!claim) {
@@ -237,7 +237,7 @@ export class ContractGeneratorShim {
   private _runContract(
     contract: Contract,
     env: GeneratingEnv<Block>,
-    draft: BlockDraft,
+    draft: Draft,
     isCancelled: () => boolean,
   ): MaybePromise<void> {
     try {
@@ -256,7 +256,7 @@ export class ContractGeneratorShim {
     }
   }
 
-  private _applyResults(env: GeneratingEnv<Block>, draft: BlockDraft): void {
+  private _applyResults(env: GeneratingEnv<Block>, draft: Draft): void {
     const newOutputs = env.getAllOutputs();
     const newClaims = env.getResolvedClaims();
     const newRefs = env.getGeneratedRefs();

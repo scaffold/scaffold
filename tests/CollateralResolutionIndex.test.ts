@@ -2,7 +2,7 @@ import { PacketType } from '../src/core/Packet.ts';
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, type Block } from '../src/core/Block.ts';
-import type { BlockDraft } from '../src/core/BlockDraft.ts';
+import type { Draft } from '../src/core/Draft.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { encodeVerdict, VERDICT_RECORD_KEY } from '../src/contracts/CollateralContract.ts';
 import { blockNodeFields, withNodeFields } from './testutil/blockNodeFields.ts';
@@ -17,19 +17,19 @@ import {
 
 class MockProvider implements CollateralResolutionIndexProvider {
   readonly blocks = new Map<HashPrimitive, Block>();
-  readonly readyDrafts = new Map<HashPrimitive, BlockDraft>();
+  readonly readyDrafts = new Map<HashPrimitive, Draft>();
   readonly verifyStatus = new Map<HashPrimitive, VerificationStatus>();
   readonly canonical = new Set<HashPrimitive>();
 
   private readonly blockAddCbs: ((block: Block) => void)[] = [];
-  private readonly draftCbs: ((draft: BlockDraft) => void)[] = [];
+  private readonly draftCbs: ((draft: Draft) => void)[] = [];
   private readonly verifyCbs: ((h: Hash, s: VerificationStatus) => void)[] = [];
   private readonly canonCbs: ((h: Hash, c: boolean) => void)[] = [];
 
   iterateBlocks(): Iterable<Block> {
     return this.blocks.values();
   }
-  iterateReadyDrafts(): Iterable<BlockDraft> {
+  iterateReadyDrafts(): Iterable<Draft> {
     return this.readyDrafts.values();
   }
   onBlockAdded(cb: (block: Block) => void): () => void {
@@ -39,7 +39,7 @@ class MockProvider implements CollateralResolutionIndexProvider {
       if (i >= 0) this.blockAddCbs.splice(i, 1);
     };
   }
-  onDraftTransition(cb: (draft: BlockDraft) => void): () => void {
+  onDraftTransition(cb: (draft: Draft) => void): () => void {
     this.draftCbs.push(cb);
     return () => {};
   }
@@ -83,7 +83,7 @@ class MockProvider implements CollateralResolutionIndexProvider {
     for (const cb of this.canonCbs) cb(h, c);
   }
 
-  addDraft(draft: BlockDraft, canonical = true): void {
+  addDraft(draft: Draft, canonical = true): void {
     if (draft.status === 'ready') {
       this.readyDrafts.set(draft.draftId.toPrimitive(), draft);
     }
@@ -91,7 +91,7 @@ class MockProvider implements CollateralResolutionIndexProvider {
     for (const cb of this.draftCbs) cb(draft);
   }
 
-  transitionDraft(draft: BlockDraft): void {
+  transitionDraft(draft: Draft): void {
     if (draft.status === 'cancelled') {
       this.readyDrafts.delete(draft.draftId.toPrimitive());
     } else if (draft.status === 'ready') {
@@ -138,7 +138,7 @@ function makeDraft(
   target: Hash,
   verdict: 'valid' | 'invalid',
   status: 'ready' | 'pending' | 'cancelled' = 'ready',
-): BlockDraft {
+): Draft {
   const verdictOutput = makeRecordOutput(
     VERDICT_RECORD_KEY,
     encodeVerdict({ target, verdict }),

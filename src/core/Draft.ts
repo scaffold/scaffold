@@ -32,7 +32,7 @@ export function draftsAreMergeable(
 // -- Types --------------------------------------------------------
 
 /** Unique identifier for a draft. */
-export type DraftID = Hash;
+export type DraftId = Hash;
 
 /** Draft lifecycle status. */
 export type DraftStatus = 'pending' | 'generating' | 'ready' | 'cancelled';
@@ -65,7 +65,7 @@ export interface ClaimIntent {
  * machine) move callers off the legacy fields, after which they can be
  * dropped.
  */
-export interface BlockDraft {
+export interface Draft {
   // -- Node-projection fields ----------------------------------------
   /** Discriminator for the `Node` union. */
   readonly kind: 'draft';
@@ -90,7 +90,7 @@ export interface BlockDraft {
   effectiveWeight: number;
 
   // -- Existing fields (some legacy, some still load-bearing) --------
-  readonly draftId: DraftID;
+  readonly draftId: DraftId;
   readonly resolvedClaims: ClaimIntent[];
   readonly outputs: Output[];
   /**
@@ -108,10 +108,10 @@ export interface BlockDraft {
   readonly status: DraftStatus;
 }
 
-// Compile-time assertion: BlockDraft satisfies the Node interface.
+// Compile-time assertion: Draft satisfies the Node interface.
 // (Type-only; the assignment is never executed.)
-const _blockDraftIsNode: Node = undefined as unknown as BlockDraft;
-void _blockDraftIsNode;
+const _draftIsNode: Node = undefined as unknown as Draft;
+void _draftIsNode;
 
 // -- Valid transitions --------------------------------------------
 
@@ -129,7 +129,7 @@ function claimIntentsToRefs(claims: readonly ClaimIntent[]): ClaimRef[] {
   return claims.map((c) => ({ producer: c.block, outputIndex: c.outputIndex }));
 }
 
-/** Create a new BlockDraft with a random draftId and 'pending' status. */
+/** Create a new Draft with a random draftId and 'pending' status. */
 export function createDraft(fields: {
   resolvedClaims: ClaimIntent[];
   outputs: Output[];
@@ -139,7 +139,7 @@ export function createDraft(fields: {
   refs?: Hash[];
   aggregates?: Hash[];
   includeConstraints?: Hash[];
-}): BlockDraft {
+}): Draft {
   return {
     kind: 'draft',
     claims: claimIntentsToRefs(fields.resolvedClaims),
@@ -165,11 +165,11 @@ export function createDraft(fields: {
 
 /** In-memory store for block drafts. Immutable transitions. */
 export class DraftStore {
-  private readonly drafts = new Map<HashPrimitive, BlockDraft>();
-  private readonly _transitionListeners: ((draft: BlockDraft) => void)[] = [];
+  private readonly drafts = new Map<HashPrimitive, Draft>();
+  private readonly _transitionListeners: ((draft: Draft) => void)[] = [];
 
   /** Register a listener that fires after any status transition. Returns an unsubscribe function. */
-  onTransition(cb: (draft: BlockDraft) => void): () => void {
+  onTransition(cb: (draft: Draft) => void): () => void {
     this._transitionListeners.push(cb);
     return () => {
       const i = this._transitionListeners.indexOf(cb);
@@ -181,7 +181,7 @@ export class DraftStore {
     return this.drafts.size;
   }
 
-  add(draft: BlockDraft): void {
+  add(draft: Draft): void {
     const key = draft.draftId.toPrimitive();
     if (this.drafts.has(key)) {
       throw new Error(`Draft ${key} already exists`);
@@ -189,7 +189,7 @@ export class DraftStore {
     this.drafts.set(key, draft);
   }
 
-  get(draftId: Hash): BlockDraft | undefined {
+  get(draftId: Hash): Draft | undefined {
     return this.drafts.get(draftId.toPrimitive());
   }
 
@@ -197,11 +197,11 @@ export class DraftStore {
     this.drafts.delete(draftId.toPrimitive());
   }
 
-  getAll(): BlockDraft[] {
+  getAll(): Draft[] {
     return [...this.drafts.values()];
   }
 
-  getByStatus(status: DraftStatus): BlockDraft[] {
+  getByStatus(status: DraftStatus): Draft[] {
     return this.getAll().filter((d) => d.status === status);
   }
 
@@ -209,7 +209,7 @@ export class DraftStore {
    * Transition a draft to a new status. Returns a new immutable draft object.
    * Validates the state machine. Transition to 'cancelled' removes the draft.
    */
-  transition(draftId: Hash, newStatus: DraftStatus): BlockDraft {
+  transition(draftId: Hash, newStatus: DraftStatus): Draft {
     const key = draftId.toPrimitive();
     const existing = this.drafts.get(key);
     if (!existing) {
@@ -223,7 +223,7 @@ export class DraftStore {
       );
     }
 
-    const updated: BlockDraft = { ...existing, status: newStatus };
+    const updated: Draft = { ...existing, status: newStatus };
 
     if (newStatus === 'cancelled') {
       this.drafts.delete(key);
@@ -241,8 +241,8 @@ export class DraftStore {
    */
   update(
     draftId: Hash,
-    changes: Partial<Omit<BlockDraft, 'draftId' | 'status'>>,
-  ): BlockDraft {
+    changes: Partial<Omit<Draft, 'draftId' | 'status'>>,
+  ): Draft {
     const key = draftId.toPrimitive();
     const existing = this.drafts.get(key);
     if (!existing) {
@@ -254,7 +254,7 @@ export class DraftStore {
     const claimsOverride = changes.resolvedClaims !== undefined && changes.claims === undefined
       ? { claims: claimIntentsToRefs(changes.resolvedClaims) }
       : {};
-    const updated: BlockDraft = { ...existing, ...changes, ...claimsOverride };
+    const updated: Draft = { ...existing, ...changes, ...claimsOverride };
     this.drafts.set(key, updated);
     return updated;
   }
@@ -265,8 +265,8 @@ export class DraftStore {
    */
   recreate(
     draftId: Hash,
-    changes: Partial<Omit<BlockDraft, 'draftId' | 'status'>>,
-  ): BlockDraft {
+    changes: Partial<Omit<Draft, 'draftId' | 'status'>>,
+  ): Draft {
     const key = draftId.toPrimitive();
     const existing = this.drafts.get(key);
     if (!existing) {
@@ -278,7 +278,7 @@ export class DraftStore {
     const claimsOverride = changes.resolvedClaims !== undefined && changes.claims === undefined
       ? { claims: claimIntentsToRefs(changes.resolvedClaims) }
       : {};
-    const newDraft: BlockDraft = {
+    const newDraft: Draft = {
       ...existing,
       ...changes,
       ...claimsOverride,

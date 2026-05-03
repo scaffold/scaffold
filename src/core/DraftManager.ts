@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/draft-blocks.md
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { BlockDraft, ClaimIntent, createDraft, DraftStore } from './BlockDraft.ts';
+import { Draft, ClaimIntent, createDraft, DraftStore } from './Draft.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
 import { type GeneratorHandle, type GeneratorProvider } from './Generator.ts';
@@ -15,13 +15,13 @@ export class DraftManager {
   private readonly consensus: ConsensusModule<unknown>;
   private readonly generator: GeneratorProvider;
   private readonly handles = new Map<HashPrimitive, GeneratorHandle>();
-  private readonly _onDraftReady?: (draft: BlockDraft) => void;
+  private readonly _onDraftReady?: (draft: Draft) => void;
 
   constructor(
     store: DraftStore,
     consensus: ConsensusModule<unknown>,
     generator: GeneratorProvider,
-    opts?: { onDraftReady?: (draft: BlockDraft) => void },
+    opts?: { onDraftReady?: (draft: Draft) => void },
   ) {
     this.store = store;
     this.consensus = consensus;
@@ -41,7 +41,7 @@ export class DraftManager {
     refs?: Hash[];
     aggregates?: Hash[];
     includeConstraints?: Hash[];
-  }): BlockDraft {
+  }): Draft {
     const draft = createDraft(fields);
     this.store.add(draft);
 

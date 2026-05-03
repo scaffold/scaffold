@@ -1,17 +1,17 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
-import { DraftStore } from '../src/core/BlockDraft.ts';
+import { DraftStore } from '../src/core/Draft.ts';
 import { DraftManager } from '../src/core/DraftManager.ts';
 import { StubGenerator } from '../src/core/Generator.ts';
 import { ConsensusModule, ConsensusProvider } from '../src/core/ConsensusModule.ts';
-import { BlockDraft } from '../src/core/BlockDraft.ts';
+import { Draft } from '../src/core/Draft.ts';
 
 // -- Test helpers ------------------------------------------------
 
 /** Minimal entity type for consensus: either a real test block or a draft. */
-type TestEntity = { kind: 'block'; hash: Hash; anchor: Hash; weight: number[] } | BlockDraft;
+type TestEntity = { kind: 'block'; hash: Hash; anchor: Hash; weight: number[] } | Draft;
 
-function isBlockDraft(e: TestEntity): e is BlockDraft {
+function isBlockDraft(e: TestEntity): e is Draft {
   return 'draftId' in e;
 }
 

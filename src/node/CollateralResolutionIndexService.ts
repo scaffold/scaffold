@@ -4,7 +4,7 @@
 
 import type { Hash } from '../util/Hash.ts';
 import { type Block, BlockStore } from '../core/Block.ts';
-import { BlockDraft, DraftStore } from '../core/BlockDraft.ts';
+import { Draft, DraftStore } from '../core/Draft.ts';
 import { BlockVerificationService } from '../core/BlockVerificationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
@@ -26,7 +26,7 @@ export class CollateralResolutionIndexService extends CollateralResolutionIndex 
       iterateBlocks(): Iterable<Block> {
         return store.values();
       },
-      iterateReadyDrafts(): Iterable<BlockDraft> {
+      iterateReadyDrafts(): Iterable<Draft> {
         return draftStore.getByStatus('ready');
       },
       onBlockAdded(cb) {

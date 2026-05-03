@@ -9,7 +9,7 @@ import {
   resolveClaimToOutput,
 } from '../core/Block.ts';
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
-import { BlockDraft, ClaimIntent, DraftStore } from '../core/BlockDraft.ts';
+import { Draft, ClaimIntent, DraftStore } from '../core/Draft.ts';
 import { type AvailableInput, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
@@ -303,7 +303,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    * it to 'ready' immediately with empty output. This preserves the old
    * `ContractGenerator` escape hatch.
    */
-  generate(draft: BlockDraft): GeneratorHandle {
+  generate(draft: Draft): GeneratorHandle {
     const first = draft.resolvedClaims[0];
     if (!first) {
       this._draftStore.transition(draft.draftId, 'ready');
@@ -413,7 +413,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   // -- Execution path -------------------------------------------------
 
   private _runGeneration(
-    draft: BlockDraft,
+    draft: Draft,
     spec: GenerationSpec,
   ): Promise<void> | void {
     const draftId = draft.draftId;
@@ -496,7 +496,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   }
 
   private _applyResult(
-    draft: BlockDraft,
+    draft: Draft,
     result: {
       outputs: Output[];
       outputSlots: OutputSlot[];

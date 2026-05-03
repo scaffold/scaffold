@@ -1,7 +1,7 @@
 import { Hash } from '../../util/Hash.ts';
 import { BlockStore } from '../../core/Block.ts';
 import { makeAggregationOutput } from '../../contracts/AggregationContract.ts';
-import { ClaimIntent } from '../../core/BlockDraft.ts';
+import { ClaimIntent } from '../../core/Draft.ts';
 import { Output } from '../../core/BlockCreationModule.ts';
 import { ConsensusService } from '../../core/ConsensusService.ts';
 import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';

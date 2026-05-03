@@ -1,6 +1,6 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
-import { ClaimIntent } from '../core/BlockDraft.ts';
+import { ClaimIntent } from '../core/Draft.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { BlockSpec, Output } from '../core/BlockCreationModule.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';

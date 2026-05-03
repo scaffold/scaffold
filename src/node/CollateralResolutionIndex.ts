@@ -19,7 +19,7 @@
 import type { Hash, HashPrimitive } from '../util/Hash.ts';
 import { type CollateralVerdict, readVerdictFromBlock } from '../contracts/CollateralContract.ts';
 import type { Block } from '../core/Block.ts';
-import type { BlockDraft } from '../core/BlockDraft.ts';
+import type { Draft } from '../core/Draft.ts';
 
 // -- Types ------------------------------------------------------------
 
@@ -42,12 +42,12 @@ export interface CollateralResolutionIndexProvider {
   /** Enumerate all known blocks (used at construction for bootstrap). */
   iterateBlocks(): Iterable<Block>;
   /** Enumerate all ready drafts (used at construction for bootstrap). */
-  iterateReadyDrafts(): Iterable<BlockDraft>;
+  iterateReadyDrafts(): Iterable<Draft>;
 
   /** Subscribe to new-block insertions. Called once per freshly-added block. */
   onBlockAdded(cb: (block: Block) => void): () => void;
   /** Subscribe to draft status transitions (ready / cancelled). */
-  onDraftTransition(cb: (draft: BlockDraft) => void): () => void;
+  onDraftTransition(cb: (draft: Draft) => void): () => void;
 
   /** Synchronous verification status for a block hash. */
   getVerificationStatus(h: Hash): VerificationStatus;
@@ -155,7 +155,7 @@ export class CollateralResolutionIndex {
     }
   }
 
-  private _ingestDraft(draft: BlockDraft): void {
+  private _ingestDraft(draft: Draft): void {
     const source: SourceRef = { kind: 'draft', hash: draft.draftId };
     const v = this._readVerdict(draft, source);
     if (!v) return;
@@ -193,7 +193,7 @@ export class CollateralResolutionIndex {
     }
   }
 
-  private _onDraftTransition(draft: BlockDraft): void {
+  private _onDraftTransition(draft: Draft): void {
     const key = draft.draftId.toPrimitive();
     if (draft.status === 'ready') {
       // Promote if we haven't already recorded it.

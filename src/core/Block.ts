@@ -148,7 +148,7 @@ export interface Block extends AtomBase, BlockPayload, Node {
   effectiveWeight: number;
 
   /** Resolved claims -- concrete output references for uniform claim handling. */
-  readonly resolvedClaims?: import('./BlockDraft.ts').ClaimIntent[];
+  readonly resolvedClaims?: import('./Draft.ts').ClaimIntent[];
   /** Block's own verification cost (excluding subtrees). Used by probing. */
   readonly selfWeight?: number;
   /** Total weight of the block's subtree (self + aggregates). Used by probing. */

@@ -1,6 +1,6 @@
 import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { draftsAreMergeable } from '../src/core/BlockDraft.ts';
+import { draftsAreMergeable } from '../src/core/Draft.ts';
 
 const h = (s: string) => Hash.digest(s);
 

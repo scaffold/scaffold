@@ -1,17 +1,17 @@
 // Protocol spec: docs/protocol/draft-blocks.md
 
-import { BlockDraft, DraftID } from './BlockDraft.ts';
+import { Draft, DraftId } from './Draft.ts';
 import { HashPrimitive } from '../util/Hash.ts';
 
 /** Handle returned by a generator for a running generation. */
 export interface GeneratorHandle {
-  readonly draftId: DraftID;
+  readonly draftId: DraftId;
   cancel(): void;
 }
 
 /** Provider interface for generators that produce blocks from drafts. */
 export interface GeneratorProvider {
-  generate(draft: BlockDraft): GeneratorHandle;
+  generate(draft: Draft): GeneratorHandle;
 }
 
 /**
@@ -19,10 +19,10 @@ export interface GeneratorProvider {
  * without performing real computation.
  */
 export class StubGenerator implements GeneratorProvider {
-  readonly active = new Map<HashPrimitive, BlockDraft>();
+  readonly active = new Map<HashPrimitive, Draft>();
   readonly cancelled = new Set<HashPrimitive>();
 
-  generate(draft: BlockDraft): GeneratorHandle {
+  generate(draft: Draft): GeneratorHandle {
     const key = draft.draftId.toPrimitive();
     this.active.set(key, draft);
 

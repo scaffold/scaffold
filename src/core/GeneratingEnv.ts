@@ -12,7 +12,7 @@ import {
   type GeneratingEnvProvider,
   type Input,
 } from './ContractEnv.ts';
-import { ClaimIntent } from './BlockDraft.ts';
+import { ClaimIntent } from './Draft.ts';
 
 // -- Types --------------------------------------------------------
 

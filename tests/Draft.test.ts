@@ -1,10 +1,10 @@
 import { assert, assertEquals, assertNotEquals, assertThrows } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { BlockDraft, ClaimIntent, createDraft, DraftStore } from '../src/core/BlockDraft.ts';
+import { Draft, ClaimIntent, createDraft, DraftStore } from '../src/core/Draft.ts';
 
 const anchor = Hash.digest('anchor');
 
-function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): BlockDraft {
+function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Draft {
   return createDraft({
     resolvedClaims: [{ block: Hash.digest('b'), outputIndex: 0, value: 100 }],
     outputs: [],

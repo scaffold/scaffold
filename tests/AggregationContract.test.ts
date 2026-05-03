@@ -10,7 +10,7 @@ import {
   BlockStore,
 } from '../src/core/Block.ts';
 import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
-import { createDraft, DraftStore } from '../src/core/BlockDraft.ts';
+import { createDraft, DraftStore } from '../src/core/Draft.ts';
 import { ContractGeneratorShim as ContractGenerator } from './testutil/ContractGeneratorShim.ts';
 import { blockNodeFields, withNodeFields } from './testutil/blockNodeFields.ts';
 import { OutputClaimModule, OutputClaimProvider } from '../src/core/OutputClaimModule.ts';

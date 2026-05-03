@@ -8,7 +8,7 @@ import {
   RECORD_CONTRACT,
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
-import { type BlockDraft, DraftStore } from '../core/BlockDraft.ts';
+import { type Draft, DraftStore } from '../core/Draft.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { BlockSpec, type ClaimEntry, Output, type Verifier } from '../core/BlockCreationModule.ts';
 import type { BlockPayload } from '../core/Block.ts';
@@ -454,7 +454,7 @@ export class NodeContext {
    * uses OutputSpaceModule to compute claim indices and the composed
    * aggregation claim mask.
    */
-  private _solidifyDraft(draft: BlockDraft): void {
+  private _solidifyDraft(draft: Draft): void {
     const includes = draft.includeConstraints;
     if (includes.length === 0) {
       this.draftManager.cancelDraft(draft.draftId);

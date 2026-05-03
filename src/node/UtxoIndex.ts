@@ -22,7 +22,7 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
 import { Block, BlockStore, makeBlockStoreOutputSpace } from '../core/Block.ts';
-import type { BlockDraft } from '../core/BlockDraft.ts';
+import type { Draft } from '../core/Draft.ts';
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
 
 /** A single unspent output tracked by the index. */
@@ -177,7 +177,7 @@ export class UtxoIndex {
    * since they become spendable only when the draft publishes as a real
    * block (at which point `blockBecameCanonical` adds them).
    */
-  draftBecameCanonical(draft: BlockDraft): void {
+  draftBecameCanonical(draft: Draft): void {
     this.removeDraftClaimedOutputs(draft);
   }
 
@@ -185,7 +185,7 @@ export class UtxoIndex {
    * Called when a draft becomes non-canonical. Re-adds the outputs its
    * `resolvedClaims` had reserved.
    */
-  draftBecameNonCanonical(draft: BlockDraft): void {
+  draftBecameNonCanonical(draft: Draft): void {
     this.reAddDraftClaimedOutputs(draft);
   }
 
@@ -344,7 +344,7 @@ export class UtxoIndex {
    * Resolved claims are direct references -- no extended-vector walk
    * needed.
    */
-  private removeDraftClaimedOutputs(draft: BlockDraft): void {
+  private removeDraftClaimedOutputs(draft: Draft): void {
     for (const rc of draft.resolvedClaims) {
       const producing = this.store.get(rc.block);
       if (!producing) continue;
@@ -362,7 +362,7 @@ export class UtxoIndex {
   }
 
   /** Re-add outputs a non-canonical draft had reserved. */
-  private reAddDraftClaimedOutputs(draft: BlockDraft): void {
+  private reAddDraftClaimedOutputs(draft: Draft): void {
     for (const rc of draft.resolvedClaims) {
       const producing = this.store.get(rc.block);
       if (!producing) continue;

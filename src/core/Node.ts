@@ -5,7 +5,7 @@
 // consume blocks and drafts uniformly through this interface, with no
 // special-casing for "real block vs in-flight draft".
 //
-// This file introduces the types only. Block and BlockDraft are migrated to
+// This file introduces the Node + ClaimRef types only. Block and Draft are migrated to
 // satisfy `Node` in follow-up steps; consumer call sites are migrated off the
 // legacy fields one by one. Nothing in this file changes existing behavior.
 
@@ -130,82 +130,13 @@ export interface Node {
   readonly effectiveWeight: number;
 }
 
-// -- Draft ----------------------------------------------------------------
-//
-// A draft is a planned-but-unhashed Node. It holds reservations atomically
-// (its claims are already in the Node graph and visible to UtxoIndex), and
-// lazily owns a generator that exercises those reservations.
-//
-// Drafts never produce drafts: even though a draft has `outputs`, those
-// outputs are not entered into the "needs to be claimed" pool until the
-// draft solidifies into a block. This keeps the producer of every ClaimRef
-// in any other Node guaranteed to be a Block, which is what allows
-// ClaimRef.producer to be a Hash (drafts have no hash).
-//
-// Drafts are never deleted. They progress through the states below;
-// terminal states (`solidified`, `failed`) persist as historical record so
-// we don't relaunch a generator we already know won't succeed, and so debug
-// tools can answer "what happened to draft X?".
-
-/** Stable, content-free identity for a draft. */
-export type DraftId = Hash;
-
-/** Reason a draft transitioned to `failed`, for debugging and not-to-relaunch. */
-export type DraftFailureSite =
-  | 'requireSignature'
-  | 'requireInput'
-  | 'contract'
-  | 'lowering';
-
-export type DraftStatus =
-  /** Reservation in place; generator not yet started. */
-  | { phase: 'pending' }
-  /** Generator pumping. */
-  | { phase: 'generating' }
-  /** Generator paused awaiting an input value. */
-  | { phase: 'awaitingInput'; key: { contract: Hash; params: Uint8Array } }
-  /**
-   * Generator finished; BlockBuilder has not yet been able to find an
-   * anchor whose extended output space covers all draft claims. Re-tried
-   * by BlockBuilderService when a new aggregation block becomes canonical.
-   */
-  | { phase: 'awaitingAnchor' }
-  /** Generator complete, ready for BlockBuilder.build. */
-  | { phase: 'readyToSolidify' }
-  /** Lost canonicality; generator suspended; will resume if canonicality returns. */
-  | { phase: 'paused'; reason: 'lostCanonicality' }
-  /** Replaced by a real block. Terminal; preserved for history. */
-  | { phase: 'solidified'; block: Block }
-  /** Hard failure; do not relaunch. Terminal; preserved for history. */
-  | { phase: 'failed'; reason: string; at: DraftFailureSite };
-
-/** Terminal status check (`solidified` or `failed`). */
-export function isDraftTerminal(s: DraftStatus): boolean {
-  return s.phase === 'solidified' || s.phase === 'failed';
-}
-
-export interface Draft extends Node {
-  readonly kind: 'draft';
-  readonly id: DraftId;
-
-  /**
-   * Mutable during drafting: the generator may append claims via
-   * requireInput / collectInputs. Frozen once the draft reaches a terminal
-   * status. Always fully resolved (per the draft invariant).
-   */
-  readonly claims: ClaimRef[];
-
-  /**
-   * Mutable during generation: the generator emits outputs via
-   * requireOutput / collectOutputs. Frozen once the draft reaches
-   * `readyToSolidify` and beyond.
-   */
-  readonly outputs: Output[];
-
-  status: DraftStatus;
-}
-
 // -- Helpers --------------------------------------------------------------
+//
+// The concrete `Draft` type (the planned-but-unhashed Node with its own
+// status field, factory, and store) lives in `./Draft.ts`. Keeping Node
+// content-free of the draft lifecycle keeps this file's surface narrow:
+// just the graph-vertex contract that ConsensusModule, OutputClaimModule,
+// and weight propagation depend on.
 
 /** Predicate: a Node is a Block. Cheap discriminator. */
 export function isBlock(n: Node): n is Node & { kind: 'block' } {
@@ -213,6 +144,6 @@ export function isBlock(n: Node): n is Node & { kind: 'block' } {
 }
 
 /** Predicate: a Node is a Draft. Cheap discriminator. */
-export function isDraft(n: Node): n is Draft {
+export function isDraft(n: Node): n is Node & { kind: 'draft' } {
   return n.kind === 'draft';
 }
