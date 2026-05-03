@@ -32,7 +32,7 @@ interface TestBlock {
   hash: Hash;
   anchor: Hash;
   outputs: Output[];
-  claims: number[];
+  claimIndices: number[];
   refs: Hash[];
   signer?: Uint8Array;
   timestamp: number;
@@ -88,7 +88,7 @@ class TestProvider implements ExecutionProvider<TestBlock> {
   }
 
   getClaims(block: TestBlock): number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getAnchor(block: TestBlock): Hash {
@@ -152,7 +152,7 @@ Deno.test('Collateral: decay return -- publisher reclaims FOR when no AGAINST', 
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, pk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -164,7 +164,7 @@ Deno.test('Collateral: decay return -- publisher reclaims FOR when no AGAINST', 
     // own: [sig, verdict]; anchor.own: [FOR]
     // ext: [sig(0), verdict(1), FOR(2)]
     outputs: [sigOutput(pk, 1000), verdictOutput(TARGET_BLOCK, 'valid')],
-    claims: [2, 1],
+    claimIndices: [2, 1],
     refs: [],
     signer: pk,
     timestamp: 2000,
@@ -185,7 +185,7 @@ Deno.test('Collateral: decay return rejects if not signed by FOR pubkey', async 
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, authorPk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -195,7 +195,7 @@ Deno.test('Collateral: decay return rejects if not signed by FOR pubkey', async 
     hash: h('claim'),
     anchor: anchor.hash,
     outputs: [sigOutput(authorPk, 1000)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: thiefPk,
     timestamp: 2000,
@@ -215,7 +215,7 @@ Deno.test('Collateral: decay return rejects wrong output value', async () => {
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, pk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -225,7 +225,7 @@ Deno.test('Collateral: decay return rejects wrong output value', async () => {
     hash: h('claim'),
     anchor: anchor.hash,
     outputs: [sigOutput(pk, 9999)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: pk,
     timestamp: 2000,
@@ -248,7 +248,7 @@ Deno.test('Collateral: unresolved challenge -- challenger claims FOR + own bond'
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, authorPk), againstOutput(50, challengerPk, { type: 'validity' })],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -260,7 +260,7 @@ Deno.test('Collateral: unresolved challenge -- challenger claims FOR + own bond'
     // own: [sig, verdict]; anchor.own: [FOR, AGAINST]
     // ext: [sig(0), verdict(1), FOR(2), AGAINST(3)]
     outputs: [sigOutput(challengerPk, 50 + 1000), verdictOutput(TARGET_BLOCK, 'invalid')],
-    claims: [2, 3, 1],
+    claimIndices: [2, 3, 1],
     refs: [],
     signer: challengerPk,
     timestamp: 5000,
@@ -281,7 +281,7 @@ Deno.test('Collateral: unresolved challenge rejects wrong payout', async () => {
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, authorPk), againstOutput(50, challengerPk, { type: 'validity' })],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -291,7 +291,7 @@ Deno.test('Collateral: unresolved challenge rejects wrong payout', async () => {
     hash: h('claim'),
     anchor: anchor.hash,
     outputs: [sigOutput(challengerPk, 999)], // wrong amount
-    claims: [1, 2],
+    claimIndices: [1, 2],
     refs: [],
     signer: challengerPk,
     timestamp: 5000,
@@ -317,7 +317,7 @@ Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond',
       forOutput(1000, authorPk),
       againstOutput(50, challengerPk, { type: 'anchor' }),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -335,7 +335,7 @@ Deno.test('Collateral: hash challenge response -- responder earns AGAINST bond',
       makeRecordOutput(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY), // preimage result
       verdictOutput(TARGET_BLOCK, 'valid'),
     ],
-    claims: [4, 5, 2, 3], // FOR, AGAINST, self-claim preimage, self-claim verdict
+    claimIndices: [4, 5, 2, 3], // FOR, AGAINST, self-claim preimage, self-claim verdict
     refs: [],
     signer: authorPk,
     timestamp: 2000,
@@ -362,7 +362,7 @@ Deno.test('Collateral: non-canonical reclaim -- full return to both sides', asyn
       forOutput(1000, authorPk),
       againstOutput(50, challengerPk, { type: 'validity' }),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -377,7 +377,7 @@ Deno.test('Collateral: non-canonical reclaim -- full return to both sides', asyn
       sigOutput(authorPk, 1000), // FOR returned to author
       sigOutput(challengerPk, 50), // AGAINST returned to challenger
     ],
-    claims: [2, 3],
+    claimIndices: [2, 3],
     refs: [],
     signer: reclaimerPk,
     timestamp: 2000,
@@ -405,7 +405,7 @@ Deno.test('Collateral: multiple AGAINST challengers each get FOR + own bond', as
       againstOutput(30, ch1, { type: 'validity' }),
       againstOutput(20, ch2, { type: 'anchor' }),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -424,7 +424,7 @@ Deno.test('Collateral: multiple AGAINST challengers each get FOR + own bond', as
       sigOutput(ch2, 20 + 1000),
       verdictOutput(TARGET_BLOCK, 'invalid'),
     ],
-    claims: [3, 4, 5, 2], // FOR + both AGAINST + self-claim verdict
+    claimIndices: [3, 4, 5, 2], // FOR + both AGAINST + self-claim verdict
     refs: [],
     signer: ch1,
     timestamp: 5000,
@@ -455,7 +455,7 @@ Deno.test('Collateral: AGAINST with each ChallengeTarget type', async () => {
       hash: h(`anchor-${target.type}`),
       anchor: ZERO_HASH,
       outputs: [forOutput(500, authorPk), againstOutput(25, challengerPk, target)],
-      claims: [],
+      claimIndices: [],
       refs: [],
       timestamp: 1000,
     };
@@ -467,7 +467,7 @@ Deno.test('Collateral: AGAINST with each ChallengeTarget type', async () => {
       // own: [sig, verdict]; anchor.own: [FOR, AGAINST]
       // ext: [sig(0), verdict(1), FOR(2), AGAINST(3)]
       outputs: [sigOutput(challengerPk, 25 + 500), verdictOutput(TARGET_BLOCK, 'invalid')],
-      claims: [2, 3, 1],
+      claimIndices: [2, 3, 1],
       refs: [],
       signer: challengerPk,
       timestamp: 2000,
@@ -518,7 +518,7 @@ Deno.test('Collateral: Mode 1 (decay return) emits verdict=valid', async () => {
     hash: h('anchor-m1-verdict'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, pk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -527,7 +527,7 @@ Deno.test('Collateral: Mode 1 (decay return) emits verdict=valid', async () => {
     hash: h('claim-m1-verdict'),
     anchor: anchor.hash,
     outputs: [sigOutput(pk, 1000), verdictOutput(TARGET_BLOCK, 'valid')],
-    claims: [2, 1],
+    claimIndices: [2, 1],
     refs: [],
     signer: pk,
     timestamp: 2000,
@@ -546,7 +546,7 @@ Deno.test('Collateral: Mode 1 rejects block with wrong verdict value', async () 
     hash: h('anchor-m1-bad'),
     anchor: ZERO_HASH,
     outputs: [forOutput(1000, pk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -556,7 +556,7 @@ Deno.test('Collateral: Mode 1 rejects block with wrong verdict value', async () 
     hash: h('claim-m1-bad'),
     anchor: anchor.hash,
     outputs: [sigOutput(pk, 1000), verdictOutput(TARGET_BLOCK, 'invalid')],
-    claims: [2, 1],
+    claimIndices: [2, 1],
     refs: [],
     signer: pk,
     timestamp: 2000,
@@ -576,7 +576,7 @@ Deno.test('Collateral: Mode 2 (hash challenge response) emits verdict=valid', as
       forOutput(1000, authorPk),
       againstOutput(50, challengerPk, { type: 'anchor' }),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -590,7 +590,7 @@ Deno.test('Collateral: Mode 2 (hash challenge response) emits verdict=valid', as
       makeRecordOutput(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY),
       verdictOutput(TARGET_BLOCK, 'valid'),
     ],
-    claims: [4, 5, 2, 3],
+    claimIndices: [4, 5, 2, 3],
     refs: [],
     signer: authorPk,
     timestamp: 2000,
@@ -611,7 +611,7 @@ Deno.test('Collateral: Mode 3 (unresolved challenge) emits verdict=invalid', asy
       forOutput(1000, authorPk),
       againstOutput(50, challengerPk, { type: 'validity' }),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -623,7 +623,7 @@ Deno.test('Collateral: Mode 3 (unresolved challenge) emits verdict=invalid', asy
       sigOutput(challengerPk, 50 + 1000),
       verdictOutput(TARGET_BLOCK, 'invalid'),
     ],
-    claims: [2, 3, 1],
+    claimIndices: [2, 3, 1],
     refs: [],
     signer: challengerPk,
     timestamp: 5000,
@@ -646,7 +646,7 @@ Deno.test('Collateral: Mode 4 (non-canonical reclaim) emits NO verdict output', 
       forOutput(1000, authorPk),
       againstOutput(50, challengerPk, { type: 'validity' }),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -658,7 +658,7 @@ Deno.test('Collateral: Mode 4 (non-canonical reclaim) emits NO verdict output', 
       sigOutput(authorPk, 1000),
       sigOutput(challengerPk, 50),
     ],
-    claims: [2, 3],
+    claimIndices: [2, 3],
     refs: [],
     signer: reclaimerPk,
     timestamp: 2000,

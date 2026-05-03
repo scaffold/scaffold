@@ -53,7 +53,7 @@ export function getBlockClaimMask(block: Block, _anchorOutputCount?: number): nu
   // Leaf block: non-self claims map directly to anchor indices
   const ownOutputCount = block.outputs.length;
   const mask: number[] = [];
-  for (const claimIdx of block.claims) {
+  for (const claimIdx of block.claimIndices) {
     if (claimIdx >= ownOutputCount) {
       mask.push(claimIdx - ownOutputCount);
     }
@@ -88,7 +88,12 @@ export function getBlockWeightVector(block: Block): number[] {
 export interface BlockPayload {
   readonly anchor: Hash;
   readonly aggregates: Hash[];
-  readonly claims: number[];
+  /**
+   * Sorted indices into this block's extended vector identifying the
+   * outputs this block consumes. The extended vector is
+   * `[ownOutputs..., aggregateOutputs..., anchorSurvivingOutputs...]`.
+   */
+  readonly claimIndices: number[];
   readonly outputs: Output[];
   readonly declaredWeight: number;
   /** Cross-block references for read-only data access. */
@@ -246,13 +251,13 @@ export function makeBlockStoreOutputSpace(store: BlockStore): OutputSpaceModule 
       const block = store.get(hash);
       if (!block) return undefined;
       const aggData = getAggregationData(block);
-      const sc = block.claims.filter((c) => c < block.outputs.length).length;
+      const sc = block.claimIndices.filter((c) => c < block.outputs.length).length;
       return {
         hash: block.hash,
         anchor: block.anchor,
         aggregates: block.aggregates,
         outputs: block.outputs.map((o) => ({ value: o.value })),
-        claims: [...block.claims].sort((a, b) => a - b),
+        claimIndices: [...block.claimIndices].sort((a, b) => a - b),
         aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
         newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
       };
@@ -341,7 +346,7 @@ export function createBlockFromPacket(
     toConnections: new Set(),
     anchor: payload.anchor,
     aggregates: payload.aggregates,
-    claims: payload.claims,
+    claimIndices: payload.claimIndices,
     outputs: payload.outputs,
     declaredWeight: payload.declaredWeight,
     refs: payload.refs,
@@ -371,7 +376,7 @@ export function composeGenesisPacket(outputs: Output[]): Block {
   return composeUnsignedBlockPacket({
     anchor: ZERO_HASH,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight: GENESIS_WEIGHT,
     refs: [],
@@ -413,7 +418,7 @@ function isBlockPayload(p: unknown): p is BlockPayload {
   return (
     o.anchor instanceof Hash &&
     Array.isArray(o.aggregates) &&
-    Array.isArray(o.claims) &&
+    Array.isArray(o.claimIndices) &&
     Array.isArray(o.outputs) &&
     typeof o.declaredWeight === 'number' &&
     Array.isArray(o.refs) &&

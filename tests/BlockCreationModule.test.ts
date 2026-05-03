@@ -276,7 +276,7 @@ Deno.test('buildBlock: simple leaf block', () => {
   assertEquals(blueprint.outputs.length, 2);
   assertEquals(blueprint.declaredWeight, 10);
   assertEquals(blueprint.aggregates, []);
-  assertEquals(blueprint.claims, [2]);
+  assertEquals(blueprint.claimIndices, [2]);
 });
 
 Deno.test('buildBlock: leaf block with self-claim', () => {
@@ -298,7 +298,7 @@ Deno.test('buildBlock: leaf block with self-claim', () => {
 
   const blueprint = module.buildBlock(spec);
   assertEquals(blueprint.outputs.length, 2);
-  assertEquals(blueprint.claims, [0, 2]);
+  assertEquals(blueprint.claimIndices, [0, 2]);
 });
 
 Deno.test('buildBlock: aggregation block with subtrees', () => {

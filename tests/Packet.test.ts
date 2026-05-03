@@ -35,7 +35,7 @@ function makeSignedBlockPacket() {
   const blueprint: BlockPayload = {
     anchor: genesis.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [makeStatusOutput(eagle.publicKey, 'update')],
     declaredWeight: 1,
     refs: [],
@@ -76,7 +76,7 @@ Deno.test('Packet: unsigned block compose/parse roundtrip', () => {
   const block = composeUnsignedBlockPacket({
     anchor: genesis.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [makeStatusOutput(eagle.publicKey, 'unsigned')],
     declaredWeight: 1,
     refs: [],
@@ -140,7 +140,7 @@ Deno.test('Packet: different signers produce different hashes', () => {
   const blueprint: BlockPayload = {
     anchor: genesis.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [makeStatusOutput(eagle.publicKey, 'same payload')],
     declaredWeight: 1,
     refs: [],

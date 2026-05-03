@@ -42,7 +42,7 @@ function makeBlockPacket(
     {
       anchor: anchor.hash,
       aggregates: [],
-      claims: [],
+      claimIndices: [],
       outputs,
       declaredWeight: 1,
       refs: [],
@@ -499,7 +499,7 @@ Deno.test('NetworkBridge: signer always recovered from signature, never trusted 
     {
       anchor: genesis.hash,
       aggregates: [],
-      claims: [],
+      claimIndices: [],
       outputs: [makeOutput(10, 'test')],
       declaredWeight: 1,
       refs: [],

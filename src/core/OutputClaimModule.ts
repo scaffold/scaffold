@@ -79,8 +79,8 @@ export interface OutputClaimProvider<BlockType> {
  * hierarchy: own outputs -> aggregates (reverse order) -> anchor.
  *
  * Key invariant: outputs are added before claims are applied. A claim at
- * index I in block.claims refers to index I in the block's own output space
- * (pre-claim), not the anchor's.
+ * index I in block.claimIndices refers to index I in the block's own output
+ * space (pre-claim), not the anchor's.
  *
  * Fully self-contained -- depends only on OutputClaimProvider and Hash.
  */

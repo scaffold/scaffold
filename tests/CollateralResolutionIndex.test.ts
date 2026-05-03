@@ -116,7 +116,7 @@ function makeBlock(
     hash,
     anchor: Hash.digest('anchor'),
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight: 0,
     refs: [],
@@ -127,8 +127,7 @@ function makeBlock(
     raw: new Uint8Array(0),
     fromConnections: [],
     toConnections: new Set(),
-    source: AtomSource.Remote,
-  };
+    source: AtomSource.Remote,  };
 }
 
 function makeDraft(

@@ -234,10 +234,10 @@ export class UtxoIndex {
    */
   private removeBlockClaimedOutputs(block: Block): void {
     if (Hash.equals(block.anchor, ZERO_HASH)) return;
-    if (block.claims.length === 0) return;
+    if (block.claimIndices.length === 0) return;
 
     const ownOutputCount = block.outputs.length;
-    for (const claimIdx of block.claims) {
+    for (const claimIdx of block.claimIndices) {
       if (claimIdx < ownOutputCount) continue; // self-claim
       const target = this.outputSpace.resolveClaimIndex(block.hash, claimIdx);
       if (!target) continue;
@@ -259,10 +259,10 @@ export class UtxoIndex {
   /** Re-add outputs a non-canonical block had claimed via index-based claims. */
   private reAddBlockClaimedOutputs(block: Block): void {
     if (Hash.equals(block.anchor, ZERO_HASH)) return;
-    if (block.claims.length === 0) return;
+    if (block.claimIndices.length === 0) return;
 
     const ownOutputCount = block.outputs.length;
-    for (const claimIdx of block.claims) {
+    for (const claimIdx of block.claimIndices) {
       if (claimIdx < ownOutputCount) continue;
       const target = this.outputSpace.resolveClaimIndex(block.hash, claimIdx);
       if (!target) continue;

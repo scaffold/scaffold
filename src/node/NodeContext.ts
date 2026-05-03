@@ -480,7 +480,7 @@ export class NodeContext {
         continue;
       }
       const aggData = getAggregationData(aggBlock);
-      const sc = aggBlock.claims.filter((c) => c < aggBlock.outputs.length).length;
+      const sc = aggBlock.claimIndices.filter((c) => c < aggBlock.outputs.length).length;
       aggregateOutputCounts.push(aggData?.newOutputCount ?? (aggBlock.outputs.length - sc));
     }
 
@@ -506,7 +506,7 @@ export class NodeContext {
       anchor,
       aggregates,
       outputs: draft.outputs.map((o) => ({ value: o.value })),
-      claims: [...selfClaimedIndices].sort((a, b) => a - b),
+      claimIndices: [...selfClaimedIndices].sort((a, b) => a - b),
       aggregateOutputCounts,
       newOutputCount: draft.outputs.length - selfClaimCount +
         aggregateOutputCounts.reduce((a, b) => a + b, 0),
@@ -520,13 +520,13 @@ export class NodeContext {
         const block = store.get(hash);
         if (!block) return undefined;
         const aggData = getAggregationData(block);
-        const sc = block.claims.filter((c) => c < block.outputs.length).length;
+        const sc = block.claimIndices.filter((c) => c < block.outputs.length).length;
         return {
           hash: block.hash,
           anchor: block.anchor,
           aggregates: block.aggregates,
           outputs: block.outputs.map((o) => ({ value: o.value })),
-          claims: [...block.claims].sort((a, b) => a - b),
+          claimIndices: [...block.claimIndices].sort((a, b) => a - b),
           aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
           newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
         };

@@ -21,7 +21,7 @@ interface TestBlock {
   hash: Hash;
   anchor: Hash;
   outputs: Output[];
-  claims: number[];
+  claimIndices: number[];
   refs: Hash[];
 }
 
@@ -62,7 +62,7 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
   }
 
   getClaims(block: TestBlock): number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getRefs(block: TestBlock): Hash[] {
@@ -246,7 +246,7 @@ Deno.test('GeneratingEnv: fetch skips null-data record outputs', async () => {
       { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0, data: null },
       makeRecordOutput('state', enc('S0')),
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(refBlock);
@@ -302,7 +302,7 @@ Deno.test('GeneratingEnv: fetch queries provider and records ref', () => {
     hash: h('ref-block'),
     anchor: ZERO_HASH,
     outputs: [makeRecordOutput('state', enc('S0'))],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(refBlock);
@@ -366,7 +366,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     hash: h('prev'),
     anchor: ZERO_HASH,
     outputs: [makeRecordOutput('state', enc('S'))],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   genProvider.addBlock(refBlock);
@@ -388,7 +388,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     hash: h('new-block'),
     anchor: ZERO_HASH,
     outputs: generatedOutputs,
-    claims: [],
+    claimIndices: [],
     refs: generatedRefs,
   };
 
@@ -402,7 +402,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     hash: h('ref-anchor'),
     anchor: ZERO_HASH,
     outputs: [{ verifier: gameVerifier, value: 0, data: new Uint8Array(0) }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   verProvider.addBlock(anchorForRef);
@@ -411,7 +411,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
   const refBlockWithClaims: TestBlock = {
     ...refBlock,
     anchor: anchorForRef.hash,
-    claims: [1], // claims the game output from anchor
+    claimIndices: [1], // claims the game output from anchor
   };
   verProvider.blocks.set(refBlock.hash.toHex(), refBlockWithClaims);
 
@@ -420,7 +420,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     params: enc('cfg'),
     block,
     outputs: block.outputs,
-    claims: block.claims,
+    claimIndices: block.claimIndices,
     refs: block.refs,
     provider: verProvider,
   });

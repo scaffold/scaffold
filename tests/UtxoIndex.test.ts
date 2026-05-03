@@ -18,6 +18,7 @@
 // aggregate subtree outputs are handled uniformly.
 
 import { assert, assertEquals } from '@std/assert';
+
 import { PacketType } from '../src/core/Packet.ts';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import type { Output } from '../src/core/BlockCreationModule.ts';
@@ -45,15 +46,15 @@ function makeBlock(opts: {
   name: string;
   anchor?: Hash;
   outputs?: Output[];
-  claims?: number[];
+  claimIndices?: number[];
   aggregates?: Hash[];
 }): Block {
-  const claims = (opts.claims ?? []).slice().sort((a, b) => a - b);
+  const claimIndices = (opts.claimIndices ?? []).slice().sort((a, b) => a - b);
   return {
     hash: h(opts.name),
     anchor: opts.anchor ?? ZERO_HASH,
     outputs: opts.outputs ?? [],
-    claims,
+    claimIndices,
     refs: [],
     aggregates: opts.aggregates ?? [],
     declaredWeight: 1,
@@ -116,7 +117,7 @@ Deno.test('UtxoIndex: anchor self-claims do not shift descendant claim resolutio
     outputs: [sigOut('a0', 50), recordOut('meta'), sigOut('a1', 999)],
     // Self-claim RECORD at idx 1; external-claim genesis idx 0
     // (own_count=3, so claim 3 → ext idx 0).
-    claims: [1, 3],
+    claimIndices: [1, 3],
   });
 
   // A.claims must balance throughput in real life, but UtxoIndex doesn't
@@ -147,7 +148,7 @@ Deno.test('UtxoIndex: anchor self-claims do not shift descendant claim resolutio
     name: 'B',
     anchor: a.hash,
     outputs: [],
-    claims: [1],
+    claimIndices: [1],
   });
   store.put(b);
   idx.blockBecameCanonical(b);
@@ -255,7 +256,7 @@ Deno.test('UtxoIndex: aggregation block claims index into agg.new outputs, not a
     //   own(2) ++ L3.new(2) ++ L2.new(2) ++ L1.new(2) ++ anchor.output_space(3)
     // We claim: L3's marker (idx 2), L2's marker (idx 4), L1's marker
     // (idx 6), anchor's AGG marker (idx 8).
-    claims: [2, 4, 6, 8],
+    claimIndices: [2, 4, 6, 8],
   });
 
   store.put(aggBlock);
@@ -291,13 +292,13 @@ Deno.test('UtxoIndex: claim resolution survives a non-canonical → canonical fl
     name: 'A2',
     anchor: genesis.hash,
     outputs: [sigOut('a0', 50), recordOut('meta'), sigOut('a1', 999)],
-    claims: [1, 3], // self-claim RECORD + external g0
+    claimIndices: [1, 3], // self-claim RECORD + external g0
   });
   const b = makeBlock({
     name: 'B2',
     anchor: a.hash,
     outputs: [],
-    claims: [1], // claims a1 via output_space(A)[1]
+    claimIndices: [1], // claims a1 via output_space(A)[1]
   });
 
   store.put(genesis);

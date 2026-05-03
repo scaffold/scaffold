@@ -409,7 +409,7 @@ export class PiggybackStrategy implements Strategy {
   private _extractRecordOutputs(sourceBlock: Block): Output[] {
     const ownOutputCount = sourceBlock.outputs.length;
     const selfClaims = new Set(
-      sourceBlock.claims.filter((c) => c < ownOutputCount),
+      sourceBlock.claimIndices.filter((c) => c < ownOutputCount),
     );
     const out: Output[] = [];
     for (let i = 0; i < sourceBlock.outputs.length; i++) {

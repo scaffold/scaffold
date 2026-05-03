@@ -11,7 +11,7 @@ export interface OutputSpaceBlock {
   readonly aggregates: readonly Hash[];
   readonly outputs: ReadonlyArray<{ readonly value: number }>;
   /** Sorted claim indices into this block's extended vector. */
-  readonly claims: readonly number[];
+  readonly claimIndices: readonly number[];
   /** Per-aggregate newOutputCount values (from cache). Same order as aggregates. */
   readonly aggregateOutputCounts: readonly number[];
   /**
@@ -299,7 +299,7 @@ export class OutputSpaceModule {
     const block = this.provider.getBlock(blockHash);
     if (!block) return undefined;
 
-    const extIdx = mapSurvivingToOriginal(spaceIndex, block.claims);
+    const extIdx = mapSurvivingToOriginal(spaceIndex, block.claimIndices);
     return this.resolveClaimIndex(blockHash, extIdx);
   }
 
@@ -353,7 +353,7 @@ export class OutputSpaceModule {
     const block = this.provider.getBlock(blockHash);
     if (!block) return undefined;
 
-    const result = mapOriginalToSurviving(extIdx, block.claims);
+    const result = mapOriginalToSurviving(extIdx, block.claimIndices);
     return result === -1 ? undefined : result;
   }
 
@@ -375,7 +375,7 @@ export class OutputSpaceModule {
     const inheritedOffset = block.outputs.length +
       block.aggregateOutputCounts.reduce((a, b) => a + b, 0);
 
-    const shifted = filterAboveAndShift(block.claims, inheritedOffset);
+    const shifted = filterAboveAndShift(block.claimIndices, inheritedOffset);
     const ownAnchorClaims = mapSurvivingToOriginalBatch(shifted, aggMask);
 
     return unionClaimMasks(aggMask, ownAnchorClaims);
@@ -450,8 +450,8 @@ export class OutputSpaceModule {
     if (!block) return undefined;
 
     // Merge-walk: extended entries have sequential spaceIndex (0,1,2,...),
-    // claims is sorted — use a pointer instead of Set
-    const claims = block.claims;
+    // claimIndices is sorted -- use a pointer instead of Set
+    const claims = block.claimIndices;
     let claimPtr = 0;
 
     const result: UtxoEntry[] = [];

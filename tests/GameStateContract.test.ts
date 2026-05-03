@@ -36,7 +36,7 @@ interface TestBlock {
   hash: Hash;
   anchor: Hash;
   outputs: Output[];
-  claims: number[];
+  claimIndices: number[];
   refs: Hash[];
   signer?: Uint8Array;
   timestamp: number;
@@ -99,7 +99,7 @@ class TestProvider implements ExecutionProvider<TestBlock> {
   }
 
   getClaims(block: TestBlock): number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getAnchor(block: TestBlock): Hash {
@@ -147,7 +147,7 @@ Deno.test('Join: black claims an awaiting-join game', async () => {
     hash: h('create'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(0, 500, awaiting)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -173,7 +173,7 @@ Deno.test('Join: black claims an awaiting-join game', async () => {
       gameStateOutput(1, 1000, joined),
     ],
     // Claim the previous GAME_STATE (ext idx 2) and self-claim the RECORD (0).
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: BLACK_PK,
     timestamp: 2000,
@@ -195,7 +195,7 @@ Deno.test('Join: rejects when signer != black pubkey in RECORD', async () => {
     hash: h('create'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(0, 500, awaiting)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -215,7 +215,7 @@ Deno.test('Join: rejects when signer != black pubkey in RECORD', async () => {
       makeRecordOutput('join', BLACK_PK),
       gameStateOutput(1, 1000, joined),
     ],
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: imposter,
     timestamp: 2000,
@@ -244,7 +244,7 @@ Deno.test('Move: legal e2-e4 accepted', async () => {
     hash: h('prev'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(1, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -262,7 +262,7 @@ Deno.test('Move: legal e2-e4 accepted', async () => {
       gameStateOutput(2, 1000, nextEnv),
     ],
     // Claim prev GAME_STATE (ext idx 2) and self-claim the RECORD (0).
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: WHITE_PK,
     timestamp: 1500,
@@ -281,7 +281,7 @@ Deno.test('Move: illegal (bishop through pawn) rejected', async () => {
     hash: h('prev-bad'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(1, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -304,7 +304,7 @@ Deno.test('Move: illegal (bishop through pawn) rejected', async () => {
       makeRecordOutput('move', encodeMove(move)),
       gameStateOutput(2, 1000, fakeNext),
     ],
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: WHITE_PK,
     timestamp: 1500,
@@ -322,7 +322,7 @@ Deno.test('Move: rejects when signed by the wrong player', async () => {
     hash: h('prev-wrongsign'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(1, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -339,7 +339,7 @@ Deno.test('Move: rejects when signed by the wrong player', async () => {
       makeRecordOutput('move', encodeMove(move)),
       gameStateOutput(2, 1000, nextEnv),
     ],
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: BLACK_PK, // but white is on move
     timestamp: 1500,
@@ -368,7 +368,7 @@ Deno.test('Checkmate: terminal block pays out the pot to the winner', async () =
     hash: h('prev-mate'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(3, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 3,
   };
@@ -387,7 +387,7 @@ Deno.test('Checkmate: terminal block pays out the pot to the winner', async () =
       sigOutput(BLACK_PK, 1000),
     ],
     // Claim prev GAME_STATE (ext 2) and self-claim RECORD (0).
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: BLACK_PK,
     timestamp: 4,
@@ -409,7 +409,7 @@ Deno.test('Checkmate: rejects wrong winner', async () => {
     hash: h('prev-mate2'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(3, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 3,
   };
@@ -422,7 +422,7 @@ Deno.test('Checkmate: rejects wrong winner', async () => {
       makeRecordOutput('move', encodeMove(mate)),
       sigOutput(WHITE_PK, 1000), // wrong: should be BLACK_PK
     ],
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: BLACK_PK,
     timestamp: 4,
@@ -450,7 +450,7 @@ Deno.test({
     hash: h('prev-timeout'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(1, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 0,
   };
@@ -466,7 +466,7 @@ Deno.test({
       makeRecordOutput('move', encodeMove(TIMEOUT_MOVE)),
       sigOutput(BLACK_PK, 1000),
     ],
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: BLACK_PK, // OPPONENT claims the timeout
     timestamp: 300_001,
@@ -485,7 +485,7 @@ Deno.test('Timeout: cannot be claimed before clock expires', async () => {
     hash: h('prev-noto'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(1, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 0,
   };
@@ -498,7 +498,7 @@ Deno.test('Timeout: cannot be claimed before clock expires', async () => {
       makeRecordOutput('move', encodeMove(TIMEOUT_MOVE)),
       sigOutput(BLACK_PK, 1000),
     ],
-    claims: [2, 0],
+    claimIndices: [2, 0],
     refs: [],
     signer: BLACK_PK,
     timestamp: 1000, // only 1 second elapsed
@@ -539,7 +539,7 @@ Deno.test('Draw: stalemate splits the pot', async () => {
     hash: h('pre-draw'),
     anchor: ZERO_HASH,
     outputs: [gameStateOutput(1, 1000, prev)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 0,
   };
@@ -557,7 +557,7 @@ Deno.test('Draw: stalemate splits the pot', async () => {
       sigOutput(WHITE_PK, 500),
       sigOutput(BLACK_PK, 500),
     ],
-    claims: [3, 0],
+    claimIndices: [3, 0],
     refs: [],
     signer: WHITE_PK,
     timestamp: 1,

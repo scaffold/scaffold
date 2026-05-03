@@ -156,7 +156,7 @@ Deno.test('TransportManager: sendBlock broadcasts raw bytes to all peers', () =>
   const raw = composeUnsignedBlockPacket({
     anchor: ZERO_HASH,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [],
     declaredWeight: 1,
     refs: [],

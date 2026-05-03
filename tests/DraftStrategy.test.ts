@@ -18,7 +18,7 @@ function makeBlock(hash: Hash, anchor: Hash, outputs: Block['outputs'] = []): Bl
     hash,
     anchor,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight: 1,
     refs: [],

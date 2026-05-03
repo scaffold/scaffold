@@ -126,7 +126,7 @@ export class Coordinator {
       fromPeer,
       anchor: block.anchor.toHex(),
       outputCount: block.outputs.length,
-      claimCount: block.claims.length,
+      claimCount: block.claimIndices.length,
       aggregateCount: block.aggregates.length,
     });
 
@@ -136,7 +136,7 @@ export class Coordinator {
     // 2. Reset pending conflicts, then register output claims and trigger migration
     //    (conflicts fire via onConflict callback -> addConflict + collect)
     this.pendingConflicts.length = 0;
-    this.outputClaims.addBlock(block.hash, block.claims);
+    this.outputClaims.addBlock(block.hash, block.claimIndices);
     this.outputClaims.onBlockLoaded(block.hash);
 
     // 3. Consensus -- start with declared weight (sampling will refine)

@@ -1,4 +1,5 @@
 import { assert, assertEquals } from '@std/assert';
+
 import { Hash } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block, composeGenesisPacket } from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
@@ -37,7 +38,7 @@ function makeLeafBlock(
     hash,
     anchor: anchor.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight,
     refs: [],

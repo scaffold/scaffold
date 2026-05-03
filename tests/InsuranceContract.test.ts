@@ -24,7 +24,7 @@ interface TestBlock {
   hash: Hash;
   anchor: Hash;
   outputs: Output[];
-  claims: number[];
+  claimIndices: number[];
   refs: Hash[];
   signer?: Uint8Array;
   timestamp: number;
@@ -72,7 +72,7 @@ class TestProvider implements ExecutionProvider<TestBlock> {
   }
 
   getClaims(block: TestBlock): number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getAnchor(block: TestBlock): Hash {
@@ -115,7 +115,7 @@ Deno.test('Insurance: aggregation claim -- returns deposit minus fee to author',
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [insOutput(1000, authorPk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -127,7 +127,7 @@ Deno.test('Insurance: aggregation claim -- returns deposit minus fee to author',
     hash: h('aggregation'),
     anchor: anchor.hash,
     outputs: [sigOutput(authorPk, minReturn)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: aggregatorPk,
     timestamp: 2000,
@@ -148,7 +148,7 @@ Deno.test('Insurance: aggregation claim rejects if return too small', async () =
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [insOutput(1000, authorPk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -159,7 +159,7 @@ Deno.test('Insurance: aggregation claim rejects if return too small', async () =
     hash: h('aggregation'),
     anchor: anchor.hash,
     outputs: [sigOutput(authorPk, 500)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: aggregatorPk,
     timestamp: 2000,
@@ -183,7 +183,7 @@ Deno.test('Insurance: solidification return -- owner reclaims full value', async
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [makeInsuranceOutput(treeRoot, 2500, aggregatorPk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -194,7 +194,7 @@ Deno.test('Insurance: solidification return -- owner reclaims full value', async
     hash: h('solidify'),
     anchor: anchor.hash,
     outputs: [sigOutput(aggregatorPk, 2500)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: aggregatorPk,
     timestamp: 100_000, // much later
@@ -220,7 +220,7 @@ Deno.test('Insurance: non-canonical reclaim -- owner gets full return', async ()
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [insOutput(1000, authorPk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -231,7 +231,7 @@ Deno.test('Insurance: non-canonical reclaim -- owner gets full return', async ()
     hash: h('reclaim'),
     anchor: anchor.hash,
     outputs: [sigOutput(authorPk, 1000)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: authorPk,
     timestamp: 2000,
@@ -251,7 +251,7 @@ Deno.test('Insurance: non-canonical reclaim rejects wrong return value', async (
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [insOutput(1000, authorPk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -262,7 +262,7 @@ Deno.test('Insurance: non-canonical reclaim rejects wrong return value', async (
     hash: h('reclaim'),
     anchor: anchor.hash,
     outputs: [sigOutput(authorPk, 9999)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: authorPk,
     timestamp: 2000,
@@ -286,7 +286,7 @@ Deno.test('Insurance: re-aggregation -- new aggregator claims old insurance', as
     hash: h('anchor'),
     anchor: ZERO_HASH,
     outputs: [insOutput(2500, aggregator1Pk)],
-    claims: [],
+    claimIndices: [],
     refs: [],
     timestamp: 1000,
   };
@@ -298,7 +298,7 @@ Deno.test('Insurance: re-aggregation -- new aggregator claims old insurance', as
     hash: h('re-agg'),
     anchor: anchor.hash,
     outputs: [sigOutput(aggregator1Pk, minReturn)],
-    claims: [1],
+    claimIndices: [1],
     refs: [],
     signer: aggregator2Pk,
     timestamp: 60_000,

@@ -82,7 +82,7 @@ export function validateBlockPacket(block: Block, store: BlockStore): void {
 function resolveClaimedOutputs(block: Block, store: BlockStore): Output[] {
   const results: Output[] = [];
   const ownOutputCount = block.outputs.length;
-  for (const claimIndex of block.claims) {
+  for (const claimIndex of block.claimIndices) {
     if (claimIndex < ownOutputCount) continue;
     const resolved = resolveClaimToOutput(block, claimIndex, store);
     if (resolved) results.push(resolved.output);

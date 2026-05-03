@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
@@ -40,7 +41,7 @@ function makeLeafBlock(
     hash,
     anchor: anchor.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight,
     refs: [],

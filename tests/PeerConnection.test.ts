@@ -78,7 +78,7 @@ function makeSignedBlockPacket() {
     {
       anchor: genesis.hash,
       aggregates: [],
-      claims: [],
+      claimIndices: [],
       outputs: [],
       declaredWeight: 1,
       refs: [],
@@ -151,7 +151,7 @@ Deno.test('unsigned block packet leaves signer undefined', () => {
   const block = composeUnsignedBlockPacket({
     anchor: genesis.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [],
     declaredWeight: 1,
     refs: [],

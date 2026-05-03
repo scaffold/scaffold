@@ -7,6 +7,7 @@
  * - Backfill routes existing unclaimed outputs to new claimers
  */
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block, BlockStore, createGenesisBlock } from '../src/core/Block.ts';
@@ -34,13 +35,13 @@ function makeBlock(
   anchor: Block,
   outputs: Output[],
   declaredWeight: number,
-  claims: number[] = [],
+  claimIndices: number[] = [],
 ): Block {
   return {
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: [],
-    claims,
+    claimIndices,
     outputs,
     declaredWeight,
     refs: [],

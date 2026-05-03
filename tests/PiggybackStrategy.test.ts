@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assert, assertEquals } from '@std/assert';
 import { Hash, HashPrimitive, ZERO_HASH } from '../src/util/Hash.ts';
 import {
@@ -45,7 +46,7 @@ function makeBlock(
   opts: {
     anchor?: Hash;
     aggregates?: Hash[];
-    claims?: number[];
+    claimIndices?: number[];
     outputs?: Output[];
     refs?: Hash[];
     declaredWeight?: number;
@@ -55,7 +56,7 @@ function makeBlock(
     hash,
     anchor: opts.anchor ?? ZERO_HASH,
     aggregates: opts.aggregates ?? [],
-    claims: opts.claims ?? [],
+    claimIndices: opts.claimIndices ?? [],
     outputs: opts.outputs ?? [],
     declaredWeight: opts.declaredWeight ?? 1,
     refs: opts.refs ?? [],
@@ -294,7 +295,7 @@ function setupOracleScenario(fx: Fixture) {
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
     outputs: [recordOut, sigChange],
-    claims: [0, 2 + 0], // self-claim record at 0, external claim at extIdx 0 (incentive0)
+    claimIndices: [0, 2 + 0], // self-claim record at 0, external claim at extIdx 0 (incentive0)
   });
   fx.store.put(B);
   fx.consensus.setCanonical(B.hash, true);
@@ -342,7 +343,7 @@ Deno.test('P: trusted source via canonicalityChanges emits createBlock', () => {
     action.spec.outputs[0].verifier.contract.toHex(),
     RECORD_CONTRACT.toHex(),
   );
-  // claims: [self-claim record, external claim of incentive1]
+  // claimIndices: [self-claim record, external claim of incentive1]
   assertEquals(action.spec.claims.length, 2);
   assertEquals(action.spec.claims[0].index, 0);
   assertEquals(action.spec.claims[1].value, 200);
@@ -401,7 +402,7 @@ Deno.test('P: late UTXO add triggers piggyback against trusted source', () => {
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
     outputs: [recordOut, sigChange],
-    claims: [0, 2 + 0],
+    claimIndices: [0, 2 + 0],
   });
   fx.store.put(B);
   fx.consensus.setCanonical(B.hash, true);
@@ -531,7 +532,7 @@ Deno.test('P: skips when source serves SIGNATURE_CONTRACT', () => {
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
     outputs: [sigChange],
-    claims: [1 + 0],
+    claimIndices: [1 + 0],
   });
   fx.store.put(B);
   fx.consensus.setCanonical(B.hash, true);
@@ -576,7 +577,7 @@ Deno.test('P: skips when source has no record outputs', () => {
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
     outputs: [sigChange],
-    claims: [1 + 0],
+    claimIndices: [1 + 0],
   });
   fx.store.put(B);
   fx.consensus.setCanonical(B.hash, true);
@@ -659,7 +660,7 @@ Deno.test(
     const B = makeBlock(h('B'), {
       anchor: genesis.hash,
       outputs: [recordOut, sigChange],
-      claims: [0, 2 + 0],
+      claimIndices: [0, 2 + 0],
     });
     store.put(B);
     consensus.setCanonical(B.hash, true);
@@ -734,7 +735,7 @@ Deno.test('P: skip the very output the source itself claims', () => {
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
     outputs: [recordOut, sigChange],
-    claims: [0, 2],
+    claimIndices: [0, 2],
   });
   fx.store.put(B);
   fx.consensus.setCanonical(B.hash, true);

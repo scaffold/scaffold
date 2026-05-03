@@ -28,7 +28,7 @@ export class BlockVerificationService extends BlockVerificationModule {
     const provider: BlockVerificationProvider = {
       getClaimCount: (blockHash: Hash) => {
         const block = store.get(blockHash);
-        return block?.claims.length;
+        return block?.claimIndices.length;
       },
       getVerifier: (targetBlock: Hash, outputIndex: number): Verifier | undefined => {
         const b = store.get(targetBlock);

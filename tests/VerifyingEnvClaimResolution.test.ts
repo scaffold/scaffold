@@ -6,6 +6,7 @@
 // underlying output.
 
 import { assert, assertEquals } from '@std/assert';
+
 import { PacketType } from '../src/core/Packet.ts';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import type { Output } from '../src/core/BlockCreationModule.ts';
@@ -29,14 +30,14 @@ function makeBlock(opts: {
   name: string;
   anchor?: Hash;
   outputs?: Output[];
-  claims?: number[];
+  claimIndices?: number[];
 }): Block {
-  const claims = (opts.claims ?? []).slice().sort((a, b) => a - b);
+  const claimIndices = (opts.claimIndices ?? []).slice().sort((a, b) => a - b);
   return {
     hash: h(opts.name),
     anchor: opts.anchor ?? ZERO_HASH,
     outputs: opts.outputs ?? [],
-    claims,
+    claimIndices,
     refs: [],
     aggregates: [],
     declaredWeight: 1,
@@ -72,7 +73,7 @@ function makeProvider(store: BlockStore): VerifyingEnvProvider<Block> {
   return {
     getBlock: (hash) => store.get(hash),
     getOutputs: (b) => b.outputs,
-    getClaims: (b) => b.claims,
+    getClaims: (b) => b.claimIndices,
     getRefs: (b) => b.refs,
     resolveClaim: (b, i) => resolveClaimToOutput(b, i, store, space)?.output,
   };
@@ -98,13 +99,13 @@ Deno.test('VerifyingEnv.requireInput resolves through anchor self-claims', () =>
     name: 'A-env',
     anchor: genesis.hash,
     outputs: [sigOut('a0', 50), recordOut('meta'), sigOut('a1', 7)],
-    claims: [1], // self-claim RECORD
+    claimIndices: [1], // self-claim RECORD
   });
   const b = makeBlock({
     name: 'B-env',
     anchor: a.hash,
     outputs: [],
-    claims: [1], // ext idx 1 -- output_space(A)[1] = a1
+    claimIndices: [1], // ext idx 1 -- output_space(A)[1] = a1
   });
   store.put(genesis);
   store.put(a);
@@ -118,7 +119,7 @@ Deno.test('VerifyingEnv.requireInput resolves through anchor self-claims', () =>
     params: enc('a1'),
     block: b,
     outputs: b.outputs,
-    claims: b.claims,
+    claimIndices: b.claimIndices,
     refs: b.refs,
     provider,
   });
@@ -142,13 +143,13 @@ Deno.test('VerifyingEnv.requireInput rejects when claim resolves to a foreign ve
     name: 'A-env-2',
     anchor: genesis.hash,
     outputs: [sigOut('a0', 50), recordOut('meta'), sigOut('a1', 7)],
-    claims: [1],
+    claimIndices: [1],
   });
   const b = makeBlock({
     name: 'B-env-2',
     anchor: a.hash,
     outputs: [],
-    claims: [1],
+    claimIndices: [1],
   });
   store.put(genesis);
   store.put(a);
@@ -159,7 +160,7 @@ Deno.test('VerifyingEnv.requireInput rejects when claim resolves to a foreign ve
     params: enc('a0'),
     block: b,
     outputs: b.outputs,
-    claims: b.claims,
+    claimIndices: b.claimIndices,
     refs: b.refs,
     provider: makeProvider(store),
   });

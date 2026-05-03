@@ -69,7 +69,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     params: Uint8Array;
     block: BlockType;
     outputs: Output[];
-    claims: number[];
+    claimIndices: number[];
     refs: Hash[];
     provider: VerifyingEnvProvider<BlockType>;
     signer?: Uint8Array;
@@ -79,7 +79,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     this._params = opts.params;
     this._block = opts.block;
     this._outputs = opts.outputs;
-    this._claims = opts.claims;
+    this._claims = opts.claimIndices;
     this._refs = opts.refs;
     this._provider = opts.provider;
     this._signer = opts.signer;

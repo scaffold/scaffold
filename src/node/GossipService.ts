@@ -23,7 +23,7 @@ class GossipProviderAdapter implements GossipProvider {
 
     // Determine self-claimed output indices
     const selfClaims = new Set(
-      block.claims.filter((c) => c < block.outputs.length),
+      block.claimIndices.filter((c) => c < block.outputs.length),
     );
 
     return block.outputs

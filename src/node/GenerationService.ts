@@ -55,7 +55,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   }
 
   getClaims(block: Block): number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getRefs(block: Block): Hash[] {
@@ -93,7 +93,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     for (const block of this.store.values()) {
       if (Hash.equals(block.anchor, ZERO_HASH)) continue;
       const ownOutputCount = block.outputs.length;
-      for (const claimIdx of block.claims) {
+      for (const claimIdx of block.claimIndices) {
         if (claimIdx < ownOutputCount) continue; // self-claim -- doesn't count
         const resolved = resolveClaimToOutput(block, claimIdx, this.store, this.outputSpace);
         if (!resolved) continue;

@@ -13,7 +13,7 @@ interface TestBlock {
   hash: Hash;
   anchor: Hash;
   outputs: Output[];
-  claims: number[];
+  claimIndices: number[];
   refs: Hash[];
 }
 
@@ -51,7 +51,7 @@ class TestProvider implements VerifyingEnvProvider<TestBlock> {
   }
 
   getClaims(block: TestBlock): number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getRefs(block: TestBlock): Hash[] {
@@ -80,7 +80,7 @@ function makeEnv(opts: {
     params: opts.params ?? new Uint8Array(0),
     block: opts.block,
     outputs: provider.getOutputs(opts.block),
-    claims: provider.getClaims(opts.block),
+    claimIndices: provider.getClaims(opts.block),
     refs: provider.getRefs(opts.block),
     provider,
     signer: opts.signer,
@@ -91,7 +91,7 @@ function makeEnv(opts: {
 
 Deno.test('VerifyingEnv: mode is Verification', () => {
   const provider = new TestProvider();
-  const block: TestBlock = { hash: h('b'), anchor: ZERO_HASH, outputs: [], claims: [], refs: [] };
+  const block: TestBlock = { hash: h('b'), anchor: ZERO_HASH, outputs: [], claimIndices: [], refs: [] };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   assertEquals(env.mode, ExecutionMode.Verification);
@@ -99,7 +99,7 @@ Deno.test('VerifyingEnv: mode is Verification', () => {
 
 Deno.test('VerifyingEnv: getContractHash and getParams', () => {
   const provider = new TestProvider();
-  const block: TestBlock = { hash: h('b'), anchor: ZERO_HASH, outputs: [], claims: [], refs: [] };
+  const block: TestBlock = { hash: h('b'), anchor: ZERO_HASH, outputs: [], claimIndices: [], refs: [] };
   provider.addBlock(block);
   const contractHash = h('my-contract');
   const params = enc('my-params');
@@ -116,7 +116,7 @@ Deno.test('VerifyingEnv: requireResult accepts when result matches', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [makeRecordOutput('state', enc('value'))],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -131,7 +131,7 @@ Deno.test('VerifyingEnv: requireResult throws on wrong value', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [makeRecordOutput('state', enc('actual'))],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -149,7 +149,7 @@ Deno.test('VerifyingEnv: requireResult throws when key not found', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -170,7 +170,7 @@ Deno.test('VerifyingEnv: requireOutput accepts when output exists', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [{ verifier, value: 42, data: enc('data') }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -185,7 +185,7 @@ Deno.test('VerifyingEnv: requireOutput accepts with default empty data', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [{ verifier, value: 10, data: new Uint8Array(0) }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -199,7 +199,7 @@ Deno.test('VerifyingEnv: requireOutput throws when output missing', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -225,7 +225,7 @@ Deno.test('VerifyingEnv: requireOutput matches positionally within namespace', (
       { verifier: vA, value: 5, data: new Uint8Array(0) },
       { verifier: vB, value: 7, data: new Uint8Array(0) },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -246,7 +246,7 @@ Deno.test('VerifyingEnv: requireOutput positional mismatch rejects', () => {
       { verifier: vA, value: 5, data: new Uint8Array(0) },
       { verifier: vB, value: 7, data: new Uint8Array(0) },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -267,7 +267,7 @@ Deno.test('VerifyingEnv: getOutput returns value/data from next namespace slot',
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [{ verifier: v, value: 42, data: enc('payload') }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -286,7 +286,7 @@ Deno.test('VerifyingEnv: getOutput rejects when block slot uses a different veri
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [{ verifier: vA, value: 5, data: new Uint8Array(0) }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -310,7 +310,7 @@ Deno.test('VerifyingEnv: getEmittedSlots records origin per call', () => {
       { verifier: vA, value: 5, data: new Uint8Array(0) },
       { verifier: vB, value: 7, data: enc('payload') },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -343,7 +343,7 @@ Deno.test('VerifyingEnv: collectInputs returns matching claimed outputs', () => 
       },
       { verifier, value: 20, data: enc('move2') },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(anchor);
@@ -352,7 +352,7 @@ Deno.test('VerifyingEnv: collectInputs returns matching claimed outputs', () => 
     hash: h('b'),
     anchor: anchor.hash,
     outputs: [],
-    claims: [0, 1, 2], // claims all three anchor outputs
+    claimIndices: [0, 1, 2], // claims all three anchor outputs
     refs: [],
   };
   provider.addBlock(block);
@@ -370,7 +370,7 @@ Deno.test('VerifyingEnv: collectInputs returns empty when no matching claims', (
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -393,7 +393,7 @@ Deno.test('VerifyingEnv: requireInput returns inputs sequentially', () => {
       { verifier, value: 1, data: enc('a') },
       { verifier, value: 2, data: enc('b') },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(anchor);
@@ -402,7 +402,7 @@ Deno.test('VerifyingEnv: requireInput returns inputs sequentially', () => {
     hash: h('b'),
     anchor: anchor.hash,
     outputs: [],
-    claims: [0, 1],
+    claimIndices: [0, 1],
     refs: [],
   };
   provider.addBlock(block);
@@ -420,7 +420,7 @@ Deno.test('VerifyingEnv: requireInput throws when no more inputs', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -444,7 +444,7 @@ Deno.test('VerifyingEnv: collectInputs skips null-data outputs', () => {
       { verifier, value: 99, data: null }, // pure-incentive output -- invisible
       { verifier, value: 20, data: enc('move2') },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(anchor);
@@ -453,7 +453,7 @@ Deno.test('VerifyingEnv: collectInputs skips null-data outputs', () => {
     hash: h('b'),
     anchor: anchor.hash,
     outputs: [],
-    claims: [0, 1, 2],
+    claimIndices: [0, 1, 2],
     refs: [],
   };
   provider.addBlock(block);
@@ -479,7 +479,7 @@ Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
       { verifier, value: 9, data: null },
       { verifier, value: 2, data: enc('b') },
     ],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(anchor);
@@ -488,7 +488,7 @@ Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
     hash: h('b'),
     anchor: anchor.hash,
     outputs: [],
-    claims: [0, 1, 2],
+    claimIndices: [0, 1, 2],
     refs: [],
   };
   provider.addBlock(block);
@@ -510,7 +510,7 @@ Deno.test('VerifyingEnv: fetch skips null-data record outputs', () => {
     hash: h('prev-anchor'),
     anchor: ZERO_HASH,
     outputs: [{ verifier: gameVerifier, value: 10, data: new Uint8Array(0) }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(prevAnchor);
@@ -524,7 +524,7 @@ Deno.test('VerifyingEnv: fetch skips null-data record outputs', () => {
       { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0, data: null },
       makeRecordOutput('state', enc('S0')),
     ],
-    claims: [2], // claims extended index 2 = anchor's game output (anchor is at indices 2..)
+    claimIndices: [2], // claims extended index 2 = anchor's game output (anchor is at indices 2..)
     refs: [],
   };
   provider.addBlock(prevBlock);
@@ -533,7 +533,7 @@ Deno.test('VerifyingEnv: fetch skips null-data record outputs', () => {
     hash: h('current'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [prevBlock.hash],
   };
   provider.addBlock(block);
@@ -554,7 +554,7 @@ Deno.test('VerifyingEnv: fetch reads result from ref block that claims verifier'
     hash: h('prev-anchor'),
     anchor: ZERO_HASH,
     outputs: [{ verifier: gameVerifier, value: 10, data: new Uint8Array(0) }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(prevAnchor);
@@ -565,7 +565,7 @@ Deno.test('VerifyingEnv: fetch reads result from ref block that claims verifier'
     outputs: [
       makeRecordOutput('state', enc('S0')),
     ],
-    claims: [1], // claims extended index 1 = anchor's game output
+    claimIndices: [1], // claims extended index 1 = anchor's game output
     refs: [],
   };
   provider.addBlock(prevBlock);
@@ -575,7 +575,7 @@ Deno.test('VerifyingEnv: fetch reads result from ref block that claims verifier'
     hash: h('current'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [prevBlock.hash],
   };
   provider.addBlock(block);
@@ -591,7 +591,7 @@ Deno.test('VerifyingEnv: fetch throws when no ref claims the verifier', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -611,7 +611,7 @@ Deno.test('VerifyingEnv: fetch throws when ref claims verifier but no result key
     hash: h('prev-anchor'),
     anchor: ZERO_HASH,
     outputs: [{ verifier, value: 5, data: new Uint8Array(0) }],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(prevAnchor);
@@ -621,7 +621,7 @@ Deno.test('VerifyingEnv: fetch throws when ref claims verifier but no result key
     hash: h('ref'),
     anchor: prevAnchor.hash,
     outputs: [],
-    claims: [0],
+    claimIndices: [0],
     refs: [],
   };
   provider.addBlock(refBlock);
@@ -630,7 +630,7 @@ Deno.test('VerifyingEnv: fetch throws when ref claims verifier but no result key
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [refBlock.hash],
   };
   provider.addBlock(block);
@@ -652,7 +652,7 @@ Deno.test('VerifyingEnv: requireSignature passes when signer matches pubkey', ()
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -666,7 +666,7 @@ Deno.test('VerifyingEnv: requireSignature throws when signer does not match', ()
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -684,7 +684,7 @@ Deno.test('VerifyingEnv: requireSignature throws when block is unsigned', () => 
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -704,7 +704,7 @@ Deno.test('VerifyingEnv: contract returning normally means accept', () => {
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [makeRecordOutput('k', enc('v'))],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);
@@ -724,7 +724,7 @@ Deno.test('VerifyingEnv: contract throwing ContractRejection means reject', () =
     hash: h('b'),
     anchor: ZERO_HASH,
     outputs: [],
-    claims: [],
+    claimIndices: [],
     refs: [],
   };
   provider.addBlock(block);

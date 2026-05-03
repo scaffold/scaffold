@@ -42,7 +42,7 @@ class VerifyingProviderAdapter implements VerifyingEnvProvider<Block> {
   }
 
   getClaims(block: Block) {
-    return block.claims;
+    return block.claimIndices;
   }
 
   getRefs(block: Block) {
@@ -93,7 +93,7 @@ export class ContractVerificationService extends ContractVerificationModule {
           block,
           verifier,
           outputs: block.outputs,
-          claims: block.claims,
+          claimIndices: block.claimIndices,
           refs: block.refs,
           signer: block.signer,
           timestamp: block.timestamp,

@@ -81,7 +81,7 @@ export interface FetchResult<T = unknown> {
 
 export interface FetchClaim<T = unknown> extends FetchResult<T> {
   readonly block: Block;
-  /** Index into block.claims[] corresponding to our incentive output. */
+  /** Index into block.claimIndices[] corresponding to our incentive output. */
   readonly claimIdx: number;
 }
 
@@ -172,7 +172,7 @@ interface Subscription {
   incentive: { blockHash: Hash; outputIndex: number } | null;
   /** Projections by insertion order. */
   projections: Projection[];
-  /** claimant hash hex → index in claimant.claims[] resolving to our incentive. */
+  /** claimant hash hex → index in claimant.claimIndices[] resolving to our incentive. */
   knownClaimants: Map<string, number>;
   /** The currently-surfaced canonical claimant, if any. */
   currentClaimant: Hash | null;

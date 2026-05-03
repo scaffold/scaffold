@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assertEquals } from '@std/assert';
 import { Hash, HashPrimitive } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block, BlockStore } from '../src/core/Block.ts';
@@ -29,7 +30,7 @@ function stubBlock(blockHash: Hash, outputs: Output[] = []): Block {
     hash: blockHash,
     anchor: ZERO_HASH,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight: 1,
     refs: [],

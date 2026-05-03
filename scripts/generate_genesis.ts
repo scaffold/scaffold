@@ -10,11 +10,11 @@
 
 import { bin2hex } from '../src/util/hex.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import { composeGenesisPacket } from '../src/core/Packet.ts';
+import { composeGenesisPacket } from '../src/core/Block.ts';
 import { WELL_KNOWN_PUBLIC_KEY } from '../src/genesis.ts';
 
 const outputs = [makeSignatureOutput(WELL_KNOWN_PUBLIC_KEY, 1_000_000)];
-const { packet } = composeGenesisPacket(outputs);
+const packet = composeGenesisPacket(outputs);
 const hex = bin2hex(packet.raw);
 
 // deno-lint-ignore no-console

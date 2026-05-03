@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
 import {
@@ -43,7 +44,7 @@ function makeLeafBlock(
   anchor: Block,
   outputs: Output[],
   declaredWeight: number,
-  claims: number[] = [],
+  claimIndices: number[] = [],
 ): Block {
   // Compute hash
   const hashParts: Uint8Array[] = [
@@ -61,7 +62,7 @@ function makeLeafBlock(
     hash,
     anchor: anchor.hash,
     aggregates: [],
-    claims,
+    claimIndices,
     outputs,
     declaredWeight,
     refs: [],
@@ -82,9 +83,9 @@ function makeLeafBlockWithHash(
   anchor: Block,
   outputs: Output[],
   declaredWeight: number,
-  claims: number[] = [],
+  claimIndices: number[] = [],
 ): Block {
-  const block = makeLeafBlock(anchor, outputs, declaredWeight, claims);
+  const block = makeLeafBlock(anchor, outputs, declaredWeight, claimIndices);
   // Override hash with deterministic one
   const hash = Hash.digest(name);
   return { ...block, hash };
@@ -147,7 +148,7 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     hash: Hash.digest('blockA'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1], // claim index 1 in extended vector = anchor output 0
+    claimIndices: [1], // claim index 1 in extended vector = anchor output 0
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 50,
     refs: [],
@@ -165,7 +166,7 @@ Deno.test('Integration: conflict resolution — two blocks claim same output, hi
     hash: Hash.digest('blockB'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1], // same claim
+    claimIndices: [1], // same claim
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 30,
     refs: [],
@@ -204,7 +205,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     hash: Hash.digest('flipA'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1],
+    claimIndices: [1],
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
     refs: [],
@@ -223,7 +224,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     hash: Hash.digest('flipB'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1],
+    claimIndices: [1],
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
     refs: [],
@@ -249,7 +250,7 @@ Deno.test('Integration: canonicality flip — descendant weight shifts the winne
     hash: Hash.digest('childA'),
     anchor: blockA.hash,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [],
     declaredWeight: 100,
     refs: [],
@@ -318,7 +319,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     hash: Hash.digest('subtreeA'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1], // claims extended idx 1 = anchor output 0
+    claimIndices: [1], // claims extended idx 1 = anchor output 0
     outputs: [makeOutput(100, 'A-out')],
     declaredWeight: 10,
     refs: [],
@@ -338,7 +339,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     hash: Hash.digest('subtreeB'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [2], // claims extended idx 2 = anchor output 1
+    claimIndices: [2], // claims extended idx 2 = anchor output 1
     outputs: [makeOutput(100, 'B-out')],
     declaredWeight: 15,
     refs: [],
@@ -367,7 +368,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     hash: Hash.digest('aggBlock'),
     anchor: genesis.hash,
     aggregates: [subtreeA.hash, subtreeB.hash],
-    claims: [],
+    claimIndices: [],
     outputs: [{
       verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       value: 0,
@@ -513,7 +514,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     hash: Hash.digestParts(...blockAHashParts),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [1], // claim extended index 1 = genesis output[0]
+    claimIndices: [1], // claim extended index 1 = genesis output[0]
     outputs: blockAOutputs,
     declaredWeight: 10,
     refs: [],
@@ -543,7 +544,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
     hash: Hash.digestParts(...blockBHashParts),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [2], // claim extended index 2 = genesis output[1]
+    claimIndices: [2], // claim extended index 2 = genesis output[1]
     outputs: blockBOutputs,
     declaredWeight: 10,
     refs: [blockA.hash],

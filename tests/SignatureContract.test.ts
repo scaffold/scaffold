@@ -1,4 +1,5 @@
 import { assert, assertEquals, assertFalse } from '@std/assert';
+
 import { Hash } from '../src/util/Hash.ts';
 import { secp } from '../src/util/secp.ts';
 import {
@@ -29,14 +30,14 @@ function makeSignedBlock(
   anchor: Block,
   outputs: { verifier: { contract: Hash; params: Uint8Array }; value: number; data: Uint8Array }[],
   declaredWeight: number,
-  claims: number[],
+  claimIndices: number[],
   privateKey: Uint8Array,
 ): Block {
   const block = composeBlockPacket(
     {
       anchor: anchor.hash,
       aggregates: [],
-      claims,
+      claimIndices,
       outputs,
       declaredWeight,
       refs: [],
@@ -94,7 +95,7 @@ Deno.test('SignatureContract: unsigned block is rejected', async () => {
     hash: Hash.digest('unsigned-block'),
     anchor: genesis.hash,
     aggregates: [],
-    claims: [0],
+    claimIndices: [0],
     outputs: [],
     declaredWeight: 10,
     refs: [],
@@ -119,7 +120,7 @@ Deno.test('SignatureContract: block signer is populated by composeBlockPacket', 
     {
       anchor: Hash.digest('test-anchor'),
       aggregates: [],
-      claims: [],
+      claimIndices: [],
       outputs: [],
       declaredWeight: 1,
       refs: [],
@@ -157,7 +158,7 @@ Deno.test('SignatureContract: ingest path recovers signer from wire packet', asy
     {
       anchor: genesis.hash,
       aggregates: [],
-      claims: [0],
+      claimIndices: [0],
       outputs: [],
       declaredWeight: 10,
       refs: [],
@@ -187,7 +188,7 @@ Deno.test('SignatureContract: ingest path rejects wrong-key signature contract',
     {
       anchor: genesis.hash,
       aggregates: [],
-      claims: [0],
+      claimIndices: [0],
       outputs: [],
       declaredWeight: 10,
       refs: [],
@@ -219,7 +220,7 @@ Deno.test('SignatureContract: Scaffold auto-registers signatureContract for veri
     {
       anchor: genesis.hash,
       aggregates: [],
-      claims: [0],
+      claimIndices: [0],
       outputs: [],
       declaredWeight: 1,
       refs: [],

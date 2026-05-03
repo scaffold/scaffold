@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assert, assertEquals, assertFalse } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import {
@@ -26,7 +27,7 @@ function makeBlock(outputs: Output[], refs: Hash[] = []): Block {
     hash: Hash.digestParts(...hashParts),
     anchor: ZERO_HASH,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs,
     declaredWeight: 1,
     refs,

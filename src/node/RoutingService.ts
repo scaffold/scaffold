@@ -19,7 +19,7 @@ class RoutingProviderAdapter implements RoutingProvider {
     if (!block) return 0;
     let size = 32 + 32; // hash + anchor
     size += block.aggregates.length * 32;
-    size += block.claims.length * 4;
+    size += block.claimIndices.length * 4;
     for (const out of block.outputs) {
       size += 32 + out.verifier.params.length + 8 + (out.data?.length ?? 0);
     }

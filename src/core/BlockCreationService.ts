@@ -16,13 +16,13 @@ function makeOutputSpaceProvider(store: BlockStore): OutputSpaceProvider {
       const block = store.get(hash);
       if (!block) return undefined;
       const aggData = getAggregationData(block);
-      const sc = block.claims.filter((c) => c < block.outputs.length).length;
+      const sc = block.claimIndices.filter((c) => c < block.outputs.length).length;
       return {
         hash: block.hash,
         anchor: block.anchor,
         aggregates: block.aggregates,
         outputs: block.outputs.map((o) => ({ value: o.value })),
-        claims: block.claims,
+        claimIndices: block.claimIndices,
         aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
         newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
       };
@@ -62,9 +62,9 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
     const anchorBlock = this.store.get(block.anchor);
     if (!anchorBlock) return block.outputs.length; // genesis
     const anchorOutputCount = this.getOutputCount(anchorBlock);
-    const ownAnchorClaims = block.claims.filter((c) => c >= block.outputs.length).length;
+    const ownAnchorClaims = block.claimIndices.filter((c) => c >= block.outputs.length).length;
     return anchorOutputCount - ownAnchorClaims + block.outputs.length -
-      block.claims.filter((c) => c < block.outputs.length).length;
+      block.claimIndices.filter((c) => c < block.outputs.length).length;
   }
 
   private getAnchorOutputCount(block: Block): number {

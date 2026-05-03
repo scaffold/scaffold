@@ -7,11 +7,12 @@ import { BlockRecordSet } from '../src/reactive/BlockRecordSet.ts';
 // -- Helpers -------------------------------------------------------
 
 function makeBlock(name: string): Block {
+  const hash = Hash.digest(name);
   return {
-    hash: Hash.digest(name),
+    hash,
     anchor: ZERO_HASH,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [],
     declaredWeight: 1,
     refs: [],
@@ -22,8 +23,7 @@ function makeBlock(name: string): Block {
     raw: new Uint8Array(0),
     fromConnections: [],
     toConnections: new Set(),
-    source: AtomSource.Local,
-  };
+    source: AtomSource.Local,  };
 }
 
 // -- Tests ---------------------------------------------------------

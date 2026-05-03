@@ -37,9 +37,9 @@ class OutputClaimProviderAdapter implements OutputClaimProvider<Block> {
   }
 
   getOwnClaimMask(block: Block): readonly number[] {
-    // block.claims is already sorted at construction time
+    // block.claimIndices is already sorted at construction time
     // (BlockCreationModule sorts before serialization).
-    return block.claims;
+    return block.claimIndices;
   }
 }
 

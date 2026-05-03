@@ -4,6 +4,7 @@
  */
 
 import { Hash } from '../../src/util/Hash.ts';
+
 import {
   AGGREGATION_CONTRACT,
   AtomSource,
@@ -57,7 +58,7 @@ export function makeLeafBlock(
   anchor: Block,
   outputs: Output[],
   declaredWeight: number,
-  claims: number[] = [],
+  claimIndices: number[] = [],
 ): Block {
   const hashParts: Uint8Array[] = [
     anchor.hash.toBytes(),
@@ -74,7 +75,7 @@ export function makeLeafBlock(
     hash: Hash.digestParts(...hashParts),
     anchor: anchor.hash,
     aggregates: [],
-    claims,
+    claimIndices,
     outputs,
     declaredWeight,
     refs: [],
@@ -90,7 +91,7 @@ export function makeBlock(
   anchor: Block,
   outputs: Output[],
   declaredWeight: number,
-  claims: number[] = [],
+  claimIndices: number[] = [],
   refs: Hash[] = [],
 ): Block {
   return {
@@ -99,7 +100,7 @@ export function makeBlock(
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: [],
-    claims,
+    claimIndices,
     outputs,
     declaredWeight,
     refs,
@@ -151,7 +152,7 @@ export function makeAggregationBlock(
     hash: Hash.digest(name),
     anchor: anchor.hash,
     aggregates: subtrees.map((s) => s.hash),
-    claims: [],
+    claimIndices: [],
     outputs: [{
       verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       value: 0,

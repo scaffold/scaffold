@@ -131,7 +131,7 @@ export class DraftStrategy implements Strategy {
       for (const change of newlyCanonical) {
         const block = event.store.get(change.hash);
         if (!block) continue;
-        const selfClaimed = new Set(block.claims.filter((c) => c < block.outputs.length));
+        const selfClaimed = new Set(block.claimIndices.filter((c) => c < block.outputs.length));
 
         for (let i = 0; i < block.outputs.length; i++) {
           if (selfClaimed.has(i)) continue;
@@ -159,7 +159,7 @@ export class DraftStrategy implements Strategy {
 
       const block = event.store.get(change.hash);
       if (!block) continue;
-      const selfClaimed = new Set(block.claims.filter((c) => c < block.outputs.length));
+      const selfClaimed = new Set(block.claimIndices.filter((c) => c < block.outputs.length));
 
       for (let i = 0; i < block.outputs.length; i++) {
         if (this.inFlight.size >= this.config.maxConcurrent) break;

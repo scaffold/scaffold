@@ -1,4 +1,5 @@
 import { PacketType } from '../src/core/Packet.ts';
+
 import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { AtomSource, AtomType, Block } from '../src/core/Block.ts';
@@ -23,7 +24,7 @@ function makeBlock(overrides?: Partial<Block>): Block {
     hash: Hash.random(),
     anchor: ZERO_HASH,
     aggregates: [],
-    claims: [],
+    claimIndices: [],
     outputs: [],
     declaredWeight: 1,
     refs: [],

@@ -41,7 +41,7 @@ function makeSignedPacket(
     {
       anchor: anchor.hash,
       aggregates: [],
-      claims: [],
+      claimIndices: [],
       outputs: [{
         verifier: { contract: Hash.digest(label), params: new Uint8Array(0) },
         value: 1,

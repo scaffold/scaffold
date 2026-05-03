@@ -38,7 +38,7 @@ Deno.test('ContractValidator: genesis is always valid', () => {
     {
       anchor: genesis.anchor,
       aggregates: genesis.aggregates,
-      claims: genesis.claims,
+      claimIndices: genesis.claimIndices,
       outputs: genesis.outputs,
       declaredWeight: genesis.declaredWeight,
       refs: genesis.refs,

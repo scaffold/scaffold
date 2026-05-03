@@ -28,16 +28,19 @@ function makeBlock(opts: {
   name: string;
   anchor?: Hash;
   outputs?: Output[];
-  claims?: number[];
+  claimIndices?: number[];
 }): Block {
+  const hash = h(opts.name);
+  const claimIndices = opts.claimIndices ?? [];
+  const declaredWeight = 1;
   return {
-    hash: h(opts.name),
+    hash,
     anchor: opts.anchor ?? ZERO_HASH,
     outputs: opts.outputs ?? [],
-    claims: opts.claims ?? [],
+    claimIndices,
     refs: [],
     aggregates: [],
-    declaredWeight: 1,
+    declaredWeight,
     timestamp: Date.now(),
     receivedAt: Date.now(),
     type: AtomType.Block,
@@ -45,8 +48,7 @@ function makeBlock(opts: {
     raw: new Uint8Array(0),
     fromConnections: [],
     toConnections: new Set(),
-    source: AtomSource.Local,
-  };
+    source: AtomSource.Local,  };
 }
 
 class TestOutputClaimProvider implements OutputClaimProvider<Block> {
@@ -73,7 +75,7 @@ class TestOutputClaimProvider implements OutputClaimProvider<Block> {
     return [];
   }
   getOwnClaimMask(block: Block): readonly number[] {
-    return block.claims;
+    return block.claimIndices;
   }
 }
 

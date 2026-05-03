@@ -97,7 +97,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
       canonical: isCanonical,
       depth,
       outputCount: block.outputs.length,
-      claimCount: block.claims.length,
+      claimCount: block.claimIndices.length,
       aggregateCount: block.aggregates.length,
       totalValue: block.outputs.reduce((sum, o) => sum + o.value, 0),
       effectiveWeight: consensus.getEffectiveWeight(hash),
@@ -130,7 +130,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
           value: o.value,
           dataLength: o.data?.length ?? 0,
         })),
-        claims: [...block.claims],
+        claimIndices: [...block.claimIndices],
         aggregates: block.aggregates.map((a) => a.toHex()),
         refs: block.refs.map((r) => r.toHex()),
         effectiveWeight: consensus.getEffectiveWeight(hash),
@@ -271,7 +271,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
       // Walk anchor chain to show inherited outputs
       if (!Hash.equals(block.anchor, ZERO_HASH)) {
         const claimSet = new Set(
-          block.claims.filter((c) => c >= block.outputs.length).map((c) =>
+          block.claimIndices.filter((c) => c >= block.outputs.length).map((c) =>
             c - block.outputs.length
           ),
         );

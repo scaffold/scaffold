@@ -260,7 +260,7 @@ export class BlockCreationModule<BlockType> {
     return {
       anchor: spec.anchor,
       aggregates: spec.aggregates,
-      claims: spec.claims.map((c) => c.index).sort((a, b) => a - b),
+      claimIndices: spec.claims.map((c) => c.index).sort((a, b) => a - b),
       outputs: spec.outputs,
       declaredWeight: spec.declaredWeight,
       refs: spec.refs,
