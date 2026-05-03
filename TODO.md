@@ -36,7 +36,11 @@ The `queueMicrotask(() => this.reactiveLayer.processBlock(block, null))` fix is 
 - **TransportManager fires two `peerConnected` events** for the same logical pubkey (one anonymous, one authenticated). Filter dupes inside the manager rather than asking every consumer to dedup.
 - **`BalanceIndex` walks `store.values()` on every read.** Make it incremental like `UtxoIndex`.
 - **`BlockReceivedResult.canonicalityChanges` mixes real block hashes and phantom draft hashes.** Consumers like `DraftStrategy.evaluate` keep tripping on "is this hash a block or a draft?" Tag entries with a discriminant.
-- **Two pre-existing test failures** (`tests/network/routing.test.ts` 4-node, `tests/network/e2e_request_reply.test.ts`) — worth at least understanding whether they're red flags or stale tests. They were failing before the demo bringup; never touched.
+
+### 8. Step 8 follow-ups (post draft canonicality competition)
+- **Wall-clock `effectiveWeight` ticker.** Step 8 introduced `effectiveWeight` on `Draft` and wired `ConsensusService.getWeightVector(draft) = max(declaredWeight, effectiveWeight)`. The 1Hz timer that bumps `draft.effectiveWeight` for non-terminal drafts (and pokes consensus to re-evaluate) is not yet implemented -- today `effectiveWeight` stays at 0 and `declaredWeight` is the static contribution. Lives naturally in `NodeContext` alongside the canonicality wiring; bump should call `consensus.setVerifiedWeight(draft.draftId, [...])` to propagate.
+- **Audit draft canonicality competition / generator pause-resume.** Drafts already participate in `ConsensusModule` via `setVerifiedWeight(draftId, ...)` and `OutputClaimService` already detects two drafts claiming the same output as a conflict. The "pause losing draft's generator on canonicality flip" wiring partially exists in `GenerationModule.onCanonicalityChange` but hasn't been re-verified end-to-end since the pickAnchor refactor. Worth a focused integration test: two drafts on the same seed, confirm only the heavier one's generator pumps, the loser's generator is suspended, and roles flip when weights cross.
+- **Drop `Draft.draftId`** (and use object equality for consensus identity). Currently `draftId: Hash` is the consensus-side key (`ConsensusModule.addBlock(draft.draftId)`). Dropping requires teaching `ConsensusModule` to operate on Node references rather than `Hash`. Touches ~130 sites; the scope is the `ConsensusModule` rewrite plus call-site migration. Defer until ConsensusModule is generalised.
 
 ## Chess Demo Follow-ups
 
