@@ -14,7 +14,6 @@ import { Hash } from '../../util/Hash.ts';
 import { bin2hex } from '../../util/hex.ts';
 import { decodeGameState } from './GameStateCodec.ts';
 import { isTerminalStatus } from './ChessRules.ts';
-import { isUnspentByCanonicalBlock } from './ChessGame.ts';
 
 function pubkeyHex(pk: Uint8Array): string {
   return bin2hex(pk);
@@ -80,11 +79,10 @@ export class BalanceIndex {
       for (let i = 0; i < block.outputs.length; i++) {
         const o = block.outputs[i];
         if (!Hash.equals(o.verifier.contract, GAME_STATE_CONTRACT)) continue;
-        // See note on `isUnspentByCanonicalBlock` -- we ignore phantom
-        // draft claims here so the locked balance keeps reflecting the
-        // active game even while the mover's next-turn draft parks on
-        // getOutput awaiting user input.
-        if (!isUnspentByCanonicalBlock(ctx, block.hash, i)) continue;
+        // Atomic claim invariant: an output is unspent iff no canonical
+        // Node has a claim pointing here. Drafts holding reservations
+        // count as spends just like blocks do.
+        if (!ctx.utxoIndex.isUnspent(block.hash, i)) continue;
         if (!o.data) continue;
         try {
           const env = decodeGameState(o.data);
