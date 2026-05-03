@@ -14,7 +14,7 @@ import {
   resolveClaimToOutput,
 } from '../../src/core/Block.ts';
 import type { OutputSpaceModule } from '../../src/core/OutputSpace.ts';
-import { Draft, ClaimIntent, DraftStore } from '../../src/core/Draft.ts';
+import { Draft, DraftStore } from '../../src/core/Draft.ts';
 import type { ClaimRef } from '../../src/core/Node.ts';
 import { OutputClaimModule } from '../../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../../src/node/UtxoIndex.ts';
@@ -259,17 +259,16 @@ export class ContractGeneratorShim {
 
   private _applyResults(env: GeneratingEnv<Block>, draft: Draft): void {
     const newOutputs = env.getAllOutputs();
-    const newClaims = env.getResolvedClaims();
+    const newClaims = env.getClaims();
     const newRefs = env.getGeneratedRefs();
-    for (const claim of newClaims) {
-      this._outputClaims.addClaim(draft.draftId, claim.block, claim.outputIndex);
+    for (const c of newClaims) {
+      this._outputClaims.addClaim(draft.draftId, c.producer, c.outputIndex);
     }
     const existingClaimKeys = new Set(
       draft.claims.map((c) => `${c.producer.toPrimitive()}:${c.outputIndex}`),
     );
     const dedupedClaimRefs: ClaimRef[] = newClaims
-      .filter((rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`))
-      .map((rc) => ({ producer: rc.block, outputIndex: rc.outputIndex }));
+      .filter((c) => !existingClaimKeys.has(`${c.producer.toPrimitive()}:${c.outputIndex}`));
     this._draftStore.update(draft.draftId, {
       outputs: [...draft.outputs, ...newOutputs],
       claims: [...draft.claims, ...dedupedClaimRefs],

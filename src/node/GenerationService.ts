@@ -475,7 +475,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const finish = (result: {
       outputs: Output[];
       outputSlots: OutputSlot[];
-      resolvedClaims: { block: Hash; outputIndex: number; value: number }[];
+      claims: ClaimRef[];
       refs: Hash[];
       includeConstraints: Hash[];
     }) => {
@@ -501,7 +501,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     result: {
       outputs: Output[];
       outputSlots: OutputSlot[];
-      resolvedClaims: { block: Hash; outputIndex: number; value: number }[];
+      claims: ClaimRef[];
       refs: Hash[];
       includeConstraints: Hash[];
     },
@@ -509,16 +509,15 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const draftId = draft.draftId;
 
     // Register claims in OutputClaimService for conflict detection + UTXO pre-claim.
-    for (const rc of result.resolvedClaims) {
-      this._outputClaims.addClaim(draftId, rc.block, rc.outputIndex);
+    for (const c of result.claims) {
+      this._outputClaims.addClaim(draftId, c.producer, c.outputIndex);
     }
 
     const existing = new Set(
       draft.claims.map((c) => `${c.producer.toPrimitive()}:${c.outputIndex}`),
     );
-    const newClaims: ClaimRef[] = result.resolvedClaims
-      .filter((rc) => !existing.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`))
-      .map((rc) => ({ producer: rc.block, outputIndex: rc.outputIndex }));
+    const newClaims: ClaimRef[] = result.claims
+      .filter((c) => !existing.has(`${c.producer.toPrimitive()}:${c.outputIndex}`));
 
     const stored = this._draftStore.get(draftId);
     if (!stored) return; // explicitly cancelled during run

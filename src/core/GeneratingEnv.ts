@@ -12,7 +12,7 @@ import {
   type GeneratingEnvProvider,
   type Input,
 } from './ContractEnv.ts';
-import { ClaimIntent } from './Draft.ts';
+import type { ClaimRef } from './Node.ts';
 
 // -- Types --------------------------------------------------------
 
@@ -82,7 +82,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
    */
   private readonly _slots: OutputSlot[] = [];
   /** Resolved claims from consumed inputs (with provenance). */
-  private readonly _resolvedClaims: ClaimIntent[] = [];
+  private readonly _claims: ClaimRef[] = [];
   /** Input data returned to the contract (without provenance). */
   private readonly _inputs: Input[] = [];
   /** Block hashes added to refs. */
@@ -129,10 +129,9 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       // `findInputs` is expected to already drop null-data outputs (pure
       // incentive, invisible to contracts). AvailableInput.data is non-null.
       for (const ai of available) {
-        this._resolvedClaims.push({
-          block: ai.block,
+        this._claims.push({
+          producer: ai.block,
           outputIndex: ai.outputIndex,
-          value: ai.value,
         });
         this._inputs.push({
           verifier: ai.verifier,
@@ -163,8 +162,8 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     // `findInputs` is expected to drop null-data outputs already.
     // Filter out inputs already consumed in this generation run.
     const unconsumed = available.filter((ai) =>
-      !this._resolvedClaims.some((rc) =>
-        Hash.equals(rc.block, ai.block) && rc.outputIndex === ai.outputIndex
+      !this._claims.some((c) =>
+        Hash.equals(c.producer, ai.block) && c.outputIndex === ai.outputIndex
       )
     );
     if (unconsumed.length > 0) {
@@ -270,10 +269,9 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   // -- Internal helpers --------------------------------------------
 
   private _consumeInput(ai: AvailableInput): Input {
-    this._resolvedClaims.push({
-      block: ai.block,
+    this._claims.push({
+      producer: ai.block,
       outputIndex: ai.outputIndex,
-      value: ai.value,
     });
     const input: Input = {
       verifier: ai.verifier,
@@ -313,9 +311,14 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     return this._inputs;
   }
 
-  /** Get resolved claims (inputs with provenance) for the draft. */
-  getResolvedClaims(): ClaimIntent[] {
-    return this._resolvedClaims;
+  /**
+   * Direct (producer, outputIndex) refs for every input the contract
+   * consumed during this run. Used by the generation harness to
+   * populate / merge into the draft's `claims`. Value is not carried
+   * here -- consumers look it up from the producer in the store.
+   */
+  getClaims(): ClaimRef[] {
+    return this._claims;
   }
 
   /** Get the block hashes added to refs. */

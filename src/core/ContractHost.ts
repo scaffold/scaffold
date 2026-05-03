@@ -3,6 +3,7 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { type MaybePromise, maybeThen } from '../util/MaybePromise.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
+import type { ClaimRef } from './Node.ts';
 import type { Contract } from '../contracts/Contract.ts';
 import {
   ContractRejection,
@@ -64,7 +65,13 @@ export interface GeneratingRunResult<BlockType> {
    * keep using the simpler field.
    */
   readonly outputSlots: OutputSlot[];
-  readonly resolvedClaims: { block: Hash; outputIndex: number; value: number }[];
+  /**
+   * Direct (producer, outputIndex) refs for every input the contract
+   * consumed. Caller merges these into the draft's `claims`. Value is
+   * not carried -- consumers look it up from the producer in the store
+   * when needed.
+   */
+  readonly claims: ClaimRef[];
   readonly refs: Hash[];
   readonly includeConstraints: Hash[];
   /** Exposed so callers can apply the default `collectInputs()` if the contract never called inputs-consuming methods. */
@@ -183,7 +190,7 @@ export class ContractHost<BlockType> {
     return maybeThen(result, () => ({
       outputs: env.getAllOutputs(),
       outputSlots: env.getGeneratedOutputSlots(),
-      resolvedClaims: env.getResolvedClaims(),
+      claims: env.getClaims(),
       refs: env.getGeneratedRefs(),
       includeConstraints: env.getIncludeConstraints(),
       env,

@@ -217,15 +217,13 @@ Deno.test('GeneratingEnv: collectInputs queries provider', () => {
   assertEquals(result[0].value, 10);
   assertEquals(result[1].value, 20);
 
-  // Resolved claims track provenance
-  const claims = env.getResolvedClaims();
+  // Resolved claims track provenance (value derived from store on demand)
+  const claims = env.getClaims();
   assertEquals(claims.length, 2);
-  assert(Hash.equals(claims[0].block, h('b1')));
+  assert(Hash.equals(claims[0].producer, h('b1')));
   assertEquals(claims[0].outputIndex, 0);
-  assertEquals(claims[0].value, 10);
-  assert(Hash.equals(claims[1].block, h('b2')));
+  assert(Hash.equals(claims[1].producer, h('b2')));
   assertEquals(claims[1].outputIndex, 1);
-  assertEquals(claims[1].value, 20);
 });
 
 Deno.test('GeneratingEnv: collectInputs returns empty when no inputs', () => {
@@ -275,10 +273,10 @@ Deno.test('GeneratingEnv: requireInput returns first available input', () => {
   assertEquals(input.value, 5);
   assertEquals(input.data, enc('data'));
 
-  // Resolved claim tracks provenance
-  const claims = env.getResolvedClaims();
+  // Resolved claim tracks provenance (value derived from store on demand)
+  const claims = env.getClaims();
   assertEquals(claims.length, 1);
-  assert(Hash.equals(claims[0].block, h('b1')));
+  assert(Hash.equals(claims[0].producer, h('b1')));
   assertEquals(claims[0].outputIndex, 2);
 });
 
