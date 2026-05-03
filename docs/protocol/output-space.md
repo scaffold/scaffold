@@ -41,7 +41,7 @@ Block B's extended vector:
 
 The "anchor's surviving outputs" are the anchor's output space with aggregate subtree claims removed. This is the state after all aggregate subtrees have applied their transformations to the anchor's output space, but before B's own outputs and claims.
 
-Claim indices in `block.claims` refer to positions in this extended vector:
+Claim indices in `block.claimIndices` refer to positions in this extended vector:
 - Index < `B.outputs.length`: **self-claim** (targets B's own output)
 - Index >= `B.outputs.length`: **shared-resource claim** (targets an inherited output)
 

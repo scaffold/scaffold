@@ -4,7 +4,7 @@
 Replace StubGenerator with a real generator that runs contracts in generation mode to produce blocks.
 
 ## What Exists
-- `GeneratorProvider` interface: `generate(draft: BlockDraft) → GeneratorHandle`
+- `GeneratorProvider` interface: `generate(draft: Draft) → GeneratorHandle`
 - `StubGenerator`: records signals, no computation
 - `GeneratingEnv`: full generation-mode ContractEnv implementation (collectInputs, requireInput, requireOutput, requireResult, fetch — all build up the draft)
 - `ContractGenerator`: wires GeneratingEnv into the draft pipeline, produces BlockSpec from draft + contract execution

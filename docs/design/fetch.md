@@ -130,7 +130,7 @@ interface FetchResult<T = unknown> {
 /** A claim surfaces the block that currently produces a result. */
 interface FetchClaim<T = unknown> extends FetchResult<T> {
   block: Block;
-  claimIdx: number;   // index into block.claims[] corresponding to our incentive
+  claimIdx: number;   // index into block.claimIndices[] corresponding to our incentive
 }
 
 interface FetchHandle {

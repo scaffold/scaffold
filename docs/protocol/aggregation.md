@@ -95,7 +95,7 @@ AggregationCache {
 Leaf blocks (no aggregates) have a trivial cache. Their marker output has empty data. The cache is implicitly:
 
 ```
-claimMask:             computed from block.claims (non-self-claims only)
+claimMask:             computed from block.claimIndices (non-self-claims only)
 newOutputCount:        block.outputs.length - selfClaimCount
 aggregateOutputCounts: []
 chainWeights:          []

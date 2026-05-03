@@ -74,7 +74,7 @@ Write a failing `Deno.test` in `tests/ChessGame.test.ts` that drives a turn=1 mo
 - src/node/strategies/DraftStrategy.ts
 - src/node/GenerationService.ts
 - src/core/DraftManager.ts
-- src/core/BlockDraft.ts
+- src/core/Draft.ts
 - src/core/GeneratingEnv.ts
 - src/demo/chess/ChessGame.ts
 - tests/ChessGame.test.ts

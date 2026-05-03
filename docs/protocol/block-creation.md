@@ -233,8 +233,8 @@ Drafts are not static specifications. They are better understood as **generator 
 
 ```
 DraftState {
-    drafts:       Map<DraftID, DraftGenerator>
-    published:    Map<DraftID, Set<BlockHash>>    // blocks created from each draft
+    drafts:       Map<DraftId, DraftGenerator>
+    published:    Map<DraftId, Set<BlockHash>>    // blocks created from each draft
     canonicalView: CanonicalView                  // from consensus module
 }
 ```
@@ -322,7 +322,7 @@ The separation rule is a property of the [collateral contract's](contracts.md) s
 
 ### Invariants
 
-1. **Outputs before claims**: A block's output space is its final, post-claim set of surviving outputs. During construction, the block's own outputs are prepended to the inherited space, forming the extended vector. Claims are applied as removals from this extended vector. Claim indices in `block.claims` refer to positions in the extended vector, not in the final output space. This ordering enables self-claiming.
+1. **Outputs before claims**: A block's output space is its final, post-claim set of surviving outputs. During construction, the block's own outputs are prepended to the inherited space, forming the extended vector. Claims are applied as removals from this extended vector. Claim indices in `block.claimIndices` refer to positions in the extended vector, not in the final output space. This ordering enables self-claiming.
 2. **Value conservation**: Every block balances input and output throughput exactly.
 3. **Anchor validity**: All claimed outputs exist in the UTXO set at the anchor point.
 4. **Weight derivation**: The weight vector is deterministically derived from `declaredWeight` and subtrees (verified via the [aggregation contract](contracts.md)).

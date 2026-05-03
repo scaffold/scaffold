@@ -333,7 +333,7 @@ For the first hop of a forward path (from `block` to its anchor-child), the inde
 // Initial setup: convert outputIndex from own-outputs position
 // to post-claim-output-space position
 postClaimIndex = outputIndex
-for each claim in block.claims:
+for each claim in block.claimIndices:
     if claim < outputIndex:
         postClaimIndex--   // a claim before us was removed, our position shifts
     if claim == outputIndex:
@@ -349,10 +349,10 @@ Alternatively, if we define `rebaseOutputIndex` as always starting from the pre-
 The two algorithms compose to form the block construction pipeline:
 
 1. **`resolveAnchor`** determines where the block attaches and what it aggregates.
-2. **`rebaseOutputIndex`** maps each `ResolvedClaim { block, outputIndex }` to an integer index in the constructed block's output space.
+2. **`rebaseOutputIndex`** maps each `ClaimRef { block, outputIndex }` to an integer index in the constructed block's output space.
 
 ```
-For each ResolvedClaim { block: X, outputIndex: i }:
+For each ClaimRef { block: X, outputIndex: i }:
     claimIndex = rebaseOutputIndex(X, i, constructedBlock)
     if claimIndex == null:
         error: output not available
@@ -642,12 +642,12 @@ rebaseOutputIndex(Genesis, 0, B):
 Currently takes a `BlockSpec` with pre-computed anchor and index-based claims. With the anchoring module:
 
 1. `resolveAnchor` computes the anchor and aggregates from the include/exclude sets.
-2. `rebaseOutputIndex` maps each `ResolvedClaim` to an integer index.
+2. `rebaseOutputIndex` maps each `ClaimRef` to an integer index.
 3. The result is fed to `buildBlock` for validation (throughput, weight vector, etc.).
 
 ### Draft Blocks
 
-Draft blocks use `resolveAnchor` with stability-preferred options to compute phantom anchors. The `includeBlocks` are the blocks referenced by the draft's `resolvedClaims`. See [Draft Blocks](draft-blocks.md).
+Draft blocks use `resolveAnchor` with stability-preferred options to compute phantom anchors. The `includeBlocks` are the blocks referenced by the draft's `claims`. See [Draft Blocks](draft-blocks.md).
 
 ---
 
@@ -672,8 +672,8 @@ If draft D1's phantom anchor creates an output space, and draft D2 wants to refe
 | File | Description |
 |------|-------------|
 | [`src/core/AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | `rebaseOutputIndex`, `resolveAnchor`, path finding |
-| [`src/core/OutputMapping.ts`](../../src/core/OutputMapping.ts) | Shared utilities: `mapSurvivingToOriginal`, `mapOriginalToSurviving`, `ResolvedClaim` |
-| [`src/core/Block.ts`](../../src/core/Block.ts) | `resolvedClaims` field on `Block` interface |
+| [`src/core/OutputMapping.ts`](../../src/core/OutputMapping.ts) | Shared utilities: `mapSurvivingToOriginal`, `mapOriginalToSurviving`, `ClaimRef` |
+| [`src/core/Block.ts`](../../src/core/Block.ts) | `claims` field on `Block` interface |
 | [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Downstream consumer (imports `mapSurvivingToOriginal`) |
 | [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Shares rebase machinery (imports `mapSurvivingToOriginal`) |
 | [`tests/AnchoringModule.test.ts`](../../tests/AnchoringModule.test.ts) | Tests for output mapping, rebase (T1-T5, T10, T11), and resolveAnchor (T7-T9) |

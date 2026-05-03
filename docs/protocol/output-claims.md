@@ -5,7 +5,7 @@ The output claims module tracks which blocks claim each output in the block grap
 This module is responsible for:
 - Tracking per-output claimant lists on every block
 - Migrating claim entries toward the actual producing block as the DAG loads
-- Populating `resolvedClaims` when a claim reaches its producing block
+- Populating `claims` when a claim reaches its producing block
 - Detecting double-spend conflicts: when migration places a second claimant on the same output, the module detects a double-spend conflict and reports it to the consensus module
 
 This module is **not** responsible for:
@@ -18,7 +18,7 @@ This module is **not** responsible for:
 
 A block's **output space** is its final, post-claim set of surviving outputs -- the clean set that descendants inherit. During construction, claim indices are resolved against the **extended vector**: the block's own outputs prepended to the inherited outputs, before claims are applied. **Outputs are added before claims are applied.** This ordering is what enables self-claiming: a block can produce an output at index 0 and claim index 0 in the same block.
 
-A claim at index I in `block.claims` refers to index I in the block's extended vector, not in its final output space or the anchor's output space.
+A claim at index I in `block.claimIndices` refers to index I in the block's extended vector, not in its final output space or the anchor's output space.
 
 A block C's extended vector (used for claim resolution):
 
@@ -43,7 +43,7 @@ OutputClaimEntry {
 }
 ```
 
-The `claimIndex` is needed so that when migration completes, we can populate the correct slot in the claimant's `resolvedClaims`.
+The `claimIndex` is needed so that when migration completes, we can populate the correct slot in the claimant's `claims`.
 
 ---
 
@@ -65,7 +65,7 @@ Migration moves claim entries from their starting block toward the block that ac
 
 Given an entry at index I on block B:
 
-1. **Resolved**: If I < B.outputs.length, the claim targets B's own output at index I. The entry is resolved -- populate the claimant's `resolvedClaims` with `{block: B.hash, outputIndex: I}`.
+1. **Resolved**: If I < B.outputs.length, the claim targets B's own output at index I. The entry is resolved -- populate the claimant's `claims` with `{block: B.hash, outputIndex: I}`.
 
 2. **Descend through aggregates**: If I >= B.outputs.length:
    - Compute R = I - B.outputs.length
