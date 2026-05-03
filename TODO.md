@@ -2,12 +2,51 @@
 
 Queued protocol work, roughly in priority order. Each item follows the 4-step development sequence in AGENTS.md: document → skeleton → test → implement.
 
+## Cohesion / Refactor (do these first)
+
+These are the items that cause the most hidden bugs today. Most of the bugs we hit during the chess demo bringup were the same shape: state that should have transitioned didn't, because no single component owned the transition. Doing these in priority order pays down the structural debt that future features will otherwise step on.
+
+### 1. Generation lifecycle as a state machine
+The biggest hidden-bug source. "What is a draft doing" is currently reconstructed by reading across **eight** independent stores: `DraftStrategy.inFlight` + `DraftStrategy.resumed` + `GenerationModule._drafts` + `GenerationService._blocked` + `GenerationService._parkedGetOutput` + `GenerationService._preQueue` + `DraftStore` + `OutputClaimService` (phantom claim entries) + `UtxoIndex` (phantom reservation) + `ConsensusService` (canonical-phantom flag). No single source of truth. The chess turn-1 bug, the inFlight-starvation bug, the "parked draft hides UTXO" bug, and the leaked `OutputHandler` Promises (per [`docs/design/chess-turn-one-bug.md`](docs/design/chess-turn-one-bug.md)) are all the same shape.
+
+Define five states (`Created → BlockedOnInput → ParkedOnGetOutput → Producing → Published | Cancelled`), make `GenerationModule` own them, and have everything else (`DraftStrategy.inFlight`, `OutputClaimService` phantom claims, `UtxoIndex` reservations) be derived from that state. The `setOutputReleasedHook` / `setCancelHook` callback web becomes a single state-transition listener. Collapses three pre-existing items below ("stale `inFlight` entries," "leaked chess handler Promises," "`_onRestart` is a no-op") into one design.
+
+### 2. Output_space / extended_vector terminology audit
+Cheapest item in this section, biggest cost-saving for future-you. The codebase has at least three different things called "extended" and they do not all mean the same thing. AGENTS.md says `extended_vector(X) = X.outputs ++ aggregate.new ++ output_space(anchor)`. Some now-deleted code meant `own ++ surviving-anchor-after-this-block's-claims-into-anchor`. `UtxoEntry.extendedIndex` is yet another thing. Some method names use "claim" / "extended" / "output space" interchangeably.
+
+Write the canonical definition once in [`docs/protocol/output-space.md`](docs/protocol/output-space.md), then audit every comment and identifier that uses "extended" and either align it or rename to "output space" / "post-subtree" / "post-claim survivors" as appropriate. ~30 minutes; saves hours later.
+
+### 3. `OutputClaimModule.tryMigrate` should call `OutputSpaceModule.resolveClaimIndex`
+After today's fixes, `tryMigrate` walks the hierarchy by hand — own → aggregate → anchor with two `mapSurvivingToOriginal` calls inline. The walk is exactly `OutputSpaceModule.resolveClaimIndex` but iterative rather than recursive. Replace with: `target = outputSpace.resolveClaimIndex(claimant, claimIdx); placeEntry(target.block, target.outputIndex, entry)`. Drops `getSubtreeClaimMask` / `getOwnClaimMask` from the provider interface and the rebase logic in OutputSpace.
+
+### 4. Split draft reservations from real-block spends in `UtxoIndex`
+A draft "becoming canonical" and removing its seed from `UtxoIndex` is structurally correct (a draft does intend to claim) but conflating it with "this output has been spent on-chain" forces every consumer to remember the distinction, and most don't. Today's `isUnspentByCanonicalBlock` helper in `ChessGame` is a workaround for this missing split.
+
+Two layers, one read-time merge: `UtxoIndex` (real-block-spent only) and a `DraftReservationIndex` (locally phantom-claimed). Generators picking inputs join both (don't double-claim). Display logic looks at `UtxoIndex` only.
+
+### 5. `OutputSpaceProvider` factory for not-yet-hashed specs
+`NodeContext._solidifyDraft` and `BlockCreationService.solidify` both hand-roll a `virtualProvider` to compute claim indices for an unfinalized block. Pull into a single `makeSpecOutputSpace(spec, store)` factory, mirroring `makeBlockStoreOutputSpace`. Pair with deleting `getBlockClaimMask` from `Block.ts` — used in one place now, leaks the same "extended vs output_space" confusion.
+
+### 6. Drop the microtask defer in `_solidifyDraft` once item #1 lands
+The `queueMicrotask(() => this.reactiveLayer.processBlock(block, null))` fix is a bandaid for "solidify is doing too much in one call" (cancel draft → build block → process block → re-evaluate strategies → potentially recurse). Once the lifecycle state machine in #1 lands and solidify becomes "transition draft to Published, fire one event," the microtask defer goes away and the cycle-protection logic in `ReactiveLayer.processBlockInner` simplifies.
+
+### 7. Smaller items
+- **`useFloodGossip` and `enablePiggyback` are coupled flags** with a runtime check that fails silently if you set one without the other. Bake into the type.
+- **Expose `DraftStrategy` config (`minValue`, `maxConcurrent`, `enableGeneration`) through `ScaffoldConfig`.** The chess demo had to pass `enableGeneration` directly during bringup. Once #1 lands, `maxConcurrent` may stop mattering; until then, expose it.
+- **TransportManager fires two `peerConnected` events** for the same logical pubkey (one anonymous, one authenticated). Filter dupes inside the manager rather than asking every consumer to dedup.
+- **`BalanceIndex` walks `store.values()` on every read.** Make it incremental like `UtxoIndex`.
+- **`BlockReceivedResult.canonicalityChanges` mixes real block hashes and phantom draft hashes.** Consumers like `DraftStrategy.evaluate` keep tripping on "is this hash a block or a draft?" Tag entries with a discriminant.
+- **Two pre-existing test failures** (`tests/network/routing.test.ts` 4-node, `tests/network/e2e_request_reply.test.ts`) — worth at least understanding whether they're red flags or stale tests. They were failing before the demo bringup; never touched.
+
 ## Chess Demo Follow-ups
 
 The chess demo in `src/demo/chess/` exercises many protocol primitives (GAME_STATE UTXO threading, getOutput injection, signature-gated generation, terminal payouts via throughput) but defers several things:
 
-### Post-join move-turn generator not starting on the non-signing node
-In `tests/ChessGame.test.ts`, the join flow works end-to-end but a follow-up turn=1 move on white never publishes. Root-cause analysis and proposed fixes live in [`docs/design/chess-turn-one-bug.md`](docs/design/chess-turn-one-bug.md). Also documents three pre-existing bugs found during the investigation (stale `DraftStrategy.inFlight`, leaked user-handler Promises on draft cancel, `GenerationService._onRestart` no-op). First step before any fix: write a failing reproducer test.
+### Generator lifecycle bugs surfaced during chess bringup
+[`docs/design/chess-turn-one-bug.md`](docs/design/chess-turn-one-bug.md) documents the original turn-1 bug plus three related issues: stale `DraftStrategy.inFlight` entries, leaked `OutputHandler` Promises on draft cancel, and `GenerationService._onRestart` being a no-op. Two were patched during the demo bringup — a sweep in `DraftStrategy.evaluate` clears `inFlight` entries whose seed has been spent, and a microtask defer in `_solidifyDraft` breaks the synchronous re-entrant cascade. Move-side `requireSignature(mover)` was also moved to before `getOutput` so non-mover generators die before parking. The leaked Promises and `_onRestart` remain. The right fix for all of them is the lifecycle state machine in **Cohesion / Refactor #1** above; until that lands, the bandaids hold.
+
+### Restore chess timeout-claim flow
+`GameStateContract` now calls `requireSignature(mover)` before reading the move, which is what kills non-mover generators early (so phantom claims don't reserve the seed UTXO). The previous opponent-signed timeout branch (`isTimeoutMove(move)` after reading the move) is incompatible with that ordering and is currently disabled — the timeout test in `tests/GameStateContract.test.ts` is `ignore: true`. Re-add via a separate verifier-params slot (`RECORD/"timeout"`) or a generator-side signer dispatch (`env.getSigner()` followed by branching). Keep the early-exit property so opponent generators on the normal-move path still die promptly.
 
 ### Validity dispute resolution
 `CollateralContract`'s `'validity'` ChallengeTarget type exists but has no resolution path — only `hash_preimage` disputes are implemented. The chess demo would benefit from end-to-end "cheater publishes invalid move → their FOR collateral is slashed." Need at minimum a degenerate "anyone can re-run the contract and claim the FOR" mode; full bisection protocol is future work.
@@ -55,7 +94,7 @@ The reactive action types (`createBlock` with collateral outputs) exist, but the
 [FetchManager](src/node/FetchManager.ts) currently throws `NotImplementedError` for `publish: false`. Wiring this up requires the pre-publish piggyback mechanism above: build an incentive block locally, skip broadcast, and let the piggyback strategy construct local-only copies from trusted network sources. Design covered in [docs/design/fetch.md](docs/design/fetch.md) and [docs/design/piggyback.md](docs/design/piggyback.md).
 
 ### Trust-gate integration for fetch callbacks
-The [fetch design](docs/design/fetch.md) specifies that `FetchManager` should gate response surfacing on [TrustGate](src/node/TrustGate.ts) — only fire callbacks for blocks that have been locally verified or collateral-backed. [FetchManager.ts](src/node/FetchManager.ts) currently surfaces on canonical resolution alone (trust-gate wiring is in place for `verify: true` but disabled for streaming callbacks). The blocker is that [`collectExtendedOutputs` in Block.ts](src/core/Block.ts:215) does not walk aggregate subtree outputs — it only returns `[own outputs, surviving anchor outputs]`, omitting per-aggregate slots described in [output-claims.md](docs/protocol/output-claims.md). Response contracts that claim through an aggregate chain (common for any generator-produced block with non-trivial anchor/aggregate structure) fail verification with `no more inputs available` because the extended-vector index doesn't resolve to the expected output. Fix: extend `collectExtendedOutputs` to include aggregate outputs in the documented order, then re-enable the trust gate in `FetchManager._reevaluate`.
+The [fetch design](docs/design/fetch.md) specifies that `FetchManager` should gate response surfacing on [TrustGate](src/node/TrustGate.ts) — only fire callbacks for blocks that have been locally verified or collateral-backed. [FetchManager.ts](src/node/FetchManager.ts) currently surfaces on canonical resolution alone (trust-gate wiring is in place for `verify: true` but disabled for streaming callbacks). The previous blocker — `collectExtendedOutputs` not walking aggregate subtrees — is resolved (claim resolution now goes through `OutputSpaceModule` everywhere). Re-enabling the trust gate for streaming callbacks is now a follow-up rather than a deep blocker.
 
 ### WASM Contract Runtime
 `ContractHost` currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The `runVerifying` / `runGenerating` surface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as an in-memory binary store but is not yet consumed for actual WASM execution.
