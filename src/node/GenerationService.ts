@@ -307,18 +307,26 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   generate(draft: Draft): GeneratorHandle {
     const first = draft.claims[0];
     if (!first) {
-      this._draftStore.transition(draft.draftId, 'ready');
+      this._draftStore.transition(draft.draftId, { phase: 'readyToSolidify' });
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
     const triggerBlock = this._store.get(first.producer);
     if (!triggerBlock) {
-      this._draftStore.transition(draft.draftId, 'cancelled');
+      this._draftStore.transition(draft.draftId, {
+        phase: 'failed',
+        reason: 'trigger producer not in store',
+        at: 'requireInput',
+      });
       return { draftId: draft.draftId, cancel: () => {} };
     }
     const output = triggerBlock.outputs[first.outputIndex];
     if (!output) {
-      this._draftStore.transition(draft.draftId, 'cancelled');
+      this._draftStore.transition(draft.draftId, {
+        phase: 'failed',
+        reason: 'trigger output not found',
+        at: 'requireInput',
+      });
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
@@ -545,7 +553,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     // set would (incorrectly) suppress those via `hasActiveTarget`.
     this.forget(draftId);
 
-    this._draftStore.transition(draftId, 'ready');
+    this._draftStore.transition(draftId, { phase: 'readyToSolidify' });
   }
 
   // -- Blocked-generator wakeup --------------------------------------

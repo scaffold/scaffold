@@ -415,7 +415,7 @@ export class NodeContext {
     //    Release inFlight slots BEFORE solidification so that when the new
     //    block is processed, DraftStrategy has room to create follow-on drafts.
     this.draftStore.onTransition((draft) => {
-      if (draft.status !== 'ready') return;
+      if (draft.status.phase !== 'readyToSolidify') return;
       for (const c of draft.claims) {
         draftStrategy.complete(c.producer, c.outputIndex);
       }
@@ -480,20 +480,26 @@ export class NodeContext {
     const result = this._blockBuilder.build(draft);
 
     if (!result.ok) {
-      // For now, both `awaitingAnchor` and other failures cancel the
+      // For now, both `awaitingAnchor` and other failures fail the
       // draft. Park-and-retry on aggregation arrival is a future
       // BlockBuilderService responsibility; until that lands, callers
-      // see the same outcome as before -- silent cancel.
-      this.draftManager.cancelDraft(draft.draftId);
+      // see the same outcome as before, except the draft now persists
+      // in `failed` status with the reason for debugging.
+      const reason = 'awaitingAnchor' in result
+        ? `awaiting anchor (${result.missing.length} producers unbridged)`
+        : result.reason;
+      this.draftManager.cancelDraft(draft.draftId, reason);
       return;
     }
 
     const block = result.block;
-    // Cancel the draft BEFORE processing the published block so the
-    // draft's phantom claims are cleared out of OutputClaimService and
-    // consensus before the real block (which claims the same outputs)
-    // is evaluated.
-    this.draftManager.cancelDraft(draft.draftId);
+    // Remove the draft from consensus + cancel its generator handle
+    // BEFORE processing the published block so the draft's phantom
+    // claims are cleared out before the real block (which claims the
+    // same outputs) is evaluated. The draft itself is then transitioned
+    // to `solidified` so it persists in the store referencing its block.
+    this.draftManager.detachDraft(draft.draftId);
+    this.draftStore.transition(draft.draftId, { phase: 'solidified', block });
     // Defer the re-entrant processBlock to a microtask so the solidify
     // frame unwinds before strategies re-evaluate the new block.
     // Without this, DraftStrategy can spawn a downstream draft (e.g.

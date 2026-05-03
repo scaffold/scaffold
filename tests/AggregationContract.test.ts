@@ -127,7 +127,7 @@ Deno.test('aggregation contract blocks when fewer than 4 inputs available', asyn
     declaredWeight: 1,
   });
   draftStore.add(draft);
-  draftStore.transition(draft.draftId, 'generating');
+  draftStore.transition(draft.draftId, { phase: 'generating' });
 
   generator.generate(draft);
   await flushMicrotasks();
@@ -136,7 +136,7 @@ Deno.test('aggregation contract blocks when fewer than 4 inputs available', asyn
   // waiting for more via waitForInput. Draft stays in 'generating'.
   const updated = draftStore.get(draft.draftId);
   assert(updated, 'draft should still exist (blocked, not cancelled)');
-  assertEquals(updated.status, 'generating');
+  assertEquals(updated.status.phase, 'generating');
   assertEquals(generator.blockedCount, 1);
 });
 
@@ -173,7 +173,7 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
     declaredWeight: 1,
   });
   draftStore.add(draft);
-  draftStore.transition(draft.draftId, 'generating');
+  draftStore.transition(draft.draftId, { phase: 'generating' });
 
   generator.generate(draft);
   await flushMicrotasks();
@@ -181,7 +181,7 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   // Draft should be ready -- aggregation contract succeeded
   const updated = draftStore.get(draft.draftId)!;
   assert(updated, 'draft should exist after successful generation');
-  assertEquals(updated.status, 'ready');
+  assertEquals(updated.status.phase, 'readyToSolidify');
 
   // The contract consumed 4 inputs via requireInput(). The first call
   // re-found the trigger claim (blocks[0]:0) which is deduplicated on merge.
@@ -230,7 +230,7 @@ Deno.test('3 blocks are not enough -- aggregator blocks waiting for 4th input', 
     declaredWeight: 1,
   });
   draftStore.add(draft);
-  draftStore.transition(draft.draftId, 'generating');
+  draftStore.transition(draft.draftId, { phase: 'generating' });
 
   generator.generate(draft);
   await flushMicrotasks();
@@ -239,7 +239,7 @@ Deno.test('3 blocks are not enough -- aggregator blocks waiting for 4th input', 
   // Draft stays in 'generating' status.
   const updated = draftStore.get(draft.draftId);
   assert(updated, 'draft should still exist (blocked, not cancelled)');
-  assertEquals(updated.status, 'generating');
+  assertEquals(updated.status.phase, 'generating');
   assertEquals(generator.blockedCount, 1);
 });
 
@@ -268,7 +268,7 @@ Deno.test('merged resolvedClaims contain no duplicates', async () => {
     declaredWeight: 1,
   });
   draftStore.add(draft);
-  draftStore.transition(draft.draftId, 'generating');
+  draftStore.transition(draft.draftId, { phase: 'generating' });
 
   generator.generate(draft);
   await flushMicrotasks();

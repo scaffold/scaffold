@@ -49,7 +49,7 @@ export class DraftManager {
 
     // Transition to generating before starting the generator,
     // since the generator may synchronously transition to ready/cancelled.
-    this.store.transition(draft.draftId, 'generating');
+    this.store.transition(draft.draftId, { phase: 'generating' });
 
     // Start generation
     const handle = this.generator.generate(draft);
@@ -59,7 +59,24 @@ export class DraftManager {
   }
 
   /** Cancel a draft: stop generator, remove from consensus, remove from store. */
-  cancelDraft(draftId: Hash): void {
+  /**
+   * Detach a draft from the live machinery (consensus + generator
+   * handle) without transitioning it to a terminal status. Used by the
+   * solidification path: the draft transitions to `solidified` (with
+   * the new block reference) but its consensus contribution is replaced
+   * by the real block, so we drop it from the consensus side.
+   */
+  detachDraft(draftId: Hash): void {
+    const key = draftId.toPrimitive();
+    const handle = this.handles.get(key);
+    if (handle) {
+      handle.cancel();
+      this.handles.delete(key);
+    }
+    this.consensus.removeBlock(draftId);
+  }
+
+  cancelDraft(draftId: Hash, reason: string = 'cancelled'): void {
     const key = draftId.toPrimitive();
 
     // Cancel generator handle
@@ -69,13 +86,25 @@ export class DraftManager {
       this.handles.delete(key);
     }
 
-    // Remove from consensus
+    // Remove from consensus -- the draft no longer competes for any
+    // outputs, even though the Draft record stays in DraftStore as a
+    // failed-status historical entry.
     this.consensus.removeBlock(draftId);
 
-    // Transition to cancelled (removes from store)
+    // Transition to failed -- the draft persists in the store with
+    // its terminal status so we don't relaunch the generator and so
+    // debug tools can see why this draft ended.
     const draft = this.store.get(draftId);
-    if (draft) {
-      this.store.transition(draftId, 'cancelled');
+    if (draft && !isTerminalDraftStatus(draft.status)) {
+      this.store.transition(draftId, {
+        phase: 'failed',
+        reason,
+        at: 'cancelled',
+      });
     }
   }
+}
+
+function isTerminalDraftStatus(s: { phase: string }): boolean {
+  return s.phase === 'solidified' || s.phase === 'failed';
 }

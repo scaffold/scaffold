@@ -4,6 +4,7 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Output } from './BlockCreationModule.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
 import type { ClaimRef, Node } from './Node.ts';
+import type { Block } from './Block.ts';
 
 // -- Draft merger disjointness ------------------------------------
 
@@ -34,8 +35,44 @@ export function draftsAreMergeable(
 /** Unique identifier for a draft. */
 export type DraftId = Hash;
 
-/** Draft lifecycle status. */
-export type DraftStatus = 'pending' | 'generating' | 'ready' | 'cancelled';
+/** Where a draft's generator hit a fatal error. */
+export type DraftFailureSite =
+  | 'requireSignature'
+  | 'requireInput'
+  | 'contract'
+  | 'lowering';
+
+/**
+ * Draft lifecycle status. Discriminated union so terminal states can
+ * carry context (the produced block for `solidified`, the failure
+ * reason + site for `failed`).
+ *
+ *   pending        -- reservation in place; generator not yet started.
+ *   generating     -- generator pumping (or paused on requireInput).
+ *   readyToSolidify -- generator finished; awaiting BlockBuilder.build.
+ *   solidified     -- replaced by a real block; terminal, kept for history.
+ *   failed         -- contract / lowering / cancellation halt; terminal.
+ *
+ * Terminal drafts persist in the DraftStore so we don't relaunch a
+ * generator we already know won't succeed, and so debug tools can
+ * answer "what happened to draft X?".
+ */
+export type DraftStatus =
+  | { phase: 'pending' }
+  | { phase: 'generating' }
+  | { phase: 'readyToSolidify' }
+  | { phase: 'solidified'; block: Block }
+  | { phase: 'failed'; reason: string; at: DraftFailureSite | 'cancelled' };
+
+/** Terminal status check (`solidified` or `failed`). */
+export function isDraftTerminal(s: DraftStatus): boolean {
+  return s.phase === 'solidified' || s.phase === 'failed';
+}
+
+/** Convenience: phase string of a DraftStatus. */
+export function statusPhase(s: DraftStatus): DraftStatus['phase'] {
+  return s.phase;
+}
 
 /**
  * A claim with known economic value. Transit type used by the generation
@@ -116,12 +153,20 @@ const _draftIsNode: Node = undefined as unknown as Draft;
 void _draftIsNode;
 
 // -- Valid transitions --------------------------------------------
+//
+// Transitions are validated by phase. Terminal phases (`solidified`,
+// `failed`) accept no further transitions -- a draft that hit one stays
+// there permanently so we don't relaunch its generator and so debug
+// tools can answer "what happened?".
 
-const VALID_TRANSITIONS: Record<DraftStatus, DraftStatus[]> = {
-  pending: ['generating', 'cancelled'],
-  generating: ['ready', 'cancelled'],
-  ready: ['cancelled'],
-  cancelled: [],
+type Phase = DraftStatus['phase'];
+
+const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
+  pending: ['generating', 'failed'],
+  generating: ['readyToSolidify', 'failed'],
+  readyToSolidify: ['solidified', 'failed'],
+  solidified: [],
+  failed: [],
 };
 
 // -- Factory ------------------------------------------------------
@@ -147,7 +192,7 @@ export function createDraft(fields: {
       fields.outputs.map((output) => ({ output, origin: 'require' as const })),
     declaredWeight: fields.declaredWeight,
     refs: fields.refs ?? [],
-    status: 'pending',
+    status: { phase: 'pending' },
   };
 }
 
@@ -191,13 +236,16 @@ export class DraftStore {
     return [...this.drafts.values()];
   }
 
-  getByStatus(status: DraftStatus): Draft[] {
-    return this.getAll().filter((d) => d.status === status);
+  getByPhase(phase: Phase): Draft[] {
+    return this.getAll().filter((d) => d.status.phase === phase);
   }
 
   /**
-   * Transition a draft to a new status. Returns a new immutable draft object.
-   * Validates the state machine. Transition to 'cancelled' removes the draft.
+   * Transition a draft to a new status. Returns a new immutable draft
+   * object. Validates the state machine. Drafts are NEVER removed by
+   * transition -- terminal states (`solidified`, `failed`) persist in
+   * the store as historical record. Use `remove()` if you really need
+   * to drop a draft from the store.
    */
   transition(draftId: Hash, newStatus: DraftStatus): Draft {
     const key = draftId.toPrimitive();
@@ -206,20 +254,15 @@ export class DraftStore {
       throw new Error(`Draft ${key} not found`);
     }
 
-    const allowed = VALID_TRANSITIONS[existing.status];
-    if (!allowed.includes(newStatus)) {
+    const allowed = VALID_TRANSITIONS[existing.status.phase];
+    if (!allowed.includes(newStatus.phase)) {
       throw new Error(
-        `Invalid transition: ${existing.status} -> ${newStatus}`,
+        `Invalid transition: ${existing.status.phase} -> ${newStatus.phase}`,
       );
     }
 
     const updated: Draft = { ...existing, status: newStatus };
-
-    if (newStatus === 'cancelled') {
-      this.drafts.delete(key);
-    } else {
-      this.drafts.set(key, updated);
-    }
+    this.drafts.set(key, updated);
 
     for (const cb of this._transitionListeners) cb(updated);
 
@@ -264,7 +307,7 @@ export class DraftStore {
       ...existing,
       ...changes,
       draftId: Hash.random(),
-      status: 'pending',
+      status: { phase: 'pending' },
     };
 
     this.drafts.set(newDraft.draftId.toPrimitive(), newDraft);
