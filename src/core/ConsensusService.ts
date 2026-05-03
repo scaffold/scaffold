@@ -1,8 +1,9 @@
-import { Hash } from '../util/Hash.ts';
+import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { Draft, DraftStore } from './Draft.ts';
 import { ConsensusConfig, ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
+import { pickAnchorForClaims } from './AnchorSelection.ts';
 
 /** Entity type that consensus operates on: either a finalized Block or a local Draft. */
 export type ConsensusEntity = Block | Draft;
@@ -30,21 +31,35 @@ class ConsensusProviderAdapter implements ConsensusProvider<ConsensusEntity> {
   }
 
   getAnchor(entity: ConsensusEntity): Hash {
-    return entity.anchor;
+    if (isBlock(entity)) return entity.anchor;
+    // Drafts derive their anchor from their claims via the same
+    // selection logic that BlockBuilder uses at solidification. This
+    // ensures pre-solidification weight attribution lands on the same
+    // chain that the eventual block will, so weight doesn't appear or
+    // disappear when the draft solidifies.
+    const pick = pickAnchorForClaims(entity.claims, this.store);
+    return pick.ok ? pick.anchor : ZERO_HASH;
   }
 
   getAggregates(entity: ConsensusEntity): Hash[] {
-    // Blocks carry their aggregates list directly. Drafts no longer
-    // store an aggregates field -- the set is computed at solidification
-    // time by BlockBuilder. For consensus integration today, treat
-    // drafts as having no aggregates (they participate in the chain
-    // through their anchor only).
-    return isBlock(entity) ? entity.aggregates : [];
+    if (isBlock(entity)) return entity.aggregates;
+    // Same selection logic as getAnchor -- a draft that claims B and C
+    // both anchored to A reports anchor=A, aggregates=[B,C], which is
+    // identical to a real aggregator block over B+C. Weight propagates
+    // through that chain.
+    const pick = pickAnchorForClaims(entity.claims, this.store);
+    return pick.ok ? pick.aggregates : [];
   }
 
   getWeightVector(entity: ConsensusEntity): number[] {
     if (isBlock(entity)) return getBlockWeightVector(entity);
-    return [entity.declaredWeight];
+    // Drafts contribute their effectiveWeight (wall-clock-bumped, plus
+    // declaredWeight as a floor) as a single-dimensional weight vector,
+    // attributed through the picked anchor's chain. Step 8 wires the
+    // ticker that grows effectiveWeight over a draft's lifetime; until
+    // then effectiveWeight is initialised to 0 and declaredWeight is
+    // the de-facto static contribution.
+    return [Math.max(entity.declaredWeight, entity.effectiveWeight)];
   }
 }
 

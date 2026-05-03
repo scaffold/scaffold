@@ -33,6 +33,7 @@ import {
 } from './OutputSpace.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
 import type { Verifier } from './BlockCreationModule.ts';
+import { pickAnchorForClaims } from './AnchorSelection.ts';
 
 /**
  * Solidification-time value-override function. Called for every slot
@@ -92,23 +93,13 @@ export class BlockBuilderModule {
    *                        an aggregation block bridges them.
    */
   build(draft: Draft): BuildResult {
-    // -- 1. Collect unique claim producers ---------------------------
-    const producerSet = new Set<string>();
-    const producers: Hash[] = [];
-    for (const c of draft.claims) {
-      const key = c.producer.toPrimitive();
-      if (producerSet.has(key)) continue;
-      producerSet.add(key);
-      producers.push(c.producer);
-    }
-    if (producers.length === 0) {
+    // -- 1. Anchor selection: deepest common ancestor of claim producers
+    if (draft.claims.length === 0) {
       // Drafts must consume at least one input -- there's no current
       // producer-less code path.
       return { ok: false, reason: 'draft has no claims' };
     }
-
-    // -- 2. Anchor selection: deepest common ancestor of producers ---
-    const pick = pickAnchor(producers, this.provider.store);
+    const pick = pickAnchorForClaims(draft.claims, this.provider.store);
     if (!pick.ok) {
       return { ok: false, awaitingAnchor: true, missing: pick.missing };
     }
@@ -235,49 +226,6 @@ export class BlockBuilderModule {
     if (!block) return { ok: false, reason: 'sign failed' };
     return { ok: true, block };
   }
-}
-
-/** Deepest common ancestor of `producers` in the store's anchor chain. */
-function pickAnchor(
-  producers: Hash[],
-  store: BlockStore,
-): { ok: true; anchor: Hash; aggregates: Hash[] } | { ok: false; missing: Hash[] } {
-  // Walk each producer's anchor chain, recording presence + depth.
-  const chains: Map<string, number>[] = [];
-  for (const p of producers) {
-    const m = new Map<string, number>();
-    let cur: Hash | undefined = p;
-    let depth = 0;
-    while (cur && store.has(cur)) {
-      m.set(cur.toPrimitive(), depth);
-      const b: Block = store.get(cur)!;
-      cur = b.anchor;
-      depth++;
-    }
-    chains.push(m);
-  }
-
-  // Find common ancestors and pick the one whose max depth across all
-  // producers is minimal (i.e. closest to all of them).
-  let best: Hash | undefined;
-  let bestMaxDepth = Infinity;
-  for (const candidateKey of chains[0].keys()) {
-    if (!chains.every((m) => m.has(candidateKey))) continue;
-    const maxDepth = Math.max(...chains.map((m) => m.get(candidateKey)!));
-    if (maxDepth < bestMaxDepth) {
-      bestMaxDepth = maxDepth;
-      best = HashCtor.fromPrimitive(candidateKey);
-    }
-  }
-
-  if (!best) {
-    return { ok: false, missing: producers };
-  }
-
-  // Producers that aren't the anchor itself become aggregate references.
-  const anchorKey = best.toPrimitive();
-  const aggregates = producers.filter((p) => p.toPrimitive() !== anchorKey);
-  return { ok: true, anchor: best, aggregates };
 }
 
 /**
