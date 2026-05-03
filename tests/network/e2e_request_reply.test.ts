@@ -33,6 +33,7 @@ import {
 import { BlockAwareness } from '../../src/node/RoutingModule.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { Block } from '../../src/core/Block.ts';
+import { cloneBlockForReception } from '../testutil/cloneBlock.ts';
 
 class SetAwareness implements BlockAwareness {
   private readonly known = new Set<string>();
@@ -119,7 +120,11 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
       if (!target) return;
       const block = from.context.store.get(action.block);
       if (!block) return;
-      queueMicrotask(() => target.context.processBlock(block, fromHex));
+      // Each node owns its own atom in production (PeerConnection
+      // deserializes per-link); clone to mimic that here so transit
+      // metadata doesn't accumulate across hops.
+      const delivered = cloneBlockForReception(block);
+      queueMicrotask(() => target.context.processBlock(delivered, fromHex));
     });
   };
   wire(nodeA, hexA);
@@ -136,8 +141,8 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   // 2. Hand-relay the seed C -> B -> A so each node records it as arriving
   //    from the previous hop. After this, both B and A can route HELLO
   //    traffic toward C via claim history + receivedFirst.
-  nodeB.context.processBlock(seed.block, hexC);
-  nodeA.context.processBlock(seed.block, hexB);
+  nodeB.context.processBlock(cloneBlockForReception(seed.block), hexC);
+  nodeA.context.processBlock(cloneBlockForReception(seed.block), hexB);
 
   // 3. A subscribes via an onClaim observer: we want the claiming block
   //    (not just the record data) so we can assert provenance in step 5.

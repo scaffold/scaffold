@@ -1,5 +1,6 @@
 import { Hash } from '../src/util/Hash.ts';
 import { Block, BlockStore } from '../src/core/Block.ts';
+import { cloneBlockForReception } from './testutil/cloneBlock.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { ConsensusService } from '../src/core/ConsensusService.ts';
 import { SamplingService } from '../src/core/SamplingService.ts';
@@ -106,7 +107,11 @@ export class SimNode {
   }
 
   /** Process a received block through coordinator and routing. */
-  receiveBlock(block: Block, fromPeer: string | null): SimBlockResult {
+  receiveBlock(input: Block, fromPeer: string | null): SimBlockResult {
+    // Mint a per-node atom so cross-node delivery in tests doesn't share
+    // mutable transit state (fromConnections / toConnections) the way a
+    // real PeerConnection's per-deserialize atoms wouldn't.
+    const block = cloneBlockForReception(input);
     const result = this.coordinator.blockReceived(block, fromPeer);
     const pushActions: PushAction[] = [];
     const listener = (action: PushAction) => pushActions.push(action);
