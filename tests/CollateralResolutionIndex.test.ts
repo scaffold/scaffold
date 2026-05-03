@@ -148,7 +148,6 @@ function makeDraft(
     claims: [],
     effectiveWeight: 0,
     draftId,
-    resolvedClaims: [],
     outputs: [verdictOutput],
     outputSlots: [{ output: verdictOutput, origin: 'require' }],
     declaredWeight: 0,

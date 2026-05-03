@@ -74,7 +74,7 @@ Deno.test('createDraft: stores draft, registers in consensus, starts generator',
   const ctx = setupWithGenesis();
 
   const draft = ctx.manager.createDraft({
-    resolvedClaims: [{ block: h('b'), outputIndex: 0, value: 100 }],
+    claims: [{ producer: h('b'), outputIndex: 0 }],
     outputs: [],
     declaredWeight: 10,
     anchor: ctx.genesis.hash,
@@ -96,7 +96,7 @@ Deno.test('draft weight propagates to anchor chain', () => {
   const ctx = setupWithGenesis();
 
   const draft = ctx.manager.createDraft({
-    resolvedClaims: [],
+    claims: [],
     outputs: [],
     declaredWeight: 42,
     anchor: ctx.genesis.hash,
@@ -111,7 +111,7 @@ Deno.test('draft canonicality: draftId appears in canonical view', () => {
   const ctx = setupWithGenesis();
 
   const draft = ctx.manager.createDraft({
-    resolvedClaims: [],
+    claims: [],
     outputs: [],
     declaredWeight: 10,
     anchor: ctx.genesis.hash,
@@ -125,7 +125,7 @@ Deno.test('cancelDraft: removes from consensus, cancels generator, removes from 
   const ctx = setupWithGenesis();
 
   const draft = ctx.manager.createDraft({
-    resolvedClaims: [],
+    claims: [],
     outputs: [],
     declaredWeight: 10,
     anchor: ctx.genesis.hash,
@@ -154,7 +154,7 @@ Deno.test('recreation: cancel old draft, create new -- no double-counting', () =
   const ctx = setupWithGenesis();
 
   const draft1 = ctx.manager.createDraft({
-    resolvedClaims: [],
+    claims: [],
     outputs: [],
     declaredWeight: 20,
     anchor: ctx.genesis.hash,
@@ -165,7 +165,7 @@ Deno.test('recreation: cancel old draft, create new -- no double-counting', () =
   // Cancel old, create new
   ctx.manager.cancelDraft(draft1.draftId);
   const draft2 = ctx.manager.createDraft({
-    resolvedClaims: [],
+    claims: [],
     outputs: [],
     declaredWeight: 20,
     anchor: ctx.genesis.hash,

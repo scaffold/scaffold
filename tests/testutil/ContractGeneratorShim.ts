@@ -15,6 +15,7 @@ import {
 } from '../../src/core/Block.ts';
 import type { OutputSpaceModule } from '../../src/core/OutputSpace.ts';
 import { Draft, ClaimIntent, DraftStore } from '../../src/core/Draft.ts';
+import type { ClaimRef } from '../../src/core/Node.ts';
 import { OutputClaimModule } from '../../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../../src/node/UtxoIndex.ts';
 import {
@@ -149,12 +150,12 @@ export class ContractGeneratorShim {
 
   generate(draft: Draft): GeneratorHandle {
     let cancelled = false;
-    const claim = draft.resolvedClaims[0];
+    const claim = draft.claims[0];
     if (!claim) {
       this._draftStore.transition(draft.draftId, 'ready');
       return { draftId: draft.draftId, cancel: () => {} };
     }
-    const block = this._adapter.getBlock(claim.block);
+    const block = this._adapter.getBlock(claim.producer);
     if (!block) {
       this._draftStore.transition(draft.draftId, 'cancelled');
       return { draftId: draft.draftId, cancel: () => {} };
@@ -265,11 +266,11 @@ export class ContractGeneratorShim {
       this._outputClaims.addClaim(draft.draftId, claim.block, claim.outputIndex);
     }
     const existingClaimKeys = new Set(
-      draft.resolvedClaims.map((rc: ClaimIntent) => `${rc.block.toPrimitive()}:${rc.outputIndex}`),
+      draft.claims.map((c) => `${c.producer.toPrimitive()}:${c.outputIndex}`),
     );
-    const dedupedClaims = newClaims.filter(
-      (rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`),
-    );
+    const dedupedClaimRefs: ClaimRef[] = newClaims
+      .filter((rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`))
+      .map((rc) => ({ producer: rc.block, outputIndex: rc.outputIndex }));
     const existingIncludes = new Set(
       draft.includeConstraints.map((h) => h.toPrimitive()),
     );
@@ -278,7 +279,7 @@ export class ContractGeneratorShim {
     );
     this._draftStore.update(draft.draftId, {
       outputs: [...draft.outputs, ...newOutputs],
-      resolvedClaims: [...draft.resolvedClaims, ...dedupedClaims],
+      claims: [...draft.claims, ...dedupedClaimRefs],
       refs: [...draft.refs, ...newRefs],
       includeConstraints: [...draft.includeConstraints, ...dedupedIncludes],
     });

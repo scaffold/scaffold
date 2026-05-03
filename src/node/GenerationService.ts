@@ -10,6 +10,7 @@ import {
 } from '../core/Block.ts';
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
 import { Draft, ClaimIntent, DraftStore } from '../core/Draft.ts';
+import type { ClaimRef } from '../core/Node.ts';
 import { type AvailableInput, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
@@ -304,13 +305,13 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    * `ContractGenerator` escape hatch.
    */
   generate(draft: Draft): GeneratorHandle {
-    const first = draft.resolvedClaims[0];
+    const first = draft.claims[0];
     if (!first) {
       this._draftStore.transition(draft.draftId, 'ready');
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
-    const triggerBlock = this._store.get(first.block);
+    const triggerBlock = this._store.get(first.producer);
     if (!triggerBlock) {
       this._draftStore.transition(draft.draftId, 'cancelled');
       return { draftId: draft.draftId, cancel: () => {} };
@@ -513,11 +514,11 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     }
 
     const existing = new Set(
-      draft.resolvedClaims.map((rc: ClaimIntent) => `${rc.block.toPrimitive()}:${rc.outputIndex}`),
+      draft.claims.map((c) => `${c.producer.toPrimitive()}:${c.outputIndex}`),
     );
-    const newClaims = result.resolvedClaims.filter(
-      (rc) => !existing.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`),
-    );
+    const newClaims: ClaimRef[] = result.resolvedClaims
+      .filter((rc) => !existing.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`))
+      .map((rc) => ({ producer: rc.block, outputIndex: rc.outputIndex }));
     const existingIncludes = new Set(
       draft.includeConstraints.map((h: Hash) => h.toPrimitive()),
     );
@@ -531,12 +532,12 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const updated = this._draftStore.update(draftId, {
       outputs: [...stored.outputs, ...result.outputs],
       outputSlots: [...stored.outputSlots, ...result.outputSlots],
-      resolvedClaims: [...stored.resolvedClaims, ...newClaims],
+      claims: [...stored.claims, ...newClaims],
       refs: [...stored.refs, ...result.refs],
       includeConstraints: [...stored.includeConstraints, ...newIncludes],
     });
 
-    // Reconcile UtxoIndex with the draft's new `resolvedClaims`. Consensus
+    // Reconcile UtxoIndex with the draft's new claims. Consensus
     // doesn't fire a canonicality-change event for an already-canonical
     // draft whose internal state changed, so we trigger the reconciliation
     // directly. Both methods are idempotent (Map.delete / Map.set).

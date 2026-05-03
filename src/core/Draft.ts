@@ -38,9 +38,11 @@ export type DraftId = Hash;
 export type DraftStatus = 'pending' | 'generating' | 'ready' | 'cancelled';
 
 /**
- * A claim with known economic value, used during draft/block construction.
- * Produced by the draft system (GeneratingEnv, DraftStrategy) which has
- * access to UTXO values. Value is needed for throughput balancing.
+ * A claim with known economic value. Transit type used by the generation
+ * pipeline (GeneratingEnv, GeneratingRunResult) to carry per-input value
+ * from the moment a contract consumes an input to the moment the draft
+ * is created. NOT stored on Draft itself -- once a draft exists, value
+ * is looked up on demand from the producing block in the store.
  */
 export interface ClaimIntent {
   /** Hash of the block containing the claimed output. */
@@ -58,12 +60,11 @@ export interface ClaimIntent {
  * `effectiveWeight`) so ConsensusModule, OutputClaimModule, weight
  * propagation, and UtxoIndex can treat drafts uniformly with blocks.
  *
- * The shape today is transitional: legacy fields (`resolvedClaims`,
- * `includeConstraints`, `anchor`, `aggregates`, the simple `status`
- * string) are still here for back-compat with consumers that haven't
- * migrated. Subsequent steps (BlockBuilderModule, lifecycle state
- * machine) move callers off the legacy fields, after which they can be
- * dropped.
+ * The shape today is transitional: `anchor`, `aggregates`,
+ * `includeConstraints`, and the simple `status` string are still here
+ * for back-compat with consumers that haven't migrated. Subsequent steps
+ * (BlockBuilderModule, lifecycle state machine) move callers off these
+ * fields, after which they can be dropped.
  */
 export interface Draft {
   // -- Node-projection fields ----------------------------------------
@@ -76,8 +77,8 @@ export interface Draft {
    * (each `outputIndex < producer.outputs.length`). Mutable so the
    * generator can append claims as it runs (requireInput / collectInputs).
    *
-   * Today this mirrors `resolvedClaims`; once consumers migrate,
-   * `resolvedClaims` is dropped and `claims` becomes the only spelling.
+   * Economic value of a claim is not stored here; it is looked up on
+   * demand from `store.get(producer).outputs[outputIndex].value`.
    */
   readonly claims: ClaimRef[];
   /**
@@ -91,7 +92,6 @@ export interface Draft {
 
   // -- Existing fields (some legacy, some still load-bearing) --------
   readonly draftId: DraftId;
-  readonly resolvedClaims: ClaimIntent[];
   readonly outputs: Output[];
   /**
    * Slot-tagged outputs (origin: 'require' | 'get'), in call order,
@@ -124,14 +124,9 @@ const VALID_TRANSITIONS: Record<DraftStatus, DraftStatus[]> = {
 
 // -- Factory ------------------------------------------------------
 
-/** Project the value-carrying ClaimIntent form into the Node-shaped ClaimRef form. */
-function claimIntentsToRefs(claims: readonly ClaimIntent[]): ClaimRef[] {
-  return claims.map((c) => ({ producer: c.block, outputIndex: c.outputIndex }));
-}
-
 /** Create a new Draft with a random draftId and 'pending' status. */
 export function createDraft(fields: {
-  resolvedClaims: ClaimIntent[];
+  claims: ClaimRef[];
   outputs: Output[];
   outputSlots?: OutputSlot[];
   declaredWeight: number;
@@ -142,10 +137,9 @@ export function createDraft(fields: {
 }): Draft {
   return {
     kind: 'draft',
-    claims: claimIntentsToRefs(fields.resolvedClaims),
+    claims: fields.claims,
     effectiveWeight: 0,
     draftId: Hash.random(),
-    resolvedClaims: fields.resolvedClaims,
     outputs: fields.outputs,
     // Default slots: treat any pre-populated outputs as 'require' origin.
     // Generation fills this in via `_applyResult`; other entry points
@@ -249,12 +243,7 @@ export class DraftStore {
       throw new Error(`Draft ${key} not found`);
     }
 
-    // Keep `claims` (Node projection) in sync if the legacy
-    // `resolvedClaims` field is being updated.
-    const claimsOverride = changes.resolvedClaims !== undefined && changes.claims === undefined
-      ? { claims: claimIntentsToRefs(changes.resolvedClaims) }
-      : {};
-    const updated: Draft = { ...existing, ...changes, ...claimsOverride };
+    const updated: Draft = { ...existing, ...changes };
     this.drafts.set(key, updated);
     return updated;
   }
@@ -275,13 +264,9 @@ export class DraftStore {
 
     this.drafts.delete(key);
 
-    const claimsOverride = changes.resolvedClaims !== undefined && changes.claims === undefined
-      ? { claims: claimIntentsToRefs(changes.resolvedClaims) }
-      : {};
     const newDraft: Draft = {
       ...existing,
       ...changes,
-      ...claimsOverride,
       draftId: Hash.random(),
       status: 'pending',
     };

@@ -6,7 +6,7 @@ const anchor = Hash.digest('anchor');
 
 function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Draft {
   return createDraft({
-    resolvedClaims: [{ block: Hash.digest('b'), outputIndex: 0, value: 100 }],
+    claims: [{ producer: Hash.digest('b'), outputIndex: 0 }],
     outputs: [],
     declaredWeight: 10,
     anchor,
@@ -17,15 +17,15 @@ function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Draf
 // -- createDraft factory ------------------------------------------
 
 Deno.test('createDraft: sets all fields, random draftId, status pending', () => {
-  const claim: ClaimIntent = { block: Hash.digest('b'), outputIndex: 1, value: 50 };
+  const claim = { producer: Hash.digest('b'), outputIndex: 1 };
   const draft = createDraft({
-    resolvedClaims: [claim],
+    claims: [claim],
     outputs: [],
     declaredWeight: 5,
     anchor,
   });
 
-  assertEquals(draft.resolvedClaims, [claim]);
+  assertEquals(draft.claims, [claim]);
   assertEquals(draft.outputs, []);
   assertEquals(draft.declaredWeight, 5);
   assert(Hash.equals(draft.anchor, anchor));
@@ -47,7 +47,7 @@ Deno.test('createDraft: optional refs and aggregates', () => {
   const r = Hash.digest('ref');
   const agg = Hash.digest('agg');
   const draft = createDraft({
-    resolvedClaims: [],
+    claims: [],
     outputs: [],
     declaredWeight: 1,
     anchor,
@@ -213,7 +213,7 @@ Deno.test('recreate: new draftId, old removed, changes applied, unspecified fiel
 
   // Unspecified fields preserved
   assertEquals(recreated.declaredWeight, draft.declaredWeight);
-  assertEquals(recreated.resolvedClaims, draft.resolvedClaims);
+  assertEquals(recreated.claims, draft.claims);
 });
 
 Deno.test('recreate defaults status to pending', () => {

@@ -89,9 +89,8 @@ Deno.test('DraftStrategy: newly canonical block with high-value output emits cre
   assertEquals(actions.length, 1);
   const action = actions[0] as CreateDraftAction;
   assertEquals(action.type, 'createDraft');
-  assertEquals(action.claim.value, 100);
   assertEquals(action.claim.outputIndex, 0);
-  assert(Hash.equals(action.claim.block, block.hash));
+  assert(Hash.equals(action.claim.producer, block.hash));
 });
 
 Deno.test('DraftStrategy: output below minValue produces no action', () => {

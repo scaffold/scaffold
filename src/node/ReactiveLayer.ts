@@ -1,6 +1,6 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
-import { ClaimIntent } from '../core/Draft.ts';
+import type { ClaimRef } from '../core/Node.ts';
 import { BlockReceivedResult } from '../core/Coordinator.ts';
 import { BlockSpec, Output } from '../core/BlockCreationModule.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
@@ -47,7 +47,7 @@ export type Action =
   | { type: 'dispute'; block: Hash; side: 'for' | 'against' }
   | {
     type: 'createDraft';
-    claim: ClaimIntent;
+    claim: ClaimRef;
     outputs: Output[];
     declaredWeight: number;
     anchor: Hash;
@@ -321,7 +321,7 @@ export class ReactiveLayer {
         case 'createDraft':
           if (this.draftManager) {
             this.draftManager.createDraft({
-              resolvedClaims: [action.claim],
+              claims: [action.claim],
               outputs: action.outputs,
               declaredWeight: action.declaredWeight,
               anchor: action.anchor,

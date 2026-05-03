@@ -395,8 +395,8 @@ export class NodeContext {
     //    block is processed, DraftStrategy has room to create follow-on drafts.
     this.draftStore.onTransition((draft) => {
       if (draft.status !== 'ready') return;
-      for (const rc of draft.resolvedClaims) {
-        draftStrategy.complete(rc.block, rc.outputIndex);
+      for (const c of draft.claims) {
+        draftStrategy.complete(c.producer, c.outputIndex);
       }
       this._solidifyDraft(draft);
     });
@@ -535,16 +535,19 @@ export class NodeContext {
 
     const outputSpace = new OutputSpaceModule(virtualProvider);
 
-    // Compute claim indices using OutputSpaceModule
+    // Compute claim indices using OutputSpaceModule. Value is looked up
+    // from the producing block in the store -- drafts only run once their
+    // producers are present, so this lookup always succeeds.
     const claims: ClaimEntry[] = [];
-    for (const rc of draft.resolvedClaims) {
+    for (const c of draft.claims) {
       const idx = outputSpace.computeClaimIndex(virtualHash, {
-        block: rc.block,
-        outputIndex: rc.outputIndex,
+        block: c.producer,
+        outputIndex: c.outputIndex,
       });
-      if (idx !== undefined) {
-        claims.push({ index: idx, value: rc.value });
-      }
+      if (idx === undefined) continue;
+      const producer = this.store.get(c.producer);
+      const value = producer?.outputs[c.outputIndex]?.value ?? 0;
+      claims.push({ index: idx, value });
     }
     // Add self-claim entries for record outputs. These use the raw
     // output index (< draft.outputs.length) because self-claims target

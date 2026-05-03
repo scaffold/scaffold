@@ -340,19 +340,19 @@ export class UtxoIndex {
   // -- Internal: draft path ----------------------------------------
 
   /**
-   * Remove each `{block, outputIndex}` in the draft's `resolvedClaims`.
-   * Resolved claims are direct references -- no extended-vector walk
-   * needed.
+   * Remove each `{producer, outputIndex}` in the draft's claims. Draft
+   * claims are always fully resolved (direct producer reference), so no
+   * extended-vector walk is needed.
    */
   private removeDraftClaimedOutputs(draft: Draft): void {
-    for (const rc of draft.resolvedClaims) {
-      const producing = this.store.get(rc.block);
+    for (const c of draft.claims) {
+      const producing = this.store.get(c.producer);
       if (!producing) continue;
-      if (rc.outputIndex >= producing.outputs.length) continue;
-      const output = producing.outputs[rc.outputIndex];
+      if (c.outputIndex >= producing.outputs.length) continue;
+      const output = producing.outputs[c.outputIndex];
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
-      const oKey = outputKey(rc.block, rc.outputIndex);
+      const oKey = outputKey(c.producer, c.outputIndex);
       const entries = this.index.get(vKey);
       if (entries) {
         entries.delete(oKey);
@@ -363,26 +363,26 @@ export class UtxoIndex {
 
   /** Re-add outputs a non-canonical draft had reserved. */
   private reAddDraftClaimedOutputs(draft: Draft): void {
-    for (const rc of draft.resolvedClaims) {
-      const producing = this.store.get(rc.block);
+    for (const c of draft.claims) {
+      const producing = this.store.get(c.producer);
       if (!producing) continue;
-      if (rc.outputIndex >= producing.outputs.length) continue;
-      const output = producing.outputs[rc.outputIndex];
+      if (c.outputIndex >= producing.outputs.length) continue;
+      const output = producing.outputs[c.outputIndex];
 
       const vKey = verifierKey(output.verifier.contract, output.verifier.params);
-      const oKey = outputKey(rc.block, rc.outputIndex);
+      const oKey = outputKey(c.producer, c.outputIndex);
       let entries = this.index.get(vKey);
       if (!entries) {
         entries = new Map();
         this.index.set(vKey, entries);
       }
       entries.set(oKey, {
-        blockHash: rc.block,
-        outputIndex: rc.outputIndex,
+        blockHash: c.producer,
+        outputIndex: c.outputIndex,
         value: output.value,
-        extendedIndex: rc.outputIndex,
+        extendedIndex: c.outputIndex,
       });
-      this._fireReAdded(rc.block, rc.outputIndex);
+      this._fireReAdded(c.producer, c.outputIndex);
     }
   }
 

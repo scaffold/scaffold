@@ -122,7 +122,7 @@ Deno.test('aggregation contract blocks when fewer than 4 inputs available', asyn
   utxoIndex.blockBecameCanonical(genesis);
 
   const draft = createDraft({
-    resolvedClaims: [{ block: genesis.hash, outputIndex: 0, value: 0 }],
+    claims: [{ producer: genesis.hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
     anchor: genesis.hash,
@@ -170,7 +170,7 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   // The aggregation contract will call requireInput() 4 times,
   // consuming all 4 aggregation outputs.
   const draft = createDraft({
-    resolvedClaims: [{ block: blocks[0].hash, outputIndex: 0, value: 0 }],
+    claims: [{ producer: blocks[0].hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
     anchor: genesis.hash,
@@ -189,11 +189,11 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   // The contract consumed 4 inputs via requireInput(). The first call
   // re-found the trigger claim (blocks[0]:0) which is deduplicated on merge.
   // Final: trigger (1) + 3 new from requireInput() = 4 total.
-  assertEquals(updated.resolvedClaims.length, AGGREGATION_THRESHOLD);
+  assertEquals(updated.claims.length, AGGREGATION_THRESHOLD);
 
   // All resolved claims should reference distinct blocks
   const claimedBlocks = new Set(
-    updated.resolvedClaims.map((rc) => rc.block.toPrimitive()),
+    updated.claims.map((c) => c.producer.toPrimitive()),
   );
   assertEquals(claimedBlocks.size, AGGREGATION_THRESHOLD);
 
@@ -229,7 +229,7 @@ Deno.test('3 blocks are not enough -- aggregator blocks waiting for 4th input', 
   // Create a draft claiming one aggregation output
   const firstBlock = store.get(h('block-0'))!;
   const draft = createDraft({
-    resolvedClaims: [{ block: firstBlock.hash, outputIndex: 0, value: 0 }],
+    claims: [{ producer: firstBlock.hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
     anchor: genesis.hash,
@@ -269,7 +269,7 @@ Deno.test('merged resolvedClaims contain no duplicates', async () => {
   }
 
   const draft = createDraft({
-    resolvedClaims: [{ block: blocks[0].hash, outputIndex: 0, value: 0 }],
+    claims: [{ producer: blocks[0].hash, outputIndex: 0 }],
     outputs: [],
     declaredWeight: 1,
     anchor: genesis.hash,
@@ -286,10 +286,10 @@ Deno.test('merged resolvedClaims contain no duplicates', async () => {
   // After merge, all resolved claims should be distinct (block, outputIndex) pairs.
   // The trigger claim (blocks[0]:0) that requireInput() re-found is deduplicated.
   const seen = new Set<string>();
-  for (const rc of updated.resolvedClaims) {
-    const key = `${rc.block.toPrimitive()}:${rc.outputIndex}`;
+  for (const c of updated.claims) {
+    const key = `${c.producer.toPrimitive()}:${c.outputIndex}`;
     assertEquals(seen.has(key), false, `duplicate claim: ${key}`);
     seen.add(key);
   }
-  assertEquals(updated.resolvedClaims.length, AGGREGATION_THRESHOLD);
+  assertEquals(updated.claims.length, AGGREGATION_THRESHOLD);
 });
