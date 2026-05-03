@@ -17,7 +17,7 @@ import type { Block } from './Block.ts';
  * `namespacesForDraft` maps a draft to the union of its claims'
  * contracts' declared outputNamespaces -- typically callers pass a
  * closure over `ContractHost.getOutputNamespaces` + the draft's
- * resolvedClaims' verifiers.
+ * claims' verifiers.
  */
 export function draftsAreMergeable(
   a: Hash[],
@@ -72,22 +72,6 @@ export function isDraftTerminal(s: DraftStatus): boolean {
 /** Convenience: phase string of a DraftStatus. */
 export function statusPhase(s: DraftStatus): DraftStatus['phase'] {
   return s.phase;
-}
-
-/**
- * A claim with known economic value. Transit type used by the generation
- * pipeline (GeneratingEnv, GeneratingRunResult) to carry per-input value
- * from the moment a contract consumes an input to the moment the draft
- * is created. NOT stored on Draft itself -- once a draft exists, value
- * is looked up on demand from the producing block in the store.
- */
-export interface ClaimIntent {
-  /** Hash of the block containing the claimed output. */
-  readonly block: Hash;
-  /** Index into that block's output array. */
-  readonly outputIndex: number;
-  /** Economic value of the claimed output. */
-  readonly value: number;
 }
 
 /**

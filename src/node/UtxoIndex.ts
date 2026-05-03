@@ -8,10 +8,10 @@
  *
  *   - Canonical block: add its own outputs, remove the outputs it claims.
  *   - Non-canonical block: reverse.
- *   - Canonical draft: remove the outputs its `resolvedClaims` point at.
+ *   - Canonical draft: remove the outputs its `claims` point at.
  *     (Drafts don't produce indexable outputs -- only the real block
  *     produced on publication does.)
- *   - Non-canonical draft: re-add the outputs its `resolvedClaims`
+ *   - Non-canonical draft: re-add the outputs its `claims`
  *     reserved.
  *
  * Wire via `ConsensusService.onCanonicalityChange`: resolve the hash via
@@ -170,7 +170,7 @@ export class UtxoIndex {
 
   /**
    * Called when a draft becomes canonical. Removes each output in the
-   * draft's `resolvedClaims` from the index -- these UTXOs are now
+   * draft's `claims` from the index -- these UTXOs are now
    * reserved for this (local-only, phantom) draft.
    *
    * Drafts do not produce UTXOs: their own outputs are not indexed,
@@ -183,7 +183,7 @@ export class UtxoIndex {
 
   /**
    * Called when a draft becomes non-canonical. Re-adds the outputs its
-   * `resolvedClaims` had reserved.
+   * `claims` had reserved.
    */
   draftBecameNonCanonical(draft: Draft): void {
     this.reAddDraftClaimedOutputs(draft);
@@ -291,7 +291,7 @@ export class UtxoIndex {
   /**
    * Remove a single `{blockHash, outputIndex}` from the index. Used when
    * a canonical draft adopts an output mid-generation (not via its
-   * initial `resolvedClaims`, so no `draftBecameCanonical` would fire).
+   * initial `claims`, so no `draftBecameCanonical` would fire).
    * Idempotent: if the entry is already removed, no-op.
    */
   removeSpentOutput(blockHash: Hash, outputIndex: number): void {

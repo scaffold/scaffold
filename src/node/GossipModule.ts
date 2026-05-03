@@ -172,7 +172,7 @@ export class GossipModule {
    * Called when OutputClaimModule.onResolution fires -- both for
    * immediate resolutions (in addBlock) and deferred resolutions
    * (when stuck migrations complete). For network blocks, this is
-   * the only path for claim processing (block.resolvedClaims is
+   * the only path for claim processing (block.claims is
    * undefined on network-received blocks).
    *
    * @param claimant - Hash of the block making the claim

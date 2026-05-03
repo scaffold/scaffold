@@ -500,13 +500,7 @@ export class NodeContext {
     // to `solidified` so it persists in the store referencing its block.
     this.draftManager.detachDraft(draft.draftId);
     this.draftStore.transition(draft.draftId, { phase: 'solidified', block });
-    // Defer the re-entrant processBlock to a microtask so the solidify
-    // frame unwinds before strategies re-evaluate the new block.
-    // Without this, DraftStrategy can spawn a downstream draft (e.g.
-    // chess turn=N+1) on the just-solidified block in the same stack
-    // frame, contending for worker slots and mid-transition draft state.
-    // See docs/design/chess-turn-one-bug.md.
-    queueMicrotask(() => this.reactiveLayer.processBlock(block, null));
+    this.reactiveLayer.processBlock(block, null);
   }
 
   /** Get the genesis block hash (first block in store) */

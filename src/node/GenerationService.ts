@@ -9,7 +9,7 @@ import {
   resolveClaimToOutput,
 } from '../core/Block.ts';
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
-import { Draft, ClaimIntent, DraftStore } from '../core/Draft.ts';
+import { Draft, DraftStore } from '../core/Draft.ts';
 import type { ClaimRef } from '../core/Node.ts';
 import { type AvailableInput, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
@@ -300,9 +300,9 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    * with the tracking module, and enqueues the generation work on the
    * execution queue.
    *
-   * A draft without any resolvedClaims does no generation -- we transition
-   * it to 'ready' immediately with empty output. This preserves the old
-   * `ContractGenerator` escape hatch.
+   * A draft without any claims does no generation -- we transition it
+   * to `readyToSolidify` immediately with empty output. This preserves
+   * the old `ContractGenerator` escape hatch.
    */
   generate(draft: Draft): GeneratorHandle {
     const first = draft.claims[0];
@@ -399,10 +399,10 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
   /**
    * Module asked us to restart. Allocate a fresh draft via DraftManager
-   * with no resolvedClaims -- the contract's `collectInputs()` call (or
+   * with no claims -- the contract's `collectInputs()` call (or
    * our default at end-of-run) will pick up fresh canonical UTXOs.
    *
-   * We cannot call DraftManager.createDraft with an empty resolvedClaims
+   * We cannot call DraftManager.createDraft with an empty claims
    * array today because the DraftManager pipeline assumes the trigger
    * output is already claimed. For now, we skip restart if the caller
    * hasn't wired a specialized restart path -- a real implementation
