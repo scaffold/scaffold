@@ -41,7 +41,8 @@ class TestProvider implements ConsensusProvider<TestEntity> {
   }
 
   getAggregates(entity: TestEntity): Hash[] {
-    return isBlockDraft(entity) ? entity.aggregates : [];
+    // Drafts no longer carry aggregates; treat as empty for consensus.
+    return isBlockDraft(entity) ? [] : [];
   }
 
   getWeightVector(entity: TestEntity): number[] {

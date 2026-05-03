@@ -519,12 +519,6 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const newClaims: ClaimRef[] = result.resolvedClaims
       .filter((rc) => !existing.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`))
       .map((rc) => ({ producer: rc.block, outputIndex: rc.outputIndex }));
-    const existingIncludes = new Set(
-      draft.includeConstraints.map((h: Hash) => h.toPrimitive()),
-    );
-    const newIncludes = result.includeConstraints.filter(
-      (h) => !existingIncludes.has(h.toPrimitive()),
-    );
 
     const stored = this._draftStore.get(draftId);
     if (!stored) return; // explicitly cancelled during run
@@ -534,7 +528,6 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       outputSlots: [...stored.outputSlots, ...result.outputSlots],
       claims: [...stored.claims, ...newClaims],
       refs: [...stored.refs, ...result.refs],
-      includeConstraints: [...stored.includeConstraints, ...newIncludes],
     });
 
     // Reconcile UtxoIndex with the draft's new claims. Consensus

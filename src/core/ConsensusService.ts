@@ -34,7 +34,12 @@ class ConsensusProviderAdapter implements ConsensusProvider<ConsensusEntity> {
   }
 
   getAggregates(entity: ConsensusEntity): Hash[] {
-    return entity.aggregates;
+    // Blocks carry their aggregates list directly. Drafts no longer
+    // store an aggregates field -- the set is computed at solidification
+    // time by BlockBuilder. For consensus integration today, treat
+    // drafts as having no aggregates (they participate in the chain
+    // through their anchor only).
+    return isBlock(entity) ? entity.aggregates : [];
   }
 
   getWeightVector(entity: ConsensusEntity): number[] {

@@ -60,11 +60,17 @@ export interface ClaimIntent {
  * `effectiveWeight`) so ConsensusModule, OutputClaimModule, weight
  * propagation, and UtxoIndex can treat drafts uniformly with blocks.
  *
- * The shape today is transitional: `anchor`, `aggregates`,
- * `includeConstraints`, and the simple `status` string are still here
- * for back-compat with consumers that haven't migrated. Subsequent steps
- * (BlockBuilderModule, lifecycle state machine) move callers off these
- * fields, after which they can be dropped.
+ * The anchor is **not** stored here. `BlockBuilderModule.build` picks
+ * an anchor at solidification time as the deepest common ancestor of
+ * all claim producers. The `aggregates` set is similarly derived
+ * (producers not on the chosen anchor's chain). `includeConstraints`
+ * is redundant with `claims` (since `unique(claims.map(c => c.producer))`
+ * is the include set) and was removed.
+ *
+ * The `draftId` field is retained for now -- it is the consensus-side
+ * identity used by ConsensusModule to register drafts as phantom
+ * blocks. Once consensus admits Nodes by object equality, draftId can
+ * be dropped.
  */
 export interface Draft {
   // -- Node-projection fields ----------------------------------------
@@ -90,7 +96,7 @@ export interface Draft {
    */
   effectiveWeight: number;
 
-  // -- Existing fields (some legacy, some still load-bearing) --------
+  // -- Other fields --------------------------------------------------
   readonly draftId: DraftId;
   readonly outputs: Output[];
   /**
@@ -100,11 +106,15 @@ export interface Draft {
    */
   readonly outputSlots: OutputSlot[];
   readonly declaredWeight: number;
+  /**
+   * Speculative anchor for generation-time consensus participation.
+   * BlockBuilder ignores this and picks the real anchor from claims at
+   * solidification time. Generation still writes to it for the
+   * GenerationSpec record; once generation is refactored, the field
+   * can be dropped.
+   */
   readonly anchor: Hash;
   readonly refs: Hash[];
-  readonly aggregates: Hash[];
-  /** Blocks that must appear in the final subtree (accumulated by requireInput). */
-  readonly includeConstraints: Hash[];
   readonly status: DraftStatus;
 }
 
@@ -132,8 +142,6 @@ export function createDraft(fields: {
   declaredWeight: number;
   anchor: Hash;
   refs?: Hash[];
-  aggregates?: Hash[];
-  includeConstraints?: Hash[];
 }): Draft {
   return {
     kind: 'draft',
@@ -149,8 +157,6 @@ export function createDraft(fields: {
     declaredWeight: fields.declaredWeight,
     anchor: fields.anchor,
     refs: fields.refs ?? [],
-    aggregates: fields.aggregates ?? [],
-    includeConstraints: fields.includeConstraints ?? [],
     status: 'pending',
   };
 }

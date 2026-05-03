@@ -9,6 +9,7 @@ import {
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
 import { type Draft, DraftStore } from '../core/Draft.ts';
+import { BlockBuilderModule } from '../core/BlockBuilderModule.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { BlockSpec, type ClaimEntry, Output, type Verifier } from '../core/BlockCreationModule.ts';
 import type { BlockPayload } from '../core/Block.ts';
@@ -159,6 +160,7 @@ export class NodeContext {
   private readonly _publicKey: Uint8Array | null;
   private readonly _contracts: Map<string, Contract>;
   private readonly _blockCreator: BlockCreator;
+  private readonly _blockBuilder: BlockBuilderModule;
   /**
    * Optional solidification-time hook that raises `value` on
    * `getOutput`-produced slots before the block is signed. See
@@ -253,6 +255,25 @@ export class NodeContext {
           : composeUnsignedBlockPacket(payload);
       },
     };
+
+    // 5b. BlockBuilderModule -- single core entry point for turning a
+    // ready draft into a signed block. Subsumes the bulk of
+    // _solidifyDraft's previous logic (anchor pick, claim lowering,
+    // self-claim insertion, aggregation patch, value override, signing).
+    // The provider's valueOverride and privateKey getters look up live
+    // values on `this` (the configured override may change at runtime via
+    // setValueOverride; the private key is captured once at construction).
+    const nodeCtx = this;
+    this._blockBuilder = new BlockBuilderModule({
+      store: this.store,
+      createBlock: (spec, key) => this._blockCreator.createBlock(spec, key),
+      get valueOverride() {
+        return nodeCtx._valueOverride;
+      },
+      get privateKey() {
+        return nodeCtx._privateKey;
+      },
+    });
 
     // 5c. Register built-in contracts with the ContractHost.
     this._contracts = new Map<string, Contract>();
@@ -448,250 +469,38 @@ export class NodeContext {
   }
 
   /**
-   * Solidify a ready draft into a real block and process it.
-   *
-   * Determines anchor and aggregates from the draft's includeConstraints,
-   * uses OutputSpaceModule to compute claim indices and the composed
-   * aggregation claim mask.
+   * Solidify a ready draft into a real block and process it. Delegates
+   * the structural work (anchor pick, claim lowering, self-claim insertion,
+   * aggregation patch, value override, signing) to BlockBuilderModule.
+   * Handles the draft-side bookkeeping: cancel before processing the new
+   * block so the draft's phantom claims clear out of OutputClaimService
+   * and consensus before the real block is evaluated.
    */
   private _solidifyDraft(draft: Draft): void {
-    const includes = draft.includeConstraints;
-    if (includes.length === 0) {
+    const result = this._blockBuilder.build(draft);
+
+    if (!result.ok) {
+      // For now, both `awaitingAnchor` and other failures cancel the
+      // draft. Park-and-retry on aggregation arrival is a future
+      // BlockBuilderService responsibility; until that lands, callers
+      // see the same outcome as before -- silent cancel.
       this.draftManager.cancelDraft(draft.draftId);
       return;
     }
 
-    // Find the deepest common ancestor of all include-constrained blocks.
-    const anchor = this._findCommonAncestor(includes);
-    if (!anchor) {
-      this.draftManager.cancelDraft(draft.draftId);
-      return;
-    }
-
-    const anchorKey = anchor.toPrimitive();
-    const aggregates = includes.filter((h) => h.toPrimitive() !== anchorKey);
-
-    // Build per-aggregate output counts from caches (or leaf defaults)
-    const aggregateOutputCounts: number[] = [];
-    for (const aggHash of aggregates) {
-      const aggBlock = this.store.get(aggHash);
-      if (!aggBlock) {
-        aggregateOutputCounts.push(0);
-        continue;
-      }
-      const aggData = getAggregationData(aggBlock);
-      const sc = aggBlock.claimIndices.filter((c) => c < aggBlock.outputs.length).length;
-      aggregateOutputCounts.push(aggData?.newOutputCount ?? (aggBlock.outputs.length - sc));
-    }
-
-    // Create a virtual OutputSpaceBlock for the block being solidified.
-    // This lets OutputSpaceModule compute claim indices and claim masks
-    // even though the block doesn't exist in the store yet.
-    //
-    // Self-claimed indices: every RECORD_CONTRACT output is self-claimed
-    // at solidification. Records are atomically produced+consumed on the
-    // emitting block -- downstream assembly handles the claim bookkeeping
-    // here, keeping it out of contract code. See
-    // docs/protocol/computation.md#self-claimed-outputs.
-    const selfClaimedIndices: number[] = [];
-    for (let i = 0; i < draft.outputs.length; i++) {
-      if (Hash.equals(draft.outputs[i].verifier.contract, RECORD_CONTRACT)) {
-        selfClaimedIndices.push(i);
-      }
-    }
-    const selfClaimCount = selfClaimedIndices.length;
-    const virtualHash = draft.draftId;
-    const virtualBlock: OutputSpaceBlock = {
-      hash: virtualHash,
-      anchor,
-      aggregates,
-      outputs: draft.outputs.map((o) => ({ value: o.value })),
-      claimIndices: [...selfClaimedIndices].sort((a, b) => a - b),
-      aggregateOutputCounts,
-      newOutputCount: draft.outputs.length - selfClaimCount +
-        aggregateOutputCounts.reduce((a, b) => a + b, 0),
-    };
-
-    // Provider that includes the virtual block + real store blocks
-    const store = this.store;
-    const virtualProvider: OutputSpaceProvider = {
-      getBlock(hash: Hash): OutputSpaceBlock | undefined {
-        if (Hash.equals(hash, virtualHash)) return virtualBlock;
-        const block = store.get(hash);
-        if (!block) return undefined;
-        const aggData = getAggregationData(block);
-        const sc = block.claimIndices.filter((c) => c < block.outputs.length).length;
-        return {
-          hash: block.hash,
-          anchor: block.anchor,
-          aggregates: block.aggregates,
-          outputs: block.outputs.map((o) => ({ value: o.value })),
-          claimIndices: [...block.claimIndices].sort((a, b) => a - b),
-          aggregateOutputCounts: aggData?.aggregateOutputCounts ?? [],
-          newOutputCount: aggData?.newOutputCount ?? (block.outputs.length - sc),
-        };
-      },
-    };
-
-    const outputSpace = new OutputSpaceModule(virtualProvider);
-
-    // Compute claim indices using OutputSpaceModule. Value is looked up
-    // from the producing block in the store -- drafts only run once their
-    // producers are present, so this lookup always succeeds.
-    const claims: ClaimEntry[] = [];
-    for (const c of draft.claims) {
-      const idx = outputSpace.computeClaimIndex(virtualHash, {
-        block: c.producer,
-        outputIndex: c.outputIndex,
-      });
-      if (idx === undefined) continue;
-      const producer = this.store.get(c.producer);
-      const value = producer?.outputs[c.outputIndex]?.value ?? 0;
-      claims.push({ index: idx, value });
-    }
-    // Add self-claim entries for record outputs. These use the raw
-    // output index (< draft.outputs.length) because self-claims target
-    // this block's own outputs directly. Value is 0 (records are
-    // economically neutral).
-    for (const idx of selfClaimedIndices) {
-      claims.push({ index: idx, value: 0 });
-    }
-
-    // Compute the composed claim mask for the aggregation data output
-    const composedClaimMask = outputSpace.subtreeClaimMask(virtualHash) ?? [];
-
-    // Update the aggregation data output with the composed claim mask
-    let outputs = this._patchAggregationOutput(
-      draft.outputs,
-      composedClaimMask,
-      aggregateOutputCounts,
-      virtualBlock.newOutputCount,
-    );
-
-    // Solidification value override: allow the configured hook to raise
-    // `value` on `getOutput`-produced slots. `verifier` and `data` are
-    // frozen at generation time; only `value` may change, and only
-    // upward (the namespace partition check rejects lowered values).
-    // See docs/protocol/computation.md#output-requirements.
-    if (this._valueOverride) {
-      outputs = this._overrideGetOutputValues(outputs, draft.outputSlots);
-    }
-
-    const spec: BlockSpec = {
-      anchor,
-      outputs,
-      claims,
-      declaredWeight: draft.declaredWeight,
-      aggregates,
-      refs: draft.refs,
-    };
-
-    const block = this._blockCreator.createBlock(spec, this._privateKey);
+    const block = result.block;
     // Cancel the draft BEFORE processing the published block so the
     // draft's phantom claims are cleared out of OutputClaimService and
     // consensus before the real block (which claims the same outputs)
-    // is evaluated. Otherwise the two claimants conflict and the newly
-    // published block loses canonicality to its own source draft.
+    // is evaluated.
     this.draftManager.cancelDraft(draft.draftId);
-    if (block) {
-      // Defer the re-entrant processBlock to a microtask so the
-      // solidify frame unwinds before strategies re-evaluate the new
-      // block. Without this, DraftStrategy can spawn a downstream
-      // draft (e.g. chess turn=N+1) on the just-solidified block in
-      // the same stack frame, contending for worker slots and
-      // mid-transition draft state. See
-      // docs/design/chess-turn-one-bug.md.
-      queueMicrotask(() => this.reactiveLayer.processBlock(block, null));
-    }
-  }
-
-  /** Find the deepest common ancestor of a set of block hashes. */
-  private _findCommonAncestor(includes: Hash[]): Hash | undefined {
-    const depthMaps: Map<string, number>[] = [];
-    for (const incHash of includes) {
-      const map = new Map<string, number>();
-      let cur = incHash;
-      let depth = 0;
-      while (this.store.has(cur)) {
-        map.set(cur.toPrimitive(), depth);
-        const block = this.store.get(cur)!;
-        cur = block.anchor;
-        depth++;
-      }
-      depthMaps.push(map);
-    }
-
-    let anchor: Hash | undefined;
-    let bestDepth = Infinity;
-    for (const [key, depth] of depthMaps[0]) {
-      if (depthMaps.every((m) => m.has(key))) {
-        const maxDepth = Math.max(...depthMaps.map((m) => m.get(key)!));
-        if (maxDepth < bestDepth) {
-          bestDepth = maxDepth;
-          anchor = Hash.fromPrimitive(key);
-        }
-      }
-    }
-
-    return anchor;
-  }
-
-  /**
-   * Patch the aggregation data output with the composed claim mask.
-   * If the draft has an aggregation data output (from the contract),
-   * update its claimMask. Otherwise return outputs unchanged.
-   */
-  private _patchAggregationOutput(
-    outputs: Output[],
-    claimMask: number[],
-    aggregateOutputCounts: number[],
-    newOutputCount: number,
-  ): Output[] {
-    return outputs.map((output) => {
-      if (!Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
-      if (output.data === null) return output; // null-data marker (if any)
-      if (output.data.length === 0) return output; // empty-bytes marker (legacy)
-
-      // Decode, patch claimMask, re-encode
-      const aggData = getAggregationData({
-        outputs: [output],
-      } as Block);
-      if (!aggData) return output;
-
-      return {
-        ...output,
-        data: encodeAggregationData({
-          ...aggData,
-          claimMask,
-          aggregateOutputCounts,
-          newOutputCount,
-        }),
-      };
-    });
-  }
-
-  /**
-   * Apply the configured value-override hook to every `getOutput`-sourced
-   * output slot. The hook sees the verifier + data + default value and
-   * returns the final value. Verifier and data are frozen; only value
-   * changes. Non-`get` slots pass through unchanged.
-   *
-   * Outputs and outputSlots are parallel arrays (outputSlots may be
-   * shorter for drafts created outside generation, which default to
-   * 'require' origin -- those also pass through unchanged).
-   */
-  private _overrideGetOutputValues(outputs: Output[], slots: OutputSlot[]): Output[] {
-    return outputs.map((output, i) => {
-      const slot = slots[i];
-      if (!slot || slot.origin !== 'get') return output;
-      if (!this._valueOverride) return output;
-      // 'get'-origin outputs always carry non-null data (synthesized by
-      // OutputHandler which returns {value, data: Uint8Array}).
-      if (output.data === null) return output;
-      const newValue = this._valueOverride(output.verifier, output.data, output.value);
-      if (newValue === output.value) return output;
-      return { ...output, value: newValue };
-    });
+    // Defer the re-entrant processBlock to a microtask so the solidify
+    // frame unwinds before strategies re-evaluate the new block.
+    // Without this, DraftStrategy can spawn a downstream draft (e.g.
+    // chess turn=N+1) on the just-solidified block in the same stack
+    // frame, contending for worker slots and mid-transition draft state.
+    // See docs/design/chess-turn-one-bug.md.
+    queueMicrotask(() => this.reactiveLayer.processBlock(block, null));
   }
 
   /** Get the genesis block hash (first block in store) */

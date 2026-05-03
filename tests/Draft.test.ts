@@ -30,7 +30,6 @@ Deno.test('createDraft: sets all fields, random draftId, status pending', () => 
   assertEquals(draft.declaredWeight, 5);
   assert(Hash.equals(draft.anchor, anchor));
   assertEquals(draft.refs, []);
-  assertEquals(draft.aggregates, []);
   assertEquals(draft.status, 'pending');
 
   // draftId should be a valid Hash (random)
@@ -43,21 +42,17 @@ Deno.test('createDraft: two calls produce different draftIds', () => {
   assertNotEquals(a.draftId.toPrimitive(), b.draftId.toPrimitive());
 });
 
-Deno.test('createDraft: optional refs and aggregates', () => {
+Deno.test('createDraft: optional refs', () => {
   const r = Hash.digest('ref');
-  const agg = Hash.digest('agg');
   const draft = createDraft({
     claims: [],
     outputs: [],
     declaredWeight: 1,
     anchor,
     refs: [r],
-    aggregates: [agg],
   });
   assertEquals(draft.refs.length, 1);
   assert(Hash.equals(draft.refs[0], r));
-  assertEquals(draft.aggregates.length, 1);
-  assert(Hash.equals(draft.aggregates[0], agg));
 });
 
 // -- DraftStore CRUD ----------------------------------------------

@@ -153,8 +153,6 @@ function makeDraft(
     declaredWeight: 0,
     anchor: Hash.digest('anchor'),
     refs: [],
-    aggregates: [],
-    includeConstraints: [],
     status,
   };
 }

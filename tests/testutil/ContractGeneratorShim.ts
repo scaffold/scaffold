@@ -261,7 +261,6 @@ export class ContractGeneratorShim {
     const newOutputs = env.getAllOutputs();
     const newClaims = env.getResolvedClaims();
     const newRefs = env.getGeneratedRefs();
-    const newIncludes = env.getIncludeConstraints();
     for (const claim of newClaims) {
       this._outputClaims.addClaim(draft.draftId, claim.block, claim.outputIndex);
     }
@@ -271,17 +270,10 @@ export class ContractGeneratorShim {
     const dedupedClaimRefs: ClaimRef[] = newClaims
       .filter((rc) => !existingClaimKeys.has(`${rc.block.toPrimitive()}:${rc.outputIndex}`))
       .map((rc) => ({ producer: rc.block, outputIndex: rc.outputIndex }));
-    const existingIncludes = new Set(
-      draft.includeConstraints.map((h) => h.toPrimitive()),
-    );
-    const dedupedIncludes = newIncludes.filter(
-      (h) => !existingIncludes.has(h.toPrimitive()),
-    );
     this._draftStore.update(draft.draftId, {
       outputs: [...draft.outputs, ...newOutputs],
       claims: [...draft.claims, ...dedupedClaimRefs],
       refs: [...draft.refs, ...newRefs],
-      includeConstraints: [...draft.includeConstraints, ...dedupedIncludes],
     });
     this._draftStore.transition(draft.draftId, 'ready');
   }
