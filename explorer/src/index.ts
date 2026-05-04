@@ -1,4 +1,9 @@
 export { BlockGraphExplorer } from "./components/BlockGraphExplorer.tsx";
+export { BlockExplorerOverlay } from "./components/BlockExplorerOverlay.tsx";
+export type {
+  BlockExplorerOverlayProps,
+  OverlayMode,
+} from "./components/BlockExplorerOverlay.tsx";
 export { BlockCreationModal } from "./components/BlockCreationModal.tsx";
 export type {
   BlockCreationModalProps,

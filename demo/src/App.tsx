@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { BlockCreationModal, BlockGraphExplorer } from "@scaffold/explorer";
-import type { InitialClaim } from "@scaffold/explorer";
+import { BlockExplorerOverlay } from "@scaffold/explorer";
 import { YamlEditorField } from "./YamlEditorField.tsx";
 import { Scaffold } from "scaffold.io/Scaffold.ts";
 import { Hash } from "scaffold.io/util/Hash.ts";
@@ -40,6 +39,26 @@ function isChessHash(hash: string): boolean {
   return hash === "#chess" || hash.startsWith("#chess?");
 }
 
+function parseYaml(text: string): Record<string, unknown> | null {
+  try {
+    return yaml.parse(text) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function renderYamlEditor(
+  props: { value: string; onChange: (v: string) => void; schema?: unknown },
+) {
+  return (
+    <YamlEditorField
+      value={props.value}
+      onChange={props.onChange}
+      schema={props.schema as never}
+    />
+  );
+}
+
 export function App() {
   const [route, setRoute] = useState<Route>(() => {
     if (typeof globalThis !== "undefined" && globalThis.location) {
@@ -51,7 +70,6 @@ export function App() {
   const navigate = useCallback((r: Route) => {
     setRoute(r);
     if (typeof globalThis !== "undefined" && globalThis.location) {
-      // Preserve any existing chess query params when navigating back to chess.
       if (r === "chess") {
         if (!isChessHash(globalThis.location.hash)) {
           globalThis.location.hash = "#chess";
@@ -63,32 +81,46 @@ export function App() {
   }, []);
 
   if (route === "chess") {
-    return (
-      <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
-        <div style={toolbarStyle}>
-          <span style={logoStyle}>Scaffold</span>
-          <span style={dividerStyle} />
-          <button onClick={() => navigate("explorer")} style={btnSecondary}>
-            Explorer
-          </button>
-          <span style={{ ...hintStyle, marginLeft: 8 }}>
-            Chess demo - each move is a block, verified by the game-state
-            contract.
-          </span>
-        </div>
-        <ChessApp />
-      </div>
-    );
+    return <ChessRoute onNavigateExplorer={() => navigate("explorer")} />;
   }
-
-  return <ExplorerApp onNavigateChess={() => navigate("chess")} />;
+  return <ExplorerRoute onNavigateChess={() => navigate("chess")} />;
 }
 
-interface ExplorerAppProps {
+// -- Chess route ----------------------------------------------------------
+
+interface ChessRouteProps {
+  onNavigateExplorer: () => void;
+}
+
+function ChessRoute({ onNavigateExplorer }: ChessRouteProps) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
+      <div style={toolbarStyle}>
+        <span style={logoStyle}>Scaffold</span>
+        <span style={dividerStyle} />
+        <button onClick={onNavigateExplorer} style={btnSecondary}>
+          Sandbox
+        </button>
+        <span style={{ ...hintStyle, marginLeft: 8 }}>
+          Chess demo - each move is a block, verified by the game-state
+          contract.
+        </span>
+      </div>
+      <ChessApp />
+    </div>
+  );
+}
+
+// Overlay action slot for the sandbox route -- includes navigation back to
+// the chess demo because the fullscreen overlay would otherwise cover it.
+
+// -- Explorer (sandbox) route --------------------------------------------
+
+interface ExplorerRouteProps {
   onNavigateChess: () => void;
 }
 
-function ExplorerApp({ onNavigateChess }: ExplorerAppProps) {
+function ExplorerRoute({ onNavigateChess }: ExplorerRouteProps) {
   const [enabledStrategies, setEnabledStrategies] = useState<Set<string>>(
     () => new Set(),
   );
@@ -109,26 +141,6 @@ function ExplorerApp({ onNavigateChess }: ExplorerAppProps) {
   }, [version]);
 
   const [count, setCount] = useState(0);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [initialClaims, setInitialClaims] = useState<InitialClaim[] | undefined>();
-
-  const handleOpenCreateModal = useCallback((claims?: InitialClaim[]) => {
-    setInitialClaims(claims);
-    setShowCreateModal(true);
-  }, []);
-
-  const handleCloseCreateModal = useCallback(() => {
-    setShowCreateModal(false);
-    setInitialClaims(undefined);
-  }, []);
-
-  const parseYaml = useCallback((text: string): Record<string, unknown> | null => {
-    try {
-      return yaml.parse(text) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-  }, []);
 
   const handleAddBlock = useCallback(() => {
     scaffold.put({
@@ -147,7 +159,6 @@ function ExplorerApp({ onNavigateChess }: ExplorerAppProps) {
   }, [scaffold]);
 
   const handleAdd5 = useCallback(() => {
-    // Pin anchor so all 5 blocks share it (simulates concurrent peers).
     const anchor = scaffold.put({
       outputs: [
         {
@@ -197,75 +208,60 @@ function ExplorerApp({ onNavigateChess }: ExplorerAppProps) {
     setVersion((v) => v + 1);
   }, [pending]);
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
-      {/* Toolbar */}
-      <div style={toolbarStyle}>
-        <span style={logoStyle}>Scaffold</span>
-        <span style={dividerStyle} />
-        <button onClick={handleAddBlock} style={btnPrimary}>
-          Add Block
-        </button>
-        <button onClick={handleAdd5} style={btnSecondary}>
-          Add 5
-        </button>
-        <button onClick={() => handleOpenCreateModal()} style={btnSecondary}>
-          Create Block
-        </button>
-        <span style={hintStyle}>
-          {count > 0 ? `+${count} added` : "Click to add blocks"}
-        </span>
-
-        <span style={dividerStyle} />
-
-        {STRATEGIES.map((s) => (
-          <label key={s.key} style={checkStyle} title={s.description}>
-            <input
-              type="checkbox"
-              checked={pending.has(s.key)}
-              onChange={() =>
-                toggle(s.key)}
-              style={{ accentColor: "#0071e3", width: 14, height: 14 }}
-            />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "#1d1d1f" }}>
-              {s.label}
-            </span>
-          </label>
-        ))}
-
-        <button
-          onClick={handleRestart}
-          style={dirty ? btnPrimary : btnSecondary}
-        >
-          {dirty ? "Restart" : "Restart"}
-        </button>
-
-        <span style={dividerStyle} />
-        <button onClick={onNavigateChess} style={btnSecondary}>
-          Chess Demo
-        </button>
-      </div>
-
-      <BlockGraphExplorer scaffold={scaffold} onCreateBlock={handleOpenCreateModal} />
-
-      {showCreateModal && (
-        <BlockCreationModal
-          scaffold={scaffold}
-          initialClaims={initialClaims}
-          onClose={handleCloseCreateModal}
-          parseYaml={parseYaml}
-          renderYamlEditor={(props) => (
-            <YamlEditorField
-              value={props.value}
-              onChange={props.onChange}
-              schema={props.schema}
-            />
-          )}
-        />
+  // Demo controls slotted into the overlay header.
+  const overlayActions = (
+    <>
+      <button onClick={handleAddBlock} style={btnPrimary}>
+        Add Block
+      </button>
+      <button onClick={handleAdd5} style={btnSecondary}>
+        Add 5
+      </button>
+      {count > 0 && (
+        <span style={{ ...hintStyle, marginRight: 4 }}>+{count} added</span>
       )}
-    </div>
+      <span style={dividerStyle} />
+      {STRATEGIES.map((s) => (
+        <label key={s.key} style={checkStyle} title={s.description}>
+          <input
+            type="checkbox"
+            checked={pending.has(s.key)}
+            onChange={() => toggle(s.key)}
+            style={{ accentColor: "#0071e3", width: 14, height: 14 }}
+          />
+          <span style={{ fontSize: 12, fontWeight: 500, color: "#1d1d1f" }}>
+            {s.label}
+          </span>
+        </label>
+      ))}
+      <button
+        onClick={handleRestart}
+        style={dirty ? btnPrimary : btnSecondary}
+        disabled={!dirty && count === 0}
+      >
+        Restart
+      </button>
+      <span style={dividerStyle} />
+      <button onClick={onNavigateChess} style={btnSecondary}>
+        Chess Demo
+      </button>
+    </>
+  );
+
+  return (
+    <BlockExplorerOverlay
+      key={version}
+      scaffold={scaffold}
+      defaultMode="fullscreen"
+      dismissable={false}
+      actions={overlayActions}
+      parseYaml={parseYaml}
+      renderYamlEditor={renderYamlEditor}
+    />
   );
 }
+
+// -- Styles ----------------------------------------------------------------
 
 const font = "-apple-system, BlinkMacSystemFont, sans-serif";
 
@@ -311,18 +307,18 @@ const checkStyle: React.CSSProperties = {
   gap: 5,
   cursor: "pointer",
   userSelect: "none",
-  padding: "5px 8px",
+  padding: "4px 6px",
   borderRadius: 8,
   fontFamily: font,
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "6px 16px",
+  padding: "5px 12px",
   background: "#0071e3",
   color: "#fff",
   border: "none",
   borderRadius: 8,
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 500,
   cursor: "pointer",
   fontFamily: font,

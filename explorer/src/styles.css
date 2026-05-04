@@ -1410,3 +1410,276 @@
   color: #ff3b30;
   background: rgba(255, 59, 48, 0.08);
 }
+
+/* ============================================================
+   Block Explorer Overlay -- floating pill + slide-in panel
+   ============================================================ */
+
+.explorer-overlay-pill,
+.explorer-overlay-panel {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Helvetica,
+    Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #1d1d1f;
+  box-sizing: border-box;
+}
+
+/* -- Pill (FAB) ---------------------------------------------- */
+
+.explorer-overlay-pill {
+  position: fixed;
+  bottom: 20px;
+  z-index: 2147483640;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(29, 29, 31, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+  backdrop-filter: saturate(180%) blur(12px);
+  -webkit-backdrop-filter: saturate(180%) blur(12px);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.explorer-overlay-pill:hover {
+  transform: translateY(-1px);
+  background: rgba(29, 29, 31, 1);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.22),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+}
+.explorer-overlay-pill:active {
+  transform: translateY(0);
+}
+.explorer-overlay-pill-right {
+  right: 20px;
+}
+.explorer-overlay-pill-left {
+  left: 20px;
+}
+.explorer-overlay-pill-icon {
+  font-size: 14px;
+  opacity: 0.9;
+  line-height: 1;
+}
+.explorer-overlay-pill-label {
+  font-weight: 600;
+}
+.explorer-overlay-pill-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.explorer-overlay-pill-pulse {
+  animation: explorer-overlay-pill-pulse 0.7s ease-out;
+}
+@keyframes explorer-overlay-pill-pulse {
+  0% {
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.18),
+      0 0 0 0 rgba(0, 113, 227, 0.6);
+  }
+  70% {
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.18),
+      0 0 0 14px rgba(0, 113, 227, 0);
+  }
+  100% {
+    box-shadow:
+      0 6px 20px rgba(0, 0, 0, 0.18),
+      0 0 0 0 rgba(0, 113, 227, 0);
+  }
+}
+
+/* -- Panel --------------------------------------------------- */
+
+.explorer-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 2147483641;
+  animation: explorer-overlay-fade 0.15s ease-out;
+}
+@keyframes explorer-overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.explorer-overlay-panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  background: #f5f5f7;
+  z-index: 2147483642;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 32px rgba(0, 0, 0, 0.18);
+  animation: explorer-overlay-slide 0.18s ease-out;
+  overflow: hidden;
+}
+.explorer-overlay-panel-right { right: 0; border-left: 1px solid #d2d2d7; }
+.explorer-overlay-panel-left { left: 0; border-right: 1px solid #d2d2d7; }
+
+.explorer-overlay-panel-fullscreen {
+  left: 0;
+  right: 0;
+  width: auto !important;
+  border: none;
+}
+
+@keyframes explorer-overlay-slide {
+  from { transform: translateX(8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.explorer-overlay-panel-left {
+  animation-name: explorer-overlay-slide-left;
+}
+@keyframes explorer-overlay-slide-left {
+  from { transform: translateX(-8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.explorer-overlay-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 1;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.explorer-overlay-resize:hover,
+.explorer-overlay-resize:active {
+  background: rgba(0, 113, 227, 0.18);
+}
+.explorer-overlay-resize-right { left: 0; }
+.explorer-overlay-resize-left { right: 0; }
+
+/* Header */
+
+.explorer-overlay-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  flex-wrap: wrap;
+}
+
+.explorer-overlay-header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1d1d1f;
+}
+.explorer-overlay-header-icon {
+  font-size: 14px;
+  opacity: 0.7;
+}
+.explorer-overlay-header-count {
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #e5e5ea;
+  color: #6e6e73;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.explorer-overlay-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.explorer-overlay-header-buttons {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.explorer-overlay-create-btn {
+  padding: 5px 12px;
+  background: #f5f5f7;
+  color: #1d1d1f;
+  border: 1px solid #d2d2d7;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 20px;
+  transition: background 0.12s ease;
+}
+.explorer-overlay-create-btn:hover {
+  background: #ebebef;
+}
+
+.explorer-overlay-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: #1d1d1f;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.explorer-overlay-iconbtn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.explorer-overlay-iconbtn:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Body -- the BlockGraph fills it */
+
+.explorer-overlay-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #f5f5f7;
+  padding: 12px;
+}
+.explorer-overlay-body .block-graph-container {
+  flex: 1 1 auto;
+  min-height: 0;
+}

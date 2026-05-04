@@ -13,6 +13,7 @@ import { Board } from './Board.tsx';
 import { Clock } from './Clock.tsx';
 import { Wallet } from './Wallet.tsx';
 import { GameList } from './GameList.tsx';
+import { BlockExplorerOverlay } from '@scaffold/explorer';
 
 const DEMO_SEEDS = ['a', 'b', 'c'] as const;
 type DemoSeed = typeof DEMO_SEEDS[number];
@@ -362,6 +363,8 @@ export function ChessApp() {
           </div>
         ))}
       </div>
+
+      <BlockExplorerOverlay scaffold={scaffold} pillLabel="Explorer" />
     </div>
   );
 }
