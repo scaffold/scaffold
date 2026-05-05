@@ -132,7 +132,7 @@ export function BlockTable({ scaffold }: { scaffold: Scaffold }) {
         case 'declaredWeight':
           return block.declaredWeight;
         case 'descendantWeight':
-          return ctx.consensus.getDescendantWeight(block.hash);
+          return ctx.nodeWeights.descendantWeight(block.hash);
         case 'outputs':
           return block.outputs.length;
         case 'inputs':

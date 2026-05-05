@@ -76,9 +76,9 @@ export const BlockRow = React.memo(function BlockRow({
   }, [onPin]);
 
   // Query services directly on each render
-  const { consensus, trust, sampling } = scaffold.context;
+  const { consensus, trust, sampling, nodeWeights } = scaffold.context;
   const isCanonical = consensus.isCanonical(block.hash);
-  const descendantWeight = consensus.getDescendantWeight(block.hash);
+  const descendantWeight = nodeWeights.descendantWeight(block.hash);
   const distribution = sampling.getDistribution(block.hash);
   const trustState = trust.getTrustState(block.hash);
   const hasConflicts = consensus.getConflicts(block.hash).size > 0;

@@ -156,6 +156,7 @@ export const BlockGraphDetail = React.memo(function BlockGraphDetail(
 ) {
   const ctx = scaffold.context;
   const consensus = ctx.consensus;
+  const nodeWeights = ctx.nodeWeights;
 
   // Find block
   let block: Block | undefined;
@@ -171,7 +172,7 @@ export const BlockGraphDetail = React.memo(function BlockGraphDetail(
   const isCanonical = consensus.isCanonical(block.hash);
   const conflicts = consensus.getConflicts(block.hash);
   const hasConflicts = conflicts.size > 1;
-  const descendantWeight = consensus.getDescendantWeight(block.hash);
+  const descendantWeight = nodeWeights.descendantWeight(block.hash);
   const effectiveWeight = consensus.getEffectiveWeight(block.hash);
 
   const anchorBlock = !isGenesis ? ctx.store.get(block.anchor) : undefined;

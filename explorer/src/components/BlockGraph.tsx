@@ -115,6 +115,7 @@ function computeGraphData(
 ): { nodes: GraphNode[]; links: GraphLink[]; width: number; height: number } {
   const ctx = scaffold.context;
   const consensus = ctx.consensus;
+  const nodeWeights = ctx.nodeWeights;
 
   const nodeData: {
     hex: string;
@@ -131,7 +132,7 @@ function computeGraphData(
     const isCanonical = consensus.isCanonical(block.hash);
     const conflicts = consensus.getConflicts(block.hash);
     const hasConflicts = conflicts.size > 1;
-    const descendantWeight = consensus.getDescendantWeight(block.hash);
+    const descendantWeight = nodeWeights.descendantWeight(block.hash);
     const effectiveWeight = consensus.getEffectiveWeight(block.hash);
     const isGhost = ghostHashes.has(hex);
     nodeData.push({
