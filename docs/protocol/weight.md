@@ -108,6 +108,8 @@ Effective weight includes ALL descendants' verified weight, regardless of confli
 
 With balanced aggregation trees (enforced by the weight-ratio constraint), weight propagation from a new leaf to the anchor chain is O(log N). Without balancing, a degenerate tree could require O(N) depth.
 
+The propagation rule itself -- how `selfWeight` and `weightVector` are combined into `derivedWeightVector` and how `descendantWeight(X)` is computed for any block (including drafts as phantom nodes) -- is specified in [weight-propagation.md](weight-propagation.md). It is canonical-independent (uses max over neighbours, never sum), so there is no circularity between consensus's canonicality decision and weight.
+
 ---
 
 ## Interaction with Other Modules

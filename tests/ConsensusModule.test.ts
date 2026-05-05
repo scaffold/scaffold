@@ -677,35 +677,10 @@ Deno.test({
   assertEquals(layer.getEffectiveWeight(B.hash), 60);
 });
 
-Deno.test({
-  name: 'getDescendantWeight: weight vector attributes to correct chain level',
-}, () => {
-  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
-  const C1: TestBlock = {
-    hash: h('C1'),
-    anchor: G.hash,
-    aggregates: [],
-    weight: [5],
-  };
-  const B: TestBlock = {
-    hash: h('B'),
-    anchor: C1.hash,
-    aggregates: [],
-    weight: [10, 20, 30],
-  };
-  const { layer } = setup(G, C1, B);
-
-  layer.setVerifiedWeight(C1.hash, [5]);
-  layer.setVerifiedWeight(B.hash, [10, 20, 30]);
-
-  // B's anchor chain: B -> C1 -> G
-  // B.weight[0] = 10 -> attributed to C1 (direct anchor)
-  // B.weight[1] = 20 -> attributed to G (anchor's anchor)
-  // B.weight[2] = 30 -> beyond genesis, attributed to nothing
-  assertEquals(layer.getDescendantWeight(C1.hash), 10);
-  // G gets: C1.weight[0] (=5) + B.weight[1] (=20) = 25
-  assertEquals(layer.getDescendantWeight(G.hash), 25);
-});
+// Note: chain-block descendant weight (the old getDescendantWeight) is now
+// delegated to NodeWeightsService -- see tests/NodeWeightsService.test.ts and
+// docs/protocol/weight-propagation.md. Conflict-resolution scoring still
+// flows through ConsensusModule via the optional `effectiveWeight` callback.
 
 // -- removeBlock tests --------------------------------------------
 
@@ -737,21 +712,6 @@ Deno.test('removeBlock: cleans up children map', () => {
 
   layer.removeBlock(B.hash);
   assertEquals(layer.getEffectiveWeight(A.hash), 50);
-});
-
-Deno.test('removeBlock: cleans up chain contributions', () => {
-  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
-  const A: TestBlock = { hash: h('A'), anchor: G.hash, aggregates: [], weight: [10] };
-  const B: TestBlock = { hash: h('B'), anchor: A.hash, aggregates: [], weight: [20] };
-  const { layer } = setup(G, A, B);
-
-  layer.setVerifiedWeight(A.hash, [10]);
-  layer.setVerifiedWeight(B.hash, [20]);
-
-  assertEquals(layer.getDescendantWeight(A.hash), 20);
-
-  layer.removeBlock(B.hash);
-  assertEquals(layer.getDescendantWeight(A.hash), 0);
 });
 
 Deno.test('removeBlock: cleans up aggregation maps', () => {

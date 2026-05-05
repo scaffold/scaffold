@@ -134,45 +134,16 @@ descendant_weight(C) = sum of B.verified_weight[i]
 When two blocks B1 and B2 conflict, we compare their **effective weight**:
 
 ```
-effective_weight(B) = sum(B.verified_weight) + descendant_weight(B)
+effective_weight(B) = selfWeight(B) + descendant_weight(B)
 ```
 
 Where:
-- `sum(B.verified_weight)` is B's own total verified work (across all chain levels)
-- `descendant_weight(B)` is the total verified work of all blocks that anchor to B (directly or transitively)
+- `selfWeight(B)` is B's own verified work (`declaredWeight` scaled by sampling).
+- `descendant_weight(B)` is computed by [`NodeWeightsModule`](weight-propagation.md). It picks the single heaviest neighbour (anchoring child or aggregator parent) at each step and never sums across overlapping subtrees -- preventing diamonds and competing aggregators from double-counting.
 
-Descendant weight is recursive:
+The propagation rule is **canonical-independent by construction**: it reads only the structural graph (anchor / aggregate edges) plus per-block `selfWeight` and `weightVector`. It does NOT consult the canonical set, so there is no circularity between weight and canonicality. Effective weight is computed once per query; conflict winners are determined in a single pass.
 
-```
-descendant_weight(B) = sum of effective_weight(D)
-    for each D that directly anchors to B
-```
-
-### Weight Modes
-
-The consensus module supports two modes for computing effective weight, configured at construction:
-
-#### All-descendants mode (default)
-
-Effective weight includes **all** descendants regardless of their canonicality. This makes conflict resolution a single-pass computation -- a block's effective weight never depends on canonicality, so there is no circularity.
-
-This is simpler and sufficient for most scenarios. A block that attracted heavy descendants signals quality (it was chosen as an anchor by high-weight workers), even if some of those descendants later lose their own conflicts.
-
-#### Canonical-only mode
-
-Effective weight includes only **canonical** descendants. A descendant that lost its own conflict (or whose anchor is non-canonical) does not contribute weight to its ancestors.
-
-This produces a "purer" weight signal but introduces a dependency between weight and canonicality. The dependency is resolved by iterative refinement:
-
-1. Compute effective weights using all descendants (same as all-descendants mode).
-2. Determine conflict winners and propagate canonicality (Phase 1 + Phase 2).
-3. Recompute effective weights, this time excluding non-canonical descendants.
-4. Re-determine conflict winners with the new weights.
-5. If the canonical set changed, go to step 3. If stable, done.
-
-**Convergence guarantee:** The canonical set can only shrink or stay the same between iterations. A block that loses a conflict also loses its descendants' weight, reinforcing its loss. A block that wins retains its canonical descendants, reinforcing its win. Since the loser set grows monotonically and the block set is finite, the iteration converges. In practice it stabilizes in 1-2 rounds.
-
-Both modes produce identical results when no block's conflict outcome depends on weight from non-canonical descendants -- which is the common case. The modes diverge only when a block wins a conflict partly due to weight from descendants that themselves lost conflicts elsewhere in the DAG.
+(Earlier revisions of this doc described an "all-descendants" mode and an iterative "canonical-only" convergence mode. The new propagation supersedes both -- the max-over-neighbours rule cannot inflate via non-canonical subtrees, so filtering by canonicality is unnecessary.)
 
 ### Verified vs. Declared Weight
 
@@ -247,9 +218,7 @@ For each block that has direct conflicts, compare effective weights. Ties broken
    - If all pass, mark canonical. Otherwise, mark non-canonical.
    - Decrement in-degree for all blocks that depend on this block (blocks that anchor to it, and blocks that aggregate it). Enqueue any that reach zero.
 
-In **all-descendants mode**, this runs once in O(|blocks| + |edges|) time. Effective weight does not depend on canonicality, so conflict winners are determined once in Phase 1 and propagated structurally in Phase 2.
-
-In **canonical-only mode**, Phases 1 and 2 are wrapped in a convergence loop. After each pass, effective weights are recomputed excluding non-canonical descendants, and the phases re-run. The loop terminates when the canonical set stabilizes.
+This runs once in O(|blocks| + |edges|) time. Effective weight is canonical-independent (see [Effective Weight](#effective-weight-for-conflict-resolution)), so conflict winners are determined once in Phase 1 and propagated structurally in Phase 2.
 
 ### Canonical View
 
@@ -341,10 +310,10 @@ Block E (`weight = [50]`) anchors to A.
 
 Now descendant weight matters:
 
-- `effective_weight(A) = 90 + effective_weight(E) = 90 + 50 = 140`
-- `effective_weight(B) = 80 + effective_weight(D) = 80 + 200 = 280`
+- `effective_weight(A) = selfWeight(A) + descendant_weight(A) = 90 + 50 = 140`
+- `effective_weight(B) = selfWeight(B) + descendant_weight(B) = 80 + 200 = 280`
 
-In **all-descendants mode**, effective weight includes all descendants regardless of their canonicality. D contributes to B's weight even though D's own canonicality depends on B's. In **canonical-only mode**, the same result holds here because D is canonical (its anchor B wins), so D's weight counts either way.
+D contributes to `descendant_weight(B)` via the propagation rule (B is on D's anchor chain). The propagation is canonical-independent, so D's contribution does not depend on conflict outcomes -- which is exactly why there is no circularity between weight and canonicality.
 
 **B overtakes A.** Now re-evaluate canonicality (topological order):
 - G: canonical.
@@ -378,27 +347,6 @@ Continuing with B winning: further verification of D reveals 50% fake work.
 
 A's branch is at 140. B still wins, but the gap has narrowed. If more real work arrives on A's branch, A could reclaim the lead -- and all of A's descendants (E) and aggregators (S) would become canonical again.
 
-### Mode Divergence Example
-
-Setup: genesis G. Block A (`weight = [7]`) and block B (`weight = [3]`) both anchor to G and conflict. Block C (`weight = [10]`) anchors to B. Block D (`weight = [12]`) anchors to G. C and D conflict.
-
-**All-descendants mode:**
-
-- `effective_weight(A) = 7`
-- `effective_weight(B) = 3 + 10 = 13`
-- B wins (13 > 7). B and C canonical, A non-canonical.
-- C vs D: C = 10, D = 12. D wins. C non-canonical.
-
-But B's victory relied on C's weight (10), and C lost its own conflict with D. In all-descendants mode, this does not matter -- B still wins.
-
-**Canonical-only mode:**
-
-- Round 1 (same as all-descendants): B wins, C loses to D.
-- Round 2: C is non-canonical, so B's canonical-only weight = 3 + 0 = 3. A = 7. A wins.
-- Round 3: A canonical, B non-canonical. C non-canonical (anchor B lost). D canonical. Stable.
-
-Result: A wins instead of B, because B's weight advantage came entirely from a descendant (C) that itself lost a conflict.
-
 ---
 
 ## Module Boundary
@@ -427,5 +375,6 @@ Result: A wins instead of B, because B's weight advantage came entirely from a d
 
 | File | Description |
 |------|-------------|
-| [`src/core/ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | Core algorithm: effective weight, conflict resolution, canonical view |
-| [`src/core/ConsensusService.ts`](../../src/core/ConsensusService.ts) | Wired adapter using concrete `Block` type |
+| [`src/core/ConsensusModule.ts`](../../src/core/ConsensusModule.ts) | Conflict resolution + canonical view. Defers `effective_weight` to a configured callback (production wiring routes through `NodeWeightsModule`). |
+| [`src/core/ConsensusService.ts`](../../src/core/ConsensusService.ts) | Wired adapter using concrete `Block`/`Draft` types; supplies the `effectiveWeight` callback bound to `NodeWeightsService`. |
+| [`src/core/NodeWeightsModule.ts`](../../src/core/NodeWeightsModule.ts) / [`src/core/NodeWeightsService.ts`](../../src/core/NodeWeightsService.ts) | Descendant weight propagation. See [weight-propagation.md](weight-propagation.md). |

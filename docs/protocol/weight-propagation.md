@@ -218,5 +218,7 @@ It does **not** read canonicality, conflicts, or verified weight separately -- i
 | File | Description |
 |------|-------------|
 | [`src/core/NodeWeightsModule.ts`](../../src/core/NodeWeightsModule.ts) | Pure logic: `derivedWeightVector` propagation, `descendantWeight(X)` query, single-max walk |
-| [`src/core/NodeWeightsService.ts`](../../src/core/NodeWeightsService.ts) | Adapter from `Node` / `BlockStore` to the propagation provider; subtracts `declaredWeight` out of `weightVector[0]` until the `weight.md` refactor lands |
-| [`tests/NodeWeights.test.ts`](../../tests/NodeWeights.test.ts) | Diamond, chained co-aggregation, competing aggregators, multi-tree spine |
+| [`src/core/NodeWeightsService.ts`](../../src/core/NodeWeightsService.ts) | Adapter from `BlockStore` + `DraftStore` to the propagation provider. Drafts participate as phantom blocks (anchor / aggregates derived via `pickAnchorForClaims`). When `SamplingService` is wired, blocks' `selfWeight` and `weightVector` are scaled by the per-block weight factor. Memoises `derivedWeightVector` and `descendantWeight` per version; invalidated on store add, draft add / transition, and sampling weight-factor change. |
+| [`src/core/ConsensusService.ts`](../../src/core/ConsensusService.ts) | Wires `effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight` into `ConsensusModule`'s conflict-resolution path. |
+| [`tests/NodeWeights.test.ts`](../../tests/NodeWeights.test.ts) | Unit tests on the pure module: diamond, chained co-aggregation, competing aggregators, multi-tree spine. |
+| [`tests/NodeWeightsService.test.ts`](../../tests/NodeWeightsService.test.ts) | End-to-end through real `BlockStore` / `DraftStore`: aggregation cache decoding, drafts as phantom blocks, cache invalidation. |

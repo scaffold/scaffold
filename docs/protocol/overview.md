@@ -205,6 +205,7 @@ The protocol is specified across several module documents, each responsible for 
 | [Block Creation](block-creation.md) | Block construction | How are blocks built, anchored, and balanced? |
 | [Contracts](contracts.md) | Standard contracts | What spending conditions do protocol modules use? |
 | [Weight](weight.md) | Weight derivation | How do blocks earn consensus influence through verified computation? |
+| [Weight Propagation](weight-propagation.md) | Descendant-weight propagation | How does weight propagate through the graph for conflict resolution without double-counting? |
 | [Anchoring](anchoring.md) | Anchor resolution & output mapping | Where does a block attach, and how are outputs addressed across blocks? |
 | [DAG](dag.md) | Graph topology | How do blocks form the chain of trees? |
 | [Output Data](output-data.md) | Data format & contract UI | How do contracts expose params/data for reading and construction? |
