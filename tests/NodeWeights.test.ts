@@ -162,136 +162,30 @@ Deno.test('descendantWeight: deep anchor chain accumulates deeper selfWeights', 
 // Joel's competing-aggregator example (the load-bearing test)
 // ---------------------------------------------------------------------------
 
-Deno.test("descendantWeight: Joel's P vs A vs P' competing-aggregator case", () => {
-  // X has anchoring child A (weight 100). A has anchoring child B (weight 50).
-  // P aggregates {X, A}, selfWeight 5.
-  // P' aggregates {X, A, B}, selfWeight 5.
-  //
-  // For P to attribute weight from X+A correctly, P.weightVector must encode
-  // those contributions (since aggregation rolls subtree weight up). For our
-  // synthetic test we set weightVectors that match the example arithmetic:
-  //
-  //   - A's contribution to X (via P) = 100  -> P attributes this to its anchor
-  //     (since X is on P.anchor's chain).
-  //   - X's contribution to X.anchor via P -- ignore for this test, X.selfWeight = 0.
-  //   - For P' (which also aggregates B): B contributes 50 to A (= P''s aggregated
-  //     descendant of X), so P' carries A=100 + B-as-A-descendant=50.
-  //
-  // We model P.weightVector as the contributions P pushes UP (to P.anchor).
-  // For descendantWeight(X), the relevant path is via parent. Our module
-  // walks P's aggregated subtree to extract weight at X-or-below directly
-  // from each Y's weightVector and selfWeight, so we set those rather than
-  // P.weightVector.
-  //
-  // Setup so the module can compute via the aggregated-subtree walk:
-  //   X (anchor G), A (anchor X), B (anchor A) with selfWeights 0, 100, 50.
-  //   P aggregates {X, A}, P.anchor = G. selfWeight 5.
-  //   P' aggregates {X, A, B}, P'.anchor = G. selfWeight 5.
-  //
-  // The weightThroughParent walk picks each Y in P's subtree that's an
-  // anchor-descendant of X (so A, but not X itself), adds Y.selfWeight, and
-  // adds Y.weightVector entries that fall within depth(Y, X). A is at
-  // depth 1 from X, so A.weightVector[0..0] (none if A.weightVector is []).
-  // Total via P = P.self + A.self = 5 + 100 = 105.
-  //
-  // P' includes B too. B is at depth 2 from X. B.selfWeight=50,
-  // B.weightVector=[] so just selfWeight contributes. Plus A. Total via P' =
-  // 5 + 100 + 50 = 155.
-  //
-  // Direct via anchoring child A: A.derived = [100] (A is a leaf with no
-  // weightVector for the test -- B contributes via selfWeight not via wV).
-  // A.derived[0] + A.derived[1] = 100 + 0 = 100.
-  //
-  // Hmm, in Joel's example A's weight is 100 and B's weight via A is 50,
-  // making A's branch 150. That requires B contributing to A via
-  // weightVector. Let me re-set: if B.selfWeight = 50 and B.weightVector = [],
-  // then B contributes 50 only via its own self, and propagation moves it up
-  // to A via shift -- but shift drops it. So our model needs B to have a
-  // weightVector entry. Setting B.weightVector = [50] models "B's aggregated
-  // subtree (or B itself, in the legacy sense) contributes 50 to B.anchor=A."
-  //
-  // With that:
-  //   B.derived = [B.self=50, B.wV[0]=50]
-  //   A.derived = [A.self=100, A.wV[0]=0] + shift1([50, 50]) = [100, 0] + [50] = [150, 0]
-  //   X via A: A.d[0] + A.d[1] = 150 + 0 = 150
-  //   X via P: 5 + 100 + (A.wV in [0..0] = 0) = 105
-  //     plus B not in P's subtree -> 105
-  //   X via P': 5 + 100 + (A.wV in [0..0] = 0) + 50 + (B.wV in [0..1] = 50)
-  //          = 5 + 100 + 50 + 50 = 205   <- hmm, this triple-counts.
-  //
-  // The issue: the model doesn't yet handle the relationship between
-  // selfWeight and weightVector cleanly. In the real protocol B contributes
-  // either via selfWeight (caught by the parent-walk's selfWeight sum) OR
-  // via weightVector entries (caught by the propagation). They shouldn't
-  // both be set -- weightVector is for AGGREGATED subtree, not own work.
-  //
-  // For B as a leaf: selfWeight=50, weightVector=[] (no aggregated subtree).
-  // For an aggregator C aggregating B: C.weightVector[depth(B in chain)] = 50
-  //   (B's contribution gets re-attributed to C's anchor chain).
-  //
-  // So in our test, we shouldn't set B.weightVector=[50] AND B.selfWeight=50.
-  // The legacy "weightVector[0]=selfWeight" convention is exactly the
-  // declaredWeight-folded-into-[0] behavior we're trying to escape. Let's
-  // model B as a leaf (selfWeight=50, weightVector=[]) and verify the answer.
-
+Deno.test("descendantWeight: Joel's anchoring vs aggregator case 1", () => {
+  // P doesn't aggregate B so it's not chosen as the descendant of X
   const m = setup(
     { id: 'G', selfWeight: 0, weightVector: [], anchor: null, aggregates: [] },
     { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
     { id: 'A', selfWeight: 100, weightVector: [], anchor: 'X', aggregates: [] },
     { id: 'B', selfWeight: 50, weightVector: [], anchor: 'A', aggregates: [] },
-    { id: 'P', selfWeight: 5, weightVector: [100], anchor: 'G', aggregates: ['X', 'A'] },
-    { id: "P'", selfWeight: 5, weightVector: [150], anchor: 'G', aggregates: ['X', 'A', 'B'] },
+    { id: 'P', selfWeight: 5, weightVector: [], anchor: 'G', aggregates: ['X', 'A'] },
   );
 
-  // Via anchoring child A:
-  //   A.derived = [A.self=100] + shift1(B.derived=[50]) = [100] + [] = [100]
-  //   candidate = 100 + 0 = 100
-  // Via parent P:
-  //   P.self = 5
-  //   subtree blocks descendant of X: A (depth 1)
-  //     A.selfWeight = 100. A.weightVector entries in [0..0] = none (empty).
-  //   total via P = 5 + 100 = 105
-  // Via parent P':
-  //   P'.self = 5
-  //   subtree blocks descendant of X: A (depth 1), B (depth 2)
-  //     A: + 100. A.weightVector in [0..0] = none.
-  //     B: + 50.  B.weightVector in [0..1] = none (empty).
-  //   total via P' = 5 + 100 + 50 = 155
-  // max = 155
-  assertEquals(m.descendantWeight('X'), 155);
+  assertEquals(m.descendantWeight('X'), 150);
 });
 
-Deno.test('descendantWeight: P vs A when neither dominates per Joel example', () => {
-  // Same as above but without P'. Then A wins since A's branch... wait:
-  //   Via A: 100 (A's leaf-derived)
-  //   Via P: 5 + 100 = 105
-  // P wins (105 > 100). To get A=150 in Joel's example, B needs to contribute
-  // to A via the propagation. Set B.weightVector = [50] meaning B's aggregated
-  // subtree pushes 50 up to A. But B is a leaf in this scenario. The cleanest
-  // way to express "B itself contributes to A" is via B.selfWeight, which is
-  // captured by the parent-walk over an aggregator's subtree -- not by
-  // anchor-chain propagation, which only carries weightVector entries.
-  //
-  // This asymmetry is intentional: anchor-chain propagation rolls *aggregated*
-  // weight up; selfWeight stays at the block. Joel's example assumed the
-  // legacy convention where selfWeight is folded into weightVector[0]. With
-  // that convention restored, A would carry B's weight upward. We model that
-  // by setting B.weightVector = [50] AND B.selfWeight = 0 (the "clean" split):
+Deno.test("descendantWeight: Joel's anchoring vs aggregator case 2", () => {
+  // P aggregates B so it's chosen as the descendant of X
   const m = setup(
+    { id: 'G', selfWeight: 0, weightVector: [], anchor: null, aggregates: [] },
     { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
     { id: 'A', selfWeight: 100, weightVector: [], anchor: 'X', aggregates: [] },
-    { id: 'B', selfWeight: 0, weightVector: [50], anchor: 'A', aggregates: [] },
-    { id: 'P', selfWeight: 5, weightVector: [100], anchor: 'G', aggregates: ['X', 'A'] },
+    { id: 'B', selfWeight: 50, weightVector: [], anchor: 'A', aggregates: [] },
+    { id: 'P', selfWeight: 5, weightVector: [], anchor: 'G', aggregates: ['X', 'A', 'B'] },
   );
-  // B.derived = [0, 50]
-  // A.derived = [100] + shift1([0, 50]) = [100] + [50] = [150]
-  // Via A: 150 + 0 = 150
-  // Via P (P aggregates X and A only, NOT B):
-  //   subtree descendants of X: A (depth 1).
-  //     A.self = 100. A.wV in [0..0] = none.
-  //   total via P = 5 + 100 = 105
-  // max = 150
-  assertEquals(m.descendantWeight('X'), 150);
+
+  assertEquals(m.descendantWeight('X'), 155);
 });
 
 // ---------------------------------------------------------------------------
