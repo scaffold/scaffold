@@ -38,8 +38,8 @@ export const GAME_STATE_CONTRACT = Hash.digest('chess-game-state-contract');
 
 import { getAggregationData } from '../contracts/AggregationContract.ts';
 import {
-  OutputSpaceModule,
   type OutputSpaceBlock,
+  OutputSpaceModule,
   type OutputSpaceProvider,
 } from './OutputSpace.ts';
 
@@ -64,16 +64,30 @@ export function getBlockClaimMask(block: Block, _anchorOutputCount?: number): nu
 }
 
 /**
- * Get the weight vector for a block: reconstructed from declaredWeight + chainWeights.
+ * The block's *aggregated subtree's* contribution at each anchor depth --
+ * i.e., `aggData.chainWeights` if present, else `[]`. Does NOT include the
+ * block's own `declaredWeight`. This is the "split" form consumed by
+ * `NodeWeightsModule` and any caller that needs `selfWeight` and subtree
+ * contribution as distinct inputs.
  */
 export function getBlockWeightVector(block: Block): number[] {
   const aggData = getAggregationData(block);
-  if (aggData && aggData.chainWeights.length > 0) {
-    const result = [...aggData.chainWeights];
-    result[0] += block.declaredWeight;
-    return result;
-  }
-  return [block.declaredWeight];
+  return aggData ? [...aggData.chainWeights] : [];
+}
+
+/**
+ * The block's full per-depth weight: `declaredWeight` folded into entry 0,
+ * subtree contributions on top. This is the "rolled-up" form consumed by
+ * `ConsensusModule` (which sums per-depth verified weight) and by
+ * `BlockCreationModule.deriveWeightVector` (which composes subtrees by their
+ * total contribution including their own declared weight).
+ */
+export function getBlockTotalWeightVector(block: Block): number[] {
+  const subtree = getBlockWeightVector(block);
+  if (subtree.length === 0) return [block.declaredWeight];
+  const result = [...subtree];
+  result[0] += block.declaredWeight;
+  return result;
 }
 
 // -- BlockPayload (wire-encoded fields) -----------------------------

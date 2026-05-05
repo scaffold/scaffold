@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/overview.md (module orchestration)
 
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
+import { Block, BlockStore, getBlockTotalWeightVector } from './Block.ts';
 import { ConsensusService } from './ConsensusService.ts';
 import { SamplingService } from './SamplingService.ts';
 import { BlockCreationService } from './BlockCreationService.ts';
@@ -69,7 +69,7 @@ export class Coordinator {
       const block = this.store.get(hash);
       if (!block) return;
       const wf = this.sampling.getWeightFactor(hash);
-      const declared = getBlockWeightVector(block);
+      const declared = getBlockTotalWeightVector(block);
       const verified = declared.map((w) => w * wf);
       this.consensus.setVerifiedWeight(hash, verified);
 
@@ -141,7 +141,7 @@ export class Coordinator {
 
     // 3. Consensus -- start with declared weight (sampling will refine)
     this.consensus.addBlock(block.hash);
-    const weightVector = getBlockWeightVector(block);
+    const weightVector = getBlockTotalWeightVector(block);
     this.consensus.setVerifiedWeight(block.hash, weightVector);
 
     // 4. Flush canonical view -- fires listener which populates canonicalityChanges

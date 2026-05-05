@@ -8,7 +8,7 @@
 
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../../src/util/Hash.ts';
-import { getBlockWeightVector } from '../../src/core/Block.ts';
+import { getBlockTotalWeightVector } from '../../src/core/Block.ts';
 import { TestNetwork } from './TestNetwork.ts';
 import { makeAggregationBlock, makeBlock, makeGenesis, makeOutput } from './helpers.ts';
 
@@ -66,7 +66,7 @@ Deno.test('Aggregation: weight vector consistent across nodes', () => {
   for (const id of net.nodeIds) {
     const block = net.getNode(id).store.get(agg.hash);
     assert(block !== undefined, `Node ${id} should have agg block`);
-    const wv = getBlockWeightVector(block);
+    const wv = getBlockTotalWeightVector(block);
     assertEquals(wv, [30], `Node ${id} weight vector mismatch`);
   }
 });

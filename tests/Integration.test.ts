@@ -11,7 +11,7 @@ import {
   BlockStore,
   createBlock,
   createGenesisBlock,
-  getBlockWeightVector,
+  getBlockTotalWeightVector,
   RECORD_CONTRACT,
 } from '../src/core/Block.ts';
 import { encodeAggregationData } from '../src/contracts/AggregationContract.ts';
@@ -396,7 +396,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
   assert(node.store.has(aggBlock.hash));
 
   // Weight vector should be reconstructed: [5 + 25] = [30]
-  const wv = getBlockWeightVector(aggBlock);
+  const wv = getBlockTotalWeightVector(aggBlock);
   assertEquals(wv, [30]);
 });
 

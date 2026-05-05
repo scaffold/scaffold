@@ -1,5 +1,5 @@
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
-import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
+import { Block, BlockStore, getBlockTotalWeightVector } from './Block.ts';
 import { Draft, DraftStore } from './Draft.ts';
 import { ConsensusConfig, ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
@@ -52,7 +52,7 @@ class ConsensusProviderAdapter implements ConsensusProvider<ConsensusEntity> {
   }
 
   getWeightVector(entity: ConsensusEntity): number[] {
-    if (isBlock(entity)) return getBlockWeightVector(entity);
+    if (isBlock(entity)) return getBlockTotalWeightVector(entity);
     // Drafts contribute their effectiveWeight (wall-clock-bumped, plus
     // declaredWeight as a floor) as a single-dimensional weight vector,
     // attributed through the picked anchor's chain. Step 8 wires the

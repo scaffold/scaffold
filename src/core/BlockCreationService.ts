@@ -1,5 +1,5 @@
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
+import { Block, BlockStore, getBlockTotalWeightVector } from './Block.ts';
 import { getAggregationData } from '../contracts/AggregationContract.ts';
 import { BlockCreationModule, BlockCreationProvider } from './BlockCreationModule.ts';
 import {
@@ -74,7 +74,7 @@ class BlockCreationProviderAdapter implements BlockCreationProvider<Block> {
   }
 
   getWeightVector(block: Block): number[] {
-    return getBlockWeightVector(block);
+    return getBlockTotalWeightVector(block);
   }
 
   getAnchorDepth(from: Hash, ancestor: Hash): number | undefined {

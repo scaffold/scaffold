@@ -1,11 +1,7 @@
 // Protocol spec: docs/protocol/weight-propagation.md
 //
 // Adapter wiring NodeWeightsModule to BlockStore. Uses Hash as NodeId so the
-// service composes with everything that already keys on block hash. The
-// adapter subtracts `block.declaredWeight` back out of `weightVector[0]` --
-// that fold belongs in `Block.ts` proper but the upstream refactor (see
-// TODO.md) hasn't landed yet, so the service keeps the propagation module
-// honest in the meantime.
+// service composes with everything that already keys on block hash.
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BlockStore, getBlockWeightVector } from './Block.ts';
@@ -34,13 +30,7 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
 
   weightVector(id: Hash): number[] {
     const b = this.store.get(id);
-    if (!b) return [];
-    // getBlockWeightVector folds declaredWeight into [0]; the propagation
-    // module wants only the aggregated subtree's contribution, so peel it
-    // back off. (TODO.md: split this in Block.ts itself.)
-    const v = [...getBlockWeightVector(b)];
-    if (v.length > 0) v[0] -= b.declaredWeight;
-    return v;
+    return b ? getBlockWeightVector(b) : [];
   }
 
   aggregates(id: Hash): Hash[] {
