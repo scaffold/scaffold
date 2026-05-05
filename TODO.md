@@ -2,6 +2,9 @@
 
 Queued protocol work, roughly in priority order. Each item follows the 4-step development sequence in AGENTS.md: document → skeleton → test → implement.
 
+### `weightVector[0]` should not include `declaredWeight`
+`getBlockWeightVector` in [`src/core/Block.ts`](src/core/Block.ts) folds `block.declaredWeight` into `result[0]` of the returned vector. That conflates two things: the block's *own* work, and the aggregated subtree's contribution at depth 0. Weight-propagation code (see [`docs/protocol/weight-propagation.md`](docs/protocol/weight-propagation.md), [`src/core/NodeWeightsModule.ts`](src/core/NodeWeightsModule.ts)) wants them split: `selfWeight` is a scalar, `weightVector[k]` is *only* the aggregated subtree's contribution to the k-th ancestor. Until this lands, `NodeWeightsService` subtracts `declaredWeight` back out of `weightVector[0]` when adapting `Node` to the propagation provider.
+
 ## Cohesion / Refactor (do these first)
 
 These are the items that cause the most hidden bugs today. Most of the bugs we hit during the chess demo bringup were the same shape: state that should have transitioned didn't, because no single component owned the transition. Doing these in priority order pays down the structural debt that future features will otherwise step on.
