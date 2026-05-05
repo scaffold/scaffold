@@ -5,10 +5,19 @@ import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 /** Configuration for the consensus module. */
 export interface ConsensusConfig {
   /**
-   * When true, effective weight for conflict resolution only counts canonical
-   * descendants. Resolved via iterative convergence. Default: false (all descendants).
+   * External effective-weight oracle. When supplied, ConsensusModule defers
+   * `getEffectiveWeight` (and the conflict-resolution score it backs) to this
+   * callback instead of running its own recursive descendant sum. The
+   * canonical wiring (`ConsensusService`) routes this through
+   * `NodeWeightsService` so blocks and drafts share one propagation model
+   * (see docs/protocol/weight-propagation.md).
+   *
+   * When absent, the legacy recursive `verified_weight + sum(children)`
+   * computation is used. This fallback exists so unit tests of
+   * `ConsensusModule` can stand up without the surrounding wiring; production
+   * paths always supply the callback.
    */
-  canonicalOnlyWeight?: boolean;
+  effectiveWeight?: (hash: Hash) => number;
 }
 
 /** Provider interface for the consensus module to access block data. */
@@ -47,7 +56,7 @@ export interface ConsensusProvider<BlockType> {
  */
 export class ConsensusModule<BlockType> {
   private readonly provider: ConsensusProvider<BlockType>;
-  private readonly canonicalOnlyWeight: boolean;
+  private readonly externalEffectiveWeight: ((hash: Hash) => number) | undefined;
 
   /** All registered block hashes, keyed by hash primitive. */
   private blocks = new Map<HashPrimitive, Hash>();
@@ -67,15 +76,6 @@ export class ConsensusModule<BlockType> {
   /** Anchor -> set of blocks that directly anchor to it. */
   private children = new Map<HashPrimitive, Set<HashPrimitive>>();
 
-  /**
-   * For weight-vector-aware descendant weight: maps each chain block to
-   * the list of (block, depth) pairs that contribute weight to it.
-   */
-  private chainContributions = new Map<
-    HashPrimitive,
-    { block: HashPrimitive; depth: number }[]
-  >();
-
   /** Cached canonical view. Null means dirty. */
   private canonicalCache: Set<HashPrimitive> | null = null;
 
@@ -87,7 +87,7 @@ export class ConsensusModule<BlockType> {
 
   constructor(provider: ConsensusProvider<BlockType>, config?: ConsensusConfig) {
     this.provider = provider;
-    this.canonicalOnlyWeight = config?.canonicalOnlyWeight ?? false;
+    this.externalEffectiveWeight = config?.effectiveWeight;
   }
 
   /** Register a listener for canonicality changes. Returns an unsubscribe function. */
@@ -154,29 +154,13 @@ export class ConsensusModule<BlockType> {
       this.getOrCreateSet(this.aggregatedByMap, sKey).add(key);
     }
 
-    // Register chain contributions for weight-vector-aware descendant weight
-    let current = anchorHash;
-    let depth = 0;
-    while (!Hash.equals(current, ZERO_HASH)) {
-      const cKey = current.toPrimitive();
-      if (!this.chainContributions.has(cKey)) {
-        this.chainContributions.set(cKey, []);
-      }
-      this.chainContributions.get(cKey)!.push({ block: key, depth });
-
-      const cBlock = this.provider.getBlock(current);
-      if (!cBlock) break;
-      current = this.provider.getAnchor(cBlock);
-      depth++;
-    }
-
     this.markDirty();
   }
 
   /**
    * Remove a previously registered block.
-   * Cleans up children, aggregation maps, chain contributions,
-   * verified weights, and direct conflicts. Marks dirty.
+   * Cleans up children, aggregation maps, verified weights, and direct
+   * conflicts. Marks dirty.
    */
   removeBlock(hash: Hash): void {
     const key = hash.toPrimitive();
@@ -207,15 +191,6 @@ export class ConsensusModule<BlockType> {
 
     // Clean up aggregatedByMap entry for this block
     this.aggregatedByMap.delete(key);
-
-    // Clean up chain contributions (remove this block's contributions from all ancestors)
-    for (const [_ancestorKey, contributions] of this.chainContributions) {
-      const idx = contributions.findIndex((c) => c.block === key);
-      if (idx !== -1) contributions.splice(idx, 1);
-    }
-
-    // Remove this block's own contribution entry
-    this.chainContributions.delete(key);
 
     // Clean up verified weights and boosts
     this.verifiedWeights.delete(key);
@@ -266,32 +241,16 @@ export class ConsensusModule<BlockType> {
 
   // -- Queries ----------------------------------------------------
 
-  /** Effective weight: own verified weight + descendant weight (recursive). */
+  /**
+   * Effective weight for conflict resolution. Defers to the configured
+   * `effectiveWeight` callback (production wiring routes through
+   * `NodeWeightsService`) when present; otherwise runs the legacy recursive
+   * descendant sum.
+   */
   getEffectiveWeight(hash: Hash): number {
+    if (this.externalEffectiveWeight) return this.externalEffectiveWeight(hash);
     const memo = new Map<HashPrimitive, number>();
     return this.computeEffectiveWeight(hash.toPrimitive(), memo);
-  }
-
-  /**
-   * Weight-vector-aware descendant weight for a chain block.
-   * Sums verified_weight[i] for each canonical block that has `hash` at
-   * depth i in its anchor chain.
-   */
-  getDescendantWeight(hash: Hash): number {
-    this.ensureCanonical();
-    const key = hash.toPrimitive();
-    const contributions = this.chainContributions.get(key);
-    if (!contributions) return 0;
-
-    let total = 0;
-    for (const { block, depth } of contributions) {
-      if (!this.canonicalCache!.has(block)) continue;
-      const vw = this.verifiedWeights.get(block);
-      if (vw && depth < vw.length) {
-        total += vw[depth];
-      }
-    }
-    return total;
   }
 
   /** Whether a block is in the current canonical view. */
@@ -326,16 +285,19 @@ export class ConsensusModule<BlockType> {
     if (!conflicts || conflicts.size === 0) return hash;
 
     const memo = new Map<HashPrimitive, number>();
+    const score = (k: HashPrimitive, h: Hash): number =>
+      (this.externalEffectiveWeight
+        ? this.externalEffectiveWeight(h)
+        : this.computeEffectiveWeight(k, memo)) +
+      (this.boosts.get(k) ?? 0);
 
     let bestHash = hash;
-    let bestWeight = this.computeEffectiveWeight(key, memo) +
-      (this.boosts.get(key) ?? 0);
+    let bestWeight = score(key, hash);
 
     for (const cKey of conflicts) {
       const cHash = this.blocks.get(cKey);
       if (!cHash) continue;
-      const cWeight = this.computeEffectiveWeight(cKey, memo) +
-        (this.boosts.get(cKey) ?? 0);
+      const cWeight = score(cKey, cHash);
       if (
         cWeight > bestWeight ||
         (cWeight === bestWeight && Hash.compare(cHash, bestHash) < 0)
@@ -367,18 +329,18 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
-   * Compute effective weight of a block.
+   * Legacy fallback effective weight (used only when no `effectiveWeight`
+   * callback is supplied -- typically `ConsensusModule` unit tests).
    *
    * effective_weight(B) = sum(verified_weight) + sum(effective_weight(child))
    *   for each child that anchors to B.
    *
-   * When `canonicalFilter` is provided, only children in the filter set
-   * contribute descendant weight (canonical-only mode).
+   * Production code goes through `NodeWeightsService` via the configured
+   * callback; see docs/protocol/weight-propagation.md for the model.
    */
   private computeEffectiveWeight(
     blockKey: HashPrimitive,
     memo: Map<HashPrimitive, number>,
-    canonicalFilter?: ReadonlySet<HashPrimitive>,
   ): number {
     const cached = memo.get(blockKey);
     if (cached !== undefined) return cached;
@@ -390,18 +352,14 @@ export class ConsensusModule<BlockType> {
     const vw = this.verifiedWeights.get(blockKey);
     let ownWeight = 0;
     if (vw) {
-      for (const w of vw) {
-        ownWeight += w;
-      }
+      for (const w of vw) ownWeight += w;
     }
 
-    // Descendant weight from children (optionally filtered by canonical set)
     let descWeight = 0;
     const kids = this.children.get(blockKey);
     if (kids) {
       for (const childKey of kids) {
-        if (canonicalFilter && !canonicalFilter.has(childKey)) continue;
-        descWeight += this.computeEffectiveWeight(childKey, memo, canonicalFilter);
+        descWeight += this.computeEffectiveWeight(childKey, memo);
       }
     }
 
@@ -410,28 +368,10 @@ export class ConsensusModule<BlockType> {
     return total;
   }
 
-  /**
-   * Compute the canonical view using a two-phase topological algorithm,
-   * optionally iterated until convergence in canonical-only weight mode.
-   */
+  /** Compute the canonical view using the two-phase topological algorithm. */
   private ensureCanonical(): void {
     if (this.canonicalCache !== null) return;
-
-    // First pass: no canonical filter (all descendants contribute weight)
-    let canonical = this.computeCanonicalPass();
-
-    if (this.canonicalOnlyWeight) {
-      // Iterate: recompute weights using only canonical descendants, re-run
-      // until the canonical set stabilizes. Converges because the loser set
-      // grows monotonically.
-      for (;;) {
-        const next = this.computeCanonicalPass(canonical);
-        if (setsEqual(canonical, next)) break;
-        canonical = next;
-      }
-    }
-
-    this.canonicalCache = canonical;
+    this.canonicalCache = this.computeCanonicalPass();
   }
 
   /**
@@ -446,13 +386,8 @@ export class ConsensusModule<BlockType> {
    *     Rule 1 -- its anchor is canonical (or it is genesis)
    *     Rule 2 -- every aggregate it references is canonical
    *     Rule 3 -- it won its direct conflict (or has none)
-   *
-   * @param canonicalFilter When provided, effective weight only counts
-   *   descendants in this set (canonical-only weight mode).
    */
-  private computeCanonicalPass(
-    canonicalFilter?: ReadonlySet<HashPrimitive>,
-  ): Set<HashPrimitive> {
+  private computeCanonicalPass(): Set<HashPrimitive> {
     const canonical = new Set<HashPrimitive>();
     const memo = new Map<HashPrimitive, number>();
 
@@ -462,19 +397,23 @@ export class ConsensusModule<BlockType> {
     // Evaluated pairwise: A ⚡ B and B ⚡ C does not mean A ⚡ C.
     const conflictLosers = new Set<HashPrimitive>();
 
+    const score = (k: HashPrimitive, h: Hash): number =>
+      (this.externalEffectiveWeight
+        ? this.externalEffectiveWeight(h)
+        : this.computeEffectiveWeight(k, memo)) +
+      (this.boosts.get(k) ?? 0);
+
     for (const blockKey of this.blocks.keys()) {
       const dc = this.directConflicts.get(blockKey);
       if (!dc || dc.size === 0) continue;
 
       const blockHash = this.blocks.get(blockKey)!;
-      const blockWeight = this.computeEffectiveWeight(blockKey, memo, canonicalFilter) +
-        (this.boosts.get(blockKey) ?? 0);
+      const blockWeight = score(blockKey, blockHash);
 
       for (const partnerKey of dc) {
         if (!this.blocks.has(partnerKey)) continue;
         const partnerHash = this.blocks.get(partnerKey)!;
-        const partnerWeight = this.computeEffectiveWeight(partnerKey, memo, canonicalFilter) +
-          (this.boosts.get(partnerKey) ?? 0);
+        const partnerWeight = score(partnerKey, partnerHash);
 
         if (
           partnerWeight > blockWeight ||
@@ -596,13 +535,4 @@ export class ConsensusModule<BlockType> {
       }
     }
   }
-}
-
-/** Check if two sets contain the same elements. */
-function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
-  if (a.size !== b.size) return false;
-  for (const v of a) {
-    if (!b.has(v)) return false;
-  }
-  return true;
 }

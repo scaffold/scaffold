@@ -21,6 +21,13 @@ export interface BlockSummary {
   aggregateCount: number;
   totalValue: number;
   effectiveWeight: number;
+  /**
+   * Conflict-resolution descendant weight from the new propagation
+   * (`docs/protocol/weight-propagation.md`). Surfaced alongside
+   * `effectiveWeight` so divergence is visible at a glance during the
+   * rollout.
+   */
+  descendantWeight: number;
 }
 
 export interface ScaffoldDebugAPI {
@@ -75,6 +82,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
   const store = ctx.store;
   const consensus = ctx.consensus;
   const sampling = ctx.sampling;
+  const nodeWeights = ctx.nodeWeights;
 
   function resolveHash(prefix: string): Hash | null {
     const lower = prefix.toLowerCase();
@@ -101,6 +109,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
       aggregateCount: block.aggregates.length,
       totalValue: block.outputs.reduce((sum, o) => sum + o.value, 0),
       effectiveWeight: consensus.getEffectiveWeight(hash),
+      descendantWeight: nodeWeights.descendantWeight(hash),
     };
   }
 
@@ -134,6 +143,8 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
         aggregates: block.aggregates.map((a) => a.toHex()),
         refs: block.refs.map((r) => r.toHex()),
         effectiveWeight: consensus.getEffectiveWeight(hash),
+        descendantWeight: nodeWeights.descendantWeight(hash),
+        derivedWeightVector: nodeWeights.derivedWeightVector(hash),
         weightFactor: sampling.getWeightFactor(hash),
         conflicts: [...consensus.getConflicts(hash)],
       };

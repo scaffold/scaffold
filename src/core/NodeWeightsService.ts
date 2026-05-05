@@ -1,48 +1,114 @@
 // Protocol spec: docs/protocol/weight-propagation.md
 //
-// Adapter wiring NodeWeightsModule to BlockStore. Uses Hash as NodeId so the
-// service composes with everything that already keys on block hash.
+// Adapter wiring NodeWeightsModule to BlockStore + DraftStore. Uses Hash as
+// NodeId so the service composes with everything that already keys on block
+// hash or draft id.
+//
+// Drafts participate as full nodes in the propagation graph, mirroring how
+// ConsensusService treats them as phantom blocks. A draft's anchor and
+// aggregates are derived from its claims via pickAnchorForClaims (the same
+// logic ConsensusService uses), and its selfWeight is `max(declaredWeight,
+// effectiveWeight)` -- consistent with what ConsensusService.getWeightVector
+// reports today.
+//
+// SamplingService is consumed lazily (via ctx.maybeGet) so unit tests that
+// stand up only the propagation layer keep working. When sampling is wired,
+// blocks' selfWeight and weightVector are scaled by the per-block weight
+// factor so the propagation sees verified weight, not raw declared weight.
+//
+// derivedWeightVector and descendantWeight are memoised across calls,
+// invalidated whenever the store grows, a draft is added/transitioned, or a
+// sampling weight factor changes. Without this, getConflictWinner would
+// trigger an O(graph) walk per candidate.
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { BlockStore, getBlockWeightVector } from './Block.ts';
+import { Draft, DraftStore } from './Draft.ts';
 import { NodeWeightsModule, NodeWeightsProvider } from './NodeWeightsModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
+import { SamplingService } from './SamplingService.ts';
+import { pickAnchorForClaims } from './AnchorSelection.ts';
 
 class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
-  /** Reverse index: block -> blocks that aggregate it. Lazily built. */
+  /** Reverse index: block -> blocks/drafts that aggregate it. Lazily built. */
   private parentsIndex: Map<HashPrimitive, Hash[]> | null = null;
-  /** Reverse index: block -> blocks that anchor to it. Lazily built. */
+  /** Reverse index: block -> blocks/drafts that anchor to it. Lazily built. */
   private anchorChildrenIndex: Map<HashPrimitive, Hash[]> | null = null;
-  /** Bumps when the store changes; invalidates the lazy indices. */
-  private storeVersion = 0;
+  /**
+   * Bumps when the store changes, when a draft is added/transitioned, or
+   * when a sampling weight factor changes. Invalidates both the lazy reverse
+   * indices and the per-call caches in the enclosing NodeWeightsService.
+   */
+  version = 0;
   private indexVersion = -1;
 
-  constructor(private readonly store: BlockStore) {
+  private draftStore: DraftStore | undefined;
+
+  constructor(
+    private readonly store: BlockStore,
+    private readonly sampling: SamplingService | undefined,
+  ) {
     store.onAdded(() => {
-      this.storeVersion++;
+      this.version++;
+    });
+    sampling?.onWeightChange(() => {
+      this.version++;
+    });
+  }
+
+  setDraftStore(ds: DraftStore): void {
+    this.draftStore = ds;
+    ds.onAdded(() => {
+      this.version++;
+    });
+    ds.onTransition(() => {
+      this.version++;
     });
   }
 
   selfWeight(id: Hash): number {
     const b = this.store.get(id);
-    return b ? b.declaredWeight : 0;
+    if (b) {
+      const factor = this.sampling?.getWeightFactor(id) ?? 1;
+      return b.declaredWeight * factor;
+    }
+    const d = this.draftStore?.get(id);
+    if (d) return Math.max(d.declaredWeight, d.effectiveWeight);
+    return 0;
   }
 
   weightVector(id: Hash): number[] {
     const b = this.store.get(id);
-    return b ? getBlockWeightVector(b) : [];
+    if (b) {
+      const factor = this.sampling?.getWeightFactor(id) ?? 1;
+      const wv = getBlockWeightVector(b);
+      return factor === 1 ? wv : wv.map((w) => w * factor);
+    }
+    // Drafts have no aggregation cache; their entire contribution is selfWeight.
+    return [];
   }
 
   aggregates(id: Hash): Hash[] {
     const b = this.store.get(id);
-    return b ? [...b.aggregates] : [];
+    if (b) return [...b.aggregates];
+    const d = this.draftStore?.get(id);
+    if (d) {
+      const pick = pickAnchorForClaims(d.claims, this.store);
+      return pick.ok ? pick.aggregates : [];
+    }
+    return [];
   }
 
   anchor(id: Hash): Hash | null {
     const b = this.store.get(id);
-    if (!b) return null;
-    if (Hash.equals(b.anchor, ZERO_HASH)) return null;
-    return b.anchor;
+    if (b) return Hash.equals(b.anchor, ZERO_HASH) ? null : b.anchor;
+    const d = this.draftStore?.get(id);
+    if (d) {
+      const pick = pickAnchorForClaims(d.claims, this.store);
+      if (!pick.ok) return null;
+      return Hash.equals(pick.anchor, ZERO_HASH) ? null : pick.anchor;
+    }
+    return null;
   }
 
   anchoringChildren(id: Hash): Hash[] {
@@ -60,32 +126,104 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
   }
 
   private ensureIndices(): void {
-    if (this.indexVersion === this.storeVersion) return;
+    if (this.indexVersion === this.version) return;
     const parents = new Map<HashPrimitive, Hash[]>();
     const anchorChildren = new Map<HashPrimitive, Hash[]>();
-    for (const block of this.store.values()) {
-      if (!Hash.equals(block.anchor, ZERO_HASH)) {
-        const k = block.anchor.toPrimitive();
-        const arr = anchorChildren.get(k) ?? [];
-        arr.push(block.hash);
-        anchorChildren.set(k, arr);
-      }
-      for (const agg of block.aggregates) {
+
+    const noteAnchor = (id: Hash, anchor: Hash) => {
+      if (Hash.equals(anchor, ZERO_HASH)) return;
+      const k = anchor.toPrimitive();
+      const arr = anchorChildren.get(k) ?? [];
+      arr.push(id);
+      anchorChildren.set(k, arr);
+    };
+    const noteAggregates = (id: Hash, aggs: Hash[]) => {
+      for (const agg of aggs) {
         const k = agg.toPrimitive();
         const arr = parents.get(k) ?? [];
-        arr.push(block.hash);
+        arr.push(id);
         parents.set(k, arr);
       }
+    };
+
+    for (const block of this.store.values()) {
+      noteAnchor(block.hash, block.anchor);
+      noteAggregates(block.hash, block.aggregates);
     }
+
+    if (this.draftStore) {
+      for (const d of this.draftStore.getAll()) {
+        // Only consider drafts still alive in consensus -- terminal drafts
+        // should not contribute weight (their solidified replacement is a
+        // real Block in the store now). Match ConsensusService's draft-as-
+        // phantom-block convention: every non-terminal draft participates.
+        if (this.isTerminalDraft(d)) continue;
+        const pick = pickAnchorForClaims(d.claims, this.store);
+        if (!pick.ok) continue;
+        noteAnchor(d.draftId, pick.anchor);
+        noteAggregates(d.draftId, pick.aggregates);
+      }
+    }
+
     this.parentsIndex = parents;
     this.anchorChildrenIndex = anchorChildren;
-    this.indexVersion = this.storeVersion;
+    this.indexVersion = this.version;
+  }
+
+  private isTerminalDraft(d: Draft): boolean {
+    return d.status.phase === 'solidified' || d.status.phase === 'failed';
   }
 }
 
-/** NodeWeightsModule wired to a BlockStore via ProtocolContext. */
+/**
+ * NodeWeightsModule wired to a BlockStore (and optionally DraftStore) via
+ * ProtocolContext. Memoises `derivedWeightVector` and `descendantWeight`
+ * across calls, invalidated by the adapter's version counter.
+ */
 export class NodeWeightsService extends NodeWeightsModule<Hash> {
+  private readonly adapter: NodeWeightsProviderAdapter;
+  private derivedCache = new Map<HashPrimitive, number[]>();
+  private descendantCache = new Map<HashPrimitive, number>();
+  private cacheVersion = -1;
+
   constructor(ctx: ProtocolContext) {
-    super(new NodeWeightsProviderAdapter(ctx.get(BlockStore)));
+    const adapter = new NodeWeightsProviderAdapter(
+      ctx.get(BlockStore),
+      ctx.maybeGet(SamplingService),
+    );
+    super(adapter);
+    this.adapter = adapter;
+  }
+
+  /** Wire a DraftStore so drafts participate in propagation as phantom blocks. */
+  setDraftStore(draftStore: DraftStore): void {
+    this.adapter.setDraftStore(draftStore);
+  }
+
+  override derivedWeightVector(id: Hash): number[] {
+    this.ensureFreshCaches();
+    const k = id.toPrimitive();
+    const hit = this.derivedCache.get(k);
+    if (hit) return hit;
+    const v = super.derivedWeightVector(id);
+    this.derivedCache.set(k, v);
+    return v;
+  }
+
+  override descendantWeight(id: Hash): number {
+    this.ensureFreshCaches();
+    const k = id.toPrimitive();
+    const hit = this.descendantCache.get(k);
+    if (hit !== undefined) return hit;
+    const w = super.descendantWeight(id);
+    this.descendantCache.set(k, w);
+    return w;
+  }
+
+  private ensureFreshCaches(): void {
+    if (this.cacheVersion === this.adapter.version) return;
+    this.derivedCache.clear();
+    this.descendantCache.clear();
+    this.cacheVersion = this.adapter.version;
   }
 }

@@ -42,6 +42,15 @@ const recursionSentinel = Symbol('RecursionSentinel');
 export class NodeWeightsModule<NodeId> {
   constructor(private readonly p: NodeWeightsProvider<NodeId>) {}
 
+  /**
+   * Public access to the provider's selfWeight. Lets call sites compose
+   * `selfWeight + descendantWeight` for conflict-resolution scoring without
+   * needing to plumb the provider through.
+   */
+  selfWeight(id: NodeId): number {
+    return this.p.selfWeight(id);
+  }
+
   // -- Propagation: derived weight vector -----------------------------------
 
   /**

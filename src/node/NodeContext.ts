@@ -40,6 +40,7 @@ import { BlockCreator, ReactiveLayer, Strategy } from './ReactiveLayer.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
+import { NodeWeightsService } from '../core/NodeWeightsService.ts';
 import { GossipService } from './GossipService.ts';
 import { RoutingService } from './RoutingService.ts';
 import { PushAction } from './RoutingModule.ts';
@@ -122,6 +123,7 @@ export class NodeContext {
   // Protocol services (convenience accessors)
   readonly consensus: ConsensusService;
   readonly sampling: SamplingService;
+  readonly nodeWeights: NodeWeightsService;
   readonly gossip: GossipService;
   readonly routing: RoutingService;
   readonly trust: TrustService;
@@ -182,10 +184,16 @@ export class NodeContext {
     // 2b. Get DraftStore from context and wire to ConsensusService
     this.draftStore = this.protocolContext.get(DraftStore);
 
-    // 3. Get all services from ProtocolContext
+    // 3. Get all services from ProtocolContext.
+    //    Order matters: NodeWeightsService consults SamplingService lazily,
+    //    and ConsensusService consults NodeWeightsService for its
+    //    effective-weight callback. Wire both before constructing
+    //    ConsensusService so its callback resolves to the live propagation.
+    this.sampling = this.protocolContext.get(SamplingService);
+    this.nodeWeights = this.protocolContext.get(NodeWeightsService);
+    this.nodeWeights.setDraftStore(this.draftStore);
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
-    this.sampling = this.protocolContext.get(SamplingService);
     this.trust = this.protocolContext.get(TrustService);
 
     // 3b. UtxoIndex -- DI-registered so GenerationService can reach it

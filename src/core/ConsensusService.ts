@@ -4,6 +4,7 @@ import { Draft, DraftStore } from './Draft.ts';
 import { ConsensusConfig, ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { pickAnchorForClaims } from './AnchorSelection.ts';
+import { NodeWeightsService } from './NodeWeightsService.ts';
 
 /** Entity type that consensus operates on: either a finalized Block or a local Draft. */
 export type ConsensusEntity = Block | Draft;
@@ -70,7 +71,18 @@ export class ConsensusService extends ConsensusModule<ConsensusEntity> {
   constructor(ctx: ProtocolContext, config?: ConsensusConfig) {
     const store = ctx.get(BlockStore);
     const adapter = new ConsensusProviderAdapter(store);
-    super(adapter, config);
+    // Route effective weight through NodeWeightsService when available so
+    // blocks and drafts share the propagation model from
+    // docs/protocol/weight-propagation.md. NodeWeightsService.selfWeight
+    // already handles both blocks (declaredWeight * sampling factor) and
+    // drafts (max declaredWeight, effectiveWeight). User-supplied
+    // `config.effectiveWeight` wins if set.
+    const nodeWeights = ctx.maybeGet(NodeWeightsService);
+    const effectiveWeight = config?.effectiveWeight ??
+      (nodeWeights
+        ? (h: Hash) => nodeWeights.selfWeight(h) + nodeWeights.descendantWeight(h)
+        : undefined);
+    super(adapter, { ...config, effectiveWeight });
     this.adapter = adapter;
   }
 

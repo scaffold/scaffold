@@ -186,6 +186,7 @@ export function createDraft(fields: {
 export class DraftStore {
   private readonly drafts = new Map<HashPrimitive, Draft>();
   private readonly _transitionListeners: ((draft: Draft) => void)[] = [];
+  private readonly _addListeners: ((draft: Draft) => void)[] = [];
 
   /** Register a listener that fires after any status transition. Returns an unsubscribe function. */
   onTransition(cb: (draft: Draft) => void): () => void {
@@ -193,6 +194,15 @@ export class DraftStore {
     return () => {
       const i = this._transitionListeners.indexOf(cb);
       if (i >= 0) this._transitionListeners.splice(i, 1);
+    };
+  }
+
+  /** Register a listener that fires after a new draft is inserted via `add()`. */
+  onAdded(cb: (draft: Draft) => void): () => void {
+    this._addListeners.push(cb);
+    return () => {
+      const i = this._addListeners.indexOf(cb);
+      if (i >= 0) this._addListeners.splice(i, 1);
     };
   }
 
@@ -206,6 +216,7 @@ export class DraftStore {
       throw new Error(`Draft ${key} already exists`);
     }
     this.drafts.set(key, draft);
+    for (const cb of this._addListeners) cb(draft);
   }
 
   get(draftId: Hash): Draft | undefined {
