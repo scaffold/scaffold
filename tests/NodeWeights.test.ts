@@ -382,3 +382,125 @@ Deno.test('descendantWeight: spine extends through tree roots', () => {
   //   via R1 = 43 + 40 = 83
   assertEquals(m.descendantWeight('G'), 83);
 });
+
+// ---------------------------------------------------------------------------
+// Coverage gaps from the followup audit
+// ---------------------------------------------------------------------------
+
+Deno.test("descendantWeight: parent path picks up parent's own anchor child via descendantWeight(P)", () => {
+  // X has no anchor children; only a parent P, which itself has anchor child Q.
+  // Confirms the "extension via descendantWeight(P)" path actually pulls Q in.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'P', selfWeight: 5, weightVector: [], anchor: 'G', aggregates: ['X'] },
+    { id: 'Q', selfWeight: 100, weightVector: [], anchor: 'P', aggregates: [] },
+  );
+  // No anchor children of X. Via parent P:
+  //   P.self=5; aggregates [X]: depth 0, skip.
+  //   + descendantWeight(P): via Q -> derived(Q)=[100], 100+0 = 100.
+  //   = 5 + 100 = 105.
+  assertEquals(m.descendantWeight('X'), 105);
+});
+
+Deno.test('descendantWeight: aggregator chain depth >= 2 (PP aggregates P aggregates X)', () => {
+  // X.anchor=G; P.anchor=G aggregates X; PP.anchor=G aggregates P. P sits in
+  // PP's aggregated subtree but is NOT an anchor-descendant of X (P.anchor=G,
+  // not X), so the PP-direct path doesn't see P. The via-P path adds P.self
+  // and recurses into descendantWeight(P) -> weightThroughParent(P, PP).
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'P', selfWeight: 20, weightVector: [], anchor: 'G', aggregates: ['X'] },
+    { id: 'PP', selfWeight: 30, weightVector: [], anchor: 'G', aggregates: ['P'] },
+  );
+  // Via P: P.self=20 + (X depth 0 skip) + descendantWeight(P)
+  //   descendantWeight(P): via parent PP:
+  //     PP.self=30 + (P depth-from-P-to-P=0, skip) + descendantWeight(PP)=0 = 30.
+  //   So descendantWeight(P) = 30.
+  // Via P total = 20 + 30 = 50.
+  // Via PP directly: PP.self=30 + (P not anchor descendant of X, skip) + 0 = 30.
+  // max = 50.
+  assertEquals(m.descendantWeight('X'), 50);
+});
+
+Deno.test('descendantWeight: anchor-child branch wins over parent branch', () => {
+  // Heavy anchor-child A vs lightweight parent P.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'A', selfWeight: 200, weightVector: [], anchor: 'X', aggregates: [] },
+    { id: 'P', selfWeight: 10, weightVector: [], anchor: 'G', aggregates: ['X'] },
+  );
+  // Via A: derived(A)=[200], 200 + 0 = 200.
+  // Via P: 10 + 0 (X skip) + descendantWeight(P)=0 = 10.
+  // max = 200.
+  assertEquals(m.descendantWeight('X'), 200);
+});
+
+Deno.test('descendantWeight: parent branch wins over anchor-child branch', () => {
+  // Lightweight anchor-child A vs heavy parent P that aggregates X+A.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'A', selfWeight: 10, weightVector: [], anchor: 'X', aggregates: [] },
+    { id: 'P', selfWeight: 100, weightVector: [], anchor: 'G', aggregates: ['X', 'A'] },
+  );
+  // Via A: derived(A)=[10] = 10.
+  // Via P: 100 + (X skip) + (A depth 1: A.wV[0..0]=none + A.self=10) + descendantWeight(P)=0
+  //      = 100 + 10 = 110.
+  // max = 110.
+  assertEquals(m.descendantWeight('X'), 110);
+});
+
+Deno.test('descendantWeight: max across multiple competing parents (no superset)', () => {
+  // Two parents covering disjoint anchor-descendants of X.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'A', selfWeight: 50, weightVector: [], anchor: 'X', aggregates: [] },
+    { id: 'B', selfWeight: 40, weightVector: [], anchor: 'X', aggregates: [] },
+    { id: 'P', selfWeight: 10, weightVector: [], anchor: 'G', aggregates: ['X', 'A'] },
+    { id: "P'", selfWeight: 10, weightVector: [], anchor: 'G', aggregates: ['X', 'B'] },
+  );
+  // Via A: derived(A)=[50] = 50.
+  // Via B: derived(B)=[40] = 40.
+  // Via P: 10 + (A: 50) + 0 = 60.
+  // Via P': 10 + (B: 40) + 0 = 50.
+  // max = 60.
+  assertEquals(m.descendantWeight('X'), 60);
+});
+
+Deno.test('descendantWeight: diamond overlap -- max across parent+anchor-child, never sum', () => {
+  // X has anchor child A AND parent P that aggregates {X, A}. Both branches
+  // include A. If we summed them, A would be counted twice.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'A', selfWeight: 100, weightVector: [], anchor: 'X', aggregates: [] },
+    { id: 'P', selfWeight: 5, weightVector: [], anchor: 'G', aggregates: ['X', 'A'] },
+  );
+  // Via A: derived(A)=[100] = 100.
+  // Via P: 5 + (A: 100) + 0 = 105.
+  // max = 105 (NOT 100 + 105 = 205).
+  assertEquals(m.descendantWeight('X'), 105);
+});
+
+Deno.test('descendantWeight: solo block with no neighbours returns 0 cleanly', () => {
+  // Genesis-shaped: no anchor, no parents, no anchor children.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: null, aggregates: [] },
+  );
+  assertEquals(m.descendantWeight('X'), 0);
+  assertEquals(m.derivedWeightVector('X'), [0]);
+});
+
+Deno.test('weightThroughParent: weightVector entries past depth-to-X are not counted', () => {
+  // A is anchor-descendant of X at depth 1. A.weightVector has entries past
+  // index 0; those land on X.anchor and above, which do NOT depend on X.
+  const m = setup(
+    { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
+    { id: 'A', selfWeight: 10, weightVector: [100, 200, 300], anchor: 'X', aggregates: [] },
+    { id: 'P', selfWeight: 5, weightVector: [], anchor: 'G', aggregates: ['X', 'A'] },
+  );
+  // Via P: 5 + (X skip) + (A depth 1: wV[0..0] = 100 only; +selfWeight=10) + 0
+  //      = 5 + 100 + 10 = 115.
+  // (A.wV[1]=200 and A.wV[2]=300 must be excluded -- they belong to X's ancestors.)
+  // Via A: derived(A) = [10, 100, 200, 300]; descendantWeight via A = 10 + 100 = 110.
+  // max = 115.
+  assertEquals(m.descendantWeight('X'), 115);
+});
