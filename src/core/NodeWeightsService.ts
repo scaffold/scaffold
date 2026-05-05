@@ -69,10 +69,6 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
     return id.toPrimitive();
   }
 
-  equals(a: Hash, b: Hash): boolean {
-    return Hash.equals(a, b);
-  }
-
   private ensureIndices(): void {
     if (this.indexVersion === this.storeVersion) return;
     const parents = new Map<HashPrimitive, Hash[]>();

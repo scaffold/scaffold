@@ -49,19 +49,19 @@ A block has at most one canonical aggregator (only one of any competing aggregat
 
 ## The Single Propagation Rule
 
-Define `derivedWeightVector(B)` -- what `B` "owns" along its anchor chain, indexed by depth above `B`:
+Define `derivedWeightVector(B)`:
+
+- `[0]` = total weight in `B`'s anchor subtree at chain blocks `B` AND deeper (a running accumulator -- `[0]` is the only "below-`B`" entry, so it absorbs everything that doesn't fit above).
+- `[k]` for `k >= 1` = weight at `B`'s `k`-th ancestor (a single chain block).
+
+Recurrence with `C*` = heaviest anchor child of `B`:
 
 ```
-derivedWeightVector(B)[0] = B.selfWeight
-derivedWeightVector(B)[k] = B.weightVector[k - 1]                                for k >= 1
-
-derivedWeightVector(B) += shiftDown1( derivedWeightVector(C*) )
-
-where C* = argmax_{C: C.anchor == B} sum( derivedWeightVector(C) )
-      shiftDown1(v)[k] = v[k + 1]                  // drop entry 0
+derivedWeightVector(B)[0] = B.selfWeight + derivedWeightVector(C*)[1] + derivedWeightVector(C*)[0]
+derivedWeightVector(B)[k] = B.weightVector[k - 1] + derivedWeightVector(C*)[k + 1]   (k >= 1)
 ```
 
-**Why "shift down by 1":** `derivedWeightVector(C)[k]` lives at `C`'s `k`-th ancestor. That same chain block sits at `B`'s `(k - 1)`-th ancestor (because `C.anchor == B`, so `C` is one level deeper than `B`). So `C`'s entry `k` becomes `B`'s entry `k - 1`. Entry 0 (weight at `C` itself) does not survive the shift -- it stayed with `C`'s subtree.
+The asymmetry at `[0]` is what keeps weight from leaking out the bottom of the vector. `C*[1]` is `C*`'s contribution to `B` itself (so it lands at `B[0]`); `C*[0]` is `C*`'s already-accumulated weight at `C*` and deeper (also still in `B`'s subtree, so it also lands at `B[0]`). For `k >= 1` we just shift -- a single chain block has no deeper level to absorb.
 
 **Why max over anchoring children:** Multiple blocks may anchor to `B`. Some of them compete (overlapping aggregations would conflict at consensus time); the protocol invariant is that only one becomes canonical. Genuinely independent parallel anchors *would* both survive, but the protocol assumes they get aggregated quickly into a single heavier block, at which point the aggregator wins the max. Picking the single heaviest child is conservative -- it never double-counts but transiently underweights truly-parallel work that hasn't been aggregated yet. That's the deliberate tradeoff.
 

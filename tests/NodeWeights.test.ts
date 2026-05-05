@@ -49,9 +49,6 @@ class TestProvider implements NodeWeightsProvider<string> {
   key(id: string): string {
     return id;
   }
-  equals(a: string, b: string): boolean {
-    return a === b;
-  }
 }
 
 function setup(...blocks: TestBlock[]): NodeWeightsModule<string> {
@@ -87,27 +84,17 @@ Deno.test('derivedWeightVector: leaf with weightVector entries', () => {
   assertEquals(m.derivedWeightVector('X'), [5, 10, 3]);
 });
 
-Deno.test('derivedWeightVector: anchor chain propagates with shift-down-1', () => {
+Deno.test('derivedWeightVector: anchor chain propagates with shift-down-1 plus deeper accumulation', () => {
   // G <- A <- B (B anchors to A, A anchors to G).
-  // A.derivedWeight = [A.self=2, A.wV[0]=0] + shift1(B.derivedWeight=[B.self=3])
-  //                 = [2, 0] + [] (B's derived has length 1, slice(1) = [])
-  //                 = [2, 0]
-  // Wait: with B.derivedWeight = [3], shift1 drops index 0, leaving [].
-  // So A.derivedWeight = [2, 0].
-  // That misses B's weight at A's level. Is that right?
-  // Actually B contributes to A via B.weightVector[0], not via selfWeight.
-  // B is a leaf, so B.weightVector = []. So B contributes nothing to A.
-  // For B to contribute to A, B.weightVector[0] must be set.
   const m = setup(
     { id: 'A', selfWeight: 2, weightVector: [0], anchor: 'G', aggregates: [] },
     { id: 'B', selfWeight: 3, weightVector: [3], anchor: 'A', aggregates: [] },
   );
-  // B.derivedWeight = [B.self=3, B.wV[0]=3]
-  // A.derivedWeight = [A.self=2, A.wV[0]=0] + shift1([3, 3]) = [2, 0] + [3] = [5, 0]
-  // Hmm: A.derivedWeight[0] = weight at A = 2 (own) + 3 (B's contribution to A from shift)
-  //                          = 5.
+  // B.derived = [B.self=3, B.wV[0]=3]
+  // A.derived[0] = A.self=2 + B.derived[1]=3 + B.derived[0]=3 = 8 (B is in A's deeper chain)
+  // A.derived[1] = A.wV[0]=0 + B.derived[2]=0 = 0
   assertEquals(m.derivedWeightVector('B'), [3, 3]);
-  assertEquals(m.derivedWeightVector('A'), [5, 0]);
+  assertEquals(m.derivedWeightVector('A'), [8, 0]);
 });
 
 Deno.test('derivedWeightVector: max over competing anchor children', () => {
@@ -118,11 +105,9 @@ Deno.test('derivedWeightVector: max over competing anchor children', () => {
     { id: 'A', selfWeight: 100, weightVector: [10], anchor: 'G', aggregates: [] },
     { id: 'B', selfWeight: 5, weightVector: [5], anchor: 'G', aggregates: [] },
   );
-  // A.derived = [100, 10], sum = 110
-  // B.derived = [5, 5], sum = 10
-  // A wins. G.derived = [G.self=1] + shift1([100, 10]) = [1] + [10] = [1+10] = [11]
-  // (No, shift1 means slice(1), so [100,10].slice(1) = [10]. addVecs([1], [10]) = [11].)
-  assertEquals(m.derivedWeightVector('G'), [11]);
+  // A.derived = [100, 10], sum = 110 (A wins over B's 10).
+  // G.derived[0] = G.self=1 + A.derived[1]=10 + A.derived[0]=100 = 111.
+  assertEquals(m.derivedWeightVector('G'), [111]);
 });
 
 // ---------------------------------------------------------------------------
@@ -158,34 +143,19 @@ Deno.test('descendantWeight: max over multiple anchoring children, never sum', (
   assertEquals(m.descendantWeight('X'), 110);
 });
 
-Deno.test('descendantWeight: deep anchor chain propagates via max child', () => {
-  // X <- A <- B with selfWeights 0, 100, 50.
-  // A.derived = [A.self=100, A.wV[0]=50] + shift1(B.derived=[50, 50])
-  //           = [100, 50] + [50] = [150, 50]
-  // (A.wV[0] = 50 because A's only aggregated subtree is B, and B contributes 50 to A.)
-  // Actually A is a leaf in our test (no aggregates), so A.wV is whatever we set.
-  // If we set A.wV = [50] meaning "B is in my subtree contributing 50 to my anchor X",
-  // then we're conflating anchor-descendant-via-B with aggregation. Let me set A.wV = []
-  // so A is a leaf with no aggregated subtree, and B contributes via the propagation rule.
+Deno.test('descendantWeight: deep anchor chain accumulates deeper selfWeights', () => {
+  // X <- A <- B with selfWeights 0, 100, 50; all leaves (empty weightVector).
   const m = setup(
     { id: 'X', selfWeight: 0, weightVector: [], anchor: 'G', aggregates: [] },
     { id: 'A', selfWeight: 100, weightVector: [], anchor: 'X', aggregates: [] },
     { id: 'B', selfWeight: 50, weightVector: [], anchor: 'A', aggregates: [] },
   );
-  // B.derived = [50] (leaf, no weightVector)
-  // A.derived = [A.self=100] + shift1([50]) = [100] + [] = [100]
-  // descendantWeight(X) via A: A.derived[0] + A.derived[1] = 100 + 0 = 100
-  // (B's 50 is lost because B is at A's anchoring child but B doesn't carry weightVector,
-  //  so B's contribution to A's derived is via shift, which shifts away its only entry.)
+  // B.derived = [50]
+  // A.derived[0] = A.self=100 + B.derived[1]=0 + B.derived[0]=50 = 150
+  // descendantWeight(X) via A = A.derived[0]+A.derived[1] = 150 + 0 = 150
   assertEquals(m.derivedWeightVector('B'), [50]);
-  assertEquals(m.derivedWeightVector('A'), [100]);
-  assertEquals(m.descendantWeight('X'), 100);
-
-  // To capture B's contribution to X's descendant weight, we need a parent
-  // path or B needs to be on a subtree the propagation can carry. Since B
-  // has no weightVector entry, structurally there's no "weight at A from B"
-  // to propagate. This is correct given the inputs -- selfWeight stays with
-  // the block; only weightVector entries propagate to ancestors.
+  assertEquals(m.derivedWeightVector('A'), [150]);
+  assertEquals(m.descendantWeight('X'), 150);
 });
 
 // ---------------------------------------------------------------------------
@@ -407,9 +377,8 @@ Deno.test('descendantWeight: spine extends through tree roots', () => {
   );
   assertEquals(m.descendantWeight('R1'), 33);
   // descendantWeight(G) via R1:
-  //   R1.derived = [R1.self=10, R1.wV[0]=40] + shift1(R2.derived=[8,25])
-  //              = [10, 40] + [25]
-  //              = [10, 65]
-  //   via R1: R1.derived[0] + R1.derived[1] = 10 + 65 = 75.
-  assertEquals(m.descendantWeight('G'), 75);
+  //   R1.derived[0] = R1.self=10 + R2.derived[1]=25 + R2.derived[0]=8 = 43
+  //   R1.derived[1] = R1.wV[0]=40 + R2.derived[2]=0 = 40
+  //   via R1 = 43 + 40 = 83
+  assertEquals(m.descendantWeight('G'), 83);
 });

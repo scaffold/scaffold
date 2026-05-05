@@ -29,13 +29,11 @@ export interface NodeWeightsProvider<NodeId> {
   parents(id: NodeId): NodeId[];
   /** B's anchor (used to walk between blocks for relative-depth math). */
   anchor(id: NodeId): NodeId | null;
-  /** Stable key for memoisation / set membership. */
+  /** Stable key for memoisation / set membership; also doubles as identity. */
   key(id: NodeId): string;
-  /** Equality on NodeId values. */
-  equals(a: NodeId, b: NodeId): boolean;
 }
 
-const recursionSentinel = Symbol("RecursionSentinel");
+const recursionSentinel = Symbol('RecursionSentinel');
 
 /**
  * Weight propagation module. Stateless across queries (memoisation is
@@ -47,11 +45,17 @@ export class NodeWeightsModule<NodeId> {
   // -- Propagation: derived weight vector -----------------------------------
 
   /**
-   * `derivedWeightVector(B)[k]` = weight at B's k-th ancestor (k = 0 means B
-   * itself) contributed by B and B's heaviest anchor-descendant chain.
+   * `derivedWeightVector(B)`:
+   *   [0] = weight at B AND at all chain descendants of B in B's subtree
+   *   [k] = weight at B's k-th ancestor (a single chain block)            (k >= 1)
    *
-   *   [0] = B.selfWeight + heaviestAnchorChild.derivedWeight[1]
-   *   [k] = B.weightVector[k - 1] + heaviestAnchorChild.derivedWeight[k + 1]   (k >= 1)
+   * Recurrence (with C* = heaviest anchor child of B):
+   *   [0] = B.selfWeight + derivedWeight(C*)[1] + derivedWeight(C*)[0]
+   *   [k] = B.weightVector[k - 1] + derivedWeight(C*)[k + 1]              (k >= 1)
+   *
+   * Note the asymmetry: [0] absorbs both C*'s [1] (its contribution to B)
+   * and C*'s [0] (which itself accumulates deeper chain weight). [k >= 1]
+   * is a single chain block so it just takes C*'s shifted entry.
    *
    * "Heaviest" = max over `sum(derivedWeightVector(C))` for C in
    * anchoringChildren(B). At most one wins -- this is the no-double-count
@@ -67,7 +71,7 @@ export class NodeWeightsModule<NodeId> {
   ): number[] {
     const k = this.p.key(id);
     const cached = memo.get(k);
-    if (cached === recursionSentinel) throw new Error("Cycle detected");
+    if (cached === recursionSentinel) throw new Error('Cycle detected');
     if (cached) return cached;
     // Cycle guard: shouldn't happen on a real DAG, but defensive.
     memo.set(k, recursionSentinel);
@@ -91,9 +95,12 @@ export class NodeWeightsModule<NodeId> {
       }
     }
 
-    // Shift down by 1: the child's entry k lands on B's entry k - 1.
-    const shifted = bestVec.length > 0 ? bestVec.slice(1) : [];
-    const out = addVecs(own, shifted);
+    // Shift down by 1 for k >= 1 (child's entry k lands on B's entry k - 1).
+    const out = addVecs(own, bestVec.slice(1));
+    // Plus: the child's [0] (= weight at C and all deeper chain blocks in
+    // C's subtree) is itself part of B's [0], since C is a chain descendant
+    // of B in B's anchor subtree.
+    if (bestVec.length > 0) out[0] = (out[0] ?? 0) + bestVec[0];
 
     memo.set(k, out);
     return out;
@@ -140,78 +147,28 @@ export class NodeWeightsModule<NodeId> {
    * contributes. The contribution from each such block Y is Y's weightVector
    * entries that attribute to X (or to chain blocks between X and Y).
    *
-   * Then we recurse: P has its own neighbours (its parents, and its
-   * anchoring children) that also depend on X. We pick the heaviest single
-   * extension -- never summing -- to maintain the no-double-count invariant.
+   * The "extension into P's other neighbours" reduces to descendantWeight(P)
+   * itself: it iterates the same anchor-children and parents, and those sets
+   * are disjoint from P's aggregated subtree (anchor-children of P are not
+   * in aggregates(P); parents of P aggregate P, they don't sit inside it).
    */
   private weightThroughParent(x: NodeId, p: NodeId): number {
     let total = this.p.selfWeight(p);
 
-    // Walk P's aggregated subtree; for each Y that is X or an anchor
-    // descendant of X, add Y.weightVector entries that land on X or on chain
-    // blocks between Y and X (those are themselves descendants of X).
-    const aggSubtree = this.collectAggregatedSubtree(p);
-    for (const y of aggSubtree) {
+    for (const y of this.p.aggregates(p)) {
       const dxy = this.depthFromTo(y, x);
-      if (dxy === null) continue; // Y is not an anchor descendant of X.
-      if (dxy === 0) continue; // Y === X: X's own weight isn't part of "descendant".
+      if (dxy === null || dxy === 0) continue; // not an anchor descendant of X (or is X).
       const wv = this.p.weightVector(y);
-      // Y.weightVector[k] attributes to Y's (k+1)-th ancestor.
-      // We want entries where (k+1)-th ancestor is X or between X and Y --
-      // i.e., k+1 in [1 .. dxy], i.e., k in [0 .. dxy - 1].
-      for (let k = 0; k < dxy && k < wv.length; k++) {
-        total += wv[k];
-      }
-      // Y's own selfWeight at chain block Y.anchor (= an X-descendant or X).
-      // That's Y's contribution at index -1 conceptually; in this model
-      // selfWeight is its own scalar that lives at "Y itself", which is also
-      // in the dependent set, so we add it once per Y.
+      // Y.weightVector[k] attributes to Y's (k+1)-th ancestor; we want
+      // entries at X or between Y and X, i.e., k in [0 .. dxy - 1].
+      for (let k = 0; k < dxy && k < wv.length; k++) total += wv[k];
       total += this.p.selfWeight(y);
     }
 
-    // Recurse into P's neighbours (other than X / things we've visited via
-    // P's aggregated subtree). We pick the single heaviest extension.
-    let bestExt = 0;
-
-    for (const c of this.p.anchoringChildren(p)) {
-      // c anchors to P -- not in aggSubtree, separate branch.
-      const v = this.derivedWeightVector(c);
-      const candidate = (v[0] ?? 0) + (v[1] ?? 0);
-      if (candidate > bestExt) bestExt = candidate;
-    }
-
-    for (const pp of this.p.parents(p)) {
-      // pp aggregates P (so pp transitively aggregates X). Recurse.
-      // To keep this query terminating and conservative, we use
-      // weightThroughParent again -- but we treat the new "X" as P (the
-      // contribution is over P's dependent set, with P playing X's role
-      // relative to pp).
-      const candidate = this.weightThroughParent(p, pp);
-      if (candidate > bestExt) bestExt = candidate;
-    }
-
-    return total + bestExt;
+    return total + this.descendantWeight(p);
   }
 
   // -- Helpers --------------------------------------------------------------
-
-  /** All blocks reachable from `root` via aggregates edges (including root). */
-  private collectAggregatedSubtree(root: NodeId): NodeId[] {
-    const out: NodeId[] = [root];
-    const seen = new Set<string>([this.p.key(root)]);
-    const stack: NodeId[] = [root];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      for (const a of this.p.aggregates(cur)) {
-        const k = this.p.key(a);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        out.push(a);
-        stack.push(a);
-      }
-    }
-    return out;
-  }
 
   /**
    * Number of anchor-chain hops from `from` up to `to`, or null if `to` is
