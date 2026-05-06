@@ -19,6 +19,8 @@ import { Output } from '../src/core/BlockCreationModule.ts';
 import { encodeAggregationData } from '../src/contracts/AggregationContract.ts';
 import { ProtocolContext } from '../src/core/ProtocolContext.ts';
 import { NodeWeightsService } from '../src/core/NodeWeightsService.ts';
+import { ConsensusService } from '../src/core/ConsensusService.ts';
+import { PlacementService } from '../src/core/PlacementService.ts';
 import { createDraft, Draft, DraftStore } from '../src/core/Draft.ts';
 
 const h = (name: string): Hash => Hash.digest(name);
@@ -76,7 +78,18 @@ function setup(...blocks: Block[]): {
   const drafts = ctx.get(DraftStore);
   const nw = ctx.get(NodeWeightsService);
   nw.setDraftStore(drafts);
-  for (const b of blocks) store.put(b);
+  // Mirror NodeContext wiring: placement needs ConsensusService for the
+  // canonical-aggregator query, and drafts derive their anchor through
+  // placement. Register blocks in consensus so getCanonicalAggregator works.
+  const consensus = ctx.get(ConsensusService);
+  consensus.setDraftStore(drafts);
+  const placement = ctx.get(PlacementService);
+  consensus.setPlacement(placement);
+  nw.setPlacement(placement);
+  for (const b of blocks) {
+    store.put(b);
+    consensus.addBlock(b.hash);
+  }
   return { ctx, store, drafts, nw };
 }
 

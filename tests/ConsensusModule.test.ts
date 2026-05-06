@@ -944,3 +944,36 @@ Deno.test({
   assert(layer.isCanonical(A.hash));
   assert(layer.isCanonical(C.hash));
 });
+
+// -- getCanonicalAggregator --------------------------------------
+
+Deno.test({ name: 'getCanonicalAggregator: returns the unique canonical aggregator' }, () => {
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const X: TestBlock = { hash: h('X'), anchor: G.hash, aggregates: [], weight: [10] };
+  const Z: TestBlock = { hash: h('Z'), anchor: G.hash, aggregates: [X.hash], weight: [5] };
+  const { layer } = setup(G, X, Z);
+
+  assertEquals(layer.getCanonicalAggregator(X.hash)?.toPrimitive(), Z.hash.toPrimitive());
+  assertEquals(layer.getCanonicalAggregator(G.hash), undefined);
+  assertEquals(layer.getCanonicalAggregator(Z.hash), undefined);
+});
+
+Deno.test({ name: 'getCanonicalAggregator: filters out non-canonical aggregators' }, () => {
+  // Two aggregators of X conflict (both aggregate the same block).
+  // The lighter one is non-canonical and must be filtered out.
+  const G: TestBlock = { hash: h('G'), anchor: ZERO_HASH, aggregates: [], weight: [] };
+  const X: TestBlock = { hash: h('X'), anchor: G.hash, aggregates: [], weight: [10] };
+  const Z1: TestBlock = { hash: h('Z1'), anchor: G.hash, aggregates: [X.hash], weight: [5] };
+  const Z2: TestBlock = { hash: h('Z2'), anchor: G.hash, aggregates: [X.hash], weight: [50] };
+  const { layer } = setup(G, X, Z1, Z2);
+
+  // Both aggregate X, so they conflict.
+  layer.addConflict(Z1.hash, Z2.hash);
+  layer.setVerifiedWeight(Z1.hash, [5]);
+  layer.setVerifiedWeight(Z2.hash, [50]);
+
+  // Z2 wins; Z1 is non-canonical.
+  assert(layer.isCanonical(Z2.hash));
+  assertFalse(layer.isCanonical(Z1.hash));
+  assertEquals(layer.getCanonicalAggregator(X.hash)?.toPrimitive(), Z2.hash.toPrimitive());
+});

@@ -71,20 +71,10 @@ export class NodeWeightsModule<NodeId> {
    * defence against competing aggregators.
    */
   derivedWeightVector(id: NodeId): number[] {
-    return this.computeDerived(id, new Map());
+    return this.computeDerived(id);
   }
 
-  private computeDerived(
-    id: NodeId,
-    memo: Map<string, number[] | typeof recursionSentinel>,
-  ): number[] {
-    const k = this.p.key(id);
-    const cached = memo.get(k);
-    if (cached === recursionSentinel) throw new Error('Cycle detected');
-    if (cached) return cached;
-    // Cycle guard: shouldn't happen on a real DAG, but defensive.
-    memo.set(k, recursionSentinel);
-
+  private computeDerived(id: NodeId): number[] {
     const sw = this.p.selfWeight(id);
     const wv = this.p.weightVector(id);
 
@@ -96,7 +86,7 @@ export class NodeWeightsModule<NodeId> {
     let bestVec: number[] = [];
     let bestSum = -1;
     for (const c of children) {
-      const v = this.computeDerived(c, memo);
+      const v = this.computeDerived(c);
       const s = sumVec(v);
       if (s > bestSum) {
         bestSum = s;
@@ -111,7 +101,6 @@ export class NodeWeightsModule<NodeId> {
     // of B in B's anchor subtree.
     if (bestVec.length > 0) out[0] = (out[0] ?? 0) + bestVec[0];
 
-    memo.set(k, out);
     return out;
   }
 

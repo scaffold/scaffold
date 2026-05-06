@@ -19,12 +19,9 @@ import type { Hash } from '../util/Hash.ts';
 import type { Block, BlockStore } from './Block.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import { Hash as HashCtor } from '../util/Hash.ts';
-import type { Output, BlockSpec, ClaimEntry } from './BlockCreationModule.ts';
+import type { BlockSpec, ClaimEntry, Output } from './BlockCreationModule.ts';
 import type { Draft } from './Draft.ts';
-import {
-  encodeAggregationData,
-  getAggregationData,
-} from '../contracts/AggregationContract.ts';
+import { encodeAggregationData, getAggregationData } from '../contracts/AggregationContract.ts';
 import { AGGREGATION_CONTRACT } from './Block.ts';
 import {
   type OutputSpaceBlock,
@@ -33,7 +30,8 @@ import {
 } from './OutputSpace.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
 import type { Verifier } from './BlockCreationModule.ts';
-import { pickAnchorForClaims } from './AnchorSelection.ts';
+import { dedupeProducers, detectAggregatedBlocks } from './DraftPlacement.ts';
+import { PlacementModule } from './PlacementModule.ts';
 
 /**
  * Solidification-time value-override function. Called for every slot
@@ -63,6 +61,12 @@ export type BuildResult =
 
 export interface BlockBuilderProvider {
   readonly store: BlockStore;
+  /**
+   * Placement for anchor selection. Optional during construction so
+   * NodeContext can wire it after services finish initialising; if
+   * unset at `build()` time, drafts stall.
+   */
+  placement: PlacementModule<Block> | null;
   /** Sign a BlockSpec into a Block. May return null on signing failure. */
   createBlock(spec: BlockSpec, privateKey: Uint8Array | null): Block | null;
   /** Optional value-override hook for `getOutput` slots. */
@@ -93,17 +97,47 @@ export class BlockBuilderModule {
    *                        an aggregation block bridges them.
    */
   build(draft: Draft): BuildResult {
-    // -- 1. Anchor selection: deepest common ancestor of claim producers
+    // -- 1. Anchor selection: placement against the canonical view
     if (draft.claims.length === 0) {
       // Drafts must consume at least one input -- there's no current
       // producer-less code path.
       return { ok: false, reason: 'draft has no claims' };
     }
-    const pick = pickAnchorForClaims(draft.claims, this.provider.store);
-    if (!pick.ok) {
-      return { ok: false, awaitingAnchor: true, missing: pick.missing };
+    // Aggregation include constraints: claims targeting AGGREGATION_CONTRACT
+    // marker outputs convert their producers into aggregated blocks. This
+    // mirrors the implicit semantic from `aggregation.md` -- requireInput()
+    // on the aggregation contract adds the producing block as an include
+    // constraint -- without yet plumbing constraints onto the Draft type.
+    // Shared with ConsensusService / NodeWeightsService so all three
+    // callers compute the same anchor for any given draft.
+    const aggregatedBlocks = detectAggregatedBlocks(draft, this.provider.store);
+    const claimedBlocks = dedupeProducers(draft.claims);
+
+    const placement = this.provider.placement;
+    const result = placement
+      ? placement.place({
+        node: draft,
+        claimedBlocks,
+        aggregatedBlocks,
+        excludedBlocks: [],
+      })
+      : { ok: false as const, stalled: true as const };
+    if (!result.ok) {
+      // Placement stalled. Caller parks the draft and retries on
+      // canonical-view changes. `missing` is the set of claim producers
+      // -- a coarse but functional retry signal.
+      return {
+        ok: false,
+        awaitingAnchor: true,
+        missing: claimedBlocks,
+      };
     }
-    const { anchor, aggregates } = pick;
+    const anchor = result.anchor;
+    // The block's `aggregates` field is exactly the include-constraint
+    // set fed into placement. No filtering: chain aggregates (where one
+    // aggregate's subtree includes another) are allowed -- aggregation.md
+    // calls this the linear-aggregation case.
+    const aggregates = aggregatedBlocks;
 
     // Build per-aggregate output counts from cached aggregation data
     // (or leaf defaults).

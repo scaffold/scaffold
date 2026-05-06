@@ -5,11 +5,13 @@
 // hash or draft id.
 //
 // Drafts participate as full nodes in the propagation graph, mirroring how
-// ConsensusService treats them as phantom blocks. A draft's anchor and
-// aggregates are derived from its claims via pickAnchorForClaims (the same
-// logic ConsensusService uses), and its selfWeight is `max(declaredWeight,
+// ConsensusService treats them as phantom blocks. A draft's anchor is
+// derived from its claims via placement (the same logic ConsensusService
+// and BlockBuilder use), and its selfWeight is `max(declaredWeight,
 // effectiveWeight)` -- consistent with what ConsensusService.getWeightVector
-// reports today.
+// reports today. Drafts have no aggregates of their own (per placement.md):
+// aggregation is an explicit operation by the AggregationContract, not a
+// consequence of multi-branch claims.
 //
 // SamplingService is consumed lazily (via ctx.maybeGet) so unit tests that
 // stand up only the propagation layer keep working. When sampling is wired,
@@ -22,12 +24,14 @@
 // trigger an O(graph) walk per candidate.
 
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { BlockStore, getBlockWeightVector } from './Block.ts';
+import { Block, BlockStore, getBlockWeightVector } from './Block.ts';
 import { Draft, DraftStore } from './Draft.ts';
+import { Node } from './Node.ts';
 import { NodeWeightsModule, NodeWeightsProvider } from './NodeWeightsModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
 import { SamplingService } from './SamplingService.ts';
-import { pickAnchorForClaims } from './AnchorSelection.ts';
+import { draftAnchorViaPlacement } from './DraftPlacement.ts';
+import { PlacementModule } from './PlacementModule.ts';
 
 class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
   /** Reverse index: block -> blocks/drafts that aggregate it. Lazily built. */
@@ -43,6 +47,9 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
   private indexVersion = -1;
 
   private draftStore: DraftStore | undefined;
+  private placement: PlacementModule<Block> | undefined;
+
+  ignoredNodes: Node[] = [];
 
   constructor(
     private readonly store: BlockStore,
@@ -64,6 +71,12 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
     ds.onTransition(() => {
       this.version++;
     });
+  }
+
+  /** Wire placement so drafts derive their anchor consistently with BlockBuilder. */
+  setPlacement(placement: PlacementModule<Block>): void {
+    this.placement = placement;
+    this.version++;
   }
 
   selfWeight(id: Hash): number {
@@ -91,11 +104,7 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
   aggregates(id: Hash): Hash[] {
     const b = this.store.get(id);
     if (b) return [...b.aggregates];
-    const d = this.draftStore?.get(id);
-    if (d) {
-      const pick = pickAnchorForClaims(d.claims, this.store);
-      return pick.ok ? pick.aggregates : [];
-    }
+    // Drafts have no aggregates of their own (per placement.md).
     return [];
   }
 
@@ -104,9 +113,8 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
     if (b) return Hash.equals(b.anchor, ZERO_HASH) ? null : b.anchor;
     const d = this.draftStore?.get(id);
     if (d) {
-      const pick = pickAnchorForClaims(d.claims, this.store);
-      if (!pick.ok) return null;
-      return Hash.equals(pick.anchor, ZERO_HASH) ? null : pick.anchor;
+      const anchor = draftAnchorViaPlacement(d, this.store, this.placement);
+      return Hash.equals(anchor, ZERO_HASH) ? null : anchor;
     }
     return null;
   }
@@ -147,21 +155,23 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
     };
 
     for (const block of this.store.values()) {
+      if (this.ignoredNodes.includes(block)) continue;
       noteAnchor(block.hash, block.anchor);
       noteAggregates(block.hash, block.aggregates);
     }
 
     if (this.draftStore) {
       for (const d of this.draftStore.getAll()) {
+        if (this.ignoredNodes.includes(d)) continue;
         // Only consider drafts still alive in consensus -- terminal drafts
         // should not contribute weight (their solidified replacement is a
         // real Block in the store now). Match ConsensusService's draft-as-
         // phantom-block convention: every non-terminal draft participates.
         if (this.isTerminalDraft(d)) continue;
-        const pick = pickAnchorForClaims(d.claims, this.store);
-        if (!pick.ok) continue;
-        noteAnchor(d.draftId, pick.anchor);
-        noteAggregates(d.draftId, pick.aggregates);
+        const anchor = draftAnchorViaPlacement(d, this.store, this.placement);
+        if (Hash.equals(anchor, ZERO_HASH)) continue;
+        noteAnchor(d.draftId, anchor);
+        // Drafts contribute no aggregates (per placement.md).
       }
     }
 
@@ -198,6 +208,22 @@ export class NodeWeightsService extends NodeWeightsModule<Hash> {
   /** Wire a DraftStore so drafts participate in propagation as phantom blocks. */
   setDraftStore(draftStore: DraftStore): void {
     this.adapter.setDraftStore(draftStore);
+  }
+
+  /** Wire placement so drafts derive their anchor consistently with BlockBuilder. */
+  setPlacement(placement: PlacementModule<Block>): void {
+    this.adapter.setPlacement(placement);
+  }
+
+  withIgnoredNodes<T>(node: Node, fn: () => T): T {
+    this.adapter.ignoredNodes.push(node);
+    try {
+      return fn();
+    } finally {
+      if (this.adapter.ignoredNodes.pop() !== node) {
+        console.error('Ignored nodes stack mismatch');
+      }
+    }
   }
 
   override derivedWeightVector(id: Hash): number[] {

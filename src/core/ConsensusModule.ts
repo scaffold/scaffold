@@ -266,6 +266,32 @@ export class ConsensusModule<BlockType> {
   }
 
   /**
+   * Return the unique canonical block whose `aggregates` field directly
+   * contains `hash`, or undefined if none exists.
+   *
+   * Aggregator-uniqueness is a consensus invariant (two aggregators that
+   * share an aggregate conflict, so at most one becomes canonical). If
+   * more than one canonical aggregator is observed, throws -- the
+   * conflict module should have prevented this.
+   */
+  getCanonicalAggregator(hash: Hash): Hash | undefined {
+    const aggregators = this.aggregatedByMap.get(hash.toPrimitive());
+    if (!aggregators || aggregators.size === 0) return undefined;
+    const canonical = this.getCanonicalView();
+    let result: Hash | undefined;
+    for (const aggKey of aggregators) {
+      if (!canonical.has(aggKey)) continue;
+      if (result !== undefined) {
+        throw new Error(
+          `multiple canonical aggregators for ${hash.toHex().slice(0, 8)}`,
+        );
+      }
+      result = this.blocks.get(aggKey);
+    }
+    return result;
+  }
+
+  /**
    * Direct conflict set for a block. Returns only explicitly declared
    * direct conflicts (no transitive expansion). Excludes the block itself.
    */
@@ -315,6 +341,16 @@ export class ConsensusModule<BlockType> {
   private markDirty(): void {
     this.canonicalCache = null;
   }
+
+  /**
+   * Re-entrancy guard for `ensureCanonical`. The canonical-view computation
+   * can call effective-weight callbacks that loop back through
+   * `getCanonicalView` (drafts derive their anchor via placement, which
+   * queries canonical-aggregator info). On re-entry we return whatever
+   * cache we have -- previous view if any, empty set on first run -- so
+   * the outer call can finish before our next pass.
+   */
+  private computingCanonical = false;
 
   private getOrCreateSet(
     map: Map<HashPrimitive, Set<HashPrimitive>>,
@@ -371,7 +407,19 @@ export class ConsensusModule<BlockType> {
   /** Compute the canonical view using the two-phase topological algorithm. */
   private ensureCanonical(): void {
     if (this.canonicalCache !== null) return;
-    this.canonicalCache = this.computeCanonicalPass();
+    if (this.computingCanonical) {
+      // Re-entrant call. Seed an empty cache so getCanonicalView returns
+      // an empty set rather than recursing. The outer call will populate
+      // the cache when it finishes.
+      this.canonicalCache = new Set();
+      return;
+    }
+    this.computingCanonical = true;
+    try {
+      this.canonicalCache = this.computeCanonicalPass();
+    } finally {
+      this.computingCanonical = false;
+    }
   }
 
   /**

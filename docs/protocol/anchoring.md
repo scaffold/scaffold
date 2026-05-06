@@ -1,11 +1,8 @@
 # Anchoring Module
 
-The anchoring module computes **where a block attaches to the graph** and **how outputs are addressed across blocks**. It provides two core algorithms:
+The anchoring module specifies **how outputs are addressed across blocks** -- given an output on one block, find its index in another block's output space. The single core algorithm is `rebaseOutputIndex`.
 
-1. **`resolveAnchor`** -- given blocks to include and exclude, compute the anchor and which blocks must be aggregated.
-2. **`rebaseOutputIndex`** -- given an output on one block, find its index in another block's output space.
-
-These are the foundational algorithms for block construction. Everything else -- draft blocks, auto-balancing, aggregation strategies -- is built on top.
+Anchor selection (choosing where a draft block attaches and what it aggregates) lives in [placement.md](placement.md). The two compose: placement returns an anchor, then `rebaseOutputIndex` lowers each `ClaimRef` into a concrete claim index in the constructed block's output space.
 
 ---
 
@@ -49,90 +46,7 @@ This means aggregation can handle chains: if blocks P, Q, R form a chain (Q anch
 
 ---
 
-## Algorithm 1: resolveAnchor
-
-### Interface
-
-```typescript
-function resolveAnchor(request: {
-    includeBlocks: Hash[],   // blocks whose outputs must be reachable
-    excludeBlocks: Hash[],   // blocks that must NOT be ancestors of the anchor
-    declaredWeight: number,
-}): {
-    anchor: Hash,
-    aggregates: Hash[],
-} | Error
-```
-
-### Semantics
-
-Given a set of blocks whose outputs must be reachable in the constructed block's output space, and a set of blocks that must not be in the anchor chain, determine:
-
-1. **The anchor** -- a block to attach to.
-2. **The aggregates** -- blocks that must be aggregated to make all included blocks reachable.
-
-A block X is **reachable** if it is either:
-- An ancestor of the anchor (in the anchor chain), OR
-- An aggregated subtree (or within an aggregated subtree's internal structure).
-
-### Algorithm
-
-```
-1. Build the anchor chain for each included block (back to genesis).
-
-2. Find the common chain:
-   - Identify blocks that appear in ALL anchor chains.
-   - These form the "shared spine."
-   - The deepest block on the shared spine is the LOWEST COMMON ANCESTOR (LCA)
-     of all included blocks.
-
-3. Classify included blocks:
-   - If a block is ON the shared spine: it's reachable via the anchor chain.
-     No aggregation needed.
-   - If a block is NOT on the shared spine: it's on a side branch.
-     It (or its branch) must be aggregated.
-
-4. Determine aggregates:
-   - For each side-branch block X, X becomes an aggregate.
-   - If multiple included blocks are on the same side branch, aggregate the
-     deepest one (it covers the shallower ones via its anchor chain).
-
-5. Compute the minimum anchor:
-   - Must be a descendant of the LCA (to include all spine blocks).
-   - Must be a descendant of every aggregate's anchor.
-   - Must NOT have any excludeBlock as an ancestor.
-   - The minimum anchor is the deepest block satisfying all these constraints.
-
-6. Select the anchor:
-   - Among valid anchors at or beyond the minimum, choose based on preference
-     heuristic (stability vs. freshness -- see options).
-
-7. Validate:
-   - If no valid anchor exists (include/exclude conflict), return error.
-   - If any aggregate's anchor is not in the chosen anchor's chain, return error.
-   - Check inter-subtree conflicts (overlapping claims) -- if detected,
-     either exclude a subtree or return error.
-```
-
-### The Key Insight
-
-Aggregation is not an input -- it's a **consequence** of the include set. If you include blocks from two unmerged trees, you must aggregate. To force an aggregation, include the tree roots. The algorithm derives the aggregation plan from the geometry of the include set.
-
-### Include a Block vs. Include Its Outputs
-
-Including block X means "X's outputs must appear somewhere in my output space." This is a weaker requirement than "X must be my anchor." X can be reachable as an ancestor OR as an aggregate.
-
-If you want to anchor to X specifically (e.g., to see X's post-claim output space as your anchor), include X and also add all blocks you DON'T want aggregated to the include set. The algorithm will place X on the anchor chain.
-
-### Exclude Constraints
-
-Exclude constraints remove blocks from consideration as ancestors. If the minimum anchor requires passing through an excluded block, the request is infeasible.
-
-Practical use: collateral blocks must not be descendants of the target block. `excludeBlocks = [targetBlock]` ensures the anchor is on a branch that doesn't pass through the target.
-
----
-
-## Algorithm 2: rebaseOutputIndex
+## rebaseOutputIndex
 
 ### Interface
 
@@ -344,11 +258,11 @@ Alternatively, if we define `rebaseOutputIndex` as always starting from the pre-
 
 ---
 
-## How resolveAnchor and rebaseOutputIndex Connect
+## How placement and rebaseOutputIndex Connect
 
 The two algorithms compose to form the block construction pipeline:
 
-1. **`resolveAnchor`** determines where the block attaches and what it aggregates.
+1. **[Placement](placement.md)** determines where the block attaches (its anchor) and what it aggregates.
 2. **`rebaseOutputIndex`** maps each `ClaimRef { block, outputIndex }` to an integer index in the constructed block's output space.
 
 ```
@@ -526,65 +440,7 @@ rebaseOutputIndex(B, 1, D):  (b1, B's second output)
   D.outputSpace = [d0, c0, b1, g1, g2]. Position 2 = b1. Correct.
 ```
 
-### T6: Inter-subtree conflict
-
-```
-Genesis: outputs [g0]
-S1 anchors to Genesis: claims [g0]
-S2 anchors to Genesis: claims [g0]
-
-resolveAnchor({ includeBlocks: [S1, S2] }):
-  Both S1 and S2 are on different branches from Genesis.
-  Aggregates = [S1, S2]. Anchor = Genesis.
-  But S1 and S2 both claim g0 -- inter-subtree conflict.
-  Error: cannot aggregate S1 and S2 together.
-```
-
-### T7: Exclude constraint
-
-```
-Genesis
-A anchors to Genesis
-B anchors to A
-
-resolveAnchor({ includeBlocks: [Genesis], excludeBlocks: [A] }):
-  Genesis is on every anchor chain. Minimum anchor = Genesis.
-  But A must not be an ancestor. A is a descendant of Genesis, so
-  any anchor that is a descendant of Genesis but not of A works.
-  Anchor = Genesis itself (Genesis is not a descendant of A).
-```
-
-### T8: Include/exclude conflict
-
-```
-Genesis
-A anchors to Genesis
-B anchors to A
-
-resolveAnchor({ includeBlocks: [B], excludeBlocks: [A] }):
-  B requires A as ancestor (B's anchor chain passes through A).
-  But A is excluded. Infeasible -- error.
-```
-
-### T9: Automatic aggregation from include set
-
-```
-Genesis
-A anchors to Genesis (branch 1)
-B anchors to Genesis (branch 2)
-
-resolveAnchor({ includeBlocks: [A, B] }):
-  A and B are on different branches.
-  LCA = Genesis.
-  Both A and B are on side branches from Genesis's perspective.
-  Aggregates = [A, B]. Anchor = Genesis.
-
-  Alternatively, if we pick A's branch as the main chain:
-  Anchor = A. Aggregates = [B].
-  (This requires B.anchor = Genesis, which is in A's anchor chain.)
-```
-
-### T10: Backward through aggregation
+### T6: Backward through aggregation
 
 ```
 Genesis: outputs [g0, g1]
@@ -606,7 +462,7 @@ Index 1 in D's output space = s1_0.
     result = 0  (index 0 in S1's output space = s1_0). Correct.
 ```
 
-### T11: Bidirectional -- rebase between siblings
+### T7: Bidirectional -- rebase between siblings
 
 ```
 Genesis: outputs [g0]
@@ -639,27 +495,19 @@ rebaseOutputIndex(Genesis, 0, B):
 
 ### BlockCreationModule
 
-Currently takes a `BlockSpec` with pre-computed anchor and index-based claims. With the anchoring module:
+Anchor selection feeds `BlockBuilderModule.build`:
 
-1. `resolveAnchor` computes the anchor and aggregates from the include/exclude sets.
-2. `rebaseOutputIndex` maps each `ClaimRef` to an integer index.
+1. [Placement](placement.md) computes the anchor.
+2. `rebaseOutputIndex` maps each `ClaimRef` to an integer index in the constructed block's output space.
 3. The result is fed to `buildBlock` for validation (throughput, weight vector, etc.).
 
 ### Draft Blocks
 
-Draft blocks use `resolveAnchor` with stability-preferred options to compute phantom anchors. The `includeBlocks` are the blocks referenced by the draft's `claims`. See [Draft Blocks](draft-blocks.md).
+Draft solidification calls placement to derive the anchor. See [Draft Blocks](draft-blocks.md) and [Placement](placement.md).
 
 ---
 
 ## Open Questions
-
-### Aggregator vs. Aggregated Weight
-
-The `resolveAnchor` algorithm may prefer an aggregator as the anchor (it's "more resolved"). But the aggregator may have less descendant weight than its leaves, since it is newer. Anchor selection and conflict resolution may disagree about which block is "better." See [Draft Blocks -- Open Question](draft-blocks.md#open-question-aggregator-vs-aggregated-weight).
-
-### Optimal Aggregation Plan
-
-When `resolveAnchor` must aggregate blocks from different branches, there may be multiple valid plans (aggregate A and keep B on the chain, or vice versa). The current algorithm uses a simple heuristic (prefer keeping the heavier branch on the chain). A more sophisticated approach would consider: aggregation cost (block size, collateral), inter-subtree conflicts, and UTXO availability.
 
 ### Draft-to-Draft Dependencies
 
@@ -671,9 +519,9 @@ If draft D1's phantom anchor creates an output space, and draft D2 wants to refe
 
 | File | Description |
 |------|-------------|
-| [`src/core/AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | `rebaseOutputIndex`, `resolveAnchor`, path finding |
+| [`src/core/AnchoringModule.ts`](../../src/core/AnchoringModule.ts) | `rebaseOutputIndex`, path finding |
 | [`src/core/OutputMapping.ts`](../../src/core/OutputMapping.ts) | Shared utilities: `mapSurvivingToOriginal`, `mapOriginalToSurviving`, `ClaimRef` |
 | [`src/core/Block.ts`](../../src/core/Block.ts) | `claims` field on `Block` interface |
 | [`src/core/BlockCreationModule.ts`](../../src/core/BlockCreationModule.ts) | Downstream consumer (imports `mapSurvivingToOriginal`) |
 | [`src/core/ConflictModule.ts`](../../src/core/ConflictModule.ts) | Shares rebase machinery (imports `mapSurvivingToOriginal`) |
-| [`tests/AnchoringModule.test.ts`](../../tests/AnchoringModule.test.ts) | Tests for output mapping, rebase (T1-T5, T10, T11), and resolveAnchor (T7-T9) |
+| [`tests/AnchoringModule.test.ts`](../../tests/AnchoringModule.test.ts) | Tests for output mapping and rebase (T1-T7) |

@@ -61,9 +61,10 @@ When block E has `aggregates: [X, Y]`, it means:
 ### Invariants
 
 1. **Rooted at anchor**: every aggregate's anchor chain must pass through the aggregating block's anchor. Formally, for each `a` in `block.aggregates`, `block.anchor` must appear in `a`'s ancestor chain. This ensures `subtreeFrom(a, block.anchor)` terminates correctly.
-2. **Non-overlapping**: aggregate subtrees must be pairwise disjoint. No block appears in two aggregates' subtrees.
-3. **Non-conflicting claims**: aggregates' claim masks against the anchor must not overlap. If they do, the aggregates conflict and cannot be combined.
-4. **Weight-ratio balance**: aggregates must satisfy the weight-ratio constraint (see [dag.md](dag.md)).
+2. **Non-conflicting claims**: aggregates' claim masks against the anchor must not overlap. If they do, the aggregates conflict and cannot be combined.
+3. **Weight-ratio balance**: aggregates must satisfy the weight-ratio constraint (see [dag.md](dag.md)).
+
+Aggregates' subtrees may overlap structurally -- the linear-aggregation case (`aggregates = [B, C, D]` for chain `A <- B <- C <- D`, where each subtree is a prefix of the next) is supported and common. What must be disjoint is the *claim masks against the anchor*, not subtree membership. See [Different-Anchor Aggregates](#different-anchor-aggregates).
 
 ---
 

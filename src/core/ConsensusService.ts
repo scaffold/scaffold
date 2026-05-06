@@ -1,9 +1,10 @@
-import { Hash, ZERO_HASH } from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore, getBlockTotalWeightVector } from './Block.ts';
 import { Draft, DraftStore } from './Draft.ts';
 import { ConsensusConfig, ConsensusModule, ConsensusProvider } from './ConsensusModule.ts';
 import { ProtocolContext } from './ProtocolContext.ts';
-import { pickAnchorForClaims } from './AnchorSelection.ts';
+import { draftAnchorViaPlacement } from './DraftPlacement.ts';
+import { PlacementModule } from './PlacementModule.ts';
 import { NodeWeightsService } from './NodeWeightsService.ts';
 
 /** Entity type that consensus operates on: either a finalized Block or a local Draft. */
@@ -15,12 +16,18 @@ function isBlock(entity: ConsensusEntity): entity is Block {
 
 class ConsensusProviderAdapter implements ConsensusProvider<ConsensusEntity> {
   private draftStore?: DraftStore;
+  private placement?: PlacementModule<Block>;
 
   constructor(private readonly store: BlockStore) {}
 
   /** Wire a DraftStore so drafts are visible to consensus. */
   setDraftStore(ds: DraftStore): void {
     this.draftStore = ds;
+  }
+
+  /** Wire placement so drafts derive their anchor consistently with BlockBuilder. */
+  setPlacement(placement: PlacementModule<Block>): void {
+    this.placement = placement;
   }
 
   getBlock(hash: Hash): ConsensusEntity | undefined {
@@ -33,23 +40,21 @@ class ConsensusProviderAdapter implements ConsensusProvider<ConsensusEntity> {
 
   getAnchor(entity: ConsensusEntity): Hash {
     if (isBlock(entity)) return entity.anchor;
-    // Drafts derive their anchor from their claims via the same
-    // selection logic that BlockBuilder uses at solidification. This
-    // ensures pre-solidification weight attribution lands on the same
-    // chain that the eventual block will, so weight doesn't appear or
-    // disappear when the draft solidifies.
-    const pick = pickAnchorForClaims(entity.claims, this.store);
-    return pick.ok ? pick.anchor : ZERO_HASH;
+    // Drafts derive their anchor via placement (same logic as
+    // BlockBuilder uses at solidification), so pre-solidification weight
+    // lands on the same chain the eventual block will. ZERO_HASH means
+    // the draft has no anchor yet (stalled or no placement wired) -- it
+    // contributes no weight.
+    return draftAnchorViaPlacement(entity, this.store, this.placement);
   }
 
   getAggregates(entity: ConsensusEntity): Hash[] {
     if (isBlock(entity)) return entity.aggregates;
-    // Same selection logic as getAnchor -- a draft that claims B and C
-    // both anchored to A reports anchor=A, aggregates=[B,C], which is
-    // identical to a real aggregator block over B+C. Weight propagates
-    // through that chain.
-    const pick = pickAnchorForClaims(entity.claims, this.store);
-    return pick.ok ? pick.aggregates : [];
+    // Drafts have no aggregates of their own -- aggregation is an
+    // explicit operation produced by the AggregationContract, not an
+    // implicit consequence of having multi-branch claims. A draft's
+    // weight propagates purely through its anchor chain.
+    return [];
   }
 
   getWeightVector(entity: ConsensusEntity): number[] {
@@ -89,5 +94,10 @@ export class ConsensusService extends ConsensusModule<ConsensusEntity> {
   /** Wire a DraftStore so drafts participate in consensus as phantom blocks. */
   setDraftStore(draftStore: DraftStore): void {
     this.adapter.setDraftStore(draftStore);
+  }
+
+  /** Wire placement so drafts derive their anchor via the same logic as BlockBuilder. */
+  setPlacement(placement: PlacementModule<Block>): void {
+    this.adapter.setPlacement(placement);
   }
 }

@@ -41,6 +41,7 @@ import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { SamplingService } from '../core/SamplingService.ts';
 import { NodeWeightsService } from '../core/NodeWeightsService.ts';
+import { PlacementService } from '../core/PlacementService.ts';
 import { GossipService } from './GossipService.ts';
 import { RoutingService } from './RoutingService.ts';
 import { PushAction } from './RoutingModule.ts';
@@ -124,6 +125,7 @@ export class NodeContext {
   readonly consensus: ConsensusService;
   readonly sampling: SamplingService;
   readonly nodeWeights: NodeWeightsService;
+  readonly placement: PlacementService;
   readonly gossip: GossipService;
   readonly routing: RoutingService;
   readonly trust: TrustService;
@@ -194,6 +196,13 @@ export class NodeContext {
     this.nodeWeights.setDraftStore(this.draftStore);
     this.consensus = this.protocolContext.get(ConsensusService);
     this.consensus.setDraftStore(this.draftStore);
+    // Placement depends on ConsensusService (canonical-aggregator query),
+    // and ConsensusService + NodeWeightsService consume placement lazily
+    // for draft-anchor derivation. Construct placement after both, then
+    // wire it back via setPlacement.
+    this.placement = this.protocolContext.get(PlacementService);
+    this.consensus.setPlacement(this.placement);
+    this.nodeWeights.setPlacement(this.placement);
     this.trust = this.protocolContext.get(TrustService);
 
     // 3b. UtxoIndex -- DI-registered so GenerationService can reach it
@@ -274,6 +283,7 @@ export class NodeContext {
     const nodeCtx = this;
     this._blockBuilder = new BlockBuilderModule({
       store: this.store,
+      placement: this.placement,
       createBlock: (spec, key) => this._blockCreator.createBlock(spec, key),
       get valueOverride() {
         return nodeCtx._valueOverride;
