@@ -10,6 +10,7 @@ import { Hash } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
 import { EventLog, LogEntry, LogQuery } from '../core/EventLog.ts';
 import { ZERO_HASH } from '../util/Hash.ts';
+import { getAggregationData } from '../contracts/AggregationContract.ts';
 
 export interface BlockSummary {
   hash: string;
@@ -128,6 +129,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
       const isCanonical = consensus.isCanonical(hash);
       const genesisHash = ctx.genesisHash;
       const depth = store.getAnchorDepth(hash, genesisHash) ?? -1;
+      const aggData = getAggregationData(block);
       return {
         hash: block.hash.toHex(),
         anchor: block.anchor.toHex(),
@@ -142,10 +144,16 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
         claimIndices: [...block.claimIndices],
         aggregates: block.aggregates.map((a) => a.toHex()),
         refs: block.refs.map((r) => r.toHex()),
+        declaredWeight: block.declaredWeight,
         effectiveWeight: consensus.getEffectiveWeight(hash),
         descendantWeight: nodeWeights.descendantWeight(hash),
         derivedWeightVector: nodeWeights.derivedWeightVector(hash),
         weightFactor: sampling.getWeightFactor(hash),
+        // Raw aggregation cache values (pre-sampling-factor) so a fix to
+        // BlockBuilder/AggregationContract weight composition is visible
+        // even when sampling has zeroed out the propagated weights.
+        chainWeights: aggData ? [...aggData.chainWeights] : [],
+        aggregateWeights: aggData ? [...aggData.aggregateWeights] : [],
         conflicts: [...consensus.getConflicts(hash)],
       };
     },

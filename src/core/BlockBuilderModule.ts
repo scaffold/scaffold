@@ -17,8 +17,8 @@
 
 import type { Hash } from '../util/Hash.ts';
 import type { Block, BlockStore } from './Block.ts';
-import { RECORD_CONTRACT } from './Block.ts';
-import { Hash as HashCtor } from '../util/Hash.ts';
+import { getBlockTotalWeightVector, RECORD_CONTRACT } from './Block.ts';
+import { Hash as HashCtor, type HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import type { BlockSpec, ClaimEntry, Output } from './BlockCreationModule.ts';
 import type { Draft } from './Draft.ts';
 import { encodeAggregationData, getAggregationData } from '../contracts/AggregationContract.ts';
@@ -139,19 +139,48 @@ export class BlockBuilderModule {
     // calls this the linear-aggregation case.
     const aggregates = aggregatedBlocks;
 
-    // Build per-aggregate output counts from cached aggregation data
-    // (or leaf defaults).
+    // Build per-aggregate output counts and weight info from each
+    // aggregate's cached aggregation data (or leaf defaults).
+    //
+    // Weight info is the AggregationContract's blind spot: the contract
+    // sees only marker outputs, so leaf inputs (empty data) emit zero
+    // weight contributions. Re-deriving here from store-resident block
+    // state ensures `chainWeights` and `aggregateWeights` reflect the
+    // leaves' actual `declaredWeight`, matching `BlockCreationModule.deriveWeightVector`.
     const aggregateOutputCounts: number[] = [];
+    const aggregateWeights: number[] = [];
+    const subtreeInfos: { anchorDepth: number; weightVector: number[] }[] = [];
     for (const aggHash of aggregates) {
       const aggBlock = this.provider.store.get(aggHash);
       if (!aggBlock) {
         aggregateOutputCounts.push(0);
+        aggregateWeights.push(0);
+        subtreeInfos.push({ anchorDepth: 0, weightVector: [] });
         continue;
       }
       const aggData = getAggregationData(aggBlock);
       const sc = aggBlock.claimIndices.filter((c) => c < aggBlock.outputs.length).length;
       aggregateOutputCounts.push(aggData?.newOutputCount ?? (aggBlock.outputs.length - sc));
+
+      // Subtree weight contribution: the aggregate's full per-depth weight
+      // (declaredWeight folded into entry 0) attributed at its anchor's
+      // depth from this block's anchor. Match the dual-direction lookup
+      // in BlockCreationModule.buildBlock so an aggregate anchored above
+      // OR below `anchor` resolves correctly.
+      const aggAnchor = aggBlock.anchor;
+      const depth = anchorChainDepth(this.provider.store, anchor, aggAnchor) ??
+        anchorChainDepth(this.provider.store, aggAnchor, anchor) ?? 0;
+      const wv = getBlockTotalWeightVector(aggBlock);
+      subtreeInfos.push({ anchorDepth: depth, weightVector: wv });
+      // aggregateWeights[i]: total weight of aggregate i's subtree (own
+      // declaredWeight + descendants). SamplingModule and TrustService
+      // sum these as the block's per-aggregate weight contribution.
+      aggregateWeights.push(wv.reduce((a, b) => a + b, 0));
     }
+    // chainWeights[d]: combined subtree weight at this block's anchor
+    // chain depth d. Excludes this block's own `declaredWeight`
+    // (consumers fold that in via getBlockTotalWeightVector).
+    const chainWeights = composeChainWeights(subtreeInfos);
 
     // -- 3. Self-claims (RECORD outputs) -----------------------------
     //
@@ -236,6 +265,8 @@ export class BlockBuilderModule {
       composedClaimMask,
       aggregateOutputCounts,
       virtualBlock.newOutputCount,
+      chainWeights,
+      aggregateWeights,
     );
 
     // -- 7. Value override -------------------------------------------
@@ -264,14 +295,18 @@ export class BlockBuilderModule {
 
 /**
  * If the draft produces an aggregation data output (from running the
- * aggregation contract), patch it with the computed claim mask. No-op
- * for blocks that aren't aggregators.
+ * aggregation contract), patch it with the structural fields and weight
+ * info computed by BlockBuilder from store-resident state. The contract
+ * fills in only the cache shape -- weight values come from here.
+ * No-op for blocks that aren't aggregators.
  */
 function patchAggregationOutput(
   outputs: Output[],
   claimMask: number[],
   aggregateOutputCounts: number[],
   newOutputCount: number,
+  chainWeights: number[],
+  aggregateWeights: number[],
 ): Output[] {
   return outputs.map((output) => {
     if (!HashCtor.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
@@ -290,9 +325,61 @@ function patchAggregationOutput(
         claimMask,
         aggregateOutputCounts,
         newOutputCount,
+        chainWeights,
+        aggregateWeights,
       }),
     };
   });
+}
+
+/**
+ * Walk `from`'s anchor chain toward genesis; return the depth at which
+ * `target` appears (0 if `from === target`), or undefined if it doesn't.
+ */
+function anchorChainDepth(
+  store: BlockStore,
+  from: Hash,
+  target: Hash,
+): number | undefined {
+  let cur: Hash = from;
+  let depth = 0;
+  const seen = new Set<HashPrimitive>();
+  while (!HashCtor.equals(cur, ZERO_HASH)) {
+    if (HashCtor.equals(cur, target)) return depth;
+    const key = cur.toPrimitive();
+    if (seen.has(key)) return undefined;
+    seen.add(key);
+    const block = store.get(cur);
+    if (!block) return undefined;
+    cur = block.anchor;
+    depth++;
+  }
+  if (HashCtor.equals(target, ZERO_HASH)) return depth;
+  return undefined;
+}
+
+/**
+ * Compose chainWeights from per-aggregate `{anchorDepth, weightVector}`.
+ * Mirrors `BlockCreationModule.deriveWeightVector` with own declaredWeight
+ * = 0 (chainWeights excludes the block's own weight by convention).
+ */
+function composeChainWeights(
+  subtreeInfos: { anchorDepth: number; weightVector: number[] }[],
+): number[] {
+  let maxDepth = -1;
+  for (const st of subtreeInfos) {
+    if (st.weightVector.length === 0) continue;
+    const stMax = st.anchorDepth + st.weightVector.length - 1;
+    if (stMax > maxDepth) maxDepth = stMax;
+  }
+  if (maxDepth < 0) return [];
+  const out: number[] = new Array(maxDepth + 1).fill(0);
+  for (const st of subtreeInfos) {
+    for (let i = 0; i < st.weightVector.length; i++) {
+      out[st.anchorDepth + i] += st.weightVector[i];
+    }
+  }
+  return out;
 }
 
 /**

@@ -1,6 +1,11 @@
 import { assert, assertEquals } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { AGGREGATION_CONTRACT, Block, composeGenesisPacket } from '../src/core/Block.ts';
+import {
+  AGGREGATION_CONTRACT,
+  Block,
+  composeGenesisPacket,
+  getBlockWeightVector,
+} from '../src/core/Block.ts';
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { NodeContext } from '../src/node/NodeContext.ts';
@@ -138,6 +143,58 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
 
   // The aggregation block should aggregate the chain blocks
   assert(aggBlock.aggregates.length > 0, 'aggregation block should have aggregates');
+
+  await scaffold.close();
+});
+
+Deno.test('Scaffold: 4-leaf aggregation block sums leaf weights in weight vector', async () => {
+  // Topology: G <- b1 <- b2 <- b3 <- b4. Aggregator A anchors at G and
+  // aggregates {b1, b2, b3, b4}. Each leaf has declaredWeight=10.
+  //
+  // Per BlockCreationModule.deriveWeightVector: A's weight vector attributes
+  // each leaf to its anchor depth from A's anchor (G):
+  //   b1 at depth 0, b2 at depth 1, b3 at depth 2, b4 at depth 3.
+  // So A.weightVector should be [b1.declaredWeight, b2.declaredWeight,
+  // b3.declaredWeight, b4.declaredWeight] = [10, 10, 10, 10] (excluding A's
+  // own declaredWeight, per getBlockWeightVector docstring).
+  //
+  // The total weight encoded in the vector should equal 4 * 10 = 40.
+  const scaffold = new Scaffold({ privateKey: WELL_KNOWN_PRIVATE_KEY });
+  const ctx = scaffold.context;
+
+  const LEAF_WEIGHT = 10;
+  for (let i = 0; i < 4; i++) {
+    scaffold.put({
+      outputs: [makeOutput(50, `demo-${i}`)],
+      declaredWeight: LEAF_WEIGHT,
+    });
+  }
+
+  await new Promise((r) => setTimeout(r, 50));
+
+  let aggBlock: Block | undefined;
+  for (const block of ctx.store.values()) {
+    const hasAggData = block.outputs.some((o) =>
+      Hash.equals(o.verifier.contract, AGGREGATION_CONTRACT) && o.data !== null &&
+      o.data.length > 0
+    );
+    if (hasAggData) {
+      aggBlock = block;
+      break;
+    }
+  }
+  assert(aggBlock, 'aggregation block must exist after 4 sequential puts');
+  assertEquals(aggBlock.aggregates.length, 4, 'aggregator should aggregate all 4 leaves');
+
+  const wv = getBlockWeightVector(aggBlock);
+  const total = wv.reduce((a, b) => a + b, 0);
+  assertEquals(
+    total,
+    4 * LEAF_WEIGHT,
+    `expected leaf weights to sum to ${4 * LEAF_WEIGHT}, got ${total} from vector ${
+      JSON.stringify(wv)
+    }`,
+  );
 
   await scaffold.close();
 });

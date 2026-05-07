@@ -25,7 +25,7 @@ import { RecordingWalkerHost } from "scaffold.io/core/RecordingWalkerHost.ts";
 import type { FieldNode } from "scaffold.io/core/RecordingWalkerHost.ts";
 import { DateSummary } from "./DateSummary.tsx";
 import { Hash } from "scaffold.io/util/Hash.ts";
-import { SIGNATURE_CONTRACT } from "scaffold.io/core/Block.ts";
+import { getBlockWeightVector, SIGNATURE_CONTRACT } from "scaffold.io/core/Block.ts";
 import type { Block } from "scaffold.io/core/Block.ts";
 import type { Output } from "scaffold.io/core/BlockCreationModule.ts";
 import type { Scaffold } from "scaffold.io/Scaffold.ts";
@@ -47,6 +47,12 @@ interface GraphNode extends SimulationNodeDatum {
   descendantWeight: number;
   effectiveWeight: number;
   isGhost: boolean;
+  // Per-card weight breakdown.
+  selfRaw: number; // declaredWeight
+  treeRaw: number; // sum of aggregation cache chainWeights (subtree, pre-factor)
+  mul: number; // sampling weight factor (0..1)
+  effLocal: number; // (selfRaw + treeRaw) * mul
+  total: number; // consensus.getEffectiveWeight (= selfWeight + descendantWeight)
 }
 
 interface GraphLink extends SimulationLinkDatum<GraphNode> {
@@ -87,6 +93,15 @@ function toHex(bytes: Uint8Array): string {
   return hex;
 }
 
+function formatWeightValue(v: number): string {
+  if (!Number.isFinite(v)) return String(v);
+  if (v === 0) return "0";
+  if (Number.isInteger(v) && Math.abs(v) < 1e6) return String(v);
+  if (Math.abs(v) >= 1e6) return v.toExponential(1);
+  // Small fractional (e.g. sampling factor 0.5) -- show 2 decimals.
+  return v.toFixed(2);
+}
+
 function tryWalkParams(contractHash: Hash, params: Uint8Array): FieldNode[] | null {
   const contract = getContract(contractHash);
   if (!contract?.walkParams) return null;
@@ -116,6 +131,7 @@ function computeGraphData(
   const ctx = scaffold.context;
   const consensus = ctx.consensus;
   const nodeWeights = ctx.nodeWeights;
+  const sampling = ctx.sampling;
 
   const nodeData: {
     hex: string;
@@ -124,6 +140,11 @@ function computeGraphData(
     hasConflicts: boolean;
     descendantWeight: number;
     effectiveWeight: number;
+    selfRaw: number;
+    treeRaw: number;
+    mul: number;
+    effLocal: number;
+    total: number;
     isGhost: boolean;
   }[] = [];
 
@@ -134,6 +155,10 @@ function computeGraphData(
     const hasConflicts = conflicts.size > 1;
     const descendantWeight = nodeWeights.descendantWeight(block.hash);
     const effectiveWeight = consensus.getEffectiveWeight(block.hash);
+    const selfRaw = block.declaredWeight;
+    const treeRaw = getBlockWeightVector(block).reduce((a, b) => a + b, 0);
+    const mul = sampling.getWeightFactor(block.hash);
+    const effLocal = (selfRaw + treeRaw) * mul;
     const isGhost = ghostHashes.has(hex);
     nodeData.push({
       hex,
@@ -142,6 +167,11 @@ function computeGraphData(
       hasConflicts,
       descendantWeight,
       effectiveWeight,
+      selfRaw,
+      treeRaw,
+      mul,
+      effLocal,
+      total: effectiveWeight,
       isGhost,
     });
   }
@@ -176,6 +206,11 @@ function computeGraphData(
       hasConflicts: d.hasConflicts,
       descendantWeight: d.descendantWeight,
       effectiveWeight: d.effectiveWeight,
+      selfRaw: d.selfRaw,
+      treeRaw: d.treeRaw,
+      mul: d.mul,
+      effLocal: d.effLocal,
+      total: d.total,
       isGhost: d.isGhost,
     };
   });
@@ -624,6 +659,12 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
   const [svgSize, setSvgSize] = useState({ width: 800, height: 500 });
   const [overlayData, setOverlayData] = useState<OverlayData | null>(null);
   const [queryText, setQueryText] = useState(DEFAULT_QUERY);
+  // Single shared tooltip for the per-card weight breakdown labels. One
+  // element rendered at the container level and repositioned on hover --
+  // no per-block tooltip duplication.
+  const [weightTooltip, setWeightTooltip] = useState<
+    { text: string; x: number; y: number } | null
+  >(null);
   const [, tick] = useReducer((x: number) => x + 1, 0);
 
   const svgRef = useRef<SVGSVGElement>(null);
@@ -1143,11 +1184,69 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                           </div>
 
                           {/* Weights */}
-                          <div className="block-expanded-weights">
-                            <span>Self: {block.declaredWeight}</span>
-                            <span>Subtree: {node.effectiveWeight}</span>
-                            <span>Desc: {node.descendantWeight}</span>
-                          </div>
+                          {(() => {
+                            const expandedCells: {
+                              label: string;
+                              value: number;
+                              tip: string;
+                            }[] = [
+                              {
+                                label: "self",
+                                value: node.selfRaw,
+                                tip:
+                                  "self: this block's declaredWeight (raw, before sampling).",
+                              },
+                              {
+                                label: "tree",
+                                value: node.treeRaw,
+                                tip:
+                                  "tree: sum of the aggregation cache's chainWeights -- this block's full subtree contribution across all anchor-chain depths, before sampling.",
+                              },
+                              {
+                                label: "mul",
+                                value: node.mul,
+                                tip:
+                                  "mul: sampling weight factor for this block. 0 = not yet sampled, 1 = fully verified.",
+                              },
+                              {
+                                label: "eff",
+                                value: node.effLocal,
+                                tip:
+                                  "eff: this block's effective contribution = (self + tree) * mul.",
+                              },
+                              {
+                                label: "total",
+                                value: node.total,
+                                tip:
+                                  "total: ConsensusModule effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight. The score consensus uses for canonicality.",
+                              },
+                            ];
+                            return (
+                              <div className="block-expanded-weights">
+                                {expandedCells.map((c) => (
+                                  <span
+                                    key={c.label}
+                                    className="block-expanded-weight-cell"
+                                    onMouseEnter={(e) =>
+                                      setWeightTooltip({
+                                        text: c.tip,
+                                        x: e.clientX,
+                                        y: e.clientY,
+                                      })}
+                                    onMouseMove={(e) =>
+                                      setWeightTooltip((prev) =>
+                                        prev
+                                          ? { ...prev, x: e.clientX, y: e.clientY }
+                                          : prev
+                                      )}
+                                    onMouseLeave={() => setWeightTooltip(null)}
+                                  >
+                                    {c.label}: {formatWeightValue(c.value)}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
 
                           {/* Aggregating blocks */}
                           {aggregatingBlocks.length > 0 && (
@@ -1375,14 +1474,49 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
                   >
                     {statusLabel}
                   </text>
-                  <text
-                    className="graph-node-weight"
-                    x={NODE_WIDTH / 2}
-                    y={46}
-                    textAnchor="middle"
-                  >
-                    w:{node.block.declaredWeight} d:{node.descendantWeight}
-                  </text>
+                  {/* Medium-detail card: just self + total. Click to expand
+                      for the full self/tree/mul/eff/total breakdown. */}
+                  {(() => {
+                    const cells: { label: string; value: number; tip: string }[] = [
+                      {
+                        label: "self",
+                        value: node.selfRaw,
+                        tip:
+                          "self: this block's declaredWeight (raw, before sampling).",
+                      },
+                      {
+                        label: "total",
+                        value: node.total,
+                        tip:
+                          "total: ConsensusModule effectiveWeight = nodeWeights.selfWeight + nodeWeights.descendantWeight. The score consensus uses for canonicality.",
+                      },
+                    ];
+                    const slot = NODE_WIDTH / cells.length;
+                    return cells.map((c, i) => (
+                      <text
+                        key={c.label}
+                        className="graph-node-weight-cell"
+                        x={slot * (i + 0.5)}
+                        y={46}
+                        textAnchor="middle"
+                        onMouseEnter={(e) =>
+                          setWeightTooltip({
+                            text: c.tip,
+                            x: e.clientX,
+                            y: e.clientY,
+                          })}
+                        onMouseMove={(e) =>
+                          setWeightTooltip((prev) =>
+                            prev
+                              ? { ...prev, x: e.clientX, y: e.clientY }
+                              : prev
+                          )}
+                        onMouseLeave={() => setWeightTooltip(null)}
+                      >
+                        {c.label}:{formatWeightValue(c.value)}
+                      </text>
+                    ));
+                  })()}
                 </g>
               );
             })}
@@ -1408,6 +1542,19 @@ export function BlockGraph({ scaffold, onCreateBlock }: BlockGraphProps) {
         block{blocks.length !== 1 ? "s" : ""}
         {ghostHashes.size > 0 && ` (${ghostHashes.size} ghost)`}
       </div>
+
+      {/* Single shared tooltip for weight-cell hovers. */}
+      {weightTooltip && (
+        <div
+          className="graph-weight-tooltip"
+          style={{
+            left: weightTooltip.x + 12,
+            top: weightTooltip.y + 12,
+          }}
+        >
+          {weightTooltip.text}
+        </div>
+      )}
     </div>
   );
 }
