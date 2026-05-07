@@ -64,14 +64,16 @@ export interface ContractEnv {
 
   /**
    * Return all inputs (claimed outputs) matching this contract's verifier.
+   * TODO: Inputs should ALWAYS be returned in causal order. This order should match the claim indices of each generated claim.
    *
    * Verification: synchronous, returns matching claims from the block.
    * Generation: possibly async, queries available outputs from UTXO index.
    */
-  collectInputs(): MaybePromise<Input[]>;
+  collectInputs(limit?: number): MaybePromise<Input[]>;
 
   /**
    * Claim one input matching this contract's verifier.
+   * TODO: Inputs should ALWAYS be returned in causal order. This order should match the claim indices of each generated claim.
    *
    * Verification: returns the next unclaimed matching input; throws if none.
    * Generation: finds/waits for an input; adds it as a resolved claim.
