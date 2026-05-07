@@ -13,7 +13,14 @@ import { Board } from './Board.tsx';
 import { Clock } from './Clock.tsx';
 import { Wallet } from './Wallet.tsx';
 import { GameList } from './GameList.tsx';
-import { BlockExplorerOverlay } from '@scaffold/explorer';
+import {
+  BlockExplorerOverlay,
+  findKey,
+  importKey,
+  loadKeys,
+  type SandboxConfig,
+} from '@scaffold/explorer';
+import type { ScaffoldConfig } from 'scaffold.io/Scaffold.ts';
 
 const DEMO_SEEDS = ['a', 'b', 'c'] as const;
 type DemoSeed = typeof DEMO_SEEDS[number];
@@ -45,20 +52,56 @@ interface Toast {
 
 let toastCounter = 0;
 
+function defaultChessConfig(seedKeyId: string): SandboxConfig {
+  return {
+    selectedKeyId: seedKeyId,
+    strategies: new Set(),
+    enablePiggyback: false,
+    enableLogging: false,
+    useFloodGossip: true,
+    enablePlugins: true,
+    enableGenerationMode: 'all',
+    enableVerificationMode: 'all',
+  };
+}
+
 export function ChessApp() {
   const seed = useMemo(() => parseSeed(), []);
 
+  // Make sure the seed-derived key is in the keystore so the config panel
+  // can surface and reuse it.
+  const seedKeyId = useMemo(() => {
+    const seedPriv = demoPrivateKey(seed);
+    const { newId } = importKey(loadKeys(), bin2hex(seedPriv), `Seed ${seed.toUpperCase()}`);
+    return newId;
+  }, [seed]);
+
+  const [config, setConfig] = useState<SandboxConfig>(() => defaultChessConfig(seedKeyId));
+  const [scaffoldVersion, setScaffoldVersion] = useState(0);
+
   const { scaffold, chess, chessIndex, balanceIndex } = useMemo(() => {
-    const priv = demoPrivateKey(seed);
+    const keys = loadKeys();
+    const keyEntry = findKey(keys, config.selectedKeyId)
+      ?? findKey(keys, seedKeyId)
+      ?? keys[0];
     const genesis = computeDemoGenesis(DEMO_SEEDS);
-    const sc = new Scaffold({
-      privateKey: priv,
+    const scaffoldConfig: ScaffoldConfig = {
+      privateKey: keyEntry.privateKey,
       genesis,
-      plugins: [new WebsocketClientTransport(), new WebrtcTransport()],
-      enableLogging: false,
-      useFloodGossip: true,
-      enablePiggyback: false,
-    });
+      enableLogging: config.enableLogging,
+      useFloodGossip: config.useFloodGossip,
+      enablePiggyback: config.enablePiggyback,
+    };
+    if (config.enablePlugins) {
+      scaffoldConfig.plugins = [new WebsocketClientTransport(), new WebrtcTransport()];
+    }
+    if (config.enableGenerationMode === 'none') {
+      scaffoldConfig.enableGeneration = () => false;
+    }
+    if (config.enableVerificationMode === 'none') {
+      scaffoldConfig.enableVerification = () => false;
+    }
+    const sc = new Scaffold(scaffoldConfig);
     const g = new ChessGame(sc);
     const ci = new ChessIndex(sc, g);
     const bi = new BalanceIndex(sc);
@@ -72,7 +115,18 @@ export function ChessApp() {
       chessIndex: ci,
       balanceIndex: bi,
     };
-  }, [seed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scaffoldVersion, seed]);
+
+  const handleApplyConfig = useCallback((next: SandboxConfig) => {
+    setConfig(next);
+    setScaffoldVersion((v) => v + 1);
+  }, []);
+
+  const activeKeyLabel = useMemo(() => {
+    const k = findKey(loadKeys(), config.selectedKeyId);
+    return k?.label ?? `Seed ${seed.toUpperCase()}`;
+  }, [config.selectedKeyId, seed]);
 
   const myPubkey = scaffold.publicKey;
   const myPubkeyHex = bin2hex(myPubkey);
@@ -364,7 +418,19 @@ export function ChessApp() {
         ))}
       </div>
 
-      <BlockExplorerOverlay scaffold={scaffold} pillLabel="Explorer" />
+      <BlockExplorerOverlay
+        key={scaffoldVersion}
+        scaffold={scaffold}
+        pillLabel="Explorer"
+        configPanel={{
+          current: config,
+          strategyOptions: [],
+          activeKeyLabel,
+          onApply: handleApplyConfig,
+          identityNote:
+            'Chess balances are seed-driven; selecting a non-seed key will leave the wallet empty.',
+        }}
+      />
     </div>
   );
 }

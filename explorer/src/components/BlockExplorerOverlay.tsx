@@ -13,9 +13,32 @@ import type {
   InitialClaim,
   YamlEditorProps,
 } from "./BlockCreationModal.tsx";
+import { ConfigPanel } from "./ConfigPanel.tsx";
+import type {
+  SandboxConfig,
+  StrategyOption,
+} from "./ConfigPanel.tsx";
 import type { Scaffold } from "scaffold.io/Scaffold.ts";
 
 export type OverlayMode = "hidden" | "panel" | "fullscreen";
+
+/**
+ * Props for the optional Scaffold config affordance rendered inside the
+ * overlay header. When provided, the popup includes a Config button that
+ * opens a modal letting the user edit identity/strategies/behavior; the
+ * host applies the change to its scaffold lifecycle.
+ */
+export interface ConfigPanelBinding {
+  current: SandboxConfig;
+  strategyOptions: StrategyOption[];
+  onApply: (next: SandboxConfig) => void;
+  /** Optional headline shown at the top of the panel. */
+  title?: string;
+  /** Optional caveat shown below the identity section. */
+  identityNote?: React.ReactNode;
+  /** Short label for the active identity, shown next to the Config button. */
+  activeKeyLabel?: string;
+}
 
 export interface BlockExplorerOverlayProps {
   scaffold: Scaffold;
@@ -25,13 +48,15 @@ export interface BlockExplorerOverlayProps {
   position?: "right" | "left";
   /** Override the pill label. Default "Explorer". */
   pillLabel?: string;
-  /** Optional JSX shown in the panel header — demo-specific controls. */
+  /** Optional JSX shown in the panel header — host-specific controls. */
   actions?: React.ReactNode;
   /** Hide the close affordance (used for standalone full-screen mode). */
   dismissable?: boolean;
   /** Optional YAML editor + parser for the bundled "Create Block" modal. */
   parseYaml?: (text: string) => Record<string, unknown> | null;
   renderYamlEditor?: (props: YamlEditorProps) => React.ReactElement;
+  /** When provided, the overlay header gains a Config button + modal. */
+  configPanel?: ConfigPanelBinding;
 }
 
 const PANEL_MIN_WIDTH = 360;
@@ -69,9 +94,11 @@ export function BlockExplorerOverlay(props: BlockExplorerOverlayProps) {
     dismissable = true,
     parseYaml,
     renderYamlEditor,
+    configPanel,
   } = props;
 
   const [mode, setMode] = useState<OverlayMode>(defaultMode);
+  const [showConfig, setShowConfig] = useState(false);
   const [panelWidth, setPanelWidth] = useState<number>(() => loadStoredWidth());
   const [blockCount, setBlockCount] = useState<number>(() => {
     let n = 0;
@@ -126,13 +153,13 @@ export function BlockExplorerOverlay(props: BlockExplorerOverlayProps) {
         return;
       }
       if (e.key === "Escape" && dismissable) {
-        if (showCreateModal) return; // let the modal own ESC
+        if (showCreateModal || showConfig) return; // let the modal own ESC
         setMode((m) => (m === "hidden" ? m : "hidden"));
       }
     };
     globalThis.addEventListener("keydown", onKey);
     return () => globalThis.removeEventListener("keydown", onKey);
-  }, [dismissable, showCreateModal]);
+  }, [dismissable, showCreateModal, showConfig]);
 
   // Drag-to-resize the side panel.
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -239,7 +266,7 @@ export function BlockExplorerOverlay(props: BlockExplorerOverlayProps) {
               {blockCount} block{blockCount === 1 ? "" : "s"}
             </span>
           </div>
-          {(actions || (parseYaml && renderYamlEditor)) && (
+          {(actions || (parseYaml && renderYamlEditor) || configPanel) && (
             <div className="explorer-overlay-header-actions">
               {actions}
               {parseYaml && renderYamlEditor && (
@@ -250,6 +277,21 @@ export function BlockExplorerOverlay(props: BlockExplorerOverlayProps) {
                   title="Author a new block manually"
                 >
                   + Create Block
+                </button>
+              )}
+              {configPanel && (
+                <button
+                  type="button"
+                  className="explorer-overlay-config-btn"
+                  onClick={() => setShowConfig(true)}
+                  title="Open Scaffold configuration"
+                >
+                  ⚙ Config
+                  {configPanel.activeKeyLabel && (
+                    <span className="explorer-overlay-config-id">
+                      {configPanel.activeKeyLabel}
+                    </span>
+                  )}
                 </button>
               )}
             </div>
@@ -295,6 +337,21 @@ export function BlockExplorerOverlay(props: BlockExplorerOverlayProps) {
           onClose={handleCloseCreate}
           parseYaml={parseYaml}
           renderYamlEditor={renderYamlEditor}
+        />
+      )}
+
+      {configPanel && (
+        <ConfigPanel
+          open={showConfig}
+          current={configPanel.current}
+          strategyOptions={configPanel.strategyOptions}
+          title={configPanel.title}
+          identityNote={configPanel.identityNote}
+          onClose={() => setShowConfig(false)}
+          onApply={(next) => {
+            setShowConfig(false);
+            configPanel.onApply(next);
+          }}
         />
       )}
     </>

@@ -10,6 +10,25 @@ export type {
   InitialClaim,
   YamlEditorProps,
 } from "./components/BlockCreationModal.tsx";
+export { ConfigPanel } from "./components/ConfigPanel.tsx";
+export type {
+  ConfigPanelProps,
+  GenVerifyMode,
+  SandboxConfig,
+  StrategyOption,
+} from "./components/ConfigPanel.tsx";
+export {
+  addRandomKey,
+  deleteKey,
+  findKey,
+  importKey,
+  loadKeys,
+  loadSelectedKeyId,
+  renameKey,
+  saveSelectedKeyId,
+  WELL_KNOWN_KEY_ID,
+} from "./config/keyStore.ts";
+export type { KeyEntry } from "./config/keyStore.ts";
 export { HighlightRegistry } from "./highlight/HighlightRegistry.ts";
 export {
   descriptorToJsonSchema,
