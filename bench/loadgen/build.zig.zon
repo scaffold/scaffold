@@ -1,0 +1,15 @@
+.{
+    .name = .scaffold_bench_loadgen,
+    .version = "0.0.1",
+    .fingerprint = 0x723659c8c48af810,
+    .dependencies = .{
+        .websocket = .{
+            .path = "../websocket.zig",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

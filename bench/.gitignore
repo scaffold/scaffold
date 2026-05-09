@@ -1,0 +1,16 @@
+# Vendored upstream dependencies (cloned at setup)
+websocket.zig/
+uWebSockets/
+
+# Build outputs
+zig-server/zig-out/
+zig-server/.zig-cache/
+loadgen/zig-out/
+loadgen/.zig-cache/
+cpp-server/cpp-server
+cpp-server/*.o
+cpp-server/*.dSYM/
+
+# Benchmark run artifacts
+results/
+*.log
