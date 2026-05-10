@@ -6,10 +6,27 @@ import type { ClaimRef } from './Node.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
 import { type GeneratorHandle, type GeneratorProvider } from './Generator.ts';
+import type { Block } from './Block.ts';
+import type { BlockBuilderModule } from './BlockBuilderModule.ts';
+
+/**
+ * Outcome of a `solidify` call. Mirrors `BlockBuilderModule.BuildResult`
+ * but adds the consumed-draft list so callers can correlate the produced
+ * block with the seed batch.
+ */
+export type SolidifyResult =
+  | { ok: true; block: Block; consumedDraftIds: Hash[] }
+  | { ok: false; awaitingAnchor: true; missing: Hash[] }
+  | { ok: false; reason: string };
 
 /**
  * Orchestrates the draft lifecycle: creation, consensus registration,
- * generator dispatch, and margin-based cancellation.
+ * generator dispatch, and the draft-to-block solidify pipeline.
+ *
+ * The solidify path is the single funnel through which any caller turns
+ * one or more drafts into a block. PutManager and the post-generation
+ * hook are the primary callers; eventually all `createBlock`-flavoured
+ * action paths in ReactiveLayer route through here.
  */
 export class DraftManager {
   private readonly store: DraftStore;
@@ -17,17 +34,25 @@ export class DraftManager {
   private readonly generator: GeneratorProvider;
   private readonly handles = new Map<HashPrimitive, GeneratorHandle>();
   private readonly _onDraftReady?: (draft: Draft) => void;
+  private readonly _blockBuilder?: BlockBuilderModule;
+  private readonly _processBlock?: (block: Block) => void;
 
   constructor(
     store: DraftStore,
     consensus: ConsensusModule<unknown>,
     generator: GeneratorProvider,
-    opts?: { onDraftReady?: (draft: Draft) => void },
+    opts?: {
+      onDraftReady?: (draft: Draft) => void;
+      blockBuilder?: BlockBuilderModule;
+      processBlock?: (block: Block) => void;
+    },
   ) {
     this.store = store;
     this.consensus = consensus;
     this.generator = generator;
     this._onDraftReady = opts?.onDraftReady;
+    this._blockBuilder = opts?.blockBuilder;
+    this._processBlock = opts?.processBlock;
   }
 
   /**
@@ -74,6 +99,84 @@ export class DraftManager {
       this.handles.delete(key);
     }
     this.consensus.removeBlock(draftId);
+  }
+
+  /**
+   * Drafts available for merging into a solidifying batch: anything in
+   * `ready` (caller could choose to solidify it) or `solidifying` (caller
+   * already chose to but it hasn't landed yet -- still locks its claims
+   * and outputs).
+   */
+  getReadyOrSolidifying(): Draft[] {
+    return [
+      ...this.store.getByPhase('ready'),
+      ...this.store.getByPhase('solidifying'),
+      // Legacy: drafts left as `readyToSolidify` by GenerationService are
+      // still valid solidify candidates until step 6 of the consolidation
+      // refactor renames them to `ready`.
+      ...this.store.getByPhase('readyToSolidify'),
+    ];
+  }
+
+  /**
+   * Synchronously attempt to turn `seedDrafts` into a single block.
+   *
+   * Pre: every input draft is in `ready`, `readyToSolidify`, or
+   * `solidifying`. Drafts in `ready`/`readyToSolidify` transition to
+   * `solidifying` immediately.
+   *
+   * On `ok`: consumed drafts transition to `solidified` carrying the
+   * produced block, are detached from consensus, and the block is
+   * dispatched via the configured `processBlock` callback.
+   *
+   * On `awaitingAnchor` or hard failure: drafts STAY in `solidifying`.
+   * Only `cancelDraft` can move a draft to `failed`. The retry loop
+   * (canonicality-change subscription, see step 11 of the consolidation
+   * refactor) is responsible for re-attempting.
+   *
+   * `solidify` is intended to be called at most once per draft as a
+   * user action; subsequent retries are driven internally.
+   */
+  solidify(seedDrafts: Draft[]): SolidifyResult {
+    if (!this._blockBuilder) {
+      return { ok: false, reason: 'DraftManager not configured with a BlockBuilderModule' };
+    }
+    if (seedDrafts.length === 0) {
+      return { ok: false, reason: 'no seed drafts' };
+    }
+
+    // 1. Transition any non-`solidifying` seeds into `solidifying`.
+    for (const seed of seedDrafts) {
+      const phase = seed.status.phase;
+      if (phase === 'solidifying') continue;
+      if (phase === 'ready' || phase === 'readyToSolidify') {
+        this.store.transition(seed.draftId, { phase: 'solidifying' });
+        continue;
+      }
+      return {
+        ok: false,
+        reason: `draft ${seed.draftId.toHex().slice(0, 10)} is not solidifiable (phase ${phase})`,
+      };
+    }
+
+    // 2. Delegate to BlockBuilderModule. Pool is empty for now; step 8
+    // of the consolidation refactor wires in autobalance via the pool.
+    const result = this._blockBuilder.solidify(seedDrafts, []);
+    if (!result.ok) return result;
+
+    // 3. Success: transition consumed drafts to `solidified`, detach
+    // from consensus, then dispatch the block. Detach BEFORE dispatch
+    // so the draft's phantom claims clear out before the real block
+    // (which claims the same outputs) is evaluated.
+    const block = result.block;
+    const consumedDraftIds = seedDrafts.map((d) => d.draftId);
+    for (const id of consumedDraftIds) {
+      this.detachDraft(id);
+      this.store.transition(id, { phase: 'solidified', block });
+    }
+    this._processBlock?.(block);
+
+    return { ok: true, block, consumedDraftIds };
   }
 
   cancelDraft(draftId: Hash, reason: string = 'cancelled'): void {

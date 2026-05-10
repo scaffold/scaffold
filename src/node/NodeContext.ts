@@ -304,8 +304,12 @@ export class NodeContext {
 
     // 5d. Create DraftManager with GenerationService as its GeneratorProvider
     //     and install the cancel hook so a rejecting generation can clean
-    //     up the draft.
-    this.draftManager = new DraftManager(this.draftStore, this.consensus, this.generation);
+    //     up the draft. Wire the BlockBuilderModule + processBlock callback
+    //     so DraftManager.solidify can drive the draft -> block path.
+    this.draftManager = new DraftManager(this.draftStore, this.consensus, this.generation, {
+      blockBuilder: this._blockBuilder,
+      processBlock: (block) => this.reactiveLayer.processBlock(block, null),
+    });
     this.generation.setCancelHook((draftId) => this.draftManager.cancelDraft(draftId));
     // Wire the node's own pubkey into generation so `requireSignature`
     // can check whether this node is the right signer for any draft it
