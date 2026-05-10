@@ -54,6 +54,30 @@ export class StatusIndex {
     return undefined;
   }
 
+  /**
+   * Resolve the (producer, outputIndex) tuple for the current status
+   * output of `name`, walking the canonical chain rooted at `tipBlock`.
+   * Returns undefined if no status output is found. Used by callers
+   * that go through the draft / PutManager path (which expects
+   * ClaimRef) instead of building a BlockSpec directly.
+   */
+  findClaimRef(
+    name: AnimalName,
+    tipBlock: Block,
+    store: BlockStore,
+  ): { producer: Hash; outputIndex: number } | undefined {
+    const identity = deriveIdentity(name);
+    for (const { output, source } of iterateExtendedOutputs(tipBlock, store)) {
+      if (output.data === undefined) continue;
+      if (!Hash.equals(output.verifier.contract, statusHash)) continue;
+      const { publicKey } = decodeStatusData(output.data);
+      if (bytesEqual(publicKey, identity.publicKey)) {
+        return { producer: source.block, outputIndex: source.outputIndex };
+      }
+    }
+    return undefined;
+  }
+
   /** Get the current status message for an identity. */
   getStatus(name: AnimalName): string | undefined {
     return this.statuses.get(name);

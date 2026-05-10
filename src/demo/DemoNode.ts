@@ -1,12 +1,5 @@
 import { Hash } from '../util/Hash.ts';
-import {
-  Block,
-  BlockStore,
-  composeBlockPacket,
-  composeGenesisPacket,
-} from '../core/Block.ts';
-import { BlockSpec } from '../core/BlockCreationModule.ts';
-import { BlockReceivedResult } from '../core/Coordinator.ts';
+import { Block, BlockStore, composeGenesisPacket } from '../core/Block.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { BlockCreationService } from '../core/BlockCreationService.ts';
 import { BlockAwareness } from '../node/RoutingModule.ts';
@@ -47,7 +40,10 @@ export class DemoNode {
       makeStatusOutput(deriveIdentity(name).publicKey, '')
     );
     const genesisBlock = composeGenesisPacket(genesisOutputs);
-    this.scaffold = new Scaffold({ genesis: genesisBlock });
+    this.scaffold = new Scaffold({
+      genesis: genesisBlock,
+      privateKey: this.identity.privateKey,
+    });
     this.tip = this.scaffold.context.store.get(this.scaffold.context.genesisHash)!;
 
     // Rebuild status index from genesis
@@ -106,37 +102,40 @@ export class DemoNode {
   publishStatus(targetName: AnimalName, message: string): void {
     const targetIdentity = deriveIdentity(targetName);
 
-    // Find the current status output for the target
-    const claimIdx = this.statusIndex.findClaimIndex(targetName, this.tip, this.store);
-    if (claimIdx === undefined) {
+    // Locate the current status output for `targetName`. The new draft
+    // path expects (producer, outputIndex) directly rather than the
+    // anchor-extended-vector index.
+    const claimRef = this.statusIndex.findClaimRef(targetName, this.tip, this.store);
+    if (claimRef === undefined) {
       throw new Error(`no status output found for ${targetName}`);
     }
 
-    // Build BlockSpec
-    const ownOutputCount = 1;
-    const spec: BlockSpec = {
-      anchor: this.tip.hash,
+    // Build through PutManager so the block goes through the
+    // DraftManager bottleneck. Note: the test harness historically
+    // broadcast first, then validated locally; the new flow inverts
+    // that (DraftManager.solidify processes locally first), so peers
+    // receive the block via the standard processBlock path.
+    const result = this.scaffold.put({
       outputs: [makeStatusOutput(targetIdentity.publicKey, message)],
-      claims: [{ index: ownOutputCount + claimIdx, value: 1 }],
-      declaredWeight: 1,
-      aggregates: [],
-      refs: [],
-    };
+      claims: [claimRef],
+    });
+    if (!result.block) {
+      throw new Error(`publishStatus failed: solidify did not produce a block`);
+    }
+    const block = result.block;
 
-    // Build block through protocol stack (throws on error)
-    const blueprint = this.blockCreation.buildBlock(spec);
-    const block = composeBlockPacket(blueprint, this.identity.privateKey);
-
-    // Send to all peers regardless of local validation
+    // Send to all peers regardless of local validation (mirrors the
+    // pre-refactor demo behaviour that broadcast even invalid blocks).
     for (const [_peerId, ws] of this.peers) {
       if (ws.readyState === WebSocket.OPEN) {
         this.sendPacket(ws, block.raw);
       }
     }
 
-    // Validate locally (throws if invalid -- after we've already broadcast).
+    // Validate locally (throws if invalid). Already in the local store
+    // via DraftManager.solidify -> processBlock; this keeps the demo's
+    // post-publish invariant.
     validateBlockPacket(block, this.store);
-    this.scaffold.context.processBlock(block);
     this.updateTipFromStore();
     this.rebuildStatusIndex();
   }
