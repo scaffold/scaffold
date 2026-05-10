@@ -310,7 +310,7 @@ function patchAggregationOutput(
 ): Output[] {
   return outputs.map((output) => {
     if (!HashCtor.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
-    if (output.data === null) return output; // null-data marker
+    if (output.data === undefined) return output; // data-less marker
     if (output.data.length === 0) return output; // empty-bytes marker (legacy)
 
     const aggData = getAggregationData({
@@ -401,7 +401,7 @@ function applyValueOverride(
   return outputs.map((output, i) => {
     const slot = slots[i];
     if (!slot || slot.origin !== 'get') return output;
-    if (output.data === null) return output;
+    if (output.data === undefined) return output;
     const newValue = override(output.verifier, output.data, output.value);
     if (newValue === output.value) return output;
     return { ...output, value: newValue };

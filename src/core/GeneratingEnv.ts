@@ -126,8 +126,8 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   collectInputs(): MaybePromise<Input[]> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     return maybeThen(this._provider.findInputs(verifier), (available) => {
-      // `findInputs` is expected to already drop null-data outputs (pure
-      // incentive, invisible to contracts). AvailableInput.data is non-null.
+      // `findInputs` is expected to already drop data-less outputs (pure
+      // incentive, invisible to contracts). AvailableInput.data is always defined.
       for (const ai of available) {
         this._claims.push({
           producer: ai.block,
@@ -159,7 +159,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     available: AvailableInput[],
     verifier: Verifier,
   ): MaybePromise<Input> {
-    // `findInputs` is expected to drop null-data outputs already.
+    // `findInputs` is expected to drop data-less outputs already.
     // Filter out inputs already consumed in this generation run.
     const unconsumed = available.filter((ai) =>
       !this._claims.some((c) =>
@@ -235,7 +235,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
       const outputs = this._provider.getOutputs(block);
       for (const output of outputs) {
-        if (output.data === null) continue;
+        if (output.data === undefined) continue;
         if (
           Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
           bytesEqual(output.verifier.params, key)

@@ -62,8 +62,8 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       const block = this.store.get(entry.blockHash);
       if (!block || entry.outputIndex >= block.outputs.length) continue;
       const output = block.outputs[entry.outputIndex];
-      // Null-data outputs are pure-incentive and invisible to contracts.
-      if (output.data === null) continue;
+      // Data-less outputs are pure-incentive and invisible to contracts.
+      if (output.data === undefined) continue;
       result.push({
         verifier: output.verifier,
         value: output.value,
@@ -203,7 +203,7 @@ export class ContractGeneratorShim {
   }
 
   notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean {
-    if (output.data === null) return false; // invisible to contracts
+    if (output.data === undefined) return false; // invisible to contracts
     const key = verifierKey(output.verifier);
     const queue = this._blocked.get(key);
     if (!queue || queue.length === 0) return false;

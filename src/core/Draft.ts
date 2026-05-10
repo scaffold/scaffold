@@ -133,8 +133,7 @@ export interface Draft {
 
 // Compile-time assertion: Draft satisfies the Node interface.
 // (Type-only; the assignment is never executed.)
-const _draftIsNode: Node = undefined as unknown as Draft;
-void _draftIsNode;
+void (({} as Draft) satisfies Node);
 
 // -- Valid transitions --------------------------------------------
 //

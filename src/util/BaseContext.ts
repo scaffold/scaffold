@@ -6,6 +6,19 @@ export interface MaybeDisposable {
   [Symbol.asyncDispose]?(): Promise<void>;
 }
 
+export interface ContextProvider {
+  get<T extends object & MaybeDisposable>(Type: new (ctx: this) => T): T;
+
+  maybeGet<T>(Type: new (ctx: this) => T): T | undefined;
+
+  onDestruct(cb: () => MaybePromise<void>): void;
+
+  mock<T extends object & MaybeDisposable>(
+    Type: new (ctx: this) => T,
+    mock: T,
+  ): void;
+}
+
 export abstract class BaseContext<DerivedType> {
   private objs = new Map<{ new (context: DerivedType): unknown }, unknown>();
   private constructing = new Set<{ new (context: DerivedType): unknown }>();

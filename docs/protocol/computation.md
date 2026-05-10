@@ -51,13 +51,13 @@ The `refs` field is new. It lists blocks whose outputs this block's contracts ma
 Output {
     verifier:   Verifier           // spending condition
     value:      Number             // economic value
-    data:       Uint8Array | null  // application-specific payload, or null
+    data?:      Uint8Array         // application-specific payload, omitted for pure-incentive outputs
 }
 ```
 
 An output's spending condition is defined by its **verifier**, which replaces the previous bare contract hash.
 
-`data` may be `null` to denote a **pure-incentive output** -- one that carries value but no application payload, used to reward computation (e.g., a responder who answered a `fetch`). See [Null-Data Outputs](#null-data-outputs) below.
+`data` may be omitted to denote a **pure-incentive output** -- one that carries value but no application payload, used to reward computation (e.g., a responder who answered a `fetch`). See [Data-less Outputs](#data-less-outputs) below.
 
 ### Verifier
 
@@ -131,9 +131,9 @@ cannot share a block if that contract declares any output namespace.
 
 ---
 
-## Null-Data Outputs
+## Data-less Outputs
 
-`Output.data` may be `null`. A null-data output is a **pure-incentive output**:
+`Output.data` may be omitted. A data-less output is a **pure-incentive output**:
 it carries value (spendable as any other UTXO) but no application payload. The
 canonical use case is paying a responder for a computation whose result lives
 elsewhere (e.g., in a record output read via `fetch`) -- the incentive is
@@ -142,32 +142,32 @@ attached to the block without polluting the responder's contract execution.
 ### Invariants
 
 - **Invisible to contracts.** `collectInputs()` and `requireInput()` filter out
-  null-data outputs before returning. A contract whose claimed inputs include
-  null-data outputs simply will not see them. This means contract decoders
-  never have to null-guard `Input.data`.
+  data-less outputs before returning. A contract whose claimed inputs include
+  data-less outputs simply will not see them. This means contract decoders
+  never have to guard against missing `Input.data`.
 - **Not emitted by contracts.** `requireOutput`, `getOutput`, and
-  `requireResult` all require non-null data. Null-data outputs enter a block
-  only through host-side paths (incentive orchestration at solidification
+  `requireResult` all require data to be present. Data-less outputs enter a
+  block only through host-side paths (incentive orchestration at solidification
   time), never through contract code.
-- **Outside owned namespaces.** A null-data output must live in a namespace
+- **Outside owned namespaces.** A data-less output must live in a namespace
   that no running contract on the block declares in its `outputNamespaces`.
-  Because contracts cannot emit null, a null-data output in an *owned*
-  namespace is a protocol violation -- the partition check rejects it. The
-  intended placement is a dedicated incentive namespace that no contract
-  claims.
-- **Block-level claimable.** Null-data outputs are tracked in the UTXO index
+  Because contracts cannot emit data-less outputs, one in an *owned* namespace
+  is a protocol violation -- the partition check rejects it. The intended
+  placement is a dedicated incentive namespace that no contract claims.
+- **Block-level claimable.** Data-less outputs are tracked in the UTXO index
   and can be referenced by `claims[]` on a future block; the block-creation
   throughput check still balances their value. What changes is only what the
   *contract* sees during execution.
-- **Hash-distinct from empty bytes.** `data: null` and `data: new Uint8Array(0)`
+- **Hash-distinct from empty bytes.** An omitted `data` and `data: new Uint8Array(0)`
   hash differently. The canonical block-hash encoding prepends a 1-byte marker
-  to the data field (`0x00` when null and no bytes follow, `0x01` followed by
+  to the data field (`0x00` when no data is present, `0x01` followed by
   the payload otherwise). Serialization preserves the distinction natively
-  (`null` survives JSON round-trips; `Uint8Array` is type-tagged).
+  (omitted fields survive JSON round-trips as `undefined`; `Uint8Array` is
+  type-tagged).
 
 ### Rationale
 
-Two pain points in the original, non-nullable `data` forced this:
+Two pain points in the original, non-optional `data` forced this:
 
 1. Empty `Uint8Array(0)` was overloaded as a sentinel for "no meaningful
    payload" in several contracts (e.g., aggregation markers), colliding with
@@ -176,7 +176,7 @@ Two pain points in the original, non-nullable `data` forced this:
    `data` and crash on the empty/missing payload, turning a reward attempt
    into a rejected claim.
 
-Null-data outputs solve both: contracts never see them, so decoders stay
+Data-less outputs solve both: contracts never see them, so decoders stay
 simple and correct; and the type system makes the "pure incentive" intent
 explicit at creation time.
 

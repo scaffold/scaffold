@@ -428,9 +428,9 @@ Deno.test('VerifyingEnv: requireInput throws when no more inputs', () => {
   assertThrows(() => env.requireInput(), ContractRejection, 'no more inputs');
 });
 
-// -- Tests: null-data outputs are invisible to contracts -----------
+// -- Tests: data-less outputs are invisible to contracts -----------
 
-Deno.test('VerifyingEnv: collectInputs skips null-data outputs', () => {
+Deno.test('VerifyingEnv: collectInputs skips data-less outputs', () => {
   const provider = new TestProvider();
   const contractHash = h('game');
   const params = enc('cfg');
@@ -441,7 +441,7 @@ Deno.test('VerifyingEnv: collectInputs skips null-data outputs', () => {
     anchor: ZERO_HASH,
     outputs: [
       { verifier, value: 10, data: enc('move1') },
-      { verifier, value: 99, data: null }, // pure-incentive output -- invisible
+      { verifier, value: 99 }, // pure-incentive output -- invisible
       { verifier, value: 20, data: enc('move2') },
     ],
     claimIndices: [],
@@ -476,7 +476,7 @@ Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
     anchor: ZERO_HASH,
     outputs: [
       { verifier, value: 1, data: enc('a') },
-      { verifier, value: 9, data: null },
+      { verifier, value: 9 },
       { verifier, value: 2, data: enc('b') },
     ],
     claimIndices: [],
@@ -498,11 +498,11 @@ Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
   const second = env.requireInput();
   assertEquals(first.data, enc('a'));
   assertEquals(second.data, enc('b'));
-  // Third requireInput() must exhaust -- the null-data output is not counted.
+  // Third requireInput() must exhaust -- the data-less output is not counted.
   assertThrows(() => env.requireInput(), ContractRejection, 'no more inputs');
 });
 
-Deno.test('VerifyingEnv: fetch skips null-data record outputs', () => {
+Deno.test('VerifyingEnv: fetch skips data-less record outputs', () => {
   const provider = new TestProvider();
   const gameVerifier: Verifier = { contract: h('game'), params: enc('cfg') };
 
@@ -519,9 +519,9 @@ Deno.test('VerifyingEnv: fetch skips null-data record outputs', () => {
     hash: h('prev'),
     anchor: prevAnchor.hash,
     outputs: [
-      // A null-data output that shares the RECORD_CONTRACT contract +
+      // A data-less output that shares the RECORD_CONTRACT contract +
       // same params as the requested key must NOT be returned by fetch.
-      { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0, data: null },
+      { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0 },
       makeRecordOutput('state', enc('S0')),
     ],
     claimIndices: [2], // claims extended index 2 = anchor's game output (anchor is at indices 2..)

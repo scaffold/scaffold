@@ -109,12 +109,12 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
     const dataBytes = data ?? new Uint8Array(0);
     const slot = this._consumeNextInNamespace(verifier.contract);
-    if (slot.data === null) {
-      // Null-data outputs are host-only and must live in unowned namespaces.
+    if (slot.data === undefined) {
+      // Data-less outputs are host-only and must live in unowned namespaces.
       // Hitting one here means the contract's namespace contains a slot it
       // couldn't have emitted.
       throw new ContractRejection(
-        'required output has null data at namespace slot',
+        'required output has no data at namespace slot',
       );
     }
     if (!verifierEquals(slot.verifier, verifier)) {
@@ -140,9 +140,9 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
   getOutput(verifier: Verifier): { value: number; data: Uint8Array } {
     const slot = this._consumeNextInNamespace(verifier.contract);
-    if (slot.data === null) {
+    if (slot.data === undefined) {
       throw new ContractRejection(
-        'getOutput slot has null data at namespace slot',
+        'getOutput slot has no data at namespace slot',
       );
     }
     if (!verifierEquals(slot.verifier, verifier)) {
@@ -185,7 +185,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       // Found a ref that claims the verifier -- now read the result
       const refOutputs = this._provider.getOutputs(refBlock);
       for (const output of refOutputs) {
-        if (output.data === null) continue;
+        if (output.data === undefined) continue;
         if (
           Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
@@ -258,8 +258,8 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     for (const claimIdx of this._claims) {
       const output = this._provider.resolveClaim(this._block, claimIdx);
       if (!output) continue;
-      // Null-data outputs are pure incentive -- invisible to contracts.
-      if (output.data === null) continue;
+      // Data-less outputs are pure incentive -- invisible to contracts.
+      if (output.data === undefined) continue;
       if (verifierEquals(output.verifier, thisVerifier)) {
         inputs.push({
           verifier: output.verifier,

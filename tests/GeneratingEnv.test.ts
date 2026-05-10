@@ -231,7 +231,7 @@ Deno.test('GeneratingEnv: collectInputs returns empty when no inputs', () => {
   assertEquals(env.collectInputs(), []);
 });
 
-Deno.test('GeneratingEnv: fetch skips null-data record outputs', async () => {
+Deno.test('GeneratingEnv: fetch skips data-less record outputs', async () => {
   const provider = new TestGenProvider();
   const gameVerifier: Verifier = { contract: h('game'), params: enc('cfg') };
 
@@ -239,9 +239,9 @@ Deno.test('GeneratingEnv: fetch skips null-data record outputs', async () => {
     hash: h('ref-block'),
     anchor: ZERO_HASH,
     outputs: [
-      // Same contract+params as the 'state' record key, but null data --
+      // Same contract+params as the 'state' record key, but no data --
       // fetch must skip it and use the real record below.
-      { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0, data: null },
+      { verifier: { contract: RECORD_CONTRACT, params: enc('state') }, value: 0 },
       makeRecordOutput('state', enc('S0')),
     ],
     claimIndices: [],
