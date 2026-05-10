@@ -53,7 +53,41 @@ export class DraftManager {
     this._onDraftReady = opts?.onDraftReady;
     this._blockBuilder = opts?.blockBuilder;
     this._processBlock = opts?.processBlock;
+
+    // Retry loop: when canonicality shifts, retry every solidifying
+    // draft and demote any solidified draft whose carried block is no
+    // longer canonical (so its content can be republished against a
+    // new anchor).
+    if (this._blockBuilder) {
+      this.consensus.onCanonicalityChange(() => this._retrySolidifying());
+    }
   }
+
+  private _retrySolidifying(): void {
+    if (!this._blockBuilder) return;
+    if (this._retrying) return; // re-entrancy guard: solidify -> processBlock -> canonicality change
+    this._retrying = true;
+    try {
+      // Demote solidified drafts whose carried block went uncanonical.
+      for (const d of this.store.getByPhase('solidified')) {
+        const block = d.status.phase === 'solidified' ? d.status.block : undefined;
+        if (!block) continue;
+        if (!this.consensus.isCanonical(block.hash)) {
+          // Re-register the phantom and transition back to solidifying.
+          this.consensus.addBlock(d.draftId);
+          this.consensus.setVerifiedWeight(d.draftId, [d.declaredWeight]);
+          this.store.transition(d.draftId, { phase: 'solidifying' });
+        }
+      }
+      // Retry every solidifying draft.
+      for (const d of this.store.getByPhase('solidifying')) {
+        this.solidify([d]);
+      }
+    } finally {
+      this._retrying = false;
+    }
+  }
+  private _retrying = false;
 
   /**
    * Create a draft, register it in consensus, start the generator.
