@@ -51,14 +51,17 @@ The bridge from `WebAssembly.Instance` to the `Contract` interface. Nothing else
 - Stack composition (`wasm_hashes`) — A4.
 - Forking — A4.
 
-### A3. Wire `WasmStore` into `ContractHost`
-- [ ] Today `ContractHost.getContract(hash)` only checks the TS registry (`src/core/ContractHost.ts:94`). Extend it to also check `WasmStore.get(hash)` and, if found, return a `WasmContractAdapter` implementing `Contract`.
-- [ ] Implement `src/core/WasmContractAdapter.ts`:
-  - Holds the WASM binary bytes.
-  - `run(env)` schedules a job on `WasmExecutor`, marshalling `env` calls per ABI.
-  - `walkParams`, `walkData`, `buildParams`, `buildData` similarly delegate to exported WASM funcs (only if exported).
-  - `outputNamespaces` read from the contract block's `output_namespaces` record output (per [wasm-abi.md#block-level-contract-metadata](docs/protocol/wasm-abi.md#block-level-contract-metadata)) — not a WASM export.
-- [ ] Populate `WasmStore` automatically when a block whose only output is a `record('wasm', binary)` lands and is canonical (this is the link from "compile" to "callable contract"): listen on `consensus.onCanonicalityChange`, scan record outputs.
+### A3. Contract execution plugins (`ContractPlugin`) ✅
+Reshaped from "wire `WasmStore` into `ContractHost`" into a pluggable execution surface:
+
+- [x] [`ContractPlugin`](src/core/ContractPlugin.ts) interface: `{ accepts(block) -> bool; getContract(block) -> Contract }`. Plugins are walked in registration order; first to accept wins.
+- [x] [`ContractHost`](src/core/ContractHost.ts) now walks plugins after the TS registry misses, caches results per contract hash. `ContractHostService` wires the `BlockStore` so plugins always see live blocks.
+- [x] [`wasmContractPlugin`](src/plugins/wasm/WasmContractPlugin.ts) accepts any block carrying a `wasm` record output. `WasmContractAdapter` lazily compiles the WASM, delegates `run` / `walkParams` / `walkData` / `buildParams` / `buildData` to a shared `WasmExecutor`, and parses `output_namespaces` off the contract block.
+- [x] `ScaffoldConfig.contractPlugins?: ContractPlugin[]` defaults to `[wasmContractPlugin()]`; threaded through `NodeContext.contractPlugins` to `ContractHost.registerPlugin`.
+- [x] All WASM code lives under `src/plugins/wasm/` (moved from `src/core/wasm/`).
+- [x] Tests: `tests/ContractPlugin.test.ts` (plugin walk semantics, caching, invalidation), `tests/WasmContractPlugin.test.ts` (end-to-end echo via plugin + ContractHost).
+
+**Deferred** (was the original "auto-populate WasmStore on canonical record blocks"): the live link from "a `record('wasm', ...)` block landed" to "now callable" already works because `ContractHost.getContract(hash)` resolves through the plugin on demand. No background populator needed -- lookups are lazy.
 
 ### A4. Composition: stacking and forking
 Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wasm-abi.md#composition).

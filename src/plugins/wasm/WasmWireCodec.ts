@@ -1,8 +1,8 @@
 // Protocol spec: docs/protocol/wasm-abi.md#wire-format
 
 import { Hash, HASH_SIZE } from '../../util/Hash.ts';
-import type { Output, Verifier } from '../BlockCreationModule.ts';
-import type { Claim } from '../ContractEnv.ts';
+import type { Output, Verifier } from '../../core/BlockCreationModule.ts';
+import type { Claim } from '../../core/ContractEnv.ts';
 
 // -- Packed (ptr, len) i64 ----------------------------------------
 

@@ -691,7 +691,18 @@ function encodeParams(
   }
   const values = flatten(params);
   const host = new DefaultBuilderHost(values);
-  return contract.buildParams(host);
+  const result = contract.buildParams(host);
+  if (result instanceof Promise) {
+    // The fetch() entry point is sync; async buildParams (e.g. a WASM
+    // contract whose module hasn't been compiled yet) isn't supported on
+    // this path. Pre-compile the contract by calling it elsewhere, or
+    // pass `params` as a pre-encoded Uint8Array.
+    throw new Error(
+      `contract ${contractHash.toHex()}: buildParams returned a Promise; ` +
+        'fetch() requires synchronous buildParams. Pass params as a Uint8Array.',
+    );
+  }
+  return result;
 }
 
 function normalizeRecordKey(key: string | Uint8Array | undefined): Uint8Array {

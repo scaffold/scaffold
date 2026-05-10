@@ -93,14 +93,14 @@ export interface Contract {
   outputNamespaces?: Hash[];
 
   /** Walk verifier params bytes for display in generic tools. */
-  walkParams?(params: Uint8Array, host: WalkerHost): void;
+  walkParams?(params: Uint8Array, host: WalkerHost): MaybePromise<void>;
 
   /** Walk output data bytes for display in generic tools. */
-  walkData?(data: Uint8Array, host: WalkerHost): void;
+  walkData?(data: Uint8Array, host: WalkerHost): MaybePromise<void>;
 
   /** Build verifier params bytes from user input. */
-  buildParams?(host: BuilderHost): Uint8Array;
+  buildParams?(host: BuilderHost): MaybePromise<Uint8Array>;
 
   /** Build output data bytes from user input. */
-  buildData?(host: BuilderHost): Uint8Array;
+  buildData?(host: BuilderHost): MaybePromise<Uint8Array>;
 }

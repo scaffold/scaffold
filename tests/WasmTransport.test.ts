@@ -8,10 +8,10 @@ import {
   ExecutionMode,
 } from '../src/core/ContractEnv.ts';
 import type { BuilderHost, ValueDescriptor, WalkerHost } from '../src/contracts/Contract.ts';
-import type { WasmTransport } from '../src/core/wasm/WasmTransport.ts';
-import { InProcessMockTransport } from '../src/core/wasm/transports/InProcessMockTransport.ts';
-import { JspiTransport } from '../src/core/wasm/transports/JspiTransport.ts';
-import { AtomicsWorkerTransport } from '../src/core/wasm/transports/AtomicsWorkerTransport.ts';
+import type { WasmTransport } from '../src/plugins/wasm/WasmTransport.ts';
+import { InProcessMockTransport } from '../src/plugins/wasm/transports/InProcessMockTransport.ts';
+import { JspiTransport } from '../src/plugins/wasm/transports/JspiTransport.ts';
+import { AtomicsWorkerTransport } from '../src/plugins/wasm/transports/AtomicsWorkerTransport.ts';
 
 // -- Fixtures ------------------------------------------------------
 

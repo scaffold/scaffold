@@ -6,7 +6,7 @@
 // becomes ready again. Requires cross-origin isolation (COOP/COEP) in the
 // browser; in Deno, SAB just works.
 
-import { type ContractEnv, ContractRejection } from '../../ContractEnv.ts';
+import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
 import type { WasmTransport } from '../WasmTransport.ts';
 import {

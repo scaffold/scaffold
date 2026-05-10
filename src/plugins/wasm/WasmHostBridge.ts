@@ -2,9 +2,9 @@
 
 import { Hash } from '../../util/Hash.ts';
 import { type MaybePromise, maybeThen } from '../../util/MaybePromise.ts';
-import { type ContractEnv, ContractRejection } from '../ContractEnv.ts';
+import { type ContractEnv, ContractRejection } from '../../core/ContractEnv.ts';
 import type { BuilderHost, ValueDescriptor, WalkerHost } from '../../contracts/Contract.ts';
-import type { Output, Verifier } from '../BlockCreationModule.ts';
+import type { Output, Verifier } from '../../core/BlockCreationModule.ts';
 import {
   decodeOutput,
   decodeOutputList,

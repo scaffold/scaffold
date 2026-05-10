@@ -5,7 +5,7 @@
 // that `WasmContractAdapter` (A3) will call. Holds the transport instance
 // over its lifetime so the worker pool amortises across calls.
 
-import type { ContractEnv } from '../ContractEnv.ts';
+import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
 import type { WasmTransport } from './WasmTransport.ts';
 import {
@@ -28,8 +28,10 @@ export interface WasmExecutorConfig {
   stagingBufSize?: number;
 }
 
+type ConcreteTransportKind = Exclude<TransportKind, 'auto'>;
+
 /** Decide which concrete transport to construct. */
-function resolveKind(config: WasmExecutorConfig): TransportKind {
+function resolveKind(config: WasmExecutorConfig): ConcreteTransportKind {
   if (config.transport && config.transport !== 'auto') return config.transport;
   if (config.workerPath !== undefined && typeof Worker !== 'undefined') {
     return 'atomics';

@@ -15,7 +15,7 @@ import {
   readI128,
   unpackPtrLen,
   writeI128,
-} from '../src/core/wasm/WasmWireCodec.ts';
+} from '../src/plugins/wasm/WasmWireCodec.ts';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 

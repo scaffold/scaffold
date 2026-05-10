@@ -1,6 +1,8 @@
 import { secp } from './util/secp.ts';
 import { Block } from './core/Block.ts';
 import type { Contract } from './contracts/Contract.ts';
+import type { ContractPlugin } from './core/ContractPlugin.ts';
+import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
 import { Hash } from './util/Hash.ts';
 import { findCanonicalTip, NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
 import { PutManager, PutRequest, PutResult } from './node/PutManager.ts';
@@ -25,6 +27,16 @@ export interface ScaffoldConfig {
   strategies?: Strategy[];
   /** Transport plugins. When provided, enables P2P networking. */
   plugins?: TransportPlugin[];
+  /**
+   * Contract execution plugins. Each takes a contract block and either
+   * `accepts` it (returning a `Contract` impl) or passes. Plugins are
+   * tried in order; the first to accept handles the block. Defaults to
+   * `[wasmContractPlugin()]` when unset. Pass `[]` to disable on-chain
+   * contract execution entirely (only TS-registered contracts run).
+   *
+   * See `src/core/ContractPlugin.ts`.
+   */
+  contractPlugins?: ContractPlugin<Block>[];
   /** Filter: should generation run for this contract hash? Default: all enabled. */
   enableGeneration?: (contractHash: Hash) => boolean;
   /** Filter: should verification run for this contract hash? Default: all enabled. */
@@ -98,6 +110,7 @@ export class Scaffold {
       },
       useFloodGossip: config.useFloodGossip ?? false,
       getConnectedPeers: () => getConnectedPeers ? getConnectedPeers() : [],
+      contractPlugins: config.contractPlugins ?? [wasmContractPlugin()],
     });
 
     // 2. Create FetchManager, wired to the already-constructed node services.

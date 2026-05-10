@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/wasm-abi.md#async-bridge-transport
 
-import type { ContractEnv } from '../ContractEnv.ts';
+import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
 
 /**

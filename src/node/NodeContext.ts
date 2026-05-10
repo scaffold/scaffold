@@ -33,6 +33,7 @@ import { collateralContract } from '../contracts/CollateralContract.ts';
 import { insuranceContract } from '../contracts/InsuranceContract.ts';
 import { recordContract } from '../contracts/RecordContract.ts';
 import type { Contract } from '../contracts/Contract.ts';
+import type { ContractPlugin } from '../core/ContractPlugin.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Block.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { Coordinator } from '../core/Coordinator.ts';
@@ -107,6 +108,13 @@ export interface NodeConfig {
    * iterable until the network bridge is up.
    */
   getConnectedPeers?: () => Iterable<string>;
+  /**
+   * Contract execution plugins. Walked in order when `ContractHost`
+   * encounters a hash not in the TS registry; the first plugin that
+   * `accepts(block)` wins. See `src/core/ContractPlugin.ts`. When
+   * unset, `Scaffold` defaults to `[wasmContractPlugin()]`.
+   */
+  contractPlugins?: ContractPlugin<Block>[];
 }
 
 /**
@@ -214,6 +222,9 @@ export class NodeContext {
     this.blockCreation = this.protocolContext.get(BlockCreationService);
     this.outputClaims = this.protocolContext.get(OutputClaimService);
     this.contractHost = this.protocolContext.get(ContractHostService);
+    for (const plugin of config.contractPlugins ?? []) {
+      this.contractHost.registerPlugin(plugin);
+    }
     this.blockVerification = this.protocolContext.get(BlockVerificationService);
     this.generation = this.protocolContext.get(GenerationService);
 

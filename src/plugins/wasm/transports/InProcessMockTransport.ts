@@ -6,7 +6,7 @@
 // transport throws with a clear message -- switch to JspiTransport or
 // AtomicsWorkerTransport for async generation.
 
-import { type ContractEnv, ContractRejection } from '../../ContractEnv.ts';
+import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
 import type { WasmTransport } from '../WasmTransport.ts';
 import {

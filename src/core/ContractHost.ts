@@ -5,6 +5,7 @@ import { type MaybePromise, maybeThen } from '../util/MaybePromise.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import type { ClaimRef } from './Node.ts';
 import type { Contract } from '../contracts/Contract.ts';
+import type { ContractPlugin } from './ContractPlugin.ts';
 import {
   ContractRejection,
   type GeneratingEnvProvider,
@@ -91,17 +92,79 @@ export interface GeneratingRunResult<BlockType> {
  * scheduling, dedupe, or draft lifecycle. Those live one layer up in
  * BlockVerificationModule / ContractVerificationModule / GenerationModule.
  */
+export interface ContractHostConfig<BlockType> {
+  /**
+   * Block-store lookup used to resolve plugin candidates. When omitted,
+   * `getContract` only consults the in-process TS registry (legacy
+   * `registerContract` path) and ignores plugins. Production wiring
+   * always provides this; unit tests that only register TS contracts
+   * directly can omit it.
+   */
+  getBlock?: (hash: Hash) => BlockType | undefined;
+}
+
 export class ContractHost<BlockType> {
   private readonly _contracts = new Map<HashPrimitive, Contract>();
+  private readonly _plugins: ContractPlugin<BlockType>[] = [];
+  /** Per-hash cache of plugin-resolved contracts so we don't re-walk on every call. */
+  private readonly _pluginCache = new Map<HashPrimitive, Contract>();
+  private readonly _getBlock?: (hash: Hash) => BlockType | undefined;
 
-  /** Register a contract implementation for a contract hash. */
+  constructor(config: ContractHostConfig<BlockType> = {}) {
+    this._getBlock = config.getBlock;
+  }
+
+  /**
+   * Register a TS-side contract implementation for a contract hash.
+   * Built-in contracts (SIGNATURE_CONTRACT, COLLATERAL_CONTRACT, etc.)
+   * use this path. On-chain WASM contracts go through plugins instead.
+   */
   registerContract(contractHash: Hash, contract: Contract): void {
     this._contracts.set(contractHash.toPrimitive(), contract);
   }
 
-  /** Look up a registered contract by hash. */
+  /**
+   * Register a contract execution plugin. Plugins are consulted in
+   * registration order for any hash not found in the TS registry. The
+   * first plugin that accepts the contract block wins, and its result
+   * is cached by hash. See `ContractPlugin`.
+   */
+  registerPlugin(plugin: ContractPlugin<BlockType>): void {
+    this._plugins.push(plugin);
+    // Invalidate the cache: a newly-registered plugin may claim hashes
+    // that previously fell through. Conservatively flush.
+    this._pluginCache.clear();
+  }
+
+  /**
+   * Look up a `Contract` for `contractHash`. Resolution order:
+   *   1. TS registry (`registerContract`).
+   *   2. Plugin cache.
+   *   3. First plugin whose `accepts(block)` returns true, where `block`
+   *      is loaded via `config.getBlock`. Result is cached.
+   *
+   * Returns `undefined` if no path resolves.
+   */
   getContract(contractHash: Hash): Contract | undefined {
-    return this._contracts.get(contractHash.toPrimitive());
+    const key = contractHash.toPrimitive();
+    const direct = this._contracts.get(key);
+    if (direct) return direct;
+
+    const cached = this._pluginCache.get(key);
+    if (cached) return cached;
+
+    if (!this._getBlock || this._plugins.length === 0) return undefined;
+    const block = this._getBlock(contractHash);
+    if (!block) return undefined;
+
+    for (const plugin of this._plugins) {
+      if (plugin.accepts(block)) {
+        const contract = plugin.getContract(block);
+        this._pluginCache.set(key, contract);
+        return contract;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -110,8 +173,7 @@ export class ContractHost<BlockType> {
    * docs/protocol/computation.md#output-namespaces.
    */
   getOutputNamespaces(contractHash: Hash): Hash[] {
-    const contract = this._contracts.get(contractHash.toPrimitive());
-    return contract?.outputNamespaces ?? [];
+    return this.getContract(contractHash)?.outputNamespaces ?? [];
   }
 
   /**
@@ -124,7 +186,7 @@ export class ContractHost<BlockType> {
     input: VerifyingRunInput<BlockType>,
     provider: VerifyingEnvProvider<BlockType>,
   ): MaybePromise<ExecutionResult> {
-    const contract = this._contracts.get(input.verifier.contract.toPrimitive());
+    const contract = this.getContract(input.verifier.contract);
     if (!contract) {
       return { accepted: false, reason: `contract not found: ${input.verifier.contract.toHex()}` };
     }
@@ -172,7 +234,7 @@ export class ContractHost<BlockType> {
   runGenerating(
     input: GeneratingRunInput<BlockType>,
   ): MaybePromise<GeneratingRunResult<BlockType>> {
-    const contract = this._contracts.get(input.verifier.contract.toPrimitive());
+    const contract = this.getContract(input.verifier.contract);
     if (!contract) {
       throw new ContractRejection(`contract not found: ${input.verifier.contract.toHex()}`);
     }
