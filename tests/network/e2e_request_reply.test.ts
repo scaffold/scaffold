@@ -131,11 +131,14 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   wire(nodeB, hexB);
   wire(nodeC, hexC);
 
-  // 1. C publishes a capability seed: self-claimed HELLO output, high value
-  //    so claim-history routing later clears the minPushPriority threshold.
+  // 1. C publishes a capability seed: a HELLO output of high value (so
+  //    claim-history routing later clears the minPushPriority threshold)
+  //    funded by claiming the genesis signature output. The HELLO output
+  //    itself is left unspent on the canonical chain so claim history
+  //    can index it as a capability.
   const seed = nodeC.put({
     outputs: [makeHelloRequest('seed', 1_000_000)],
-    claims: [{ index: 0, value: 1_000_000 }],
+    claims: [{ producer: nodeC.context.genesisHash, outputIndex: 2 }],
   });
 
   // 2. Hand-relay the seed C -> B -> A so each node records it as arriving

@@ -43,6 +43,12 @@ export class DemoNode {
     this.scaffold = new Scaffold({
       genesis: genesisBlock,
       privateKey: this.identity.privateKey,
+      // Demo blocks are user-driven; piggyback would otherwise spawn
+      // competing claims on every status output, and DraftStrategy
+      // generators on STATUS_CONTRACT (no registered generator) leak
+      // timers because they block waiting for inputs that never arrive.
+      enablePiggyback: false,
+      enableGeneration: () => false,
     });
     this.tip = this.scaffold.context.store.get(this.scaffold.context.genesisHash)!;
 

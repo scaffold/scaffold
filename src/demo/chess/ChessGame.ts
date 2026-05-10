@@ -16,7 +16,7 @@
 
 import type { Scaffold } from '../../Scaffold.ts';
 import { GAME_STATE_CONTRACT, RECORD_CONTRACT } from '../../core/Block.ts';
-import type { ClaimEntry, Output } from '../../core/BlockCreationModule.ts';
+import type { Output } from '../../core/BlockCreationModule.ts';
 import { gameStateContract } from '../../contracts/GameStateContract.ts';
 import { makeAggregationOutput } from '../../contracts/AggregationContract.ts';
 import { makeRecordOutput } from '../../contracts/RecordContract.ts';
@@ -206,15 +206,14 @@ export class ChessGame {
       data: encodeGameState(awaiting),
     };
     const gameRecord = makeRecordOutput('game', gameId);
-    // Include the aggregation marker explicitly so our own-output indices
-    // (and auto-balance's sig-utxo claim indices) line up with the final
-    // layout the node produces.
-    const outputs = [stateOutput, gameRecord, makeAggregationOutput()];
-    const claims: ClaimEntry[] = [
-      { index: 1, value: 0 }, // self-claim the RECORD at own idx 1
-    ];
+    // PutManager appends the aggregation marker; the RECORD output is
+    // automatically self-claimed by BlockBuilder (any output whose
+    // verifier.contract is RECORD_CONTRACT). No explicit claim needed
+    // for the record. Auto-balance pulls the creator's sig UTXOs to
+    // fund the stake on the GAME_STATE output.
+    const outputs = [stateOutput, gameRecord];
 
-    const { block } = this.scaffold.put({ outputs, claims, declaredWeight: 1 });
+    const { block } = this.scaffold.put({ outputs, declaredWeight: 1 });
     if (!block) throw new Error('createGame: put failed');
     return gameId;
   }
