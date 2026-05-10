@@ -435,15 +435,21 @@ export class NodeContext {
     });
     reactiveLayerRef.current = this.reactiveLayer;
 
-    // 9. Wire draft solidification: when a draft becomes ready, build and process it.
-    //    Release inFlight slots BEFORE solidification so that when the new
-    //    block is processed, DraftStrategy has room to create follow-on drafts.
+    // 9. Wire generator-driven draft solidification: when GenerationService
+    //    transitions a draft to `readyToSolidify` (the legacy phase that
+    //    still drives the generator-driven path), DraftManager.solidify
+    //    pulls it through the build / sign / processBlock pipeline.
+    //    `ready` transitions are NOT routed here because PutManager
+    //    drives those itself (and would race the listener otherwise).
+    //    Release DraftStrategy inFlight slots BEFORE solidification so
+    //    the new block has room to spawn follow-on drafts when
+    //    processBlock fires.
     this.draftStore.onTransition((draft) => {
       if (draft.status.phase !== 'readyToSolidify') return;
       for (const c of draft.claims) {
         draftStrategy.complete(c.producer, c.outputIndex);
       }
-      this._solidifyDraft(draft);
+      this.draftManager.solidify([draft]);
     });
 
     // 10. Process genesis block through coordinator directly
@@ -490,41 +496,6 @@ export class NodeContext {
   /** Create a block from a spec, with auto-balance and optional signing. */
   createBlock(spec: BlockSpec, privateKey: Uint8Array | null): Block | null {
     return this._blockCreator.createBlock(spec, privateKey);
-  }
-
-  /**
-   * Solidify a ready draft into a real block and process it. Delegates
-   * the structural work (anchor pick, claim lowering, self-claim insertion,
-   * aggregation patch, value override, signing) to BlockBuilderModule.
-   * Handles the draft-side bookkeeping: cancel before processing the new
-   * block so the draft's phantom claims clear out of OutputClaimService
-   * and consensus before the real block is evaluated.
-   */
-  private _solidifyDraft(draft: Draft): void {
-    const result = this._blockBuilder.build(draft);
-
-    if (!result.ok) {
-      // For now, both `awaitingAnchor` and other failures fail the
-      // draft. Park-and-retry on aggregation arrival is a future
-      // BlockBuilderService responsibility; until that lands, callers
-      // see the same outcome as before, except the draft now persists
-      // in `failed` status with the reason for debugging.
-      const reason = 'awaitingAnchor' in result
-        ? `awaiting anchor (${result.missing.length} producers unbridged)`
-        : result.reason;
-      this.draftManager.cancelDraft(draft.draftId, reason);
-      return;
-    }
-
-    const block = result.block;
-    // Remove the draft from consensus + cancel its generator handle
-    // BEFORE processing the published block so the draft's phantom
-    // claims are cleared out before the real block (which claims the
-    // same outputs) is evaluated. The draft itself is then transitioned
-    // to `solidified` so it persists in the store referencing its block.
-    this.draftManager.detachDraft(draft.draftId);
-    this.draftStore.transition(draft.draftId, { phase: 'solidified', block });
-    this.reactiveLayer.processBlock(block, null);
   }
 
   /** Get the genesis block hash (first block in store) */
