@@ -16,7 +16,7 @@ export function makeRecordOutput(key: string | Uint8Array, value: Uint8Array): O
   return {
     verifier: { contract: RECORD_CONTRACT, params },
     value: 0,
-    data: value,
+    body: value,
   };
 }
 
@@ -38,14 +38,14 @@ export function getRecordKey(output: Output): Uint8Array {
 export function findRecordOutput(
   block: Block,
   key: string | Uint8Array,
-): (Output & { data: Uint8Array }) | undefined {
+): (Output & { body: Uint8Array }) | undefined {
   const keyBytes = typeof key === 'string' ? new TextEncoder().encode(key) : key;
   for (const output of block.outputs) {
     if (!isRecordOutput(output)) continue;
-    if (output.data === undefined) continue;
+    if (output.body === undefined) continue;
     const params = output.verifier.params;
     if (params.length === keyBytes.length && params.every((b, i) => b === keyBytes[i])) {
-      return output as Output & { data: Uint8Array };
+      return output as Output & { body: Uint8Array };
     }
   }
   return undefined;

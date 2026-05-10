@@ -38,7 +38,7 @@ function makeRecordOutput(key: string, value: string): Output {
       params: new TextEncoder().encode(key),
     },
     value: 0,
-    data: new TextEncoder().encode(value),
+    body: new TextEncoder().encode(value),
   };
 }
 
@@ -264,12 +264,12 @@ function setupOracleScenario(fx: Fixture) {
   const incentive0: Output = {
     verifier: oracleVerifier,
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const incentive1: Output = {
     verifier: oracleVerifier,
     value: 200,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 
   // Genesis-like block carrying both incentives at outputs[0] and [1].
@@ -291,7 +291,7 @@ function setupOracleScenario(fx: Fixture) {
   const sigChange: Output = {
     verifier: { contract: SIGNATURE_CONTRACT, params: sigParams },
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
@@ -378,12 +378,12 @@ Deno.test('P: late UTXO add triggers piggyback against trusted source', () => {
   const incentive0: Output = {
     verifier: oracleVerifier,
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const incentive1: Output = {
     verifier: oracleVerifier,
     value: 200,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const genesis = makeBlock(h('genesis'), {
     outputs: [incentive0, incentive1],
@@ -398,7 +398,7 @@ Deno.test('P: late UTXO add triggers piggyback against trusted source', () => {
       params: new TextEncoder().encode('pk'),
     },
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
@@ -515,7 +515,7 @@ Deno.test('P: skips when source serves SIGNATURE_CONTRACT', () => {
       params: new TextEncoder().encode('alice-pubkey'),
     },
     value: 1000,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const genesis = makeBlock(h('genesis'), { outputs: [sigOut, sigOut] });
   fx.store.put(genesis);
@@ -528,7 +528,7 @@ Deno.test('P: skips when source serves SIGNATURE_CONTRACT', () => {
       params: new TextEncoder().encode('bob-pubkey'),
     },
     value: 1000,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
@@ -560,7 +560,7 @@ Deno.test('P: skips when source has no record outputs', () => {
   const incentive: Output = {
     verifier: oracleVerifier,
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const genesis = makeBlock(h('genesis'), { outputs: [incentive, incentive] });
   fx.store.put(genesis);
@@ -573,7 +573,7 @@ Deno.test('P: skips when source has no record outputs', () => {
       params: new TextEncoder().encode('pk'),
     },
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,
@@ -636,12 +636,12 @@ Deno.test(
     const incentive0: Output = {
       verifier: oracleVerifier,
       value: 100,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     };
     const incentive1: Output = {
       verifier: oracleVerifier,
       value: 200,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     };
     const genesis = makeBlock(h('genesis'), {
       outputs: [incentive0, incentive1],
@@ -656,7 +656,7 @@ Deno.test(
         params: new TextEncoder().encode('pk'),
       },
       value: 100,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     };
     const B = makeBlock(h('B'), {
       anchor: genesis.hash,
@@ -718,7 +718,7 @@ Deno.test('P: skip the very output the source itself claims', () => {
   const incentive: Output = {
     verifier: oracleVerifier,
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const genesis = makeBlock(h('genesis'), { outputs: [incentive] });
   fx.store.put(genesis);
@@ -731,7 +731,7 @@ Deno.test('P: skip the very output the source itself claims', () => {
       params: new TextEncoder().encode('pk'),
     },
     value: 100,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const B = makeBlock(h('B'), {
     anchor: genesis.hash,

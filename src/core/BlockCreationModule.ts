@@ -23,16 +23,16 @@ export interface Output {
   /**
    * Application-specific payload, or omitted for a pure-incentive output.
    *
-   * Data-less outputs are invisible to contracts: they never surface in
+   * Body-less outputs are invisible to contracts: they never surface in
    * `claimAll` / `claimNext`, and contracts cannot emit them via
    * `emitOutput` / `requestBody` / `record`. They are still
    * tracked in the UTXO index and block-level claiming still balances
    * their value -- they are just outside contract execution.
    *
-   * Data-less outputs must live in namespaces that no running contract
+   * Body-less outputs must live in namespaces that no running contract
    * declares (unowned by the output-namespace partition check).
    */
-  data?: Uint8Array;
+  body?: Uint8Array;
 }
 
 /** A claim against an output in the extended vector. */

@@ -45,7 +45,7 @@ function makeSignedPacket(
       outputs: [{
         verifier: { contract: Hash.digest(label), params: new Uint8Array(0) },
         value: 1,
-        data: new Uint8Array(0),
+        body: new Uint8Array(0),
       }],
       declaredWeight: 1,
       refs: [],

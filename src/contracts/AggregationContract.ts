@@ -24,7 +24,7 @@ export interface AggregationData {
   aggregateWeights: number[];
 }
 
-/** Encode AggregationData to a Uint8Array for use in Output.data. */
+/** Encode AggregationData to a Uint8Array for use in Output.body. */
 export function encodeAggregationData(data: AggregationData): Uint8Array {
   const json = JSON.stringify({
     claimMask: data.claimMask,
@@ -36,7 +36,7 @@ export function encodeAggregationData(data: AggregationData): Uint8Array {
   return new TextEncoder().encode(json);
 }
 
-/** Decode AggregationData from an Output.data Uint8Array. */
+/** Decode AggregationData from an Output.body Uint8Array. */
 export function decodeAggregationData(bytes: Uint8Array): AggregationData {
   const json = JSON.parse(new TextDecoder().decode(bytes));
   return {
@@ -55,9 +55,9 @@ export function decodeAggregationData(bytes: Uint8Array): AggregationData {
 export function getAggregationData(block: Block): AggregationData | null {
   for (const output of block.outputs) {
     if (Hash.equals(output.verifier.contract, AGGREGATION_CONTRACT)) {
-      if (output.data === undefined) continue; // data-less marker (if any)
-      if (output.data.length === 0) continue; // empty-bytes marker (legacy)
-      return decodeAggregationData(output.data);
+      if (output.body === undefined) continue; // data-less marker (if any)
+      if (output.body.length === 0) continue; // empty-bytes marker (legacy)
+      return decodeAggregationData(output.body);
     }
   }
   return null;
@@ -71,7 +71,7 @@ export function makeAggregationOutput(): Output {
   return {
     verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
     value: 0,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 }
 
@@ -109,8 +109,8 @@ export const aggregationContract: Contract = {
     // Decode caches from consumed inputs.
     // Inputs with empty data are leaves (implicit trivial cache).
     const caches: (AggregationData | null)[] = inputs.map((input) => {
-      if (input.data.length === 0) return null;
-      return decodeAggregationData(input.data);
+      if (input.body.length === 0) return null;
+      return decodeAggregationData(input.body);
     });
 
     // Compose: sum newOutputCounts, collect per-aggregate info.

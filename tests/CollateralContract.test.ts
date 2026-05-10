@@ -58,7 +58,7 @@ function sigOutput(pk: Uint8Array, value: number): Output {
   return {
     verifier: { contract: SIGNATURE_CONTRACT, params: pk },
     value,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 }
 

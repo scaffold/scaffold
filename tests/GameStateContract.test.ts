@@ -65,7 +65,7 @@ function gameStateOutput(
   return {
     verifier: { contract: GAME_STATE_CONTRACT, params: encodeGameParams(GAME_ID, turnId) },
     value,
-    data: encodeGameState(env),
+    body: encodeGameState(env),
   };
 }
 
@@ -73,7 +73,7 @@ function sigOutput(pk: Uint8Array, value: number): Output {
   return {
     verifier: { contract: SIGNATURE_CONTRACT, params: pk },
     value,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 }
 

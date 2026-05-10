@@ -13,7 +13,7 @@ function makeRecordOutput(key: string, value: string): Output {
   return {
     verifier: { contract: RECORD_CONTRACT, params: str2bin(key) },
     value: 0,
-    data: str2bin(value),
+    body: str2bin(value),
   };
 }
 

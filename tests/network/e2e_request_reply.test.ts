@@ -152,15 +152,15 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   //    fetch() itself publishes the incentive block — no separate put()
   //    is needed. The incentive value comes from getOutgoingIncentive in
   //    the Scaffold config.
-  let response: { data: Uint8Array; block: Block } | null = null;
+  let response: { body: Uint8Array; block: Block } | null = null;
   nodeA.fetch({
     contract: HELLO_CONTRACT,
     params: new TextEncoder().encode('world'),
     recordKey: 'response',
     onClaim: (c) => {
       if (!c) return;
-      const text = new TextDecoder().decode(c.data);
-      if (text.startsWith('Hello')) response = { data: c.data, block: c.block };
+      const text = new TextDecoder().decode(c.body);
+      if (text.startsWith('Hello')) response = { body: c.body, block: c.block };
     },
   });
 
@@ -168,7 +168,7 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   const result = await waitFor(() => response, 3000);
 
   assertEquals(
-    new TextDecoder().decode(result.data),
+    new TextDecoder().decode(result.body),
     'Hello, world',
     'A should receive the Hello response',
   );

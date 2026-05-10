@@ -85,9 +85,9 @@ export class BalanceIndex {
         // active game even while the mover's next-turn draft parks on
         // requestBody awaiting user input.
         if (!isUnspentByCanonicalBlock(ctx, block.hash, i)) continue;
-        if (!o.data) continue;
+        if (!o.body) continue;
         try {
-          const env = decodeGameState(o.data);
+          const env = decodeGameState(o.body);
           if (isTerminalStatus(env.state.status)) continue;
           const blackIsParticipant = !env.black.every((b) => b === 0);
           if (

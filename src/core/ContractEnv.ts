@@ -16,7 +16,7 @@ export enum ExecutionMode {
 export interface Input {
   readonly verifier: Verifier;
   readonly value: number;
-  readonly data: Uint8Array;
+  readonly body: Uint8Array;
   /** True when the claimed output belongs to the same block that is claiming it. */
   readonly isSelfClaim: boolean;
 }
@@ -84,7 +84,7 @@ export interface ContractEnv {
    * Require the block to produce a specific output.
    *
    * Verification: checks the next output in the contract's namespace
-   * sequence matches exactly (verifier + value + data). The contract's
+   * sequence matches exactly (verifier + value + body). The contract's
    * own call order determines the namespace's expected sequence.
    * Generation: adds the output to the draft with `origin: 'require'`.
    *
@@ -92,25 +92,25 @@ export interface ContractEnv {
    *
    * TODO(@joel): consider unifying emitOutput + requestBody into a
    * single method that varies by argument count:
-   *   emitOutput(verifier, data?, value?): Promise<{value, data}>
-   *     (verifier, data, value) -- today's emitOutput
-   *     (verifier, data)        -- contract supplies data; host supplies value
+   *   emitOutput(verifier, body?, value?): Promise<{value, body}>
+   *     (verifier, body, value) -- today's emitOutput
+   *     (verifier, body)        -- contract supplies body; host supplies value
    *     (verifier)              -- host supplies both
    * Revisit once more real contracts exercise requestBody.
    */
-  emitOutput(verifier: Verifier, value: number, data?: Uint8Array): void;
+  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void;
 
   /**
    * Ask the host for an output under the given verifier. The host (in
-   * generation) or the wire (in verification) supplies `(value, data)`.
+   * generation) or the wire (in verification) supplies `(value, body)`.
    *
    * Generation: the host handler chain synthesizes the output. If no
    * handler matches, the contract blocks until one does (like
-   * `claimNext`). Returns `{value, data}` so the contract can use
+   * `claimNext`). Returns `{value, body}` so the contract can use
    * them in downstream logic.
    *
    * Verification: reads the next output in the contract's namespace
-   * sequence. `verifier` and `data` must match exactly; `value` on the
+   * sequence. `verifier` and `body` must match exactly; `value` on the
    * wire must be `>=` what was emitted at generation time
    * (solidification may raise `value` but not lower it).
    *
@@ -118,11 +118,11 @@ export interface ContractEnv {
    */
   requestBody(
     verifier: Verifier,
-  ): MaybePromise<{ value: number; data: Uint8Array }>;
+  ): MaybePromise<{ value: number; body: Uint8Array }>;
 
   /**
-   * Require a result (self-claimed key-value output) on this block.
-   * Creates/checks an output with { contract: RECORD_CONTRACT, params: key, data: value }.
+   * Self-claimed key-value output on this block.
+   * Sugar over emitOutput for `{ contract: RECORD_CONTRACT, params: key, body: value }` slots.
    *
    * Verification: checks the result output exists with the expected value.
    * Generation: creates the result output and self-claim.
@@ -202,5 +202,5 @@ export interface GeneratingEnvProvider<BlockType> extends VerifyingEnvProvider<B
     runningContract: Hash,
     runningParams: Uint8Array,
     outputVerifier: Verifier,
-  ): Promise<{ value: number; data: Uint8Array } | null>;
+  ): Promise<{ value: number; body: Uint8Array } | null>;
 }

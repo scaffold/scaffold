@@ -51,7 +51,7 @@ function makeOutput(contractName: string, value = 0): Output {
   return {
     verifier: { contract: h(contractName), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array(),
+    body: new Uint8Array(),
   };
 }
 

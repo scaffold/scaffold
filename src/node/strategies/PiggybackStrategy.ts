@@ -419,7 +419,7 @@ export class PiggybackStrategy implements Strategy {
       out.push({
         verifier: { contract: o.verifier.contract, params: o.verifier.params },
         value: o.value,
-        data: o.data,
+        body: o.body,
       });
     }
     return out;

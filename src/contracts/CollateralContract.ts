@@ -59,7 +59,7 @@ export function makeCollateralOutput(
   return {
     verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
     value,
-    data: encodeCollateralDetail({ side: 'for', pubkey }),
+    body: encodeCollateralDetail({ side: 'for', pubkey }),
   };
 }
 
@@ -73,7 +73,7 @@ export function makeAgainstOutput(
   return {
     verifier: { contract: COLLATERAL_CONTRACT, params: targetBlockHash.toBytes() },
     value,
-    data: encodeCollateralDetail({ side: 'against', pubkey, target }),
+    body: encodeCollateralDetail({ side: 'against', pubkey, target }),
   };
 }
 
@@ -134,7 +134,7 @@ export function readVerdictFromBlock(
 ): VerdictRecord | undefined {
   const out = findRecordOutput(block as Block, VERDICT_RECORD_KEY);
   if (!out) return undefined;
-  return decodeVerdict(out.data);
+  return decodeVerdict(out.body);
 }
 
 // -- Helpers ----------------------------------------------------------
@@ -165,7 +165,7 @@ function partitionInputs(inputs: Input[]): PartitionedInputs {
   const againstInputs: PartitionedInputs['againstInputs'] = [];
 
   for (const input of inputs) {
-    const detail = decodeCollateralDetail(input.data);
+    const detail = decodeCollateralDetail(input.body);
     if (detail.side === 'for') {
       forInputs.push({
         input,

@@ -42,7 +42,7 @@ import { PlacementModule } from './PlacementModule.ts';
  */
 export type ValueOverrideFn = (
   verifier: Verifier,
-  data: Uint8Array,
+  body: Uint8Array,
   defaultValue: number,
 ) => number;
 
@@ -347,8 +347,8 @@ function patchAggregationOutput(
 ): Output[] {
   return outputs.map((output) => {
     if (!HashCtor.equals(output.verifier.contract, AGGREGATION_CONTRACT)) return output;
-    if (output.data === undefined) return output; // data-less marker
-    if (output.data.length === 0) return output; // empty-bytes marker (legacy)
+    if (output.body === undefined) return output; // data-less marker
+    if (output.body.length === 0) return output; // empty-bytes marker (legacy)
 
     const aggData = getAggregationData({
       outputs: [output],
@@ -357,7 +357,7 @@ function patchAggregationOutput(
 
     return {
       ...output,
-      data: encodeAggregationData({
+      body: encodeAggregationData({
         ...aggData,
         claimMask,
         aggregateOutputCounts,
@@ -438,8 +438,8 @@ function applyValueOverride(
   return outputs.map((output, i) => {
     const slot = slots[i];
     if (!slot || slot.origin !== 'get') return output;
-    if (output.data === undefined) return output;
-    const newValue = override(output.verifier, output.data, output.value);
+    if (output.body === undefined) return output;
+    const newValue = override(output.verifier, output.body, output.value);
     if (newValue === output.value) return output;
     return { ...output, value: newValue };
   });

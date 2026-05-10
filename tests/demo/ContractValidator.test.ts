@@ -114,7 +114,7 @@ Deno.test('ContractValidator: block without status outputs passes without signat
   const nonStatusOutput: Output = {
     verifier: { contract: Hash.digest('other-contract'), params: new Uint8Array(0) },
     value: 0,
-    data: new Uint8Array([]),
+    body: new Uint8Array([]),
   };
 
   const spec: BlockSpec = {

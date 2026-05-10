@@ -10,11 +10,11 @@ import {
 const enc = (s: string) => new TextEncoder().encode(s);
 const hashOf = (s: string) => Hash.digest(s);
 
-function out(contract: Hash, value: number, data = new Uint8Array(0)): Output {
+function out(contract: Hash, value: number, body = new Uint8Array(0)): Output {
   return {
     verifier: { contract, params: new Uint8Array(0) },
     value,
-    data,
+    body,
   };
 }
 
@@ -135,7 +135,7 @@ Deno.test('partition: unowned namespace outputs ignored by check', () => {
     [emitted, {
       verifier: { contract: agg, params: new Uint8Array(0) },
       value: 0,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     }],
     [contrib],
   );

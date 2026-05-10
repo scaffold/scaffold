@@ -14,7 +14,7 @@ import type { OutputSlot } from '../src/core/GeneratingEnv.ts';
 
 type ValueOverrideFn = (
   verifier: { contract: Hash; params: Uint8Array },
-  data: Uint8Array,
+  body: Uint8Array,
   defaultValue: number,
 ) => number;
 
@@ -27,8 +27,8 @@ function overrideGetOutputValues(
     const slot = slots[i];
     if (!slot || slot.origin !== 'get') return output;
     if (!fn) return output;
-    if (output.data === undefined) return output;
-    const newValue = fn(output.verifier, output.data, output.value);
+    if (output.body === undefined) return output;
+    const newValue = fn(output.verifier, output.body, output.value);
     if (newValue === output.value) return output;
     return { ...output, value: newValue };
   });
@@ -44,7 +44,7 @@ function out(
   const output: Output = {
     verifier: { contract: hashOf('c'), params: new Uint8Array(0) },
     value,
-    data: enc('d'),
+    body: enc('d'),
   };
   return { output, slot: { output, origin } };
 }
@@ -78,15 +78,15 @@ Deno.test('override: hook sees verifier + data + default value', () => {
   const { output, slot } = out(3, 'get');
   let seen: {
     verifier: { contract: Hash; params: Uint8Array };
-    data: Uint8Array;
+    body: Uint8Array;
     defaultValue: number;
   } | undefined;
-  overrideGetOutputValues([output], [slot], (verifier, data, defaultValue) => {
-    seen = { verifier, data, defaultValue };
+  overrideGetOutputValues([output], [slot], (verifier, body, defaultValue) => {
+    seen = { verifier, body, defaultValue };
     return defaultValue;
   });
   assertEquals(seen!.defaultValue, 3);
-  assertEquals(seen!.data, enc('d'));
+  assertEquals(seen!.body, enc('d'));
 });
 
 Deno.test('override: mixed get + require slots', () => {

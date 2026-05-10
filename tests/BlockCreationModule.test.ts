@@ -94,7 +94,7 @@ function makeOutput(value: number, contractName?: string): Output {
       params: new Uint8Array(0),
     },
     value,
-    data: new Uint8Array(),
+    body: new Uint8Array(),
   };
 }
 

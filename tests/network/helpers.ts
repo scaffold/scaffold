@@ -50,7 +50,7 @@ export function makeOutput(value: number, label?: string): Output {
   return {
     verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array([]),
+    body: new Uint8Array([]),
   };
 }
 
@@ -157,7 +157,7 @@ export function makeAggregationBlock(
     outputs: [{
       verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       value: 0,
-      data: aggData,
+      body: aggData,
     }],
     declaredWeight,
     refs: [],

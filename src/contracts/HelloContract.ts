@@ -44,6 +44,6 @@ export function makeHelloRequest(name: string, value: number): Output {
   return {
     verifier: helloVerifier(name),
     value,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 }

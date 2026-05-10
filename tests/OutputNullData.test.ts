@@ -6,11 +6,11 @@ import { deserialize, serialize } from '../src/core/BlockSerializer.ts';
 
 const h = (s: string): Hash => Hash.digest(s);
 
-function makeOutput(data?: Uint8Array): Output {
+function makeOutput(body?: Uint8Array): Output {
   return {
     verifier: { contract: h('c'), params: new Uint8Array(0) },
     value: 1,
-    data,
+    body,
   };
 }
 
@@ -43,12 +43,12 @@ Deno.test('serializer: data-less, empty-bytes, and non-empty data survive round-
   const decoded = deserialize<Output[]>(json);
 
   assertEquals(decoded.length, 3);
-  assertEquals(decoded[0].data, undefined);
-  assert(decoded[1].data instanceof Uint8Array);
-  assertEquals((decoded[1].data as Uint8Array).length, 0);
-  assert(decoded[2].data instanceof Uint8Array);
+  assertEquals(decoded[0].body, undefined);
+  assert(decoded[1].body instanceof Uint8Array);
+  assertEquals((decoded[1].body as Uint8Array).length, 0);
+  assert(decoded[2].body instanceof Uint8Array);
   assertEquals(
-    new TextDecoder().decode(decoded[2].data as Uint8Array),
+    new TextDecoder().decode(decoded[2].body as Uint8Array),
     'payload',
   );
 });
@@ -59,8 +59,8 @@ Deno.test('serializer: data-less round-trips through a full genesis block', () =
   const json = serialize(block);
   const decoded = deserialize<typeof block>(json);
   assertEquals(decoded.outputs.length, 2);
-  assertEquals(decoded.outputs[0].data, undefined);
-  assert(decoded.outputs[1].data instanceof Uint8Array);
+  assertEquals(decoded.outputs[0].body, undefined);
+  assert(decoded.outputs[1].body instanceof Uint8Array);
   // Anchor hash recovered via reviver
   assert(decoded.anchor instanceof Hash);
   assert(Hash.equals(decoded.anchor, ZERO_HASH));

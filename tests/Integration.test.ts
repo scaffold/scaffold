@@ -36,7 +36,7 @@ function makeOutput(value: number, label?: string): Output {
   return {
     verifier: { contract: Hash.digest(label ?? 'contract'), params: new Uint8Array(0) },
     value,
-    data: new Uint8Array([]),
+    body: new Uint8Array([]),
   };
 }
 
@@ -373,7 +373,7 @@ Deno.test('Integration: aggregation — aggregation block rolls up subtrees', ()
     outputs: [{
       verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       value: 0,
-      data: aggData,
+      body: aggData,
     }],
     declaredWeight: 5,
     refs: [],
@@ -457,7 +457,7 @@ Deno.test('Integration: computation block with self-claims → verify → valid'
   const genesis = createGenesisBlock([{
     verifier: { contract: trivialContract, params: new Uint8Array(0) },
     value: 0,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   }]);
   node.receiveBlock(genesis, null);
 
@@ -495,7 +495,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
   const gameOutput = {
     verifier: gameVerifier,
     value: 0,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
   const genesis = createGenesisBlock([gameOutput, gameOutput]);
   node.receiveBlock(genesis, null);
@@ -576,7 +576,7 @@ Deno.test('Integration: coordinator.attemptVerification works end-to-end', async
   const genesis = createGenesisBlock([{
     verifier: { contract, params: new Uint8Array(0) },
     value: 0,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   }]);
   node.receiveBlock(genesis, null);
 

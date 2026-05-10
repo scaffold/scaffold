@@ -63,11 +63,11 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       if (!block || entry.outputIndex >= block.outputs.length) continue;
       const output = block.outputs[entry.outputIndex];
       // Data-less outputs are pure-incentive and invisible to contracts.
-      if (output.data === undefined) continue;
+      if (output.body === undefined) continue;
       result.push({
         verifier: output.verifier,
         value: output.value,
-        data: output.data,
+        body: output.body,
         isSelfClaim: false,
         block: entry.blockHash,
         outputIndex: entry.outputIndex,
@@ -95,7 +95,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     _runningContract: Hash,
     _runningParams: Uint8Array,
     _outputVerifier: Verifier,
-  ): Promise<{ value: number; data: Uint8Array } | null> {
+  ): Promise<{ value: number; body: Uint8Array } | null> {
     // Test shim: no handlers registered, never resolves. Tests that
     // exercise requestBody should use the real OutputHandlerRegistry.
     return Promise.resolve(null);
@@ -203,7 +203,7 @@ export class ContractGeneratorShim {
   }
 
   notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean {
-    if (output.data === undefined) return false; // invisible to contracts
+    if (output.body === undefined) return false; // invisible to contracts
     const key = verifierKey(output.verifier);
     const queue = this._blocked.get(key);
     if (!queue || queue.length === 0) return false;
@@ -213,7 +213,7 @@ export class ContractGeneratorShim {
     entry.resolve({
       verifier: output.verifier,
       value: output.value,
-      data: output.data,
+      body: output.body,
       isSelfClaim: false,
       block: blockHash,
       outputIndex,

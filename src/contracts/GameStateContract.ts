@@ -93,7 +93,7 @@ export const gameStateContract: Contract = {
     const prevInput = await env.claimNext();
     let prev: GameStateEnvelope;
     try {
-      prev = decodeGameState(prevInput.data);
+      prev = decodeGameState(prevInput.body);
     } catch (e) {
       throw new ContractRejection('previous game state malformed: ' + (e as Error).message);
     }
@@ -117,7 +117,7 @@ export const gameStateContract: Contract = {
         contract: RECORD_CONTRACT,
         params: JOIN_KEY,
       });
-      const blackPubkey = joinSlot.data;
+      const blackPubkey = joinSlot.body;
       if (blackPubkey.length !== 33) {
         throw new ContractRejection('black pubkey must be 33 bytes');
       }
@@ -181,7 +181,7 @@ export const gameStateContract: Contract = {
     });
     let move: Move;
     try {
-      move = decodeMove(moveSlot.data);
+      move = decodeMove(moveSlot.body);
     } catch (e) {
       throw new ContractRejection('move malformed: ' + (e as Error).message);
     }

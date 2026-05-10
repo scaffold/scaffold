@@ -16,7 +16,7 @@ import { UtxoIndexService } from './UtxoIndexService.ts';
 import { Hash } from '../util/Hash.ts';
 
 export interface AutoBalanceLogger {
-  warn?: (event: string, data?: Record<string, unknown>) => void;
+  warn?: (event: string, body?: Record<string, unknown>) => void;
 }
 
 /**

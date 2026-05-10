@@ -75,7 +75,7 @@ Deno.test('DraftStrategy: newly canonical block with high-value output emits cre
     {
       verifier: { contract: SIGNATURE_CONTRACT, params: new Uint8Array(33) },
       value: 100,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     },
   ]);
   store.put(block);
@@ -100,7 +100,7 @@ Deno.test('DraftStrategy: output below minValue produces no action', () => {
     {
       verifier: { contract: SIGNATURE_CONTRACT, params: new Uint8Array(33) },
       value: 5,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     },
   ]);
   store.put(block);
@@ -120,7 +120,7 @@ Deno.test('DraftStrategy: output already in-flight produces no duplicate', () =>
     {
       verifier: { contract: SIGNATURE_CONTRACT, params: new Uint8Array(33) },
       value: 100,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     },
   ]);
   store.put(block);
@@ -145,7 +145,7 @@ Deno.test('DraftStrategy: multiple high-value outputs produce multiple actions (
   const outputs = Array.from({ length: 5 }, (_, i) => ({
     verifier: { contract: SIGNATURE_CONTRACT, params: new Uint8Array(33) },
     value: 50 + i,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   }));
 
   const block = makeBlock(h('block4'), genesis.hash, outputs);
@@ -168,7 +168,7 @@ Deno.test('DraftStrategy: non-canonical change produces no action', () => {
     {
       verifier: { contract: SIGNATURE_CONTRACT, params: new Uint8Array(33) },
       value: 100,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     },
   ]);
   store.put(block);

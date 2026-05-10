@@ -93,14 +93,14 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
       runningContract: Hash,
       runningParams: Uint8Array,
       outputVerifier: Verifier,
-    ) => Promise<{ value: number; data: Uint8Array } | null>)
+    ) => Promise<{ value: number; body: Uint8Array } | null>)
     | null = null;
 
   resolveGetOutput(
     runningContract: Hash,
     runningParams: Uint8Array,
     outputVerifier: Verifier,
-  ): Promise<{ value: number; data: Uint8Array } | null> {
+  ): Promise<{ value: number; body: Uint8Array } | null> {
     if (this._resolveGetOutput) {
       return this._resolveGetOutput(runningContract, runningParams, outputVerifier);
     }
@@ -147,7 +147,7 @@ Deno.test('GeneratingEnv: record creates a result output', () => {
   assertEquals(outputs.length, 1);
   assert(Hash.equals(outputs[0].verifier.contract, RECORD_CONTRACT));
   assertEquals(outputs[0].verifier.params, enc('state'));
-  assertEquals(outputs[0].data, enc('value'));
+  assertEquals(outputs[0].body, enc('value'));
   assertEquals(outputs[0].value, 0);
 });
 
@@ -171,13 +171,13 @@ Deno.test('GeneratingEnv: emitOutput adds output to list', () => {
   assertEquals(outputs.length, 1);
   assert(Hash.equals(outputs[0].verifier.contract, verifier.contract));
   assertEquals(outputs[0].value, 42);
-  assertEquals(outputs[0].data, enc('data'));
+  assertEquals(outputs[0].body, enc('data'));
 });
 
 Deno.test('GeneratingEnv: emitOutput defaults data to empty', () => {
   const { env } = makeGenEnv();
   env.emitOutput({ contract: h('x'), params: new Uint8Array(0) }, 10);
-  assertEquals(env.getAllOutputs()[0].data, new Uint8Array(0));
+  assertEquals(env.getAllOutputs()[0].body, new Uint8Array(0));
 });
 
 Deno.test('GeneratingEnv: interleaved record and emitOutput preserve call order', () => {
@@ -190,10 +190,10 @@ Deno.test('GeneratingEnv: interleaved record and emitOutput preserve call order'
   const slots = env.getGeneratedOutputSlots();
   assertEquals(slots.length, 4);
   assertEquals(slots.every((s) => s.origin === 'require'), true);
-  assertEquals(slots[0].output.data, enc('a'));
+  assertEquals(slots[0].output.body, enc('a'));
   assert(Hash.equals(slots[1].output.verifier.contract, RECORD_CONTRACT));
   assertEquals(slots[1].output.verifier.params, enc('k1'));
-  assertEquals(slots[2].output.data, enc('b'));
+  assertEquals(slots[2].output.body, enc('b'));
   assertEquals(slots[3].output.verifier.params, enc('k2'));
 });
 
@@ -206,8 +206,8 @@ Deno.test('GeneratingEnv: claimAll queries provider', () => {
   const verifier: Verifier = { contract: contractHash, params };
 
   const available: AvailableInput[] = [
-    { verifier, value: 10, data: enc('move1'), isSelfClaim: false, block: h('b1'), outputIndex: 0 },
-    { verifier, value: 20, data: enc('move2'), isSelfClaim: false, block: h('b2'), outputIndex: 1 },
+    { verifier, value: 10, body: enc('move1'), isSelfClaim: false, block: h('b1'), outputIndex: 0 },
+    { verifier, value: 20, body: enc('move2'), isSelfClaim: false, block: h('b2'), outputIndex: 1 },
   ];
   provider.setAvailableInputs(verifier, available);
 
@@ -264,14 +264,14 @@ Deno.test('GeneratingEnv: claimNext returns first available input', () => {
   const verifier: Verifier = { contract: contractHash, params };
 
   const available: AvailableInput[] = [
-    { verifier, value: 5, data: enc('data'), isSelfClaim: false, block: h('b1'), outputIndex: 2 },
+    { verifier, value: 5, body: enc('data'), isSelfClaim: false, block: h('b1'), outputIndex: 2 },
   ];
   provider.setAvailableInputs(verifier, available);
 
   const { env } = makeGenEnv({ contractHash, params, provider });
   const input = env.claimNext() as Input;
   assertEquals(input.value, 5);
-  assertEquals(input.data, enc('data'));
+  assertEquals(input.body, enc('data'));
 
   // Resolved claim tracks provenance (value derived from store on demand)
   const claims = env.getClaims();
@@ -399,7 +399,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
   const anchorForRef: TestBlock = {
     hash: h('ref-anchor'),
     anchor: ZERO_HASH,
-    outputs: [{ verifier: gameVerifier, value: 0, data: new Uint8Array(0) }],
+    outputs: [{ verifier: gameVerifier, value: 0, body: new Uint8Array(0) }],
     claimIndices: [],
     refs: [],
   };

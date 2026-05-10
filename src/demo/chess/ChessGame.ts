@@ -149,12 +149,12 @@ export class ChessGame {
         if (waiter.resolved && waiter.bytes) {
           const bytes = waiter.bytes;
           this.waiters.delete(key);
-          return Promise.resolve({ value: 0, data: bytes });
+          return Promise.resolve({ value: 0, body: bytes });
         }
-        return new Promise<{ value: number; data: Uint8Array }>((resolve) => {
+        return new Promise<{ value: number; body: Uint8Array }>((resolve) => {
           waiter.resolvers.push((bytes) => {
             this.waiters.delete(key);
-            resolve({ value: 0, data: bytes });
+            resolve({ value: 0, body: bytes });
           });
         });
       },
@@ -203,7 +203,7 @@ export class ChessGame {
         params: encodeGameParams(gameId, 0),
       },
       value: stake,
-      data: encodeGameState(awaiting),
+      body: encodeGameState(awaiting),
     };
     const gameRecord = makeRecordOutput('game', gameId);
     // PutManager appends the aggregation marker; the RECORD output is
@@ -355,10 +355,10 @@ export class ChessGame {
         // block. Going through OutputClaimService lets us filter to
         // real-block claimants only.
         if (!isUnspentByCanonicalBlock(ctx, block.hash, i)) continue;
-        if (!o.data) continue;
+        if (!o.body) continue;
         let env: GameStateEnvelope;
         try {
-          env = decodeGameState(o.data);
+          env = decodeGameState(o.body);
         } catch {
           continue;
         }

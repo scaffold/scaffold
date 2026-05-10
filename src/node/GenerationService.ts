@@ -77,11 +77,11 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       const block = this.store.get(entry.blockHash);
       if (!block || entry.outputIndex >= block.outputs.length) continue;
       const output = block.outputs[entry.outputIndex];
-      if (output.data === undefined) continue;
+      if (output.body === undefined) continue;
       result.push({
         verifier: output.verifier,
         value: output.value,
-        data: output.data,
+        body: output.body,
         isSelfClaim: false,
         block: entry.blockHash,
         outputIndex: entry.outputIndex,
@@ -113,7 +113,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     runningContract: Hash,
     runningParams: Uint8Array,
     outputVerifier: Verifier,
-  ): Promise<{ value: number; data: Uint8Array } | null> {
+  ): Promise<{ value: number; body: Uint8Array } | null> {
     return this.outputHandlers.resolve(
       runningContract,
       runningParams,
@@ -144,7 +144,7 @@ interface ParkedGetOutput {
   runningContract: Hash;
   runningParams: Uint8Array;
   outputVerifier: Verifier;
-  resolve: (result: { value: number; data: Uint8Array }) => void;
+  resolve: (result: { value: number; body: Uint8Array }) => void;
 }
 
 // -- Service --------------------------------------------------------
@@ -380,7 +380,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
             const absorbed = this.notifyNewOutput(ai.block, ai.outputIndex, {
               verifier: ai.verifier,
               value: ai.value,
-              data: ai.data,
+              body: ai.body,
             });
             if (!absorbed) {
               this._utxoIndex.reAddUnspentOutput(ai.block, ai.outputIndex);
@@ -576,7 +576,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   notifyNewOutput(blockHash: Hash, outputIndex: number, output: Output): boolean {
     // Data-less outputs are pure-incentive and invisible to contracts --
     // they cannot be waked into or adopted by a running generator.
-    if (output.data === undefined) return false;
+    if (output.body === undefined) return false;
     const vKey = utxoVerifierKey(output.verifier.contract, output.verifier.params);
 
     // 1. Wake blocked generator.
@@ -588,7 +588,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       entry.resolve({
         verifier: output.verifier,
         value: output.value,
-        data: output.data,
+        body: output.body,
         isSelfClaim: false,
         block: blockHash,
         outputIndex,
@@ -609,7 +609,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       const ai: AvailableInput = {
         verifier: output.verifier,
         value: output.value,
-        data: output.data,
+        body: output.body,
         isSelfClaim: false,
         block: blockHash,
         outputIndex,

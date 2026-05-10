@@ -105,7 +105,7 @@ export class NamespacePartitionModule {
         // Data-less outputs (pure-incentive) must live in unowned
         // namespaces -- contracts cannot emit them, so a data-less slot
         // in an owned namespace is a partition violation.
-        if (onBlock.data === undefined) {
+        if (onBlock.body === undefined) {
           return {
             ok: false,
             reason: `namespace ${
@@ -113,9 +113,9 @@ export class NamespacePartitionModule {
             } slot ${i}: data-less output in owned namespace`,
           };
         }
-        // `emitted.data` is always defined by construction (the env
+        // `emitted.body` is always defined by construction (the env
         // only records data-bearing slots for require/get).
-        if (emitted.data === undefined) {
+        if (emitted.body === undefined) {
           return {
             ok: false,
             reason: `namespace ${
@@ -123,7 +123,7 @@ export class NamespacePartitionModule {
             } slot ${i}: emitted slot has no data (should be impossible)`,
           };
         }
-        if (!bytesEqual(onBlock.data, emitted.data)) {
+        if (!bytesEqual(onBlock.body, emitted.body)) {
           return {
             ok: false,
             reason: `namespace ${

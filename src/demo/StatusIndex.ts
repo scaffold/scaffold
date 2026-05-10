@@ -18,9 +18,9 @@ export class StatusIndex {
 
     for (const block of canonicalChain) {
       for (const output of block.outputs) {
-        if (output.data === undefined) continue;
+        if (output.body === undefined) continue;
         if (Hash.equals(output.verifier.contract, statusHash)) {
-          const { publicKey, message } = decodeStatusData(output.data);
+          const { publicKey, message } = decodeStatusData(output.body);
           const name = publicKeyToAnimalName(publicKey);
           if (name) {
             const oldMessage = this.statuses.get(name);
@@ -44,9 +44,9 @@ export class StatusIndex {
   findClaimIndex(name: AnimalName, tipBlock: Block, store: BlockStore): number | undefined {
     const identity = deriveIdentity(name);
     for (const { extendedIndex, output } of iterateExtendedOutputs(tipBlock, store)) {
-      if (output.data === undefined) continue;
+      if (output.body === undefined) continue;
       if (!Hash.equals(output.verifier.contract, statusHash)) continue;
-      const { publicKey } = decodeStatusData(output.data);
+      const { publicKey } = decodeStatusData(output.body);
       if (bytesEqual(publicKey, identity.publicKey)) {
         return extendedIndex;
       }
@@ -68,9 +68,9 @@ export class StatusIndex {
   ): { producer: Hash; outputIndex: number } | undefined {
     const identity = deriveIdentity(name);
     for (const { output, source } of iterateExtendedOutputs(tipBlock, store)) {
-      if (output.data === undefined) continue;
+      if (output.body === undefined) continue;
       if (!Hash.equals(output.verifier.contract, statusHash)) continue;
-      const { publicKey } = decodeStatusData(output.data);
+      const { publicKey } = decodeStatusData(output.body);
       if (bytesEqual(publicKey, identity.publicKey)) {
         return { producer: source.block, outputIndex: source.outputIndex };
       }

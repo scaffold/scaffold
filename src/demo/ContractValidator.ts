@@ -33,9 +33,9 @@ export function validateBlockPacket(block: Block, store: BlockStore): void {
   // Check if any claimed output is a status output
   let requiredPublicKey: Uint8Array | undefined;
   for (const output of claimedOutputs) {
-    if (output.data === undefined) continue;
+    if (output.body === undefined) continue;
     if (Hash.equals(output.verifier.contract, statusHash)) {
-      const { publicKey } = decodeStatusData(output.data);
+      const { publicKey } = decodeStatusData(output.body);
       if (requiredPublicKey) {
         // Multiple status claims — they must all be for the same identity
         if (!bytesEqual(requiredPublicKey, publicKey)) {
@@ -49,9 +49,9 @@ export function validateBlockPacket(block: Block, store: BlockStore): void {
 
   // Also check produced status outputs — their publicKey must match the signer
   for (const output of block.outputs) {
-    if (output.data === undefined) continue;
+    if (output.body === undefined) continue;
     if (Hash.equals(output.verifier.contract, statusHash)) {
-      const { publicKey } = decodeStatusData(output.data);
+      const { publicKey } = decodeStatusData(output.body);
       if (requiredPublicKey) {
         if (!bytesEqual(requiredPublicKey, publicKey)) {
           throw new Error('produced status output publicKey does not match claimed output');

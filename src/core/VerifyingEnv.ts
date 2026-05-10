@@ -106,15 +106,15 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return inputs[this._inputCursor++];
   }
 
-  emitOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
-    const dataBytes = data ?? new Uint8Array(0);
+  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+    const bodyBytes = body ?? new Uint8Array(0);
     const slot = this._consumeNextInNamespace(verifier.contract);
-    if (slot.data === undefined) {
-      // Data-less outputs are host-only and must live in unowned namespaces.
+    if (slot.body === undefined) {
+      // Body-less outputs are host-only and must live in unowned namespaces.
       // Hitting one here means the contract's namespace contains a slot it
       // couldn't have emitted.
       throw new ContractRejection(
-        'required output has no data at namespace slot',
+        'required output has no body at namespace slot',
       );
     }
     if (!verifierEquals(slot.verifier, verifier)) {
@@ -127,22 +127,22 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
         'required output value mismatch at namespace slot',
       );
     }
-    if (!bytesEqual(slot.data, dataBytes)) {
+    if (!bytesEqual(slot.body, bodyBytes)) {
       throw new ContractRejection(
-        'required output data mismatch at namespace slot',
+        'required output body mismatch at namespace slot',
       );
     }
     this._emittedSlots.push({
-      output: { verifier, value, data: dataBytes },
+      output: { verifier, value, body: bodyBytes },
       origin: 'require',
     });
   }
 
-  requestBody(verifier: Verifier): { value: number; data: Uint8Array } {
+  requestBody(verifier: Verifier): { value: number; body: Uint8Array } {
     const slot = this._consumeNextInNamespace(verifier.contract);
-    if (slot.data === undefined) {
+    if (slot.body === undefined) {
       throw new ContractRejection(
-        'requestBody slot has no data at namespace slot',
+        'requestBody slot has no body at namespace slot',
       );
     }
     if (!verifierEquals(slot.verifier, verifier)) {
@@ -151,10 +151,10 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       );
     }
     this._emittedSlots.push({
-      output: { verifier: slot.verifier, value: slot.value, data: slot.data },
+      output: { verifier: slot.verifier, value: slot.value, body: slot.body },
       origin: 'get',
     });
-    return { value: slot.value, data: slot.data };
+    return { value: slot.value, body: slot.body };
   }
 
   record(key: Uint8Array, value: Uint8Array): void {
@@ -185,12 +185,12 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       // Found a ref that claims the verifier -- now read the result
       const refOutputs = this._provider.getOutputs(refBlock);
       for (const output of refOutputs) {
-        if (output.data === undefined) continue;
+        if (output.body === undefined) continue;
         if (
           Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
         ) {
-          return output.data;
+          return output.body;
         }
       }
       // Ref claims the verifier but has no matching result key
@@ -259,12 +259,12 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       const output = this._provider.resolveClaim(this._block, claimIdx);
       if (!output) continue;
       // Data-less outputs are pure incentive -- invisible to contracts.
-      if (output.data === undefined) continue;
+      if (output.body === undefined) continue;
       if (verifierEquals(output.verifier, thisVerifier)) {
         inputs.push({
           verifier: output.verifier,
           value: output.value,
-          data: output.data,
+          body: output.body,
           isSelfClaim: claimIdx < this._outputs.length,
         });
       }

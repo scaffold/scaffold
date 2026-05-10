@@ -34,7 +34,7 @@ export function makeInsuranceOutput(
   return {
     verifier: { contract: INSURANCE_CONTRACT, params: targetBlockHash.toBytes() },
     value,
-    data: encodeInsuranceDetail({ pubkey }),
+    body: encodeInsuranceDetail({ pubkey }),
   };
 }
 
@@ -82,7 +82,7 @@ export const insuranceContract: Contract = {
 
       const now = env.timestamp();
       const input = inputs[0];
-      const detail = decodeInsuranceDetail(input.data);
+      const detail = decodeInsuranceDetail(input.body);
 
       // The resolution mode is determined by what outputs the claiming block produces.
       // The contract enforces the minimum return to the original author.

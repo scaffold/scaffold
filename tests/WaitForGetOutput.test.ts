@@ -24,7 +24,7 @@ const blockingContract: Contract = {
   async run(env) {
     await env.claimNext();
     const slot = await env.requestBody({ contract: RECORD_CONTRACT, params: enc('prompt') });
-    env.record(enc('echo'), slot.data);
+    env.record(enc('echo'), slot.body);
   },
 };
 
@@ -50,7 +50,7 @@ Deno.test(
         {
           verifier: { contract: BLOCKING_CONTRACT, params: new Uint8Array(0) },
           value: 0,
-          data: enc('trigger'),
+          body: enc('trigger'),
         },
       ],
     });
@@ -69,7 +69,7 @@ Deno.test(
     // Now register a handler. The parked generator should resume.
     scaffold.registerOutputHandler(BLOCKING_CONTRACT, async () => ({
       value: 0,
-      data: enc('resolved-bytes'),
+      body: enc('resolved-bytes'),
     }));
 
     // Allow the generator to resume and the resulting draft to solidify.
@@ -99,7 +99,7 @@ Deno.test(
         {
           verifier: { contract: BLOCKING_CONTRACT, params: new Uint8Array(0) },
           value: 0,
-          data: enc('trigger'),
+          body: enc('trigger'),
         },
       ],
     });

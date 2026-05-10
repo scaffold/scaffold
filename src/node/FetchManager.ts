@@ -67,11 +67,11 @@ export interface FetchInput<T = unknown> {
 }
 
 export interface FetchResult<T = unknown> {
-  readonly data: Uint8Array;
+  readonly body: Uint8Array;
   /**
-   * Run `contract.walkData` on `data` and return the walked value. Memoized —
+   * Run `contract.walkData` on `body` and return the walked value. Memoized —
    * repeated calls return the same Promise. Rejects with `SupersededError`
-   * if a different canonical claim has surfaced with different data, with
+   * if a different canonical claim has surfaced with different body, with
    * `InvalidatedError` if the surfacing claim was invalidated with no
    * replacement, or with the underlying error if `walkData` is missing or
    * throws.
@@ -93,16 +93,16 @@ export interface FetchHandle {
 
 /** A FetchResult that can be superseded or invalidated by the manager. */
 class FetchResultImpl<T = unknown> implements FetchResult<T> {
-  readonly data: Uint8Array;
+  readonly body: Uint8Array;
   private _parsePromise: Promise<T> | undefined;
   private _parseReject: ((err: Error) => void) | undefined;
   private _supersededError: Error | undefined;
 
   constructor(
-    data: Uint8Array,
+    body: Uint8Array,
     private readonly _runParse: () => Promise<T>,
   ) {
-    this.data = data;
+    this.body = body;
   }
 
   parse(): Promise<T> {
@@ -349,7 +349,7 @@ export class FetchManager {
     const incentiveOutput: Output = {
       verifier: { contract: sub.contract, params: sub.params },
       value,
-      data: new Uint8Array(0),
+      body: new Uint8Array(0),
     };
 
     // Emit a createBlock action. The BlockCreator in NodeContext handles
@@ -547,7 +547,7 @@ export class FetchManager {
       }
       return;
     }
-    const newData = recordOutput.data;
+    const newData = recordOutput.body;
 
     // verify:true path: gate on local verification.
     if (p.verify) {

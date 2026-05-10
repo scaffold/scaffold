@@ -16,7 +16,7 @@ import { makeBlobRegistryResolver, makeUtxoResolver } from './builtinResolvers.t
 export type OutputHandler = (
   runningParams: Uint8Array,
   outputVerifier: Verifier,
-) => Promise<{ value: number; data: Uint8Array } | null>;
+) => Promise<{ value: number; body: Uint8Array } | null>;
 
 /**
  * Fallback chain for `requestBody` resolution during generation.
@@ -104,7 +104,7 @@ export class OutputHandlerRegistry {
     runningContract: Hash,
     runningParams: Uint8Array,
     outputVerifier: Verifier,
-  ): Promise<{ value: number; data: Uint8Array } | null> {
+  ): Promise<{ value: number; body: Uint8Array } | null> {
     for (const handler of this._builtins) {
       const result = await handler(runningParams, outputVerifier);
       if (result !== null) return result;

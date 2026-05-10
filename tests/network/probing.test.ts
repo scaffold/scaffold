@@ -122,7 +122,7 @@ Deno.test('Sampling: weight factor converges on all nodes for valid leaf', async
     [{
       verifier: { contract: validContract, params: new Uint8Array(0) },
       value: 100,
-      data: new Uint8Array([]),
+      body: new Uint8Array([]),
     }],
     50,
     [0],
@@ -168,12 +168,12 @@ Deno.test('Sampling: invalid subtree detected via weight factor', async () => {
     {
       verifier: { contract: validContract, params: new Uint8Array(0) },
       value: 100,
-      data: new Uint8Array([]),
+      body: new Uint8Array([]),
     },
     {
       verifier: { contract: invalidContract, params: new Uint8Array(0) },
       value: 100,
-      data: new Uint8Array([]),
+      body: new Uint8Array([]),
     },
     makeOutput(100, 'spare-0'),
     makeOutput(100, 'spare-1'),
@@ -326,7 +326,7 @@ Deno.test('Sampling: verification updates consensus weight', async () => {
     [{
       verifier: { contract: validContract, params: new Uint8Array(0) },
       value: 100,
-      data: new Uint8Array([]),
+      body: new Uint8Array([]),
     }],
     50,
     [0],
@@ -366,7 +366,7 @@ Deno.test('Sampling: attemptVerification runs the full sample-verify cycle', asy
     [{
       verifier: { contract: validContract, params: new Uint8Array(0) },
       value: 100,
-      data: new Uint8Array([]),
+      body: new Uint8Array([]),
     }],
     50,
     [0],

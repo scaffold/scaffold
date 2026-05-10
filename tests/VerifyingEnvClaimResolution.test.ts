@@ -53,11 +53,11 @@ function makeBlock(opts: {
   });
 }
 
-function sigOut(label: string, value: number, data = enc(label)): Output {
+function sigOut(label: string, value: number, body = enc(label)): Output {
   return {
     verifier: { contract: SIGNATURE_CONTRACT, params: enc(label) },
     value,
-    data,
+    body,
   };
 }
 
@@ -65,7 +65,7 @@ function recordOut(key: string): Output {
   return {
     verifier: { contract: RECORD_CONTRACT, params: enc(key) },
     value: 0,
-    data: enc(`record-data-${key}`),
+    body: enc(`record-data-${key}`),
   };
 }
 

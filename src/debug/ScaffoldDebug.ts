@@ -139,7 +139,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
           index: i,
           contract: o.verifier.contract.toHex(),
           value: o.value,
-          dataLength: o.data?.length ?? 0,
+          dataLength: o.body?.length ?? 0,
         })),
         claimIndices: [...block.claimIndices],
         aggregates: block.aggregates.map((a) => a.toHex()),
@@ -283,7 +283,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
         index: i,
         contract: output.verifier.contract.toHex(),
         value: output.value,
-        dataLength: output.data?.length ?? 0,
+        dataLength: output.body?.length ?? 0,
         source: 'own',
       }));
 
@@ -303,7 +303,7 @@ export function createDebugAPI(scaffold: Scaffold): ScaffoldDebugAPI {
               index: result.length,
               contract: o.verifier.contract.toHex(),
               value: o.value,
-              dataLength: o.data?.length ?? 0,
+              dataLength: o.body?.length ?? 0,
               source: claimSet.has(i) ? 'claimed' : 'inherited',
               fromBlock: anchorBlock.hash.toHex(),
             });

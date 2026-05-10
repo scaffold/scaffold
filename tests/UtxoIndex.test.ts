@@ -74,7 +74,7 @@ function sigOut(label: string, value: number): Output {
   return {
     verifier: { contract: SIGNATURE_CONTRACT, params: enc(label) },
     value,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 }
 
@@ -82,7 +82,7 @@ function recordOut(key: string): Output {
   return {
     verifier: { contract: RECORD_CONTRACT, params: enc(key) },
     value: 0,
-    data: enc(`record-data-${key}`),
+    body: enc(`record-data-${key}`),
   };
 }
 
@@ -249,7 +249,7 @@ Deno.test('UtxoIndex: aggregation block claims index into agg.new outputs, not a
       {
         verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
         value: 0,
-        data: aggData,
+        body: aggData,
       },
       makeAggregationOutput(), // marker for self
     ],

@@ -12,7 +12,7 @@ export function makeSignatureOutput(publicKey: Uint8Array, value: number): Outpu
   return {
     verifier: { contract: SIGNATURE_CONTRACT, params: publicKey },
     value,
-    data: new Uint8Array(0),
+    body: new Uint8Array(0),
   };
 }
 

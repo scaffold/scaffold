@@ -29,7 +29,7 @@ function aggMarker(chainWeights: number[]): Output {
   return {
     verifier: { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
     value: 0,
-    data: encodeAggregationData({
+    body: encodeAggregationData({
       claimMask: [],
       newOutputCount: 0,
       aggregateOutputCounts: [],

@@ -56,7 +56,7 @@ export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableInput>;
  */
 export type WaitForGetOutputFn = (
   outputVerifier: Verifier,
-) => Promise<{ value: number; data: Uint8Array }>;
+) => Promise<{ value: number; body: Uint8Array }>;
 
 // -- GeneratingEnv ------------------------------------------------
 
@@ -127,7 +127,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     return maybeThen(this._provider.findInputs(verifier), (available) => {
       // `findInputs` is expected to already drop data-less outputs (pure
-      // incentive, invisible to contracts). AvailableInput.data is always defined.
+      // incentive, invisible to contracts). AvailableInput.body is always defined.
       for (const ai of available) {
         this._claims.push({
           producer: ai.block,
@@ -136,7 +136,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
         this._inputs.push({
           verifier: ai.verifier,
           value: ai.value,
-          data: ai.data,
+          body: ai.body,
           isSelfClaim: false,
         });
         this._addIncludeConstraint(ai.block);
@@ -179,16 +179,16 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection('no inputs available');
   }
 
-  emitOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
+  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
     this._slots.push({
-      output: { verifier, value, data: data ?? new Uint8Array(0) },
+      output: { verifier, value, body: body ?? new Uint8Array(0) },
       origin: 'require',
     });
   }
 
   async requestBody(
     verifier: Verifier,
-  ): Promise<{ value: number; data: Uint8Array }> {
+  ): Promise<{ value: number; body: Uint8Array }> {
     let resolved = await this._provider.resolveGetOutput(
       this._contractHash,
       this._params,
@@ -203,10 +203,10 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       resolved = await this._waitForGetOutput(verifier);
     }
     this._slots.push({
-      output: { verifier, value: resolved.value, data: resolved.data },
+      output: { verifier, value: resolved.value, body: resolved.body },
       origin: 'get',
     });
-    return { value: resolved.value, data: resolved.data };
+    return { value: resolved.value, body: resolved.body };
   }
 
   record(key: Uint8Array, value: Uint8Array): void {
@@ -214,7 +214,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       output: {
         verifier: { contract: RECORD_CONTRACT, params: key },
         value: 0,
-        data: value,
+        body: value,
       },
       origin: 'require',
     });
@@ -235,12 +235,12 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
       const outputs = this._provider.getOutputs(block);
       for (const output of outputs) {
-        if (output.data === undefined) continue;
+        if (output.body === undefined) continue;
         if (
           Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
           bytesEqual(output.verifier.params, key)
         ) {
-          return output.data;
+          return output.body;
         }
       }
       throw new ContractRejection('block claims verifier but has no result for key');
@@ -276,7 +276,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     const input: Input = {
       verifier: ai.verifier,
       value: ai.value,
-      data: ai.data,
+      body: ai.body,
       isSelfClaim: false,
     };
     this._inputs.push(input);

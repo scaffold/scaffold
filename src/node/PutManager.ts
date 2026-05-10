@@ -166,7 +166,7 @@ export class PutManager {
         out.push({
           verifier: { contract: RECORD_CONTRACT, params: str2bin(key) },
           value: 0,
-          data: typeof value === 'string' ? str2bin(value) : value,
+          body: typeof value === 'string' ? str2bin(value) : value,
         });
       }
     }
@@ -174,7 +174,7 @@ export class PutManager {
     // generator-driven path adds this via the AggregationContract; the
     // direct (skipGeneration / PutManager) path adds it here.
     const hasMarker = out.some((o) =>
-      (o.data === undefined || o.data.length === 0) &&
+      (o.body === undefined || o.body.length === 0) &&
       o.verifier.contract.toHex() === AGGREGATION_CONTRACT.toHex()
     );
     if (!hasMarker) out.push(makeAggregationOutput());
