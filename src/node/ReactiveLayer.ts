@@ -51,6 +51,12 @@ export type Action =
     outputs: Output[];
     declaredWeight: number;
     refs?: Hash[];
+    /**
+     * If true, the draft is registered as ready immediately with no
+     * generator. Used for fund-only drafts (e.g. signature UTXOs that
+     * just lock the output for future autobalance merges).
+     */
+    skipGeneration?: boolean;
   };
 
 // -- Block creator interface ----------------------------------------
@@ -318,12 +324,20 @@ export class ReactiveLayer {
           break;
         case 'createDraft':
           if (this.draftManager) {
-            this.draftManager.createDraft({
+            const fields = {
               claims: [action.claim],
               outputs: action.outputs,
               declaredWeight: action.declaredWeight,
               refs: action.refs,
-            });
+            };
+            // skipGeneration: register the draft as ready immediately
+            // with no generator (fund-only path used for SIGNATURE_CONTRACT
+            // UTXOs so autobalance can pull them out of the draft pool).
+            if (action.skipGeneration) {
+              this.draftManager.addReady(fields);
+            } else {
+              this.draftManager.createDraft(fields);
+            }
           }
           break;
       }

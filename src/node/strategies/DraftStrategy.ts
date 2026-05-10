@@ -31,6 +31,14 @@ export interface CreateDraftAction {
   outputs: Output[];
   declaredWeight: number;
   refs?: Hash[];
+  /**
+   * If true, the draft is registered as ready immediately with no
+   * generator. Used for fund-only drafts (signature UTXOs that just
+   * lock the output, available for future autobalance merges) and
+   * other contracts where the caller has all claims/outputs decided
+   * up front.
+   */
+  skipGeneration?: boolean;
 }
 
 export interface DraftStrategyConfig {
