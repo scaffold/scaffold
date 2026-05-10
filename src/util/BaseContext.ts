@@ -6,22 +6,9 @@ export interface MaybeDisposable {
   [Symbol.asyncDispose]?(): Promise<void>;
 }
 
-export interface ContextProvider {
-  get<T extends object & MaybeDisposable>(Type: new (ctx: this) => T): T;
-
-  maybeGet<T>(Type: new (ctx: this) => T): T | undefined;
-
-  onDestruct(cb: () => MaybePromise<void>): void;
-
-  mock<T extends object & MaybeDisposable>(
-    Type: new (ctx: this) => T,
-    mock: T,
-  ): void;
-}
-
-export abstract class BaseContext<DerivedType> {
-  private objs = new Map<{ new (context: DerivedType): unknown }, unknown>();
-  private constructing = new Set<{ new (context: DerivedType): unknown }>();
+export abstract class BaseContext {
+  private objs = new Map<new (ctx: never) => unknown, unknown>();
+  private constructing = new Set<new (ctx: never) => unknown>();
   // TODO: AsyncDisposableStack
   private destructors: (() => MaybePromise<void>)[] = [];
   private isDestructed = false;
@@ -39,7 +26,7 @@ export abstract class BaseContext<DerivedType> {
     }
   }
 
-  public get<T extends object & MaybeDisposable>(Type: { new (context: DerivedType): T }): T {
+  public get<T extends object & MaybeDisposable>(Type: new (ctx: this) => T): T {
     if (!this.objs.has(Type)) {
       if (this.isDestructed) {
         throw new Error(`Cannot use a context after it's been destructed!`);
@@ -52,7 +39,7 @@ export abstract class BaseContext<DerivedType> {
       this.constructing.add(Type);
 
       try {
-        const obj = new Type(this.getThis());
+        const obj = new Type(this);
         this.objs.set(Type, obj);
 
         const disposer = obj[Symbol.dispose];
@@ -72,7 +59,7 @@ export abstract class BaseContext<DerivedType> {
     return this.objs.get(Type) as T;
   }
 
-  public maybeGet<T>(Type: { new (context: DerivedType): T }): T | undefined {
+  public maybeGet<T>(Type: new (ctx: this) => T): T | undefined {
     return this.objs.get(Type) as T | undefined;
   }
 
@@ -84,10 +71,8 @@ export abstract class BaseContext<DerivedType> {
     return this.objs;
   }
 
-  protected abstract getThis(): DerivedType;
-
-  protected mock<T extends object & MaybeDisposable>(
-    Type: { new (context: DerivedType): T },
+  public mock<T extends object & MaybeDisposable>(
+    Type: new (ctx: this) => T,
     mock: T,
   ): void {
     if (this.objs.has(Type)) {
