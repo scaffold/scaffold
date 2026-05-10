@@ -292,6 +292,7 @@ export class NodeContext {
       get privateKey() {
         return nodeCtx._privateKey;
       },
+      getDefaultAnchor: () => findCanonicalTip(nodeCtx),
     });
 
     // 5c. Register built-in contracts with the ContractHost.

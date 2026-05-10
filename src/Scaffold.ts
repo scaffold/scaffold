@@ -1,10 +1,9 @@
 import { secp } from './util/secp.ts';
-import { AGGREGATION_CONTRACT, Block } from './core/Block.ts';
-import { makeAggregationOutput } from './contracts/AggregationContract.ts';
+import { Block } from './core/Block.ts';
 import type { Contract } from './contracts/Contract.ts';
 import { Hash } from './util/Hash.ts';
 import { findCanonicalTip, NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
-import { BlockProcessor, PutManager, PutRequest, PutResult } from './node/PutManager.ts';
+import { PutManager, PutRequest, PutResult } from './node/PutManager.ts';
 import { OutputHandler, OutputHandlerRegistry } from './core/OutputHandlerRegistry.ts';
 import { FetchHandle, FetchInput, FetchManager, FetchResult } from './node/FetchManager.ts';
 import type { Verifier } from './core/BlockCreationModule.ts';
@@ -150,38 +149,9 @@ export class Scaffold {
       };
     }
 
-    // 4. Create PutManager with a BlockProcessor that delegates to NodeContext.
-    const processor: BlockProcessor = {
-      buildBlock: (spec) => {
-        // Resolve anchor: if the spec's anchor isn't in the store,
-        // select the canonical tip (deepest canonical block).
-        let anchorHash = spec.anchor;
-        if (!nodeContext.store.has(anchorHash)) {
-          anchorHash = findCanonicalTip(nodeContext);
-        }
-
-        // Every non-genesis block carries an aggregation marker output.
-        // Only append if the spec doesn't already carry one (the draft
-        // solidification path pre-populates it and has already computed
-        // claim indices against that layout -- appending again would
-        // shift claim targets by one).
-        const hasAggMarker = spec.outputs.some((o) =>
-          (o.data === undefined || o.data.length === 0) &&
-          o.verifier.contract.toHex() === AGGREGATION_CONTRACT.toHex()
-        );
-        const outputs = hasAggMarker ? spec.outputs : [...spec.outputs, makeAggregationOutput()];
-
-        return nodeContext.createBlock(
-          { ...spec, anchor: anchorHash, outputs },
-          privateKey,
-        );
-      },
-      processBlock: (block) => {
-        nodeContext.processBlock(block);
-      },
-    };
-
-    this.putManager = new PutManager(processor);
+    // 4. PutManager: end-user-facing draft API. Routes through the
+    //    DraftManager bottleneck. See src/node/PutManager.ts.
+    this.putManager = new PutManager(nodeContext.draftManager);
   }
 
   /** Register a contract for generation and verification at runtime. */

@@ -73,6 +73,12 @@ export interface BlockBuilderProvider {
   valueOverride: ValueOverrideFn | null;
   /** Private key for signing, or null for unsigned blocks. */
   privateKey: Uint8Array | null;
+  /**
+   * Fallback anchor for drafts that have no claims and no aggregated
+   * blocks (typically zero-value record puts). When unset, such drafts
+   * stall at placement.
+   */
+  getDefaultAnchor?: () => Hash | undefined;
 }
 
 export class BlockBuilderModule {
@@ -97,12 +103,8 @@ export class BlockBuilderModule {
    *                        an aggregation block bridges them.
    */
   build(draft: Draft): BuildResult {
-    // -- 1. Anchor selection: placement against the canonical view
-    if (draft.claims.length === 0) {
-      // Drafts must consume at least one input -- there's no current
-      // producer-less code path.
-      return { ok: false, reason: 'draft has no claims' };
-    }
+    // -- 1. Anchor selection: placement against the canonical view ------
+    //
     // Aggregation include constraints: claims targeting AGGREGATION_CONTRACT
     // marker outputs convert their producers into aggregated blocks. This
     // mirrors the implicit semantic from `aggregation.md` -- requireInput()
@@ -113,26 +115,38 @@ export class BlockBuilderModule {
     const aggregatedBlocks = detectAggregatedBlocks(draft, this.provider.store);
     const claimedBlocks = dedupeProducers(draft.claims);
 
-    const placement = this.provider.placement;
-    const result = placement
-      ? placement.place({
-        node: draft,
-        claimedBlocks,
-        aggregatedBlocks,
-        excludedBlocks: [],
-      })
-      : { ok: false as const, stalled: true as const };
-    if (!result.ok) {
-      // Placement stalled. Caller parks the draft and retries on
-      // canonical-view changes. `missing` is the set of claim producers
-      // -- a coarse but functional retry signal.
-      return {
-        ok: false,
-        awaitingAnchor: true,
-        missing: claimedBlocks,
-      };
+    let anchor: Hash;
+    if (claimedBlocks.length === 0 && aggregatedBlocks.length === 0) {
+      // Zero-claim, zero-aggregate drafts (e.g. record puts) have no
+      // signal for placement to anchor against. Fall back to a default
+      // anchor if the provider supplies one.
+      const fallback = this.provider.getDefaultAnchor?.();
+      if (!fallback) {
+        return { ok: false, reason: 'draft has no claims and no default anchor' };
+      }
+      anchor = fallback;
+    } else {
+      const placement = this.provider.placement;
+      const result = placement
+        ? placement.place({
+          node: draft,
+          claimedBlocks,
+          aggregatedBlocks,
+          excludedBlocks: [],
+        })
+        : { ok: false as const, stalled: true as const };
+      if (!result.ok) {
+        // Placement stalled. Caller parks the draft and retries on
+        // canonical-view changes. `missing` is the set of claim producers
+        // -- a coarse but functional retry signal.
+        return {
+          ok: false,
+          awaitingAnchor: true,
+          missing: claimedBlocks,
+        };
+      }
+      anchor = result.anchor;
     }
-    const anchor = result.anchor;
     // The block's `aggregates` field is exactly the include-constraint
     // set fed into placement. No filtering: chain aggregates (where one
     // aggregate's subtree includes another) are allowed -- aggregation.md

@@ -83,7 +83,42 @@ export class DraftManager {
     return draft;
   }
 
-  /** Cancel a draft: stop generator, remove from consensus, remove from store. */
+  /** Look up a draft by id, if it's still in the store. */
+  get(draftId: Hash): Draft | undefined {
+    return this.store.get(draftId);
+  }
+
+  /**
+   * Synchronously create a draft already in `ready` (no generator
+   * involvement). Used by PutManager and any caller that has all
+   * claims/outputs decided up-front.
+   */
+  addReady(fields: {
+    claims: ClaimRef[];
+    outputs: Output[];
+    declaredWeight: number;
+    refs?: Hash[];
+  }): Draft {
+    const draft = createDraft(fields);
+    this.store.add(draft);
+    this.consensus.addBlock(draft.draftId);
+    this.consensus.setVerifiedWeight(draft.draftId, [draft.declaredWeight]);
+    this.store.transition(draft.draftId, { phase: 'ready' });
+    return this.store.get(draft.draftId) ?? draft;
+  }
+
+  /**
+   * Update an in-flight draft's claims/outputs in place. The draft
+   * must be in a non-terminal, pre-solidify phase. No-op if the draft
+   * is gone.
+   */
+  update(
+    draftId: Hash,
+    changes: { claims?: ClaimRef[]; outputs?: Output[]; refs?: Hash[] },
+  ): Draft {
+    return this.store.update(draftId, changes);
+  }
+
   /**
    * Detach a draft from the live machinery (consensus + generator
    * handle) without transitioning it to a terminal status. Used by the
