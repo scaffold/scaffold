@@ -108,7 +108,7 @@ All multi-byte integers are little-endian, matching WASM's native representation
 | `hash`   | 32 | raw 32-byte digest (no length prefix; size is fixed) |
 | `string` | `4 + n` | `u32 len; byte[len] utf8` |
 
-All coin values (`Output.value`, `Input.value`, the `value` field returned by `get_output`) are `i128`. WASM has no native i128 type; values cross the boundary as 16 bytes inside a serialised struct (the convention everywhere in this spec) — no i128-aware import signatures needed. The TS-side adapter marshals to and from `BigInt`.
+All coin values (`Output.value`, `Claim.value`, the `value` field returned by `request_body`) are `i128`. WASM has no native i128 type; values cross the boundary as 16 bytes inside a serialised struct (the convention everywhere in this spec) — no i128-aware import signatures needed. The TS-side adapter marshals to and from `BigInt`.
 
 ### `Verifier`
 
@@ -120,22 +120,22 @@ Verifier {
 ```
 Total wire size: `36 + params.len`.
 
-### `Input`
+### `Claim`
 
-The shape a contract sees from `require_input` / `collect_inputs`. Data-less outputs (`Output.data` omitted in the protocol) are filtered out by the runtime before they reach the contract — see [computation.md#data-less-outputs](computation.md#data-less-outputs) — so `Input.data` is always present here.
+The shape a contract sees from `claim_next` / `claim_all`. Body-less outputs (`Output.body` omitted in the protocol) are filtered out by the runtime before they reach the contract — see [computation.md#data-less-outputs](computation.md#data-less-outputs) — so `Claim.body` is always present here.
 
 ```
-Input {
-    verifier:    Verifier   // 36+ bytes
-    value:       i128       // 16 bytes
-    data:        bytes      // u32 len + bytes
-    is_self_claim: u8       // 0 or 1
+Claim {
+    verifier:      Verifier   // 36+ bytes
+    value:         i128       // 16 bytes
+    body:          bytes      // u32 len + bytes
+    is_self_claim: u8         // 0 or 1
 }
 ```
 
-For `collect_inputs`, the wire format is `u32 count` followed by `count` consecutive `Input` records.
+For `claim_all`, the wire format is `u32 count` followed by `count` consecutive `Claim` records.
 
-### `Output` (input to `require_output`)
+### `Output` (input to `emit_output`)
 
 ```
 Output {
@@ -172,11 +172,10 @@ Mirrors `ContractEnv` (`src/core/ContractEnv.ts`). Calls marked **(may block)** 
 | `contract_metadata` | `(verifier_ptr: i32, verifier_len: i32) -> i64` | packed `(ptr, len)` of `i128 value + bytes body` | Read-only lookup against the **contract's own block** (the block whose hash equals the running contract's hash). Used for retrieving record outputs and other metadata baked into the contract definition: `output_namespaces`, `abi_version`, source bytes for interpreter-stack contracts, etc. — see [Block-level contract metadata](#block-level-contract-metadata). Determinism holds because contract blocks are content-addressed and immutable. Throws via `reject` if the contract block is not loaded or no matching output exists. |
 | `params`            | `() -> i64` | packed `(ptr, len)` of `verifier.params` bytes | Synchronous. |
 | `timestamp`         | `() -> i64` | block timestamp, ms since epoch | Synchronous. |
-| `require_input`     | `() -> i64` | packed `(ptr, len)` of one `Input` wire record | **may block** in generation; throws via `reject` if no matching input in verification. |
-| `collect_inputs`    | `(limit: i32) -> i64` | packed `(ptr, len)` of `u32 count + count × Input` | **may block** in generation. `limit = -1` for unbounded. |
-| `require_output`    | `(out_ptr: i32, out_len: i32) -> ()` | — | Argument is an `Output` wire record. Synchronous from contract's POV; verification mode validates against the namespace sequence. |
-| `get_output`        | `(verifier_ptr: i32, verifier_len: i32) -> i64` | packed `(ptr, len)` of `i128 value + bytes data` | **may block** in generation. The returned bytes are the host's resolved `(value, data)` pair. Contracts must not depend on `value` being final: the block-creation layer may raise it during solidification (see [computation.md#output-requirements](computation.md#output-requirements) "solidification-time value override"). This is a known temporary mechanism; future revisions will fold value resolution into the contract path. |
-| `require_result`    | `(key_ptr: i32, key_len: i32, value_ptr: i32, value_len: i32) -> ()` | — | Sets/checks a `RECORD_CONTRACT` self-claimed output. Synchronous. |
+| `claim_next`        | `() -> i64` | packed `(ptr, len)` of one `Claim` wire record | **may block** in generation; throws via `reject` if no matching claim in verification. |
+| `claim_all`         | `(limit: i32) -> i64` | packed `(ptr, len)` of `u32 count + count × Claim` | **may block** in generation. `limit = -1` for unbounded. |
+| `emit_output`       | `(out_ptr: i32, out_len: i32) -> ()` | — | Argument is an `Output` wire record. Synchronous from contract's POV; verification mode validates against the namespace sequence. To emit a self-claimed record output (the equivalent of TS-side `env.record(key, value)`), build an `Output` whose `verifier.contract` is `RECORD_CONTRACT`, `verifier.params` is the key, `value` is `0`, and `body` is the value. |
+| `request_body`      | `(verifier_ptr: i32, verifier_len: i32) -> i64` | packed `(ptr, len)` of `i128 value + bytes body` | **may block** in generation. The returned bytes are the host's resolved `(value, body)` pair. Contracts must not depend on `value` being final: the block-creation layer may raise it during solidification (see [computation.md#output-requirements](computation.md#output-requirements) "solidification-time value override"). This is a known temporary mechanism; future revisions will fold value resolution into the contract path. |
 | `fetch`             | `(verifier_ptr: i32, verifier_len: i32, key_ptr: i32, key_len: i32) -> i64` | packed `(ptr, len)` of the record value bytes | **may block**. Throws via `reject` if no ancestor block claims the verifier. |
 | `fork`              | `(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()` | — | Spawn an independent sub-contract. Verification: no-op. **may block** in generation: waits for the sub-contract's block to commit, propagates `ContractRejection` from the sub-generator. See [Forking](#forking). |
 | `sign`              | `(pubkey_ptr: i32, pubkey_len: i32) -> ()` | — | Asserts the block was signed by `pubkey`. Synchronous. |
@@ -239,7 +238,7 @@ This is where the ABI's signatures are deliberately decoupled from how blocking 
 The contract runs in a Worker. Its memory is `SharedArrayBuffer`-backed. Each instance has a per-call signal buffer and a result-staging buffer.
 
 For a may-block call:
-1. Contract calls (e.g.) `scaffold_env.require_input()`. The Worker-side host stub serialises arguments (none in this case), copies them into the staging buffer, sets the signal flag to `WAIT`, posts a message to the main thread, and calls `Atomics.wait` on the signal buffer.
+1. Contract calls (e.g.) `scaffold_env.claim_next()`. The Worker-side host stub serialises arguments (none in this case), copies them into the staging buffer, sets the signal flag to `WAIT`, posts a message to the main thread, and calls `Atomics.wait` on the signal buffer.
 2. The main thread receives the message, runs the corresponding async `ContractEnv` method, awaits the result, and copies the serialised bytes into the staging buffer (chunked if larger than the buffer).
 3. The main thread sets the signal flag to `CONTINUE` (or `THROW` for `ContractRejection`) and `Atomics.notify`s.
 4. The Worker wakes. On `THROW` it triggers `scaffold_env.reject` semantics in-process. On `CONTINUE` it calls the contract's exported `$alloc(len)`, copies the staged result into contract memory, and returns the packed `(ptr, len)` to the caller.
@@ -258,9 +257,9 @@ When the runtime detects JSPI support (`typeof WebAssembly.Suspending === 'funct
 For each may-block import, the host wraps an async JS function:
 
 ```js
-const requireInput = new WebAssembly.Suspending(async () => {
-  const input = await env.requireInput();
-  const bytes = encodeInput(input);                   // serialise to wire format
+const claimNext = new WebAssembly.Suspending(async () => {
+  const claim = await env.claimNext();
+  const bytes = encodeClaim(claim);                   // serialise to wire format
   const ptr = instance.exports.alloc(bytes.length);   // allocate in contract memory
   new Uint8Array(memory.buffer, ptr, bytes.length).set(bytes);
   return (BigInt(ptr) << 32n) | BigInt(bytes.length); // packed return
@@ -274,7 +273,7 @@ const promisingRun = WebAssembly.promising(instance.exports.run);
 await promisingRun();
 ```
 
-From the contract's side, `require_input` looks identical to the Atomics version — it returns an `i64` with the packed pointer. The runtime stack-switches to await the JS Promise; no Worker, no SAB, no `postMessage`, no COOP/COEP requirement.
+From the contract's side, `claim_next` looks identical to the Atomics version — it returns an `i64` with the packed pointer. The runtime stack-switches to await the JS Promise; no Worker, no SAB, no `postMessage`, no COOP/COEP requirement.
 
 JSPI is a fast path opportunity, not a replacement: as of the spec date, it ships in Chrome 137+, is behind a flag in Firefox, and is not available in Safari. The runtime picks Atomics by default and uses JSPI only when feature detection succeeds and the deployment opts in.
 
@@ -361,14 +360,13 @@ A `requestBody` call with no matching record falls through to the normal handler
 
 ### Minimal echo contract (hand-rolled WAT)
 
-A contract that emits one record `('echo', params)` and accepts.
+A contract that reads its `params` and emits them as a `RECORD_CONTRACT/"echo"` self-claimed output, then accepts. There is no host-level `require_result` — record outputs are emitted via `emit_output` with `verifier.contract = RECORD_CONTRACT`. The TS-side `env.record(key, value)` helper is sugar over the same call.
 
 ```wat
 (module
   (memory (export "memory") 1 1 shared)
-  (import "scaffold_env" "params" (func $params (result i64)))
-  (import "scaffold_env" "require_result"
-    (func $require_result (param i32 i32 i32 i32)))
+  (import "scaffold_env" "params"      (func $params      (result i64)))
+  (import "scaffold_env" "emit_output" (func $emit_output (param i32 i32)))
 
   ;; bump allocator
   (global $next (mut i32) (i32.const 1024))
@@ -378,21 +376,39 @@ A contract that emits one record `('echo', params)` and accepts.
     (global.set $next (i32.add (global.get $next) (local.get $n)))
     (local.get $p))
 
-  ;; "echo" key bytes baked in at offset 0
-  (data (i32.const 0) "echo")
+  ;; -- Pre-built Output prefix at offset 0 (60 bytes total) ----------
+  ;; Output wire layout:
+  ;;   [ 0..32):  verifier.contract  -- 32-byte RECORD_CONTRACT hash
+  ;;   [32..36):  verifier.params length = 4 (u32 LE)
+  ;;   [36..40):  verifier.params = "echo"
+  ;;   [40..56):  value = 0 (i128 LE, 16 bytes)
+  ;;   [56..60):  body length (u32 LE)            -- written at runtime
+  ;;   [60..  ):  body bytes                      -- copied at runtime
+  ;;
+  ;; The 32 bytes of RECORD_CONTRACT hash and the 16 zero bytes of value
+  ;; are zero-initialised by the linear memory and overlaid by the runtime
+  ;; (the host knows the canonical RECORD_CONTRACT hash); only the params
+  ;; segment is baked into the data section here.
+  (data (i32.const 32) "\04\00\00\00echo")
 
   (func (export "run")
-    (local $packed i64)
+    (local $packed i64) (local $src i32) (local $len i32)
     (local.set $packed (call $params))
-    (call $require_result
-      (i32.const 0) (i32.const 4)                           ;; key = "echo"
-      (i32.wrap_i64 (i64.shr_u (local.get $packed) (i64.const 32)))  ;; value_ptr
-      (i32.wrap_i64 (local.get $packed))))                  ;; value_len
+    (local.set $src    (i32.wrap_i64 (i64.shr_u (local.get $packed) (i64.const 32))))
+    (local.set $len    (i32.wrap_i64 (local.get $packed)))
 
-  (func (export "output_namespaces") (result i64) (i64.const 0)))
+    ;; body length (u32 LE) at offset 56
+    (i32.store (i32.const 56) (local.get $len))
+    ;; body bytes copied to offset 60
+    (memory.copy (i32.const 60) (local.get $src) (local.get $len))
+
+    ;; emit the Output: ptr=0, len = 60 + body_len
+    (call $emit_output
+      (i32.const 0)
+      (i32.add (i32.const 60) (local.get $len)))))
 ```
 
-Two imports, two exports beyond `memory` and `alloc`. Compiles to a few hundred bytes. The first runtime smoke test (DEV_DEMO_TASKS §C0) targets this exact shape.
+Two imports, one export beyond `memory` and `alloc`. The contract's static metadata (its `output_namespaces`, its `wasm` blob) lives on the introducing block as record outputs (see [Block-level contract metadata](#block-level-contract-metadata)) — not as WASM exports. The first runtime smoke test (DEV_DEMO_TASKS §C0) targets this exact shape.
 
 ### Signature contract walker (AssemblyScript)
 
@@ -456,5 +472,5 @@ These are non-normative: a future implementation may differ as long as the contr
 | Future: `src/worker/Instance.ts` (extended) | Worker-side import bindings for `scaffold_env`, `scaffold_walker`, `scaffold_builder`. |
 | Existing: [`src/core/ContractEnv.ts`](../../src/core/ContractEnv.ts) | The TypeScript interface this ABI mirrors. |
 | Existing: [`src/contracts/Contract.ts`](../../src/contracts/Contract.ts) | The `Contract` interface a `WasmContractAdapter` implements. |
-| Spec: [`docs/protocol/computation.md`](computation.md) | Semantic surface for `run`, `requireInput`, `getOutput`, etc. |
+| Spec: [`docs/protocol/computation.md`](computation.md) | Semantic surface for `run`, `claimNext`, `requestBody`, etc. |
 | Spec: [`docs/protocol/output-data.md`](output-data.md) | Walker/builder semantics and value descriptors. |
