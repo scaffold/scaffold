@@ -291,6 +291,29 @@ export class BlockBuilderModule {
     if (!block) return { ok: false, reason: 'sign failed' };
     return { ok: true, block };
   }
+
+  /**
+   * Solidify a batch of drafts into a single block.
+   *
+   * `seedDrafts` are the drafts the caller explicitly wants to publish.
+   * `pool` is the set of additional `ready`/`solidifying` drafts available
+   * to be merged in if autobalance needs more inputs (managed by
+   * DraftManager).
+   *
+   * For now this is a thin shim: size-1 batches with an empty pool
+   * delegate to the existing single-draft `build`. Multi-draft batches
+   * and pool-driven autobalance are filled in in subsequent migration
+   * steps.
+   */
+  solidify(seedDrafts: Draft[], pool: Draft[]): BuildResult {
+    if (seedDrafts.length === 0) {
+      return { ok: false, reason: 'no seed drafts' };
+    }
+    if (seedDrafts.length === 1 && pool.length === 0) {
+      return this.build(seedDrafts[0]);
+    }
+    return { ok: false, reason: 'multi-draft solidify not yet implemented' };
+  }
 }
 
 /**

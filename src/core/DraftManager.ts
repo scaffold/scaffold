@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/draft-blocks.md
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { Draft, createDraft, DraftStore } from './Draft.ts';
+import { createDraft, Draft, DraftStore } from './Draft.ts';
 import type { ClaimRef } from './Node.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
@@ -106,5 +106,5 @@ export class DraftManager {
 }
 
 function isTerminalDraftStatus(s: { phase: string }): boolean {
-  return s.phase === 'solidified' || s.phase === 'failed';
+  return s.phase === 'failed';
 }

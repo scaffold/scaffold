@@ -47,26 +47,40 @@ export type DraftFailureSite =
  * carry context (the produced block for `solidified`, the failure
  * reason + site for `failed`).
  *
- *   pending        -- reservation in place; generator not yet started.
- *   generating     -- generator pumping (or paused on requireInput).
- *   readyToSolidify -- generator finished; awaiting BlockBuilder.build.
- *   solidified     -- replaced by a real block; terminal, kept for history.
- *   failed         -- contract / lowering / cancellation halt; terminal.
+ *   pending      -- reservation in place; generator (if any) hasn't finished.
+ *   ready        -- generator finished (or none was attached);
+ *                   eligible for merging into a solidifying batch. Solidify
+ *                   is never called automatically.
+ *   solidifying  -- DraftManager.solidify has been called; we keep retrying
+ *                   on canonicality changes until it succeeds. Eligible for
+ *                   merging.
+ *   solidified   -- produced a block that is currently canonical. Carries
+ *                   the latest block. NOT terminal: if the carried block
+ *                   becomes uncanonical, the draft transitions back to
+ *                   `solidifying` and the manager retries with a new anchor.
+ *   failed       -- terminal. Reachable only via DraftManager.cancelDraft
+ *                   (or generator hard-error during `pending`).
  *
- * Terminal drafts persist in the DraftStore so we don't relaunch a
- * generator we already know won't succeed, and so debug tools can
- * answer "what happened to draft X?".
+ *   generating, readyToSolidify -- legacy phases retained transitionally
+ *                                   while the codebase migrates. Treated
+ *                                   as `pending` and `ready` respectively.
+ *
+ * Failed drafts persist in the DraftStore so we don't relaunch a generator
+ * we already know won't succeed, and so debug tools can answer
+ * "what happened to draft X?".
  */
 export type DraftStatus =
   | { phase: 'pending' }
   | { phase: 'generating' }
+  | { phase: 'ready' }
   | { phase: 'readyToSolidify' }
+  | { phase: 'solidifying' }
   | { phase: 'solidified'; block: Block }
   | { phase: 'failed'; reason: string; at: DraftFailureSite | 'cancelled' };
 
-/** Terminal status check (`solidified` or `failed`). */
+/** Terminal status check (only `failed` is terminal -- `solidified` can re-solidify on uncanonicality). */
 export function isDraftTerminal(s: DraftStatus): boolean {
-  return s.phase === 'solidified' || s.phase === 'failed';
+  return s.phase === 'failed';
 }
 
 /** Convenience: phase string of a DraftStatus. */
@@ -137,18 +151,27 @@ void (({} as Draft) satisfies Node);
 
 // -- Valid transitions --------------------------------------------
 //
-// Transitions are validated by phase. Terminal phases (`solidified`,
-// `failed`) accept no further transitions -- a draft that hit one stays
-// there permanently so we don't relaunch its generator and so debug
-// tools can answer "what happened?".
+// Transitions are validated by phase. The `failed` phase is terminal --
+// a draft that hits it stays there permanently so we don't relaunch its
+// generator and so debug tools can answer "what happened?".
+//
+// `solidified` is NOT terminal: if the produced block becomes uncanonical,
+// DraftManager transitions the draft back to `solidifying` and retries
+// with a new anchor.
+//
+// `generating` and `readyToSolidify` are legacy phases retained
+// transitionally; once the consolidation refactor is complete they will
+// be removed from the union and from this table.
 
 type Phase = DraftStatus['phase'];
 
 const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
-  pending: ['generating', 'failed'],
-  generating: ['readyToSolidify', 'failed'],
-  readyToSolidify: ['solidified', 'failed'],
-  solidified: [],
+  pending: ['generating', 'ready', 'failed'],
+  generating: ['ready', 'readyToSolidify', 'failed'],
+  ready: ['solidifying', 'failed'],
+  readyToSolidify: ['solidifying', 'solidified', 'failed'],
+  solidifying: ['solidified', 'failed'],
+  solidified: ['solidifying', 'failed'],
   failed: [],
 };
 
