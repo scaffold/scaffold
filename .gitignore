@@ -9,5 +9,8 @@ lcov.info
 render.svg
 .claude/worktrees/
 
+# Vite dev-server cache (per-app)
+.vite/
+
 # Harness per-run artifacts; committed baselines live in harness/metrics/
 runs/

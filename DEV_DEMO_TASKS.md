@@ -31,26 +31,25 @@ The bridge from `WebAssembly.Instance` to the `Contract` interface. Nothing else
 - [ ] **Remaining open questions** flagged in the spec: WASM feature whitelist for determinism, reject reason size cap. Both can be resolved alongside A2.
 - [ ] **Identifier renames pending** — possible follow-up to flatten `Verifier { contract, params }` and rename ContractEnv methods (`requireInput → nextInput`, `requireOutput → emitOutput`, etc.). Decisions land in their own pass; spec/code update afterwards.
 
-### A2. Worker pool + pluggable transport behind ExecutionQueue
-- [ ] Read and port the relevant pieces from `legacy2/WorkerManager.ts` (4-runner pool, work-stealing by score, `isReady` lifecycle) and `legacy2/JobDriver.ts` (per-instance host-side RPC server) — rewritten against `ContractEnv`, not the legacy DataTree model.
-- [ ] Define `src/core/WasmTransport.ts` interface — single contract-execution boundary independent of how host calls are bridged:
-  ```ts
-  interface WasmTransport {
-    run(module: WebAssembly.Module, env: ContractEnv): Promise<void>;
-    walkParams(module, params, host): Promise<void>;
-    walkData(module, data, host): Promise<void>;
-    buildParams(module, host): Promise<Uint8Array>;
-    buildData(module, host): Promise<Uint8Array>;
-  }
-  ```
-- [ ] Implement **all three transports** in v1 (this lets the executor pick by feature detection or config, and gives the test suite a clean seam):
-  - **`AtomicsWorkerTransport`** (default, works in every modern browser with COOP/COEP). Worker pool, SAB-backed contract memory, extended `WorkerChannel` for byte-returning host imports + reject/crash distinction. Reuse `src/worker/WorkerChannel.ts` — extend, don't reinvent.
-  - **`JspiTransport`** (fast path on Chrome 137+; behind flag in Firefox; absent in Safari). Host imports wrapped with `new WebAssembly.Suspending(asyncFn)`; entry exports wrapped with `WebAssembly.promising`. No SAB, no Worker required, no COOP/COEP. Used opportunistically when the runtime detects support and config allows.
-  - **`InProcessMockTransport`** (test/dev). Runs the WASM on the current thread without Workers or SAB; uses `await` directly through a sync-looking import shim that `Atomics.wait`-on-zero (Worker context) or returns a Promise (test context, which then awaits manually). Primarily for unit-testing the executor + adapter without spinning up a Worker. May omit production-grade isolation.
-- [ ] `src/core/WasmExecutor.ts` selects a transport at construction (config override > feature detection > Atomics default), holds the pool, and exposes `runVerifying(env, wasmModule)` / `runGenerating(env, wasmModule)`.
-- [ ] Extend `src/worker/Instance.ts` and `src/worker/worker.ts` with the new `scaffold_env.*`, `scaffold_walker.*`, `scaffold_builder.*` imports defined in A1 (currently they only expose a small `init/open/size/read/write` set scoped to file handles).
-- [ ] Cross-origin isolation: the demo's `vite.config.ts` needs a small middleware to set `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp`. Required by Atomics; not required by JSPI. Verify and wire.
-- [ ] Tests parameterised over all three transports: same test suite runs against `AtomicsWorkerTransport`, `JspiTransport` (skip on browsers without support), and `InProcessMockTransport`. This is how we validate the abstraction holds.
+### A2. Worker pool + pluggable transport behind ExecutionQueue ✅
+- [x] Ported the runner-pool + work-stealing pattern from `legacy2/WorkerManager.ts` into [`src/core/wasm/WasmWorkerPool.ts`](src/core/wasm/WasmWorkerPool.ts). Per-instance host-side dispatch lives in [`src/core/wasm/transports/AtomicsWorkerTransport.ts`](src/core/wasm/transports/AtomicsWorkerTransport.ts) (collapsed driver + handler against `ContractEnv` instead of legacy DataTree). The legacy `WorkerChannel.ts` was left untouched; a sibling [`WasmWorkerChannel.ts`](src/worker/wasm/WasmWorkerChannel.ts) carries the new byte-returning + reject/crash protocol the WASM ABI needs.
+- [x] [`src/core/wasm/WasmTransport.ts`](src/core/wasm/WasmTransport.ts) — single contract-execution boundary. Five entry points (run + walk_params + walk_data + build_params + build_data + close).
+- [x] All three transports implemented in v1:
+  - **[`AtomicsWorkerTransport`](src/core/wasm/transports/AtomicsWorkerTransport.ts)** — worker pool, SAB-backed contract memory, byte-returning dispatch with reject/crash split via [`WasmWorkerChannel`](src/worker/wasm/WasmWorkerChannel.ts).
+  - **[`JspiTransport`](src/core/wasm/transports/JspiTransport.ts)** — `WebAssembly.Suspending` / `WebAssembly.promising`. Feature-gated via `JspiTransport.isSupported()`.
+  - **[`InProcessMockTransport`](src/core/wasm/transports/InProcessMockTransport.ts)** — same-thread, sync-only. Throws clearly if a may-block import is awaited (use JSPI/Atomics for async).
+- [x] [`src/core/wasm/WasmExecutor.ts`](src/core/wasm/WasmExecutor.ts) — selects a transport at construction (`'auto' | 'atomics' | 'jspi' | 'in-process'`), holds the pool, exposes `run` / `walk*` / `build*` / `close`.
+- [x] New WASM worker stack added alongside the legacy one: [`wasmInstance.ts`](src/worker/wasm/wasmInstance.ts) (per-instance host imports closure) and [`wasmWorker.ts`](src/worker/wasm/wasmWorker.ts) (worker entrypoint). Legacy `src/worker/Instance.ts` and `worker.ts` stay — they back the existing JS-contract path.
+- [x] Walker / builder paths included end-to-end. Wire codec lives in [`src/core/wasm/WasmWireCodec.ts`](src/core/wasm/WasmWireCodec.ts) (Verifier, Claim, Output, ValueDescriptor, packed-i64, i128).
+- [x] COOP/COEP middleware in [`demo/vite.config.ts`](demo/vite.config.ts).
+- [x] Tests in [`tests/WasmTransport.test.ts`](tests/WasmTransport.test.ts) parameterised over all three transports (echo, reject, walk_params, build_params). Codec round-trips in [`tests/WasmWireCodec.test.ts`](tests/WasmWireCodec.test.ts). Hand-rolled fixtures under [`tests/fixtures/wasm/`](tests/fixtures/wasm/) (`.wat` committed for documentation; `.wasm` compiled by `build.sh` via `wat2wasm`).
+
+**Deferred to follow-ups** (flagged in plan):
+- `i128 → bigint` migration of the TS `Output.value` type (today serialised through `number` with safe-int check).
+- Memory caps + budget enforcement — that's A3 (the adapter feeds them through).
+- WorkerChannel chunking for results larger than 64 KiB — single-shot only in v1.
+- Stack composition (`wasm_hashes`) — A4.
+- Forking — A4.
 
 ### A3. Wire `WasmStore` into `ContractHost`
 - [ ] Today `ContractHost.getContract(hash)` only checks the TS registry (`src/core/ContractHost.ts:94`). Extend it to also check `WasmStore.get(hash)` and, if found, return a `WasmContractAdapter` implementing `Contract`.

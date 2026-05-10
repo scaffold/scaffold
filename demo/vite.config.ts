@@ -7,8 +7,14 @@ const npmDeps = resolve(__dirname, '../npm/esm/deps');
 /** Rewrite Deno URL imports (https://deno.land/...) to pre-compiled npm deps. */
 function denoUrlRewriter(): Plugin {
   const urlMap: Record<string, string> = {
-    'https://deno.land/std@0.160.0/hash/sha256.ts': resolve(npmDeps, 'deno.land/std@0.160.0/hash/sha256.js'),
-    'https://deno.land/std@0.160.0/hash/sha3.ts': resolve(npmDeps, 'deno.land/std@0.160.0/hash/sha3.js'),
+    'https://deno.land/std@0.160.0/hash/sha256.ts': resolve(
+      npmDeps,
+      'deno.land/std@0.160.0/hash/sha256.js',
+    ),
+    'https://deno.land/std@0.160.0/hash/sha3.ts': resolve(
+      npmDeps,
+      'deno.land/std@0.160.0/hash/sha3.js',
+    ),
   };
   return {
     name: 'deno-url-rewriter',
@@ -28,8 +34,34 @@ function denoUrlRewriter(): Plugin {
   };
 }
 
+/**
+ * Set Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy so the
+ * demo runs cross-origin isolated. Required by SharedArrayBuffer (and thus
+ * by the AtomicsWorkerTransport that the WASM contract runtime uses). See
+ * docs/protocol/wasm-abi.md#async-bridge-transport.
+ */
+function crossOriginIsolation(): Plugin {
+  return {
+    name: 'cross-origin-isolation',
+    configureServer(server) {
+      server.middlewares.use((_req, res, next) => {
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((_req, res, next) => {
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [denoUrlRewriter(), react()],
+  plugins: [crossOriginIsolation(), denoUrlRewriter(), react()],
   resolve: {
     alias: {
       '@scaffold/explorer': resolve(__dirname, '../explorer/src/index.ts'),
