@@ -17,6 +17,8 @@ import type { Strategy } from "scaffold.io/node/ReactiveLayer.ts";
 import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.ts";
 import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
 import { installDebugAPI } from "scaffold.io/debug/ScaffoldDebug.ts";
+import { composeGenesisPacket } from "scaffold.io/core/Block.ts";
+import { makeSignatureOutput } from "scaffold.io/contracts/SignatureContract.ts";
 import yaml from "yaml";
 import { ChessApp } from "./chess/ChessApp.tsx";
 
@@ -254,8 +256,19 @@ function buildScaffoldConfig(
   const strategies = STRATEGIES
     .filter((s) => config.strategies.has(s.key))
     .map((s) => s.create());
+  // Build a genesis that funds every key in the keystore. autoBalance
+  // pulls the active key's signature UTXO out of the genesis to cover
+  // the throughput of every put -- without an output for the active
+  // key, every "Add Block" attempt fails with "throughput imbalance".
+  // Outputs are emitted in keystore order; keys.id is a stable hash of
+  // the private key, so any node loading the same keystore computes the
+  // same genesis hash.
+  const genesis = composeGenesisPacket(
+    keys.map((k) => makeSignatureOutput(k.publicKey, 1_000_000)),
+  );
   const scaffoldConfig: ScaffoldConfig = {
     privateKey: keyEntry.privateKey,
+    genesis,
     strategies,
     enablePiggyback: config.enablePiggyback,
     enableLogging: config.enableLogging,
