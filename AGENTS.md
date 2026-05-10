@@ -97,6 +97,7 @@ Planning -> Documentation -> Testing -> Coding
 - As much as possible, keep things very modular and encapsulated. Use providers to abstract away dependencies.
 - For logical parts, don't use Context or assume anything about the BlockType except what you can access through the provider.
 - Glue code using Context should be minimal; it's much more difficult to test.
+- `null` vs `undefined`: use `?` / `undefined` for "not provided / optional" (parameters, optional properties, unset config). Use `null` for the explicit "lookup or computation produced no result" return (e.g. `Hash | null`, `Block | null`). Don't mix the two for the same concept in one API.
 
 ## Logging and Debugging
 
