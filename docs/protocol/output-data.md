@@ -150,6 +150,8 @@ array determines whether the host renders a free input or a selection.
 
 ## Reading: The Walker
 
+> The host-import signatures shown in this and the following section are illustrative. The exact binary surface (import names, parameter widths, packed-pointer return convention, error semantics) is normatively specified in [wasm-abi.md](wasm-abi.md).
+
 The walker lets generic tools inspect existing params/data. The contract
 receives the raw bytes and calls host-imported `emit_*` functions to describe
 the structure:

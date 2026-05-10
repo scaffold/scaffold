@@ -260,6 +260,8 @@ Cross-block references replace the oracle log concept from earlier brainstorming
 
 ## Contract WASM Interface
 
+> The signatures and host-import surface below are a conceptual sketch. The concrete binary contract — exact import/export signatures, memory layout, error model, and async-bridge transport — lives in [wasm-abi.md](wasm-abi.md). When the two documents disagree, `wasm-abi.md` is authoritative for the binary surface.
+
 ### Required Export
 
 ```
