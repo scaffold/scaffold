@@ -11,7 +11,7 @@ import {
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
 import { Draft, DraftStore } from '../core/Draft.ts';
 import type { ClaimRef } from '../core/Node.ts';
-import { type AvailableInput, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
+import { type AvailableClaim, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
@@ -67,12 +67,12 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     return resolveClaimToOutput(block, claimIndex, this.store, this.outputSpace)?.output;
   }
 
-  findInputs(verifier: Verifier): AvailableInput[] {
+  findInputs(verifier: Verifier): AvailableClaim[] {
     // UtxoIndex now filters canonicality + claim status at read time, so
     // no additional filtering is needed here. Data-less outputs are
     // pure-incentive and invisible to contracts, so drop them here.
     const entries = this.utxoIndex.getByVerifier(verifier.contract, verifier.params);
-    const result: AvailableInput[] = [];
+    const result: AvailableClaim[] = [];
     for (const entry of entries) {
       const block = this.store.get(entry.blockHash);
       if (!block || entry.outputIndex >= block.outputs.length) continue;
@@ -135,7 +135,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 interface BlockedEntry {
   draftId: Hash;
   verifierKey: string;
-  resolve: (input: AvailableInput) => void;
+  resolve: (input: AvailableClaim) => void;
 }
 
 /** A generator parked in `requestBody` waiting for a user handler to match. */
@@ -202,7 +202,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    * keyed by draftId. When the contract calls `waitForInput`, these are
    * consumed first; if empty, the waiter parks in `_blocked`.
    */
-  private readonly _preQueue = new Map<HashPrimitive, AvailableInput[]>();
+  private readonly _preQueue = new Map<HashPrimitive, AvailableClaim[]>();
 
   /** Draft-level cancellation flags. Checked by the run loop. */
   private readonly _cancelled = new Set<HashPrimitive>();
@@ -434,7 +434,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
         if (pre.length === 0) this._preQueue.delete(draftId.toPrimitive());
         return Promise.resolve(ai);
       }
-      return new Promise<AvailableInput>((resolve) => {
+      return new Promise<AvailableClaim>((resolve) => {
         const vKey = utxoVerifierKey(verifier.contract, verifier.params);
         let queue = this._blocked.get(vKey);
         if (!queue) {
@@ -605,8 +605,8 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       // Reflect in the UTXO view so parallel `findInputs` calls don't
       // re-pick this output, and `autoBalance` doesn't double-spend.
       this._utxoIndex.removeSpentOutput(blockHash, outputIndex);
-      // Park the AvailableInput for the draft's next waitForInput call.
-      const ai: AvailableInput = {
+      // Park the AvailableClaim for the draft's next waitForInput call.
+      const ai: AvailableClaim = {
         verifier: output.verifier,
         value: output.value,
         body: output.body,

@@ -8,7 +8,7 @@ import {
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
-import { type ContractEnv, ContractRejection, type Input } from '../core/ContractEnv.ts';
+import { type ContractEnv, ContractRejection, type Claim } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 import { findRecordOutput } from './RecordContract.ts';
@@ -156,11 +156,11 @@ export function decayedValue(initialValue: number, elapsedMs: number): number {
 // -- Partition inputs -------------------------------------------------
 
 interface PartitionedInputs {
-  forInputs: { input: Input; detail: CollateralDetail & { side: 'for' } }[];
-  againstInputs: { input: Input; detail: CollateralDetail & { side: 'against' } }[];
+  forInputs: { input: Claim; detail: CollateralDetail & { side: 'for' } }[];
+  againstInputs: { input: Claim; detail: CollateralDetail & { side: 'against' } }[];
 }
 
-function partitionInputs(inputs: Input[]): PartitionedInputs {
+function partitionInputs(inputs: Claim[]): PartitionedInputs {
   const forInputs: PartitionedInputs['forInputs'] = [];
   const againstInputs: PartitionedInputs['againstInputs'] = [];
 

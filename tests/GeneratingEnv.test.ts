@@ -5,11 +5,11 @@ import { RECORD_CONTRACT } from '../src/core/Block.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { ExecutionMode } from '../src/core/ContractEnv.ts';
 import {
-  type AvailableInput,
+  type AvailableClaim,
   type ContractEnv,
   ContractRejection,
   type GeneratingEnvProvider,
-  type Input,
+  type Claim,
 } from '../src/core/ContractEnv.ts';
 import { GeneratingEnv } from '../src/core/GeneratingEnv.ts';
 import { VerifyingEnv } from '../src/core/VerifyingEnv.ts';
@@ -32,14 +32,14 @@ const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
   readonly blocks = new Map<string, TestBlock>();
-  private readonly _availableInputs = new Map<string, AvailableInput[]>();
+  private readonly _availableInputs = new Map<string, AvailableClaim[]>();
   private readonly _blocksClaiming = new Map<string, Hash>();
 
   addBlock(block: TestBlock): void {
     this.blocks.set(block.hash.toHex(), block);
   }
 
-  setAvailableInputs(verifier: Verifier, inputs: AvailableInput[]): void {
+  setAvailableInputs(verifier: Verifier, inputs: AvailableClaim[]): void {
     this._availableInputs.set(
       verifier.contract.toHex() + ':' + Array.from(verifier.params).join(','),
       inputs,
@@ -77,7 +77,7 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
     return anchor.outputs[claimIndex - block.outputs.length];
   }
 
-  findInputs(verifier: Verifier): MaybePromise<AvailableInput[]> {
+  findInputs(verifier: Verifier): MaybePromise<AvailableClaim[]> {
     const key = verifier.contract.toHex() + ':' + Array.from(verifier.params).join(',');
     return this._availableInputs.get(key) ?? [];
   }
@@ -205,14 +205,14 @@ Deno.test('GeneratingEnv: claimAll queries provider', () => {
   const params = enc('cfg');
   const verifier: Verifier = { contract: contractHash, params };
 
-  const available: AvailableInput[] = [
+  const available: AvailableClaim[] = [
     { verifier, value: 10, body: enc('move1'), isSelfClaim: false, block: h('b1'), outputIndex: 0 },
     { verifier, value: 20, body: enc('move2'), isSelfClaim: false, block: h('b2'), outputIndex: 1 },
   ];
   provider.setAvailableInputs(verifier, available);
 
   const { env } = makeGenEnv({ contractHash, params, provider });
-  const result = env.claimAll() as Input[];
+  const result = env.claimAll() as Claim[];
   assertEquals(result.length, 2);
   assertEquals(result[0].value, 10);
   assertEquals(result[1].value, 20);
@@ -263,13 +263,13 @@ Deno.test('GeneratingEnv: claimNext returns first available input', () => {
   const params = enc('cfg');
   const verifier: Verifier = { contract: contractHash, params };
 
-  const available: AvailableInput[] = [
+  const available: AvailableClaim[] = [
     { verifier, value: 5, body: enc('data'), isSelfClaim: false, block: h('b1'), outputIndex: 2 },
   ];
   provider.setAvailableInputs(verifier, available);
 
   const { env } = makeGenEnv({ contractHash, params, provider });
-  const input = env.claimNext() as Input;
+  const input = env.claimNext() as Claim;
   assertEquals(input.value, 5);
   assertEquals(input.body, enc('data'));
 

@@ -13,7 +13,7 @@ export enum ExecutionMode {
 }
 
 /** A claimed output being consumed as input by a contract. */
-export interface Input {
+export interface Claim {
   readonly verifier: Verifier;
   readonly value: number;
   readonly body: Uint8Array;
@@ -22,7 +22,7 @@ export interface Input {
 }
 
 /** An input with its provenance -- where it lives in the DAG. */
-export interface AvailableInput extends Input {
+export interface AvailableClaim extends Claim {
   /** Block containing this output. */
   readonly block: Hash;
   /** Index into that block's output array. */
@@ -69,7 +69,7 @@ export interface ContractEnv {
    * Verification: synchronous, returns matching claims from the block.
    * Generation: possibly async, queries available outputs from UTXO index.
    */
-  claimAll(limit?: number): MaybePromise<Input[]>;
+  claimAll(limit?: number): MaybePromise<Claim[]>;
 
   /**
    * Claim one input matching this contract's verifier.
@@ -78,7 +78,7 @@ export interface ContractEnv {
    * Verification: returns the next unclaimed matching input; throws if none.
    * Generation: finds/waits for an input; adds it as a resolved claim.
    */
-  claimNext(): MaybePromise<Input>;
+  claimNext(): MaybePromise<Claim>;
 
   /**
    * Require the block to produce a specific output.
@@ -190,7 +190,7 @@ export interface VerifyingEnvProvider<BlockType> {
  */
 export interface GeneratingEnvProvider<BlockType> extends VerifyingEnvProvider<BlockType> {
   /** Find available inputs matching a verifier (with provenance). */
-  findInputs(verifier: Verifier): MaybePromise<AvailableInput[]>;
+  findInputs(verifier: Verifier): MaybePromise<AvailableClaim[]>;
   /** Find a block that claims the given verifier. Returns its hash. */
   findBlockClaiming(verifier: Verifier): MaybePromise<Hash | undefined>;
   /**

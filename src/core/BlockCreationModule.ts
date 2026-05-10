@@ -49,7 +49,7 @@ export interface ClaimEntry {
 }
 
 /**
- * Input specification for building a block. Describes the creator's intent.
+ * Claim specification for building a block. Describes the creator's intent.
  * The module derives all structural fields (claimMask, weight vector, outputCount).
  */
 export interface BlockSpec {

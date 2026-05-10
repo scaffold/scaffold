@@ -5,12 +5,12 @@ import { type MaybePromise, maybeThen } from '../util/MaybePromise.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import {
-  type AvailableInput,
+  type AvailableClaim,
   type ContractEnv,
   ContractRejection,
   ExecutionMode,
   type GeneratingEnvProvider,
-  type Input,
+  type Claim,
 } from './ContractEnv.ts';
 import type { ClaimRef } from './Node.ts';
 
@@ -47,7 +47,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
  *
  * Returns a Promise that resolves with the next available input.
  */
-export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableInput>;
+export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableClaim>;
 
 /**
  * Callback the GeneratingEnv calls when `requestBody` has no resolver match.
@@ -83,8 +83,8 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _slots: OutputSlot[] = [];
   /** Resolved claims from consumed inputs (with provenance). */
   private readonly _claims: ClaimRef[] = [];
-  /** Input data returned to the contract (without provenance). */
-  private readonly _inputs: Input[] = [];
+  /** Claim data returned to the contract (without provenance). */
+  private readonly _inputs: Claim[] = [];
   /** Block hashes added to refs. */
   private readonly _refs: Hash[] = [];
   /** Block hashes that must be included in the final subtree. */
@@ -123,11 +123,11 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     return this._params;
   }
 
-  claimAll(): MaybePromise<Input[]> {
+  claimAll(): MaybePromise<Claim[]> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     return maybeThen(this._provider.findInputs(verifier), (available) => {
       // `findInputs` is expected to already drop data-less outputs (pure
-      // incentive, invisible to contracts). AvailableInput.body is always defined.
+      // incentive, invisible to contracts). AvailableClaim.body is always defined.
       for (const ai of available) {
         this._claims.push({
           producer: ai.block,
@@ -145,7 +145,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     });
   }
 
-  claimNext(): MaybePromise<Input> {
+  claimNext(): MaybePromise<Claim> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     const findResult = this._provider.findInputs(verifier);
 
@@ -156,9 +156,9 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   }
 
   private _pickInput(
-    available: AvailableInput[],
+    available: AvailableClaim[],
     verifier: Verifier,
-  ): MaybePromise<Input> {
+  ): MaybePromise<Claim> {
     // `findInputs` is expected to drop data-less outputs already.
     // Filter out inputs already consumed in this generation run.
     const unconsumed = available.filter((ai) =>
@@ -268,12 +268,12 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   // -- Internal helpers --------------------------------------------
 
-  private _consumeInput(ai: AvailableInput): Input {
+  private _consumeInput(ai: AvailableClaim): Claim {
     this._claims.push({
       producer: ai.block,
       outputIndex: ai.outputIndex,
     });
-    const input: Input = {
+    const input: Claim = {
       verifier: ai.verifier,
       value: ai.value,
       body: ai.body,
@@ -307,7 +307,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   }
 
   /** Get the inputs consumed by this contract. */
-  getConsumedInputs(): Input[] {
+  getConsumedInputs(): Claim[] {
     return this._inputs;
   }
 

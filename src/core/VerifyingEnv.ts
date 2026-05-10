@@ -7,7 +7,7 @@ import {
   type ContractEnv,
   ContractRejection,
   ExecutionMode,
-  type Input,
+  type Claim,
   type VerifyingEnvProvider,
 } from './ContractEnv.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
@@ -47,7 +47,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
   /** Tracks which matching inputs have been consumed by claimNext(). */
   private _inputCursor = 0;
-  private _matchingInputs: Input[] | null = null;
+  private _matchingInputs: Claim[] | null = null;
 
   /**
    * Per-contract cursor into block.outputs, indexed by the output's
@@ -94,11 +94,11 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return this._params;
   }
 
-  claimAll(): Input[] {
+  claimAll(): Claim[] {
     return this._getMatchingInputs();
   }
 
-  claimNext(): Input {
+  claimNext(): Claim {
     const inputs = this._getMatchingInputs();
     if (this._inputCursor >= inputs.length) {
       throw new ContractRejection('no more inputs available');
@@ -246,7 +246,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   }
 
   /** Lazily compute and cache inputs matching this contract's verifier. */
-  private _getMatchingInputs(): Input[] {
+  private _getMatchingInputs(): Claim[] {
     if (this._matchingInputs !== null) return this._matchingInputs;
 
     const thisVerifier: Verifier = {
@@ -254,7 +254,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       params: this._params,
     };
 
-    const inputs: Input[] = [];
+    const inputs: Claim[] = [];
     for (const claimIdx of this._claims) {
       const output = this._provider.resolveClaim(this._block, claimIdx);
       if (!output) continue;

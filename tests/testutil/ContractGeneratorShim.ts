@@ -19,7 +19,7 @@ import type { ClaimRef } from '../../src/core/Node.ts';
 import { OutputClaimModule } from '../../src/core/OutputClaimModule.ts';
 import { UtxoIndex } from '../../src/node/UtxoIndex.ts';
 import {
-  type AvailableInput,
+  type AvailableClaim,
   ContractRejection,
   type GeneratingEnvProvider,
 } from '../../src/core/ContractEnv.ts';
@@ -53,9 +53,9 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   resolveClaim(block: Block, claimIndex: number): Output | undefined {
     return resolveClaimToOutput(block, claimIndex, this.store, this.outputSpace)?.output;
   }
-  findInputs(verifier: Verifier): AvailableInput[] {
+  findInputs(verifier: Verifier): AvailableClaim[] {
     const entries = this.utxoIndex.getByVerifier(verifier.contract, verifier.params);
-    const result: AvailableInput[] = [];
+    const result: AvailableClaim[] = [];
     for (const entry of entries) {
       const claimants = this.outputClaims.getClaimantsAt(entry.blockHash, entry.outputIndex);
       if (claimants && claimants.length > 0) continue;
@@ -115,7 +115,7 @@ function verifierKey(v: Verifier): string {
 interface BlockedEntry {
   env: GeneratingEnv<Block>;
   draftId: Hash;
-  resolve: (input: AvailableInput) => void;
+  resolve: (input: AvailableClaim) => void;
 }
 
 export interface GeneratorHandle {
@@ -173,7 +173,7 @@ export class ContractGeneratorShim {
     }
 
     const waitForInput: WaitForInputFn = (v) =>
-      new Promise<AvailableInput>((resolve) => {
+      new Promise<AvailableClaim>((resolve) => {
         const key = verifierKey(v);
         let queue = this._blocked.get(key);
         if (!queue) {
