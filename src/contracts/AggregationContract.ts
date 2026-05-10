@@ -86,7 +86,7 @@ export const AGGREGATION_THRESHOLD = 4;
  * The composed claimMask is computed at solidification time by the
  * OutputSpaceModule, which correctly handles arbitrary anchor depths.
  *
- * Each requireInput() call blocks if no marker is available, resuming
+ * Each claimNext() call blocks if no marker is available, resuming
  * when the next marker becomes canonical.
  */
 export const aggregationContract: Contract = {
@@ -102,7 +102,7 @@ export const aggregationContract: Contract = {
     const inputs = [];
 
     for (let i = 0; i < AGGREGATION_THRESHOLD; i++) {
-      const input = await env.requireInput();
+      const input = await env.claimNext();
       inputs.push(input);
     }
 
@@ -147,7 +147,7 @@ export const aggregationContract: Contract = {
       aggregateWeights,
     };
 
-    env.requireOutput(
+    env.emitOutput(
       { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       0,
       encodeAggregationData(composedData),

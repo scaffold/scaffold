@@ -87,7 +87,7 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
     return this._blocksClaiming.get(key);
   }
 
-  /** Handler chain for getOutput. Tests can override by assigning _resolveGetOutput. */
+  /** Handler chain for requestBody. Tests can override by assigning _resolveGetOutput. */
   _resolveGetOutput:
     | ((
       runningContract: Hash,
@@ -129,19 +129,19 @@ Deno.test('GeneratingEnv: mode is Generation', () => {
   assertEquals(env.mode, ExecutionMode.Generation);
 });
 
-Deno.test('GeneratingEnv: getContractHash and getParams', () => {
+Deno.test('GeneratingEnv: contractHash and params', () => {
   const contractHash = h('my-contract');
   const params = enc('my-params');
   const { env } = makeGenEnv({ contractHash, params });
-  assert(Hash.equals(env.getContractHash(), contractHash));
-  assertEquals(env.getParams(), params);
+  assert(Hash.equals(env.contractHash(), contractHash));
+  assertEquals(env.params(), params);
 });
 
-// -- Tests: requireResult ------------------------------------------
+// -- Tests: record ------------------------------------------
 
-Deno.test('GeneratingEnv: requireResult creates a result output', () => {
+Deno.test('GeneratingEnv: record creates a result output', () => {
   const { env } = makeGenEnv();
-  env.requireResult(enc('state'), enc('value'));
+  env.record(enc('state'), enc('value'));
 
   const outputs = env.getAllOutputs();
   assertEquals(outputs.length, 1);
@@ -151,21 +151,21 @@ Deno.test('GeneratingEnv: requireResult creates a result output', () => {
   assertEquals(outputs[0].value, 0);
 });
 
-Deno.test('GeneratingEnv: multiple requireResult calls', () => {
+Deno.test('GeneratingEnv: multiple record calls', () => {
   const { env } = makeGenEnv();
-  env.requireResult(enc('a'), enc('1'));
-  env.requireResult(enc('b'), enc('2'));
+  env.record(enc('a'), enc('1'));
+  env.record(enc('b'), enc('2'));
 
   const outputs = env.getAllOutputs();
   assertEquals(outputs.length, 2);
 });
 
-// -- Tests: requireOutput ------------------------------------------
+// -- Tests: emitOutput ------------------------------------------
 
-Deno.test('GeneratingEnv: requireOutput adds output to list', () => {
+Deno.test('GeneratingEnv: emitOutput adds output to list', () => {
   const { env } = makeGenEnv();
   const verifier: Verifier = { contract: h('pay'), params: enc('pk') };
-  env.requireOutput(verifier, 42, enc('data'));
+  env.emitOutput(verifier, 42, enc('data'));
 
   const outputs = env.getAllOutputs();
   assertEquals(outputs.length, 1);
@@ -174,18 +174,18 @@ Deno.test('GeneratingEnv: requireOutput adds output to list', () => {
   assertEquals(outputs[0].data, enc('data'));
 });
 
-Deno.test('GeneratingEnv: requireOutput defaults data to empty', () => {
+Deno.test('GeneratingEnv: emitOutput defaults data to empty', () => {
   const { env } = makeGenEnv();
-  env.requireOutput({ contract: h('x'), params: new Uint8Array(0) }, 10);
+  env.emitOutput({ contract: h('x'), params: new Uint8Array(0) }, 10);
   assertEquals(env.getAllOutputs()[0].data, new Uint8Array(0));
 });
 
-Deno.test('GeneratingEnv: interleaved requireResult and requireOutput preserve call order', () => {
+Deno.test('GeneratingEnv: interleaved record and emitOutput preserve call order', () => {
   const { env } = makeGenEnv();
-  env.requireOutput({ contract: h('pay'), params: enc('pk') }, 5, enc('a'));
-  env.requireResult(enc('k1'), enc('v1'));
-  env.requireOutput({ contract: h('pay'), params: enc('pk') }, 3, enc('b'));
-  env.requireResult(enc('k2'), enc('v2'));
+  env.emitOutput({ contract: h('pay'), params: enc('pk') }, 5, enc('a'));
+  env.record(enc('k1'), enc('v1'));
+  env.emitOutput({ contract: h('pay'), params: enc('pk') }, 3, enc('b'));
+  env.record(enc('k2'), enc('v2'));
 
   const slots = env.getGeneratedOutputSlots();
   assertEquals(slots.length, 4);
@@ -197,9 +197,9 @@ Deno.test('GeneratingEnv: interleaved requireResult and requireOutput preserve c
   assertEquals(slots[3].output.verifier.params, enc('k2'));
 });
 
-// -- Tests: collectInputs ------------------------------------------
+// -- Tests: claimAll ------------------------------------------
 
-Deno.test('GeneratingEnv: collectInputs queries provider', () => {
+Deno.test('GeneratingEnv: claimAll queries provider', () => {
   const provider = new TestGenProvider();
   const contractHash = h('game');
   const params = enc('cfg');
@@ -212,7 +212,7 @@ Deno.test('GeneratingEnv: collectInputs queries provider', () => {
   provider.setAvailableInputs(verifier, available);
 
   const { env } = makeGenEnv({ contractHash, params, provider });
-  const result = env.collectInputs() as Input[];
+  const result = env.claimAll() as Input[];
   assertEquals(result.length, 2);
   assertEquals(result[0].value, 10);
   assertEquals(result[1].value, 20);
@@ -226,9 +226,9 @@ Deno.test('GeneratingEnv: collectInputs queries provider', () => {
   assertEquals(claims[1].outputIndex, 1);
 });
 
-Deno.test('GeneratingEnv: collectInputs returns empty when no inputs', () => {
+Deno.test('GeneratingEnv: claimAll returns empty when no inputs', () => {
   const { env } = makeGenEnv();
-  assertEquals(env.collectInputs(), []);
+  assertEquals(env.claimAll(), []);
 });
 
 Deno.test('GeneratingEnv: fetch skips data-less record outputs', async () => {
@@ -255,9 +255,9 @@ Deno.test('GeneratingEnv: fetch skips data-less record outputs', async () => {
   assertEquals(result, enc('S0'));
 });
 
-// -- Tests: requireInput -------------------------------------------
+// -- Tests: claimNext -------------------------------------------
 
-Deno.test('GeneratingEnv: requireInput returns first available input', () => {
+Deno.test('GeneratingEnv: claimNext returns first available input', () => {
   const provider = new TestGenProvider();
   const contractHash = h('game');
   const params = enc('cfg');
@@ -269,7 +269,7 @@ Deno.test('GeneratingEnv: requireInput returns first available input', () => {
   provider.setAvailableInputs(verifier, available);
 
   const { env } = makeGenEnv({ contractHash, params, provider });
-  const input = env.requireInput() as Input;
+  const input = env.claimNext() as Input;
   assertEquals(input.value, 5);
   assertEquals(input.data, enc('data'));
 
@@ -280,10 +280,10 @@ Deno.test('GeneratingEnv: requireInput returns first available input', () => {
   assertEquals(claims[0].outputIndex, 2);
 });
 
-Deno.test('GeneratingEnv: requireInput throws when no inputs', () => {
+Deno.test('GeneratingEnv: claimNext throws when no inputs', () => {
   const { env } = makeGenEnv();
   try {
-    env.requireInput();
+    env.claimNext();
     assert(false, 'should have thrown');
   } catch (e) {
     assert(e instanceof ContractRejection);
@@ -329,8 +329,8 @@ Deno.test('GeneratingEnv: fetch throws when no block claims verifier', () => {
 
 Deno.test('GeneratingEnv: getAllOutputs returns results then regular outputs', () => {
   const { env } = makeGenEnv();
-  env.requireResult(enc('state'), enc('val'));
-  env.requireOutput({ contract: h('pay'), params: enc('pk') }, 50);
+  env.record(enc('state'), enc('val'));
+  env.emitOutput({ contract: h('pay'), params: enc('pk') }, 50);
 
   const all = env.getAllOutputs();
   assertEquals(all.length, 2);
@@ -350,8 +350,8 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     const state = prevState as Uint8Array;
     const newState = new Uint8Array([...state, 1]);
 
-    env.requireResult(enc('state'), newState);
-    env.requireOutput(
+    env.record(enc('state'), newState);
+    env.emitOutput(
       { contract: h('sig'), params: enc('creator') },
       10,
       new Uint8Array(0),

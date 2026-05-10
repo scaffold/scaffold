@@ -97,7 +97,7 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     _outputVerifier: Verifier,
   ): Promise<{ value: number; data: Uint8Array } | null> {
     // Test shim: no handlers registered, never resolves. Tests that
-    // exercise getOutput should use the real OutputHandlerRegistry.
+    // exercise requestBody should use the real OutputHandlerRegistry.
     return Promise.resolve(null);
   }
 }

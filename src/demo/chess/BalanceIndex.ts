@@ -83,7 +83,7 @@ export class BalanceIndex {
         // See note on `isUnspentByCanonicalBlock` -- we ignore phantom
         // draft claims here so the locked balance keeps reflecting the
         // active game even while the mover's next-turn draft parks on
-        // getOutput awaiting user input.
+        // requestBody awaiting user input.
         if (!isUnspentByCanonicalBlock(ctx, block.hash, i)) continue;
         if (!o.data) continue;
         try {

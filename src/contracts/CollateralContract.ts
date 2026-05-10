@@ -94,7 +94,7 @@ export const PREIMAGE_RESULT_KEY = new TextEncoder().encode('collateral:preimage
  * Modes 1 and 2 emit `verdict: 'valid'`. Mode 3 emits `verdict: 'invalid'`.
  * Mode 4 (non-canonical reclaim) emits no verdict output at all.
  *
- * The record is self-claimed via `env.requireResult` so it participates
+ * The record is self-claimed via `env.record` so it participates
  * in the block's claim structure like any other result.
  */
 export const VERDICT_RECORD_KEY = 'verdict';
@@ -193,7 +193,7 @@ function partitionInputs(inputs: Input[]): PartitionedInputs {
  *    Publisher reclaims FOR value. Requires publisher signature.
  *
  * 2. **Hash challenge response**: Both FOR and AGAINST claimed, block signed by
- *    FOR publisher. Responder reveals preimage via requireResult(), earns AGAINST bond.
+ *    FOR publisher. Responder reveals preimage via record(), earns AGAINST bond.
  *    FOR collateral returned to publisher.
  *
  * 3. **Unresolved challenge**: Both FOR and AGAINST claimed, block signed by
@@ -207,14 +207,14 @@ export const collateralContract: Contract = {
   outputNamespaces: [SIGNATURE_CONTRACT, RECORD_CONTRACT],
 
   run(env) {
-    const inputsResult = env.collectInputs();
+    const inputsResult = env.claimAll();
 
     return maybeThen(inputsResult, (inputs) => {
       if (inputs.length === 0) {
         throw new ContractRejection('no collateral inputs');
       }
 
-      const now = env.getTimestamp();
+      const now = env.timestamp();
       const { forInputs, againstInputs } = partitionInputs(inputs);
 
       if (forInputs.length === 0) {
@@ -236,7 +236,7 @@ export const collateralContract: Contract = {
 
       // Try FOR signer first (hash challenge response)
       try {
-        env.requireSignature(forPubkey);
+        env.sign(forPubkey);
         hashChallengeResponse(env, forInputs, againstInputs);
         return;
       } catch {
@@ -245,7 +245,7 @@ export const collateralContract: Contract = {
 
       // Try AGAINST signer (unresolved challenge or non-canonical)
       try {
-        env.requireSignature(againstPubkey);
+        env.sign(againstPubkey);
         unresolvedChallenge(env, forInputs, againstInputs);
         return;
       } catch {
@@ -385,8 +385,8 @@ function decayReturn(
   forInputs: PartitionedInputs['forInputs'],
 ): void {
   for (const { input, detail } of forInputs) {
-    env.requireSignature(detail.pubkey);
-    env.requireOutput(
+    env.sign(detail.pubkey);
+    env.emitOutput(
       { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
       input.value,
     );
@@ -405,15 +405,15 @@ function hashChallengeResponse(
 ): void {
   const forPubkey = forInputs[0].detail.pubkey;
 
-  // Preimage must be provided via requireResult
-  env.requireResult(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY); // placeholder check
+  // Preimage must be provided via record
+  env.record(PREIMAGE_RESULT_KEY, PREIMAGE_RESULT_KEY); // placeholder check
 
   // FOR collateral returned to publisher
   let totalFor = 0;
   for (const { input } of forInputs) {
     totalFor += input.value;
   }
-  env.requireOutput(
+  env.emitOutput(
     { contract: SIGNATURE_CONTRACT, params: forPubkey },
     totalFor,
   );
@@ -423,7 +423,7 @@ function hashChallengeResponse(
   for (const { input } of againstInputs) {
     totalAgainst += input.value;
   }
-  env.requireOutput(
+  env.emitOutput(
     { contract: SIGNATURE_CONTRACT, params: forPubkey },
     totalAgainst,
   );
@@ -446,7 +446,7 @@ function unresolvedChallenge(
   }
 
   for (const { input: againstInput, detail: againstDetail } of againstInputs) {
-    env.requireOutput(
+    env.emitOutput(
       { contract: SIGNATURE_CONTRACT, params: againstDetail.pubkey },
       againstInput.value + totalForValue,
     );
@@ -464,8 +464,8 @@ function unresolvedChallenge(
  * Mode 4 (non-canonical reclaim) does NOT call this -- no trust signal.
  */
 function emitVerdict(env: ContractEnv, verdict: CollateralVerdict): void {
-  const target = Hash.fromBytes(env.getParams());
-  env.requireResult(VERDICT_RECORD_KEY_BYTES, encodeVerdict({ target, verdict }));
+  const target = Hash.fromBytes(env.params());
+  env.record(VERDICT_RECORD_KEY_BYTES, encodeVerdict({ target, verdict }));
 }
 
 /**
@@ -477,13 +477,13 @@ function nonCanonicalReclaim(
   againstInputs: PartitionedInputs['againstInputs'],
 ): void {
   for (const { input, detail } of forInputs) {
-    env.requireOutput(
+    env.emitOutput(
       { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
       input.value,
     );
   }
   for (const { input, detail } of againstInputs) {
-    env.requireOutput(
+    env.emitOutput(
       { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
       input.value,
     );

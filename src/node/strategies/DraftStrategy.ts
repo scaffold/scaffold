@@ -110,7 +110,7 @@ export class DraftStrategy implements Strategy {
     // output was claimed by a later canonical block (and thus removed
     // from the canonical UTXO view), the draft has long since published
     // and the entry should be released. Without this sweep, parked
-    // drafts (chess GAME_STATE generators that wait on getOutput)
+    // drafts (chess GAME_STATE generators that wait on requestBody)
     // accumulate `inFlight` entries forever, eventually hitting
     // maxConcurrent and starving every new turn.
     // See docs/design/chess-turn-one-bug.md item 1.

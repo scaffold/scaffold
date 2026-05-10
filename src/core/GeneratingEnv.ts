@@ -41,7 +41,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 // -- Types --------------------------------------------------------
 
 /**
- * Callback that the GeneratingEnv calls when requireInput() cannot be
+ * Callback that the GeneratingEnv calls when claimNext() cannot be
  * satisfied immediately. The ContractGenerator provides this to register
  * the env in the blocked-generator registry.
  *
@@ -50,7 +50,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableInput>;
 
 /**
- * Callback the GeneratingEnv calls when `getOutput` has no resolver match.
+ * Callback the GeneratingEnv calls when `requestBody` has no resolver match.
  * Mirrors `WaitForInputFn`: parks the contract and resolves later once a
  * handler produces a result (e.g., after user input arrives).
  */
@@ -76,8 +76,8 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   /**
    * Outputs to add to the draft, in call order, tagged by origin. The
-   * order reflects the sequence of `requireOutput` / `requireResult` /
-   * `getOutput` calls. Self-claim bookkeeping for record outputs happens
+   * order reflects the sequence of `emitOutput` / `record` /
+   * `requestBody` calls. Self-claim bookkeeping for record outputs happens
    * downstream at solidification (see NodeContext._solidifyDraft).
    */
   private readonly _slots: OutputSlot[] = [];
@@ -94,14 +94,14 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     contractHash: Hash;
     params: Uint8Array;
     provider: GeneratingEnvProvider<BlockType>;
-    /** Optional callback for blocking requireInput(). If not provided, throws on no input. */
+    /** Optional callback for blocking claimNext(). If not provided, throws on no input. */
     waitForInput?: WaitForInputFn;
-    /** Optional callback for blocking getOutput(). If not provided, throws on no handler match. */
+    /** Optional callback for blocking requestBody(). If not provided, throws on no handler match. */
     waitForGetOutput?: WaitForGetOutputFn;
     /**
-     * The node's own public key, used to answer `requireSignature` in
+     * The node's own public key, used to answer `sign` in
      * generation mode: the draft will be signed by this key at
-     * solidification, so any `requireSignature(pk)` call reduces to
+     * solidification, so any `sign(pk)` call reduces to
      * "does `pk === signerPubkey`?". If undefined, any signature
      * requirement rejects.
      */
@@ -115,15 +115,15 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     this._signerPubkey = opts.signerPubkey;
   }
 
-  getContractHash(): Hash {
+  contractHash(): Hash {
     return this._contractHash;
   }
 
-  getParams(): Uint8Array {
+  params(): Uint8Array {
     return this._params;
   }
 
-  collectInputs(): MaybePromise<Input[]> {
+  claimAll(): MaybePromise<Input[]> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     return maybeThen(this._provider.findInputs(verifier), (available) => {
       // `findInputs` is expected to already drop data-less outputs (pure
@@ -145,7 +145,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     });
   }
 
-  requireInput(): MaybePromise<Input> {
+  claimNext(): MaybePromise<Input> {
     const verifier: Verifier = { contract: this._contractHash, params: this._params };
     const findResult = this._provider.findInputs(verifier);
 
@@ -179,14 +179,14 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection('no inputs available');
   }
 
-  requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
+  emitOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
     this._slots.push({
       output: { verifier, value, data: data ?? new Uint8Array(0) },
       origin: 'require',
     });
   }
 
-  async getOutput(
+  async requestBody(
     verifier: Verifier,
   ): Promise<{ value: number; data: Uint8Array }> {
     let resolved = await this._provider.resolveGetOutput(
@@ -197,7 +197,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     if (resolved === null) {
       if (!this._waitForGetOutput) {
         throw new ContractRejection(
-          'no getOutput handler matched (and no wait callback configured)',
+          'no requestBody handler matched (and no wait callback configured)',
         );
       }
       resolved = await this._waitForGetOutput(verifier);
@@ -209,7 +209,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     return { value: resolved.value, data: resolved.data };
   }
 
-  requireResult(key: Uint8Array, value: Uint8Array): void {
+  record(key: Uint8Array, value: Uint8Array): void {
     this._slots.push({
       output: {
         verifier: { contract: RECORD_CONTRACT, params: key },
@@ -247,7 +247,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     });
   }
 
-  requireSignature(pubkey: Uint8Array): void {
+  sign(pubkey: Uint8Array): void {
     // The draft will be signed at solidification by the node's own key.
     // A contract asking for a signature from some other pubkey cannot be
     // satisfied here -- reject so the generator aborts (and the block is
@@ -262,7 +262,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  getTimestamp(): number {
+  timestamp(): number {
     return Date.now();
   }
 

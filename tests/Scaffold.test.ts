@@ -120,7 +120,7 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
     });
   }
 
-  // The aggregation contract resolves via async requireInput() --
+  // The aggregation contract resolves via async claimNext() --
   // flush microtasks to let it complete.
   await new Promise((r) => setTimeout(r, 50));
 

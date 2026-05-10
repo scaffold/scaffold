@@ -24,8 +24,8 @@ export interface Output {
    * Application-specific payload, or omitted for a pure-incentive output.
    *
    * Data-less outputs are invisible to contracts: they never surface in
-   * `collectInputs` / `requireInput`, and contracts cannot emit them via
-   * `requireOutput` / `getOutput` / `requireResult`. They are still
+   * `claimAll` / `claimNext`, and contracts cannot emit them via
+   * `emitOutput` / `requestBody` / `record`. They are still
    * tracked in the UTXO index and block-level claiming still balances
    * their value -- they are just outside contract execution.
    *

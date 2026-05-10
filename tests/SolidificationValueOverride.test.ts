@@ -8,7 +8,7 @@ import type { OutputSlot } from '../src/core/GeneratingEnv.ts';
  * standalone function, prove it raises 'get'-origin slot values and
  * leaves 'require' slots unchanged. Integration with NodeContext is
  * covered indirectly by existing end-to-end tests (nothing in-tree
- * calls getOutput yet, so the override is a no-op in the full pipeline
+ * calls requestBody yet, so the override is a no-op in the full pipeline
  * today).
  */
 

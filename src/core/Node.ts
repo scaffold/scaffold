@@ -93,7 +93,7 @@ export interface Node {
   /**
    * Outputs this Node produces. For blocks, never mutated after
    * construction. For drafts, populated incrementally by the generator
-   * (via requireOutput / collectOutputs); append-only during the draft's
+   * (via emitOutput / collectOutputs); append-only during the draft's
    * `generating` / `awaitingInput` phases, frozen once the draft
    * transitions to `readyToSolidify`. Typed as a plain array (rather than
    * ReadonlyArray) so Block can satisfy this interface alongside
@@ -110,7 +110,7 @@ export interface Node {
    *
    * Mutable so OutputClaimModule.tryMigrate can rewrite block claim entries
    * in place as ancestors become canonical, and so draft generators can
-   * append claims via requireInput.
+   * append claims via claimNext.
    */
   readonly claims: ClaimRef[];
 

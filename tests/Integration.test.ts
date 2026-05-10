@@ -487,7 +487,7 @@ Deno.test('Integration: cross-block references — block B refs A and reads stat
       const prevState = new TextDecoder().decode(
         env.fetch(gameVerifier, enc('state')) as Uint8Array,
       );
-      env.requireResult(enc('state'), enc(prevState + '-next'));
+      env.record(enc('state'), enc(prevState + '-next'));
     },
   });
 

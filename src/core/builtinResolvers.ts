@@ -16,7 +16,7 @@ export function makeBlobRegistryResolver(): OutputHandler {
 }
 
 /**
- * Stub resolver for UTXO-sourced `getOutput` calls. Some contracts may want
+ * Stub resolver for UTXO-sourced `requestBody` calls. Some contracts may want
  * to request outputs that already exist on the chain (e.g., aggregation
  * contracts that want to bind to existing markers). Returns null for now.
  *

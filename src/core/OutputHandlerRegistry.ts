@@ -6,7 +6,7 @@ import type { ProtocolContext } from './ProtocolContext.ts';
 import { makeBlobRegistryResolver, makeUtxoResolver } from './builtinResolvers.ts';
 
 /**
- * A handler that can synthesize the `(value, data)` for a `getOutput`
+ * A handler that can synthesize the `(value, data)` for a `requestBody`
  * request during generation. Returns `null` to defer to the next handler
  * in the chain. A non-null return terminates resolution.
  *
@@ -19,13 +19,13 @@ export type OutputHandler = (
 ) => Promise<{ value: number; data: Uint8Array } | null>;
 
 /**
- * Fallback chain for `getOutput` resolution during generation.
+ * Fallback chain for `requestBody` resolution during generation.
  *
  * Resolution order (first non-null wins):
  *   1. Built-in Scaffold resolvers, in registration order.
  *   2. User handlers for the running contract hash, in registration order.
  *   3. If nothing matched, returns `null` and the caller blocks (the
- *      contract awaits restart-on-uncanonical, mirroring `requireInput`).
+ *      contract awaits restart-on-uncanonical, mirroring `claimNext`).
  *
  * See docs/protocol/computation.md#host-handler-registration.
  */
@@ -53,7 +53,7 @@ export class OutputHandlerRegistry {
    * Subscribe to user-handler registrations. The callback fires every time
    * a new user handler is installed (after `registerUser` returns). Returns
    * an unsubscribe function. `GenerationService` uses this to retry parked
-   * generators whose first `getOutput` resolution saw no handlers.
+   * generators whose first `requestBody` resolution saw no handlers.
    */
   onUserHandlerRegistered(cb: (runningContract: Hash) => void): () => void {
     this._onRegisterListeners.push(cb);
@@ -97,7 +97,7 @@ export class OutputHandlerRegistry {
   }
 
   /**
-   * Resolve a `getOutput` request by iterating the fallback chain.
+   * Resolve a `requestBody` request by iterating the fallback chain.
    * Returns `null` if no handler produced a result.
    */
   async resolve(

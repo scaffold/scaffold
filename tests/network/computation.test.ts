@@ -33,7 +33,7 @@ function registerGameContract(net: TestNetwork, nodeId: string): void {
       const prevState = new TextDecoder().decode(
         env.fetch(gameVerifier, enc('state')) as Uint8Array,
       );
-      env.requireResult(enc('state'), enc(prevState + '-next'));
+      env.record(enc('state'), enc(prevState + '-next'));
     },
   });
 }
@@ -144,7 +144,7 @@ Deno.test('Computation: invalid computation detected on all nodes', async () => 
   for (const id of net.nodeIds) {
     net.getNode(id).execution.registerContract(strictContract, {
       run(env: ContractEnv) {
-        env.requireResult(enc('required-key'), enc('required-value'));
+        env.record(enc('required-key'), enc('required-value'));
       },
     });
   }

@@ -90,7 +90,7 @@ export const gameStateContract: Contract = {
   outputNamespaces: [GAME_STATE_CONTRACT, RECORD_CONTRACT],
 
   async run(env) {
-    const prevInput = await env.requireInput();
+    const prevInput = await env.claimNext();
     let prev: GameStateEnvelope;
     try {
       prev = decodeGameState(prevInput.data);
@@ -100,20 +100,20 @@ export const gameStateContract: Contract = {
 
     let params;
     try {
-      params = decodeGameParams(env.getParams());
+      params = decodeGameParams(env.params());
     } catch (e) {
       throw new ContractRejection('game params malformed: ' + (e as Error).message);
     }
 
     const { gameId, turnId } = params;
     const nextParamsBytes = encodeGameParams(gameId, turnId + 1);
-    const now = env.getTimestamp();
+    const now = env.timestamp();
 
     // -- JOIN ----------------------------------------------------------
     if (prev.state.status === STATUS_AWAITING_JOIN) {
       assertFreshInitial(prev);
 
-      const joinSlot = await env.getOutput({
+      const joinSlot = await env.requestBody({
         contract: RECORD_CONTRACT,
         params: JOIN_KEY,
       });
@@ -125,7 +125,7 @@ export const gameStateContract: Contract = {
         throw new ContractRejection('black and white must be distinct');
       }
 
-      env.requireSignature(blackPubkey);
+      env.sign(blackPubkey);
 
       const joined: GameStateEnvelope = {
         state: {
@@ -144,7 +144,7 @@ export const gameStateContract: Contract = {
         black: blackPubkey,
       };
 
-      env.requireOutput(
+      env.emitOutput(
         { contract: GAME_STATE_CONTRACT, params: nextParamsBytes },
         prevInput.value * 2,
         encodeGameState(joined),
@@ -161,7 +161,7 @@ export const gameStateContract: Contract = {
 
     // Require the mover's signature BEFORE reading the move. In
     // generation mode this throws ContractRejection on every node
-    // whose signing pubkey isn't the mover, so the parked-on-getOutput
+    // whose signing pubkey isn't the mover, so the parked-on-requestBody
     // path never runs on the opponent or third-party observers --
     // their drafts cancel before the phantom claim reserves the
     // GAME_STATE UTXO.
@@ -171,11 +171,11 @@ export const gameStateContract: Contract = {
     // verifier-params slot or generator-side signer dispatch; with the
     // signature gate first there's no way to honor them in the same
     // entry point. See TODO.md.
-    env.requireSignature(mover);
+    env.sign(mover);
 
-    // Pull the user move from RECORD/"move". getOutput consumes one slot in
+    // Pull the user move from RECORD/"move". requestBody consumes one slot in
     // the RECORD namespace (positionally first).
-    const moveSlot = await env.getOutput({
+    const moveSlot = await env.requestBody({
       contract: RECORD_CONTRACT,
       params: MOVE_KEY,
     });
@@ -213,25 +213,25 @@ export const gameStateContract: Contract = {
       switch (next.status) {
         case STATUS_WHITE_WON:
         case STATUS_TIMEOUT_BLACK:
-          env.requireOutput(
+          env.emitOutput(
             { contract: SIGNATURE_CONTRACT, params: white },
             pot,
           );
           break;
         case STATUS_BLACK_WON:
         case STATUS_TIMEOUT_WHITE:
-          env.requireOutput(
+          env.emitOutput(
             { contract: SIGNATURE_CONTRACT, params: black },
             pot,
           );
           break;
         case STATUS_DRAW: {
           const half = Math.floor(pot / 2);
-          env.requireOutput(
+          env.emitOutput(
             { contract: SIGNATURE_CONTRACT, params: white },
             half,
           );
-          env.requireOutput(
+          env.emitOutput(
             { contract: SIGNATURE_CONTRACT, params: black },
             pot - half,
           );
@@ -249,7 +249,7 @@ export const gameStateContract: Contract = {
       white: prev.white,
       black: prev.black,
     };
-    env.requireOutput(
+    env.emitOutput(
       { contract: GAME_STATE_CONTRACT, params: nextParamsBytes },
       pot,
       encodeGameState(nextEnv),

@@ -73,14 +73,14 @@ export const insuranceContract: Contract = {
   outputNamespaces: [SIGNATURE_CONTRACT],
 
   run(env) {
-    const inputsResult = env.collectInputs();
+    const inputsResult = env.claimAll();
 
     return maybeThen(inputsResult, (inputs) => {
       if (inputs.length === 0) {
         throw new ContractRejection('no insurance inputs');
       }
 
-      const now = env.getTimestamp();
+      const now = env.timestamp();
       const input = inputs[0];
       const detail = decodeInsuranceDetail(input.data);
 
@@ -97,9 +97,9 @@ export const insuranceContract: Contract = {
 
       // Check if signed by the insurance owner (solidification or non-canonical reclaim)
       try {
-        env.requireSignature(detail.pubkey);
+        env.sign(detail.pubkey);
         // Owner is reclaiming -- full return
-        env.requireOutput(
+        env.emitOutput(
           { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
           input.value,
         );
@@ -110,7 +110,7 @@ export const insuranceContract: Contract = {
 
       // Aggregation claim: someone else claiming, must return most to author
       const minReturn = Math.floor(input.value * MIN_RETURN_RATE);
-      env.requireOutput(
+      env.emitOutput(
         { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
         minReturn,
       );

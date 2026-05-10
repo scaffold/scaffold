@@ -160,7 +160,7 @@ export class Scaffold {
   }
 
   /**
-   * Register a handler for `env.getOutput(verifier)` calls during generation.
+   * Register a handler for `env.requestBody(verifier)` calls during generation.
    * `runningContract` scopes the handler to contracts whose verifier's
    * contract matches. Handlers for the same contract run in registration
    * order; each returns `null` to defer to the next, or a concrete
@@ -176,7 +176,7 @@ export class Scaffold {
 
   /**
    * Configure the solidification-time value-override hook. Called per
-   * `getOutput` slot before signing; lets the node raise the output's
+   * `requestBody` slot before signing; lets the node raise the output's
    * `value` (only). See docs/protocol/computation.md#output-requirements.
    */
   setValueOverride(fn: ValueOverrideFn | null): void {

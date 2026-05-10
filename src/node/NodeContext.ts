@@ -168,7 +168,7 @@ export class NodeContext {
   private readonly _blockBuilder: BlockBuilderModule;
   /**
    * Optional solidification-time hook that raises `value` on
-   * `getOutput`-produced slots before the block is signed. See
+   * `requestBody`-produced slots before the block is signed. See
    * docs/protocol/computation.md#output-requirements.
    */
   private _valueOverride: ValueOverrideFn | null = null;
@@ -312,9 +312,9 @@ export class NodeContext {
       processBlock: (block) => this.reactiveLayer.processBlock(block, null),
     });
     this.generation.setCancelHook((draftId) => this.draftManager.cancelDraft(draftId));
-    // Wire the node's own pubkey into generation so `requireSignature`
+    // Wire the node's own pubkey into generation so `sign`
     // can check whether this node is the right signer for any draft it
-    // produces. Without this, every `requireSignature(...)` rejects.
+    // produces. Without this, every `sign(...)` rejects.
     if (this._publicKey) this.generation.setSignerPubkey(this._publicKey);
     // Note: DraftManager.checkMargin and its canonicality listener were
     // removed -- anchor-chain Rule 1/2 in ConsensusModule is stricter
@@ -478,7 +478,7 @@ export class NodeContext {
 
   /**
    * Configure the solidification-time value-override hook. Called for
-   * every `getOutput` slot before the block is signed. See
+   * every `requestBody` slot before the block is signed. See
    * docs/protocol/computation.md#output-requirements.
    *
    * Only one hook is installed at a time; passing `null` clears it.

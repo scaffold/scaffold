@@ -69,7 +69,7 @@ Deno.test('partition: owner emitted sequence matches block outputs', () => {
   assertEquals(result.ok, true);
 });
 
-Deno.test('partition: positional value mismatch rejects (requireOutput)', () => {
+Deno.test('partition: positional value mismatch rejects (emitOutput)', () => {
   const mod = new NamespacePartitionModule();
   const sig = hashOf('signature');
   const c1 = hashOf('c1');
@@ -85,7 +85,7 @@ Deno.test('partition: positional value mismatch rejects (requireOutput)', () => 
   assertEquals(result.ok, false);
 });
 
-Deno.test('partition: getOutput slot allows higher block value', () => {
+Deno.test('partition: requestBody slot allows higher block value', () => {
   const mod = new NamespacePartitionModule();
   const sig = hashOf('signature');
   const c1 = hashOf('c1');
@@ -101,7 +101,7 @@ Deno.test('partition: getOutput slot allows higher block value', () => {
   assertEquals(result.ok, true);
 });
 
-Deno.test('partition: getOutput slot rejects lowered value', () => {
+Deno.test('partition: requestBody slot rejects lowered value', () => {
   const mod = new NamespacePartitionModule();
   const sig = hashOf('signature');
   const c1 = hashOf('c1');

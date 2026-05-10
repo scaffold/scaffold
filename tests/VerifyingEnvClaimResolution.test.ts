@@ -1,6 +1,6 @@
 // Pins the contract-env side of the same claim-resolution invariant
 // covered by UtxoIndex.test.ts: when a contract calls
-// `env.requireInput()` (or the inputs feed any other env method), the
+// `env.claimNext()` (or the inputs feed any other env method), the
 // claim index it sees must resolve through OutputSpaceModule, so
 // anchor self-claims and aggregate subtree outputs land on the right
 // underlying output.
@@ -80,14 +80,14 @@ function makeProvider(store: BlockStore): VerifyingEnvProvider<Block> {
   };
 }
 
-Deno.test('VerifyingEnv.requireInput resolves through anchor self-claims', () => {
+Deno.test('VerifyingEnv.claimNext resolves through anchor self-claims', () => {
   // Genesis ──> A ──> B(this verifier)
   //
   // A self-claims its RECORD output at index 1. B's external claim
   // index 1 (after own_count=0) addresses output_space(A)[1] = a1, NOT
   // the legacy walk's `[a0, RECORD, a1, ...][1]` = RECORD.
   //
-  // The contract under test calls requireInput() expecting a SIG
+  // The contract under test calls claimNext() expecting a SIG
   // output for label "a1". If the env resolved into RECORD instead,
   // the input wouldn't match and the call would throw.
 
@@ -125,7 +125,7 @@ Deno.test('VerifyingEnv.requireInput resolves through anchor self-claims', () =>
     provider,
   });
 
-  const inputs = env.collectInputs();
+  const inputs = env.claimAll();
   assertEquals(inputs.length, 1, 'exactly one input matching SIG/a1');
   assertEquals(inputs[0].value, 7, 'value must be a1.value');
   assertEquals(
@@ -135,9 +135,9 @@ Deno.test('VerifyingEnv.requireInput resolves through anchor self-claims', () =>
   );
 });
 
-Deno.test('VerifyingEnv.requireInput rejects when claim resolves to a foreign verifier', () => {
+Deno.test('VerifyingEnv.claimNext rejects when claim resolves to a foreign verifier', () => {
   // Same fixture, but the contract under test verifies SIG/a0 -- B
-  // claims a1, not a0, so requireInput must yield nothing.
+  // claims a1, not a0, so claimNext must yield nothing.
   const store = new BlockStore();
   const genesis = makeBlock({ name: 'genesis-env-2', outputs: [sigOut('g0', 100)] });
   const a = makeBlock({
@@ -166,7 +166,7 @@ Deno.test('VerifyingEnv.requireInput rejects when claim resolves to a foreign ve
     provider: makeProvider(store),
   });
 
-  assertEquals(env.collectInputs().length, 0);
+  assertEquals(env.claimAll().length, 0);
 });
 
 Deno.test('Block.resolveClaimToOutput returns producer + output for valid index', () => {

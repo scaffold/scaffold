@@ -24,10 +24,10 @@ export const helloContract: Contract = {
   outputNamespaces: [RECORD_CONTRACT],
 
   async run(env) {
-    await env.requireInput();
-    const name = new TextDecoder().decode(env.getParams());
+    await env.claimNext();
+    const name = new TextDecoder().decode(env.params());
     const response = new TextEncoder().encode(`Hello, ${name}`);
-    env.requireResult(new TextEncoder().encode('response'), response);
+    env.record(new TextEncoder().encode('response'), response);
   },
 };
 

@@ -105,15 +105,15 @@ Deno.test('ChessGame: join flow via prompt drives generator end-to-end', async (
 
   // White introduces the game. DraftStrategy on BOTH nodes sees the
   // unclaimed GAME_STATE UTXO and starts a generator. The contract's
-  // getOutput(RECORD/"join") parks on both until someone resolves.
+  // requestBody(RECORD/"join") parks on both until someone resolves.
   const gameId = whiteChess.createGame(200);
   await flush();
 
   // Black's UI "joins": posts a 'join' prompt on turn 0 and resolves it
   // with black's pubkey. Black's parked generator wakes, runs
-  // requireSignature(blackPub) which passes (matches black's signer
+  // sign(blackPub) which passes (matches black's signer
   // pubkey), and produces the join block. White's generator cannot
-  // satisfy requireSignature(blackPub) and stays parked.
+  // satisfy sign(blackPub) and stays parked.
   const joinPrompt = blackChess.promptJoin(gameId, 0);
   joinPrompt.resolve(blackPub);
 

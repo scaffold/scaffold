@@ -97,20 +97,20 @@ Deno.test('VerifyingEnv: mode is Verification', () => {
   assertEquals(env.mode, ExecutionMode.Verification);
 });
 
-Deno.test('VerifyingEnv: getContractHash and getParams', () => {
+Deno.test('VerifyingEnv: contractHash and params', () => {
   const provider = new TestProvider();
   const block: TestBlock = { hash: h('b'), anchor: ZERO_HASH, outputs: [], claimIndices: [], refs: [] };
   provider.addBlock(block);
   const contractHash = h('my-contract');
   const params = enc('my-params');
   const env = makeEnv({ contractHash, params, block, provider });
-  assert(Hash.equals(env.getContractHash(), contractHash));
-  assertEquals(env.getParams(), params);
+  assert(Hash.equals(env.contractHash(), contractHash));
+  assertEquals(env.params(), params);
 });
 
-// -- Tests: requireResult ------------------------------------------
+// -- Tests: record ------------------------------------------
 
-Deno.test('VerifyingEnv: requireResult accepts when result matches', () => {
+Deno.test('VerifyingEnv: record accepts when result matches', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -122,10 +122,10 @@ Deno.test('VerifyingEnv: requireResult accepts when result matches', () => {
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   // Should not throw
-  env.requireResult(enc('state'), enc('value'));
+  env.record(enc('state'), enc('value'));
 });
 
-Deno.test('VerifyingEnv: requireResult throws on wrong value', () => {
+Deno.test('VerifyingEnv: record throws on wrong value', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -137,13 +137,13 @@ Deno.test('VerifyingEnv: requireResult throws on wrong value', () => {
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   assertThrows(
-    () => env.requireResult(enc('state'), enc('expected')),
+    () => env.record(enc('state'), enc('expected')),
     ContractRejection,
     'data mismatch',
   );
 });
 
-Deno.test('VerifyingEnv: requireResult throws when key not found', () => {
+Deno.test('VerifyingEnv: record throws when key not found', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -155,15 +155,15 @@ Deno.test('VerifyingEnv: requireResult throws when key not found', () => {
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   assertThrows(
-    () => env.requireResult(enc('missing'), enc('val')),
+    () => env.record(enc('missing'), enc('val')),
     ContractRejection,
     'namespace slot exhausted',
   );
 });
 
-// -- Tests: requireOutput ------------------------------------------
+// -- Tests: emitOutput ------------------------------------------
 
-Deno.test('VerifyingEnv: requireOutput accepts when output exists', () => {
+Deno.test('VerifyingEnv: emitOutput accepts when output exists', () => {
   const provider = new TestProvider();
   const verifier: Verifier = { contract: h('pay'), params: enc('key') };
   const block: TestBlock = {
@@ -175,10 +175,10 @@ Deno.test('VerifyingEnv: requireOutput accepts when output exists', () => {
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  env.requireOutput(verifier, 42, enc('data'));
+  env.emitOutput(verifier, 42, enc('data'));
 });
 
-Deno.test('VerifyingEnv: requireOutput accepts with default empty data', () => {
+Deno.test('VerifyingEnv: emitOutput accepts with default empty data', () => {
   const provider = new TestProvider();
   const verifier: Verifier = { contract: h('pay'), params: enc('key') };
   const block: TestBlock = {
@@ -190,10 +190,10 @@ Deno.test('VerifyingEnv: requireOutput accepts with default empty data', () => {
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  env.requireOutput(verifier, 10);
+  env.emitOutput(verifier, 10);
 });
 
-Deno.test('VerifyingEnv: requireOutput throws when output missing', () => {
+Deno.test('VerifyingEnv: emitOutput throws when output missing', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -205,7 +205,7 @@ Deno.test('VerifyingEnv: requireOutput throws when output missing', () => {
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   assertThrows(
-    () => env.requireOutput({ contract: h('x'), params: new Uint8Array(0) }, 1),
+    () => env.emitOutput({ contract: h('x'), params: new Uint8Array(0) }, 1),
     ContractRejection,
     'namespace slot exhausted',
   );
@@ -213,7 +213,7 @@ Deno.test('VerifyingEnv: requireOutput throws when output missing', () => {
 
 // -- Tests: positional namespace matching --------------------------
 
-Deno.test('VerifyingEnv: requireOutput matches positionally within namespace', () => {
+Deno.test('VerifyingEnv: emitOutput matches positionally within namespace', () => {
   const provider = new TestProvider();
   const contract = h('pay');
   const vA: Verifier = { contract, params: enc('a') };
@@ -230,11 +230,11 @@ Deno.test('VerifyingEnv: requireOutput matches positionally within namespace', (
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  env.requireOutput(vA, 5);
-  env.requireOutput(vB, 7);
+  env.emitOutput(vA, 5);
+  env.emitOutput(vB, 7);
 });
 
-Deno.test('VerifyingEnv: requireOutput positional mismatch rejects', () => {
+Deno.test('VerifyingEnv: emitOutput positional mismatch rejects', () => {
   const provider = new TestProvider();
   const contract = h('pay');
   const vA: Verifier = { contract, params: enc('a') };
@@ -253,13 +253,13 @@ Deno.test('VerifyingEnv: requireOutput positional mismatch rejects', () => {
   const env = makeEnv({ block, provider });
   // Contract asked for B first, but block has A at slot 0.
   assertThrows(
-    () => env.requireOutput(vB, 7),
+    () => env.emitOutput(vB, 7),
     ContractRejection,
     'verifier mismatch',
   );
 });
 
-Deno.test('VerifyingEnv: getOutput returns value/data from next namespace slot', () => {
+Deno.test('VerifyingEnv: requestBody returns value/data from next namespace slot', () => {
   const provider = new TestProvider();
   const contract = h('pay');
   const v: Verifier = { contract, params: enc('a') };
@@ -272,12 +272,12 @@ Deno.test('VerifyingEnv: getOutput returns value/data from next namespace slot',
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  const result = env.getOutput(v);
+  const result = env.requestBody(v);
   assertEquals(result.value, 42);
   assertEquals(result.data, enc('payload'));
 });
 
-Deno.test('VerifyingEnv: getOutput rejects when block slot uses a different verifier', () => {
+Deno.test('VerifyingEnv: requestBody rejects when block slot uses a different verifier', () => {
   const provider = new TestProvider();
   const contract = h('pay');
   const vA: Verifier = { contract, params: enc('a') };
@@ -292,9 +292,9 @@ Deno.test('VerifyingEnv: getOutput rejects when block slot uses a different veri
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   assertThrows(
-    () => env.getOutput(vB),
+    () => env.requestBody(vB),
     ContractRejection,
-    'getOutput verifier mismatch',
+    'requestBody verifier mismatch',
   );
 });
 
@@ -315,17 +315,17 @@ Deno.test('VerifyingEnv: getEmittedSlots records origin per call', () => {
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  env.requireOutput(vA, 5);
-  env.getOutput(vB);
+  env.emitOutput(vA, 5);
+  env.requestBody(vB);
   const slots = env.getEmittedSlots();
   assertEquals(slots.length, 2);
   assertEquals(slots[0].origin, 'require');
   assertEquals(slots[1].origin, 'get');
 });
 
-// -- Tests: collectInputs ------------------------------------------
+// -- Tests: claimAll ------------------------------------------
 
-Deno.test('VerifyingEnv: collectInputs returns matching claimed outputs', () => {
+Deno.test('VerifyingEnv: claimAll returns matching claimed outputs', () => {
   const provider = new TestProvider();
   const contractHash = h('game');
   const params = enc('config');
@@ -358,13 +358,13 @@ Deno.test('VerifyingEnv: collectInputs returns matching claimed outputs', () => 
   provider.addBlock(block);
 
   const env = makeEnv({ contractHash, params, block, provider });
-  const inputs = env.collectInputs();
+  const inputs = env.claimAll();
   assertEquals(inputs.length, 2);
   assertEquals(inputs[0].data, enc('move1'));
   assertEquals(inputs[1].data, enc('move2'));
 });
 
-Deno.test('VerifyingEnv: collectInputs returns empty when no matching claims', () => {
+Deno.test('VerifyingEnv: claimAll returns empty when no matching claims', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -375,12 +375,12 @@ Deno.test('VerifyingEnv: collectInputs returns empty when no matching claims', (
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  assertEquals(env.collectInputs(), []);
+  assertEquals(env.claimAll(), []);
 });
 
-// -- Tests: requireInput -------------------------------------------
+// -- Tests: claimNext -------------------------------------------
 
-Deno.test('VerifyingEnv: requireInput returns inputs sequentially', () => {
+Deno.test('VerifyingEnv: claimNext returns inputs sequentially', () => {
   const provider = new TestProvider();
   const contractHash = h('game');
   const params = enc('cfg');
@@ -408,13 +408,13 @@ Deno.test('VerifyingEnv: requireInput returns inputs sequentially', () => {
   provider.addBlock(block);
 
   const env = makeEnv({ contractHash, params, block, provider });
-  const first = env.requireInput();
-  const second = env.requireInput();
+  const first = env.claimNext();
+  const second = env.claimNext();
   assertEquals(first.data, enc('a'));
   assertEquals(second.data, enc('b'));
 });
 
-Deno.test('VerifyingEnv: requireInput throws when no more inputs', () => {
+Deno.test('VerifyingEnv: claimNext throws when no more inputs', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -425,12 +425,12 @@ Deno.test('VerifyingEnv: requireInput throws when no more inputs', () => {
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  assertThrows(() => env.requireInput(), ContractRejection, 'no more inputs');
+  assertThrows(() => env.claimNext(), ContractRejection, 'no more inputs');
 });
 
 // -- Tests: data-less outputs are invisible to contracts -----------
 
-Deno.test('VerifyingEnv: collectInputs skips data-less outputs', () => {
+Deno.test('VerifyingEnv: claimAll skips data-less outputs', () => {
   const provider = new TestProvider();
   const contractHash = h('game');
   const params = enc('cfg');
@@ -459,13 +459,13 @@ Deno.test('VerifyingEnv: collectInputs skips data-less outputs', () => {
   provider.addBlock(block);
 
   const env = makeEnv({ contractHash, params, block, provider });
-  const inputs = env.collectInputs();
+  const inputs = env.claimAll();
   assertEquals(inputs.length, 2);
   assertEquals(inputs[0].data, enc('move1'));
   assertEquals(inputs[1].data, enc('move2'));
 });
 
-Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
+Deno.test('VerifyingEnv: claimNext exhausts on filtered list', () => {
   const provider = new TestProvider();
   const contractHash = h('game');
   const params = enc('cfg');
@@ -494,12 +494,12 @@ Deno.test('VerifyingEnv: requireInput exhausts on filtered list', () => {
   provider.addBlock(block);
 
   const env = makeEnv({ contractHash, params, block, provider });
-  const first = env.requireInput();
-  const second = env.requireInput();
+  const first = env.claimNext();
+  const second = env.claimNext();
   assertEquals(first.data, enc('a'));
   assertEquals(second.data, enc('b'));
-  // Third requireInput() must exhaust -- the data-less output is not counted.
-  assertThrows(() => env.requireInput(), ContractRejection, 'no more inputs');
+  // Third claimNext() must exhaust -- the data-less output is not counted.
+  assertThrows(() => env.claimNext(), ContractRejection, 'no more inputs');
 });
 
 Deno.test('VerifyingEnv: fetch skips data-less record outputs', () => {
@@ -643,9 +643,9 @@ Deno.test('VerifyingEnv: fetch throws when ref claims verifier but no result key
   );
 });
 
-// -- Tests: requireSignature ---------------------------------------
+// -- Tests: sign ---------------------------------------
 
-Deno.test('VerifyingEnv: requireSignature passes when signer matches pubkey', () => {
+Deno.test('VerifyingEnv: sign passes when signer matches pubkey', () => {
   const provider = new TestProvider();
   const pubkey = enc('my-pubkey');
   const block: TestBlock = {
@@ -657,10 +657,10 @@ Deno.test('VerifyingEnv: requireSignature passes when signer matches pubkey', ()
   };
   provider.addBlock(block);
   const env = makeEnv({ params: pubkey, block, provider, signer: pubkey });
-  env.requireSignature(pubkey);
+  env.sign(pubkey);
 });
 
-Deno.test('VerifyingEnv: requireSignature throws when signer does not match', () => {
+Deno.test('VerifyingEnv: sign throws when signer does not match', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -672,13 +672,13 @@ Deno.test('VerifyingEnv: requireSignature throws when signer does not match', ()
   provider.addBlock(block);
   const env = makeEnv({ params: enc('actual'), block, provider, signer: enc('actual') });
   assertThrows(
-    () => env.requireSignature(enc('expected')),
+    () => env.sign(enc('expected')),
     ContractRejection,
     'block signer does not match',
   );
 });
 
-Deno.test('VerifyingEnv: requireSignature throws when block is unsigned', () => {
+Deno.test('VerifyingEnv: sign throws when block is unsigned', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('b'),
@@ -690,7 +690,7 @@ Deno.test('VerifyingEnv: requireSignature throws when block is unsigned', () => 
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
   assertThrows(
-    () => env.requireSignature(enc('any-key')),
+    () => env.sign(enc('any-key')),
     ContractRejection,
     'block is not signed',
   );
@@ -712,7 +712,7 @@ Deno.test('VerifyingEnv: contract returning normally means accept', () => {
 
   // Simulate a contract that does work and returns
   const contract = (e: VerifyingEnv<TestBlock>) => {
-    e.requireResult(enc('k'), enc('v'));
+    e.record(enc('k'), enc('v'));
     // normal return = accept
   };
   contract(env); // should not throw

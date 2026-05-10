@@ -438,7 +438,7 @@ Deno.test({
   name: 'Timeout: opponent can claim after clock runs out',
   // Temporarily disabled: GameStateContract now requires the mover's
   // signature before reading the move (so non-mover generators die
-  // before parking on getOutput). The opponent-signed timeout branch
+  // before parking on requestBody). The opponent-signed timeout branch
   // needs its own verifier-params slot or a signer-dispatched entry
   // point. Re-enable once that lands.
   ignore: true,

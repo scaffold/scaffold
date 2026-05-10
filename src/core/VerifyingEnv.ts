@@ -45,13 +45,13 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   private readonly _signer: Uint8Array | undefined;
   private readonly _timestamp: number;
 
-  /** Tracks which matching inputs have been consumed by requireInput(). */
+  /** Tracks which matching inputs have been consumed by claimNext(). */
   private _inputCursor = 0;
   private _matchingInputs: Input[] | null = null;
 
   /**
    * Per-contract cursor into block.outputs, indexed by the output's
-   * `verifier.contract`. Increments each time requireOutput / getOutput
+   * `verifier.contract`. Increments each time emitOutput / requestBody
    * consumes a slot for that contract. Enables positional matching
    * within a namespace (see docs/protocol/computation.md#output-namespaces).
    */
@@ -86,19 +86,19 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     this._timestamp = opts.timestamp ?? 0;
   }
 
-  getContractHash(): Hash {
+  contractHash(): Hash {
     return this._contractHash;
   }
 
-  getParams(): Uint8Array {
+  params(): Uint8Array {
     return this._params;
   }
 
-  collectInputs(): Input[] {
+  claimAll(): Input[] {
     return this._getMatchingInputs();
   }
 
-  requireInput(): Input {
+  claimNext(): Input {
     const inputs = this._getMatchingInputs();
     if (this._inputCursor >= inputs.length) {
       throw new ContractRejection('no more inputs available');
@@ -106,7 +106,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return inputs[this._inputCursor++];
   }
 
-  requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
+  emitOutput(verifier: Verifier, value: number, data?: Uint8Array): void {
     const dataBytes = data ?? new Uint8Array(0);
     const slot = this._consumeNextInNamespace(verifier.contract);
     if (slot.data === undefined) {
@@ -138,16 +138,16 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     });
   }
 
-  getOutput(verifier: Verifier): { value: number; data: Uint8Array } {
+  requestBody(verifier: Verifier): { value: number; data: Uint8Array } {
     const slot = this._consumeNextInNamespace(verifier.contract);
     if (slot.data === undefined) {
       throw new ContractRejection(
-        'getOutput slot has no data at namespace slot',
+        'requestBody slot has no data at namespace slot',
       );
     }
     if (!verifierEquals(slot.verifier, verifier)) {
       throw new ContractRejection(
-        'getOutput verifier mismatch at namespace slot',
+        'requestBody verifier mismatch at namespace slot',
       );
     }
     this._emittedSlots.push({
@@ -157,10 +157,10 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return { value: slot.value, data: slot.data };
   }
 
-  requireResult(key: Uint8Array, value: Uint8Array): void {
-    // Sugar over requireOutput for RECORD_CONTRACT outputs. Matches positionally
+  record(key: Uint8Array, value: Uint8Array): void {
+    // Sugar over emitOutput for RECORD_CONTRACT outputs. Matches positionally
     // within the RECORD_CONTRACT namespace (value = 0 for records).
-    this.requireOutput({ contract: RECORD_CONTRACT, params: key }, 0, value);
+    this.emitOutput({ contract: RECORD_CONTRACT, params: key }, 0, value);
   }
 
   fetch(verifier: Verifier, key: Uint8Array): Uint8Array {
@@ -199,7 +199,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection(`no ref block found claiming verifier`);
   }
 
-  requireSignature(pubkey: Uint8Array): void {
+  sign(pubkey: Uint8Array): void {
     if (!this._signer) {
       throw new ContractRejection('block is not signed');
     }
@@ -208,13 +208,13 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  getTimestamp(): number {
+  timestamp(): number {
     return this._timestamp;
   }
 
   /**
-   * The slots this contract emitted during verification (requireOutput +
-   * getOutput calls). Used by the block-level namespace partition check.
+   * The slots this contract emitted during verification (emitOutput +
+   * requestBody calls). Used by the block-level namespace partition check.
    */
   getEmittedSlots(): OutputSlot[] {
     return this._emittedSlots;

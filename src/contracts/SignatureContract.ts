@@ -27,7 +27,7 @@ export const signatureContract: Contract = {
   outputNamespaces: [],
 
   run(env) {
-    env.requireSignature(env.getParams());
+    env.sign(env.params());
   },
 
   walkParams(params, host) {

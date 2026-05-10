@@ -57,10 +57,10 @@ export interface ContractEnv {
   readonly mode: ExecutionMode;
 
   /** The contract hash for this invocation. */
-  getContractHash(): Hash;
+  contractHash(): Hash;
 
   /** The verifier params for this invocation. */
-  getParams(): Uint8Array;
+  params(): Uint8Array;
 
   /**
    * Return all inputs (claimed outputs) matching this contract's verifier.
@@ -69,7 +69,7 @@ export interface ContractEnv {
    * Verification: synchronous, returns matching claims from the block.
    * Generation: possibly async, queries available outputs from UTXO index.
    */
-  collectInputs(limit?: number): MaybePromise<Input[]>;
+  claimAll(limit?: number): MaybePromise<Input[]>;
 
   /**
    * Claim one input matching this contract's verifier.
@@ -78,7 +78,7 @@ export interface ContractEnv {
    * Verification: returns the next unclaimed matching input; throws if none.
    * Generation: finds/waits for an input; adds it as a resolved claim.
    */
-  requireInput(): MaybePromise<Input>;
+  claimNext(): MaybePromise<Input>;
 
   /**
    * Require the block to produce a specific output.
@@ -90,15 +90,15 @@ export interface ContractEnv {
    *
    * See docs/protocol/computation.md#output-namespaces.
    *
-   * TODO(@joel): consider unifying requireOutput + getOutput into a
+   * TODO(@joel): consider unifying emitOutput + requestBody into a
    * single method that varies by argument count:
-   *   requireOutput(verifier, data?, value?): Promise<{value, data}>
-   *     (verifier, data, value) -- today's requireOutput
+   *   emitOutput(verifier, data?, value?): Promise<{value, data}>
+   *     (verifier, data, value) -- today's emitOutput
    *     (verifier, data)        -- contract supplies data; host supplies value
    *     (verifier)              -- host supplies both
-   * Revisit once more real contracts exercise getOutput.
+   * Revisit once more real contracts exercise requestBody.
    */
-  requireOutput(verifier: Verifier, value: number, data?: Uint8Array): void;
+  emitOutput(verifier: Verifier, value: number, data?: Uint8Array): void;
 
   /**
    * Ask the host for an output under the given verifier. The host (in
@@ -106,7 +106,7 @@ export interface ContractEnv {
    *
    * Generation: the host handler chain synthesizes the output. If no
    * handler matches, the contract blocks until one does (like
-   * `requireInput`). Returns `{value, data}` so the contract can use
+   * `claimNext`). Returns `{value, data}` so the contract can use
    * them in downstream logic.
    *
    * Verification: reads the next output in the contract's namespace
@@ -116,7 +116,7 @@ export interface ContractEnv {
    *
    * See docs/protocol/computation.md#output-requirements.
    */
-  getOutput(
+  requestBody(
     verifier: Verifier,
   ): MaybePromise<{ value: number; data: Uint8Array }>;
 
@@ -127,7 +127,7 @@ export interface ContractEnv {
    * Verification: checks the result output exists with the expected value.
    * Generation: creates the result output and self-claim.
    */
-  requireResult(key: Uint8Array, value: Uint8Array): void;
+  record(key: Uint8Array, value: Uint8Array): void;
 
   /**
    * Read a result from an ancestor block that claims the given verifier.
@@ -144,7 +144,7 @@ export interface ContractEnv {
    * Assert the block's signature matches the given public key.
    * Throws ContractRejection if not.
    */
-  requireSignature(pubkey: Uint8Array): void;
+  sign(pubkey: Uint8Array): void;
 
   /**
    * Return the current block's timestamp (milliseconds since epoch).
@@ -152,7 +152,7 @@ export interface ContractEnv {
    * Verification: returns the block's wire-format timestamp.
    * Generation: returns the draft's timestamp or Date.now().
    */
-  getTimestamp(): number;
+  timestamp(): number;
 }
 
 /** @deprecated Use Contract interface from './Contract.ts' instead. */
@@ -194,7 +194,7 @@ export interface GeneratingEnvProvider<BlockType> extends VerifyingEnvProvider<B
   /** Find a block that claims the given verifier. Returns its hash. */
   findBlockClaiming(verifier: Verifier): MaybePromise<Hash | undefined>;
   /**
-   * Synthesize a `(value, data)` pair for a `getOutput` request. Returns
+   * Synthesize a `(value, data)` pair for a `requestBody` request. Returns
    * `null` to indicate the handler chain found nothing; the contract then
    * blocks on restart-on-uncanonical. See `OutputHandlerRegistry`.
    */

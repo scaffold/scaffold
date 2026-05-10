@@ -165,7 +165,7 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   assertEquals(entries.length, AGGREGATION_THRESHOLD);
 
   // Create a draft claiming the first block's aggregation output.
-  // The aggregation contract will call requireInput() 4 times,
+  // The aggregation contract will call claimNext() 4 times,
   // consuming all 4 aggregation outputs.
   const draft = createDraft({
     claims: [{ producer: blocks[0].hash, outputIndex: 0 }],
@@ -183,9 +183,9 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   assert(updated, 'draft should exist after successful generation');
   assertEquals(updated.status.phase, 'readyToSolidify');
 
-  // The contract consumed 4 inputs via requireInput(). The first call
+  // The contract consumed 4 inputs via claimNext(). The first call
   // re-found the trigger claim (blocks[0]:0) which is deduplicated on merge.
-  // Final: trigger (1) + 3 new from requireInput() = 4 total.
+  // Final: trigger (1) + 3 new from claimNext() = 4 total.
   assertEquals(updated.claims.length, AGGREGATION_THRESHOLD);
 
   // All resolved claims should reference distinct blocks
@@ -194,7 +194,7 @@ Deno.test('4 blocks with aggregation outputs triggers aggregator generation', as
   );
   assertEquals(claimedBlocks.size, AGGREGATION_THRESHOLD);
 
-  // The contract produces one aggregation data output via requireOutput()
+  // The contract produces one aggregation data output via emitOutput()
   assertEquals(updated.outputs.length, 1);
   assertEquals(
     Hash.equals(updated.outputs[0].verifier.contract, AGGREGATION_CONTRACT),
@@ -277,7 +277,7 @@ Deno.test('merged resolvedClaims contain no duplicates', async () => {
   assert(updated, 'draft should exist');
 
   // After merge, all resolved claims should be distinct (block, outputIndex) pairs.
-  // The trigger claim (blocks[0]:0) that requireInput() re-found is deduplicated.
+  // The trigger claim (blocks[0]:0) that claimNext() re-found is deduplicated.
   const seen = new Set<string>();
   for (const c of updated.claims) {
     const key = `${c.producer.toPrimitive()}:${c.outputIndex}`;

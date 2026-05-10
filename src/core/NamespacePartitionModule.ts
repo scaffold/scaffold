@@ -35,8 +35,8 @@ export type PartitionResult =
  *   1. At most one owner per namespace on a given block.
  *   2. Within every owned namespace, the block's outputs (in block order)
  *      equal, positionally, what the owning contract emitted.
- *      - For `requireOutput`: exact `(verifier, value, data)` match.
- *      - For `getOutput`: `verifier` and `data` exact; block's value may
+ *      - For `emitOutput`: exact `(verifier, value, data)` match.
+ *      - For `requestBody`: `verifier` and `data` exact; block's value may
  *        be >= emitted value (solidification-time raise).
  *   3. Unowned namespaces (no claim's contract declares them) are left to
  *      other protocol rules (e.g., the mandatory aggregation marker).
@@ -142,7 +142,7 @@ export class NamespacePartitionModule {
             };
           }
         } else {
-          // requireOutput: exact value match.
+          // emitOutput: exact value match.
           if (onBlock.value !== emitted.value) {
             return {
               ok: false,

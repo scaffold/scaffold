@@ -138,7 +138,7 @@ interface BlockedEntry {
   resolve: (input: AvailableInput) => void;
 }
 
-/** A generator parked in `getOutput` waiting for a user handler to match. */
+/** A generator parked in `requestBody` waiting for a user handler to match. */
 interface ParkedGetOutput {
   draftId: Hash;
   runningContract: Hash;
@@ -189,7 +189,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   private readonly _blocked = new Map<string, BlockedEntry[]>();
 
   /**
-   * Generators parked in `getOutput` waiting for a user handler to match.
+   * Generators parked in `requestBody` waiting for a user handler to match.
    * Keyed by the running contract hash (OutputHandlerRegistry dispatches by
    * running contract). When a user handler registers for that contract, we
    * re-run the resolver for each parked entry; entries whose handler now
@@ -207,7 +207,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   /** Draft-level cancellation flags. Checked by the run loop. */
   private readonly _cancelled = new Set<HashPrimitive>();
 
-  /** The node's public key, used for requireSignature in generation. */
+  /** The node's public key, used for sign in generation. */
   private _signerPubkey: Uint8Array | undefined;
 
   constructor(ctx: ProtocolContext) {
@@ -241,7 +241,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       this.onCanonicalityChange(hash, canonical);
     });
 
-    // Wake generators parked in `getOutput` when a new user handler lands
+    // Wake generators parked in `requestBody` when a new user handler lands
     // for the running contract. The handler may or may not actually resolve
     // the parked request -- we re-run the resolver chain and keep the entry
     // parked if everything still returns null.
@@ -250,7 +250,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     });
 
     // Wake blocked contracts when a reorg frees up an output. Without
-    // this hook, a contract that called `requireInput()` before the
+    // this hook, a contract that called `claimNext()` before the
     // matching UTXO existed would stay parked forever if the only way
     // the UTXO appears is via an existing claimant becoming non-canonical
     // (DraftStrategy only reacts to newly-canonical events).
@@ -282,7 +282,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
   }
 
   /**
-   * Install the node's own public key. `requireSignature` in generation
+   * Install the node's own public key. `sign` in generation
    * mode uses this to decide whether the draft can be signed by the
    * required pubkey at solidification. Set by NodeContext after
    * construction (since the key isn't part of ProtocolContext DI).
@@ -316,7 +316,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       this._draftStore.transition(draft.draftId, {
         phase: 'failed',
         reason: 'trigger producer not in store',
-        at: 'requireInput',
+        at: 'claimNext',
       });
       return { draftId: draft.draftId, cancel: () => {} };
     }
@@ -325,7 +325,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       this._draftStore.transition(draft.draftId, {
         phase: 'failed',
         reason: 'trigger output not found',
-        at: 'requireInput',
+        at: 'claimNext',
       });
       return { draftId: draft.draftId, cancel: () => {} };
     }
@@ -399,7 +399,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
   /**
    * Module asked us to restart. Allocate a fresh draft via DraftManager
-   * with no claims -- the contract's `collectInputs()` call (or
+   * with no claims -- the contract's `claimAll()` call (or
    * our default at end-of-run) will pick up fresh canonical UTXOs.
    *
    * We cannot call DraftManager.createDraft with an empty claims
@@ -639,14 +639,14 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     return n;
   }
 
-  /** Number of generators parked in `getOutput`. For introspection/tests. */
+  /** Number of generators parked in `requestBody`. For introspection/tests. */
   get parkedGetOutputCount(): number {
     let n = 0;
     for (const q of this._parkedGetOutput.values()) n += q.length;
     return n;
   }
 
-  /** Debug: list parked getOutput entries. */
+  /** Debug: list parked requestBody entries. */
   debugParkedGetOutput(): {
     runningContract: string;
     runningParamsHex: string;
@@ -689,7 +689,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
   /**
    * Called when a new user handler registers for `runningContract`. Re-run
-   * the resolver chain for every parked getOutput on that contract hash and
+   * the resolver chain for every parked requestBody on that contract hash and
    * resolve any whose handler chain now returns non-null. Entries that still
    * resolve to null stay parked.
    *

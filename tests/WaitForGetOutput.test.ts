@@ -1,4 +1,4 @@
-// End-to-end: a contract calls `env.getOutput(verifier)` in generation mode
+// End-to-end: a contract calls `env.requestBody(verifier)` in generation mode
 // and no handler returns non-null yet. The generator must park on a queue
 // and resume when a handler is later registered that returns non-null.
 
@@ -14,17 +14,17 @@ import type { Contract } from '../src/contracts/Contract.ts';
 const enc = (s: string) => new TextEncoder().encode(s);
 
 /**
- * Contract: claims a single input, calls getOutput(RECORD/"prompt"),
- * mirrors the resolved bytes into a requireResult under the same key.
+ * Contract: claims a single input, calls requestBody(RECORD/"prompt"),
+ * mirrors the resolved bytes into a record under the same key.
  */
 const BLOCKING_CONTRACT = Hash.digest('scaffold:test:blocking-get-output');
 
 const blockingContract: Contract = {
   outputNamespaces: [RECORD_CONTRACT],
   async run(env) {
-    await env.requireInput();
-    const slot = await env.getOutput({ contract: RECORD_CONTRACT, params: enc('prompt') });
-    env.requireResult(enc('echo'), slot.data);
+    await env.claimNext();
+    const slot = await env.requestBody({ contract: RECORD_CONTRACT, params: enc('prompt') });
+    env.record(enc('echo'), slot.data);
   },
 };
 
@@ -44,7 +44,7 @@ Deno.test(
 
     // Publish a block that has the BLOCKING_CONTRACT output as a new UTXO.
     // DraftStrategy sees the canonicality change and kicks off a generator;
-    // the generator calls getOutput and parks because no handler is set.
+    // the generator calls requestBody and parks because no handler is set.
     scaffold.put({
       outputs: [
         {
@@ -55,7 +55,7 @@ Deno.test(
       ],
     });
 
-    // Give DraftStrategy time to start the generator. The getOutput call
+    // Give DraftStrategy time to start the generator. The requestBody call
     // inside the contract will park because no handler has been registered
     // yet.
     await new Promise((r) => setTimeout(r, 50));
@@ -63,7 +63,7 @@ Deno.test(
     const gen = scaffold.context.generation;
     assert(
       gen.parkedGetOutputCount >= 1,
-      'a generator should be parked in getOutput, got ' + gen.parkedGetOutputCount,
+      'a generator should be parked in requestBody, got ' + gen.parkedGetOutputCount,
     );
 
     // Now register a handler. The parked generator should resume.

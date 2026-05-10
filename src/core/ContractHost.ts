@@ -47,7 +47,7 @@ export interface GeneratingRunInput<BlockType> {
   readonly provider: GeneratingEnvProvider<BlockType>;
   readonly waitForInput?: WaitForInputFn;
   readonly waitForGetOutput?: WaitForGetOutputFn;
-  /** The node's own pubkey. Used by `requireSignature` in generation mode. */
+  /** The node's own pubkey. Used by `sign` in generation mode. */
   readonly signerPubkey?: Uint8Array;
 }
 
@@ -74,7 +74,7 @@ export interface GeneratingRunResult<BlockType> {
   readonly claims: ClaimRef[];
   readonly refs: Hash[];
   readonly includeConstraints: Hash[];
-  /** Exposed so callers can apply the default `collectInputs()` if the contract never called inputs-consuming methods. */
+  /** Exposed so callers can apply the default `claimAll()` if the contract never called inputs-consuming methods. */
   readonly env: GeneratingEnv<BlockType>;
 }
 
@@ -163,7 +163,7 @@ export class ContractHost<BlockType> {
 
   /**
    * Run a contract in generation mode. Returns the env's accumulated state
-   * plus the env itself (so callers can invoke `env.collectInputs()` post-run
+   * plus the env itself (so callers can invoke `env.claimAll()` post-run
    * as a default when the contract never requested inputs).
    *
    * Throws ContractRejection / other errors up to the caller -- the caller

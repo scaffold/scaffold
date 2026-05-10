@@ -37,8 +37,8 @@ export type DraftId = Hash;
 
 /** Where a draft's generator hit a fatal error. */
 export type DraftFailureSite =
-  | 'requireSignature'
-  | 'requireInput'
+  | 'sign'
+  | 'claimNext'
   | 'contract'
   | 'lowering';
 
@@ -116,7 +116,7 @@ export interface Draft {
    * draft consumes. Drafts only run when their producing blocks are
    * present in the local store, so claims are always fully resolved
    * (each `outputIndex < producer.outputs.length`). Mutable so the
-   * generator can append claims as it runs (requireInput / collectInputs).
+   * generator can append claims as it runs (claimNext / claimAll).
    *
    * Economic value of a claim is not stored here; it is looked up on
    * demand from `store.get(producer).outputs[outputIndex].value`.

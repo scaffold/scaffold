@@ -4,10 +4,10 @@
 // it introduces the initial GAME_STATE UTXO. Every subsequent block is
 // produced by a generator that DraftStrategy spawns automatically on the
 // unclaimed GAME_STATE UTXO:
-//   - requireInput() claims the prev state.
-//   - getOutput(RECORD/"move" or "join") blocks until our registered
+//   - claimNext() claims the prev state.
+//   - requestBody(RECORD/"move" or "join") blocks until our registered
 //     handler resolves (see `resolvePrompt`).
-//   - requireSignature(mover) filters which node's generator actually
+//   - sign(mover) filters which node's generator actually
 //     produces the block: only the mover's node can sign.
 //
 // React populates `pending` (via `promptMove` / `promptJoin`); clicking a
@@ -120,7 +120,7 @@ export class ChessGame {
     if (this.contractRegistered) return;
     this.scaffold.registerContract(GAME_STATE_CONTRACT, gameStateContract);
     // Generator-side bridge: when the contract calls
-    // env.getOutput(RECORD/"move" or "join") inside GAME_STATE_CONTRACT,
+    // env.requestBody(RECORD/"move" or "join") inside GAME_STATE_CONTRACT,
     // the host invokes this handler. We always return a Promise for a
     // recognized (gameId, turnId, kind) tuple; the Promise resolves when
     // someone calls `resolvePrompt` (or the matching prompt's `resolve`).
@@ -350,7 +350,7 @@ export class ChessGame {
         if (!Hash.equals(o.verifier.contract, GAME_STATE_CONTRACT)) continue;
         // "Unspent" for chess display means: no real canonical block has
         // claimed this GAME_STATE. Phantom-draft claims (the mover's
-        // turn-N+1 draft parked on getOutput) reserve in UtxoIndex but
+        // turn-N+1 draft parked on requestBody) reserve in UtxoIndex but
         // don't actually consume the output until they publish a real
         // block. Going through OutputClaimService lets us filter to
         // real-block claimants only.

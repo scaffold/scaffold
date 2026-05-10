@@ -482,7 +482,7 @@ Deno.test('OutputClaimModule', async (t) => {
     // A1 has 1 own + 2 from S1 + (G's 10 - whatever A1 claims from G).
     // For simplicity, let's say A1 claims nothing from G.
     // A1 total outputs = 1 + 2 + 10 = 13? No, that's not right either.
-    // getOutputCount for A1: it's computed by BlockCreation. Let me just set it directly.
+    // requestBodyCount for A1: it's computed by BlockCreation. Let me just set it directly.
     // For this test, A1's newOutputCount as seen by A2 = let's say 3 (1 own + 2 from S1).
     // But that's only if A1 claims all of G's outputs. Let me simplify:
     // S1 is a subtree of A1. S1 has 2 outputs.

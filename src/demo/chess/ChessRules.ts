@@ -688,7 +688,7 @@ function matchPseudo(state: GameState, m: Move): Generated | null {
  *   handled here -- caller checks signer)
  *
  * The caller is responsible for:
- * - signature requirements (requireSignature in the contract)
+ * - signature requirements (sign in the contract)
  * - verifying elapsed >= 0 (should come from contract timestamp check)
  */
 export function applyMove(

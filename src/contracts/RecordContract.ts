@@ -61,7 +61,7 @@ export const recordContract: Contract = {
   outputNamespaces: [],
 
   async run(env) {
-    const inputs = await env.collectInputs();
+    const inputs = await env.claimAll();
     for (const input of inputs) {
       if (!input.isSelfClaim) {
         throw new ContractRejection('record outputs must be self-claimed');

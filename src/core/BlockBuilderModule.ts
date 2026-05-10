@@ -69,7 +69,7 @@ export interface BlockBuilderProvider {
   placement: PlacementModule<Block> | null;
   /** Sign a BlockSpec into a Block. May return null on signing failure. */
   createBlock(spec: BlockSpec, privateKey: Uint8Array | null): Block | null;
-  /** Optional value-override hook for `getOutput` slots. */
+  /** Optional value-override hook for `requestBody` slots. */
   valueOverride: ValueOverrideFn | null;
   /** Private key for signing, or null for unsigned blocks. */
   privateKey: Uint8Array | null;
@@ -107,7 +107,7 @@ export class BlockBuilderModule {
     //
     // Aggregation include constraints: claims targeting AGGREGATION_CONTRACT
     // marker outputs convert their producers into aggregated blocks. This
-    // mirrors the implicit semantic from `aggregation.md` -- requireInput()
+    // mirrors the implicit semantic from `aggregation.md` -- claimNext()
     // on the aggregation contract adds the producing block as an include
     // constraint -- without yet plumbing constraints onto the Draft type.
     // Shared with ConsensusService / NodeWeightsService so all three
@@ -285,7 +285,7 @@ export class BlockBuilderModule {
 
     // -- 7. Value override -------------------------------------------
     //
-    // Allow the configured hook to raise `value` on `getOutput`-produced
+    // Allow the configured hook to raise `value` on `requestBody`-produced
     // slots before signing. Verifier + data are frozen; only value may
     // change, and only upward.
     if (this.provider.valueOverride) {
@@ -420,7 +420,7 @@ function composeChainWeights(
 }
 
 /**
- * Apply the value-override hook to every `getOutput`-sourced slot. The
+ * Apply the value-override hook to every `requestBody`-sourced slot. The
  * hook sees `(verifier, data, defaultValue)` and returns the final
  * value. Verifier + data are frozen; only value changes. Non-`get`
  * slots and slots without data pass through unchanged.
