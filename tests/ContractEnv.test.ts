@@ -829,6 +829,26 @@ Deno.test('VerifyingEnv: getContractMetadata throws when no matching output exis
   );
 });
 
+Deno.test('VerifyingEnv: fork is a no-op (sub-block verified independently)', () => {
+  const provider = new TestProvider();
+  const block: TestBlock = {
+    hash: h('exec'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+  // Fork should silently succeed in verification mode -- nothing on this
+  // block depends on the forked sub-contract; its own block is verified
+  // separately. See docs/protocol/wasm-abi.md#forking.
+  env.fork(
+    { contract: h('hash-contract'), params: enc('blob-hash') },
+    [],
+  );
+});
+
 Deno.test('VerifyingEnv: getContractMetadata skips body-less outputs', () => {
   const provider = new TestProvider();
   const contractHash = h('compiler');

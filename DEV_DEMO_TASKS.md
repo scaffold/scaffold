@@ -58,13 +58,29 @@ The bridge from `WebAssembly.Instance` to the `Contract` interface. Nothing else
   - Holds the WASM binary bytes.
   - `run(env)` schedules a job on `WasmExecutor`, marshalling `env` calls per ABI.
   - `walkParams`, `walkData`, `buildParams`, `buildData` similarly delegate to exported WASM funcs (only if exported).
-  - `outputNamespaces` read from a well-known export (e.g. `output_namespaces_ptr` + `output_namespaces_len`).
+  - `outputNamespaces` read from the contract block's `output_namespaces` record output (per [wasm-abi.md#block-level-contract-metadata](docs/protocol/wasm-abi.md#block-level-contract-metadata)) — not a WASM export.
 - [ ] Populate `WasmStore` automatically when a block whose only output is a `record('wasm', binary)` lands and is canonical (this is the link from "compile" to "callable contract"): listen on `consensus.onCanonicalityChange`, scan record outputs.
 
-### A4. WASM stack composition (importing one contract's exports as another's imports)
-- [ ] Spec it in `docs/protocol/wasm-abi.md` §Stacks: a contract can declare `wasi_imports = [otherContractHash]` so the executor instantiates the WASI shim as a sibling and wires its exports into the user module's `wasi_snapshot_preview1` import namespace.
-- [ ] Implement in `WasmContractAdapter`: instantiate the import-providing modules first, build the imports object, then instantiate the importing module.
-- [ ] Add a stock `wasi-shim.wasm` contract that maps WASI snapshot preview 1 syscalls onto the Scaffold ABI. Most likely: re-use `src/worker/WasiImpl.ts` as the JS-side reference and ship a thin `.wasm` shim, OR just expose `WasiImpl.ts` directly in the worker and let user modules import `wasi_snapshot_preview1` against it (simpler — pursue this first).
+### A4. Composition: stacking and forking
+Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wasm-abi.md#composition).
+
+**Stacking** (static, in-band, low-overhead):
+- [ ] In `WasmContractAdapter`: read the contract block's `wasm_hashes` record. For each blob hash (bottom-to-top), `fetch({ contract: HASH_CONTRACT, params: blobHash })` to get the WASM bytes, instantiate, and wire its exports into the next layer's imports. The primary `wasm` (top of the stack) is instantiated last with the layer below as its import object.
+- [ ] Provide a single runtime-supplied shared linear memory imported by every layer under `(import "env" "memory")`. Reject contracts whose stack layers export a memory.
+- [ ] Restrict `scaffold_env.*` / `scaffold_walker.*` / `scaffold_builder.*` to wasm 1 (bottom). Higher layers must not see the host imports.
+- [ ] Reject cycles in the stack at load.
+- [ ] One per-verifier budget shared across the entire stack.
+- [ ] Ship a stock `wasi-shim.wasm` contract block whose `wasm` record is a thin shim that maps WASI snapshot preview 1 syscalls onto `scaffold_env`. Use `src/worker/WasiImpl.ts` as the reference behaviour. Compile the shim from minimal Zig or hand-write the `.wat`.
+
+**Forking** (dynamic, out-of-band, parallel):
+- [ ] Wire `GeneratingEnv.fork(verifier, records)` into the generation pipeline (currently a stub that throws). Implementation needs:
+  - Spawn a sub-generator on `verifier` with its own `ContractEnv`, own claims / outputs / namespace, own per-verifier budget.
+  - Route the sub-contract's `requestBody(v)` calls through the parent-supplied `records[]` first (verifier-equality match → return `(value, body)` and emit slot on the sub-block); fall through to the normal handler chain on no match.
+  - Block the parent generator until the sub-block commits, propagating `ContractRejection` from the sub-generator up.
+  - Auto-emergence: if the sub-contract claims no inputs and no UTXO matches `verifier`, self-claim a new output under `verifier` on the sub-block. If a UTXO already matches, consume it (idempotent "store-once" property).
+  - Cap recursion depth (default 16) to prevent unbounded fork loops.
+- [ ] Decide block-placement policy: merge sub-contract outputs into the parent's block when small, place on a new block when larger. Heuristic; not part of the contract-visible semantics.
+- [ ] Tests: fork creates a UTXO when none exists; fork consumes an existing UTXO when one matches; fork-of-failing-sub-generator propagates rejection; depth-cap enforced.
 
 ### A5. Tests
 - [ ] `tests/WasmContractAdapter.test.ts`: load a tiny hand-rolled `.wat` → `.wasm` (compiled at test setup) that emits one record and verify it round-trips through `runVerifying` / `runGenerating`.

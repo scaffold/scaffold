@@ -81,7 +81,8 @@ Standard records on the contract block:
 
 | Record key | Wire format | Meaning |
 |---|---|---|
-| `wasm`              | raw `.wasm` bytes        | The contract module. Required. |
+| `wasm`              | raw `.wasm` bytes        | The contract module — top of the stack if stacking. Required. |
+| `wasm_hashes`       | concatenated 32-byte hashes (no length prefix; total length is `N × 32`) | Stack composition (see [Stacking](#stacking)). Each hash is a content-addressed reference to a WASM blob (not a block hash). Order is bottom-to-top: index 0 sits closest to the scaffold env; index N-1 sits immediately under the primary `wasm`. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation. Absent or empty → no stack; the contract runs as a single module. |
 | `output_namespaces` | concatenated 32-byte hashes (no length prefix; total length is the count × 32) | The closed set of contract hashes this contract may produce. Empty record (zero bytes) = produces no outputs. See [computation.md#output-namespaces](computation.md#output-namespaces). |
 | `abi_version`       | UTF-8 date string `YYYYMMDD` (e.g. `"20250510"`) | The ABI revision this WASM was built against. Runtimes refuse to load contracts whose `abi_version` is newer than their own supported version, or older than their compatibility floor. (Future: a WASM export `abi_version() -> i32` returning the same date as a packed integer like `20250510`; runtimes verify the two match.) |
 | `max_memory_pages`  | little-endian `u32`      | Per-instance memory cap in 64 KiB pages. Defaults to `4096` (256 MiB) when absent. |
@@ -177,6 +178,7 @@ Mirrors `ContractEnv` (`src/core/ContractEnv.ts`). Calls marked **(may block)** 
 | `require_result`    | `(key_ptr: i32, key_len: i32, value_ptr: i32, value_len: i32) -> ()` | — | Sets/checks a `RECORD_CONTRACT` self-claimed output. Synchronous. |
 | `fetch`             | `(verifier_ptr: i32, verifier_len: i32, key_ptr: i32, key_len: i32) -> i64` | packed `(ptr, len)` of the record value bytes | **may block**. Throws via `reject` if no ancestor block claims the verifier. |
 | `get_contract_metadata` | `(verifier_ptr: i32, verifier_len: i32) -> i64` | packed `(ptr, len)` of `i128 value + bytes body` | Read-only lookup against the **contract's own block** (the block whose hash equals the running contract's hash). Used for retrieving record outputs and other metadata baked into the contract definition: `output_namespaces`, `abi_version`, source bytes for interpreter-stack contracts, etc. — see [Block-level contract metadata](#block-level-contract-metadata). Determinism holds because contract blocks are content-addressed and immutable. Throws via `reject` if the contract block is not loaded or no matching output exists. |
+| `fork`              | `(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()` | — | Spawn an independent sub-contract. Verification: no-op. **may block** in generation: waits for the sub-contract's block to commit, propagates `ContractRejection` from the sub-generator. See [Forking](#forking). |
 | `sign`              | `(pubkey_ptr: i32, pubkey_len: i32) -> ()` | — | Asserts the block was signed by `pubkey`. Synchronous. |
 | `reject`            | `(reason_ptr: i32, reason_len: i32) -> noreturn` | — | Aborts the contract with a `ContractRejection`. Bytes are interpreted as UTF-8. The runtime traps after the call so any further WASM execution is impossible; conventionally callers also `unreachable` immediately after for compilers that don't infer noreturn. |
 
@@ -284,15 +286,74 @@ JSPI is a fast path opportunity, not a replacement: as of the spec date, it ship
 
 ---
 
-## Stack Composition
+## Composition
 
-A WASM contract may import other contracts' exports. This is how interpreter-style stacks are built (e.g. a QuickJS contract serving as the runtime for a JS-source contract; a WASI shim providing `wasi_snapshot_preview1` to a WASI-targeting binary).
+Two mechanisms for composing contracts. They serve different needs and compose orthogonally — stacked contracts can fork; forked sub-contracts can be stacks.
 
-The ABI itself is unchanged — composition is a *runtime* concern handled by the executor (see [draft-blocks.md](draft-blocks.md) and DEV_DEMO_TASKS §A4). The relevant interaction with this spec:
+| | **Stacking** | **Forking** |
+|---|---|---|
+| Purpose | Static, in-band, low-overhead composition | Dynamic, out-of-band, parallel composition |
+| Granularity | Multiple WASM blobs in one execution | Independent generator producing its own block |
+| Configured | At contract publication, via `wasm_hashes` record on the contract block | At runtime, via `fork()` host call during generation |
+| Communication | Direct WASM-to-WASM (exports↔imports), shared memory | One-shot pre-resolution via a records vector; no further interaction |
+| Budget | Stack shares the parent's per-verifier budget | Each fork gets its own fresh budget |
+| Verification | Single block, single verifier — stack is internal | Sub-contract block is independently verified |
 
-- A contract that imports from another contract declares those imports under a non-`scaffold_*` namespace, conventionally the imported contract's symbolic name (e.g. `wasi_snapshot_preview1`). The runtime resolves the namespace by instantiating the named contract first and wiring its exports into the importer's import object.
-- An imported contract's host imports (`scaffold_env`, `scaffold_walker`, `scaffold_builder`) are bound to the *importing* contract's environment. The imported instance shares no `ContractEnv` of its own; it acts as a pure library.
-- The runtime handles ordering: imported instances are constructed before the importer. Cycles are rejected at load.
+### Stacking
+
+A contract may declare a stack of additional WASM blobs that load alongside its primary module and link to each other directly. The mental model:
+
+```
+scaffold env <-> wasm 1 <-> wasm 2 <-> ... <-> wasm N
+```
+
+Each pair is linked by **WASM-to-WASM exports↔imports** (no JS in the path). Only WASM 1 — the bottom of the stack — sees the `scaffold_env.*`, `scaffold_walker.*`, `scaffold_builder.*` host imports. Each higher WASM sees only the layer immediately below it as its imports object. This is enforced by the runtime's import-resolver and is not negotiable: a higher WASM cannot reach down past its predecessor.
+
+**Configuration.** The contract block carries a `wasm_hashes` record output (alongside `wasm`, `output_namespaces`, `abi_version`, etc. — see [Block-level contract metadata](#block-level-contract-metadata)). Its body is `N × 32` bytes: a flat array of WASM blob content-hashes, ordered bottom (closest to scaffold) to top (closest to the contract's `run`). The primary `wasm` record is the top of the stack; `wasm_hashes` enumerates everything *below* it. (`wasm_hashes` may be absent or empty for contracts that don't stack.)
+
+**Blob lookup.** The hashes refer to WASM binary blobs, not block hashes. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation begins — see [Forking](#forking) for how blobs get registered on the network. All blobs must be loaded and instantiated before the contract's `run` is invoked. Failure to load any blob is a load-time crash.
+
+**Memory model.** All WASMs in a stack import a single runtime-supplied shared linear memory under `(import "env" "memory" (memory ...))`. This makes pointer-passing across layers trivial (a `(ptr, len)` tuple has the same meaning everywhere). Each WASM may also have its own private memory if it likes, but the shared memory is the rendezvous for cross-layer data. WASMs that export a memory instead of importing it are rejected at load (no in-stack module owns the memory).
+
+**Execution.** The contract's `run` is invoked on the top WASM. From there, every host call traverses the stack: top → ... → wasm 1 → real `scaffold_env.*` (resolved against the executing block's `ContractEnv` via the transport described in [Async-bridge transport](#async-bridge-transport)). Each layer is free to inspect, modify, or pass through.
+
+**Cycles** in the stack are rejected at load.
+
+**Budget.** A stacked execution counts as a single contract execution: the entire stack shares one per-verifier budget.
+
+**Use cases.** WASI binaries (top WASM imports `wasi_snapshot_preview1`; the layer below is a Scaffold-WASI shim that exports those names and translates to scaffold_env). JavaScript interpreters (top WASM is a thin wrapper that loads JS source from `getContractMetadata`; layer below is QuickJS-as-WASM). Any other "interpreter on top of host" pattern.
+
+### Forking
+
+A generating contract may spawn an independent sub-contract that runs in its own `ContractEnv` and produces its own block.
+
+**ABI.** From the contract's perspective:
+
+```
+fork(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()
+```
+
+The verifier identifies the sub-contract to spawn (its `(contractHash, params)`). The records bytes are a serialised array of `Output` wire records (`u32 count` then `count × Output`) — pre-resolutions the sub-contract's `requestBody` will consume.
+
+**Verification.** No-op. The sub-contract's block is independently verified later via the normal verification path; nothing on the parent block needs to confirm the fork succeeded.
+
+**Generation.** The runtime spawns a new generator for `verifier` and runs it to completion. The parent's `fork` call is **blocking**: it waits for the sub-block to be committed (or for the sub-generator to fail). If the sub-generator rejects, the parent generator also rejects — fork is not fire-and-forget. Blocking + propagated failure means the parent has a guarantee that, by the time `fork` returns, the sub-contract's block exists on the network.
+
+**Records routing.** When the sub-contract calls `requestBody(verifier)`, the runtime first scans the parent-supplied records by verifier-equality. A match returns the record's `(value, body)` and emits an output slot on the sub-contract's block (same as a normal `requestBody`). This is "generation-only pre-resolution that materialises as a slot": the sub-contract's block is self-contained at verification time — no records needed at verify, the slots are already on the wire.
+
+A `requestBody` call with no matching record falls through to the normal handler chain on the sub-contract.
+
+**Sub-contract namespace.** The sub-contract has its own namespace: its claims, outputs, and self-claims live on its block, not the parent's. The parent and sub-contract share no state beyond the verifier and records.
+
+**Auto-emergence and idempotency.** If the sub-contract claims no inputs and no UTXO exists matching the forked verifier, the runtime creates a self-claimed output under that verifier on the sub-contract's block. The sub-contract's block thus *emerges as a UTXO source* for the verifier. If a UTXO already exists, the sub-contract claims it instead and no new UTXO is created — the data exists on the network exactly once.
+
+**Recursion.** Forks may fork. The runtime caps depth (default: 16) to prevent malicious unbounded recursion.
+
+**Budget.** Each fork gets its own fresh per-verifier budget, independent of the parent's. Stacked WASMs *inside* a forked sub-contract still share that fork's budget.
+
+**Block placement.** No hard rule. The runtime may merge a forked sub-contract's outputs into the parent's block (if the sub-contract is small) or place them on a new block (if larger). Authors should not depend on either — `fork` is a generation directive, not a block-creation guarantee.
+
+**Use cases.** Providing data alongside a hash request: a parent that publishes `wasm_hashes: [H]` calls `fork({ contract: HASH_CONTRACT, params: H }, [{ verifier: RECORD_CONTRACT/'preimage', value: 0, body: blob }])` to seed the network with the preimage. The HASH contract verifies that hashing `body` yields `H`, then self-claims. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the forked block. Any other "publish-and-make-available" pattern works the same way.
 
 ---
 

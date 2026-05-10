@@ -163,6 +163,34 @@ export interface ContractEnv {
   ): MaybePromise<{ value: number; body: Uint8Array }>;
 
   /**
+   * Spawn an independent sub-contract in a new generation context.
+   *
+   * Verification: no-op. The sub-contract's block is independently verified.
+   *
+   * Generation: spawns a generator with `verifier` as its identity. The
+   * sub-contract has its own ContractEnv and its own block. `records`
+   * is a pre-resolved set of `requestBody` answers: when the sub-contract
+   * calls `requestBody(v)`, the runtime first scans `records` by
+   * verifier-equality and, if matched, returns that `(value, body)` and
+   * emits an output slot on the sub-contract's block (so verification
+   * needs nothing beyond the block itself).
+   *
+   * Blocking. Returns once the sub-block has committed. If the
+   * sub-generator throws `ContractRejection`, this call propagates the
+   * rejection to the parent generator.
+   *
+   * Auto-emergence. If the sub-contract claims no inputs and no UTXO
+   * exists matching `verifier`, the runtime self-claims a new output
+   * under `verifier` on the sub-contract's block, so the verifier
+   * becomes a UTXO source on the network. If a matching UTXO already
+   * exists, it is consumed instead and no new UTXO is created — the
+   * data is stored exactly once.
+   *
+   * See docs/protocol/wasm-abi.md#forking.
+   */
+  fork(verifier: Verifier, records: Output[]): MaybePromise<void>;
+
+  /**
    * Assert the block's signature matches the given public key.
    * Throws ContractRejection if not.
    */

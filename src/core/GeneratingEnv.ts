@@ -280,6 +280,17 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection('no matching output on contract block');
   }
 
+  fork(_verifier: Verifier, _records: Output[]): Promise<void> {
+    // TODO(@joel): wire fork into the generation pipeline.
+    // Spec: spawns a sub-generator on its own block with `records` as
+    // pre-resolved requestBody answers, blocks until commit, propagates
+    // ContractRejection on sub-generator failure, auto-claims an existing
+    // matching UTXO if one exists else self-emerges. See
+    // docs/protocol/wasm-abi.md#forking. Reject loudly until then so
+    // a fork-using contract fails fast rather than silently no-opping.
+    throw new ContractRejection('fork() not yet implemented');
+  }
+
   timestamp(): number {
     return Date.now();
   }

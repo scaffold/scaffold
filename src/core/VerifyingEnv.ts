@@ -223,6 +223,12 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection('no matching output on contract block');
   }
 
+  fork(_verifier: Verifier, _records: Output[]): void {
+    // No-op in verification mode -- the sub-contract's block is verified
+    // independently elsewhere; nothing on this block depends on it.
+    // See docs/protocol/wasm-abi.md#forking.
+  }
+
   timestamp(): number {
     return this._timestamp;
   }
