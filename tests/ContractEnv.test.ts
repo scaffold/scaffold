@@ -736,9 +736,9 @@ Deno.test('VerifyingEnv: contract throwing ContractRejection means reject', () =
   assertThrows(() => contract(env), ContractRejection, 'bad block');
 });
 
-// -- Tests: getContractMetadata ------------------------------------
+// -- Tests: contractMetadata ------------------------------------
 
-Deno.test('VerifyingEnv: getContractMetadata reads matching record from contract block', () => {
+Deno.test('VerifyingEnv: contractMetadata reads matching record from contract block', () => {
   const provider = new TestProvider();
   const contractHash = h('compiler');
 
@@ -766,7 +766,7 @@ Deno.test('VerifyingEnv: getContractMetadata reads matching record from contract
   provider.addBlock(block);
 
   const env = makeEnv({ contractHash, block, provider });
-  const result = env.getContractMetadata({
+  const result = env.contractMetadata({
     contract: RECORD_CONTRACT,
     params: enc('abi_version'),
   });
@@ -774,7 +774,7 @@ Deno.test('VerifyingEnv: getContractMetadata reads matching record from contract
   assertEquals(result.value, 0);
 });
 
-Deno.test('VerifyingEnv: getContractMetadata throws when contract block not loaded', () => {
+Deno.test('VerifyingEnv: contractMetadata throws when contract block not loaded', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('exec'),
@@ -788,7 +788,7 @@ Deno.test('VerifyingEnv: getContractMetadata throws when contract block not load
   // contractHash points at a block we never added.
   const env = makeEnv({ contractHash: h('missing-contract'), block, provider });
   assertThrows(
-    () => env.getContractMetadata({
+    () => env.contractMetadata({
       contract: RECORD_CONTRACT,
       params: enc('abi_version'),
     }),
@@ -797,7 +797,7 @@ Deno.test('VerifyingEnv: getContractMetadata throws when contract block not load
   );
 });
 
-Deno.test('VerifyingEnv: getContractMetadata throws when no matching output exists', () => {
+Deno.test('VerifyingEnv: contractMetadata throws when no matching output exists', () => {
   const provider = new TestProvider();
   const contractHash = h('compiler');
   const contractBlock: TestBlock = {
@@ -820,7 +820,7 @@ Deno.test('VerifyingEnv: getContractMetadata throws when no matching output exis
 
   const env = makeEnv({ contractHash, block, provider });
   assertThrows(
-    () => env.getContractMetadata({
+    () => env.contractMetadata({
       contract: RECORD_CONTRACT,
       params: enc('nonexistent'),
     }),
@@ -849,7 +849,7 @@ Deno.test('VerifyingEnv: fork is a no-op (sub-block verified independently)', ()
   );
 });
 
-Deno.test('VerifyingEnv: getContractMetadata skips body-less outputs', () => {
+Deno.test('VerifyingEnv: contractMetadata skips body-less outputs', () => {
   const provider = new TestProvider();
   const contractHash = h('compiler');
   const verifier: Verifier = {
@@ -861,7 +861,7 @@ Deno.test('VerifyingEnv: getContractMetadata skips body-less outputs', () => {
     anchor: ZERO_HASH,
     outputs: [
       // A body-less output (pure incentive) under the same verifier
-      // must not satisfy getContractMetadata.
+      // must not satisfy contractMetadata.
       { verifier, value: 0 },
     ],
     claimIndices: [],
@@ -880,7 +880,7 @@ Deno.test('VerifyingEnv: getContractMetadata skips body-less outputs', () => {
 
   const env = makeEnv({ contractHash, block, provider });
   assertThrows(
-    () => env.getContractMetadata(verifier),
+    () => env.contractMetadata(verifier),
     ContractRejection,
     'no matching output on contract block',
   );
