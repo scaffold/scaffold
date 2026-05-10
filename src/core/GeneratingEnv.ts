@@ -262,6 +262,24 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
+  getContractMetadata(verifier: Verifier): { value: number; body: Uint8Array } {
+    const contractBlock = this._provider.getBlock(this._contractHash);
+    if (contractBlock === undefined) {
+      throw new ContractRejection('contract block not loaded');
+    }
+    const outputs = this._provider.getOutputs(contractBlock);
+    for (const output of outputs) {
+      if (output.body === undefined) continue;
+      if (
+        Hash.equals(output.verifier.contract, verifier.contract) &&
+        bytesEqual(output.verifier.params, verifier.params)
+      ) {
+        return { value: output.value, body: output.body };
+      }
+    }
+    throw new ContractRejection('no matching output on contract block');
+  }
+
   timestamp(): number {
     return Date.now();
   }

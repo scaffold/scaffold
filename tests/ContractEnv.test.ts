@@ -735,3 +735,133 @@ Deno.test('VerifyingEnv: contract throwing ContractRejection means reject', () =
   };
   assertThrows(() => contract(env), ContractRejection, 'bad block');
 });
+
+// -- Tests: getContractMetadata ------------------------------------
+
+Deno.test('VerifyingEnv: getContractMetadata reads matching record from contract block', () => {
+  const provider = new TestProvider();
+  const contractHash = h('compiler');
+
+  // The contract's own block carries metadata records.
+  const contractBlock: TestBlock = {
+    hash: contractHash,
+    anchor: ZERO_HASH,
+    outputs: [
+      makeRecordOutput('abi_version', enc('20250510')),
+      makeRecordOutput('output_namespaces', new Uint8Array(32)),
+    ],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(contractBlock);
+
+  // The executing block is unrelated.
+  const block: TestBlock = {
+    hash: h('exec'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+
+  const env = makeEnv({ contractHash, block, provider });
+  const result = env.getContractMetadata({
+    contract: RECORD_CONTRACT,
+    params: enc('abi_version'),
+  });
+  assertEquals(result.body, enc('20250510'));
+  assertEquals(result.value, 0);
+});
+
+Deno.test('VerifyingEnv: getContractMetadata throws when contract block not loaded', () => {
+  const provider = new TestProvider();
+  const block: TestBlock = {
+    hash: h('exec'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+
+  // contractHash points at a block we never added.
+  const env = makeEnv({ contractHash: h('missing-contract'), block, provider });
+  assertThrows(
+    () => env.getContractMetadata({
+      contract: RECORD_CONTRACT,
+      params: enc('abi_version'),
+    }),
+    ContractRejection,
+    'contract block not loaded',
+  );
+});
+
+Deno.test('VerifyingEnv: getContractMetadata throws when no matching output exists', () => {
+  const provider = new TestProvider();
+  const contractHash = h('compiler');
+  const contractBlock: TestBlock = {
+    hash: contractHash,
+    anchor: ZERO_HASH,
+    outputs: [makeRecordOutput('abi_version', enc('20250510'))],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(contractBlock);
+
+  const block: TestBlock = {
+    hash: h('exec'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+
+  const env = makeEnv({ contractHash, block, provider });
+  assertThrows(
+    () => env.getContractMetadata({
+      contract: RECORD_CONTRACT,
+      params: enc('nonexistent'),
+    }),
+    ContractRejection,
+    'no matching output on contract block',
+  );
+});
+
+Deno.test('VerifyingEnv: getContractMetadata skips body-less outputs', () => {
+  const provider = new TestProvider();
+  const contractHash = h('compiler');
+  const verifier: Verifier = {
+    contract: RECORD_CONTRACT,
+    params: enc('abi_version'),
+  };
+  const contractBlock: TestBlock = {
+    hash: contractHash,
+    anchor: ZERO_HASH,
+    outputs: [
+      // A body-less output (pure incentive) under the same verifier
+      // must not satisfy getContractMetadata.
+      { verifier, value: 0 },
+    ],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(contractBlock);
+
+  const block: TestBlock = {
+    hash: h('exec'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(block);
+
+  const env = makeEnv({ contractHash, block, provider });
+  assertThrows(
+    () => env.getContractMetadata(verifier),
+    ContractRejection,
+    'no matching output on contract block',
+  );
+});

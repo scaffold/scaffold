@@ -141,6 +141,28 @@ export interface ContractEnv {
   fetch(verifier: Verifier, key: Uint8Array): MaybePromise<Uint8Array>;
 
   /**
+   * Read an output from the contract's own block (the block whose hash
+   * is `env.contractHash()`).
+   *
+   * Like `requestBody`, but operates on the contract block instead of
+   * the executing block, and is purely read-only (no slot is emitted).
+   * Used for retrieving record outputs baked into the contract definition:
+   * `output_namespaces`, `abi_version`, `max_memory_pages`, source bytes for
+   * interpreter-stack contracts, and any other contract-level metadata.
+   * See docs/protocol/wasm-abi.md#block-level-contract-metadata.
+   *
+   * Determinism: the contract block is content-addressed and immutable,
+   * so all peers observe identical outputs. The contract block must be
+   * loaded locally; if WASM is loaded, the block is loaded.
+   *
+   * Throws ContractRejection if the contract block is not loaded or if
+   * no output matching the verifier exists on it.
+   */
+  getContractMetadata(
+    verifier: Verifier,
+  ): MaybePromise<{ value: number; body: Uint8Array }>;
+
+  /**
    * Assert the block's signature matches the given public key.
    * Throws ContractRejection if not.
    */
