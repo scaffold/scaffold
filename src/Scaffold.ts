@@ -1,5 +1,5 @@
 import { secp } from './util/secp.ts';
-import { Block } from './core/Block.ts';
+import { Block, HASH_CONTRACT } from './core/Block.ts';
 import type { Contract } from './contracts/Contract.ts';
 import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
@@ -110,7 +110,10 @@ export class Scaffold {
       },
       useFloodGossip: config.useFloodGossip ?? false,
       getConnectedPeers: () => getConnectedPeers ? getConnectedPeers() : [],
-      contractPlugins: config.contractPlugins ?? [wasmContractPlugin()],
+      // User-supplied plugins go in directly. When unset, we install a
+      // default `wasmContractPlugin` post-construction below -- the default
+      // plugin's `resolveBlob` needs FetchManager, which isn't constructed yet.
+      contractPlugins: config.contractPlugins ?? [],
     });
 
     // 2. Create FetchManager, wired to the already-constructed node services.
@@ -129,6 +132,24 @@ export class Scaffold {
       findCanonicalTip: () => findCanonicalTip(nodeContext),
       logger: this.eventLog ? new ScopedLogger(this.eventLog, 'fetch') : undefined,
     });
+
+    // 2a. Install the default `wasmContractPlugin` if the caller didn't supply
+    //     their own plugin list. The plugin needs `resolveBlob` backed by
+    //     FetchManager for stacking layer-blob lookups; can't construct earlier.
+    if (config.contractPlugins === undefined) {
+      const fetchMgr = this.fetchManager;
+      const defaultPlugin = wasmContractPlugin({
+        resolveBlob: async (hash: Hash) => {
+          const result = await fetchMgr.fetch({
+            contract: HASH_CONTRACT,
+            params: hash.toBytes(),
+            verify: true,
+          });
+          return result.body;
+        },
+      });
+      nodeContext.contractHost.registerPlugin(defaultPlugin);
+    }
 
     // 3. Create NetworkBridge if plugins are provided
     if (config.plugins && config.plugins.length > 0) {

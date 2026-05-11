@@ -2,15 +2,20 @@
 
 import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
+import type { CompiledStack } from './WasmLayers.ts';
 
 /**
  * Single contract-execution boundary, independent of how host calls are
- * bridged across threads. Each method instantiates a fresh WASM instance,
- * runs the named export, and returns when the export completes.
+ * bridged across threads. Each method instantiates the full stack with a
+ * runtime-supplied shared linear memory and runs the named export on the
+ * top (primary) instance.
  *
- * Memory caps and budget enforcement are the caller's responsibility (see
- * `WasmContractAdapter` in A3 for the wiring): the transport itself takes
- * a module + an env/host and runs it.
+ * Stacking ([wasm-abi.md#stacking](docs/protocol/wasm-abi.md#stacking)):
+ *   - All layers share one `env.memory` import supplied by the transport.
+ *   - Only the bottom layer sees the scaffold export view (`scaffold_env.*` /
+ *     `scaffold_walker.*` / `scaffold_builder.*`, flattened).
+ *   - Higher layers' imports resolve against the layer immediately below's
+ *     `instance.exports`, optionally remapped via `mapImports`.
  *
  * Three implementations in v1:
  * - `AtomicsWorkerTransport` (default; SAB + Atomics.wait, requires COOP/COEP)
@@ -24,27 +29,27 @@ export interface WasmTransport {
    * the export returns; throws `ContractRejection` on `scaffold_env.reject`,
    * Error otherwise (crash).
    */
-  run(module: WebAssembly.Module, env: ContractEnv): Promise<void>;
+  run(stack: CompiledStack, env: ContractEnv): Promise<void>;
 
-  /** Run `walk_params(params_ptr, params_len)`. */
+  /** Run `walk_params(params_ptr, params_len)` on the top instance. */
   walkParams(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     params: Uint8Array,
     host: WalkerHost,
   ): Promise<void>;
 
-  /** Run `walk_data(data_ptr, data_len)`. */
+  /** Run `walk_data(data_ptr, data_len)` on the top instance. */
   walkData(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     data: Uint8Array,
     host: WalkerHost,
   ): Promise<void>;
 
   /** Run `build_params() -> i64`. Returns the bytes the contract emitted. */
-  buildParams(module: WebAssembly.Module, host: BuilderHost): Promise<Uint8Array>;
+  buildParams(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array>;
 
   /** Run `build_data() -> i64`. Returns the bytes the contract emitted. */
-  buildData(module: WebAssembly.Module, host: BuilderHost): Promise<Uint8Array>;
+  buildData(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array>;
 
   /** Free any pooled resources (workers). Idempotent. */
   close(): Promise<void>;

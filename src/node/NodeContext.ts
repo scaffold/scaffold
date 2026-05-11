@@ -3,6 +3,7 @@ import {
   Block,
   BlockStore,
   COLLATERAL_CONTRACT,
+  HASH_CONTRACT,
   INSURANCE_CONTRACT,
   makeBlockStoreOutputSpace,
   RECORD_CONTRACT,
@@ -32,6 +33,7 @@ import {
 import { collateralContract } from '../contracts/CollateralContract.ts';
 import { insuranceContract } from '../contracts/InsuranceContract.ts';
 import { recordContract } from '../contracts/RecordContract.ts';
+import { hashContract } from '../contracts/HashContract.ts';
 import type { Contract } from '../contracts/Contract.ts';
 import type { ContractPlugin } from '../core/ContractPlugin.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Block.ts';
@@ -313,6 +315,7 @@ export class NodeContext {
     this._registerBuiltinContract(INSURANCE_CONTRACT, insuranceContract);
     this._registerBuiltinContract(RECORD_CONTRACT, recordContract);
     this._registerBuiltinContract(SIGNATURE_CONTRACT, signatureContract);
+    this._registerBuiltinContract(HASH_CONTRACT, hashContract);
 
     // 5d. Create DraftManager with GenerationService as its GeneratorProvider
     //     and install the cancel hook so a rejecting generation can clean

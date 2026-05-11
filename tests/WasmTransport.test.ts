@@ -21,6 +21,13 @@ async function loadFixture(name: string): Promise<WebAssembly.Module> {
   return await WebAssembly.compile(bytes);
 }
 
+import type { CompiledStack } from '../src/plugins/wasm/WasmLayers.ts';
+
+/** Wrap a single module as a CompiledStack (no lower layers). */
+function singleStack(module: WebAssembly.Module): CompiledStack {
+  return { layers: [], primary: { module } };
+}
+
 // -- Mock env / hosts ---------------------------------------------
 
 /** Recording env: synchronous; captures emitOutput calls verbatim. */
@@ -176,7 +183,7 @@ for (const entry of transportEntries()) {
       try {
         const module = await loadFixture('echo');
         const env = new RecordingEnv(new TextEncoder().encode('hello world'));
-        await transport.run(module, env);
+        await transport.run(singleStack(module), env);
         assertEquals(env.emittedOutputs.length, 1);
         const out = env.emittedOutputs[0];
         assertEquals(out.verifier.contract.toHex(), ZERO_HASH.toHex());
@@ -200,7 +207,7 @@ for (const entry of transportEntries()) {
         const module = await loadFixture('reject_test');
         const env = new RecordingEnv(new Uint8Array(0));
         await assertRejects(
-          () => transport.run(module, env),
+          () => transport.run(singleStack(module), env),
           ContractRejection,
           'rejected on purpose',
         );
@@ -221,7 +228,7 @@ for (const entry of transportEntries()) {
       try {
         const module = await loadFixture('walker_test');
         const walker = new RecordingWalker();
-        await transport.walkParams(module, new Uint8Array(0), walker);
+        await transport.walkParams(singleStack(module), new Uint8Array(0), walker);
         // AtomicsWorkerTransport routes emit_string as an inform; give the
         // microtask loop one tick to deliver the postMessage before asserting.
         await new Promise((r) => setTimeout(r, 0));
@@ -248,7 +255,7 @@ for (const entry of transportEntries()) {
       try {
         const module = await loadFixture('builder_test');
         const builder = new FixedBuilder({ name: 'Joel' });
-        const result = await transport.buildParams(module, builder);
+        const result = await transport.buildParams(singleStack(module), builder);
         assertEquals(new TextDecoder().decode(result), 'Joel');
       } finally {
         await transport.close();

@@ -30,6 +30,15 @@ export const SIGNATURE_CONTRACT = Hash.digest('signature-contract');
 export const RECORD_CONTRACT = Hash.digest('result-contract');
 
 /**
+ * Well-known contract hash for content-addressed blob lookup. A HASH_CONTRACT
+ * verifier's params are a 32-byte blob hash; the block carrying the contract
+ * provides a `preimage` record whose body, when hashed, must equal those
+ * params. See docs/protocol/wasm-abi.md#stacking (used by WASM stacking to
+ * fetch layer blobs by content hash).
+ */
+export const HASH_CONTRACT = Hash.digest('hash-contract');
+
+/**
  * Well-known contract hash for the chess-demo game-state contract. Lives in
  * core so tests and services can reference a stable hash without depending on
  * the demo module.

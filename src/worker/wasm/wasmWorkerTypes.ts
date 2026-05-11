@@ -14,10 +14,16 @@ export interface WasmInitMsg {
   stagingBuf: SharedArrayBuffer;
 }
 
-/** Sent from main -> worker to instantiate the module for one call. */
+/**
+ * Sent from main -> worker to instantiate the (possibly stacked) module(s)
+ * for one call. `modules` is bottom-to-top; the last entry is the primary
+ * (its exports drive the call). `mapImports[i]` is the rebinding map for
+ * `modules[i]`; each may be undefined for default 1:1 imports.
+ */
 export interface WasmInstantiateMsg {
   type: 'instantiate';
-  module: WebAssembly.Module;
+  modules: WebAssembly.Module[];
+  mapImports: (Record<string, string> | undefined)[];
   mode: WasmSessionMode;
   /** Pre-cached run-mode constants. Ignored for walk/build modes. */
   preset?: {

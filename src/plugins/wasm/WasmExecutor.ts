@@ -2,12 +2,13 @@
 //
 // Selects a `WasmTransport` at construction (config override > feature
 // detection > Atomics default) and exposes the per-export entry points
-// that `WasmContractAdapter` (A3) will call. Holds the transport instance
-// over its lifetime so the worker pool amortises across calls.
+// that `WasmContractAdapter` calls. Holds the transport instance over its
+// lifetime so the worker pool amortises across calls.
 
 import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
 import type { WasmTransport } from './WasmTransport.ts';
+import type { CompiledStack } from './WasmLayers.ts';
 import {
   AtomicsWorkerTransport,
   type AtomicsWorkerTransportConfig,
@@ -81,32 +82,32 @@ export class WasmExecutor {
     return this._kind;
   }
 
-  run(module: WebAssembly.Module, env: ContractEnv): Promise<void> {
-    return this._transport.run(module, env);
+  run(stack: CompiledStack, env: ContractEnv): Promise<void> {
+    return this._transport.run(stack, env);
   }
 
   walkParams(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     params: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
-    return this._transport.walkParams(module, params, host);
+    return this._transport.walkParams(stack, params, host);
   }
 
   walkData(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     data: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
-    return this._transport.walkData(module, data, host);
+    return this._transport.walkData(stack, data, host);
   }
 
-  buildParams(module: WebAssembly.Module, host: BuilderHost): Promise<Uint8Array> {
-    return this._transport.buildParams(module, host);
+  buildParams(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
+    return this._transport.buildParams(stack, host);
   }
 
-  buildData(module: WebAssembly.Module, host: BuilderHost): Promise<Uint8Array> {
-    return this._transport.buildData(module, host);
+  buildData(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
+    return this._transport.buildData(stack, host);
   }
 
   close(): Promise<void> {

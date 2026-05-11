@@ -81,8 +81,8 @@ Standard records on the contract block:
 
 | Record key | Wire format | Meaning |
 |---|---|---|
-| `wasm`              | raw `.wasm` bytes        | The contract module — top of the stack if stacking. Required. |
-| `wasm_hashes`       | concatenated 32-byte hashes (no length prefix; total length is `N × 32`) | Stack composition (see [Stacking](#stacking)). Each hash is a content-addressed reference to a WASM blob (not a block hash). Order is bottom-to-top: index 0 sits closest to the scaffold env; index N-1 sits immediately under the primary `wasm`. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation. Absent or empty → no stack; the contract runs as a single module. |
+| `wasm`              | raw `.wasm` bytes        | The contract module — primary (top) of the stack. Required. |
+| `wasm_layers`       | UTF-8 JSON array (see [Stacking](#stacking)) | Stack composition. Non-empty array of `{wasmHash?, mapImports?}` entries, bottom-to-top; the last entry's `wasmHash` is omitted (its bytes come from `wasm`). Required on every WASM contract block — use `[{}]` for single-module contracts. Replaces the legacy `wasm_hashes` shape. |
 | `output_namespaces` | concatenated 32-byte hashes (no length prefix; total length is the count × 32) | The closed set of contract hashes this contract may produce. Empty record (zero bytes) = produces no outputs. See [computation.md#output-namespaces](computation.md#output-namespaces). |
 | `abi_version`       | UTF-8 date string `YYYYMMDD` (e.g. `"20250510"`) | The ABI revision this WASM was built against. Runtimes refuse to load contracts whose `abi_version` is newer than their own supported version, or older than their compatibility floor. (Future: a WASM export `abi_version() -> i32` returning the same date as a packed integer like `20250510`; runtimes verify the two match.) |
 | `max_memory_pages`  | little-endian `u32`      | Per-instance memory cap in 64 KiB pages. Defaults to `4096` (256 MiB) when absent. |
@@ -293,7 +293,7 @@ Two mechanisms for composing contracts. They serve different needs and compose o
 |---|---|---|
 | Purpose | Static, in-band, low-overhead composition | Dynamic, out-of-band, parallel composition |
 | Granularity | Multiple WASM blobs in one execution | Independent generator producing its own block |
-| Configured | At contract publication, via `wasm_hashes` record on the contract block | At runtime, via `fork()` host call during generation |
+| Configured | At contract publication, via `wasm_layers` record on the contract block | At runtime, via `fork()` host call during generation |
 | Communication | Direct WASM-to-WASM (exports↔imports), shared memory | One-shot pre-resolution via a records vector; no further interaction |
 | Budget | Stack shares the parent's per-verifier budget | Each fork gets its own fresh budget |
 | Verification | Single block, single verifier — stack is internal | Sub-contract block is independently verified |
@@ -306,21 +306,81 @@ A contract may declare a stack of additional WASM blobs that load alongside its 
 scaffold env <-> wasm 1 <-> wasm 2 <-> ... <-> wasm N
 ```
 
-Each pair is linked by **WASM-to-WASM exports↔imports** (no JS in the path). Only WASM 1 — the bottom of the stack — sees the `scaffold_env.*`, `scaffold_walker.*`, `scaffold_builder.*` host imports. Each higher WASM sees only the layer immediately below it as its imports object. This is enforced by the runtime's import-resolver and is not negotiable: a higher WASM cannot reach down past its predecessor.
+Each pair is linked by **WASM-to-WASM exports↔imports** (no JS in the path). Only WASM 1 — the bottom of the stack — sees the `scaffold_env.*`, `scaffold_walker.*`, `scaffold_builder.*` host exports (flattened into one mode-appropriate map). Each higher WASM sees only the layer immediately below it as its imports source. A higher WASM cannot reach down past its predecessor: import resolution for layer *i* (above the bottom) is performed against `instance[i-1].exports`, so scaffold-only names are simply absent and instantiation fails with a `LinkError`.
 
-**Configuration.** The contract block carries a `wasm_hashes` record output (alongside `wasm`, `output_namespaces`, `abi_version`, etc. — see [Block-level contract metadata](#block-level-contract-metadata)). Its body is `N × 32` bytes: a flat array of WASM blob content-hashes, ordered bottom (closest to scaffold) to top (closest to the contract's `run`). The primary `wasm` record is the top of the stack; `wasm_hashes` enumerates everything *below* it. (`wasm_hashes` may be absent or empty for contracts that don't stack.)
+**Configuration: the `wasm_layers` record.** The contract block carries a `wasm_layers` record alongside `wasm`, `output_namespaces`, etc. The body is a UTF-8 JSON array — non-empty, bottom-to-top — where each entry has the shape:
 
-**Blob lookup.** The hashes refer to WASM binary blobs, not block hashes. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation begins — see [Forking](#forking) for how blobs get registered on the network. All blobs must be loaded and instantiated before the contract's `run` is invoked. Failure to load any blob is a load-time crash.
+```ts
+type LayerSpec = {
+  wasmHash?: string | null;          // 64-char hex content hash of a WASM blob.
+  mapImports?: Record<string, string>; // Optional import rebinding.
+};
+```
 
-**Memory model.** All WASMs in a stack import a single runtime-supplied shared linear memory under `(import "env" "memory" (memory ...))`. This makes pointer-passing across layers trivial (a `(ptr, len)` tuple has the same meaning everywhere). Each WASM may also have its own private memory if it likes, but the shared memory is the rendezvous for cross-layer data. WASMs that export a memory instead of importing it are rejected at load (no in-stack module owns the memory).
+The **last** entry is the primary: it omits (or sets `null` for) `wasmHash` because the primary's bytes live in the contract block's `wasm` record. All other entries have `wasmHash` as a 64-char hex string. Single-module contracts use `wasm_layers: [{}]` (one entry, both fields omitted) — the record is **mandatory** on every WASM contract block.
 
-**Execution.** The contract's `run` is invoked on the top WASM. From there, every host call traverses the stack: top → ... → wasm 1 → real `scaffold_env.*` (resolved against the executing block's `ContractEnv` via the transport described in [Async-bridge transport](#async-bridge-transport)). Each layer is free to inspect, modify, or pass through.
+Structural rules enforced at load:
+1. Non-empty array; at least one entry.
+2. Exactly one entry has `wasmHash` omitted (the primary), and it must be the **last** entry.
+3. No duplicate `wasmHash` (each blob loads once).
+4. `mapImports` keys are dotted `"namespace.field"` strings; the value is a bare lower-export name.
+5. `env.memory` is reserved — `mapImports` cannot use it as a key.
 
-**Cycles** in the stack are rejected at load.
+**Import rebinding via `mapImports`.** Each layer's declared WASM imports are resolved against the layer below's flat exports view:
+
+- For the **bottom** layer, "layer below" = the mode-appropriate scaffold export map (`scaffold_env.*` for run; `scaffold_walker.*` for walk_params / walk_data; `scaffold_builder.*` for build_params / build_data), flattened — names are bare (`emit_output`, `claim_next`, ...).
+- For **higher** layers, "layer below" = the instance just instantiated below (its `instance.exports`).
+
+For each declared `(import "X" "Y" ...)` on layer *i*:
+
+1. If `mapImports["X.Y"]` is set, bind to `lowerExports[mapImports["X.Y"]]` (lookup uses the value as the lower-export name).
+2. Otherwise, bind to `lowerExports[Y]` (default 1:1 on the field name).
+3. If the lookup yields `undefined`, `WebAssembly.instantiate` throws a `LinkError` with the offending import name — there is no separate pre-validation pass.
+
+A few worked examples:
+
+```jsonc
+// Single module, no rebinding -- the existing single-module case.
+[{}]
+```
+
+```jsonc
+// Single module that imports under a non-standard namespace and renames a scaffold name.
+// The primary declares (import "renamed_env" "emit_output" ...).
+[
+  { "mapImports": { "renamed_env.emit_output": "emit_output" } }
+]
+```
+
+```jsonc
+// WASI binary (primary) above a wasi-shim (layer 0).
+// The wasi-shim's bottom-layer mapImports is empty -- it imports scaffold_env.* under
+// the literal namespaces by default-1:1 (declared imports are `(import "scaffold_env" "..." ...)`,
+// resolved against the scaffold flat map at the bare field name).
+// The WASI binary declares (import "wasi_snapshot_preview1" "fd_write" ...); the primary's
+// mapImports binds that to the shim's flat `fd_write` export.
+[
+  { "wasmHash": "...64-hex...the wasi-shim..." },
+  {
+    "mapImports": {
+      "wasi_snapshot_preview1.fd_write":  "fd_write",
+      "wasi_snapshot_preview1.proc_exit": "proc_exit"
+    }
+  }
+]
+```
+
+**Blob lookup.** Each entry's `wasmHash` refers to a content-addressed WASM blob, not a block hash. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation — see [Forking](#forking) for how blobs get registered on the network. All blobs must be loaded and compiled before the contract's `run` is invoked. Failure to fetch any blob is a load-time crash.
+
+**Memory model.** All WASMs in a stack receive a single runtime-supplied linear memory under `(import "env" "memory" ...)`. The bridge always injects it into every layer's imports; modules import it explicitly. Pointer-passing across layers is trivial — a `(ptr, len)` tuple has the same meaning everywhere. Modules MAY declare additional private memories internally, but the shared `env.memory` is the rendezvous for cross-layer data.
+
+**Execution.** The contract's `run` is invoked on the **top** instance's `run` export. From there, every host call traverses the stack: top → ... → wasm 1 → real `scaffold_env.*` (resolved against the executing block's `ContractEnv` via the transport described in [Async-bridge transport](#async-bridge-transport)). Each layer is free to inspect, modify, or pass through.
+
+**Cycles** (duplicate `wasmHash` in `wasm_layers`) are rejected at load.
 
 **Budget.** A stacked execution counts as a single contract execution: the entire stack shares one per-verifier budget.
 
-**Use cases.** WASI binaries (top WASM imports `wasi_snapshot_preview1`; the layer below is a Scaffold-WASI shim that exports those names and translates to scaffold_env). JavaScript interpreters (top WASM is a thin wrapper that loads JS source from `getContractMetadata`; layer below is QuickJS-as-WASM). Any other "interpreter on top of host" pattern.
+**Use cases.** WASI binaries (top WASM imports `wasi_snapshot_preview1`; the layer below is a Scaffold-WASI shim that exports those names and translates to scaffold_env). JavaScript interpreters (top WASM is a thin wrapper that loads JS source from `contractMetadata`; layer below is QuickJS-as-WASM). Any other "interpreter on top of host" pattern.
 
 ### Forking
 
@@ -352,7 +412,7 @@ A `requestBody` call with no matching record falls through to the normal handler
 
 **Block placement.** No hard rule. The runtime may merge a forked sub-contract's outputs into the parent's block (if the sub-contract is small) or place them on a new block (if larger). Authors should not depend on either — `fork` is a generation directive, not a block-creation guarantee.
 
-**Use cases.** Providing data alongside a hash request: a parent that publishes `wasm_hashes: [H]` calls `fork({ contract: HASH_CONTRACT, params: H }, [{ verifier: RECORD_CONTRACT/'preimage', value: 0, body: blob }])` to seed the network with the preimage. The HASH contract verifies that hashing `body` yields `H`, then self-claims. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the forked block. Any other "publish-and-make-available" pattern works the same way.
+**Use cases.** Providing data alongside a hash request: a parent that references a blob via `wasm_layers: [{wasmHash: H}, {}]` calls `fork({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the forked block. Any other "publish-and-make-available" pattern works the same way.
 
 ---
 

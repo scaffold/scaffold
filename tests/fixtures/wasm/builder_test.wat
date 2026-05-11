@@ -7,7 +7,7 @@
 (module
   (import "scaffold_builder" "request_string"
     (func $request_string (param i32 i32 i32 i32) (result i64)))
-  (memory (export "memory") 1 4096 shared)
+  (import "env" "memory" (memory 1 4096 shared))
 
   (global $next (mut i32) (i32.const 1024))
   (func $alloc (export "alloc") (param $n i32) (result i32)

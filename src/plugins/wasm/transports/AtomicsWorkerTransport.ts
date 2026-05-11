@@ -26,6 +26,22 @@ import {
 } from '../WasmWorkerPool.ts';
 import type { WasmJobSpec, WasmSessionMode } from '../../../worker/wasm/wasmWorkerTypes.ts';
 import type { WasmHostHandlers } from '../../../worker/wasm/WasmWorkerChannel.ts';
+import type { CompiledStack } from '../WasmLayers.ts';
+
+/** Flatten a CompiledStack into the arrays the worker instantiate message expects. */
+function stackToWorkerArrays(
+  stack: CompiledStack,
+): { modules: WebAssembly.Module[]; mapImports: (Record<string, string> | undefined)[] } {
+  const modules: WebAssembly.Module[] = [];
+  const mapImports: (Record<string, string> | undefined)[] = [];
+  for (const layer of stack.layers) {
+    modules.push(layer.module);
+    mapImports.push(layer.mapImports);
+  }
+  modules.push(stack.primary.module);
+  mapImports.push(stack.primary.mapImports);
+  return { modules, mapImports };
+}
 
 // -- Per-call host-handler tables ---------------------------------
 
@@ -161,7 +177,7 @@ export class AtomicsWorkerTransport implements WasmTransport {
     this.defaultPriority = config.defaultPriority ?? 0;
   }
 
-  run(module: WebAssembly.Module, env: ContractEnv): Promise<void> {
+  run(stack: CompiledStack, env: ContractEnv): Promise<void> {
     const bridge = makeRunBridge(env);
     const handlers = runHandlers(bridge);
     const preset = {
@@ -170,12 +186,13 @@ export class AtomicsWorkerTransport implements WasmTransport {
       params: bridge.params(),
       timestamp: bridge.timestamp(),
     };
+    const { modules, mapImports } = stackToWorkerArrays(stack);
     return this.pool.submit<void>({
       score: () => this.defaultPriority,
       run: async (worker) => {
         worker.server.setHandlers(handlers);
         const terminal = awaitTerminal(worker);
-        postJob(worker, { type: 'instantiate', module, mode: 'run', preset });
+        postJob(worker, { type: 'instantiate', modules, mapImports, mode: 'run', preset });
         postJob(worker, { type: 'call' });
         unwrapTerminal(await terminal, false);
       },
@@ -183,27 +200,27 @@ export class AtomicsWorkerTransport implements WasmTransport {
   }
 
   walkParams(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     params: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
-    return this.runWalk(module, 'walk_params', params, host);
+    return this.runWalk(stack, 'walk_params', params, host);
   }
 
   walkData(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     data: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
-    return this.runWalk(module, 'walk_data', data, host);
+    return this.runWalk(stack, 'walk_data', data, host);
   }
 
-  buildParams(module: WebAssembly.Module, host: BuilderHost): Promise<Uint8Array> {
-    return this.runBuild(module, 'build_params', host);
+  buildParams(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
+    return this.runBuild(stack, 'build_params', host);
   }
 
-  buildData(module: WebAssembly.Module, host: BuilderHost): Promise<Uint8Array> {
-    return this.runBuild(module, 'build_data', host);
+  buildData(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
+    return this.runBuild(stack, 'build_data', host);
   }
 
   close(): Promise<void> {
@@ -211,19 +228,20 @@ export class AtomicsWorkerTransport implements WasmTransport {
   }
 
   private runWalk(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     mode: 'walk_params' | 'walk_data',
     input: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
     const bridge = makeWalkBridge(host);
     const handlers = walkHandlers(bridge);
+    const { modules, mapImports } = stackToWorkerArrays(stack);
     return this.pool.submit<void>({
       score: () => this.defaultPriority,
       run: async (worker) => {
         worker.server.setHandlers(handlers);
         const terminal = awaitTerminal(worker);
-        postJob(worker, { type: 'instantiate', module, mode });
+        postJob(worker, { type: 'instantiate', modules, mapImports, mode });
         postJob(worker, { type: 'call', input });
         unwrapTerminal(await terminal, false);
       },
@@ -231,18 +249,19 @@ export class AtomicsWorkerTransport implements WasmTransport {
   }
 
   private runBuild(
-    module: WebAssembly.Module,
+    stack: CompiledStack,
     mode: 'build_params' | 'build_data',
     host: BuilderHost,
   ): Promise<Uint8Array> {
     const bridge = makeBuildBridge(host);
     const handlers = buildHandlers(bridge);
+    const { modules, mapImports } = stackToWorkerArrays(stack);
     return this.pool.submit<Uint8Array>({
       score: () => this.defaultPriority,
       run: async (worker) => {
         worker.server.setHandlers(handlers);
         const terminal = awaitTerminal(worker);
-        postJob(worker, { type: 'instantiate', module, mode });
+        postJob(worker, { type: 'instantiate', modules, mapImports, mode });
         postJob(worker, { type: 'call' });
         const bytes = unwrapTerminal(await terminal, true);
         return bytes ?? new Uint8Array(0);

@@ -60,9 +60,14 @@ class RecordingEnv implements ContractEnv {
   }
 }
 
+const LAYERS_DEFAULT = new TextEncoder().encode('[{}]');
+
 Deno.test('wasmContractPlugin: accepts blocks with a `wasm` record', async () => {
   const wasmBytes = await loadFixture('echo');
-  const block = composeGenesisPacket([makeRecordOutput('wasm', wasmBytes)]);
+  const block = composeGenesisPacket([
+    makeRecordOutput('wasm', wasmBytes),
+    makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
+  ]);
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   assertEquals(plugin.accepts(block), true);
 });
@@ -79,7 +84,10 @@ Deno.test(
   'wasmContractPlugin: getContract returns a Contract that runs end-to-end',
   async () => {
     const wasmBytes = await loadFixture('echo');
-    const block = composeGenesisPacket([makeRecordOutput('wasm', wasmBytes)]);
+    const block = composeGenesisPacket([
+      makeRecordOutput('wasm', wasmBytes),
+      makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
+    ]);
 
     const plugin = wasmContractPlugin({ transport: 'in-process' });
     const host = new ContractHost<Block>({
@@ -120,6 +128,7 @@ Deno.test(
 
     const block = composeGenesisPacket([
       makeRecordOutput('wasm', wasmBytes),
+      makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
       makeRecordOutput('output_namespaces', namespaceBytes),
     ]);
 
