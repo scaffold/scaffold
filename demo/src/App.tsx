@@ -21,6 +21,8 @@ import { composeGenesisPacket } from "scaffold.io/core/Block.ts";
 import { makeSignatureOutput } from "scaffold.io/contracts/SignatureContract.ts";
 import yaml from "yaml";
 import { ChessApp } from "./chess/ChessApp.tsx";
+import { DevDemoApp, pickInitialLang } from "./dev-demo/DevDemoApp.tsx";
+import { DemoNav, type DemoRoute } from "./dev-demo/DemoNav.tsx";
 
 interface StrategyDef extends StrategyOption {
   create: () => Strategy;
@@ -41,7 +43,7 @@ const STRATEGIES: StrategyDef[] = [
   },
 ];
 
-type Route = "explorer" | "chess";
+type Route = DemoRoute;
 
 interface ParsedHash {
   route: Route;
@@ -53,12 +55,16 @@ function parseHash(hash: string): ParsedHash {
   const qIdx = trimmed.indexOf("?");
   const path = qIdx === -1 ? trimmed : trimmed.slice(0, qIdx);
   const query = qIdx === -1 ? "" : trimmed.slice(qIdx + 1);
-  const route: Route = path === "chess" ? "chess" : "explorer";
+  const route: Route = path === "chess"
+    ? "chess"
+    : path === "dev-demo"
+    ? "dev-demo"
+    : "explorer";
   return { route, params: new URLSearchParams(query) };
 }
 
 function buildHash(route: Route, params: URLSearchParams): string {
-  const path = route === "chess" ? "chess" : "";
+  const path = route === "explorer" ? "" : route;
   const q = params.toString();
   if (!path && !q) return "";
   if (!q) return `#${path}`;
@@ -117,26 +123,27 @@ export function App() {
   }, []);
 
   if (route === "chess") {
-    return <ChessRoute onNavigateExplorer={() => navigate("explorer")} />;
+    return <ChessRoute navigate={navigate} />;
   }
-  return <ExplorerRoute onNavigateChess={() => navigate("chess")} />;
+  if (route === "dev-demo") {
+    return <DevDemoRoute navigate={navigate} />;
+  }
+  return <ExplorerRoute navigate={navigate} />;
 }
 
 // -- Chess route ----------------------------------------------------------
 
 interface ChessRouteProps {
-  onNavigateExplorer: () => void;
+  navigate: (route: Route) => void;
 }
 
-function ChessRoute({ onNavigateExplorer }: ChessRouteProps) {
+function ChessRoute({ navigate }: ChessRouteProps) {
   return (
     <div style={{ minHeight: "100vh", background: "#f5f5f7" }}>
       <div style={toolbarStyle}>
         <span style={logoStyle}>Scaffold</span>
         <span style={dividerStyle} />
-        <button onClick={onNavigateExplorer} style={btnSecondary}>
-          Sandbox
-        </button>
+        <DemoNav route="chess" navigate={navigate} />
         <span style={{ ...hintStyle, marginLeft: 8 }}>
           Chess demo - each move is a block, verified by the game-state
           contract.
@@ -147,10 +154,33 @@ function ChessRoute({ onNavigateExplorer }: ChessRouteProps) {
   );
 }
 
+// -- Dev Demo route -------------------------------------------------------
+
+interface DevDemoRouteProps {
+  navigate: (route: Route) => void;
+}
+
+function DevDemoRoute({ navigate }: DevDemoRouteProps) {
+  const initialLang = useMemo(
+    () => pickInitialLang(readHashParam("lang")),
+    [],
+  );
+  const setLangInUrl = useCallback((lang: string) => {
+    writeHashParam("lang", lang);
+  }, []);
+  return (
+    <DevDemoApp
+      navigate={navigate}
+      initialLang={initialLang}
+      setLangInUrl={setLangInUrl}
+    />
+  );
+}
+
 // -- Explorer (sandbox) route --------------------------------------------
 
 interface ExplorerRouteProps {
-  onNavigateChess: () => void;
+  navigate: (route: Route) => void;
 }
 
 const SANDBOX_CONFIG_STORAGE = "scaffold-demo-sandbox-config-v1";
@@ -283,8 +313,10 @@ function buildScaffoldConfig(
   return { scaffoldConfig, keyEntry };
 }
 
-function ExplorerRoute({ onNavigateChess }: ExplorerRouteProps) {
-  const [config, setConfig] = useState<SandboxConfig>(() => loadSandboxConfig());
+function ExplorerRoute({ navigate }: ExplorerRouteProps) {
+  const [config, setConfig] = useState<SandboxConfig>(() =>
+    loadSandboxConfig()
+  );
   const [version, setVersion] = useState(0);
 
   const { scaffold, activeKey } = useMemo(() => {
@@ -364,19 +396,17 @@ function ExplorerRoute({ onNavigateChess }: ExplorerRouteProps) {
 
   const overlayActions = (
     <>
-      <button onClick={handleAddBlock} style={btnPrimary}>
+      <button type="button" onClick={handleAddBlock} style={btnPrimary}>
         Add Block
       </button>
-      <button onClick={handleAdd5} style={btnSecondary}>
+      <button type="button" onClick={handleAdd5} style={btnSecondary}>
         Add 5
       </button>
       {count > 0 && (
         <span style={{ ...hintStyle, marginRight: 4 }}>+{count} added</span>
       )}
       <span style={dividerStyle} />
-      <button onClick={onNavigateChess} style={btnSecondary}>
-        Chess Demo
-      </button>
+      <DemoNav route="explorer" navigate={navigate} />
     </>
   );
 

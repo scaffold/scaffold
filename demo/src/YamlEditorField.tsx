@@ -1,19 +1,8 @@
 import React from 'react';
-import MonacoEditor, { loader } from '@monaco-editor/react';
+import './dev-demo/monacoSetup.ts';
+import MonacoEditor from '@monaco-editor/react';
 import { configureMonacoYaml, MonacoYaml, MonacoYamlOptions } from 'monaco-yaml';
-import * as monaco from 'monaco-editor';
 import { editor } from 'monaco-editor';
-import yamlWorker from 'monaco-yaml/yaml.worker?worker';
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-
-self.MonacoEnvironment = {
-  getWorker(_moduleId: string, label: string) {
-    if (label === 'yaml') return new yamlWorker();
-    return new editorWorker();
-  },
-};
-
-loader.config({ monaco });
 
 const createYamlConfig = (schema: object): MonacoYamlOptions => ({
   enableSchemaRequest: true,
