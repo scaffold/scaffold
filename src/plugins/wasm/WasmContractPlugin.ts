@@ -1,13 +1,13 @@
 // Protocol spec: docs/protocol/wasm-abi.md
 //
 // `ContractPlugin` for on-chain WASM contracts. Accepts any block carrying
-// a `wasm` record output; the bytes of that record are the primary WASM
-// binary. The block must also carry a `wasm_layers` JSON record describing
-// the module stack (mandatory; use `[{}]` for single-module contracts -- see
-// docs/protocol/wasm-abi.md#stacking).
+// a `wasm_layers` JSON record describing the module stack (see
+// docs/protocol/wasm-abi.md#stacking). Every entry in `wasm_layers` carries
+// a `wasmHash` referencing a content-addressed WASM blob; the bytes are
+// fetched via `resolveBlob` (FetchManager + HASH_CONTRACT in production).
 //
-// `getContract(block)` returns a `Contract` that lazily fetches lower layer
-// blobs, compiles all modules, and delegates run / walk_params / walk_data /
+// `getContract(block)` returns a `Contract` that lazily fetches and compiles
+// every layer's blob, then delegates run / walk_params / walk_data /
 // build_params / build_data to a shared `WasmExecutor`.
 
 import { Hash, HASH_SIZE } from '../../util/Hash.ts';
@@ -31,12 +31,10 @@ export interface WasmContractPluginConfig extends WasmExecutorConfig {
    */
   executor?: WasmExecutor;
   /**
-   * Resolve a content-addressed blob hash to its bytes. Required when any
-   * contract block declares non-empty `wasm_layers` lower entries; otherwise
-   * compileStack throws a clear error.
-   *
+   * Resolve a content-addressed blob hash to its bytes. **Required** for any
+   * contract block to be runnable (every layer's WASM is fetched via this).
    * In production this wraps `FetchManager.fetch({ contract: HASH_CONTRACT,
-   * params: hash.toBytes() }).body` -- see `NodeContext`.
+   * params: hash.toBytes() }).body` -- see `Scaffold`.
    */
   resolveBlob?: (hash: Hash) => Promise<Uint8Array>;
 }
@@ -65,7 +63,6 @@ function readOutputNamespaces(block: Block): Hash[] {
 
 function copyToOwnedArrayBuffer(src: Uint8Array): Uint8Array<ArrayBuffer> {
   // WebAssembly.compile requires an ArrayBuffer-backed BufferSource (not SAB).
-  // Allocate a fresh ArrayBuffer and copy in.
   const buf = new ArrayBuffer(src.byteLength);
   const owned = new Uint8Array(buf);
   owned.set(src);
@@ -73,15 +70,14 @@ function copyToOwnedArrayBuffer(src: Uint8Array): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * `Contract` implementation backed by a (possibly stacked) WASM binary on a
- * contract block. Lower layer blobs are fetched (via `resolveBlob`) and
- * compiled on first use; the resulting `CompiledStack` is cached on the
- * adapter for subsequent calls.
+ * `Contract` implementation backed by a WASM module stack on a contract
+ * block. All layers' blobs are fetched via `resolveBlob` and compiled on
+ * first use; the resulting `CompiledStack` is cached on the adapter for
+ * subsequent calls.
  */
 class WasmContractAdapter implements Contract {
   readonly outputNamespaces: Hash[];
   private readonly _block: Block;
-  private readonly _primaryBytes: Uint8Array;
   private readonly _normalisedStack: NormalisedStack;
   private readonly _resolveBlob: WasmContractPluginConfig['resolveBlob'];
   private _stackPromise: Promise<CompiledStack> | null = null;
@@ -90,13 +86,11 @@ class WasmContractAdapter implements Contract {
     private readonly _executor: WasmExecutor,
     block: Block,
     metadata: WasmContractMetadata,
-    primaryBytes: Uint8Array,
     normalisedStack: NormalisedStack,
     resolveBlob: WasmContractPluginConfig['resolveBlob'],
   ) {
     this.outputNamespaces = metadata.outputNamespaces;
     this._block = block;
-    this._primaryBytes = primaryBytes;
     this._normalisedStack = normalisedStack;
     this._resolveBlob = resolveBlob;
   }
@@ -104,27 +98,26 @@ class WasmContractAdapter implements Contract {
   private compileStack(): Promise<CompiledStack> {
     if (this._stackPromise !== null) return this._stackPromise;
     this._stackPromise = (async (): Promise<CompiledStack> => {
+      if (!this._resolveBlob) {
+        throw new Error(
+          `WasmContractAdapter: contract block ${this._block.hash.toHex()} ` +
+            `cannot resolve wasm_layers because the plugin was constructed ` +
+            `without \`resolveBlob\`. Wire one through ` +
+            `\`wasmContractPlugin({ resolveBlob })\`.`,
+        );
+      }
       const layers: StackEntry[] = [];
-      for (const lower of this._normalisedStack.layers) {
-        if (!this._resolveBlob) {
-          throw new Error(
-            `WasmContractAdapter: contract block ${this._block.hash.toHex()} ` +
-              `declares wasm_layers with a lower-layer blob ${lower.blobHash.toHex()}, but the plugin was constructed without \`resolveBlob\`. ` +
-              `Wire one through \`wasmContractPlugin({ resolveBlob })\`.`,
-          );
-        }
-        const blobBytes = await this._resolveBlob(lower.blobHash);
+      for (const layer of this._normalisedStack.layers) {
+        const blobBytes = await this._resolveBlob(layer.blobHash);
         const owned = copyToOwnedArrayBuffer(blobBytes);
         const module = await WebAssembly.compile(owned);
-        layers.push({ module, mapImports: lower.mapImports });
+        layers.push({
+          module,
+          mapImports: layer.mapImports,
+          mapExports: layer.mapExports,
+        });
       }
-      const primaryModule = await WebAssembly.compile(
-        copyToOwnedArrayBuffer(this._primaryBytes),
-      );
-      return {
-        layers,
-        primary: { module: primaryModule, mapImports: this._normalisedStack.primary.mapImports },
-      };
+      return { layers };
     })();
     return this._stackPromise;
   }
@@ -163,8 +156,8 @@ class WasmContractAdapter implements Contract {
 
 /**
  * Build a `ContractPlugin` that handles any contract block carrying a
- * `wasm` record output. The block must also carry a `wasm_layers` JSON
- * record (use `[{}]` for single-module contracts).
+ * `wasm_layers` record. The plugin's `resolveBlob` callback is required to
+ * actually run the contract.
  */
 export function wasmContractPlugin(
   config: WasmContractPluginConfig = {},
@@ -173,21 +166,13 @@ export function wasmContractPlugin(
   const executor = providedExecutor ?? new WasmExecutor(executorConfig);
   return {
     accepts(block: Block): boolean {
-      return findRecordOutput(block, 'wasm') !== undefined;
+      return findRecordOutput(block, 'wasm_layers') !== undefined;
     },
     getContract(block: Block): Contract {
-      const wasmRecord = findRecordOutput(block, 'wasm');
-      if (!wasmRecord) {
-        throw new Error(
-          `WasmContractPlugin: block ${block.hash.toHex()} has no \`wasm\` record`,
-        );
-      }
       const layersRecord = findRecordOutput(block, 'wasm_layers');
       if (!layersRecord) {
         throw new Error(
-          `WasmContractPlugin: block ${block.hash.toHex()} is missing a ` +
-            `\`wasm_layers\` record (required; use [{}] for single-module contracts -- ` +
-            `see docs/protocol/wasm-abi.md#stacking)`,
+          `WasmContractPlugin: block ${block.hash.toHex()} has no \`wasm_layers\` record`,
         );
       }
       const normalisedStack = parseWasmLayers(layersRecord.body);
@@ -198,7 +183,6 @@ export function wasmContractPlugin(
         executor,
         block,
         metadata,
-        wasmRecord.body,
         normalisedStack,
         resolveBlob,
       );

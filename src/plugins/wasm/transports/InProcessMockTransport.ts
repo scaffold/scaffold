@@ -25,7 +25,7 @@ import {
   type WalkBridge,
 } from '../WasmHostBridge.ts';
 import { packPtrLen } from '../WasmWireCodec.ts';
-import { buildImportsForLayer, type CompiledStack } from '../WasmLayers.ts';
+import { buildImportsForLayer, type CompiledStack, presentExports } from '../WasmLayers.ts';
 
 const SYNC_ONLY_ERROR = 'InProcessMockTransport: host import returned a Promise; ' +
   'switch to JspiTransport or AtomicsWorkerTransport for async execution';
@@ -196,30 +196,28 @@ async function loadStack(
   ctx: InstanceCtx,
   memory: WebAssembly.Memory,
 ): Promise<LoadedStack> {
-  // Walk the stack bottom-to-top, using each instance's exports as the
-  // next layer's `lowerExports`.
-  let lowerExports: Record<string, unknown> = scaffoldFlat;
-  for (const entry of stack.layers) {
-    const imports = buildImportsForLayer(entry.module, entry.mapImports, lowerExports, memory);
-    const instance = await WebAssembly.instantiate(entry.module, imports);
-    lowerExports = instance.exports as Record<string, unknown>;
+  if (stack.layers.length === 0) {
+    throw new Error('CompiledStack.layers must be non-empty');
   }
-  // Primary (top) instance.
-  const primaryImports = buildImportsForLayer(
-    stack.primary.module,
-    stack.primary.mapImports,
-    lowerExports,
-    memory,
-  );
-  const top = await WebAssembly.instantiate(stack.primary.module, primaryImports);
-  const topExports = top.exports as Record<string, unknown>;
-  const alloc = topExports.alloc;
+  // Walk bottom-to-top. The first layer's "lower" is the scaffold flat map;
+  // each subsequent layer's "lower" is the previous instance's presented
+  // exports (instance.exports + mapExports-injected dotted entries).
+  let presentedLower: Record<string, unknown> = scaffoldFlat;
+  let topExports: Record<string, unknown> | null = null;
+  for (const entry of stack.layers) {
+    const imports = buildImportsForLayer(entry.module, entry.mapImports, presentedLower, memory);
+    const instance = await WebAssembly.instantiate(entry.module, imports);
+    const exports = instance.exports as Record<string, unknown>;
+    presentedLower = presentExports(exports, entry.mapExports);
+    topExports = exports;
+  }
+  const alloc = topExports!.alloc;
   if (typeof alloc !== 'function') {
     throw new Error('top WASM module is missing required `alloc` export');
   }
   ctx.memory = memory;
   ctx.alloc = alloc as (size: number) => number;
-  return { ctx, topExports };
+  return { ctx, topExports: topExports! };
 }
 
 // -- Transport ---------------------------------------------------------

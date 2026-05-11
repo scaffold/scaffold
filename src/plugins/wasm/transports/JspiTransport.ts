@@ -22,7 +22,7 @@ import {
   type WalkBridge,
 } from '../WasmHostBridge.ts';
 import { packPtrLen } from '../WasmWireCodec.ts';
-import { buildImportsForLayer, type CompiledStack } from '../WasmLayers.ts';
+import { buildImportsForLayer, type CompiledStack, presentExports } from '../WasmLayers.ts';
 
 // JSPI types (TC39 stage-4; not yet in TS lib). Declared minimally.
 interface SuspendingCtor {
@@ -222,27 +222,25 @@ async function loadStack(
   ctx: InstanceCtx,
   memory: WebAssembly.Memory,
 ): Promise<LoadedStack> {
-  let lowerExports: Record<string, unknown> = scaffoldFlat;
-  for (const entry of stack.layers) {
-    const imports = buildImportsForLayer(entry.module, entry.mapImports, lowerExports, memory);
-    const instance = await WebAssembly.instantiate(entry.module, imports);
-    lowerExports = instance.exports as Record<string, unknown>;
+  if (stack.layers.length === 0) {
+    throw new Error('CompiledStack.layers must be non-empty');
   }
-  const primaryImports = buildImportsForLayer(
-    stack.primary.module,
-    stack.primary.mapImports,
-    lowerExports,
-    memory,
-  );
-  const top = await WebAssembly.instantiate(stack.primary.module, primaryImports);
-  const topExports = top.exports as Record<string, unknown>;
-  const alloc = topExports.alloc;
+  let presentedLower: Record<string, unknown> = scaffoldFlat;
+  let topExports: Record<string, unknown> | null = null;
+  for (const entry of stack.layers) {
+    const imports = buildImportsForLayer(entry.module, entry.mapImports, presentedLower, memory);
+    const instance = await WebAssembly.instantiate(entry.module, imports);
+    const exports = instance.exports as Record<string, unknown>;
+    presentedLower = presentExports(exports, entry.mapExports);
+    topExports = exports;
+  }
+  const alloc = topExports!.alloc;
   if (typeof alloc !== 'function') {
     throw new Error('top WASM module is missing required `alloc` export');
   }
   ctx.memory = memory;
   ctx.alloc = alloc as (size: number) => number;
-  return { ctx, topExports };
+  return { ctx, topExports: topExports! };
 }
 
 // -- Transport ----------------------------------------------------

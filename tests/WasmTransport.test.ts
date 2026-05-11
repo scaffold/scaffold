@@ -23,9 +23,9 @@ async function loadFixture(name: string): Promise<WebAssembly.Module> {
 
 import type { CompiledStack } from '../src/plugins/wasm/WasmLayers.ts';
 
-/** Wrap a single module as a CompiledStack (no lower layers). */
+/** Wrap a single module as a single-layer CompiledStack (it IS the top). */
 function singleStack(module: WebAssembly.Module): CompiledStack {
-  return { layers: [], primary: { module } };
+  return { layers: [{ module }] };
 }
 
 // -- Mock env / hosts ---------------------------------------------

@@ -16,14 +16,15 @@ export interface WasmInitMsg {
 
 /**
  * Sent from main -> worker to instantiate the (possibly stacked) module(s)
- * for one call. `modules` is bottom-to-top; the last entry is the primary
- * (its exports drive the call). `mapImports[i]` is the rebinding map for
- * `modules[i]`; each may be undefined for default 1:1 imports.
+ * for one call. `modules` is bottom-to-top; the last entry is the top of the
+ * stack (its exports drive the call). `mapImports[i]` / `mapExports[i]` are
+ * the rebinding maps for `modules[i]`; each may be undefined.
  */
 export interface WasmInstantiateMsg {
   type: 'instantiate';
   modules: WebAssembly.Module[];
   mapImports: (Record<string, string> | undefined)[];
+  mapExports: (Record<string, string> | undefined)[];
   mode: WasmSessionMode;
   /** Pre-cached run-mode constants. Ignored for walk/build modes. */
   preset?: {

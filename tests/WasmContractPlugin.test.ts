@@ -13,13 +13,19 @@ import {
 import { wasmContractPlugin } from '../src/plugins/wasm/WasmContractPlugin.ts';
 import type { Block } from '../src/core/Block.ts';
 
-// End-to-end: build a Block carrying the echo `.wasm` as a record,
-// register it in a BlockStore-shaped lookup, and run the contract
-// through ContractHost.runVerifying via the WasmContractPlugin.
+// End-to-end: build a Block whose wasm_layers references the echo blob by
+// content hash; resolveBlob returns the bytes; ContractHost dispatches to
+// the plugin and runs the contract against a recording env.
 
-async function loadFixture(name: string): Promise<Uint8Array> {
+async function loadFixtureBytes(name: string): Promise<Uint8Array> {
   const url = new URL(`./fixtures/wasm/${name}.wasm`, import.meta.url);
   return await Deno.readFile(url);
+}
+
+function layersRecord(
+  layers: { wasmHash?: string; mapImports?: Record<string, string> }[],
+): Output {
+  return makeRecordOutput('wasm_layers', new TextEncoder().encode(JSON.stringify(layers)));
 }
 
 class RecordingEnv implements ContractEnv {
@@ -60,46 +66,41 @@ class RecordingEnv implements ContractEnv {
   }
 }
 
-const LAYERS_DEFAULT = new TextEncoder().encode('[{}]');
-
-Deno.test('wasmContractPlugin: accepts blocks with a `wasm` record', async () => {
-  const wasmBytes = await loadFixture('echo');
-  const block = composeGenesisPacket([
-    makeRecordOutput('wasm', wasmBytes),
-    makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
-  ]);
+Deno.test('wasmContractPlugin: accepts blocks with a wasm_layers record', async () => {
+  const bytes = await loadFixtureBytes('echo');
+  const hash = Hash.digest(bytes);
+  const block = composeGenesisPacket([layersRecord([{ wasmHash: hash.toHex() }])]);
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   assertEquals(plugin.accepts(block), true);
 });
 
-Deno.test('wasmContractPlugin: rejects blocks without a `wasm` record', () => {
+Deno.test('wasmContractPlugin: rejects blocks without a wasm_layers record', () => {
   const block = composeGenesisPacket([
-    makeRecordOutput('not_wasm', new Uint8Array([1, 2, 3])),
+    makeRecordOutput('something_else', new Uint8Array([1, 2, 3])),
   ]);
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   assertEquals(plugin.accepts(block), false);
 });
 
 Deno.test(
-  'wasmContractPlugin: getContract returns a Contract that runs end-to-end',
+  'wasmContractPlugin: getContract runs end-to-end via resolveBlob',
   async () => {
-    const wasmBytes = await loadFixture('echo');
-    const block = composeGenesisPacket([
-      makeRecordOutput('wasm', wasmBytes),
-      makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
-    ]);
+    const bytes = await loadFixtureBytes('echo');
+    const hash = Hash.digest(bytes);
+    const block = composeGenesisPacket([layersRecord([{ wasmHash: hash.toHex() }])]);
 
-    const plugin = wasmContractPlugin({ transport: 'in-process' });
+    const plugin = wasmContractPlugin({
+      transport: 'in-process',
+      resolveBlob: (h: Hash) => {
+        if (Hash.equals(h, hash)) return Promise.resolve(bytes);
+        return Promise.reject(new Error(`unexpected blob ${h.toHex()}`));
+      },
+    });
     const host = new ContractHost<Block>({
       getBlock: (h) => (Hash.equals(h, block.hash) ? block : undefined),
     });
     host.registerPlugin(plugin);
 
-    // ContractHost.runVerifying builds its own VerifyingEnv from the
-    // provider, so it can't observe a `RecordingEnv`. Instead pull the
-    // plugin-resolved Contract out via getContract and drive it directly
-    // with a recording env -- this is what the higher-level
-    // VerificationService does internally.
     const contract = host.getContract(block.hash);
     assertEquals(contract === undefined, false);
 
@@ -118,8 +119,8 @@ Deno.test(
 Deno.test(
   'wasmContractPlugin: outputNamespaces parsed from contract block record',
   async () => {
-    const wasmBytes = await loadFixture('echo');
-    // Two 32-byte hashes packed back-to-back -- the standard wire shape.
+    const bytes = await loadFixtureBytes('echo');
+    const hash = Hash.digest(bytes);
     const ns1 = Hash.digest('plugin-ns-A');
     const ns2 = Hash.digest('plugin-ns-B');
     const namespaceBytes = new Uint8Array(64);
@@ -127,8 +128,7 @@ Deno.test(
     namespaceBytes.set(ns2.toBytes(), 32);
 
     const block = composeGenesisPacket([
-      makeRecordOutput('wasm', wasmBytes),
-      makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
+      layersRecord([{ wasmHash: hash.toHex() }]),
       makeRecordOutput('output_namespaces', namespaceBytes),
     ]);
 

@@ -140,11 +140,13 @@ export class Scaffold {
       const fetchMgr = this.fetchManager;
       const defaultPlugin = wasmContractPlugin({
         resolveBlob: async (hash: Hash) => {
-          const result = await fetchMgr.fetch({
+          // `verify: true` makes fetch return a Promise<FetchResult>; the
+          // surface type union also covers the FetchHandle path so we cast.
+          const result = await (fetchMgr.fetch({
             contract: HASH_CONTRACT,
             params: hash.toBytes(),
             verify: true,
-          });
+          }) as Promise<FetchResult>);
           return result.body;
         },
       });

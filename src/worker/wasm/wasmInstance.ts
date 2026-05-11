@@ -12,7 +12,7 @@ import {
   type WasmWorkerChannelClient,
 } from './WasmWorkerChannel.ts';
 import type { WasmCallMsg, WasmInstantiateMsg, WasmSessionMode } from './wasmWorkerTypes.ts';
-import { buildImportsForLayer } from '../../plugins/wasm/WasmLayers.ts';
+import { buildImportsForLayer, presentExports } from '../../plugins/wasm/WasmLayers.ts';
 
 const SCAFFOLD_TRAP_TAG = '__scaffold_reject__:';
 
@@ -226,6 +226,9 @@ export class WasmSession {
     if (msg.mapImports.length !== msg.modules.length) {
       throw new Error('instantiate: mapImports length must match modules length');
     }
+    if (msg.mapExports.length !== msg.modules.length) {
+      throw new Error('instantiate: mapExports length must match modules length');
+    }
     const ctx: SessionCtx = makeEmptyCtx();
     const memory = makeSharedMemory();
     ctx.memory = memory;
@@ -240,22 +243,22 @@ export class WasmSession {
       scaffoldFlat = flatBuildExports(ctx, this.client);
     }
 
-    let lowerExports: Record<string, unknown> = scaffoldFlat;
-    let topInstance: WebAssembly.Instance | null = null;
+    let presentedLower: Record<string, unknown> = scaffoldFlat;
+    let topExports: Record<string, unknown> | null = null;
     for (let i = 0; i < msg.modules.length; i++) {
       const module = msg.modules[i];
-      const imports = buildImportsForLayer(module, msg.mapImports[i], lowerExports, memory);
+      const imports = buildImportsForLayer(module, msg.mapImports[i], presentedLower, memory);
       const instance = await WebAssembly.instantiate(module, imports);
-      lowerExports = instance.exports as Record<string, unknown>;
-      topInstance = instance;
+      const exports = instance.exports as Record<string, unknown>;
+      presentedLower = presentExports(exports, msg.mapExports[i]);
+      topExports = exports;
     }
-    const topExports = topInstance!.exports as Record<string, unknown>;
-    const alloc = topExports.alloc;
+    const alloc = topExports!.alloc;
     if (typeof alloc !== 'function') {
       throw new Error('top WASM module is missing required `alloc` export');
     }
     ctx.alloc = alloc as (size: number) => number;
-    this.instantiated = { ctx, topExports, mode: msg.mode };
+    this.instantiated = { ctx, topExports: topExports!, mode: msg.mode };
   }
 
   call(msg: WasmCallMsg): Uint8Array | undefined {
