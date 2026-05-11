@@ -121,6 +121,60 @@ Deno.test('memory_grow_no_abstain returns -1', async () => {
   assertEquals(r.result, -1, `expected -1, got result=${r.result}`);
 });
 
+Deno.test('float_local_set canonicalizes NaN before local.set, division of 0/0 returns canonical NaN', async () => {
+  const input = await loadFixture('float_local_set');
+  const r = await runTool(input);
+  assert(r.result > 0, `expected transformed, got result=${r.result}`);
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
+    env: { memory },
+  })) as { instance: WebAssembly.Instance };
+  const div = instance.exports.div as (a: number, b: number) => number;
+  // 0/0 = NaN. After canonicalize, the bits must be 0x7fc00000.
+  const result = div(0, 0);
+  assert(Number.isNaN(result));
+  // Read NaN bits via a typed array view.
+  const buf = new ArrayBuffer(4);
+  new Float32Array(buf)[0] = result;
+  const bits = new Uint32Array(buf)[0];
+  assertEquals(bits, 0x7fc00000, `NaN bits should be canonical, got 0x${bits.toString(16)}`);
+});
+
+Deno.test('float_local_set idempotence: re-transform returns 0', async () => {
+  const input = await loadFixture('float_local_set');
+  const first = await runTool(input);
+  assert(first.result > 0);
+  const second = await runTool(first.output!);
+  assertEquals(second.result, 0);
+});
+
+Deno.test('float_f64_store canonicalizes before f64.store, 0/0 yields canonical NaN', async () => {
+  const input = await loadFixture('float_f64_store');
+  const r = await runTool(input);
+  assert(r.result > 0);
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
+    env: { memory },
+  })) as { instance: WebAssembly.Instance };
+  const store = instance.exports.store as (a: number, b: number) => void;
+  // 0 * Infinity = NaN.
+  store(0, Infinity);
+  const buf = new Uint8Array(memory.buffer, 0, 8);
+  const view = new DataView(buf.buffer);
+  const hi = view.getUint32(4, true);
+  const lo = view.getUint32(0, true);
+  assertEquals(hi, 0x7ff80000, `f64 NaN high bits should be canonical, got 0x${hi.toString(16)}`);
+  assertEquals(lo, 0);
+});
+
+Deno.test('float_global_set canonicalizes before global.set', async () => {
+  const input = await loadFixture('float_global_set');
+  const r = await runTool(input);
+  assert(r.result > 0);
+  const second = await runTool(r.output!);
+  assertEquals(second.result, 0, 'idempotence broken');
+});
+
 Deno.test('transformer is deterministic: same input produces same output', async () => {
   const input = await loadFixture('memory_section');
   const a = await runTool(input);

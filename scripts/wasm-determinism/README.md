@@ -44,21 +44,30 @@ task before sending a PR if you've changed any Zig source.
   the transformer inserts a guard: if `result == -1`, the contract calls
   `env.abstain` and traps via `unreachable`. The contract must import
   `env.abstain (func)`; if not, the validator rejects with -1.
+- **NaN canonicalization at float escape ops (partial)** -- the transformer
+  inserts a 6-instruction canonicalize sequence (canonical-NaN-on-NaN)
+  before every f32/f64 `local.set`, `local.tee`, `global.set`, `f32.store`,
+  and `f64.store`. NaN bit pattern is normalized to `0x7fc00000` (f32) /
+  `0x7ff8000000000000` (f64) on escape.
 - **Custom version section** -- `scaffold-transform-version: 20250510`
   appended to mark transformed modules.
-- **Idempotence** -- running the tool on its own output returns 0 (no
-  changes). Output bytes are byte-deterministic for a given input.
+- **Idempotence** -- running the tool on its own output returns 0. Output
+  bytes are byte-deterministic for a given input.
 
 ## Not yet implemented
 
-- **NaN canonicalization at float escape ops.** The transformer does *not*
-  yet insert canonicalization sequences at `local.set`/`local.tee`/
-  `global.set`/`*.store`/`call`/`return`/`br*` for float operands. A module
-  that uses float arithmetic and then escapes the result via memory or
-  function boundary still has nondeterministic NaN bits. See plan doc.
-- **Operand stack type tracker** -- needed for the multi-value `br*`
-  canonicalize case and for call-args/return canonicalization.
+- **NaN canonicalization at call args, return values, br\* with floats,
+  v128 stores.** These escape ops are not yet canonicalized. Call/return
+  needs to spill float arguments to locals before canonicalizing (one
+  scratch per arg). `br*` and multi-value blocks need an operand-stack
+  type tracker. `v128.store` (and `v128.store*_lane`) needs lane-wise
+  canonicalization via `f32x4.eq` / `f64x2.eq` + `v128.bitselect`.
+- **Operand stack type tracker** -- needed for the `br*`-with-float case
+  and for verifying call/return canonicalization is applied to the right
+  operands.
 
-Until NaN canonicalization lands, the host runtime should treat contracts
-with float types as conditionally deterministic: the validator passes
-the banned-content checks but does not yet enforce canonicalization.
+A contract that only uses floats inside straight-line arithmetic with
+results stored to locals/globals/memory is fully covered. A contract that
+passes f32/f64 across function boundaries is not yet covered -- the host
+should treat such contracts as conditionally deterministic and refuse to
+include them in consensus blocks.

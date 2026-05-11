@@ -379,7 +379,6 @@ fn analyzeBodies(
     allocator: std.mem.Allocator,
     logFn: *const fn (msg: []const u8) void,
 ) Error![]?body_rewriter.Plan {
-    // Find the code section.
     var code_sec: ?parser.Section = null;
     for (mod.sections) |sec| {
         if (sec.id == .code) code_sec = sec;
@@ -391,6 +390,14 @@ fn analyzeBodies(
     const func_count = try leb.readU32(input, &ix);
     const plans = try allocator.alloc(?body_rewriter.Plan, func_count);
 
+    var imported_func_count: u32 = 0;
+    for (mod.imports) |imp| {
+        switch (imp.kind) {
+            .func => imported_func_count += 1,
+            else => {},
+        }
+    }
+
     var f: u32 = 0;
     while (f < func_count) : (f += 1) {
         const body_size = try leb.readU32(input, &ix);
@@ -398,7 +405,17 @@ fn analyzeBodies(
         const body_end = body_start + body_size;
         if (body_end > sec.end) return Error.Malformed;
 
-        plans[f] = body_rewriter.analyze(input, body_start, body_end, mod.abstain_func_index, allocator) catch |err| switch (err) {
+        const global_func_idx = imported_func_count + f;
+        const type_idx = mod.func_types[global_func_idx];
+        const ft = mod.types[type_idx];
+
+        const ctx = body_rewriter.ModuleCtx{
+            .func_type = ft,
+            .global_types = mod.global_types,
+            .abstain_func_index = mod.abstain_func_index,
+        };
+
+        plans[f] = body_rewriter.analyze(input, body_start, body_end, ctx, allocator) catch |err| switch (err) {
             error.NeedsAbstain => {
                 log(logFn, "banned: memory.grow used without env.abstain import");
                 return Error.Banned;
