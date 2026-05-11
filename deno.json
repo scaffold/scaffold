@@ -63,6 +63,8 @@
     "test-avro": "mocha --ui tdd --reporter dot",
     "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info",
     "generate-genesis": "deno run --allow-all scripts/generate_genesis.ts",
+    "build-determinism-tool": "cd scripts/wasm-determinism && zig build -Doptimize=ReleaseSmall && cp zig-out/bin/wasm-determinism.wasm dist/wasm-determinism.wasm",
+    "build-determinism-fixtures": "bash tests/fixtures/wasm-determinism/build.sh",
     "viz:build": "deno run --allow-all viz/build.ts",
     "viz:serve": "deno run --allow-all viz/serve.ts"
   },
