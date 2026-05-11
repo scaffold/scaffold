@@ -28,12 +28,10 @@ deno task build-determinism-fixtures
 deno test --allow-read tests/WasmDeterminism.test.ts
 ```
 
-The artifact at `dist/wasm-determinism.wasm` is checked in. Run the build
+The artifact at `bin/wasm-determinism.wasm` is checked in. Run the build
 task before sending a PR if you've changed any Zig source.
 
-## V1 scope (this release)
-
-Implemented:
+## Implemented
 
 - **Banned-content detection** -- atomics (`0xfe` family), relaxed SIMD
   (`0xfd 0x100`..`0x113`), GC (`0xfb` family), exception handling
@@ -42,26 +40,25 @@ Implemented:
 - **Memory section -> import rewrite** -- if a module declares its own
   memory, it's rewritten to import `env.memory` instead. The transformer
   preserves limits.
+- **`memory.grow` / `table.grow` abstain guard** -- after each grow site,
+  the transformer inserts a guard: if `result == -1`, the contract calls
+  `env.abstain` and traps via `unreachable`. The contract must import
+  `env.abstain (func)`; if not, the validator rejects with -1.
 - **Custom version section** -- `scaffold-transform-version: 20250510`
-  appended to mark transformed modules. Idempotent on re-run.
+  appended to mark transformed modules.
 - **Idempotence** -- running the tool on its own output returns 0 (no
   changes). Output bytes are byte-deterministic for a given input.
 
-## Not yet implemented (V2)
+## Not yet implemented
 
 - **NaN canonicalization at float escape ops.** The transformer does *not*
   yet insert canonicalization sequences at `local.set`/`local.tee`/
   `global.set`/`*.store`/`call`/`return`/`br*` for float operands. A module
   that uses float arithmetic and then escapes the result via memory or
   function boundary still has nondeterministic NaN bits. See plan doc.
-- **`memory.grow` / `table.grow` abstain guard.** The transformer does
-  *not* yet wrap grow instructions to call `env.abstain` on `-1`. Grow
-  results currently propagate as-is; this works deterministically only if
-  the host pins `min == max` on the imported memory.
 - **Operand stack type tracker** -- needed for the multi-value `br*`
-  canonicalize case and for call-args canonicalization.
+  canonicalize case and for call-args/return canonicalization.
 
-These are the next steps. Until they land, contracts that use floats
-or `memory.grow` should not rely on the V1 validator for full determinism
-guarantees -- they pass the banned-content checks but the runtime needs
-to enforce min == max imports and only allow no-NaN-producing float code.
+Until NaN canonicalization lands, the host runtime should treat contracts
+with float types as conditionally deterministic: the validator passes
+the banned-content checks but does not yet enforce canonicalization.

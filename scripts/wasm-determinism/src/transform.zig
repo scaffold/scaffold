@@ -7,11 +7,13 @@ const wasm = @import("wasm.zig");
 const leb = @import("leb.zig");
 const parser = @import("parser.zig");
 const instr = @import("instr.zig");
+const body_rewriter = @import("body.zig");
 
 pub const Error = error{
     Banned,
     Malformed,
     OutOfMemory,
+    NeedsAbstain,
 } || leb.Error;
 
 pub const Result = union(enum) {
@@ -63,6 +65,18 @@ pub fn run(opts: RunOptions) Error!Result {
         }
     }
 
+    // Analyze each function body to determine if any need rewriting (e.g.,
+    // grow-guard insertion). Cache the plans so emitCodeSection can reuse them.
+    const body_plans = try analyzeBodies(opts.input, mod, opts.allocator, opts.logFn);
+    var any_body_changes = false;
+    for (body_plans) |p| {
+        if (p != null) {
+            any_body_changes = true;
+            break;
+        }
+    }
+    if (any_body_changes) modified = true;
+
     const has_version = hasVersionSection(opts.input, mod);
     if (!has_version) modified = true;
 
@@ -70,10 +84,10 @@ pub fn run(opts: RunOptions) Error!Result {
 
     // Emit the transformed module.
     var emit = Emitter{ .buf = opts.output, .pos = 0 };
-    try emitTransformed(&emit, opts.input, mod, .{
+    try emitTransformed(&emit, opts.input, mod, body_plans, .{
         .needs_memory_import = needs_memory_import,
         .strip_existing_version_section = has_version, // replace if mismatched
-    });
+    }, opts.allocator);
     return .{ .transformed = emit.pos };
 }
 
@@ -223,28 +237,22 @@ fn emitTransformed(
     emit: *Emitter,
     input: []const u8,
     mod: parser.Module,
+    body_plans: []const ?body_rewriter.Plan,
     opts: EmitOpts,
+    allocator: std.mem.Allocator,
 ) Error!void {
     // Magic + version.
     emit.writeBytes(&wasm.MAGIC);
     emit.writeBytes(&wasm.VERSION);
 
-    // Emit sections in order. For each section:
-    //   - Memory section: skip (memory moved to import).
-    //   - Import section: append memory import if needed.
-    //   - Custom version section: skip existing matching/mismatched; we'll append fresh at end.
-    //   - Others: copy through.
     var import_section_emitted = false;
 
     for (mod.sections) |sec| {
         switch (sec.id) {
             .memory => {
                 if (opts.needs_memory_import) {
-                    // Skip emitting the memory section; the memory is moved
-                    // into the import section.
                     continue;
                 } else {
-                    // Copy through.
                     emit.writeBytes(input[sec.full_start..sec.full_end]);
                 }
             },
@@ -252,17 +260,14 @@ fn emitTransformed(
                 try emitImportSection(emit, input, sec, mod, opts);
                 import_section_emitted = true;
             },
+            .code => {
+                try emitCodeSection(emit, input, sec, mod, body_plans, allocator);
+            },
             .custom => {
-                // Strip any existing scaffold-transform-version section (we
-                // append fresh at the end). All other custom sections are
-                // copied through.
                 if (isVersionSection(input, sec)) continue;
                 emit.writeBytes(input[sec.full_start..sec.full_end]);
             },
             else => {
-                // If we need to inject a new import section and we haven't
-                // emitted it yet, do so now -- but only if we're past the
-                // import section's natural position (id 2).
                 if (opts.needs_memory_import and !import_section_emitted and !mod.has_env_memory_import) {
                     if (@intFromEnum(sec.id) > @intFromEnum(wasm.SectionId.import)) {
                         try emitSynthImportSection(emit, mod);
@@ -274,14 +279,136 @@ fn emitTransformed(
         }
     }
 
-    // If we still haven't emitted the import section (module had no sections
-    // past id 2), do it now.
     if (opts.needs_memory_import and !import_section_emitted and !mod.has_env_memory_import) {
         try emitSynthImportSection(emit, mod);
     }
 
-    // Append the version section.
     try emitVersionSection(emit);
+}
+
+fn emitCodeSection(
+    emit: *Emitter,
+    input: []const u8,
+    sec: parser.Section,
+    mod: parser.Module,
+    body_plans: []const ?body_rewriter.Plan,
+    allocator: std.mem.Allocator,
+) Error!void {
+    // Quick path: no plan touched any body, so copy through verbatim.
+    var any_plan = false;
+    for (body_plans) |p| {
+        if (p != null) {
+            any_plan = true;
+            break;
+        }
+    }
+    if (!any_plan) {
+        emit.writeBytes(input[sec.full_start..sec.full_end]);
+        return;
+    }
+
+    // Section id + reserved 5-byte size slot.
+    emit.writeByte(@intFromEnum(wasm.SectionId.code));
+    const size_slot = emit.reserveSectionSize();
+    const payload_start = emit.pos;
+
+    var ix = sec.start;
+    const func_count = try leb.readU32(input, &ix);
+    emit.writeU32(func_count);
+
+    // The number of imported functions sits at the front of mod.func_types;
+    // local functions start at imported_count. We need to know each function's
+    // param count (from its type signature) to compute scratch local indices.
+    const imported_func_count = imported_func_count: {
+        var n: u32 = 0;
+        for (mod.imports) |imp| {
+            switch (imp.kind) {
+                .func => n += 1,
+                else => {},
+            }
+        }
+        break :imported_func_count n;
+    };
+
+    var f: u32 = 0;
+    while (f < func_count) : (f += 1) {
+        const body_size = try leb.readU32(input, &ix);
+        const body_start = ix;
+        const body_end = body_start + body_size;
+        if (body_end > sec.end) return Error.Malformed;
+
+        const plan = body_plans[f];
+        if (plan == null) {
+            // Pass through unchanged: emit size + body bytes.
+            emit.writeU32(body_size);
+            emit.writeBytes(input[body_start..body_end]);
+        } else {
+            // Rewrite this function body.
+            const global_func_idx = imported_func_count + f;
+            const type_idx = mod.func_types[global_func_idx];
+            const ft = mod.types[type_idx];
+            const num_params: u32 = @intCast(ft.params.len);
+            const params_plus_locals = try body_rewriter.paramsPlusLocals(input, body_start, body_end, num_params);
+
+            var out_body = std.ArrayList(u8).empty;
+            var ctx = body_rewriter.RewriteCtx{
+                .input = input,
+                .body_start = body_start,
+                .body_end = body_end,
+                .abstain_func_index = mod.abstain_func_index orelse 0,
+                .plan = plan.?,
+                .locals_before_scratch = params_plus_locals,
+                .out = &out_body,
+                .allocator = allocator,
+            };
+            try body_rewriter.emit(&ctx);
+
+            emit.writeU32(@intCast(out_body.items.len));
+            emit.writeBytes(out_body.items);
+        }
+
+        ix = body_end;
+    }
+
+    emit.patchSectionSize(size_slot, payload_start);
+}
+
+fn analyzeBodies(
+    input: []const u8,
+    mod: parser.Module,
+    allocator: std.mem.Allocator,
+    logFn: *const fn (msg: []const u8) void,
+) Error![]?body_rewriter.Plan {
+    // Find the code section.
+    var code_sec: ?parser.Section = null;
+    for (mod.sections) |sec| {
+        if (sec.id == .code) code_sec = sec;
+    }
+    if (code_sec == null) return &.{};
+
+    const sec = code_sec.?;
+    var ix = sec.start;
+    const func_count = try leb.readU32(input, &ix);
+    const plans = try allocator.alloc(?body_rewriter.Plan, func_count);
+
+    var f: u32 = 0;
+    while (f < func_count) : (f += 1) {
+        const body_size = try leb.readU32(input, &ix);
+        const body_start = ix;
+        const body_end = body_start + body_size;
+        if (body_end > sec.end) return Error.Malformed;
+
+        plans[f] = body_rewriter.analyze(input, body_start, body_end, mod.abstain_func_index, allocator) catch |err| switch (err) {
+            error.NeedsAbstain => {
+                log(logFn, "banned: memory.grow used without env.abstain import");
+                return Error.Banned;
+            },
+            else => return err,
+        };
+        ix = body_end;
+    }
+
+    return plans;
 }
 
 fn isVersionSection(input: []const u8, sec: parser.Section) bool {

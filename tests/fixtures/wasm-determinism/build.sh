@@ -8,7 +8,18 @@ cd "$(dirname "$0")"
 
 for wat in *.wat; do
   base="${wat%.wat}"
-  wat2wasm --enable-all "$wat" -o "$base.wasm"
+  # Enable the post-MVP features our fixtures need, but NOT compact imports
+  # (which our parser does not handle -- and which is non-standard binary
+  # encoding anyway). --enable-all would turn compact-imports on.
+  wat2wasm \
+    --enable-threads \
+    --enable-exceptions \
+    --enable-function-references \
+    --enable-tail-call \
+    --enable-gc \
+    --enable-multi-memory \
+    --enable-relaxed-simd \
+    "$wat" -o "$base.wasm"
 done
 
 # Post-process clean.wasm: append scaffold-transform-version custom section so

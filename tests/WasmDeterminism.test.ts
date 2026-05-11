@@ -1,6 +1,6 @@
 import { assertEquals, assert } from '@std/assert';
 
-const TOOL_PATH = new URL('../scripts/wasm-determinism/dist/wasm-determinism.wasm', import.meta.url);
+const TOOL_PATH = new URL('../scripts/wasm-determinism/bin/wasm-determinism.wasm', import.meta.url);
 const FIXTURES_DIR = new URL('./fixtures/wasm-determinism/', import.meta.url);
 
 interface RunResult {
@@ -88,6 +88,37 @@ Deno.test('memory_imported fixture gets version-stamped on first pass, idempoten
   assert(first.result > 0, `expected transformed, got result=${first.result}`);
   const second = await runTool(first.output!);
   assertEquals(second.result, 0, `re-transform should be unchanged, got ${second.result}`);
+});
+
+Deno.test('memory_grow gets abstain guard inserted', async () => {
+  const input = await loadFixture('memory_grow');
+  const r = await runTool(input);
+  assert(r.result > 0, `expected transformed, got result=${r.result}`);
+  // Output should instantiate (we provide env.memory + env.abstain).
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  let abstainCalled = false;
+  const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
+    env: { memory, abstain: () => { abstainCalled = true; } },
+  })) as { instance: WebAssembly.Instance };
+  const doGrow = instance.exports.do_grow as (n: number) => number;
+  // Growing by 1 page succeeds (returns previous size = 1). Abstain not called.
+  assertEquals(doGrow(1), 1);
+  assertEquals(abstainCalled, false);
+  // Subsequent grow re-runs return prev page count; the guard only fires on -1.
+});
+
+Deno.test('memory_grow idempotence: re-transform returns 0', async () => {
+  const input = await loadFixture('memory_grow');
+  const first = await runTool(input);
+  assert(first.result > 0);
+  const second = await runTool(first.output!);
+  assertEquals(second.result, 0, `re-transform should be unchanged, got ${second.result}`);
+});
+
+Deno.test('memory_grow_no_abstain returns -1', async () => {
+  const input = await loadFixture('memory_grow_no_abstain');
+  const r = await runTool(input);
+  assertEquals(r.result, -1, `expected -1, got result=${r.result}`);
 });
 
 Deno.test('transformer is deterministic: same input produces same output', async () => {
