@@ -65,7 +65,12 @@ export class WasmWorkerPool {
       if (this.workers.length < this.poolSize) {
         worker = this.startWorker();
       } else {
-        const { promise, resolve, reject } = Promise.withResolvers<R>();
+        let resolve!: (value: R) => void;
+        let reject!: (reason?: unknown) => void;
+        const promise = new Promise<R>((res, rej) => {
+          resolve = res;
+          reject = rej;
+        });
         this.queue.push({
           job: job as WasmPoolJob<unknown>,
           resolve: resolve as (value: unknown) => void,

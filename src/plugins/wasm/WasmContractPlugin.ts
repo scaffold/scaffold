@@ -53,7 +53,7 @@ function readOutputNamespaces(block: Block): Hash[] {
   return result;
 }
 
-function copyToOwnedArrayBuffer(src: Uint8Array): Uint8Array<ArrayBuffer> {
+function copyToOwnedArrayBuffer(src: Uint8Array) {
   const buf = new ArrayBuffer(src.byteLength);
   const owned = new Uint8Array(buf);
   owned.set(src);
