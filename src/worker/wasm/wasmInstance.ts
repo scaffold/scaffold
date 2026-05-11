@@ -1,10 +1,10 @@
 // Protocol spec: docs/protocol/wasm-abi.md
 //
 // Worker-side instance: composes host imports backed by `WasmWorkerChannel`
-// and runs the configured export. Mirrors the in-process transport's
-// stack-aware logic but reads/writes the result bytes via the channel's
-// staging buffer + Atomics.wait instead of directly invoking the env on
-// the main thread.
+// and runs the configured entry export. Mirrors the in-process transport's
+// graph-aware instantiation (via `loadModules`) but reads/writes the result
+// bytes via the channel's staging buffer + Atomics.wait instead of directly
+// invoking the env on the main thread.
 
 import {
   WasmCrashError,
@@ -12,7 +12,12 @@ import {
   type WasmWorkerChannelClient,
 } from './WasmWorkerChannel.ts';
 import type { WasmCallMsg, WasmInstantiateMsg, WasmSessionMode } from './wasmWorkerTypes.ts';
-import { buildImportsForLayer, presentExports } from '../../plugins/wasm/WasmLayers.ts';
+import {
+  type CompiledLayer,
+  type CompiledModules,
+  loadModules,
+  type TargetRef,
+} from '../../plugins/wasm/WasmModules.ts';
 
 const SCAFFOLD_TRAP_TAG = '__scaffold_reject__:';
 
@@ -59,7 +64,7 @@ function dispatchPacked(
   return packPtrLen(ptr, bytes.length);
 }
 
-// -- Flat scaffold export builders ----------------------------------
+// -- Scaffold flat (bare-name keyed; loadModules surfaces under base:*) --
 
 interface RunPreset {
   executionMode: number;
@@ -206,7 +211,8 @@ function flatBuildExports(
 
 interface InstantiateResult {
   ctx: SessionCtx;
-  topExports: Record<string, unknown>;
+  entryExports: Record<string, unknown>;
+  entryName: string;
   mode: WasmSessionMode;
 }
 
@@ -220,14 +226,8 @@ export class WasmSession {
   constructor(private readonly client: WasmWorkerChannelClient) {}
 
   async instantiate(msg: WasmInstantiateMsg): Promise<void> {
-    if (!Array.isArray(msg.modules) || msg.modules.length === 0) {
-      throw new Error('instantiate: modules array must be non-empty');
-    }
-    if (msg.mapImports.length !== msg.modules.length) {
-      throw new Error('instantiate: mapImports length must match modules length');
-    }
-    if (msg.mapExports.length !== msg.modules.length) {
-      throw new Error('instantiate: mapExports length must match modules length');
+    if (!Array.isArray(msg.layers) || msg.layers.length === 0) {
+      throw new Error('instantiate: layers array must be non-empty');
     }
     const ctx: SessionCtx = makeEmptyCtx();
     const memory = makeSharedMemory();
@@ -243,45 +243,64 @@ export class WasmSession {
       scaffoldFlat = flatBuildExports(ctx, this.client);
     }
 
-    let presentedLower: Record<string, unknown> = scaffoldFlat;
-    let topExports: Record<string, unknown> | null = null;
-    for (let i = 0; i < msg.modules.length; i++) {
-      const module = msg.modules[i];
-      const imports = buildImportsForLayer(module, msg.mapImports[i], presentedLower, memory);
-      const instance = await WebAssembly.instantiate(module, imports);
-      const exports = instance.exports as Record<string, unknown>;
-      presentedLower = presentExports(exports, msg.mapExports[i]);
-      topExports = exports;
+    // Build CompiledModules from the message. base.imports doesn't need to
+    // be populated for the worker -- the main thread sent the entry target
+    // directly. Use a synthetic base map containing just the entry.
+    const compiledLayers: CompiledLayer[] = msg.layers.map((l) => ({
+      key: l.key,
+      module: l.module,
+      imports: l.imports,
+    }));
+    const byKey = new Map<string, CompiledLayer>();
+    for (const l of compiledLayers) byKey.set(l.key, l);
+    const baseImports = new Map<string, TargetRef>([[msg.mode, msg.entry]]);
+    const compiled: CompiledModules = {
+      base: { version: 0, imports: baseImports },
+      layers: compiledLayers,
+      byKey,
+    };
+
+    const { exportsByKey } = await loadModules(compiled, scaffoldFlat, memory);
+    const entryExports = exportsByKey.get(msg.entry.layerKey);
+    if (!entryExports) {
+      throw new Error(
+        `instantiate: entry layer ${JSON.stringify(msg.entry.layerKey)} not found`,
+      );
     }
-    const alloc = topExports!.alloc;
+    const alloc = entryExports.alloc;
     if (typeof alloc !== 'function') {
-      throw new Error('top WASM module is missing required `alloc` export');
+      throw new Error(
+        `entry layer ${JSON.stringify(msg.entry.layerKey)} is missing required \`alloc\` export`,
+      );
     }
     ctx.alloc = alloc as (size: number) => number;
-    this.instantiated = { ctx, topExports: topExports!, mode: msg.mode };
+    this.instantiated = {
+      ctx,
+      entryExports,
+      entryName: msg.entry.exportName,
+      mode: msg.mode,
+    };
   }
 
   call(msg: WasmCallMsg): Uint8Array | undefined {
     if (!this.instantiated) throw new Error('not instantiated');
-    const { ctx, topExports, mode } = this.instantiated;
+    const { ctx, entryExports, entryName, mode } = this.instantiated;
+    const fn = entryExports[entryName];
+    if (typeof fn !== 'function') {
+      throw new Error(`entry export ${JSON.stringify(entryName)} not callable`);
+    }
 
     if (mode === 'run') {
-      const fn = topExports.run;
-      if (typeof fn !== 'function') throw new Error('missing `run` export');
       (fn as () => void)();
       return undefined;
     }
     if (mode === 'walk_params' || mode === 'walk_data') {
-      const fn = topExports[mode];
-      if (typeof fn !== 'function') throw new Error(`missing \`${mode}\` export`);
       const input = msg.input ?? new Uint8Array(0);
       const ptr = allocAndWrite(ctx, input);
       (fn as (p: number, l: number) => void)(ptr, input.length);
       return undefined;
     }
     // build_params / build_data
-    const fn = topExports[mode];
-    if (typeof fn !== 'function') throw new Error(`missing \`${mode}\` export`);
     const packed = (fn as () => bigint)();
     const ptr = Number((packed >> 32n) & 0xFFFFFFFFn);
     const len = Number(packed & 0xFFFFFFFFn);

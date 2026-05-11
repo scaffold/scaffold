@@ -1,13 +1,9 @@
 // Protocol spec: docs/protocol/wasm-abi.md#optional-jspi
 //
-// Same-thread WASM execution where async host imports suspend the WASM
-// stack via `WebAssembly.Suspending` and the entry export is wrapped with
-// `WebAssembly.promising`. Supports stacking
-// ([wasm-abi.md#stacking](docs/protocol/wasm-abi.md#stacking)): all layers
-// share one `env.memory`, only the bottom layer sees scaffold exports.
-//
-// Available in Chrome 137+ (and behind a flag elsewhere); detect with
-// `JspiTransport.isSupported()` before constructing.
+// Same-thread WASM execution. Async scaffold imports wrap in
+// `WebAssembly.Suspending`; the entry export is wrapped with
+// `WebAssembly.promising`. Otherwise identical structure to the in-process
+// transport: shared memory, loadModules, lookup entry via base.imports.
 
 import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
@@ -22,9 +18,8 @@ import {
   type WalkBridge,
 } from '../WasmHostBridge.ts';
 import { packPtrLen } from '../WasmWireCodec.ts';
-import { buildImportsForLayer, type CompiledStack, presentExports } from '../WasmLayers.ts';
+import { type CompiledModules, loadModules, type TargetRef } from '../WasmModules.ts';
 
-// JSPI types (TC39 stage-4; not yet in TS lib). Declared minimally.
 interface SuspendingCtor {
   new <Fn extends (...args: never[]) => unknown>(fn: Fn): Fn;
 }
@@ -38,8 +33,6 @@ interface JspiAddons {
   promising?: PromisingFn;
 }
 const jspi: JspiAddons = WebAssembly as unknown as JspiAddons;
-
-// -- Memory + helpers ---------------------------------------------
 
 interface InstanceCtx {
   memory: WebAssembly.Memory;
@@ -70,26 +63,20 @@ function allocAndWrite(ctx: InstanceCtx, bytes: Uint8Array): number {
 }
 
 function suspending<Fn extends (...args: never[]) => unknown>(fn: Fn): Fn {
-  if (!jspi.Suspending) {
-    throw new Error('JSPI not supported in this runtime');
-  }
+  if (!jspi.Suspending) throw new Error('JSPI not supported in this runtime');
   return new jspi.Suspending(fn);
 }
 
 function promising<Fn extends (...args: never[]) => unknown>(
   fn: Fn,
 ): (...args: Parameters<Fn>) => Promise<ReturnType<Fn>> {
-  if (!jspi.promising) {
-    throw new Error('JSPI not supported in this runtime');
-  }
+  if (!jspi.promising) throw new Error('JSPI not supported in this runtime');
   return jspi.promising(fn);
 }
 
 function makeSharedMemory(): WebAssembly.Memory {
   return new WebAssembly.Memory({ initial: 1, maximum: 4096, shared: true });
 }
-
-// -- Flat scaffold export builders --------------------------------
 
 function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unknown> {
   const handlePackedAsync = async (bytes: Uint8Array | Promise<Uint8Array>): Promise<bigint> => {
@@ -209,41 +196,38 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
   };
 }
 
-// -- Stack instantiation ------------------------------------------
-
-interface LoadedStack {
-  ctx: InstanceCtx;
-  topExports: Record<string, unknown>;
+interface EntryInfo {
+  exports: Record<string, unknown>;
+  exportName: string;
+  layerKey: string;
 }
 
-async function loadStack(
-  stack: CompiledStack,
-  scaffoldFlat: Record<string, unknown>,
-  ctx: InstanceCtx,
-  memory: WebAssembly.Memory,
-): Promise<LoadedStack> {
-  if (stack.layers.length === 0) {
-    throw new Error('CompiledStack.layers must be non-empty');
+function resolveEntry(
+  modules: CompiledModules,
+  exportsByKey: ReadonlyMap<string, Record<string, unknown>>,
+  mode: string,
+): EntryInfo {
+  const ref: TargetRef | undefined = modules.base.imports.get(mode);
+  if (!ref) {
+    throw new Error(`modules.base.imports has no entry for mode ${JSON.stringify(mode)}`);
   }
-  let presentedLower: Record<string, unknown> = scaffoldFlat;
-  let topExports: Record<string, unknown> | null = null;
-  for (const entry of stack.layers) {
-    const imports = buildImportsForLayer(entry.module, entry.mapImports, presentedLower, memory);
-    const instance = await WebAssembly.instantiate(entry.module, imports);
-    const exports = instance.exports as Record<string, unknown>;
-    presentedLower = presentExports(exports, entry.mapExports);
-    topExports = exports;
+  const exports = exportsByKey.get(ref.layerKey);
+  if (!exports) {
+    throw new Error(`modules.base.imports[${JSON.stringify(mode)}]: layer not found`);
   }
-  const alloc = topExports!.alloc;
+  return { exports, exportName: ref.exportName, layerKey: ref.layerKey };
+}
+
+function setCtxFromEntry(ctx: InstanceCtx, entry: EntryInfo, memory: WebAssembly.Memory): void {
+  const alloc = entry.exports.alloc;
   if (typeof alloc !== 'function') {
-    throw new Error('top WASM module is missing required `alloc` export');
+    throw new Error(
+      `entry layer ${JSON.stringify(entry.layerKey)} is missing required \`alloc\` export`,
+    );
   }
   ctx.memory = memory;
   ctx.alloc = alloc as (size: number) => number;
-  return { ctx, topExports: topExports! };
 }
-
-// -- Transport ----------------------------------------------------
 
 export class JspiTransport implements WasmTransport {
   static isSupported(): boolean {
@@ -256,47 +240,41 @@ export class JspiTransport implements WasmTransport {
     }
   }
 
-  async run(stack: CompiledStack, env: ContractEnv): Promise<void> {
+  async run(modules: CompiledModules, env: ContractEnv): Promise<void> {
     const ctx = makeEmptyCtx();
     const memory = makeSharedMemory();
     const bridge = makeRunBridge(env);
     const scaffoldFlat = flatRunExports(ctx, bridge);
-    const loaded = await loadStack(stack, scaffoldFlat, ctx, memory);
-    const runFn = loaded.topExports.run;
-    if (typeof runFn !== 'function') {
-      throw new Error('top WASM module is missing required `run` export');
+    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entry = resolveEntry(modules, exportsByKey, 'run');
+    setCtxFromEntry(ctx, entry, memory);
+    const fn = entry.exports[entry.exportName];
+    if (typeof fn !== 'function') {
+      throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);
     }
-    const promisingRun = promising(runFn as () => unknown);
+    const promisingFn = promising(fn as () => unknown);
     try {
-      await promisingRun();
+      await promisingFn();
     } catch (err) {
       if (err instanceof ContractRejection) throw err;
       throw err;
     }
   }
 
-  async walkParams(
-    stack: CompiledStack,
-    params: Uint8Array,
-    host: WalkerHost,
-  ): Promise<void> {
-    await this.runWalk(stack, 'walk_params', params, host);
+  walkParams(modules: CompiledModules, params: Uint8Array, host: WalkerHost): Promise<void> {
+    return this.runWalk(modules, 'walk_params', params, host);
   }
 
-  async walkData(
-    stack: CompiledStack,
-    data: Uint8Array,
-    host: WalkerHost,
-  ): Promise<void> {
-    await this.runWalk(stack, 'walk_data', data, host);
+  walkData(modules: CompiledModules, data: Uint8Array, host: WalkerHost): Promise<void> {
+    return this.runWalk(modules, 'walk_data', data, host);
   }
 
-  async buildParams(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
-    return await this.runBuild(stack, 'build_params', host);
+  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+    return this.runBuild(modules, 'build_params', host);
   }
 
-  async buildData(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
-    return await this.runBuild(stack, 'build_data', host);
+  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+    return this.runBuild(modules, 'build_data', host);
   }
 
   close(): Promise<void> {
@@ -304,8 +282,8 @@ export class JspiTransport implements WasmTransport {
   }
 
   private async runWalk(
-    stack: CompiledStack,
-    exportName: 'walk_params' | 'walk_data',
+    modules: CompiledModules,
+    mode: 'walk_params' | 'walk_data',
     bytes: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
@@ -313,28 +291,32 @@ export class JspiTransport implements WasmTransport {
     const memory = makeSharedMemory();
     const bridge = makeWalkBridge(host);
     const scaffoldFlat = flatWalkExports(ctx, bridge);
-    const loaded = await loadStack(stack, scaffoldFlat, ctx, memory);
-    const fn = loaded.topExports[exportName];
+    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entry = resolveEntry(modules, exportsByKey, mode);
+    setCtxFromEntry(ctx, entry, memory);
+    const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
-      throw new Error(`top WASM module is missing required \`${exportName}\` export`);
+      throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);
     }
     const ptr = allocAndWrite(ctx, bytes);
     (fn as (p: number, l: number) => void)(ptr, bytes.length);
   }
 
   private async runBuild(
-    stack: CompiledStack,
-    exportName: 'build_params' | 'build_data',
+    modules: CompiledModules,
+    mode: 'build_params' | 'build_data',
     host: BuilderHost,
   ): Promise<Uint8Array> {
     const ctx = makeEmptyCtx();
     const memory = makeSharedMemory();
     const bridge = makeBuildBridge(host);
     const scaffoldFlat = flatBuildExports(ctx, bridge);
-    const loaded = await loadStack(stack, scaffoldFlat, ctx, memory);
-    const fn = loaded.topExports[exportName];
+    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entry = resolveEntry(modules, exportsByKey, mode);
+    setCtxFromEntry(ctx, entry, memory);
+    const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
-      throw new Error(`top WASM module is missing required \`${exportName}\` export`);
+      throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);
     }
     const packed = (fn as () => bigint)();
     const ptr = Number((packed >> 32n) & 0xFFFFFFFFn);

@@ -81,9 +81,8 @@ Standard records on the contract block:
 
 | Record key | Wire format | Meaning |
 |---|---|---|
-| `wasm_layers`       | UTF-8 JSON array (see [Stacking](#stacking)) | Required on every WASM contract block. Non-empty array of `{wasmHash, mapImports?, mapExports?}` entries, bottom-to-top. **Every** entry references a content-addressed WASM blob (fetched via `{ contract: HASH_CONTRACT, params: blobHash }`); the last entry is the top of the stack (its `run` / `walk_*` / `build_*` export is invoked). Single-module contracts have one entry. Replaces both the legacy `wasm` and `wasm_hashes` records. |
+| `modules`           | UTF-8 JSON object (see [Stacking](#stacking)) | Required on every WASM contract block. Describes the contract's module graph: a `base` section (ABI version + scaffold-facing entry points) and a `layers` map of named modules with their cross-edge linking. Each layer references a content-addressed WASM blob (fetched via `{ contract: HASH_CONTRACT, params: blobHash }`). Every cross-module / cross-scaffold reference is explicit; no implicit defaults. Replaces the legacy `wasm`, `wasm_hashes`, and `abi_version` records. |
 | `output_namespaces` | concatenated 32-byte hashes (no length prefix; total length is the count × 32) | The closed set of contract hashes this contract may produce. Empty record (zero bytes) = produces no outputs. See [computation.md#output-namespaces](computation.md#output-namespaces). |
-| `abi_version`       | UTF-8 date string `YYYYMMDD` (e.g. `"20250510"`) | The ABI revision this WASM was built against. Runtimes refuse to load contracts whose `abi_version` is newer than their own supported version, or older than their compatibility floor. (Future: a WASM export `abi_version() -> i32` returning the same date as a packed integer like `20250510`; runtimes verify the two match.) |
 | `max_memory_pages`  | little-endian `u32`      | Per-instance memory cap in 64 KiB pages. Defaults to `4096` (256 MiB) when absent. |
 | `budget_ms_hint`    | little-endian `u32`      | Author's hint for `runVerifying` wall-clock budget. The runtime uses this only to size scheduling; the actual budget enforcement comes from the verification module (see [computation.md#per-verifier-budget](computation.md#per-verifier-budget)). |
 
@@ -292,116 +291,122 @@ Two mechanisms for composing contracts. They serve different needs and compose o
 |---|---|---|
 | Purpose | Static, in-band, low-overhead composition | Dynamic, out-of-band, parallel composition |
 | Granularity | Multiple WASM blobs in one execution | Independent generator producing its own block |
-| Configured | At contract publication, via `wasm_layers` record on the contract block | At runtime, via `fork()` host call during generation |
+| Configured | At contract publication, via `modules` record on the contract block | At runtime, via `fork()` host call during generation |
 | Communication | Direct WASM-to-WASM (exports↔imports), shared memory | One-shot pre-resolution via a records vector; no further interaction |
 | Budget | Stack shares the parent's per-verifier budget | Each fork gets its own fresh budget |
 | Verification | Single block, single verifier — stack is internal | Sub-contract block is independently verified |
 
 ### Stacking
 
-A contract may declare a stack of additional WASM blobs that load alongside its primary module and link to each other directly. The mental model:
+A contract is structured as a **graph of WASM modules**, declared in a `modules` JSON record on the contract block. The graph has two parts:
 
-```
-scaffold env <-> wasm 1 <-> wasm 2 <-> ... <-> wasm N
-```
+- **`base`**: the scaffold-facing stub. Names which layer scaffold invokes for each mode (`run`, `walk_params`, etc.) and carries the contract's ABI version. Scaffold itself is a node in the graph, addressed by the special layer key `"base"`.
+- **`layers`**: a map from a logical layer key (e.g. `"wasi_shim"`, `"program"`) to a layer spec. Each layer references a content-addressed WASM blob and lists how its declared WASM imports resolve onto other layers' exports.
 
-Each pair is linked by **WASM-to-WASM exports↔imports** (no JS in the path). Only WASM 1 — the bottom of the stack — sees the `scaffold_env.*`, `scaffold_walker.*`, `scaffold_builder.*` host exports (flattened into one mode-appropriate map). Each higher WASM sees only the layer immediately below it as its imports source. A higher WASM cannot reach down past its predecessor: import resolution for layer *i* (above the bottom) is performed against the layer-below's presented exports, so scaffold-only names are simply absent.
+Every cross-edge in the graph is **explicit** in some layer's `imports` map. There is no global lookup, no implicit default, no fallback. Authors spell out exactly where each import comes from.
 
-**Configuration: the `wasm_layers` record.** The contract block carries a `wasm_layers` record (the **only** WASM-related record on the block — there is no separate `wasm` record; every layer's bytes are fetched by hash). The body is a UTF-8 JSON array — non-empty, bottom-to-top — where each entry has the shape:
+**Wire format.**
 
 ```ts
-type LayerSpec = {
-  wasmHash: string;                    // 64-char hex content hash of a WASM blob. Required.
-  mapImports?: Record<string, string>; // Optional: how MY imports resolve onto the layer-below's presented exports.
-  mapExports?: Record<string, string>; // Optional: how MY exports are presented to the layer above.
+type ModulesSpec = {
+  base: {
+    version: number;                          // integer ABI date, e.g. 20250510
+    imports: Record<string, string>;          // "<mode>" -> "<layerKey>:<exportName>"
+  };
+  layers: Record<string, {
+    wasmHash: string;                         // 64-char hex content hash of the WASM blob
+    imports?: Record<string, string>;         // "<ns>.<field>" -> "<layerKey>:<exportName>"
+  }>;
 };
 ```
 
-Single-module contracts have **one entry** (the WASM blob's hash). The runtime fetches and instantiates that blob alone; its `run` / `walk_*` / `build_*` exports drive the call.
+The values of every `imports` map are `"<layerKey>:<exportName>"` references. `layerKey` is any key in `layers`, or the reserved string `"base"` (referring to scaffold's mode-appropriate ContractEnv host exports).
 
-Structural rules enforced at load:
-1. Non-empty array.
-2. Every entry has `wasmHash` as a 64-char hex string.
-3. No duplicate `wasmHash` (each blob loads once; rejects trivial cycles).
-4. `mapImports` and `mapExports` keys are dotted `"namespace.field"` strings.
-5. `env.memory` is reserved — `mapImports` cannot use it as a key.
-
-**Import resolution.** Each layer's declared `(import "X" "Y" ...)` is bound through a two-sided process:
-
-- The **layer below** computes its *presented exports* — a flat dict keyed by string. It starts as `instance.exports` (bare names) and is extended by `mapExports`: for each `(k → v)` entry, `presented[k] = instance.exports[v]`. So `mapExports: { "wasi_snapshot_preview1.fd_write": "fd_write" }` injects a dotted entry pointing at the bare `fd_write` export.
-- For the **bottom** layer, the "layer below" view is the mode-appropriate scaffold export map (`scaffold_env.*` for run; `scaffold_walker.*` for walk_params / walk_data; `scaffold_builder.*` for build_params / build_data), flattened to bare field names.
-
-For each declared `(import "X" "Y" ...)` on this layer:
-
-1. If `mapImports` has an entry for `"X.Y"`, the lookup name is `mapImports["X.Y"]`. **Strict** — if that name isn't in the layer-below's presented view, instantiation fails. No fallback.
-2. Otherwise (no entry), the lookup name defaults to `"X.Y"` (the dotted form). If that isn't present, fall back to `"Y"` (bare field name). The fallback is the back-compat path for unmapped scaffold-style imports.
-3. If neither lookup finds anything, the import is bound to `undefined` and `WebAssembly.instantiate` throws a `LinkError` pointing at the precise (module, name).
-
-A few worked examples:
+**Wildcards.** `imports` entries support a single trailing-`*` wildcard:
 
 ```jsonc
-// Single module, no rebinding -- typical contract. Imports `(import "scaffold_env" "X" ...)`
-// resolve via the bare-field fallback to scaffold_env's flat exports.
-[
-  { "wasmHash": "...64-hex..." }
-]
+{ "wasi_snapshot_preview1.*": "wasi_shim:*" }
 ```
 
-```jsonc
-// Single module that renames a scaffold name. The module declares
-// `(import "renamed_env" "emit_output" ...)`; mapImports redirects to the
-// bare scaffold export name `emit_output`.
-[
-  {
-    "wasmHash": "...64-hex...",
-    "mapImports": { "renamed_env.emit_output": "emit_output" }
-  }
-]
-```
+This matches any import whose key starts with `"wasi_snapshot_preview1."`; the suffix replaces the `*` in the target. Required shape:
+1. `*` is at the end of BOTH key and value.
+2. The character immediately before `*` is `.` in the key, and either `.` or `:` in the value.
+
+Resolution priority: literal entries first, then longest-prefix wildcard.
+
+**Strictness.** If a declared WASM import on any layer has no matching entry (literal or wildcard) in the layer's `imports`, loading fails. There are no implicit defaults.
+
+**Structural rules** (enforced at parse time):
+1. `modules.base.version` is an integer.
+2. `modules.layers` is non-empty.
+3. Every layer's `wasmHash` is a 64-char hex string.
+4. No duplicate `wasmHash` across layers.
+5. The reserved layer key `"base"` cannot appear in `layers`.
+6. Every `"<layerKey>:<exportName>"` reference resolves to a layer that exists in `layers` (or to `"base"`).
+7. `base.imports` references cannot target `"base"` (scaffold doesn't call itself).
+
+**Worked examples.**
+
+Single-module contract:
 
 ```jsonc
-// WASI binary (top) above a wasi-shim (bottom). Two equivalent ways to wire
-// it: (a) upper-side mapImports binds wasi names to shim's flat exports;
-// (b) lower-side mapExports injects "wasi_snapshot_preview1.fd_write" into
-// the shim's presented view, and the upper's default-1:1 lookup matches.
-//
-// (a) Upper-side:
-[
-  { "wasmHash": "...the wasi-shim..." },
-  {
-    "wasmHash": "...the WASI binary...",
-    "mapImports": {
-      "wasi_snapshot_preview1.fd_write":  "fd_write",
-      "wasi_snapshot_preview1.proc_exit": "proc_exit"
-    }
-  }
-]
-// (b) Lower-side -- packageable as a reusable wasi-shim contract:
-[
-  {
-    "wasmHash": "...the wasi-shim...",
-    "mapExports": {
-      "wasi_snapshot_preview1.fd_write":  "fd_write",
-      "wasi_snapshot_preview1.proc_exit": "proc_exit"
-    }
+{
+  "base": {
+    "version": 20250510,
+    "imports": { "run": "main:run" }
   },
-  { "wasmHash": "...the WASI binary..." }
-]
+  "layers": {
+    "main": {
+      "wasmHash": "...64-hex...",
+      "imports": { "scaffold_env.*": "base:*" }
+    }
+  }
+}
 ```
 
-**Blob lookup.** Each entry's `wasmHash` refers to a content-addressed WASM blob. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation. All blobs must be loaded and compiled before the contract's entry export is invoked. Failure to fetch any blob is a load-time crash.
+The contract's WASM declares `(import "scaffold_env" "emit_output" ...)` etc.; the wildcard routes each to scaffold's matching export. `base.imports.run` says "scaffold's run-mode entrypoint is `main:run`."
 
-**`HASH_CONTRACT`** is a discovery beacon for blob publication. A block publishing a blob carries two outputs: a `HASH_CONTRACT/hash(blob)` output (the discovery key the network indexes on, self-claimed) and a `RECORD_CONTRACT/'default'` output whose body is the blob. The `HashContract.run` reads the `'default'` record via `requestBody({contract: RECORD_CONTRACT, params: 'default'})` and asserts `hash(body) == params`, so verification rejects misrepresented blobs. Other contracts invert a hash by calling `fetch({ contract: HASH_CONTRACT, params: hash }, { recordKey: 'default' })`.
+A WASI program above a WASI shim (two layers, bidirectional dependencies):
 
-**Memory model.** All WASMs in a stack receive a single runtime-supplied linear memory under `(import "env" "memory" ...)`. The bridge always injects it into every layer's imports; modules import it explicitly. Pointer-passing across layers is trivial — a `(ptr, len)` tuple has the same meaning everywhere. Modules MAY declare additional private memories internally, but the shared `env.memory` is the rendezvous for cross-layer data.
+```jsonc
+{
+  "base": {
+    "version": 20250510,
+    "imports": { "run": "wasi_shim:run" }
+  },
+  "layers": {
+    "wasi_shim": {
+      "wasmHash": "...the WASI shim WASM...",
+      "imports": {
+        "_start": "program:__wasi_unstable_reactor_start",
+        "scaffold_env.*": "base:*"
+      }
+    },
+    "program": {
+      "wasmHash": "...the WASI program WASM...",
+      "imports": {
+        "wasi_snapshot_preview1.*": "wasi_shim:*"
+      }
+    }
+  }
+}
+```
 
-**Execution.** The contract's `run` is invoked on the **top** instance's `run` export (the last entry in `wasm_layers`). From there, every host call traverses the stack: top → ... → wasm 1 → real `scaffold_env.*` (resolved against the executing block's `ContractEnv` via the transport described in [Async-bridge transport](#async-bridge-transport)). Each layer is free to inspect, modify, or pass through.
+`base.imports.run` is `wasi_shim:run` — scaffold calls the shim's `run`, which internally invokes the program's `_start` (declared as an import on the shim, mapped to the program's actual export `__wasi_unstable_reactor_start`). The program's WASI imports resolve to the shim's flat exports of the same names. The shim's own scaffold imports go directly to `base`. The graph is cyclic (shim ↔ program), which the linker handles via JS forwarders (see below).
 
-**Cycles** (duplicate `wasmHash` in `wasm_layers`) are rejected at load.
+**Memory model.** All layers receive a single runtime-supplied linear memory under `(import "env" "memory" ...)`. Pointer-passing across layers is trivial — `(ptr, len)` has the same meaning everywhere. Modules may declare additional private memories internally, but `env.memory` is the rendezvous. `env.memory` is reserved — it cannot appear as a key in any `imports` map.
 
-**Budget.** A stacked execution counts as a single contract execution: the entire stack shares one per-verifier budget.
+**Entry export.** Scaffold invokes the export named by `base.imports[<mode>]` on the layer named there. The same layer's `alloc` export is used by the host bridge as the contract-side allocator (so any layer chosen as an entry point must export `alloc`).
 
-**Use cases.** WASI binaries (top WASM imports `wasi_snapshot_preview1`; the layer below is a Scaffold-WASI shim that exports those names and translates to scaffold_env). JavaScript interpreters (top WASM is a thin wrapper that loads JS source from `contractMetadata`; layer below is QuickJS-as-WASM). Any other "interpreter on top of host" pattern.
+**Linker implementation.** Cross-edges (layer → layer and layer → base) go through JS forwarder closures that close over a shared name table populated after every layer is instantiated. This handles cyclic graphs uniformly. There's a one-JS-call hop per cross-edge — a real cost; future work may topo-sort acyclic graphs and use direct WASM-to-WASM linking.
+
+**Cycles** at the `wasmHash` level (duplicate blob references) are rejected at load. Cycles at the graph level (layer A's imports reach into B; B's imports reach into A) are allowed and handled by forwarders.
+
+**Budget.** A graph execution counts as a single contract execution: the entire graph shares one per-verifier budget.
+
+**`HASH_CONTRACT` integration.** Each layer's `wasmHash` references a content-addressed WASM blob. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation. A block publishing a blob carries a `HASH_CONTRACT/hash(blob)` discovery output (self-claimed; its `run` verifies the preimage) and a `RECORD_CONTRACT/'default'` output whose body IS the blob. The HASH contract reads the `'default'` record via `requestBody({contract: RECORD_CONTRACT, params: 'default'})` and asserts `hash(body) == params`, so misrepresented blobs are rejected at verification.
+
+**Use cases.** WASI binaries (program imports `wasi_snapshot_preview1` from a Scaffold-WASI shim). JavaScript interpreters (program is a thin wrapper that loads JS source from `contractMetadata`; the shim below is QuickJS-as-WASM exposing host imports under standard names). Any "interpreter atop a host shim" pattern.
 
 ### Forking
 

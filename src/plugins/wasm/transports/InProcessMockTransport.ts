@@ -1,16 +1,9 @@
 // Protocol spec: docs/protocol/wasm-abi.md#async-bridge-transport
 //
-// Same-thread WASM execution with no Worker, no SAB-dispatch, no JSPI.
-// Supports stacking ([wasm-abi.md#stacking](docs/protocol/wasm-abi.md#stacking)):
-// the transport supplies a runtime-owned shared linear memory under
-// `env.memory`, instantiates each layer bottom-up with `buildImportsForLayer`,
-// and routes host calls through `WasmHostBridge` -- only the bottom layer
-// sees the scaffold export view.
-//
-// Suitable for verification (where the env is fully sync) and for walker /
-// builder paths (also sync). If a may-block import returns a Promise, this
-// transport throws with a clear message -- switch to JspiTransport or
-// AtomicsWorkerTransport for async generation.
+// Same-thread WASM execution. The transport supplies a shared linear
+// memory, instantiates every module in the graph via `loadModules`, then
+// invokes the entry export named by `base.imports[<mode>]`. Cross-edge
+// references go through JS forwarders so cycles in the graph work.
 
 import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
@@ -25,7 +18,7 @@ import {
   type WalkBridge,
 } from '../WasmHostBridge.ts';
 import { packPtrLen } from '../WasmWireCodec.ts';
-import { buildImportsForLayer, type CompiledStack, presentExports } from '../WasmLayers.ts';
+import { type CompiledModules, loadModules, type TargetRef } from '../WasmModules.ts';
 
 const SYNC_ONLY_ERROR = 'InProcessMockTransport: host import returned a Promise; ' +
   'switch to JspiTransport or AtomicsWorkerTransport for async execution';
@@ -63,9 +56,11 @@ function expectSync<T>(value: T | Promise<T>): T {
   return value;
 }
 
-// -- Flat scaffold export builders -------------------------------------
-// These return one big flat dict (no namespace) suitable as the bottom
-// layer's `lowerExports` view in `buildImportsForLayer`.
+function makeSharedMemory(): WebAssembly.Memory {
+  return new WebAssembly.Memory({ initial: 1, maximum: 4096, shared: true });
+}
+
+// -- Scaffold flat exports (keyed by bare name) ------------------------
 
 function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unknown> {
   const handlePackedBytes = (bytes: Uint8Array): bigint => {
@@ -75,10 +70,8 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
   return {
     mode: () => bridge.mode(),
     contract_hash: () => handlePackedBytes(bridge.contractHash()),
-    contract_metadata: (vp: number, vl: number) => {
-      const verifier = readSlice(ctx, vp, vl);
-      return handlePackedBytes(expectSync(bridge.contractMetadata(verifier)));
-    },
+    contract_metadata: (vp: number, vl: number) =>
+      handlePackedBytes(expectSync(bridge.contractMetadata(readSlice(ctx, vp, vl)))),
     params: () => handlePackedBytes(bridge.params()),
     timestamp: () => bridge.timestamp(),
     claim_next: () => handlePackedBytes(expectSync(bridge.claimNext())),
@@ -177,92 +170,91 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
   };
 }
 
-// -- Stack instantiation -----------------------------------------------
+// -- Entry resolution --------------------------------------------------
 
-/** Allocate the runtime-supplied shared memory used by every layer. */
-function makeSharedMemory(): WebAssembly.Memory {
-  return new WebAssembly.Memory({ initial: 1, maximum: 4096, shared: true });
+interface EntryInfo {
+  exports: Record<string, unknown>;
+  exportName: string;
+  layerKey: string;
 }
 
-interface LoadedStack {
-  ctx: InstanceCtx;
-  /** Top instance's exports (where `run`, `walk_*`, `build_*`, `alloc` live). */
-  topExports: Record<string, unknown>;
+function resolveEntry(
+  modules: CompiledModules,
+  exportsByKey: ReadonlyMap<string, Record<string, unknown>>,
+  mode: string,
+): EntryInfo {
+  const ref: TargetRef | undefined = modules.base.imports.get(mode);
+  if (!ref) {
+    throw new Error(`modules.base.imports has no entry for mode ${JSON.stringify(mode)}`);
+  }
+  if (ref.layerKey === 'base') {
+    throw new Error(
+      `modules.base.imports[${JSON.stringify(mode)}]: target cannot be "base"`,
+    );
+  }
+  const exports = exportsByKey.get(ref.layerKey);
+  if (!exports) {
+    throw new Error(
+      `modules.base.imports[${JSON.stringify(mode)}]: layer ${
+        JSON.stringify(ref.layerKey)
+      } not found`,
+    );
+  }
+  return { exports, exportName: ref.exportName, layerKey: ref.layerKey };
 }
 
-async function loadStack(
-  stack: CompiledStack,
-  scaffoldFlat: Record<string, unknown>,
-  ctx: InstanceCtx,
-  memory: WebAssembly.Memory,
-): Promise<LoadedStack> {
-  if (stack.layers.length === 0) {
-    throw new Error('CompiledStack.layers must be non-empty');
-  }
-  // Walk bottom-to-top. The first layer's "lower" is the scaffold flat map;
-  // each subsequent layer's "lower" is the previous instance's presented
-  // exports (instance.exports + mapExports-injected dotted entries).
-  let presentedLower: Record<string, unknown> = scaffoldFlat;
-  let topExports: Record<string, unknown> | null = null;
-  for (const entry of stack.layers) {
-    const imports = buildImportsForLayer(entry.module, entry.mapImports, presentedLower, memory);
-    const instance = await WebAssembly.instantiate(entry.module, imports);
-    const exports = instance.exports as Record<string, unknown>;
-    presentedLower = presentExports(exports, entry.mapExports);
-    topExports = exports;
-  }
-  const alloc = topExports!.alloc;
+function setCtxFromEntry(ctx: InstanceCtx, entry: EntryInfo, memory: WebAssembly.Memory): void {
+  const alloc = entry.exports.alloc;
   if (typeof alloc !== 'function') {
-    throw new Error('top WASM module is missing required `alloc` export');
+    throw new Error(
+      `entry layer ${JSON.stringify(entry.layerKey)} is missing required \`alloc\` export`,
+    );
   }
   ctx.memory = memory;
   ctx.alloc = alloc as (size: number) => number;
-  return { ctx, topExports: topExports! };
 }
 
 // -- Transport ---------------------------------------------------------
 
 export class InProcessMockTransport implements WasmTransport {
-  async run(stack: CompiledStack, env: ContractEnv): Promise<void> {
+  async run(modules: CompiledModules, env: ContractEnv): Promise<void> {
     const ctx = makeEmptyCtx();
     const memory = makeSharedMemory();
     const bridge = makeRunBridge(env);
     const scaffoldFlat = flatRunExports(ctx, bridge);
-    const loaded = await loadStack(stack, scaffoldFlat, ctx, memory);
-    const runFn = loaded.topExports.run;
-    if (typeof runFn !== 'function') {
-      throw new Error('top WASM module is missing required `run` export');
+    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entry = resolveEntry(modules, exportsByKey, 'run');
+    setCtxFromEntry(ctx, entry, memory);
+    const fn = entry.exports[entry.exportName];
+    if (typeof fn !== 'function') {
+      throw new Error(
+        `entry layer ${JSON.stringify(entry.layerKey)} has no export ${
+          JSON.stringify(entry.exportName)
+        }`,
+      );
     }
     try {
-      (runFn as () => void)();
+      (fn as () => void)();
     } catch (err) {
       if (err instanceof ContractRejection) throw err;
       throw err;
     }
   }
 
-  async walkParams(
-    stack: CompiledStack,
-    params: Uint8Array,
-    host: WalkerHost,
-  ): Promise<void> {
-    await this.runWalk(stack, 'walk_params', params, host);
+  walkParams(modules: CompiledModules, params: Uint8Array, host: WalkerHost): Promise<void> {
+    return this.runWalk(modules, 'walk_params', params, host);
   }
 
-  async walkData(
-    stack: CompiledStack,
-    data: Uint8Array,
-    host: WalkerHost,
-  ): Promise<void> {
-    await this.runWalk(stack, 'walk_data', data, host);
+  walkData(modules: CompiledModules, data: Uint8Array, host: WalkerHost): Promise<void> {
+    return this.runWalk(modules, 'walk_data', data, host);
   }
 
-  async buildParams(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
-    return await this.runBuild(stack, 'build_params', host);
+  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+    return this.runBuild(modules, 'build_params', host);
   }
 
-  async buildData(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
-    return await this.runBuild(stack, 'build_data', host);
+  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+    return this.runBuild(modules, 'build_data', host);
   }
 
   close(): Promise<void> {
@@ -270,8 +262,8 @@ export class InProcessMockTransport implements WasmTransport {
   }
 
   private async runWalk(
-    stack: CompiledStack,
-    exportName: 'walk_params' | 'walk_data',
+    modules: CompiledModules,
+    mode: 'walk_params' | 'walk_data',
     bytes: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
@@ -279,28 +271,40 @@ export class InProcessMockTransport implements WasmTransport {
     const memory = makeSharedMemory();
     const bridge = makeWalkBridge(host);
     const scaffoldFlat = flatWalkExports(ctx, bridge);
-    const loaded = await loadStack(stack, scaffoldFlat, ctx, memory);
-    const fn = loaded.topExports[exportName];
+    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entry = resolveEntry(modules, exportsByKey, mode);
+    setCtxFromEntry(ctx, entry, memory);
+    const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
-      throw new Error(`top WASM module is missing required \`${exportName}\` export`);
+      throw new Error(
+        `entry layer ${JSON.stringify(entry.layerKey)} has no export ${
+          JSON.stringify(entry.exportName)
+        }`,
+      );
     }
     const ptr = allocAndWrite(ctx, bytes);
     (fn as (p: number, l: number) => void)(ptr, bytes.length);
   }
 
   private async runBuild(
-    stack: CompiledStack,
-    exportName: 'build_params' | 'build_data',
+    modules: CompiledModules,
+    mode: 'build_params' | 'build_data',
     host: BuilderHost,
   ): Promise<Uint8Array> {
     const ctx = makeEmptyCtx();
     const memory = makeSharedMemory();
     const bridge = makeBuildBridge(host);
     const scaffoldFlat = flatBuildExports(ctx, bridge);
-    const loaded = await loadStack(stack, scaffoldFlat, ctx, memory);
-    const fn = loaded.topExports[exportName];
+    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entry = resolveEntry(modules, exportsByKey, mode);
+    setCtxFromEntry(ctx, entry, memory);
+    const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
-      throw new Error(`top WASM module is missing required \`${exportName}\` export`);
+      throw new Error(
+        `entry layer ${JSON.stringify(entry.layerKey)} has no export ${
+          JSON.stringify(entry.exportName)
+        }`,
+      );
     }
     const packed = (fn as () => bigint)();
     const ptr = Number((packed >> 32n) & 0xFFFFFFFFn);

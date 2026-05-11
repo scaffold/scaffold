@@ -1,7 +1,6 @@
-// End-to-end tests for WASM stacking (A4). Drives multi-layer stacks
-// through `wasmContractPlugin` -> the in-process transport. Covers the
-// passthrough fixture stack, mapImports renaming, mapExports namespace
-// injection, and structural rejection of malformed `wasm_layers` records.
+// End-to-end tests for the WASM `modules` graph (A4 stacking). Drives the
+// passthrough fixture graph through `wasmContractPlugin` -> the in-process
+// transport, covers wildcards, mapping renames, and structural rejection.
 
 import { assert, assertEquals, assertRejects, assertStringIncludes } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
@@ -22,13 +21,12 @@ async function loadFixtureBytes(name: string): Promise<Uint8Array> {
   return await Deno.readFile(url);
 }
 
-function makeLayersRecord(spec: unknown): Output {
-  return makeRecordOutput('wasm_layers', new TextEncoder().encode(JSON.stringify(spec)));
+function modulesRecord(spec: unknown): Output {
+  return makeRecordOutput('modules', new TextEncoder().encode(JSON.stringify(spec)));
 }
 
-function makeLayersRecordRaw(raw: string | undefined): Output | undefined {
-  if (raw === undefined) return undefined;
-  return makeRecordOutput('wasm_layers', new TextEncoder().encode(raw));
+function modulesRecordRaw(raw: string): Output {
+  return makeRecordOutput('modules', new TextEncoder().encode(raw));
 }
 
 class RecordingEnv implements ContractEnv {
@@ -77,23 +75,35 @@ function blobResolver(map: Map<string, Uint8Array>): (h: Hash) => Promise<Uint8A
   };
 }
 
-// -- Happy path: real stack runs end-to-end ---------------------------
+// -- Happy path: real graph runs end-to-end ---------------------------
 
 Deno.test(
-  'WasmStacking: passthrough_upper above passthrough_lower runs end-to-end',
+  'WasmStacking: two-layer passthrough graph (upper imports from lower)',
   async () => {
     const lowerBytes = await loadFixtureBytes('passthrough_lower');
     const upperBytes = await loadFixtureBytes('passthrough_upper');
     const lowerHash = Hash.digest(lowerBytes);
     const upperHash = Hash.digest(upperBytes);
 
-    const block = composeGenesisPacket([
-      makeLayersRecord([
-        { wasmHash: lowerHash.toHex() },
-        { wasmHash: upperHash.toHex(), mapImports: { 'renamed_ns.emit_output': 'emit_output' } },
-      ]),
-    ]);
+    // Graph:
+    //   base.imports.run -> "upper:run"  (scaffold calls upper's run)
+    //   upper imports renamed_ns.emit_output -> "lower:emit_output"
+    //   lower imports scaffold_env.emit_output -> "base:emit_output"
+    const spec = {
+      base: { version: 20250510, imports: { run: 'upper:run' } },
+      layers: {
+        lower: {
+          wasmHash: lowerHash.toHex(),
+          imports: { 'scaffold_env.emit_output': 'base:emit_output' },
+        },
+        upper: {
+          wasmHash: upperHash.toHex(),
+          imports: { 'renamed_ns.emit_output': 'lower:emit_output' },
+        },
+      },
+    };
 
+    const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(
       new Map([
         [lowerHash.toHex(), lowerBytes],
@@ -115,58 +125,56 @@ Deno.test(
 );
 
 Deno.test(
-  'WasmStacking: passthrough stack via lower-side mapExports (no upper mapImports)',
+  'WasmStacking: single-module with wildcard scaffold imports',
   async () => {
-    // Same stack but instead of the upper specifying mapImports, the lower
-    // specifies mapExports that injects "renamed_ns.emit_output" into its
-    // presented view. The upper's default-1:1 lookup then resolves directly.
-    const lowerBytes = await loadFixtureBytes('passthrough_lower');
-    const upperBytes = await loadFixtureBytes('passthrough_upper');
-    const lowerHash = Hash.digest(lowerBytes);
-    const upperHash = Hash.digest(upperBytes);
-
-    const block = composeGenesisPacket([
-      makeLayersRecord([
-        { wasmHash: lowerHash.toHex(), mapExports: { 'renamed_ns.emit_output': 'emit_output' } },
-        { wasmHash: upperHash.toHex() },
-      ]),
-    ]);
-
-    const resolveBlob = blobResolver(
-      new Map([
-        [lowerHash.toHex(), lowerBytes],
-        [upperHash.toHex(), upperBytes],
-      ]),
-    );
+    const bytes = await loadFixtureBytes('echo');
+    const hash = Hash.digest(bytes);
+    const spec = {
+      base: { version: 20250510, imports: { run: 'main:run' } },
+      layers: {
+        main: {
+          wasmHash: hash.toHex(),
+          imports: { 'scaffold_env.*': 'base:*' },
+        },
+      },
+    };
+    const block = composeGenesisPacket([modulesRecord(spec)]);
+    const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
     const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
     const contract = plugin.getContract(block);
-    const env = new RecordingEnv();
+    const env = new RecordingEnv(new TextEncoder().encode('wildcard-ok'));
     await contract.run(env);
     assertEquals(env.emittedOutputs.length, 1);
-    assertEquals(new TextDecoder().decode(env.emittedOutputs[0].verifier.params), 'stack');
+    assertEquals(
+      new TextDecoder().decode(env.emittedOutputs[0].body ?? new Uint8Array(0)),
+      'wildcard-ok',
+    );
   },
 );
 
 Deno.test(
-  'WasmStacking: single-module rename_only resolves via mapImports',
+  'WasmStacking: rename via explicit dotted entry (rename_only fixture)',
   async () => {
+    // rename_only declares (import "renamed_env" "emit_output" ...) -- map it
+    // explicitly to scaffold's emit_output.
     const bytes = await loadFixtureBytes('rename_only');
     const hash = Hash.digest(bytes);
-    const block = composeGenesisPacket([
-      makeLayersRecord([
-        {
+    const spec = {
+      base: { version: 20250510, imports: { run: 'main:run' } },
+      layers: {
+        main: {
           wasmHash: hash.toHex(),
-          mapImports: { 'renamed_env.emit_output': 'emit_output' },
+          imports: { 'renamed_env.emit_output': 'base:emit_output' },
         },
-      ]),
-    ]);
+      },
+    };
+    const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
     const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
     const contract = plugin.getContract(block);
     const env = new RecordingEnv();
     await contract.run(env);
     assertEquals(env.emittedOutputs.length, 1);
-    assertEquals(new TextDecoder().decode(env.emittedOutputs[0].verifier.params), 'rename');
     assertEquals(
       new TextDecoder().decode(env.emittedOutputs[0].body ?? new Uint8Array(0)),
       'rename-ok',
@@ -174,92 +182,84 @@ Deno.test(
   },
 );
 
-Deno.test(
-  'WasmStacking: single-module with default 1:1 falls back to bare field on scaffold flat',
-  async () => {
-    // The echo fixture imports (scaffold_env, params) and (scaffold_env,
-    // emit_output). With no mapImports, the resolver tries "scaffold_env.X"
-    // first (not in scaffold flat), then falls back to "X" (which IS in the
-    // flat scaffold view). This is the back-compat path.
-    const bytes = await loadFixtureBytes('echo');
-    const hash = Hash.digest(bytes);
-    const block = composeGenesisPacket([
-      makeLayersRecord([{ wasmHash: hash.toHex() }]),
-    ]);
-    const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
-    const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
-    const contract = plugin.getContract(block);
-    const env = new RecordingEnv(new TextEncoder().encode('default-path-ok'));
-    await contract.run(env);
-    assertEquals(env.emittedOutputs.length, 1);
-    assertEquals(new TextDecoder().decode(env.emittedOutputs[0].verifier.params), 'echo');
-  },
-);
-
 // -- Structural rejection ---------------------------------------------
 
-function blockWith(record: Output | undefined): Block {
-  return composeGenesisPacket(record ? [record] : []);
+function blockWith(record: Output): Block {
+  return composeGenesisPacket([record]);
 }
 
-Deno.test('WasmStacking: reject -- missing wasm_layers record', () => {
-  const block = blockWith(undefined);
+Deno.test('WasmStacking: reject -- modules record not JSON object', () => {
+  const block = blockWith(modulesRecordRaw('[]'));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, 'wasm_layers');
+    assertStringIncludes((err as Error).message, 'must be a JSON object');
   }
 });
 
-Deno.test('WasmStacking: reject -- wasm_layers not a JSON array', () => {
-  const block = blockWith(makeLayersRecordRaw('{}'));
+Deno.test('WasmStacking: reject -- modules.base.version not integer', () => {
+  const block = blockWith(modulesRecordRaw('{"base":{"version":"v1","imports":{}},"layers":{}}'));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, 'JSON array');
+    assertStringIncludes((err as Error).message, 'version must be an integer');
   }
 });
 
-Deno.test('WasmStacking: reject -- empty wasm_layers array', () => {
-  const block = blockWith(makeLayersRecordRaw('[]'));
+Deno.test('WasmStacking: reject -- empty layers', () => {
+  const block = blockWith(
+    modulesRecordRaw('{"base":{"version":20250510,"imports":{}},"layers":{}}'),
+  );
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, 'non-empty');
+    assertStringIncludes((err as Error).message, 'at least one layer');
   }
 });
 
-Deno.test('WasmStacking: reject -- entry missing wasmHash', () => {
-  const block = blockWith(makeLayersRecordRaw('[{}]'));
+Deno.test('WasmStacking: reject -- layer key "base" is reserved', () => {
+  const spec = {
+    base: { version: 20250510, imports: {} },
+    layers: { base: { wasmHash: '0'.repeat(64) } },
+  };
+  const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, 'wasmHash is required');
+    assertStringIncludes((err as Error).message, '"base" is reserved');
   }
 });
 
-Deno.test('WasmStacking: reject -- wasmHash is not 64-char hex', () => {
-  const block = blockWith(makeLayersRecord([{ wasmHash: 'not-a-hash' }]));
+Deno.test('WasmStacking: reject -- base.imports references unknown layer', () => {
+  const spec = {
+    base: { version: 20250510, imports: { run: 'nope:run' } },
+    layers: { main: { wasmHash: '0'.repeat(64) } },
+  };
+  const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, '64-char hex');
+    assertStringIncludes((err as Error).message, 'unknown layer');
   }
 });
 
 Deno.test('WasmStacking: reject -- duplicate wasmHash', () => {
   const dup = '0'.repeat(64);
-  const block = blockWith(makeLayersRecord([{ wasmHash: dup }, { wasmHash: dup }]));
+  const spec = {
+    base: { version: 20250510, imports: { run: 'a:run' } },
+    layers: { a: { wasmHash: dup }, b: { wasmHash: dup } },
+  };
+  const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
@@ -269,50 +269,77 @@ Deno.test('WasmStacking: reject -- duplicate wasmHash', () => {
   }
 });
 
-Deno.test('WasmStacking: reject -- mapImports key is env.memory', () => {
-  const block = blockWith(
-    makeLayersRecord([{ wasmHash: '0'.repeat(64), mapImports: { 'env.memory': 'anything' } }]),
-  );
+Deno.test('WasmStacking: reject -- wildcard key/value mismatch', () => {
+  const spec = {
+    base: { version: 20250510, imports: { run: 'main:run' } },
+    layers: {
+      main: {
+        wasmHash: '0'.repeat(64),
+        imports: { 'foo.*': 'base:literal' },
+      },
+    },
+  };
+  const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, 'env.memory');
+    assertStringIncludes((err as Error).message, 'wildcard');
   }
 });
 
-Deno.test('WasmStacking: reject -- mapImports key missing dot', () => {
-  const block = blockWith(
-    makeLayersRecord([{ wasmHash: '0'.repeat(64), mapImports: { 'no_dot': 'x' } }]),
-  );
+Deno.test('WasmStacking: reject -- target ref missing colon', () => {
+  const spec = {
+    base: { version: 20250510, imports: { run: 'no-colon-here' } },
+    layers: { main: { wasmHash: '0'.repeat(64) } },
+  };
+  const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
     throw new Error('expected throw');
   } catch (err) {
-    assertStringIncludes((err as Error).message, 'dotted');
+    assertStringIncludes((err as Error).message, '<layerKey>:<exportName>');
   }
 });
 
-Deno.test('WasmStacking: reject -- mapExports key missing dot', () => {
-  const block = blockWith(
-    makeLayersRecord([{ wasmHash: '0'.repeat(64), mapExports: { 'no_dot': 'x' } }]),
+Deno.test('WasmStacking: reject -- declared import not listed (strict)', async () => {
+  // echo declares scaffold_env.params and scaffold_env.emit_output. Provide
+  // an `imports` map missing one of them; loading must fail.
+  const bytes = await loadFixtureBytes('echo');
+  const hash = Hash.digest(bytes);
+  const spec = {
+    base: { version: 20250510, imports: { run: 'main:run' } },
+    layers: {
+      main: {
+        wasmHash: hash.toHex(),
+        imports: { 'scaffold_env.params': 'base:params' /* missing emit_output */ },
+      },
+    },
+  };
+  const block = composeGenesisPacket([modulesRecord(spec)]);
+  const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
+  const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
+  const contract = plugin.getContract(block);
+  await assertRejects(
+    async () => {
+      await contract.run(new RecordingEnv());
+    },
+    Error,
+    'no entry for declared import',
   );
-  const plugin = wasmContractPlugin({ transport: 'in-process' });
-  try {
-    plugin.getContract(block);
-    throw new Error('expected throw');
-  } catch (err) {
-    assertStringIncludes((err as Error).message, 'dotted');
-  }
 });
 
 Deno.test('WasmStacking: reject -- resolveBlob missing', async () => {
   const bytes = await loadFixtureBytes('echo');
   const hash = Hash.digest(bytes);
-  const block = composeGenesisPacket([makeLayersRecord([{ wasmHash: hash.toHex() }])]);
-  // No resolveBlob.
+  const spec = {
+    base: { version: 20250510, imports: { run: 'main:run' } },
+    layers: { main: { wasmHash: hash.toHex(), imports: { 'scaffold_env.*': 'base:*' } } },
+  };
+  const block = composeGenesisPacket([modulesRecord(spec)]);
+  // No resolveBlob configured.
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   const contract = plugin.getContract(block);
   await assertRejects(
@@ -324,32 +351,30 @@ Deno.test('WasmStacking: reject -- resolveBlob missing', async () => {
   );
 });
 
-Deno.test('WasmStacking: LinkError surfaces for genuinely unresolved import', async () => {
-  // rename_only declares (import "renamed_env" "emit_output" ...). With NO
-  // mapImports, default lookup tries "renamed_env.emit_output" then bare
-  // "emit_output". The scaffold flat view has emit_output, so this resolves
-  // fine. Build a deliberately broken case: rename to something the scaffold
-  // doesn't expose.
-  const bytes = await loadFixtureBytes('rename_only');
+Deno.test('WasmStacking: wildcard matching -- longest prefix wins', async () => {
+  // Use the echo fixture and verify wildcard prefix routing works on a
+  // single-module spec with overlapping wildcards.
+  const bytes = await loadFixtureBytes('echo');
   const hash = Hash.digest(bytes);
-  const block = composeGenesisPacket([
-    makeLayersRecord([
-      {
+  const spec = {
+    base: { version: 20250510, imports: { run: 'main:run' } },
+    layers: {
+      main: {
         wasmHash: hash.toHex(),
-        mapImports: { 'renamed_env.emit_output': 'definitely_not_a_scaffold_name' },
+        imports: {
+          // Specific entries take precedence (literal > wildcard).
+          'scaffold_env.params': 'base:params',
+          'scaffold_env.*': 'base:*',
+        },
       },
-    ]),
-  ]);
+    },
+  };
+  const block = composeGenesisPacket([modulesRecord(spec)]);
   const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
   const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
   const contract = plugin.getContract(block);
-  await assertRejects(
-    async () => {
-      await contract.run(new RecordingEnv());
-    },
-    Error,
-  );
-  // We don't pin the exact LinkError message; it varies by runtime, but
-  // SOME error must fire.
-  assert(true);
+  const env = new RecordingEnv(new TextEncoder().encode('wild-longest-ok'));
+  await contract.run(env);
+  assertEquals(env.emittedOutputs.length, 1);
+  assert(env.emittedOutputs[0].body !== undefined);
 });

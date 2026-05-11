@@ -1,14 +1,13 @@
 // Protocol spec: docs/protocol/wasm-abi.md
 //
 // Selects a `WasmTransport` at construction (config override > feature
-// detection > Atomics default) and exposes the per-export entry points
-// that `WasmContractAdapter` calls. Holds the transport instance over its
-// lifetime so the worker pool amortises across calls.
+// detection > Atomics default) and exposes the per-mode entry points
+// `WasmContractAdapter` calls.
 
 import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
 import type { WasmTransport } from './WasmTransport.ts';
-import type { CompiledStack } from './WasmLayers.ts';
+import type { CompiledModules } from './WasmModules.ts';
 import {
   AtomicsWorkerTransport,
   type AtomicsWorkerTransportConfig,
@@ -31,7 +30,6 @@ export interface WasmExecutorConfig {
 
 type ConcreteTransportKind = Exclude<TransportKind, 'auto'>;
 
-/** Decide which concrete transport to construct. */
 function resolveKind(config: WasmExecutorConfig): ConcreteTransportKind {
   if (config.transport && config.transport !== 'auto') return config.transport;
   if (config.workerPath !== undefined && typeof Worker !== 'undefined') {
@@ -60,7 +58,6 @@ function buildTransport(config: WasmExecutorConfig): WasmTransport {
     case 'in-process':
       return new InProcessMockTransport();
     default: {
-      // exhaustive
       const _exhaustive: never = kind;
       void _exhaustive;
       throw new Error(`unknown transport kind: ${kind}`);
@@ -77,37 +74,36 @@ export class WasmExecutor {
     this._transport = buildTransport(config);
   }
 
-  /** The transport kind actually selected (auto resolves to a concrete kind). */
   get kind(): TransportKind {
     return this._kind;
   }
 
-  run(stack: CompiledStack, env: ContractEnv): Promise<void> {
-    return this._transport.run(stack, env);
+  run(modules: CompiledModules, env: ContractEnv): Promise<void> {
+    return this._transport.run(modules, env);
   }
 
   walkParams(
-    stack: CompiledStack,
+    modules: CompiledModules,
     params: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
-    return this._transport.walkParams(stack, params, host);
+    return this._transport.walkParams(modules, params, host);
   }
 
   walkData(
-    stack: CompiledStack,
+    modules: CompiledModules,
     data: Uint8Array,
     host: WalkerHost,
   ): Promise<void> {
-    return this._transport.walkData(stack, data, host);
+    return this._transport.walkData(modules, data, host);
   }
 
-  buildParams(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
-    return this._transport.buildParams(stack, host);
+  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+    return this._transport.buildParams(modules, host);
   }
 
-  buildData(stack: CompiledStack, host: BuilderHost): Promise<Uint8Array> {
-    return this._transport.buildData(stack, host);
+  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+    return this._transport.buildData(modules, host);
   }
 
   close(): Promise<void> {

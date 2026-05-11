@@ -48,7 +48,7 @@ The bridge from `WebAssembly.Instance` to the `Contract` interface. Nothing else
 - `i128 → bigint` migration of the TS `Output.value` type (today serialised through `number` with safe-int check).
 - Memory caps + budget enforcement — that's A3 (the adapter feeds them through).
 - WorkerChannel chunking for results larger than 64 KiB — single-shot only in v1.
-- Stack composition (`wasm_layers`) — A4.
+- Stack composition (`modules` graph) — A4.
 - Forking — A4.
 
 ### A3. Contract execution plugins (`ContractPlugin`) ✅
@@ -67,14 +67,13 @@ Reshaped from "wire `WasmStore` into `ContractHost`" into a pluggable execution 
 Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wasm-abi.md#composition).
 
 **Stacking** (static, in-band, low-overhead):
-- [x] In `WasmContractAdapter`: read the contract block's `wasm_layers` JSON record. EVERY entry has a `wasmHash` referencing a content-addressed WASM blob; `fetch({ contract: HASH_CONTRACT, params: blobHash })` returns the bytes. The last entry is the top of the stack; its exports drive the call. Single-module contracts have one entry. Replaces both `wasm_hashes` and the older `wasm` record.
-- [x] `mapImports` (per layer) rebinds this layer's declared imports onto the layer-below's presented exports. Strict when an explicit entry is set; otherwise default 1:1 with bare-field fallback.
-- [x] `mapExports` (per layer) injects dotted-namespace entries into this layer's presented view for the layer above. Lets reusable middleware (e.g. a wasi-shim) package its exports under a standard namespace without forcing consumers to write mapImports.
-- [x] Provide a single runtime-supplied shared linear memory imported by every layer under `(import "env" "memory")`. `env.memory` is reserved -- mapImports can't remap it.
-- [x] Restrict `scaffold_env.*` / `scaffold_walker.*` / `scaffold_builder.*` to wasm 1 (bottom). Higher layers resolve against the presented view of the layer below; scaffold names are absent unless intentionally exposed via mapExports.
-- [x] Reject cycles (duplicate `wasmHash`) in `wasm_layers` at load.
+- [x] Contracts declare a graph of WASM modules in a `modules` JSON record on the contract block. `base.imports` names the scaffold-facing entry exports (mode -> "layerKey:exportName"); `layers` is a map of named modules. Every cross-module / cross-scaffold reference is explicit; no implicit defaults; wildcards (trailing `*`) for bulk routing. See [wasm-abi.md#stacking](docs/protocol/wasm-abi.md#stacking).
+- [x] Strict resolution: a declared WASM import with no matching `imports` entry is a load error.
+- [x] Single runtime-supplied shared linear memory injected under `(import "env" "memory")` for every layer; `env.memory` is reserved.
+- [x] Cyclic graphs (e.g., a WASI shim that calls `_start` on a WASI program which calls `fd_write` back into the shim) work via JS forwarder closures over a shared name table populated after all layers are instantiated.
+- [x] Reject duplicate `wasmHash` across layers at load.
 - [x] HASH_CONTRACT discovery beacon: a HASH_CONTRACT/blobHash block carries a RECORD_CONTRACT/'default' record with the blob bytes. The contract's run reads the record via requestBody and asserts hash(body) == params, so misrepresented blobs are rejected at verification.
-- [x] One per-verifier budget shared across the entire stack. (Budget enforcement itself is still a follow-up from A2; once landed, stacking inherits it.)
+- [x] One per-verifier budget shared across the entire graph. (Budget enforcement itself is still a follow-up from A2; once landed, stacking inherits it.)
 - [ ] Ship a stock `wasi-shim.wasm` contract block whose layer maps WASI snapshot preview 1 syscalls onto `scaffold_env`. Use `src/worker/WasiImpl.ts` as the reference behaviour. Compile the shim from minimal Zig or hand-write the `.wat`. **Deferred** — A4 stacking shipped with synthetic passthrough fixtures; wasi-shim becomes its own session when there's a real WASI binary to validate against.
 
 **Forking** (dynamic, out-of-band, parallel):

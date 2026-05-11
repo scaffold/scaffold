@@ -1,55 +1,35 @@
 // Protocol spec: docs/protocol/wasm-abi.md#stacking
 //
-// HASH_CONTRACT: content-addressed blob lookup beacon and verifier.
-// A block publishing a blob carries two outputs:
-//   1. A HASH_CONTRACT output whose verifier params are `hash(blob)` -- the
-//      discovery key the network indexes on. Self-claimed so its `run`
-//      executes during verification (proving the preimage is valid).
-//   2. A RECORD_CONTRACT/'default' output whose body is the blob -- what
-//      `requestBody` reads during the contract's run, and what
-//      `FetchManager.fetch(..., { recordKey: 'default' })` surfaces.
+// HASH_CONTRACT: content-addressed blob verifier. The verifier params are
+// the 32-byte hash of a blob; the publishing block carries a
+// RECORD_CONTRACT/'default' output whose body IS the blob. When the
+// HASH_CONTRACT output is claimed (typically the incentive output sits on
+// a request block, claimed by a responder publishing the blob),
+// `hashContract.run` reads the 'default' record via `env.requestBody` and
+// asserts `hash(body) == verifier.params`.
 //
-// The contract's run reads the 'default' record body and asserts
-// hash(body) == verifier.params. A failing block is rejected; a passing
-// one is a verified blob-publication that anyone can fetch by hash.
+// Other contracts invert a hash by calling
+//   `await fetch({ contract: HASH_CONTRACT, params: hash }, { recordKey: 'default' })`
+// which surfaces the body.
+//
+// outputNamespaces = [RECORD_CONTRACT]: `requestBody({contract: RECORD_CONTRACT, ...})`
+// emits an output slot on the block being verified, which contributes a
+// RECORD_CONTRACT-namespace output. The partition check requires the
+// contract to OWN every namespace whose outputs appear -- so we declare it.
 
 import { Hash } from '../util/Hash.ts';
-import { HASH_CONTRACT, RECORD_CONTRACT } from '../core/Block.ts';
+import { RECORD_CONTRACT } from '../core/Block.ts';
 import { ContractRejection } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
-import type { Output } from '../core/BlockCreationModule.ts';
-import { makeRecordOutput } from './RecordContract.ts';
 import { str2bin } from '../util/buffer.ts';
 
-/** Record key on a HASH_CONTRACT block carrying the blob bytes. */
+/** Record key on a HASH_CONTRACT-publishing block carrying the blob bytes. */
 export const DEFAULT_KEY = 'default';
 
-/**
- * Build the outputs needed to publish a blob under HASH_CONTRACT:
- *   - HASH_CONTRACT/hash(blob) discovery beacon (body empty).
- *   - RECORD_CONTRACT/'default' carrying the blob bytes.
- *
- * The caller is responsible for self-claiming BOTH outputs so verification
- * runs the HashContract (validates the preimage) and the RecordContract
- * (asserts the record is self-claimed).
- */
-export function makeHashContractOutputs(blob: Uint8Array): Output[] {
-  const blobHash = Hash.digest(blob);
-  return [
-    {
-      verifier: { contract: HASH_CONTRACT, params: blobHash.toBytes() },
-      value: 0,
-      body: new Uint8Array(0),
-    },
-    makeRecordOutput(DEFAULT_KEY, blob),
-  ];
-}
-
 export const hashContract: Contract = {
-  // HashContract only VERIFIES (it reads the preimage record and checks the
-  // hash); it does not own any output namespace. The block's record output
-  // is owned by RecordContract's empty-namespace contract.
-  outputNamespaces: [],
+  // requestBody adds a RECORD_CONTRACT slot; partition requires HASH_CONTRACT
+  // owns that namespace on this block.
+  outputNamespaces: [RECORD_CONTRACT],
 
   async run(env) {
     if (env.params().length !== 32) {

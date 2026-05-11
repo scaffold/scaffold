@@ -13,8 +13,8 @@ import {
 import { wasmContractPlugin } from '../src/plugins/wasm/WasmContractPlugin.ts';
 import type { Block } from '../src/core/Block.ts';
 
-// End-to-end: build a Block whose wasm_layers references the echo blob by
-// content hash; resolveBlob returns the bytes; ContractHost dispatches to
+// End-to-end: build a Block whose `modules` record references the echo blob
+// by content hash; resolveBlob returns the bytes; ContractHost dispatches to
 // the plugin and runs the contract against a recording env.
 
 async function loadFixtureBytes(name: string): Promise<Uint8Array> {
@@ -22,10 +22,21 @@ async function loadFixtureBytes(name: string): Promise<Uint8Array> {
   return await Deno.readFile(url);
 }
 
-function layersRecord(
-  layers: { wasmHash?: string; mapImports?: Record<string, string> }[],
-): Output {
-  return makeRecordOutput('wasm_layers', new TextEncoder().encode(JSON.stringify(layers)));
+function modulesRecord(spec: unknown): Output {
+  return makeRecordOutput('modules', new TextEncoder().encode(JSON.stringify(spec)));
+}
+
+/** Build a minimal `modules` spec for a single-module contract. */
+function singleModuleSpec(hashHex: string, mode: string, entry: string): unknown {
+  return {
+    base: { version: 20250510, imports: { [mode]: `main:${entry}` } },
+    layers: {
+      main: {
+        wasmHash: hashHex,
+        imports: { 'scaffold_env.*': 'base:*' },
+      },
+    },
+  };
 }
 
 class RecordingEnv implements ContractEnv {
@@ -66,15 +77,15 @@ class RecordingEnv implements ContractEnv {
   }
 }
 
-Deno.test('wasmContractPlugin: accepts blocks with a wasm_layers record', async () => {
+Deno.test('wasmContractPlugin: accepts blocks with a modules record', async () => {
   const bytes = await loadFixtureBytes('echo');
   const hash = Hash.digest(bytes);
-  const block = composeGenesisPacket([layersRecord([{ wasmHash: hash.toHex() }])]);
+  const block = composeGenesisPacket([modulesRecord(singleModuleSpec(hash.toHex(), 'run', 'run'))]);
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   assertEquals(plugin.accepts(block), true);
 });
 
-Deno.test('wasmContractPlugin: rejects blocks without a wasm_layers record', () => {
+Deno.test('wasmContractPlugin: rejects blocks without a modules record', () => {
   const block = composeGenesisPacket([
     makeRecordOutput('something_else', new Uint8Array([1, 2, 3])),
   ]);
@@ -87,7 +98,9 @@ Deno.test(
   async () => {
     const bytes = await loadFixtureBytes('echo');
     const hash = Hash.digest(bytes);
-    const block = composeGenesisPacket([layersRecord([{ wasmHash: hash.toHex() }])]);
+    const block = composeGenesisPacket([
+      modulesRecord(singleModuleSpec(hash.toHex(), 'run', 'run')),
+    ]);
 
     const plugin = wasmContractPlugin({
       transport: 'in-process',
@@ -128,7 +141,7 @@ Deno.test(
     namespaceBytes.set(ns2.toBytes(), 32);
 
     const block = composeGenesisPacket([
-      layersRecord([{ wasmHash: hash.toHex() }]),
+      modulesRecord(singleModuleSpec(hash.toHex(), 'run', 'run')),
       makeRecordOutput('output_namespaces', namespaceBytes),
     ]);
 

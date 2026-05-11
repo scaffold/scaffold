@@ -1,14 +1,10 @@
 // Protocol spec: docs/protocol/wasm-abi.md
 //
 // `ContractPlugin` for on-chain WASM contracts. Accepts any block carrying
-// a `wasm_layers` JSON record describing the module stack (see
-// docs/protocol/wasm-abi.md#stacking). Every entry in `wasm_layers` carries
-// a `wasmHash` referencing a content-addressed WASM blob; the bytes are
-// fetched via `resolveBlob` (FetchManager + HASH_CONTRACT in production).
-//
-// `getContract(block)` returns a `Contract` that lazily fetches and compiles
-// every layer's blob, then delegates run / walk_params / walk_data /
-// build_params / build_data to a shared `WasmExecutor`.
+// a `modules` JSON record describing the contract's module graph (see
+// docs/protocol/wasm-abi.md#stacking). Every layer references a content-
+// addressed WASM blob; bytes are fetched via `resolveBlob` (FetchManager +
+// HASH_CONTRACT in production).
 
 import { Hash, HASH_SIZE } from '../../util/Hash.ts';
 import type { Block } from '../../core/Block.ts';
@@ -18,23 +14,19 @@ import type { ContractPlugin } from '../../core/ContractPlugin.ts';
 import type { ContractEnv } from '../../core/ContractEnv.ts';
 import { WasmExecutor, type WasmExecutorConfig } from './WasmExecutor.ts';
 import {
-  type CompiledStack,
-  type NormalisedStack,
-  parseWasmLayers,
-  type StackEntry,
-} from './WasmLayers.ts';
+  type CompiledLayer,
+  type CompiledModules,
+  type NormalisedModules,
+  parseModules,
+} from './WasmModules.ts';
 
 export interface WasmContractPluginConfig extends WasmExecutorConfig {
-  /**
-   * Pre-built executor. When supplied, this plugin uses it instead of
-   * constructing one. Useful when multiple plugins should share a pool.
-   */
+  /** Pre-built executor (lets multiple plugins share one). */
   executor?: WasmExecutor;
   /**
-   * Resolve a content-addressed blob hash to its bytes. **Required** for any
-   * contract block to be runnable (every layer's WASM is fetched via this).
-   * In production this wraps `FetchManager.fetch({ contract: HASH_CONTRACT,
-   * params: hash.toBytes() }).body` -- see `Scaffold`.
+   * Resolve a content-addressed blob hash to its bytes. Required for every
+   * `modules` block. In production this wraps
+   * `FetchManager.fetch({ contract: HASH_CONTRACT, params: hash.toBytes() }).body`.
    */
   resolveBlob?: (hash: Hash) => Promise<Uint8Array>;
 }
@@ -62,102 +54,93 @@ function readOutputNamespaces(block: Block): Hash[] {
 }
 
 function copyToOwnedArrayBuffer(src: Uint8Array): Uint8Array<ArrayBuffer> {
-  // WebAssembly.compile requires an ArrayBuffer-backed BufferSource (not SAB).
   const buf = new ArrayBuffer(src.byteLength);
   const owned = new Uint8Array(buf);
   owned.set(src);
   return owned;
 }
 
-/**
- * `Contract` implementation backed by a WASM module stack on a contract
- * block. All layers' blobs are fetched via `resolveBlob` and compiled on
- * first use; the resulting `CompiledStack` is cached on the adapter for
- * subsequent calls.
- */
 class WasmContractAdapter implements Contract {
   readonly outputNamespaces: Hash[];
   private readonly _block: Block;
-  private readonly _normalisedStack: NormalisedStack;
+  private readonly _normalised: NormalisedModules;
   private readonly _resolveBlob: WasmContractPluginConfig['resolveBlob'];
-  private _stackPromise: Promise<CompiledStack> | null = null;
+  private _compiledPromise: Promise<CompiledModules> | null = null;
 
   constructor(
     private readonly _executor: WasmExecutor,
     block: Block,
     metadata: WasmContractMetadata,
-    normalisedStack: NormalisedStack,
+    normalised: NormalisedModules,
     resolveBlob: WasmContractPluginConfig['resolveBlob'],
   ) {
     this.outputNamespaces = metadata.outputNamespaces;
     this._block = block;
-    this._normalisedStack = normalisedStack;
+    this._normalised = normalised;
     this._resolveBlob = resolveBlob;
   }
 
-  private compileStack(): Promise<CompiledStack> {
-    if (this._stackPromise !== null) return this._stackPromise;
-    this._stackPromise = (async (): Promise<CompiledStack> => {
+  private compile(): Promise<CompiledModules> {
+    if (this._compiledPromise !== null) return this._compiledPromise;
+    this._compiledPromise = (async (): Promise<CompiledModules> => {
       if (!this._resolveBlob) {
         throw new Error(
           `WasmContractAdapter: contract block ${this._block.hash.toHex()} ` +
-            `cannot resolve wasm_layers because the plugin was constructed ` +
+            `cannot resolve modules.layers because the plugin was constructed ` +
             `without \`resolveBlob\`. Wire one through ` +
             `\`wasmContractPlugin({ resolveBlob })\`.`,
         );
       }
-      const layers: StackEntry[] = [];
-      for (const layer of this._normalisedStack.layers) {
+      const layers: CompiledLayer[] = [];
+      const byKey = new Map<string, CompiledLayer>();
+      for (const layer of this._normalised.layers) {
         const blobBytes = await this._resolveBlob(layer.blobHash);
         const owned = copyToOwnedArrayBuffer(blobBytes);
         const module = await WebAssembly.compile(owned);
-        layers.push({
-          module,
-          mapImports: layer.mapImports,
-          mapExports: layer.mapExports,
-        });
+        const entry: CompiledLayer = { key: layer.key, module, imports: layer.imports };
+        layers.push(entry);
+        byKey.set(layer.key, entry);
       }
-      return { layers };
+      return { base: this._normalised.base, layers, byKey };
     })();
-    return this._stackPromise;
+    return this._compiledPromise;
   }
 
   async run(env: ContractEnv): Promise<void> {
-    const stack = await this.compileStack();
-    await this._executor.run(stack, env);
+    const compiled = await this.compile();
+    await this._executor.run(compiled, env);
   }
 
   async walkParams(
     params: Uint8Array,
     host: import('../../contracts/Contract.ts').WalkerHost,
   ): Promise<void> {
-    const stack = await this.compileStack();
-    await this._executor.walkParams(stack, params, host);
+    const compiled = await this.compile();
+    await this._executor.walkParams(compiled, params, host);
   }
 
   async walkData(
     data: Uint8Array,
     host: import('../../contracts/Contract.ts').WalkerHost,
   ): Promise<void> {
-    const stack = await this.compileStack();
-    await this._executor.walkData(stack, data, host);
+    const compiled = await this.compile();
+    await this._executor.walkData(compiled, data, host);
   }
 
   async buildParams(host: import('../../contracts/Contract.ts').BuilderHost): Promise<Uint8Array> {
-    const stack = await this.compileStack();
-    return await this._executor.buildParams(stack, host);
+    const compiled = await this.compile();
+    return await this._executor.buildParams(compiled, host);
   }
 
   async buildData(host: import('../../contracts/Contract.ts').BuilderHost): Promise<Uint8Array> {
-    const stack = await this.compileStack();
-    return await this._executor.buildData(stack, host);
+    const compiled = await this.compile();
+    return await this._executor.buildData(compiled, host);
   }
 }
 
 /**
- * Build a `ContractPlugin` that handles any contract block carrying a
- * `wasm_layers` record. The plugin's `resolveBlob` callback is required to
- * actually run the contract.
+ * Build a `ContractPlugin` that handles contract blocks carrying a `modules`
+ * record. `resolveBlob` is required to actually run any contract.
  */
 export function wasmContractPlugin(
   config: WasmContractPluginConfig = {},
@@ -166,26 +149,20 @@ export function wasmContractPlugin(
   const executor = providedExecutor ?? new WasmExecutor(executorConfig);
   return {
     accepts(block: Block): boolean {
-      return findRecordOutput(block, 'wasm_layers') !== undefined;
+      return findRecordOutput(block, 'modules') !== undefined;
     },
     getContract(block: Block): Contract {
-      const layersRecord = findRecordOutput(block, 'wasm_layers');
-      if (!layersRecord) {
+      const modulesRecord = findRecordOutput(block, 'modules');
+      if (!modulesRecord) {
         throw new Error(
-          `WasmContractPlugin: block ${block.hash.toHex()} has no \`wasm_layers\` record`,
+          `WasmContractPlugin: block ${block.hash.toHex()} has no \`modules\` record`,
         );
       }
-      const normalisedStack = parseWasmLayers(layersRecord.body);
+      const normalised = parseModules(modulesRecord.body);
       const metadata: WasmContractMetadata = {
         outputNamespaces: readOutputNamespaces(block),
       };
-      return new WasmContractAdapter(
-        executor,
-        block,
-        metadata,
-        normalisedStack,
-        resolveBlob,
-      );
+      return new WasmContractAdapter(executor, block, metadata, normalised, resolveBlob);
     },
   };
 }
