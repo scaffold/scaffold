@@ -88,22 +88,15 @@ pub fn analyze(
     ctx: ModuleCtx,
     allocator: std.mem.Allocator,
 ) Error!?Plan {
-    // Read locals declaration.
+    // Skip the locals declaration (we no longer need per-local typing).
     var ix = body_start;
     const local_groups = try leb.readU32(input, &ix);
 
-    // Build the full local-type table: params first, then declared locals.
-    var local_types = std.ArrayList(wasm.ValType).empty;
-    for (ctx.func_type.params) |p| try local_types.append(allocator, p);
-
     var g: u32 = 0;
     while (g < local_groups) : (g += 1) {
-        const cnt = try leb.readU32(input, &ix);
+        try leb.skipU32(input, &ix); // count
         if (ix >= body_end) return Error.Malformed;
-        const vt = wasm.ValType.fromByte(input[ix]) orelse return Error.Malformed;
-        ix += 1;
-        var k: u32 = 0;
-        while (k < cnt) : (k += 1) try local_types.append(allocator, vt);
+        ix += 1; // valtype byte
     }
 
     var sites = std.ArrayList(Site).empty;
@@ -130,33 +123,11 @@ pub fn analyze(
                 }
             },
 
-            .local_set, .local_tee => {
-                const idx = step.imm_u32;
-                if (idx >= local_types.items.len) return Error.Malformed;
-                const vt = local_types.items[idx];
-                // local.tee is also the first instruction of our canonicalize
-                // sequence. If we recognize it as canon-start, skip adding a
-                // new site for it; the *next* consume will check its window.
-                const is_canon_start = step.kind == .local_tee and
-                    (vt == .f32 or vt == .f64) and
-                    matchCanonForward(input, inst_start, body_end, vt);
-                if (!is_canon_start) {
-                    try maybeAddCanonSite(input, body_start, inst_start, vt, &window, &sites, allocator, &needs_f32_scratch, &needs_f64_scratch);
-                }
-            },
-
-            .global_set => {
-                const idx = step.imm_u32;
-                if (idx >= ctx.global_types.len) return Error.Malformed;
-                const vt = ctx.global_types[idx].val_type;
-                try maybeAddCanonSite(input, body_start, inst_start, vt, &window, &sites, allocator, &needs_f32_scratch, &needs_f64_scratch);
-            },
-
-            .f32_store => {
+            .f32_store, .f32_copysign => {
                 try maybeAddCanonSite(input, body_start, inst_start, .f32, &window, &sites, allocator, &needs_f32_scratch, &needs_f64_scratch);
             },
 
-            .f64_store => {
+            .f64_store, .f64_copysign => {
                 try maybeAddCanonSite(input, body_start, inst_start, .f64, &window, &sites, allocator, &needs_f32_scratch, &needs_f64_scratch);
             },
 

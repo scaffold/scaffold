@@ -121,7 +121,7 @@ Deno.test('memory_grow_no_abstain returns -1', async () => {
   assertEquals(r.result, -1, `expected -1, got result=${r.result}`);
 });
 
-Deno.test('float_local_set canonicalizes NaN before local.set, division of 0/0 returns canonical NaN', async () => {
+Deno.test('float_local_set canonicalizes NaN before f32.store, memory bytes are canonical', async () => {
   const input = await loadFixture('float_local_set');
   const r = await runTool(input);
   assert(r.result > 0, `expected transformed, got result=${r.result}`);
@@ -129,15 +129,11 @@ Deno.test('float_local_set canonicalizes NaN before local.set, division of 0/0 r
   const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
     env: { memory },
   })) as { instance: WebAssembly.Instance };
-  const div = instance.exports.div as (a: number, b: number) => number;
-  // 0/0 = NaN. After canonicalize, the bits must be 0x7fc00000.
-  const result = div(0, 0);
-  assert(Number.isNaN(result));
-  // Read NaN bits via a typed array view.
-  const buf = new ArrayBuffer(4);
-  new Float32Array(buf)[0] = result;
-  const bits = new Uint32Array(buf)[0];
-  assertEquals(bits, 0x7fc00000, `NaN bits should be canonical, got 0x${bits.toString(16)}`);
+  const div = instance.exports.div as (a: number, b: number) => void;
+  // 0/0 = NaN. Contract stores the result to memory[0..4].
+  div(0, 0);
+  const bits = new DataView(memory.buffer).getUint32(0, true);
+  assertEquals(bits, 0x7fc00000, `NaN bits in memory should be canonical, got 0x${bits.toString(16)}`);
 });
 
 Deno.test('float_local_set idempotence: re-transform returns 0', async () => {
@@ -167,12 +163,48 @@ Deno.test('float_f64_store canonicalizes before f64.store, 0/0 yields canonical 
   assertEquals(lo, 0);
 });
 
-Deno.test('float_global_set canonicalizes before global.set', async () => {
+Deno.test('float_global_set canonicalizes before f32.store via global path', async () => {
   const input = await loadFixture('float_global_set');
   const r = await runTool(input);
   assert(r.result > 0);
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
+    env: { memory },
+  })) as { instance: WebAssembly.Instance };
+  const set = instance.exports.set as (x: number) => void;
+  // NaN + NaN = NaN. Contract goes through a global, then stores to memory[0..4].
+  set(NaN);
+  const bits = new DataView(memory.buffer).getUint32(0, true);
+  assertEquals(bits, 0x7fc00000, `NaN bits in memory should be canonical, got 0x${bits.toString(16)}`);
   const second = await runTool(r.output!);
   assertEquals(second.result, 0, 'idempotence broken');
+});
+
+Deno.test('float_copysign canonicalizes second arg, result has canonical sign', async () => {
+  const input = await loadFixture('float_copysign');
+  const r = await runTool(input);
+  assert(r.result > 0, `expected transformed, got result=${r.result}`);
+  const memory = new WebAssembly.Memory({ initial: 1 });
+  const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
+    env: { memory },
+  })) as { instance: WebAssembly.Instance };
+  const cs = instance.exports.cs as (a: number) => void;
+  cs(0); // arg unused; the contract divides 0/0 internally to get a NaN
+  // copysign(1.0, canonical_NaN) should produce 1.0 with sign bit 0 (since
+  // canonical NaN has sign bit 0). If the NaN had been uncanonicalized, the
+  // sign would depend on V8's choice of NaN bit pattern.
+  const bits = new DataView(memory.buffer).getUint32(0, true);
+  // 1.0 with positive sign = 0x3f800000. 1.0 with negative sign = 0xbf800000.
+  // With canonical NaN as second arg (sign=0), result must be positive.
+  assertEquals(bits, 0x3f800000, `copysign(1.0, canon_NaN) should be +1.0, got 0x${bits.toString(16)}`);
+});
+
+Deno.test('float_copysign idempotence: re-transform returns 0', async () => {
+  const input = await loadFixture('float_copysign');
+  const first = await runTool(input);
+  assert(first.result > 0);
+  const second = await runTool(first.output!);
+  assertEquals(second.result, 0);
 });
 
 Deno.test('transformer is deterministic: same input produces same output', async () => {

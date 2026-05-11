@@ -44,11 +44,14 @@ task before sending a PR if you've changed any Zig source.
   the transformer inserts a guard: if `result == -1`, the contract calls
   `env.abstain` and traps via `unreachable`. The contract must import
   `env.abstain (func)`; if not, the validator rejects with -1.
-- **NaN canonicalization at float escape ops (partial)** -- the transformer
-  inserts a 6-instruction canonicalize sequence (canonical-NaN-on-NaN)
-  before every f32/f64 `local.set`, `local.tee`, `global.set`, `f32.store`,
-  and `f64.store`. NaN bit pattern is normalized to `0x7fc00000` (f32) /
-  `0x7ff8000000000000` (f64) on escape.
+- **NaN canonicalization at observable escapes** -- the transformer inserts
+  a 6-instruction canonicalize sequence before every observable bit-leak
+  point: `f32.store`, `f64.store`, `f32.copysign` (second arg), and
+  `f64.copysign` (second arg). NaN bit pattern is normalized to
+  `0x7fc00000` (f32) / `0x7ff8000000000000` (f64). Internal storage points
+  (`local.set` / `global.set`) and function returns are NOT canonicalized
+  -- bits cannot escape through those paths within WASM execution. Hosts
+  that bit-read return values should use a memory-out contract API.
 - **Custom version section** -- `scaffold-transform-version: 20250510`
   appended to mark transformed modules.
 - **Idempotence** -- running the tool on its own output returns 0. Output
@@ -56,18 +59,14 @@ task before sending a PR if you've changed any Zig source.
 
 ## Not yet implemented
 
-- **NaN canonicalization at call args, return values, br\* with floats,
-  v128 stores.** These escape ops are not yet canonicalized. Call/return
-  needs to spill float arguments to locals before canonicalizing (one
-  scratch per arg). `br*` and multi-value blocks need an operand-stack
-  type tracker. `v128.store` (and `v128.store*_lane`) needs lane-wise
-  canonicalization via `f32x4.eq` / `f64x2.eq` + `v128.bitselect`.
-- **Operand stack type tracker** -- needed for the `br*`-with-float case
-  and for verifying call/return canonicalization is applied to the right
-  operands.
+- **v128 lane-wise canonicalization** at `v128.store`, `v128.store*_lane`,
+  `i32x4.extract_lane`, `i64x2.extract_lane`. A v128 containing float
+  lanes can leak bits through these escape points. Pattern would be a
+  back-to-back `f32x4.eq` + `v128.bitselect` then `f64x2.eq` +
+  `v128.bitselect` (~12 instructions per site). Contracts using v128 with
+  float lanes should be flagged as conditionally deterministic until this
+  lands.
 
-A contract that only uses floats inside straight-line arithmetic with
-results stored to locals/globals/memory is fully covered. A contract that
-passes f32/f64 across function boundaries is not yet covered -- the host
-should treat such contracts as conditionally deterministic and refuse to
-include them in consensus blocks.
+A contract that uses only scalar f32/f64 arithmetic plus copysign is
+fully covered for determinism. SIMD-using contracts that mix integer
+and float lanes are not yet covered.

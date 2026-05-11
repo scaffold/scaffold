@@ -24,6 +24,8 @@ pub const Kind = enum {
     f64_store,
     v128_store,
     v128_store_lane,
+    f32_copysign,
+    f64_copysign,
     call, // immediate: func index
     call_indirect, // immediate: type index + table index
     @"return",
@@ -217,6 +219,12 @@ pub fn step(bytes: []const u8, idx: *usize) Error!StepResult {
         wasm.Op.f64_reinterpret_i64,
         => kind = .banned_reinterpret,
 
+        // Copysign extracts the sign bit of its second arg -- the second arg's
+        // NaN bits become observable in the non-NaN result, so we canonicalize
+        // before copysign fires.
+        wasm.Op.f32_copysign => kind = .f32_copysign,
+        wasm.Op.f64_copysign => kind = .f64_copysign,
+
         // NaN-producing float arithmetic.
         wasm.Op.f32_add,
         wasm.Op.f32_sub,
@@ -241,6 +249,8 @@ pub fn step(bytes: []const u8, idx: *usize) Error!StepResult {
         wasm.Op.f64_nearest,
         wasm.Op.f64_sqrt,
         => kind = .nan_producing,
+
+
 
         // Multi-byte prefixes.
         wasm.Op.fc_prefix => try handleFcPrefix(bytes, idx, &kind),
