@@ -34,9 +34,11 @@ task before sending a PR if you've changed any Zig source.
 ## Implemented
 
 - **Banned-content detection** -- atomics (`0xfe` family), relaxed SIMD
-  (`0xfd 0x100`..`0x113`), GC (`0xfb` family), exception handling
-  (`try_table`, `throw`, `throw_ref`, legacy try/catch), reinterpret family
-  (`f32.reinterpret_i32` etc.), shared memory/table.
+  (`0xfd 0x100`..`0x113`), all SIMD ops with float-lane potential
+  (everything under the `0xfd` prefix except byte-level v128 loads, stores,
+  load_lane/store_lane, load_zero, and v128.const), GC (`0xfb` family),
+  exception handling (`try_table`, `throw`, `throw_ref`, legacy try/catch),
+  reinterpret family (`f32.reinterpret_i32` etc.), shared memory/table.
 - **Memory section -> import rewrite** -- if a module declares its own
   memory, it's rewritten to import `env.memory` instead. The transformer
   preserves limits.
@@ -59,14 +61,14 @@ task before sending a PR if you've changed any Zig source.
 
 ## Not yet implemented
 
-- **v128 lane-wise canonicalization** at `v128.store`, `v128.store*_lane`,
-  `i32x4.extract_lane`, `i64x2.extract_lane`. A v128 containing float
-  lanes can leak bits through these escape points. Pattern would be a
-  back-to-back `f32x4.eq` + `v128.bitselect` then `f64x2.eq` +
-  `v128.bitselect` (~12 instructions per site). Contracts using v128 with
-  float lanes should be flagged as conditionally deterministic until this
-  lands.
+- **Integer-typed SIMD ops** are blocked by the broad SIMD ban. A v128
+  carrying only integer lanes is deterministic, but without an operand
+  stack type tracker the validator can't distinguish "v128 from integer
+  ops only" from "v128 that contains float lanes." The safer current
+  behavior is to ban all SIMD arithmetic / lane-access / comparison ops
+  outright. Future work: add the type tracker and re-enable safe integer
+  SIMD via a per-op rule.
 
 A contract that uses only scalar f32/f64 arithmetic plus copysign is
-fully covered for determinism. SIMD-using contracts that mix integer
-and float lanes are not yet covered.
+fully covered. SIMD contracts are entirely rejected until the type
+tracker arrives.

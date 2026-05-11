@@ -74,6 +74,7 @@ for (const name of [
   'banned_atomic',
   'banned_exception',
   'banned_relaxed_simd',
+  'banned_float_simd',
 ]) {
   Deno.test(`${name} returns -1`, async () => {
     const input = await loadFixture(name);

@@ -13,6 +13,7 @@ pub const Kind = enum {
     // Banned families.
     banned_atomic,
     banned_relaxed_simd,
+    banned_simd,
     banned_gc,
     banned_exception,
     banned_reinterpret,
@@ -22,8 +23,6 @@ pub const Kind = enum {
     global_set, // immediate: global index
     f32_store, // memory-arg (align + offset)
     f64_store,
-    v128_store,
-    v128_store_lane,
     f32_copysign,
     f64_copysign,
     call, // immediate: func index
@@ -342,38 +341,39 @@ fn handleFcPrefix(bytes: []const u8, idx: *usize, kind: *Kind) Error!void {
 
 fn handleFdPrefix(bytes: []const u8, idx: *usize, kind: *Kind) Error!void {
     const sub = try leb.readU32(bytes, idx);
-    // Relaxed SIMD: sub-opcodes 0x100..=0x113
+
+    // Relaxed SIMD: sub-opcodes 0x100..=0x113. Explicitly nondeterministic
+    // per spec.
     if (sub >= 0x100 and sub <= 0x113) {
         kind.* = .banned_relaxed_simd;
+        return;
     }
-    // Sub-opcodes have varied immediates. We list the ones with non-zero
-    // immediates; everything else has no extra bytes.
+
+    // We allow only byte-level SIMD ops -- the ones that move bytes around
+    // without interpreting them as f32x4/f64x2. Everything else (lane
+    // extracts/replaces, comparisons, arithmetic, conversions) is banned
+    // because we cannot tell at the binary level which lane interpretation
+    // is in play; if a v128 ever holds float-typed lanes, its NaN bits leak
+    // through stores and lane extracts. Banning the float-producing /
+    // float-consuming SIMD ops eliminates the leak source.
     switch (sub) {
+        // Byte-level SIMD that doesn't produce or consume float lanes.
         0 => try skipMemArg(bytes, idx), // v128.load
         1...10 => try skipMemArg(bytes, idx), // v128.load*
         11 => try skipMemArg(bytes, idx), // v128.store
         12 => idx.* += 16, // v128.const
-        13 => idx.* += 16, // i8x16.shuffle
-        14 => {}, // i8x16.swizzle
-        // 21..29: extract/replace lane (1 byte lane idx)
-        21...34 => idx.* += 1,
-        // load lane (memarg + lane idx)
+        // Note: v128.load*_lane / v128.store*_lane and v128.load32/64_zero
+        // also move bytes around without float interpretation -- safe.
         84...91 => {
             try skipMemArg(bytes, idx);
             idx.* += 1;
         },
-        92, 93 => try skipMemArg(bytes, idx), // v128.load32_zero / 64_zero
-        // store_lane
+        92, 93 => try skipMemArg(bytes, idx),
+        // Anything else: ban. Lane access, comparisons, arithmetic, and
+        // conversions are all rejected because they may produce or consume
+        // f32x4/f64x2 lanes whose NaN bits aren't canonical.
         else => {
-            // Most other SIMD ops have no immediate. The "store lane" variants
-            // (subops 88-91) are handled above. We may miss some ops with
-            // exotic immediates -- they'll fail to parse and be caught.
+            kind.* = .banned_simd;
         },
-    }
-    // Detect v128 stores so caller can canonicalize before them.
-    switch (sub) {
-        11 => kind.* = .v128_store,
-        88, 89, 90, 91 => kind.* = .v128_store_lane,
-        else => {},
     }
 }

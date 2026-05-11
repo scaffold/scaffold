@@ -144,6 +144,10 @@ fn validateNoBanned(
                     log(logFn, "banned: relaxed SIMD op");
                     return Error.Banned;
                 },
+                .banned_simd => {
+                    log(logFn, "banned: SIMD op with float-lane potential");
+                    return Error.Banned;
+                },
                 .banned_gc => {
                     log(logFn, "banned: GC op");
                     return Error.Banned;
