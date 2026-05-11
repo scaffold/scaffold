@@ -1,8 +1,16 @@
 # wasm-determinism
 
-Single idempotent tool that validates + transforms a WASM module to make
-it execute deterministically in any engine. Used by Scaffold to gate
-contracts before they enter the network.
+Idempotent transformer that rewrites a WASM module so it executes
+deterministically across every engine. Two artifacts ship from this
+directory:
+
+- **`bin/wasm-determinism.wasm`** -- standalone tool, exports
+  `transform(input_len) -> i32`. Bytes in / bytes out, used by
+  `tests/WasmDeterminism.test.ts`.
+- **`bin/wasm-determinism-contract.wasm`** -- the same transform logic
+  wrapped as a Scaffold contract (imports from `scaffold_env.*`, exports
+  `alloc` and `run`). One blob, two contract deployments (transform mode
+  and verify mode) selected via a record on the introducing block.
 
 ## API
 
@@ -23,13 +31,41 @@ Validation = `transform(...) == 0`.
 ## Build
 
 ```
-deno task build-determinism-tool
+deno task build-determinism-constants   # regenerate src/well_known.zig if Block.ts constants change
+deno task build-determinism-tool        # builds both wasm-determinism.wasm and wasm-determinism-contract.wasm
 deno task build-determinism-fixtures
-deno test --allow-read tests/WasmDeterminism.test.ts
+deno test --allow-read tests/WasmDeterminism.test.ts tests/WasmDeterminismContract.test.ts
 ```
 
-The artifact at `bin/wasm-determinism.wasm` is checked in. Run the build
-task before sending a PR if you've changed any Zig source.
+Both artifacts at `bin/wasm-determinism.wasm` and
+`bin/wasm-determinism-contract.wasm` are checked in. Run the build task
+before sending a PR if you've changed any Zig source.
+
+## Contract deployment
+
+The Scaffold contract uses these on its introducing block:
+
+| Record key                    | Value                                          |
+|-------------------------------|------------------------------------------------|
+| `modules`                     | JSON ModulesSpec referencing the contract WASM |
+| `output_namespaces`           | `RECORD_CONTRACT` (32 bytes)                   |
+| `scaffold-determinism-mode`   | `"transform"` or `"verify"` (UTF-8)            |
+
+The contract takes a 32-byte verifier params: the input WASM's hash.
+
+- **Transform mode** -- loads the input WASM via
+  `fetch({ HASH_CONTRACT, input_hash }, "default")`, runs the transform,
+  then emits:
+  - `(RECORD_CONTRACT, "default")` body = output hash (= input hash if no-op)
+  - `(RECORD_CONTRACT, "outputWasmBytes")` body = transformed bytes (only
+    if transform changed anything)
+  Banned input -> `reject`.
+- **Verify mode** -- loads the input WASM the same way and accepts only if
+  transform is a no-op (i.e., input is already deterministic). Anything
+  else -> `reject`. Emits no outputs.
+
+Two contract blocks deploy the same WASM blob, differing only in the
+`scaffold-determinism-mode` record.
 
 ## Implemented
 

@@ -57,7 +57,9 @@ function expectSync<T>(value: T | Promise<T>): T {
 }
 
 function makeSharedMemory(): WebAssembly.Memory {
-  return new WebAssembly.Memory({ initial: 1, maximum: 4096, shared: true });
+  // ABI default: 16 pages (1 MiB) initial. Contracts may import less, but
+  // must not require more for instantiation.
+  return new WebAssembly.Memory({ initial: 16, maximum: 4096, shared: true });
 }
 
 // -- Scaffold flat exports (keyed by bare name) ------------------------
