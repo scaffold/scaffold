@@ -485,7 +485,7 @@ A `requestBody` call with no matching record falls through to the normal handler
 
 **Block placement.** No hard rule. The runtime may merge a forked sub-contract's outputs into the parent's block (if the sub-contract is small) or place them on a new block (if larger). Authors should not depend on either — `fork` is a generation directive, not a block-creation guarantee.
 
-**Use cases.** Providing data alongside a hash request: a parent that references a blob via `wasm_layers: [{wasmHash: H}, {}]` calls `fork({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the forked block. Any other "publish-and-make-available" pattern works the same way.
+**Use cases.** Providing data alongside a hash request: a parent that references a blob via its `modules` graph (e.g. `{ layers: { main: { wasmHash: H } } }`) calls `fork({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the forked block. Any other "publish-and-make-available" pattern works the same way.
 
 ---
 

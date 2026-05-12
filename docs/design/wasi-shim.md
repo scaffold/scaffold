@@ -305,34 +305,17 @@ For test programs we can also run locally with `wasmtime`, run the same binary b
 
 ### 4. Contract-trace snapshot tests
 
-The general scaffold testing primitive (described in [Contract Snapshot Testing](#contract-snapshot-testing) below). For specific narrow tests of the shim's own logic (proc_exit propagation, preopen discovery, /dev/random determinism, etc.), the snapshot tests give us byte-exact "this exact sequence of host calls happened" verification.
+Use [`tests/helpers/contractSnapshot.ts`](../../tests/helpers/contractSnapshot.ts) (general-purpose, not WASI-specific). Each per-WASI-call test:
+- Specifies a contract-block records map (`modules` JSON + any contract-level records like `wasi_setup`).
+- Specifies a `mock` of always-the-same `ContractEnv` responses (e.g. `mode`, `contract_hash`, `params`, `timestamp`).
+- Specifies an ordered `sequence` of expected host calls with `expect` matchers and `respond` values.
+- The helper runs the contract, asserts each host call matches the next sequence entry, captures the full trace (including cross-layer JS-forwarder hops via the `tracer` parameter on `loadModules`), and runs `assertSnapshot` on the rendered text.
+
+First-run snapshot generation: `deno test --allow-all <file> -- --update`. Subsequent runs match the committed `.snap` file or fail with a diff. Rejection (`scaffold_env.reject`) is a first-class sequence step (`{ type: 'reject', expect: { reason: '...' } }`); unexpected rejections fail the test.
 
 ### 5. Real-world end-to-end
 
 The dev demo's first language is AssemblyScript. Running `asc` (the AssemblyScript compiler, a WASI program) through the shim is the golden-path integration test. When `asc compile a one-liner` produces the same bytes as a local non-shim `asc compile a one-liner`, we know the shim works for compiler-class workloads.
-
-## Contract Snapshot Testing
-
-A separate test primitive — not WASI-specific — that the shim depends on. Lives at `tests/helpers/contractSnapshot.ts`. API:
-
-```ts
-await assertContractTraceSnapshot(t, {
-  blocksDir: 'tests/fixtures/wasi-echo/',  // each file is one packet, wire format
-  contractBlockHash: hashOfTheContractBlock,
-  mode: 'run',
-  input?: { params: ... },                 // optional override
-});
-```
-
-Implementation: wraps the WASM transport and the `WasmModules.ts` linker forwarders with a tracing decorator that records:
-- Every import call (which layer, which import name, args decoded at the ABI level)
-- Every memory read/write the host does at the ABI boundary
-- Every cross-layer call (JS forwarder hop, with target layer + export)
-- Every export return (with packed pointer decoded back to byte ranges if applicable)
-
-Output is a stable text format (one indented event per line) that diffs well and snapshots cleanly via `assertSnapshot` / `--update`. Memory addresses are normalized to relative offsets within their owning region so that small alignment shifts don't churn snapshots.
-
-This primitive lands BEFORE the shim implementation starts. Other parts of scaffold benefit too (contract authors get a reproducible debugging tool for free).
 
 ## Source-tree Layout
 

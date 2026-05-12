@@ -1,0 +1,11 @@
+export const snapshot = {};
+
+snapshot[`ContractTraceSnapshot: echo contract round-trips with one emit_output 1`] = `
+'> entry main:run (mode=run)
+  > forward main -> base:params (scaffold_env.params)
+  < return
+  > forward main -> base:emit_output (scaffold_env.emit_output)
+    > scaffold_env.emit_output(verifier=Verifier{contract=0x0000000000000000000000000000000000000000000000000000000000000000, params=bytes(4) "echo"}, value=0, body=bytes(11) "hello world") [sequence #1: emit_output ✓]
+  < return
+< exit ok'
+`;

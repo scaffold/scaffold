@@ -43,6 +43,15 @@ After today's fixes, `tryMigrate` walks the hierarchy by hand — own → aggreg
 - **Generation pipeline simplification.** Step 8 (`0c7c159`) migrated `GeneratingRunResult` and `GeneratingEnv` to `ClaimRef[]` (no value). Step 10 (`1d249f9` follow-on) deletes the unused `Block.resolvedClaims` field, the `ClaimIntent` type, and the stale comments referencing `resolvedClaims` throughout `UtxoIndex` / `GenerationService` / `GossipModule`. The `_resolvedClaims` private name in GeneratingEnv was renamed to `_claims`. Done.
 - **Anchor-aware `pickAnchor` for B+C-anchored-to-A case.** The current `AnchorSelection.pickAnchor` returns `{ anchor: A, aggregates: [B, C] }` for that exact case (works as-is). What it doesn't yet do is **pick the right aggregator block when one exists**: if a real aggregator over [B, C] anchored to A is already in the store, picking it as the anchor (instead of A + virtual aggregation of B and C) gives a cleaner solidification. Worth a follow-up after `BlockBuilderService` lands.
 
+## Dev-demo dev-tab broken on current plugin
+
+`demo/src/dev-demo/compilerHashes.ts:publishEchoContract` still publishes a contract block with the legacy `wasm` + `wasm_layers` records. The current `WasmContractPlugin` requires a `modules` record (added during A4 stacking) and only fetches blobs by hash via `HASH_CONTRACT` + RECORD_CONTRACT/'default'. To make the dev-tab work again, `publishEchoContract` needs to:
+1. Publish a HASH_CONTRACT block carrying the echo WASM bytes as a RECORD_CONTRACT/'default' output (the discovery beacon).
+2. Publish a separate contract block whose `modules` record is `{ base: {version, imports: {run: "main:run"}, memories: {heap: {...}}}, layers: {main: {wasmHash: <hash>, imports: {"scaffold_env.*": "base:*", "env.memory": "base:heap"}}} }`.
+3. Return the contract block's hash (callers use that as `compilerHash`).
+
+The C0 echo fixture in `demo/src/dev-demo/fixtures/echo.wasm` is still valid -- only the publishing dance needs updating.
+
 ## Chess Demo Follow-ups
 
 The chess demo in `src/demo/chess/` exercises many protocol primitives (GAME_STATE UTXO threading, getOutput injection, signature-gated generation, terminal payouts via throughput) but defers several things:

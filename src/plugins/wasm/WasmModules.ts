@@ -501,6 +501,31 @@ export interface LoadModulesResult {
 }
 
 /**
+ * Test-instrumentation hook: every cross-layer JS-forwarder call fires an
+ * `enter` event before invoking the target and an `exit` event after. The
+ * exit event carries `result` on a normal return or `error` on a thrown
+ * exception. Production code does not pass a tracer; `tests/helpers/
+ * contractSnapshot.ts` uses this to render call sequences.
+ */
+export interface TracerEvent {
+  readonly phase: 'enter' | 'exit';
+  /** Layer key that declared the import. Never `"base"` (base doesn't call layers). */
+  readonly srcLayer: string;
+  /** Resolved target -- the layer + export the call routes to. */
+  readonly target: TargetRef;
+  /** The `"<ns>.<field>"` form of the import as declared in the WASM module. */
+  readonly declared: string;
+  /** Raw wire-level args (i32 / i64 / etc., not semantic). */
+  readonly args: readonly unknown[];
+  /** Only on `phase === "exit"` and only when the call returned normally. */
+  readonly result?: unknown;
+  /** Only on `phase === "exit"` and only when the call threw. */
+  readonly error?: unknown;
+}
+
+export type Tracer = (event: TracerEvent) => void;
+
+/**
  * Instantiate every layer with kind-aware import resolution.
  *
  * Two-pass:
@@ -520,6 +545,7 @@ export async function loadModules(
   compiled: CompiledModules,
   scaffoldExports: Record<string, unknown>,
   entry: TargetRef,
+  tracer?: Tracer,
 ): Promise<LoadModulesResult> {
   if (compiled.layers.length === 0) {
     throw new Error('CompiledModules.layers must be non-empty');
@@ -616,7 +642,16 @@ export async function loadModules(
           `${key} (target not found in nameTable)`,
       );
     }
-    return fn(...args);
+    if (!tracer) return fn(...args);
+    tracer({ phase: 'enter', srcLayer: srcLayerKey, target, declared, args });
+    try {
+      const result = fn(...args);
+      tracer({ phase: 'exit', srcLayer: srcLayerKey, target, declared, args, result });
+      return result;
+    } catch (err) {
+      tracer({ phase: 'exit', srcLayer: srcLayerKey, target, declared, args, error: err });
+      throw err;
+    }
   };
 
   const exportsByKey = new Map<string, Record<string, unknown>>();
