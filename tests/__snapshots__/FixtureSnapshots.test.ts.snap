@@ -1,0 +1,55 @@
+export const snapshot = {};
+
+snapshot[`Fixture: echo emits params as RECORD body 1`] = `
+'> entry main:run (mode=run)
+  > forward main -> base:params (scaffold_env.params)
+  < return
+  > forward main -> base:emit_output (scaffold_env.emit_output)
+    > scaffold_env.emit_output(verifier=Verifier{contract=0x0000000000000000000000000000000000000000000000000000000000000000, params=bytes(4) "echo"}, value=0, body=bytes(15) "echo body bytes") [sequence #1: emit_output ✓]
+  < return
+< exit ok'
+`;
+
+snapshot[`Fixture: reject_test produces a ContractRejection 1`] = `
+'> entry main:run (mode=run)
+  > forward main -> base:reject (scaffold_env.reject)
+    > scaffold_env.reject(reason="rejected on purpose") [sequence #1: reject ✓]
+  < return (threw)
+< rejected "rejected on purpose"'
+`;
+
+snapshot[`Fixture: rename_only routes a renamed namespace import to scaffold 1`] = `
+'> entry main:run (mode=run)
+  > forward main -> base:emit_output (renamed_env.emit_output)
+    > scaffold_env.emit_output(verifier=Verifier{contract=0x0000000000000000000000000000000000000000000000000000000000000000, params=bytes(6) "rename"}, value=0, body=bytes(9) "rename-ok") [sequence #1: emit_output ✓]
+  < return
+< exit ok'
+`;
+
+snapshot[`Fixture: passthrough two-layer graph forwards emit_output upward 1`] = `
+'> entry upper:run (mode=run)
+  > forward upper -> lower:emit_output (renamed_ns.emit_output)
+    > forward lower -> base:emit_output (scaffold_env.emit_output)
+      > scaffold_env.emit_output(verifier=Verifier{contract=0x0000000000000000000000000000000000000000000000000000000000000000, params=bytes(5) "stack"}, value=0, body=bytes(14) "passthrough-ok") [sequence #1: emit_output ✓]
+    < return
+  < return
+< exit ok'
+`;
+
+snapshot[`Fixture: own_memory_echo runs without a scaffold-provided memory 1`] = `
+'> entry main:run (mode=run)
+  > forward main -> base:params (scaffold_env.params)
+  < return
+  > forward main -> base:emit_output (scaffold_env.emit_output)
+    > scaffold_env.emit_output(verifier=Verifier{contract=0x0000000000000000000000000000000000000000000000000000000000000000, params=bytes(4) "echo"}, value=0, body=bytes(7) "own-mem") [sequence #1: emit_output ✓]
+  < return
+< exit ok'
+`;
+
+snapshot[`Fixture: cross_mem_consumer reads data_owner exported memory 1`] = `
+'> entry consumer:run (mode=run)
+  > forward consumer -> base:emit_output (scaffold_env.emit_output)
+    > scaffold_env.emit_output(verifier=Verifier{contract=0x0000000000000000000000000000000000000000000000000000000000000000, params=bytes(0) ""}, value=0, body=bytes(21) "hello-from-data-owner") [sequence #1: emit_output ✓]
+  < return
+< exit ok'
+`;

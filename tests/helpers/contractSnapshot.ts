@@ -496,10 +496,14 @@ function expectSync<T>(value: T | Promise<T>): T {
   return value;
 }
 
-function flatRunExports(ctx: InstanceCtx, env: ContractEnv): Record<string, unknown> {
+function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, unknown> {
   // Construct a real bridge wrapping the MockSequenceEnv. The bridge is the
   // unchanged production path -- it does the wire-format marshalling. We do
-  // not separately wrap it; tracing happens at the env level.
+  // not separately wrap it; tracing happens at the env level. `reject` is the
+  // one exception: the production bridge throws ContractRejection without
+  // consulting the env, which bypasses our sequence machinery. Route
+  // `reject` directly through MockSequenceEnv.reject so the sequence entry
+  // is consumed before the trap.
   const bridge = makeRunBridge(env);
   const packed = (bytes: Uint8Array): bigint => {
     const ptr = allocAndWrite(ctx, bytes);
@@ -528,7 +532,7 @@ function flatRunExports(ctx: InstanceCtx, env: ContractEnv): Record<string, unkn
       bridge.sign(readSlice(ctx, pp, pl));
     },
     reject: (rp: number, rl: number) => {
-      bridge.reject(readSlice(ctx, rp, rl));
+      env.reject(new TextDecoder().decode(readSlice(ctx, rp, rl)));
     },
   };
   void parseValueDescriptor; // walker/builder hooks not wired in v1
