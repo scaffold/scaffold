@@ -22,8 +22,9 @@ The shim is one layer in a stacking [`modules`](../protocol/wasm-abi.md#stacking
     "wasi_shim": {
       "wasmHash": "...wasi-shim WASM blob hash...",
       "imports": {
-        "_start": "program:_start",
-        "program_mem.memory": "program:memory",
+        "program._start": "program:_start",
+        "program_mem.read_bytes":  "program:memory@read",
+        "program_mem.write_bytes": "program:memory@write",
         "scaffold_env.*": "base:*"
       }
     },
@@ -37,7 +38,31 @@ The shim is one layer in a stacking [`modules`](../protocol/wasm-abi.md#stacking
 }
 ```
 
-Each module owns its own memory (declared via `(memory (export "memory") ...)`). The shim imports the program's memory under the local name `program_mem.memory` so it can read program pointers when forwarding WASI calls. The program imports only the shim's WASI functions. No shared memory; no data-section collision.
+Each module owns its own memory (declared via `(memory (export "memory") ...)`). The program imports only the shim's WASI functions. No shared memory; no data-section collision.
+
+**Cross-memory access via function imports, not multi-memory.** The shim needs to read pointers from the program's memory (e.g. the iovec arrays in `fd_write`) and write results back (e.g. the destination buffer in `args_get`). The naïve design uses a [WebAssembly multi-memory](https://github.com/WebAssembly/multi-memory) import — directly importing `program:memory` into the shim's memory index 1. That design is sound at the engine level (all major browsers support multi-memory) but **the Zig toolchain (0.16) does not emit `i32.load (memory $N)` for non-default memories**, and there's no `@wasmMemoryCopy(dstIdx, srcIdx, ...)` builtin. Forcing multi-memory through Zig would require either inline-WAT injection or post-processing the `.wasm` after compile, neither of which buy enough to justify the complexity.
+
+Instead, the shim imports two thin accessor functions from a virtual `program_mem` namespace:
+
+```
+program_mem.read_bytes(prog_off: u32, shim_dst: u32, len: u32) -> ()
+program_mem.write_bytes(prog_off: u32, shim_src: u32, len: u32) -> ()
+```
+
+The linker resolves these via the `@read` / `@write` accessor markers in the shim layer's `imports` map. Concretely:
+
+```jsonc
+"wasi_shim": {
+  "imports": {
+    "program_mem.read_bytes":  "program:memory@read",   // function import; binds to a memcpy closure
+    "program_mem.write_bytes": "program:memory@write"
+  }
+}
+```
+
+`parseTargetRef` (in `src/plugins/wasm/WasmModules.ts`) recognises the `@read` / `@write` suffix and produces a `TargetRef` with `accessor` set. At instantiate time, the function-import binding is a synthesised JS closure of signature `(prog_off, peer_off, len) => void`: a `Uint8Array(dstMem.buffer, ...).set(Uint8Array(srcMem.buffer, ...))` between the source layer's primary memory and the named target memory. One JS↔WASM hop per cross-memory call, O(len) memcpy. For compute-shaped programs (compiler, interpreter, parser) the call frequency is low and the size per call is large, so the overhead is amortised; for printf-style chatter it's still bounded by one hop per `fd_write`.
+
+This keeps the Zig source idiomatic — no multi-memory builtins, no toolchain workarounds — at the cost of two extra imports. The shim WASM blob ends up smaller and easier to audit than the multi-memory variant would be. If a future shim needs raw multi-memory (e.g. for performance-critical interpreters), it can be added without breaking this design.
 
 Scaffold invokes the shim's `run`. The shim sets up state from `wasi_setup` (read via `contract_metadata`), then calls into `program:_start` (or `_initialize` for reactor modules). Each WASI host call from the program lands on the shim's flat-exported `fd_read`, `fd_write`, etc., which the shim handles by walking its in-memory FS state and, for paths backed by scaffold operations, calling into `scaffold_env` (which `imports: {"scaffold_env.*": "base:*"}` routes to scaffold).
 
@@ -170,7 +195,7 @@ A JSON record on the contract block, key `"wasi_setup"`, body is UTF-8 JSON of:
 
 ```ts
 type WasiSetup = {
-  /** Program argv. Defaults to ["program"]. */
+  /** Program argv. Defaults to []. The shim does not synthesise a program name; if your program reads `argv[0]`, set it explicitly. */
   argv?: string[];
   /** Environment variables. Order is preserved as listed. */
   env?: Record<string, string>;
@@ -215,51 +240,83 @@ If `wasi_setup` is absent on the contract block, the shim uses the defaults (no 
 
 ## Memory Layout
 
-Each module owns its own linear memory (per the updated [wasm-abi.md memory model](../protocol/wasm-abi.md#memory-model-stacking)). The shim declares `(memory (export "memory") ...)` and the program declares its own memory the same way. No data-section collision is possible because the data sections initialize *different* memories.
+Each module owns its own linear memory (per the updated [wasm-abi.md memory model](../protocol/wasm-abi.md#memory-model-stacking)). The shim declares `(memory (export "memory") ...)` and the program declares its own memory the same way. No data-section collision is possible because the data sections initialize *different* memories. Cross-memory access uses `program_mem.read_bytes` / `program_mem.write_bytes` (see [Architecture](#architecture)).
 
-The shim imports the program's memory under a local name in its layer's `imports` map:
+**Per-WASI-call flow.** When the program calls `fd_write(prog_iovs, iovs_len, ..., prog_nwritten)`:
+1. The shim calls `program_mem.read_bytes(prog_iovs, shim_buf, iovs_len * 8)` to pull the iovec array into its own memory.
+2. For each iovec entry `(prog_buf_ptr, buf_len)`, the shim calls `program_mem.read_bytes(prog_buf_ptr, shim_staging, buf_len)` to pull the actual bytes.
+3. The shim calls `scaffold_env.emit_output(shim_staging, buf_len)` (or routes to debug, depending on the FD's path).
+4. The shim writes the total bytes-written back: `program_mem.write_bytes(prog_nwritten, &shim_total, 4)`.
 
-```jsonc
-"wasi_shim": {
-  "wasmHash": "...",
-  "imports": {
-    "scaffold_env.*": "base:*",
-    "program_mem.memory": "program:memory",
-    "_start": "program:_start"
-  }
-}
-```
+The reverse path (`fd_read`) is symmetric: scaffold writes into the shim's staging memory, the shim's `write_bytes` calls copy each chunk into the program's destination buffers.
 
-This lets the shim's WASM declare `(import "program_mem" "memory" (memory $prog_mem ...))` and access the program's memory via that index for cross-memory reads/writes.
-
-**Cross-memory copies at the WASI boundary.** When the program calls `fd_write(prog_ptr, len)`, `prog_ptr` is an offset into the program's memory. The shim:
-1. Reads `len` bytes from `(memory $prog_mem)` at offset `prog_ptr`.
-2. Copies them into the shim's own memory at a freshly-allocated location.
-3. Calls `scaffold_env.emit_output(shim_ptr, len)`. Scaffold reads from the shim's memory (the entry layer's memory).
-
-The cost is one memcpy per WASI call, O(len). For compiler/interpreter-class workloads (large data, low call frequency) it's negligible; for printf-style chatter it's bounded.
-
-The reverse path is the same: `request_body` writes into shim memory, shim copies to the program's destination buffer.
-
-**No `--global-base` gymnastics.** Both modules use their toolchain defaults. The shim is normal Zig/Rust/whatever, the program is whatever it already was. No linker flags to coordinate.
+**No `--global-base` gymnastics.** Both modules use their toolchain defaults. The shim is plain `wasm32-freestanding` Zig, the program is whatever it already was. No linker flags to coordinate.
 
 ### Language choice
 
-Now that there's no data-section collision constraint, language choice is mostly developer preference:
+Zig 0.16 (`wasm32-freestanding` target). Rationale:
+- `comptime`, `inline fn`, `packed struct` keep the WASI marshalling code small and direct — the same surface in Rust requires more attribute soup or build flags.
+- `ReleaseSmall` builds the minimum panic handler we measured at ~70 bytes per public function, vs. several hundred for default Rust.
+- No runtime, no allocator pulled in unless we ask for it.
+- Existing `src/worker/WasiImpl.ts` is the behavioural reference; the port is mechanical.
 
-- **Zig** (`wasm32-freestanding` target): ergonomic, small runtime, `comptime` keeps generated code lean.
-- **Rust** (`wasm32-unknown-unknown` or `wasm32-wasi` with std stripped): also fine, more boilerplate for `no_std` builds.
-- **TinyGo**: viable now (the issue was static-data globals, not the Go runtime per se). Probably overkill for this use case.
+Rust on `wasm32-unknown-unknown` is the natural fallback if Zig hits a wall on something like `comptime` ergonomics; TinyGo is overkill.
 
-I'd start with Zig — the existing `src/worker/WasiImpl.ts` is the behavioural reference, and the port is mechanical. Switch if a real obstacle appears.
+## Minimum Viable WASI Surface
+
+Per wasi-libc call-pattern analysis, a ~13-import surface covers ~95% of real programs (compilers, interpreters, parsers built against wasi-libc). Implement these first; everything else returns `ENOTSUP`. The first build batch lands the deterministic calls that don't need an FD table (clock, random, proc, args/env, sched); the second batch adds the FD/path layer.
+
+| Call | Role | Source of reference |
+|---|---|---|
+| `proc_exit` | clean / failure termination | wasi-libc `_exit`, exit-from-main path |
+| `fd_write` | stdout/stderr + scaffold outputs | always single ciovec from wasi-libc; multiple ciovecs only via `writev` |
+| `fd_read` | stdin + input file reads | always single iovec from wasi-libc |
+| `fd_close` | release FD slot | invalidate slot, push to free-list, don't free shared resources |
+| `fd_seek` | file seeking | use full u64 offset math; do NOT downcast to JS number |
+| `fd_fdstat_get` | file metadata | 20-byte struct: filetype, fdflags, two rights u64s |
+| `fd_fdstat_set_flags` | append / nonblock toggle | only APPEND/DSYNC/NONBLOCK/RSYNC/SYNC reach the host |
+| `fd_filestat_get` | size, dev/ino, type | required by `stat`/`fstat`; many programs read `dev`/`ino` |
+| `fd_readdir` | directory walk | cookie starts at 0 (`DIRCOOKIE_START`); EOF when bytes-written < buf-size |
+| `path_open` | open file/dir from preopen | wasi-libc requests near-max rights; gate by oflags+fdflags, not rights bitmap |
+| `path_filestat_get` | stat without open | parallel to `fd_filestat_get` |
+| `clock_time_get` | wall clock + monotonic | REALTIME = block timestamp ×10⁶; MONOTONIC = call counter (1 ns / call) |
+| `random_get` | entropy | deterministic PRNG (`H(seed‖counter)`); shared stream with `/dev/random` |
+
+After this batch lands and saghul/quickjs runs end-to-end, the second batch adds `args_get`/`args_sizes_get`/`environ_get`/`environ_sizes_get` (deterministic from `wasi_setup`) plus the `_*set_times`, `_*allocate`, and rights-related shims that real programs rarely call but `wasi-testsuite` exercises.
+
+### Determinism corrections vs. WasiImpl.ts
+
+The existing TS reference contains several non-determinism-or-correctness bugs that **must not** be ported verbatim. The Zig implementation reconciles these:
+
+1. `clock_time_get(REALTIME)` — TS calls `Date.now()`; Zig uses scaffold's block timestamp ×10⁶.
+2. `clock_time_get(MONOTONIC)` — TS calls `performance.now()`; Zig increments a per-call counter by 1 ns.
+3. `random_get` — TS calls `crypto.getRandomValues()`; Zig uses the deterministic PRNG defined in [`/dev/random` and `/dev/urandom`](#devrandom-and-devurandom).
+4. `fd_seek` / `fd_pread` / `fd_pwrite` — TS coerces i64 offsets to JS Number, losing precision above 2⁵³; Zig uses native u64/i64 arithmetic.
+5. `poll_oneoff` — TS reads the subscription struct at incorrect offsets; Zig follows the spec layout (8 B userdata, 1 B tag, 7 B pad, 8 B u64 union).
+6. iovec bounds — TS validates the iovec table pointer but not each element's `(ptr, len)`; Zig validates both.
+7. `path_symlink` errno — TS returns `ENOSYS` uniformly; the design says `EROFS` outside `/scratch`, `ENOTSUP` inside. Zig follows the design.
+
+### Reference-reconciled invariants
+
+Decisions where the WASI spec leaves room and our two external references (`bjorn3/browser_wasi_shim`, `wasmtime/crates/wasi-common`) diverged. Picking these once, here, so individual call PRs don't re-litigate:
+
+- **FD table** is a flat `ArrayList(?Fd)` plus a free-list of closed indices. Stdio = fds 0/1/2, preopens start at fd 3.
+- **`fd_close`** sets the slot to `null` and pushes to the free-list; it does not free shared resources (stdio sinks, `/dev/random`).
+- **`fd_prestat_dir_name`** writes the path bytes exactly as configured — no trailing NUL, no trailing slash. Returns `ENAMETOOLONG` if the buffer is short rather than silently truncating (matches `bjorn3/browser_wasi_shim`; diverges from wasmtime which truncates).
+- **Default FD method** for unimplemented capabilities returns `ENOTSUP` (clearer debugging signal than `EBADF`). Type-mismatches still return the typed errno (`ENOTDIR`, `EISDIR`).
+- **Rights** are tracked per-fd as a `{read, write, …}` flag set but **enforced only at the shim**, not pushed through to ambient OS permissions. Missing READ → `EBADF` from `fd_read`; missing WRITE → `EBADF` from `fd_write`. No `EACCES` mapping.
+- **Path normalisation**: absolute paths in `path_*` calls relative to a dirfd → `ENOTCAPABLE`; `..` that escapes the preopen → `ENOTCAPABLE`; trailing slash preserved as an `expects_directory` flag and passed to `path_open` (open on a regular file with trailing slash → `ENOTDIR`).
+- **Memory/pointer errors trap, don't errno**. Out-of-bounds guest pointer or misaligned argument area → trap from the host import. This matches wasmtime's wiggle invariant and what real engines do.
+- **Errno numeric values**: take them from `wasi_defs.ts` in `bjorn3/browser_wasi_shim` (which matches the spec). The 12 we care about most: `EBADF=8`, `EEXIST=20`, `EINVAL=28`, `EISDIR=31`, `ENAMETOOLONG=37`, `ENOENT=44`, `ENOTDIR=54`, `ENOTSUP=58`, `EPERM=63`, `EPIPE=64`, `ENOTCAPABLE=76`, `EAGAIN=6`.
 
 ## Other Implementation Notes
 
 1. **`max_memory_pages`.** Stacking shares one budget across the whole graph. A WASI program (e.g. a compiler) can want hundreds of MiB. The contract author sets `max_memory_pages` on their contract block; it applies to the shared memory across both shim and program. Picks a value that covers `program_data + program_heap + shim_offset (256 MiB) + shim_heap`.
-2. **proc_exit propagation through WASM.** The standard WASI implementation strategy is to raise a special trap (`__wasi_proc_exit_exception` or similar) and catch it at the boundary. In our case, the boundary is `scaffold_env.reject`, which itself traps. So `proc_exit(n != 0)` → `scaffold_env.reject(...)` → trap → bubble out through the shim's `run` → caught by scaffold. `proc_exit(0)` must NOT trap — we want the shim's `run` to return normally. The shim implements this by storing an "exit requested" flag, then having `_start`'s WASM trap caught at the shim's call site via a sentinel that the shim recognises. In Zig this looks like calling the program through a JS forwarder that maps proc_exit(0) trap → setjmp-style flag.
+2. **proc_exit propagation through WASM.** `proc_exit(n != 0)` calls `scaffold_env.reject("WASI proc_exit: <n>")` which traps; the rejection surfaces at scaffold as a `ContractRejection` with that reason. `proc_exit(0)` must NOT surface as a rejection — the shim's `run` should return normally. We use the same `reject` machinery but with a magic reason string `__SCAFFOLD_WASI_EXIT_ZERO__` (defined in `src/contracts/wasi-shim/src/abi/proc.zig`); the WASI shim's setup-side helper installs a wrapper around `program._start` in the stacking linker that catches `ContractRejection` whose `.message === EXIT_ZERO_REASON` and swallows it, so the shim's `run` returns cleanly. Any other rejection reason propagates as a real rejection.
 3. **Reactor vs command modules.** Command modules export `_start`; reactor modules export `_initialize` and other named entries. v1 supports both via `wasi_setup.entry`. The shim invokes `entry` and treats normal return as success.
 4. **`output_namespaces` discovery.** The shim doesn't know what namespaces the program will emit into until it emits. The contract author must declare `output_namespaces` on the contract block matching what the program emits. Mismatches are caught at verification time by the standard output-partition check. There's no automated discovery; documenting "list every namespace your program writes to" is sufficient.
 5. **Path normalization.** `.` and `..` are normalized standardly; symlinks not supported; case-sensitive byte-level comparison. Trailing slashes ignored on regular files.
+6. **Bump allocator base = `__heap_base`.** The shim's exported `alloc` is a bump allocator. **Critical**: do NOT hardcode the start to `1 MiB` or any other fixed value -- Zig's wasm-ld places the data section (which contains the SHA-256 IV constants, format strings, and `extern` symbols) at the linker's default `--global-base=1MiB` boundary. A bump allocator starting at 1 MiB silently clobbers the IV table on the first `alloc(...)` call, and subsequent SHA-256 hashes return garbage with no observable error. Use the wasm-ld-emitted `__heap_base` symbol (`extern const __heap_base: u8;` then `&__heap_base` for its address) -- it points at the first byte after the last data segment. This was an actual bug in v1 that took a snapshot-test-with-byte-assertions to surface; documenting so it doesn't recur.
 
 ## Out of Scope for v1
 
@@ -315,7 +372,17 @@ First-run snapshot generation: `deno test --allow-all <file> -- --update`. Subse
 
 ### 5. Real-world end-to-end
 
-The dev demo's first language is AssemblyScript. Running `asc` (the AssemblyScript compiler, a WASI program) through the shim is the golden-path integration test. When `asc compile a one-liner` produces the same bytes as a local non-shim `asc compile a one-liner`, we know the shim works for compiler-class workloads.
+The shim is the hard part; real programs are the proof. Targets, smallest-first:
+
+1. **`saghul/quickjs`** (~1 MB). Stdin → eval → stdout. Exercises `args_get`/`args_sizes_get`, `fd_read` on fd 0, `fd_write` on fds 1/2, `proc_exit`, `clock_time_get` (via JS `Date`), `random_get` (via JS `Math.random`). No preopened dirs, no env vars, runs out of the box. **First real-program target** — running a one-line script through it is the shakedown.
+2. **`saghul/quickjs --std --eval`** with a tiny script that reads a "file" from a `/scratch` preopen. Adds `path_open`, `fd_close`, `fd_readdir`.
+3. **VMware WLR `php-cgi-8.2.6-slim.wasm`** (~6 MB). Stresses `environ_get` heavily (CGI vars) plus `fd_read`/`fd_write`. Wants stdin populated with a request body.
+4. **VMware WLR `ruby-3.2.2-slim.wasm`** (~8 MB). Similar to PHP, fewer preopens.
+5. **VMware WLR `python-3.12.0.wasm`** (~26 MB). Touches the entire WASI surface — `path_open` walking a preopened stdlib mount, `fd_filestat_get` on every `import`, `environ_get` for `PYTHONHOME`/`PYTHONPATH`. **Graduation target** — when CPython boots and runs a `print("hello")` we have a real shim.
+
+The dev-demo's AssemblyScript path (`asc compile a one-liner` through the shim) sits between (1) and (3): smaller than Python, larger than QuickJS, but optimised for AOT compilation rather than scripting.
+
+**SpiderMonkey** is `wasi-component-model` (preview2) only; not a viable preview1 target. **SQLite CLI** lacks a clean standalone preview1 `.wasm` — `sqlite.org`'s WASM is browser-Emscripten; `wasmer/sqlite` package is from 2019 and unmaintained. Defer both unless a maintained build appears.
 
 ## Source-tree Layout
 

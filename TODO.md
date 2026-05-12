@@ -259,21 +259,32 @@ See [`docs/design/wasi-shim.md`](docs/design/wasi-shim.md) for the full design.
 
 The WASI shim is a standalone Zig project that compiles to a single `wasi-shim.wasm` blob. It lives at `src/contracts/wasi-shim/` and is treated like any other user contract module — not part of the scaffold protocol surface. Once shipped, contract authors can run unmodified WASI binaries (compilers, interpreters, etc.) by stacking them above this shim in a `modules` graph.
 
-Prerequisites (land before the shim itself):
+Prerequisites (DONE):
 
-- **Multi-memory in `WasmModules.ts` + transports.** Current implementation auto-injects one shared `env.memory`; spec now says each layer owns its own memory and may import others. `WasmModules.ts` needs a two-pass instantiation (topo-sort memory deps, then function-cycle forwarders). All three transports (`InProcessMockTransport`, `JspiTransport`, `AtomicsWorkerTransport`) need updates. Existing tests need to be migrated off the shared-memory shorthand.
-- **Contract-trace snapshot testing helper.** `tests/helpers/contractSnapshot.ts` — a general scaffold testing primitive that captures every WASM-boundary event (imports, exports, cross-layer hops, memory reads/writes at the ABI boundary) and snapshots them via `assertSnapshot`. Used by the shim's per-call tests but useful for any contract.
+- ✓ **Per-layer memory in `WasmModules.ts`.** Landed: each layer owns its memory; two-pass topo+forwarder instantiation. Commit `1a4eda5`.
+- ✓ **Contract-trace snapshot helper.** Landed: `tests/helpers/contractSnapshot.ts`. Commits `2377f4f`, `2b5f37e`.
+- ✓ **Cross-memory accessor function imports.** Landed: `@read`/`@write` markers in `imports` map → synthesised JS memcpy closures. `tests/WasmModules.crossMemAccessor.test.ts` covers 7 cases.
 
-Then the shim itself, in chunks:
+In progress (this session):
 
-- **Per-call reference review.** For each WASI call (~40), reconcile against WASI snapshot preview 1 spec, `bjorn3/browser_wasi_shim`, `wasmtime/crates/wasi-common`, `wasi-libc`, and Zig stdlib's `std.os.wasi`. Document divergences with rationale.
+- ✓ **Zig project skeleton.** `src/contracts/wasi-shim/` — `build.zig`, `build.sh`, `setup.ts`, and source layout per design doc.
+- ✓ **Batch-1 WASI calls (no FD table needed):** `proc_exit`, `proc_raise`, `sched_yield`, `clock_time_get`, `clock_res_get`, `random_get`, `args_get`/`args_sizes_get`, `environ_get`/`environ_sizes_get`. All deterministic; PRNG seeded from `contract_hash`.
+- ✓ **End-to-end snapshot tests.** `tests/WasiShim.test.ts` — 5 tests including one with a real wasi-libc-compiled C probe (`clock_gettime` + return 0). All green.
+
+Next (batch 2 -- the FD/path layer):
+
 - **VFS in Zig.** `src/contracts/wasi-shim/src/vfs/` — fd table, path resolver, memfs, devfs, input-node abstraction. No WASI-isms, no scaffold-isms. Tested in pure Zig.
-- **WASI ABI wire layer.** `src/contracts/wasi-shim/src/abi/` — marshal each WASI call into a vfs operation. Tested in pure Zig.
-- **Scaffold wiring.** `src/contracts/wasi-shim/src/scaffold/` — wraps `scaffold_env.*`, reads `wasi_setup`, populates the vfs's input nodes via scaffold callbacks, mediates the cross-memory copy at the boundary. Tested via the contract-trace snapshot helper.
-- **`setup.ts` helper.** Build a contract block from `(program WASM hash, wasi_setup)` → modules graph + records. Includes shim blob hash as a constant.
-- **`wasi-testsuite` integration.** Vendor as `tests/vendor/wasi-testsuite/`, build harness, filter out unsupported tests with documented reasons.
-- **Differential testing against wasmtime.** For each applicable test program, also run via wasmtime locally, diff output.
-- **AssemblyScript compiler end-to-end.** Compile a one-liner via `asc` running through the shim; assert output matches a locally-run reference.
+- **`fd_*` core:** `fd_write`, `fd_read`, `fd_close`, `fd_seek`, `fd_fdstat_get`, `fd_fdstat_set_flags`, `fd_filestat_get`, `fd_readdir`, `fd_prestat_get`, `fd_prestat_dir_name`. Wires through `program_mem.read_bytes`/`write_bytes` to copy iovec/buffer payloads.
+- **`path_*` core:** `path_open`, `path_filestat_get`, plus stubs returning `ENOTSUP` for symlinks/links/rename/unlink.
+- **wasi_setup parsing.** Currently the `wasi_setup` record is plumbed through `setup.ts` but the Zig shim never reads it. `state.init` should call `contract_metadata({contract: RECORD_CONTRACT, params: "wasi_setup"})` and parse the JSON into argv/env/preopens tables.
+- **`scaffold_env.reject` magic-exit-zero wrapper.** The shim signals `proc_exit(0)` by rejecting with the magic reason string `__SCAFFOLD_WASI_EXIT_ZERO__`; the contract runner must swallow that specific reason and treat as success. Add this layer either in `setup.ts` (wrapping `_start`) or in the transport.
+- **Differential testing.** Diff output against `wasmtime` locally for each fixture.
+- **`wasi-testsuite` integration.** Vendor as `tests/vendor/wasi-testsuite/`, write a Python adapter, filter the skip list documented in the design doc.
+
+Real-world targets (graduation criteria):
+
+- **`saghul/quickjs`** (~1 MB) — first real preview1 program. Needs fd_write/fd_read for stdio + args_get for the `-e` flag. Will fail today on fd_write; the failure trace tells us batch 2's priority.
+- **VMware WLR `python-3.12.0.wasm`** (26 MB) — touches every preview1 call. When CPython boots and runs `print("hello")`, the shim is real.
 
 ## Application Layer
 

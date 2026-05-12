@@ -1,0 +1,84 @@
+export const snapshot = {};
+
+snapshot[`WasiShim: clock_time_get(REALTIME) writes block timestamp × 1e6 1`] = `
+"> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
+    < return
+  < return
+< exit ok"
+`;
+
+snapshot[`WasiShim: proc_exit(7) surfaces as ContractRejection with the WASI prefix 1`] = `
+'> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:proc_exit (wasi_snapshot_preview1.proc_exit)
+      > forward wasi_shim -> base:reject (scaffold_env.reject)
+        > scaffold_env.reject(reason="WASI proc_exit: 7") [sequence #1: reject ✓]
+      < return (threw)
+    < return (threw)
+  < return (threw)
+< rejected "WASI proc_exit: 7"'
+`;
+
+snapshot[`WasiShim: args_sizes_get returns (0,0) under default empty argv 1`] = `
+"> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:args_sizes_get (wasi_snapshot_preview1.args_sizes_get)
+    < return
+  < return
+< exit ok"
+`;
+
+snapshot[`WasiShim: random_get(32) uses the deterministic PRNG 1`] = `
+"> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:random_get (wasi_snapshot_preview1.random_get)
+    < return
+  < return
+< exit ok"
+`;
+
+snapshot[`WasiShim: real wasi-libc program (clock_gettime + return 0) 1`] = `
+"> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
+    < return
+  < return
+< exit ok"
+`;
+
+snapshot[`WasiShim: hello-world C program runs through stubbed fd_* path (batch-2 gap) 1`] = `
+"> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:fd_fdstat_get (wasi_snapshot_preview1.fd_fdstat_get)
+    < return
+    > forward program -> wasi_shim:fd_write (wasi_snapshot_preview1.fd_write)
+    < return
+  < return
+< exit ok"
+`;

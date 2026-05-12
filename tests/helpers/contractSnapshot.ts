@@ -111,6 +111,13 @@ export interface ContractSnapshotOptions {
   entryMode?: 'run';
   mock: MockTable;
   sequence: readonly SequenceStep[];
+  /**
+   * Optional callback fired after the run returns (or rejects), before the
+   * snapshot assertion. Receives each layer's primary memory keyed by layer
+   * name -- useful for asserting byte effects (e.g. that a WASI shim wrote
+   * the expected bytes into the program layer's memory). Throw to fail.
+   */
+  afterRun?: (memories: ReadonlyMap<string, WebAssembly.Memory>) => void;
 }
 
 // -- Trace events -----------------------------------------------------
@@ -587,7 +594,7 @@ export async function assertContractTraceSnapshot(
     }
   };
 
-  const { exportsByKey, entryMemory } = await loadModules(
+  const { exportsByKey, entryMemory, memoryByLayerKey } = await loadModules(
     compiled,
     scaffoldFlat,
     entryRef,
@@ -654,6 +661,8 @@ export async function assertContractTraceSnapshot(
       );
     }
   }
+
+  if (options.afterRun) options.afterRun(memoryByLayerKey);
 
   const formatted = formatTrace(trace);
   await assertSnapshot(t, formatted);
