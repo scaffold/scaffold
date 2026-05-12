@@ -145,6 +145,16 @@ export interface ModulesSpec {
 export interface TargetRef {
   readonly layerKey: string;
   readonly exportName: string;
+  /**
+   * Optional cross-memory accessor marker. When set, the import MUST be of
+   * WASM kind `function`, the target export MUST be a `WebAssembly.Memory`,
+   * and scaffold synthesises a memcpy closure of signature
+   * `(target_off, src_off, len) => void` that copies between the source
+   * layer's primary memory and the target memory. `'read'` copies target->
+   * source; `'write'` copies source->target. Spelled `"<layerKey>:<exportName>@read"`
+   * or `"...@write"` in the JSON record.
+   */
+  readonly accessor?: 'read' | 'write';
 }
 
 /** One pattern entry parsed from a layer's `imports`. */
@@ -201,10 +211,30 @@ function parseTargetRef(raw: string, context: string): TargetRef {
       `${context}: target ${JSON.stringify(raw)} must have the form "<layerKey>:<exportName>"`,
     );
   }
-  return {
-    layerKey: raw.slice(0, colonIdx),
-    exportName: raw.slice(colonIdx + 1),
-  };
+  // Strip optional accessor marker `@read` / `@write` from the export name.
+  let rest = raw.slice(colonIdx + 1);
+  let accessor: 'read' | 'write' | undefined;
+  const atIdx = rest.indexOf('@');
+  if (atIdx !== -1) {
+    const tag = rest.slice(atIdx + 1);
+    if (tag !== 'read' && tag !== 'write') {
+      throw new Error(
+        `${context}: target ${
+          JSON.stringify(raw)
+        } has unknown accessor ${JSON.stringify('@' + tag)} (expected "@read" or "@write")`,
+      );
+    }
+    if (atIdx === 0) {
+      throw new Error(
+        `${context}: target ${JSON.stringify(raw)} accessor marker must follow an export name`,
+      );
+    }
+    accessor = tag;
+    rest = rest.slice(0, atIdx);
+  }
+  return accessor !== undefined
+    ? { layerKey: raw.slice(0, colonIdx), exportName: rest, accessor }
+    : { layerKey: raw.slice(0, colonIdx), exportName: rest };
 }
 
 function parseImportEntry(key: string, value: string, layerKey: string): ImportPattern {
@@ -244,6 +274,12 @@ function parseImportEntry(key: string, value: string, layerKey: string): ImportP
       throw new Error(`${context}: wildcard value ${JSON.stringify(value)} must end with "*"`);
     }
     const targetExportPrefix = afterColon.slice(0, -1);
+    if (value.includes('@')) {
+      throw new Error(
+        `${context}: wildcard value ${JSON.stringify(value)} must not contain "@" ` +
+          `(accessor markers are only valid on literal target refs)`,
+      );
+    }
     if (targetExportPrefix.length > 0 && !targetExportPrefix.endsWith('.')) {
       throw new Error(
         `${context}: wildcard value ${
@@ -578,7 +614,26 @@ export async function loadModules(
     for (const imp of WebAssembly.Module.imports(layer.module)) {
       const target = resolveImport(imp.module, imp.name, layer.imports, layer.key);
       resolved.push({ namespace: imp.module, name: imp.name, kind: imp.kind, target });
-      if (imp.kind !== 'function' && target.layerKey !== 'base') {
+      if (target.accessor !== undefined) {
+        if (imp.kind !== 'function') {
+          throw new Error(
+            `modules.layers[${JSON.stringify(layer.key)}].imports[${
+              JSON.stringify(`${imp.module}.${imp.name}`)
+            }]: accessor target ${JSON.stringify(target.exportName)}@${target.accessor} can only ` +
+              `bind to a function-kind import (got kind=${imp.kind})`,
+          );
+        }
+        if (target.layerKey === 'base') {
+          throw new Error(
+            `modules.layers[${JSON.stringify(layer.key)}].imports[${
+              JSON.stringify(`${imp.module}.${imp.name}`)
+            }]: accessor targets cannot reference "base" (point at a layer that exports a memory)`,
+          );
+        }
+        // The target memory must exist before we can build the closure, so
+        // treat this like a memory dep for topo-sort purposes.
+        deps.add(target.layerKey);
+      } else if (imp.kind !== 'function' && target.layerKey !== 'base') {
         deps.add(target.layerKey);
       }
     }
@@ -656,6 +711,49 @@ export async function loadModules(
 
   const exportsByKey = new Map<string, Record<string, unknown>>();
   const memoryByLayerKey = new Map<string, WebAssembly.Memory>();
+  // Per-layer mutable handle to its primary memory. Cross-memory accessor
+  // closures close over this ref so they can re-read `.buffer` on each call
+  // (memory.grow() invalidates prior ArrayBuffer references). Populated
+  // immediately after the owning layer instantiates.
+  const srcMemRefByLayer = new Map<string, { current: WebAssembly.Memory | null }>();
+  for (const layer of compiled.layers) srcMemRefByLayer.set(layer.key, { current: null });
+
+  const makeAccessor = (
+    srcMemRef: { current: WebAssembly.Memory | null },
+    dstMem: WebAssembly.Memory,
+    accessor: 'read' | 'write',
+    declared: string,
+    srcLayerKey: string,
+  ): ImportFn =>
+  (progOff: number, peerOff: number, len: number): void => {
+    const srcMem = srcMemRef.current;
+    if (!srcMem) {
+      throw new Error(
+        `Stack layer ${JSON.stringify(srcLayerKey)}: accessor \`${declared}\` invoked before ` +
+          `source layer's primary memory was bound (internal error)`,
+      );
+    }
+    // Re-read `.buffer` on every call -- memory.grow() invalidates priors.
+    const targetBuf = new Uint8Array(dstMem.buffer);
+    const peerBuf = new Uint8Array(srcMem.buffer);
+    const fromBuf = accessor === 'read' ? targetBuf : peerBuf;
+    const toBuf = accessor === 'read' ? peerBuf : targetBuf;
+    const fromOff = accessor === 'read' ? progOff : peerOff;
+    const toOff = accessor === 'read' ? peerOff : progOff;
+    if (
+      !Number.isInteger(len) || len < 0 ||
+      !Number.isInteger(fromOff) || fromOff < 0 ||
+      !Number.isInteger(toOff) || toOff < 0 ||
+      fromOff + len > fromBuf.length || toOff + len > toBuf.length
+    ) {
+      throw new RangeError(
+        `Stack layer ${JSON.stringify(srcLayerKey)}: accessor \`${declared}\` out-of-bounds ` +
+          `(progOff=${progOff}, peerOff=${peerOff}, len=${len}, ` +
+          `srcLen=${peerBuf.length}, dstLen=${targetBuf.length})`,
+      );
+    }
+    toBuf.set(fromBuf.subarray(fromOff, fromOff + len), toOff);
+  };
 
   for (const layerKey of topoOrder) {
     const layer = compiled.byKey.get(layerKey)!;
@@ -668,7 +766,32 @@ export async function loadModules(
     for (const r of resolved) {
       const dotted = `${r.namespace}.${r.name}`;
       let value: unknown;
-      if (r.kind === 'function') {
+      if (r.target.accessor !== undefined) {
+        // Already validated as kind=function during classification.
+        const targetExports = exportsByKey.get(r.target.layerKey);
+        if (!targetExports) {
+          throw new Error(
+            `modules.layers[${JSON.stringify(layerKey)}].imports[${JSON.stringify(dotted)}]: ` +
+              `accessor target ${r.target.layerKey}:${r.target.exportName} not yet instantiated ` +
+              `(internal error: topo order broken)`,
+          );
+        }
+        const candidate = targetExports[r.target.exportName];
+        if (!(candidate instanceof WebAssembly.Memory)) {
+          throw new Error(
+            `modules.layers[${JSON.stringify(layerKey)}].imports[${JSON.stringify(dotted)}]: ` +
+              `accessor binds to non-memory export ${r.target.layerKey}:${r.target.exportName} ` +
+              `(got ${candidate === undefined ? 'undefined' : typeof candidate})`,
+          );
+        }
+        value = makeAccessor(
+          srcMemRefByLayer.get(layerKey)!,
+          candidate,
+          r.target.accessor,
+          dotted,
+          layerKey,
+        );
+      } else if (r.kind === 'function') {
         value = makeForwarder(r.target, layerKey, dotted);
       } else if (r.kind === 'memory') {
         if (r.target.layerKey === 'base') {
@@ -731,7 +854,10 @@ export async function loadModules(
     const primary = exports.memory instanceof WebAssembly.Memory
       ? (exports.memory as WebAssembly.Memory)
       : firstImportedMemory;
-    if (primary) memoryByLayerKey.set(layerKey, primary);
+    if (primary) {
+      memoryByLayerKey.set(layerKey, primary);
+      srcMemRefByLayer.get(layerKey)!.current = primary;
+    }
   }
 
   // --- Pass 4: populate nameTable so function forwarders resolve -----
