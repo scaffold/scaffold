@@ -244,6 +244,28 @@ back to a publisher without flooding. Open work:
 - **Atom GC respects transit pinning.** Atoms whose `fromConnections` chain is in active use for reverse-path signaling must not be GC'd or the path breaks (current `replyToPathBroken` log path). Once GC lands, "pin while a signal session names this hash" is the simplest policy.
 - **`PeerInfoAtom` (return when needed).** The old `PeerInfo` packet type was dead and got deleted. Reintroduce as a proper Atom subtype if/when contract-interest routing (TODO option 4 under "Request Routing") needs peers to advertise which contracts they can execute.
 
+## WASI Shim (user-module, large)
+
+See [`docs/design/wasi-shim.md`](docs/design/wasi-shim.md) for the full design.
+
+The WASI shim is a standalone Zig project that compiles to a single `wasi-shim.wasm` blob. It lives at `src/contracts/wasi-shim/` and is treated like any other user contract module — not part of the scaffold protocol surface. Once shipped, contract authors can run unmodified WASI binaries (compilers, interpreters, etc.) by stacking them above this shim in a `modules` graph.
+
+Prerequisites (land before the shim itself):
+
+- **Multi-memory in `WasmModules.ts` + transports.** Current implementation auto-injects one shared `env.memory`; spec now says each layer owns its own memory and may import others. `WasmModules.ts` needs a two-pass instantiation (topo-sort memory deps, then function-cycle forwarders). All three transports (`InProcessMockTransport`, `JspiTransport`, `AtomicsWorkerTransport`) need updates. Existing tests need to be migrated off the shared-memory shorthand.
+- **Contract-trace snapshot testing helper.** `tests/helpers/contractSnapshot.ts` — a general scaffold testing primitive that captures every WASM-boundary event (imports, exports, cross-layer hops, memory reads/writes at the ABI boundary) and snapshots them via `assertSnapshot`. Used by the shim's per-call tests but useful for any contract.
+
+Then the shim itself, in chunks:
+
+- **Per-call reference review.** For each WASI call (~40), reconcile against WASI snapshot preview 1 spec, `bjorn3/browser_wasi_shim`, `wasmtime/crates/wasi-common`, `wasi-libc`, and Zig stdlib's `std.os.wasi`. Document divergences with rationale.
+- **VFS in Zig.** `src/contracts/wasi-shim/src/vfs/` — fd table, path resolver, memfs, devfs, input-node abstraction. No WASI-isms, no scaffold-isms. Tested in pure Zig.
+- **WASI ABI wire layer.** `src/contracts/wasi-shim/src/abi/` — marshal each WASI call into a vfs operation. Tested in pure Zig.
+- **Scaffold wiring.** `src/contracts/wasi-shim/src/scaffold/` — wraps `scaffold_env.*`, reads `wasi_setup`, populates the vfs's input nodes via scaffold callbacks, mediates the cross-memory copy at the boundary. Tested via the contract-trace snapshot helper.
+- **`setup.ts` helper.** Build a contract block from `(program WASM hash, wasi_setup)` → modules graph + records. Includes shim blob hash as a constant.
+- **`wasi-testsuite` integration.** Vendor as `tests/vendor/wasi-testsuite/`, build harness, filter out unsupported tests with documented reasons.
+- **Differential testing against wasmtime.** For each applicable test program, also run via wasmtime locally, diff output.
+- **AssemblyScript compiler end-to-end.** Compile a one-liner via `asc` running through the shim; assert output matches a locally-run reference.
+
 ## Application Layer
 
 These sit on top of the core protocol and can be specified later.

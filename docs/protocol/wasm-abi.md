@@ -83,7 +83,7 @@ Standard records on the contract block:
 |---|---|---|
 | `modules`           | UTF-8 JSON object (see [Stacking](#stacking)) | Required on every WASM contract block. Describes the contract's module graph: a `base` section (ABI version + scaffold-facing entry points) and a `layers` map of named modules with their cross-edge linking. Each layer references a content-addressed WASM blob (fetched via `{ contract: HASH_CONTRACT, params: blobHash }`). Every cross-module / cross-scaffold reference is explicit; no implicit defaults. Replaces the legacy `wasm`, `wasm_hashes`, and `abi_version` records. |
 | `output_namespaces` | concatenated 32-byte hashes (no length prefix; total length is the count × 32) | The closed set of contract hashes this contract may produce. Empty record (zero bytes) = produces no outputs. See [computation.md#output-namespaces](computation.md#output-namespaces). |
-| `max_memory_pages`  | little-endian `u32`      | Per-instance memory cap in 64 KiB pages. Defaults to `4096` (256 MiB) when absent. |
+| `max_memory_pages`  | little-endian `u32`      | Per-memory cap in 64 KiB pages applied to every memory (scaffold-provided or module-declared) instantiated for the contract. Defaults to `4096` (256 MiB) when absent. |
 | `budget_ms_hint`    | little-endian `u32`      | Author's hint for `runVerifying` wall-clock budget. The runtime uses this only to size scheduling; the actual budget enforcement comes from the verification module (see [computation.md#per-verifier-budget](computation.md#per-verifier-budget)). |
 
 Additional contract-specific records may be present; the runtime ignores anything it doesn't recognise.
@@ -312,15 +312,24 @@ type ModulesSpec = {
   base: {
     version: number;                          // integer ABI date, e.g. 20250510
     imports: Record<string, string>;          // "<mode>" -> "<layerKey>:<exportName>"
+    memories?: Record<string, MemorySpec>;    // scaffold-provided memories, addressable as "base:<name>"
   };
   layers: Record<string, {
     wasmHash: string;                         // 64-char hex content hash of the WASM blob
     imports?: Record<string, string>;         // "<ns>.<field>" -> "<layerKey>:<exportName>"
   }>;
 };
+
+type MemorySpec = {
+  initial: number;                            // initial size in 64-KiB pages
+  maximum?: number;                           // max pages; defaults to the contract block's max_memory_pages
+  shared?: boolean;                           // true => SAB-backed (required for Atomics transport)
+};
 ```
 
-The values of every `imports` map are `"<layerKey>:<exportName>"` references. `layerKey` is any key in `layers`, or the reserved string `"base"` (referring to scaffold's mode-appropriate ContractEnv host exports).
+The values of every `imports` map are `"<layerKey>:<exportName>"` references. `layerKey` is any key in `layers`, or the reserved string `"base"` (referring to scaffold's mode-appropriate ContractEnv host exports and any memories declared in `base.memories`).
+
+Imports may resolve to **any kind** that WASM imports support: function, memory, table, or global. The linker reads the import kind from `WebAssembly.Module.imports()` and matches it against the resolved target's kind; a mismatch (e.g. memory import resolving to a function) is a `LinkError` at load time. In practice, function and memory imports are the only kinds modern toolchains emit.
 
 **Wildcards.** `imports` entries support a single trailing-`*` wildcard:
 
@@ -344,10 +353,36 @@ Resolution priority: literal entries first, then longest-prefix wildcard.
 5. The reserved layer key `"base"` cannot appear in `layers`.
 6. Every `"<layerKey>:<exportName>"` reference resolves to a layer that exists in `layers` (or to `"base"`).
 7. `base.imports` references cannot target `"base"` (scaffold doesn't call itself).
+8. Memory imports across layers must form an acyclic dependency graph (see [Memory model](#memory-model-stacking) below). Function-import cycles are handled by JS forwarders; memory-import cycles cannot be (memories aren't lazy-bindable) and are rejected at load.
 
 **Worked examples.**
 
-Single-module contract:
+Single-module contract that imports scaffold's memory:
+
+```jsonc
+{
+  "base": {
+    "version": 20250510,
+    "imports": { "run": "main:run" },
+    "memories": {
+      "heap": { "initial": 16, "maximum": 4096, "shared": true }
+    }
+  },
+  "layers": {
+    "main": {
+      "wasmHash": "...64-hex...",
+      "imports": {
+        "scaffold_env.*": "base:*",
+        "env.memory": "base:heap"
+      }
+    }
+  }
+}
+```
+
+The contract's WASM declares `(import "scaffold_env" "emit_output" ...)` and `(import "env" "memory" ...)`; the wildcard routes function imports to scaffold's matching exports, and `env.memory` resolves to a scaffold-provided memory. `base.imports.run` says "scaffold's run-mode entrypoint is `main:run`."
+
+Single-module contract that owns its memory (no scaffold-provided memory needed):
 
 ```jsonc
 {
@@ -364,9 +399,9 @@ Single-module contract:
 }
 ```
 
-The contract's WASM declares `(import "scaffold_env" "emit_output" ...)` etc.; the wildcard routes each to scaffold's matching export. `base.imports.run` says "scaffold's run-mode entrypoint is `main:run`."
+The contract's WASM declares `(memory (export "memory") 16 4096 shared)` — its own memory. Scaffold uses the entry layer's exported `memory` for the host bridge.
 
-A WASI program above a WASI shim (two layers, bidirectional dependencies):
+A WASI program above a WASI shim (two layers, function-cyclic + memory-acyclic):
 
 ```jsonc
 {
@@ -379,6 +414,7 @@ A WASI program above a WASI shim (two layers, bidirectional dependencies):
       "wasmHash": "...the WASI shim WASM...",
       "imports": {
         "_start": "program:__wasi_unstable_reactor_start",
+        "program_mem.memory": "program:memory",
         "scaffold_env.*": "base:*"
       }
     },
@@ -392,15 +428,26 @@ A WASI program above a WASI shim (two layers, bidirectional dependencies):
 }
 ```
 
-`base.imports.run` is `wasi_shim:run` — scaffold calls the shim's `run`, which internally invokes the program's `_start` (declared as an import on the shim, mapped to the program's actual export `__wasi_unstable_reactor_start`). The program's WASI imports resolve to the shim's flat exports of the same names. The shim's own scaffold imports go directly to `base`. The graph is cyclic (shim ↔ program), which the linker handles via JS forwarders (see below).
+Each module declares its own memory. The shim imports the program's exported memory under a local name (so it can read program pointers when forwarding WASI calls). The program imports only the shim's WASI functions. Memory deps are one-way (shim ← program), so topo order is "program first, then shim". Function cycles (shim ↔ program) are resolved by JS forwarders post-instantiation.
 
-**Memory model.** All layers receive a single runtime-supplied linear memory under `(import "env" "memory" ...)`. Pointer-passing across layers is trivial — `(ptr, len)` has the same meaning everywhere. Modules may declare additional private memories internally, but `env.memory` is the rendezvous. `env.memory` is reserved — it cannot appear as a key in any `imports` map.
+`base.imports.run` is `wasi_shim:run` — scaffold calls the shim's `run`, which internally invokes the program's `_start` via the cross-edge import. The shim copies bytes between its own memory and the program's memory at the WASI boundary as needed.
 
-**Entry export.** Scaffold invokes the export named by `base.imports[<mode>]` on the layer named there. The same layer's `alloc` export is used by the host bridge as the contract-side allocator (so any layer chosen as an entry point must export `alloc`).
+<a id="memory-model-stacking"></a>
+**Memory model.** Each layer has its own linear memory. A layer's memory is either declared in the WASM module (`(memory ...)`) or imported via the `imports` map (resolving to another layer's exported memory or a `base.memories` declaration).
 
-**Linker implementation.** Cross-edges (layer → layer and layer → base) go through JS forwarder closures that close over a shared name table populated after every layer is instantiated. This handles cyclic graphs uniformly. There's a one-JS-call hop per cross-edge — a real cost; future work may topo-sort acyclic graphs and use direct WASM-to-WASM linking.
+Scaffold uses the **entry layer's memory** for the host bridge: `alloc` returns offsets into the entry layer's memory, and import-supplied bytes (e.g. `request_body` results) are written there. Non-entry layers wanting to ship bytes to scaffold (or receive bytes from it) must copy through the entry layer's memory at their own boundary. For most use cases — single-module contracts, or shims that already mediate every host call — this is naturally where the data ends up.
 
-**Cycles** at the `wasmHash` level (duplicate blob references) are rejected at load. Cycles at the graph level (layer A's imports reach into B; B's imports reach into A) are allowed and handled by forwarders.
+The entry layer's memory must be `shared: true` when the runtime selects the Atomics transport. Layer-declared memories without `shared` are still permitted as long as they're not the entry memory under Atomics; JSPI and in-process transports don't require shared.
+
+**Entry export.** Scaffold invokes the export named by `base.imports[<mode>]` on the layer named there. The same layer must also export:
+- `alloc`: the host-bridge allocator (returns offsets in the entry layer's memory).
+- `memory`: the linear memory the bridge reads from / writes to. Either declared in the WASM (`(memory (export "memory") ...)`) or re-exported from an imported memory.
+
+**Linker implementation.** The linker performs two passes:
+1. **Memory pass.** Topo-sort layers by memory dependencies. Instantiate any `base.memories`, then instantiate layers in topo order: a layer is instantiable once every memory it imports has been created. Memory imports resolve directly to `WebAssembly.Memory` instances; no forwarding.
+2. **Function-cycle pass.** Function imports that target a layer not yet instantiated are stubbed with JS forwarders closing over a shared name table populated after every layer has been instantiated. Forwarders cost one JS-hop per cross-edge call; future work may topo-sort the acyclic subset and use direct linking.
+
+**Cycles.** Duplicate `wasmHash` across layers is rejected at load. Memory-import cycles are rejected at load (no forwarder mechanism). Function-import cycles are allowed and handled by forwarders.
 
 **Budget.** A graph execution counts as a single contract execution: the entire graph shares one per-verifier budget.
 
