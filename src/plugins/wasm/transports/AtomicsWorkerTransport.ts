@@ -153,6 +153,15 @@ function modulesToWorkerLayers(modules: CompiledModules): WasmLayerMsg[] {
   return modules.layers.map((l) => ({ key: l.key, module: l.module, imports: l.imports }));
 }
 
+function baseMemoriesAsRecord(
+  modules: CompiledModules,
+): Record<string, import('../WasmModules.ts').MemorySpec> | undefined {
+  if (modules.base.memories.size === 0) return undefined;
+  const out: Record<string, import('../WasmModules.ts').MemorySpec> = {};
+  for (const [k, v] of modules.base.memories) out[k] = v;
+  return out;
+}
+
 function lookupEntry(modules: CompiledModules, mode: WasmSessionMode): TargetRef {
   const ref = modules.base.imports.get(mode);
   if (!ref) {
@@ -192,13 +201,14 @@ export class AtomicsWorkerTransport implements WasmTransport {
       timestamp: bridge.timestamp(),
     };
     const layers = modulesToWorkerLayers(modules);
+    const baseMemories = baseMemoriesAsRecord(modules);
     const entry = lookupEntry(modules, 'run');
     return this.pool.submit<void>({
       score: () => this.defaultPriority,
       run: async (worker) => {
         worker.server.setHandlers(handlers);
         const terminal = awaitTerminal(worker);
-        postJob(worker, { type: 'instantiate', layers, entry, mode: 'run', preset });
+        postJob(worker, { type: 'instantiate', layers, entry, mode: 'run', baseMemories, preset });
         postJob(worker, { type: 'call' });
         unwrapTerminal(await terminal, false);
       },
@@ -234,13 +244,14 @@ export class AtomicsWorkerTransport implements WasmTransport {
     const bridge = makeWalkBridge(host);
     const handlers = walkHandlers(bridge);
     const layers = modulesToWorkerLayers(modules);
+    const baseMemories = baseMemoriesAsRecord(modules);
     const entry = lookupEntry(modules, mode);
     return this.pool.submit<void>({
       score: () => this.defaultPriority,
       run: async (worker) => {
         worker.server.setHandlers(handlers);
         const terminal = awaitTerminal(worker);
-        postJob(worker, { type: 'instantiate', layers, entry, mode });
+        postJob(worker, { type: 'instantiate', layers, entry, mode, baseMemories });
         postJob(worker, { type: 'call', input });
         unwrapTerminal(await terminal, false);
       },
@@ -255,13 +266,14 @@ export class AtomicsWorkerTransport implements WasmTransport {
     const bridge = makeBuildBridge(host);
     const handlers = buildHandlers(bridge);
     const layers = modulesToWorkerLayers(modules);
+    const baseMemories = baseMemoriesAsRecord(modules);
     const entry = lookupEntry(modules, mode);
     return this.pool.submit<Uint8Array>({
       score: () => this.defaultPriority,
       run: async (worker) => {
         worker.server.setHandlers(handlers);
         const terminal = awaitTerminal(worker);
-        postJob(worker, { type: 'instantiate', layers, entry, mode });
+        postJob(worker, { type: 'instantiate', layers, entry, mode, baseMemories });
         postJob(worker, { type: 'call' });
         const bytes = unwrapTerminal(await terminal, true);
         return bytes ?? new Uint8Array(0);

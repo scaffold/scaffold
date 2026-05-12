@@ -90,15 +90,25 @@ Deno.test(
     //   upper imports renamed_ns.emit_output -> "lower:emit_output"
     //   lower imports scaffold_env.emit_output -> "base:emit_output"
     const spec = {
-      base: { version: 20250510, imports: { run: 'upper:run' } },
+      base: {
+        version: 20250510,
+        imports: { run: 'upper:run' },
+        memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+      },
       layers: {
         lower: {
           wasmHash: lowerHash.toHex(),
-          imports: { 'scaffold_env.emit_output': 'base:emit_output' },
+          imports: {
+            'scaffold_env.emit_output': 'base:emit_output',
+            'env.memory': 'base:heap',
+          },
         },
         upper: {
           wasmHash: upperHash.toHex(),
-          imports: { 'renamed_ns.emit_output': 'lower:emit_output' },
+          imports: {
+            'renamed_ns.emit_output': 'lower:emit_output',
+            'env.memory': 'base:heap',
+          },
         },
       },
     };
@@ -130,11 +140,15 @@ Deno.test(
     const bytes = await loadFixtureBytes('echo');
     const hash = Hash.digest(bytes);
     const spec = {
-      base: { version: 20250510, imports: { run: 'main:run' } },
+      base: {
+        version: 20250510,
+        imports: { run: 'main:run' },
+        memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+      },
       layers: {
         main: {
           wasmHash: hash.toHex(),
-          imports: { 'scaffold_env.*': 'base:*' },
+          imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
         },
       },
     };
@@ -160,11 +174,18 @@ Deno.test(
     const bytes = await loadFixtureBytes('rename_only');
     const hash = Hash.digest(bytes);
     const spec = {
-      base: { version: 20250510, imports: { run: 'main:run' } },
+      base: {
+        version: 20250510,
+        imports: { run: 'main:run' },
+        memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+      },
       layers: {
         main: {
           wasmHash: hash.toHex(),
-          imports: { 'renamed_env.emit_output': 'base:emit_output' },
+          imports: {
+            'renamed_env.emit_output': 'base:emit_output',
+            'env.memory': 'base:heap',
+          },
         },
       },
     };
@@ -357,7 +378,11 @@ Deno.test('WasmStacking: wildcard matching -- longest prefix wins', async () => 
   const bytes = await loadFixtureBytes('echo');
   const hash = Hash.digest(bytes);
   const spec = {
-    base: { version: 20250510, imports: { run: 'main:run' } },
+    base: {
+      version: 20250510,
+      imports: { run: 'main:run' },
+      memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+    },
     layers: {
       main: {
         wasmHash: hash.toHex(),
@@ -365,6 +390,7 @@ Deno.test('WasmStacking: wildcard matching -- longest prefix wins', async () => 
           // Specific entries take precedence (literal > wildcard).
           'scaffold_env.params': 'base:params',
           'scaffold_env.*': 'base:*',
+          'env.memory': 'base:heap',
         },
       },
     },
@@ -378,3 +404,157 @@ Deno.test('WasmStacking: wildcard matching -- longest prefix wins', async () => 
   assertEquals(env.emittedOutputs.length, 1);
   assert(env.emittedOutputs[0].body !== undefined);
 });
+
+// -- Multi-memory cases ----------------------------------------------
+
+Deno.test(
+  'WasmStacking: single-module owns its memory (no base.memories needed)',
+  async () => {
+    // own_memory_echo declares `(memory (export "memory") 1 4096 shared)`.
+    // No memory imports; the host bridge uses the entry layer's exported
+    // memory directly.
+    const bytes = await loadFixtureBytes('own_memory_echo');
+    const hash = Hash.digest(bytes);
+    const spec = {
+      base: { version: 20250510, imports: { run: 'main:run' } },
+      layers: {
+        main: {
+          wasmHash: hash.toHex(),
+          imports: { 'scaffold_env.*': 'base:*' },
+        },
+      },
+    };
+    const block = composeGenesisPacket([modulesRecord(spec)]);
+    const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
+    const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
+    const contract = plugin.getContract(block);
+    const env = new RecordingEnv(new TextEncoder().encode('own-mem-ok'));
+    await contract.run(env);
+    assertEquals(env.emittedOutputs.length, 1);
+    assertEquals(
+      new TextDecoder().decode(env.emittedOutputs[0].body ?? new Uint8Array(0)),
+      'own-mem-ok',
+    );
+  },
+);
+
+Deno.test(
+  'WasmStacking: cross-memory -- consumer imports data_owner memory and reads from it',
+  async () => {
+    // data_owner exports memory with "hello-from-data-owner" at offset 256.
+    // consumer imports that memory and emits the bytes as a record body.
+    const ownerBytes = await loadFixtureBytes('data_owner');
+    const consumerBytes = await loadFixtureBytes('cross_mem_consumer');
+    const ownerHash = Hash.digest(ownerBytes);
+    const consumerHash = Hash.digest(consumerBytes);
+    const spec = {
+      base: { version: 20250510, imports: { run: 'consumer:run' } },
+      layers: {
+        owner: { wasmHash: ownerHash.toHex() },
+        consumer: {
+          wasmHash: consumerHash.toHex(),
+          imports: {
+            'scaffold_env.emit_output': 'base:emit_output',
+            'other_mem.memory': 'owner:memory',
+          },
+        },
+      },
+    };
+    const block = composeGenesisPacket([modulesRecord(spec)]);
+    const resolveBlob = blobResolver(
+      new Map([
+        [ownerHash.toHex(), ownerBytes],
+        [consumerHash.toHex(), consumerBytes],
+      ]),
+    );
+    const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
+    const contract = plugin.getContract(block);
+    const env = new RecordingEnv();
+    await contract.run(env);
+    assertEquals(env.emittedOutputs.length, 1);
+    assertEquals(
+      new TextDecoder().decode(env.emittedOutputs[0].body ?? new Uint8Array(0)),
+      'hello-from-data-owner',
+    );
+  },
+);
+
+Deno.test(
+  'WasmStacking: reject -- memory-import cycle between two layers',
+  async () => {
+    // echo and rename_only both declare `(import "env" "memory" ...)`. Wire
+    // their env.memory imports to each other; the dep graph becomes
+    // echo -> rename_only and rename_only -> echo, which the linker must
+    // reject at load.
+    const echoBytes = await loadFixtureBytes('echo');
+    const renameBytes = await loadFixtureBytes('rename_only');
+    const echoHash = Hash.digest(echoBytes);
+    const renameHash = Hash.digest(renameBytes);
+    const spec = {
+      base: { version: 20250510, imports: { run: 'a:run' } },
+      layers: {
+        a: {
+          wasmHash: echoHash.toHex(),
+          imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'b:memory' },
+        },
+        b: {
+          wasmHash: renameHash.toHex(),
+          imports: {
+            'renamed_env.emit_output': 'base:emit_output',
+            'env.memory': 'a:memory',
+          },
+        },
+      },
+    };
+    const block = composeGenesisPacket([modulesRecord(spec)]);
+    const resolveBlob = blobResolver(
+      new Map([
+        [echoHash.toHex(), echoBytes],
+        [renameHash.toHex(), renameBytes],
+      ]),
+    );
+    const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
+    const contract = plugin.getContract(block);
+    await assertRejects(
+      async () => {
+        await contract.run(new RecordingEnv());
+      },
+      Error,
+      'memory/table/global-import cycle detected',
+    );
+  },
+);
+
+Deno.test(
+  'WasmStacking: reject -- memory import target is a function (kind mismatch)',
+  async () => {
+    // echo's env.memory is wired to `base:params` -- params is a function,
+    // not a memory. The linker rejects with a clear "not a WebAssembly.Memory"
+    // error.
+    const bytes = await loadFixtureBytes('echo');
+    const hash = Hash.digest(bytes);
+    const spec = {
+      base: { version: 20250510, imports: { run: 'main:run' } },
+      layers: {
+        main: {
+          wasmHash: hash.toHex(),
+          imports: {
+            'scaffold_env.*': 'base:*',
+            'env.memory': 'base:params',
+          },
+        },
+      },
+    };
+    const block = composeGenesisPacket([modulesRecord(spec)]);
+    const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
+    const plugin = wasmContractPlugin({ transport: 'in-process', resolveBlob });
+    const contract = plugin.getContract(block);
+    await assertRejects(
+      async () => {
+        await contract.run(new RecordingEnv());
+      },
+      Error,
+      'not found in base.memories',
+    );
+  },
+);

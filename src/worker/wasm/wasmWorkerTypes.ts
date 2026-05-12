@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/wasm-abi.md
 
-import type { ImportPattern, TargetRef } from '../../plugins/wasm/WasmModules.ts';
+import type { ImportPattern, MemorySpec, TargetRef } from '../../plugins/wasm/WasmModules.ts';
 
 /**
  * Modes a single worker session can be configured for. Each maps to a
@@ -33,6 +33,11 @@ export interface WasmInstantiateMsg {
   layers: WasmLayerMsg[];
   entry: TargetRef;
   mode: WasmSessionMode;
+  /**
+   * Scaffold-provided memory specs (mirrors `compiled.base.memories`). The
+   * worker creates fresh `WebAssembly.Memory` instances from these specs.
+   */
+  baseMemories?: Record<string, MemorySpec>;
   /** Pre-cached run-mode constants. Ignored for walk/build modes. */
   preset?: {
     executionMode: number;

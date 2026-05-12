@@ -16,6 +16,7 @@ import {
   type CompiledLayer,
   type CompiledModules,
   loadModules,
+  type MemorySpec,
   type TargetRef,
 } from '../../plugins/wasm/WasmModules.ts';
 
@@ -216,10 +217,6 @@ interface InstantiateResult {
   mode: WasmSessionMode;
 }
 
-function makeSharedMemory(): WebAssembly.Memory {
-  return new WebAssembly.Memory({ initial: 1, maximum: 4096, shared: true });
-}
-
 export class WasmSession {
   private instantiated: InstantiateResult | null = null;
 
@@ -230,8 +227,6 @@ export class WasmSession {
       throw new Error('instantiate: layers array must be non-empty');
     }
     const ctx: SessionCtx = makeEmptyCtx();
-    const memory = makeSharedMemory();
-    ctx.memory = memory;
 
     let scaffoldFlat: Record<string, unknown>;
     if (msg.mode === 'run') {
@@ -244,8 +239,9 @@ export class WasmSession {
     }
 
     // Build CompiledModules from the message. base.imports doesn't need to
-    // be populated for the worker -- the main thread sent the entry target
-    // directly. Use a synthetic base map containing just the entry.
+    // be populated beyond the entry (loadModules only uses it for the
+    // `entry.layerKey === "base"` rejection). base.memories carries
+    // scaffold-provided memory specs.
     const compiledLayers: CompiledLayer[] = msg.layers.map((l) => ({
       key: l.key,
       module: l.module,
@@ -254,13 +250,34 @@ export class WasmSession {
     const byKey = new Map<string, CompiledLayer>();
     for (const l of compiledLayers) byKey.set(l.key, l);
     const baseImports = new Map<string, TargetRef>([[msg.mode, msg.entry]]);
+    const baseMemories = new Map<string, MemorySpec>();
+    if (msg.baseMemories) {
+      for (const [k, v] of Object.entries(msg.baseMemories)) baseMemories.set(k, v);
+    }
     const compiled: CompiledModules = {
-      base: { version: 0, imports: baseImports },
+      base: { version: 0, imports: baseImports, memories: baseMemories },
       layers: compiledLayers,
       byKey,
     };
 
-    const { exportsByKey } = await loadModules(compiled, scaffoldFlat, memory);
+    const { exportsByKey, entryMemory } = await loadModules(
+      compiled,
+      scaffoldFlat,
+      msg.entry,
+    );
+    // The Atomics transport assumes a SAB-backed entry memory so the worker
+    // and main thread can coordinate via Atomics.wait on the channel
+    // buffers. Detect mismatches early; the actual cross-thread data
+    // motion goes via the channel's staging SAB regardless, but a
+    // non-shared contract memory would be a configuration error.
+    if (!(entryMemory.buffer instanceof SharedArrayBuffer)) {
+      throw new Error(
+        `instantiate: entry layer ${JSON.stringify(msg.entry.layerKey)} memory is not ` +
+          `SharedArrayBuffer-backed; the Atomics transport requires \`shared: true\` on the ` +
+          `entry memory (declared on the module or in base.memories)`,
+      );
+    }
+    ctx.memory = entryMemory;
     const entryExports = exportsByKey.get(msg.entry.layerKey);
     if (!entryExports) {
       throw new Error(

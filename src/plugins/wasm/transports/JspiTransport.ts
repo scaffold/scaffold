@@ -74,10 +74,6 @@ function promising<Fn extends (...args: never[]) => unknown>(
   return jspi.promising(fn);
 }
 
-function makeSharedMemory(): WebAssembly.Memory {
-  return new WebAssembly.Memory({ initial: 1, maximum: 4096, shared: true });
-}
-
 function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unknown> {
   const handlePackedAsync = async (bytes: Uint8Array | Promise<Uint8Array>): Promise<bigint> => {
     const resolved = await bytes;
@@ -202,15 +198,25 @@ interface EntryInfo {
   layerKey: string;
 }
 
+function lookupEntryRef(modules: CompiledModules, mode: string): TargetRef {
+  const ref: TargetRef | undefined = modules.base.imports.get(mode);
+  if (!ref) {
+    throw new Error(`modules.base.imports has no entry for mode ${JSON.stringify(mode)}`);
+  }
+  if (ref.layerKey === 'base') {
+    throw new Error(
+      `modules.base.imports[${JSON.stringify(mode)}]: target cannot be "base"`,
+    );
+  }
+  return ref;
+}
+
 function resolveEntry(
   modules: CompiledModules,
   exportsByKey: ReadonlyMap<string, Record<string, unknown>>,
   mode: string,
 ): EntryInfo {
-  const ref: TargetRef | undefined = modules.base.imports.get(mode);
-  if (!ref) {
-    throw new Error(`modules.base.imports has no entry for mode ${JSON.stringify(mode)}`);
-  }
+  const ref = lookupEntryRef(modules, mode);
   const exports = exportsByKey.get(ref.layerKey);
   if (!exports) {
     throw new Error(`modules.base.imports[${JSON.stringify(mode)}]: layer not found`);
@@ -242,12 +248,12 @@ export class JspiTransport implements WasmTransport {
 
   async run(modules: CompiledModules, env: ContractEnv): Promise<void> {
     const ctx = makeEmptyCtx();
-    const memory = makeSharedMemory();
     const bridge = makeRunBridge(env);
     const scaffoldFlat = flatRunExports(ctx, bridge);
-    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entryRef = lookupEntryRef(modules, 'run');
+    const { exportsByKey, entryMemory } = await loadModules(modules, scaffoldFlat, entryRef);
     const entry = resolveEntry(modules, exportsByKey, 'run');
-    setCtxFromEntry(ctx, entry, memory);
+    setCtxFromEntry(ctx, entry, entryMemory);
     const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
       throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);
@@ -288,12 +294,12 @@ export class JspiTransport implements WasmTransport {
     host: WalkerHost,
   ): Promise<void> {
     const ctx = makeEmptyCtx();
-    const memory = makeSharedMemory();
     const bridge = makeWalkBridge(host);
     const scaffoldFlat = flatWalkExports(ctx, bridge);
-    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entryRef = lookupEntryRef(modules, mode);
+    const { exportsByKey, entryMemory } = await loadModules(modules, scaffoldFlat, entryRef);
     const entry = resolveEntry(modules, exportsByKey, mode);
-    setCtxFromEntry(ctx, entry, memory);
+    setCtxFromEntry(ctx, entry, entryMemory);
     const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
       throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);
@@ -308,12 +314,12 @@ export class JspiTransport implements WasmTransport {
     host: BuilderHost,
   ): Promise<Uint8Array> {
     const ctx = makeEmptyCtx();
-    const memory = makeSharedMemory();
     const bridge = makeBuildBridge(host);
     const scaffoldFlat = flatBuildExports(ctx, bridge);
-    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entryRef = lookupEntryRef(modules, mode);
+    const { exportsByKey, entryMemory } = await loadModules(modules, scaffoldFlat, entryRef);
     const entry = resolveEntry(modules, exportsByKey, mode);
-    setCtxFromEntry(ctx, entry, memory);
+    setCtxFromEntry(ctx, entry, entryMemory);
     const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
       throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);

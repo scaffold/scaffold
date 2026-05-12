@@ -41,11 +41,15 @@ function modulesRecord(spec: unknown): Output {
 
 function singleModuleSpec(hashHex: string): unknown {
   return {
-    base: { version: 20250510, imports: { run: 'main:run' } },
+    base: {
+      version: 20250510,
+      imports: { run: 'main:run' },
+      memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+    },
     layers: {
       main: {
         wasmHash: hashHex,
-        imports: { 'scaffold_env.*': 'base:*' },
+        imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
       },
     },
   };

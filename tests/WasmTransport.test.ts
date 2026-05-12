@@ -35,7 +35,11 @@ async function singleModuleStack(
   const bytes = await Deno.readFile(url);
   const hash = Hash.digest(bytes);
   const spec = {
-    base: { version: 20250510, imports: { [mode]: `main:${entryExport}` } },
+    base: {
+      version: 20250510,
+      imports: { [mode]: `main:${entryExport}` },
+      memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+    },
     layers: {
       main: {
         wasmHash: hash.toHex(),
@@ -43,6 +47,7 @@ async function singleModuleStack(
           'scaffold_env.*': 'base:*',
           'scaffold_walker.*': 'base:*',
           'scaffold_builder.*': 'base:*',
+          'env.memory': 'base:heap',
         },
       },
     },

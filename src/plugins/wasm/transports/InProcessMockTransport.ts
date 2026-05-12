@@ -56,12 +56,6 @@ function expectSync<T>(value: T | Promise<T>): T {
   return value;
 }
 
-function makeSharedMemory(): WebAssembly.Memory {
-  // ABI default: 16 pages (1 MiB) initial. Contracts may import less, but
-  // must not require more for instantiation.
-  return new WebAssembly.Memory({ initial: 16, maximum: 4096, shared: true });
-}
-
 // -- Scaffold flat exports (keyed by bare name) ------------------------
 
 function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unknown> {
@@ -180,11 +174,7 @@ interface EntryInfo {
   layerKey: string;
 }
 
-function resolveEntry(
-  modules: CompiledModules,
-  exportsByKey: ReadonlyMap<string, Record<string, unknown>>,
-  mode: string,
-): EntryInfo {
+function lookupEntryRef(modules: CompiledModules, mode: string): TargetRef {
   const ref: TargetRef | undefined = modules.base.imports.get(mode);
   if (!ref) {
     throw new Error(`modules.base.imports has no entry for mode ${JSON.stringify(mode)}`);
@@ -194,6 +184,15 @@ function resolveEntry(
       `modules.base.imports[${JSON.stringify(mode)}]: target cannot be "base"`,
     );
   }
+  return ref;
+}
+
+function resolveEntry(
+  modules: CompiledModules,
+  exportsByKey: ReadonlyMap<string, Record<string, unknown>>,
+  mode: string,
+): EntryInfo {
+  const ref = lookupEntryRef(modules, mode);
   const exports = exportsByKey.get(ref.layerKey);
   if (!exports) {
     throw new Error(
@@ -221,12 +220,12 @@ function setCtxFromEntry(ctx: InstanceCtx, entry: EntryInfo, memory: WebAssembly
 export class InProcessMockTransport implements WasmTransport {
   async run(modules: CompiledModules, env: ContractEnv): Promise<void> {
     const ctx = makeEmptyCtx();
-    const memory = makeSharedMemory();
     const bridge = makeRunBridge(env);
     const scaffoldFlat = flatRunExports(ctx, bridge);
-    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entryRef = lookupEntryRef(modules, 'run');
+    const { exportsByKey, entryMemory } = await loadModules(modules, scaffoldFlat, entryRef);
     const entry = resolveEntry(modules, exportsByKey, 'run');
-    setCtxFromEntry(ctx, entry, memory);
+    setCtxFromEntry(ctx, entry, entryMemory);
     const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
       throw new Error(
@@ -270,12 +269,12 @@ export class InProcessMockTransport implements WasmTransport {
     host: WalkerHost,
   ): Promise<void> {
     const ctx = makeEmptyCtx();
-    const memory = makeSharedMemory();
     const bridge = makeWalkBridge(host);
     const scaffoldFlat = flatWalkExports(ctx, bridge);
-    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entryRef = lookupEntryRef(modules, mode);
+    const { exportsByKey, entryMemory } = await loadModules(modules, scaffoldFlat, entryRef);
     const entry = resolveEntry(modules, exportsByKey, mode);
-    setCtxFromEntry(ctx, entry, memory);
+    setCtxFromEntry(ctx, entry, entryMemory);
     const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
       throw new Error(
@@ -294,12 +293,12 @@ export class InProcessMockTransport implements WasmTransport {
     host: BuilderHost,
   ): Promise<Uint8Array> {
     const ctx = makeEmptyCtx();
-    const memory = makeSharedMemory();
     const bridge = makeBuildBridge(host);
     const scaffoldFlat = flatBuildExports(ctx, bridge);
-    const { exportsByKey } = await loadModules(modules, scaffoldFlat, memory);
+    const entryRef = lookupEntryRef(modules, mode);
+    const { exportsByKey, entryMemory } = await loadModules(modules, scaffoldFlat, entryRef);
     const entry = resolveEntry(modules, exportsByKey, mode);
-    setCtxFromEntry(ctx, entry, memory);
+    setCtxFromEntry(ctx, entry, entryMemory);
     const fn = entry.exports[entry.exportName];
     if (typeof fn !== 'function') {
       throw new Error(

@@ -29,11 +29,15 @@ function modulesRecord(spec: unknown): Output {
 /** Build a minimal `modules` spec for a single-module contract. */
 function singleModuleSpec(hashHex: string, mode: string, entry: string): unknown {
   return {
-    base: { version: 20250510, imports: { [mode]: `main:${entry}` } },
+    base: {
+      version: 20250510,
+      imports: { [mode]: `main:${entry}` },
+      memories: { heap: { initial: 16, maximum: 4096, shared: true } },
+    },
     layers: {
       main: {
         wasmHash: hashHex,
-        imports: { 'scaffold_env.*': 'base:*' },
+        imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
       },
     },
   };
