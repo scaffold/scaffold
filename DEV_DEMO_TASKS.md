@@ -97,41 +97,41 @@ Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wa
 
 The dev-demo tab UI. Can be built against a stubbed compiler (returns hard-coded WASM) so that work proceeds independently of the runtime.
 
-### B1. Routing & shell
-- [ ] Extend `Route` union in `demo/src/App.tsx` with `"dev-demo"`. Update `parseHash`, `buildHash`, and the route switch.
-- [ ] Add a tab/button to the existing toolbar to navigate to the new tab. Mirror the chess link pattern (`demo/src/App.tsx:131-148`).
-- [ ] New file: `demo/src/dev-demo/DevDemoApp.tsx` — top-level component holding language tabs.
+### B1. Routing & shell ✅
+- [x] Extend `Route` union in `demo/src/App.tsx` with `"dev-demo"`. Update `parseHash`, `buildHash`, and the route switch.
+- [x] Add a tab/button to the existing toolbar to navigate to the new tab. Replaced the one-off route buttons with a shared 3-button segmented control in [`demo/src/dev-demo/DemoNav.tsx`](demo/src/dev-demo/DemoNav.tsx), rendered by all three routes.
+- [x] New file: [`demo/src/dev-demo/DevDemoApp.tsx`](demo/src/dev-demo/DevDemoApp.tsx) — top-level component holding language tabs.
 
-### B2. Language tab strip
-- [ ] `demo/src/dev-demo/LanguageTabs.tsx`: top-level tabs for the 10 languages. Selected language tracked in state and reflected in URL hash (`#dev-demo?lang=assemblyscript`).
-- [ ] (Stretch / phase 2) Inner sub-tabs for "examples" within a language. Out of scope for v1; leave the data shape extensible.
+### B2. Language tab strip ✅
+- [x] [`demo/src/dev-demo/LanguageTabs.tsx`](demo/src/dev-demo/LanguageTabs.tsx): top-level tabs for the 10 languages. Selected language tracked in state and reflected in URL hash (`#dev-demo?lang=assemblyscript`).
+- [ ] (Stretch / phase 2) Inner sub-tabs for "examples" within a language. Out of scope for v1; `Example` data shape under [`demo/src/dev-demo/examples/index.ts`](demo/src/dev-demo/examples/index.ts) leaves room to extend.
 
-### B3. Per-language panel layout
-- [ ] `demo/src/dev-demo/LanguagePanel.tsx`: stacked layout, top-to-bottom:
+### B3. Per-language panel layout ✅
+- [x] [`demo/src/dev-demo/LanguagePanel.tsx`](demo/src/dev-demo/LanguagePanel.tsx): stacked layout, top-to-bottom:
   1. Read-only Monaco editor showing TS `new Scaffold({...})` snippet.
   2. **Editable** Monaco editor with the language's source.
   3. Read-only Monaco editor showing TS `scaffold.fetch({ contract: <compiler-hash>, params: { files, options }, onClaim })` with a Run button overlaid (top-right corner).
-  4. Hash output line (`> 0x…`) — clicking the hash opens the explorer modal at that block (see Workstream D).
+  4. Hash output line (`> 0x…`) — clicking the hash logs to the event log today; opens the explorer modal pre-focused once Workstream D1 lands.
   5. Editable Monaco editor showing TS `scaffold.fetch({ contract: <hash from above>, params, onResult })` with a Run button.
   6. Plain-text output panel (`> Hello World`).
-- [ ] Steps 3 and 5 should reflect live state — when the compile completes, step 5's `contract:` field auto-populates with the resulting block hash; until then it shows a placeholder.
-- [ ] Use sensible default examples per language (B6).
+- [x] Steps 3 and 5 reflect live state — section 3's snippet re-renders as the source edits, and section 5's `contract:` field auto-populates with the compiled hash unless the user has manually edited the snippet.
+- [x] Sensible default examples per language (see B6).
 
-### B4. Monaco extensions
-- [ ] Generalise `demo/src/YamlEditorField.tsx` into `demo/src/CodeEditorField.tsx` accepting `language` prop. Keep YAML wiring intact for the existing creation modal.
-- [ ] Register language IDs Monaco doesn't ship by default: `zig`, `assemblyscript`, `go` (already shipped), `rust` (already shipped). Use `monaco-editor`'s `languages.register` + `setMonarchTokensProvider` for those without bundled grammars.
+### B4. Monaco extensions ✅
+- [x] Generalised the Monaco worker setup into [`demo/src/dev-demo/monacoSetup.ts`](demo/src/dev-demo/monacoSetup.ts) (shared side-effect module). New [`demo/src/dev-demo/CodeEditorField.tsx`](demo/src/dev-demo/CodeEditorField.tsx) accepts a `language` prop; the existing `YamlEditorField` keeps its YAML schema wiring and re-imports the shared setup.
+- [x] Registered Monarch grammars for `zig` and `assemblyscript` in [`demo/src/dev-demo/languageGrammars.ts`](demo/src/dev-demo/languageGrammars.ts). The remaining 8 languages (`typescript`, `javascript`, `go`, `python`, `rust`, `c`, `cpp`, `sql`) ship with Monaco's basic-languages bundle.
 - [ ] (Stretch) LSP integration. Out of scope for v1.
 
-### B5. Run buttons & state machine
-- [ ] Each "Run" button has states: `idle | compiling | done | error`. Show spinner + disable while running. On error, show stderr inline (compiler stderr from `asc.compileString` is text).
-- [ ] Per-tab state lives in component-local React state for v1. No persistence.
+### B5. Run buttons & state machine ✅
+- [x] [`demo/src/dev-demo/RunButton.tsx`](demo/src/dev-demo/RunButton.tsx) has the `idle | compiling | done | error` states with disabled-while-running and inline error message rendering. The first Run drives a compile state machine; the second drives a call state machine, both per-language.
+- [x] Per-tab state lives in component-local React state; `LanguagePanel` is keyed by `lang` so switching tabs resets cleanly. No persistence in v1.
 
-### B6. Starter examples
-- [ ] One example per language defined as a TS constant: source + expected fetch params + expected output. Co-located in `demo/src/dev-demo/examples/`.
-- [ ] AssemblyScript example matches the brief: `run(name) -> "Hello " + name`.
+### B6. Starter examples ✅
+- [x] One example per language defined as a TS constant under [`demo/src/dev-demo/examples/`](demo/src/dev-demo/examples/) with `source`, `fetchParams`, and `expectedOutput` fields. Registered via [`examples/index.ts`](demo/src/dev-demo/examples/index.ts).
+- [x] AssemblyScript example matches the brief: `run()` writes `"Hello " + scaffold.getParams()`.
 
-### B7. Fixture mode (unblocks UI work from A)
-- [ ] Behind a `?fixture=1` URL flag, the Run button skips network compilation and uses pre-baked WASM fixtures stored in `demo/src/dev-demo/fixtures/` so UI work can proceed before A lands. **Not** a JS-contract shortcut — the WASM still runs through whatever runtime exists at the time (worker pool when ready, a tiny `WebAssembly.instantiate`-and-call shim before that). The fixtures are real `.wasm` files, just hand-built.
+### B7. Fixture mode (unblocks UI work from A) ✅
+- [x] [`demo/src/dev-demo/fixtureMode.ts`](demo/src/dev-demo/fixtureMode.ts) reads the `?fixture=1` URL flag. In v1 this is informational only -- because no remote compiler contracts exist yet, [`demo/src/dev-demo/compilerHashes.ts`](demo/src/dev-demo/compilerHashes.ts) always publishes the bundled [`demo/src/dev-demo/fixtures/echo.wasm`](demo/src/dev-demo/fixtures/echo.wasm) (copied from `tests/fixtures/wasm/echo.wasm`) as a contract block on the route's Scaffold and uses its hash for every language. When live compiler contracts land in Workstream C, the flag will branch the demo between live and fixture paths; until then the flag is a no-op signal logged at boot.
 
 ---
 
