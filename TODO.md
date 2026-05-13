@@ -275,6 +275,14 @@ Then the shim itself, in chunks:
 - **Differential testing against wasmtime.** For each applicable test program, also run via wasmtime locally, diff output.
 - **AssemblyScript compiler end-to-end.** Compile a one-liner via `asc` running through the shim; assert output matches a locally-run reference.
 
+### WASI shim — gaps surfaced during Wave B3 setup
+
+Land before snapshot tests in Phase E:
+
+- **`wasi_setup` absent → ContractRejection.** `setup.read` calls `env.contractMetadata({contract = self, params = "wasi_setup"})`; the host throws `ContractRejection` if the record is absent, and the shim cannot catch it from inside wasm. The design says "absent → use defaults," so either (a) `WasmHostBridge.contractMetadata` should return an empty body for missing keys, or (b) every contract author must publish at least an empty `{}` `wasi_setup` record. Today the shim handles the empty-body case correctly (returns defaults); only true absence is the gap.
+- **`OutputLeaf` alignment in `paths.zig`.** The struct has u64 fields that bump its alignment past the natural alignment of `vfs.Node` on wasm32; Zig 0.16's `@fieldParentPtr` therefore rejects the recovery without an explicit `@alignCast`. Wave B3 added the cast at the three call sites; the comment in `OutputLeaf` (which speaks of an 8-byte assumption) should be revisited and either the struct re-laid-out to keep alignment ≤ Node's, or the cast pattern adopted as the standard recovery shape across all sibling structs (RecordAccumulator etc. happen to dodge it because their u64 fields appear after natural-aligned fields, but the asymmetry is fragile).
+- **`/out/debug` routing still buffer-only.** `paths.zig` flagged this in its module header; setup wires preopens through but does not change the routing. Phase D's TS setup helper should add a `scaffold_env.debug(ptr, len)` import that `paths.appendDebug` forwards to.
+
 ## Application Layer
 
 These sit on top of the core protocol and can be specified later.

@@ -12,4 +12,6 @@ comptime {
     _ = @import("vfs/devfs.zig");
     _ = @import("vfs/input_node.zig");
     _ = @import("vfs/memfs.zig");
+    _ = @import("scaffold/paths_codec.zig");
+    _ = @import("scaffold/setup.zig");
 }

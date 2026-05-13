@@ -27,6 +27,8 @@ const args_env = @import("abi/args_env.zig");
 const unsupported = @import("abi/unsupported.zig");
 const state = @import("state.zig");
 const env = @import("scaffold/env.zig");
+const paths = @import("scaffold/paths.zig");
+const setup = @import("scaffold/setup.zig");
 
 // -- scaffold_env imports --------------------------------------------
 //
@@ -106,15 +108,50 @@ const shim_allocator: state.Allocator = .{ .ctx = null, .alloc = shimAllocFn };
 
 export fn run() void {
     reset_bump();
-    // TODO: wasi_setup parse via setup.zig (Phase B Wave 2) — pass parsed
-    // argv/env/cwd/preopens here instead of relying on `InitArgs` defaults.
+    paths.reset();
+
+    // Read scaffold-side scalars before any allocator-bumping work so the
+    // bytes we hand to `state.init` are stable. `setup.read` bumps the
+    // arena while encoding the verifier and parsing JSON, but only after
+    // we've snapshotted the hash + params slice here. The `_in` suffix
+    // sidesteps shadowing the `scaffold_env.contract_hash` extern above.
+    const contract_hash_in = env.contractHash();
+    const params_in = env.params();
+    const timestamp_ms_in = env.timestamp();
+
+    const parsed = setup.read(shim_allocator, contract_hash_in) catch |err|
+        rejectWith("WASI shim setup failed", err);
+
     state.init(shim_allocator, .{
-        .timestamp_ms = env.timestamp(),
-        .contract_hash = env.contractHash(),
-        .params = env.params(),
+        .timestamp_ms = timestamp_ms_in,
+        .contract_hash = contract_hash_in,
+        .params = params_in,
+        .argv = parsed.argv,
+        .env = parsed.env,
+        .cwd = parsed.cwd,
+        .preopens = parsed.preopens,
     });
+
+    setup.populateFdTable(parsed, shim_allocator) catch |err|
+        rejectWith("WASI shim fd table init failed", err);
+
     _start();
-    // `proc_exit(0)` and a normal return both land here -- nothing to do.
+
+    // Auto-close any FDs the program left open. Per the design:
+    // "If the program exits with an open FD, the shim closes it
+    // automatically before returning to scaffold."
+    setup.autoCloseAll();
+    // `proc_exit(0)` and a normal return both land here -- nothing else to do.
+}
+
+/// Format `<prefix>: <errName>` into a small fixed buffer and reject. Lives
+/// here (rather than in scaffold/env.zig) so the buffer is on the run-frame
+/// stack -- no static state to confuse re-entry semantics.
+fn rejectWith(prefix: []const u8, err: anyerror) noreturn {
+    var buf: [96]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, "{s}: {s}", .{ prefix, @errorName(err) }) catch
+        unreachable;
+    env.reject(msg);
 }
 
 // -- WASI snapshot preview 1 exports ---------------------------------
