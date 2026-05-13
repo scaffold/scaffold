@@ -207,6 +207,104 @@ pub fn makeFile(arena: *MemfsArena, name: []const u8, on_close: ?OnClose) ?*vfs.
     return &file.node;
 }
 
+/// True if `node` is one of memfs's directory nodes (i.e. lives under
+/// `/scratch`). Used by abi/path.zig to gate mutating calls -- only memfs
+/// dirs accept create/remove/rename.
+pub fn isMemfsDir(node: *vfs.Node) bool {
+    return node.vtable == &MemfsDir.vtable;
+}
+
+/// True if `node` is a memfs file. Used by `truncate` to silently no-op on
+/// non-memfs targets (input nodes are read-only; streams have no size).
+pub fn isMemfsFile(node: *vfs.Node) bool {
+    return node.vtable == &MemfsFile.vtable;
+}
+
+/// Borrow the backing arena from a memfs directory. Used by abi/path.zig's
+/// CREAT branch so it can `makeFile`/`makeDir` against the same arena the
+/// surrounding tree is using. Returns null for non-memfs nodes.
+pub fn arenaOf(node: *vfs.Node) ?*MemfsArena {
+    if (!isMemfsDir(node)) return null;
+    const dir: *MemfsDir = @fieldParentPtr("node", node);
+    return dir.arena;
+}
+
+/// Truncate a memfs file to length 0. Returns true on success, false if
+/// `node` isn't a memfs file (in which case the caller treats it as a
+/// silent no-op per the design). The capacity is preserved -- a subsequent
+/// write reuses the buffer instead of forcing an arena bump.
+pub fn truncate(node: *vfs.Node) bool {
+    if (!isMemfsFile(node)) return false;
+    const file: *MemfsFile = @fieldParentPtr("node", node);
+    file.len = 0;
+    return true;
+}
+
+pub const RemoveKind = enum { file, directory };
+
+/// Remove `name` from `parent`. The kind discriminator enforces the WASI
+/// distinction between `path_remove_directory` and `path_unlink_file`:
+/// removing a file with `kind = .directory` returns NotADirectory and
+/// vice-versa. Returns NotEmpty when removing a non-empty directory.
+pub fn removeChild(parent: *vfs.Node, name: []const u8, kind: RemoveKind) vfs.VfsError!void {
+    if (!isMemfsDir(parent)) return vfs.VfsError.ReadOnly;
+    const dir: *MemfsDir = @fieldParentPtr("node", parent);
+    var i: usize = 0;
+    while (i < dir.len) : (i += 1) {
+        if (!std.mem.eql(u8, dir.children[i].name, name)) continue;
+        const child = dir.children[i].node;
+        const child_is_dir = isMemfsDir(child);
+        switch (kind) {
+            .file => if (child_is_dir) return vfs.VfsError.IsADirectory,
+            .directory => if (!child_is_dir) return vfs.VfsError.NotADirectory,
+        }
+        if (child_is_dir) {
+            const child_dir: *MemfsDir = @fieldParentPtr("node", child);
+            if (child_dir.len != 0) return vfs.VfsError.NotEmpty;
+        }
+        // Compact the children slice. The arena keeps the dropped entry's
+        // bytes around until run-end; that's fine -- memfs is per-run.
+        var j: usize = i;
+        while (j + 1 < dir.len) : (j += 1) {
+            dir.children[j] = dir.children[j + 1];
+        }
+        dir.len -= 1;
+        return;
+    }
+    return vfs.VfsError.NotFound;
+}
+
+/// Move (`old_parent`, `old_name`) to (`new_parent`, `new_name`). Both
+/// parents must be memfs dirs. POSIX `rename(2)` is a single atomic
+/// operation that overwrites a target of the same kind -- but in our
+/// single-threaded shim we can't tell programs apart on atomicity, so we
+/// keep the simpler "old must exist, new must not" rule and surface
+/// AlreadyExists on collision.
+pub fn rename(
+    old_parent: *vfs.Node,
+    old_name: []const u8,
+    new_parent: *vfs.Node,
+    new_name: []const u8,
+) vfs.VfsError!void {
+    if (!isMemfsDir(old_parent) or !isMemfsDir(new_parent)) return vfs.VfsError.ReadOnly;
+    const old_dir: *MemfsDir = @fieldParentPtr("node", old_parent);
+    var i: usize = 0;
+    while (i < old_dir.len) : (i += 1) {
+        if (!std.mem.eql(u8, old_dir.children[i].name, old_name)) continue;
+        const moving = old_dir.children[i].node;
+        if (!addChild(new_parent, new_name, moving)) return vfs.VfsError.AlreadyExists;
+        // Compact source after a successful add so a failure leaves the
+        // tree intact.
+        var j: usize = i;
+        while (j + 1 < old_dir.len) : (j += 1) {
+            old_dir.children[j] = old_dir.children[j + 1];
+        }
+        old_dir.len -= 1;
+        return;
+    }
+    return vfs.VfsError.NotFound;
+}
+
 /// Add `child` (already a vfs.Node from `makeDir`/`makeFile`) to `parent`.
 /// Returns false on AlreadyExists or arena exhaustion. Higher layers (path
 /// open/create) own the create-vs-open semantics; memfs just tracks names.

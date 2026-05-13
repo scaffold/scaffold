@@ -24,6 +24,8 @@ const proc = @import("abi/proc.zig");
 const clock = @import("abi/clock.zig");
 const random_abi = @import("abi/random.zig");
 const args_env = @import("abi/args_env.zig");
+const fd_mod = @import("abi/fd.zig");
+const path_mod = @import("abi/path.zig");
 const unsupported = @import("abi/unsupported.zig");
 const state = @import("state.zig");
 const env = @import("scaffold/env.zig");
@@ -206,32 +208,32 @@ export fn environ_sizes_get(out_count: i32, out_buf_size: i32) i32 {
 // here so the program's `wasi_snapshot_preview1.*` wildcard import resolves.
 // Implementations land in subsequent batches.
 
-export fn fd_write(_: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_write(fd: i32, iovs_ptr: i32, iovs_len: i32, out_nwritten: i32) i32 {
+    return fd_mod.fd_write(fd, iovs_ptr, iovs_len, out_nwritten);
 }
-export fn fd_read(_: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_read(fd: i32, iovs_ptr: i32, iovs_len: i32, out_nread: i32) i32 {
+    return fd_mod.fd_read(fd, iovs_ptr, iovs_len, out_nread);
 }
-export fn fd_close(_: i32) i32 {
-    return unsupported.notsup();
+export fn fd_close(fd: i32) i32 {
+    return fd_mod.fd_close(fd);
 }
-export fn fd_seek(_: i32, _: i64, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_seek(fd: i32, offset: i64, whence: i32, out_new_offset: i32) i32 {
+    return fd_mod.fd_seek(fd, offset, whence, out_new_offset);
 }
-export fn fd_tell(_: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_tell(fd: i32, out_offset: i32) i32 {
+    return fd_mod.fd_tell(fd, out_offset);
 }
-export fn fd_fdstat_get(_: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_fdstat_get(fd: i32, out_stat: i32) i32 {
+    return fd_mod.fd_fdstat_get(fd, out_stat);
 }
-export fn fd_fdstat_set_flags(_: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_fdstat_set_flags(fd: i32, fdflags: i32) i32 {
+    return fd_mod.fd_fdstat_set_flags(fd, fdflags);
 }
 export fn fd_fdstat_set_rights(_: i32, _: i64, _: i64) i32 {
     return unsupported.notsup();
 }
-export fn fd_filestat_get(_: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_filestat_get(fd: i32, out_stat: i32) i32 {
+    return fd_mod.fd_filestat_get(fd, out_stat);
 }
 export fn fd_filestat_set_size(_: i32, _: i64) i32 {
     return unsupported.notsup();
@@ -239,8 +241,8 @@ export fn fd_filestat_set_size(_: i32, _: i64) i32 {
 export fn fd_filestat_set_times(_: i32, _: i64, _: i64, _: i32) i32 {
     return unsupported.notsup();
 }
-export fn fd_readdir(_: i32, _: i32, _: i32, _: i64, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_readdir(fd: i32, buf: i32, buf_len: i32, cookie: i64, out_bytes_used: i32) i32 {
+    return fd_mod.fd_readdir(fd, buf, buf_len, cookie, out_bytes_used);
 }
 export fn fd_renumber(_: i32, _: i32) i32 {
     return unsupported.notsup();
@@ -257,11 +259,11 @@ export fn fd_advise(_: i32, _: i64, _: i64, _: i32) i32 {
 export fn fd_allocate(_: i32, _: i64, _: i64) i32 {
     return unsupported.notsup();
 }
-export fn fd_prestat_get(_: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_prestat_get(fd: i32, out_prestat: i32) i32 {
+    return fd_mod.fd_prestat_get(fd, out_prestat);
 }
-export fn fd_prestat_dir_name(_: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn fd_prestat_dir_name(fd: i32, buf: i32, buf_len: i32) i32 {
+    return fd_mod.fd_prestat_dir_name(fd, buf, buf_len);
 }
 export fn fd_pread(_: i32, _: i32, _: i32, _: i64, _: i32) i32 {
     return unsupported.notsup();
@@ -270,35 +272,106 @@ export fn fd_pwrite(_: i32, _: i32, _: i32, _: i64, _: i32) i32 {
     return unsupported.notsup();
 }
 
-export fn path_open(_: i32, _: i32, _: i32, _: i32, _: i32, _: i64, _: i64, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_open(
+    dirfd: i32,
+    dirflags: i32,
+    path_ptr: i32,
+    path_len: i32,
+    oflags: i32,
+    rights_base: i64,
+    rights_inheriting: i64,
+    fdflags: i32,
+    out_fd: i32,
+) i32 {
+    return path_mod.path_open(
+        dirfd,
+        dirflags,
+        path_ptr,
+        path_len,
+        oflags,
+        rights_base,
+        rights_inheriting,
+        fdflags,
+        out_fd,
+    );
 }
-export fn path_filestat_get(_: i32, _: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_filestat_get(dirfd: i32, dirflags: i32, path_ptr: i32, path_len: i32, out_stat: i32) i32 {
+    return path_mod.path_filestat_get(dirfd, dirflags, path_ptr, path_len, out_stat);
 }
-export fn path_filestat_set_times(_: i32, _: i32, _: i32, _: i32, _: i64, _: i64, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_filestat_set_times(
+    dirfd: i32,
+    dirflags: i32,
+    path_ptr: i32,
+    path_len: i32,
+    atim: i64,
+    mtim: i64,
+    fst_flags: i32,
+) i32 {
+    return path_mod.path_filestat_set_times(dirfd, dirflags, path_ptr, path_len, atim, mtim, fst_flags);
 }
-export fn path_create_directory(_: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_create_directory(dirfd: i32, path_ptr: i32, path_len: i32) i32 {
+    return path_mod.path_create_directory(dirfd, path_ptr, path_len);
 }
-export fn path_remove_directory(_: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_remove_directory(dirfd: i32, path_ptr: i32, path_len: i32) i32 {
+    return path_mod.path_remove_directory(dirfd, path_ptr, path_len);
 }
-export fn path_unlink_file(_: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_unlink_file(dirfd: i32, path_ptr: i32, path_len: i32) i32 {
+    return path_mod.path_unlink_file(dirfd, path_ptr, path_len);
 }
-export fn path_rename(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_rename(
+    old_dirfd: i32,
+    old_path_ptr: i32,
+    old_path_len: i32,
+    new_dirfd: i32,
+    new_path_ptr: i32,
+    new_path_len: i32,
+) i32 {
+    return path_mod.path_rename(
+        old_dirfd,
+        old_path_ptr,
+        old_path_len,
+        new_dirfd,
+        new_path_ptr,
+        new_path_len,
+    );
 }
-export fn path_symlink(_: i32, _: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_symlink(
+    old_path_ptr: i32,
+    old_path_len: i32,
+    dirfd: i32,
+    new_path_ptr: i32,
+    new_path_len: i32,
+) i32 {
+    return path_mod.path_symlink(old_path_ptr, old_path_len, dirfd, new_path_ptr, new_path_len);
 }
-export fn path_readlink(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_readlink(
+    dirfd: i32,
+    path_ptr: i32,
+    path_len: i32,
+    buf_ptr: i32,
+    buf_len: i32,
+    out_used: i32,
+) i32 {
+    return path_mod.path_readlink(dirfd, path_ptr, path_len, buf_ptr, buf_len, out_used);
 }
-export fn path_link(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32) i32 {
-    return unsupported.notsup();
+export fn path_link(
+    old_dirfd: i32,
+    old_dirflags: i32,
+    old_path_ptr: i32,
+    old_path_len: i32,
+    new_dirfd: i32,
+    new_path_ptr: i32,
+    new_path_len: i32,
+) i32 {
+    return path_mod.path_link(
+        old_dirfd,
+        old_dirflags,
+        old_path_ptr,
+        old_path_len,
+        new_dirfd,
+        new_path_ptr,
+        new_path_len,
+    );
 }
 
 export fn poll_oneoff(_: i32, _: i32, _: i32, _: i32) i32 {

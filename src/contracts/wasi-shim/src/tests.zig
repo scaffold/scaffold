@@ -14,4 +14,6 @@ comptime {
     _ = @import("vfs/memfs.zig");
     _ = @import("scaffold/paths_codec.zig");
     _ = @import("scaffold/setup.zig");
+    _ = @import("abi/fd.zig");
+    _ = @import("abi/path.zig");
 }
