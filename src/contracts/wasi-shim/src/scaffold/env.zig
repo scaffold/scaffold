@@ -8,6 +8,12 @@
 //
 // Slice lifetime: every returned slice is only valid until the next `alloc`
 // call. Copy out anything you need to keep.
+//
+// The pointer-to-i32 conversions for outbound externs use `@bitCast` rather
+// than `@intCast` so a shim arena that grows past 2 GiB doesn't trap on the
+// cast itself; the wire bytes are identical for in-range pointers.
+
+const std = @import("std");
 
 const main = @import("../main.zig");
 
@@ -26,6 +32,10 @@ pub fn params() []const u8 {
 
 pub fn contractHash() [32]u8 {
     const slice = unpack(main.contract_hash());
+    // Host contract: scaffold_env.contract_hash always returns 32 bytes.
+    // Assert in safe builds; in ReleaseSmall the @memcpy below would trap on
+    // a short slice anyway, but the assert documents the invariant.
+    std.debug.assert(slice.len == 32);
     var out: [32]u8 = undefined;
     @memcpy(&out, slice[0..32]);
     return out;
@@ -34,7 +44,7 @@ pub fn contractHash() [32]u8 {
 /// Slice valid until the next `alloc` call.
 pub fn contractMetadata(verifier: []const u8) []const u8 {
     return unpack(main.contract_metadata(
-        @intCast(@intFromPtr(verifier.ptr)),
+        ptrToI32(verifier.ptr),
         @intCast(verifier.len),
     ));
 }
@@ -42,7 +52,7 @@ pub fn contractMetadata(verifier: []const u8) []const u8 {
 /// Slice valid until the next `alloc` call.
 pub fn requestBody(verifier: []const u8) []const u8 {
     return unpack(main.request_body(
-        @intCast(@intFromPtr(verifier.ptr)),
+        ptrToI32(verifier.ptr),
         @intCast(verifier.len),
     ));
 }
@@ -50,26 +60,34 @@ pub fn requestBody(verifier: []const u8) []const u8 {
 /// Slice valid until the next `alloc` call.
 pub fn fetch(verifier: []const u8, key: []const u8) []const u8 {
     return unpack(main.fetch(
-        @intCast(@intFromPtr(verifier.ptr)),
+        ptrToI32(verifier.ptr),
         @intCast(verifier.len),
-        @intCast(@intFromPtr(key.ptr)),
+        ptrToI32(key.ptr),
         @intCast(key.len),
     ));
 }
 
 pub fn emitOutput(bytes: []const u8) void {
     main.emit_output(
-        @intCast(@intFromPtr(bytes.ptr)),
+        ptrToI32(bytes.ptr),
         @intCast(bytes.len),
     );
 }
 
 pub fn reject(reason: []const u8) noreturn {
     main.reject(
-        @intCast(@intFromPtr(reason.ptr)),
+        ptrToI32(reason.ptr),
         @intCast(reason.len),
     );
     unreachable;
+}
+
+/// Convert a wasm32 pointer to the i32 the host extern signature wants.
+/// Uses `@bitCast` so pointers above 2 GiB survive the cast (the host
+/// reads the i32 sign-agnostically as the 32-bit address).
+fn ptrToI32(p: anytype) i32 {
+    const u: u32 = @intCast(@intFromPtr(p));
+    return @bitCast(u);
 }
 
 fn unpack(packed_val: i64) []const u8 {

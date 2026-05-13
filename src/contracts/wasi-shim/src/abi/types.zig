@@ -13,6 +13,9 @@
 // Errno numeric values follow WASI snapshot preview 1 (cross-checked against
 // `bjorn3/browser_wasi_shim/src/wasi_defs.ts`).
 
+const std = @import("std");
+const vfs = @import("../vfs/vfs.zig");
+
 pub const Errno = enum(u16) {
     SUCCESS = 0,
     @"2BIG" = 1,
@@ -202,7 +205,6 @@ pub const Filestat = extern struct {
 };
 
 comptime {
-    const std = @import("std");
     std.debug.assert(@sizeOf(Iovec) == 8);
     std.debug.assert(@sizeOf(Ciovec) == 8);
     std.debug.assert(@sizeOf(Fdstat) == 24);
@@ -211,9 +213,22 @@ comptime {
     std.debug.assert(@sizeOf(Oflags) == 2);
 }
 
-/// Translate a `vfs.zig` error into a WASI errno. Stub until the vfs error
-/// set lands; mapping is filled in alongside `vfs/vfs.zig`.
-pub fn errnoFromVfs(err: anytype) Errno {
-    _ = err;
-    return Errno.NOTSUP;
+/// Translate a `vfs.zig` error into a WASI errno. The mapping is exhaustive
+/// over `vfs.VfsError`; adding a new error variant must add an arm here.
+pub fn errnoFromVfs(err: vfs.VfsError) Errno {
+    return switch (err) {
+        vfs.VfsError.NotFound => Errno.NOENT,
+        vfs.VfsError.NotADirectory => Errno.NOTDIR,
+        vfs.VfsError.IsADirectory => Errno.ISDIR,
+        vfs.VfsError.AlreadyExists => Errno.EXIST,
+        vfs.VfsError.NotEmpty => Errno.NOTEMPTY,
+        vfs.VfsError.NotCapable => Errno.NOTCAPABLE,
+        vfs.VfsError.NotSupported => Errno.NOTSUP,
+        vfs.VfsError.NameTooLong => Errno.NAMETOOLONG,
+        vfs.VfsError.InvalidArgument => Errno.INVAL,
+        vfs.VfsError.BadFd => Errno.BADF,
+        vfs.VfsError.ReadOnly => Errno.ROFS,
+        vfs.VfsError.EndOfFile => Errno.IO,
+        vfs.VfsError.OutOfSpace => Errno.NOSPC,
+    };
 }

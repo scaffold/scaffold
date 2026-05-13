@@ -75,8 +75,9 @@ var bump_ptr: u32 = 1024 * 1024; // start above any data section
 export fn alloc(size: i32) i32 {
     // 16-byte alignment is plenty for everything we stage (verifier bytes,
     // request bodies, output records). Wire-format codecs assume LE u32/u64
-    // alignment at worst.
-    const aligned = (bump_ptr + 15) & ~@as(u32, 15);
+    // alignment at worst. `0xF` as a low-4-bits mask reads more clearly than
+    // bare `15`.
+    const aligned = (bump_ptr + 0xF) & ~@as(u32, 0xF);
     bump_ptr = aligned + @as(u32, @intCast(size));
     return @intCast(aligned);
 }
@@ -84,6 +85,17 @@ export fn alloc(size: i32) i32 {
 fn reset_bump() void {
     bump_ptr = 1024 * 1024;
 }
+
+/// Bump-allocator adapter for `state.init`. Always returns a slice of `size`
+/// bytes backed by the per-run bump arena; never null (run() owns the
+/// budget — if alloc trips memory bounds the wasm trap surfaces through
+/// `panic` like any other shim trap).
+fn shimAllocFn(_: ?*anyopaque, size: usize) []u8 {
+    const ptr: u32 = @intCast(alloc(@intCast(size)));
+    return @as([*]u8, @ptrFromInt(ptr))[0..size];
+}
+
+const shim_allocator: state.Allocator = .{ .ctx = null, .alloc = shimAllocFn };
 
 // -- run -------------------------------------------------------------
 //
@@ -96,7 +108,7 @@ export fn run() void {
     reset_bump();
     // TODO: wasi_setup parse via setup.zig (Phase B Wave 2) — pass parsed
     // argv/env/cwd/preopens here instead of relying on `InitArgs` defaults.
-    state.init(.{
+    state.init(shim_allocator, .{
         .timestamp_ms = env.timestamp(),
         .contract_hash = env.contractHash(),
         .params = env.params(),
@@ -115,7 +127,9 @@ export fn proc_exit(rval: i32) noreturn {
 }
 
 export fn proc_raise(sig: i32) i32 {
-    return proc.proc_raise(sig);
+    // `proc.proc_raise` is `noreturn`; the i32 return type matches the WASI
+    // ABI signature but is never actually produced.
+    proc.proc_raise(sig);
 }
 
 export fn sched_yield() i32 {
@@ -282,6 +296,20 @@ fn noLog(
 ) void {}
 
 pub fn panic(msg: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
-    reject(@intCast(@intFromPtr(msg.ptr)), @intCast(msg.len));
+    // Prefix matches `proc.zig`'s "WASI proc_exit:" / "WASI proc_raise:" so
+    // production traps surface with an unambiguous source.
+    const prefix = "WASI shim panic: ";
+    var buf: [256]u8 = undefined;
+    const room = buf.len - prefix.len;
+    const copied = @min(msg.len, room);
+    @memcpy(buf[0..prefix.len], prefix);
+    @memcpy(buf[prefix.len..][0..copied], msg[0..copied]);
+    const total = prefix.len + copied;
+
+    // `@bitCast` for the pointer keeps the cast bit-preserving so a high
+    // arena address survives; the length is small enough to round-trip via
+    // ordinary `@intCast`.
+    const ptr_u32: u32 = @intCast(@intFromPtr(&buf[0]));
+    reject(@bitCast(ptr_u32), @intCast(total));
     unreachable;
 }

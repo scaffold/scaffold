@@ -159,7 +159,7 @@ Writes to `/out/debug` are forwarded to `ctx.logger('wasi-shim').debug(...)`. Li
 
 ### `/dev/random` and `/dev/urandom`
 
-Reads return bytes from a single deterministic PRNG seeded by `H(contract_hash || timestamp_ms_le8 || params)`. The original draft said `H(block_hash || contract_hash)`, but `scaffold_env` doesn't expose `block_hash` and we don't want to expand the protocol surface for one feature; the invocation triple is already per-execution-deterministic (every verifier sees the same contract_hash, the same wire-format timestamp, and the same params). The stream is infinite — programs may read as much as they want. Reads from both paths consume the same stream (no separate state between them), and `random_get` WASI calls also consume from this stream. Order of consumption is deterministic because program execution is deterministic.
+Reads return bytes from a single deterministic PRNG seeded by `H(contract_hash || timestamp_ms_le8 || params)`. `scaffold_env` deliberately doesn't expose `block_hash` (we don't want to expand the protocol surface for one feature); the invocation triple is already per-execution-deterministic (every verifier sees the same contract_hash, the same wire-format timestamp, and the same params). The stream is infinite — programs may read as much as they want. Reads from both paths consume the same stream (no separate state between them), and `random_get` WASI calls also consume from this stream. Order of consumption is deterministic because program execution is deterministic.
 
 The construction: a counter-mode PRNG outputting `H(seed || counter_le8)` per 32-byte block, where `counter` is a u64 advanced once per emitted block. The shim tracks `(seed, position)` as part of its state.
 

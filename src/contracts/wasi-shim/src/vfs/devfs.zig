@@ -149,12 +149,32 @@ pub const dev_dir: *vfs.Node = &dev_dir_node;
 
 const testing = std.testing;
 
+// state.init now copies its borrowed slices into a caller-supplied bump
+// allocator. Keep a small file-scoped arena for these tests; reset before
+// each `initTestState` so re-entry doesn't accumulate.
+var test_arena_buf: [1024]u8 = undefined;
+var test_arena_pos: usize = 0;
+
+fn testAllocFn(_: ?*anyopaque, size: usize) []u8 {
+    const base = @intFromPtr(&test_arena_buf[0]) + test_arena_pos;
+    const aligned = std.mem.alignForward(usize, base, 8);
+    const start = aligned - @intFromPtr(&test_arena_buf[0]);
+    const end = start + size;
+    std.debug.assert(end <= test_arena_buf.len);
+    test_arena_pos = end;
+    return test_arena_buf[start..end];
+}
+
 fn initTestState() void {
-    state.init(.{
-        .timestamp_ms = 1_700_000_000_000,
-        .contract_hash = [_]u8{0x42} ** 32,
-        .params = "devfs-test",
-    });
+    test_arena_pos = 0;
+    state.init(
+        .{ .ctx = null, .alloc = testAllocFn },
+        .{
+            .timestamp_ms = 1_700_000_000_000,
+            .contract_hash = [_]u8{0x42} ** 32,
+            .params = "devfs-test",
+        },
+    );
 }
 
 test "/dev/null read returns 0, write returns src.len" {

@@ -21,6 +21,10 @@ pub const VfsError = error{
     BadFd,
     ReadOnly,
     EndOfFile,
+    /// Backing arena (memfs bump arena, etc.) ran out of space. Distinct
+    /// from `NotCapable` so the abi layer can map it to ENOSPC instead of
+    /// ENOTCAPABLE.
+    OutOfSpace,
 };
 
 /// Mirrors WASI snapshot preview 1 filetype numbering. Kept as an opaque
@@ -77,6 +81,10 @@ pub const FdEntry = struct {
 };
 
 pub const FdTable = struct {
+    /// Cap sized for wasi-libc workloads: typical CPython processes peak
+    /// around ~64 fds during stdlib walks; QuickJS opens an order of
+    /// magnitude fewer. 256 covers both with headroom and keeps the BSS
+    /// footprint small (256 × sizeof(?FdEntry) ≈ 16 KiB).
     pub const MAX_FDS: u32 = 256;
 
     entries: [MAX_FDS]?FdEntry,
@@ -98,6 +106,11 @@ pub const FdTable = struct {
         return self;
     }
 
+    /// Hot-path lookup. `null` on bad/unset fd; the abi layer translates
+    /// to `Errno.BADF`. Mutations (`free`) signal failure via a typed
+    /// return -- the asymmetry is deliberate: lookup is read-only and may
+    /// legitimately probe arbitrary fds, but every mutation is a programmer
+    /// or program error worth surfacing.
     pub fn get(self: *FdTable, fd: i32) ?*FdEntry {
         if (fd < 0) return null;
         const idx: u32 = @intCast(fd);
@@ -114,9 +127,12 @@ pub const FdTable = struct {
         return idx;
     }
 
-    pub fn free(self: *FdTable, fd: u32) void {
-        if (fd >= MAX_FDS) return;
-        if (self.entries[fd] == null) return;
+    /// Drop the slot for `fd`. Returns `BadFd` for out-of-range or
+    /// already-free fds so the abi layer can return `Errno.BADF` rather
+    /// than silently masking a double-close.
+    pub fn free(self: *FdTable, fd: u32) VfsError!void {
+        if (fd >= MAX_FDS) return VfsError.BadFd;
+        if (self.entries[fd] == null) return VfsError.BadFd;
         self.entries[fd] = null;
         self.free_list[self.free_count] = fd;
         self.free_count += 1;
@@ -271,11 +287,11 @@ test "FdTable allocates 0 first, then 1, LIFO on free" {
     try testing.expectEqual(@as(?u32, 1), table.alloc(entry));
     try testing.expectEqual(@as(?u32, 2), table.alloc(entry));
 
-    table.free(1);
+    try table.free(1);
     try testing.expectEqual(@as(?u32, 1), table.alloc(entry));
 
-    table.free(0);
-    table.free(2);
+    try table.free(0);
+    try table.free(2);
     // LIFO: last freed comes back first.
     try testing.expectEqual(@as(?u32, 2), table.alloc(entry));
     try testing.expectEqual(@as(?u32, 0), table.alloc(entry));
@@ -286,6 +302,35 @@ test "FdTable.get rejects out-of-range and unset slots" {
     try testing.expect(table.get(-1) == null);
     try testing.expect(table.get(0) == null);
     try testing.expect(table.get(@as(i32, @intCast(FdTable.MAX_FDS))) == null);
+}
+
+test "FdTable.free returns BadFd for out-of-range and double-free" {
+    var table = FdTable.init();
+    const stub_vtable: NodeVTable = .{
+        .stat = TestNode.statImpl,
+        .read = TestNode.readImpl,
+        .write = TestNode.writeImpl,
+        .close = TestNode.closeImpl,
+        .readdir = null,
+        .lookup = null,
+    };
+    var stub_node: Node = .{ .vtable = &stub_vtable };
+    const entry: FdEntry = .{
+        .node = &stub_node,
+        .offset = 0,
+        .rights_base = 0,
+        .rights_inheriting = 0,
+        .fdflags = 0,
+        .preopen_path = null,
+    };
+
+    try testing.expectError(VfsError.BadFd, table.free(0));
+    try testing.expectError(VfsError.BadFd, table.free(FdTable.MAX_FDS));
+    try testing.expectError(VfsError.BadFd, table.free(FdTable.MAX_FDS + 100));
+
+    _ = table.alloc(entry);
+    try table.free(0);
+    try testing.expectError(VfsError.BadFd, table.free(0));
 }
 
 test "resolve walks /a/b/c across an in-memory tree" {

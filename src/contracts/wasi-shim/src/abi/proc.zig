@@ -17,13 +17,14 @@ pub const EXIT_ZERO_REASON: []const u8 = "__SCAFFOLD_WASI_EXIT_ZERO__";
 pub fn proc_exit(rval: i32) noreturn {
     if (rval == 0) {
         env.reject(EXIT_ZERO_REASON);
+    } else {
+        var buf: [40]u8 = undefined;
+        const msg = std.fmt.bufPrint(&buf, "WASI proc_exit: {d}", .{rval}) catch unreachable;
+        env.reject(msg);
     }
-    var buf: [40]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, "WASI proc_exit: {d}", .{rval}) catch unreachable;
-    env.reject(msg);
 }
 
-pub fn proc_raise(sig: i32) i32 {
+pub fn proc_raise(sig: i32) noreturn {
     var buf: [40]u8 = undefined;
     const msg = std.fmt.bufPrint(&buf, "WASI proc_raise: {d}", .{sig}) catch unreachable;
     env.reject(msg);

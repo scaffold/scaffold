@@ -9,18 +9,25 @@ const abi = @import("../abi/types.zig");
 
 pub fn readSlice(src: u32, dst: []u8) void {
     main.read_bytes(
-        @intCast(src),
-        @intCast(@intFromPtr(dst.ptr)),
+        @bitCast(src),
+        ptrToI32(dst.ptr),
         @intCast(dst.len),
     );
 }
 
 pub fn writeSlice(dst: u32, src: []const u8) void {
     main.write_bytes(
-        @intCast(dst),
-        @intCast(@intFromPtr(src.ptr)),
+        @bitCast(dst),
+        ptrToI32(src.ptr),
         @intCast(src.len),
     );
+}
+
+/// Convert a wasm32 pointer to the i32 the host extern wants. `@bitCast`
+/// keeps pointers above 2 GiB intact instead of trapping at the cast.
+fn ptrToI32(p: anytype) i32 {
+    const u: u32 = @intCast(@intFromPtr(p));
+    return @bitCast(u);
 }
 
 pub fn readU32(src: u32) u32 {
@@ -47,12 +54,33 @@ pub fn writeU64(dst: u32, value: u64) void {
     writeSlice(dst, &buf);
 }
 
+/// Largest iovec table we'll bulk-read in one cross-memory hop. WASI
+/// `iovs_len` is u32 in principle, but wasi-libc fans out to 1024 iovs at
+/// the high end and most calls use 1-8. 1024 iovs × 8 bytes/iov = 8 KiB
+/// of stack staging, comfortable for any reasonable call stack.
+const IOVEC_BULK_BUFFER_BYTES: usize = 8192;
+
+/// Bulk-decode an iovec table from program memory. One `read_bytes` hop
+/// stages the whole table into a stack buffer; iovs are then unpacked
+/// in-shim. For tables larger than the staging buffer we fall through to
+/// chunked hops (still O(N/STAGE) hops, not O(N)).
 pub fn readIovecs(src: u32, out: []abi.Iovec) void {
-    for (out, 0..) |*iov, i| {
-        const base = src + @as(u32, @intCast(i * 8));
-        iov.* = .{
-            .buf = readU32(base),
-            .buf_len = readU32(base + 4),
-        };
+    var staging: [IOVEC_BULK_BUFFER_BYTES]u8 = undefined;
+    const max_iovs_per_hop = staging.len / 8;
+    var done: usize = 0;
+    while (done < out.len) {
+        const remaining = out.len - done;
+        const this_batch = @min(remaining, max_iovs_per_hop);
+        const bytes_this_hop = this_batch * 8;
+        readSlice(src + @as(u32, @intCast(done * 8)), staging[0..bytes_this_hop]);
+        var i: usize = 0;
+        while (i < this_batch) : (i += 1) {
+            const off = i * 8;
+            out[done + i] = .{
+                .buf = std.mem.readInt(u32, staging[off..][0..4], .little),
+                .buf_len = std.mem.readInt(u32, staging[off + 4 ..][0..4], .little),
+            };
+        }
+        done += this_batch;
     }
 }

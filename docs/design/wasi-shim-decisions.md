@@ -889,9 +889,9 @@ type + block timestamp.
 
 **Determinism mapping**: Counter-mode PRNG defined in wasi-shim.md
 `/dev/random and /dev/urandom`: `H(seed || counter)`, 32 bytes per
-counter step, where `seed = H(block_hash || contract_hash)` captured at
-`run()` startup. The PRNG state is shared with reads from `/dev/random`
-and `/dev/urandom`.
+counter step, where `seed = H(contract_hash || timestamp_ms_le8 || params)`
+captured at `run()` startup (see `src/contracts/wasi-shim/src/state.zig`).
+The PRNG state is shared with reads from `/dev/random` and `/dev/urandom`.
 
 **Decisions**:
 1. The PRNG hash function is `Hash.digest` (whatever scaffold uses; check

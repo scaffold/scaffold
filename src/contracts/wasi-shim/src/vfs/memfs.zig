@@ -152,7 +152,7 @@ const MemfsFile = struct {
         if (end > file.capacity) {
             const new_cap = growCapacity(file.capacity, end);
             const new_buf = file.arena.alloc(new_cap, 1) orelse
-                return vfs.VfsError.NotCapable;
+                return vfs.VfsError.OutOfSpace;
             @memcpy(new_buf[0..file.len], file.bytes[0..file.len]);
             file.bytes = new_buf;
             file.capacity = new_cap;
@@ -423,4 +423,23 @@ test "arena alloc returns null when exhausted" {
     var arena = MemfsArena.init(&buf);
     try testing.expect(arena.alloc(32, 1) != null);
     try testing.expect(arena.alloc(1024, 1) == null);
+}
+
+test "write past arena capacity surfaces OutOfSpace, not NotCapable" {
+    // Just enough room for the file struct + one tiny capacity bump,
+    // then fail on the next grow.
+    var buf: [128]u8 = undefined;
+    var arena = MemfsArena.init(&buf);
+
+    const file = makeFile(&arena, "f", null).?;
+    // First write triggers a grow to capacity 16; succeeds.
+    _ = try file.vtable.write(file, 0, "abc");
+    // A multi-KB write forces another grow that the 128-byte arena can't
+    // satisfy.
+    var big: [256]u8 = undefined;
+    @memset(&big, 'x');
+    try testing.expectError(
+        vfs.VfsError.OutOfSpace,
+        file.vtable.write(file, 3, &big),
+    );
 }
