@@ -49,6 +49,10 @@ function runHandlers(bridge: RunBridge): WasmHostHandlers {
     sign: ([pubkey]) => {
       bridge.sign(pubkey as Uint8Array);
     },
+    // /out/debug routing for the WASI shim. Diagnostic-only; never traps.
+    debug: ([message]) => {
+      bridge.debug(message as Uint8Array);
+    },
   };
 }
 

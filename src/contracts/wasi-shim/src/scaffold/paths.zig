@@ -38,16 +38,12 @@
 // for "open a key" matches "open a file" overwhelmingly more often than
 // "open a directory."
 //
-// `/out/debug` routing (TODO)
-// ---------------------------
-// The design routes `/out/debug` writes to `ctx.logger('wasi-shim').debug`.
-// The shim runs inside the WASM sandbox and has no `ctx.logger` import. For
-// the moment writes are appended to a fixed `debug_buffer` BSS slot via
-// `appendDebug`. The buffer is intentionally never read out (no
-// `scaffold_env.debug` import yet). Phase D's TS setup helper should add
-// such an import that this module routes through. Tracking via the
-// `debug_routing_is_buffer` flag below for the orchestrator's reviewer.
-// **This is a design gap we are surfacing, not silently swallowing.**
+// `/out/debug` routing
+// --------------------
+// Writes are line-buffered in a fixed BSS slot and flushed to
+// `scaffold_env.debug` (and from there to `ctx.logger('contract').debug`)
+// on each `\n`. `autoCloseAll` flushes the trailing partial line via the
+// `DebugNode.close` vtable entry. The host treats the bytes as UTF-8.
 
 const std = @import("std");
 
@@ -66,19 +62,22 @@ pub const decodeRecordKey = codec.decodeRecordKey;
 pub const decodeAmount = codec.decodeAmount;
 pub const RECORD_CONTRACT_HASH = codec.RECORD_CONTRACT_HASH;
 
-/// Surfaced for the reviewer: writes to `/out/debug` currently land in a
-/// shim-side buffer rather than `ctx.logger`. See module header.
-pub const debug_routing_is_buffer: bool = true;
+/// `/out/debug` writes now route to `scaffold_env.debug`; the buffer is
+/// purely a line-flush staging slot. Kept as a constant so older test
+/// scaffolding that probed the previous routing still compiles.
+pub const debug_routing_is_buffer: bool = false;
 
 // -- public surface -------------------------------------------------------
 
 /// Per-run lazy-singleton cache. `null` between runs (after `reset`).
 var root_node: ?*vfs.Node = null;
 
-/// Reset the cached root. Must be called from `main.run` before `state.init`
-/// so the next run's nodes capture the new state slices.
+/// Reset the cached root and any per-run BSS (notably the debug line buffer)
+/// so the next run starts clean. Must be called from `main.run` before
+/// `state.init`.
 pub fn reset() void {
     root_node = null;
+    debug_pos = 0;
 }
 
 /// Returns the singleton root node for this run. Lazily built on first
@@ -464,6 +463,12 @@ fn fetchBody(self: *VerifierLeaf) vfs.VfsError![]const u8 {
         .contract_metadata => env.contractMetadata(verifier),
         .body => env.requestBody(verifier),
     };
+    // The host bridge converts a missing-record `ContractRejection` into an
+    // empty reply, which `unpackBody` rejects -- programs reading an absent
+    // metadata key see `InvalidArgument`. The trade-off vs surfacing an
+    // empty file is intentional: the design doesn't distinguish "absent"
+    // from "present but malformed", so we only fall back to defaults
+    // inside `setup.read`, where the design explicitly says we should.
     return codec.unpackBody(reply) catch vfs.VfsError.InvalidArgument;
 }
 
@@ -900,21 +905,55 @@ fn allocOutputLeaf(
 
 // -- /out/debug ---------------------------------------------------------
 
-/// Debug sink. Writes append to a fixed BSS buffer; close is a no-op
-/// (debug is meant to flush as it streams). The buffer is intentionally
-/// never read out of the shim today: the design routes debug to
-/// `ctx.logger`, but the shim has no such import yet. Buffering here at
-/// least makes writes observable via a memory dump rather than dropping
-/// them on the floor. See module header for the open question.
+/// Line-buffer for `/out/debug`. Writes accumulate here; each `\n` flushes
+/// the buffered prefix (without the newline) via `env.debug`. The trailing
+/// partial line is flushed by `DebugNode.close`, which `autoCloseAll`
+/// calls at program exit. The fixed cap matches the design's
+/// "diagnostic-only" promise -- if a single line exceeds it, the buffer
+/// flushes the prefix early and continues accumulating, so the line shows
+/// up as multiple debug events rather than being silently truncated.
 const DEBUG_BUFFER_BYTES: usize = 4096;
 var debug_buffer: [DEBUG_BUFFER_BYTES]u8 = undefined;
 var debug_pos: usize = 0;
 
+/// Flush the current buffer (if non-empty) and reset.
+fn flushDebug() void {
+    if (debug_pos == 0) return;
+    env.debug(debug_buffer[0..debug_pos]);
+    debug_pos = 0;
+}
+
+/// Append `src` to the line buffer, flushing on each `\n` and whenever the
+/// buffer fills. The newline itself is dropped: each flush is one logical
+/// debug line, and `ctx.logger` already adds its own framing.
 fn appendDebug(src: []const u8) void {
-    const remaining = DEBUG_BUFFER_BYTES - debug_pos;
-    const n = @min(src.len, remaining);
-    @memcpy(debug_buffer[debug_pos .. debug_pos + n], src[0..n]);
-    debug_pos += n;
+    var i: usize = 0;
+    while (i < src.len) {
+        // Find the next newline in the remaining input; everything before it
+        // (plus any current buffered prefix) becomes one debug event.
+        const nl_rel = std.mem.indexOfScalar(u8, src[i..], '\n');
+        const chunk_end = if (nl_rel) |o| i + o else src.len;
+        var j: usize = i;
+        while (j < chunk_end) {
+            const room = DEBUG_BUFFER_BYTES - debug_pos;
+            if (room == 0) {
+                // Oversized line: flush the prefix and keep accumulating.
+                // Two events rather than one truncation, deliberately.
+                flushDebug();
+                continue;
+            }
+            const n = @min(chunk_end - j, room);
+            @memcpy(debug_buffer[debug_pos .. debug_pos + n], src[j .. j + n]);
+            debug_pos += n;
+            j += n;
+        }
+        if (nl_rel != null) {
+            flushDebug();
+            i = chunk_end + 1;
+        } else {
+            i = chunk_end;
+        }
+    }
 }
 
 const DebugNode = struct {
@@ -924,7 +963,7 @@ const DebugNode = struct {
         .stat = stat,
         .read = readErr,
         .write = write,
-        .close = noopClose,
+        .close = closeFlush,
         .readdir = null,
         .lookup = null,
     };
@@ -938,6 +977,12 @@ const DebugNode = struct {
     fn write(_: *vfs.Node, _: u64, src: []const u8) vfs.VfsError!usize {
         appendDebug(src);
         return src.len;
+    }
+    /// Flush any partial line on close. `autoCloseAll` reaches us at
+    /// program exit, so a `printf("hello")` without a trailing newline
+    /// still surfaces in the host log.
+    fn closeFlush(_: *vfs.Node) void {
+        flushDebug();
     }
 };
 

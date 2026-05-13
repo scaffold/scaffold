@@ -41,7 +41,12 @@ pub fn contractHash() [32]u8 {
     return out;
 }
 
-/// Slice valid until the next `alloc` call.
+/// Slice valid until the next `alloc` call. The host bridge converts a
+/// missing record (typed env's `ContractRejection`) into an empty reply
+/// rather than trapping; callers (notably `setup.read`) check for an
+/// empty / unparseable reply and fall through to defaults. The returned
+/// slice may therefore have `len == 0` even though the call did not
+/// "fail" -- that's the missing-record signal.
 pub fn contractMetadata(verifier: []const u8) []const u8 {
     return unpack(main.contract_metadata(
         ptrToI32(verifier.ptr),
@@ -71,6 +76,16 @@ pub fn emitOutput(bytes: []const u8) void {
     main.emit_output(
         ptrToI32(bytes.ptr),
         @intCast(bytes.len),
+    );
+}
+
+/// Diagnostic-only sink for `/out/debug` writes. The host forwards bytes
+/// to `ctx.logger('contract').debug` (or silently drops if no logger is
+/// wired). Never traps; safe to call on any code path.
+pub fn debug(message: []const u8) void {
+    main.debug(
+        ptrToI32(message.ptr),
+        @intCast(message.len),
     );
 }
 

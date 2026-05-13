@@ -102,6 +102,10 @@ function flatRunExports(
     sign: (pp: number, pl: number) => {
       client.dispatchVoid('sign', [readSlice(ctx, pp, pl)]);
     },
+    // /out/debug routing for the WASI shim. Diagnostic-only; never traps.
+    debug: (rp: number, rl: number) => {
+      client.dispatchVoid('debug', [readSlice(ctx, rp, rl)]);
+    },
     reject: (rp: number, rl: number) => {
       throw new WasmRejectError(readString(ctx, rp, rl));
     },

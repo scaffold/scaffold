@@ -87,6 +87,10 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
     sign: (pp: number, pl: number) => {
       bridge.sign(readSlice(ctx, pp, pl));
     },
+    // /out/debug routing for the WASI shim. Diagnostic-only; never traps.
+    debug: (rp: number, rl: number) => {
+      bridge.debug(readSlice(ctx, rp, rl));
+    },
     reject: (rp: number, rl: number) => {
       bridge.reject(readSlice(ctx, rp, rl));
     },

@@ -203,6 +203,17 @@ export interface ContractEnv {
    * Generation: returns the draft's timestamp or Date.now().
    */
   timestamp(): number;
+
+  /**
+   * Diagnostic-only sink. Does NOT emit a scaffold output. Implementations
+   * typically forward to `ctx.logger('contract').debug`. Used by the WASI
+   * shim's `/out/debug` stream.
+   *
+   * Optional: callers must tolerate `env.debug === undefined`. The WASM
+   * host bridge swallows debug writes silently when the env doesn't
+   * implement this method.
+   */
+  debug?(message: string): void;
 }
 
 /** @deprecated Use Contract interface from './Contract.ts' instead. */

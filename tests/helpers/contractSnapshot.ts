@@ -71,15 +71,24 @@ export interface MockTable {
   fetch?: Uint8Array;
   claim_next?: Claim;
   claim_all?: Claim[];
-  contract_metadata?: { value: number; body: Uint8Array };
+  /**
+   * Configured response. `null` triggers the strict-throws-on-missing path:
+   * the env throws `ContractRejection` and the WasmHostBridge converts that
+   * to the empty-bytes sentinel for the WASI shim.
+   */
+  contract_metadata?: { value: number; body: Uint8Array } | null;
   sign?: null;
   put?: null;
   record?: null;
+  debug?: null;
   reject?: null;
 }
 
 export type SequenceStep =
-  | { type: 'emit_output'; expect?: { verifier?: Partial<Verifier>; value?: number; body?: Uint8Array } }
+  | {
+    type: 'emit_output';
+    expect?: { verifier?: Partial<Verifier>; value?: number; body?: Uint8Array };
+  }
   | {
     type: 'request_body';
     expect?: { verifier?: Partial<Verifier> };
@@ -100,6 +109,7 @@ export type SequenceStep =
   | { type: 'sign'; expect?: { pubkey?: Uint8Array } }
   | { type: 'put'; expect?: { verifier?: Partial<Verifier>; records?: Output[] } }
   | { type: 'record'; expect?: { key?: Uint8Array; value?: Uint8Array } }
+  | { type: 'debug'; expect?: { message?: string } }
   | { type: 'reject'; expect?: { reason?: string } };
 
 export interface ContractSnapshotOptions {
@@ -126,7 +136,13 @@ type TraceEvent =
     sequenceIndex?: number;
   }
   | { kind: 'forwarder_enter'; srcLayer: string; target: TargetRef; declared: string }
-  | { kind: 'forwarder_exit'; srcLayer: string; target: TargetRef; declared: string; threw: boolean }
+  | {
+    kind: 'forwarder_exit';
+    srcLayer: string;
+    target: TargetRef;
+    declared: string;
+    threw: boolean;
+  }
   | { kind: 'rejected'; reason: string }
   | { kind: 'exit_ok' };
 
@@ -189,11 +205,33 @@ class MockSequenceEnv implements ContractEnv {
   }
 
   contractMetadata(verifier: Verifier): { value: number; body: Uint8Array } {
+    // Mock convention: `contract_metadata: null` in the mock table means
+    // "record absent." Production envs throw `ContractRejection` for this
+    // case (the WasmHostBridge converts that to the empty-bytes sentinel
+    // for the WASI shim). Mirror that here so the trace records both the
+    // dispatch and the throw path.
+    if (
+      Object.prototype.hasOwnProperty.call(this._mock, 'contract_metadata') &&
+      this._mock.contract_metadata === null
+    ) {
+      this._trace.push({
+        kind: 'host_call',
+        method: 'contract_metadata',
+        args: { verifier },
+        result: null,
+        source: 'mock',
+      });
+      throw new ContractRejection('no matching output on contract block');
+    }
     return this._dispatch('contract_metadata', { verifier }) as { value: number; body: Uint8Array };
   }
 
   sign(pubkey: Uint8Array): void {
     this._dispatch('sign', { pubkey });
+  }
+
+  debug(message: string): void {
+    this._dispatch('debug', { message });
   }
 
   put(verifier: Verifier, records: Output[]): void {
@@ -372,7 +410,9 @@ function formatTrace(events: readonly TraceEvent[]): string {
   for (const ev of events) {
     switch (ev.kind) {
       case 'entry':
-        lines.push(`${indent()}> entry ${ev.target.layerKey}:${ev.target.exportName} (mode=${ev.entryMode})`);
+        lines.push(
+          `${indent()}> entry ${ev.target.layerKey}:${ev.target.exportName} (mode=${ev.entryMode})`,
+        );
         depth += 1;
         break;
       case 'host_call': {
@@ -381,9 +421,7 @@ function formatTrace(events: readonly TraceEvent[]): string {
         const tail = ev.source === 'mock'
           ? ' [mock]'
           : ` [sequence #${ev.sequenceIndex}: ${ev.method} ✓]`;
-        const ret = ev.result === undefined
-          ? ''
-          : ` -> ${renderArg(ev.result)}`;
+        const ret = ev.result === undefined ? '' : ` -> ${renderArg(ev.result)}`;
         lines.push(`${head}${tail}${ret}`);
         break;
       }
@@ -530,6 +568,11 @@ function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, 
     },
     sign: (pp: number, pl: number) => {
       bridge.sign(readSlice(ctx, pp, pl));
+    },
+    // /out/debug routing for the WASI shim. Routes through the mock env so
+    // each line shows up in the trace as a `host_call` step.
+    debug: (rp: number, rl: number) => {
+      bridge.debug(readSlice(ctx, rp, rl));
     },
     reject: (rp: number, rl: number) => {
       env.reject(new TextDecoder().decode(readSlice(ctx, rp, rl)));

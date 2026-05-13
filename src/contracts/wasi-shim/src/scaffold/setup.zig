@@ -22,12 +22,11 @@
 //     so we don't ignore unknowns there -- the only "unknown" failure mode
 //     is a non-numeric `extra_fds` key, which surfaces as InvalidExtraFdKey.
 //
-// `wasi_setup` absence: documented as a design gap. Calling
-// `env.contractMetadata` on a missing record currently *rejects the whole
-// run* (the host throws ContractRejection, which we cannot catch from
-// inside wasm). We treat an empty body as "use defaults"; total absence
-// surfaces as a run rejection. See TODO.md for the WasmHostBridge change
-// that would let this module fall through cleanly.
+// `wasi_setup` absence: handled gracefully. The host bridge collapses a
+// missing record (`ContractRejection` from the typed env) into an empty
+// reply, and `read` falls through to `defaults()` for both that case and
+// a present-but-empty body. Matches the design's "absent record → use
+// defaults" rule.
 
 const std = @import("std");
 
@@ -87,10 +86,10 @@ const DEFAULT_PREOPENS: []const []const u8 = &[_][]const u8{ "/in", "/out", "/sc
 pub fn read(alloc: state_mod.Allocator, contract_hash: [32]u8) SetupError!ParsedSetup {
     const verifier = codec.encodeVerifier(alloc, contract_hash, WASI_SETUP_KEY);
     const reply = env.contractMetadata(verifier);
-
-    // unpackBody peels the (i128 value, u32 body_len) header. A truncated or
-    // missing reply is treated as "use defaults" so a contract author who
-    // omits the record still boots; the design says absent record == defaults.
+    // The host bridge collapses a missing record into an empty reply
+    // (no value/body header); `unpackBody` rejects it with `InvalidReply`,
+    // and we fall through to `defaults()`. A present-but-empty body lands
+    // in the same place via the explicit `body.len == 0` check below.
     const body = codec.unpackBody(reply) catch return defaults();
     if (body.len == 0) return defaults();
     return parseSetupJson(body, alloc);

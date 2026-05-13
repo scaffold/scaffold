@@ -42,10 +42,19 @@ pub extern "scaffold_env" fn mode() i32;
 pub extern "scaffold_env" fn timestamp() i64;
 pub extern "scaffold_env" fn params() i64;
 pub extern "scaffold_env" fn contract_hash() i64;
+// `contract_metadata` returns an empty (`len == 0`) reply when the requested
+// record is absent on the contract block (the host bridge converts the typed
+// `ContractRejection` into this empty wire reply). Callers (env.zig +
+// setup.zig) treat both an empty reply and a present-but-empty body as
+// "use defaults" so the shim doesn't trap on a missing record. Any other
+// reply is a normal `(value, body)` payload.
 pub extern "scaffold_env" fn contract_metadata(vp: i32, vl: i32) i64;
 pub extern "scaffold_env" fn emit_output(op: i32, ol: i32) void;
 pub extern "scaffold_env" fn request_body(vp: i32, vl: i32) i64;
 pub extern "scaffold_env" fn fetch(vp: i32, vl: i32, kp: i32, kl: i32) i64;
+// Diagnostic-only sink for `/out/debug`. Host forwards to `ctx.logger` (or
+// silently drops if no logger is wired). Bytes are UTF-8.
+pub extern "scaffold_env" fn debug(rp: i32, rl: i32) void;
 pub extern "scaffold_env" fn reject(rp: i32, rl: i32) void;
 
 // -- program imports -------------------------------------------------

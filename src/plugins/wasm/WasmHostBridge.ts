@@ -14,6 +14,18 @@ import {
   encodeValueAndBody,
 } from './WasmWireCodec.ts';
 
+/**
+ * Empty-bytes reply the bridge returns from `contractMetadata` when the
+ * typed env threw `ContractRejection`. The WASI shim's setup.read peels
+ * the value/body header and falls through to defaults on either a
+ * truncated reply or a present-but-empty body, so this single empty
+ * encoding covers both "no matching record" and "present record with
+ * empty body" with the design's intended behaviour. Non-WASM callers go
+ * through the typed `ContractEnv.contractMetadata`, which keeps its
+ * strict-throws contract.
+ */
+const EMPTY_METADATA_REPLY: Uint8Array = new Uint8Array(0);
+
 // -- Run bridge ---------------------------------------------------
 
 /**
@@ -32,6 +44,12 @@ import {
 export interface RunBridge {
   mode(): number;
   contractHash(): Uint8Array;
+  /**
+   * Returns an empty `Uint8Array` when the typed env signalled "no matching
+   * record" via `ContractRejection`. The WASI shim's setup.read treats a
+   * truncated/empty reply as "use defaults", so the two cases (absent
+   * record vs present-with-empty-body) intentionally collapse on the wire.
+   */
   contractMetadata(verifierBytes: Uint8Array): MaybePromise<Uint8Array>;
   params(): Uint8Array;
   timestamp(): bigint;
@@ -42,6 +60,8 @@ export interface RunBridge {
   fetch(verifierBytes: Uint8Array, key: Uint8Array): MaybePromise<Uint8Array>;
   put(verifierBytes: Uint8Array, recordsBytes: Uint8Array): MaybePromise<void>;
   sign(pubkey: Uint8Array): void;
+  /** Diagnostic-only sink for `/out/debug` writes from the WASI shim. */
+  debug(messageBytes: Uint8Array): void;
   /** Throws ContractRejection. The transport translates that to a WASM trap. */
   reject(reason: Uint8Array): never;
 }
@@ -56,11 +76,35 @@ export function makeRunBridge(env: ContractEnv): RunBridge {
 
     contractHash: () => env.contractHash().toBytes(),
 
-    contractMetadata: (verifierBytes) =>
-      maybeThen(
-        env.contractMetadata(decodeV(verifierBytes)),
-        (r) => encodeValueAndBody(r.value, r.body),
-      ),
+    // The shim's contract for missing-record handling: a `ContractRejection`
+    // from the typed env converts to an empty `Uint8Array` reply (transports
+    // pack it as `(ptr, len=0)`). The shim's `setup.read` falls through to
+    // defaults on either an empty reply or a present-but-empty body, so we
+    // don't need a separate "absent" sentinel on the wire. Observability of
+    // the conversion runs through `env.debug` (best-effort) so the bridge
+    // stays logger-free per scaffold's transport boundary.
+    contractMetadata: (verifierBytes) => {
+      const onMissing = (err: unknown): Uint8Array => {
+        if (err instanceof ContractRejection) {
+          env.debug?.(`contract_metadata: missing record (${err.message})`);
+          return EMPTY_METADATA_REPLY;
+        }
+        throw err;
+      };
+      let reply: MaybePromise<{ value: number; body: Uint8Array }>;
+      try {
+        reply = env.contractMetadata(decodeV(verifierBytes));
+      } catch (err) {
+        return onMissing(err);
+      }
+      if (reply instanceof Promise) {
+        return reply.then(
+          (r) => encodeValueAndBody(r.value, r.body),
+          onMissing,
+        );
+      }
+      return encodeValueAndBody(reply.value, reply.body);
+    },
 
     params: () => env.params(),
 
@@ -88,6 +132,15 @@ export function makeRunBridge(env: ContractEnv): RunBridge {
 
     sign: (pubkey) => {
       env.sign(pubkey);
+    },
+
+    debug: (messageBytes) => {
+      // Best-effort diagnostic sink. Envs that don't implement `debug` get
+      // their writes swallowed -- this matches the design's "diagnostic-only"
+      // promise and keeps `/out/debug` from trapping when no logger is wired.
+      if (env.debug) {
+        env.debug(new TextDecoder().decode(messageBytes));
+      }
     },
 
     reject: (reason) => {
