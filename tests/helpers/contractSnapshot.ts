@@ -46,6 +46,7 @@ import type { Output, Verifier } from '../../src/core/BlockCreationModule.ts';
 import { composeGenesisPacket } from '../../src/core/Block.ts';
 import { makeRecordOutput } from '../../src/contracts/RecordContract.ts';
 import { RECORD_CONTRACT } from '../../src/core/Block.ts';
+import { EXIT_ZERO_REASON } from '../../src/contracts/wasi-shim/setup.ts';
 import {
   type CompiledLayer,
   type CompiledModules,
@@ -155,6 +156,19 @@ class SequenceMismatchError extends Error {
   }
 }
 
+/**
+ * Sentinel error thrown by `MockSequenceEnv.reject` when the WASI shim's
+ * `proc_exit(0)` magic string is observed. Caught by the outer helper and
+ * treated as clean termination. Tests for shim-backed contracts therefore
+ * don't need a `reject` step in their sequence for `proc_exit(0)`.
+ */
+class WasiCleanExit extends Error {
+  constructor() {
+    super('WasiCleanExit');
+    this.name = 'WasiCleanExit';
+  }
+}
+
 class MockSequenceEnv implements ContractEnv {
   private cursor = 0;
 
@@ -244,6 +258,15 @@ class MockSequenceEnv implements ContractEnv {
 
   /** Called from the run bridge's `reject` handler. Throws ContractRejection. */
   reject(reason: string): never {
+    // Special case: the WASI shim's `proc_exit(0)` rejects with a magic
+    // sentinel string. Treat that as clean termination so shim-backed
+    // contracts don't need to spell out a `reject` step in their sequence
+    // for the (very common) clean-exit case. The trace records `exit_ok`
+    // instead of a reject host_call.
+    if (reason === EXIT_ZERO_REASON) {
+      this._trace.push({ kind: 'exit_ok' });
+      throw new WasiCleanExit();
+    }
     this._dispatch('reject', { reason });
     // Even if dispatch records the call, we still need to throw to terminate.
     throw new ContractRejection(reason);
@@ -267,8 +290,10 @@ class MockSequenceEnv implements ContractEnv {
 
     // Fall through to sequence.
     if (this.cursor >= this._sequence.length) {
+      const argsHint = renderArgs(args);
+      const argsTail = argsHint ? ` with args (${argsHint})` : '';
       throw new SequenceMismatchError(
-        `sequence exhausted: contract called \`${method}\` but no more entries`,
+        `sequence exhausted: contract called \`${method}\`${argsTail} but no more entries`,
       );
     }
     const step = this._sequence[this.cursor];
@@ -276,9 +301,11 @@ class MockSequenceEnv implements ContractEnv {
     this.cursor += 1;
 
     if (step.type !== method) {
+      const argsHint = renderArgs(args);
+      const argsTail = argsHint ? ` with args (${argsHint})` : '';
       throw new SequenceMismatchError(
         `sequence step #${stepIndex + 1}: expected ${JSON.stringify(step.type)} ` +
-          `but contract called ${JSON.stringify(method)}`,
+          `but contract called ${JSON.stringify(method)}${argsTail}`,
       );
     }
     if (step.expect) {
@@ -662,7 +689,10 @@ export async function assertContractTraceSnapshot(
     (fn as () => void)();
     trace.push({ kind: 'exit_ok' });
   } catch (err) {
-    if (err instanceof ContractRejection) {
+    if (err instanceof WasiCleanExit) {
+      // The WASI shim's `proc_exit(0)` path: MockSequenceEnv.reject already
+      // pushed `exit_ok` before throwing this sentinel. Nothing more to do.
+    } else if (err instanceof ContractRejection) {
       rejection = err;
       trace.push({ kind: 'rejected', reason: err.message });
     } else {

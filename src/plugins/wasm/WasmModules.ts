@@ -141,10 +141,19 @@ export interface ModulesSpec {
 
 // -- Parsed / normalised types -----------------------------------------
 
-/** A target reference parsed from `"<layerKey>:<exportName>"`. */
+/**
+ * A target reference parsed from `"<layerKey>:<exportName>"` or, with the
+ * cross-memory accessor markers from the WASI shim design,
+ * `"<layerKey>:<memoryExportName>@read"` / `"...@write"`. When `accessor`
+ * is set, the import is synthesised at instantiate time as a closure that
+ * memcpys between the source layer's primary memory and the target layer's
+ * named memory export -- the import's WASM signature must be
+ * `(prog_off: i32, peer_off: i32, len: i32) -> ()`.
+ */
 export interface TargetRef {
   readonly layerKey: string;
   readonly exportName: string;
+  readonly accessor?: 'read' | 'write';
 }
 
 /** One pattern entry parsed from a layer's `imports`. */
@@ -201,10 +210,24 @@ function parseTargetRef(raw: string, context: string): TargetRef {
       `${context}: target ${JSON.stringify(raw)} must have the form "<layerKey>:<exportName>"`,
     );
   }
-  return {
-    layerKey: raw.slice(0, colonIdx),
-    exportName: raw.slice(colonIdx + 1),
-  };
+  const layerKey = raw.slice(0, colonIdx);
+  const rest = raw.slice(colonIdx + 1);
+  // Accessor markers: "<memoryExport>@read" / "@write" select a synthesised
+  // cross-memory function import (see TargetRef docstring + the WASI shim
+  // design doc, "program memory bridge" section).
+  const atIdx = rest.lastIndexOf('@');
+  if (atIdx > 0) {
+    const accessor = rest.slice(atIdx + 1);
+    if (accessor === 'read' || accessor === 'write') {
+      return { layerKey, exportName: rest.slice(0, atIdx), accessor };
+    }
+    throw new Error(
+      `${context}: target ${JSON.stringify(raw)} has unknown accessor ${
+        JSON.stringify(accessor)
+      } (expected "@read" or "@write")`,
+    );
+  }
+  return { layerKey, exportName: rest };
 }
 
 function parseImportEntry(key: string, value: string, layerKey: string): ImportPattern {
@@ -654,6 +677,69 @@ export async function loadModules(
     }
   };
 
+  // Cross-memory accessor forwarder. WASI shim design: imports a virtual
+  // `program_mem.{read,write}_bytes(prog_off, peer_off, len)` function that
+  // memcpys between the source layer's primary memory and the target layer's
+  // named memory export. Both memories are resolved lazily at call time so
+  // we don't need to topo-order accessor imports the way we do for direct
+  // memory imports (the underlying read_bytes/write_bytes WASM signature is
+  // pure function-passing; the cycle that exists between shim and program
+  // is broken by the function-forwarder pattern, same as ordinary calls).
+  const makeAccessorForwarder = (
+    target: TargetRef,
+    srcLayerKey: string,
+    declared: string,
+    accessor: 'read' | 'write',
+  ): ImportFn =>
+  (...args: unknown[]) => {
+    const traceCall = (run: () => void): void => {
+      if (!tracer) {
+        run();
+        return;
+      }
+      tracer({ phase: 'enter', srcLayer: srcLayerKey, target, declared, args });
+      try {
+        run();
+        tracer({ phase: 'exit', srcLayer: srcLayerKey, target, declared, args });
+      } catch (err) {
+        tracer({ phase: 'exit', srcLayer: srcLayerKey, target, declared, args, error: err });
+        throw err;
+      }
+    };
+    traceCall(() => {
+      const peerMem = memoryByLayerKey.get(srcLayerKey);
+      if (!peerMem) {
+        throw new Error(
+          `Stack layer ${JSON.stringify(srcLayerKey)}: cross-memory accessor \`${declared}\` ` +
+            `cannot resolve source layer's primary memory (this layer doesn't export or ` +
+            `import a memory)`,
+        );
+      }
+      const targetExports = exportsByKey.get(target.layerKey);
+      const targetMem = targetExports?.[target.exportName];
+      if (!(targetMem instanceof WebAssembly.Memory)) {
+        throw new Error(
+          `Stack layer ${JSON.stringify(srcLayerKey)}: cross-memory accessor \`${declared}\` ` +
+            `target ${target.layerKey}:${target.exportName} is not a WebAssembly.Memory ` +
+            `(got ${targetMem === undefined ? 'undefined' : typeof targetMem})`,
+        );
+      }
+      // Args are `(target_off: i32, peer_off: i32, len: i32)`. The
+      // semantics differ between read and write: `read` copies from target
+      // memory into peer memory; `write` is the reverse.
+      const targetOff = args[0] as number;
+      const peerOff = args[1] as number;
+      const len = args[2] as number;
+      if (accessor === 'read') {
+        const src = new Uint8Array(targetMem.buffer, targetOff, len);
+        new Uint8Array(peerMem.buffer, peerOff, len).set(src);
+      } else {
+        const src = new Uint8Array(peerMem.buffer, peerOff, len);
+        new Uint8Array(targetMem.buffer, targetOff, len).set(src);
+      }
+    });
+  };
+
   const exportsByKey = new Map<string, Record<string, unknown>>();
   const memoryByLayerKey = new Map<string, WebAssembly.Memory>();
 
@@ -669,7 +755,9 @@ export async function loadModules(
       const dotted = `${r.namespace}.${r.name}`;
       let value: unknown;
       if (r.kind === 'function') {
-        value = makeForwarder(r.target, layerKey, dotted);
+        value = r.target.accessor
+          ? makeAccessorForwarder(r.target, layerKey, dotted, r.target.accessor)
+          : makeForwarder(r.target, layerKey, dotted);
       } else if (r.kind === 'memory') {
         if (r.target.layerKey === 'base') {
           const mem = baseMemories.get(r.target.exportName);

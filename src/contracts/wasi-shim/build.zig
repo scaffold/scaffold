@@ -30,6 +30,20 @@ pub fn build(b: *std.Build) void {
     exe.entry = .disabled; // no _start; `run` is invoked by scaffold
     exe.rdynamic = true; // keep all `export fn` visible without manual --export
 
+    // Memory budget. Layout:
+    //   0..1 MiB              -- Zig stack (grows down from __stack_pointer
+    //                            = 1 MiB, the wasm-ld default)
+    //   1 MiB..~1.1 MiB       -- .rodata + .data + BSS (incl. global state)
+    //   2 MiB..               -- shim bump arena (see `bump_ptr` in main.zig)
+    //
+    // The bump arena starts at 2 MiB so it's well clear of BSS (the global
+    // `current_state` alone is ~10 KiB and BSS sits right after .data). The
+    // largest single allocation is the /scratch memfs arena (64 KiB), and
+    // setup.read + state.init together stage maybe ~20 KiB of book-keeping.
+    // 4 MiB = 64 pages comfortably covers that with room to grow. No max --
+    // the engine may grow if a future feature needs more.
+    exe.initial_memory = 64 * 64 * 1024;
+
     // Drop directly into dist/wasi-shim.wasm so the TS setup helper has a
     // stable path. We bypass the default zig-out/bin/ layout because the
     // shipping artifact is a single .wasm, not a binary tree.

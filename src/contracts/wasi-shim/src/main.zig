@@ -82,8 +82,17 @@ pub extern "program_mem" fn write_bytes(prog_off: i32, shim_src: i32, len: i32) 
 // The contract ABI expects an exported `alloc(size) -> ptr` that the host
 // uses to stage bytes into the contract's memory (e.g. when scaffold returns
 // `params()` to us). It's a bump allocator -- no free. Reset each `run`.
-
-var bump_ptr: u32 = 1024 * 1024; // start above any data section
+//
+// Start address: 2 MiB. This is comfortably above
+//   - the Zig stack (lives below __stack_pointer = 1 MiB by wasm-ld default)
+//   - the .rodata + .data + BSS region (loaded at 1 MiB; ~12 KiB total
+//     today, dominated by the global `current_state`).
+// Putting bump below ~1.1 MiB silently overwrites BSS / rodata — caused a
+// week of "memory access out of bounds" mystery before we caught it. Any
+// future bump to BSS (e.g. growing FdTable) doesn't need a corresponding
+// bump here as long as BSS stays under 1 MiB.
+const BUMP_START: u32 = 2 * 1024 * 1024;
+var bump_ptr: u32 = BUMP_START;
 
 export fn alloc(size: i32) i32 {
     // 16-byte alignment is plenty for everything we stage (verifier bytes,
@@ -96,7 +105,7 @@ export fn alloc(size: i32) i32 {
 }
 
 fn reset_bump() void {
-    bump_ptr = 1024 * 1024;
+    bump_ptr = BUMP_START;
 }
 
 /// Bump-allocator adapter for `state.init`. Always returns a slice of `size`
