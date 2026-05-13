@@ -59,7 +59,7 @@
     "bundle-worker": "deno bundle $DENO_FLAGS --check src/worker/worker.ts dist/worker.js",
     "run-server": "deno run $DENO_FLAGS --check --allow-all scripts/server.ts",
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all scripts/signalingServer.ts",
-    "test": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
+    "test": "deno task build:wasi-shim && deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
     "test-avro": "mocha --ui tdd --reporter dot",
     "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info",
     "generate-genesis": "deno run --allow-all scripts/generate_genesis.ts",
@@ -67,6 +67,8 @@
     "build-determinism-tool": "cd scripts/wasm-determinism && zig build -Doptimize=ReleaseSmall && cp zig-out/bin/wasm-determinism.wasm bin/wasm-determinism.wasm && cp zig-out/bin/wasm-determinism-contract.wasm bin/wasm-determinism-contract.wasm",
     "build-determinism-constants": "deno run --allow-read --allow-write scripts/wasm-determinism/generate_constants.ts",
     "build-determinism-fixtures": "bash tests/fixtures/wasm-determinism/build.sh",
+    "build:wasi-shim": "cd src/contracts/wasi-shim && ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-global ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local zig build wasi-shim",
+    "test:wasi": "deno task build:wasi-shim && deno test --allow-all tests/WasiShim*.test.ts",
     "viz:build": "deno run --allow-all viz/build.ts",
     "viz:serve": "deno run --allow-all viz/serve.ts"
   },

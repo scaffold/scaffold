@@ -9,7 +9,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-for wat in *.wat; do
+for wat in *.wat wasi/*.wat; do
   wasm="${wat%.wat}.wasm"
   echo "wat2wasm $wat -> $wasm"
   wat2wasm --enable-threads "$wat" -o "$wasm"
