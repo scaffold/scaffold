@@ -1,6 +1,6 @@
 # WASI Shim
 
-> Status: design draft. Speccing the in-stack shim that lets an unmodified WASI snapshot preview 1 program run as a Scaffold contract by mapping the WASI host surface onto `scaffold_env` via a virtual filesystem.
+> Status: implemented (v1). Spec for the in-stack shim that lets an unmodified WASI snapshot preview 1 program run as a Scaffold contract by mapping the WASI host surface onto `scaffold_env` via a virtual filesystem. Living in `src/contracts/wasi-shim/`; QuickJS boots end-to-end through it (`tests/WasiShimQuickJS.test.ts`) and the per-call snapshot suite (`tests/WasiShim.test.ts`) covers the 12-call MVP across 12 fixtures.
 
 ## Goal
 
@@ -60,7 +60,9 @@ The linker resolves these via the `@read` / `@write` accessor markers in the shi
 }
 ```
 
-`parseTargetRef` (in `src/plugins/wasm/WasmModules.ts`) recognises the `@read` / `@write` suffix and produces a `TargetRef` with `accessor` set. At instantiate time, the function-import binding is a synthesised JS closure of signature `(prog_off, peer_off, len) => void`: a `Uint8Array(dstMem.buffer, ...).set(Uint8Array(srcMem.buffer, ...))` between the source layer's primary memory and the named target memory. One JS↔WASM hop per cross-memory call, O(len) memcpy. For compute-shaped programs (compiler, interpreter, parser) the call frequency is low and the size per call is large, so the overhead is amortised; for printf-style chatter it's still bounded by one hop per `fd_write`.
+`parseTargetRef` in [`src/plugins/wasm/WasmModules.ts`](../../src/plugins/wasm/WasmModules.ts) recognises the `@read` / `@write` suffix and produces a `TargetRef` with `accessor: 'read' | 'write'`. At instantiate time, `makeAccessorForwarder` (same file) synthesises a JS closure of signature `(prog_off, peer_off, len) => void` that runs `Uint8Array(dstMem.buffer, ...).set(Uint8Array(srcMem.buffer, ...))` between the source layer's primary memory and the named target memory. One JS↔WASM hop per cross-memory call, O(len) memcpy. For compute-shaped programs (compiler, interpreter, parser) the call frequency is low and the size per call is large, so the overhead is amortised; for printf-style chatter it's still bounded by one hop per `fd_write`.
+
+Memories are resolved **lazily** at first call (looked up out of `memoryByLayerKey`), not bound at instantiate. This sidesteps a topo-sort cycle: the shim layer's accessor forwarders need to reference the program layer's memory, but the program layer hasn't been instantiated yet when the shim's import object is constructed. Lazy resolution lets both layers be instantiated in either order. Limitations carried by Phase E2: (1) the synth closure is fixed at signature `(i32, i32, i32) -> ()` — there is no kind-check at instantiate time, only at call time; (2) the "peer" memory is the source layer's *primary* memory (`memoryByLayerKey.get(srcLayerKey)`), so a layer that imports several memories with different roles can't disambiguate yet.
 
 This keeps the Zig source idiomatic — no multi-memory builtins, no toolchain workarounds — at the cost of two extra imports. The shim WASM blob ends up smaller and easier to audit than the multi-memory variant would be. If a future shim needs raw multi-memory (e.g. for performance-critical interpreters), it can be added without breaking this design.
 
@@ -97,7 +99,7 @@ The shim presents a fixed-shape virtual filesystem with three operational zones 
 │   │                    — write bytes; close emits Output{RECORD_CONTRACT, key, value=0, body}
 │   ├── output/0x{contract_hash_hex}/{params_encoded}/{amount_decimal}
 │   │                    — write bytes; close emits Output{contract, params, value=amount, body}
-│   └── debug            — write bytes; goes to ctx.logger('wasi-shim').debug, no record emitted
+│   └── debug            — write bytes; routed to scaffold_env.debug (see /out/debug below), no record emitted
 ├── scratch/             — read/write; guaranteed empty at start, in-memory only, dropped on exit
 ├── dev/
 │   ├── null             — read EOF, write discarded
@@ -155,7 +157,7 @@ Open creates an in-memory write buffer. Writes append to the buffer. **`close` e
 
 ### `/out/debug`
 
-Writes to `/out/debug` are forwarded to `ctx.logger('wasi-shim').debug(...)`. Lines are flushed on each newline, with the final partial line (if any) flushed on close. The debug stream **does not emit a scaffold output** — it's purely diagnostic, visible in DevTools and `__scaffold.events`. This is the canonical sink for `stderr` and for `printf` debugging from the program.
+Writes to `/out/debug` are forwarded to a `scaffold_env.debug(ptr, len)` host import added in Phase D (live in `WasmHostBridge.ts` and threaded through all three transports). Inside the shim the route is `paths.appendDebug` → `env.debug` → host. The buffer is **line-buffered**: bytes accumulate in a `DebugNode` write buffer and a `flush()` fires on each `\n`; on FD close (including the implicit close at end-of-run via `autoCloseAll`) any trailing partial line is flushed. The debug stream **does not emit a scaffold output** — it's purely diagnostic. The host-side default (`WasmHostBridge.makeImports`) routes through `env.debug?.(...)` which the production `VerifyingEnv` / `GeneratingEnv` do not yet implement, so production writes are dropped silently (see TODO.md "logger wiring"); test envs and the snapshot helper capture the bytes for assertion. This is the canonical sink for `stderr` and for `printf` debugging from the program.
 
 ### `/dev/random` and `/dev/urandom`
 
@@ -255,6 +257,22 @@ The reverse path (`fd_read`) is symmetric: scaffold writes into the shim's stagi
 
 **No `--global-base` gymnastics.** Both modules use their toolchain defaults. The shim is plain `wasm32-freestanding` Zig, the program is whatever it already was. No linker flags to coordinate.
 
+### Memory layout caveats (shim-internal)
+
+The shim's bump arena starts at a hardcoded offset, not at `__heap_base`. Layout per `build.zig`:
+
+```
+0..1 MiB        — Zig stack (grows down from __stack_pointer = 1 MiB, the wasm-ld default)
+1 MiB..~1.1 MiB — .rodata + .data + BSS (incl. global state)
+2 MiB..         — shim bump arena (`bump_ptr` in main.zig)
+```
+
+`exe.initial_memory = 64 * 64 KiB = 4 MiB`; the engine may grow if needed.
+
+**Why 2 MiB and not 1 MiB.** Phase E2 caught a real bug here: the original `BUMP_START = 1 MiB` collided exactly with the start of `.rodata` (wasm-ld places `.rodata` at `__stack_pointer` by default). The first `alloc(...)` overwrote string literals like `"/dev/null"`, scrambling them and producing confusing `vfs.NotFound` errors during `populateFdTable`. Moving `BUMP_START` to 2 MiB clears stack + `.rodata` + `.data` + BSS with ~1 MiB of headroom over the largest BSS we can reasonably grow without restructuring `current_state`.
+
+**Long-term cleanup** (TODO): pass `--export=__heap_base` to wasm-ld and read the linker-provided value at runtime instead of the hardcoded 2 MiB. That removes the headroom-vs-collision tradeoff entirely. Filed for follow-up; today's value is safe for the v1 surface.
+
 ### Language choice
 
 Zig 0.16 (`wasm32-freestanding` target). Rationale:
@@ -307,7 +325,7 @@ Decisions where the WASI spec leaves room and our two external references (`bjor
 - **`fd_close`** sets the slot to `null` and pushes to the free-list; it does not free shared resources (stdio sinks, `/dev/random`).
 - **`fd_prestat_dir_name`** writes the path bytes exactly as configured — no trailing NUL, no trailing slash. Returns `ENAMETOOLONG` if the buffer is short rather than silently truncating (matches `bjorn3/browser_wasi_shim`; diverges from wasmtime which truncates).
 - **Default FD method** for unimplemented capabilities returns `ENOTSUP` (clearer debugging signal than `EBADF`). Type-mismatches still return the typed errno (`ENOTDIR`, `EISDIR`).
-- **Rights** are tracked per-fd as a `{read, write, …}` flag set and **enforced only at the shim** -- OS-level enforcement is N/A since the shim is the FS. The bitmap is **clamped at `path_open`** to the set of rights the resolved node actually supports (e.g. opening `/in/foo` returns an FD with FD_WRITE cleared even if the caller asked for it; wasi-libc requests near-max rights as a default). Post-clamp, the per-call rights gates produce the right errno synchronously: missing READ → `EBADF` from `fd_read`; missing WRITE → `EBADF` from `fd_write`. No `EACCES` mapping.
+- **Rights** are tracked per-fd as a `{read, write, …}` flag set and **enforced only at the shim** -- OS-level enforcement is N/A since the shim is the FS. The Phase C clamp model (`abi/path.zig:finishOpen`): the requested `rights_base` / `rights_inheriting` are masked against the **node's supported rights** (derived from `vfs.Node.kind` — `/in/*` → READ-only, `/out/*` → WRITE-only, `/scratch/*` → READ+WRITE+SEEK, devfs nodes per their kind). The clamp is silent — a request for FD_WRITE on `/in/foo` succeeds and returns an FD with FD_WRITE cleared; wasi-libc requests near-max rights as a default and the program never sees a synthetic `ENOTCAPABLE` from `path_open`. Post-clamp, per-call rights gates produce the right errno synchronously: missing READ → `EBADF` from `fd_read`; missing WRITE → `EBADF` from `fd_write`. No `EACCES` mapping.
 - **Path normalisation**: absolute paths in `path_*` calls relative to a dirfd → `ENOTCAPABLE`; `..` that escapes the preopen → `ENOTCAPABLE`; trailing slash preserved as an `expects_directory` flag and passed to `path_open` (open on a regular file with trailing slash → `ENOTDIR`).
 - **Memory/pointer errors trap, don't errno**. Out-of-bounds guest pointer or misaligned argument area → trap from the host import. This matches wasmtime's wiggle invariant and what real engines do.
 - **Errno numeric values**: take them from `wasi_defs.ts` in `bjorn3/browser_wasi_shim` (which matches the spec). The 12 we care about most: `EBADF=8`, `EEXIST=20`, `EINVAL=28`, `EISDIR=31`, `ENAMETOOLONG=37`, `ENOENT=44`, `ENOTDIR=54`, `ENOTSUP=58`, `EPERM=63`, `EPIPE=64`, `ENOTCAPABLE=76`, `EAGAIN=6`.
@@ -315,7 +333,18 @@ Decisions where the WASI spec leaves room and our two external references (`bjor
 ## Other Implementation Notes
 
 1. **`max_memory_pages`.** Stacking shares one budget across the whole graph. A WASI program (e.g. a compiler) can want hundreds of MiB. The contract author sets `max_memory_pages` on their contract block; it applies to the shared memory across both shim and program. Picks a value that covers `program_data + program_heap + shim_offset (256 MiB) + shim_heap`.
-2. **proc_exit propagation through WASM.** `proc_exit(n != 0)` calls `scaffold_env.reject("WASI proc_exit: <n>")` which traps; the rejection surfaces at scaffold as a `ContractRejection` with that reason. `proc_exit(0)` must NOT surface as a rejection — the shim's `run` should return normally. We use the same `reject` machinery but with a magic reason string `__SCAFFOLD_WASI_EXIT_ZERO__` (defined in `src/contracts/wasi-shim/src/abi/proc.zig`); the WASI shim's setup-side helper installs a wrapper around `program._start` in the stacking linker that catches `ContractRejection` whose `.message === EXIT_ZERO_REASON` and swallows it, so the shim's `run` returns cleanly. Any other rejection reason propagates as a real rejection.
+2. **proc_exit propagation through WASM, and the `EXIT_ZERO_REASON` magic string.** `proc_exit(n != 0)` calls `scaffold_env.reject("WASI proc_exit: <n>")` which traps; the rejection surfaces at scaffold as a `ContractRejection` with that reason. `proc_exit(0)` must NOT surface as a rejection — the shim's `run` should return normally. We use the same `reject` machinery but with a sentinel reason string:
+
+   ```
+   EXIT_ZERO_REASON = "__SCAFFOLD_WASI_EXIT_ZERO__"
+   ```
+
+   This sentinel is **load-bearing across the language boundary** and must stay byte-equal in three places:
+   - **Zig:** [`src/contracts/wasi-shim/src/abi/proc.zig`](../../src/contracts/wasi-shim/src/abi/proc.zig) declares the constant; `proc_exit(0)` calls `env.reject(EXIT_ZERO_REASON)`.
+   - **TypeScript (setup):** [`src/contracts/wasi-shim/setup.ts`](../../src/contracts/wasi-shim/setup.ts) re-exports it; `withExitRecognition()` (the run-wrapper) catches `ContractRejection` with this exact `.message` and converts to a clean return.
+   - **Test helper:** [`tests/helpers/contractSnapshot.ts`](../../tests/helpers/contractSnapshot.ts) imports the same constant and treats this rejection reason as a clean exit when rendering the trace.
+
+   Any other rejection reason propagates as a real rejection. If you change the string, change all three.
 3. **Reactor vs command modules.** Command modules export `_start`; reactor modules export `_initialize` and other named entries. v1 supports both via `wasi_setup.entry`. The shim invokes `entry` and treats normal return as success.
 4. **`output_namespaces` discovery.** The shim doesn't know what namespaces the program will emit into until it emits. The contract author must declare `output_namespaces` on the contract block matching what the program emits. Mismatches are caught at verification time by the standard output-partition check. There's no automated discovery; documenting "list every namespace your program writes to" is sufficient.
 5. **Path normalization.** `.` and `..` are normalized standardly; symlinks not supported; case-sensitive byte-level comparison. Trailing slashes ignored on regular files.
@@ -333,58 +362,37 @@ Decisions where the WASI spec leaves room and our two external references (`bjor
 
 ## Testing Strategy
 
-This shim is too large and too subtle to implement with confidence from a single set of hand-written tests. The plan stacks four independent sources of correctness signal:
+The v1 shim ships with two stacked sources of correctness signal: contract-trace snapshot tests for every MVP call shape, and a QuickJS end-to-end shakedown that exercises the whole stack against a real WASI program. Reference review and the wasi-testsuite/differential-testing aspirations remain TODOs (see below).
 
-### 1. Reference-implementation review
+### 1. Contract-trace snapshot tests (live)
 
-For each WASI call the shim implements, before shipping the call we read **all** the following independently and reconcile against our implementation:
+[`tests/WasiShim.test.ts`](../../tests/WasiShim.test.ts) runs 12 fixtures (`tests/fixtures/wasm/wasi/wasi_*.wat` → `.wasm`) covering the 12-call MVP plus argv/env. Each fixture:
+- Composes a contract block via [`src/contracts/wasi-shim/setup.ts`](../../src/contracts/wasi-shim/setup.ts) (modules graph + `wasi_setup` + `output_namespaces`).
+- Drives it through [`tests/helpers/contractSnapshot.ts`](../../tests/helpers/contractSnapshot.ts) (general-purpose, not WASI-specific): a `mock` of `ContractEnv` responses (`mode`, `contract_hash`, `params`, `timestamp`, `request_body`, `fetch`, `contract_metadata`) plus an ordered `sequence` of expected host calls with `expect` matchers and `respond` values.
+- The helper captures the full trace including cross-layer JS-forwarder hops (via the `tracer` parameter on `loadModules`) and runs `assertSnapshot` on the rendered text. Rejection (`scaffold_env.reject`) is a first-class sequence step; the `EXIT_ZERO_REASON` sentinel is recognised as a clean exit.
 
-- **WASI snapshot preview 1 spec** — `WebAssembly/WASI` `wasi-0.1` branch, `legacy/preview1/docs.md` (the `main` branch removed the legacy doc; pin to `wasi-0.1`). Authoritative on signatures, errno values, and required behaviors.
-- **`bjorn3/browser_wasi_shim`** (TypeScript, MIT) — closest implementation to our shape (browser, deterministic, virtual filesystem). Reference for edge cases like `path_open` flag interactions, `fd_readdir` cookie semantics.
-- **`wasmtime/crates/wasi-common`** (Rust) — canonical engine reference. Reference for the "what would the most-used WASI engine do here?" question.
-- **`wasi-libc`** — the C library the *program* is linked against. Reference for "what call patterns will our shim actually see?" Many WASI calls have multiple flag combinations that look equivalent in the spec but only certain ones come from wasi-libc in practice.
-- Any other reasonably-mature WASI implementation we find (esp. Zig stdlib's `std.os.wasi` types).
+First-run snapshot generation: `deno test --allow-all tests/WasiShim.test.ts -- --update`. Subsequent runs match the committed `tests/__snapshots__/WasiShim.test.ts.snap` or fail with a diff.
 
-Each call's PR notes which references were checked and any divergences, with rationale. Divergences are either documented as deliberate (e.g. determinism constraints) or fixed.
+Run them via the dedicated task: `deno task test:wasi` (which also rebuilds the shim).
 
-### 2. `wasi-testsuite` (WebAssembly/wasi-testsuite)
+The 12 fixtures: `wasi_args`, `wasi_clock_monotonic`, `wasi_clock_realtime`, `wasi_environ`, `wasi_fd_read_params`, `wasi_fd_readdir`, `wasi_fd_write_record`, `wasi_fd_write_stdout`, `wasi_path_open_then_read`, `wasi_proc_exit_fail`, `wasi_proc_exit_ok`, `wasi_random`.
 
-Pulled in as `tests/vendor/wasi-testsuite/` (git submodule). Harness lives at `tests/WasiTestsuite.test.ts`:
-- Iterates the test programs (pre-compiled `.wasm` shipped in the repo).
-- For each, reads the test's adapter JSON to extract argv/env/preopens.
-- Constructs a Scaffold contract block (modules graph + `wasi_setup` from the adapter).
-- Runs via the in-process transport.
-- Captures `/out/debug` content + exit code; compares to expected.
+### 2. QuickJS shakedown (live)
 
-Initial filter: skip tests under `nn-sock-*` (no socket support), tests requiring real wall-clock time, and any test requiring real signal delivery. Document the skip list with reasons. Aim for 80%+ of tests passing on first run.
+[`tests/WasiShimQuickJS.test.ts`](../../tests/WasiShimQuickJS.test.ts) boots an unmodified `saghul/quickjs` preview1 build through the shim. The QuickJS WASM is fetched and cached locally via `deno task vendor:quickjs` ([`scripts/vendor_quickjs.ts`](../../scripts/vendor_quickjs.ts)); the test snapshots the host-call trace (`tests/__snapshots__/WasiShimQuickJS.test.ts.snap`) and asserts the program reaches `proc_exit(0)`. This is the proof the shim composes correctly: stdin → eval → stdout exercises `args_get`/`args_sizes_get`, `fd_read` on fd 0, `fd_write` on fds 1/2, `proc_exit`, `clock_time_get` (via JS `Date`), `random_get` (via JS `Math.random`).
 
-### 3. Differential testing against wasmtime
+### 3. Native Zig unit tests (live)
 
-For test programs we can also run locally with `wasmtime`, run the same binary both ways (matching argv/env/preopens), capture stdout/stderr/exit, diff. Catches divergences that the per-test expected-output comparison doesn't. Lives alongside the wasi-testsuite harness.
+`zig build test` (or via the inline build step in `deno task build:wasi-shim`'s sibling `zig build test`) runs the pure-logic modules (`vfs`, `prng`, `state`, `json`, path normalisation) on the host. Rooted at [`src/contracts/wasi-shim/src/tests.zig`](../../src/contracts/wasi-shim/src/tests.zig).
 
-### 4. Contract-trace snapshot tests
+### TODO — reference review, wasi-testsuite, differential testing
 
-Use [`tests/helpers/contractSnapshot.ts`](../../tests/helpers/contractSnapshot.ts) (general-purpose, not WASI-specific). Each per-WASI-call test:
-- Specifies a contract-block records map (`modules` JSON + any contract-level records like `wasi_setup`).
-- Specifies a `mock` of always-the-same `ContractEnv` responses (e.g. `mode`, `contract_hash`, `params`, `timestamp`).
-- Specifies an ordered `sequence` of expected host calls with `expect` matchers and `respond` values.
-- The helper runs the contract, asserts each host call matches the next sequence entry, captures the full trace (including cross-layer JS-forwarder hops via the `tracer` parameter on `loadModules`), and runs `assertSnapshot` on the rendered text.
+The original design called for additional layers that have not landed. They remain on the post-v1 roadmap:
 
-First-run snapshot generation: `deno test --allow-all <file> -- --update`. Subsequent runs match the committed `.snap` file or fail with a diff. Rejection (`scaffold_env.reject`) is a first-class sequence step (`{ type: 'reject', expect: { reason: '...' } }`); unexpected rejections fail the test.
-
-### 5. Real-world end-to-end
-
-The shim is the hard part; real programs are the proof. Targets, smallest-first:
-
-1. **`saghul/quickjs`** (~1 MB). Stdin → eval → stdout. Exercises `args_get`/`args_sizes_get`, `fd_read` on fd 0, `fd_write` on fds 1/2, `proc_exit`, `clock_time_get` (via JS `Date`), `random_get` (via JS `Math.random`). No preopened dirs, no env vars, runs out of the box. **First real-program target** — running a one-line script through it is the shakedown.
-2. **`saghul/quickjs --std --eval`** with a tiny script that reads a "file" from a `/scratch` preopen. Adds `path_open`, `fd_close`, `fd_readdir`.
-3. **VMware WLR `php-cgi-8.2.6-slim.wasm`** (~6 MB). Stresses `environ_get` heavily (CGI vars) plus `fd_read`/`fd_write`. Wants stdin populated with a request body.
-4. **VMware WLR `ruby-3.2.2-slim.wasm`** (~8 MB). Similar to PHP, fewer preopens.
-5. **VMware WLR `python-3.12.0.wasm`** (~26 MB). Touches the entire WASI surface — `path_open` walking a preopened stdlib mount, `fd_filestat_get` on every `import`, `environ_get` for `PYTHONHOME`/`PYTHONPATH`. **Graduation target** — when CPython boots and runs a `print("hello")` we have a real shim.
-
-The dev-demo's AssemblyScript path (`asc compile a one-liner` through the shim) sits between (1) and (3): smaller than Python, larger than QuickJS, but optimised for AOT compilation rather than scripting.
-
-**SpiderMonkey** is `wasi-component-model` (preview2) only; not a viable preview1 target. **SQLite CLI** lacks a clean standalone preview1 `.wasm` — `sqlite.org`'s WASM is browser-Emscripten; `wasmer/sqlite` package is from 2019 and unmaintained. Defer both unless a maintained build appears.
+- **Per-call reference review.** Cross-checking each call against the WASI snapshot preview 1 spec, `bjorn3/browser_wasi_shim`, `wasmtime/crates/wasi-common`, and `wasi-libc`. Phase A produced [`docs/design/wasi-shim-decisions.md`](./wasi-shim-decisions.md) doing exactly this for the 12-call MVP; extending the format to the long tail of `ENOTSUP`-stubbed calls is future work.
+- **`wasi-testsuite` integration.** Vendoring `WebAssembly/wasi-testsuite` as `tests/vendor/wasi-testsuite/` and running its programs through the shim. Filter list TBD; deferred to post-v1.
+- **Differential testing against `wasmtime`.** Run each test program both through the shim and through `wasmtime` locally; diff stdout/stderr/exit. Deferred to post-v1.
+- **Larger real-world programs.** PHP (`php-cgi-8.2.6-slim.wasm`), Ruby (`ruby-3.2.2-slim.wasm`), and especially CPython (`python-3.12.0.wasm`) are the graduation targets. CPython's import cache compares inodes, so it requires the inode upgrade tracked in `TODO.md` ("Wyhash inodes for `fd_filestat_get`/`path_filestat_get` before CPython graduation"). **SpiderMonkey** is preview2-only and not a viable preview1 target. **SQLite CLI** lacks a maintained standalone preview1 build; defer until one appears.
 
 ## Source-tree Layout
 
@@ -392,46 +400,55 @@ The shim source lives in its own subdirectory under `src/contracts/wasi-shim/`, 
 
 ```
 src/contracts/wasi-shim/
-├── build.zig              — Zig build script; outputs wasi-shim.wasm
-├── src/
-│   ├── main.zig           — module entry; exports WASI ABI to program, run to scaffold
-│   ├── abi/               — WASI snapshot preview 1 wire layer (no logic, just marshaling)
-│   │   ├── types.zig      — errno, fdflags, oflags, rights — straight from std.os.wasi
-│   │   ├── fd.zig         — fd_* functions; thin dispatch into vfs
-│   │   ├── path.zig       — path_* functions; resolve path → vfs node, dispatch
-│   │   ├── proc.zig       — proc_exit, proc_raise
-│   │   ├── clock.zig      — clock_time_get, clock_res_get (deterministic)
-│   │   ├── random.zig     — random_get (deterministic PRNG)
-│   │   ├── args_env.zig   — args_get, environ_get
-│   │   └── unsupported.zig — sock_*, path_symlink, etc. — return ENOTSUP
-│   ├── vfs/               — virtual filesystem; no WASI-isms, no scaffold-isms
-│   │   ├── vfs.zig        — node type, fd table, path resolver, dirent iter
-│   │   ├── memfs.zig      — in-memory tree for /scratch
-│   │   ├── devfs.zig      — /dev/null, /dev/zero, /dev/random, /dev/urandom
-│   │   └── input_node.zig — read-only nodes whose bytes are produced by a callback
-│   ├── scaffold/          — scaffold-specific wiring
-│   │   ├── env.zig        — wraps scaffold_env.* imports (Zig-side ergonomic API)
-│   │   ├── prog_mem.zig   — reads/writes program's memory via the imported memory
-│   │   ├── setup.zig      — reads wasi_setup record, populates argv/env/preopens
-│   │   └── paths.zig      — maps shim path prefixes (/in/body/..., /in/fetch/..., /out/record/..., etc.) onto scaffold calls
-│   └── prng.zig           — counter-mode H(seed || counter) PRNG, shared by random_get + /dev/random
-└── README.md              — how to build, test, contribute
+├── build.zig              — Zig build script; outputs dist/wasi-shim.wasm
+├── dist/
+│   └── wasi-shim.wasm     — built artifact; hash discovered by setup.ts at runtime
+├── setup.ts               — TS helper that composes a Scaffold contract block
+├── README.md              — quick-start; links to this design doc
+└── src/
+    ├── main.zig           — module entry; exports WASI ABI to program, run to scaffold
+    ├── state.zig          — per-run mutable state (argv/env/preopens, FD table, PRNG counters)
+    ├── prng.zig           — counter-mode H(seed || counter) PRNG, shared by random_get + /dev/random
+    ├── json.zig           — freestanding JSON subset parser (objects/strings/bool/null; no numbers)
+    ├── tests.zig          — root for `zig build test` (native, host-target unit tests)
+    ├── abi/               — WASI snapshot preview 1 wire layer (marshaling, light logic)
+    │   ├── types.zig      — errno, fdflags, oflags, rights, packed wire structs (Iovec, Fdstat, Filestat)
+    │   ├── fd.zig         — fd_* dispatchers + serialisers (Fdstat/Filestat/Dirent)
+    │   ├── path.zig       — path_* dispatchers; normalisation, splitParentLeaf, finishOpen with rights clamp
+    │   ├── proc.zig       — proc_exit (EXIT_ZERO_REASON sentinel), proc_raise
+    │   ├── clock.zig      — clock_time_get, clock_res_get (deterministic)
+    │   ├── random.zig     — random_get (deterministic PRNG)
+    │   ├── args_env.zig   — args_get, args_sizes_get, environ_get, environ_sizes_get
+    │   └── unsupported.zig — sock_*, path_symlink, etc. — return ENOTSUP / EROFS
+    ├── vfs/               — virtual filesystem; no WASI-isms, no scaffold-isms
+    │   ├── vfs.zig        — Node, NodeKind, FdTable, path resolver, error set
+    │   ├── memfs.zig      — in-memory tree for /scratch (bump-allocated, dropped on exit)
+    │   ├── devfs.zig      — /dev/null, /dev/zero, /dev/random, /dev/urandom
+    │   └── input_node.zig — read-only nodes whose bytes are produced by a callback
+    └── scaffold/          — scaffold-specific wiring
+        ├── env.zig        — wraps scaffold_env.* imports (Zig-side ergonomic API)
+        ├── prog_mem.zig   — reads/writes program's memory via program_mem.{read,write}_bytes
+        ├── setup.zig      — reads wasi_setup record, populates argv/env/preopens, builds initial FD table
+        ├── paths.zig      — maps shim path prefixes (/in/..., /out/...) onto scaffold calls; OutputLeaf, RecordAccumulator, DebugNode
+        └── paths_codec.zig — hex/decimal encoding helpers shared by paths.zig
 ```
 
 Mapping to scaffold-side code:
 
 | Path | Description |
 |------|-------------|
-| Future: `src/contracts/wasi-shim/` | Standalone Zig project producing `wasi-shim.wasm`. |
-| Future: `src/contracts/wasi-shim/dist/wasi-shim.wasm` | Built artifact. Hash baked into a constant in `setup.ts`. |
-| Future: `src/contracts/wasi-shim/setup.ts` | TS helper to construct a contract block: takes (program WASM hash, wasi_setup config) → modules graph + records. |
-| Future: `tests/helpers/contractSnapshot.ts` | The general-purpose contract trace snapshot helper. |
-| Future: `tests/vendor/wasi-testsuite/` | Vendored test suite (git submodule). |
-| Future: `tests/WasiTestsuite.test.ts` | wasi-testsuite harness. |
-| Future: `tests/WasiShim.test.ts` | Per-call unit tests and snapshot tests. |
-| Existing: [`src/worker/WasiImpl.ts`](../../src/worker/WasiImpl.ts) | Reference TS implementation of the WASI surface (~1.5kloc). Behavioural source-of-truth for the Zig port. |
-| Existing: [`src/worker/WasiConstants.ts`](../../src/worker/WasiConstants.ts) | Errno constants — Zig has these in `std.os.wasi`, but useful for cross-checking. |
-| Existing: [`docs/protocol/wasm-abi.md#stacking`](../protocol/wasm-abi.md#stacking) | Stacking graph format the shim plugs into. |
+| [`src/contracts/wasi-shim/`](../../src/contracts/wasi-shim/) | Standalone Zig project producing `wasi-shim.wasm`. |
+| [`src/contracts/wasi-shim/dist/wasi-shim.wasm`](../../src/contracts/wasi-shim/dist/wasi-shim.wasm) | Built artifact; hash discovered by `setup.ts` at runtime via `Hash.digest`. |
+| [`src/contracts/wasi-shim/setup.ts`](../../src/contracts/wasi-shim/setup.ts) | TS helper: `(shimBytes, programBytes, wasi_setup) → { records, blobs }` ready for `assertContractTraceSnapshot` / a publisher. Also exports `EXIT_ZERO_REASON` and `withExitRecognition`. |
+| [`tests/helpers/contractSnapshot.ts`](../../tests/helpers/contractSnapshot.ts) | General-purpose contract-trace snapshot helper. WASI-aware to the extent that it recognises `EXIT_ZERO_REASON`. |
+| [`tests/WasiShim.test.ts`](../../tests/WasiShim.test.ts) | 12-fixture per-call snapshot suite. |
+| [`tests/WasiShimQuickJS.test.ts`](../../tests/WasiShimQuickJS.test.ts) | QuickJS end-to-end shakedown. |
+| [`tests/WasiShimSetup.test.ts`](../../tests/WasiShimSetup.test.ts) | Unit tests for `setup.ts` (default omission, output_namespaces encoding, etc.). |
+| [`scripts/vendor_quickjs.ts`](../../scripts/vendor_quickjs.ts) | Vendoring script invoked via `deno task vendor:quickjs`. |
+| [`src/worker/WasiImpl.ts`](../../src/worker/WasiImpl.ts) | Reference TS implementation of the WASI surface (~1.5kloc). Behavioural source-of-truth that informed the Zig port; not invoked at runtime by the shim path. |
+| [`src/worker/WasiConstants.ts`](../../src/worker/WasiConstants.ts) | Errno constants — Zig has these in `std.os.wasi`, but useful for cross-checking. |
+| [`docs/protocol/wasm-abi.md#stacking`](../protocol/wasm-abi.md#stacking) | Stacking graph format the shim plugs into. |
+| **Not landed:** `tests/vendor/wasi-testsuite/`, `tests/WasiTestsuite.test.ts` | wasi-testsuite vendoring + harness; see Testing Strategy TODO. |
 
 ## Cross-references
 
