@@ -1,0 +1,76 @@
+export const snapshot = {};
+
+snapshot[`WasiShim - QuickJS shakedown: print("hello world") 1`] = `
+\`> entry wasi_shim:run (mode=run)
+  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
+  < return
+  > forward wasi_shim -> base:params (scaffold_env.params)
+  < return
+  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+  < return
+  > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x9a1579f4e4cf5763e2b63fc5b66a1f0a7f7f78ffec96e3da3e3e1d5a24019f69, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(45) "{\\\\"argv\\\\":[\\\\"qjs\\\\",\\\\"-e\\\\",\\\\"print('hello world');\\\\"]}"}
+  < return
+  > forward wasi_shim -> program:_start (program._start)
+    > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:environ_sizes_get (wasi_snapshot_preview1.environ_sizes_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:args_sizes_get (wasi_snapshot_preview1.args_sizes_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:args_get (wasi_snapshot_preview1.args_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:fd_fdstat_get (wasi_snapshot_preview1.fd_fdstat_get)
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+    > forward program -> wasi_shim:fd_write (wasi_snapshot_preview1.fd_write)
+      > forward wasi_shim -> program:memory (program_mem.read_bytes)
+      < return
+      > forward wasi_shim -> program:memory (program_mem.read_bytes)
+      < return
+      > forward wasi_shim -> base:debug (scaffold_env.debug)
+        > scaffold_env.debug(message="hello world") [mock] -> null
+      < return
+      > forward wasi_shim -> program:memory (program_mem.write_bytes)
+      < return
+    < return
+  < return
+< exit ok\`
+`;
