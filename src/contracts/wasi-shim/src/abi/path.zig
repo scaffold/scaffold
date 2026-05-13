@@ -84,6 +84,21 @@ const DirfdLookup = union(enum) {
     err: abi.Errno,
 };
 
+/// Resolve `split.parent` against `start`, treating an empty parent (the
+/// canonical single-leaf-name case, e.g. `creat("foo", ...)` against a dirfd)
+/// as `start` itself. Without this short-circuit `normalisePath("")` would
+/// return `error.Empty` -> EINVAL, breaking every CREAT-shaped call against a
+/// preopen dirfd. Returns `null` and sets `out_errno` on resolve failure so
+/// the caller can short-circuit with the appropriate WASI errno.
+fn resolveParent(start: *vfs.Node, parent_path: []const u8, out_errno: *abi.Errno) ?*vfs.Node {
+    if (parent_path.len == 0) return start;
+    const r = normalisePath(start, parent_path) catch |err| {
+        out_errno.* = errnoFromNormalise(err);
+        return null;
+    };
+    return r.node;
+}
+
 /// Validate the dirfd and return its node. Reasons for failure:
 ///   - missing / out-of-range slot     → BADF
 ///   - the node's stat itself errors   → propagated via `errnoFromVfs`
@@ -202,6 +217,115 @@ fn tryTruncate(node: *vfs.Node) void {
     // append-only by virtue of being write-buffered.
 }
 
+/// Bitmask of WASI rights the node can actually serve when the FD is
+/// opened on it directly. Used to clamp `rights_base` at path_open time.
+/// The clamp model: rights are enforced ONLY at the shim (in the per-call
+/// rights gates of fd_read/fd_write/fd_seek/etc.); OS-level enforcement is
+/// N/A because the shim *is* the FS. Clamping at open means a caller that
+/// requested near-max rights (wasi-libc's default) still gets a workable
+/// FD, but the rights bitmap accurately reflects what the FD can do -- so
+/// subsequent ops return BADF (the rights gate) on capability violations
+/// instead of ROFS/ISDIR (the per-op enforcement).
+pub fn nodeSupportedRights(node: *vfs.Node) u64 {
+    return switch (node.vtable.kind) {
+        // Read-only file: read/seek/tell/stat. No write, no fdstat-set
+        // (immutable), no truncate.
+        .input_file => abi.RIGHT_FD_READ | abi.RIGHT_FD_SEEK | abi.RIGHT_FD_TELL |
+            abi.RIGHT_FD_FILESTAT_GET | abi.RIGHT_FD_ADVISE |
+            abi.RIGHT_POLL_FD_READWRITE,
+        // Write-only seekable file (record/output accumulators). The shim
+        // accepts SEEK on these so wasi-libc's "rewind on close" patterns
+        // work, but the in-memory writer treats out-of-order offsets as
+        // INVAL -- the rights bitmap stays permissive, the node enforces.
+        .output_file => abi.RIGHT_FD_WRITE | abi.RIGHT_FD_SEEK | abi.RIGHT_FD_TELL |
+            abi.RIGHT_FD_FILESTAT_GET | abi.RIGHT_FD_DATASYNC |
+            abi.RIGHT_FD_SYNC | abi.RIGHT_FD_ADVISE |
+            abi.RIGHT_FD_FILESTAT_SET_SIZE |
+            abi.RIGHT_FD_FILESTAT_SET_TIMES | abi.RIGHT_POLL_FD_READWRITE,
+        // Write-only stream (/out/debug, stdio bound to debug). No seek.
+        .output_stream => abi.RIGHT_FD_WRITE | abi.RIGHT_FD_FILESTAT_GET |
+            abi.RIGHT_FD_DATASYNC | abi.RIGHT_FD_SYNC |
+            abi.RIGHT_POLL_FD_READWRITE,
+        // R/W seekable file (memfs).
+        .memfs_file => abi.RIGHT_FD_READ | abi.RIGHT_FD_WRITE |
+            abi.RIGHT_FD_SEEK | abi.RIGHT_FD_TELL |
+            abi.RIGHT_FD_FILESTAT_GET | abi.RIGHT_FD_FILESTAT_SET_SIZE |
+            abi.RIGHT_FD_FILESTAT_SET_TIMES | abi.RIGHT_FD_DATASYNC |
+            abi.RIGHT_FD_SYNC | abi.RIGHT_FD_ADVISE |
+            abi.RIGHT_FD_ALLOCATE | abi.RIGHT_POLL_FD_READWRITE,
+        // Mutable directory: readdir + mutation rights propagated to
+        // children via inheriting (the caller selects what they want; the
+        // inheriting set advertises what's available).
+        .memfs_directory => abi.RIGHT_FD_READDIR | abi.RIGHT_FD_FILESTAT_GET |
+            abi.RIGHT_PATH_OPEN | abi.RIGHT_PATH_CREATE_DIRECTORY |
+            abi.RIGHT_PATH_CREATE_FILE | abi.RIGHT_PATH_FILESTAT_GET |
+            abi.RIGHT_PATH_FILESTAT_SET_SIZE |
+            abi.RIGHT_PATH_FILESTAT_SET_TIMES | abi.RIGHT_PATH_REMOVE_DIRECTORY |
+            abi.RIGHT_PATH_RENAME_SOURCE | abi.RIGHT_PATH_RENAME_TARGET |
+            abi.RIGHT_PATH_UNLINK_FILE,
+        // Read-only directory (/in, /out, /dev): readdir + path_open. No
+        // mutation rights -- attempts to create/unlink under here surface
+        // via the existing mutationGate.
+        .static_directory => abi.RIGHT_FD_READDIR | abi.RIGHT_FD_FILESTAT_GET |
+            abi.RIGHT_PATH_OPEN | abi.RIGHT_PATH_FILESTAT_GET,
+        // R/W character device (/dev/null, /dev/zero, /dev/random write
+        // path for wasi-libc's seed init). No seek.
+        .rw_device => abi.RIGHT_FD_READ | abi.RIGHT_FD_WRITE |
+            abi.RIGHT_FD_FILESTAT_GET | abi.RIGHT_POLL_FD_READWRITE,
+        // Read-only character device. Currently unused (we treat
+        // /dev/random as rw_device so wasi-libc seed init can write); kept
+        // in the enum for completeness so a future stricter mode can
+        // graduate to it.
+        .ro_device => abi.RIGHT_FD_READ | abi.RIGHT_FD_FILESTAT_GET |
+            abi.RIGHT_POLL_FD_READWRITE,
+        // Conservative fallback for vtables that haven't opted into the
+        // classification yet. Zero rights -- any subsequent fd_read/
+        // fd_write returns BADF, which surfaces as a clear rights error.
+        // New node implementations should declare a kind explicitly.
+        .opaque_node => 0,
+    };
+}
+
+/// Bitmask of WASI rights this node's *descendants* can claim. For non-
+/// directories, equals `nodeSupportedRights` (vacuous -- there are no
+/// descendants). For directories, this is the union of every supported-
+/// rights set the directory can hand out via path_open. wasi-libc
+/// computes "max child rights = dirfd's `fs_rights_inheriting`" before
+/// calling path_open, so the inheriting set must be wide enough to cover
+/// what the children actually support -- otherwise wasi-libc would mask
+/// out (e.g.) FD_READ when opening `/in/foo` because the dirfd's
+/// inheriting didn't advertise it.
+pub fn nodeInheritingRights(node: *vfs.Node) u64 {
+    return switch (node.vtable.kind) {
+        // Directories: union of every kind of child a path_open beneath
+        // them might land on. We over-approximate liberally because the
+        // child's own per-call clamp (in finishOpen) restricts the actual
+        // FD; advertising too-broad inheriting is harmless.
+        .static_directory, .memfs_directory => allInheritableRights(),
+        // Non-directories don't bear children. Use supported as the
+        // inheriting set; wasi-libc never reads it for non-dirs.
+        else => nodeSupportedRights(node),
+    };
+}
+
+/// Compile-time union of the per-kind supported rights for every node
+/// kind that can sit under a directory. Cached as a comptime constant so
+/// the bitmask isn't recomputed per call.
+fn allInheritableRights() u64 {
+    return abi.RIGHT_FD_READ | abi.RIGHT_FD_WRITE | abi.RIGHT_FD_SEEK |
+        abi.RIGHT_FD_TELL | abi.RIGHT_FD_FILESTAT_GET |
+        abi.RIGHT_FD_FILESTAT_SET_SIZE | abi.RIGHT_FD_FILESTAT_SET_TIMES |
+        abi.RIGHT_FD_DATASYNC | abi.RIGHT_FD_SYNC | abi.RIGHT_FD_ADVISE |
+        abi.RIGHT_FD_ALLOCATE | abi.RIGHT_FD_READDIR |
+        abi.RIGHT_PATH_OPEN | abi.RIGHT_PATH_CREATE_DIRECTORY |
+        abi.RIGHT_PATH_CREATE_FILE | abi.RIGHT_PATH_FILESTAT_GET |
+        abi.RIGHT_PATH_FILESTAT_SET_SIZE |
+        abi.RIGHT_PATH_FILESTAT_SET_TIMES |
+        abi.RIGHT_PATH_REMOVE_DIRECTORY | abi.RIGHT_PATH_RENAME_SOURCE |
+        abi.RIGHT_PATH_RENAME_TARGET | abi.RIGHT_PATH_UNLINK_FILE |
+        abi.RIGHT_POLL_FD_READWRITE;
+}
+
 /// Allocate the FdEntry, stash the new index, return SUCCESS.
 fn finishOpen(
     node: *vfs.Node,
@@ -212,15 +336,29 @@ fn finishOpen(
 ) i32 {
     const fd_table = &state.current().fd_table;
     const fdflags_u32: u32 = @bitCast(fdflags);
+    // Clamp the caller's requested rights to what this node can actually
+    // serve. wasi-libc requests near-max rights as a default; without
+    // clamping, the FD's rights bitmap would advertise capabilities the
+    // node can't honour (e.g. FD_WRITE on a /in/* leaf), and the per-op
+    // enforcement would surface a confusing ROFS/ISDIR/NotSupported error
+    // mid-operation. Post-clamp, the existing fd_read/fd_write rights
+    // gates produce BADF synchronously when the program asks for an
+    // operation the node doesn't support.
+    //
+    // `rights_inheriting` is clamped against the node's *child* rights
+    // (a wider union for directories) rather than its own supported set,
+    // so wasi-libc's "compute child max from dirfd inheriting" pattern
+    // doesn't mask out (e.g.) FD_READ when opening `/in/foo` from the
+    // /in dirfd.
+    const supported = nodeSupportedRights(node);
+    const inheriting_supported = nodeInheritingRights(node);
+    const requested_base: u64 = @bitCast(rights_base);
+    const requested_inh: u64 = @bitCast(rights_inheriting);
     const idx = fd_table.alloc(.{
         .node = node,
         .offset = 0,
-        // Per design: rights are tracked but enforced only at the operation
-        // level via the node's vtable. We honour what the caller asked for;
-        // the next fd_read/fd_write traps with the right errno from the node
-        // if the operation isn't supported there.
-        .rights_base = @bitCast(rights_base),
-        .rights_inheriting = @bitCast(rights_inheriting),
+        .rights_base = requested_base & supported,
+        .rights_inheriting = requested_inh & inheriting_supported,
         .fdflags = @truncate(fdflags_u32),
         .preopen_path = null,
     }) orelse return @intFromEnum(abi.Errno.NFILE);
@@ -250,10 +388,9 @@ fn createUnderMemfs(
     // walking ops, so a CREAT here would be a contract bug.
     if (isDotOrDotDot(split.leaf)) return @intFromEnum(abi.Errno.INVAL);
 
-    const parent_resolve = normalisePath(start, split.parent) catch |err|
-        return @intFromEnum(errnoFromNormalise(err));
-
-    const parent = parent_resolve.node;
+    var parent_errno: abi.Errno = abi.Errno.SUCCESS;
+    const parent = resolveParent(start, split.parent, &parent_errno) orelse
+        return @intFromEnum(parent_errno);
     if (!memfs.isMemfsDir(parent)) {
         // Per design: CREAT under /in → NOTCAPABLE; CREAT into /out's virtual
         // tree never reaches here (the dual file/dir nodes exist before
@@ -263,17 +400,21 @@ fn createUnderMemfs(
         return @intFromEnum(abi.Errno.NOTCAPABLE);
     }
 
+    // Invariant: isMemfsDir(parent) is true (just checked), so arenaOf must
+    // succeed. Per AGENTS.md "never silently drop errors": panic if a
+    // future memfs refactor breaks the invariant rather than masking the
+    // bug as IO.
     const arena = memfs.arenaOf(parent) orelse
-        return @intFromEnum(abi.Errno.IO);
+        @panic("memfs invariant broken: isMemfsDir(parent) but arenaOf returned null");
     const new_node = if (create_dir)
         memfs.makeDir(arena, split.leaf) orelse return @intFromEnum(abi.Errno.NOSPC)
     else
         memfs.makeFile(arena, split.leaf, null) orelse return @intFromEnum(abi.Errno.NOSPC);
     if (!memfs.addChild(parent, split.leaf, new_node)) {
-        // Race-free in our single-threaded model, but `addChild` also fails
-        // on AlreadyExists -- which is impossible because we got here only
-        // after resolve returned NotFound. Surface OutOfSpace as the only
-        // remaining failure mode.
+        // Race-free in our single-threaded model, and we got here only
+        // because resolve returned NotFound -- so AlreadyExists is
+        // impossible. The only remaining failure mode is the children
+        // array's bytes-allocation arena exhausting (NOSPC).
         return @intFromEnum(abi.Errno.NOSPC);
     }
 
@@ -400,26 +541,35 @@ pub fn path_create_directory(dirfd: i32, path_ptr: i32, path_len: i32) i32 {
     const split = splitParentLeaf(path) orelse return @intFromEnum(abi.Errno.INVAL);
     if (isDotOrDotDot(split.leaf)) return @intFromEnum(abi.Errno.INVAL);
 
-    const parent_resolve = normalisePath(start, split.parent) catch |err|
-        return @intFromEnum(errnoFromNormalise(err));
-
-    const parent = parent_resolve.node;
+    var parent_errno: abi.Errno = abi.Errno.SUCCESS;
+    const parent = resolveParent(start, split.parent, &parent_errno) orelse
+        return @intFromEnum(parent_errno);
     const zone_errno = mutationGate(parent);
     if (zone_errno != abi.Errno.SUCCESS) return @intFromEnum(zone_errno);
 
+    // Invariant: mutationGate returned SUCCESS only if parent is a memfs dir,
+    // so arenaOf must succeed. Per AGENTS.md "never silently drop errors": a
+    // null here means a future memfs refactor broke this invariant; surface
+    // it as a panic rather than an opaque IO errno.
     const arena = memfs.arenaOf(parent) orelse
-        return @intFromEnum(abi.Errno.IO);
+        @panic("memfs invariant broken: mutationGate accepted parent but arenaOf returned null");
     const new_dir = memfs.makeDir(arena, split.leaf) orelse
         return @intFromEnum(abi.Errno.NOSPC);
     if (!memfs.addChild(parent, split.leaf, new_dir)) {
         // Either AlreadyExists (real error) or arena exhaustion mid-grow.
-        // Probe the parent for the leaf to disambiguate.
+        // Probe the parent for the leaf to disambiguate. Switch on the lookup
+        // error variant per AGENTS.md ("never silently drop errors") so a
+        // future lookup that returns BadFd / NotADirectory etc. propagates
+        // accurately instead of being collapsed to NOSPC.
         const lookup = parent.vtable.lookup orelse
-            return @intFromEnum(abi.Errno.IO);
+            @panic("memfs invariant broken: parent has no lookup vtable");
         if (lookup(parent, split.leaf)) |_| {
             return @intFromEnum(abi.Errno.EXIST);
-        } else |_| {
-            return @intFromEnum(abi.Errno.NOSPC);
+        } else |err| switch (err) {
+            // NotFound here means addChild's bytes-allocation succeeded but
+            // its capacity grow ran out -- map to NOSPC.
+            vfs.VfsError.NotFound => return @intFromEnum(abi.Errno.NOSPC),
+            else => return @intFromEnum(abi.errnoFromVfs(err)),
         }
     }
     return @intFromEnum(abi.Errno.SUCCESS);
@@ -451,10 +601,9 @@ fn removeEntry(dirfd: i32, path_ptr: i32, path_len: i32, kind: RemoveKind) i32 {
     const split = splitParentLeaf(path) orelse return @intFromEnum(abi.Errno.INVAL);
     if (isDotOrDotDot(split.leaf)) return @intFromEnum(abi.Errno.INVAL);
 
-    const parent_resolve = normalisePath(start, split.parent) catch |err|
-        return @intFromEnum(errnoFromNormalise(err));
-
-    const parent = parent_resolve.node;
+    var parent_errno: abi.Errno = abi.Errno.SUCCESS;
+    const parent = resolveParent(start, split.parent, &parent_errno) orelse
+        return @intFromEnum(parent_errno);
     const zone_errno = mutationGate(parent);
     if (zone_errno != abi.Errno.SUCCESS) return @intFromEnum(zone_errno);
 
@@ -500,13 +649,12 @@ pub fn path_rename(
     if (isDotOrDotDot(old_split.leaf) or isDotOrDotDot(new_split.leaf))
         return @intFromEnum(abi.Errno.INVAL);
 
-    const old_parent_resolve = normalisePath(old_start, old_split.parent) catch |err|
-        return @intFromEnum(errnoFromNormalise(err));
-    const new_parent_resolve = normalisePath(new_start, new_split.parent) catch |err|
-        return @intFromEnum(errnoFromNormalise(err));
-
-    const old_parent = old_parent_resolve.node;
-    const new_parent = new_parent_resolve.node;
+    var old_parent_errno: abi.Errno = abi.Errno.SUCCESS;
+    const old_parent = resolveParent(old_start, old_split.parent, &old_parent_errno) orelse
+        return @intFromEnum(old_parent_errno);
+    var new_parent_errno: abi.Errno = abi.Errno.SUCCESS;
+    const new_parent = resolveParent(new_start, new_split.parent, &new_parent_errno) orelse
+        return @intFromEnum(new_parent_errno);
 
     const old_gate = mutationGate(old_parent);
     if (old_gate != abi.Errno.SUCCESS) return @intFromEnum(old_gate);
@@ -553,12 +701,15 @@ pub fn path_link(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32, _: i32) i32 {
 }
 
 /// Per spec: readlink on a non-symlink returns EINVAL; on a missing path,
-/// ENOENT. Since we never have symlinks, every successful path resolution
-/// would still hit "not a symlink", which is EINVAL. We keep the simpler
-/// NOENT decision (matches a wasi-libc `readlink` probe expecting "no such
-/// link") to avoid a redundant resolve pass for an unimplemented call.
+/// ENOENT. Since we never have symlinks, the universal answer matches the
+/// "not a symlink" branch of the spec: EINVAL. (Earlier drafts returned
+/// NOENT here, but that contradicted both the spec table and the design
+/// doc's "symlinks: ENOTSUP everywhere" out-of-scope note. We pick EINVAL
+/// as the spec-conformant signal that "this resolved fine but isn't a
+/// link", and avoid the resolve-then-reject pass since no real program
+/// calls readlink on this shim today.)
 pub fn path_readlink(_: i32, _: i32, _: i32, _: i32, _: i32, _: i32) i32 {
-    return @intFromEnum(abi.Errno.NOENT);
+    return @intFromEnum(abi.Errno.INVAL);
 }
 
 // -- tests ---------------------------------------------------------------
@@ -709,4 +860,82 @@ test "isDotOrDotDot recognises `.` and `..`" {
     try testing.expect(!isDotOrDotDot("..."));
     try testing.expect(!isDotOrDotDot("foo"));
     try testing.expect(!isDotOrDotDot(""));
+}
+
+test "resolveParent: empty parent returns start (single-leaf-name CREAT case)" {
+    // Regression test for the Phase C blocker: splitParentLeaf("foo") returns
+    // parent="" leaf="foo". Without the empty-parent short-circuit, the
+    // canonical creat(2)-shaped path_open(scratch_dirfd, "newfile", O_CREAT)
+    // hit normalisePath("") -> error.Empty -> EINVAL, breaking every CREAT
+    // / unlink / rename / mkdir / rmdir against a top-level leaf.
+    var root = TestNode.dir(&.{});
+    var out_errno: abi.Errno = abi.Errno.SUCCESS;
+    const got = resolveParent(&root.node, "", &out_errno);
+    try testing.expect(got != null);
+    try testing.expect(got.? == &root.node);
+    try testing.expectEqual(abi.Errno.SUCCESS, out_errno);
+}
+
+test "resolveParent: non-empty parent walks via normalisePath" {
+    var leaf = TestNode.file();
+    var sub = TestNode.dir(&[_]TestNode.Child{.{ .name = "leaf", .node = &leaf }});
+    var root = TestNode.dir(&[_]TestNode.Child{.{ .name = "sub", .node = &sub }});
+    var out_errno: abi.Errno = abi.Errno.SUCCESS;
+    // Parent path "sub/" -> resolves to `sub`. (splitParentLeaf("sub/x")
+    // would yield parent="sub/" leaf="x".)
+    const got = resolveParent(&root.node, "sub/", &out_errno);
+    try testing.expect(got != null);
+    try testing.expect(got.? == &sub.node);
+}
+
+test "resolveParent: non-empty parent that fails to resolve sets errno" {
+    var root = TestNode.dir(&.{});
+    var out_errno: abi.Errno = abi.Errno.SUCCESS;
+    // "missing" doesn't exist under root -> NotFound -> NOENT.
+    const got = resolveParent(&root.node, "missing/", &out_errno);
+    try testing.expect(got == null);
+    try testing.expectEqual(abi.Errno.NOENT, out_errno);
+}
+
+test "splitParentLeaf single-segment input has empty parent (regression)" {
+    // The Phase C blocker pivoted on splitParentLeaf returning .parent="";
+    // the contract here is that the helper does NOT special-case it. The
+    // fix lives in resolveParent, not in splitParentLeaf -- this test
+    // documents that intent.
+    const r = splitParentLeaf("foo").?;
+    try testing.expectEqualStrings("", r.parent);
+    try testing.expectEqualStrings("foo", r.leaf);
+}
+
+test "nodeSupportedRights: opaque vtable defaults to zero" {
+    var dummy = TestNode.file(); // file_vtable has .kind = .opaque_node
+    try testing.expectEqual(@as(u64, 0), nodeSupportedRights(&dummy.node));
+}
+
+test "nodeInheritingRights: directories advertise the union of child rights" {
+    // Build a kind-tagged dir vtable directly (TestNode default is opaque).
+    const dir_vtable: vfs.NodeVTable = .{
+        .stat = TestNode.statImpl,
+        .read = TestNode.readImpl,
+        .write = TestNode.writeImpl,
+        .close = TestNode.closeImpl,
+        .readdir = null,
+        .lookup = TestNode.lookupImpl,
+        .kind = .static_directory,
+    };
+    var dir_node: vfs.Node = .{ .vtable = &dir_vtable };
+
+    // Inheriting must include FD_READ + FD_WRITE so wasi-libc's "max
+    // child rights = dirfd inheriting" pattern doesn't pre-mask either.
+    const inh = nodeInheritingRights(&dir_node);
+    try testing.expect((inh & abi.RIGHT_FD_READ) != 0);
+    try testing.expect((inh & abi.RIGHT_FD_WRITE) != 0);
+    try testing.expect((inh & abi.RIGHT_FD_SEEK) != 0);
+    try testing.expect((inh & abi.RIGHT_PATH_OPEN) != 0);
+}
+
+test "nodeInheritingRights: non-directories report supported (no children)" {
+    var leaf = TestNode.file();
+    // file_vtable defaults to .opaque_node -> supported = 0.
+    try testing.expectEqual(nodeSupportedRights(&leaf.node), nodeInheritingRights(&leaf.node));
 }

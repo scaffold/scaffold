@@ -36,6 +36,7 @@ const codec = @import("paths_codec.zig");
 const paths = @import("paths.zig");
 const state_mod = @import("../state.zig");
 const vfs = @import("../vfs/vfs.zig");
+const abi_path = @import("../abi/path.zig");
 
 pub const ExtraFd = struct {
     fd: u32,
@@ -256,14 +257,17 @@ pub fn populateFdTable(setup: ParsedSetup, alloc: state_mod.Allocator) !void {
 
     // Stdio: alloc returns 0, 1, 2 in order from the LIFO. The design
     // specifies stdio at fixed positions; the table's init order matches.
+    // Rights are clamped to what the underlying node can serve so a
+    // program calling `fd_fdstat_get(0)` sees an honest capability set
+    // rather than a maxInt that'd lie about (e.g.) FD_SEEK on /dev/random.
     const stdio_paths = [_][]const u8{ setup.stdin_path, setup.stdout_path, setup.stderr_path };
     for (stdio_paths) |path| {
         const node = (try vfs.resolve(root, path)).node;
         _ = fd_table.alloc(.{
             .node = node,
             .offset = 0,
-            .rights_base = std.math.maxInt(u64),
-            .rights_inheriting = std.math.maxInt(u64),
+            .rights_base = abi_path.nodeSupportedRights(node),
+            .rights_inheriting = abi_path.nodeInheritingRights(node),
             .fdflags = 0,
             .preopen_path = null,
         }) orelse return error.FdTableFull;
@@ -271,15 +275,18 @@ pub fn populateFdTable(setup: ParsedSetup, alloc: state_mod.Allocator) !void {
 
     // Preopens: each gets the next sequential fd starting at 3. Path bytes
     // are duped so `fd_prestat_dir_name` can return them after the parsed
-    // setup goes out of scope.
+    // setup goes out of scope. Inheriting is set to the union of every
+    // child rights set the dir can hand out so wasi-libc's "max child
+    // rights = dirfd inheriting" pattern doesn't pre-mask FD_READ /
+    // FD_WRITE before path_open.
     for (setup.preopens) |path| {
         const node = (try vfs.resolve(root, path)).node;
         const path_copy = codec.dupeBytes(alloc, path);
         _ = fd_table.alloc(.{
             .node = node,
             .offset = 0,
-            .rights_base = std.math.maxInt(u64),
-            .rights_inheriting = std.math.maxInt(u64),
+            .rights_base = abi_path.nodeSupportedRights(node),
+            .rights_inheriting = abi_path.nodeInheritingRights(node),
             .fdflags = 0,
             .preopen_path = path_copy,
         }) orelse return error.FdTableFull;
@@ -293,8 +300,8 @@ pub fn populateFdTable(setup: ParsedSetup, alloc: state_mod.Allocator) !void {
         fd_table.entries[extra.fd] = .{
             .node = node,
             .offset = 0,
-            .rights_base = std.math.maxInt(u64),
-            .rights_inheriting = std.math.maxInt(u64),
+            .rights_base = abi_path.nodeSupportedRights(node),
+            .rights_inheriting = abi_path.nodeInheritingRights(node),
             .fdflags = 0,
             .preopen_path = null,
         };

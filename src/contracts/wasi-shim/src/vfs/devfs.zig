@@ -34,6 +34,7 @@ const dev_null_vtable: vfs.NodeVTable = .{
     .close = noopClose,
     .readdir = null,
     .lookup = null,
+    .kind = .rw_device,
 };
 
 var dev_null_node: vfs.Node = .{ .vtable = &dev_null_vtable };
@@ -57,6 +58,7 @@ const dev_zero_vtable: vfs.NodeVTable = .{
     .close = noopClose,
     .readdir = null,
     .lookup = null,
+    .kind = .rw_device,
 };
 
 var dev_zero_node: vfs.Node = .{ .vtable = &dev_zero_vtable };
@@ -81,6 +83,12 @@ const dev_random_vtable: vfs.NodeVTable = .{
     .close = noopClose,
     .readdir = null,
     .lookup = null,
+    // rw_device, not ro_device, even though /dev/random is "read-only" in
+    // intent: wasi-libc's seed-init path opens it O_RDWR and writes to mix
+    // entropy. We accept writes (silently discarded -- entropy mixing would
+    // break determinism) so the rights clamp doesn't make wasi-libc trip
+    // over a BADF.
+    .kind = .rw_device,
 };
 
 var dev_random_node: vfs.Node = .{ .vtable = &dev_random_vtable };
@@ -136,6 +144,7 @@ const dev_dir_vtable: vfs.NodeVTable = .{
     .close = noopClose,
     .readdir = dirReaddir,
     .lookup = dirLookup,
+    .kind = .static_directory,
 };
 
 var dev_dir_node: vfs.Node = .{ .vtable = &dev_dir_vtable };

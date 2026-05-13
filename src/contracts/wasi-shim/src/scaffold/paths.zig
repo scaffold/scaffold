@@ -106,6 +106,7 @@ const StaticDir = struct {
         .close = noopClose,
         .readdir = readdir,
         .lookup = lookup,
+        .kind = .static_directory,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -292,6 +293,7 @@ const VerifierBranchRoot = struct {
         // ENOTSUP on readdir (faking enumeration would mislead programs).
         .readdir = null,
         .lookup = lookup,
+        .kind = .static_directory,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -338,6 +340,7 @@ const ParamsLevel = struct {
         .close = noopClose,
         .readdir = null,
         .lookup = lookup,
+        .kind = .static_directory,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -411,6 +414,7 @@ const VerifierLeaf = struct {
         .close = noopClose,
         .readdir = null,
         .lookup = null,
+        .kind = .input_file,
     };
 
     fn stat(self_node: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -491,6 +495,7 @@ const FetchAccumulator = struct {
         .close = noopClose,
         .readdir = null,
         .lookup = lookup,
+        .kind = .input_file,
     };
 
     fn stat(self_node: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -578,6 +583,7 @@ const OutRoot = struct {
         .close = noopClose,
         .readdir = null,
         .lookup = lookup,
+        .kind = .static_directory,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -642,6 +648,7 @@ const RecordAccumulator = struct {
         .close = close,
         .readdir = null,
         .lookup = lookup,
+        .kind = .output_file,
     };
 
     fn stat(self_node: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -725,6 +732,7 @@ const OutputParamsLevel = struct {
         .close = noopClose,
         .readdir = null,
         .lookup = lookup,
+        .kind = .static_directory,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -772,6 +780,7 @@ const OutputAmountLevel = struct {
         .close = noopClose,
         .readdir = null,
         .lookup = lookup,
+        .kind = .static_directory,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -839,6 +848,7 @@ const OutputLeaf = struct {
         .close = close,
         .readdir = null,
         .lookup = null,
+        .kind = .output_file,
     };
 
     fn amount(self: *const OutputLeaf) i128 {
@@ -966,6 +976,7 @@ const DebugNode = struct {
         .close = closeFlush,
         .readdir = null,
         .lookup = null,
+        .kind = .output_stream,
     };
 
     fn stat(_: *vfs.Node) vfs.VfsError!vfs.Stat {

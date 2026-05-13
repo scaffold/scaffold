@@ -64,6 +64,7 @@ const MemfsDir = struct {
         .close = close,
         .readdir = readdir,
         .lookup = lookup,
+        .kind = .memfs_directory,
     };
 
     fn stat(self: *vfs.Node) vfs.VfsError!vfs.Stat {
@@ -125,6 +126,7 @@ const MemfsFile = struct {
         .close = close,
         .readdir = null,
         .lookup = null,
+        .kind = .memfs_file,
     };
 
     fn stat(self: *vfs.Node) vfs.VfsError!vfs.Stat {

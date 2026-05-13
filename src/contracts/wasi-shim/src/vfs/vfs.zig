@@ -48,6 +48,44 @@ pub const DirEntry = struct {
     filetype: Filetype,
 };
 
+/// Coarse classification used by `path_open` to derive which WASI rights
+/// the underlying node can actually serve. The abi layer clamps the
+/// caller's requested rights against this set so subsequent fd_read/
+/// fd_write calls return BADF (the rights gate) instead of ROFS/ISDIR
+/// (the per-call enforcement). Each implementation declares its kind on
+/// its vtable; the `opaque_node` default is conservative (no R/W rights
+/// implied) for vtables added before this field existed.
+pub const NodeKind = enum {
+    /// Default for vtables that haven't opted into classification yet.
+    /// Treated as zero supported rights (most restrictive); any fd_read /
+    /// fd_write probe will then return BADF.
+    opaque_node,
+    /// Read-only file (e.g. /in/* leaves, fetch accumulators). FD_READ +
+    /// FD_SEEK + FD_TELL + FD_FILESTAT_GET.
+    input_file,
+    /// Write-only file (/out/record/*, /out/output/*). FD_WRITE +
+    /// FD_FILESTAT_GET. Notably no FD_SEEK -- /out is append-only.
+    output_file,
+    /// Write-only character stream (/out/debug, stdio bound to debug).
+    /// FD_WRITE + FD_FILESTAT_GET. No SEEK, no READ.
+    output_stream,
+    /// Read+write seekable file (/scratch/* memfs). FD_READ + FD_WRITE +
+    /// FD_SEEK + FD_TELL + FD_FILESTAT_GET + truncation/filestat-set.
+    memfs_file,
+    /// Mutable directory (/scratch). FD_READDIR + FD_FILESTAT_GET +
+    /// PATH_* mutation rights. No R/W.
+    memfs_directory,
+    /// Read-only directory (/in, /out, /dev and their static subdirs).
+    /// FD_READDIR + FD_FILESTAT_GET. No mutation rights.
+    static_directory,
+    /// Read+write character device (/dev/null, /dev/zero). FD_READ +
+    /// FD_WRITE + FD_FILESTAT_GET. No SEEK.
+    rw_device,
+    /// Read-only character device (/dev/random, /dev/urandom). FD_READ +
+    /// FD_FILESTAT_GET. No SEEK, no WRITE.
+    ro_device,
+};
+
 pub const NodeVTable = struct {
     stat: *const fn (self: *Node) VfsError!Stat,
     /// Read into `out` from `offset`. Streams ignore `offset`; a short
@@ -63,6 +101,10 @@ pub const NodeVTable = struct {
     readdir: ?*const fn (self: *Node, cookie: u64, out: []DirEntry) VfsError!usize,
     /// Directory-only: lookup a single child segment (no slashes).
     lookup: ?*const fn (self: *Node, name: []const u8) VfsError!*Node,
+    /// Coarse classification used by `path_open` to clamp WASI rights.
+    /// Defaults to `opaque_node` (zero rights) so older vtables remain
+    /// safe; new vtables should declare an explicit kind.
+    kind: NodeKind = .opaque_node,
 };
 
 pub const Node = struct {

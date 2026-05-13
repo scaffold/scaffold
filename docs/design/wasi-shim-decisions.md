@@ -290,10 +290,16 @@ All eight are deterministic by construction.
 - `/dev/*`, `/in/*`, `/scratch/*` ⇒ no side effects.
 
 **Decisions**:
-1. Order of operations: (a) capture handle, (b) null the slot, (c) push
-   index to free-list, (d) run handle-specific close (flush write buffer
-   ⇒ `emit_output` if applicable). If step (d) traps, the slot stays null
-   — that's acceptable and matches "close is best-effort" POSIX semantics.
+1. Order of operations: (a) capture handle, (b) run handle-specific close
+   (flush write buffer ⇒ `emit_output` if applicable), (c) null the slot
+   and push the index to the free-list. Close-then-null is safer against
+   a hypothetical re-entrant close handler that pokes back through
+   `fd_table` — it would observe the slot still occupied (the original
+   FD it was invoked on) rather than a confusing already-free state. If
+   step (b) traps the slot stays occupied; the auto-close pass at run()
+   exit walks the slot, but every close handler is one-shot guarded so a
+   double-close is benign. A trap aborts the program anyway, so the leak
+   window is one run.
 2. Stdio FDs (0, 1, 2) **can** be closed by the program. Their slots null
    normally; subsequent reads/writes return `EBADF`. (wasi-libc expects this
    — stdout being closed is how some daemons signal end-of-output.)
@@ -716,21 +722,34 @@ allocator.
 3. Reject absolute paths with `ENOTCAPABLE`. wasi-libc converts
    `open("/abs")` into `path_open(preopen_fd, "abs/...")` itself; we never
    see absolute paths.
-4. `oflags` and `fdflags` are checked **as bits**; rights are NOT
-   enforced. Specifically: we look at `O_CREAT, O_EXCL, O_TRUNC,
-   O_DIRECTORY` from oflags and at `APPEND, NONBLOCK` from fdflags;
-   everything else in those words is silently ignored.
-5. Read/write capability of the resulting FD comes from the **path zone**,
-   not from the rights bitmap:
-   - `/in/*` ⇒ READ-only (FD_READ + FD_SEEK + FD_TELL)
-   - `/out/*` ⇒ WRITE-only (FD_WRITE) plus FD_SEEK on `/scratch`-shaped
-     paths if we ever add them; `/out/debug` is FD_WRITE only (no seek)
-   - `/scratch/*` ⇒ READ + WRITE + SEEK
-   - `/dev/null` ⇒ READ + WRITE (both no-op)
-   - `/dev/zero` ⇒ READ + WRITE (write no-op)
-   - `/dev/random`, `/dev/urandom` ⇒ READ only (writes discarded but
-     still returns SUCCESS — wasi-libc tries to write to /dev/urandom on
-     some seed-init paths)
+4. `oflags` and `fdflags` are checked **as bits** for behaviour
+   (`O_CREAT, O_EXCL, O_TRUNC, O_DIRECTORY` from oflags; `APPEND,
+   NONBLOCK` from fdflags). Caller-requested rights are **clamped**, not
+   rejected: see decision #5. Everything else in those words is silently
+   ignored.
+5. Read/write capability of the resulting FD comes from the **path zone**:
+   each node declares a `NodeKind` on its vtable that determines the
+   maximum supported rights set, and `path_open` clamps the caller's
+   `rights_base` / `rights_inheriting` to that set (intersection).
+   Synchronous `ENOTCAPABLE` at `path_open` was rejected because
+   wasi-libc requests near-max rights as a default and would trip on it;
+   the clamp model lets the open succeed and surfaces the right errno
+   (BADF) at the per-call rights gate (`fd_read`/`fd_write`/`fd_seek`).
+   The bitmap is enforced ONLY at the shim; OS-level enforcement is N/A
+   because the shim is the FS. Per-zone supported rights:
+   - `/in/*` ⇒ READ-only (FD_READ + FD_SEEK + FD_TELL +
+     FD_FILESTAT_GET + FD_ADVISE)
+   - `/out/record/*`, `/out/output/*` ⇒ WRITE + SEEK + filestat-set (the
+     in-memory accumulator enforces sequential offsets, but SEEK is
+     advertised so wasi-libc's "rewind on close" patterns work)
+   - `/out/debug` ⇒ WRITE only (no SEEK -- it's a stream)
+   - `/scratch/*` ⇒ READ + WRITE + SEEK + filestat-set + alloc
+   - `/scratch` (and other directories) ⇒ READDIR + PATH_OPEN + the
+     PATH_* mutation rights for memfs dirs; READ-only directory rights
+     for `/in`, `/out`, `/dev` and their static sub-dirs
+   - `/dev/null`, `/dev/zero` ⇒ READ + WRITE (both no-op for write)
+   - `/dev/random`, `/dev/urandom` ⇒ READ + WRITE (writes discarded;
+     wasi-libc opens these O_RDWR on some seed-init paths)
 6. `O_CREAT` honoured only in `/scratch/*` and `/out/*`. In `/in/*` ⇒
    `ENOTCAPABLE`. In `/dev/*` ⇒ `EEXIST` (because the device nodes are
    pre-existing; `O_CREAT | O_EXCL` ⇒ `EEXIST`; `O_CREAT` alone ⇒

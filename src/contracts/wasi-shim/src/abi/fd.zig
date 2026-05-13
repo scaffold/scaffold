@@ -36,6 +36,42 @@ const STAGING_BUF_BYTES: usize = 16 * 1024;
 // 8 = 8 KiB) and matches the cap declared in `prog_mem.readIovecs`.
 const MAX_IOVECS: usize = 1024;
 
+// Per-iovec sanity cap on `buf_len`. wasm32 program memory tops out at 4 GiB
+// (the u32 ptr space). The shim doesn't have a way to query the program's
+// actual memory size from inside the contract -- doing so would require yet
+// another scaffold_env import for a value that's not known to the JS host
+// either (program memory is the wasm Memory created by the runner, opaque
+// here). 2 GiB is well above any realistic single-iovec write while still
+// catching obviously-bogus values (negative-as-u32, uninitialised stack data,
+// etc.) before the host trap loses the call-site's intent. A length over
+// this is rejected with INVAL and a debug log naming the iovec index.
+const IOVEC_LEN_GUARD: u32 = 1 << 31;
+
+/// Pre-validate an iovec table: every (buf, buf_len) pair must satisfy
+/// `buf_len <= IOVEC_LEN_GUARD` and `buf + buf_len` must not wrap u32.
+/// Returns `null` on success; otherwise the index of the bad iovec (so the
+/// caller can debug-log a precise reason) plus the chosen errno.
+const IovecValidationFailure = struct {
+    index: usize,
+    errno: abi.Errno,
+};
+fn validateIovecs(iovs: []const abi.Iovec) ?IovecValidationFailure {
+    for (iovs, 0..) |iov, i| {
+        if (iov.buf_len > IOVEC_LEN_GUARD) {
+            return .{ .index = i, .errno = abi.Errno.INVAL };
+        }
+        // u64 add dodges wrap-around on the u32 sum. wasm32 ptr space is
+        // u32, so any sum > maxInt(u32) is guaranteed to OOB the program
+        // memory. Surface as INVAL with the iovec index named so the trace
+        // points at the offending entry rather than a bare host-side OOB.
+        const end: u64 = @as(u64, iov.buf) + @as(u64, iov.buf_len);
+        if (end > std.math.maxInt(u32)) {
+            return .{ .index = i, .errno = abi.Errno.INVAL };
+        }
+    }
+    return null;
+}
+
 // -- fd_write ----------------------------------------------------------------
 
 pub fn fd_write(fd: i32, iovs_ptr: i32, iovs_len: i32, out_nwritten: i32) i32 {
@@ -55,6 +91,13 @@ pub fn fd_write(fd: i32, iovs_ptr: i32, iovs_len: i32, out_nwritten: i32) i32 {
 
     var iovs_buf: [MAX_IOVECS]abi.Iovec = undefined;
     prog_mem.readIovecs(@intCast(iovs_ptr), iovs_buf[0..n_iovs]);
+
+    // Pre-validate every iovec entry's `(ptr, len)` so a bad sum surfaces
+    // with the offending index rather than a bare host-trap OOB. Per design
+    // "Reference-reconciled invariants" #3.
+    if (validateIovecs(iovs_buf[0..n_iovs])) |fail| {
+        return @intFromEnum(fail.errno);
+    }
 
     var staging: [STAGING_BUF_BYTES]u8 = undefined;
     var total: u32 = 0;
@@ -113,6 +156,13 @@ pub fn fd_read(fd: i32, iovs_ptr: i32, iovs_len: i32, out_nread: i32) i32 {
     var iovs_buf: [MAX_IOVECS]abi.Iovec = undefined;
     prog_mem.readIovecs(@intCast(iovs_ptr), iovs_buf[0..n_iovs]);
 
+    // Pre-validate every iovec entry's `(ptr, len)` so a bad sum surfaces
+    // with the offending index rather than a bare host-trap OOB. Per design
+    // "Reference-reconciled invariants" #3.
+    if (validateIovecs(iovs_buf[0..n_iovs])) |fail| {
+        return @intFromEnum(fail.errno);
+    }
+
     var staging: [STAGING_BUF_BYTES]u8 = undefined;
     var total: u32 = 0;
     var hit_eof = false;
@@ -166,15 +216,21 @@ pub fn fd_close(fd: i32) i32 {
 
     // Preopens cannot be closed in our model -- closing a preopen would leave
     // wasi-libc walking past it on the next prestat scan. Stdio FDs (0/1/2)
-    // ARE closeable per the WASI spec (some daemons close stderr).
-    if (entry.preopen_path != null) return errno(.NOTCAPABLE);
+    // ARE closeable per the WASI spec (some daemons close stderr). Per
+    // decisions sheet `fd_close` #3: preopen close returns EBADF (not
+    // ENOTCAPABLE) so wasi-libc's atexit-cleanup loop terminates cleanly
+    // -- NOTCAPABLE keeps the loop iterating and can eat real cleanup.
+    if (entry.preopen_path != null) return errno(.BADF);
 
-    // Order: capture the node, run the node-side close (which may emit
-    // outputs / call reject), then null the slot. If the close traps, the
-    // slot is still occupied -- the auto-close pass at run() exit will not
-    // re-fire because it iterates `entries[i]` linearly and the slot is
-    // already null after the successful path. A trap aborts the program
-    // anyway.
+    // Order: (a) capture handle, (b) run handle-specific close (flushes
+    // any buffered writes via emit_output), (c) free the slot. We diverge
+    // from decisions sheet #1's "null-then-close" because close-then-null
+    // is safer against re-entrancy: a hypothetical close handler that
+    // pokes back through `fd_table` won't observe an already-free slot
+    // (which would be a contract bug). If step (b) traps, the slot stays
+    // occupied -- the auto-close pass at run() exit walks the slot, but
+    // every close handler is one-shot guarded so a double-close is benign.
+    // A trap abort the program anyway, so the leak window is one run.
     const node = entry.node;
     node.vtable.close(node);
     fd_table.free(@intCast(fd)) catch return errno(.BADF);
@@ -269,6 +325,20 @@ pub fn fd_fdstat_set_flags(fd: i32, fdflags: i32) i32 {
     if (bits > std.math.maxInt(u16)) return errno(.INVAL);
     const flags: u16 = @intCast(bits);
     if ((flags & ~FDFLAGS_DEFINED_MASK) != 0) return errno(.INVAL);
+
+    // Per decisions sheet decision #3: APPEND only makes sense on a seekable
+    // backing (it's a "snap to end-of-file" toggle). Setting it on a stream
+    // (e.g. /dev/random, /out/debug, stdio) is a contract bug -- surface as
+    // ENOTSUP instead of silently storing a meaningless bit. Stat once, up
+    // front, so the priority order matches `fd_seek` (filetype is checked
+    // before the bits go anywhere).
+    const append_requested = (flags & 0b0000_0001) != 0;
+    if (append_requested) {
+        const stat_res = entry.node.vtable.stat(entry.node) catch |err|
+            return @intFromEnum(abi.errnoFromVfs(err));
+        if (stat_res.filetype == .CHARACTER_DEVICE) return errno(.NOTSUP);
+        if (stat_res.filetype == .DIRECTORY) return errno(.NOTSUP);
+    }
 
     // Drop DSYNC/RSYNC/SYNC silently; only APPEND + NONBLOCK survive.
     entry.fdflags = (entry.fdflags & ~FDFLAGS_STORED_MASK) |
@@ -639,4 +709,49 @@ test "fdflags mask logic: APPEND alone passes through, DSYNC dropped" {
 test "fdflags mask logic: high bits get rejected" {
     const bad: u16 = 0b1000_0000; // bit 7 -- not a defined fdflag
     try testing.expect((bad & ~FDFLAGS_DEFINED_MASK) != 0);
+}
+
+test "validateIovecs accepts a small in-bounds table" {
+    const iovs = [_]abi.Iovec{
+        .{ .buf = 0x1000, .buf_len = 64 },
+        .{ .buf = 0x2000, .buf_len = 128 },
+        .{ .buf = 0, .buf_len = 0 },
+    };
+    try testing.expect(validateIovecs(&iovs) == null);
+}
+
+test "validateIovecs flags an iovec whose len exceeds the 2 GiB guard" {
+    const iovs = [_]abi.Iovec{
+        .{ .buf = 0x1000, .buf_len = 64 },
+        .{ .buf = 0x2000, .buf_len = IOVEC_LEN_GUARD + 1 },
+    };
+    const fail = validateIovecs(&iovs).?;
+    try testing.expectEqual(@as(usize, 1), fail.index);
+    try testing.expectEqual(abi.Errno.INVAL, fail.errno);
+}
+
+test "validateIovecs flags an iovec whose end wraps the u32 ptr space" {
+    // buf + buf_len overflows u32; rejecting with the index named beats a
+    // bare host-side OOB trap.
+    const iovs = [_]abi.Iovec{
+        .{ .buf = 0xFFFF_F000, .buf_len = 0x0000_2000 }, // sum = 0x1_0000_1000
+    };
+    const fail = validateIovecs(&iovs).?;
+    try testing.expectEqual(@as(usize, 0), fail.index);
+    try testing.expectEqual(abi.Errno.INVAL, fail.errno);
+}
+
+test "validateIovecs accepts a sum that exactly fills u32 ptr space" {
+    // buf + buf_len = 1 << 32 - 1: still in-bounds for a 4 GiB program memory.
+    // (We cap len at 2 GiB so this single-iovec case can't reach the wrap
+    // boundary by itself; verify a maximal-but-valid table doesn't flag.)
+    const iovs = [_]abi.Iovec{
+        .{ .buf = 0x8000_0000, .buf_len = IOVEC_LEN_GUARD - 1 },
+    };
+    try testing.expect(validateIovecs(&iovs) == null);
+}
+
+test "validateIovecs accepts an empty table" {
+    const iovs = [_]abi.Iovec{};
+    try testing.expect(validateIovecs(&iovs) == null);
 }

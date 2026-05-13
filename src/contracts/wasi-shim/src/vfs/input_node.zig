@@ -19,6 +19,7 @@ const vtable: vfs.NodeVTable = .{
     .close = closeImpl,
     .readdir = null,
     .lookup = null,
+    .kind = .input_file,
 };
 
 pub fn init(self: *InputNode, producer: Producer, ctx: ?*anyopaque) void {
