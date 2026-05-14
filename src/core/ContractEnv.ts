@@ -186,9 +186,9 @@ export interface ContractEnv {
    * exists, it is consumed instead and no new UTXO is created — the
    * data is stored exactly once.
    *
-   * See docs/protocol/wasm-abi.md#forking.
+   * See docs/protocol/wasm-abi.md#put.
    */
-  fork(verifier: Verifier, records: Output[]): MaybePromise<void>;
+  put(verifier: Verifier, records: Output[]): MaybePromise<void>;
 
   /**
    * Assert the block's signature matches the given public key.

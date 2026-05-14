@@ -105,7 +105,7 @@ export class WasmWorkerChannelClient {
     throw new WasmCrashError(`host dispatch failed (flag=${flag})`);
   }
 
-  /** Void-returning dispatch (used for `fork`, which blocks until commit). */
+  /** Void-returning dispatch (used for `put`, which blocks until commit). */
   dispatchVoid(func: string, args: unknown[]): void {
     this.dispatchBytes(func, args);
   }

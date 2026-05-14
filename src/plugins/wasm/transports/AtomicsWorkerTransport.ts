@@ -43,8 +43,8 @@ function runHandlers(bridge: RunBridge): WasmHostHandlers {
     },
     request_body: async ([verifier]) => await bridge.requestBody(verifier as Uint8Array),
     fetch: async ([verifier, key]) => await bridge.fetch(verifier as Uint8Array, key as Uint8Array),
-    fork: async ([verifier, records]) => {
-      await bridge.fork(verifier as Uint8Array, records as Uint8Array);
+    put: async ([verifier, records]) => {
+      await bridge.put(verifier as Uint8Array, records as Uint8Array);
     },
     sign: ([pubkey]) => {
       bridge.sign(pubkey as Uint8Array);

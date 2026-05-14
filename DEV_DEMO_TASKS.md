@@ -63,7 +63,7 @@ Reshaped from "wire `WasmStore` into `ContractHost`" into a pluggable execution 
 
 **Deferred** (was the original "auto-populate WasmStore on canonical record blocks"): the live link from "a `record('wasm', ...)` block landed" to "now callable" already works because `ContractHost.getContract(hash)` resolves through the plugin on demand. No background populator needed -- lookups are lazy.
 
-### A4. Composition: stacking and forking
+### A4. Composition: stacking and put
 Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wasm-abi.md#composition).
 
 **Stacking** (static, in-band, low-overhead):
@@ -76,15 +76,15 @@ Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wa
 - [x] One per-verifier budget shared across the entire graph. (Budget enforcement itself is still a follow-up from A2; once landed, stacking inherits it.)
 - [ ] Ship a stock `wasi-shim.wasm` contract block whose layer maps WASI snapshot preview 1 syscalls onto `scaffold_env`. Use `src/worker/WasiImpl.ts` as the reference behaviour. Compile the shim from minimal Zig or hand-write the `.wat`. **Deferred** — A4 stacking shipped with synthetic passthrough fixtures; wasi-shim becomes its own session when there's a real WASI binary to validate against.
 
-**Forking** (dynamic, out-of-band, parallel):
-- [ ] Wire `GeneratingEnv.fork(verifier, records)` into the generation pipeline (currently a stub that throws). Implementation needs:
+**Put** (dynamic, out-of-band, parallel):
+- [ ] Wire `GeneratingEnv.put(verifier, records)` into the generation pipeline (currently a stub that throws). Implementation needs:
   - Spawn a sub-generator on `verifier` with its own `ContractEnv`, own claims / outputs / namespace, own per-verifier budget.
   - Route the sub-contract's `requestBody(v)` calls through the parent-supplied `records[]` first (verifier-equality match → return `(value, body)` and emit slot on the sub-block); fall through to the normal handler chain on no match.
   - Block the parent generator until the sub-block commits, propagating `ContractRejection` from the sub-generator up.
   - Auto-emergence: if the sub-contract claims no inputs and no UTXO matches `verifier`, self-claim a new output under `verifier` on the sub-block. If a UTXO already matches, consume it (idempotent "store-once" property).
-  - Cap recursion depth (default 16) to prevent unbounded fork loops.
+  - Cap recursion depth (default 16) to prevent unbounded `put` recursion.
 - [ ] Decide block-placement policy: merge sub-contract outputs into the parent's block when small, place on a new block when larger. Heuristic; not part of the contract-visible semantics.
-- [ ] Tests: fork creates a UTXO when none exists; fork consumes an existing UTXO when one matches; fork-of-failing-sub-generator propagates rejection; depth-cap enforced.
+- [ ] Tests: `put` creates a UTXO when none exists; `put` consumes an existing UTXO when one matches; `put` of a failing sub-generator propagates rejection; depth-cap enforced.
 
 ### A5. Tests
 - [ ] `tests/WasmContractAdapter.test.ts`: load a tiny hand-rolled `.wat` → `.wasm` (compiled at test setup) that emits one record and verify it round-trips through `runVerifying` / `runGenerating`.

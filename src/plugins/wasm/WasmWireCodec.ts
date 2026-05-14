@@ -128,7 +128,7 @@ export function decodeOutput(
   };
 }
 
-/** Decode an `Output` list prefixed with a u32 count (used by `fork` records). */
+/** Decode an `Output` list prefixed with a u32 count (used by `put` records). */
 export function decodeOutputList(
   bytes: Uint8Array,
   offset = 0,

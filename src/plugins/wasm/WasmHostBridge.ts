@@ -40,7 +40,7 @@ export interface RunBridge {
   emitOutput(outputBytes: Uint8Array): void;
   requestBody(verifierBytes: Uint8Array): MaybePromise<Uint8Array>;
   fetch(verifierBytes: Uint8Array, key: Uint8Array): MaybePromise<Uint8Array>;
-  fork(verifierBytes: Uint8Array, recordsBytes: Uint8Array): MaybePromise<void>;
+  put(verifierBytes: Uint8Array, recordsBytes: Uint8Array): MaybePromise<void>;
   sign(pubkey: Uint8Array): void;
   /** Throws ContractRejection. The transport translates that to a WASM trap. */
   reject(reason: Uint8Array): never;
@@ -83,8 +83,8 @@ export function makeRunBridge(env: ContractEnv): RunBridge {
 
     fetch: (verifierBytes, key) => env.fetch(decodeV(verifierBytes), key),
 
-    fork: (verifierBytes, recordsBytes) =>
-      env.fork(decodeV(verifierBytes), decodeOList(recordsBytes)),
+    put: (verifierBytes, recordsBytes) =>
+      env.put(decodeV(verifierBytes), decodeOList(recordsBytes)),
 
     sign: (pubkey) => {
       env.sign(pubkey);

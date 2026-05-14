@@ -175,7 +175,7 @@ Mirrors `ContractEnv` (`src/core/ContractEnv.ts`). Calls marked **(may block)** 
 | `emit_output`       | `(out_ptr: i32, out_len: i32) -> ()` | — | Argument is an `Output` wire record. Synchronous from contract's POV; verification mode validates against the namespace sequence. To emit a self-claimed record output (the equivalent of TS-side `env.record(key, value)`), build an `Output` whose `verifier.contract` is `RECORD_CONTRACT`, `verifier.params` is the key, `value` is `0`, and `body` is the value. |
 | `request_body`      | `(verifier_ptr: i32, verifier_len: i32) -> i64` | packed `(ptr, len)` of `i128 value + bytes body` | **may block** in generation. The returned bytes are the host's resolved `(value, body)` pair. Contracts must not depend on `value` being final: the block-creation layer may raise it during solidification (see [computation.md#output-requirements](computation.md#output-requirements) "solidification-time value override"). This is a known temporary mechanism; future revisions will fold value resolution into the contract path. |
 | `fetch`             | `(verifier_ptr: i32, verifier_len: i32, key_ptr: i32, key_len: i32) -> i64` | packed `(ptr, len)` of the record value bytes | **may block**. Throws via `reject` if no ancestor block claims the verifier. |
-| `fork`              | `(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()` | — | Spawn an independent sub-contract. Verification: no-op. **may block** in generation: waits for the sub-contract's block to commit, propagates `ContractRejection` from the sub-generator. See [Forking](#forking). |
+| `put`               | `(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()` | — | Spawn an independent sub-contract. Verification: no-op. **may block** in generation: waits for the sub-contract's block to commit, propagates `ContractRejection` from the sub-generator. See [Put](#put). |
 | `sign`              | `(pubkey_ptr: i32, pubkey_len: i32) -> ()` | — | Asserts the block was signed by `pubkey`. Synchronous. |
 | `reject`            | `(reason_ptr: i32, reason_len: i32) -> noreturn` | — | Aborts the contract with a `ContractRejection`. Bytes are interpreted as UTF-8. The runtime traps after the call so any further WASM execution is impossible; conventionally callers also `unreachable` immediately after for compilers that don't infer noreturn. |
 
@@ -285,15 +285,15 @@ JSPI is a fast path opportunity, not a replacement: as of the spec date, it ship
 
 ## Composition
 
-Two mechanisms for composing contracts. They serve different needs and compose orthogonally — stacked contracts can fork; forked sub-contracts can be stacks.
+Two mechanisms for composing contracts. They serve different needs and compose orthogonally — stacked contracts can call `put`; sub-contracts spawned by `put` can be stacks.
 
-| | **Stacking** | **Forking** |
+| | **Stacking** | **Put** |
 |---|---|---|
 | Purpose | Static, in-band, low-overhead composition | Dynamic, out-of-band, parallel composition |
 | Granularity | Multiple WASM blobs in one execution | Independent generator producing its own block |
-| Configured | At contract publication, via `modules` record on the contract block | At runtime, via `fork()` host call during generation |
+| Configured | At contract publication, via `modules` record on the contract block | At runtime, via `put()` host call during generation |
 | Communication | Direct WASM-to-WASM (exports↔imports), shared memory | One-shot pre-resolution via a records vector; no further interaction |
-| Budget | Stack shares the parent's per-verifier budget | Each fork gets its own fresh budget |
+| Budget | Stack shares the parent's per-verifier budget | Each `put` gets its own fresh budget |
 | Verification | Single block, single verifier — stack is internal | Sub-contract block is independently verified |
 
 ### Stacking
@@ -455,21 +455,21 @@ The entry layer's memory must be `shared: true` when the runtime selects the Ato
 
 **Use cases.** WASI binaries (program imports `wasi_snapshot_preview1` from a Scaffold-WASI shim). JavaScript interpreters (program is a thin wrapper that loads JS source from `contractMetadata`; the shim below is QuickJS-as-WASM exposing host imports under standard names). Any "interpreter atop a host shim" pattern.
 
-### Forking
+### Put
 
 A generating contract may spawn an independent sub-contract that runs in its own `ContractEnv` and produces its own block.
 
 **ABI.** From the contract's perspective:
 
 ```
-fork(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()
+put(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()
 ```
 
 The verifier identifies the sub-contract to spawn (its `(contractHash, params)`). The records bytes are a serialised array of `Output` wire records (`u32 count` then `count × Output`) — pre-resolutions the sub-contract's `requestBody` will consume.
 
-**Verification.** No-op. The sub-contract's block is independently verified later via the normal verification path; nothing on the parent block needs to confirm the fork succeeded.
+**Verification.** No-op. The sub-contract's block is independently verified later via the normal verification path; nothing on the parent block needs to confirm the `put` succeeded.
 
-**Generation.** The runtime spawns a new generator for `verifier` and runs it to completion. The parent's `fork` call is **blocking**: it waits for the sub-block to be committed (or for the sub-generator to fail). If the sub-generator rejects, the parent generator also rejects — fork is not fire-and-forget. Blocking + propagated failure means the parent has a guarantee that, by the time `fork` returns, the sub-contract's block exists on the network.
+**Generation.** The runtime spawns a new generator for `verifier` and runs it to completion. The parent's `put` call is **blocking**: it waits for the sub-block to be committed (or for the sub-generator to fail). If the sub-generator rejects, the parent generator also rejects — `put` is not fire-and-forget. Blocking + propagated failure means the parent has a guarantee that, by the time `put` returns, the sub-contract's block exists on the network.
 
 **Records routing.** When the sub-contract calls `requestBody(verifier)`, the runtime first scans the parent-supplied records by verifier-equality. A match returns the record's `(value, body)` and emits an output slot on the sub-contract's block (same as a normal `requestBody`). This is "generation-only pre-resolution that materialises as a slot": the sub-contract's block is self-contained at verification time — no records needed at verify, the slots are already on the wire.
 
@@ -477,15 +477,15 @@ A `requestBody` call with no matching record falls through to the normal handler
 
 **Sub-contract namespace.** The sub-contract has its own namespace: its claims, outputs, and self-claims live on its block, not the parent's. The parent and sub-contract share no state beyond the verifier and records.
 
-**Auto-emergence and idempotency.** If the sub-contract claims no inputs and no UTXO exists matching the forked verifier, the runtime creates a self-claimed output under that verifier on the sub-contract's block. The sub-contract's block thus *emerges as a UTXO source* for the verifier. If a UTXO already exists, the sub-contract claims it instead and no new UTXO is created — the data exists on the network exactly once.
+**Auto-emergence and idempotency.** If the sub-contract claims no inputs and no UTXO exists matching the verifier, the runtime creates a self-claimed output under that verifier on the sub-contract's block. The sub-contract's block thus *emerges as a UTXO source* for the verifier. If a UTXO already exists, the sub-contract claims it instead and no new UTXO is created — the data exists on the network exactly once.
 
-**Recursion.** Forks may fork. The runtime caps depth (default: 16) to prevent malicious unbounded recursion.
+**Recursion.** Sub-contracts spawned by `put` may themselves call `put`. The runtime caps depth (default: 16) to prevent malicious unbounded recursion.
 
-**Budget.** Each fork gets its own fresh per-verifier budget, independent of the parent's. Stacked WASMs *inside* a forked sub-contract still share that fork's budget.
+**Budget.** Each `put` gets its own fresh per-verifier budget, independent of the parent's. Stacked WASMs *inside* a sub-contract still share that sub-contract's budget.
 
-**Block placement.** No hard rule. The runtime may merge a forked sub-contract's outputs into the parent's block (if the sub-contract is small) or place them on a new block (if larger). Authors should not depend on either — `fork` is a generation directive, not a block-creation guarantee.
+**Block placement.** No hard rule. The runtime may merge a sub-contract's outputs into the parent's block (if the sub-contract is small) or place them on a new block (if larger). Authors should not depend on either — `put` is a generation directive, not a block-creation guarantee.
 
-**Use cases.** Providing data alongside a hash request: a parent that references a blob via its `modules` graph (e.g. `{ layers: { main: { wasmHash: H } } }`) calls `fork({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the forked block. Any other "publish-and-make-available" pattern works the same way.
+**Use cases.** Providing data alongside a hash request: a parent that references a blob via its `modules` graph (e.g. `{ layers: { main: { wasmHash: H } } }`) calls `put({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the sub-contract's block. Any other "publish-and-make-available" pattern works the same way.
 
 ---
 

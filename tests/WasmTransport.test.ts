@@ -116,8 +116,8 @@ class RecordingEnv implements ContractEnv {
     this.signedKeys.push(pubkey);
   }
 
-  fork(): void {
-    throw new ContractRejection('fork not supported in tests');
+  put(): void {
+    throw new ContractRejection('put not supported in tests');
   }
 
   timestamp(): number {

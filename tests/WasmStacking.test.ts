@@ -61,7 +61,7 @@ class RecordingEnv implements ContractEnv {
     throw new ContractRejection('no fetch');
   }
   sign(): void {}
-  fork(): void {}
+  put(): void {}
   timestamp(): number {
     return 0;
   }

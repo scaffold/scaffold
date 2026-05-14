@@ -6,7 +6,7 @@
 
 Take a WASM module that was compiled against `wasi_snapshot_preview1` (e.g. by `clang --target=wasm32-wasi`, `rustc --target=wasm32-wasi`, or `tinygo -target=wasi`) and run it as a Scaffold contract without modification, by stacking it above a shim that translates WASI host calls into `scaffold_env` calls.
 
-Most WASI programs targeted by this shim are **input/output-shaped** compute jobs: a compiler, an interpreter, a parser, a transformer. They consume scaffold-side inputs (`params`, `request_body`, `fetch`) as files, write scaffold-side outputs (`emit_output`) as files, and don't need scaffold-specific features (claims, forks, signatures). For those use cases, the WASI ↔ scaffold impedance match is excellent — both are byte-oriented synchronous request/response.
+Most WASI programs targeted by this shim are **input/output-shaped** compute jobs: a compiler, an interpreter, a parser, a transformer. They consume scaffold-side inputs (`params`, `request_body`, `fetch`) as files, write scaffold-side outputs (`emit_output`) as files, and don't need scaffold-specific features (claims, sub-contract `put`, signatures). For those use cases, the WASI ↔ scaffold impedance match is excellent — both are byte-oriented synchronous request/response.
 
 ## Architecture
 
@@ -267,7 +267,7 @@ I'd start with Zig — the existing `src/worker/WasiImpl.ts` is the behavioural 
 - **Sockets** (`sock_*`): `ENOTSUP`. Scaffold has no network surface a deterministic contract could touch.
 - **Symlinks/hardlinks**: `ENOTSUP` everywhere. Trivially complicates the FS state.
 - **Real `fd_filestat_set_times`**: returns success but doesn't store anything (the file is virtual).
-- **`fork()` host call exposure**: the WASI shim doesn't expose scaffold's `fork()`. Forking is a scaffold-specific feature; WASI programs that need it should be written against a different shim or use a wrapper.
+- **`put()` host call exposure**: the WASI shim doesn't expose scaffold's `put()`. Spawning sub-contracts is a scaffold-specific feature; WASI programs that need it should be written against a different shim or use a wrapper.
 - **Claims**: WASI programs don't claim. The implicit "claim all" behaviour at end-of-contract handles non-claiming contracts.
 - **Signing**: WASI programs don't sign. If a contract needs signing, it should use a different shim.
 - **Live `walker`/`builder` paths**: v1 of the shim only implements `run`. The contract block's `base.imports` includes only `"run"`; calls to `walk_*` or `build_*` on a WASI-shimmed contract return ENOTSUP at the scaffold boundary.

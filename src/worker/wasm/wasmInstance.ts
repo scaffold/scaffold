@@ -96,8 +96,8 @@ function flatRunExports(
       dispatchPacked(ctx, client, 'request_body', [readSlice(ctx, vp, vl)]),
     fetch: (vp: number, vl: number, kp: number, kl: number) =>
       dispatchPacked(ctx, client, 'fetch', [readSlice(ctx, vp, vl), readSlice(ctx, kp, kl)]),
-    fork: (vp: number, vl: number, rp: number, rl: number) => {
-      client.dispatchVoid('fork', [readSlice(ctx, vp, vl), readSlice(ctx, rp, rl)]);
+    put: (vp: number, vl: number, rp: number, rl: number) => {
+      client.dispatchVoid('put', [readSlice(ctx, vp, vl), readSlice(ctx, rp, rl)]);
     },
     sign: (pp: number, pl: number) => {
       client.dispatchVoid('sign', [readSlice(ctx, pp, pl)]);

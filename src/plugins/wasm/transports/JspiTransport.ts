@@ -107,8 +107,8 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
         Promise.resolve(bridge.fetch(readSlice(ctx, vp, vl), readSlice(ctx, kp, kl))),
       )
     ),
-    fork: suspending(async (vp: number, vl: number, rp: number, rl: number) => {
-      await bridge.fork(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl));
+    put: suspending(async (vp: number, vl: number, rp: number, rl: number) => {
+      await bridge.put(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl));
     }),
     sign: (pp: number, pl: number) => {
       bridge.sign(readSlice(ctx, pp, pl));

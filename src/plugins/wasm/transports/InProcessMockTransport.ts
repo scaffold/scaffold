@@ -81,8 +81,8 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
       handlePackedBytes(
         expectSync(bridge.fetch(readSlice(ctx, vp, vl), readSlice(ctx, kp, kl))),
       ),
-    fork: (vp: number, vl: number, rp: number, rl: number) => {
-      expectSync(bridge.fork(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl)));
+    put: (vp: number, vl: number, rp: number, rl: number) => {
+      expectSync(bridge.put(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl)));
     },
     sign: (pp: number, pl: number) => {
       bridge.sign(readSlice(ctx, pp, pl));

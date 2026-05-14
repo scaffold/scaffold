@@ -223,10 +223,10 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  fork(_verifier: Verifier, _records: Output[]): void {
+  put(_verifier: Verifier, _records: Output[]): void {
     // No-op in verification mode -- the sub-contract's block is verified
     // independently elsewhere; nothing on this block depends on it.
-    // See docs/protocol/wasm-abi.md#forking.
+    // See docs/protocol/wasm-abi.md#put.
   }
 
   timestamp(): number {

@@ -73,7 +73,7 @@ export interface MockTable {
   claim_all?: Claim[];
   contract_metadata?: { value: number; body: Uint8Array };
   sign?: null;
-  fork?: null;
+  put?: null;
   record?: null;
   reject?: null;
 }
@@ -98,7 +98,7 @@ export type SequenceStep =
     respond: { value: number; body: Uint8Array };
   }
   | { type: 'sign'; expect?: { pubkey?: Uint8Array } }
-  | { type: 'fork'; expect?: { verifier?: Partial<Verifier>; records?: Output[] } }
+  | { type: 'put'; expect?: { verifier?: Partial<Verifier>; records?: Output[] } }
   | { type: 'record'; expect?: { key?: Uint8Array; value?: Uint8Array } }
   | { type: 'reject'; expect?: { reason?: string } };
 
@@ -196,8 +196,8 @@ class MockSequenceEnv implements ContractEnv {
     this._dispatch('sign', { pubkey });
   }
 
-  fork(verifier: Verifier, records: Output[]): void {
-    this._dispatch('fork', { verifier, records });
+  put(verifier: Verifier, records: Output[]): void {
+    this._dispatch('put', { verifier, records });
   }
 
   record(key: Uint8Array, value: Uint8Array): void {
@@ -525,8 +525,8 @@ function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, 
       packed(expectSync(bridge.requestBody(readSlice(ctx, vp, vl)))),
     fetch: (vp: number, vl: number, kp: number, kl: number) =>
       packed(expectSync(bridge.fetch(readSlice(ctx, vp, vl), readSlice(ctx, kp, kl)))),
-    fork: (vp: number, vl: number, rp: number, rl: number) => {
-      expectSync(bridge.fork(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl)));
+    put: (vp: number, vl: number, rp: number, rl: number) => {
+      expectSync(bridge.put(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl)));
     },
     sign: (pp: number, pl: number) => {
       bridge.sign(readSlice(ctx, pp, pl));

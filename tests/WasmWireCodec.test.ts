@@ -130,7 +130,7 @@ Deno.test('Output round-trip with empty body', () => {
   assertEquals(back.value.body?.length ?? -1, 0);
 });
 
-// -- Output list (used by fork records) --------------------------
+// -- Output list (used by put records) --------------------------
 
 Deno.test('Output list round-trip', () => {
   const outputs: Output[] = [

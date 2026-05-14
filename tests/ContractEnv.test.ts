@@ -829,7 +829,7 @@ Deno.test('VerifyingEnv: contractMetadata throws when no matching output exists'
   );
 });
 
-Deno.test('VerifyingEnv: fork is a no-op (sub-block verified independently)', () => {
+Deno.test('VerifyingEnv: put is a no-op (sub-block verified independently)', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('exec'),
@@ -840,10 +840,10 @@ Deno.test('VerifyingEnv: fork is a no-op (sub-block verified independently)', ()
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  // Fork should silently succeed in verification mode -- nothing on this
-  // block depends on the forked sub-contract; its own block is verified
-  // separately. See docs/protocol/wasm-abi.md#forking.
-  env.fork(
+  // Put should silently succeed in verification mode -- nothing on this
+  // block depends on the sub-contract; its own block is verified
+  // separately. See docs/protocol/wasm-abi.md#put.
+  env.put(
     { contract: h('hash-contract'), params: enc('blob-hash') },
     [],
   );

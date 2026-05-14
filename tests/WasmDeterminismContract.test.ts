@@ -140,7 +140,7 @@ class FakeEnv implements ContractEnv {
     throw new ContractRejection('not used');
   }
   sign(): void {}
-  fork(): void {}
+  put(): void {}
   timestamp(): number {
     return 0;
   }
