@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scaffold } from 'scaffold.io/Scaffold.ts';
-import {
-  demoPrivateKey,
-  demoPublicKey,
-  WELL_KNOWN_KEY_VALUE,
-  WELL_KNOWN_KEYS,
-} from 'scaffold.io/genesis.ts';
-import { composeGenesisPacket } from 'scaffold.io/core/Block.ts';
-import { makeSignatureOutput } from 'scaffold.io/contracts/SignatureContract.ts';
+import { getGenesisBlock, WELL_KNOWN_KEYS } from 'scaffold.io/genesis.ts';
 import { bin2hex } from 'scaffold.io/util/hex.ts';
 import { ChessGame } from 'scaffold.io/demo/chess/ChessGame.ts';
 import { ChessIndex } from 'scaffold.io/demo/chess/ChessIndex.ts';
@@ -23,27 +16,13 @@ import { GameList } from './GameList.tsx';
 import {
   BlockExplorerOverlay,
   findKey,
-  importKey,
+  getOrCreateDefaultKeyId,
   loadKeys,
   type SandboxConfig,
 } from '@scaffold/explorer';
 import type { ScaffoldConfig } from 'scaffold.io/Scaffold.ts';
 
-const DEMO_SEEDS = ['a', 'b', 'c'] as const;
-type DemoSeed = typeof DEMO_SEEDS[number];
-
 const DEFAULT_HUB_URL = 'ws://127.0.0.1:8314/';
-
-function parseSeed(): DemoSeed {
-  if (typeof globalThis === 'undefined' || !globalThis.location) return 'a';
-  const hash = globalThis.location.hash; // e.g. "#chess?seed=b"
-  const q = hash.indexOf('?');
-  if (q < 0) return 'a';
-  const params = new URLSearchParams(hash.slice(q + 1));
-  const s = params.get('seed');
-  if (s && (DEMO_SEEDS as readonly string[]).includes(s)) return s as DemoSeed;
-  return 'a';
-}
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
@@ -59,9 +38,9 @@ interface Toast {
 
 let toastCounter = 0;
 
-function defaultChessConfig(seedKeyId: string): SandboxConfig {
+function defaultChessConfig(): SandboxConfig {
   return {
-    selectedKeyId: seedKeyId,
+    selectedKeyId: getOrCreateDefaultKeyId(),
     strategies: new Set(),
     enablePiggyback: false,
     enableLogging: false,
@@ -73,40 +52,15 @@ function defaultChessConfig(seedKeyId: string): SandboxConfig {
 }
 
 export function ChessApp() {
-  const seed = useMemo(() => parseSeed(), []);
-
-  // Make sure the seed-derived key is in the keystore so the config panel
-  // can surface and reuse it.
-  const seedKeyId = useMemo(() => {
-    const seedPriv = demoPrivateKey(seed);
-    const { newId } = importKey(loadKeys(), bin2hex(seedPriv), `Seed ${seed.toUpperCase()}`);
-    return newId;
-  }, [seed]);
-
-  const [config, setConfig] = useState<SandboxConfig>(() => defaultChessConfig(seedKeyId));
+  const [config, setConfig] = useState<SandboxConfig>(() => defaultChessConfig());
   const [scaffoldVersion, setScaffoldVersion] = useState(0);
 
   const { scaffold, chess, chessIndex, balanceIndex } = useMemo(() => {
     const keys = loadKeys();
-    const keyEntry = findKey(keys, config.selectedKeyId)
-      ?? findKey(keys, seedKeyId)
-      ?? keys[0];
-    // Chess peers must agree on a single genesis hash, so we cannot fund
-    // arbitrary user keys here. We fund the per-seed demo keys (indices
-    // 0..DEMO_SEEDS.length-1 -- existing tests rely on this ordering) plus
-    // every WELL_KNOWN_KEYS entry so picking a built-in identity in the
-    // config panel still leaves a spendable balance.
-    const genesis = composeGenesisPacket([
-      ...DEMO_SEEDS.map((seed) =>
-        makeSignatureOutput(demoPublicKey(seed), 1_000_000)
-      ),
-      ...WELL_KNOWN_KEYS.map((k) =>
-        makeSignatureOutput(k.publicKey, WELL_KNOWN_KEY_VALUE)
-      ),
-    ]);
+    const keyEntry = findKey(keys, config.selectedKeyId) ?? keys[0];
     const scaffoldConfig: ScaffoldConfig = {
       privateKey: keyEntry.privateKey,
-      genesis,
+      genesis: getGenesisBlock(),
       enableLogging: config.enableLogging,
       useFloodGossip: config.useFloodGossip,
       enablePiggyback: config.enablePiggyback,
@@ -135,7 +89,7 @@ export function ChessApp() {
       balanceIndex: bi,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scaffoldVersion, seed]);
+  }, [scaffoldVersion]);
 
   const handleApplyConfig = useCallback((next: SandboxConfig) => {
     setConfig(next);
@@ -144,8 +98,8 @@ export function ChessApp() {
 
   const activeKeyLabel = useMemo(() => {
     const k = findKey(loadKeys(), config.selectedKeyId);
-    return k?.label ?? `Seed ${seed.toUpperCase()}`;
-  }, [config.selectedKeyId, seed]);
+    return k?.label ?? 'Anonymous';
+  }, [config.selectedKeyId]);
 
   const myPubkey = scaffold.publicKey;
   const myPubkeyHex = bin2hex(myPubkey);
@@ -167,21 +121,18 @@ export function ChessApp() {
     };
   }, [chessIndex, balanceIndex, chess]);
 
-  // Bootstrap to the signaling hub and auto-dial the other demo seeds.
-  // On every peer-connected event we re-attempt connectToPeer for any
-  // missing seed: that way when seed B's tab comes up after seed A's, A
-  // sees B via the hub and initiates a WebRTC handshake.
+  // Bootstrap to the signaling hub and auto-dial every well-known identity
+  // we're not currently using. When a peer joins we re-attempt connectToPeer
+  // for the remaining identities so late-joining tabs are picked up.
   useEffect(() => {
     scaffold.start();
 
     const tryDialOthers = () => {
-      for (const s of DEMO_SEEDS) {
-        if (s === seed) continue;
-        const otherPub = demoPublicKey(s);
-        const otherHex = bin2hex(otherPub);
+      for (const k of WELL_KNOWN_KEYS) {
+        const otherHex = bin2hex(k.publicKey);
         if (otherHex === myPubkeyHex) continue;
         if (connectedPeersRef.current.has(otherHex)) continue;
-        scaffold.connectToPeer(otherPub).catch(() => {
+        scaffold.connectToPeer(k.publicKey).catch(() => {
           // Transport failure (peer not online yet); will retry on next peer event.
         });
       }
@@ -194,7 +145,6 @@ export function ChessApp() {
         connectedPeersRef.current = next;
         return next;
       });
-      // Seed B just joined? Try the remaining known seeds.
       tryDialOthers();
     });
     scaffold.onPeerDisconnected((peerId) => {
@@ -218,7 +168,7 @@ export function ChessApp() {
     return () => {
       void scaffold.close();
     };
-  }, [scaffold, seed, myPubkeyHex]);
+  }, [scaffold, myPubkeyHex]);
 
   const pushToast = useCallback(
     (message: string, kind: 'info' | 'error' = 'info') => {
@@ -325,11 +275,10 @@ export function ChessApp() {
     ((selected.state.state.toMove === 0 && amWhite) ||
       (selected.state.state.toMove === 1 && amBlack));
 
-  // Known peers map: seed letter → pubkey hex. Used to label the status pills.
+  // Known peers map: well-known label → pubkey hex. Used to label the status pills.
   const knownPeerLabels = useMemo(() => {
     const map = new Map<string, string>();
-    for (const s of DEMO_SEEDS) map.set(bin2hex(demoPublicKey(s)), s.toUpperCase());
-    map.set(bin2hex(demoPublicKey('hub')), 'hub');
+    for (const k of WELL_KNOWN_KEYS) map.set(bin2hex(k.publicKey), k.label);
     return map;
   }, []);
 
@@ -337,7 +286,7 @@ export function ChessApp() {
     <div style={{ fontFamily: '-apple-system, sans-serif' }}>
       <div style={statusBarStyle}>
         <span style={seedPillStyle}>
-          You are seed <strong>{seed.toUpperCase()}</strong> · {myPubkeyHex.slice(0, 10)}...
+          You are <strong>{activeKeyLabel}</strong> · {myPubkeyHex.slice(0, 10)}...
         </span>
         {[...connectedPeers].map((peerId) => (
           <span key={peerId} style={peerPillStyle}>
@@ -446,8 +395,6 @@ export function ChessApp() {
           strategyOptions: [],
           activeKeyLabel,
           onApply: handleApplyConfig,
-          identityNote:
-            'Chess balances come from the per-seed and well-known testnet keys baked into the chess genesis; user-generated keys will leave the wallet empty.',
         }}
       />
     </div>

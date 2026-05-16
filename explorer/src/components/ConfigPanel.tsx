@@ -379,8 +379,20 @@ function KeyRow(props: {
   onDelete: () => void;
 }) {
   const { entry, selected, renaming } = props;
+  const rowSelectable = !renaming && !selected;
   return (
     <div
+      role={rowSelectable ? "button" : undefined}
+      tabIndex={rowSelectable ? 0 : -1}
+      onClick={rowSelectable ? props.onSelect : undefined}
+      onKeyDown={rowSelectable
+        ? (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            props.onSelect();
+          }
+        }
+        : undefined}
       style={{
         display: "flex",
         alignItems: "center",
@@ -389,13 +401,15 @@ function KeyRow(props: {
         borderRadius: 8,
         border: selected ? "1px solid #0071e3" : "1px solid #d2d2d7",
         background: selected ? "rgba(0,113,227,0.06)" : "#fff",
+        cursor: rowSelectable ? "pointer" : "default",
       }}
     >
       <input
         type="radio"
         checked={selected}
-        onChange={props.onSelect}
-        style={{ accentColor: "#0071e3" }}
+        readOnly
+        tabIndex={-1}
+        style={{ accentColor: "#0071e3", pointerEvents: "none" }}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
         {renaming
@@ -404,6 +418,7 @@ function KeyRow(props: {
               autoFocus
               value={props.renameValue}
               onChange={(e) => props.onChangeRename(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 if (e.key === "Enter") props.onCommitRename();
                 if (e.key === "Escape") props.onCancelRename();
@@ -434,14 +449,20 @@ function KeyRow(props: {
       {!entry.builtIn && !renaming && (
         <>
           <button
-            onClick={props.onStartRename}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onStartRename();
+            }}
             style={smallBtn}
             title="Rename"
           >
             Rename
           </button>
           <button
-            onClick={props.onDelete}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onDelete();
+            }}
             style={smallBtnDanger}
             title="Delete key"
           >

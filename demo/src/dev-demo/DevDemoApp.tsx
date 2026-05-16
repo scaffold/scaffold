@@ -2,13 +2,12 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BlockExplorerOverlay,
   findKey,
+  getOrCreateDefaultKeyId,
   type KeyEntry,
   loadKeys,
-  WELL_KNOWN_KEY_ID,
 } from "@scaffold/explorer";
 import { Scaffold, type ScaffoldConfig } from "scaffold.io/Scaffold.ts";
-import { composeGenesisPacket } from "scaffold.io/core/Block.ts";
-import { makeSignatureOutput } from "scaffold.io/contracts/SignatureContract.ts";
+import { getGenesisBlock } from "scaffold.io/genesis.ts";
 import { installDebugAPI } from "scaffold.io/debug/ScaffoldDebug.ts";
 import type { Hash } from "scaffold.io/util/Hash.ts";
 import { registerDevDemoGrammars } from "./languageGrammars.ts";
@@ -53,15 +52,10 @@ export function DevDemoApp(
 
   const scaffold = useMemo(() => {
     const keys: KeyEntry[] = loadKeys();
-    const keyEntry = findKey(keys, WELL_KNOWN_KEY_ID) ?? keys[0];
-    const genesis = composeGenesisPacket(
-      keys.map((k: KeyEntry) =>
-        makeSignatureOutput(k.publicKey, 1_000_000)
-      ),
-    );
+    const keyEntry = findKey(keys, getOrCreateDefaultKeyId()) ?? keys[0];
     const config: ScaffoldConfig = {
       privateKey: keyEntry.privateKey,
-      genesis,
+      genesis: getGenesisBlock(),
       enableLogging: true,
       enablePiggyback: true,
       useFloodGossip: false,

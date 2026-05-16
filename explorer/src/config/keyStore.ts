@@ -202,4 +202,18 @@ export function saveSelectedKeyId(id: string) {
   }
 }
 
+/**
+ * Resolve the default identity for a fresh session: if the user has at least
+ * one persisted user key, return the first one; otherwise generate and
+ * persist a new "Anonymous" key. Built-ins are intentionally NOT used as the
+ * default -- selecting a well-known identity is what funds the wallet.
+ */
+export function getOrCreateDefaultKeyId(): string {
+  const keys = loadKeys();
+  const existingUserKey = keys.find((k) => !k.builtIn);
+  if (existingUserKey) return existingUserKey.id;
+  const { newId } = addRandomKey(keys, "Anonymous");
+  return newId;
+}
+
 export const WELL_KNOWN_KEY_ID = WELL_KNOWN_ID;

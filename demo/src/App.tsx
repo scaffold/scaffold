@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BlockExplorerOverlay,
   findKey,
+  getOrCreateDefaultKeyId,
   type KeyEntry,
   loadKeys,
   loadSelectedKeyId,
   type SandboxConfig,
   saveSelectedKeyId,
   type StrategyOption,
-  WELL_KNOWN_KEY_ID,
 } from "@scaffold/explorer";
 import { YamlEditorField } from "./YamlEditorField.tsx";
 import { Scaffold, type ScaffoldConfig } from "scaffold.io/Scaffold.ts";
@@ -17,8 +17,7 @@ import type { Strategy } from "scaffold.io/node/ReactiveLayer.ts";
 import { SamplingStrategy } from "scaffold.io/node/strategies/SamplingStrategy.ts";
 import { DisputeStrategy } from "scaffold.io/node/strategies/DisputeStrategy.ts";
 import { installDebugAPI } from "scaffold.io/debug/ScaffoldDebug.ts";
-import { composeGenesisPacket } from "scaffold.io/core/Block.ts";
-import { makeSignatureOutput } from "scaffold.io/contracts/SignatureContract.ts";
+import { getGenesisBlock } from "scaffold.io/genesis.ts";
 import yaml from "yaml";
 import { ChessApp } from "./chess/ChessApp.tsx";
 import { DevDemoApp, pickInitialLang } from "./dev-demo/DevDemoApp.tsx";
@@ -198,7 +197,7 @@ interface PersistedSandbox {
 
 function defaultSandboxConfig(): SandboxConfig {
   return {
-    selectedKeyId: WELL_KNOWN_KEY_ID,
+    selectedKeyId: getOrCreateDefaultKeyId(),
     strategies: new Set(),
     enablePiggyback: true,
     enableLogging: true,
@@ -286,19 +285,9 @@ function buildScaffoldConfig(
   const strategies = STRATEGIES
     .filter((s) => config.strategies.has(s.key))
     .map((s) => s.create());
-  // Build a genesis that funds every key in the keystore. autoBalance
-  // pulls the active key's signature UTXO out of the genesis to cover
-  // the throughput of every put -- without an output for the active
-  // key, every "Add Block" attempt fails with "throughput imbalance".
-  // Outputs are emitted in keystore order; keys.id is a stable hash of
-  // the private key, so any node loading the same keystore computes the
-  // same genesis hash.
-  const genesis = composeGenesisPacket(
-    keys.map((k) => makeSignatureOutput(k.publicKey, 1_000_000)),
-  );
   const scaffoldConfig: ScaffoldConfig = {
     privateKey: keyEntry.privateKey,
-    genesis,
+    genesis: getGenesisBlock(),
     strategies,
     enablePiggyback: config.enablePiggyback,
     enableLogging: config.enableLogging,
@@ -328,11 +317,9 @@ function ExplorerRoute({ navigate }: ExplorerRouteProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 
-  // Mirror the active key id into the URL (drop the param when it's the
-  // well-known default to keep URLs clean).
+  // Mirror the active key id into the URL.
   useEffect(() => {
-    const target = activeKey.id === WELL_KNOWN_KEY_ID ? null : activeKey.id;
-    writeHashParam("key", target);
+    writeHashParam("key", activeKey.id);
     saveSelectedKeyId(activeKey.id);
   }, [activeKey.id]);
 

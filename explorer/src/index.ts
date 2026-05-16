@@ -21,6 +21,7 @@ export {
   addRandomKey,
   deleteKey,
   findKey,
+  getOrCreateDefaultKeyId,
   importKey,
   loadKeys,
   loadSelectedKeyId,
