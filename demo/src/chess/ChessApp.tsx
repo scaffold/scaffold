@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scaffold } from 'scaffold.io/Scaffold.ts';
-import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from 'scaffold.io/genesis.ts';
+import {
+  demoPrivateKey,
+  demoPublicKey,
+  WELL_KNOWN_KEY_VALUE,
+  WELL_KNOWN_KEYS,
+} from 'scaffold.io/genesis.ts';
+import { composeGenesisPacket } from 'scaffold.io/core/Block.ts';
+import { makeSignatureOutput } from 'scaffold.io/contracts/SignatureContract.ts';
 import { bin2hex } from 'scaffold.io/util/hex.ts';
 import { ChessGame } from 'scaffold.io/demo/chess/ChessGame.ts';
 import { ChessIndex } from 'scaffold.io/demo/chess/ChessIndex.ts';
@@ -84,7 +91,19 @@ export function ChessApp() {
     const keyEntry = findKey(keys, config.selectedKeyId)
       ?? findKey(keys, seedKeyId)
       ?? keys[0];
-    const genesis = computeDemoGenesis(DEMO_SEEDS);
+    // Chess peers must agree on a single genesis hash, so we cannot fund
+    // arbitrary user keys here. We fund the per-seed demo keys (indices
+    // 0..DEMO_SEEDS.length-1 -- existing tests rely on this ordering) plus
+    // every WELL_KNOWN_KEYS entry so picking a built-in identity in the
+    // config panel still leaves a spendable balance.
+    const genesis = composeGenesisPacket([
+      ...DEMO_SEEDS.map((seed) =>
+        makeSignatureOutput(demoPublicKey(seed), 1_000_000)
+      ),
+      ...WELL_KNOWN_KEYS.map((k) =>
+        makeSignatureOutput(k.publicKey, WELL_KNOWN_KEY_VALUE)
+      ),
+    ]);
     const scaffoldConfig: ScaffoldConfig = {
       privateKey: keyEntry.privateKey,
       genesis,
@@ -428,7 +447,7 @@ export function ChessApp() {
           activeKeyLabel,
           onApply: handleApplyConfig,
           identityNote:
-            'Chess balances are seed-driven; selecting a non-seed key will leave the wallet empty.',
+            'Chess balances come from the per-seed and well-known testnet keys baked into the chess genesis; user-generated keys will leave the wallet empty.',
         }}
       />
     </div>
