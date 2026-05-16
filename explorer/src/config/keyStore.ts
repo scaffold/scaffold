@@ -6,8 +6,8 @@ import { Hash } from "scaffold.io/util/Hash.ts";
 import { bin2hex, hex2bin } from "scaffold.io/util/hex.ts";
 import { secp } from "scaffold.io/util/secp.ts";
 import {
+  WELL_KNOWN_KEYS,
   WELL_KNOWN_PRIVATE_KEY,
-  WELL_KNOWN_PUBLIC_KEY,
 } from "scaffold.io/genesis.ts";
 
 const STORAGE_KEY = "scaffold-demo-keystore-v1";
@@ -34,6 +34,11 @@ interface StoredKeystore {
 }
 
 const WELL_KNOWN_ID = hashOf(WELL_KNOWN_PRIVATE_KEY);
+
+/** Ids of every built-in well-known key (used to dedupe localStorage entries). */
+const BUILT_IN_IDS: ReadonlySet<string> = new Set(
+  WELL_KNOWN_KEYS.map((k) => hashOf(k.privateKey)),
+);
 
 function hashOf(privateKey: Uint8Array): string {
   return Hash.digest(privateKey).toHex();
@@ -63,14 +68,14 @@ function saveStored(store: StoredKeystore) {
   }
 }
 
-function builtInEntry(): KeyEntry {
-  return {
-    id: WELL_KNOWN_ID,
-    label: "Well-known (testnet)",
-    privateKey: WELL_KNOWN_PRIVATE_KEY,
-    publicKey: WELL_KNOWN_PUBLIC_KEY,
+function builtInEntries(): KeyEntry[] {
+  return WELL_KNOWN_KEYS.map((k) => ({
+    id: hashOf(k.privateKey),
+    label: k.label,
+    privateKey: k.privateKey,
+    publicKey: k.publicKey,
     builtIn: true,
-  };
+  }));
 }
 
 /** Read the full key list (built-ins first, then user keys in insertion order). */
@@ -78,7 +83,7 @@ export function loadKeys(): KeyEntry[] {
   const stored = loadStored();
   const userEntries: KeyEntry[] = [];
   for (const e of stored.entries) {
-    if (e.id === WELL_KNOWN_ID) continue;
+    if (BUILT_IN_IDS.has(e.id)) continue;
     let pk: Uint8Array;
     try {
       pk = hex2bin(e.privateKeyHex);
@@ -94,7 +99,7 @@ export function loadKeys(): KeyEntry[] {
       builtIn: false,
     });
   }
-  return [builtInEntry(), ...userEntries];
+  return [...builtInEntries(), ...userEntries];
 }
 
 function persistUserEntries(keys: KeyEntry[]) {

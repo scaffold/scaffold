@@ -9,12 +9,9 @@
  */
 
 import { bin2hex } from '../src/util/hex.ts';
-import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import { composeGenesisPacket } from '../src/core/Block.ts';
-import { WELL_KNOWN_PUBLIC_KEY } from '../src/genesis.ts';
+import { computeGenesisBlock, WELL_KNOWN_KEYS } from '../src/genesis.ts';
 
-const outputs = [makeSignatureOutput(WELL_KNOWN_PUBLIC_KEY, 1_000_000)];
-const packet = composeGenesisPacket(outputs);
+const packet = computeGenesisBlock();
 const hex = bin2hex(packet.raw);
 
 // deno-lint-ignore no-console
@@ -24,4 +21,8 @@ console.log(hex);
 // deno-lint-ignore no-console
 console.log(`\nGenesis hash: ${packet.hash.toHex()}`);
 // deno-lint-ignore no-console
-console.log(`Block hash will be: ${packet.hash.toHex()}`);
+console.log(`Funded keys (${WELL_KNOWN_KEYS.length}):`);
+for (const [i, k] of WELL_KNOWN_KEYS.entries()) {
+  // deno-lint-ignore no-console
+  console.log(`  [${i}] ${k.label}  pub=${bin2hex(k.publicKey)}`);
+}
