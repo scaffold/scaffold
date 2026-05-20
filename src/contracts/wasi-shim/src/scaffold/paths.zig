@@ -49,6 +49,7 @@ const std = @import("std");
 
 const vfs = @import("../vfs/vfs.zig");
 const env = @import("env.zig");
+const lazy_inputs = @import("lazy_inputs.zig");
 const memfs = @import("../vfs/memfs.zig");
 const devfs = @import("../vfs/devfs.zig");
 const input_node = @import("../vfs/input_node.zig");
@@ -259,20 +260,21 @@ fn makeMode() []const u8 {
 var ts_bytes: [8]u8 = undefined;
 
 fn makeTimestamp() []const u8 {
-    std.mem.writeInt(u64, &ts_bytes, env.timestamp(), .little);
+    std.mem.writeInt(u64, &ts_bytes, lazy_inputs.timestampMs(), .little);
     return ts_bytes[0..8];
 }
 
 fn makeContractHash() []const u8 {
-    // Pull straight from state, which has the bytes already copied into
-    // shim memory by `state.init`. Avoids the env.contractHash() copy.
-    return state_mod.current().contract_hash[0..];
+    // lazy_inputs caches the bytes in module-scope storage; the returned
+    // slice stays valid until the next `lazy_inputs.reset()`.
+    return lazy_inputs.contractHashSlice();
 }
 
 fn makeParams() []const u8 {
-    // env.params() returns a slice into the shim's bump arena. The arena
-    // only grows, so the slice stays valid for the duration of the run.
-    return env.params();
+    // lazy_inputs.paramsBytes() returns a slice into the shim's bump arena.
+    // The arena only grows within a run, so the slice stays valid for the
+    // duration of the run.
+    return lazy_inputs.paramsBytes();
 }
 
 // -- /in/{contract_metadata,body,fetch} dynamic branches ----------------

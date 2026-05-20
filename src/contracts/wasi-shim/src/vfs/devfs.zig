@@ -70,9 +70,15 @@ fn randomStat(_: *vfs.Node) vfs.VfsError!vfs.Stat {
     return .{ .filetype = .CHARACTER_DEVICE, .size = 0 };
 }
 
+// Seed fixed-zero for now; see abi/random.zig for the same constant and the
+// TODO around picking real seed inputs. The shared PRNG counter still lives
+// on `state` so /dev/random and /dev/urandom advance the same stream as
+// `random_get`.
+const ZERO_SEED: [32]u8 = [_]u8{0} ** 32;
+
 fn randomRead(_: *vfs.Node, _: u64, out: []u8) vfs.VfsError!usize {
     const s = state.current();
-    prng.fill(s.prng_seed, &s.prng_counter, out);
+    prng.fill(ZERO_SEED, &s.prng_counter, out);
     return out.len;
 }
 
@@ -178,11 +184,7 @@ fn initTestState() void {
     test_arena_pos = 0;
     state.init(
         .{ .ctx = null, .alloc = testAllocFn },
-        .{
-            .timestamp_ms = 1_700_000_000_000,
-            .contract_hash = [_]u8{0x42} ** 32,
-            .params = "devfs-test",
-        },
+        .{},
     );
 }
 
@@ -231,13 +233,14 @@ test "/dev/random and /dev/urandom share the prng counter" {
 test "/dev/random write is discarded (no entropy mixing)" {
     initTestState();
     const counter_before = state.current().prng_counter;
-    const seed_before = state.current().prng_seed;
 
     const payload = "would-be entropy";
     try testing.expectEqual(payload.len, try dev_random.vtable.write(dev_random, 0, payload));
 
+    // Counter unchanged is the live "no entropy mixing" signal. The seed is
+    // currently a hardcoded constant (see randomRead) and isn't observable on
+    // state.
     try testing.expectEqual(counter_before, state.current().prng_counter);
-    try testing.expectEqualSlices(u8, &seed_before, &state.current().prng_seed);
 }
 
 test "/dev/random stat reports CHARACTER_DEVICE size 0" {

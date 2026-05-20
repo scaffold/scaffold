@@ -355,7 +355,6 @@ pub fn fd_filestat_get(fd: i32, out_stat: i32) i32 {
     const stat_res = entry.node.vtable.stat(entry.node) catch |err|
         return @intFromEnum(abi.errnoFromVfs(err));
 
-    const ts_ns: u64 = state.current().timestamp_ms * 1_000_000;
     const filetype = vfsToWasiFiletype(stat_res.filetype);
     var buf: [@sizeOf(abi.Filestat)]u8 = undefined;
     serializeFilestat(&buf, .{
@@ -370,9 +369,13 @@ pub fn fd_filestat_get(fd: i32, out_stat: i32) i32 {
         // any subdir). Programs use this to detect "is this a directory".
         .nlink = if (filetype == .DIRECTORY) 2 else 1,
         .size = stat_res.size,
-        .atim = ts_ns,
-        .mtim = ts_ns,
-        .ctim = ts_ns,
+        // atim/mtim/ctim deliberately 0: stat times are not part of the
+        // deterministic surface the shim exposes today. Reading the block
+        // timestamp here would force an env.timestamp() call on every
+        // filestat, which the lazy-inputs work intentionally avoids.
+        .atim = 0,
+        .mtim = 0,
+        .ctim = 0,
     });
     prog_mem.writeSlice(@intCast(out_stat), &buf);
     return errno(.SUCCESS);

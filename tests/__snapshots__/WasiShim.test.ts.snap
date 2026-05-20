@@ -2,14 +2,8 @@ export const snapshot = {};
 
 snapshot[`WasiShim - proc_exit(0): clean termination 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:proc_exit (wasi_snapshot_preview1.proc_exit)
@@ -22,14 +16,8 @@ snapshot[`WasiShim - proc_exit(0): clean termination 1`] = `
 
 snapshot[`WasiShim - proc_exit(7): rejects with reason 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:proc_exit (wasi_snapshot_preview1.proc_exit)
@@ -43,14 +31,8 @@ snapshot[`WasiShim - proc_exit(7): rejects with reason 1`] = `
 
 snapshot[`WasiShim - fd_write to stdout: routes to /out/debug as debug call 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:fd_write (wasi_snapshot_preview1.fd_write)
@@ -71,14 +53,8 @@ snapshot[`WasiShim - fd_write to stdout: routes to /out/debug as debug call 1`] 
 
 snapshot[`WasiShim - fd_write to /out/record/foo: emits Output{RECORD_CONTRACT, params="foo"} 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:path_open (wasi_snapshot_preview1.path_open)
@@ -110,14 +86,8 @@ snapshot[`WasiShim - fd_write to /out/record/foo: emits Output{RECORD_CONTRACT, 
 
 snapshot[`WasiShim - fd_read from /in/params: returns mocked params bytes 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:path_open (wasi_snapshot_preview1.path_open)
@@ -167,17 +137,13 @@ snapshot[`WasiShim - fd_read from /in/params: returns mocked params bytes 1`] = 
 
 snapshot[`WasiShim - clock_time_get(REALTIME): returns timestamp x 1e6 ns 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
+      > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
+      < return
       > forward wasi_shim -> program:memory (program_mem.write_bytes)
       < return
     < return
@@ -210,14 +176,8 @@ snapshot[`WasiShim - clock_time_get(REALTIME): returns timestamp x 1e6 ns 1`] = 
 
 snapshot[`WasiShim - clock_time_get(MONOTONIC): counter advances 1 ns per call 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:clock_time_get (wasi_snapshot_preview1.clock_time_get)
@@ -257,14 +217,8 @@ snapshot[`WasiShim - clock_time_get(MONOTONIC): counter advances 1 ns per call 1
 
 snapshot[`WasiShim - random_get(8): emits deterministic PRNG bytes 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:random_get (wasi_snapshot_preview1.random_get)
@@ -287,7 +241,7 @@ snapshot[`WasiShim - random_get(8): emits deterministic PRNG bytes 1`] = `
     < return
     > forward program -> wasi_shim:fd_close (wasi_snapshot_preview1.fd_close)
       > forward wasi_shim -> base:emit_output (scaffold_env.emit_output)
-        > scaffold_env.emit_output(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(3) "rng"}, value=0, body=bytes(8) 0x05383dbcd0ed651c) [sequence #1: emit_output ✓]
+        > scaffold_env.emit_output(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(3) "rng"}, value=0, body=bytes(8) 0x2c34ce1df23b838c) [sequence #1: emit_output ✓]
       < return
     < return
     > forward program -> wasi_shim:proc_exit (wasi_snapshot_preview1.proc_exit)
@@ -300,14 +254,8 @@ snapshot[`WasiShim - random_get(8): emits deterministic PRNG bytes 1`] = `
 
 snapshot[`WasiShim - args_get: returns wasi_setup.argv[0] 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(20) "{\\\\"argv\\\\":[\\\\"asc0123\\\\"]}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(20) "{\\\\"argv\\\\":[\\\\"asc0123\\\\"]}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:args_sizes_get (wasi_snapshot_preview1.args_sizes_get)
@@ -353,14 +301,8 @@ snapshot[`WasiShim - args_get: returns wasi_setup.argv[0] 1`] = `
 
 snapshot[`WasiShim - environ_get: returns wasi_setup.env[0] as KEY=VALUE 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(21) "{\\\\"env\\\\":{\\\\"FOO\\\\":\\\\"bar\\\\"}}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(21) "{\\\\"env\\\\":{\\\\"FOO\\\\":\\\\"bar\\\\"}}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:environ_sizes_get (wasi_snapshot_preview1.environ_sizes_get)
@@ -410,14 +352,8 @@ snapshot[`WasiShim - environ_get: returns wasi_setup.env[0] as KEY=VALUE 1`] = `
 
 snapshot[`WasiShim - path_open round-trip on /scratch: writes then reads back 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(2) "{}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:path_open (wasi_snapshot_preview1.path_open)
@@ -481,14 +417,8 @@ snapshot[`WasiShim - path_open round-trip on /scratch: writes then reads back 1`
 
 snapshot[`WasiShim - fd_readdir on root: enumerates preopens 1`] = `
 '> entry wasi_shim:run (mode=run)
-  > forward wasi_shim -> base:contract_hash (scaffold_env.contract_hash)
-  < return
-  > forward wasi_shim -> base:params (scaffold_env.params)
-  < return
-  > forward wasi_shim -> base:timestamp (scaffold_env.timestamp)
-  < return
   > forward wasi_shim -> base:contract_metadata (scaffold_env.contract_metadata)
-    > scaffold_env.contract_metadata(verifier=Verifier{contract=0x8ceef1667e691c3796e60fcbad45393ff8df7736bc53ffa0b3c1cf6ba23d9889, params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(25) "{\\\\"preopens\\\\":[\\\\"/\\\\",\\\\"/out\\\\"]}"}
+    > scaffold_env.contract_metadata(verifier=Verifier{contract=RECORD_CONTRACT(d08a9def..), params=bytes(10) "wasi_setup"}) [mock] -> {value=0, body=bytes(25) "{\\\\"preopens\\\\":[\\\\"/\\\\",\\\\"/out\\\\"]}"}
   < return
   > forward wasi_shim -> program:_start (program._start)
     > forward program -> wasi_shim:fd_readdir (wasi_snapshot_preview1.fd_readdir)

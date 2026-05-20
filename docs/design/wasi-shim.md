@@ -161,11 +161,22 @@ Writes to `/out/debug` are forwarded to a `scaffold_env.debug(ptr, len)` host im
 
 ### `/dev/random` and `/dev/urandom`
 
-Reads return bytes from a single deterministic PRNG seeded by `H(contract_hash || timestamp_ms_le8 || params)`. `scaffold_env` deliberately doesn't expose `block_hash` (we don't want to expand the protocol surface for one feature); the invocation triple is already per-execution-deterministic (every verifier sees the same contract_hash, the same wire-format timestamp, and the same params). The stream is infinite — programs may read as much as they want. Reads from both paths consume the same stream (no separate state between them), and `random_get` WASI calls also consume from this stream. Order of consumption is deterministic because program execution is deterministic.
+Reads return bytes from a single deterministic PRNG. The current implementation uses a **fixed-zero seed** (see `TODO.md` — the question of which `scaffold_env` inputs should feed the seed is open). The stream is still per-call-deterministic because the shared `prng_counter` advances on every read, but two different contract blocks will see the same stream unless their consumption order diverges. The stream is infinite — programs may read as much as they want. Reads from both paths consume the same stream (no separate state between them), and `random_get` WASI calls also consume from this stream. Order of consumption is deterministic because program execution is deterministic.
 
-The construction: a counter-mode PRNG outputting `H(seed || counter_le8)` per 32-byte block, where `counter` is a u64 advanced once per emitted block. The shim tracks `(seed, position)` as part of its state.
+The construction: a counter-mode PRNG outputting `H(seed || counter_le8)` per 32-byte block, where `counter` is a u64 advanced once per emitted block. The shim tracks `(seed, position)` as part of its state; the seed slot is currently a 32-byte zero constant.
 
 Writes to `/dev/random` and `/dev/urandom` are discarded (no entropy mixing — that would break determinism).
+
+### Lazy scalar inputs
+
+`scaffold_env.contract_hash`, `scaffold_env.params`, and `scaffold_env.timestamp` are **fetched lazily on first use**, not at `run` entry. The cache lives in `src/contracts/wasi-shim/src/scaffold/lazy_inputs.zig`; the `reset()` at the top of every `run` invalidates it. Concretely:
+
+- `/in/contract_hash` triggers a `scaffold_env.contract_hash` call on first read.
+- `/in/timestamp` and `clock_time_get(REALTIME)` both go through `lazy_inputs.timestampMs()`; whichever fires first pays for the host call, the other reuses the cache.
+- `/in/params` is the sole consumer of `scaffold_env.params` (the PRNG seed no longer hashes it — see [`/dev/random`](#devrandom-and-devurandom)).
+- `setup.read` does **not** touch any of these scalars: it reads the `wasi_setup` record under verifier `{RECORD_CONTRACT, "wasi_setup"}`, so a program that never opens an `/in/*` scalar input and never calls `clock_time_get(REALTIME)` sees the three host calls skipped entirely.
+
+This shaves three host crossings off every "compute that doesn't touch its scaffold inputs" contract. The cost was free — the eager fetches were only there to feed the PRNG seed and a (since-removed) filestat timestamp.
 
 ## Determinism
 
@@ -173,7 +184,8 @@ WASI exposes several sources of non-determinism that must be deterministically m
 
 | WASI call | Mapping |
 |---|---|
-| `clock_time_get(REALTIME)` | block timestamp, ms × 10^6 (WASI is nanoseconds) |
+| `clock_time_get(REALTIME)` | block timestamp, ms × 10^6 (WASI is nanoseconds); `scaffold_env.timestamp` is fetched lazily on first call |
+| `fd_filestat_get` / `path_filestat_get` (atim/mtim/ctim) | always 0 (stat times are not part of the deterministic surface) |
 | `clock_time_get(MONOTONIC)` | strictly-increasing call counter × 1ns; starts at 0 |
 | `clock_time_get(PROCESS_CPUTIME_ID)` | same as MONOTONIC |
 | `clock_time_get(THREAD_CPUTIME_ID)` | same as MONOTONIC |
@@ -193,7 +205,7 @@ The MONOTONIC counter ensures that even programs that `sleep`-style poll on mono
 
 ## `wasi_setup` Record
 
-A JSON record on the contract block, key `"wasi_setup"`, body is UTF-8 JSON of:
+A JSON record on the contract block under verifier `{contract: RECORD_CONTRACT, params: "wasi_setup"}` (the standard record-output shape — see `src/contracts/RecordContract.ts::makeRecordOutput`). Body is UTF-8 JSON of:
 
 > Parser note: the shim ships a ~200-line JSON subset parser (objects, arrays, strings with standard escapes, plus `null` / `true` / `false` — no numbers, since `wasi_setup` doesn't need any). Zig's `std.json` isn't freestanding-friendly. The TS `setup.ts` helper produces canonical JSON with sorted keys.
 
@@ -427,8 +439,9 @@ src/contracts/wasi-shim/
     │   └── input_node.zig — read-only nodes whose bytes are produced by a callback
     └── scaffold/          — scaffold-specific wiring
         ├── env.zig        — wraps scaffold_env.* imports (Zig-side ergonomic API)
+        ├── lazy_inputs.zig — per-run caches for contract_hash / params / timestamp; first read pays the host call
         ├── prog_mem.zig   — reads/writes program's memory via program_mem.{read,write}_bytes
-        ├── setup.zig      — reads wasi_setup record, populates argv/env/preopens, builds initial FD table
+        ├── setup.zig      — reads wasi_setup record (under verifier {RECORD_CONTRACT, "wasi_setup"}), populates argv/env/preopens, builds initial FD table
         ├── paths.zig      — maps shim path prefixes (/in/..., /out/...) onto scaffold calls; OutputLeaf, RecordAccumulator, DebugNode
         └── paths_codec.zig — hex/decimal encoding helpers shared by paths.zig
 ```

@@ -480,7 +480,6 @@ pub fn path_filestat_get(
         return @intFromEnum(abi.Errno.NOTDIR);
     }
 
-    const ts_ns: u64 = state.current().timestamp_ms *% 1_000_000;
     const filetype = fd_mod.vfsToWasiFiletype(stat_res.filetype);
     var buf: [@sizeOf(abi.Filestat)]u8 = undefined;
     fd_mod.serializeFilestat(&buf, .{
@@ -492,9 +491,10 @@ pub fn path_filestat_get(
         .filetype = filetype,
         .nlink = if (filetype == .DIRECTORY) 2 else 1,
         .size = stat_res.size,
-        .atim = ts_ns,
-        .mtim = ts_ns,
-        .ctim = ts_ns,
+        // atim/mtim/ctim deliberately 0; see fd_filestat_get.
+        .atim = 0,
+        .mtim = 0,
+        .ctim = 0,
     });
     prog_mem.writeSlice(@bitCast(out_stat), &buf);
     return @intFromEnum(abi.Errno.SUCCESS);

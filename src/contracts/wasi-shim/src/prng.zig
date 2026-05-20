@@ -1,7 +1,9 @@
 // Deterministic counter-mode PRNG: H(seed || counter_le8) per 32-byte block.
-// Seed is opaque here (computed by state.zig from the invocation triple).
-// The counter is shared across all consumers (random_get, /dev/random,
-// /dev/urandom) so the stream stays single-source and deterministic.
+// Seed is opaque here -- callers pass it in. Today the wasi-shim wires a
+// fixed-zero seed (see abi/random.zig and vfs/devfs.zig) while we decide
+// which scaffold_env inputs should feed it; the counter is shared across all
+// consumers (random_get, /dev/random, /dev/urandom) so the stream stays
+// single-source and deterministic.
 
 const std = @import("std");
 

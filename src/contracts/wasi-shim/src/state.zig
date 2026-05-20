@@ -10,7 +10,7 @@
 //
 // Without this copy, a future setup path that does
 //   `const md = env.contractMetadata(...);`
-//   `state.init(.{ .params = env.params(), ..., .argv = parsed_argv, ... });`
+//   `state.init(.{ .argv = parsed_argv, ... });`
 // would silently corrupt state every time `init` ran an `alloc` for the
 // FD table or for `md`'s parse buffer in between borrowing the bytes and
 // reading them.
@@ -22,8 +22,6 @@
 const std = @import("std");
 
 const vfs = @import("vfs/vfs.zig");
-
-const Sha256 = std.crypto.hash.sha2.Sha256;
 
 pub const EnvEntry = struct { key: []const u8, val: []const u8 };
 
@@ -44,14 +42,10 @@ pub const Allocator = struct {
 };
 
 pub const State = struct {
-    /// Block timestamp from `scaffold_env.timestamp()`, in milliseconds.
-    timestamp_ms: u64,
-    /// Hash of the running contract block.
-    contract_hash: [32]u8,
-    /// PRNG seed = SHA256(contract_hash || timestamp_ms_le_u64 || params).
-    /// Computed in `init` from the args; never recomputed during a run.
-    prng_seed: [32]u8,
     /// Counter shared by `random_get` + `/dev/random` + `/dev/urandom`.
+    /// The PRNG seed itself is fixed-zero for now (see abi/random.zig);
+    /// the counter still advances per-block to keep the stream
+    /// deterministic-but-distinct across calls within a run.
     prng_counter: u64,
     /// Counter for `clock_time_get(MONOTONIC)` and the CPUTIME family.
     /// Starts at 0; advances by 1 per observation. Returned ns is the
@@ -75,12 +69,6 @@ pub const State = struct {
 };
 
 pub const InitArgs = struct {
-    timestamp_ms: u64,
-    contract_hash: [32]u8,
-    /// Bytes hashed into the PRNG seed alongside contract_hash + timestamp.
-    /// Typically `scaffold_env.params()`. Borrowed only for the duration of
-    /// this `init` call -- bytes are consumed into the seed and not retained.
-    params: []const u8,
     /// All slice fields below are borrowed only across this `init` call:
     /// `init` copies them into shim-owned memory via `allocator` before
     /// returning. After `init` returns, callers may drop or invalidate the
@@ -100,9 +88,6 @@ var current_state: State = undefined;
 /// caller is free to drop the originals once `init` returns.
 pub fn init(allocator: Allocator, args: InitArgs) void {
     current_state = .{
-        .timestamp_ms = args.timestamp_ms,
-        .contract_hash = args.contract_hash,
-        .prng_seed = computeSeed(args.contract_hash, args.timestamp_ms, args.params),
         .prng_counter = 0,
         .monotonic_counter = 0,
         .argv = dupeSlices(allocator, args.argv),
@@ -143,19 +128,6 @@ pub fn current() *State {
     return &current_state;
 }
 
-fn computeSeed(contract_hash: [32]u8, timestamp_ms: u64, params: []const u8) [32]u8 {
-    var ts_le: [8]u8 = undefined;
-    std.mem.writeInt(u64, &ts_le, timestamp_ms, .little);
-
-    var hasher = Sha256.init(.{});
-    hasher.update(&contract_hash);
-    hasher.update(&ts_le);
-    hasher.update(params);
-    var out: [32]u8 = undefined;
-    hasher.final(&out);
-    return out;
-}
-
 // -- tests -----------------------------------------------------------------
 //
 // Tests use a fixed-buffer bump arena to mirror the shipping behaviour:
@@ -186,59 +158,16 @@ const TestArena = struct {
     }
 };
 
-test "init computes deterministic seed" {
-    var arena_buf: [4096]u8 = undefined;
-    var arena = TestArena.init(&arena_buf);
-
-    const contract_hash = [_]u8{0x11} ** 32;
-    const params = "hello world";
-
-    init(arena.allocator(), .{
-        .timestamp_ms = 1_700_000_000_000,
-        .contract_hash = contract_hash,
-        .params = params,
-    });
-    const seed_a = current().prng_seed;
-
-    arena.pos = 0;
-    init(arena.allocator(), .{
-        .timestamp_ms = 1_700_000_000_000,
-        .contract_hash = contract_hash,
-        .params = params,
-    });
-    const seed_b = current().prng_seed;
-
-    try std.testing.expectEqualSlices(u8, &seed_a, &seed_b);
-
-    arena.pos = 0;
-    init(arena.allocator(), .{
-        .timestamp_ms = 1_700_000_000_001,
-        .contract_hash = contract_hash,
-        .params = params,
-    });
-    const seed_c = current().prng_seed;
-
-    try std.testing.expect(!std.mem.eql(u8, &seed_a, &seed_c));
-}
-
 test "init resets counters" {
     var arena_buf: [4096]u8 = undefined;
     var arena = TestArena.init(&arena_buf);
 
-    init(arena.allocator(), .{
-        .timestamp_ms = 42,
-        .contract_hash = [_]u8{0} ** 32,
-        .params = "",
-    });
+    init(arena.allocator(), .{});
     current().prng_counter = 99;
     current().monotonic_counter = 77;
 
     arena.pos = 0;
-    init(arena.allocator(), .{
-        .timestamp_ms = 42,
-        .contract_hash = [_]u8{0} ** 32,
-        .params = "",
-    });
+    init(arena.allocator(), .{});
     try std.testing.expectEqual(@as(u64, 0), current().prng_counter);
     try std.testing.expectEqual(@as(u64, 0), current().monotonic_counter);
 }
@@ -257,9 +186,6 @@ test "init copies borrowed slices into arena memory" {
     var preopens_storage = [_][]const u8{preopen_buf[0..]};
 
     init(arena.allocator(), .{
-        .timestamp_ms = 0,
-        .contract_hash = [_]u8{0} ** 32,
-        .params = "",
         .argv = argv_storage[0..],
         .env = env_storage[0..],
         .cwd = cwd_buf[0..],
@@ -288,10 +214,6 @@ test "init creates an empty fd_table" {
     var arena_buf: [4096]u8 = undefined;
     var arena = TestArena.init(&arena_buf);
 
-    init(arena.allocator(), .{
-        .timestamp_ms = 0,
-        .contract_hash = [_]u8{0} ** 32,
-        .params = "",
-    });
+    init(arena.allocator(), .{});
     try std.testing.expectEqual(vfs.FdTable.MAX_FDS, current().fd_table.free_count);
 }

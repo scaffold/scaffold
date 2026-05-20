@@ -80,12 +80,13 @@ const DEFAULT_PREOPENS: []const []const u8 = &[_][]const u8{ "/in", "/out", "/sc
 /// `ParsedSetup` with all slices owned by the shim's bump arena via `alloc`.
 /// Defaults are applied per-field for missing keys.
 ///
-/// `contract_hash` is passed in (rather than read off `state.current()`)
-/// because `read` runs before `state.init` -- the parsed setup is one of
-/// the inputs to `state.init`. Caller obtains the hash via
-/// `env.contractHash()`.
-pub fn read(alloc: state_mod.Allocator, contract_hash: [32]u8) SetupError!ParsedSetup {
-    const verifier = codec.encodeVerifier(alloc, contract_hash, WASI_SETUP_KEY);
+/// The wasi_setup record is stored as a record output on the contract block,
+/// so its verifier is `{contract: RECORD_CONTRACT, params: "wasi_setup"}` --
+/// the same shape every other on-block record uses (see
+/// `src/contracts/RecordContract.ts::makeRecordOutput`). The running
+/// contract's own hash is never needed here.
+pub fn read(alloc: state_mod.Allocator) SetupError!ParsedSetup {
+    const verifier = codec.encodeVerifier(alloc, codec.RECORD_CONTRACT_HASH, WASI_SETUP_KEY);
     const reply = env.contractMetadata(verifier);
     // The host bridge collapses a missing record into an empty reply
     // (no value/body header); `unpackBody` rejects it with `InvalidReply`,

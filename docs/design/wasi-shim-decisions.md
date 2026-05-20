@@ -57,6 +57,20 @@ and apply unless a per-call section overrides them:
    number.
 7. Every catch-all path emits a `scaffold_env.reject` log via the panic
    handler in main.zig (no silent error swallowing — see AGENTS.md).
+8. **`scaffold_env` scalars are fetched lazily.** `contract_hash`, `params`,
+   and `timestamp` are not pulled at `run` entry; they're fetched (and
+   cached) on first use by `scaffold/lazy_inputs.zig`. Consequences:
+   - `/in/contract_hash`, `/in/params`, `/in/timestamp` reads are the
+     primary triggers. `clock_time_get(REALTIME)` is the other consumer
+     of `timestamp`.
+   - The PRNG seed is currently a 32-byte zero constant (see TODO.md);
+     it does **not** pull any of the three scalars.
+   - `setup.read` looks up `wasi_setup` under the standard record verifier
+     `{contract: RECORD_CONTRACT, params: "wasi_setup"}`; the running
+     contract's hash is not part of the lookup, so contracts that don't
+     ship a `wasi_setup` record (and whose programs never read the scalar
+     `/in/*` files or call REALTIME) skip all four host crossings.
+   - `lazy_inputs.reset()` runs at the top of every `run` to drop caches.
 
 ---
 
@@ -530,9 +544,9 @@ field. No external state.
 | 17 | 7 | (pad) | zero |
 | 24 | 8 | `nlink` | `u64`, our value: 1 |
 | 32 | 8 | `size` | `u64`, see decisions |
-| 40 | 8 | `atim` | `u64` (nanos), block timestamp ×10⁶ |
-| 48 | 8 | `mtim` | `u64` (nanos), same |
-| 56 | 8 | `ctim` | `u64` (nanos), same |
+| 40 | 8 | `atim` | `u64` (nanos), always 0 (see decisions) |
+| 48 | 8 | `mtim` | `u64` (nanos), always 0 |
+| 56 | 8 | `ctim` | `u64` (nanos), always 0 |
 
 **Errno conditions** (in priority order):
 | # | Condition | Errno |
@@ -552,8 +566,9 @@ field. No external state.
 - `std.os.wasi`: `filestat_t` extern struct above. Same caveat as fdstat —
   write field-by-field; do not memcpy a Zig struct.
 
-**Determinism mapping**: All fields are derived from the FD's static type
-+ block timestamp. No wall clock.
+**Determinism mapping**: All fields are derived from the FD's static type.
+Times are always zero (see decisions), so the call doesn't read any block
+state at all.
 
 **Decisions**:
 1. `dev = 0` always. We have no concept of multiple devices.
@@ -569,8 +584,12 @@ field. No external state.
    length from `path_open` time; for `/scratch/*` it's the memfs node
    length; for write-buffered FDs it's the buffered byte count; for
    streams `/dev/null`, `/dev/zero`, `/dev/random` it's `0`).
-6. `atim = mtim = ctim = block_timestamp_ms * 1_000_000` (nanos). All
-   three the same; no per-file mtime tracking.
+6. `atim = mtim = ctim = 0`. Stat times are not part of the deterministic
+   surface; reading the block timestamp here would force an eager
+   `scaffold_env.timestamp` host call on every filestat, which the
+   lazy-inputs work explicitly avoids. Programs that care about per-file
+   times (very few; the standard exception is `make`-style timestamp
+   dependency tracking) need to model them in scratch instead.
 7. Zero the 7-byte pad explicitly.
 
 ---
@@ -807,7 +826,7 @@ allocator.
 - `std.os.wasi`: same `filestat_t` struct.
 
 **Determinism mapping**: Same as `fd_filestat_get` — derived from path
-type + block timestamp.
+type alone. Times are zero, so this call reads no block state.
 
 **Decisions**:
 1. Share the path-resolution helper with `path_open`. Only difference:
@@ -872,8 +891,11 @@ type + block timestamp.
    that interleaves them sees a single increasing sequence. (wasmtime
    distinguishes; we don't, because cpu-time semantics are meaningless
    without a CPU.)
-4. The block timestamp is captured once at `run()` startup via
-   `scaffold_env.timestamp()`. Don't re-call.
+4. The block timestamp is fetched lazily on first use via
+   `scaffold/lazy_inputs.zig` (whichever fires first between
+   `clock_time_get(REALTIME)` and an `/in/timestamp` read pays for the
+   host call; the other reuses the cache). Cache is invalidated by
+   `lazy_inputs.reset()` at the top of every `run`.
 
 ---
 
@@ -908,9 +930,10 @@ type + block timestamp.
 
 **Determinism mapping**: Counter-mode PRNG defined in wasi-shim.md
 `/dev/random and /dev/urandom`: `H(seed || counter)`, 32 bytes per
-counter step, where `seed = H(contract_hash || timestamp_ms_le8 || params)`
-captured at `run()` startup (see `src/contracts/wasi-shim/src/state.zig`).
-The PRNG state is shared with reads from `/dev/random` and `/dev/urandom`.
+counter step, where `seed` is **currently a 32-byte zero constant**
+(see TODO.md "PRNG seed inputs"). The `prng_counter` lives on
+`src/contracts/wasi-shim/src/state.zig` and is shared with reads from
+`/dev/random` and `/dev/urandom`.
 
 **Decisions**:
 1. The PRNG hash function is `Hash.digest` (whatever scaffold uses; check

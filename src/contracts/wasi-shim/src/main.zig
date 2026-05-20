@@ -29,6 +29,7 @@ const path_mod = @import("abi/path.zig");
 const unsupported = @import("abi/unsupported.zig");
 const state = @import("state.zig");
 const env = @import("scaffold/env.zig");
+const lazy_inputs = @import("scaffold/lazy_inputs.zig");
 const paths = @import("scaffold/paths.zig");
 const setup = @import("scaffold/setup.zig");
 
@@ -129,23 +130,18 @@ const shim_allocator: state.Allocator = .{ .ctx = null, .alloc = shimAllocFn };
 export fn run() void {
     reset_bump();
     paths.reset();
+    lazy_inputs.reset();
 
-    // Read scaffold-side scalars before any allocator-bumping work so the
-    // bytes we hand to `state.init` are stable. `setup.read` bumps the
-    // arena while encoding the verifier and parsing JSON, but only after
-    // we've snapshotted the hash + params slice here. The `_in` suffix
-    // sidesteps shadowing the `scaffold_env.contract_hash` extern above.
-    const contract_hash_in = env.contractHash();
-    const params_in = env.params();
-    const timestamp_ms_in = env.timestamp();
-
-    const parsed = setup.read(shim_allocator, contract_hash_in) catch |err|
+    // No `scaffold_env` scalars are pulled here. `contract_hash`, `params`,
+    // and `timestamp` are fetched lazily by `scaffold/lazy_inputs.zig` on
+    // first use -- typically from the `/in/*` input nodes or
+    // `clock_time_get(REALTIME)`. `setup.read` reads the wasi_setup record
+    // under verifier `{RECORD_CONTRACT, "wasi_setup"}`, so it never needs
+    // the running contract's hash either.
+    const parsed = setup.read(shim_allocator) catch |err|
         rejectWith("WASI shim setup failed", err);
 
     state.init(shim_allocator, .{
-        .timestamp_ms = timestamp_ms_in,
-        .contract_hash = contract_hash_in,
-        .params = params_in,
         .argv = parsed.argv,
         .env = parsed.env,
         .cwd = parsed.cwd,

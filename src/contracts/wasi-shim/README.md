@@ -78,8 +78,9 @@ What works:
 - Virtual filesystem: `/in/{mode,timestamp,contract_hash,params,body/...,fetch/...,contract_metadata/...}`,
   `/out/{record/...,output/...,debug}`, `/scratch/*` (in-memory, dropped on
   exit), `/dev/{null,zero,random,urandom}`.
-- Deterministic everywhere: PRNG seeded from `H(contract_hash || timestamp_ms || params)`,
-  `MONOTONIC` is a per-call counter, `REALTIME` is the block timestamp.
+- Deterministic everywhere: PRNG uses a 32-byte zero seed today (TODO: pick
+  real inputs — see TODO.md), `MONOTONIC` is a per-call counter, `REALTIME`
+  is the block timestamp (fetched lazily on first call).
 - QuickJS boots end-to-end (`tests/WasiShimQuickJS.test.ts`).
 
 What's `ENOTSUP`:
