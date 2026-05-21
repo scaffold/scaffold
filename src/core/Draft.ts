@@ -59,7 +59,7 @@ export type DraftStatus =
   | { phase: 'populating' }
   | { phase: 'ready' }
   | { phase: 'solidifying' }
-  | { phase: 'solidified'; block: Block }
+  | { phase: 'solidified' }
   | { phase: 'cancelled'; reason: string };
 
 /** Terminal status check. Only `cancelled` is terminal. */
@@ -137,10 +137,11 @@ export interface Draft {
    * at any moment. Zero-claim drafts are exempt (multiple may be
    * canonical simultaneously). Mutated only by DraftManager.
    *
-   * Populated starting in chunk 3 of the consolidation refactor; for
-   * now this is reserved as a forward-compatibility field and stays
-   * empty -- the latest block lives in `status.block` when
-   * `status.phase === 'solidified'`.
+   * Empty while in `populating`/`ready`/`solidifying`/`cancelled`. Grows
+   * by one each time a `solidifying` draft successfully builds a block.
+   * Reads use `currentCanonicalBlock(draft, consensus)` to pick the live
+   * winner; the latest entry is the most recent attempt, which may be
+   * canonical or uncanonical.
    */
   readonly solidifiedBlocks: Block[];
 }
@@ -298,4 +299,43 @@ export class DraftStore {
     this.drafts.set(key, updated);
     return updated;
   }
+
+  /**
+   * Append a newly-produced block to the draft's `solidifiedBlocks`
+   * history. Does NOT transition the draft -- that's a separate call
+   * to `transition` made by DraftManager.solidify.
+   */
+  appendSolidifiedBlock(draftId: Hash, block: Block): Draft {
+    const key = draftId.toPrimitive();
+    const existing = this.drafts.get(key);
+    if (!existing) {
+      throw new Error(`Draft ${key} not found`);
+    }
+    const updated: Draft = {
+      ...existing,
+      solidifiedBlocks: [...existing.solidifiedBlocks, block],
+    };
+    this.drafts.set(key, updated);
+    return updated;
+  }
+}
+
+/**
+ * Pick the current canonical block from a draft's `solidifiedBlocks`
+ * history, if any. Returns `undefined` if none are canonical (the
+ * usual case while the draft is in `solidifying` and the retry loop
+ * is rebuilding) or if the draft hasn't solidified yet.
+ *
+ * Used by NodeWeightsService and any other consumer that previously
+ * read `status.block` on a `solidified` status.
+ */
+export function currentCanonicalBlock(
+  draft: Draft,
+  isCanonical: (h: Hash) => boolean,
+): Block | undefined {
+  for (let i = draft.solidifiedBlocks.length - 1; i >= 0; i--) {
+    const b = draft.solidifiedBlocks[i];
+    if (isCanonical(b.hash)) return b;
+  }
+  return undefined;
 }

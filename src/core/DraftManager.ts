@@ -70,11 +70,17 @@ export class DraftManager {
     this._retrying = true;
     this._solidifyDepth++;
     try {
-      // Demote solidified drafts whose carried block went uncanonical.
+      // Demote solidified drafts where no entry in `solidifiedBlocks`
+      // is currently canonical. Zero-claim drafts are exempt: their
+      // produced blocks may all be canonical simultaneously (see
+      // Draft.ts claims docstring), so we don't track exclusivity.
       for (const d of this.store.getByPhase('solidified')) {
-        const block = d.status.phase === 'solidified' ? d.status.block : undefined;
-        if (!block) continue;
-        if (!this.consensus.isCanonical(block.hash)) {
+        if (d.claims.length === 0) continue;
+        if (d.solidifiedBlocks.length === 0) continue;
+        const anyCanonical = d.solidifiedBlocks.some((b) =>
+          this.consensus.isCanonical(b.hash)
+        );
+        if (!anyCanonical) {
           // Re-register the phantom and transition back to solidifying.
           this.consensus.addBlock(d.draftId);
           this.consensus.setVerifiedWeight(d.draftId, [d.declaredWeight]);
@@ -273,7 +279,13 @@ export class DraftManager {
     if (existing.status.phase === 'cancelled' || existing.status.phase === 'solidified') {
       return { ok: false, reason: `draft is ${existing.status.phase}` };
     }
-    return this.solidify([existing]);
+    // `populating` is not accepted by `solidify`; promote to `ready` first
+    // so the next step in `solidify` can do the standard ready -> solidifying
+    // transition. This keeps `solidify`'s precondition tight.
+    const seed = existing.status.phase === 'populating'
+      ? this.store.transition(draftId, { phase: 'ready' })
+      : existing;
+    return this.solidify([seed]);
   }
 
   /** Producer-agnostic cancel. Alias for the legacy `cancelDraft`. */
@@ -388,15 +400,17 @@ export class DraftManager {
       const result = this._blockBuilder.solidify(seedDrafts, []);
       if (!result.ok) return result;
 
-      // 3. Success: transition consumed drafts to `solidified`, detach
-      // from consensus, then dispatch the block. Detach BEFORE dispatch
-      // so the draft's phantom claims clear out before the real block
-      // (which claims the same outputs) is evaluated.
+      // 3. Success: append the new block to each draft's solidifiedBlocks
+      // history, transition to `solidified`, detach from consensus, then
+      // dispatch the block. Detach BEFORE dispatch so the draft's phantom
+      // claims clear out before the real block (which claims the same
+      // outputs) is evaluated.
       const block = result.block;
       const consumedDraftIds = seedDrafts.map((d) => d.draftId);
       for (const id of consumedDraftIds) {
         this.detachDraft(id);
-        this.store.transition(id, { phase: 'solidified', block });
+        this.store.appendSolidifiedBlock(id, block);
+        this.store.transition(id, { phase: 'solidified' });
       }
       this._processBlock?.(block);
 
