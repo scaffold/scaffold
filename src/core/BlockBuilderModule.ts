@@ -102,7 +102,24 @@ export class BlockBuilderModule {
    *                        canonical store. Caller parks the draft until
    *                        an aggregation block bridges them.
    */
-  build(draft: Draft): BuildResult {
+  build(
+    draft: Draft,
+    opts?: {
+      /**
+       * Extra aggregated blocks to union with the draft's own claim-derived
+       * set. Used by the re-solidify retry loop to force a new attempt to
+       * descend from canonical conflict witnesses on previous attempts'
+       * losing branches.
+       */
+      aggregatedBlocks?: Hash[];
+      /**
+       * Blocks placement must NOT anchor at or descend from. Used by the
+       * re-solidify retry loop to forbid re-anchoring at the draft's
+       * previously-failed blocks (so each retry produces a fresh hash).
+       */
+      excludedBlocks?: Hash[];
+    },
+  ): BuildResult {
     // -- 1. Anchor selection: placement against the canonical view ------
     //
     // Aggregation include constraints: claims targeting AGGREGATION_CONTRACT
@@ -112,8 +129,13 @@ export class BlockBuilderModule {
     // constraint -- without yet plumbing constraints onto the Draft type.
     // Shared with ConsensusService / NodeWeightsService so all three
     // callers compute the same anchor for any given draft.
-    const aggregatedBlocks = detectAggregatedBlocks(draft, this.provider.store);
+    const detectedAggregates = detectAggregatedBlocks(draft, this.provider.store);
+    const aggregatedBlocks = dedupeHashes([
+      ...detectedAggregates,
+      ...(opts?.aggregatedBlocks ?? []),
+    ]);
     const claimedBlocks = dedupeProducers(draft.claims);
+    const excludedBlocks = opts?.excludedBlocks ?? [];
 
     let anchor: Hash;
     if (claimedBlocks.length === 0 && aggregatedBlocks.length === 0) {
@@ -132,7 +154,7 @@ export class BlockBuilderModule {
           node: draft,
           claimedBlocks,
           aggregatedBlocks,
-          excludedBlocks: [],
+          excludedBlocks,
         })
         : { ok: false as const, stalled: true as const };
       if (!result.ok) {
@@ -319,15 +341,35 @@ export class BlockBuilderModule {
    * and pool-driven autobalance are filled in in subsequent migration
    * steps.
    */
-  solidify(seedDrafts: Draft[], pool: Draft[]): BuildResult {
+  solidify(
+    seedDrafts: Draft[],
+    pool: Draft[],
+    opts?: {
+      aggregatedBlocks?: Hash[];
+      excludedBlocks?: Hash[];
+    },
+  ): BuildResult {
     if (seedDrafts.length === 0) {
       return { ok: false, reason: 'no seed drafts' };
     }
     if (seedDrafts.length === 1 && pool.length === 0) {
-      return this.build(seedDrafts[0]);
+      return this.build(seedDrafts[0], opts);
     }
     return { ok: false, reason: 'multi-draft solidify not yet implemented' };
   }
+}
+
+/** Dedupe a list of Hashes, preserving first-seen order. */
+function dedupeHashes(hashes: Hash[]): Hash[] {
+  const seen = new Set<string>();
+  const out: Hash[] = [];
+  for (const h of hashes) {
+    const key = h.toHex();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(h);
+  }
+  return out;
 }
 
 /**

@@ -96,6 +96,94 @@ export class DraftManager {
       this._retrying = false;
     }
   }
+
+  /**
+   * For a previously-solidified block of one of our drafts, find every
+   * canonical block that "witnesses" its loss -- typically the canonical
+   * partner in a direct conflict. Returns `[]` when no specific
+   * witness is identifiable (e.g. the previous block lost on branch
+   * weight without a direct claim collision).
+   *
+   * Currently implements step 1 only (direct conflicts via
+   * `consensus.getConflicts`). Step 2 (anchor-chain walk for indirect
+   * losses) is not yet implemented -- placement's standard logic against
+   * the current canonical view handles the indirect case adequately
+   * here. Returning every canonical conflict (not just one) handles the
+   * legitimate case where a block has multiple direct-conflict partners
+   * that don't conflict with each other and so can all be canonical.
+   */
+  private _findCanonicalConflictWitnesses(blockHash: Hash): Hash[] {
+    const conflicts = this.consensus.getConflicts(blockHash);
+    const canonical: Hash[] = [];
+    for (const cKey of conflicts) {
+      const cHash = Hash.fromPrimitive(cKey);
+      if (this.consensus.isCanonical(cHash)) canonical.push(cHash);
+    }
+    return canonical;
+  }
+
+  /**
+   * Compute the placement opts to feed BlockBuilderModule.solidify for a
+   * draft that is being re-solidified. Implements the simplified
+   * single-branch algorithm from the consolidation plan:
+   *
+   *   - aggregatedBlocks: dedupe witnesses for each prior block.
+   *     These force the new block to include the witnesses in its
+   *     aggregates, ensuring direct-claim collisions emerge structurally
+   *     and indirect losses become descendants of the winning branch.
+   *   - excludedBlocks: every prior block from this draft, so placement
+   *     refuses to re-anchor at any of our own losing attempts (each
+   *     retry produces a fresh hash).
+   *
+   * Returns empty opts on the first attempt (solidifiedBlocks empty).
+   */
+  private _mergeResolidifyOpts(perDraft: Array<{
+    aggregatedBlocks: Hash[];
+    excludedBlocks: Hash[];
+  }>): { aggregatedBlocks: Hash[]; excludedBlocks: Hash[] } {
+    const aggSeen = new Set<string>();
+    const aggregatedBlocks: Hash[] = [];
+    const excSeen = new Set<string>();
+    const excludedBlocks: Hash[] = [];
+    for (const o of perDraft) {
+      for (const h of o.aggregatedBlocks) {
+        const k = h.toHex();
+        if (aggSeen.has(k)) continue;
+        aggSeen.add(k);
+        aggregatedBlocks.push(h);
+      }
+      for (const h of o.excludedBlocks) {
+        const k = h.toHex();
+        if (excSeen.has(k)) continue;
+        excSeen.add(k);
+        excludedBlocks.push(h);
+      }
+    }
+    return { aggregatedBlocks, excludedBlocks };
+  }
+
+  private _computeResolidifyOpts(d: Draft): {
+    aggregatedBlocks: Hash[];
+    excludedBlocks: Hash[];
+  } {
+    if (d.solidifiedBlocks.length === 0) {
+      return { aggregatedBlocks: [], excludedBlocks: [] };
+    }
+    const witnessSet = new Set<string>();
+    const witnesses: Hash[] = [];
+    for (const b of d.solidifiedBlocks) {
+      for (const w of this._findCanonicalConflictWitnesses(b.hash)) {
+        const key = w.toHex();
+        if (witnessSet.has(key)) continue;
+        witnessSet.add(key);
+        witnesses.push(w);
+      }
+    }
+    return {
+      aggregatedBlocks: witnesses,
+      excludedBlocks: d.solidifiedBlocks.map((b) => b.hash),
+    };
+  }
   private _retrying = false;
 
   /**
@@ -395,12 +483,19 @@ export class DraftManager {
         };
       }
 
-      // 2. Delegate to BlockBuilderModule. Pool is empty for now; step 8
+      // 2. Compute re-solidify opts (aggregated witnesses + excluded
+      // prior blocks) for each seed. For multi-draft batches we merge
+      // the per-draft opts. Single-draft is the common case today.
+      const resolidifyOpts = this._mergeResolidifyOpts(
+        seedDrafts.map((d) => this._computeResolidifyOpts(d)),
+      );
+
+      // 3. Delegate to BlockBuilderModule. Pool is empty for now; step 8
       // of the consolidation refactor wires in autobalance via the pool.
-      const result = this._blockBuilder.solidify(seedDrafts, []);
+      const result = this._blockBuilder.solidify(seedDrafts, [], resolidifyOpts);
       if (!result.ok) return result;
 
-      // 3. Success: append the new block to each draft's solidifiedBlocks
+      // 4. Success: append the new block to each draft's solidifiedBlocks
       // history, transition to `solidified`, detach from consensus, then
       // dispatch the block. Detach BEFORE dispatch so the draft's phantom
       // claims clear out before the real block (which claims the same

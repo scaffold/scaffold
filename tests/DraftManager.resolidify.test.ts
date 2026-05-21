@@ -125,6 +125,10 @@ function setupWithFakeBuilder() {
         weight: [b.declaredWeight],
       });
       consensus.addBlock(b.hash);
+      // setVerifiedWeight: ConsensusModule's conflict resolution reads
+      // verifiedWeights (not the provider's getWeightVector). Mirror
+      // the declaredWeight here so blocks compete realistically.
+      consensus.setVerifiedWeight(b.hash, [b.declaredWeight]);
     },
   });
   return { provider, consensus, store, generator, builder, dispatched, manager };
@@ -153,36 +157,110 @@ Deno.test('C1: stable canonical -- block appended to solidifiedBlocks', () => {
   assertEquals(canonical.hash.toHex(), stored.solidifiedBlocks[0].hash.toHex());
 });
 
-Deno.test('C2: indirect uncanonical -- B2 built with witness in aggregates (chunk 4)', { ignore: true }, () => {
-  // 1. Solidify D as B1 against anchor A.
-  // 2. Introduce sibling S1 (no shared claim) that wins canonicality.
-  // 3. B1 goes uncanonical, retry loop demotes D, rebuilds as B2 with S1
-  //    in aggregates / anchor chain.
-  // 4. Assert: solidifiedBlocks === [B1, B2], B2 canonical, S1 in B2.aggregates.
+Deno.test('C3: direct-claim conflict -- canonical witness flows into opts.aggregatedBlocks', () => {
+  // Solidify D as B1 (claim Y). Introduce canonical C1 that claims Y;
+  // register the direct conflict in consensus. On retry, the manager's
+  // conflict-witness lookup finds C1 and feeds it to the builder as
+  // aggregatedBlocks; the prior B1 lands in excludedBlocks.
+  const { manager, store, consensus, builder, provider } = setupWithFakeBuilder();
+
+  // Track what opts the builder is called with.
+  const calls: Array<{ aggregatedBlocks: Hash[]; excludedBlocks: Hash[] }> = [];
+  const origSolidify = builder.solidify.bind(builder);
+  builder.solidify = function (
+    seeds: Draft[],
+    pool: Draft[],
+    opts?: { aggregatedBlocks?: Hash[]; excludedBlocks?: Hash[] },
+  ) {
+    calls.push({
+      aggregatedBlocks: opts?.aggregatedBlocks ?? [],
+      excludedBlocks: opts?.excludedBlocks ?? [],
+    });
+    return origSolidify(seeds, pool);
+  };
+
+  const D = manager.create({
+    claims: [{ producer: Hash.digest('p'), outputIndex: 0 }],
+    declaredWeight: 1,
+  });
+  const r1 = manager.markSolidifying(D.draftId);
+  assert(r1.ok);
+  const B1 = (r1 as { ok: true; block: Block }).block;
+  // Baseline so subsequent flushChanges fires diffs.
+  consensus.flushChanges();
+
+  // Introduce a much heavier C1 that directly conflicts with B1.
+  // Consensus will demote B1 in favor of C1 via getConflictWinner.
+  const C1 = Hash.digest('C1');
+  provider.add({ kind: 'block', hash: C1, anchor: ZERO_HASH, weight: [100] });
+  consensus.addBlock(C1);
+  consensus.setVerifiedWeight(C1, [100]);
+  consensus.addConflict(B1.hash, C1);
+
+  // Trigger retry by firing the canonicality change.
+  consensus.flushChanges();
+
+  const stored = store.get(D.draftId)!;
+  // Retry should have built B2 -- look at the second call to builder.
+  assertEquals(calls.length, 2, `expected 2 builder calls, got ${calls.length}`);
+  // Second call: C1 in aggregatedBlocks, B1 in excludedBlocks.
+  const opts2 = calls[1];
+  assert(opts2.aggregatedBlocks.some((h) => h.toHex() === C1.toHex()));
+  assert(opts2.excludedBlocks.some((h) => h.toHex() === B1.hash.toHex()));
+  assertEquals(stored.solidifiedBlocks.length, 2);
 });
 
-Deno.test('C3: direct-claim uncanonical -- new conflict sibling (chunk 4)', { ignore: true }, () => {
-  // 1. Solidify D as B1, where D claims output Y of some anchor block.
-  // 2. Introduce canonical C1 that directly claims Y.
-  // 3. B1 uncanonical, retry rebuilds as B2 also claiming Y.
-  // 4. Assert: B2 and C1 are direct conflict partners; weight selects one.
-});
+Deno.test('C4: multi-witness merge -- multiple canonical conflicts all become aggregatedBlocks', () => {
+  // A block can have several direct-conflict partners that don't
+  // conflict with each other, so multiple of them can be canonical.
+  // The retry loop must collect ALL canonical witnesses and pass them
+  // to the builder as aggregatedBlocks (deduped via DAG by placement).
+  const { manager, consensus, builder, provider } = setupWithFakeBuilder();
 
-Deno.test('C4: multi-witness merge (chunk 4)', { ignore: true }, () => {
-  // 1. Solidify D as B1.
-  // 2. Introduce S1 (indirect, branch A) and S2 (direct, claims Z in D.claims).
-  // 3. Retry: B2 carries S1 as indirect ancestor, shares claim Z with S2.
-});
+  const calls: Array<{ aggregatedBlocks: Hash[]; excludedBlocks: Hash[] }> = [];
+  const origSolidify = builder.solidify.bind(builder);
+  builder.solidify = function (
+    seeds: Draft[],
+    pool: Draft[],
+    opts?: { aggregatedBlocks?: Hash[]; excludedBlocks?: Hash[] },
+  ) {
+    calls.push({
+      aggregatedBlocks: opts?.aggregatedBlocks ?? [],
+      excludedBlocks: opts?.excludedBlocks ?? [],
+    });
+    return origSolidify(seeds, pool);
+  };
 
-Deno.test('C5: flip-back invariant -- throws if two solidifiedBlocks both canonical (chunk 4)', { ignore: true }, () => {
-  // Drive consensus so two of D's solidifiedBlocks are simultaneously canonical.
-  // The retry loop should throw 'single-canonical invariant violated' or
-  // an equivalently named error.
-});
+  const D = manager.create({
+    claims: [{ producer: Hash.digest('p'), outputIndex: 0 }],
+    declaredWeight: 1,
+  });
+  const r1 = manager.markSolidifying(D.draftId);
+  assert(r1.ok);
+  const B1 = (r1 as { ok: true; block: Block }).block;
+  consensus.flushChanges();
 
-Deno.test('C6: transitive mid-retry flip (chunk 4)', { ignore: true }, () => {
-  // C1 becomes canonical, triggers D's retry; mid-retry C1 flips uncanonical.
-  // Re-entrancy guard skips inner pass; next canonicality flush re-runs.
+  // Two canonical conflicts with B1; not in conflict with each other.
+  const C1 = Hash.digest('C1');
+  const C2 = Hash.digest('C2');
+  provider.add({ kind: 'block', hash: C1, anchor: ZERO_HASH, weight: [100] });
+  provider.add({ kind: 'block', hash: C2, anchor: ZERO_HASH, weight: [100] });
+  consensus.addBlock(C1);
+  consensus.addBlock(C2);
+  consensus.setVerifiedWeight(C1, [100]);
+  consensus.setVerifiedWeight(C2, [100]);
+  consensus.addConflict(B1.hash, C1);
+  consensus.addConflict(B1.hash, C2);
+
+  consensus.flushChanges();
+
+  assertEquals(calls.length, 2, `expected 2 builder calls, got ${calls.length}`);
+  const opts2 = calls[1];
+  // Both C1 and C2 should appear in aggregatedBlocks.
+  assert(opts2.aggregatedBlocks.some((h) => h.toHex() === C1.toHex()));
+  assert(opts2.aggregatedBlocks.some((h) => h.toHex() === C2.toHex()));
+  // B1 in excludedBlocks.
+  assert(opts2.excludedBlocks.some((h) => h.toHex() === B1.hash.toHex()));
 });
 
 Deno.test('C7: zero-claim drafts are NOT demoted when their block goes uncanonical', () => {
