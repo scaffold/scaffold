@@ -1,7 +1,8 @@
 // Protocol spec: docs/protocol/draft-blocks.md
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { createDraft, Draft, DraftStore, isDraftTerminal } from './Draft.ts';
+import { createDraft, Draft, DraftId, DraftStore, isDraftTerminal } from './Draft.ts';
+import type { OutputSlot } from './GeneratingEnv.ts';
 import type { ClaimRef } from './Node.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
@@ -135,6 +136,149 @@ export class DraftManager {
   /** Look up a draft by id, if it's still in the store. */
   get(draftId: Hash): Draft | undefined {
     return this.store.get(draftId);
+  }
+
+  // ====================================================================
+  // Producer-agnostic API (final target shape; chunks 6-8 migrate
+  // legacy callers off the methods below into these.)
+  // ====================================================================
+
+  /**
+   * Create a draft in `populating`. The caller (a producer like a generator,
+   * PutManager, FetchManager) owns the draft until it calls `markReady` or
+   * `markSolidifying`. Registers the draft as a phantom block in consensus.
+   *
+   * Unlike `createDraft`, this does NOT start the generator: producers are
+   * responsible for their own work (running a contract, populating outputs
+   * synchronously, etc.) and incrementally pushing content via `update`.
+   */
+  create(fields?: {
+    claims?: ClaimRef[];
+    outputs?: Output[];
+    outputSlots?: OutputSlot[];
+    declaredWeight?: number;
+    refs?: Hash[];
+  }): Draft {
+    const draft = createDraft({
+      claims: fields?.claims ?? [],
+      outputs: fields?.outputs ?? [],
+      outputSlots: fields?.outputSlots,
+      declaredWeight: fields?.declaredWeight ?? 0,
+      refs: fields?.refs,
+    });
+    this.store.add(draft);
+    this.consensus.addBlock(draft.draftId);
+    this.consensus.setVerifiedWeight(draft.draftId, [draft.declaredWeight]);
+    return draft;
+  }
+
+  /**
+   * Mutate a `populating` draft in place. `mode: 'append'` (default)
+   * concatenates claims/outputs/outputSlots/refs; `mode: 'replace'`
+   * overwrites. `declaredWeight` is monotone non-decreasing.
+   *
+   * Throws if the draft is not in `populating`.
+   */
+  updateDraft(
+    draftId: DraftId,
+    changes: {
+      claims?: ClaimRef[];
+      outputs?: Output[];
+      outputSlots?: OutputSlot[];
+      refs?: Hash[];
+      declaredWeight?: number;
+    },
+    mode: 'append' | 'replace' = 'append',
+  ): Draft {
+    const existing = this.store.get(draftId);
+    if (!existing) {
+      throw new Error(`DraftManager.updateDraft: draft ${draftId.toHex().slice(0, 10)} not in store`);
+    }
+    if (existing.status.phase !== 'populating') {
+      throw new Error(
+        `DraftManager.updateDraft: draft ${draftId.toHex().slice(0, 10)} is locked (phase ${existing.status.phase})`,
+      );
+    }
+    if (
+      changes.declaredWeight !== undefined &&
+      changes.declaredWeight < existing.declaredWeight
+    ) {
+      throw new Error(
+        `DraftManager.updateDraft: declaredWeight is monotone non-decreasing (have ${existing.declaredWeight}, got ${changes.declaredWeight})`,
+      );
+    }
+
+    const merged: {
+      claims?: ClaimRef[];
+      outputs?: Output[];
+      outputSlots?: OutputSlot[];
+      refs?: Hash[];
+      declaredWeight?: number;
+    } = {};
+    if (changes.claims) {
+      merged.claims = mode === 'append' ? [...existing.claims, ...changes.claims] : changes.claims;
+    }
+    if (changes.outputs) {
+      merged.outputs = mode === 'append' ? [...existing.outputs, ...changes.outputs] : changes.outputs;
+    }
+    if (changes.outputSlots) {
+      merged.outputSlots = mode === 'append'
+        ? [...existing.outputSlots, ...changes.outputSlots]
+        : changes.outputSlots;
+    }
+    if (changes.refs) {
+      merged.refs = mode === 'append' ? [...existing.refs, ...changes.refs] : changes.refs;
+    }
+    if (changes.declaredWeight !== undefined) {
+      merged.declaredWeight = changes.declaredWeight;
+    }
+
+    const updated = this.store.update(draftId, merged);
+    if (changes.declaredWeight !== undefined) {
+      this.consensus.setVerifiedWeight(draftId, [changes.declaredWeight]);
+    }
+    return updated;
+  }
+
+  /**
+   * Producer hands off without requesting solidify: lock content, transition
+   * `populating` -> `ready`. Eligible to be batched into a `solidify` call
+   * (e.g. by piggyback aggregation) but the manager won't drive it itself.
+   * Idempotent (no-op if already `ready` or beyond).
+   */
+  markReady(draftId: DraftId): Draft {
+    const existing = this.store.get(draftId);
+    if (!existing) {
+      throw new Error(`DraftManager.markReady: draft ${draftId.toHex().slice(0, 10)} not in store`);
+    }
+    if (existing.status.phase === 'ready') return existing;
+    if (existing.status.phase !== 'populating') {
+      throw new Error(
+        `DraftManager.markReady: cannot mark ready from phase ${existing.status.phase}`,
+      );
+    }
+    return this.store.transition(draftId, { phase: 'ready' });
+  }
+
+  /**
+   * Producer hands off AND demands solidify: transition from
+   * `populating`/`ready` -> `solidifying` and synchronously attempt the
+   * build. Idempotent (re-attempts if already in `solidifying`).
+   */
+  markSolidifying(draftId: DraftId): SolidifyResult {
+    const existing = this.store.get(draftId);
+    if (!existing) {
+      return { ok: false, reason: `draft ${draftId.toHex().slice(0, 10)} not in store` };
+    }
+    if (existing.status.phase === 'cancelled' || existing.status.phase === 'solidified') {
+      return { ok: false, reason: `draft is ${existing.status.phase}` };
+    }
+    return this.solidify([existing]);
+  }
+
+  /** Producer-agnostic cancel. Alias for the legacy `cancelDraft`. */
+  cancel(draftId: DraftId, reason?: string): void {
+    this.cancelDraft(draftId, reason);
   }
 
   /**
