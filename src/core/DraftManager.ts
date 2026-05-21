@@ -32,7 +32,7 @@ export type SolidifyResult =
 export class DraftManager {
   private readonly store: DraftStore;
   private readonly consensus: ConsensusModule<unknown>;
-  private readonly generator: GeneratorProvider;
+  private readonly generator?: GeneratorProvider;
   private readonly handles = new Map<HashPrimitive, GeneratorHandle>();
   private readonly _onDraftReady?: (draft: Draft) => void;
   private readonly _blockBuilder?: BlockBuilderModule;
@@ -41,7 +41,7 @@ export class DraftManager {
   constructor(
     store: DraftStore,
     consensus: ConsensusModule<unknown>,
-    generator: GeneratorProvider,
+    generator?: GeneratorProvider,
     opts?: {
       onDraftReady?: (draft: Draft) => void;
       blockBuilder?: BlockBuilderModule;
@@ -210,6 +210,9 @@ export class DraftManager {
     declaredWeight: number;
     refs?: Hash[];
   }): Draft {
+    if (!this.generator) {
+      throw new Error('DraftManager.createDraft: no GeneratorProvider configured');
+    }
     const draft = createDraft(fields);
     this.store.add(draft);
 
