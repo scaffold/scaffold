@@ -161,9 +161,9 @@ export class CollateralResolutionIndex {
     if (!v) return;
     const entry: Entry = { source, target: v.target, verdict: v.verdict };
     // Drafts don't participate in block verification -- treat the
-    // `readyToSolidify` phase as the activation gate.
+    // `solidifying` phase as the activation gate.
     // `_onDraftTransition` routes non-ready drafts.
-    if (draft.status.phase === 'readyToSolidify') {
+    if (draft.status.phase === 'solidifying') {
       this._activate(entry);
     }
   }
@@ -196,12 +196,12 @@ export class CollateralResolutionIndex {
 
   private _onDraftTransition(draft: Draft): void {
     const key = draft.draftId.toPrimitive();
-    if (draft.status.phase === 'readyToSolidify') {
+    if (draft.status.phase === 'solidifying') {
       // Promote if we haven't already recorded it.
       if (!this._sourceTargets.has(key) && !this._pending.has(key)) {
         this._ingestDraft(draft);
       }
-    } else if (draft.status.phase === 'failed' || draft.status.phase === 'solidified') {
+    } else if (draft.status.phase === 'cancelled' || draft.status.phase === 'solidified') {
       this._retractSource(draft.draftId);
     }
   }

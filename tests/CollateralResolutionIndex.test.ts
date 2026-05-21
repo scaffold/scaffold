@@ -84,7 +84,7 @@ class MockProvider implements CollateralResolutionIndexProvider {
   }
 
   addDraft(draft: Draft, canonical = true): void {
-    if (draft.status.phase === 'readyToSolidify') {
+    if (draft.status.phase === 'solidifying') {
       this.readyDrafts.set(draft.draftId.toPrimitive(), draft);
     }
     if (canonical) this.canonical.add(draft.draftId.toPrimitive());
@@ -92,9 +92,9 @@ class MockProvider implements CollateralResolutionIndexProvider {
   }
 
   transitionDraft(draft: Draft): void {
-    if (draft.status.phase === 'failed') {
+    if (draft.status.phase === 'cancelled') {
       this.readyDrafts.delete(draft.draftId.toPrimitive());
-    } else if (draft.status.phase === 'readyToSolidify') {
+    } else if (draft.status.phase === 'solidifying') {
       this.readyDrafts.set(draft.draftId.toPrimitive(), draft);
     }
     for (const cb of this.draftCbs) cb(draft);
@@ -137,15 +137,15 @@ function makeDraft(
   draftId: Hash,
   target: Hash,
   verdict: 'valid' | 'invalid',
-  phase: 'readyToSolidify' | 'pending' | 'failed' = 'readyToSolidify',
+  phase: 'solidifying' | 'populating' | 'cancelled' = 'solidifying',
 ): Draft {
   const verdictOutput = makeRecordOutput(
     VERDICT_RECORD_KEY,
     encodeVerdict({ target, verdict }),
   );
   const status =
-    phase === 'failed'
-      ? { phase: 'failed' as const, reason: 'cancelled', at: 'cancelled' as const }
+    phase === 'cancelled'
+      ? { phase: 'cancelled' as const, reason: 'cancelled' }
       : { phase };
   return {
     kind: 'draft',
@@ -157,6 +157,7 @@ function makeDraft(
     declaredWeight: 0,
     refs: [],
     status,
+    solidifiedBlocks: [],
   };
 }
 
@@ -239,7 +240,7 @@ Deno.test('CRI: ready + canonical draft with verdict contributes', () => {
   const idx = new CollateralResolutionIndex(p);
   const T = h('target');
   const D = h('draft');
-  p.addDraft(makeDraft(D, T, 'invalid', 'readyToSolidify'), true);
+  p.addDraft(makeDraft(D, T, 'invalid', 'solidifying'), true);
   assertEquals(idx.verdict(T), 'invalid');
 });
 
@@ -248,9 +249,9 @@ Deno.test('CRI: cancelled draft retracts verdict', () => {
   const idx = new CollateralResolutionIndex(p);
   const T = h('target');
   const D = h('draft');
-  p.addDraft(makeDraft(D, T, 'valid', 'readyToSolidify'), true);
+  p.addDraft(makeDraft(D, T, 'valid', 'solidifying'), true);
   assertEquals(idx.verdict(T), 'valid');
-  p.transitionDraft(makeDraft(D, T, 'valid', 'failed'));
+  p.transitionDraft(makeDraft(D, T, 'valid', 'cancelled'));
   assertEquals(idx.verdict(T), 'none');
 });
 
@@ -292,7 +293,7 @@ Deno.test('CRI: bootstrap picks up pre-existing blocks and drafts', () => {
   p.blocks.set(R.toPrimitive(), makeBlock(R, T, 'valid'));
   p.canonical.add(R.toPrimitive());
   p.verifyStatus.set(R.toPrimitive(), 'passed');
-  p.readyDrafts.set(D.toPrimitive(), makeDraft(D, T, 'invalid', 'readyToSolidify'));
+  p.readyDrafts.set(D.toPrimitive(), makeDraft(D, T, 'invalid', 'solidifying'));
   p.canonical.add(D.toPrimitive());
 
   const idx = new CollateralResolutionIndex(p);

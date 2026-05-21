@@ -27,7 +27,7 @@ export class CollateralResolutionIndexService extends CollateralResolutionIndex 
         return store.values();
       },
       iterateReadyDrafts(): Iterable<Draft> {
-        return draftStore.getByPhase('readyToSolidify');
+        return draftStore.getByPhase('solidifying');
       },
       onBlockAdded(cb) {
         return store.onAdded(cb);

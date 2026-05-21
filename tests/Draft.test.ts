@@ -13,7 +13,7 @@ function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Draf
 
 // -- createDraft factory ------------------------------------------
 
-Deno.test('createDraft: sets all fields, random draftId, status pending', () => {
+Deno.test('createDraft: sets all fields, random draftId, status populating', () => {
   const claim = { producer: Hash.digest('b'), outputIndex: 1 };
   const draft = createDraft({
     claims: [claim],
@@ -25,7 +25,8 @@ Deno.test('createDraft: sets all fields, random draftId, status pending', () => 
   assertEquals(draft.outputs, []);
   assertEquals(draft.declaredWeight, 5);
   assertEquals(draft.refs, []);
-  assertEquals(draft.status.phase, 'pending');
+  assertEquals(draft.status.phase, 'populating');
+  assertEquals(draft.solidifiedBlocks, []);
 
   // draftId should be a valid Hash (random)
   assert(draft.draftId instanceof Hash);
@@ -71,7 +72,7 @@ Deno.test('add duplicate draftId throws', () => {
   assertThrows(() => store.add(draft), Error, 'already exists');
 });
 
-Deno.test('getAll and getByStatus return correct subsets', () => {
+Deno.test('getAll and getByPhase return correct subsets', () => {
   const store = new DraftStore();
   const d1 = makeDraft();
   const d2 = makeDraft();
@@ -79,72 +80,70 @@ Deno.test('getAll and getByStatus return correct subsets', () => {
   store.add(d2);
 
   assertEquals(store.getAll().length, 2);
-  assertEquals(store.getByPhase('pending').length, 2);
-  assertEquals(store.getByPhase('generating').length, 0);
+  assertEquals(store.getByPhase('populating').length, 2);
+  assertEquals(store.getByPhase('ready').length, 0);
 
-  store.transition(d1.draftId, { phase: 'generating' });
-  assertEquals(store.getByPhase('pending').length, 1);
-  assertEquals(store.getByPhase('generating').length, 1);
+  store.transition(d1.draftId, { phase: 'ready' });
+  assertEquals(store.getByPhase('populating').length, 1);
+  assertEquals(store.getByPhase('ready').length, 1);
 });
 
 // -- State machine transitions ------------------------------------
 
-Deno.test('valid transitions: pending -> generating', () => {
+Deno.test('valid transitions: populating -> ready', () => {
   const store = new DraftStore();
   const draft = makeDraft();
   store.add(draft);
-  const updated = store.transition(draft.draftId, { phase: 'generating' });
-  assertEquals(updated.status.phase, 'generating');
+  const updated = store.transition(draft.draftId, { phase: 'ready' });
+  assertEquals(updated.status.phase, 'ready');
 });
 
-Deno.test('valid transitions: generating -> ready', () => {
+Deno.test('valid transitions: populating -> solidifying', () => {
   const store = new DraftStore();
   const draft = makeDraft();
   store.add(draft);
-  store.transition(draft.draftId, { phase: 'generating' });
-  const ready = store.transition(draft.draftId, { phase: 'readyToSolidify' });
-  assertEquals(ready.status.phase, 'readyToSolidify');
+  const solidifying = store.transition(draft.draftId, { phase: 'solidifying' });
+  assertEquals(solidifying.status.phase, 'solidifying');
 });
 
-Deno.test('valid transitions: each -> cancelled', () => {
-  for (const startStatus of ['pending', 'generating', 'ready'] as const) {
+Deno.test('valid transitions: each non-terminal -> cancelled', () => {
+  for (const startStatus of ['populating', 'ready', 'solidifying'] as const) {
     const store = new DraftStore();
     const draft = makeDraft();
     store.add(draft);
 
     // Advance to startStatus
-    if (startStatus === 'generating' || startStatus === 'ready') {
-      store.transition(draft.draftId, { phase: 'generating' });
+    if (startStatus === 'ready' || startStatus === 'solidifying') {
+      store.transition(draft.draftId, { phase: 'ready' });
     }
-    if (startStatus === 'ready') {
-      store.transition(draft.draftId, { phase: 'readyToSolidify' });
+    if (startStatus === 'solidifying') {
+      store.transition(draft.draftId, { phase: 'solidifying' });
     }
 
-    const cancelled = store.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
-    assertEquals(cancelled.status.phase, 'failed');
+    const cancelled = store.transition(draft.draftId, { phase: 'cancelled', reason: 'cancelled' });
+    assertEquals(cancelled.status.phase, 'cancelled');
   }
 });
 
-Deno.test('invalid transitions throw: generating -> pending', () => {
+Deno.test('invalid transitions throw: ready -> populating', () => {
   const store = new DraftStore();
   const draft = makeDraft();
   store.add(draft);
-  store.transition(draft.draftId, { phase: 'generating' });
+  store.transition(draft.draftId, { phase: 'ready' });
   assertThrows(
-    () => store.transition(draft.draftId, { phase: 'pending' }),
+    () => store.transition(draft.draftId, { phase: 'populating' }),
     Error,
     'Invalid transition',
   );
 });
 
-Deno.test('invalid transitions throw: ready -> generating', () => {
+Deno.test('invalid transitions throw: solidifying -> ready', () => {
   const store = new DraftStore();
   const draft = makeDraft();
   store.add(draft);
-  store.transition(draft.draftId, { phase: 'generating' });
-  store.transition(draft.draftId, { phase: 'readyToSolidify' });
+  store.transition(draft.draftId, { phase: 'solidifying' });
   assertThrows(
-    () => store.transition(draft.draftId, { phase: 'generating' }),
+    () => store.transition(draft.draftId, { phase: 'ready' }),
     Error,
     'Invalid transition',
   );
@@ -154,21 +153,21 @@ Deno.test('invalid transitions throw: cancelled -> anything', () => {
   const store = new DraftStore();
   const draft = makeDraft();
   store.add(draft);
-  store.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+  store.transition(draft.draftId, { phase: 'cancelled', reason: 'cancelled' });
   // Terminal status means no further transitions are allowed.
-  assertThrows(() => store.transition(draft.draftId, { phase: 'pending' }), Error);
+  assertThrows(() => store.transition(draft.draftId, { phase: 'populating' }), Error);
 });
 
 Deno.test('terminal-phase drafts persist (no auto-removal on transition)', () => {
   const store = new DraftStore();
   const draft = makeDraft();
   store.add(draft);
-  store.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+  store.transition(draft.draftId, { phase: 'cancelled', reason: 'cancelled' });
   // Drafts persist in terminal status as historical record; only
   // explicit `remove(draftId)` drops them.
-  const failed = store.get(draft.draftId);
-  assert(failed !== undefined);
-  assertEquals(failed!.status.phase, 'failed');
+  const cancelled = store.get(draft.draftId);
+  assert(cancelled !== undefined);
+  assertEquals(cancelled!.status.phase, 'cancelled');
   assertEquals(store.size, 1);
 });
 
@@ -177,45 +176,9 @@ Deno.test('transition returns new object, old reference unchanged (immutability)
   const draft = makeDraft();
   store.add(draft);
 
-  const updated = store.transition(draft.draftId, { phase: 'generating' });
-  assertEquals(draft.status.phase, 'pending'); // original unchanged
-  assertEquals(updated.status.phase, 'generating');
+  const updated = store.transition(draft.draftId, { phase: 'ready' });
+  assertEquals(draft.status.phase, 'populating'); // original unchanged
+  assertEquals(updated.status.phase, 'ready');
   assert(Hash.equals(draft.draftId, updated.draftId));
   assert(draft !== updated);
-});
-
-// -- recreate -----------------------------------------------------
-
-Deno.test('recreate: new draftId, old removed, changes applied, unspecified fields preserved', () => {
-  const store = new DraftStore();
-  const draft = makeDraft();
-  store.add(draft);
-
-  const newRefs = [Hash.digest('new-ref')];
-  const recreated = store.recreate(draft.draftId, { refs: newRefs });
-
-  // Old removed
-  assertEquals(store.get(draft.draftId), undefined);
-
-  // New exists with new id
-  assertNotEquals(recreated.draftId.toPrimitive(), draft.draftId.toPrimitive());
-  assertEquals(store.get(recreated.draftId), recreated);
-
-  // Changes applied
-  assertEquals(recreated.refs.length, 1);
-  assert(Hash.equals(recreated.refs[0], newRefs[0]));
-
-  // Unspecified fields preserved
-  assertEquals(recreated.declaredWeight, draft.declaredWeight);
-  assertEquals(recreated.claims, draft.claims);
-});
-
-Deno.test('recreate defaults status to pending', () => {
-  const store = new DraftStore();
-  const draft = makeDraft();
-  store.add(draft);
-  store.transition(draft.draftId, { phase: 'generating' });
-
-  const recreated = store.recreate(draft.draftId, {});
-  assertEquals(recreated.status.phase, 'pending');
 });

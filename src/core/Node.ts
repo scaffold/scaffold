@@ -94,8 +94,8 @@ export interface Node {
    * Outputs this Node produces. For blocks, never mutated after
    * construction. For drafts, populated incrementally by the generator
    * (via emitOutput / collectOutputs); append-only during the draft's
-   * `generating` / `awaitingInput` phases, frozen once the draft
-   * transitions to `readyToSolidify`. Typed as a plain array (rather than
+   * `populating` phase, frozen once the draft transitions to `ready`
+   * or `solidifying`. Typed as a plain array (rather than
    * ReadonlyArray) so Block can satisfy this interface alongside
    * BlockPayload, which uses Output[].
    */

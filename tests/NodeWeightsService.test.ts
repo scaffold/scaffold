@@ -201,9 +201,8 @@ Deno.test('NodeWeightsService: terminal drafts do not contribute', () => {
   // Move it through to solidified-equivalent terminal state: failure works
   // for this assertion since failed and solidified are both terminal.
   drafts.transition(draft.draftId, {
-    phase: 'failed',
+    phase: 'cancelled',
     reason: 'test',
-    at: 'cancelled',
   });
 
   assertEquals(nw.descendantWeight(A.hash), 0);
@@ -246,9 +245,8 @@ Deno.test('NodeWeightsService: cache invalidates on draft transition', () => {
 
   // Draft transitions to a terminal state -- it should drop out.
   drafts.transition(draft.draftId, {
-    phase: 'failed',
+    phase: 'cancelled',
     reason: 'test',
-    at: 'cancelled',
   });
 
   assertEquals(nw.descendantWeight(A.hash), 0);

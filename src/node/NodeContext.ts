@@ -450,16 +450,21 @@ export class NodeContext {
     reactiveLayerRef.current = this.reactiveLayer;
 
     // 9. Wire generator-driven draft solidification: when GenerationService
-    //    transitions a draft to `readyToSolidify` (the legacy phase that
-    //    still drives the generator-driven path), DraftManager.solidify
-    //    pulls it through the build / sign / processBlock pipeline.
-    //    `ready` transitions are NOT routed here because PutManager
-    //    drives those itself (and would race the listener otherwise).
+    //    transitions a draft to `solidifying`, DraftManager.solidify pulls
+    //    it through the build / sign / processBlock pipeline. PutManager-
+    //    driven `solidifying` transitions are handled by PutManager calling
+    //    solidify directly; the listener is idempotent for those (solidify
+    //    sees the draft already in `solidifying` and proceeds to build).
     //    Release DraftStrategy inFlight slots BEFORE solidification so
     //    the new block has room to spawn follow-on drafts when
     //    processBlock fires.
     this.draftStore.onTransition((draft) => {
-      if (draft.status.phase !== 'readyToSolidify') return;
+      if (draft.status.phase !== 'solidifying') return;
+      // Skip if DraftManager (or its retry loop) initiated this transition --
+      // it will handle the build itself. Only fires for "external" transitions
+      // into solidifying, which today means generator-driven completions
+      // (GenerationService transitions populating -> solidifying directly).
+      if (this.draftManager.isSolidifyActive()) return;
       for (const c of draft.claims) {
         draftStrategy.complete(c.producer, c.outputIndex);
       }

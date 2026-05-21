@@ -181,7 +181,7 @@ class NodeWeightsProviderAdapter implements NodeWeightsProvider<Hash> {
   }
 
   private isTerminalDraft(d: Draft): boolean {
-    return d.status.phase === 'solidified' || d.status.phase === 'failed';
+    return d.status.phase === 'solidified' || d.status.phase === 'cancelled';
   }
 }
 

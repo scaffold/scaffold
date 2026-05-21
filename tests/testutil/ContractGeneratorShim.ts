@@ -152,23 +152,23 @@ export class ContractGeneratorShim {
     let cancelled = false;
     const claim = draft.claims[0];
     if (!claim) {
-      this._draftStore.transition(draft.draftId, { phase: 'readyToSolidify' });
+      this._draftStore.transition(draft.draftId, { phase: 'solidifying' });
       return { draftId: draft.draftId, cancel: () => {} };
     }
     const block = this._adapter.getBlock(claim.producer);
     if (!block) {
-      this._draftStore.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+      this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'cancelled' });
       return { draftId: draft.draftId, cancel: () => {} };
     }
     const output = block.outputs[claim.outputIndex];
     if (!output) {
-      this._draftStore.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+      this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'cancelled' });
       return { draftId: draft.draftId, cancel: () => {} };
     }
     const verifier = output.verifier;
     const contract = this._lookupContract(verifier.contract);
     if (!contract) {
-      this._draftStore.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+      this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'cancelled' });
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
@@ -249,10 +249,10 @@ export class ContractGeneratorShim {
       });
     } catch (e) {
       if (e instanceof ContractRejection) {
-        if (!isCancelled()) this._draftStore.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+        if (!isCancelled()) this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'contract-failed' });
         return;
       }
-      if (!isCancelled()) this._draftStore.transition(draft.draftId, { phase: 'failed', reason: 'cancelled', at: 'cancelled' });
+      if (!isCancelled()) this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'contract-failed' });
       return;
     }
   }
@@ -274,6 +274,6 @@ export class ContractGeneratorShim {
       claims: [...draft.claims, ...dedupedClaimRefs],
       refs: [...draft.refs, ...newRefs],
     });
-    this._draftStore.transition(draft.draftId, { phase: 'readyToSolidify' });
+    this._draftStore.transition(draft.draftId, { phase: 'solidifying' });
   }
 }

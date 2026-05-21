@@ -1,7 +1,7 @@
 // Protocol spec: docs/protocol/draft-blocks.md
 
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { createDraft, Draft, DraftStore } from './Draft.ts';
+import { createDraft, Draft, DraftStore, isDraftTerminal } from './Draft.ts';
 import type { ClaimRef } from './Node.ts';
 import { Output } from './BlockCreationModule.ts';
 import { ConsensusModule } from './ConsensusModule.ts';
@@ -67,6 +67,7 @@ export class DraftManager {
     if (!this._blockBuilder) return;
     if (this._retrying) return; // re-entrancy guard: solidify -> processBlock -> canonicality change
     this._retrying = true;
+    this._solidifyDepth++;
     try {
       // Demote solidified drafts whose carried block went uncanonical.
       for (const d of this.store.getByPhase('solidified')) {
@@ -84,10 +85,25 @@ export class DraftManager {
         this.solidify([d]);
       }
     } finally {
+      this._solidifyDepth--;
       this._retrying = false;
     }
   }
   private _retrying = false;
+
+  /**
+   * Re-entrancy guard for the auto-solidify-on-transition listener
+   * installed by NodeContext. Set true while solidify (or the retry
+   * loop) is running so the listener doesn't recursively call solidify
+   * on transitions we initiated ourselves. Callers outside this class
+   * read it via `isSolidifyActive`.
+   */
+  private _solidifyDepth = 0;
+
+  /** True while a solidify or retry pass is currently in progress. */
+  isSolidifyActive(): boolean {
+    return this._solidifyDepth > 0;
+  }
 
   /**
    * Create a draft, register it in consensus, start the generator.
@@ -106,9 +122,8 @@ export class DraftManager {
     this.consensus.addBlock(draft.draftId);
     this.consensus.setVerifiedWeight(draft.draftId, [draft.declaredWeight]);
 
-    // Transition to generating before starting the generator,
-    // since the generator may synchronously transition to ready/cancelled.
-    this.store.transition(draft.draftId, { phase: 'generating' });
+    // Draft starts in `populating` and stays there until the generator
+    // finishes. No separate transition needed.
 
     // Start generation
     const handle = this.generator.generate(draft);
@@ -180,28 +195,22 @@ export class DraftManager {
     return [
       ...this.store.getByPhase('ready'),
       ...this.store.getByPhase('solidifying'),
-      // Legacy: drafts left as `readyToSolidify` by GenerationService are
-      // still valid solidify candidates until step 6 of the consolidation
-      // refactor renames them to `ready`.
-      ...this.store.getByPhase('readyToSolidify'),
     ];
   }
 
   /**
    * Synchronously attempt to turn `seedDrafts` into a single block.
    *
-   * Pre: every input draft is in `ready`, `readyToSolidify`, or
-   * `solidifying`. Drafts in `ready`/`readyToSolidify` transition to
-   * `solidifying` immediately.
+   * Pre: every input draft is in `ready` or `solidifying`. Drafts in
+   * `ready` transition to `solidifying` immediately.
    *
    * On `ok`: consumed drafts transition to `solidified` carrying the
    * produced block, are detached from consensus, and the block is
    * dispatched via the configured `processBlock` callback.
    *
    * On `awaitingAnchor` or hard failure: drafts STAY in `solidifying`.
-   * Only `cancelDraft` can move a draft to `failed`. The retry loop
-   * (canonicality-change subscription, see step 11 of the consolidation
-   * refactor) is responsible for re-attempting.
+   * Only `cancelDraft` can move a draft to `cancelled`. The retry loop
+   * (canonicality-change subscription) is responsible for re-attempting.
    *
    * `solidify` is intended to be called at most once per draft as a
    * user action; subsequent retries are driven internally.
@@ -214,38 +223,43 @@ export class DraftManager {
       return { ok: false, reason: 'no seed drafts' };
     }
 
-    // 1. Transition any non-`solidifying` seeds into `solidifying`.
-    for (const seed of seedDrafts) {
-      const phase = seed.status.phase;
-      if (phase === 'solidifying') continue;
-      if (phase === 'ready' || phase === 'readyToSolidify') {
-        this.store.transition(seed.draftId, { phase: 'solidifying' });
-        continue;
+    this._solidifyDepth++;
+    try {
+      // 1. Transition any non-`solidifying` seeds into `solidifying`.
+      for (const seed of seedDrafts) {
+        const phase = seed.status.phase;
+        if (phase === 'solidifying') continue;
+        if (phase === 'ready') {
+          this.store.transition(seed.draftId, { phase: 'solidifying' });
+          continue;
+        }
+        return {
+          ok: false,
+          reason: `draft ${seed.draftId.toHex().slice(0, 10)} is not solidifiable (phase ${phase})`,
+        };
       }
-      return {
-        ok: false,
-        reason: `draft ${seed.draftId.toHex().slice(0, 10)} is not solidifiable (phase ${phase})`,
-      };
+
+      // 2. Delegate to BlockBuilderModule. Pool is empty for now; step 8
+      // of the consolidation refactor wires in autobalance via the pool.
+      const result = this._blockBuilder.solidify(seedDrafts, []);
+      if (!result.ok) return result;
+
+      // 3. Success: transition consumed drafts to `solidified`, detach
+      // from consensus, then dispatch the block. Detach BEFORE dispatch
+      // so the draft's phantom claims clear out before the real block
+      // (which claims the same outputs) is evaluated.
+      const block = result.block;
+      const consumedDraftIds = seedDrafts.map((d) => d.draftId);
+      for (const id of consumedDraftIds) {
+        this.detachDraft(id);
+        this.store.transition(id, { phase: 'solidified', block });
+      }
+      this._processBlock?.(block);
+
+      return { ok: true, block, consumedDraftIds };
+    } finally {
+      this._solidifyDepth--;
     }
-
-    // 2. Delegate to BlockBuilderModule. Pool is empty for now; step 8
-    // of the consolidation refactor wires in autobalance via the pool.
-    const result = this._blockBuilder.solidify(seedDrafts, []);
-    if (!result.ok) return result;
-
-    // 3. Success: transition consumed drafts to `solidified`, detach
-    // from consensus, then dispatch the block. Detach BEFORE dispatch
-    // so the draft's phantom claims clear out before the real block
-    // (which claims the same outputs) is evaluated.
-    const block = result.block;
-    const consumedDraftIds = seedDrafts.map((d) => d.draftId);
-    for (const id of consumedDraftIds) {
-      this.detachDraft(id);
-      this.store.transition(id, { phase: 'solidified', block });
-    }
-    this._processBlock?.(block);
-
-    return { ok: true, block, consumedDraftIds };
   }
 
   cancelDraft(draftId: Hash, reason: string = 'cancelled'): void {
@@ -260,23 +274,18 @@ export class DraftManager {
 
     // Remove from consensus -- the draft no longer competes for any
     // outputs, even though the Draft record stays in DraftStore as a
-    // failed-status historical entry.
+    // cancelled-status historical entry.
     this.consensus.removeBlock(draftId);
 
-    // Transition to failed -- the draft persists in the store with
+    // Transition to cancelled -- the draft persists in the store with
     // its terminal status so we don't relaunch the generator and so
     // debug tools can see why this draft ended.
     const draft = this.store.get(draftId);
-    if (draft && !isTerminalDraftStatus(draft.status)) {
+    if (draft && !isDraftTerminal(draft.status)) {
       this.store.transition(draftId, {
-        phase: 'failed',
+        phase: 'cancelled',
         reason,
-        at: 'cancelled',
       });
     }
   }
-}
-
-function isTerminalDraftStatus(s: { phase: string }): boolean {
-  return s.phase === 'failed';
 }

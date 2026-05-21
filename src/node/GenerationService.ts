@@ -301,31 +301,29 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    * execution queue.
    *
    * A draft without any claims does no generation -- we transition it
-   * to `readyToSolidify` immediately with empty output. This preserves
+   * to `solidifying` immediately with empty output. This preserves
    * the old `ContractGenerator` escape hatch.
    */
   generate(draft: Draft): GeneratorHandle {
     const first = draft.claims[0];
     if (!first) {
-      this._draftStore.transition(draft.draftId, { phase: 'readyToSolidify' });
+      this._draftStore.transition(draft.draftId, { phase: 'solidifying' });
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
     const triggerBlock = this._store.get(first.producer);
     if (!triggerBlock) {
       this._draftStore.transition(draft.draftId, {
-        phase: 'failed',
+        phase: 'cancelled',
         reason: 'trigger producer not in store',
-        at: 'claimNext',
       });
       return { draftId: draft.draftId, cancel: () => {} };
     }
     const output = triggerBlock.outputs[first.outputIndex];
     if (!output) {
       this._draftStore.transition(draft.draftId, {
-        phase: 'failed',
+        phase: 'cancelled',
         reason: 'trigger output not found',
-        at: 'claimNext',
       });
       return { draftId: draft.draftId, cancel: () => {} };
     }
@@ -547,13 +545,13 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     }
 
     // Forget the draft from module tracking before transitioning to
-    // 'ready': solidification runs synchronously in the ready-transition
+    // 'solidifying': solidification runs synchronously in the transition
     // listener and produces a real block whose outputs may trigger new
     // drafts for the same target. Keeping the old draft in the active
     // set would (incorrectly) suppress those via `hasActiveTarget`.
     this.forget(draftId);
 
-    this._draftStore.transition(draftId, { phase: 'readyToSolidify' });
+    this._draftStore.transition(draftId, { phase: 'solidifying' });
   }
 
   // -- Blocked-generator wakeup --------------------------------------

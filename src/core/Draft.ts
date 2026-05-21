@@ -35,52 +35,36 @@ export function draftsAreMergeable(
 /** Unique identifier for a draft. */
 export type DraftId = Hash;
 
-/** Where a draft's generator hit a fatal error. */
-export type DraftFailureSite =
-  | 'sign'
-  | 'claimNext'
-  | 'contract'
-  | 'lowering';
-
 /**
  * Draft lifecycle status. Discriminated union so terminal states can
- * carry context (the produced block for `solidified`, the failure
- * reason + site for `failed`).
+ * carry context.
  *
- *   pending      -- reservation in place; generator (if any) hasn't finished.
- *   ready        -- generator finished (or none was attached);
- *                   eligible for merging into a solidifying batch. Solidify
- *                   is never called automatically.
- *   solidifying  -- DraftManager.solidify has been called; we keep retrying
- *                   on canonicality changes until it succeeds. Eligible for
- *                   merging.
- *   solidified   -- produced a block that is currently canonical. Carries
- *                   the latest block. NOT terminal: if the carried block
- *                   becomes uncanonical, the draft transitions back to
- *                   `solidifying` and the manager retries with a new anchor.
- *   failed       -- terminal. Reachable only via DraftManager.cancelDraft
- *                   (or generator hard-error during `pending`).
- *
- *   generating, readyToSolidify -- legacy phases retained transitionally
- *                                   while the codebase migrates. Treated
- *                                   as `pending` and `ready` respectively.
- *
- * Failed drafts persist in the DraftStore so we don't relaunch a generator
- * we already know won't succeed, and so debug tools can answer
- * "what happened to draft X?".
+ *   populating  -- producer is filling the draft in place. The only
+ *                  phase in which `update` is legal.
+ *   ready       -- producer has handed off. Eligible for merging into
+ *                  a solidifying batch; the manager will NOT solidify
+ *                  it on its own.
+ *   solidifying -- producer requested solidify (or retry loop is
+ *                  re-attempting). Manager keeps retrying on canonicality
+ *                  changes until it succeeds.
+ *   solidified  -- at least one block has been produced. Carries the
+ *                  latest block. NOT terminal: if the carried block
+ *                  becomes uncanonical, the draft transitions back to
+ *                  `solidifying` and the manager retries with a new
+ *                  anchor, appending the new block to `solidifiedBlocks`.
+ *   cancelled   -- terminal. Reached only via explicit cancel (producer
+ *                  hard-error, user cancel, etc).
  */
 export type DraftStatus =
-  | { phase: 'pending' }
-  | { phase: 'generating' }
+  | { phase: 'populating' }
   | { phase: 'ready' }
-  | { phase: 'readyToSolidify' }
   | { phase: 'solidifying' }
   | { phase: 'solidified'; block: Block }
-  | { phase: 'failed'; reason: string; at: DraftFailureSite | 'cancelled' };
+  | { phase: 'cancelled'; reason: string };
 
-/** Terminal status check (only `failed` is terminal -- `solidified` can re-solidify on uncanonicality). */
+/** Terminal status check. Only `cancelled` is terminal. */
 export function isDraftTerminal(s: DraftStatus): boolean {
-  return s.phase === 'failed';
+  return s.phase === 'cancelled';
 }
 
 /** Convenience: phase string of a DraftStatus. */
@@ -118,6 +102,10 @@ export interface Draft {
    * (each `outputIndex < producer.outputs.length`). Mutable so the
    * generator can append claims as it runs (claimNext / claimAll).
    *
+   * A draft with no claims will produce blocks that may not be
+   * canonical-exclusive (i.e. multiple of them may become canonical
+   * at the same time).
+   *
    * Economic value of a claim is not stored here; it is looked up on
    * demand from `store.get(producer).outputs[outputIndex].value`.
    */
@@ -143,6 +131,18 @@ export interface Draft {
   readonly declaredWeight: number;
   readonly refs: Hash[];
   readonly status: DraftStatus;
+  /**
+   * Every block this draft has solidified into, oldest first. Invariant:
+   * for drafts with `claims.length > 0`, at most one entry is canonical
+   * at any moment. Zero-claim drafts are exempt (multiple may be
+   * canonical simultaneously). Mutated only by DraftManager.
+   *
+   * Populated starting in chunk 3 of the consolidation refactor; for
+   * now this is reserved as a forward-compatibility field and stays
+   * empty -- the latest block lives in `status.block` when
+   * `status.phase === 'solidified'`.
+   */
+  readonly solidifiedBlocks: Block[];
 }
 
 // Compile-time assertion: Draft satisfies the Node interface.
@@ -151,33 +151,27 @@ void (({} as Draft) satisfies Node);
 
 // -- Valid transitions --------------------------------------------
 //
-// Transitions are validated by phase. The `failed` phase is terminal --
-// a draft that hits it stays there permanently so we don't relaunch its
+// Transitions are validated by phase. `cancelled` is terminal -- a draft
+// that hits it stays there permanently so we don't relaunch its
 // generator and so debug tools can answer "what happened?".
 //
 // `solidified` is NOT terminal: if the produced block becomes uncanonical,
 // DraftManager transitions the draft back to `solidifying` and retries
 // with a new anchor.
-//
-// `generating` and `readyToSolidify` are legacy phases retained
-// transitionally; once the consolidation refactor is complete they will
-// be removed from the union and from this table.
 
 type Phase = DraftStatus['phase'];
 
 const VALID_TRANSITIONS: Record<Phase, Phase[]> = {
-  pending: ['generating', 'ready', 'failed'],
-  generating: ['ready', 'readyToSolidify', 'failed'],
-  ready: ['solidifying', 'failed'],
-  readyToSolidify: ['solidifying', 'solidified', 'failed'],
-  solidifying: ['solidified', 'failed'],
-  solidified: ['solidifying', 'failed'],
-  failed: [],
+  populating: ['ready', 'solidifying', 'cancelled'],
+  ready: ['solidifying', 'cancelled'],
+  solidifying: ['solidified', 'cancelled'],
+  solidified: ['solidifying', 'cancelled'],
+  cancelled: [],
 };
 
 // -- Factory ------------------------------------------------------
 
-/** Create a new Draft with a random draftId and 'pending' status. */
+/** Create a new Draft with a random draftId and 'populating' status. */
 export function createDraft(fields: {
   claims: ClaimRef[];
   outputs: Output[];
@@ -198,7 +192,8 @@ export function createDraft(fields: {
       fields.outputs.map((output) => ({ output, origin: 'require' as const })),
     declaredWeight: fields.declaredWeight,
     refs: fields.refs ?? [],
-    status: { phase: 'pending' },
+    status: { phase: 'populating' },
+    solidifiedBlocks: [],
   };
 }
 
@@ -260,9 +255,9 @@ export class DraftStore {
   /**
    * Transition a draft to a new status. Returns a new immutable draft
    * object. Validates the state machine. Drafts are NEVER removed by
-   * transition -- terminal states (`solidified`, `failed`) persist in
-   * the store as historical record. Use `remove()` if you really need
-   * to drop a draft from the store.
+   * transition -- terminal states (`solidified`, `cancelled`) persist
+   * in the store as historical record. Use `remove()` if you really
+   * need to drop a draft from the store.
    */
   transition(draftId: Hash, newStatus: DraftStatus): Draft {
     const key = draftId.toPrimitive();
@@ -302,32 +297,5 @@ export class DraftStore {
     const updated: Draft = { ...existing, ...changes };
     this.drafts.set(key, updated);
     return updated;
-  }
-
-  /**
-   * Delete old draft and create a new one with a new draftId and merged fields.
-   * Status defaults to 'pending'.
-   */
-  recreate(
-    draftId: Hash,
-    changes: Partial<Omit<Draft, 'draftId' | 'status'>>,
-  ): Draft {
-    const key = draftId.toPrimitive();
-    const existing = this.drafts.get(key);
-    if (!existing) {
-      throw new Error(`Draft ${key} not found`);
-    }
-
-    this.drafts.delete(key);
-
-    const newDraft: Draft = {
-      ...existing,
-      ...changes,
-      draftId: Hash.random(),
-      status: { phase: 'pending' },
-    };
-
-    this.drafts.set(newDraft.draftId.toPrimitive(), newDraft);
-    return newDraft;
   }
 }

@@ -102,7 +102,7 @@ export class PutManager {
           `PutManager.put: draft for key ${keyStr} is already solidifying; cannot mutate`,
         );
       }
-      if (phase !== 'ready' && phase !== 'readyToSolidify' && phase !== 'pending') {
+      if (phase !== 'ready' && phase !== 'populating') {
         // Terminal: the keyed map should have evicted this entry. Be
         // defensive and treat as a miss.
         if (keyStr !== undefined) this.keyed.delete(keyStr);

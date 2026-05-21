@@ -86,7 +86,7 @@ Deno.test('createDraft: stores draft, registers in consensus, starts generator',
   // Draft is in store
   const stored = ctx.draftStore.get(draft.draftId);
   assert(stored !== undefined);
-  assertEquals(stored!.status.phase, 'generating');
+  assertEquals(stored!.status.phase, 'populating');
 
   // Draft registered in consensus
   assert(ctx.consensus.isCanonical(draft.draftId));
@@ -129,7 +129,7 @@ Deno.test('draft canonicality: draftId appears in canonical view', () => {
   assert(canonical.has(draft.draftId.toPrimitive()));
 });
 
-Deno.test('cancelDraft: removes from consensus, cancels generator, persists in store as failed', () => {
+Deno.test('cancelDraft: removes from consensus, cancels generator, persists in store as cancelled', () => {
   const ctx = setupWithGenesis();
 
   const draft = ctx.manager.createDraft({
@@ -148,11 +148,11 @@ Deno.test('cancelDraft: removes from consensus, cancels generator, persists in s
   assert(ctx.generator.cancelled.has(draft.draftId.toPrimitive()));
   assertFalse(ctx.generator.active.has(draft.draftId.toPrimitive()));
 
-  // Draft persists in the store with terminal `failed` status (so we
+  // Draft persists in the store with terminal `cancelled` status (so we
   // don't relaunch its generator and so debug tools can see it).
   const stored = ctx.draftStore.get(draft.draftId);
   assert(stored !== undefined);
-  assertEquals(stored!.status.phase, 'failed');
+  assertEquals(stored!.status.phase, 'cancelled');
 });
 
 // Margin-based draft cancellation is intentionally removed; canonicality-
