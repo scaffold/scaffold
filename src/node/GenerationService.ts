@@ -10,6 +10,7 @@ import {
 } from '../core/Block.ts';
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
 import { Draft, DraftStore } from '../core/Draft.ts';
+import type { DraftManager } from '../core/DraftManager.ts';
 import type { ClaimRef } from '../core/Node.ts';
 import { type AvailableClaim, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
@@ -157,8 +158,11 @@ interface ParkedGetOutput {
  *   - `ContractHostService`   -- actually run the contract in generation mode
  *   - `UtxoIndexService` + `OutputClaimService` -- source inputs and pre-claim them
  *
- * Also implements `GeneratorProvider` so `DraftManager` can invoke it as
- * the in-place replacement for the old `ContractGenerator`.
+ * Producer-style API: `enqueueGeneration(fields)` creates a draft via
+ * `DraftManager.create` and runs the contract to populate it. Still
+ * implements the legacy `GeneratorProvider` so `DraftManager.createDraft`
+ * can drive it from a pre-existing draft for any caller that hasn't yet
+ * migrated.
  *
  * Cancellation policy: none today. A draft that becomes uncanonical is kept
  * in the store at reduced priority; its Executable runs to completion. See
@@ -209,6 +213,13 @@ export class GenerationService extends GenerationModule implements GeneratorProv
 
   /** The node's public key, used for sign in generation. */
   private _signerPubkey: Uint8Array | undefined;
+
+  /**
+   * DraftManager reference for the producer-style entry point. Set after
+   * construction by NodeContext (DraftManager and GenerationService have
+   * a mutual dependency, so we wire one direction via setter).
+   */
+  private _draftManager: DraftManager | undefined;
 
   constructor(ctx: ProtocolContext) {
     const store = ctx.get(BlockStore);
@@ -291,40 +302,88 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     this._signerPubkey = pubkey;
   }
 
+  /**
+   * Wire the DraftManager used by the producer-style `enqueueGeneration`
+   * entry point. The setter (rather than constructor injection) breaks
+   * the mutual-dependency cycle between GenerationService and DraftManager.
+   */
+  setDraftManager(dm: DraftManager): void {
+    this._draftManager = dm;
+  }
+
+  // -- Producer entry point ------------------------------------------
+
+  /**
+   * Producer-style entry point. Creates a draft via DraftManager.create
+   * (registering the consensus phantom), populates its `claims` with the
+   * trigger reference, then runs the contract to fill it in.
+   *
+   * Returns the draftId. Callers that want to track completion should
+   * listen on `DraftStore.onTransition`.
+   *
+   * Throws if `setDraftManager` hasn't been wired.
+   */
+  enqueueGeneration(fields: {
+    claims: ClaimRef[];
+    outputs?: Output[];
+    declaredWeight: number;
+    refs?: Hash[];
+  }): Hash {
+    if (!this._draftManager) {
+      throw new Error('GenerationService.enqueueGeneration: setDraftManager not called');
+    }
+    const draft = this._draftManager.create({
+      claims: fields.claims,
+      outputs: fields.outputs ?? [],
+      declaredWeight: fields.declaredWeight,
+      refs: fields.refs,
+    });
+    const handle = this._startGeneration(draft);
+    // Register the cancel handle so DraftManager.detachDraft can run
+    // the generator's cleanup (release OutputClaimService entries,
+    // drain pre-queues, mark cancelled set) when the draft is later
+    // torn down at solidify or cancel time.
+    this._draftManager.attachGeneratorHandle(draft.draftId, handle);
+    return draft.draftId;
+  }
+
   // -- GeneratorProvider ---------------------------------------------
 
   /**
-   * Called by `DraftManager` immediately after creating a draft. Extracts
-   * the target verifier from the first resolved claim (the "trigger
-   * output" that caused the draft to be created), registers the draft
-   * with the tracking module, and enqueues the generation work on the
-   * execution queue.
-   *
-   * A draft without any claims does no generation -- we transition it
-   * to `solidifying` immediately with empty output. This preserves
-   * the old `ContractGenerator` escape hatch.
+   * Legacy entry point. Called by `DraftManager.createDraft` immediately
+   * after creating a draft -- preserved so any caller that hasn't migrated
+   * to `enqueueGeneration` still works. Delegates to the same internal
+   * `_startGeneration` helper.
    */
   generate(draft: Draft): GeneratorHandle {
+    return this._startGeneration(draft);
+  }
+
+  /**
+   * Shared core: given a draft already in `populating`, extract the
+   * trigger, register with the tracking module, and enqueue the
+   * contract executable on the queue.
+   *
+   * A draft without any claims does no generation -- we mark it
+   * `solidifying` immediately with empty output (or `cancelled` if the
+   * trigger is malformed). Errors during trigger extraction propagate
+   * via the DraftManager.cancel path.
+   */
+  private _startGeneration(draft: Draft): GeneratorHandle {
     const first = draft.claims[0];
     if (!first) {
-      this._draftStore.transition(draft.draftId, { phase: 'solidifying' });
+      this._completeEmptyDraft(draft.draftId);
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
     const triggerBlock = this._store.get(first.producer);
     if (!triggerBlock) {
-      this._draftStore.transition(draft.draftId, {
-        phase: 'cancelled',
-        reason: 'trigger producer not in store',
-      });
+      this._cancelGenerationDraft(draft.draftId, 'trigger producer not in store');
       return { draftId: draft.draftId, cancel: () => {} };
     }
     const output = triggerBlock.outputs[first.outputIndex];
     if (!output) {
-      this._draftStore.transition(draft.draftId, {
-        phase: 'cancelled',
-        reason: 'trigger output not found',
-      });
+      this._cancelGenerationDraft(draft.draftId, 'trigger output not found');
       return { draftId: draft.draftId, cancel: () => {} };
     }
 
@@ -391,6 +450,32 @@ export class GenerationService extends GenerationModule implements GeneratorProv
         this.forget(draftId);
       },
     };
+  }
+
+  /**
+   * Drive a no-claims draft to `solidifying` directly. Prefers DraftManager
+   * (so solidify runs via the new API); falls back to the store transition
+   * (for the legacy `generate(draft)` path that may not have a DM wired).
+   */
+  private _completeEmptyDraft(draftId: Hash): void {
+    if (this._draftManager) {
+      this._draftManager.markSolidifying(draftId);
+    } else {
+      this._draftStore.transition(draftId, { phase: 'solidifying' });
+    }
+  }
+
+  /**
+   * Cancel a draft whose generation can't proceed (malformed trigger,
+   * etc). Routes through DraftManager when wired so consensus + draft
+   * store stay consistent.
+   */
+  private _cancelGenerationDraft(draftId: Hash, reason: string): void {
+    if (this._draftManager) {
+      this._draftManager.cancel(draftId, reason);
+    } else {
+      this._draftStore.transition(draftId, { phase: 'cancelled', reason });
+    }
   }
 
   // -- Restart handler -----------------------------------------------
@@ -527,12 +612,26 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     const stored = this._draftStore.get(draftId);
     if (!stored) return; // explicitly cancelled during run
 
-    const updated = this._draftStore.update(draftId, {
-      outputs: [...stored.outputs, ...result.outputs],
-      outputSlots: [...stored.outputSlots, ...result.outputSlots],
-      claims: [...stored.claims, ...newClaims],
-      refs: [...stored.refs, ...result.refs],
-    });
+    // Mutate the draft via the producer-agnostic API when wired (which
+    // enforces the populating-phase lock + declared-weight monotonicity);
+    // fall back to the raw store update for the legacy generate(draft)
+    // path that may not have a DraftManager.
+    let updated: Draft;
+    if (this._draftManager) {
+      updated = this._draftManager.updateDraft(draftId, {
+        outputs: result.outputs,
+        outputSlots: result.outputSlots,
+        claims: newClaims,
+        refs: result.refs,
+      }, 'append');
+    } else {
+      updated = this._draftStore.update(draftId, {
+        outputs: [...stored.outputs, ...result.outputs],
+        outputSlots: [...stored.outputSlots, ...result.outputSlots],
+        claims: [...stored.claims, ...newClaims],
+        refs: [...stored.refs, ...result.refs],
+      });
+    }
 
     // Reconcile UtxoIndex with the draft's new claims. Consensus
     // doesn't fire a canonicality-change event for an already-canonical
@@ -545,13 +644,22 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     }
 
     // Forget the draft from module tracking before transitioning to
-    // 'solidifying': solidification runs synchronously in the transition
-    // listener and produces a real block whose outputs may trigger new
-    // drafts for the same target. Keeping the old draft in the active
-    // set would (incorrectly) suppress those via `hasActiveTarget`.
+    // 'solidifying': solidification runs synchronously and produces a
+    // real block whose outputs may trigger new drafts for the same
+    // target. Keeping the old draft in the active set would (incorrectly)
+    // suppress those via `hasActiveTarget`.
     this.forget(draftId);
 
-    this._draftStore.transition(draftId, { phase: 'solidifying' });
+    // Drive solidify directly through DraftManager (which handles the
+    // transition, build, dispatch, and re-solidify retry loop). The
+    // legacy path transitions to `solidifying` and relies on the
+    // NodeContext auto-solidify listener; the listener is idempotent
+    // via DraftManager.isSolidifyActive() so both paths coexist.
+    if (this._draftManager) {
+      this._draftManager.markSolidifying(draftId);
+    } else {
+      this._draftStore.transition(draftId, { phase: 'solidifying' });
+    }
   }
 
   // -- Blocked-generator wakeup --------------------------------------

@@ -11,6 +11,14 @@ import { RoutingService } from './RoutingService.ts';
 import { PushAction } from './RoutingModule.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 
+/** Shape of fields accepted by GenerationService.enqueueGeneration. */
+export interface GenerationFields {
+  claims: ClaimRef[];
+  outputs?: Output[];
+  declaredWeight: number;
+  refs?: Hash[];
+}
+
 // -- Reactive event and action types --------------------------------
 
 /** Event passed to strategies for evaluation. */
@@ -101,6 +109,7 @@ export class ReactiveLayer {
 
   private readonly routing?: RoutingService;
   private readonly draftManager?: DraftManager;
+  private readonly generationService?: { enqueueGeneration(fields: GenerationFields): Hash };
   private readonly _log?: ScopedLogger;
 
   private readonly onPushActions?: (actions: PushAction[], block: Block) => void;
@@ -122,6 +131,7 @@ export class ReactiveLayer {
     privateKey?: Uint8Array | null;
     routing?: RoutingService;
     draftManager?: DraftManager;
+    generationService?: { enqueueGeneration(fields: GenerationFields): Hash };
     logger?: ScopedLogger;
     onPushActions?: (actions: PushAction[], block: Block) => void;
     onBlockProcessed?: (block: Block) => void;
@@ -137,6 +147,7 @@ export class ReactiveLayer {
     this.privateKey = deps.privateKey ?? null;
     this.routing = deps.routing;
     this.draftManager = deps.draftManager;
+    this.generationService = deps.generationService;
     this._log = deps.logger;
     this.onPushActions = deps.onPushActions;
     this.onBlockProcessed = deps.onBlockProcessed;
@@ -335,7 +346,14 @@ export class ReactiveLayer {
             // UTXOs so autobalance can pull them out of the draft pool).
             if (action.skipGeneration) {
               this.draftManager.addReady(fields);
+            } else if (this.generationService) {
+              // Producer-style path: GenerationService creates the draft
+              // via draftManager.create and runs the contract.
+              this.generationService.enqueueGeneration(fields);
             } else {
+              // Fallback: legacy path. Kept for tests that wire a
+              // DraftManager + GeneratorProvider without a separate
+              // GenerationService reference.
               this.draftManager.createDraft(fields);
             }
           }

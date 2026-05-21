@@ -416,6 +416,19 @@ export class DraftManager {
   }
 
   /**
+   * Register a generator handle for a draft created via `create` so that
+   * `detachDraft` / `cancel` can run the generator's cleanup (release
+   * OutputClaimService entries, drain pre-queues, etc) when the draft
+   * is later torn down. Producers that drive their own work via `create`
+   * (e.g. GenerationService.enqueueGeneration) call this immediately
+   * after starting the generation; the legacy `createDraft` path wires
+   * the handle internally.
+   */
+  attachGeneratorHandle(draftId: Hash, handle: GeneratorHandle): void {
+    this.handles.set(draftId.toPrimitive(), handle);
+  }
+
+  /**
    * Detach a draft from the live machinery (consensus + generator
    * handle) without transitioning it to a terminal status. Used by the
    * solidification path: the draft transitions to `solidified` (with

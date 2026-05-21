@@ -317,15 +317,17 @@ export class NodeContext {
     this._registerBuiltinContract(SIGNATURE_CONTRACT, signatureContract);
     this._registerBuiltinContract(HASH_CONTRACT, hashContract);
 
-    // 5d. Create DraftManager with GenerationService as its GeneratorProvider
-    //     and install the cancel hook so a rejecting generation can clean
-    //     up the draft. Wire the BlockBuilderModule + processBlock callback
-    //     so DraftManager.solidify can drive the draft -> block path.
-    this.draftManager = new DraftManager(this.draftStore, this.consensus, this.generation, {
+    // 5d. Create DraftManager (no GeneratorProvider -- GenerationService is
+    //     a producer that drives draftManager.create directly). Wire the
+    //     BlockBuilderModule + processBlock callback so DraftManager.solidify
+    //     can drive the draft -> block path. Then back-wire DraftManager
+    //     into GenerationService so it can call create/update/markSolidifying.
+    this.draftManager = new DraftManager(this.draftStore, this.consensus, undefined, {
       blockBuilder: this._blockBuilder,
       processBlock: (block) => this.reactiveLayer.processBlock(block, null),
     });
-    this.generation.setCancelHook((draftId) => this.draftManager.cancelDraft(draftId));
+    this.generation.setDraftManager(this.draftManager);
+    this.generation.setCancelHook((draftId) => this.draftManager.cancel(draftId));
     // Wire the node's own pubkey into generation so `sign`
     // can check whether this node is the right signer for any draft it
     // produces. Without this, every `sign(...)` rejects.
@@ -439,6 +441,7 @@ export class NodeContext {
       blockCreator: this._blockCreator,
       routing: this.routing,
       draftManager: this.draftManager,
+      generationService: this.generation,
       logger: this.protocolContext.logger('reactive'),
       onPushActions: config.onPushActions,
       onBlockProcessed: (block: Block) => {
@@ -460,14 +463,21 @@ export class NodeContext {
     //    processBlock fires.
     this.draftStore.onTransition((draft) => {
       if (draft.status.phase !== 'solidifying') return;
-      // Skip if DraftManager (or its retry loop) initiated this transition --
-      // it will handle the build itself. Only fires for "external" transitions
-      // into solidifying, which today means generator-driven completions
-      // (GenerationService transitions populating -> solidifying directly).
-      if (this.draftManager.isSolidifyActive()) return;
+      // Always release DraftStrategy inFlight slots when a draft enters
+      // `solidifying` -- regardless of whether DraftManager initiated the
+      // transition (via markSolidifying / the retry loop) or whether
+      // GenerationService transitioned the draft directly via the legacy
+      // path. Without this, generated drafts whose contracts run via the
+      // new producer API never release their slots, blocking subsequent
+      // drafts for the same {block, outputIndex} target.
       for (const c of draft.claims) {
         draftStrategy.complete(c.producer, c.outputIndex);
       }
+      // Only call solidify if not already inside one (avoids re-entrancy
+      // when DraftManager initiated the transition itself). Producer-API
+      // calls into markSolidifying are already running solidify when the
+      // transition fires; legacy GenerationService transitions are not.
+      if (this.draftManager.isSolidifyActive()) return;
       this.draftManager.solidify([draft]);
     });
 
