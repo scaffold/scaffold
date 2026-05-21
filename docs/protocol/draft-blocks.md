@@ -35,16 +35,36 @@ For drafts, claims are always created in the fully-resolved form — drafts only
 
 ```
 Draft {
-    kind:            'draft'        // Node-union discriminator
-    claims:          ClaimRef[]     // outputs being claimed
-    outputs:         Output[]       // new outputs this block will produce
-    outputSlots:     OutputSlot[]   // origin tags ('require' | 'get'), parallel to outputs
-    declaredWeight:  number         // work this block contributes
-    effectiveWeight: number         // wall-clock-bumped, drives draft canonicality competition
-    refs:            Hash[]         // read-only cross-block references
-    status:          DraftStatus    // pending | generating | ready | cancelled
+    kind:             'draft'        // Node-union discriminator
+    draftId:          Hash           // local identity (random)
+    claims:           ClaimRef[]     // outputs being claimed
+    outputs:          Output[]       // new outputs this block will produce
+    outputSlots:      OutputSlot[]   // origin tags ('require' | 'get'), parallel to outputs
+    declaredWeight:   number         // work this block contributes
+    effectiveWeight:  number         // wall-clock-bumped, drives draft canonicality competition
+    refs:             Hash[]         // read-only cross-block references
+    status:           DraftStatus    // see below
+    solidifiedBlocks: Block[]        // every block this draft has produced, oldest first
 }
 ```
+
+`DraftStatus` is a five-phase discriminated union:
+
+| Phase | Description |
+|-------|-------------|
+| `populating` | Producer is filling the draft. Only phase in which `update` is legal. |
+| `ready` | Producer handed off without demanding solidify. Eligible for piggyback merge; the manager will not solidify on its own. |
+| `solidifying` | Producer demanded solidify, or the retry loop is rebuilding. Manager keeps retrying on canonicality changes. |
+| `solidified` | At least one block has been produced. Latest attempt is the last entry in `solidifiedBlocks`. **NOT terminal**: if the canonical block flips uncanonical the draft transitions back to `solidifying`. |
+| `cancelled` | Terminal. Only path: explicit producer cancel. |
+
+There are **no other terminal failures**: a draft that can't solidify stays in `solidifying` indefinitely under the priority/pause mechanism. The producer can cancel it explicitly when it wants to give up.
+
+### Mutual exclusivity invariant
+
+For drafts with `claims.length > 0`, **at most one entry in `solidifiedBlocks` is canonical at any moment**. The re-solidify retry loop enforces this by demoting the draft from `solidified` back to `solidifying` whenever none of its prior blocks are canonical, then rebuilding with conflict-witness opts (see "Tracked Blocks & Re-solidification" below).
+
+Zero-claim drafts are **exempt**: multiple of their blocks may be canonical simultaneously, since there's no input scarcity to fight over.
 
 A draft has **no hash** (it hasn't been serialized), **no signature**, and **no explicit identity field** — drafts are referenced by JS object equality, which is 1:1 with logical identity since drafts are never duplicated. The anchor is **not** stored on the draft; it is computed at solidification time by [`BlockBuilderModule`](block-creation.md) from the producing blocks of `claims`. The same applies to `aggregates`: the set of subtrees that get aggregated is a function of which producers fall outside the chosen anchor's chain, derived at lowering time.
 
@@ -65,6 +85,87 @@ The construction pipeline becomes:
 
 - Not a `Block`. It cannot be stored in `BlockStore`, referenced by hash, or sent to peers.
 - Not persistent across restarts. Drafts are ephemeral local state. If the node restarts, in-progress work is lost (the generation must restart).
+
+---
+
+## Producer Model
+
+The construction-time API treats producers as an open set: any caller can create a draft, populate it, and hand it off via a uniform `DraftManager` API. The four established producers are:
+
+| Producer | Pattern |
+|----------|---------|
+| `PutManager` (direct) | `create() → updateDraft() → markSolidifying()` for publish, `markReady()` for park. |
+| `FetchManager` (incentive) | `create({outputs: [incentive, agg-marker], declaredWeight: 0}) → markSolidifying()`. |
+| `Scaffold.send` (planned) | Same shape as Put. |
+| `GenerationService` (generator-driven) | `create({}) → updateDraft()` per contract result → `markReady()` for whitelisted contracts (e.g. SIGNATURE), `markSolidifying()` for everything else. |
+
+`DraftManager` itself knows nothing about generators or specific callers. The API surface is:
+
+```ts
+create(fields?): Draft                  // populating + consensus phantom
+updateDraft(id, changes, mode?): Draft  // only legal in `populating`
+markReady(id): Draft                    // populating -> ready, locks content
+markSolidifying(id): SolidifyResult     // populating/ready -> solidifying + build
+cancel(id, reason?): void               // terminal
+get(id) / getByPhase(phase) / getReadyOrSolidifying()
+```
+
+`updateDraft` is **append-by-default** with a `mode: 'replace'` option, **phase-locked to populating** (throws from any other phase), and enforces **monotone non-decreasing `declaredWeight`** (re-registering verified weight in consensus on each raise).
+
+---
+
+## Tracked Blocks & Re-solidification
+
+When a draft has been solidified and its canonical block subsequently flips uncanonical, the retry loop on `consensus.onCanonicalityChange` demotes the draft and rebuilds.
+
+**Algorithm** (simplified single-branch — direct-claim collisions emerge structurally from re-issuing `D.claims`):
+
+```
+on each canonicality change:
+  for D in store.getByPhase('solidified'):
+    if D.claims.length == 0: continue                  # zero-claim exemption
+    if D.solidifiedBlocks.some(isCanonical): continue  # already happy
+    re-register D as a phantom in consensus
+    transition D to 'solidifying'
+
+  for D in store.getByPhase('solidifying'):
+    witnesses = []
+    for Bi in D.solidifiedBlocks:
+      witnesses += consensus.getConflicts(Bi).filter(isCanonical)
+    blockBuilder.solidify([D], pool=[], {
+      aggregatedBlocks: dedupe(witnesses),
+      excludedBlocks:   D.solidifiedBlocks.map(b => b.hash),
+    })
+```
+
+`aggregatedBlocks` is the union of all canonical direct-conflict partners of D's prior blocks. Placement uses this to force the new block to descend from (or conflict-sibling with) the winning branch. **All** canonical conflicts are added — it's legal for a block to have multiple direct-conflict partners that don't conflict with each other (and so all be canonical).
+
+`excludedBlocks` is every block this draft has ever produced. Placement refuses to anchor at any of them, ensuring each retry produces a fresh hash.
+
+If `solidify` returns `awaitingAnchor` (placement stalled) or a hard failure, the draft stays in `solidifying` and the next canonicality change re-attempts. There is no `failed` terminal state; only explicit `cancel`.
+
+---
+
+## Implementation status (2026-05)
+
+Implemented:
+- New 5-phase `DraftStatus` union (`populating | ready | solidifying | solidified | cancelled`).
+- `solidifiedBlocks: Block[]` history on every draft, mutual-exclusivity invariant enforced by the retry loop.
+- `currentCanonicalBlock(draft, isCanonical)` helper (replaces the old `status.block` reader).
+- Producer-agnostic API on `DraftManager`: `create`, `updateDraft`, `markReady`, `markSolidifying`, `cancel` (and queries).
+- `BlockBuilderModule.solidify({ aggregatedBlocks, excludedBlocks })` opts threaded into placement.
+- `_findCanonicalConflictWitnesses` + `_computeResolidifyOpts` in `DraftManager` for the re-solidify pipeline.
+
+Pending (tracked in `TODO.md`):
+- `GenerationService` migration to use the producer API explicitly (currently still wears the `GeneratorProvider` hat).
+- `PutManager` and `FetchManager` migration to the unified API.
+- Whitelist mechanism for "markReady vs markSolidifying" at generator finish (signature contract → ready for piggyback merge; everything else → immediate solidify).
+- Pump for `ready` drafts (currently the NodeContext auto-solidify listener handles transitions to `solidifying`; once a real ready-pump lands, the listener can go away).
+- GC of solidified drafts beyond a finalization horizon (explicitly out of scope for this pass).
+
+The legacy `createDraft`/`addReady`/`cancelDraft` methods on `DraftManager` remain available alongside the new producer API and will be removed once all consumers have migrated.
+
+Legacy sections below ("Immutability and Recreation", "Anchor Selection > Legacy: Phantom Anchor", parts of "Consensus Integration > Generation Deprioritization and Restart") predate this design and need a rewrite pass; the algorithm above is authoritative.
 
 ---
 

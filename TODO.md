@@ -7,9 +7,24 @@ Queued protocol work, roughly in priority order. Each item follows the 4-step de
 These are the items that cause the most hidden bugs today. Most of the bugs we hit during the chess demo bringup were the same shape: state that should have transitioned didn't, because no single component owned the transition. Doing these in priority order pays down the structural debt that future features will otherwise step on.
 
 ### 1. Generation lifecycle as a state machine
-**Partially landed** in the Node refactor. Steps 6-9 collapsed several of the originally separate stores into Draft's own status union (`pending | generating | readyToSolidify | solidified | failed`); `BlockBuilderModule` owns the lowering pipeline; `DraftManager.detachDraft` cleanly separates "remove from consensus" from "mark draft terminal." Drafts persist as terminal nodes for debug history.
+**Partially landed** in the Node refactor. Steps 6-9 collapsed several of the originally separate stores into Draft's own status union (now `populating | ready | solidifying | solidified | cancelled` after the 2026-05 producer-agnostic refactor); `BlockBuilderModule` owns the lowering pipeline; `DraftManager.detachDraft` cleanly separates "remove from consensus" from "mark draft terminal." Drafts persist as terminal nodes for debug history.
 
 What's still split across multiple stores: `DraftStrategy.inFlight` + `.resumed`, `GenerationService._blocked` + `._parkedGetOutput` + `._preQueue`, the `setOutputReleasedHook` / `setCancelHook` callback web. These should be derived from `Draft.status` (extended with `awaitingInput` / `parkedOnGetOutput` phases) rather than maintained as parallel state. After that, the leaked `OutputHandler` Promises and the `GenerationService._onRestart` no-op fall out as data-flow consequences rather than independent bugs.
+
+### 1a. Producer-flip migration (chunks 6-8 of the don't-worry-about-gc plan)
+The 2026-05 refactor landed the producer-agnostic DraftManager API (`create`, `updateDraft`, `markReady`, `markSolidifying`, `cancel`) and the `solidifiedBlocks` tracking + re-solidify-with-conflict-ancestors pipeline. The legacy `createDraft`/`addReady`/`cancelDraft` methods remain alongside the new API; consumers haven't been migrated yet.
+
+Pending migrations:
+- `GenerationService` should stop implementing `GeneratorProvider` and become a producer driven by a new `enqueueGeneration(trigger)` entry point. Includes a whitelist (SIGNATURE_CONTRACT etc.) selecting `markReady` for piggyback merge vs `markSolidifying` for immediate publish.
+- `PutManager.put` should use `create → updateDraft → markSolidifying/markReady` instead of `addReady + solidify`.
+- `FetchManager._publishIncentive` should create a draft via the API (`create({outputs: [incentive, agg-marker]}) → markSolidifying`) instead of dispatching a `createBlock` action.
+- A pump for `ready` drafts: either PiggybackStrategy aggregates them, or a new strategy. Today the NodeContext auto-solidify listener fires on transitions to `solidifying` (re-entrancy-guarded by `DraftManager.isSolidifyActive()`); once the pump lands, the listener can go away.
+- Once all consumers have migrated, delete `createDraft`, `addReady`, `cancelDraft`, and rename `updateDraft` → `update`.
+
+See `~/.claude/plans/don-t-worry-about-gc-iterative-metcalfe.md` for the full chunk list and test matrix.
+
+### 1b. Draft GC
+Solidified drafts live forever today (`solidifiedBlocks` retained indefinitely for re-solidify on canonicality flip). At finalization depth the risk of a canonical block flipping uncanonical drops to ~0, so the draft can be safely GC'd. Out of scope for the current pass; track here.
 
 ### 2. Output_space / extended_vector terminology audit
 Cheapest item in this section, biggest cost-saving for future-you. The codebase has at least three different things called "extended" and they do not all mean the same thing. AGENTS.md says `extended_vector(X) = X.outputs ++ aggregate.new ++ output_space(anchor)`. Some now-deleted code meant `own ++ surviving-anchor-after-this-block's-claims-into-anchor`. `UtxoEntry.extendedIndex` is yet another thing. Some method names use "claim" / "extended" / "output space" interchangeably.
