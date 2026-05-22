@@ -91,7 +91,7 @@ The shim presents a fixed-shape virtual filesystem with three operational zones 
 │   ├── contract_metadata/0x{contract_hash_hex}/{params_encoded}/
 │   │                    — read returns body bytes of contract_metadata({contract, params})
 │   ├── body/0x{contract_hash_hex}/{params_encoded}/
-│   │                    — read returns body bytes of requestBody({contract, params})
+│   │                    — read returns body bytes of request({contract, params})
 │   └── fetch/0x{contract_hash_hex}/{params_encoded}/{record_key_path}
 │                        — read returns fetched record value; path-after-params is the record key
 ├── out/                 — write-only; scaffold-side outputs

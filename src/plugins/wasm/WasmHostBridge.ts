@@ -55,8 +55,8 @@ export interface RunBridge {
   timestamp(): bigint;
   claimNext(): MaybePromise<Uint8Array>;
   claimAll(limit: number): MaybePromise<Uint8Array>;
-  emitOutput(outputBytes: Uint8Array): void;
-  requestBody(verifierBytes: Uint8Array): MaybePromise<Uint8Array>;
+  send(outputBytes: Uint8Array): void;
+  request(verifierBytes: Uint8Array): MaybePromise<Uint8Array>;
   fetch(verifierBytes: Uint8Array, key: Uint8Array): MaybePromise<Uint8Array>;
   put(verifierBytes: Uint8Array, recordsBytes: Uint8Array): MaybePromise<void>;
   sign(pubkey: Uint8Array): void;
@@ -114,21 +114,33 @@ export function makeRunBridge(env: ContractEnv): RunBridge {
 
     claimAll: (limit) => maybeThen(env.claimAll(limit < 0 ? undefined : limit), encodeClaimList),
 
-    emitOutput: (outputBytes) => {
+    send: (outputBytes) => {
       const output = decodeO(outputBytes);
-      env.emitOutput(output.verifier, output.value, output.body);
+      env.send(output.verifier, output.value, output.body);
     },
 
-    requestBody: (verifierBytes) =>
+    request: (verifierBytes) =>
       maybeThen(
-        env.requestBody(decodeV(verifierBytes)),
+        env.request(decodeV(verifierBytes)),
         (r) => encodeValueAndBody(r.value, r.body),
       ),
 
     fetch: (verifierBytes, key) => env.fetch(decodeV(verifierBytes), key),
 
-    put: (verifierBytes, recordsBytes) =>
-      env.put(decodeV(verifierBytes), decodeOList(recordsBytes)),
+    put: (verifierBytes, recordsBytes) => {
+      // Wire format still carries an Output[]; convert to the
+      // {key -> body} shape that env.put now expects. TODO(@joel): make
+      // the WASM wire format records-shaped directly once put is wired
+      // through the generator pipeline.
+      const outputs = decodeOList(recordsBytes);
+      const records: Record<string, Uint8Array | string> = {};
+      const td = new TextDecoder();
+      for (const o of outputs) {
+        const key = td.decode(o.verifier.params);
+        records[key] = o.body ?? new Uint8Array(0);
+      }
+      return env.put(decodeV(verifierBytes), records);
+    },
 
     sign: (pubkey) => {
       env.sign(pubkey);

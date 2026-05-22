@@ -7,7 +7,7 @@
 
 import { Hash } from '../../src/util/Hash.ts';
 import { str2bin } from '../../src/util/buffer.ts';
-import { RECORD_CONTRACT, HASH_CONTRACT } from '../../src/core/Block.ts';
+import { HASH_CONTRACT, RECORD_CONTRACT } from '../../src/core/Block.ts';
 
 function asZigBytes(hash: Hash, name: string): string {
   const bytes = hash.toBytes();

@@ -178,7 +178,16 @@ Deno.test('blockReceived: block from peer enters receivedFirst', () => {
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
 
   // Alice sends a claiming block -> enters receivedFirst + claim history
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('claimer'), V, 10, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('claimer'),
+    V,
+    10,
+    'alice',
+  );
 
   // New V-output block arrives -- should route toward alice (via claim history)
   const actions = collectPushActions(routing);
@@ -213,7 +222,16 @@ Deno.test('blockReceived: source integrity (duplicate is no-op)', () => {
   const actions = collectPushActions(routing);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('claimer'), V, 10, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('claimer'),
+    V,
+    10,
+    'alice',
+  );
 
   // Duplicate blockReceived
   routing.blockReceived(h('claimer'), 'alice'); // no-op (already processed)
@@ -233,7 +251,16 @@ Deno.test('send action routes to peer with trigger in receivedFirst', () => {
   const actions = collectPushActions(routing);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('trigger'), V, 10, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('trigger'),
+    V,
+    10,
+    'alice',
+  );
 
   gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
@@ -271,8 +298,26 @@ Deno.test('send action: different triggers per peer -> push to both', () => {
   routing.addPeer('bob', 'pk_bob', new TestAwareness());
 
   // Each peer sends a different claiming block
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('from_alice'), V, 10, 'alice');
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('from_bob'), V, 10, 'bob');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('from_alice'),
+    V,
+    10,
+    'alice',
+  );
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('from_bob'),
+    V,
+    10,
+    'bob',
+  );
 
   gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
@@ -322,7 +367,16 @@ Deno.test('send action: skip peer whose awareness already has block', () => {
   awareness.add(h('new')); // alice already knows about h('new')
 
   routing.addPeer('alice', 'pk_alice', awareness);
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('trigger'), V, 10, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('trigger'),
+    V,
+    10,
+    'alice',
+  );
 
   gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 5 }]);
   routing.blockReceived(h('new'), null);
@@ -342,7 +396,16 @@ Deno.test('push priority: amount / responseIndex * deliveryRate / size', () => {
   routingProvider.setSize(h('new'), 200);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('trigger'), V, 100, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('trigger'),
+    V,
+    100,
+    'alice',
+  );
 
   gossipProvider.addBlock(h('new'), [{ index: 0, verifierKey: V, value: 50 }]);
   routing.blockReceived(h('new'), null);
@@ -359,7 +422,16 @@ Deno.test('push priority: response index starts at 1', () => {
   const actions = collectPushActions(routing);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('trigger'), V, 100, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('trigger'),
+    V,
+    100,
+    'alice',
+  );
 
   gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V, value: 50 }]);
   routing.blockReceived(h('B1'), null);
@@ -385,8 +457,26 @@ Deno.test('push priority: response index is per-verifier per-peer', () => {
   const actions = collectPushActions(routing);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('t1'), V1, 100, 'alice');
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('t2'), V2, 100, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('t1'),
+    V1,
+    100,
+    'alice',
+  );
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('t2'),
+    V2,
+    100,
+    'alice',
+  );
 
   // Push B1 (V1) and report
   gossipProvider.addBlock(h('B1'), [{ index: 0, verifierKey: V1, value: 50 }]);
@@ -410,7 +500,16 @@ Deno.test('push priority: block size inversely affects priority', () => {
   const actions = collectPushActions(routing);
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('trigger'), V, 100, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('trigger'),
+    V,
+    100,
+    'alice',
+  );
 
   routingProvider.setSize(h('small'), 50);
   routingProvider.setSize(h('large'), 500);
@@ -566,7 +665,16 @@ Deno.test('integration: claim history routes V-output block toward claimer peer'
   routing.addPeer('bob', 'pk_bob', new TestAwareness());
 
   // Alice sends us a claiming block for V
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('alice_claim'), V, 10, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('alice_claim'),
+    V,
+    10,
+    'alice',
+  );
 
   // Bob sends us a V-output block
   gossipProvider.addBlock(h('bob_request'), [{ index: 0, verifierKey: V, value: 5 }]);
@@ -584,8 +692,26 @@ Deno.test('integration: claim history count reflects resolved claims', () => {
   const V = vk('game');
 
   routing.addPeer('alice', 'pk_alice', new TestAwareness());
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('claim1'), V, 10, 'alice');
-  establishClaimHistory(gossip, routing, gossipProvider, routingProvider, h('claim2'), V, 20, 'alice');
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('claim1'),
+    V,
+    10,
+    'alice',
+  );
+  establishClaimHistory(
+    gossip,
+    routing,
+    gossipProvider,
+    routingProvider,
+    h('claim2'),
+    V,
+    20,
+    'alice',
+  );
 
   assertEquals(gossip.getClaimHistoryCount(V), 2);
 });

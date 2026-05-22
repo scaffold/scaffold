@@ -308,13 +308,21 @@ Deno.test('D3: non-mergeable namespaces rejected (chunk 4)', { ignore: true }, (
 // F. Anchor / placement interaction
 // =================================================================
 
-Deno.test('F1: markSolidifying with no anchor returns awaitingAnchor (chunk 4)', { ignore: true }, () => {
-  // Draft claims outputs of blocks not in the store; placement stalls;
-  // markSolidifying returns { ok: false, awaitingAnchor: true, missing: [...] }.
-  // Draft stays in solidifying; solidifiedBlocks empty.
-});
+Deno.test(
+  'F1: markSolidifying with no anchor returns awaitingAnchor (chunk 4)',
+  { ignore: true },
+  () => {
+    // Draft claims outputs of blocks not in the store; placement stalls;
+    // markSolidifying returns { ok: false, awaitingAnchor: true, missing: [...] }.
+    // Draft stays in solidifying; solidifiedBlocks empty.
+  },
+);
 
-Deno.test('F2: canonicality change unblocks anchor -> retry succeeds (chunk 4)', { ignore: true }, () => {
-  // Setup as F1; add the missing producer to the store and signal
-  // canonicality; retry loop succeeds; draft moves to solidified.
-});
+Deno.test(
+  'F2: canonicality change unblocks anchor -> retry succeeds (chunk 4)',
+  { ignore: true },
+  () => {
+    // Setup as F1; add the missing producer to the store and signal
+    // canonicality; retry loop succeeds; draft moves to solidified.
+  },
+);

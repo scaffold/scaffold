@@ -48,10 +48,10 @@ class RecordingEnv implements ContractEnv {
   claimNext(): Claim {
     throw new ContractRejection('no inputs');
   }
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+  send(verifier: Verifier, value: number, body?: Uint8Array): void {
     this.emittedOutputs.push({ verifier, value, body });
   }
-  requestBody(): { value: number; body: Uint8Array } {
+  request(): { value: number; body: Uint8Array } {
     throw new ContractRejection('no body resolver');
   }
   record(): void {

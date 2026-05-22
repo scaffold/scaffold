@@ -21,6 +21,7 @@ import { Scaffold } from '../../src/Scaffold.ts';
 import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../../src/genesis.ts';
 import { makeHelloRequest } from '../../src/contracts/HelloContract.ts';
 import { makeSignatureOutput } from '../../src/contracts/SignatureContract.ts';
+import { makeAggregationOutput } from '../../src/contracts/AggregationContract.ts';
 
 Deno.test('autoBalance: claim resolves correctly when anchor is not the UTXO producer', async () => {
   const genesis = computeDemoGenesis(['a']);
@@ -31,31 +32,39 @@ Deno.test('autoBalance: claim resolves correctly when anchor is not the UTXO pro
   });
   const pubkey = demoPublicKey('a');
 
+  const draftManager = node.context.draftManager;
+
   // Interim: consume genesis's signature output, emit a fresh sig
   // output (round-trip 1M coins). Now interim's sig output is the only
-  // signature UTXO in the index.
-  const interim = node.put({
-    outputs: [makeSignatureOutput(pubkey, 1_000_000)],
+  // signature UTXO in the index. Pair the input claim with the output
+  // through DraftManager directly -- the narrow Scaffold.put only
+  // publishes records under a verifier.
+  const interimDraft = draftManager.addReady({
     claims: [{ producer: node.context.genesisHash, outputIndex: 0 }],
+    outputs: [makeSignatureOutput(pubkey, 1_000_000), makeAggregationOutput()],
+    declaredWeight: 1,
   });
-  assert(interim.hash, 'interim must be created');
+  const interim = draftManager.solidify([interimDraft]);
+  assert(interim.ok, 'interim must be created');
   assert(
-    node.context.consensus.isCanonical(interim.hash),
+    node.context.consensus.isCanonical(interim.block.hash),
     'interim must be canonical before the next put',
   );
 
   // Funded block: anchors to interim. autoBalance must resolve interim's
   // sig output via the anchor's extended vector, not via the producer's
   // local outputIndex.
-  const funded = node.put({
-    outputs: [makeHelloRequest('world', 1_000)],
+  const fundedDraft = draftManager.addReady({
+    claims: [],
+    outputs: [makeHelloRequest('world', 1_000), makeAggregationOutput()],
+    declaredWeight: 1,
   });
-
-  assert(funded.hash, 'funded must be created');
+  const funded = draftManager.solidify([fundedDraft]);
+  assert(funded.ok, 'funded must be created');
   assert(
-    node.context.consensus.isCanonical(funded.hash),
+    node.context.consensus.isCanonical(funded.block.hash),
     `funded block should be canonical after auto-balance (hash ${
-      funded.hash.toHex().slice(0, 10)
+      funded.block.hash.toHex().slice(0, 10)
     })`,
   );
 

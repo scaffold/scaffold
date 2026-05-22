@@ -385,5 +385,4 @@ export class UtxoIndex {
       this._fireReAdded(c.producer, c.outputIndex);
     }
   }
-
 }

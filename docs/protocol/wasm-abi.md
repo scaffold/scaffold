@@ -451,7 +451,7 @@ The entry layer's memory must be `shared: true` when the runtime selects the Ato
 
 **Budget.** A graph execution counts as a single contract execution: the entire graph shares one per-verifier budget.
 
-**`HASH_CONTRACT` integration.** Each layer's `wasmHash` references a content-addressed WASM blob. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation. A block publishing a blob carries a `HASH_CONTRACT/hash(blob)` discovery output (self-claimed; its `run` verifies the preimage) and a `RECORD_CONTRACT/'default'` output whose body IS the blob. The HASH contract reads the `'default'` record via `requestBody({contract: RECORD_CONTRACT, params: 'default'})` and asserts `hash(body) == params`, so misrepresented blobs are rejected at verification.
+**`HASH_CONTRACT` integration.** Each layer's `wasmHash` references a content-addressed WASM blob. The runtime fetches each blob via `fetch({ contract: HASH_CONTRACT, params: blobHash })` before instantiation. A block publishing a blob carries a `HASH_CONTRACT/hash(blob)` discovery output (self-claimed; its `run` verifies the preimage) and a `RECORD_CONTRACT/'default'` output whose body IS the blob. The HASH contract reads the `'default'` record via `request({contract: RECORD_CONTRACT, params: 'default'})` and asserts `hash(body) == params`, so misrepresented blobs are rejected at verification.
 
 **Use cases.** WASI binaries (program imports `wasi_snapshot_preview1` from a Scaffold-WASI shim). JavaScript interpreters (program is a thin wrapper that loads JS source from `contractMetadata`; the shim below is QuickJS-as-WASM exposing host imports under standard names). Any "interpreter atop a host shim" pattern.
 
@@ -465,15 +465,15 @@ A generating contract may spawn an independent sub-contract that runs in its own
 put(verifier_ptr: i32, verifier_len: i32, records_ptr: i32, records_len: i32) -> ()
 ```
 
-The verifier identifies the sub-contract to spawn (its `(contractHash, params)`). The records bytes are a serialised array of `Output` wire records (`u32 count` then `count × Output`) — pre-resolutions the sub-contract's `requestBody` will consume.
+The verifier identifies the sub-contract to spawn (its `(contractHash, params)`). The records bytes are a serialised array of `Output` wire records (`u32 count` then `count × Output`) — pre-resolutions the sub-contract's `request` will consume. The JS-level `ContractEnv.put` surfaces these as a `Record<string, Uint8Array | string>` keyed by record name; the bridge translates between the two at the WASM boundary.
 
 **Verification.** No-op. The sub-contract's block is independently verified later via the normal verification path; nothing on the parent block needs to confirm the `put` succeeded.
 
 **Generation.** The runtime spawns a new generator for `verifier` and runs it to completion. The parent's `put` call is **blocking**: it waits for the sub-block to be committed (or for the sub-generator to fail). If the sub-generator rejects, the parent generator also rejects — `put` is not fire-and-forget. Blocking + propagated failure means the parent has a guarantee that, by the time `put` returns, the sub-contract's block exists on the network.
 
-**Records routing.** When the sub-contract calls `requestBody(verifier)`, the runtime first scans the parent-supplied records by verifier-equality. A match returns the record's `(value, body)` and emits an output slot on the sub-contract's block (same as a normal `requestBody`). This is "generation-only pre-resolution that materialises as a slot": the sub-contract's block is self-contained at verification time — no records needed at verify, the slots are already on the wire.
+**Records routing.** When the sub-contract calls `request(verifier)`, the runtime first scans the parent-supplied records by verifier-equality. A match returns the record's `(value, body)` and emits an output slot on the sub-contract's block (same as a normal `request`). This is "generation-only pre-resolution that materialises as a slot": the sub-contract's block is self-contained at verification time — no records needed at verify, the slots are already on the wire.
 
-A `requestBody` call with no matching record falls through to the normal handler chain on the sub-contract.
+A `request` call with no matching record falls through to the normal handler chain on the sub-contract.
 
 **Sub-contract namespace.** The sub-contract has its own namespace: its claims, outputs, and self-claims live on its block, not the parent's. The parent and sub-contract share no state beyond the verifier and records.
 
@@ -605,5 +605,5 @@ These are non-normative: a future implementation may differ as long as the contr
 | Future: `src/worker/Instance.ts` (extended) | Worker-side import bindings for `scaffold_env`, `scaffold_walker`, `scaffold_builder`. |
 | Existing: [`src/core/ContractEnv.ts`](../../src/core/ContractEnv.ts) | The TypeScript interface this ABI mirrors. |
 | Existing: [`src/contracts/Contract.ts`](../../src/contracts/Contract.ts) | The `Contract` interface a `WasmContractAdapter` implements. |
-| Spec: [`docs/protocol/computation.md`](computation.md) | Semantic surface for `run`, `claimNext`, `requestBody`, etc. |
+| Spec: [`docs/protocol/computation.md`](computation.md) | Semantic surface for `run`, `claimNext`, `request`, etc. |
 | Spec: [`docs/protocol/output-data.md`](output-data.md) | Walker/builder semantics and value descriptors. |

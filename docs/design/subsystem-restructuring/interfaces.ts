@@ -30,11 +30,11 @@
 // -- Shared types (stubs of real types in src/core/) -----------------------
 
 type Hash = unknown; // src/util/Hash.ts
-type Ref = Hash;     // canonical reference to a Block or Draft (Node.ts)
+type Ref = Hash; // canonical reference to a Block or Draft (Node.ts)
 
-interface Block { /* matches src/core/Block.ts */ }
-interface Draft { /* matches src/core/Draft.ts */ }
-interface ContractEnv { /* matches src/core/ContractEnv.ts -- the unit of work for the executor */ }
+interface Block {/* matches src/core/Block.ts */}
+interface Draft {/* matches src/core/Draft.ts */}
+interface ContractEnv {/* matches src/core/ContractEnv.ts -- the unit of work for the executor */}
 
 // A vertex in the DAG -- Block or Draft. Both satisfy this surface today
 // (see src/core/Node.ts). Reads-only here on purpose; subsystems write back

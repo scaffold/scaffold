@@ -6,11 +6,11 @@ import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import {
   type AvailableClaim,
+  type Claim,
   type ContractEnv,
   ContractRejection,
   ExecutionMode,
   type GeneratingEnvProvider,
-  type Claim,
 } from './ContractEnv.ts';
 import type { ClaimRef } from './Node.ts';
 
@@ -50,7 +50,7 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 export type WaitForInputFn = (verifier: Verifier) => Promise<AvailableClaim>;
 
 /**
- * Callback the GeneratingEnv calls when `requestBody` has no resolver match.
+ * Callback the GeneratingEnv calls when `request` has no resolver match.
  * Mirrors `WaitForInputFn`: parks the contract and resolves later once a
  * handler produces a result (e.g., after user input arrives).
  */
@@ -76,9 +76,9 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
 
   /**
    * Outputs to add to the draft, in call order, tagged by origin. The
-   * order reflects the sequence of `emitOutput` / `record` /
-   * `requestBody` calls. Self-claim bookkeeping for record outputs happens
-   * downstream at solidification (see NodeContext._solidifyDraft).
+   * order reflects the sequence of `send` / `record` / `request` calls.
+   * Self-claim bookkeeping for record outputs happens downstream at
+   * solidification (see NodeContext._solidifyDraft).
    */
   private readonly _slots: OutputSlot[] = [];
   /** Resolved claims from consumed inputs (with provenance). */
@@ -96,7 +96,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     provider: GeneratingEnvProvider<BlockType>;
     /** Optional callback for blocking claimNext(). If not provided, throws on no input. */
     waitForInput?: WaitForInputFn;
-    /** Optional callback for blocking requestBody(). If not provided, throws on no handler match. */
+    /** Optional callback for blocking request(). If not provided, throws on no handler match. */
     waitForGetOutput?: WaitForGetOutputFn;
     /**
      * The node's own public key, used to answer `sign` in
@@ -197,14 +197,14 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     throw new ContractRejection('no inputs available');
   }
 
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+  send(verifier: Verifier, value: number, body?: Uint8Array): void {
     this._slots.push({
       output: { verifier, value, body: body ?? new Uint8Array(0) },
       origin: 'require',
     });
   }
 
-  async requestBody(
+  async request(
     verifier: Verifier,
   ): Promise<{ value: number; body: Uint8Array }> {
     let resolved = await this._provider.resolveGetOutput(
@@ -215,7 +215,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     if (resolved === null) {
       if (!this._waitForGetOutput) {
         throw new ContractRejection(
-          'no requestBody handler matched (and no wait callback configured)',
+          'no request handler matched (and no wait callback configured)',
         );
       }
       resolved = await this._waitForGetOutput(verifier);
@@ -280,12 +280,12 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  put(_verifier: Verifier, _records: Output[]): Promise<void> {
+  put(_verifier: Verifier, _records: Record<string, Uint8Array | string>): Promise<void> {
     // TODO(@joel): wire put into the generation pipeline.
-    // Spec: spawns a sub-generator on its own block with `records` as
-    // pre-resolved requestBody answers, blocks until commit, propagates
-    // ContractRejection on sub-generator failure, auto-claims an existing
-    // matching UTXO if one exists else self-emerges. See
+    // Spec: spawns a sub-generator on its own block self-claiming under
+    // `verifier`, emits one RECORD_CONTRACT output per `records` entry,
+    // propagates ContractRejection on sub-generator failure, auto-claims an
+    // existing matching UTXO if one exists else self-emerges. See
     // docs/protocol/wasm-abi.md#put. Reject loudly until then so
     // a put-using contract fails fast rather than silently no-opping.
     throw new ContractRejection('put() not yet implemented');

@@ -324,4 +324,3 @@ Deno.test('multiple packet types flow through correctly', () => {
   assertEquals(signals.length, 1);
   assertEquals(requests.length, 1);
 });
-

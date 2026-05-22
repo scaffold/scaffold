@@ -11,7 +11,7 @@
 
 import { Hash } from '../util/Hash.ts';
 import type { Output } from './BlockCreationModule.ts';
-import type { BlockStore, Block } from './Block.ts';
+import type { Block, BlockStore } from './Block.ts';
 
 // -- ClaimRef -------------------------------------------------------------
 //

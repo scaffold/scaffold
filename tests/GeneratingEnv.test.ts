@@ -6,10 +6,10 @@ import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { ExecutionMode } from '../src/core/ContractEnv.ts';
 import {
   type AvailableClaim,
+  type Claim,
   type ContractEnv,
   ContractRejection,
   type GeneratingEnvProvider,
-  type Claim,
 } from '../src/core/ContractEnv.ts';
 import { GeneratingEnv } from '../src/core/GeneratingEnv.ts';
 import { VerifyingEnv } from '../src/core/VerifyingEnv.ts';
@@ -87,7 +87,7 @@ class TestGenProvider implements GeneratingEnvProvider<TestBlock> {
     return this._blocksClaiming.get(key);
   }
 
-  /** Handler chain for requestBody. Tests can override by assigning _resolveGetOutput. */
+  /** Handler chain for request. Tests can override by assigning _resolveGetOutput. */
   _resolveGetOutput:
     | ((
       runningContract: Hash,
@@ -160,12 +160,12 @@ Deno.test('GeneratingEnv: multiple record calls', () => {
   assertEquals(outputs.length, 2);
 });
 
-// -- Tests: emitOutput ------------------------------------------
+// -- Tests: send ------------------------------------------
 
-Deno.test('GeneratingEnv: emitOutput adds output to list', () => {
+Deno.test('GeneratingEnv: send adds output to list', () => {
   const { env } = makeGenEnv();
   const verifier: Verifier = { contract: h('pay'), params: enc('pk') };
-  env.emitOutput(verifier, 42, enc('data'));
+  env.send(verifier, 42, enc('data'));
 
   const outputs = env.getAllOutputs();
   assertEquals(outputs.length, 1);
@@ -174,17 +174,17 @@ Deno.test('GeneratingEnv: emitOutput adds output to list', () => {
   assertEquals(outputs[0].body, enc('data'));
 });
 
-Deno.test('GeneratingEnv: emitOutput defaults data to empty', () => {
+Deno.test('GeneratingEnv: send defaults data to empty', () => {
   const { env } = makeGenEnv();
-  env.emitOutput({ contract: h('x'), params: new Uint8Array(0) }, 10);
+  env.send({ contract: h('x'), params: new Uint8Array(0) }, 10);
   assertEquals(env.getAllOutputs()[0].body, new Uint8Array(0));
 });
 
-Deno.test('GeneratingEnv: interleaved record and emitOutput preserve call order', () => {
+Deno.test('GeneratingEnv: interleaved record and send preserve call order', () => {
   const { env } = makeGenEnv();
-  env.emitOutput({ contract: h('pay'), params: enc('pk') }, 5, enc('a'));
+  env.send({ contract: h('pay'), params: enc('pk') }, 5, enc('a'));
   env.record(enc('k1'), enc('v1'));
-  env.emitOutput({ contract: h('pay'), params: enc('pk') }, 3, enc('b'));
+  env.send({ contract: h('pay'), params: enc('pk') }, 3, enc('b'));
   env.record(enc('k2'), enc('v2'));
 
   const slots = env.getGeneratedOutputSlots();
@@ -330,7 +330,7 @@ Deno.test('GeneratingEnv: fetch throws when no block claims verifier', () => {
 Deno.test('GeneratingEnv: getAllOutputs returns results then regular outputs', () => {
   const { env } = makeGenEnv();
   env.record(enc('state'), enc('val'));
-  env.emitOutput({ contract: h('pay'), params: enc('pk') }, 50);
+  env.send({ contract: h('pay'), params: enc('pk') }, 50);
 
   const all = env.getAllOutputs();
   assertEquals(all.length, 2);
@@ -351,7 +351,7 @@ Deno.test('GeneratingEnv: round-trip -- same contract works in generate and veri
     const newState = new Uint8Array([...state, 1]);
 
     env.record(enc('state'), newState);
-    env.emitOutput(
+    env.send(
       { contract: h('sig'), params: enc('creator') },
       10,
       new Uint8Array(0),

@@ -113,7 +113,7 @@ export const gameStateContract: Contract = {
     if (prev.state.status === STATUS_AWAITING_JOIN) {
       assertFreshInitial(prev);
 
-      const joinSlot = await env.requestBody({
+      const joinSlot = await env.request({
         contract: RECORD_CONTRACT,
         params: JOIN_KEY,
       });
@@ -144,7 +144,7 @@ export const gameStateContract: Contract = {
         black: blackPubkey,
       };
 
-      env.emitOutput(
+      env.send(
         { contract: GAME_STATE_CONTRACT, params: nextParamsBytes },
         prevInput.value * 2,
         encodeGameState(joined),
@@ -175,7 +175,7 @@ export const gameStateContract: Contract = {
 
     // Pull the user move from RECORD/"move". requestBody consumes one slot in
     // the RECORD namespace (positionally first).
-    const moveSlot = await env.requestBody({
+    const moveSlot = await env.request({
       contract: RECORD_CONTRACT,
       params: MOVE_KEY,
     });
@@ -213,25 +213,25 @@ export const gameStateContract: Contract = {
       switch (next.status) {
         case STATUS_WHITE_WON:
         case STATUS_TIMEOUT_BLACK:
-          env.emitOutput(
+          env.send(
             { contract: SIGNATURE_CONTRACT, params: white },
             pot,
           );
           break;
         case STATUS_BLACK_WON:
         case STATUS_TIMEOUT_WHITE:
-          env.emitOutput(
+          env.send(
             { contract: SIGNATURE_CONTRACT, params: black },
             pot,
           );
           break;
         case STATUS_DRAW: {
           const half = Math.floor(pot / 2);
-          env.emitOutput(
+          env.send(
             { contract: SIGNATURE_CONTRACT, params: white },
             half,
           );
-          env.emitOutput(
+          env.send(
             { contract: SIGNATURE_CONTRACT, params: black },
             pot - half,
           );
@@ -249,7 +249,7 @@ export const gameStateContract: Contract = {
       white: prev.white,
       black: prev.black,
     };
-    env.emitOutput(
+    env.send(
       { contract: GAME_STATE_CONTRACT, params: nextParamsBytes },
       pot,
       encodeGameState(nextEnv),

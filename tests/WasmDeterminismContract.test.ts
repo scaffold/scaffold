@@ -122,7 +122,7 @@ class FakeEnv implements ContractEnv {
     return bytes;
   }
 
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+  send(verifier: Verifier, value: number, body?: Uint8Array): void {
     this.emitted.push({ verifier, value, body });
   }
 
@@ -133,7 +133,7 @@ class FakeEnv implements ContractEnv {
   claimNext(): Claim {
     throw new ContractRejection('no inputs');
   }
-  requestBody(): { value: number; body: Uint8Array } {
+  request(): { value: number; body: Uint8Array } {
     throw new ContractRejection('not used');
   }
   record(): void {

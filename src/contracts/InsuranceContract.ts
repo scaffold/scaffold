@@ -99,7 +99,7 @@ export const insuranceContract: Contract = {
       try {
         env.sign(detail.pubkey);
         // Owner is reclaiming -- full return
-        env.emitOutput(
+        env.send(
           { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
           input.value,
         );
@@ -110,7 +110,7 @@ export const insuranceContract: Contract = {
 
       // Aggregation claim: someone else claiming, must return most to author
       const minReturn = Math.floor(input.value * MIN_RETURN_RATE);
-      env.emitOutput(
+      env.send(
         { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
         minReturn,
       );

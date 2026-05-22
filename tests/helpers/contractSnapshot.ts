@@ -198,11 +198,11 @@ class MockSequenceEnv implements ContractEnv {
     return this._mock.timestamp ?? 0;
   }
 
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+  send(verifier: Verifier, value: number, body?: Uint8Array): void {
     this._dispatch('emit_output', { verifier, value, body: body ?? new Uint8Array(0) });
   }
 
-  requestBody(verifier: Verifier): { value: number; body: Uint8Array } {
+  request(verifier: Verifier): { value: number; body: Uint8Array } {
     return this._dispatch('request_body', { verifier }) as { value: number; body: Uint8Array };
   }
 
@@ -248,7 +248,7 @@ class MockSequenceEnv implements ContractEnv {
     this._dispatch('debug', { message });
   }
 
-  put(verifier: Verifier, records: Output[]): void {
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): void {
     this._dispatch('put', { verifier, records });
   }
 
@@ -584,10 +584,10 @@ function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, 
     claim_next: () => packed(expectSync(bridge.claimNext())),
     claim_all: (limit: number) => packed(expectSync(bridge.claimAll(limit))),
     emit_output: (op: number, ol: number) => {
-      bridge.emitOutput(readSlice(ctx, op, ol));
+      bridge.send(readSlice(ctx, op, ol));
     },
     request_body: (vp: number, vl: number) =>
-      packed(expectSync(bridge.requestBody(readSlice(ctx, vp, vl)))),
+      packed(expectSync(bridge.request(readSlice(ctx, vp, vl)))),
     fetch: (vp: number, vl: number, kp: number, kl: number) =>
       packed(expectSync(bridge.fetch(readSlice(ctx, vp, vl), readSlice(ctx, kp, kl)))),
     put: (vp: number, vl: number, rp: number, rl: number) => {

@@ -1,21 +1,15 @@
-// PutManager rewritten around DraftManager. These tests exercise the
-// new draft-based put path end-to-end through Scaffold.
+// PutManager: the narrow put({contract, params, records}) +
+// send({contract, params, body}) surface. Both publish through the
+// DraftManager bottleneck.
 
 import { assert, assertEquals, assertExists } from '@std/assert';
 import { Scaffold } from '../src/Scaffold.ts';
 import { computeDemoGenesis, demoPrivateKey } from '../src/genesis.ts';
-import { Output } from '../src/core/BlockCreationModule.ts';
 import { RECORD_CONTRACT } from '../src/core/Block.ts';
+import { Hash } from '../src/util/Hash.ts';
 import { str2bin } from '../src/util/buffer.ts';
-import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
 
-function makeRecordOutput(key: string, value: string): Output {
-  return {
-    verifier: { contract: RECORD_CONTRACT, params: str2bin(key) },
-    value: 0,
-    body: str2bin(value),
-  };
-}
+const TEST_VERIFIER_CONTRACT = Hash.digest('scaffold:test:put-verifier');
 
 function makeNode(): Scaffold {
   return new Scaffold({
@@ -27,106 +21,92 @@ function makeNode(): Scaffold {
   });
 }
 
-Deno.test('PutManager: basic put with outputs creates a canonical block', async () => {
+function tipBlockFor(node: Scaffold, contract: Hash, params: Uint8Array) {
+  for (const block of [...node.context.store.values()].reverse()) {
+    if (
+      block.outputs.some((o) =>
+        Hash.equals(o.verifier.contract, contract) &&
+        o.verifier.params.length === params.length &&
+        o.verifier.params.every((b, i) => b === params[i])
+      )
+    ) {
+      return block;
+    }
+  }
+  return undefined;
+}
+
+Deno.test('PutManager.put: emits a verifier-marker output under (contract, params)', async () => {
   const node = makeNode();
-  const result = node.put({ outputs: [makeRecordOutput('greeting', 'hello')] });
-  assertExists(result.block);
-  assertExists(result.hash);
-  assert(node.context.consensus.isCanonical(result.hash!));
+  const params = str2bin('alpha');
+  node.put({ contract: TEST_VERIFIER_CONTRACT, params, records: {} });
+  const block = tipBlockFor(node, TEST_VERIFIER_CONTRACT, params);
+  assertExists(block, 'block with verifier output should exist');
   await node.close();
 });
 
-Deno.test('PutManager: records are converted to RECORD_CONTRACT outputs', async () => {
+Deno.test('PutManager.put: records become RECORD_CONTRACT outputs', async () => {
   const node = makeNode();
-  const result = node.put({ records: { foo: 'bar' } });
-  assertExists(result.block);
-  const recordOutputs = result.block!.outputs.filter((o) =>
-    o.verifier.contract.toHex() === RECORD_CONTRACT.toHex()
-  );
-  assertEquals(recordOutputs.length, 1);
-  await node.close();
-});
-
-Deno.test('PutManager: explicit declaredWeight propagates to the block', async () => {
-  const node = makeNode();
-  const result = node.put({
-    outputs: [makeRecordOutput('k', 'v')],
-    declaredWeight: 42,
+  const params = str2bin('alpha');
+  node.put({
+    contract: TEST_VERIFIER_CONTRACT,
+    params,
+    records: { foo: 'bar', baz: new Uint8Array([1, 2, 3]) },
   });
-  assertExists(result.block);
-  assertEquals(result.block!.declaredWeight, 42);
-  await node.close();
-});
-
-Deno.test('PutManager: default declaredWeight is 1', async () => {
-  const node = makeNode();
-  const result = node.put({ outputs: [makeRecordOutput('k', 'v')] });
-  assertExists(result.block);
-  assertEquals(result.block!.declaredWeight, 1);
-  await node.close();
-});
-
-Deno.test('PutManager: claims against producer outputs resolve correctly', async () => {
-  const node = makeNode();
-  const result = node.put({
-    outputs: [makeSignatureOutput(node.publicKey, 1_000_000)],
-    claims: [{ producer: node.context.genesisHash, outputIndex: 0 }],
-  });
-  assertExists(result.block);
-  assert(node.context.consensus.isCanonical(result.hash!));
-  await node.close();
-});
-
-Deno.test('PutManager: publish:false parks the draft without producing a block', async () => {
-  const node = makeNode();
-  const result = node.put({
-    key: 'my-key',
-    outputs: [makeRecordOutput('k', 'v')],
-    publish: false,
-  });
-  assertEquals(result.block, null);
-  assertEquals(result.hash, null);
-  const draft = node.context.draftStore.get(result.draftId);
-  assertExists(draft);
-  assertEquals(draft!.status.phase, 'ready');
-  await node.close();
-});
-
-Deno.test('PutManager: repeated puts with same key extend the parked draft', async () => {
-  const node = makeNode();
-  const first = node.put({
-    key: 'k1',
-    outputs: [makeRecordOutput('a', '1')],
-    publish: false,
-  });
-  const second = node.put({
-    key: 'k1',
-    outputs: [makeRecordOutput('b', '2')],
-    publish: false,
-  });
-  assertEquals(first.draftId.toHex(), second.draftId.toHex());
-  const draft = node.context.draftStore.get(first.draftId);
-  assertExists(draft);
-  const recordOutputs = draft!.outputs.filter((o) =>
-    o.verifier.contract.toHex() === RECORD_CONTRACT.toHex()
+  const block = tipBlockFor(node, TEST_VERIFIER_CONTRACT, params);
+  assertExists(block);
+  const recordOutputs = block!.outputs.filter((o) =>
+    Hash.equals(o.verifier.contract, RECORD_CONTRACT)
   );
   assertEquals(recordOutputs.length, 2);
+  const foo = recordOutputs.find((o) => new TextDecoder().decode(o.verifier.params) === 'foo');
+  const baz = recordOutputs.find((o) => new TextDecoder().decode(o.verifier.params) === 'baz');
+  assertExists(foo);
+  assertEquals(new TextDecoder().decode(foo!.body!), 'bar');
+  assertExists(baz);
+  assertEquals(baz!.body, new Uint8Array([1, 2, 3]));
   await node.close();
 });
 
-Deno.test('PutManager: keyed put with publish:true evicts the key', async () => {
+Deno.test('PutManager.send: emits a single output under the verifier', async () => {
   const node = makeNode();
-  const first = node.put({
-    key: 'k2',
-    outputs: [makeRecordOutput('a', '1')],
-    publish: true,
+  const params = str2bin('s1');
+  const body = new Uint8Array([9, 8, 7]);
+  node.send({ contract: TEST_VERIFIER_CONTRACT, params, body });
+  const block = tipBlockFor(node, TEST_VERIFIER_CONTRACT, params);
+  assertExists(block);
+  const verifierOutput = block!.outputs.find((o) =>
+    Hash.equals(o.verifier.contract, TEST_VERIFIER_CONTRACT)
+  );
+  assertExists(verifierOutput);
+  assertEquals(verifierOutput!.body, body);
+  assertEquals(verifierOutput!.value, 0);
+  await node.close();
+});
+
+Deno.test('PutManager.send: value defaults to 0 and accepts explicit values', async () => {
+  const node = makeNode();
+  const params = str2bin('s2');
+  node.send({ contract: TEST_VERIFIER_CONTRACT, params, body: new Uint8Array(0), value: 42 });
+  const block = tipBlockFor(node, TEST_VERIFIER_CONTRACT, params);
+  assertExists(block);
+  const verifierOutput = block!.outputs.find((o) =>
+    Hash.equals(o.verifier.contract, TEST_VERIFIER_CONTRACT)
+  );
+  assertExists(verifierOutput);
+  assertEquals(verifierOutput!.value, 42);
+  await node.close();
+});
+
+Deno.test('PutManager.put: the resulting block becomes canonical', async () => {
+  const node = makeNode();
+  node.put({
+    contract: TEST_VERIFIER_CONTRACT,
+    params: str2bin('canon'),
+    records: { x: 'y' },
   });
-  assertExists(first.block);
-  const second = node.put({
-    key: 'k2',
-    outputs: [makeRecordOutput('b', '2')],
-    publish: false,
-  });
-  assert(first.draftId.toHex() !== second.draftId.toHex(), 'keys evicted on publish');
+  const block = tipBlockFor(node, TEST_VERIFIER_CONTRACT, str2bin('canon'));
+  assertExists(block);
+  assert(node.context.consensus.isCanonical(block!.hash));
   await node.close();
 });

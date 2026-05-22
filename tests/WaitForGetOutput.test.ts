@@ -1,4 +1,4 @@
-// End-to-end: a contract calls `env.requestBody(verifier)` in generation mode
+// End-to-end: a contract calls `env.request(verifier)` in generation mode
 // and no handler returns non-null yet. The generator must park on a queue
 // and resume when a handler is later registered that returns non-null.
 
@@ -14,7 +14,7 @@ import type { Contract } from '../src/contracts/Contract.ts';
 const enc = (s: string) => new TextEncoder().encode(s);
 
 /**
- * Contract: claims a single input, calls requestBody(RECORD/"prompt"),
+ * Contract: claims a single input, calls request(RECORD/"prompt"),
  * mirrors the resolved bytes into a record under the same key.
  */
 const BLOCKING_CONTRACT = Hash.digest('scaffold:test:blocking-get-output');
@@ -23,7 +23,7 @@ const blockingContract: Contract = {
   outputNamespaces: [RECORD_CONTRACT],
   async run(env) {
     await env.claimNext();
-    const slot = await env.requestBody({ contract: RECORD_CONTRACT, params: enc('prompt') });
+    const slot = await env.request({ contract: RECORD_CONTRACT, params: enc('prompt') });
     env.record(enc('echo'), slot.body);
   },
 };
@@ -44,18 +44,14 @@ Deno.test(
 
     // Publish a block that has the BLOCKING_CONTRACT output as a new UTXO.
     // DraftStrategy sees the canonicality change and kicks off a generator;
-    // the generator calls requestBody and parks because no handler is set.
-    scaffold.put({
-      outputs: [
-        {
-          verifier: { contract: BLOCKING_CONTRACT, params: new Uint8Array(0) },
-          value: 0,
-          body: enc('trigger'),
-        },
-      ],
+    // the generator calls request and parks because no handler is set.
+    scaffold.send({
+      contract: BLOCKING_CONTRACT,
+      params: new Uint8Array(0),
+      body: enc('trigger'),
     });
 
-    // Give DraftStrategy time to start the generator. The requestBody call
+    // Give DraftStrategy time to start the generator. The request call
     // inside the contract will park because no handler has been registered
     // yet.
     await new Promise((r) => setTimeout(r, 50));
@@ -63,7 +59,7 @@ Deno.test(
     const gen = scaffold.context.generation;
     assert(
       gen.parkedGetOutputCount >= 1,
-      'a generator should be parked in requestBody, got ' + gen.parkedGetOutputCount,
+      'a generator should be parked in request, got ' + gen.parkedGetOutputCount,
     );
 
     // Now register a handler. The parked generator should resume.
@@ -94,14 +90,10 @@ Deno.test(
     });
     scaffold.registerContract(BLOCKING_CONTRACT, blockingContract);
 
-    scaffold.put({
-      outputs: [
-        {
-          verifier: { contract: BLOCKING_CONTRACT, params: new Uint8Array(0) },
-          value: 0,
-          body: enc('trigger'),
-        },
-      ],
+    scaffold.send({
+      contract: BLOCKING_CONTRACT,
+      params: new Uint8Array(0),
+      body: enc('trigger'),
     });
 
     await new Promise((r) => setTimeout(r, 50));

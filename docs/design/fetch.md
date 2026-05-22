@@ -65,7 +65,7 @@ interface FetchInput<T = unknown> {
   params: Uint8Array | Record<string, unknown>;
 
   /** Which self-claimed record on the responder block to surface. */
-  recordKey?: string | Uint8Array;       // default: empty bytes
+  key?: string | Uint8Array;             // default: empty bytes
 
   /** Verify the response contract locally before resolving. */
   verify?: boolean;                      // default false
@@ -254,7 +254,7 @@ Rule:
 - `object` supplied but the contract does not export `buildParams` → throw
   synchronously at the call site (fail loudly, not later).
 
-Same decision for `recordKey`: accept `string | Uint8Array`. A string is
+Same decision for `key`: accept `string | Uint8Array`. A string is
 UTF-8 encoded to bytes. The default is empty bytes — tightest encoding,
 zero ambiguity for single-record contracts (there is no "forgotten key"
 interpretation), and contracts that expose multiple records use meaningful
@@ -381,7 +381,7 @@ Two `fetch()` calls with the same verifier share:
 
 Each caller keeps its own projection over the subscription:
 
-- Its own `recordKey` (different record readers off the same responder).
+- Its own `key` (different record readers off the same responder).
 - Its own `verify` / `parse` flags.
 - Its own `onResult` / `onClaim` / `onError` / Promise.
 
@@ -409,7 +409,7 @@ const price = await r.parse();   // { usd: 3800 }
 const h = scaffold.fetch({
   contract: GameState,
   params: { room: 'r1', tick: 42 },
-  recordKey: 'state',
+  key: 'state',
   onResult: async r => {
     if (!r) return render('invalidated');
     try { render(await r.parse()); }

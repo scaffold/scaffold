@@ -1,12 +1,12 @@
-import echoWasmUrl from "./fixtures/echo.wasm?url";
-import { makeRecordOutput } from "scaffold.io/contracts/RecordContract.ts";
-import type { Scaffold } from "scaffold.io/Scaffold.ts";
-import type { Hash } from "scaffold.io/util/Hash.ts";
-import type { Lang } from "./examples/index.ts";
+import echoWasmUrl from './fixtures/echo.wasm?url';
+import { makeRecordOutput } from 'scaffold.io/contracts/RecordContract.ts';
+import type { Scaffold } from 'scaffold.io/Scaffold.ts';
+import type { Hash } from 'scaffold.io/util/Hash.ts';
+import type { Lang } from './examples/index.ts';
 
 // Bottom-of-stack marker required by WasmContractPlugin for single-module
 // contracts. See docs/protocol/wasm-abi.md#stacking.
-const LAYERS_DEFAULT = new TextEncoder().encode("[{}]");
+const LAYERS_DEFAULT = new TextEncoder().encode('[{}]');
 
 let cachedEchoBytes: Uint8Array | undefined;
 
@@ -29,18 +29,25 @@ async function loadEchoBytes(): Promise<Uint8Array> {
  */
 export async function publishEchoContract(scaffold: Scaffold): Promise<Hash> {
   const bytes = await loadEchoBytes();
-  const result = scaffold.put({
+  // The echo contract block carries two custom record outputs ("wasm" and
+  // "wasm_layers"); neither pattern matches the unified put/send shapes,
+  // so we drive DraftManager directly.
+  const draftManager = scaffold.context.draftManager;
+  const draft = draftManager.addReady({
+    claims: [],
     outputs: [
-      makeRecordOutput("wasm", bytes),
-      makeRecordOutput("wasm_layers", LAYERS_DEFAULT),
+      makeRecordOutput('wasm', bytes),
+      makeRecordOutput('wasm_layers', LAYERS_DEFAULT),
     ],
+    declaredWeight: 1,
   });
-  if (!result.hash) {
+  const result = draftManager.solidify([draft]);
+  if (!result.ok) {
     throw new Error(
-      "publishEchoContract: scaffold.put returned no hash (draft parked or awaitingAnchor)",
+      'publishEchoContract: DraftManager.solidify returned no block (parked or awaitingAnchor)',
     );
   }
-  return result.hash;
+  return result.block.hash;
 }
 
 /** Map of language id -> compiler block hash for the active Scaffold. */

@@ -16,10 +16,10 @@ import {
   AtomType,
   Block,
   BlockStore,
-  RECORD_CONTRACT,
-  SIGNATURE_CONTRACT,
   makeBlockStoreOutputSpace,
+  RECORD_CONTRACT,
   resolveClaimToOutput,
+  SIGNATURE_CONTRACT,
 } from '../src/core/Block.ts';
 import { VerifyingEnv } from '../src/core/VerifyingEnv.ts';
 import type { VerifyingEnvProvider } from '../src/core/ContractEnv.ts';

@@ -4,10 +4,10 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import {
+  type Claim,
   type ContractEnv,
   ContractRejection,
   ExecutionMode,
-  type Claim,
   type VerifyingEnvProvider,
 } from './ContractEnv.ts';
 import type { OutputSlot } from './GeneratingEnv.ts';
@@ -51,9 +51,9 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
 
   /**
    * Per-contract cursor into block.outputs, indexed by the output's
-   * `verifier.contract`. Increments each time emitOutput / requestBody
-   * consumes a slot for that contract. Enables positional matching
-   * within a namespace (see docs/protocol/computation.md#output-namespaces).
+   * `verifier.contract`. Increments each time send / request consumes
+   * a slot for that contract. Enables positional matching within a
+   * namespace (see docs/protocol/computation.md#output-namespaces).
    */
   private readonly _namespaceCursor = new Map<HashPrimitive, number>();
 
@@ -121,7 +121,7 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     return inputs[this._inputCursor++];
   }
 
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+  send(verifier: Verifier, value: number, body?: Uint8Array): void {
     const bodyBytes = body ?? new Uint8Array(0);
     const slot = this._consumeNextInNamespace(verifier.contract);
     if (slot.body === undefined) {
@@ -153,16 +153,16 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     });
   }
 
-  requestBody(verifier: Verifier): { value: number; body: Uint8Array } {
+  request(verifier: Verifier): { value: number; body: Uint8Array } {
     const slot = this._consumeNextInNamespace(verifier.contract);
     if (slot.body === undefined) {
       throw new ContractRejection(
-        'requestBody slot has no body at namespace slot',
+        'request slot has no body at namespace slot',
       );
     }
     if (!verifierEquals(slot.verifier, verifier)) {
       throw new ContractRejection(
-        'requestBody verifier mismatch at namespace slot',
+        'request verifier mismatch at namespace slot',
       );
     }
     this._emittedSlots.push({
@@ -173,9 +173,9 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   }
 
   record(key: Uint8Array, value: Uint8Array): void {
-    // Sugar over emitOutput for RECORD_CONTRACT outputs. Matches positionally
+    // Sugar over send for RECORD_CONTRACT outputs. Matches positionally
     // within the RECORD_CONTRACT namespace (value = 0 for records).
-    this.emitOutput({ contract: RECORD_CONTRACT, params: key }, 0, value);
+    this.send({ contract: RECORD_CONTRACT, params: key }, 0, value);
   }
 
   fetch(verifier: Verifier, key: Uint8Array): Uint8Array {
@@ -223,8 +223,8 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  put(_verifier: Verifier, _records: Output[]): void {
-    // No-op in verification mode -- the sub-contract's block is verified
+  put(_verifier: Verifier, _records: Record<string, Uint8Array | string>): void {
+    // No-op in verification mode -- the sub-block is verified
     // independently elsewhere; nothing on this block depends on it.
     // See docs/protocol/wasm-abi.md#put.
   }
@@ -234,8 +234,8 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   }
 
   /**
-   * The slots this contract emitted during verification (emitOutput +
-   * requestBody calls). Used by the block-level namespace partition check.
+   * The slots this contract emitted during verification (send + request
+   * calls). Used by the block-level namespace partition check.
    */
   getEmittedSlots(): OutputSlot[] {
     return this._emittedSlots;

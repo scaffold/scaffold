@@ -8,7 +8,7 @@ import {
   SIGNATURE_CONTRACT,
 } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
-import { type ContractEnv, ContractRejection, type Claim } from '../core/ContractEnv.ts';
+import { type Claim, type ContractEnv, ContractRejection } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 import { findRecordOutput } from './RecordContract.ts';
@@ -386,7 +386,7 @@ function decayReturn(
 ): void {
   for (const { input, detail } of forInputs) {
     env.sign(detail.pubkey);
-    env.emitOutput(
+    env.send(
       { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
       input.value,
     );
@@ -413,7 +413,7 @@ function hashChallengeResponse(
   for (const { input } of forInputs) {
     totalFor += input.value;
   }
-  env.emitOutput(
+  env.send(
     { contract: SIGNATURE_CONTRACT, params: forPubkey },
     totalFor,
   );
@@ -423,7 +423,7 @@ function hashChallengeResponse(
   for (const { input } of againstInputs) {
     totalAgainst += input.value;
   }
-  env.emitOutput(
+  env.send(
     { contract: SIGNATURE_CONTRACT, params: forPubkey },
     totalAgainst,
   );
@@ -446,7 +446,7 @@ function unresolvedChallenge(
   }
 
   for (const { input: againstInput, detail: againstDetail } of againstInputs) {
-    env.emitOutput(
+    env.send(
       { contract: SIGNATURE_CONTRACT, params: againstDetail.pubkey },
       againstInput.value + totalForValue,
     );
@@ -477,13 +477,13 @@ function nonCanonicalReclaim(
   againstInputs: PartitionedInputs['againstInputs'],
 ): void {
   for (const { input, detail } of forInputs) {
-    env.emitOutput(
+    env.send(
       { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
       input.value,
     );
   }
   for (const { input, detail } of againstInputs) {
-    env.emitOutput(
+    env.send(
       { contract: SIGNATURE_CONTRACT, params: detail.pubkey },
       input.value,
     );

@@ -1,4 +1,4 @@
-import { assertEquals, assert } from '@std/assert';
+import { assert, assertEquals } from '@std/assert';
 
 const TOOL_PATH = new URL('../scripts/wasm-determinism/bin/wasm-determinism.wasm', import.meta.url);
 const FIXTURES_DIR = new URL('./fixtures/wasm-determinism/', import.meta.url);
@@ -28,7 +28,9 @@ async function runTool(input: Uint8Array): Promise<RunResult> {
       logs.push(new TextDecoder().decode(bytes));
     },
   };
-  const { instance } = (await WebAssembly.instantiate(toolBytes as BufferSource, { env })) as { instance: WebAssembly.Instance };
+  const { instance } = (await WebAssembly.instantiate(toolBytes as BufferSource, { env })) as {
+    instance: WebAssembly.Instance;
+  };
   const inputOffset = (instance.exports.input_buffer as () => number)();
   const outputOffset = (instance.exports.output_buffer as () => number)();
   const transform = instance.exports.transform as (n: number) => number;
@@ -44,7 +46,11 @@ async function runTool(input: Uint8Array): Promise<RunResult> {
 Deno.test('clean fixture (already valid + version-marked) returns 0', async () => {
   const input = await loadFixture('clean');
   const r = await runTool(input);
-  assertEquals(r.result, 0, `expected unchanged, got result=${r.result}, logs=${JSON.stringify(r.logs)}`);
+  assertEquals(
+    r.result,
+    0,
+    `expected unchanged, got result=${r.result}, logs=${JSON.stringify(r.logs)}`,
+  );
   assertEquals(r.output, null);
 });
 
@@ -55,7 +61,10 @@ Deno.test('memory_section fixture is rewritten with memory import', async () => 
   assert(r.output !== null);
   // Output should instantiate with env.memory import.
   const memory = new WebAssembly.Memory({ initial: 1 });
-  const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, { env: { memory } })) as { instance: WebAssembly.Instance };
+  const { instance } =
+    (await WebAssembly.instantiate(r.output! as BufferSource, { env: { memory } })) as {
+      instance: WebAssembly.Instance;
+    };
   const main = instance.exports.main as (n: number) => number;
   assertEquals(main(41), 42);
 });
@@ -68,14 +77,16 @@ Deno.test('memory_section idempotence: re-transform returns 0', async () => {
   assertEquals(second.result, 0, `re-transform should be unchanged, got ${second.result}`);
 });
 
-for (const name of [
-  'banned_reinterpret',
-  'banned_shared_memory',
-  'banned_atomic',
-  'banned_exception',
-  'banned_relaxed_simd',
-  'banned_float_simd',
-]) {
+for (
+  const name of [
+    'banned_reinterpret',
+    'banned_shared_memory',
+    'banned_atomic',
+    'banned_exception',
+    'banned_relaxed_simd',
+    'banned_float_simd',
+  ]
+) {
   Deno.test(`${name} returns -1`, async () => {
     const input = await loadFixture(name);
     const r = await runTool(input);
@@ -99,7 +110,12 @@ Deno.test('memory_grow gets abstain guard inserted', async () => {
   const memory = new WebAssembly.Memory({ initial: 1 });
   let abstainCalled = false;
   const { instance } = (await WebAssembly.instantiate(r.output! as BufferSource, {
-    env: { memory, abstain: () => { abstainCalled = true; } },
+    env: {
+      memory,
+      abstain: () => {
+        abstainCalled = true;
+      },
+    },
   })) as { instance: WebAssembly.Instance };
   const doGrow = instance.exports.do_grow as (n: number) => number;
   // Growing by 1 page succeeds (returns previous size = 1). Abstain not called.
@@ -134,7 +150,11 @@ Deno.test('float_local_set canonicalizes NaN before f32.store, memory bytes are 
   // 0/0 = NaN. Contract stores the result to memory[0..4].
   div(0, 0);
   const bits = new DataView(memory.buffer).getUint32(0, true);
-  assertEquals(bits, 0x7fc00000, `NaN bits in memory should be canonical, got 0x${bits.toString(16)}`);
+  assertEquals(
+    bits,
+    0x7fc00000,
+    `NaN bits in memory should be canonical, got 0x${bits.toString(16)}`,
+  );
 });
 
 Deno.test('float_local_set idempotence: re-transform returns 0', async () => {
@@ -176,7 +196,11 @@ Deno.test('float_global_set canonicalizes before f32.store via global path', asy
   // NaN + NaN = NaN. Contract goes through a global, then stores to memory[0..4].
   set(NaN);
   const bits = new DataView(memory.buffer).getUint32(0, true);
-  assertEquals(bits, 0x7fc00000, `NaN bits in memory should be canonical, got 0x${bits.toString(16)}`);
+  assertEquals(
+    bits,
+    0x7fc00000,
+    `NaN bits in memory should be canonical, got 0x${bits.toString(16)}`,
+  );
   const second = await runTool(r.output!);
   assertEquals(second.result, 0, 'idempotence broken');
 });
@@ -197,7 +221,11 @@ Deno.test('float_copysign canonicalizes second arg, result has canonical sign', 
   const bits = new DataView(memory.buffer).getUint32(0, true);
   // 1.0 with positive sign = 0x3f800000. 1.0 with negative sign = 0xbf800000.
   // With canonical NaN as second arg (sign=0), result must be positive.
-  assertEquals(bits, 0x3f800000, `copysign(1.0, canon_NaN) should be +1.0, got 0x${bits.toString(16)}`);
+  assertEquals(
+    bits,
+    0x3f800000,
+    `copysign(1.0, canon_NaN) should be +1.0, got 0x${bits.toString(16)}`,
+  );
 });
 
 Deno.test('float_copysign idempotence: re-transform returns 0', async () => {

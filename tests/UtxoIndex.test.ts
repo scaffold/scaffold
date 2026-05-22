@@ -271,7 +271,11 @@ Deno.test('UtxoIndex: aggregation block claims index into agg.new outputs, not a
 
   // The SIG outputs (anchor's keep-me, leaves' l*-keep, genesis's g)
   // must NOT have been touched by the agg block's claims.
-  assertEquals(isUnspent(idx, anchor, 1), true, 'anchor SIG must remain (not anchor.output_space slot 0)');
+  assertEquals(
+    isUnspent(idx, anchor, 1),
+    true,
+    'anchor SIG must remain (not anchor.output_space slot 0)',
+  );
   assertEquals(isUnspent(idx, l1, 1), true, 'L1 SIG must remain');
   assertEquals(isUnspent(idx, l2, 1), true, 'L2 SIG must remain');
   assertEquals(isUnspent(idx, l3, 1), true, 'L3 SIG must remain');
@@ -329,5 +333,8 @@ Deno.test('UtxoIndex: getByVerifier finds outputs added by blockBecameCanonical'
   const entries = idx.getByVerifier(SIGNATURE_CONTRACT, enc('g'));
   assertEquals(entries.length, 1);
   assertEquals(entries[0].value, 100);
-  assertEquals(verifierKey(SIGNATURE_CONTRACT, enc('g')).startsWith(SIGNATURE_CONTRACT.toHex()), true);
+  assertEquals(
+    verifierKey(SIGNATURE_CONTRACT, enc('g')).startsWith(SIGNATURE_CONTRACT.toHex()),
+    true,
+  );
 });

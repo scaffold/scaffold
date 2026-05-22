@@ -63,7 +63,7 @@ export interface ContractEnv {
    * Read an output from the contract's own block (the block whose hash
    * is `env.contractHash()`).
    *
-   * Like `requestBody`, but operates on the contract block instead of
+   * Like `request`, but operates on the contract block instead of
    * the executing block, and is purely read-only (no slot is emitted).
    * Used for retrieving record outputs baked into the contract definition:
    * `output_namespaces`, `abi_version`, `max_memory_pages`, source bytes for
@@ -103,24 +103,19 @@ export interface ContractEnv {
   claimNext(): MaybePromise<Claim>;
 
   /**
-   * Require the block to produce a specific output.
+   * Publish a single output under the given verifier with the supplied
+   * body and value. Fire-and-forget within the contract: the slot is
+   * appended to the namespace and the call returns nothing.
    *
    * Verification: checks the next output in the contract's namespace
    * sequence matches exactly (verifier + value + body). The contract's
    * own call order determines the namespace's expected sequence.
    * Generation: adds the output to the draft with `origin: 'require'`.
    *
-   * See docs/protocol/computation.md#output-namespaces.
-   *
-   * TODO(@joel): consider unifying emitOutput + requestBody into a
-   * single method that varies by argument count:
-   *   emitOutput(verifier, body?, value?): Promise<{value, body}>
-   *     (verifier, body, value) -- today's emitOutput
-   *     (verifier, body)        -- contract supplies body; host supplies value
-   *     (verifier)              -- host supplies both
-   * Revisit once more real contracts exercise requestBody.
+   * Mirrors `Scaffold.send({contract, params, body})` at the contract
+   * level. See docs/protocol/computation.md#output-namespaces.
    */
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void;
+  send(verifier: Verifier, value: number, body?: Uint8Array): void;
 
   /**
    * Ask the host for an output under the given verifier. The host (in
@@ -138,13 +133,13 @@ export interface ContractEnv {
    *
    * See docs/protocol/computation.md#output-requirements.
    */
-  requestBody(
+  request(
     verifier: Verifier,
   ): MaybePromise<{ value: number; body: Uint8Array }>;
 
   /**
    * Self-claimed key-value output on this block.
-   * Sugar over emitOutput for `{ contract: RECORD_CONTRACT, params: key, body: value }` slots.
+   * Sugar over `send` for `{ contract: RECORD_CONTRACT, params: key, body: value }` slots.
    *
    * Verification: checks the result output exists with the expected value.
    * Generation: creates the result output and self-claim.
@@ -163,18 +158,17 @@ export interface ContractEnv {
   fetch(verifier: Verifier, key: Uint8Array): MaybePromise<Uint8Array>;
 
   /**
-   * Spawn an independent sub-contract in a new generation context.
+   * Publish a verifier on a new block with fitting records.
    *
-   * Verification: no-op. The sub-contract's block is independently verified.
+   * Mirrors `Scaffold.put({contract, params, records})` at the contract
+   * level. The new block self-claims an output under `verifier` (so it
+   * is discoverable via `fetch(verifier, key)`) and emits one
+   * RECORD_CONTRACT output per entry in `records`.
    *
-   * Generation: spawns a generator with `verifier` as its identity. The
-   * sub-contract has its own ContractEnv and its own block. `records`
-   * is a pre-resolved set of `requestBody` answers: when the sub-contract
-   * calls `requestBody(v)`, the runtime first scans `records` by
-   * verifier-equality and, if matched, returns that `(value, body)` and
-   * emits an output slot on the sub-contract's block (so verification
-   * needs nothing beyond the block itself).
+   * Verification: no-op. The sub-block is independently verified.
    *
+   * Generation: spawns a sub-generator with `verifier` as its identity
+   * and the supplied `records` as the data the sub-block publishes.
    * Blocking. Returns once the sub-block has committed. If the
    * sub-generator throws `ContractRejection`, this call propagates the
    * rejection to the parent generator.
@@ -183,12 +177,12 @@ export interface ContractEnv {
    * exists matching `verifier`, the runtime self-claims a new output
    * under `verifier` on the sub-contract's block, so the verifier
    * becomes a UTXO source on the network. If a matching UTXO already
-   * exists, it is consumed instead and no new UTXO is created — the
+   * exists, it is consumed instead and no new UTXO is created -- the
    * data is stored exactly once.
    *
    * See docs/protocol/wasm-abi.md#put.
    */
-  put(verifier: Verifier, records: Output[]): MaybePromise<void>;
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): MaybePromise<void>;
 
   /**
    * Assert the block's signature matches the given public key.

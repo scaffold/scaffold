@@ -32,16 +32,8 @@
 
 import { parseArgs } from '@std/cli/parse-args';
 import { Scaffold } from '../src/Scaffold.ts';
-import {
-  computeDemoGenesis,
-  demoPrivateKey,
-  demoPublicKey,
-} from '../src/genesis.ts';
-import {
-  HELLO_CONTRACT,
-  helloContract,
-  makeHelloRequest,
-} from '../src/contracts/HelloContract.ts';
+import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../src/genesis.ts';
+import { HELLO_CONTRACT, helloContract } from '../src/contracts/HelloContract.ts';
 import { WebsocketServerTransport } from '../plugins/deno/WebsocketServerTransport.ts';
 import { WebsocketClientTransport } from '../plugins/WebsocketClientTransport.ts';
 import { TransportPlugin } from '../src/interfaces/transport.ts';
@@ -160,14 +152,20 @@ async function handleCommand(line: string): Promise<void> {
 
     case 'seed': {
       const name = parts[1] ?? 'seed';
-      const result = scaffold.put({
-        outputs: [makeHelloRequest(name, 1_000_000)],
-        claims: [{ index: 0, value: 1_000_000 }],
+      // Seed emits a single HELLO_CONTRACT incentive output. Send is the
+      // unified primitive for "single output, fire-and-forget".
+      scaffold.send({
+        contract: HELLO_CONTRACT,
+        params: new TextEncoder().encode(name),
+        body: new Uint8Array(0),
+        value: 1_000_000,
       });
-      seedHash = result.hash;
+      // Track the latest hello-request hash by reading the store tip.
+      const tip = [...scaffold.context.store.values()].pop();
+      seedHash = tip?.hash ?? null;
       emit({
         type: 'seed_published',
-        hash: result.hash.toHex(),
+        hash: seedHash?.toHex() ?? '',
         name,
       });
       break;
@@ -196,13 +194,17 @@ async function handleCommand(line: string): Promise<void> {
     case 'request': {
       const name = parts.slice(1).join(' ');
       if (!name) throw new Error('usage: request <name>');
-      const result = scaffold.put({
-        outputs: [makeHelloRequest(name, 1_000)],
+      scaffold.send({
+        contract: HELLO_CONTRACT,
+        params: new TextEncoder().encode(name),
+        body: new Uint8Array(0),
+        value: 1_000,
       });
+      const tip = [...scaffold.context.store.values()].pop();
       emit({
         type: 'request_published',
         name,
-        hash: result.hash.toHex(),
+        hash: tip?.hash.toHex() ?? '',
       });
       break;
     }

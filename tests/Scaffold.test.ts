@@ -10,6 +10,7 @@ import { Output } from '../src/core/BlockCreationModule.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { NodeContext } from '../src/node/NodeContext.ts';
 import { WELL_KNOWN_PRIVATE_KEY } from '../src/genesis.ts';
+import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
 
 // -- Helpers --------------------------------------------------------
 
@@ -25,6 +26,35 @@ function defaultConfig(): ScaffoldConfig {
   const outputs = [makeOutput(100, 'g0'), makeOutput(200, 'g1')];
   const genesis = composeGenesisPacket(outputs);
   return { genesis };
+}
+
+/** Convenience: send a single output through Scaffold.send. */
+function sendDemo(scaffold: Scaffold, label: string, value: number): void {
+  scaffold.send({
+    contract: Hash.digest(label),
+    params: new Uint8Array(0),
+    body: new Uint8Array(0),
+    value,
+  });
+}
+
+/**
+ * Helper for tests that need to control declaredWeight on the resulting
+ * block: drives DraftManager directly with the single output.
+ */
+function publishWithWeight(
+  scaffold: Scaffold,
+  label: string,
+  value: number,
+  declaredWeight: number,
+): void {
+  const draftManager = scaffold.context.draftManager;
+  const draft = draftManager.addReady({
+    claims: [],
+    outputs: [makeOutput(value, label), makeAggregationOutput()],
+    declaredWeight,
+  });
+  draftManager.solidify([draft]);
 }
 
 // -- Tests ----------------------------------------------------------
@@ -59,26 +89,22 @@ Deno.test('Scaffold: context getter returns NodeContext', () => {
   assert(scaffold.context instanceof NodeContext);
 });
 
-Deno.test('Scaffold: put() creates and processes a block', async () => {
+Deno.test('Scaffold: send() creates and processes a block', async () => {
   const scaffold = new Scaffold(defaultConfig());
   const ctx = scaffold.context;
-  const genesis = ctx.store.get(ctx.genesisHash)!;
+  const beforeCount = [...ctx.store.values()].length;
 
-  // Put creates a block anchored to genesis. We need throughput-balanced
-  // outputs (value 0 with no claims means balanced: inputs 0 = outputs 0).
-  const result = scaffold.put({
-    outputs: [makeOutput(0, 'new-output')],
+  // Send creates a block anchored to the canonical tip with one output.
+  scaffold.send({
+    contract: Hash.digest('new-output'),
+    params: new Uint8Array(0),
+    body: new Uint8Array(0),
   });
 
-  assert(result);
-  assert(result.hash);
-  assert(result.block);
-
-  // The block should be in the store after put
-  assert(ctx.store.has(result.hash));
-
-  // The block should be canonical (no conflicts)
-  assert(ctx.consensus.isCanonical(result.hash));
+  const blocks = [...ctx.store.values()];
+  assert(blocks.length > beforeCount, 'a new block should be in the store');
+  const newBlock = blocks[blocks.length - 1];
+  assert(ctx.consensus.isCanonical(newBlock.hash), 'new block should be canonical');
 
   await scaffold.close();
 });
@@ -115,8 +141,11 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
   const ctx = scaffold.context;
 
   for (let i = 0; i < 4; i++) {
-    scaffold.put({
-      outputs: [makeOutput(50, `demo-${i}`)],
+    scaffold.send({
+      contract: Hash.digest(`demo-${i}`),
+      params: new Uint8Array(0),
+      body: new Uint8Array(0),
+      value: 50,
     });
   }
 
@@ -139,7 +168,7 @@ Deno.test('Scaffold: 4 sequential puts trigger aggregation block', async () => {
     }
   }
 
-  assert(aggBlock, 'an aggregation block should have been created after 4 sequential puts');
+  assert(aggBlock, 'an aggregation block should have been created after 4 sequential sends');
 
   // The aggregation block should aggregate the chain blocks
   assert(aggBlock.aggregates.length > 0, 'aggregation block should have aggregates');
@@ -164,10 +193,7 @@ Deno.test('Scaffold: 4-leaf aggregation block sums leaf weights in weight vector
 
   const LEAF_WEIGHT = 10;
   for (let i = 0; i < 4; i++) {
-    scaffold.put({
-      outputs: [makeOutput(50, `demo-${i}`)],
-      declaredWeight: LEAF_WEIGHT,
-    });
+    publishWithWeight(scaffold, `demo-${i}`, 50, LEAF_WEIGHT);
   }
 
   await new Promise((r) => setTimeout(r, 50));
@@ -207,9 +233,7 @@ Deno.test('Scaffold: 8 sequential puts trigger multi-level aggregation', async (
   const ctx = scaffold.context;
 
   for (let i = 0; i < 8; i++) {
-    scaffold.put({
-      outputs: [makeOutput(50, `demo-${i}`)],
-    });
+    sendDemo(scaffold, `demo-${i}`, 50);
   }
 
   // Flush async -- multiple rounds of aggregation need time.
@@ -244,10 +268,8 @@ Deno.test('Scaffold: async puts (UI-like) produce aggregation after every 4', as
   const ctx = scaffold.context;
 
   for (let i = 0; i < 8; i++) {
-    scaffold.put({
-      outputs: [makeOutput(50, `async-${i}`)],
-    });
-    // Simulate UI timing: flush microtasks between each put
+    sendDemo(scaffold, `async-${i}`, 50);
+    // Simulate UI timing: flush microtasks between each send
     await new Promise((r) => setTimeout(r, 10));
   }
 

@@ -77,9 +77,7 @@ export class DraftManager {
       for (const d of this.store.getByPhase('solidified')) {
         if (d.claims.length === 0) continue;
         if (d.solidifiedBlocks.length === 0) continue;
-        const anyCanonical = d.solidifiedBlocks.some((b) =>
-          this.consensus.isCanonical(b.hash)
-        );
+        const anyCanonical = d.solidifiedBlocks.some((b) => this.consensus.isCanonical(b.hash));
         if (!anyCanonical) {
           // Re-register the phantom and transition back to solidifying.
           this.consensus.addBlock(d.draftId);
@@ -137,10 +135,12 @@ export class DraftManager {
    *
    * Returns empty opts on the first attempt (solidifiedBlocks empty).
    */
-  private _mergeResolidifyOpts(perDraft: Array<{
-    aggregatedBlocks: Hash[];
-    excludedBlocks: Hash[];
-  }>): { aggregatedBlocks: Hash[]; excludedBlocks: Hash[] } {
+  private _mergeResolidifyOpts(
+    perDraft: Array<{
+      aggregatedBlocks: Hash[];
+      excludedBlocks: Hash[];
+    }>,
+  ): { aggregatedBlocks: Hash[]; excludedBlocks: Hash[] } {
     const aggSeen = new Set<string>();
     const aggregatedBlocks: Hash[] = [];
     const excSeen = new Set<string>();
@@ -289,11 +289,15 @@ export class DraftManager {
   ): Draft {
     const existing = this.store.get(draftId);
     if (!existing) {
-      throw new Error(`DraftManager.updateDraft: draft ${draftId.toHex().slice(0, 10)} not in store`);
+      throw new Error(
+        `DraftManager.updateDraft: draft ${draftId.toHex().slice(0, 10)} not in store`,
+      );
     }
     if (existing.status.phase !== 'populating') {
       throw new Error(
-        `DraftManager.updateDraft: draft ${draftId.toHex().slice(0, 10)} is locked (phase ${existing.status.phase})`,
+        `DraftManager.updateDraft: draft ${
+          draftId.toHex().slice(0, 10)
+        } is locked (phase ${existing.status.phase})`,
       );
     }
     if (
@@ -316,7 +320,9 @@ export class DraftManager {
       merged.claims = mode === 'append' ? [...existing.claims, ...changes.claims] : changes.claims;
     }
     if (changes.outputs) {
-      merged.outputs = mode === 'append' ? [...existing.outputs, ...changes.outputs] : changes.outputs;
+      merged.outputs = mode === 'append'
+        ? [...existing.outputs, ...changes.outputs]
+        : changes.outputs;
     }
     if (changes.outputSlots) {
       merged.outputSlots = mode === 'append'

@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertNotEquals, assertThrows } from '@std/assert';
 import { Hash } from '../src/util/Hash.ts';
-import { Draft, createDraft, DraftStore } from '../src/core/Draft.ts';
+import { createDraft, Draft, DraftStore } from '../src/core/Draft.ts';
 
 function makeDraft(overrides?: Partial<Parameters<typeof createDraft>[0]>): Draft {
   return createDraft({

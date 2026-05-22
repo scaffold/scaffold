@@ -1,7 +1,7 @@
 // Design spec: docs/design/fetch.md
 
 import { Hash } from '../util/Hash.ts';
-import { Block, BlockStore, RECORD_CONTRACT } from '../core/Block.ts';
+import { Block, BlockStore } from '../core/Block.ts';
 import type { Verifier } from '../core/BlockCreationModule.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
 import { bin2hex } from '../util/hex.ts';
@@ -30,7 +30,7 @@ export interface FetchInput<T = unknown> {
   params: Uint8Array | Record<string, unknown>;
 
   /** Which self-claimed record on the responder block to surface. Default: empty bytes. */
-  recordKey?: string | Uint8Array;
+  key?: string | Uint8Array;
 
   /** Verify the response contract locally before resolving. Default: false. */
   verify?: boolean;
@@ -227,8 +227,8 @@ export class FetchManager {
     // 1. Encode params
     const params = encodeParams(input.contract, input.params, this.deps.contractHost);
 
-    // 2. Normalize recordKey
-    const recordKey = normalizeRecordKey(input.recordKey);
+    // 2. Normalize key
+    const recordKey = normalizeRecordKey(input.key);
 
     // 3. Verifier key for dedup
     const verifierKey = computeVerifierKey(input.contract, params);

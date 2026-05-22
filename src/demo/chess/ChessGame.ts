@@ -120,7 +120,7 @@ export class ChessGame {
     if (this.contractRegistered) return;
     this.scaffold.registerContract(GAME_STATE_CONTRACT, gameStateContract);
     // Generator-side bridge: when the contract calls
-    // env.requestBody(RECORD/"move" or "join") inside GAME_STATE_CONTRACT,
+    // env.request(RECORD/"move" or "join") inside GAME_STATE_CONTRACT,
     // the host invokes this handler. We always return a Promise for a
     // recognized (gameId, turnId, kind) tuple; the Promise resolves when
     // someone calls `resolvePrompt` (or the matching prompt's `resolve`).
@@ -213,8 +213,10 @@ export class ChessGame {
     // fund the stake on the GAME_STATE output.
     const outputs = [stateOutput, gameRecord];
 
-    const { block } = this.scaffold.put({ outputs, declaredWeight: 1 });
-    if (!block) throw new Error('createGame: put failed');
+    const draftManager = this.scaffold.context.draftManager;
+    const draft = draftManager.addReady({ claims: [], outputs, declaredWeight: 1 });
+    const result = draftManager.solidify([draft]);
+    if (!result.ok) throw new Error('createGame: put failed');
     return gameId;
   }
 

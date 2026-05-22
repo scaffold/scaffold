@@ -16,11 +16,7 @@
 
 import { parseArgs } from '@std/cli/parse-args';
 import { Scaffold } from '../src/Scaffold.ts';
-import {
-  computeDemoGenesis,
-  demoPrivateKey,
-  demoPublicKey,
-} from '../src/genesis.ts';
+import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../src/genesis.ts';
 import { WebsocketServerTransport } from '../plugins/deno/WebsocketServerTransport.ts';
 import { bin2hex } from '../src/util/hex.ts';
 

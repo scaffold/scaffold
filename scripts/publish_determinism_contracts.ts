@@ -15,11 +15,7 @@
  */
 
 import { Hash } from '../src/util/Hash.ts';
-import {
-  composeGenesisPacket,
-  HASH_CONTRACT,
-  RECORD_CONTRACT,
-} from '../src/core/Block.ts';
+import { composeGenesisPacket, HASH_CONTRACT, RECORD_CONTRACT } from '../src/core/Block.ts';
 import type { Output } from '../src/core/BlockCreationModule.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { Scaffold } from '../src/Scaffold.ts';
@@ -38,7 +34,7 @@ const TRANSFORM_VERSION = 20250510;
 function blobPublishBlock(blob: Uint8Array): Output[] {
   // The HASH_CONTRACT/(blob hash) output is the discovery beacon; the
   // RECORD_CONTRACT('default') output carries the bytes that the HASH_CONTRACT
-  // verifier checks via requestBody. Both must live on the same block.
+  // verifier checks via request. Both must live on the same block.
   const blobHash = Hash.digest(blob);
   return [
     {
@@ -69,9 +65,7 @@ function contractBlockOutputs(
 ): Output[] {
   // Transform mode emits RECORD_CONTRACT outputs (default + outputWasmBytes).
   // Verify mode emits no outputs but must still declare the namespace (empty).
-  const namespaceBytes = mode === 'transform'
-    ? RECORD_CONTRACT.toBytes()
-    : new Uint8Array(0);
+  const namespaceBytes = mode === 'transform' ? RECORD_CONTRACT.toBytes() : new Uint8Array(0);
   return [
     modulesRecord(contractWasmHash),
     makeRecordOutput('output_namespaces', namespaceBytes),
@@ -95,21 +89,25 @@ async function main(): Promise<void> {
 
   const scaffold = new Scaffold({ genesis, privateKey, enableLogging: false });
 
+  // These blocks each carry multiple raw outputs (blob + metadata), so
+  // they bypass the narrow Scaffold.put and submit through DraftManager
+  // directly.
+  const draftManager = scaffold.context.draftManager;
+  const publishOutputs = (outputs: Output[], label: string): Hash => {
+    const draft = draftManager.addReady({ claims: [], outputs, declaredWeight: 1 });
+    const result = draftManager.solidify([draft]);
+    if (!result.ok) throw new Error(`failed to publish ${label}`);
+    return result.block.hash;
+  };
+
   // 1) Publish the contract WASM blob via the HASH_CONTRACT pattern.
-  const blobResult = scaffold.put({ outputs: blobPublishBlock(contractWasm) });
-  if (!blobResult.hash) throw new Error('failed to publish contract WASM blob');
+  publishOutputs(blobPublishBlock(contractWasm), 'contract WASM blob');
 
   // 2) Publish the transform-mode contract block.
-  const transformResult = scaffold.put({
-    outputs: contractBlockOutputs(contractWasmHash, 'transform'),
-  });
-  if (!transformResult.hash) throw new Error('failed to publish transform contract block');
+  publishOutputs(contractBlockOutputs(contractWasmHash, 'transform'), 'transform contract block');
 
   // 3) Publish the verify-mode contract block.
-  const verifyResult = scaffold.put({
-    outputs: contractBlockOutputs(contractWasmHash, 'verify'),
-  });
-  if (!verifyResult.hash) throw new Error('failed to publish verify contract block');
+  publishOutputs(contractBlockOutputs(contractWasmHash, 'verify'), 'verify contract block');
 
   // Sanity-check: both contract blocks should be loadable as contracts via
   // the auto-registered wasmContractPlugin. This confirms the blob beacon

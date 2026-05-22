@@ -5,14 +5,14 @@
 // RECORD_CONTRACT/'default' output whose body IS the blob. When the
 // HASH_CONTRACT output is claimed (typically the incentive output sits on
 // a request block, claimed by a responder publishing the blob),
-// `hashContract.run` reads the 'default' record via `env.requestBody` and
+// `hashContract.run` reads the 'default' record via `env.request` and
 // asserts `hash(body) == verifier.params`.
 //
 // Other contracts invert a hash by calling
-//   `await fetch({ contract: HASH_CONTRACT, params: hash }, { recordKey: 'default' })`
+//   `await fetch({ contract: HASH_CONTRACT, params: hash, key: 'default' })`
 // which surfaces the body.
 //
-// outputNamespaces = [RECORD_CONTRACT]: `requestBody({contract: RECORD_CONTRACT, ...})`
+// outputNamespaces = [RECORD_CONTRACT]: `request({contract: RECORD_CONTRACT, ...})`
 // emits an output slot on the block being verified, which contributes a
 // RECORD_CONTRACT-namespace output. The partition check requires the
 // contract to OWN every namespace whose outputs appear -- so we declare it.
@@ -27,7 +27,7 @@ import { str2bin } from '../util/buffer.ts';
 export const DEFAULT_KEY = 'default';
 
 export const hashContract: Contract = {
-  // requestBody adds a RECORD_CONTRACT slot; partition requires HASH_CONTRACT
+  // request adds a RECORD_CONTRACT slot; partition requires HASH_CONTRACT
   // owns that namespace on this block.
   outputNamespaces: [RECORD_CONTRACT],
 
@@ -38,7 +38,7 @@ export const hashContract: Contract = {
       );
     }
     const expectedHash = Hash.fromBytes(env.params());
-    const { body: plaintext } = await env.requestBody({
+    const { body: plaintext } = await env.request({
       contract: RECORD_CONTRACT,
       params: str2bin(DEFAULT_KEY),
     });

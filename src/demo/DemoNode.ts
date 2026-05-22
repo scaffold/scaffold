@@ -116,16 +116,21 @@ export class DemoNode {
       throw new Error(`no status output found for ${targetName}`);
     }
 
-    // Build through PutManager so the block goes through the
-    // DraftManager bottleneck. Note: the test harness historically
-    // broadcast first, then validated locally; the new flow inverts
-    // that (DraftManager.solidify processes locally first), so peers
+    // Build through DraftManager directly: the narrow Scaffold.put
+    // covers only "publish records under a verifier", and DemoNode
+    // needs to pair a status output with a specific input claim.
+    // Note: the test harness historically broadcast first, then
+    // validated locally; the new flow inverts that
+    // (DraftManager.solidify processes locally first), so peers
     // receive the block via the standard processBlock path.
-    const result = this.scaffold.put({
-      outputs: [makeStatusOutput(targetIdentity.publicKey, message)],
+    const draftManager = this.scaffold.context.draftManager;
+    const draft = draftManager.addReady({
       claims: [claimRef],
+      outputs: [makeStatusOutput(targetIdentity.publicKey, message)],
+      declaredWeight: 1,
     });
-    if (!result.block) {
+    const result = draftManager.solidify([draft]);
+    if (!result.ok) {
       throw new Error(`publishStatus failed: solidify did not produce a block`);
     }
     const block = result.block;

@@ -73,10 +73,10 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
     claim_next: () => handlePackedBytes(expectSync(bridge.claimNext())),
     claim_all: (limit: number) => handlePackedBytes(expectSync(bridge.claimAll(limit))),
     emit_output: (op: number, ol: number) => {
-      bridge.emitOutput(readSlice(ctx, op, ol));
+      bridge.send(readSlice(ctx, op, ol));
     },
     request_body: (vp: number, vl: number) =>
-      handlePackedBytes(expectSync(bridge.requestBody(readSlice(ctx, vp, vl)))),
+      handlePackedBytes(expectSync(bridge.request(readSlice(ctx, vp, vl)))),
     fetch: (vp: number, vl: number, kp: number, kl: number) =>
       handlePackedBytes(
         expectSync(bridge.fetch(readSlice(ctx, vp, vl), readSlice(ctx, kp, kl))),

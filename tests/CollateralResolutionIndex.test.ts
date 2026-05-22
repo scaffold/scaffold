@@ -143,10 +143,9 @@ function makeDraft(
     VERDICT_RECORD_KEY,
     encodeVerdict({ target, verdict }),
   );
-  const status =
-    phase === 'cancelled'
-      ? { phase: 'cancelled' as const, reason: 'cancelled' }
-      : { phase };
+  const status = phase === 'cancelled'
+    ? { phase: 'cancelled' as const, reason: 'cancelled' }
+    : { phase };
   return {
     kind: 'draft',
     claims: [],

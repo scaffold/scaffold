@@ -97,10 +97,10 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
       handlePackedAsync(Promise.resolve(bridge.claimAll(limit)))
     ),
     emit_output: (op: number, ol: number) => {
-      bridge.emitOutput(readSlice(ctx, op, ol));
+      bridge.send(readSlice(ctx, op, ol));
     },
     request_body: suspending((vp: number, vl: number) =>
-      handlePackedAsync(Promise.resolve(bridge.requestBody(readSlice(ctx, vp, vl))))
+      handlePackedAsync(Promise.resolve(bridge.request(readSlice(ctx, vp, vl))))
     ),
     fetch: suspending((vp: number, vl: number, kp: number, kl: number) =>
       handlePackedAsync(

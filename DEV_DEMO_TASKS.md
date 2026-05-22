@@ -79,7 +79,7 @@ Both mechanisms are formalised in [`docs/protocol/wasm-abi.md`](docs/protocol/wa
 **Put** (dynamic, out-of-band, parallel):
 - [ ] Wire `GeneratingEnv.put(verifier, records)` into the generation pipeline (currently a stub that throws). Implementation needs:
   - Spawn a sub-generator on `verifier` with its own `ContractEnv`, own claims / outputs / namespace, own per-verifier budget.
-  - Route the sub-contract's `requestBody(v)` calls through the parent-supplied `records[]` first (verifier-equality match → return `(value, body)` and emit slot on the sub-block); fall through to the normal handler chain on no match.
+  - Emit one RECORD_CONTRACT output per `records` entry on the sub-block, and route the sub-contract's `request(v)` calls through the parent-supplied records first (by key match → return `(value, body)` and emit slot on the sub-block); fall through to the normal handler chain on no match.
   - Block the parent generator until the sub-block commits, propagating `ContractRejection` from the sub-generator up.
   - Auto-emergence: if the sub-contract claims no inputs and no UTXO matches `verifier`, self-claim a new output under `verifier` on the sub-block. If a UTXO already matches, consume it (idempotent "store-once" property).
   - Cap recursion depth (default 16) to prevent unbounded `put` recursion.

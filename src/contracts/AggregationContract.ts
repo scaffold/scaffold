@@ -147,7 +147,7 @@ export const aggregationContract: Contract = {
       aggregateWeights,
     };
 
-    env.emitOutput(
+    env.send(
       { contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) },
       0,
       encodeAggregationData(composedData),

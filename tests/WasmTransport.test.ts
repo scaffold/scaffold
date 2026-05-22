@@ -68,7 +68,7 @@ async function singleModuleStack(
 
 // -- Mock env / hosts ---------------------------------------------
 
-/** Recording env: synchronous; captures emitOutput calls verbatim. */
+/** Recording env: synchronous; captures send calls verbatim. */
 class RecordingEnv implements ContractEnv {
   readonly mode = ExecutionMode.Verification;
   readonly emittedOutputs: Output[] = [];
@@ -96,11 +96,11 @@ class RecordingEnv implements ContractEnv {
     throw new ContractRejection('no inputs');
   }
 
-  emitOutput(verifier: Verifier, value: number, body?: Uint8Array): void {
+  send(verifier: Verifier, value: number, body?: Uint8Array): void {
     this.emittedOutputs.push({ verifier, value, body });
   }
 
-  requestBody(): { value: number; body: Uint8Array } {
+  request(): { value: number; body: Uint8Array } {
     throw new ContractRejection('no body resolver');
   }
 

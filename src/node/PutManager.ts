@@ -1,194 +1,180 @@
-// User-facing draft API. Thin wrapper around DraftManager that adds
-// keyed create-or-update semantics and a `publish: false` parking mode.
+// User-facing draft API: the three publishing primitives.
 //
-// Architecture: DraftManager (in src/core/) is the single bottleneck for
-// all draft + block creation. PutManager is one caller of it. Other
-// callers (the post-generation hook in GenerationService, the strategy
-// action handlers in ReactiveLayer, DemoNode.publishStatus) call
-// DraftManager directly.
+// - `put({contract, params, records})` publishes a verifier output under
+//   `(contract, params)` together with one RECORD_CONTRACT output per
+//   entry in `records`. Companion to `Scaffold.fetch`: subsequent fetches
+//   on the same verifier surface those records.
+// - `send({contract, params, body})` publishes a single output under
+//   `(contract, params)` with the supplied body. Fire-and-forget.
 //
-// See docs/protocol/draft-blocks.md.
+// Both routes feed into DraftManager. The draft is an intent to create a
+// possibly canonical block; if the block becomes uncanonical the draft
+// pipeline re-creates another. See docs/protocol/draft-blocks.md.
+//
+// `put` does not require canonicality. `send` requires canonicality (the
+// peer the output is sent to must observe a canonical chain to act on it).
 
 import { AGGREGATION_CONTRACT, Block, RECORD_CONTRACT } from '../core/Block.ts';
 import { makeAggregationOutput } from '../contracts/AggregationContract.ts';
 import { Output } from '../core/BlockCreationModule.ts';
 import { DraftManager } from '../core/DraftManager.ts';
-import type { Draft } from '../core/Draft.ts';
-import type { ClaimRef } from '../core/Node.ts';
+import { ContractHostService } from '../core/ContractHostService.ts';
+import { DefaultBuilderHost } from '../core/DefaultBuilderHost.ts';
+import { Hash } from '../util/Hash.ts';
 import { str2bin } from '../util/buffer.ts';
-import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { Primitive } from '../util/types.ts';
 
-/**
- * Resolved claim: a direct (producer, outputIndex) reference. Drafts
- * only run once their producing block is in the local store, so
- * outputIndex is always a real index into producer.outputs.
- */
-export type PutClaim = ClaimRef;
-
-/** Request to put data into the network */
+/** Publish records under a verifier. Does not require canonicality. */
 export interface PutRequest {
-  /** Claims (producer, outputIndex) the new draft will consume. */
-  claims?: PutClaim[];
-  /** Outputs the new draft will produce. */
-  outputs?: Output[];
+  /** Verifier-output contract hash. */
+  contract: Hash;
   /**
-   * Convenience: each (key, value) becomes a RECORD_CONTRACT output
-   * with `verifier.params = utf8(key)` and `data = utf8(value)`.
+   * Verifier-output params. Pre-encoded bytes, or a key-value object that
+   * `contract.buildParams` will encode (requires the contract to be
+   * registered).
    */
-  records?: Record<string, Uint8Array | string>;
-  /** Declared work weight for the draft. Default 1. */
-  declaredWeight?: number;
+  params: Uint8Array | Record<string, unknown>;
   /**
-   * Identifier for keyed updates. Repeated puts with the same key
-   * extend the existing draft (until it's published or cancelled).
-   * Without a key, every call creates a fresh draft.
+   * Records to publish on the same block. Each entry becomes a
+   * RECORD_CONTRACT output whose `verifier.params = utf8(key)` and
+   * `body = utf8(value)`.
    */
-  key?: Primitive | Hash;
-  /**
-   * If true, the draft is solidified into a block immediately after
-   * creation/update. If false, the draft is parked in `ready` and only
-   * published by a subsequent `put({ key, publish: true })` call.
-   * Default: true.
-   */
-  publish?: boolean;
+  records: Record<string, Uint8Array | string>;
 }
 
-export interface PutResult {
-  /** The draft created or updated by this call. */
-  draftId: Hash;
+/** Publish a single output under a verifier. Requires canonicality. */
+export interface SendRequest {
+  /** Output's verifier contract hash. */
+  contract: Hash;
   /**
-   * The produced block, if `publish: true` succeeded synchronously.
-   * Null when the draft is parked (`publish: false`) or solidify is
-   * still in flight (`awaitingAnchor`).
+   * Output's verifier params. Pre-encoded bytes, or a key-value object
+   * that `contract.buildParams` will encode.
    */
-  block: Block | null;
-  /** Convenience accessor: `block?.hash ?? null`. */
-  hash: Hash | null;
+  params: Uint8Array | Record<string, unknown>;
+  /** Output body. */
+  body: Uint8Array;
+  /** Output value (economic weight on the wire). Default 0. */
+  value?: number;
 }
 
 export class PutManager {
-  // Active keyed drafts. Evicted on publication or cancellation.
-  private readonly keyed = new Map<string, Hash>();
-
-  constructor(private readonly draftManager: DraftManager) {}
+  constructor(
+    private readonly draftManager: DraftManager,
+    private readonly contractHost: ContractHostService,
+  ) {}
 
   /**
-   * Create or update a draft, optionally publishing it as a block.
-   *
-   * - With `key` + `publish: false`: park the draft. Subsequent puts
-   *   with the same key extend it (append claims/outputs) until
-   *   published.
-   * - With `publish: true` (default): solidify immediately. On success,
-   *   the produced block is returned and the key is evicted from the
-   *   keyed map (so a subsequent same-key call creates a fresh draft).
-   * - On `awaitingAnchor` (no canonical anchor yet): the draft stays
-   *   in `solidifying`. The internal retry loop (configured in
-   *   DraftManager) will re-attempt as the chain advances.
+   * Publish a verifier with fitting records on a new draft. The draft is
+   * solidified immediately if a canonical anchor is available; otherwise
+   * the draft pipeline retries as the chain advances. Does not require
+   * canonicality of the resulting block.
    */
-  put(request: PutRequest): PutResult {
-    const outputs = this._normalizeOutputs(request);
-    const claims = request.claims ?? [];
-    const declaredWeight = request.declaredWeight ?? 1;
-    const publish = request.publish !== false;
-    const keyStr = request.key !== undefined ? this._normalizeKey(request.key) : undefined;
-
-    // 1. Locate or create the draft.
-    let draft = keyStr !== undefined ? this._lookupByKeyStr(keyStr) : undefined;
-    if (draft) {
-      const phase = draft.status.phase;
-      if (phase === 'solidifying') {
-        throw new Error(
-          `PutManager.put: draft for key ${keyStr} is already solidifying; cannot mutate`,
-        );
-      }
-      if (phase !== 'ready' && phase !== 'populating') {
-        // Terminal: the keyed map should have evicted this entry. Be
-        // defensive and treat as a miss.
-        if (keyStr !== undefined) this.keyed.delete(keyStr);
-        draft = undefined;
-      }
-    }
-
-    if (!draft) {
-      draft = this.draftManager.addReady({
-        claims: [...claims],
-        outputs: [...outputs],
-        declaredWeight,
-      });
-      if (keyStr !== undefined) this.keyed.set(keyStr, draft.draftId);
-    } else if (claims.length > 0 || outputs.length > 0) {
-      draft = this.draftManager.update(draft.draftId, {
-        claims: [...draft.claims, ...claims],
-        outputs: [...draft.outputs, ...outputs],
+  put(request: PutRequest): void {
+    const params = encodeParams(request.contract, request.params, this.contractHost);
+    const outputs: Output[] = [
+      // Verifier marker output: makes the block discoverable as the
+      // publisher of `(contract, params)`. Body-less so it's pure
+      // incentive / signal, not data.
+      { verifier: { contract: request.contract, params }, value: 0 },
+    ];
+    for (const [key, value] of Object.entries(request.records)) {
+      outputs.push({
+        verifier: { contract: RECORD_CONTRACT, params: str2bin(key) },
+        value: 0,
+        body: typeof value === 'string' ? str2bin(value) : value,
       });
     }
+    outputs.push(makeAggregationOutput());
 
-    // 2. If parking, return now.
-    if (!publish) {
-      return { draftId: draft.draftId, block: null, hash: null };
-    }
-
-    // 3. Solidify. On success, evict the key (per spec: published key
-    // is deleted from the map; subsequent same-key calls start fresh).
-    const result = this.draftManager.solidify([draft]);
-    if (keyStr !== undefined) this.keyed.delete(keyStr);
-
-    if (result.ok) {
-      return { draftId: draft.draftId, block: result.block, hash: result.block.hash };
-    }
-    // awaitingAnchor or hard reason: draft is still in `solidifying`.
-    // The retry loop is responsible for eventually producing the block.
-    return { draftId: draft.draftId, block: null, hash: null };
+    const draft = this.draftManager.addReady({
+      claims: [],
+      outputs,
+      declaredWeight: 1,
+    });
+    this.draftManager.solidify([draft]);
   }
 
-  /** Cancel a keyed draft. Evicts the key. */
-  cancel(key: Primitive | Hash, reason?: string): void {
-    const keyStr = this._normalizeKey(key);
-    const draftId = this.keyed.get(keyStr);
-    if (!draftId) return;
-    this.keyed.delete(keyStr);
-    this.draftManager.cancelDraft(draftId, reason ?? 'cancelled by put');
-  }
-
-  /** Look up the active draft for a given key, if any. */
-  get(key: Primitive | Hash): Draft | undefined {
-    const keyStr = this._normalizeKey(key);
-    return this._lookupByKeyStr(keyStr);
-  }
-
-  // -- internals -----------------------------------------------------
-
-  private _normalizeOutputs(request: PutRequest): Output[] {
-    const out = [...(request.outputs ?? [])];
-    if (request.records) {
-      for (const [key, value] of Object.entries(request.records)) {
-        out.push({
-          verifier: { contract: RECORD_CONTRACT, params: str2bin(key) },
-          value: 0,
-          body: typeof value === 'string' ? str2bin(value) : value,
-        });
-      }
-    }
-    // Every non-genesis block carries an aggregation marker output. The
-    // generator-driven path adds this via the AggregationContract; the
-    // direct (skipGeneration / PutManager) path adds it here.
-    const hasMarker = out.some((o) =>
-      (o.body === undefined || o.body.length === 0) &&
-      o.verifier.contract.toHex() === AGGREGATION_CONTRACT.toHex()
-    );
-    if (!hasMarker) out.push(makeAggregationOutput());
-    return out;
-  }
-
-  private _normalizeKey(key: Primitive | Hash): string {
-    if (key instanceof Hash) return `h:${(key.toPrimitive() as HashPrimitive).toString()}`;
-    return `p:${String(key)}`;
-  }
-
-  private _lookupByKeyStr(keyStr: string): Draft | undefined {
-    const draftId = this.keyed.get(keyStr);
-    if (!draftId) return undefined;
-    return this.draftManager.get(draftId);
+  /**
+   * Publish a single output under the supplied verifier and return. The
+   * draft pipeline handles canonicality / re-creation on uncanonical.
+   */
+  send(request: SendRequest): void {
+    const params = encodeParams(request.contract, request.params, this.contractHost);
+    const outputs: Output[] = [
+      {
+        verifier: { contract: request.contract, params },
+        value: request.value ?? 0,
+        body: request.body,
+      },
+      makeAggregationOutput(),
+    ];
+    const draft = this.draftManager.addReady({
+      claims: [],
+      outputs,
+      declaredWeight: 1,
+    });
+    this.draftManager.solidify([draft]);
   }
 }
+
+// -- Helpers ---------------------------------------------------------
+
+function encodeParams(
+  contractHash: Hash,
+  params: Uint8Array | Record<string, unknown>,
+  contractHost: ContractHostService,
+): Uint8Array {
+  if (params instanceof Uint8Array) return params;
+  const contract = contractHost.getContract(contractHash);
+  if (!contract) {
+    throw new Error(`contract not registered: ${contractHash.toHex()}`);
+  }
+  if (!contract.buildParams) {
+    throw new Error(
+      `contract ${contractHash.toHex()} does not support buildParams; ` +
+        'pass params as Uint8Array',
+    );
+  }
+  const values = flatten(params);
+  const host = new DefaultBuilderHost(values);
+  const result = contract.buildParams(host);
+  if (result instanceof Promise) {
+    throw new Error(
+      `contract ${contractHash.toHex()}: buildParams returned a Promise; ` +
+        'put()/send() require synchronous buildParams. Pass params as a Uint8Array.',
+    );
+  }
+  return result;
+}
+
+function flatten(
+  obj: Record<string, unknown>,
+  prefix = '',
+  out = new Map<string, unknown>(),
+): Map<string, unknown> {
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v !== null && typeof v === 'object' && !(v instanceof Uint8Array) && !Array.isArray(v)) {
+      flatten(v as Record<string, unknown>, key, out);
+    } else if (Array.isArray(v)) {
+      out.set(key, v.length);
+      for (let i = 0; i < v.length; i++) {
+        const el = v[i];
+        const elKey = `${key}.${i}`;
+        if (el !== null && typeof el === 'object' && !(el instanceof Uint8Array)) {
+          flatten(el as Record<string, unknown>, elKey, out);
+        } else {
+          out.set(elKey, el);
+        }
+      }
+    } else {
+      out.set(key, v);
+    }
+  }
+  return out;
+}
+
+// AGGREGATION_CONTRACT and Block re-exports for downstream callers that
+// still rely on the old surface; remove once no consumer imports them
+// from this file.
+export type { Block };
+export { AGGREGATION_CONTRACT };

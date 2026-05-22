@@ -249,10 +249,20 @@ export class ContractGeneratorShim {
       });
     } catch (e) {
       if (e instanceof ContractRejection) {
-        if (!isCancelled()) this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'contract-failed' });
+        if (!isCancelled()) {
+          this._draftStore.transition(draft.draftId, {
+            phase: 'cancelled',
+            reason: 'contract-failed',
+          });
+        }
         return;
       }
-      if (!isCancelled()) this._draftStore.transition(draft.draftId, { phase: 'cancelled', reason: 'contract-failed' });
+      if (!isCancelled()) {
+        this._draftStore.transition(draft.draftId, {
+          phase: 'cancelled',
+          reason: 'contract-failed',
+        });
+      }
       return;
     }
   }

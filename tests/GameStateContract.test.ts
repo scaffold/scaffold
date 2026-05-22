@@ -443,38 +443,38 @@ Deno.test({
   // point. Re-enable once that lands.
   ignore: true,
   fn: async () => {
-  const { provider, module } = setup();
-  const prev = playedState(0);
-  // white has 5 minutes; t = 300_001 expires.
-  const anchor: TestBlock = {
-    hash: h('prev-timeout'),
-    anchor: ZERO_HASH,
-    outputs: [gameStateOutput(1, 1000, prev)],
-    claimIndices: [],
-    refs: [],
-    timestamp: 0,
-  };
-  provider.addBlock(anchor);
+    const { provider, module } = setup();
+    const prev = playedState(0);
+    // white has 5 minutes; t = 300_001 expires.
+    const anchor: TestBlock = {
+      hash: h('prev-timeout'),
+      anchor: ZERO_HASH,
+      outputs: [gameStateOutput(1, 1000, prev)],
+      claimIndices: [],
+      refs: [],
+      timestamp: 0,
+    };
+    provider.addBlock(anchor);
 
-  const timeoutNext = applyMove(prev.state, TIMEOUT_MOVE, 300_001);
-  assertEquals(timeoutNext.status, STATUS_TIMEOUT_WHITE);
+    const timeoutNext = applyMove(prev.state, TIMEOUT_MOVE, 300_001);
+    assertEquals(timeoutNext.status, STATUS_TIMEOUT_WHITE);
 
-  const timeoutBlock: TestBlock = {
-    hash: h('timeout'),
-    anchor: anchor.hash,
-    outputs: [
-      makeRecordOutput('move', encodeMove(TIMEOUT_MOVE)),
-      sigOutput(BLACK_PK, 1000),
-    ],
-    claimIndices: [2, 0],
-    refs: [],
-    signer: BLACK_PK, // OPPONENT claims the timeout
-    timestamp: 300_001,
-  };
-  provider.addBlock(timeoutBlock);
+    const timeoutBlock: TestBlock = {
+      hash: h('timeout'),
+      anchor: anchor.hash,
+      outputs: [
+        makeRecordOutput('move', encodeMove(TIMEOUT_MOVE)),
+        sigOutput(BLACK_PK, 1000),
+      ],
+      claimIndices: [2, 0],
+      refs: [],
+      signer: BLACK_PK, // OPPONENT claims the timeout
+      timestamp: 300_001,
+    };
+    provider.addBlock(timeoutBlock);
 
-  const result = await module.verifyBlock(timeoutBlock.hash);
-  assertEquals(result, { accepted: true });
+    const result = await module.verifyBlock(timeoutBlock.hash);
+    assertEquals(result, { accepted: true });
   },
 });
 

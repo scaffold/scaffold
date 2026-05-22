@@ -549,7 +549,10 @@ Deno.test('S6: self-claiming - newOutputCount', () => {
 
 Deno.test('S6: self-claiming - outputSpace matches ground truth', () => {
   assertMatchesGroundTruth(
-    [makeGenesis('G', 5), makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claimIndices: [0, 1, 4] })],
+    [
+      makeGenesis('G', 5),
+      makeLeaf({ name: 'B', anchor: 'G', outputCount: 3, claimIndices: [0, 1, 4] }),
+    ],
     'B',
   );
 });

@@ -224,7 +224,7 @@ Deno.test('fetch: verify:true with aborted signal rejects with FetchAbortError',
   await sf.close();
 });
 
-Deno.test('fetch: recordKey normalization (string → utf8 bytes)', async () => {
+Deno.test('fetch: key normalization (string → utf8 bytes)', async () => {
   // Indirectly verified: two projections with string 'foo' vs utf8('foo')
   // dedup to the same subscription-level view.
   const sf = new Scaffold(defaultConfig());
@@ -235,13 +235,13 @@ Deno.test('fetch: recordKey normalization (string → utf8 bytes)', async () => 
   const h1 = sf.fetch({
     contract,
     params,
-    recordKey: 'foo',
+    key: 'foo',
     onResult: () => {},
   }) as FetchHandle;
   const h2 = sf.fetch({
     contract,
     params,
-    recordKey: new TextEncoder().encode('foo'),
+    key: new TextEncoder().encode('foo'),
     onResult: () => {},
   }) as FetchHandle;
 

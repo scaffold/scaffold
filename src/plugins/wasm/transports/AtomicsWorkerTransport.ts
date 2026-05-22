@@ -39,9 +39,9 @@ function runHandlers(bridge: RunBridge): WasmHostHandlers {
     claim_next: async () => await bridge.claimNext(),
     claim_all: async ([limit]) => await bridge.claimAll(limit as number),
     emit_output: ([output]) => {
-      bridge.emitOutput(output as Uint8Array);
+      bridge.send(output as Uint8Array);
     },
-    request_body: async ([verifier]) => await bridge.requestBody(verifier as Uint8Array),
+    request_body: async ([verifier]) => await bridge.request(verifier as Uint8Array),
     fetch: async ([verifier, key]) => await bridge.fetch(verifier as Uint8Array, key as Uint8Array),
     put: async ([verifier, records]) => {
       await bridge.put(verifier as Uint8Array, records as Uint8Array);

@@ -2,12 +2,7 @@
 
 import { Hash } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
-import {
-  Block,
-  BlockStore,
-  makeBlockStoreOutputSpace,
-  resolveClaimToOutput,
-} from './Block.ts';
+import { Block, BlockStore, makeBlockStoreOutputSpace, resolveClaimToOutput } from './Block.ts';
 import {
   ContractVerificationModule,
   type ContractVerificationProvider,

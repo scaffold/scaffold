@@ -34,6 +34,7 @@ import { BlockAwareness } from '../../src/node/RoutingModule.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { Block } from '../../src/core/Block.ts';
 import { cloneBlockForReception } from '../testutil/cloneBlock.ts';
+import { makeAggregationOutput } from '../../src/contracts/AggregationContract.ts';
 
 class SetAwareness implements BlockAwareness {
   private readonly known = new Set<string>();
@@ -136,10 +137,13 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   //    funded by claiming the genesis signature output. The HELLO output
   //    itself is left unspent on the canonical chain so claim history
   //    can index it as a capability.
-  const seed = nodeC.put({
-    outputs: [makeHelloRequest('seed', 1_000_000)],
+  const seedDraft = nodeC.context.draftManager.addReady({
     claims: [{ producer: nodeC.context.genesisHash, outputIndex: 2 }],
+    outputs: [makeHelloRequest('seed', 1_000_000), makeAggregationOutput()],
+    declaredWeight: 1,
   });
+  const seed = nodeC.context.draftManager.solidify([seedDraft]);
+  if (!seed.ok) throw new Error('seed publish failed');
 
   // 2. Hand-relay the seed C -> B -> A so each node records it as arriving
   //    from the previous hop. After this, both B and A can route HELLO
@@ -156,7 +160,7 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   nodeA.fetch({
     contract: HELLO_CONTRACT,
     params: new TextEncoder().encode('world'),
-    recordKey: 'response',
+    key: 'response',
     onClaim: (c) => {
       if (!c) return;
       const text = new TextDecoder().decode(c.body);

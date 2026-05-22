@@ -5,7 +5,7 @@ import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
 import { Hash } from './util/Hash.ts';
 import { findCanonicalTip, NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
-import { PutManager, PutRequest, PutResult } from './node/PutManager.ts';
+import { PutManager, PutRequest, SendRequest } from './node/PutManager.ts';
 import { OutputHandler, OutputHandlerRegistry } from './core/OutputHandlerRegistry.ts';
 import { FetchHandle, FetchInput, FetchManager, FetchResult } from './node/FetchManager.ts';
 import type { Verifier } from './core/BlockCreationModule.ts';
@@ -187,7 +187,7 @@ export class Scaffold {
 
     // 4. PutManager: end-user-facing draft API. Routes through the
     //    DraftManager bottleneck. See src/node/PutManager.ts.
-    this.putManager = new PutManager(nodeContext.draftManager);
+    this.putManager = new PutManager(nodeContext.draftManager, nodeContext.contractHost);
   }
 
   /** Register a contract for generation and verification at runtime. */
@@ -196,7 +196,7 @@ export class Scaffold {
   }
 
   /**
-   * Register a handler for `env.requestBody(verifier)` calls during generation.
+   * Register a handler for `env.request(verifier)` calls during generation.
    * `runningContract` scopes the handler to contracts whose verifier's
    * contract matches. Handlers for the same contract run in registration
    * order; each returns `null` to defer to the next, or a concrete
@@ -212,7 +212,7 @@ export class Scaffold {
 
   /**
    * Configure the solidification-time value-override hook. Called per
-   * `requestBody` slot before signing; lets the node raise the output's
+   * `request` slot before signing; lets the node raise the output's
    * `value` (only). See docs/protocol/computation.md#output-requirements.
    */
   setValueOverride(fn: ValueOverrideFn | null): void {
@@ -235,9 +235,23 @@ export class Scaffold {
     return this.fetchManager.fetch<T>(input);
   }
 
-  /** Put data into the network */
-  put(request: PutRequest): PutResult {
-    return this.putManager.put(request);
+  /**
+   * Publish a verifier with fitting records. Creates a draft that
+   * emits a verifier-output marker plus one RECORD_CONTRACT output per
+   * record; subsequent `fetch(verifier, key)` calls surface those
+   * records. Does not require the resulting block to be canonical.
+   */
+  put(request: PutRequest): void {
+    this.putManager.put(request);
+  }
+
+  /**
+   * Publish a single output under the supplied verifier with the given
+   * body. Fire-and-forget. The draft pipeline re-creates the block if
+   * it becomes uncanonical.
+   */
+  send(request: SendRequest): void {
+    this.putManager.send(request);
   }
 
   /** Start network plugins (if configured). */
