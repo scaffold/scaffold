@@ -4,8 +4,9 @@ import type { Contract } from './contracts/Contract.ts';
 import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
 import { Hash } from './util/Hash.ts';
-import { findCanonicalTip, NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
-import { PutManager, PutRequest, SendRequest } from './node/PutManager.ts';
+import { NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
+import { PutManager, PutRequest } from './node/PutManager.ts';
+import { SendHandle, SendManager, SendRequest } from './node/SendManager.ts';
 import { OutputHandler, OutputHandlerRegistry } from './core/OutputHandlerRegistry.ts';
 import { FetchHandle, FetchInput, FetchManager, FetchResult } from './node/FetchManager.ts';
 import type { Verifier } from './core/BlockCreationModule.ts';
@@ -75,6 +76,7 @@ export interface ScaffoldConfig {
 export class Scaffold {
   private readonly nodeContext: NodeContext;
   private readonly putManager: PutManager;
+  private readonly sendManager: SendManager;
   private readonly fetchManager: FetchManager;
   private readonly networkBridge?: NetworkBridge;
   private readonly _publicKey: Uint8Array;
@@ -116,10 +118,27 @@ export class Scaffold {
       contractPlugins: config.contractPlugins ?? [],
     });
 
-    // 2. Create FetchManager, wired to the already-constructed node services.
     const nodeContext = this.nodeContext;
+
+    // 2. PutManager + SendManager: end-user-facing draft primitives.
+    //    Both route through the DraftManager bottleneck and share
+    //    helpers in src/node/draftPublishing.ts.
+    this.putManager = new PutManager(
+      nodeContext.draftManager,
+      nodeContext.draftStore,
+      nodeContext.contractHost,
+    );
+    this.sendManager = new SendManager(
+      nodeContext.draftManager,
+      nodeContext.draftStore,
+      nodeContext.contractHost,
+    );
+
+    // 3. Create FetchManager. Its incentive publication is delegated to
+    //    SendManager so the incentive block re-emits on uncanonical for
+    //    free (and the two paths share code).
     this.fetchManager = new FetchManager({
-      dispatcher: nodeContext.reactiveLayer,
+      send: (req) => this.sendManager.send(req),
       consensus: nodeContext.consensus,
       outputClaims: nodeContext.outputClaims,
       blockStore: nodeContext.store,
@@ -129,11 +148,10 @@ export class Scaffold {
       config: {
         getOutgoingIncentive: config.getOutgoingIncentive ?? (() => 0),
       },
-      findCanonicalTip: () => findCanonicalTip(nodeContext),
       logger: this.eventLog ? new ScopedLogger(this.eventLog, 'fetch') : undefined,
     });
 
-    // 2a. Install the default `wasmContractPlugin` if the caller didn't supply
+    // 3a. Install the default `wasmContractPlugin` if the caller didn't supply
     //     their own plugin list. The plugin needs `resolveBlob` backed by
     //     FetchManager for stacking layer-blob lookups; can't construct earlier.
     if (config.contractPlugins === undefined) {
@@ -153,7 +171,7 @@ export class Scaffold {
       nodeContext.contractHost.registerPlugin(defaultPlugin);
     }
 
-    // 3. Create NetworkBridge if plugins are provided
+    // 4. Create NetworkBridge if plugins are provided
     if (config.plugins && config.plugins.length > 0) {
       const selfIdHex = bin2hex(publicKey);
 
@@ -184,10 +202,6 @@ export class Scaffold {
         return seen;
       };
     }
-
-    // 4. PutManager: end-user-facing draft API. Routes through the
-    //    DraftManager bottleneck. See src/node/PutManager.ts.
-    this.putManager = new PutManager(nodeContext.draftManager, nodeContext.contractHost);
   }
 
   /** Register a contract for generation and verification at runtime. */
@@ -236,22 +250,24 @@ export class Scaffold {
   }
 
   /**
-   * Publish a verifier with fitting records. Creates a draft that
-   * emits a verifier-output marker plus one RECORD_CONTRACT output per
-   * record; subsequent `fetch(verifier, key)` calls surface those
-   * records. Does not require the resulting block to be canonical.
+   * Publish a verifier with fitting records. Returns a Promise that
+   * resolves with the first block produced from the draft. The draft
+   * pipeline will keep re-emitting if that block becomes uncanonical,
+   * but the promise only resolves once. Use `send` if you need to
+   * observe re-emissions.
    */
-  put(request: PutRequest): void {
-    this.putManager.put(request);
+  put(request: PutRequest): Promise<Block> {
+    return this.putManager.put(request);
   }
 
   /**
    * Publish a single output under the supplied verifier with the given
-   * body. Fire-and-forget. The draft pipeline re-creates the block if
-   * it becomes uncanonical.
+   * body. Returns a handle whose `close()` cancels the underlying draft.
+   * `onBlock` fires for the initial emission plus every re-emission after
+   * the previous block becomes uncanonical.
    */
-  send(request: SendRequest): void {
-    this.putManager.send(request);
+  send(request: SendRequest): SendHandle {
+    return this.sendManager.send(request);
   }
 
   /** Start network plugins (if configured). */

@@ -38,7 +38,12 @@ publishing an incentive output and observing blocks that claim it.
 2. Scaffold publishes an **incentive block** with one output
    `{ verifier: { contract, params }, value, data: empty }`. Gossip routes it
    to peers with claim history for that verifier (see
-   [gossip.md](../protocol/gossip.md#claim-history-index)).
+   [gossip.md](../protocol/gossip.md#claim-history-index)). The incentive is
+   published through `SendManager.send`, which uses the standard draft
+   pipeline -- so if the incentive block goes uncanonical (chain reorg,
+   conflict), the draft re-emits a new incentive block automatically and
+   `sub.incentive` pivots to it. Closing the last fetch projection cancels
+   the underlying send draft.
 3. A **responder block** claims the incentive. Alongside that claim it
    produces one or more **self-claimed RECORD outputs** keyed by a record key
    (default: empty bytes). The record's `data` bytes are the result payload.
@@ -81,7 +86,11 @@ interface FetchInput<T = unknown> {
   /** Cancels subscription + releases observers (does not revoke incentive). */
   signal?: AbortSignal;
 
-  /** Called once the incentive block is published. */
+  /**
+   * Called whenever the incentive block is (re-)published. Fires on the
+   * initial publication and again each time the previous incentive block
+   * becomes uncanonical and SendManager re-emits a replacement.
+   */
   onIncentive?: (block: Block, outputIdx: number) => void;
 
   /**

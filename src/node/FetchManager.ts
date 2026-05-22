@@ -3,7 +3,6 @@
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
 import type { Verifier } from '../core/BlockCreationModule.ts';
-import type { Output } from '../core/BlockCreationModule.ts';
 import { bin2hex } from '../util/hex.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
@@ -13,8 +12,8 @@ import type { TrustGate, TrustStatus } from './TrustGate.ts';
 import { DefaultBuilderHost } from '../core/DefaultBuilderHost.ts';
 import { type FieldNode, RecordingWalkerHost } from '../core/RecordingWalkerHost.ts';
 import { findRecordOutput } from '../contracts/RecordContract.ts';
-import type { Action, ReactiveLayer } from './ReactiveLayer.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
+import type { SendHandle, SendRequest } from './SendManager.ts';
 import {
   FetchAbortError,
   InvalidatedError,
@@ -170,20 +169,32 @@ interface Subscription {
   params: Uint8Array;
   /** The incentive output. Null while the incentive block is being built. */
   incentive: { blockHash: Hash; outputIndex: number } | null;
+  /**
+   * Send handle for the incentive draft. Closed when the last projection
+   * disconnects; this cancels the draft so it stops re-emitting.
+   */
+  incentiveHandle: SendHandle | null;
   /** Projections by insertion order. */
   projections: Projection[];
   /** claimant hash hex → index in claimant.claimIndices[] resolving to our incentive. */
   knownClaimants: Map<string, number>;
   /** The currently-surfaced canonical claimant, if any. */
   currentClaimant: Hash | null;
-  /** Buffered onIncentive calls — fired once the incentive lands. */
+  /** Buffered onIncentive calls -- fired once the incentive lands. */
   pendingIncentiveProjections: Projection[];
 }
 
 // -- FetchManager ----------------------------------------------------
 
 export interface FetchManagerDeps {
-  dispatcher: Pick<ReactiveLayer, 'dispatchActions'>;
+  /**
+   * Publish the incentive block via SendManager. Returns a handle whose
+   * `close()` cancels the underlying draft -- called when the last
+   * projection disconnects. The supplied `onBlock` fires for the initial
+   * emission plus each re-emission after the previous incentive block
+   * becomes uncanonical.
+   */
+  send: (request: SendRequest) => SendHandle;
   consensus: ConsensusService;
   outputClaims: OutputClaimService;
   blockStore: BlockStore;
@@ -193,8 +204,6 @@ export interface FetchManagerDeps {
   config: {
     getOutgoingIncentive: (v: Verifier) => number;
   };
-  /** Resolve the canonical anchor for a new incentive block. */
-  findCanonicalTip: () => Hash;
   logger?: ScopedLogger;
 }
 
@@ -284,6 +293,7 @@ export class FetchManager {
         contract: input.contract,
         params,
         incentive: null,
+        incentiveHandle: null,
         projections: [],
         knownClaimants: new Map(),
         currentClaimant: null,
@@ -346,54 +356,23 @@ export class FetchManager {
     const verifier: Verifier = { contract: sub.contract, params: sub.params };
     const value = this.deps.config.getOutgoingIncentive(verifier);
 
-    const incentiveOutput: Output = {
-      verifier: { contract: sub.contract, params: sub.params },
-      value,
+    // SendManager owns the draft + retry loop, so the incentive block
+    // automatically re-emits on uncanonical. `onBlock` fires for the
+    // initial emission and for every re-emission; we pivot `sub.incentive`
+    // each time so subsequent claim tracking attaches to the new block.
+    const request: SendRequest = {
+      contract: sub.contract,
+      params: sub.params,
       body: new Uint8Array(0),
-    };
-
-    // Emit a createBlock action. The BlockCreator in NodeContext handles
-    // aggregation-marker insertion and auto-balance; we just declare the
-    // one output we care about.
-    const action: Action = {
-      type: 'createBlock',
-      spec: {
-        anchor: this.deps.findCanonicalTip(),
-        outputs: [incentiveOutput],
-        claims: [],
-        declaredWeight: 0,
-        aggregates: [],
-        refs: [],
-      },
-      sign: true,
-      broadcast: true,
-      onCreated: (block) => {
-        if (!block) {
-          const err = new Error('incentive block build failed');
-          // Fire onError on all projections; drop subscription.
-          for (const p of sub.projections) {
-            p.onError?.(err);
-            if (p.promise && !p.promise.settled) {
-              p.promise.settled = true;
-              p.promise.reject(err);
-            }
-          }
-          this.subscriptions.delete(sub.verifierKey);
-          return;
-        }
-        // Find the output index for our verifier (the block creator may
-        // have appended aggregation marker or change outputs).
+      value,
+      onBlock: (block) => {
         const outputIndex = block.outputs.findIndex((o) =>
           Hash.equals(o.verifier.contract, sub.contract) &&
-          byteEquals(o.verifier.params, sub.params) &&
-          // exclude any other matching verifier that is also e.g. an incentive
-          // (first-match is fine here since we emitted exactly one in the spec)
-          true
+          byteEquals(o.verifier.params, sub.params)
         );
         if (outputIndex < 0) {
           const err = new Error('incentive output missing from built block');
           for (const p of sub.projections) p.onError?.(err);
-          this.subscriptions.delete(sub.verifierKey);
           return;
         }
         sub.incentive = { blockHash: block.hash, outputIndex };
@@ -403,12 +382,21 @@ export class FetchManager {
           outputIndex,
           value,
         });
-        // Fire onIncentive for pending projections.
         const pending = sub.pendingIncentiveProjections.splice(0);
         for (const p of pending) p.onIncentive?.(block, outputIndex);
       },
+      onError: (err) => {
+        for (const p of sub.projections) {
+          p.onError?.(err);
+          if (p.promise && !p.promise.settled) {
+            p.promise.settled = true;
+            p.promise.reject(err);
+          }
+        }
+        this.subscriptions.delete(sub.verifierKey);
+      },
     };
-    this.deps.dispatcher.dispatchActions([action]);
+    sub.incentiveHandle = this.deps.send(request);
   }
 
   // -- Resolution / canonicality event handlers ---------------------
@@ -659,6 +647,10 @@ export class FetchManager {
     // If no projections remain, drop the subscription entirely.
     if (sub.projections.length === 0) {
       this.subscriptions.delete(verifierKey);
+      // Cancel the incentive draft so SendManager stops re-emitting on
+      // uncanonical for a verifier no one is watching anymore.
+      sub.incentiveHandle?.close();
+      sub.incentiveHandle = null;
       // Remove reverse index entries for this subscription.
       for (const claimantHex of sub.knownClaimants.keys()) {
         const set = this.claimantToVerifiers.get(claimantHex);
