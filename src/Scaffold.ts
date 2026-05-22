@@ -121,10 +121,10 @@ export class Scaffold {
     const nodeContext = this.nodeContext;
 
     // 2. PutManager + SendManager: end-user-facing draft primitives.
-    //    Both route through the DraftManager bottleneck and share
-    //    helpers in src/node/draftPublishing.ts.
+    //    put runs the contract generator via GenerationService; send
+    //    bypasses generation and emits raw outputs via DraftManager.
     this.putManager = new PutManager(
-      nodeContext.draftManager,
+      nodeContext.generation,
       nodeContext.draftStore,
       nodeContext.contractHost,
     );

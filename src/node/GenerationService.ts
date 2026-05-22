@@ -6,6 +6,7 @@ import {
   Block,
   BlockStore,
   makeBlockStoreOutputSpace,
+  RECORD_CONTRACT,
   resolveClaimToOutput,
 } from '../core/Block.ts';
 import { OutputSpaceModule } from '../core/OutputSpace.ts';
@@ -22,6 +23,7 @@ import { OutputHandlerRegistry } from '../core/OutputHandlerRegistry.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { verifierKey as utxoVerifierKey } from './UtxoIndex.ts';
 import { UtxoIndexService } from './UtxoIndexService.ts';
+import { str2bin } from '../util/buffer.ts';
 import { type WaitForGetOutputFn, type WaitForInputFn } from '../core/GeneratingEnv.ts';
 import type { GeneratorHandle, GeneratorProvider } from '../core/Generator.ts';
 import {
@@ -34,11 +36,25 @@ import {
 
 /**
  * Adapts BlockStore + UtxoIndex + OutputClaimService into a
- * `GeneratingEnvProvider<Block>`. Ported from the former
- * `ContractGenerator` with no behavior changes.
+ * `GeneratingEnvProvider<Block>`. Records-aware: `setRecords(verifierKey, ...)`
+ * pre-installs a `key -> body` map that `resolveGetOutput` consults first
+ * for RECORD_CONTRACT requests from the matching running contract. Used by
+ * the records-driven entry point on GenerationService (see `generate`
+ * below). For records-less generations (DraftStrategy-triggered), the
+ * adapter falls through to OutputHandlerRegistry unchanged.
  */
 class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
   private readonly outputSpace: OutputSpaceModule;
+
+  /**
+   * verifier-key (`${contractHex}:${paramsHex}`) -> active records + consumed
+   * key set. At most one entry per verifier-key at any moment, since
+   * GenerationService dedupes generations by verifier.
+   */
+  private readonly _activeRecords = new Map<string, {
+    records: Map<string, Uint8Array>;
+    consumed: Set<string>;
+  }>();
 
   constructor(
     private readonly store: BlockStore,
@@ -46,6 +62,21 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     private readonly outputHandlers: OutputHandlerRegistry,
   ) {
     this.outputSpace = makeBlockStoreOutputSpace(store);
+  }
+
+  /** Install per-generation records before running the contract. */
+  setRecords(verifierKey: string, records: Map<string, Uint8Array>): void {
+    this._activeRecords.set(verifierKey, { records, consumed: new Set() });
+  }
+
+  /**
+   * Remove the records entry and return the consumed-key set. Returns
+   * `undefined` if no entry was installed (records-less generation).
+   */
+  consumeRecords(verifierKey: string): Set<string> | undefined {
+    const entry = this._activeRecords.get(verifierKey);
+    this._activeRecords.delete(verifierKey);
+    return entry?.consumed;
   }
 
   getBlock(hash: Hash): Block | undefined {
@@ -115,12 +146,39 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
     runningParams: Uint8Array,
     outputVerifier: Verifier,
   ): Promise<{ value: number; body: Uint8Array } | null> {
+    const vk = adapterVerifierKey(runningContract, runningParams);
+    const entry = this._activeRecords.get(vk);
+    if (entry) {
+      // Records-driven generation: only RECORD_CONTRACT requests resolve
+      // from records. Anything else, or a miss on key, returns null which
+      // makes GeneratingEnv.request() throw ContractRejection (no
+      // waitForGetOutput supplied for records-driven runs).
+      if (!Hash.equals(outputVerifier.contract, RECORD_CONTRACT)) {
+        return Promise.resolve(null);
+      }
+      const key = new TextDecoder().decode(outputVerifier.params);
+      const body = entry.records.get(key);
+      if (body === undefined) return Promise.resolve(null);
+      entry.consumed.add(key);
+      return Promise.resolve({ value: 0, body });
+    }
+    // Records-less generation (DraftStrategy-triggered): preserve the
+    // existing handler-registry fallback so AggregationContract +
+    // ChessGame's user-input handler keep working.
     return this.outputHandlers.resolve(
       runningContract,
       runningParams,
       outputVerifier,
     );
   }
+}
+
+function adapterVerifierKey(contract: Hash, params: Uint8Array): string {
+  let pHex = '';
+  for (let i = 0; i < params.length; i++) {
+    pHex += params[i].toString(16).padStart(2, '0');
+  }
+  return `${contract.toHex()}:${pHex}`;
 }
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -345,6 +403,136 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     // torn down at solidify or cancel time.
     this._draftManager.attachGeneratorHandle(draft.draftId, handle);
     return draft.draftId;
+  }
+
+  /**
+   * Records-driven entry point. Creates an empty draft, runs the
+   * generator for `verifier`, and answers every
+   * `env.request({contract: RECORD_CONTRACT, params: utf8(key)})` call
+   * from the supplied `records` map.
+   *
+   * Strict matching:
+   *   - `request` for a verifier not present in `records` rejects the
+   *     draft (the generator throws `ContractRejection`; we cancel).
+   *   - Records keys that the generator never consumes cause the draft
+   *     to be cancelled after the run completes.
+   *
+   * Other `env` calls (send / record / claimNext / claimAll / fetch)
+   * delegate to the shared adapter as in any other generation.
+   *
+   * Throws if `setDraftManager` hasn't been wired or if no contract is
+   * registered/loadable for `verifier.contract`.
+   *
+   * Named `generateForVerifier` (rather than overloading `generate`) so
+   * the legacy claim-driven `generate(draft)` method that satisfies the
+   * `GeneratorProvider` interface still type-checks cleanly.
+   */
+  generateForVerifier(
+    verifier: Verifier,
+    records: Record<string, Uint8Array | string>,
+  ): { draftId: Hash; cancel: () => void } {
+    if (!this._draftManager) {
+      throw new Error('GenerationService.generateForVerifier: setDraftManager not called');
+    }
+    if (!this._host.getContract(verifier.contract)) {
+      throw new Error(
+        `GenerationService.generateForVerifier: no contract registered or loadable for ${verifier.contract.toHex()}`,
+      );
+    }
+
+    // 1. Create an empty draft (no claims, no outputs).
+    const draft = this._draftManager.create({
+      claims: [],
+      outputs: [],
+      declaredWeight: 1,
+    });
+    const draftId = draft.draftId;
+
+    // 2. Normalize records (string -> utf8 bytes) and install on the adapter.
+    const recordsMap = new Map<string, Uint8Array>();
+    for (const [k, v] of Object.entries(records)) {
+      recordsMap.set(k, typeof v === 'string' ? str2bin(v) : v);
+    }
+    const vk = adapterVerifierKey(verifier.contract, verifier.params);
+    this._adapter.setRecords(vk, recordsMap);
+
+    // 3. Register with GenerationModule so dedupe + priority work.
+    const spec: GenerationSpec = {
+      targetKey: targetKeyFor(verifier),
+      verifier,
+      declaredWeight: 1,
+    };
+    this.register(draftId, spec);
+
+    // 4. Build the cancel handle. consumeRecords() is idempotent
+    //    (Map.delete) so safe to call from both the throw path and
+    //    external cancels.
+    const handle: GeneratorHandle = {
+      draftId,
+      cancel: () => {
+        this._cancelled.add(draftId.toPrimitive());
+        this._adapter.consumeRecords(vk);
+        this._outputClaims.removeClaims(draftId);
+        this._removeBlocked(draftId);
+        this._removeParkedGetOutput(draftId);
+        this.forget(draftId);
+      },
+    };
+    this._draftManager.attachGeneratorHandle(draftId, handle);
+
+    // 5. Enqueue the contract execution.
+    const budget = Math.max(spec.declaredWeight * this._queue.msPerCostUnit, 30_000);
+    const executable = {
+      priority: () => this.priority(draftId),
+      maxCostMs: budget,
+      run: async () => {
+        // Records-driven runs are strict: no waitForInput / waitForGetOutput.
+        // `claimNext` falls through to the adapter's `findInputs` (UTXO
+        // index); if no UTXO exists, the env throws ContractRejection.
+        let result;
+        try {
+          const maybe = this._host.runGenerating({
+            verifier,
+            provider: this._adapter,
+            signerPubkey: this._signerPubkey,
+          });
+          result = maybe instanceof Promise ? await maybe : maybe;
+        } catch (e) {
+          this._adapter.consumeRecords(vk);
+          if (this._cancelled.has(draftId.toPrimitive())) return;
+          this._cancelGenerationDraft(
+            draftId,
+            e instanceof Error ? e.message : String(e),
+          );
+          return;
+        }
+
+        if (this._cancelled.has(draftId.toPrimitive())) return;
+
+        // Strict-matching post-check: every record key must have been
+        // consumed by a `request` call.
+        const consumed = this._adapter.consumeRecords(vk) ?? new Set<string>();
+        const unused: string[] = [];
+        for (const key of recordsMap.keys()) {
+          if (!consumed.has(key)) unused.push(key);
+        }
+        if (unused.length > 0) {
+          this._cancelGenerationDraft(
+            draftId,
+            `unused records: ${unused.join(', ')}`,
+          );
+          return;
+        }
+
+        this._applyResult(draft, result);
+      },
+    };
+    this._queue.enqueue(executable);
+
+    return {
+      draftId,
+      cancel: () => this._cancelGenerationDraft(draftId, 'generate handle cancelled'),
+    };
   }
 
   // -- GeneratorProvider ---------------------------------------------

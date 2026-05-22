@@ -1,42 +1,56 @@
-// PutManager + SendManager: the narrow put({contract, params, records})
-// and send({contract, params, body, onBlock?}) primitives. Both publish
-// through the DraftManager bottleneck.
+// PutManager: runs the contract generator for (contract, params) with
+// `records` answering env.request({RECORD_CONTRACT, key}). Strict
+// matching -- unmatched requests and unused records both reject.
 
-import { assert, assertEquals, assertExists } from '@std/assert';
+import { assert, assertEquals, assertRejects } from '@std/assert';
 import { Scaffold } from '../src/Scaffold.ts';
 import { computeDemoGenesis, demoPrivateKey } from '../src/genesis.ts';
-import { Block, RECORD_CONTRACT } from '../src/core/Block.ts';
+import { AGGREGATION_CONTRACT, RECORD_CONTRACT } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { str2bin } from '../src/util/buffer.ts';
+import type { Contract } from '../src/contracts/Contract.ts';
 
-const TEST_VERIFIER_CONTRACT = Hash.digest('scaffold:test:put-verifier');
+const TEST_CONTRACT = Hash.digest('scaffold:test:records-consuming-contract');
+
+/**
+ * Test contract: params encode a newline-separated list of expected
+ * record keys. The contract calls env.request for each key. It also
+ * emits an aggregation marker so the resulting block is structurally
+ * complete (the BlockBuilder's invariants expect one per non-genesis
+ * block; without it the block fails to solidify).
+ */
+const testContract: Contract = {
+  outputNamespaces: [RECORD_CONTRACT, AGGREGATION_CONTRACT],
+  async run(env) {
+    const keysStr = new TextDecoder().decode(env.params());
+    const keys = keysStr === '' ? [] : keysStr.split('\n');
+    for (const key of keys) {
+      await env.request({
+        contract: RECORD_CONTRACT,
+        params: str2bin(key),
+      });
+    }
+    env.send({ contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) }, 0);
+  },
+};
 
 function makeNode(): Scaffold {
-  return new Scaffold({
+  const node = new Scaffold({
     privateKey: demoPrivateKey('a'),
     genesis: computeDemoGenesis(['a']),
     enableLogging: false,
     enablePiggyback: false,
     enableGeneration: () => false,
   });
+  node.registerContract(TEST_CONTRACT, testContract);
+  return node;
 }
 
-Deno.test('PutManager.put: resolves with a block carrying the verifier marker', async () => {
-  const node = makeNode();
-  const params = str2bin('alpha');
-  const block = await node.put({ contract: TEST_VERIFIER_CONTRACT, params, records: {} });
-  const verifierOutput = block.outputs.find((o) =>
-    Hash.equals(o.verifier.contract, TEST_VERIFIER_CONTRACT)
-  );
-  assertExists(verifierOutput, 'block should carry the (contract, params) verifier output');
-  await node.close();
-});
-
-Deno.test('PutManager.put: records become RECORD_CONTRACT outputs', async () => {
+Deno.test('PutManager.put: resolves with a block carrying the requested records', async () => {
   const node = makeNode();
   const block = await node.put({
-    contract: TEST_VERIFIER_CONTRACT,
-    params: str2bin('alpha'),
+    contract: TEST_CONTRACT,
+    params: str2bin('foo\nbaz'),
     records: { foo: 'bar', baz: new Uint8Array([1, 2, 3]) },
   });
   const recordOutputs = block.outputs.filter((o) =>
@@ -45,91 +59,74 @@ Deno.test('PutManager.put: records become RECORD_CONTRACT outputs', async () => 
   assertEquals(recordOutputs.length, 2);
   const foo = recordOutputs.find((o) => new TextDecoder().decode(o.verifier.params) === 'foo');
   const baz = recordOutputs.find((o) => new TextDecoder().decode(o.verifier.params) === 'baz');
-  assertExists(foo);
-  assertEquals(new TextDecoder().decode(foo!.body!), 'bar');
-  assertExists(baz);
-  assertEquals(baz!.body, new Uint8Array([1, 2, 3]));
-  await node.close();
-});
-
-Deno.test('PutManager.put: resolved block is canonical', async () => {
-  const node = makeNode();
-  const block = await node.put({
-    contract: TEST_VERIFIER_CONTRACT,
-    params: str2bin('canon'),
-    records: { x: 'y' },
-  });
+  assert(foo);
+  assertEquals(new TextDecoder().decode(foo.body!), 'bar');
+  assert(baz);
+  assertEquals(baz.body, new Uint8Array([1, 2, 3]));
   assert(node.context.consensus.isCanonical(block.hash));
   await node.close();
 });
 
-Deno.test('SendManager.send: onBlock fires with a block carrying the single output', async () => {
+Deno.test('PutManager.put: empty records works when the contract requests nothing', async () => {
   const node = makeNode();
-  const params = str2bin('s1');
-  const body = new Uint8Array([9, 8, 7]);
-  let received: Block | null = null;
-  const handle = node.send({
-    contract: TEST_VERIFIER_CONTRACT,
-    params,
-    body,
-    onBlock: (b) => {
-      received = b;
-    },
+  const block = await node.put({
+    contract: TEST_CONTRACT,
+    params: str2bin(''),
+    records: {},
   });
-  // Anchor is canonical at construction time, so onBlock fires synchronously
-  // during the addReady -> solidify path.
-  assertExists(received, 'onBlock should fire synchronously when anchor is already canonical');
-  const verifierOutput = received!.outputs.find((o) =>
-    Hash.equals(o.verifier.contract, TEST_VERIFIER_CONTRACT)
+  assert(block);
+  // Only the aggregation marker should be on the block.
+  const recordOutputs = block.outputs.filter((o) =>
+    Hash.equals(o.verifier.contract, RECORD_CONTRACT)
   );
-  assertExists(verifierOutput);
-  assertEquals(verifierOutput!.body, body);
-  assertEquals(verifierOutput!.value, 0);
-  handle.close();
+  assertEquals(recordOutputs.length, 0);
   await node.close();
 });
 
-Deno.test('SendManager.send: value defaults to 0 and accepts explicit values', async () => {
+Deno.test('PutManager.put: unmatched request rejects the Promise', async () => {
   const node = makeNode();
-  let received: Block | null = null;
-  const handle = node.send({
-    contract: TEST_VERIFIER_CONTRACT,
-    params: str2bin('s2'),
-    body: new Uint8Array(0),
-    value: 42,
-    onBlock: (b) => {
-      received = b;
-    },
-  });
-  assertExists(received);
-  const verifierOutput = received!.outputs.find((o) =>
-    Hash.equals(o.verifier.contract, TEST_VERIFIER_CONTRACT)
+  // Contract requests 'foo' and 'bar' but records only supplies 'foo'.
+  await assertRejects(
+    () =>
+      node.put({
+        contract: TEST_CONTRACT,
+        params: str2bin('foo\nbar'),
+        records: { foo: 'x' },
+      }),
+    Error,
+    'put draft cancelled',
   );
-  assertExists(verifierOutput);
-  assertEquals(verifierOutput!.value, 42);
-  handle.close();
   await node.close();
 });
 
-Deno.test('SendManager.send: close() cancels the draft and onError fires', async () => {
+Deno.test('PutManager.put: unused records reject the Promise', async () => {
   const node = makeNode();
-  // Use a verifier on an anchor that the node cannot solidify against yet
-  // (in this single-node setup the genesis anchor is canonical, so the
-  // first emission still fires). Close immediately after; the SendHandle's
-  // cancelDraft is a no-op once the draft is already solidified, but it
-  // unsubscribes the callback so subsequent re-emissions do not fire.
-  const seen: Block[] = [];
-  const handle = node.send({
-    contract: TEST_VERIFIER_CONTRACT,
-    params: str2bin('cancel-test'),
-    body: new Uint8Array(0),
-    onBlock: (b) => seen.push(b),
-  });
-  assertEquals(seen.length, 1, 'one initial emission expected');
-  handle.close();
-  // The handle.close() unsubscribes; if the draft re-solidifies in this
-  // tick it should NOT call onBlock again.
-  await new Promise((r) => setTimeout(r, 20));
-  assertEquals(seen.length, 1, 'no further emissions after close');
+  // Contract requests only 'foo' but records supplies 'foo' and 'extra'.
+  await assertRejects(
+    () =>
+      node.put({
+        contract: TEST_CONTRACT,
+        params: str2bin('foo'),
+        records: { foo: 'x', extra: 'y' },
+      }),
+    Error,
+    'unused records',
+  );
+  await node.close();
+});
+
+Deno.test('PutManager.put: unregistered contract rejects synchronously', async () => {
+  const node = makeNode();
+  const unknown = Hash.digest('scaffold:test:not-a-real-contract');
+  await assertRejects(
+    () =>
+      node.put({
+        contract: unknown,
+        params: new Uint8Array(0),
+        records: {},
+      }),
+    Error,
+    'no contract registered',
+  );
   await node.close();
 });
