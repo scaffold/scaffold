@@ -652,7 +652,19 @@ export async function loadModules(
   }
 
   // --- Pass 3: instantiate layers in topo order ----------------------
+  //
+  // `nameTable` resolves the lazy function forwarders at call time. The
+  // host-provided `base:*` exports are known up front and MUST be in the
+  // table before instantiation begins -- a WASM start function (e.g. the
+  // wasi-shim reading its `wasi_setup` via `scaffold_env.contract_metadata`)
+  // fires synchronously during `WebAssembly.instantiate`, before any code
+  // after this loop runs. Per-layer `${layerKey}:*` entries are added
+  // immediately after each instantiation so a later layer's start function
+  // can call into an earlier layer's exports through a forwarder.
   const nameTable = new Map<string, ImportFn>();
+  for (const [name, fn] of Object.entries(scaffoldExports)) {
+    if (typeof fn === 'function') nameTable.set(`base:${name}`, fn as ImportFn);
+  }
   const makeForwarder = (target: TargetRef, srcLayerKey: string, declared: string): ImportFn =>
   (
     ...args: unknown[]
@@ -814,22 +826,18 @@ export async function loadModules(
     const instance = await WebAssembly.instantiate(layer.module, out as WebAssembly.Imports);
     const exports = instance.exports as Record<string, unknown>;
     exportsByKey.set(layerKey, exports);
+    // Publish this layer's function exports into the shared nameTable
+    // before the next layer instantiates, so any later layer's start
+    // function can resolve forwarders into this layer.
+    for (const [name, fn] of Object.entries(exports)) {
+      if (typeof fn === 'function') nameTable.set(`${layerKey}:${name}`, fn as ImportFn);
+    }
 
     // Determine the layer's primary memory.
     const primary = exports.memory instanceof WebAssembly.Memory
       ? (exports.memory as WebAssembly.Memory)
       : firstImportedMemory;
     if (primary) memoryByLayerKey.set(layerKey, primary);
-  }
-
-  // --- Pass 4: populate nameTable so function forwarders resolve -----
-  for (const [name, fn] of Object.entries(scaffoldExports)) {
-    if (typeof fn === 'function') nameTable.set(`base:${name}`, fn as ImportFn);
-  }
-  for (const [layerKey, exports] of exportsByKey) {
-    for (const [name, fn] of Object.entries(exports)) {
-      if (typeof fn === 'function') nameTable.set(`${layerKey}:${name}`, fn as ImportFn);
-    }
   }
 
   // --- Pass 5: resolve entry memory ---------------------------------
