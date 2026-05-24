@@ -26,12 +26,13 @@ Deno.test(
         imports: { run: 'main:run' },
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: echoHash.toHex(),
           imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
         },
-      },
+      ],
     };
 
     await assertContractTraceSnapshot(t, {
@@ -66,12 +67,13 @@ Deno.test(
         imports: { run: 'main:run' },
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: echoHash.toHex(),
           imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
         },
-      },
+      ],
     };
 
     await assertRejects(
@@ -113,12 +115,13 @@ Deno.test(
         imports: { run: 'main:run' },
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: echoHash.toHex(),
           imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
         },
-      },
+      ],
     };
 
     await assertRejects(

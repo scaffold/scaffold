@@ -27,14 +27,15 @@ function singleModuleGraph(hashHex: string, withScaffoldMemory = true) {
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       }
       : { version: 20250510, imports: { run: 'main:run' } },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: hashHex,
         imports: withScaffoldMemory
           ? { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' }
           : { 'scaffold_env.*': 'base:*' },
       },
-    },
+    ],
   };
 }
 
@@ -86,15 +87,16 @@ Deno.test('Fixture: rename_only routes a renamed namespace import to scaffold', 
       imports: { run: 'main:run' },
       memories: { heap: { initial: 16, maximum: 4096, shared: true } },
     },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: hash.toHex(),
         imports: {
           'renamed_env.emit_output': 'base:emit_output',
           'env.memory': 'base:heap',
         },
       },
-    },
+    ],
   };
   await assertContractTraceSnapshot(t, {
     records: { modules: spec },
@@ -124,22 +126,24 @@ Deno.test('Fixture: passthrough two-layer graph forwards emit_output upward', as
       imports: { run: 'upper:run' },
       memories: { heap: { initial: 16, maximum: 4096, shared: true } },
     },
-    layers: {
-      lower: {
+    layers: [
+      {
+        key: 'lower',
         wasmHash: lower.hash.toHex(),
         imports: {
           'scaffold_env.emit_output': 'base:emit_output',
           'env.memory': 'base:heap',
         },
       },
-      upper: {
+      {
+        key: 'upper',
         wasmHash: upper.hash.toHex(),
         imports: {
           'renamed_ns.emit_output': 'lower:emit_output',
           'env.memory': 'base:heap',
         },
       },
-    },
+    ],
   };
   await assertContractTraceSnapshot(t, {
     records: { modules: spec },
@@ -192,16 +196,17 @@ Deno.test('Fixture: cross_mem_consumer reads data_owner exported memory', async 
   const consumer = await loadFixture('cross_mem_consumer');
   const spec = {
     base: { version: 20250510, imports: { run: 'consumer:run' } },
-    layers: {
-      owner: { wasmHash: owner.hash.toHex() },
-      consumer: {
+    layers: [
+      { key: 'owner', wasmHash: owner.hash.toHex() },
+      {
+        key: 'consumer',
         wasmHash: consumer.hash.toHex(),
         imports: {
           'scaffold_env.emit_output': 'base:emit_output',
           'other_mem.memory': 'owner:memory',
         },
       },
-    },
+    ],
   };
   await assertContractTraceSnapshot(t, {
     records: { modules: spec },

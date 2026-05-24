@@ -46,12 +46,13 @@ function singleModuleSpec(hashHex: string): unknown {
       imports: { run: 'main:run' },
       memories: { heap: { initial: 16, maximum: 4096, shared: true } },
     },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: hashHex,
         imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
       },
-    },
+    ],
   };
 }
 

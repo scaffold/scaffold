@@ -18,8 +18,9 @@ The shim is one layer in a stacking [`modules`](../protocol/wasm-abi.md#stacking
     "version": 20250510,
     "imports": { "run": "wasi_shim:run" }
   },
-  "layers": {
-    "wasi_shim": {
+  "layers": [
+    {
+      "key": "wasi_shim",
       "wasmHash": "...wasi-shim WASM blob hash...",
       "imports": {
         "program._start": "program:_start",
@@ -28,15 +29,18 @@ The shim is one layer in a stacking [`modules`](../protocol/wasm-abi.md#stacking
         "scaffold_env.*": "base:*"
       }
     },
-    "program": {
+    {
+      "key": "program",
       "wasmHash": "...the unmodified WASI program WASM blob hash...",
       "imports": {
         "wasi_snapshot_preview1.*": "wasi_shim:*"
       }
     }
-  }
+  ]
 }
 ```
+
+Array order is the instantiation order: shim first, program second. The shim's `program._start` import resolves lazily through the function-forwarder, so the program (instantiated later) satisfies it without an ordering conflict. There are no memory imports between the layers — the cross-memory bridge uses synthesised function imports (`@read` / `@write`), which are also lazy.
 
 Each module owns its own memory (declared via `(memory (export "memory") ...)`). The program imports only the shim's WASI functions. No shared memory; no data-section collision.
 
@@ -52,7 +56,8 @@ program_mem.write_bytes(prog_off: u32, shim_src: u32, len: u32) -> ()
 The linker resolves these via the `@read` / `@write` accessor markers in the shim layer's `imports` map. Concretely:
 
 ```jsonc
-"wasi_shim": {
+{
+  "key": "wasi_shim",
   "imports": {
     "program_mem.read_bytes":  "program:memory@read",   // function import; binds to a memcpy closure
     "program_mem.write_bytes": "program:memory@write"

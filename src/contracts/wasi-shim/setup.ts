@@ -67,7 +67,8 @@ interface ModulesSpec {
     version: number;
     imports: Record<string, string>;
   };
-  layers: Record<string, {
+  layers: Array<{
+    key: string;
     wasmHash: string;
     imports: Record<string, string>;
   }>;
@@ -78,13 +79,19 @@ function buildModulesSpec(shimHashHex: string, programHashHex: string): ModulesS
   // (Architecture section). Two layers, bidirectional function imports
   // resolved by the linker's lazy nameTable + the @read/@write accessor
   // markers for the program memory bridge.
+  //
+  // Array order = instantiation order: wasi_shim is instantiated first; its
+  // function import of `program._start` is resolved lazily through the
+  // forwarder, so program (instantiated after) can satisfy it without an
+  // ordering conflict.
   return {
     base: {
       version: MODULES_VERSION,
       imports: { run: 'wasi_shim:run' },
     },
-    layers: {
-      wasi_shim: {
+    layers: [
+      {
+        key: 'wasi_shim',
         wasmHash: shimHashHex,
         imports: {
           'program._start': 'program:_start',
@@ -93,11 +100,12 @@ function buildModulesSpec(shimHashHex: string, programHashHex: string): ModulesS
           'scaffold_env.*': 'base:*',
         },
       },
-      program: {
+      {
+        key: 'program',
         wasmHash: programHashHex,
         imports: { 'wasi_snapshot_preview1.*': 'wasi_shim:*' },
       },
-    },
+    ],
   };
 }
 

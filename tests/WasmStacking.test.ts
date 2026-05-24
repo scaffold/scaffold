@@ -95,22 +95,24 @@ Deno.test(
         imports: { run: 'upper:run' },
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       },
-      layers: {
-        lower: {
+      layers: [
+        {
+          key: 'lower',
           wasmHash: lowerHash.toHex(),
           imports: {
             'scaffold_env.emit_output': 'base:emit_output',
             'env.memory': 'base:heap',
           },
         },
-        upper: {
+        {
+          key: 'upper',
           wasmHash: upperHash.toHex(),
           imports: {
             'renamed_ns.emit_output': 'lower:emit_output',
             'env.memory': 'base:heap',
           },
         },
-      },
+      ],
     };
 
     const block = composeGenesisPacket([modulesRecord(spec)]);
@@ -145,12 +147,13 @@ Deno.test(
         imports: { run: 'main:run' },
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: hash.toHex(),
           imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'base:heap' },
         },
-      },
+      ],
     };
     const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
@@ -179,15 +182,16 @@ Deno.test(
         imports: { run: 'main:run' },
         memories: { heap: { initial: 16, maximum: 4096, shared: true } },
       },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: hash.toHex(),
           imports: {
             'renamed_env.emit_output': 'base:emit_output',
             'env.memory': 'base:heap',
           },
         },
-      },
+      ],
     };
     const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
@@ -221,7 +225,7 @@ Deno.test('WasmStacking: reject -- modules record not JSON object', () => {
 });
 
 Deno.test('WasmStacking: reject -- modules.base.version not integer', () => {
-  const block = blockWith(modulesRecordRaw('{"base":{"version":"v1","imports":{}},"layers":{}}'));
+  const block = blockWith(modulesRecordRaw('{"base":{"version":"v1","imports":{}},"layers":[]}'));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
     plugin.getContract(block);
@@ -233,7 +237,7 @@ Deno.test('WasmStacking: reject -- modules.base.version not integer', () => {
 
 Deno.test('WasmStacking: reject -- empty layers', () => {
   const block = blockWith(
-    modulesRecordRaw('{"base":{"version":20250510,"imports":{}},"layers":{}}'),
+    modulesRecordRaw('{"base":{"version":20250510,"imports":{}},"layers":[]}'),
   );
   const plugin = wasmContractPlugin({ transport: 'in-process' });
   try {
@@ -247,7 +251,7 @@ Deno.test('WasmStacking: reject -- empty layers', () => {
 Deno.test('WasmStacking: reject -- layer key "base" is reserved', () => {
   const spec = {
     base: { version: 20250510, imports: {} },
-    layers: { base: { wasmHash: '0'.repeat(64) } },
+    layers: [{ key: 'base', wasmHash: '0'.repeat(64) }],
   };
   const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
@@ -262,7 +266,7 @@ Deno.test('WasmStacking: reject -- layer key "base" is reserved', () => {
 Deno.test('WasmStacking: reject -- base.imports references unknown layer', () => {
   const spec = {
     base: { version: 20250510, imports: { run: 'nope:run' } },
-    layers: { main: { wasmHash: '0'.repeat(64) } },
+    layers: [{ key: 'main', wasmHash: '0'.repeat(64) }],
   };
   const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
@@ -278,7 +282,10 @@ Deno.test('WasmStacking: reject -- duplicate wasmHash', () => {
   const dup = '0'.repeat(64);
   const spec = {
     base: { version: 20250510, imports: { run: 'a:run' } },
-    layers: { a: { wasmHash: dup }, b: { wasmHash: dup } },
+    layers: [
+      { key: 'a', wasmHash: dup },
+      { key: 'b', wasmHash: dup },
+    ],
   };
   const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
@@ -293,12 +300,13 @@ Deno.test('WasmStacking: reject -- duplicate wasmHash', () => {
 Deno.test('WasmStacking: reject -- wildcard key/value mismatch', () => {
   const spec = {
     base: { version: 20250510, imports: { run: 'main:run' } },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: '0'.repeat(64),
         imports: { 'foo.*': 'base:literal' },
       },
-    },
+    ],
   };
   const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
@@ -313,7 +321,7 @@ Deno.test('WasmStacking: reject -- wildcard key/value mismatch', () => {
 Deno.test('WasmStacking: reject -- target ref missing colon', () => {
   const spec = {
     base: { version: 20250510, imports: { run: 'no-colon-here' } },
-    layers: { main: { wasmHash: '0'.repeat(64) } },
+    layers: [{ key: 'main', wasmHash: '0'.repeat(64) }],
   };
   const block = blockWith(modulesRecord(spec));
   const plugin = wasmContractPlugin({ transport: 'in-process' });
@@ -332,12 +340,13 @@ Deno.test('WasmStacking: reject -- declared import not listed (strict)', async (
   const hash = Hash.digest(bytes);
   const spec = {
     base: { version: 20250510, imports: { run: 'main:run' } },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: hash.toHex(),
         imports: { 'scaffold_env.params': 'base:params' /* missing emit_output */ },
       },
-    },
+    ],
   };
   const block = composeGenesisPacket([modulesRecord(spec)]);
   const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
@@ -357,7 +366,7 @@ Deno.test('WasmStacking: reject -- resolveBlob missing', async () => {
   const hash = Hash.digest(bytes);
   const spec = {
     base: { version: 20250510, imports: { run: 'main:run' } },
-    layers: { main: { wasmHash: hash.toHex(), imports: { 'scaffold_env.*': 'base:*' } } },
+    layers: [{ key: 'main', wasmHash: hash.toHex(), imports: { 'scaffold_env.*': 'base:*' } }],
   };
   const block = composeGenesisPacket([modulesRecord(spec)]);
   // No resolveBlob configured.
@@ -383,8 +392,9 @@ Deno.test('WasmStacking: wildcard matching -- longest prefix wins', async () => 
       imports: { run: 'main:run' },
       memories: { heap: { initial: 16, maximum: 4096, shared: true } },
     },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: hash.toHex(),
         imports: {
           // Specific entries take precedence (literal > wildcard).
@@ -393,7 +403,7 @@ Deno.test('WasmStacking: wildcard matching -- longest prefix wins', async () => 
           'env.memory': 'base:heap',
         },
       },
-    },
+    ],
   };
   const block = composeGenesisPacket([modulesRecord(spec)]);
   const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
@@ -417,12 +427,13 @@ Deno.test(
     const hash = Hash.digest(bytes);
     const spec = {
       base: { version: 20250510, imports: { run: 'main:run' } },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: hash.toHex(),
           imports: { 'scaffold_env.*': 'base:*' },
         },
-      },
+      ],
     };
     const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));
@@ -449,16 +460,17 @@ Deno.test(
     const consumerHash = Hash.digest(consumerBytes);
     const spec = {
       base: { version: 20250510, imports: { run: 'consumer:run' } },
-      layers: {
-        owner: { wasmHash: ownerHash.toHex() },
-        consumer: {
+      layers: [
+        { key: 'owner', wasmHash: ownerHash.toHex() },
+        {
+          key: 'consumer',
           wasmHash: consumerHash.toHex(),
           imports: {
             'scaffold_env.emit_output': 'base:emit_output',
             'other_mem.memory': 'owner:memory',
           },
         },
-      },
+      ],
     };
     const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(
@@ -493,19 +505,21 @@ Deno.test(
     const renameHash = Hash.digest(renameBytes);
     const spec = {
       base: { version: 20250510, imports: { run: 'a:run' } },
-      layers: {
-        a: {
+      layers: [
+        {
+          key: 'a',
           wasmHash: echoHash.toHex(),
           imports: { 'scaffold_env.*': 'base:*', 'env.memory': 'b:memory' },
         },
-        b: {
+        {
+          key: 'b',
           wasmHash: renameHash.toHex(),
           imports: {
             'renamed_env.emit_output': 'base:emit_output',
             'env.memory': 'a:memory',
           },
         },
-      },
+      ],
     };
     const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(
@@ -536,15 +550,16 @@ Deno.test(
     const hash = Hash.digest(bytes);
     const spec = {
       base: { version: 20250510, imports: { run: 'main:run' } },
-      layers: {
-        main: {
+      layers: [
+        {
+          key: 'main',
           wasmHash: hash.toHex(),
           imports: {
             'scaffold_env.*': 'base:*',
             'env.memory': 'base:params',
           },
         },
-      },
+      ],
     };
     const block = composeGenesisPacket([modulesRecord(spec)]);
     const resolveBlob = blobResolver(new Map([[hash.toHex(), bytes]]));

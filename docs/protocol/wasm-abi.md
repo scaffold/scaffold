@@ -301,7 +301,7 @@ Two mechanisms for composing contracts. They serve different needs and compose o
 A contract is structured as a **graph of WASM modules**, declared in a `modules` JSON record on the contract block. The graph has two parts:
 
 - **`base`**: the scaffold-facing stub. Names which layer scaffold invokes for each mode (`run`, `walk_params`, etc.) and carries the contract's ABI version. Scaffold itself is a node in the graph, addressed by the special layer key `"base"`.
-- **`layers`**: a map from a logical layer key (e.g. `"wasi_shim"`, `"program"`) to a layer spec. Each layer references a content-addressed WASM blob and lists how its declared WASM imports resolve onto other layers' exports.
+- **`layers`**: an ordered array of layer specs. Each layer carries a logical key (e.g. `"wasi_shim"`, `"program"`), references a content-addressed WASM blob, and lists how its declared WASM imports resolve onto other layers' exports. **Array order is the instantiation order**; memory / table / global imports must target a strictly lower-indexed layer (function imports are lazy via JS forwarders and may cycle freely).
 
 Every cross-edge in the graph is **explicit** in some layer's `imports` map. There is no global lookup, no implicit default, no fallback. Authors spell out exactly where each import comes from.
 
@@ -314,7 +314,10 @@ type ModulesSpec = {
     imports: Record<string, string>;          // "<mode>" -> "<layerKey>:<exportName>"
     memories?: Record<string, MemorySpec>;    // scaffold-provided memories, addressable as "base:<name>"
   };
-  layers: Record<string, {
+  // Array order is the instantiation order. Memory / table / global imports
+  // must target a strictly lower-indexed layer; function imports may cycle.
+  layers: Array<{
+    key: string;                              // unique, not "base", no ":" / "." / "*"
     wasmHash: string;                         // 64-char hex content hash of the WASM blob
     imports?: Record<string, string>;         // "<ns>.<field>" -> "<layerKey>:<exportName>"
   }>;
@@ -347,13 +350,13 @@ Resolution priority: literal entries first, then longest-prefix wildcard.
 
 **Structural rules** (enforced at parse time):
 1. `modules.base.version` is an integer.
-2. `modules.layers` is non-empty.
-3. Every layer's `wasmHash` is a 64-char hex string.
-4. No duplicate `wasmHash` across layers.
-5. The reserved layer key `"base"` cannot appear in `layers`.
+2. `modules.layers` is a non-empty array.
+3. Every layer carries a non-empty `key`, unique across the array, not `"base"`, no `":"` / `"."` / `"*"`.
+4. Every layer's `wasmHash` is a 64-char hex string.
+5. No duplicate `wasmHash` across layers.
 6. Every `"<layerKey>:<exportName>"` reference resolves to a layer that exists in `layers` (or to `"base"`).
 7. `base.imports` references cannot target `"base"` (scaffold doesn't call itself).
-8. Memory imports across layers must form an acyclic dependency graph (see [Memory model](#memory-model-stacking) below). Function-import cycles are handled by JS forwarders; memory-import cycles cannot be (memories aren't lazy-bindable) and are rejected at load.
+8. Memory / table / global imports across layers must target a strictly lower-indexed layer in the `layers` array (or `base:*` memories). Function-import cycles are handled by JS forwarders; non-function imports bind eagerly at instantiate time and cannot be deferred.
 
 **Worked examples.**
 
@@ -368,15 +371,16 @@ Single-module contract that imports scaffold's memory:
       "heap": { "initial": 16, "maximum": 4096, "shared": true }
     }
   },
-  "layers": {
-    "main": {
+  "layers": [
+    {
+      "key": "main",
       "wasmHash": "...64-hex...",
       "imports": {
         "scaffold_env.*": "base:*",
         "env.memory": "base:heap"
       }
     }
-  }
+  ]
 }
 ```
 
@@ -390,12 +394,13 @@ Single-module contract that owns its memory (no scaffold-provided memory needed)
     "version": 20250510,
     "imports": { "run": "main:run" }
   },
-  "layers": {
-    "main": {
+  "layers": [
+    {
+      "key": "main",
       "wasmHash": "...64-hex...",
       "imports": { "scaffold_env.*": "base:*" }
     }
-  }
+  ]
 }
 ```
 
@@ -409,26 +414,28 @@ A WASI program above a WASI shim (two layers, function-cyclic + memory-acyclic):
     "version": 20250510,
     "imports": { "run": "wasi_shim:run" }
   },
-  "layers": {
-    "wasi_shim": {
+  "layers": [
+    {
+      "key": "program",
+      "wasmHash": "...the WASI program WASM...",
+      "imports": {
+        "wasi_snapshot_preview1.*": "wasi_shim:*"
+      }
+    },
+    {
+      "key": "wasi_shim",
       "wasmHash": "...the WASI shim WASM...",
       "imports": {
         "_start": "program:__wasi_unstable_reactor_start",
         "program_mem.memory": "program:memory",
         "scaffold_env.*": "base:*"
       }
-    },
-    "program": {
-      "wasmHash": "...the WASI program WASM...",
-      "imports": {
-        "wasi_snapshot_preview1.*": "wasi_shim:*"
-      }
     }
-  }
+  ]
 }
 ```
 
-Each module declares its own memory. The shim imports the program's exported memory under a local name (so it can read program pointers when forwarding WASI calls). The program imports only the shim's WASI functions. Memory deps are one-way (shim ← program), so topo order is "program first, then shim". Function cycles (shim ↔ program) are resolved by JS forwarders post-instantiation.
+Each module declares its own memory. The shim imports the program's exported memory under a local name (so it can read program pointers when forwarding WASI calls). The program imports only the shim's WASI functions. Memory deps are one-way (shim ← program), so the array order is "program first, then shim" — the shim's memory import resolves against an already-instantiated layer. Function cycles (shim ↔ program) are resolved by JS forwarders consulting the shared exports table at call time.
 
 `base.imports.run` is `wasi_shim:run` — scaffold calls the shim's `run`, which internally invokes the program's `_start` via the cross-edge import. The shim copies bytes between its own memory and the program's memory at the WASI boundary as needed.
 
@@ -443,11 +450,14 @@ The entry layer's memory must be `shared: true` when the runtime selects the Ato
 - `alloc`: the host-bridge allocator (returns offsets in the entry layer's memory).
 - `memory`: the linear memory the bridge reads from / writes to. Either declared in the WASM (`(memory (export "memory") ...)`) or re-exported from an imported memory.
 
-**Linker implementation.** The linker performs two passes:
-1. **Memory pass.** Topo-sort layers by memory dependencies. Instantiate any `base.memories`, then instantiate layers in topo order: a layer is instantiable once every memory it imports has been created. Memory imports resolve directly to `WebAssembly.Memory` instances; no forwarding.
-2. **Function-cycle pass.** Function imports that target a layer not yet instantiated are stubbed with JS forwarders closing over a shared name table populated after every layer has been instantiated. Forwarders cost one JS-hop per cross-edge call; future work may topo-sort the acyclic subset and use direct linking.
+**Linker implementation.** The linker:
+1. Validates that every layer's memory / table / global import targets either a strictly lower-indexed layer or a `base.memories` entry — non-function imports bind eagerly, so the target must already be instantiated when this layer wires up.
+2. Pre-populates a shared exports table (`base:<bareName>` → host export) from scaffold's host bindings.
+3. Walks `layers` in array order. For each layer: function imports are wired as JS forwarder closures that look up `<layerKey>:<exportName>` in the shared exports table at call time; non-function imports resolve directly to the target. Immediately after `WebAssembly.instantiate` returns, every function export the layer exposes is registered in the exports table under `<layerKey>:<exportName>`, so any higher layer's downward import resolves cleanly.
 
-**Cycles.** Duplicate `wasmHash` across layers is rejected at load. Memory-import cycles are rejected at load (no forwarder mechanism). Function-import cycles are allowed and handled by forwarders.
+**Cycles.** Duplicate `wasmHash` across layers is rejected at load. Memory / table / global imports targeting a higher-indexed layer are rejected (no forwarder mechanism — they bind eagerly). Function-import cycles are allowed and handled by forwarders (one JS-hop per cross-edge call).
+
+**Suspending base exports.** Host (`base:*`) exports declare a call shape: `sync` or `async`. For `async` base imports, the wire-time import handed to WASM is wrapped in `new WebAssembly.Suspending(forwarder)` — required because `Suspending` instances are not callable from JavaScript and must be the literal import value. Per-layer WASM exports are always treated as sync from JS (WASM exports return synchronously even if they internally suspend); only host-exported entries carry the distinction.
 
 **Budget.** A graph execution counts as a single contract execution: the entire graph shares one per-verifier budget.
 
@@ -485,7 +495,7 @@ A `request` call with no matching record falls through to the normal handler cha
 
 **Block placement.** No hard rule. The runtime may merge a sub-contract's outputs into the parent's block (if the sub-contract is small) or place them on a new block (if larger). Authors should not depend on either — `put` is a generation directive, not a block-creation guarantee.
 
-**Use cases.** Providing data alongside a hash request: a parent that references a blob via its `modules` graph (e.g. `{ layers: { main: { wasmHash: H } } }`) calls `put({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the sub-contract's block. Any other "publish-and-make-available" pattern works the same way.
+**Use cases.** Providing data alongside a hash request: a parent that references a blob via its `modules` graph (e.g. `{ layers: [{ key: "main", wasmHash: H }] }`) calls `put({ contract: HASH_CONTRACT, params: H }, [...])` to seed the network with the preimage. The HASH contract's role is purely as a discovery beacon — the caller (e.g. `resolveBlob` in the WASM plugin) verifies hash equality after fetching. Future calls to `fetch({ contract: HASH_CONTRACT, params: H })` find the sub-contract's block. Any other "publish-and-make-available" pattern works the same way.
 
 ---
 

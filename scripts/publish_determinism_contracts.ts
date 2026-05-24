@@ -49,12 +49,13 @@ function blobPublishBlock(blob: Uint8Array): Output[] {
 function modulesRecord(contractWasmHash: Hash): Output {
   const spec = {
     base: { version: TRANSFORM_VERSION, imports: { run: 'main:run' } },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: contractWasmHash.toHex(),
         imports: { 'scaffold_env.*': 'base:*' },
       },
-    },
+    ],
   };
   return makeRecordOutput('modules', new TextEncoder().encode(JSON.stringify(spec)));
 }

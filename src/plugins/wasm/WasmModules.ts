@@ -16,8 +16,9 @@
 //         "<memoryName>": { "initial": 16, "maximum": 4096, "shared": true }
 //       }
 //     },
-//     "layers": {
-//       "<layerKey>": {
+//     "layers": [
+//       {
+//         "key": "<layerKey>",
 //         "wasmHash": "<64-char hex content hash>",
 //         "imports": {
 //           "<ns>.<field>":   "<layerKey>:<exportName>",
@@ -26,8 +27,12 @@
 //         }
 //       },
 //       ...
-//     }
+//     ]
 //   }
+//
+// The `layers` array IS the instantiation order. Memory / table / global
+// imports must target a strictly lower-indexed layer (see Pass 2 in
+// `loadModules`); function imports may cycle freely via forwarders.
 //
 // Resolution model
 // ----------------
@@ -125,6 +130,12 @@ export interface BaseSpec {
 }
 
 export interface LayerSpec {
+  /**
+   * Layer identifier. Referenced by `<layerKey>:<exportName>` import targets
+   * and by `base.imports`. Must be unique across the `layers` array, must not
+   * be `"base"`, and must not contain `":"`, `"."`, or `"*"`.
+   */
+  key: string;
   /** 64-char hex content hash of the WASM blob. */
   wasmHash: string;
   /**
@@ -136,7 +147,12 @@ export interface LayerSpec {
 
 export interface ModulesSpec {
   base: BaseSpec;
-  layers: Record<string, LayerSpec>;
+  /**
+   * Array order IS the instantiation order. Memory / table / global imports
+   * must target a strictly lower-indexed layer (`base:*` memories also OK);
+   * function imports are lazy and may cycle freely.
+   */
+  layers: LayerSpec[];
 }
 
 // -- Parsed / normalised types -----------------------------------------
@@ -356,13 +372,12 @@ export function parseModules(recordBody: Uint8Array): NormalisedModules {
     }
   }
 
-  // layers
-  if (typeof obj.layers !== 'object' || obj.layers === null || Array.isArray(obj.layers)) {
-    throw new Error('modules.layers must be an object');
+  // layers -- an ordered array; index in the array is the instantiation order.
+  if (!Array.isArray(obj.layers)) {
+    throw new Error('modules.layers must be an array');
   }
-  const layersObj = obj.layers as Record<string, unknown>;
-  const layerKeys = Object.keys(layersObj);
-  if (layerKeys.length === 0) {
+  const layersArr = obj.layers as unknown[];
+  if (layersArr.length === 0) {
     throw new Error('modules.layers must contain at least one layer');
   }
 
@@ -370,7 +385,16 @@ export function parseModules(recordBody: Uint8Array): NormalisedModules {
   const byKey = new Map<string, NormalisedLayer>();
   const seenHashes = new Set<string>();
 
-  for (const layerKey of layerKeys) {
+  for (let i = 0; i < layersArr.length; i++) {
+    const layer = layersArr[i];
+    if (typeof layer !== 'object' || layer === null || Array.isArray(layer)) {
+      throw new Error(`modules.layers[${i}] must be an object`);
+    }
+    const layerObj = layer as Record<string, unknown>;
+    if (typeof layerObj.key !== 'string' || layerObj.key.length === 0) {
+      throw new Error(`modules.layers[${i}].key must be a non-empty string`);
+    }
+    const layerKey = layerObj.key;
     if (layerKey === 'base') {
       throw new Error('modules.layers: layer key "base" is reserved (refers to scaffold host)');
     }
@@ -379,11 +403,9 @@ export function parseModules(recordBody: Uint8Array): NormalisedModules {
         `modules.layers: layer key ${JSON.stringify(layerKey)} must not contain ":", ".", or "*"`,
       );
     }
-    const layer = layersObj[layerKey];
-    if (typeof layer !== 'object' || layer === null || Array.isArray(layer)) {
-      throw new Error(`modules.layers[${JSON.stringify(layerKey)}] must be an object`);
+    if (byKey.has(layerKey)) {
+      throw new Error(`modules.layers: duplicate layer key ${JSON.stringify(layerKey)}`);
     }
-    const layerObj = layer as Record<string, unknown>;
     if (typeof layerObj.wasmHash !== 'string' || !/^[a-fA-F0-9]{64}$/.test(layerObj.wasmHash)) {
       throw new Error(
         `modules.layers[${JSON.stringify(layerKey)}].wasmHash must be a 64-char hex string`,

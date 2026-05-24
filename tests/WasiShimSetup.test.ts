@@ -36,19 +36,25 @@ Deno.test('buildContractRecords: modules JSON has expected shape', () => {
   assertEquals(base.version, 20250510);
   assertEquals((base.imports as Record<string, string>).run, 'wasi_shim:run');
 
-  const layers = modules.layers as Record<string, Record<string, unknown>>;
+  const layers = modules.layers as Array<Record<string, unknown>>;
+  assertEquals(layers.length, 2, 'expected wasi_shim then program');
+  const [shimLayer, progLayer] = layers;
+  // Array order is the instantiation order: shim first, program second.
+  assertEquals(shimLayer.key, 'wasi_shim');
+  assertEquals(progLayer.key, 'program');
+
   const shimHex = Hash.digest(STUB_SHIM).toHex();
   const progHex = Hash.digest(STUB_PROG).toHex();
-  assertEquals(layers.wasi_shim.wasmHash, shimHex);
-  assertEquals(layers.program.wasmHash, progHex);
+  assertEquals(shimLayer.wasmHash, shimHex);
+  assertEquals(progLayer.wasmHash, progHex);
 
-  const shimImports = layers.wasi_shim.imports as Record<string, string>;
+  const shimImports = shimLayer.imports as Record<string, string>;
   assertEquals(shimImports['program._start'], 'program:_start');
   assertEquals(shimImports['program_mem.read_bytes'], 'program:memory@read');
   assertEquals(shimImports['program_mem.write_bytes'], 'program:memory@write');
   assertEquals(shimImports['scaffold_env.*'], 'base:*');
 
-  const progImports = layers.program.imports as Record<string, string>;
+  const progImports = progLayer.imports as Record<string, string>;
   assertEquals(progImports['wasi_snapshot_preview1.*'], 'wasi_shim:*');
 
   // Blobs map is keyed by hex hash, contains both bytes.

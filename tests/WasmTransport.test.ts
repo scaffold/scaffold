@@ -40,8 +40,9 @@ async function singleModuleStack(
       imports: { [mode]: `main:${entryExport}` },
       memories: { heap: { initial: 16, maximum: 4096, shared: true } },
     },
-    layers: {
-      main: {
+    layers: [
+      {
+        key: 'main',
         wasmHash: hash.toHex(),
         imports: {
           'scaffold_env.*': 'base:*',
@@ -50,7 +51,7 @@ async function singleModuleStack(
           'env.memory': 'base:heap',
         },
       },
-    },
+    ],
   };
   const normalised = parseModules(new TextEncoder().encode(JSON.stringify(spec)));
   const module = await WebAssembly.compile(bytes);
