@@ -15,10 +15,20 @@ import type { WasmCallMsg, WasmInstantiateMsg, WasmSessionMode } from './wasmWor
 import {
   type CompiledLayer,
   type CompiledModules,
+  type ExportEntry,
   loadModules,
   type MemorySpec,
+  syncExport,
   type TargetRef,
 } from '../../plugins/wasm/WasmModules.ts';
+
+function asSyncEntries<T extends Record<string, (...args: never[]) => unknown>>(
+  obj: T,
+): Record<string, ExportEntry> {
+  const out: Record<string, ExportEntry> = {};
+  for (const [k, fn] of Object.entries(obj)) out[k] = syncExport(fn);
+  return out;
+}
 
 const SCAFFOLD_TRAP_TAG = '__scaffold_reject__:';
 
@@ -78,8 +88,8 @@ function flatRunExports(
   ctx: SessionCtx,
   client: WasmWorkerChannelClient,
   preset: RunPreset,
-): Record<string, unknown> {
-  return {
+): Record<string, ExportEntry> {
+  return asSyncEntries({
     mode: () => preset.executionMode,
     contract_hash: () =>
       packPtrLen(allocAndWrite(ctx, preset.contractHash), preset.contractHash.length),
@@ -109,14 +119,14 @@ function flatRunExports(
     reject: (rp: number, rl: number) => {
       throw new WasmRejectError(readString(ctx, rp, rl));
     },
-  };
+  });
 }
 
 function flatWalkExports(
   ctx: SessionCtx,
   client: WasmWorkerChannelClient,
-): Record<string, unknown> {
-  return {
+): Record<string, ExportEntry> {
+  return asSyncEntries({
     emit_bytes: (kp: number, kl: number, vp: number, vl: number, dp: number, dl: number) => {
       client.inform('emit_bytes', [
         readString(ctx, kp, kl),
@@ -151,14 +161,14 @@ function flatWalkExports(
     emit_list_end: () => {
       client.inform('emit_list_end', []);
     },
-  };
+  });
 }
 
 function flatBuildExports(
   ctx: SessionCtx,
   client: WasmWorkerChannelClient,
-): Record<string, unknown> {
-  return {
+): Record<string, ExportEntry> {
+  return asSyncEntries({
     request_bytes: (kp: number, kl: number, dp: number, dl: number) =>
       dispatchPacked(ctx, client, 'request_bytes', [
         readString(ctx, kp, kl),
@@ -209,7 +219,7 @@ function flatBuildExports(
     validation_error: (kp: number, kl: number, mp: number, ml: number) => {
       client.inform('validation_error', [readString(ctx, kp, kl), readString(ctx, mp, ml)]);
     },
-  };
+  });
 }
 
 // -- Session --------------------------------------------------------
@@ -232,7 +242,7 @@ export class WasmSession {
     }
     const ctx: SessionCtx = makeEmptyCtx();
 
-    let scaffoldFlat: Record<string, unknown>;
+    let scaffoldFlat: Record<string, ExportEntry>;
     if (msg.mode === 'run') {
       if (!msg.preset) throw new Error('run mode requires preset');
       scaffoldFlat = flatRunExports(ctx, this.client, msg.preset);

@@ -18,7 +18,13 @@ import {
   type WalkBridge,
 } from '../WasmHostBridge.ts';
 import { packPtrLen } from '../WasmWireCodec.ts';
-import { type CompiledModules, loadModules, type TargetRef } from '../WasmModules.ts';
+import {
+  type CompiledModules,
+  type ExportEntry,
+  loadModules,
+  syncExport,
+  type TargetRef,
+} from '../WasmModules.ts';
 
 const SYNC_ONLY_ERROR = 'InProcessMockTransport: host import returned a Promise; ' +
   'switch to JspiTransport or AtomicsWorkerTransport for async execution';
@@ -58,12 +64,23 @@ function expectSync<T>(value: T | Promise<T>): T {
 
 // -- Scaffold flat exports (keyed by bare name) ------------------------
 
-function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unknown> {
+/** Wrap every value in `syncExport(...)` -- InProcess imports are all sync. */
+function asSyncEntries<T extends Record<string, (...args: never[]) => unknown>>(
+  obj: T,
+): Record<string, ExportEntry> {
+  const out: Record<string, ExportEntry> = {};
+  for (const [k, fn] of Object.entries(obj)) {
+    out[k] = syncExport(fn as (...args: unknown[]) => unknown);
+  }
+  return out;
+}
+
+function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, ExportEntry> {
   const handlePackedBytes = (bytes: Uint8Array): bigint => {
     const ptr = allocAndWrite(ctx, bytes);
     return packPtrLen(ptr, bytes.length);
   };
-  return {
+  return asSyncEntries({
     mode: () => bridge.mode(),
     contract_hash: () => handlePackedBytes(bridge.contractHash()),
     contract_metadata: (vp: number, vl: number) =>
@@ -94,11 +111,11 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
     reject: (rp: number, rl: number) => {
       bridge.reject(readSlice(ctx, rp, rl));
     },
-  };
+  });
 }
 
-function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, unknown> {
-  return {
+function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, ExportEntry> {
+  return asSyncEntries({
     emit_bytes: (kp: number, kl: number, vp: number, vl: number, dp: number, dl: number) =>
       bridge.emitBytes(
         readString(ctx, kp, kl),
@@ -129,15 +146,15 @@ function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, u
     emit_list_start: (kp: number, kl: number, count: number) =>
       bridge.emitListStart(readString(ctx, kp, kl), count) ? 1 : 0,
     emit_list_end: () => bridge.emitListEnd(),
-  };
+  });
 }
 
-function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string, unknown> {
+function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string, ExportEntry> {
   const handlePackedBytes = (bytes: Uint8Array): bigint => {
     const ptr = allocAndWrite(ctx, bytes);
     return packPtrLen(ptr, bytes.length);
   };
-  return {
+  return asSyncEntries({
     request_bytes: (kp: number, kl: number, dp: number, dl: number) =>
       handlePackedBytes(
         bridge.requestBytes(
@@ -167,7 +184,7 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
     end_array: () => bridge.endArray(),
     validation_error: (kp: number, kl: number, mp: number, ml: number) =>
       bridge.validationError(readString(ctx, kp, kl), readString(ctx, mp, ml)),
-  };
+  });
 }
 
 // -- Entry resolution --------------------------------------------------

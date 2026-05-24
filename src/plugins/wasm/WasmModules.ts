@@ -549,24 +549,76 @@ export interface TracerEvent {
 export type Tracer = (event: TracerEvent) => void;
 
 /**
+ * Host export classified by call shape. The transport tells `loadModules`
+ * which exports are sync (called from JS, returns synchronously) vs async
+ * (called from JS, returns a Promise). For `kind: 'async'` base imports,
+ * the wire-time import value is `new WebAssembly.Suspending(forwarder)`
+ * so WASM can call them as if sync while JSPI handles the suspension.
+ *
+ * Per-layer WASM exports are always treated as sync from JS (WASM exports
+ * return synchronously even if they internally suspend); only `base:` host
+ * exports carry the distinction.
+ */
+export type ExportEntry =
+  | { kind: 'sync'; fn: (...args: unknown[]) => unknown }
+  | { kind: 'async'; fn: (...args: unknown[]) => Promise<unknown> };
+
+/**
+ * Wrap a sync host function as a `kind: 'sync'` entry. The generic
+ * constraint accepts any concrete arg-typed function -- WASM imports
+ * arrive at the JS boundary as raw args; the host function's typed
+ * parameters just describe how it interprets them.
+ */
+export function syncExport<Fn extends (...args: never[]) => unknown>(fn: Fn): ExportEntry {
+  return { kind: 'sync', fn: fn as unknown as (...args: unknown[]) => unknown };
+}
+
+/** Wrap an async host function as a `kind: 'async'` entry. */
+export function asyncExport<Fn extends (...args: never[]) => Promise<unknown>>(
+  fn: Fn,
+): ExportEntry {
+  return {
+    kind: 'async',
+    fn: fn as unknown as (...args: unknown[]) => Promise<unknown>,
+  };
+}
+
+/**
  * Instantiate every layer with kind-aware import resolution.
  *
- * Two-pass:
- *   1. Topo-sort layers by non-function (memory/table/global) imports;
- *      reject cycles. Instantiate scaffold-provided memories from
- *      `compiled.base.memories`.
- *   2. Instantiate each layer in topo order. Function imports use JS
- *      forwarders over a shared nameTable populated after every layer
- *      finishes, so function cycles work. Memory/table/global imports
- *      bind eagerly to already-instantiated layers' exports or base
- *      memories.
+ * The supplied `compiled.layers` array IS the instantiation order. Memory /
+ * table / global imports must target a strictly lower-indexed layer (or
+ * `base:` memories); we validate this up front and reject otherwise. There
+ * is no topo-sort. The contract is "layer N may only depend, at instantiate
+ * time, on layers 0..N-1 and `base:*`."
+ *
+ * Function imports are resolved through a single shared exports table
+ * (`exports: Map<string, ExportEntry>`):
+ *   - Base entries are pre-populated from `scaffoldExports` before the
+ *     instantiation loop runs.
+ *   - Each layer's WASM exports are added to the table immediately after
+ *     `WebAssembly.instantiate` returns, before the next layer wires up.
+ *
+ * Function imports use a forwarder that looks up the table at call time
+ * (so cycles work: layer N may import a function from layer M > N; the
+ * forwarder fires only after both layers are instantiated). For
+ * `base:` targets whose entry is `kind: 'async'`, the import value handed
+ * to WASM is `new WebAssembly.Suspending(forwarder)` -- required because
+ * `Suspending` instances are not callable from JavaScript and must be the
+ * literal import value.
+ *
+ * Constraint on WASM start functions: a layer's `(start ...)` (if present)
+ * may only call into base or already-instantiated lower layers. Calls into
+ * not-yet-instantiated higher layers will fire the forwarder and throw at
+ * lookup time. This is unavoidable: there is no order that lets two layers'
+ * start functions mutually call each other.
  *
  * `scaffoldExports` is keyed by BARE export names (e.g., `"emit_output"`).
- * It's surfaced in the nameTable under `"base:<bareName>"` keys.
+ * Surfaced in the exports table under `"base:<bareName>"`.
  */
 export async function loadModules(
   compiled: CompiledModules,
-  scaffoldExports: Record<string, unknown>,
+  scaffoldExports: Record<string, ExportEntry>,
   entry: TargetRef,
   tracer?: Tracer,
 ): Promise<LoadModulesResult> {
@@ -609,74 +661,62 @@ export async function loadModules(
     memoryDeps.set(layer.key, deps);
   }
 
-  // --- Pass 2: topo-sort layers by non-function deps -----------------
-  const inDegree = new Map<string, number>();
-  const reverseAdj = new Map<string, Set<string>>();
-  for (const layer of compiled.layers) {
-    inDegree.set(layer.key, 0);
-    reverseAdj.set(layer.key, new Set());
+  // --- Pass 2: validate non-function imports target lower-indexed layers
+  // The supplied `compiled.layers` array is the instantiation order. Memory
+  // / table / global imports bind eagerly, so their target must already be
+  // instantiated when this layer wires up -- i.e. strictly lower index, or
+  // `base:` memories. Function imports are lazy via forwarders and may
+  // cycle freely.
+  const indexByKey = new Map<string, number>();
+  for (let i = 0; i < compiled.layers.length; i++) {
+    indexByKey.set(compiled.layers[i].key, i);
   }
-  for (const [src, deps] of memoryDeps) {
-    for (const dep of deps) {
-      if (!reverseAdj.has(dep)) {
+  for (let i = 0; i < compiled.layers.length; i++) {
+    const layer = compiled.layers[i];
+    for (const dep of memoryDeps.get(layer.key)!) {
+      const depIdx = indexByKey.get(dep);
+      if (depIdx === undefined) {
         throw new Error(
-          `modules.layers[${JSON.stringify(src)}]: non-function import references unknown layer ${
-            JSON.stringify(dep)
-          }`,
+          `modules.layers[${
+            JSON.stringify(layer.key)
+          }]: non-function import references unknown layer ${JSON.stringify(dep)}`,
         );
       }
-      reverseAdj.get(dep)!.add(src);
-      inDegree.set(src, (inDegree.get(src) ?? 0) + 1);
+      if (depIdx >= i) {
+        throw new Error(
+          `modules.layers[${JSON.stringify(layer.key)}]: non-function imports must target ` +
+            `a strictly lower-indexed layer (or base:* memories). Layer ${
+              JSON.stringify(layer.key)
+            } (index ${i}) imports from ${JSON.stringify(dep)} (index ${depIdx}).`,
+        );
+      }
     }
-  }
-  const queue: string[] = [];
-  for (const [layer, deg] of inDegree) if (deg === 0) queue.push(layer);
-  const topoOrder: string[] = [];
-  while (queue.length > 0) {
-    const layer = queue.shift()!;
-    topoOrder.push(layer);
-    for (const dependent of reverseAdj.get(layer)!) {
-      const newDeg = (inDegree.get(dependent) ?? 0) - 1;
-      inDegree.set(dependent, newDeg);
-      if (newDeg === 0) queue.push(dependent);
-    }
-  }
-  if (topoOrder.length !== compiled.layers.length) {
-    const stuck: string[] = [];
-    for (const [layer, deg] of inDegree) if (deg > 0) stuck.push(layer);
-    throw new Error(
-      `modules.layers: memory/table/global-import cycle detected among layers [${
-        stuck.map((s) => JSON.stringify(s)).join(', ')
-      }] (these import kinds bind eagerly and cannot be lazy-resolved like function imports)`,
-    );
   }
 
-  // --- Pass 3: instantiate layers in topo order ----------------------
+  // --- Pass 3: instantiate layers in supplied order ------------------
   //
-  // `nameTable` resolves the lazy function forwarders at call time. The
-  // host-provided `base:*` exports are known up front and MUST be in the
-  // table before instantiation begins -- a WASM start function (e.g. the
-  // wasi-shim reading its `wasi_setup` via `scaffold_env.contract_metadata`)
-  // fires synchronously during `WebAssembly.instantiate`, before any code
-  // after this loop runs. Per-layer `${layerKey}:*` entries are added
-  // immediately after each instantiation so a later layer's start function
-  // can call into an earlier layer's exports through a forwarder.
-  const nameTable = new Map<string, ImportFn>();
-  for (const [name, fn] of Object.entries(scaffoldExports)) {
-    if (typeof fn === 'function') nameTable.set(`base:${name}`, fn as ImportFn);
+  // `exports` is the single shared table that resolves function-import
+  // forwarders at call time. Base entries are populated up front; per-layer
+  // entries are added immediately after each `WebAssembly.instantiate`
+  // returns. (See ExportEntry doc above for the kind: 'sync' | 'async'
+  // distinction and how it drives Suspending wrapping at wire time.)
+  const exports = new Map<string, ExportEntry>();
+  for (const [name, entry] of Object.entries(scaffoldExports)) {
+    exports.set(`base:${name}`, entry);
   }
   const makeForwarder = (target: TargetRef, srcLayerKey: string, declared: string): ImportFn =>
   (
     ...args: unknown[]
   ) => {
     const key = `${target.layerKey}:${target.exportName}`;
-    const fn = nameTable.get(key);
-    if (!fn) {
+    const entry = exports.get(key);
+    if (!entry) {
       throw new Error(
         `Stack layer ${JSON.stringify(srcLayerKey)}: unresolved import \`${declared}\` -> ` +
-          `${key} (target not found in nameTable)`,
+          `${key} (target not in exports table)`,
       );
     }
+    const fn = entry.fn;
     if (!tracer) return fn(...args);
     tracer({ phase: 'enter', srcLayer: srcLayerKey, target, declared, args });
     try {
@@ -755,8 +795,13 @@ export async function loadModules(
   const exportsByKey = new Map<string, Record<string, unknown>>();
   const memoryByLayerKey = new Map<string, WebAssembly.Memory>();
 
-  for (const layerKey of topoOrder) {
-    const layer = compiled.byKey.get(layerKey)!;
+  // Suspending is only available when JSPI is enabled in the runtime; load
+  // lazily so the in-process / Atomics paths don't require it.
+  const SuspendingCtor =
+    (WebAssembly as unknown as { Suspending?: new (fn: unknown) => unknown }).Suspending;
+
+  for (const layer of compiled.layers) {
+    const layerKey = layer.key;
     const resolved = declaredByLayer.get(layerKey)!;
     const out: Record<string, Record<string, unknown>> = {};
     // Cache the first imported memory we wire up so we can record it as
@@ -767,9 +812,31 @@ export async function loadModules(
       const dotted = `${r.namespace}.${r.name}`;
       let value: unknown;
       if (r.kind === 'function') {
-        value = r.target.accessor
-          ? makeAccessorForwarder(r.target, layerKey, dotted, r.target.accessor)
-          : makeForwarder(r.target, layerKey, dotted);
+        if (r.target.accessor) {
+          value = makeAccessorForwarder(r.target, layerKey, dotted, r.target.accessor);
+        } else {
+          const fwd = makeForwarder(r.target, layerKey, dotted);
+          // Suspending-wrap iff the target is known async at wire time.
+          // Only base entries can be async (per-layer WASM exports are
+          // always sync from JS); for upward layer refs the target isn't
+          // in the table yet but it's guaranteed sync, so the plain
+          // forwarder is correct.
+          const wireEntry = r.target.layerKey === 'base'
+            ? exports.get(`base:${r.target.exportName}`)
+            : undefined;
+          if (wireEntry?.kind === 'async') {
+            if (!SuspendingCtor) {
+              throw new Error(
+                `Stack layer ${JSON.stringify(layerKey)}: import ${JSON.stringify(dotted)} ` +
+                  `targets async base export ${JSON.stringify(r.target.exportName)} but the ` +
+                  `runtime does not support WebAssembly.Suspending. Use a sync transport.`,
+              );
+            }
+            value = new SuspendingCtor(fwd);
+          } else {
+            value = fwd;
+          }
+        }
       } else if (r.kind === 'memory') {
         if (r.target.layerKey === 'base') {
           const mem = baseMemories.get(r.target.exportName);
@@ -784,10 +851,12 @@ export async function loadModules(
         } else {
           const targetExports = exportsByKey.get(r.target.layerKey);
           if (!targetExports) {
+            // Pass 2 should have rejected this; if we land here it's an
+            // internal invariant break.
             throw new Error(
               `modules.layers[${JSON.stringify(layerKey)}].imports[${JSON.stringify(dotted)}]: ` +
                 `target ${r.target.layerKey}:${r.target.exportName} not yet instantiated ` +
-                `(internal error: topo order broken)`,
+                `(internal error: Pass 2 layer-order validation should have rejected this)`,
             );
           }
           const candidate = targetExports[r.target.exportName];
@@ -824,18 +893,24 @@ export async function loadModules(
     }
 
     const instance = await WebAssembly.instantiate(layer.module, out as WebAssembly.Imports);
-    const exports = instance.exports as Record<string, unknown>;
-    exportsByKey.set(layerKey, exports);
-    // Publish this layer's function exports into the shared nameTable
-    // before the next layer instantiates, so any later layer's start
-    // function can resolve forwarders into this layer.
-    for (const [name, fn] of Object.entries(exports)) {
-      if (typeof fn === 'function') nameTable.set(`${layerKey}:${name}`, fn as ImportFn);
+    const layerExports = instance.exports as Record<string, unknown>;
+    exportsByKey.set(layerKey, layerExports);
+    // Publish this layer's function exports into the shared table before
+    // the next layer wires up, so a higher layer's forwarder can resolve
+    // its downward references. (Per-layer WASM exports are always sync
+    // from JS, even when JSPI is in play.)
+    for (const [name, fn] of Object.entries(layerExports)) {
+      if (typeof fn === 'function') {
+        exports.set(`${layerKey}:${name}`, {
+          kind: 'sync',
+          fn: fn as (...args: unknown[]) => unknown,
+        });
+      }
     }
 
     // Determine the layer's primary memory.
-    const primary = exports.memory instanceof WebAssembly.Memory
-      ? (exports.memory as WebAssembly.Memory)
+    const primary = layerExports.memory instanceof WebAssembly.Memory
+      ? (layerExports.memory as WebAssembly.Memory)
       : firstImportedMemory;
     if (primary) memoryByLayerKey.set(layerKey, primary);
   }

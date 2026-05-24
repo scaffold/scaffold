@@ -18,7 +18,14 @@ import {
   type WalkBridge,
 } from '../WasmHostBridge.ts';
 import { packPtrLen } from '../WasmWireCodec.ts';
-import { type CompiledModules, loadModules, type TargetRef } from '../WasmModules.ts';
+import {
+  asyncExport,
+  type CompiledModules,
+  type ExportEntry,
+  loadModules,
+  syncExport,
+  type TargetRef,
+} from '../WasmModules.ts';
 
 interface SuspendingCtor {
   new <Fn extends (...args: never[]) => unknown>(fn: Fn): Fn;
@@ -62,11 +69,6 @@ function allocAndWrite(ctx: InstanceCtx, bytes: Uint8Array): number {
   return ptr;
 }
 
-function suspending<Fn extends (...args: never[]) => unknown>(fn: Fn): Fn {
-  if (!jspi.Suspending) throw new Error('JSPI not supported in this runtime');
-  return new jspi.Suspending(fn);
-}
-
 function promising<Fn extends (...args: never[]) => unknown>(
   fn: Fn,
 ): (...args: Parameters<Fn>) => Promise<ReturnType<Fn>> {
@@ -74,7 +76,7 @@ function promising<Fn extends (...args: never[]) => unknown>(
   return jspi.promising(fn);
 }
 
-function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unknown> {
+function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, ExportEntry> {
   const handlePackedAsync = async (bytes: Uint8Array | Promise<Uint8Array>): Promise<bigint> => {
     const resolved = await bytes;
     const ptr = allocAndWrite(ctx, resolved);
@@ -84,47 +86,59 @@ function flatRunExports(ctx: InstanceCtx, bridge: RunBridge): Record<string, unk
     const ptr = allocAndWrite(ctx, bytes);
     return packPtrLen(ptr, bytes.length);
   };
+  // Each entry's kind drives the Suspending wrapping in loadModules. The
+  // async entries below were previously eagerly wrapped via `new
+  // Suspending(...)` here; we now hand the raw async fns to loadModules,
+  // which Suspending-wraps the forwarder at wire time.
   return {
-    mode: () => bridge.mode(),
-    contract_hash: () => handlePackedSync(bridge.contractHash()),
-    contract_metadata: suspending((vp: number, vl: number) =>
+    mode: syncExport(() => bridge.mode()),
+    contract_hash: syncExport(() => handlePackedSync(bridge.contractHash())),
+    contract_metadata: asyncExport((vp: number, vl: number) =>
       handlePackedAsync(Promise.resolve(bridge.contractMetadata(readSlice(ctx, vp, vl))))
     ),
-    params: () => handlePackedSync(bridge.params()),
-    timestamp: () => bridge.timestamp(),
-    claim_next: suspending(() => handlePackedAsync(Promise.resolve(bridge.claimNext()))),
-    claim_all: suspending((limit: number) =>
+    params: syncExport(() => handlePackedSync(bridge.params())),
+    timestamp: syncExport(() => bridge.timestamp()),
+    claim_next: asyncExport(() => handlePackedAsync(Promise.resolve(bridge.claimNext()))),
+    claim_all: asyncExport((limit: number) =>
       handlePackedAsync(Promise.resolve(bridge.claimAll(limit)))
     ),
-    emit_output: (op: number, ol: number) => {
+    emit_output: syncExport((op: number, ol: number) => {
       bridge.send(readSlice(ctx, op, ol));
-    },
-    request_body: suspending((vp: number, vl: number) =>
+    }),
+    request_body: asyncExport((vp: number, vl: number) =>
       handlePackedAsync(Promise.resolve(bridge.request(readSlice(ctx, vp, vl))))
     ),
-    fetch: suspending((vp: number, vl: number, kp: number, kl: number) =>
+    fetch: asyncExport((vp: number, vl: number, kp: number, kl: number) =>
       handlePackedAsync(
         Promise.resolve(bridge.fetch(readSlice(ctx, vp, vl), readSlice(ctx, kp, kl))),
       )
     ),
-    put: suspending(async (vp: number, vl: number, rp: number, rl: number) => {
+    put: asyncExport(async (vp: number, vl: number, rp: number, rl: number) => {
       await bridge.put(readSlice(ctx, vp, vl), readSlice(ctx, rp, rl));
     }),
-    sign: (pp: number, pl: number) => {
+    sign: syncExport((pp: number, pl: number) => {
       bridge.sign(readSlice(ctx, pp, pl));
-    },
+    }),
     // /out/debug routing for the WASI shim. Diagnostic-only; never traps.
-    debug: (rp: number, rl: number) => {
+    debug: syncExport((rp: number, rl: number) => {
       bridge.debug(readSlice(ctx, rp, rl));
-    },
-    reject: (rp: number, rl: number) => {
+    }),
+    reject: syncExport((rp: number, rl: number) => {
       bridge.reject(readSlice(ctx, rp, rl));
-    },
+    }),
   };
 }
 
-function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, unknown> {
-  return {
+function asSyncEntries<T extends Record<string, (...args: never[]) => unknown>>(
+  obj: T,
+): Record<string, ExportEntry> {
+  const out: Record<string, ExportEntry> = {};
+  for (const [k, fn] of Object.entries(obj)) out[k] = syncExport(fn);
+  return out;
+}
+
+function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, ExportEntry> {
+  return asSyncEntries({
     emit_bytes: (kp: number, kl: number, vp: number, vl: number, dp: number, dl: number) =>
       bridge.emitBytes(
         readString(ctx, kp, kl),
@@ -155,15 +169,15 @@ function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, u
     emit_list_start: (kp: number, kl: number, count: number) =>
       bridge.emitListStart(readString(ctx, kp, kl), count) ? 1 : 0,
     emit_list_end: () => bridge.emitListEnd(),
-  };
+  });
 }
 
-function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string, unknown> {
+function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string, ExportEntry> {
   const packBytes = (bytes: Uint8Array): bigint => {
     const ptr = allocAndWrite(ctx, bytes);
     return packPtrLen(ptr, bytes.length);
   };
-  return {
+  return asSyncEntries({
     request_bytes: (kp: number, kl: number, dp: number, dl: number) =>
       packBytes(
         bridge.requestBytes(
@@ -193,7 +207,7 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
     end_array: () => bridge.endArray(),
     validation_error: (kp: number, kl: number, mp: number, ml: number) =>
       bridge.validationError(readString(ctx, kp, kl), readString(ctx, mp, ml)),
-  };
+  });
 }
 
 interface EntryInfo {

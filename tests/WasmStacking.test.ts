@@ -480,12 +480,13 @@ Deno.test(
 );
 
 Deno.test(
-  'WasmStacking: reject -- memory-import cycle between two layers',
+  'WasmStacking: reject -- memory import targets a higher-indexed layer',
   async () => {
     // echo and rename_only both declare `(import "env" "memory" ...)`. Wire
-    // their env.memory imports to each other; the dep graph becomes
-    // echo -> rename_only and rename_only -> echo, which the linker must
-    // reject at load.
+    // their env.memory imports to each other; in the supplied layer order
+    // (a before b), a's `env.memory -> b:memory` is an upward memory import,
+    // which the linker must reject because memory imports bind eagerly and
+    // can only target lower-indexed (already-instantiated) layers.
     const echoBytes = await loadFixtureBytes('echo');
     const renameBytes = await loadFixtureBytes('rename_only');
     const echoHash = Hash.digest(echoBytes);
@@ -520,7 +521,7 @@ Deno.test(
         await contract.run(new RecordingEnv());
       },
       Error,
-      'memory/table/global-import cycle detected',
+      'must target a strictly lower-indexed layer',
     );
   },
 );

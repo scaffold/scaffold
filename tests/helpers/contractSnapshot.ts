@@ -50,8 +50,10 @@ import { EXIT_ZERO_REASON } from '../../src/contracts/wasi-shim/setup.ts';
 import {
   type CompiledLayer,
   type CompiledModules,
+  type ExportEntry,
   loadModules,
   parseModules,
+  syncExport,
   type TargetRef,
   type TracerEvent,
 } from '../../src/plugins/wasm/WasmModules.ts';
@@ -561,7 +563,7 @@ function expectSync<T>(value: T | Promise<T>): T {
   return value;
 }
 
-function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, unknown> {
+function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, ExportEntry> {
   // Construct a real bridge wrapping the MockSequenceEnv. The bridge is the
   // unchanged production path -- it does the wire-format marshalling. We do
   // not separately wrap it; tracing happens at the env level. `reject` is the
@@ -574,7 +576,16 @@ function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, 
     const ptr = allocAndWrite(ctx, bytes);
     return packPtrLen(ptr, bytes.length);
   };
-  return {
+  // All snapshot-harness host calls are sync (env is MockSequenceEnv which
+  // never returns Promises). Wrap uniformly.
+  const asSyncEntries = <T extends Record<string, (...args: never[]) => unknown>>(
+    obj: T,
+  ): Record<string, ExportEntry> => {
+    const out: Record<string, ExportEntry> = {};
+    for (const [k, fn] of Object.entries(obj)) out[k] = syncExport(fn);
+    return out;
+  };
+  return asSyncEntries({
     mode: () => bridge.mode(),
     contract_hash: () => packed(bridge.contractHash()),
     contract_metadata: (vp: number, vl: number) =>
@@ -604,7 +615,7 @@ function flatRunExports(ctx: InstanceCtx, env: MockSequenceEnv): Record<string, 
     reject: (rp: number, rl: number) => {
       env.reject(new TextDecoder().decode(readSlice(ctx, rp, rl)));
     },
-  };
+  });
   void parseValueDescriptor; // walker/builder hooks not wired in v1
 }
 
