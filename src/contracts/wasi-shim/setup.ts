@@ -199,7 +199,8 @@ function encodeOutputNamespaces(
 /**
  * Compose a contract block that stacks the WASI shim above `programBytes`.
  *
- * @param opts.shimBytes the wasi-shim.wasm blob (load via `loadShim()`).
+ * @param opts.shimBytes the wasi-shim.wasm blob (load via `loadShim()` from
+ *   `./loadShim.ts` in Deno, or read the file yourself in other runtimes).
  * @param opts.programBytes the WASI preview1 program WASM.
  * @param opts.setup wasi_setup config; defaults applied for any missing field.
  * @param opts.outputNamespaces (contract, params) pairs the program may emit
@@ -224,26 +225,6 @@ export function buildContractRecords(opts: {
     records: { modules, wasi_setup, output_namespaces },
     blobs: { [shimHex]: opts.shimBytes, [programHex]: opts.programBytes },
   };
-}
-
-/**
- * Read the built shim WASM from `src/contracts/wasi-shim/dist/wasi-shim.wasm`.
- * Throws if the file is missing — the build pipeline will eventually wire
- * this automatically.
- */
-export async function loadShim(): Promise<Uint8Array> {
-  const url = new URL('./dist/wasi-shim.wasm', import.meta.url);
-  try {
-    return await Deno.readFile(url);
-  } catch (err) {
-    if (err instanceof Deno.errors.NotFound) {
-      throw new Error(
-        `wasi-shim: dist/wasi-shim.wasm not found. ` +
-          `Run \`cd src/contracts/wasi-shim && zig build\` first.`,
-      );
-    }
-    throw err;
-  }
 }
 
 /**

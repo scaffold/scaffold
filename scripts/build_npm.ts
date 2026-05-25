@@ -24,6 +24,8 @@ for await (
       './src/util/QueueMuxer.ts',
       // Deno-only: uses Deno.listen/Deno.connect with unix transport.
       './src/node/UnixSocketTransport.ts',
+      // Deno-only: reads the built shim WASM via Deno.readFile.
+      './src/contracts/wasi-shim/loadShim.ts',
     ],
   })
 ) {

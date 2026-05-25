@@ -3,7 +3,7 @@
 //
 // Why this exists: the WASI shim WASM is produced by a Zig build step, not by
 // Deno itself. Tests that need the shim should call `loadWasiShim()` instead
-// of reaching into `setup.ts:loadShim()` directly so they get:
+// of reaching into `loadShim.ts:loadShim()` directly so they get:
 //   1. A single read per `deno test` invocation (cached), and
 //   2. A clear error message pointing at the build task when the artifact is
 //      missing -- instead of the raw "file not found" from `loadShim()`.
@@ -12,7 +12,7 @@
 // before running tests, so the artifact is normally fresh. This helper exists
 // for ad-hoc invocations like `deno test --allow-all tests/WasiShim*.test.ts`.
 
-import { loadShim } from '../../src/contracts/wasi-shim/setup.ts';
+import { loadShim } from '../../src/contracts/wasi-shim/loadShim.ts';
 
 let cached: Promise<Uint8Array> | undefined;
 
