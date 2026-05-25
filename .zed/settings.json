@@ -37,4 +37,5 @@
       "formatter": "language_server",
     },
   },
+  "file_scan_exclusions": [".claude/worktrees/"],
 }
