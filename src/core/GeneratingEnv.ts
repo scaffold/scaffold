@@ -58,6 +58,17 @@ export type WaitForGetOutputFn = (
   outputVerifier: Verifier,
 ) => Promise<{ value: number; body: Uint8Array }>;
 
+/**
+ * Callback the GeneratingEnv invokes for `put`. Spawns a sub-generator
+ * for `verifier` with `records` answering its `request` calls, blocks
+ * until the sub-block commits, and propagates `ContractRejection` from
+ * the sub-generator. See docs/protocol/wasm-abi.md#put.
+ */
+export type PutFn = (
+  verifier: Verifier,
+  records: Record<string, Uint8Array | string>,
+) => Promise<void>;
+
 // -- GeneratingEnv ------------------------------------------------
 
 /**
@@ -72,6 +83,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
   private readonly _provider: GeneratingEnvProvider<BlockType>;
   private readonly _waitForInput?: WaitForInputFn;
   private readonly _waitForGetOutput?: WaitForGetOutputFn;
+  private readonly _put?: PutFn;
   private readonly _signerPubkey: Uint8Array | undefined;
 
   /**
@@ -98,6 +110,8 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     waitForInput?: WaitForInputFn;
     /** Optional callback for blocking request(). If not provided, throws on no handler match. */
     waitForGetOutput?: WaitForGetOutputFn;
+    /** Optional callback for `put`. If not provided, any put() call rejects. */
+    put?: PutFn;
     /**
      * The node's own public key, used to answer `sign` in
      * generation mode: the draft will be signed by this key at
@@ -112,6 +126,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     this._provider = opts.provider;
     this._waitForInput = opts.waitForInput;
     this._waitForGetOutput = opts.waitForGetOutput;
+    this._put = opts.put;
     this._signerPubkey = opts.signerPubkey;
   }
 
@@ -280,15 +295,11 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  put(_verifier: Verifier, _records: Record<string, Uint8Array | string>): Promise<void> {
-    // TODO(@joel): wire put into the generation pipeline.
-    // Spec: spawns a sub-generator on its own block self-claiming under
-    // `verifier`, emits one RECORD_CONTRACT output per `records` entry,
-    // propagates ContractRejection on sub-generator failure, auto-claims an
-    // existing matching UTXO if one exists else self-emerges. See
-    // docs/protocol/wasm-abi.md#put. Reject loudly until then so
-    // a put-using contract fails fast rather than silently no-opping.
-    throw new ContractRejection('put() not yet implemented');
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): Promise<void> {
+    if (!this._put) {
+      throw new ContractRejection('put() requires a PutFn callback (none configured)');
+    }
+    return this._put(verifier, records);
   }
 
   timestamp(): number {

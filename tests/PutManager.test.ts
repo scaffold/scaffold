@@ -5,7 +5,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert';
 import { Scaffold } from '../src/Scaffold.ts';
 import { computeDemoGenesis, demoPrivateKey } from '../src/genesis.ts';
-import { AGGREGATION_CONTRACT, RECORD_CONTRACT } from '../src/core/Block.ts';
+import { AGGREGATION_CONTRACT, Block, RECORD_CONTRACT } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import type { Contract } from '../src/contracts/Contract.ts';
@@ -127,6 +127,137 @@ Deno.test('PutManager.put: unregistered contract rejects synchronously', async (
       }),
     Error,
     'no contract registered',
+  );
+  await node.close();
+});
+
+// -- env.put -> sub-generation -------------------------------------
+
+const CHILD_CONTRACT = Hash.digest('scaffold:test:env-put-child');
+const PARENT_CONTRACT = Hash.digest('scaffold:test:env-put-parent');
+
+/**
+ * Child of the env.put tests. Same shape as testContract above: params
+ * encode newline-separated record keys, the contract requests each one
+ * and emits an aggregation marker.
+ */
+const childContract: Contract = {
+  outputNamespaces: [RECORD_CONTRACT, AGGREGATION_CONTRACT],
+  async run(env) {
+    const keysStr = new TextDecoder().decode(env.params());
+    const keys = keysStr === '' ? [] : keysStr.split('\n');
+    for (const key of keys) {
+      await env.request({
+        contract: RECORD_CONTRACT,
+        params: str2bin(key),
+      });
+    }
+    env.send({ contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) }, 0);
+  },
+};
+
+/**
+ * Parent of the env.put tests. Calls env.put once with a fixed child
+ * verifier and the records the caller (via PutManager.put) passes in
+ * through `params.childKeys` and `params.childRecords`. Encodes records
+ * with one key per line and a `key=value` shape.
+ *
+ * Parent itself emits only the aggregation marker.
+ */
+const parentContract: Contract = {
+  outputNamespaces: [AGGREGATION_CONTRACT],
+  async run(env) {
+    const params = new TextDecoder().decode(env.params());
+    const [childKeysLine, ...recordLines] = params.split('|');
+    const records: Record<string, string> = {};
+    for (const line of recordLines) {
+      if (line === '') continue;
+      const eq = line.indexOf('=');
+      records[line.slice(0, eq)] = line.slice(eq + 1);
+    }
+    await env.put(
+      { contract: CHILD_CONTRACT, params: str2bin(childKeysLine) },
+      records,
+    );
+    env.send({ contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) }, 0);
+  },
+};
+
+function makeNodeWithChild(): Scaffold {
+  const node = makeNode();
+  node.registerContract(CHILD_CONTRACT, childContract);
+  node.registerContract(PARENT_CONTRACT, parentContract);
+  return node;
+}
+
+Deno.test('env.put: parent contract spawns a child block carrying the records', async () => {
+  const node = makeNodeWithChild();
+  // Parent runs put({child, "foo\nbar"}, {foo: "1", bar: "2"}) then emits its
+  // aggregation marker.
+  const parentBlock = await node.put({
+    contract: PARENT_CONTRACT,
+    params: str2bin('foo\nbar|foo=1|bar=2'),
+    records: {},
+  });
+
+  // The parent block exists and is canonical -- env.put is blocking, so
+  // by the time PutManager resolves the parent block, the sub-block has
+  // also committed.
+  assert(node.context.consensus.isCanonical(parentBlock.hash));
+
+  // Find the child block in the store via the child's verifier.
+  let childBlock: Block | undefined;
+  for (const b of node.context.store.values()) {
+    if (
+      b.outputs.some((o) =>
+        Hash.equals(o.verifier.contract, CHILD_CONTRACT) ||
+        (Hash.equals(o.verifier.contract, RECORD_CONTRACT) &&
+          (new TextDecoder().decode(o.verifier.params) === 'foo' ||
+            new TextDecoder().decode(o.verifier.params) === 'bar'))
+      )
+    ) {
+      // The parent block only emits AGGREGATION; the child emits RECORD outputs.
+      // We want the latter -- the one that actually claims a RECORD output.
+      const hasRecord = b.outputs.some((o) =>
+        Hash.equals(o.verifier.contract, RECORD_CONTRACT)
+      );
+      if (hasRecord) {
+        childBlock = b;
+        break;
+      }
+    }
+  }
+  assert(childBlock, 'expected a child block emitting RECORD outputs');
+
+  const td = new TextDecoder();
+  const recordOutputs = childBlock.outputs.filter((o) =>
+    Hash.equals(o.verifier.contract, RECORD_CONTRACT)
+  );
+  assertEquals(recordOutputs.length, 2);
+  const foo = recordOutputs.find((o) => td.decode(o.verifier.params) === 'foo');
+  const bar = recordOutputs.find((o) => td.decode(o.verifier.params) === 'bar');
+  assert(foo);
+  assertEquals(td.decode(foo.body!), '1');
+  assert(bar);
+  assertEquals(td.decode(bar.body!), '2');
+
+  await node.close();
+});
+
+Deno.test('env.put: sub-generator rejection cancels the parent draft', async () => {
+  const node = makeNodeWithChild();
+  // Child requests "foo" but parent supplies no records -- the sub-generator
+  // throws ContractRejection on the unmatched request, env.put propagates,
+  // and PutManager rejects the parent draft.
+  await assertRejects(
+    () =>
+      node.put({
+        contract: PARENT_CONTRACT,
+        params: str2bin('foo|'),
+        records: {},
+      }),
+    Error,
+    'put draft cancelled',
   );
   await node.close();
 });

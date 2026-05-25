@@ -15,6 +15,7 @@ import { VerifyingEnv } from './VerifyingEnv.ts';
 import {
   GeneratingEnv,
   type OutputSlot,
+  type PutFn,
   type WaitForGetOutputFn,
   type WaitForInputFn,
 } from './GeneratingEnv.ts';
@@ -48,6 +49,8 @@ export interface GeneratingRunInput<BlockType> {
   readonly provider: GeneratingEnvProvider<BlockType>;
   readonly waitForInput?: WaitForInputFn;
   readonly waitForGetOutput?: WaitForGetOutputFn;
+  /** Optional callback used by `env.put`. Omit to reject any put() call. */
+  readonly put?: PutFn;
   /** The node's own pubkey. Used by `sign` in generation mode. */
   readonly signerPubkey?: Uint8Array;
 }
@@ -245,6 +248,7 @@ export class ContractHost<BlockType> {
       provider: input.provider,
       waitForInput: input.waitForInput,
       waitForGetOutput: input.waitForGetOutput,
+      put: input.put,
       signerPubkey: input.signerPubkey,
     });
 

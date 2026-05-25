@@ -13,7 +13,11 @@ import { OutputSpaceModule } from '../core/OutputSpace.ts';
 import { Draft, DraftStore } from '../core/Draft.ts';
 import type { DraftManager } from '../core/DraftManager.ts';
 import type { ClaimRef } from '../core/Node.ts';
-import { type AvailableClaim, type GeneratingEnvProvider } from '../core/ContractEnv.ts';
+import {
+  type AvailableClaim,
+  ContractRejection,
+  type GeneratingEnvProvider,
+} from '../core/ContractEnv.ts';
 import type { OutputSlot } from '../core/GeneratingEnv.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
@@ -24,7 +28,11 @@ import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { verifierKey as utxoVerifierKey } from './UtxoIndex.ts';
 import { UtxoIndexService } from './UtxoIndexService.ts';
 import { str2bin } from '../util/buffer.ts';
-import { type WaitForGetOutputFn, type WaitForInputFn } from '../core/GeneratingEnv.ts';
+import {
+  type PutFn,
+  type WaitForGetOutputFn,
+  type WaitForInputFn,
+} from '../core/GeneratingEnv.ts';
 import type { GeneratorHandle, GeneratorProvider } from '../core/Generator.ts';
 import {
   GenerationModule,
@@ -188,6 +196,14 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   }
   return true;
 }
+
+// -- Put recursion cap ----------------------------------------------
+
+/**
+ * Maximum sub-generation depth reachable through `env.put`. Caps malicious
+ * unbounded recursion. See docs/protocol/wasm-abi.md#put ("default: 16").
+ */
+const MAX_PUT_DEPTH = 16;
 
 // -- Blocked-generator registry -------------------------------------
 
@@ -426,10 +442,16 @@ export class GenerationService extends GenerationModule implements GeneratorProv
    * Named `generateForVerifier` (rather than overloading `generate`) so
    * the legacy claim-driven `generate(draft)` method that satisfies the
    * `GeneratorProvider` interface still type-checks cleanly.
+   *
+   * `depth` is the sub-generation nesting level. Callers from outside the
+   * contract pipeline (PutManager) leave it at 0; `env.put` re-enters
+   * here at depth+1 via `_putFromContract`. The contract running at
+   * `depth` may itself call `put`, which would spawn at `depth+1`.
    */
   generateForVerifier(
     verifier: Verifier,
     records: Record<string, Uint8Array | string>,
+    depth = 0,
   ): { draftId: Hash; cancel: () => void } {
     if (!this._draftManager) {
       throw new Error('GenerationService.generateForVerifier: setDraftManager not called');
@@ -494,6 +516,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
           const maybe = this._host.runGenerating({
             verifier,
             provider: this._adapter,
+            put: (v, r) => this._putFromContract(v, r, depth + 1),
             signerPubkey: this._signerPubkey,
           });
           result = maybe instanceof Promise ? await maybe : maybe;
@@ -741,6 +764,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
         provider: this._adapter,
         waitForInput,
         waitForGetOutput,
+        put: (v, r) => this._putFromContract(v, r, 1),
         signerPubkey: this._signerPubkey,
       });
     } catch (_e) {
@@ -963,6 +987,76 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       }
     }
     return out;
+  }
+
+  // -- env.put -> sub-generation -------------------------------------
+
+  /**
+   * Spawn a sub-generation for `verifier` with `records` and resolve once
+   * the sub-block commits. Mirrors `PutManager.put` for the in-contract
+   * code path: we own the draft via `generateForVerifier` and listen on
+   * `DraftStore.onTransition` for the solidified-or-cancelled outcome.
+   *
+   * Rejects with `ContractRejection` so the parent contract's run loop
+   * treats the failure as a contract-level rejection (and the parent
+   * draft is cancelled by the standard error path in `_runGeneration` /
+   * `generateForVerifier`'s run loop).
+   *
+   * `childDepth` is the depth the sub-generation will run at -- the
+   * caller has already incremented past its own depth. We compare
+   * against `MAX_PUT_DEPTH` here so the deepest legal contract still
+   * gets a real reject reason rather than a stack overflow.
+   */
+  private _putFromContract(
+    verifier: Verifier,
+    records: Record<string, Uint8Array | string>,
+    childDepth: number,
+  ): Promise<void> {
+    if (childDepth > MAX_PUT_DEPTH) {
+      return Promise.reject(
+        new ContractRejection(
+          `put recursion depth exceeded (max ${MAX_PUT_DEPTH})`,
+        ),
+      );
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      let handle: { draftId: Hash; cancel: () => void };
+      try {
+        handle = this.generateForVerifier(verifier, records, childDepth);
+      } catch (e) {
+        // Synchronous failures (e.g. no contract registered for
+        // `verifier.contract`) become ContractRejection so the parent
+        // contract's catch path sees the standard contract-level error.
+        reject(
+          e instanceof ContractRejection
+            ? e
+            : new ContractRejection(e instanceof Error ? e.message : String(e)),
+        );
+        return;
+      }
+      const targetId = handle.draftId;
+
+      // Register the transition listener before the generation's
+      // async run completes (generateForVerifier enqueues onto the
+      // queue; the run happens on a later tick) so we never miss the
+      // solidified/cancelled transition.
+      let unsub: (() => void) | null = null;
+      unsub = this._draftStore.onTransition((d) => {
+        if (!Hash.equals(d.draftId, targetId)) return;
+        if (d.status.phase === 'solidified' && d.solidifiedBlocks.length > 0) {
+          unsub?.();
+          resolve();
+        } else if (d.status.phase === 'cancelled') {
+          unsub?.();
+          reject(
+            new ContractRejection(
+              `put sub-generator rejected: ${d.status.reason}`,
+            ),
+          );
+        }
+      });
+    });
   }
 
   private _removeBlocked(draftId: Hash): void {
