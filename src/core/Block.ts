@@ -14,6 +14,9 @@ export { AtomSource, AtomType } from './Atom.ts';
 /** Genesis blocks use this as their declared weight (very high). */
 export const GENESIS_WEIGHT = Number.MAX_SAFE_INTEGER;
 
+/** Well-known contract hash for contracts themselves. */
+export const CONTRACT_CONTRACT = Hash.digest('contract-contract');
+
 /** Well-known contract hash for aggregation contract outputs. */
 export const AGGREGATION_CONTRACT = Hash.digest('aggregation-contract');
 
