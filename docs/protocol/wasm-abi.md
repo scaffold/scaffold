@@ -203,6 +203,7 @@ A contract calling a walker import outside an active `walk_*` invocation traps. 
 | `request_number`       | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> f64` | numeric value |
 | `request_bool`         | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i32` | `0` or `1` |
 | `request_array_length` | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i32` | item count |
+| `request_object_keys`  | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i64` | packed `(ptr, len)` of `ObjectKeys` (`u32 count; count × (u32 len; utf8)`) — the keys of the object value, so a builder can serialize an object of unknown shape (the analog of `request_array_length` for arrays). Empty when absent or not an object. |
 | `begin_object`         | `(key_ptr, key_len: i32) -> ()` | — |
 | `end_object`           | `() -> ()` | — |
 | `begin_array`          | `(key_ptr, key_len: i32) -> ()` | — |

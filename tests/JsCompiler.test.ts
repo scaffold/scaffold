@@ -12,7 +12,7 @@ import { findRecordOutput } from '../src/contracts/RecordContract.ts';
 import { getWellKnownBlocks } from '../src/wellKnown.ts';
 import { loadWasiShim } from './helpers/loadWasiShim.ts';
 import { loadQuickJs } from './helpers/loadQuickJs.ts';
-import { bin2str, str2bin } from '../src/util/buffer.ts';
+import { bin2str } from '../src/util/buffer.ts';
 
 Deno.test('Scaffold.compile + invoke: hello-world JS contract', async (t) => {
   try {
@@ -45,10 +45,12 @@ Deno.test('Scaffold.compile + invoke: hello-world JS contract', async (t) => {
     const contractHash = await scaffold.compile({ files: { '/main.js': source } });
     assert(contractHash, 'compile returned a hash');
 
-    // 2. Invoke the compiled contract.
+    // 2. Invoke the compiled contract with a plain object as params -- it is
+    //    canonical-JSON encoded, which is what the contract's
+    //    JSON.parse(scaffold.params()) expects.
     const execBlock = await scaffold.put({
       contract: contractHash,
-      params: str2bin(JSON.stringify({ name: 'World' })),
+      params: { name: 'World' },
       records: {},
     });
 

@@ -56,6 +56,12 @@ export interface BuilderHost {
   requestNumber(key: string, desc: ValueDescriptor): number;
   requestBool(key: string, desc: ValueDescriptor): boolean;
   requestArrayLength(key: string, desc: ValueDescriptor): number;
+  /**
+   * The keys present on the object value at `key`, so a builder can serialize
+   * an object of unknown shape (the analog of `requestArrayLength` for arrays).
+   * Returns `[]` when the value is absent or not an object.
+   */
+  requestObjectKeys(key: string, desc: ValueDescriptor): string[];
   beginObject(key: string): void;
   endObject(): void;
   beginArray(key: string): void;

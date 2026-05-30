@@ -4,7 +4,7 @@ import type { BuilderHost, ValueDescriptor } from '../contracts/Contract.ts';
 
 /** Metadata about a field the builder requested. */
 export interface FieldRequest {
-  kind: 'bytes' | 'string' | 'number' | 'bool' | 'arrayLength';
+  kind: 'bytes' | 'string' | 'number' | 'bool' | 'arrayLength' | 'objectKeys';
   key: string;
   /** Full path from root (for nested fields). */
   path: string[];
@@ -110,6 +110,25 @@ export class DefaultBuilderHost implements BuilderHost {
       return this.values.get(pk) as number;
     }
     return 0;
+  }
+
+  requestObjectKeys(key: string, desc: ValueDescriptor): string[] {
+    this.recordField('objectKeys', key, desc);
+    // The values map is flattened to dot-joined paths, so the keys of the
+    // object at this path are the distinct next path segments under its
+    // prefix. E.g. for { collateral: { side, amount } } the entries are
+    // "collateral.side" / "collateral.amount", so the keys under "collateral"
+    // are ["side", "amount"].
+    const path = this.currentPath(key).filter((s) => s.length > 0);
+    const prefix = path.length > 0 ? path.join('.') + '.' : '';
+    const seen = new Set<string>();
+    for (const mapKey of this.values.keys()) {
+      if (prefix !== '' && !mapKey.startsWith(prefix)) continue;
+      const rest = prefix === '' ? mapKey : mapKey.slice(prefix.length);
+      const segment = rest.split('.')[0];
+      if (segment.length > 0) seen.add(segment);
+    }
+    return [...seen];
   }
 
   beginObject(key: string): void {

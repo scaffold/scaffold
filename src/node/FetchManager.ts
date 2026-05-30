@@ -9,8 +9,9 @@ import { OutputClaimService } from '../core/OutputClaimService.ts';
 import { BlockVerificationService } from '../core/BlockVerificationService.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import type { TrustGate, TrustStatus } from './TrustGate.ts';
-import { DefaultBuilderHost } from '../core/DefaultBuilderHost.ts';
 import { type FieldNode, RecordingWalkerHost } from '../core/RecordingWalkerHost.ts';
+import { encodeParams } from './draftPublishing.ts';
+import { bin2str } from '../util/buffer.ts';
 import { findRecordOutput } from '../contracts/RecordContract.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
 import type { SendHandle, SendRequest } from './SendManager.ts';
@@ -665,38 +666,6 @@ export class FetchManager {
 
 // -- Helpers ---------------------------------------------------------
 
-function encodeParams(
-  contractHash: Hash,
-  params: Uint8Array | Record<string, unknown>,
-  contractHost: ContractHostService,
-): Uint8Array {
-  if (params instanceof Uint8Array) return params;
-  const contract = contractHost.getContract(contractHash);
-  if (!contract) {
-    throw new Error(`contract not registered: ${contractHash.toHex()}`);
-  }
-  if (!contract.buildParams) {
-    throw new Error(
-      `contract ${contractHash.toHex()} does not support buildParams; ` +
-        'pass params as Uint8Array',
-    );
-  }
-  const values = flatten(params);
-  const host = new DefaultBuilderHost(values);
-  const result = contract.buildParams(host);
-  if (result instanceof Promise) {
-    // The fetch() entry point is sync; async buildParams (e.g. a WASM
-    // contract whose module hasn't been compiled yet) isn't supported on
-    // this path. Pre-compile the contract by calling it elsewhere, or
-    // pass `params` as a pre-encoded Uint8Array.
-    throw new Error(
-      `contract ${contractHash.toHex()}: buildParams returned a Promise; ` +
-        'fetch() requires synchronous buildParams. Pass params as a Uint8Array.',
-    );
-  }
-  return result;
-}
-
 function normalizeRecordKey(key: string | Uint8Array | undefined): Uint8Array {
   if (key === undefined) return new Uint8Array(0);
   if (typeof key === 'string') return new TextEncoder().encode(key);
@@ -715,33 +684,6 @@ function byteEquals(a: Uint8Array, b: Uint8Array): boolean {
   return true;
 }
 
-function flatten(
-  obj: Record<string, unknown>,
-  prefix = '',
-  out = new Map<string, unknown>(),
-): Map<string, unknown> {
-  for (const [k, v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v !== null && typeof v === 'object' && !(v instanceof Uint8Array) && !Array.isArray(v)) {
-      flatten(v as Record<string, unknown>, key, out);
-    } else if (Array.isArray(v)) {
-      out.set(key, v.length);
-      for (let i = 0; i < v.length; i++) {
-        const el = v[i];
-        const elKey = `${key}.${i}`;
-        if (el !== null && typeof el === 'object' && !(el instanceof Uint8Array)) {
-          flatten(el as Record<string, unknown>, elKey, out);
-        } else {
-          out.set(elKey, el);
-        }
-      }
-    } else {
-      out.set(key, v);
-    }
-  }
-  return out;
-}
-
 /** Run contract.walkData on record bytes and return a JS object. */
 async function parseRecord<T>(
   contract: Hash,
@@ -752,10 +694,11 @@ async function parseRecord<T>(
   if (!impl) {
     throw new Error(`contract not registered: ${contract.toHex()}`);
   }
+  // Contracts with a custom data codec expose `walkData`. Otherwise the result
+  // is canonical JSON (the JS runtime writes JSON via scaffold.result(...)), so
+  // decode it directly -- the symmetric counterpart of `encodeParams`.
   if (!impl.walkData) {
-    throw new Error(
-      `contract ${contract.toHex()} does not support walkData`,
-    );
+    return JSON.parse(bin2str(data)) as T;
   }
   const host = new RecordingWalkerHost();
   await impl.walkData(data, host);

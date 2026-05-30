@@ -167,6 +167,9 @@ class FixedBuilder implements BuilderHost {
   requestArrayLength(): number {
     return 0;
   }
+  requestObjectKeys(): string[] {
+    return [];
+  }
   beginObject(): void {}
   endObject(): void {}
   beginArray(): void {}

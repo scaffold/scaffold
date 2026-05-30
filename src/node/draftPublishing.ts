@@ -1,17 +1,23 @@
 // Shared helpers for the user-facing publishing primitives (PutManager,
-// SendManager). Both build outputs to feed `DraftManager.addReady`; the
-// helpers below normalize their inputs and centralize the params-encoding
-// path so the two managers stay in lockstep.
+// SendManager, FetchManager). They centralize the params-encoding path so the
+// managers stay in lockstep.
 
 import { Hash } from '../util/Hash.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
-import { DefaultBuilderHost } from '../core/DefaultBuilderHost.ts';
+import { str2bin } from '../util/buffer.ts';
 
 /**
- * Encode a `params` field that may already be bytes or may be a key-value
- * object that the contract knows how to serialize via `buildParams`. Used
- * by both PutManager and SendManager and mirrors what FetchManager does for
- * its own `params`.
+ * Encode a `params` field that may already be bytes or may be a plain object.
+ *
+ * Object params are encoded as **canonical JSON** (recursively sorted keys, so
+ * the same logical params always produce the same verifier bytes -- important
+ * because verifier params are content-addressed). This matches the JS runtime,
+ * whose contracts read params via `JSON.parse(scaffold.params())`.
+ *
+ * Contracts that need a custom binary encoding should pass `params` as a
+ * `Uint8Array`. (A declarative per-contract codec -- the generic JSON
+ * walker/builder module that lets any contract advertise its params shape --
+ * is tracked as future work in TODO.md.)
  */
 export function encodeParams(
   contractHash: Hash,
@@ -19,51 +25,28 @@ export function encodeParams(
   contractHost: ContractHostService,
 ): Uint8Array {
   if (params instanceof Uint8Array) return params;
-  const contract = contractHost.getContract(contractHash);
-  if (!contract) {
+  if (!contractHost.getContract(contractHash)) {
     throw new Error(`contract not registered: ${contractHash.toHex()}`);
   }
-  if (!contract.buildParams) {
-    throw new Error(
-      `contract ${contractHash.toHex()} does not support buildParams; ` +
-        'pass params as Uint8Array',
-    );
-  }
-  const values = flatten(params);
-  const host = new DefaultBuilderHost(values);
-  const result = contract.buildParams(host);
-  if (result instanceof Promise) {
-    throw new Error(
-      `contract ${contractHash.toHex()}: buildParams returned a Promise; ` +
-        'put()/send() require synchronous buildParams. Pass params as a Uint8Array.',
-    );
-  }
-  return result;
+  return str2bin(canonicalJson(params));
 }
 
-function flatten(
-  obj: Record<string, unknown>,
-  prefix = '',
-  out = new Map<string, unknown>(),
-): Map<string, unknown> {
-  for (const [k, v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v !== null && typeof v === 'object' && !(v instanceof Uint8Array) && !Array.isArray(v)) {
-      flatten(v as Record<string, unknown>, key, out);
-    } else if (Array.isArray(v)) {
-      out.set(key, v.length);
-      for (let i = 0; i < v.length; i++) {
-        const el = v[i];
-        const elKey = `${key}.${i}`;
-        if (el !== null && typeof el === 'object' && !(el instanceof Uint8Array)) {
-          flatten(el as Record<string, unknown>, elKey, out);
-        } else {
-          out.set(elKey, el);
-        }
-      }
-    } else {
-      out.set(key, v);
-    }
+/**
+ * JSON with recursively sorted object keys, for stable content addressing.
+ * Arrays keep their order; `Uint8Array` is left for `JSON.stringify`'s default
+ * handling (callers should pass bytes via the `Uint8Array` params path).
+ */
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(sortKeys(value));
+}
+
+function sortKeys(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortKeys);
+  if (value !== null && typeof value === 'object' && !(value instanceof Uint8Array)) {
+    const obj = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(obj).sort()) out[key] = sortKeys(obj[key]);
+    return out;
   }
-  return out;
+  return value;
 }
