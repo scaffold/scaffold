@@ -178,6 +178,18 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
         readString(ctx, kp, kl),
         parseValueDescriptor(readSlice(ctx, dp, dl)),
       ),
+    request_value_type: (kp: number, kl: number, dp: number, dl: number) =>
+      bridge.requestValueType(
+        readString(ctx, kp, kl),
+        parseValueDescriptor(readSlice(ctx, dp, dl)),
+      ),
+    request_object_keys: (kp: number, kl: number, dp: number, dl: number) =>
+      handlePackedBytes(
+        bridge.requestObjectKeys(
+          readString(ctx, kp, kl),
+          parseValueDescriptor(readSlice(ctx, dp, dl)),
+        ),
+      ),
     begin_object: (kp: number, kl: number) => bridge.beginObject(readString(ctx, kp, kl)),
     end_object: () => bridge.endObject(),
     begin_array: (kp: number, kl: number) => bridge.beginArray(readString(ctx, kp, kl)),
