@@ -26,6 +26,15 @@ extern "scaffold_builder" fn end_object() void;
 extern "scaffold_builder" fn begin_array(kp: i32, kl: i32) void;
 extern "scaffold_builder" fn end_array() void;
 
+// -- Host imports: scaffold_walker.* ---------------------------------
+extern "scaffold_walker" fn emit_string(kp: i32, kl: i32, vp: i32, vl: i32, dp: i32, dl: i32) void;
+extern "scaffold_walker" fn emit_number(kp: i32, kl: i32, value: f64, dp: i32, dl: i32) void;
+extern "scaffold_walker" fn emit_bool(kp: i32, kl: i32, value: i32, dp: i32, dl: i32) void;
+extern "scaffold_walker" fn emit_map_start(kp: i32, kl: i32) i32;
+extern "scaffold_walker" fn emit_map_end() void;
+extern "scaffold_walker" fn emit_list_start(kp: i32, kl: i32, count: i32) i32;
+extern "scaffold_walker" fn emit_list_end() void;
+
 // ValueType enum (matches src/contracts/Contract.ts).
 const VT_NULL: i32 = 0;
 const VT_BOOL: i32 = 1;
@@ -291,4 +300,288 @@ export fn build_params() i64 {
 
 export fn build_data() i64 {
     return build();
+}
+
+// -- Walker: parse JSON bytes and stream emit_* host calls -----------
+//
+// A small recursive-descent JSON parser. Strings are unescaped into the bump
+// arena before being passed to emit_string; numbers are parsed to f64. Object
+// members are emitted under their key; array elements under their index ("0",
+// "1", ...), matching the builder side and the host's walker->object mapping.
+
+const WalkError = error{Invalid};
+
+const Walker = struct {
+    input: []const u8,
+    pos: usize,
+
+    fn peek(self: *Walker) WalkError!u8 {
+        if (self.pos >= self.input.len) return error.Invalid;
+        return self.input[self.pos];
+    }
+
+    fn skipWs(self: *Walker) void {
+        while (self.pos < self.input.len) : (self.pos += 1) {
+            switch (self.input[self.pos]) {
+                ' ', '\t', '\n', '\r' => {},
+                else => return,
+            }
+        }
+    }
+
+    fn expect(self: *Walker, c: u8) WalkError!void {
+        if (self.pos >= self.input.len or self.input[self.pos] != c) return error.Invalid;
+        self.pos += 1;
+    }
+
+    fn matchLiteral(self: *Walker, lit: []const u8) WalkError!void {
+        if (self.pos + lit.len > self.input.len) return error.Invalid;
+        var i: usize = 0;
+        while (i < lit.len) : (i += 1) {
+            if (self.input[self.pos + i] != lit[i]) return error.Invalid;
+        }
+        self.pos += lit.len;
+    }
+
+    // Parse a JSON string, unescaping into the bump arena. Returns the slice.
+    fn parseString(self: *Walker) WalkError![]const u8 {
+        try self.expect('"');
+        const start: i32 = alloc(0); // current arena cursor (no bytes yet)
+        var len: usize = 0;
+        const base: [*]u8 = @ptrFromInt(@as(usize, @intCast(start)));
+        while (true) {
+            if (self.pos >= self.input.len) return error.Invalid;
+            const c = self.input[self.pos];
+            self.pos += 1;
+            if (c == '"') break;
+            if (c == '\\') {
+                if (self.pos >= self.input.len) return error.Invalid;
+                const e = self.input[self.pos];
+                self.pos += 1;
+                const decoded: u8 = switch (e) {
+                    '"' => '"',
+                    '\\' => '\\',
+                    '/' => '/',
+                    'b' => 0x08,
+                    'f' => 0x0C,
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    'u' => {
+                        // Decode a \uXXXX BMP escape to UTF-8.
+                        if (self.pos + 4 > self.input.len) return error.Invalid;
+                        var cp: u21 = 0;
+                        var k: usize = 0;
+                        while (k < 4) : (k += 1) {
+                            cp = cp * 16 + try hexVal(self.input[self.pos + k]);
+                        }
+                        self.pos += 4;
+                        len += encodeUtf8(base, len, cp);
+                        continue;
+                    },
+                    else => return error.Invalid,
+                };
+                base[len] = decoded;
+                len += 1;
+                continue;
+            }
+            base[len] = c;
+            len += 1;
+        }
+        // Reserve the bytes we wrote so later allocs don't overwrite them.
+        _ = alloc(@intCast(len));
+        return base[0..len];
+    }
+
+    fn walkValue(self: *Walker, key: []const u8) WalkError!void {
+        self.skipWs();
+        const c = try self.peek();
+        switch (c) {
+            '{' => try self.walkObject(key),
+            '[' => try self.walkArray(key),
+            '"' => {
+                const s = try self.parseString();
+                emit_string(ptrOf(key), @intCast(key.len), ptrOf(s), @intCast(s.len), 0, 0);
+            },
+            't' => {
+                try self.matchLiteral("true");
+                emit_bool(ptrOf(key), @intCast(key.len), 1, 0, 0);
+            },
+            'f' => {
+                try self.matchLiteral("false");
+                emit_bool(ptrOf(key), @intCast(key.len), 0, 0, 0);
+            },
+            'n' => {
+                try self.matchLiteral("null");
+                // No emit_null in the ABI; surface JSON null as the empty string.
+                emit_string(ptrOf(key), @intCast(key.len), 0, 0, 0, 0);
+            },
+            '-', '0'...'9' => {
+                const n = try self.parseNumber();
+                emit_number(ptrOf(key), @intCast(key.len), n, 0, 0);
+            },
+            else => return error.Invalid,
+        }
+    }
+
+    fn walkObject(self: *Walker, key: []const u8) WalkError!void {
+        try self.expect('{');
+        _ = emit_map_start(ptrOf(key), @intCast(key.len));
+        self.skipWs();
+        if ((try self.peek()) == '}') {
+            self.pos += 1;
+            emit_map_end();
+            return;
+        }
+        while (true) {
+            self.skipWs();
+            const member_key = try self.parseString();
+            self.skipWs();
+            try self.expect(':');
+            try self.walkValue(member_key);
+            self.skipWs();
+            const sep = try self.peek();
+            if (sep == ',') {
+                self.pos += 1;
+                continue;
+            }
+            if (sep == '}') {
+                self.pos += 1;
+                break;
+            }
+            return error.Invalid;
+        }
+        emit_map_end();
+    }
+
+    fn walkArray(self: *Walker, key: []const u8) WalkError!void {
+        try self.expect('[');
+        // Two-pass would require rescanning; emit_list_start needs a count, so
+        // scan ahead for the element count first.
+        const count = try self.scanArrayCount();
+        _ = emit_list_start(ptrOf(key), @intCast(key.len), count);
+        self.skipWs();
+        if ((try self.peek()) == ']') {
+            self.pos += 1;
+            emit_list_end();
+            return;
+        }
+        var idx: i32 = 0;
+        while (true) : (idx += 1) {
+            var idx_buf: [16]u8 = undefined;
+            const idx_key = fmtInt(&idx_buf, idx);
+            try self.walkValue(idx_key);
+            self.skipWs();
+            const sep = try self.peek();
+            if (sep == ',') {
+                self.pos += 1;
+                continue;
+            }
+            if (sep == ']') {
+                self.pos += 1;
+                break;
+            }
+            return error.Invalid;
+        }
+        emit_list_end();
+    }
+
+    // Count top-level elements of the array starting at self.pos (which points
+    // at '['), without consuming. Skips nested structures and strings.
+    fn scanArrayCount(self: *Walker) WalkError!i32 {
+        var p = self.pos + 1; // past '['
+        // skip ws
+        while (p < self.input.len and isWs(self.input[p])) : (p += 1) {}
+        if (p < self.input.len and self.input[p] == ']') return 0;
+        var count: i32 = 1;
+        var depth: i32 = 0;
+        while (p < self.input.len) : (p += 1) {
+            const c = self.input[p];
+            if (c == '"') {
+                p += 1;
+                while (p < self.input.len) : (p += 1) {
+                    if (self.input[p] == '\\') {
+                        p += 1;
+                        continue;
+                    }
+                    if (self.input[p] == '"') break;
+                }
+                continue;
+            }
+            if (c == '[' or c == '{') depth += 1;
+            if (c == ']' or c == '}') {
+                if (depth == 0) break;
+                depth -= 1;
+            }
+            if (c == ',' and depth == 0) count += 1;
+        }
+        return count;
+    }
+
+    fn parseNumber(self: *Walker) WalkError!f64 {
+        const start = self.pos;
+        if (self.pos < self.input.len and self.input[self.pos] == '-') self.pos += 1;
+        while (self.pos < self.input.len) : (self.pos += 1) {
+            switch (self.input[self.pos]) {
+                '0'...'9', '.', 'e', 'E', '+', '-' => {},
+                else => break,
+            }
+        }
+        const slice = self.input[start..self.pos];
+        return std.fmt.parseFloat(f64, slice) catch error.Invalid;
+    }
+};
+
+fn isWs(c: u8) bool {
+    return c == ' ' or c == '\t' or c == '\n' or c == '\r';
+}
+
+fn hexVal(c: u8) WalkError!u21 {
+    return switch (c) {
+        '0'...'9' => @intCast(c - '0'),
+        'a'...'f' => @intCast(c - 'a' + 10),
+        'A'...'F' => @intCast(c - 'A' + 10),
+        else => error.Invalid,
+    };
+}
+
+fn encodeUtf8(base: [*]u8, off: usize, cp: u21) usize {
+    if (cp < 0x80) {
+        base[off] = @intCast(cp);
+        return 1;
+    } else if (cp < 0x800) {
+        base[off] = @intCast(0xC0 | (cp >> 6));
+        base[off + 1] = @intCast(0x80 | (cp & 0x3F));
+        return 2;
+    } else {
+        base[off] = @intCast(0xE0 | (cp >> 12));
+        base[off + 1] = @intCast(0x80 | ((cp >> 6) & 0x3F));
+        base[off + 2] = @intCast(0x80 | (cp & 0x3F));
+        return 3;
+    }
+}
+
+fn fmtInt(buf: []u8, v: i32) []const u8 {
+    return std.fmt.bufPrint(buf, "{d}", .{v}) catch unreachable;
+}
+
+fn walk(params_ptr: i32, params_len: i32) void {
+    // Do NOT reset the bump arena here: the host wrote the input JSON into it
+    // via `alloc` before calling us, so `bump_ptr` already points just past
+    // the input. parseString's scratch allocations must land above the input,
+    // not on top of it.
+    const input = memSlice(params_ptr, params_len);
+    var w = Walker{ .input = input, .pos = 0 };
+    // Top-level value is emitted under the empty key, mirroring the builder.
+    w.walkValue("") catch {
+        // Malformed JSON: emit nothing (the host sees an empty tree).
+    };
+}
+
+export fn walk_params(params_ptr: i32, params_len: i32) void {
+    walk(params_ptr, params_len);
+}
+
+export fn walk_data(data_ptr: i32, data_len: i32) void {
+    walk(data_ptr, data_len);
 }

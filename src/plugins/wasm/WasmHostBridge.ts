@@ -243,8 +243,14 @@ export function makeBuildBridge(host: BuilderHost): BuildBridge {
 
 // -- Helpers ------------------------------------------------------
 
-/** Parse a UTF-8 JSON-encoded `ValueDescriptor`. Throws if malformed. */
+/**
+ * Parse a UTF-8 JSON-encoded `ValueDescriptor`. An empty descriptor (zero
+ * bytes) means "no hints" -- a generic builder/walker (e.g. the JSON module)
+ * has no per-field descriptor to pass -- and decodes to `{}`. Throws if a
+ * non-empty descriptor is malformed.
+ */
 export function parseValueDescriptor(bytes: Uint8Array): ValueDescriptor {
+  if (bytes.length === 0) return {} as ValueDescriptor;
   const text = new TextDecoder().decode(bytes);
   return JSON.parse(text) as ValueDescriptor;
 }
