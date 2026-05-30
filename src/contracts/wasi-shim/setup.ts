@@ -7,7 +7,6 @@
 // constant declared there. proc_exit(0) traps via scaffold_env.reject with
 // this exact message; `withExitRecognition` swallows it.
 
-import { encodeBase64Url } from '@std/encoding/base64url';
 import { Hash } from '../../util/Hash.ts';
 import { ContractRejection } from '../../core/ContractEnv.ts';
 
@@ -171,27 +170,20 @@ function recordEquals(a: Record<string, string>, b: Record<string, string>): boo
 
 // -- output_namespaces serialisation ----------------------------------
 
-interface OutputNamespaceJson {
-  contract: string;
-  /** base64url-encoded params bytes (clean JSON, no escaping). */
-  params: string;
-}
-
 /**
- * Encode the `output_namespaces` manifest. NOTE: this record is currently
- * informational — the contract block format does not validate program
- * outputs against it (that lives elsewhere, and is a no-op for v1). It is
- * still produced because the design doc requires it on the block, and
- * downstream verification is expected to grow into reading it.
+ * Encode the `output_namespaces` record: the concatenated 32-byte CONTRACT
+ * hashes of the namespaces the program may emit into, in order, with no length
+ * prefix (an empty set is zero bytes). This is the format
+ * `WasmContractPlugin.readOutputNamespaces` parses and that wasm-abi.md
+ * mandates -- namespaces are keyed by contract hash, so a namespace's `params`
+ * is not part of its on-chain identity and is not encoded here.
  */
 function encodeOutputNamespaces(
   namespaces: ReadonlyArray<{ contract: Hash; params: Uint8Array }>,
 ): Uint8Array {
-  const arr: OutputNamespaceJson[] = namespaces.map((ns) => ({
-    contract: ns.contract.toHex(),
-    params: encodeBase64Url(ns.params),
-  }));
-  return new TextEncoder().encode(JSON.stringify(arr));
+  const out = new Uint8Array(namespaces.length * 32);
+  namespaces.forEach((ns, i) => out.set(ns.contract.toBytes(), i * 32));
+  return out;
 }
 
 // -- Public API -------------------------------------------------------
@@ -203,8 +195,10 @@ function encodeOutputNamespaces(
  *   `./loadShim.ts` in Deno, or read the file yourself in other runtimes).
  * @param opts.programBytes the WASI preview1 program WASM.
  * @param opts.setup wasi_setup config; defaults applied for any missing field.
- * @param opts.outputNamespaces (contract, params) pairs the program may emit
- *   into. Pass `[]` for programs that only write to `/out/debug`.
+ * @param opts.outputNamespaces the namespaces (by contract hash) the program
+ *   may emit into; only `.contract` is encoded (see `encodeOutputNamespaces`).
+ *   Pass `[]` for programs that only write to `/out/debug` or self-claimed
+ *   `/out/record/*` outputs.
  */
 export function buildContractRecords(opts: {
   shimBytes: Uint8Array;
@@ -214,16 +208,37 @@ export function buildContractRecords(opts: {
 }): ShimContractInputs {
   const shimHash = Hash.digest(opts.shimBytes);
   const programHash = Hash.digest(opts.programBytes);
-  const shimHex = shimHash.toHex();
-  const programHex = programHash.toHex();
 
-  const modules = buildModulesSpec(shimHex, programHex);
-  const wasi_setup = encodeWasiSetup(opts.setup ?? {});
-  const output_namespaces = encodeOutputNamespaces(opts.outputNamespaces ?? []);
+  const records = buildContractRecordsFromHashes({
+    shimHash,
+    programHash,
+    setup: opts.setup,
+    outputNamespaces: opts.outputNamespaces,
+  });
 
   return {
-    records: { modules, wasi_setup, output_namespaces },
-    blobs: { [shimHex]: opts.shimBytes, [programHex]: opts.programBytes },
+    records,
+    blobs: { [shimHash.toHex()]: opts.shimBytes, [programHash.toHex()]: opts.programBytes },
+  };
+}
+
+/**
+ * Build just the records (no blobs) for a shim+program contract, given the
+ * blob *hashes* rather than the bytes. Use this when the blobs are already
+ * available to verifiers (e.g. seeded as well-known blocks), so there is no
+ * need to re-publish them. Returns `modules` as a JS object (its on-chain form
+ * is JSON) plus the `wasi_setup` / `output_namespaces` byte records.
+ */
+export function buildContractRecordsFromHashes(opts: {
+  shimHash: Hash;
+  programHash: Hash;
+  setup?: WasiSetup;
+  outputNamespaces?: ReadonlyArray<{ contract: Hash; params: Uint8Array }>;
+}): ShimContractInputs['records'] {
+  return {
+    modules: buildModulesSpec(opts.shimHash.toHex(), opts.programHash.toHex()),
+    wasi_setup: encodeWasiSetup(opts.setup ?? {}),
+    output_namespaces: encodeOutputNamespaces(opts.outputNamespaces ?? []),
   };
 }
 

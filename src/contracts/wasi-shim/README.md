@@ -56,7 +56,7 @@ const { records, blobs } = buildContractRecords({
   shimBytes,        // load wasi-shim.wasm
   programBytes,     // your unmodified WASI preview1 program
   setup: { argv: ['program', '/in/params'], cwd: '/scratch' },
-  outputNamespaces: [],  // (contract, params) pairs your program emits into
+  outputNamespaces: [],  // contract hashes of namespaces your program emits into
 });
 ```
 

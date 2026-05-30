@@ -128,22 +128,31 @@ Deno.test('buildContractRecords: wasi_setup keys are emitted in sorted order', (
   assertEquals(keys, ['argv', 'cwd', 'env', 'stdout']);
 });
 
-Deno.test('buildContractRecords: output_namespaces is a JSON array of {contract, params}', () => {
+Deno.test('buildContractRecords: output_namespaces is concatenated 32-byte contract hashes', () => {
+  // Matches wasm-abi.md + WasmContractPlugin.readOutputNamespaces: contract
+  // hashes only (params are not part of a namespace's on-chain identity).
   const ns0Contract = Hash.digest('contract-zero');
-  const ns0Params = utf8('hello');
+  const ns1Contract = Hash.digest('contract-one');
   const out = buildContractRecords({
     shimBytes: STUB_SHIM,
     programBytes: STUB_PROG,
-    outputNamespaces: [{ contract: ns0Contract, params: ns0Params }],
+    outputNamespaces: [
+      { contract: ns0Contract, params: utf8('ignored') },
+      { contract: ns1Contract, params: new Uint8Array(0) },
+    ],
   });
-  const decoded = parseRecord(out.records.output_namespaces);
-  // params is base64url ("hello" -> "aGVsbG8")
-  assertEquals(decoded, [{ contract: ns0Contract.toHex(), params: 'aGVsbG8' }]);
+  const body = out.records.output_namespaces;
+  assert(body instanceof Uint8Array);
+  assertEquals(body.length, 64);
+  assertEquals(Hash.fromBytes(body.slice(0, 32)).toHex(), ns0Contract.toHex());
+  assertEquals(Hash.fromBytes(body.slice(32, 64)).toHex(), ns1Contract.toHex());
 });
 
-Deno.test('buildContractRecords: empty outputNamespaces produces []', () => {
+Deno.test('buildContractRecords: empty outputNamespaces produces zero bytes', () => {
   const out = buildContractRecords({ shimBytes: STUB_SHIM, programBytes: STUB_PROG });
-  assertEquals(parseRecord(out.records.output_namespaces), []);
+  const body = out.records.output_namespaces;
+  assert(body instanceof Uint8Array);
+  assertEquals(body.length, 0);
 });
 
 Deno.test('withExitRecognition: swallows ContractRejection with EXIT_ZERO_REASON', () => {

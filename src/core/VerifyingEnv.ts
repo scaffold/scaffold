@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/computation.md
 
-import { Hash, HashPrimitive } from '../util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import {
@@ -223,10 +223,15 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  put(_verifier: Verifier, _records: Record<string, Uint8Array | string>): void {
-    // No-op in verification mode -- the sub-block is verified
-    // independently elsewhere; nothing on this block depends on it.
+  put(_verifier: Verifier, _records: Record<string, Uint8Array | string>): Hash {
+    // No-op in verification mode -- the sub-block is verified independently
+    // elsewhere, and the parent block does not reference it. We return
+    // ZERO_HASH as a placeholder: contracts that ignore the put return
+    // verify unchanged; contracts whose outputs depend on the returned hash
+    // are not network-verifiable yet (see ContractEnv.put doc + TODO.md) and
+    // should run via local generation only.
     // See docs/protocol/wasm-abi.md#put.
+    return ZERO_HASH;
   }
 
   timestamp(): number {

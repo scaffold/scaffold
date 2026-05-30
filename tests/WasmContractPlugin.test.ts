@@ -76,7 +76,9 @@ class RecordingEnv implements ContractEnv {
     throw new ContractRejection('no fetch');
   }
   sign(): void {}
-  put(): void {}
+  put(): Hash {
+    return ZERO_HASH;
+  }
   timestamp(): number {
     return 0;
   }

@@ -117,7 +117,7 @@ class RecordingEnv implements ContractEnv {
     this.signedKeys.push(pubkey);
   }
 
-  put(): void {
+  put(): Hash {
     throw new ContractRejection('put not supported in tests');
   }
 

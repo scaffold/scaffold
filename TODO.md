@@ -191,6 +191,14 @@ Standard contracts are specified in [contracts.md](docs/protocol/contracts.md). 
 
 Specific work: add a `storage?` config field to `Scaffold`, construct `StorageManager` when provided, replay persisted blocks through the coordinator on startup, and persist new canonical blocks.
 
+### Default browser transport plugin (for zero-config `bootstrap`)
+`ScaffoldConfig.bootstrap?: string[]` is wired (dialed on `start()` via the configured plugin's
+`acceptsProtocols[0]`), but there is no bundled default browser transport, so `bootstrap` requires
+the caller to also pass `plugins: [...]`. For true zero-config browser usage
+(`new Scaffold({ bootstrap: ['relay.scaffold.io'] })`) we need a default WebRTC/WebSocket transport
+plugin that Scaffold installs automatically when `bootstrap` is set and `plugins` is unset. Until
+then `start()` throws a clear error directing the user to supply a transport plugin. (@joel)
+
 ### Peer Module
 Peer discovery, connection management, and disconnection of useless peers. The gossip module exports per-peer quality scores and consumes the peer set + transport metrics (latency, throughput). This module decides who to connect to, how to find new peers, and when to drop unproductive connections.
 
@@ -208,6 +216,18 @@ How do incentive blocks reach peers who can fulfill them? Options to explore:
 Likely best starting point: option 4 (gossip-only, with peerInfo contract interest as optimization).
 
 ## Computation DAG
+
+### Verifiable `put()` returns (parent must ref its put sub-blocks)
+`env.put` now resolves the committed sub-block's hash so a contract can reference what it created
+(e.g. a compiler `env.record(DEFAULT_KEY, hash)`). But the parent block does **not** reference its
+put sub-blocks, and `VerifyingEnv.put` returns `ZERO_HASH` -- so a contract whose *outputs depend on
+the returned hash* re-runs to a different/zero hash during verification and fails the namespace
+check. Such contracts are therefore only usable via **local generation** (`Scaffold.put`), not
+network-verified `fetch`. Proper fix: have generation append each put sub-block's hash to the parent
+block (a dedicated ordered ref list, kept distinct from conflict-ancestor / trigger refs), and have
+`VerifyingEnv.put` return the next entry in put-call order so verification replays the returns
+deterministically. Needed before the TS JS-compiler contract can be fetched+verified across the
+network rather than run locally. (@joel)
 
 When a contract calls `ctx.request(otherVerifier)`, it resolves to a Promise for the first canonical response. This creates an input dependency: the generated block specifies the requested block as an input. If the requested result later becomes non-canonical, the dependent block is affected -- generation should be cancelled (if still running) and restarted with the new canonical input.
 

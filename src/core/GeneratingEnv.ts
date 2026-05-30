@@ -62,12 +62,14 @@ export type WaitForGetOutputFn = (
  * Callback the GeneratingEnv invokes for `put`. Spawns a sub-generator
  * for `verifier` with `records` answering its `request` calls, blocks
  * until the sub-block commits, and propagates `ContractRejection` from
- * the sub-generator. See docs/protocol/wasm-abi.md#put.
+ * the sub-generator. Resolves with the committed sub-block's hash so the
+ * calling contract can reference what it created (e.g. record it as a
+ * result). See docs/protocol/wasm-abi.md#put.
  */
 export type PutFn = (
   verifier: Verifier,
   records: Record<string, Uint8Array | string>,
-) => Promise<void>;
+) => Promise<Hash>;
 
 // -- GeneratingEnv ------------------------------------------------
 
@@ -295,7 +297,7 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     }
   }
 
-  put(verifier: Verifier, records: Record<string, Uint8Array | string>): Promise<void> {
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): Promise<Hash> {
     if (!this._put) {
       throw new ContractRejection('put() requires a PutFn callback (none configured)');
     }

@@ -3,7 +3,15 @@ import { Block, HASH_CONTRACT } from './core/Block.ts';
 import type { Contract } from './contracts/Contract.ts';
 import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
+import { findRecordOutput } from './contracts/RecordContract.ts';
+import { DEFAULT_KEY } from './contracts/HashContract.ts';
+import {
+  type JsCompileInput,
+  JS_COMPILER_CONTRACT,
+  makeJsCompilerContract,
+} from './contracts/JsCompilerContract.ts';
 import { Hash } from './util/Hash.ts';
+import { str2bin } from './util/buffer.ts';
 import { NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
 import { PutManager, PutRequest } from './node/PutManager.ts';
 import { SendHandle, SendManager, SendRequest } from './node/SendManager.ts';
@@ -13,6 +21,7 @@ import type { Verifier } from './core/BlockCreationModule.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 import { getGenesisBlock } from './genesis.ts';
+import { getWellKnownBlocks } from './wellKnown.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { PushAction } from './node/RoutingModule.ts';
@@ -24,10 +33,28 @@ export interface ScaffoldConfig {
   privateKey?: Uint8Array;
   /** Pre-built genesis block. Defaults to the well-known genesis. */
   genesis?: Block;
+  /**
+   * Blocks to seed into the store after genesis so their blobs resolve
+   * locally without peer fetch. Defaults to the bundled well-known blocks
+   * (the wasi-shim + QuickJS blob blocks). Pass `[]` to disable seeding.
+   */
+  wellKnownBlocks?: Block[];
   /** Strategies to register */
   strategies?: Strategy[];
   /** Transport plugins. When provided, enables P2P networking. */
   plugins?: TransportPlugin[];
+  /**
+   * Signaling/relay addresses to dial on `start()`. Each address is dialed
+   * through the configured transport plugin that accepts `bootstrapProtocol`.
+   * Requires at least one `plugins` entry -- a default browser transport is
+   * not yet bundled (see TODO.md). Example: `bootstrap: ['relay.scaffold.io']`.
+   */
+  bootstrap?: string[];
+  /**
+   * Protocol used to dial `bootstrap` addresses. Defaults to the first
+   * `acceptsProtocols` entry of the first configured plugin.
+   */
+  bootstrapProtocol?: string;
   /**
    * Contract execution plugins. Each takes a contract block and either
    * `accepts` it (returning a `Contract` impl) or passes. Plugins are
@@ -80,6 +107,8 @@ export class Scaffold {
   private readonly fetchManager: FetchManager;
   private readonly networkBridge?: NetworkBridge;
   private readonly _publicKey: Uint8Array;
+  private readonly _bootstrap: string[];
+  private readonly _bootstrapProtocol?: string;
 
   /** Structured event log. Available for debugging and introspection. */
   readonly eventLog: EventLog;
@@ -89,7 +118,12 @@ export class Scaffold {
     const publicKey = secp.getPublicKey(privateKey, true);
     this._publicKey = publicKey;
 
+    this._bootstrap = config.bootstrap ?? [];
+    this._bootstrapProtocol = config.bootstrapProtocol ??
+      config.plugins?.[0]?.acceptsProtocols?.[0];
+
     const genesis = config.genesis ?? getGenesisBlock();
+    const wellKnownBlocks = config.wellKnownBlocks ?? getWellKnownBlocks();
 
     this.eventLog = (config.enableLogging !== false)
       ? new EventLog({ console: true })
@@ -100,6 +134,7 @@ export class Scaffold {
     let getConnectedPeers: (() => Iterable<string>) | undefined;
     this.nodeContext = new NodeContext({
       genesis,
+      wellKnownBlocks,
       privateKey,
       publicKey,
       strategies: config.strategies,
@@ -158,8 +193,16 @@ export class Scaffold {
       const fetchMgr = this.fetchManager;
       const defaultPlugin = wasmContractPlugin({
         resolveBlob: async (hash: Hash) => {
-          // `verify: true` makes fetch return a Promise<FetchResult>; the
-          // surface type union also covers the FetchHandle path so we cast.
+          // Local-first: a HASH_CONTRACT publish (including the seeded
+          // well-known blob blocks) carries a RECORD/'default' output whose
+          // body hashes to the requested hash. Resolving from the store keeps
+          // offline / single-node nodes from depending on peer fetch.
+          const local = this._resolveBlobLocal(hash);
+          if (local) return local;
+
+          // Fall back to incentive-based peer fetch. `verify: true` makes
+          // fetch return a Promise<FetchResult>; the surface type union also
+          // covers the FetchHandle path so we cast.
           const result = await (fetchMgr.fetch({
             contract: HASH_CONTRACT,
             params: hash.toBytes(),
@@ -202,6 +245,44 @@ export class Scaffold {
         return seen;
       };
     }
+
+    // 5. Register the standard JS compiler contract so `compile()` (and a
+    //    direct `fetch`/`put` under JS_COMPILER_CONTRACT) work zero-config.
+    this.registerContract(JS_COMPILER_CONTRACT, makeJsCompilerContract());
+  }
+
+  /**
+   * Compile JavaScript source into a contract block and return its hash.
+   *
+   * Drives the standard JS compiler contract via a local `put` (generation),
+   * reading back the new contract block's hash from the RECORD/'default'
+   * result. The compiled contract runs through QuickJS + the wasi-shim with the
+   * `scaffold` global available to its `run()`.
+   */
+  async compile(input: JsCompileInput): Promise<Hash> {
+    const params = str2bin(JSON.stringify({ files: input.files, options: input.options ?? {} }));
+    const block = await this.put({ contract: JS_COMPILER_CONTRACT, params, records: {} });
+    const result = findRecordOutput(block, DEFAULT_KEY);
+    if (!result) {
+      throw new Error('compile: JS compiler produced no result record');
+    }
+    return Hash.fromBytes(result.body);
+  }
+
+  /**
+   * Resolve a blob from the local store without touching the network.
+   * Scans for a HASH_CONTRACT block carrying a RECORD/'default' output whose
+   * body hashes to `hash`. Returns null when no such block is present.
+   */
+  private _resolveBlobLocal(hash: Hash): Uint8Array | null {
+    for (const block of this.nodeContext.store.values()) {
+      const record = findRecordOutput(block, DEFAULT_KEY);
+      if (!record) continue;
+      if (Hash.equals(Hash.digest(record.body), hash)) {
+        return record.body;
+      }
+    }
+    return null;
   }
 
   /** Register a contract for generation and verification at runtime. */
@@ -270,9 +351,24 @@ export class Scaffold {
     return this.sendManager.send(request);
   }
 
-  /** Start network plugins (if configured). */
+  /** Start network plugins (if configured) and dial any `bootstrap` addresses. */
   start(): void {
     this.networkBridge?.start();
+    if (this._bootstrap.length === 0) return;
+    if (!this.networkBridge) {
+      throw new Error(
+        'bootstrap addresses require a transport plugin; pass `plugins: [...]` ' +
+          '(a default browser transport is not yet bundled -- see TODO.md)',
+      );
+    }
+    if (!this._bootstrapProtocol) {
+      throw new Error(
+        'bootstrap addresses require `bootstrapProtocol` (no plugin protocol could be inferred)',
+      );
+    }
+    for (const address of this._bootstrap) {
+      this.networkBridge.bootstrapConnection(this._bootstrapProtocol, address);
+    }
   }
 
   /** Connect to a bootstrap address via the plugin that accepts this protocol. */

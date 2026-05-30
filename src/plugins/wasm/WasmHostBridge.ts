@@ -139,7 +139,11 @@ export function makeRunBridge(env: ContractEnv): RunBridge {
         const key = td.decode(o.verifier.params);
         records[key] = o.body ?? new Uint8Array(0);
       }
-      return env.put(decodeV(verifierBytes), records);
+      // env.put now resolves the created sub-block's hash, but the WASM `put`
+      // ABI does not yet surface a return value (the transports wire it as a
+      // void export). Discard the hash here; surfacing it to WASM guests is a
+      // future ABI bump. TODO(@joel): add a hash-return put path.
+      return maybeThen(env.put(decodeV(verifierBytes), records), () => undefined);
     },
 
     sign: (pubkey) => {

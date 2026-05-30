@@ -6,7 +6,7 @@
 // record on the contract's own block: one transform, one verify.
 
 import { assert, assertEquals, assertRejects } from '@std/assert';
-import { Hash } from '../src/util/Hash.ts';
+import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { composeGenesisPacket, HASH_CONTRACT, RECORD_CONTRACT } from '../src/core/Block.ts';
 import { makeRecordOutput } from '../src/contracts/RecordContract.ts';
 import { ContractHost } from '../src/core/ContractHost.ts';
@@ -141,7 +141,9 @@ class FakeEnv implements ContractEnv {
     throw new ContractRejection('not used');
   }
   sign(): void {}
-  put(): void {}
+  put(): Hash {
+    return ZERO_HASH;
+  }
   timestamp(): number {
     return 0;
   }

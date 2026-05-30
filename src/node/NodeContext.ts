@@ -3,6 +3,7 @@ import {
   Block,
   BlockStore,
   COLLATERAL_CONTRACT,
+  CONTRACT_CONTRACT,
   HASH_CONTRACT,
   INSURANCE_CONTRACT,
   makeBlockStoreOutputSpace,
@@ -34,6 +35,7 @@ import { collateralContract } from '../contracts/CollateralContract.ts';
 import { insuranceContract } from '../contracts/InsuranceContract.ts';
 import { recordContract } from '../contracts/RecordContract.ts';
 import { hashContract } from '../contracts/HashContract.ts';
+import { contractContract } from '../contracts/ContractContract.ts';
 import type { Contract } from '../contracts/Contract.ts';
 import type { ContractPlugin } from '../core/ContractPlugin.ts';
 import { composeBlockPacket, composeUnsignedBlockPacket } from '../core/Block.ts';
@@ -76,6 +78,13 @@ export type ValueOverrideFn = (
 export interface NodeConfig {
   /** Genesis block (pre-built). */
   genesis: Block;
+  /**
+   * Additional well-known blocks to seed into the store after genesis (e.g.
+   * the WASM blob blocks the JS runtime stacks). Seeding them lets their
+   * blobs resolve from the local store without peer fetch. They are expected
+   * to anchor at genesis.
+   */
+  wellKnownBlocks?: Block[];
   /** Private key for signing blocks. If provided, solidified drafts will be signed. */
   privateKey?: Uint8Array;
   /** Public key (compressed, 33 bytes). Derived from privateKey. Used for auto-balance. */
@@ -316,6 +325,7 @@ export class NodeContext {
     this._registerBuiltinContract(RECORD_CONTRACT, recordContract);
     this._registerBuiltinContract(SIGNATURE_CONTRACT, signatureContract);
     this._registerBuiltinContract(HASH_CONTRACT, hashContract);
+    this._registerBuiltinContract(CONTRACT_CONTRACT, contractContract);
 
     // 5d. Create DraftManager (no GeneratorProvider -- GenerationService is
     //     a producer that drives draftManager.create directly). Wire the
@@ -492,6 +502,16 @@ export class NodeContext {
     // initializes the canonical snapshot without firing listeners, so
     // genesis outputs must be indexed explicitly.
     this.utxoIndex.blockBecameCanonical(genesis);
+
+    // 10a. Seed well-known blocks (e.g. WASM blob blocks). They anchor at
+    //      genesis; process them through the coordinator the same way (not
+    //      the reactive layer -- strategies should not fire on them). These
+    //      only need to be present in the store so their blobs resolve
+    //      locally; they are not spent as UTXOs, so no explicit index seeding.
+    for (const wk of config.wellKnownBlocks ?? []) {
+      this.coordinator.blockReceived(wk, null);
+      this.blocks.add(wk);
+    }
   }
 
   /** Process a block through the reactive layer */

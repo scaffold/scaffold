@@ -1011,7 +1011,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
     verifier: Verifier,
     records: Record<string, Uint8Array | string>,
     childDepth: number,
-  ): Promise<void> {
+  ): Promise<Hash> {
     if (childDepth > MAX_PUT_DEPTH) {
       return Promise.reject(
         new ContractRejection(
@@ -1020,7 +1020,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
       );
     }
 
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<Hash>((resolve, reject) => {
       let handle: { draftId: Hash; cancel: () => void };
       try {
         handle = this.generateForVerifier(verifier, records, childDepth);
@@ -1046,7 +1046,7 @@ export class GenerationService extends GenerationModule implements GeneratorProv
         if (!Hash.equals(d.draftId, targetId)) return;
         if (d.status.phase === 'solidified' && d.solidifiedBlocks.length > 0) {
           unsub?.();
-          resolve();
+          resolve(d.solidifiedBlocks[0].hash);
         } else if (d.status.phase === 'cancelled') {
           unsub?.();
           reject(

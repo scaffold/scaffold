@@ -35,7 +35,7 @@
 //     records the rejection.
 
 import { assertSnapshot } from '@std/testing/snapshot';
-import { Hash } from '../../src/util/Hash.ts';
+import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import {
   type Claim,
   type ContractEnv,
@@ -250,8 +250,9 @@ class MockSequenceEnv implements ContractEnv {
     this._dispatch('debug', { message });
   }
 
-  put(verifier: Verifier, records: Record<string, Uint8Array | string>): void {
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): Hash {
     this._dispatch('put', { verifier, records });
+    return ZERO_HASH;
   }
 
   record(key: Uint8Array, value: Uint8Array): void {

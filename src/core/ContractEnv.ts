@@ -158,20 +158,27 @@ export interface ContractEnv {
   fetch(verifier: Verifier, key: Uint8Array): MaybePromise<Uint8Array>;
 
   /**
-   * Publish a verifier on a new block with fitting records.
+   * Publish a verifier on a new block with fitting records. Resolves with
+   * the committed sub-block's hash.
    *
    * Mirrors `Scaffold.put({contract, params, records})` at the contract
    * level. The new block self-claims an output under `verifier` (so it
    * is discoverable via `fetch(verifier, key)`) and emits one
    * RECORD_CONTRACT output per entry in `records`.
    *
-   * Verification: no-op. The sub-block is independently verified.
-   *
    * Generation: spawns a sub-generator with `verifier` as its identity
    * and the supplied `records` as the data the sub-block publishes.
-   * Blocking. Returns once the sub-block has committed. If the
-   * sub-generator throws `ContractRejection`, this call propagates the
-   * rejection to the parent generator.
+   * Blocking. Resolves with the sub-block's hash once it has committed.
+   * If the sub-generator throws `ContractRejection`, this call propagates
+   * the rejection to the parent generator.
+   *
+   * Verification: no-op that returns `ZERO_HASH`. The sub-block is
+   * verified independently, and the parent block does not reference it,
+   * so a contract whose *outputs depend on the returned hash* (e.g. one
+   * that records it) is not network-verifiable yet -- that requires the
+   * parent to ref its put sub-blocks so verification can replay the
+   * returns in order. See TODO.md. Until then, such contracts should be
+   * driven by local generation (`Scaffold.put`), not network `fetch`.
    *
    * Auto-emergence. If the sub-contract claims no inputs and no UTXO
    * exists matching `verifier`, the runtime self-claims a new output
@@ -182,7 +189,7 @@ export interface ContractEnv {
    *
    * See docs/protocol/wasm-abi.md#put.
    */
-  put(verifier: Verifier, records: Record<string, Uint8Array | string>): MaybePromise<void>;
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): MaybePromise<Hash>;
 
   /**
    * Assert the block's signature matches the given public key.
