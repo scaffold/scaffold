@@ -1,10 +1,11 @@
 // Protocol spec: docs/protocol/output-data.md
 
 import type { BuilderHost, ValueDescriptor } from '../contracts/Contract.ts';
+import { ValueType } from '../contracts/Contract.ts';
 
 /** Metadata about a field the builder requested. */
 export interface FieldRequest {
-  kind: 'bytes' | 'string' | 'number' | 'bool' | 'arrayLength' | 'objectKeys';
+  kind: 'valueType' | 'bytes' | 'string' | 'number' | 'bool' | 'arrayLength' | 'objectKeys';
   key: string;
   /** Full path from root (for nested fields). */
   path: string[];
@@ -55,6 +56,29 @@ export class DefaultBuilderHost implements BuilderHost {
     desc: ValueDescriptor,
   ): void {
     this.fields.push({ kind, key, path: this.currentPath(key), desc });
+  }
+
+  requestValueType(key: string, desc: ValueDescriptor): ValueType {
+    this.recordField('valueType', key, desc);
+    // Best-effort over the flattened value map: an exact value reveals its JS
+    // type; a path with descendants is an object. (Descriptor-driven contracts
+    // know their own types and rarely call this; the JSON builder uses
+    // NestedBuilderHost, which resolves types precisely.)
+    const pk = this.pathKey(key);
+    if (this.values.has(pk)) {
+      const v = this.values.get(pk);
+      if (v === null || v === undefined) return ValueType.Null;
+      if (typeof v === 'boolean') return ValueType.Bool;
+      if (typeof v === 'number') return ValueType.Number;
+      if (typeof v === 'string') return ValueType.String;
+      if (Array.isArray(v)) return ValueType.Array;
+      return ValueType.Object;
+    }
+    const prefix = pk.length > 0 ? pk + '.' : '';
+    for (const mapKey of this.values.keys()) {
+      if (prefix === '' || mapKey.startsWith(prefix)) return ValueType.Object;
+    }
+    return ValueType.Null;
   }
 
   requestBytes(key: string, desc: ValueDescriptor): Uint8Array {

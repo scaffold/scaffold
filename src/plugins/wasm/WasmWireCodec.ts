@@ -175,6 +175,46 @@ export function encodeClaimList(claims: Claim[]): Uint8Array {
   return out;
 }
 
+/**
+ * Encode a list of strings: `u32 count; count × (u32 byte_len; utf8 bytes)`.
+ * Used by `request_object_keys`.
+ */
+export function encodeStringList(items: string[]): Uint8Array {
+  const enc = new TextEncoder();
+  const encoded = items.map((s) => enc.encode(s));
+  const total = 4 + encoded.reduce((acc, b) => acc + 4 + b.length, 0);
+  const out = new Uint8Array(total);
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
+  view.setUint32(0, items.length, true);
+  let offset = 4;
+  for (const b of encoded) {
+    view.setUint32(offset, b.length, true);
+    offset += 4;
+    out.set(b, offset);
+    offset += b.length;
+  }
+  return out;
+}
+
+/** Decode a string list produced by `encodeStringList`. */
+export function decodeStringList(bytes: Uint8Array): string[] {
+  if (bytes.length < 4) throw new Error('decodeStringList: short read on count');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const count = view.getUint32(0, true);
+  const dec = new TextDecoder();
+  const out: string[] = [];
+  let offset = 4;
+  for (let i = 0; i < count; i++) {
+    if (bytes.length < offset + 4) throw new Error('decodeStringList: short read on length');
+    const len = view.getUint32(offset, true);
+    offset += 4;
+    if (bytes.length < offset + len) throw new Error('decodeStringList: short read on bytes');
+    out.push(dec.decode(bytes.subarray(offset, offset + len)));
+    offset += len;
+  }
+  return out;
+}
+
 /** Encode a `(value, body)` reply for `request_body` / `contract_metadata`. */
 export function encodeValueAndBody(value: number, body: Uint8Array): Uint8Array {
   const out = new Uint8Array(I128_BYTES + 4 + body.length);

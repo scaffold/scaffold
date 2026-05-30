@@ -11,6 +11,7 @@ import {
   decodeVerifier,
   encodeClaim,
   encodeClaimList,
+  encodeStringList,
   encodeValueAndBody,
 } from './WasmWireCodec.ts';
 
@@ -205,12 +206,16 @@ export function makeWalkBridge(host: WalkerHost): WalkBridge {
  * copies into contract memory.
  */
 export interface BuildBridge {
+  /** Returns the `ValueType` enum value (i32) of the value at `key`. */
+  requestValueType(key: string, desc: ValueDescriptor): number;
   requestBytes(key: string, desc: ValueDescriptor): Uint8Array;
   /** Returns UTF-8 encoded bytes of the user-supplied string. */
   requestString(key: string, desc: ValueDescriptor): Uint8Array;
   requestNumber(key: string, desc: ValueDescriptor): number;
   requestBool(key: string, desc: ValueDescriptor): number;
   requestArrayLength(key: string, desc: ValueDescriptor): number;
+  /** Returns the object's keys encoded as a string-list (see WasmWireCodec). */
+  requestObjectKeys(key: string, desc: ValueDescriptor): Uint8Array;
   beginObject(key: string): void;
   endObject(): void;
   beginArray(key: string): void;
@@ -221,11 +226,13 @@ export interface BuildBridge {
 export function makeBuildBridge(host: BuilderHost): BuildBridge {
   const encoder = new TextEncoder();
   return {
+    requestValueType: (key, desc) => host.requestValueType(key, desc),
     requestBytes: (key, desc) => host.requestBytes(key, desc),
     requestString: (key, desc) => encoder.encode(host.requestString(key, desc)),
     requestNumber: (key, desc) => host.requestNumber(key, desc),
     requestBool: (key, desc) => host.requestBool(key, desc) ? 1 : 0,
     requestArrayLength: (key, desc) => host.requestArrayLength(key, desc),
+    requestObjectKeys: (key, desc) => encodeStringList(host.requestObjectKeys(key, desc)),
     beginObject: (key) => host.beginObject(key),
     endObject: () => host.endObject(),
     beginArray: (key) => host.beginArray(key),

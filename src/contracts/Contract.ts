@@ -47,10 +47,30 @@ export interface WalkerHost {
 // -- Builder Host -----------------------------------------------------
 
 /**
+ * The runtime type of a value, so a generic builder can decide how to serialize
+ * it. Numeric values match the `request_value_type` wire return in wasm-abi.md.
+ */
+export enum ValueType {
+  Null = 0,
+  Bool = 1,
+  Number = 2,
+  String = 3,
+  Array = 4,
+  Object = 5,
+}
+
+/**
  * Host interface for the builder (writing direction).
  * The contract calls these to request field values from the user.
  */
 export interface BuilderHost {
+  /**
+   * The runtime type of the value at `key`, so a generic builder (one that does
+   * not know the params shape ahead of time, e.g. the JSON walker/builder
+   * module) can dispatch to the right `request*` call. Returns `Null` when the
+   * value is absent.
+   */
+  requestValueType(key: string, desc: ValueDescriptor): ValueType;
   requestBytes(key: string, desc: ValueDescriptor): Uint8Array;
   requestString(key: string, desc: ValueDescriptor): string;
   requestNumber(key: string, desc: ValueDescriptor): number;

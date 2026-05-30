@@ -8,6 +8,7 @@ import {
   ExecutionMode,
 } from '../src/core/ContractEnv.ts';
 import type { BuilderHost, ValueDescriptor, WalkerHost } from '../src/contracts/Contract.ts';
+import { ValueType } from '../src/contracts/Contract.ts';
 import type { WasmTransport } from '../src/plugins/wasm/WasmTransport.ts';
 import { InProcessMockTransport } from '../src/plugins/wasm/transports/InProcessMockTransport.ts';
 import { JspiTransport } from '../src/plugins/wasm/transports/JspiTransport.ts';
@@ -169,6 +170,9 @@ class FixedBuilder implements BuilderHost {
   }
   requestObjectKeys(): string[] {
     return [];
+  }
+  requestValueType(): ValueType {
+    return ValueType.String;
   }
   beginObject(): void {}
   endObject(): void {}
