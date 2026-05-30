@@ -1,3 +1,5 @@
+// Protocol spec: docs/protocol/wasm-abi.md (scaffold_builder / scaffold_walker)
+
 const std = @import("std");
 
 // json-wb: the generic JSON walker/builder contract module.

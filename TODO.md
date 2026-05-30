@@ -125,30 +125,26 @@ The reactive action types (`createBlock` with collateral outputs) exist, but the
 ### Trust-gate integration for fetch callbacks
 The [fetch design](docs/design/fetch.md) specifies that `FetchManager` should gate response surfacing on [TrustGate](src/node/TrustGate.ts) — only fire callbacks for blocks that have been locally verified or collateral-backed. [FetchManager.ts](src/node/FetchManager.ts) currently surfaces on canonical resolution alone (trust-gate wiring is in place for `verify: true` but disabled for streaming callbacks). The previous blocker — `collectExtendedOutputs` not walking aggregate subtrees — is resolved (claim resolution now goes through `OutputSpaceModule` everywhere). Re-enabling the trust gate for streaming callbacks is now a follow-up rather than a deep blocker.
 
-### Generic JSON walker/builder WASM module (declarative params/result codec)
-Object params (`fetch/put({ params: { name: 'World' } })`) are encoded host-side as **canonical
-JSON** today (`src/node/draftPublishing.ts#encodeParams`), and `result.parse()` JSON-decodes when a
-contract has no `walkData`. This works for the JS runtime (which reads `JSON.parse(scaffold.params())`)
-but is a host-side TS path, not the "wired anywhere" design Joel wants: a single generic JSON
-walker/builder WASM module that any contract declares in its `modules.base.imports`
-(`build_params`/`walk_params`/`build_data`/`walk_data` → `json_wb:*`), so a Zig/other-host node can
-serialize/deserialize the same way without TS. The `requestObjectKeys` builder primitive is already
-added (BuilderHost + DefaultBuilderHost + wasm-abi.md) as the foundation.
+### Generic JSON codec: host fast-path vs. contract-declared codec
+**Landed:** the generic JSON walker/builder WASM module (`src/contracts/json-wb`, ABI option 1 --
+`request_value_type` drives the builder's dispatch). It is wired as a `json_wb` layer on every
+contract the JS compiler produces (`build_params`/`walk_params`/`build_data`/`walk_data` →
+`json_wb:*`) and seeded as a well-known block, so any host can serialize/deserialize a contract's
+params/results without TS-specific code. `result.parse()` runs the contract's `walkData` (json-wb)
+when present.
 
-**Open ABI decision before building it:** a generic JSON *builder* (object → JSON) must learn each
-value's TYPE to emit valid JSON (quote strings, not numbers/bools; recurse objects; iterate arrays).
-`requestObjectKeys` alone doesn't convey type. Options:
-  1. Add a `request_value_type(key) -> u8` enum {null,bool,number,string,array,object}; the module
-     dispatches to request_string/number/bool / request_array_length / request_object_keys.
-  2. Have the host return each *leaf* already JSON-formatted (e.g. `request_json_value(key) -> bytes`),
-     so the module only does structural assembly (objects/arrays) and the host formats scalars.
-  3. Overload existing requesters with a sentinel (e.g. request_array_length returns -1 for non-array)
-     plus request_object_keys returning empty for non-objects — leaves scalar-type ambiguity.
-Recommend (1): smallest, unambiguous, mirrors the walker's emit_* type tags. Decide, then build the
-Zig module (reuse the shim's JSON parser for the walker side), wire a `json-wb` well-known block, and
-extend `buildModulesSpec`/`buildJsContractRecords` to add the `json_wb` layer + the four base.imports.
-Also needs async `encodeParams` (the WASM build path is async; `fetch()` returns its handle
-synchronously today — thread the object-params encode through a deferred-subscription path). (@joel)
+What remains (smaller, deferred):
+- **Object params still take the host fast path.** `encodeParams` (`src/node/draftPublishing.ts`)
+  encodes object params as canonical JSON in TS rather than calling the contract's declared
+  `build_params`. This is byte-identical to json-wb's output (proven in `tests/JsonWb.test.ts`), so
+  it is a legitimate optimization for JSON contracts -- but a contract with a *non-JSON* declared
+  codec would be mis-encoded. To honor arbitrary codecs, route object params through
+  `contract.buildParams` when the contract declares one. That requires **async `encodeParams`**: the
+  WASM build path is async and `fetch()` returns its handle synchronously today, so thread the
+  object-params encode through a deferred-subscription path (keep the bytes path sync).
+- **Atomics/JSPI/worker transports**: `request_value_type` / `request_object_keys` are wired through
+  the in-process transport (the Deno default) + the host bridge; mirror them into JspiTransport,
+  AtomicsWorkerTransport, and wasmInstance for browser parity. (@joel)
 
 ### WASM Contract Runtime
 `ContractHost` currently uses a TypeScript mock contract registry. Replace with real `WebAssembly.instantiate` loading, host function bindings (imports), and memory management. The `runVerifying` / `runGenerating` surface stays the same -- only the contract dispatch changes. The [WasmStore](src/core/WasmStore.ts) exists as an in-memory binary store but is not yet consumed for actual WASM execution.
