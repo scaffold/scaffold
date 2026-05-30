@@ -16,7 +16,7 @@ import { AtomSource, Block, parseBlockPacket } from './core/Block.ts';
 import { Hash } from './util/Hash.ts';
 
 /** Names of the well-known block directories, in seed order. */
-const WELL_KNOWN_NAMES = ['wasi-shim', 'quickjs'] as const;
+const WELL_KNOWN_NAMES = ['wasi-shim', 'quickjs', 'json-wb'] as const;
 type WellKnownName = (typeof WELL_KNOWN_NAMES)[number];
 
 interface BlockHashManifest {
@@ -80,6 +80,11 @@ export function getShimBlobHash(): Hash {
 /** Content hash of the QuickJS (qjs-wasi) blob. */
 export function getQuickjsBlobHash(): Hash {
   return wellKnownBlobHash('quickjs');
+}
+
+/** Content hash of the generic JSON walker/builder (json-wb) blob. */
+export function getJsonWbBlobHash(): Hash {
+  return wellKnownBlobHash('json-wb');
 }
 
 function blockBinUrl(name: WellKnownName): URL {

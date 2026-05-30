@@ -19,7 +19,7 @@ import { Hash } from '../util/Hash.ts';
 import { CONTRACT_CONTRACT, RECORD_CONTRACT } from '../core/Block.ts';
 import { DEFAULT_KEY } from './HashContract.ts';
 import { buildJsContractRecordsFromHashes } from './js-runtime/setup.ts';
-import { getQuickjsBlobHash, getShimBlobHash } from '../wellKnown.ts';
+import { getJsonWbBlobHash, getQuickjsBlobHash, getShimBlobHash } from '../wellKnown.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 
 /** Well-known hash identifying the standard JS compiler contract. */
@@ -37,11 +37,13 @@ export interface JsCompileInput {
 export interface JsCompilerDeps {
   shimBlobHash(): Hash;
   quickjsBlobHash(): Hash;
+  jsonWbBlobHash(): Hash;
 }
 
 const DEFAULT_DEPS: JsCompilerDeps = {
   shimBlobHash: getShimBlobHash,
   quickjsBlobHash: getQuickjsBlobHash,
+  jsonWbBlobHash: getJsonWbBlobHash,
 };
 
 /**
@@ -60,6 +62,7 @@ export function makeJsCompilerContract(deps: JsCompilerDeps = DEFAULT_DEPS): Con
       const records = buildJsContractRecordsFromHashes({
         shimHash: deps.shimBlobHash(),
         quickjsHash: deps.quickjsBlobHash(),
+        jsonWbHash: deps.jsonWbBlobHash(),
         source,
       });
 
@@ -67,9 +70,7 @@ export function makeJsCompilerContract(deps: JsCompilerDeps = DEFAULT_DEPS): Con
       // other records are already Uint8Array.
       const contractRecords: Record<string, Uint8Array> = {};
       for (const [key, value] of Object.entries(records)) {
-        contractRecords[key] = value instanceof Uint8Array
-          ? value
-          : str2bin(JSON.stringify(value));
+        contractRecords[key] = value instanceof Uint8Array ? value : str2bin(JSON.stringify(value));
       }
 
       const contractHash = await env.put(

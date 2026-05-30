@@ -52,6 +52,8 @@ export function buildJsContractRecords(opts: {
 export function buildJsContractRecordsFromHashes(opts: {
   shimHash: Hash;
   quickjsHash: Hash;
+  /** Optional generic JSON walker/builder layer (json-wb) for params/data. */
+  jsonWbHash?: Hash;
   source: string;
   outputNamespaces?: ReadonlyArray<{ contract: Hash; params: Uint8Array }>;
 }): ShimContractInputs['records'] {
@@ -59,6 +61,7 @@ export function buildJsContractRecordsFromHashes(opts: {
   return buildContractRecordsFromHashes({
     shimHash: opts.shimHash,
     programHash: opts.quickjsHash,
+    jsonWbHash: opts.jsonWbHash,
     setup: { argv: ['qjs', '--std', '-e', program] },
     outputNamespaces: opts.outputNamespaces,
   });

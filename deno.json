@@ -68,6 +68,7 @@
     "build-determinism-constants": "deno run --allow-read --allow-write scripts/wasm-determinism/generate_constants.ts",
     "build-determinism-fixtures": "bash tests/fixtures/wasm-determinism/build.sh",
     "build:wasi-shim": "cd src/contracts/wasi-shim && ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-global ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local zig build wasi-shim",
+    "build:json-wb": "cd src/contracts/json-wb && ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-global ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-local zig build json-wb",
     "build:well-known": "bash well-known-blocks/build-all.sh",
     "vendor:quickjs": "deno run --allow-net --allow-read --allow-write --allow-run=curl scripts/vendor_quickjs.ts",
     "test:wasi": "deno task build:wasi-shim && deno test --allow-all tests/WasiShim*.test.ts",

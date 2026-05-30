@@ -4,7 +4,7 @@
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
-for block in wasi-shim quickjs; do
+for block in wasi-shim quickjs json-wb; do
   echo "== well-known-blocks/$block =="
   bash "$DIR/$block/build.sh"
 done

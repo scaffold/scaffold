@@ -73,7 +73,11 @@ interface ModulesSpec {
   }>;
 }
 
-function buildModulesSpec(shimHashHex: string, programHashHex: string): ModulesSpec {
+function buildModulesSpec(
+  shimHashHex: string,
+  programHashHex: string,
+  jsonWbHashHex?: string,
+): ModulesSpec {
   // The graph is the canonical stack from docs/design/wasi-shim.md
   // (Architecture section). Two layers, bidirectional function imports
   // resolved by the linker's lazy nameTable + the @read/@write accessor
@@ -83,29 +87,46 @@ function buildModulesSpec(shimHashHex: string, programHashHex: string): ModulesS
   // function import of `program._start` is resolved lazily through the
   // forwarder, so program (instantiated after) can satisfy it without an
   // ordering conflict.
-  return {
-    base: {
-      version: MODULES_VERSION,
-      imports: { run: 'wasi_shim:run' },
+  const imports: Record<string, string> = { run: 'wasi_shim:run' };
+  const layers: ModulesSpec['layers'] = [
+    {
+      key: 'wasi_shim',
+      wasmHash: shimHashHex,
+      imports: {
+        'program._start': 'program:_start',
+        'program_mem.read_bytes': 'program:memory@read',
+        'program_mem.write_bytes': 'program:memory@write',
+        'scaffold_env.*': 'base:*',
+      },
     },
-    layers: [
-      {
-        key: 'wasi_shim',
-        wasmHash: shimHashHex,
-        imports: {
-          'program._start': 'program:_start',
-          'program_mem.read_bytes': 'program:memory@read',
-          'program_mem.write_bytes': 'program:memory@write',
-          'scaffold_env.*': 'base:*',
-        },
+    {
+      key: 'program',
+      wasmHash: programHashHex,
+      imports: { 'wasi_snapshot_preview1.*': 'wasi_shim:*' },
+    },
+  ];
+
+  // Optional generic JSON walker/builder layer. When present, the contract's
+  // params/data are serialized/deserialized by json-wb (so any tool reads and
+  // writes them the same way) rather than by the program itself. It is the
+  // entry layer for the build/walk modes; it has its own memory and only
+  // imports the scaffold builder/walker host surface.
+  if (jsonWbHashHex !== undefined) {
+    imports.build_params = 'json_wb:build_params';
+    imports.build_data = 'json_wb:build_data';
+    imports.walk_params = 'json_wb:walk_params';
+    imports.walk_data = 'json_wb:walk_data';
+    layers.push({
+      key: 'json_wb',
+      wasmHash: jsonWbHashHex,
+      imports: {
+        'scaffold_builder.*': 'base:*',
+        'scaffold_walker.*': 'base:*',
       },
-      {
-        key: 'program',
-        wasmHash: programHashHex,
-        imports: { 'wasi_snapshot_preview1.*': 'wasi_shim:*' },
-      },
-    ],
-  };
+    });
+  }
+
+  return { base: { version: MODULES_VERSION, imports }, layers };
 }
 
 // -- wasi_setup serialisation -----------------------------------------
@@ -232,11 +253,17 @@ export function buildContractRecords(opts: {
 export function buildContractRecordsFromHashes(opts: {
   shimHash: Hash;
   programHash: Hash;
+  /** Optional generic JSON walker/builder layer (json-wb) for params/data. */
+  jsonWbHash?: Hash;
   setup?: WasiSetup;
   outputNamespaces?: ReadonlyArray<{ contract: Hash; params: Uint8Array }>;
 }): ShimContractInputs['records'] {
   return {
-    modules: buildModulesSpec(opts.shimHash.toHex(), opts.programHash.toHex()),
+    modules: buildModulesSpec(
+      opts.shimHash.toHex(),
+      opts.programHash.toHex(),
+      opts.jsonWbHash?.toHex(),
+    ),
     wasi_setup: encodeWasiSetup(opts.setup ?? {}),
     output_namespaces: encodeOutputNamespaces(opts.outputNamespaces ?? []),
   };
