@@ -218,9 +218,7 @@ Deno.test('env.put: parent contract spawns a child block carrying the records', 
     ) {
       // The parent block only emits AGGREGATION; the child emits RECORD outputs.
       // We want the latter -- the one that actually claims a RECORD output.
-      const hasRecord = b.outputs.some((o) =>
-        Hash.equals(o.verifier.contract, RECORD_CONTRACT)
-      );
+      const hasRecord = b.outputs.some((o) => Hash.equals(o.verifier.contract, RECORD_CONTRACT));
       if (hasRecord) {
         childBlock = b;
         break;

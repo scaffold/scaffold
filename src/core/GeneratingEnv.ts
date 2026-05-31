@@ -301,7 +301,14 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     if (!this._put) {
       throw new ContractRejection('put() requires a PutFn callback (none configured)');
     }
-    return this._put(verifier, records);
+    return this._put(verifier, records).then((hash) => {
+      // Record the sub-block hash in refs -- interleaved with fetch refs in
+      // call order -- so verification can replay put()'s return value
+      // positionally (see VerifyingEnv.put / .fetch). This is what makes a
+      // contract that records a put-returned hash network-verifiable.
+      this._refs.push(hash);
+      return hash;
+    });
   }
 
   timestamp(): number {

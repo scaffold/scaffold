@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/computation.md
 
-import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
+import { Hash, HashPrimitive } from '../util/Hash.ts';
 import type { Output, Verifier } from './BlockCreationModule.ts';
 import { RECORD_CONTRACT } from './Block.ts';
 import {
@@ -48,6 +48,15 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   /** Tracks which matching inputs have been consumed by claimNext(). */
   private _inputCursor = 0;
   private _matchingInputs: Claim[] | null = null;
+
+  /**
+   * Cursor into `_refs`, advanced by every `fetch` and `put` call. Generation
+   * pushes one ref per `fetch`/`put` in call order (see GeneratingEnv), and the
+   * contract is deterministic, so verification consumes refs positionally in
+   * the same order: `fetch` reads (and validates) the next ref; `put` returns
+   * the next ref (the sub-block it created during generation).
+   */
+  private _refCursor = 0;
 
   /**
    * Per-contract cursor into block.outputs, indexed by the output's
@@ -224,14 +233,16 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   }
 
   put(_verifier: Verifier, _records: Record<string, Uint8Array | string>): Hash {
-    // No-op in verification mode -- the sub-block is verified independently
-    // elsewhere, and the parent block does not reference it. We return
-    // ZERO_HASH as a placeholder: contracts that ignore the put return
-    // verify unchanged; contracts whose outputs depend on the returned hash
-    // are not network-verifiable yet (see ContractEnv.put doc + TODO.md) and
-    // should run via local generation only.
+    // The sub-block is verified independently elsewhere; here we only need to
+    // reproduce put()'s RETURN value deterministically. Generation pushed the
+    // created sub-block's hash onto refs in call order (interleaved with fetch
+    // refs), so we return the next ref positionally. A contract that records
+    // the put-returned hash thus re-verifies identically.
     // See docs/protocol/wasm-abi.md#put.
-    return ZERO_HASH;
+    if (this._refCursor >= this._refs.length) {
+      throw new ContractRejection(`put() consumed more refs than the block carries`);
+    }
+    return this._refs[this._refCursor++];
   }
 
   timestamp(): number {

@@ -843,7 +843,29 @@ Deno.test('VerifyingEnv: contractMetadata throws when no matching output exists'
   );
 });
 
-Deno.test('VerifyingEnv: put is a no-op (sub-block verified independently)', () => {
+Deno.test('VerifyingEnv: put replays the sub-block hash from refs (in call order)', () => {
+  const provider = new TestProvider();
+  // Generation appended the created sub-block's hash to refs; verification
+  // replays put()'s return value positionally. See docs/protocol/wasm-abi.md#put.
+  const subHashA = h('sub-block-a');
+  const subHashB = h('sub-block-b');
+  const block: TestBlock = {
+    hash: h('exec'),
+    anchor: ZERO_HASH,
+    outputs: [],
+    claimIndices: [],
+    refs: [subHashA, subHashB],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ block, provider });
+
+  const r1 = env.put({ contract: h('hash-contract'), params: enc('blob-1') }, {});
+  assertEquals(r1.toHex(), subHashA.toHex());
+  const r2 = env.put({ contract: h('hash-contract'), params: enc('blob-2') }, {});
+  assertEquals(r2.toHex(), subHashB.toHex());
+});
+
+Deno.test('VerifyingEnv: put throws when the block carries no matching ref', () => {
   const provider = new TestProvider();
   const block: TestBlock = {
     hash: h('exec'),
@@ -854,12 +876,10 @@ Deno.test('VerifyingEnv: put is a no-op (sub-block verified independently)', () 
   };
   provider.addBlock(block);
   const env = makeEnv({ block, provider });
-  // Put should silently succeed in verification mode -- nothing on this
-  // block depends on the sub-contract; its own block is verified
-  // separately. See docs/protocol/wasm-abi.md#put.
-  env.put(
-    { contract: h('hash-contract'), params: enc('blob-hash') },
-    {},
+  assertThrows(
+    () => env.put({ contract: h('hash-contract'), params: enc('blob') }, {}),
+    ContractRejection,
+    'consumed more refs',
   );
 });
 

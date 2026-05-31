@@ -238,17 +238,19 @@ Likely best starting point: option 4 (gossip-only, with peerInfo contract intere
 
 ## Computation DAG
 
-### Verifiable `put()` returns (parent must ref its put sub-blocks)
-`env.put` now resolves the committed sub-block's hash so a contract can reference what it created
-(e.g. a compiler `env.record(DEFAULT_KEY, hash)`). But the parent block does **not** reference its
-put sub-blocks, and `VerifyingEnv.put` returns `ZERO_HASH` -- so a contract whose *outputs depend on
-the returned hash* re-runs to a different/zero hash during verification and fails the namespace
-check. Such contracts are therefore only usable via **local generation** (`Scaffold.put`), not
-network-verified `fetch`. Proper fix: have generation append each put sub-block's hash to the parent
-block (a dedicated ordered ref list, kept distinct from conflict-ancestor / trigger refs), and have
-`VerifyingEnv.put` return the next entry in put-call order so verification replays the returns
-deterministically. Needed before the TS JS-compiler contract can be fetched+verified across the
-network rather than run locally. (@joel)
+### Verifiable `put()` returns -- DONE
+`env.put` resolves the committed sub-block's hash, and generation appends that hash to the block's
+`refs`, interleaved with `fetch` refs in call order. Verification consumes `refs` positionally via a
+single cursor shared by `fetch` and `put` (`VerifyingEnv`): `fetch` takes the next ref and checks it
+claims the requested verifier; `put` returns the next ref. So a contract whose outputs depend on a
+put-returned hash (the JS compiler's `env.record(DEFAULT_KEY, hash)`) re-verifies identically. No
+wire-format change -- `refs` already existed; genesis unaffected. Covered by
+`tests/PutManager.test.ts` ("a block recording the put-returned hash re-verifies") and
+`tests/ContractEnv.test.ts` (positional put/fetch replay).
+
+Note: making the JS compiler invokable via network `fetch` (vs local `put`) additionally needs
+generation-on-incentive -- a node seeing a fetch incentive block runs the contract locally. That is
+the GenerationStrategy / request-routing work below, separate from put verifiability.
 
 When a contract calls `ctx.request(otherVerifier)`, it resolves to a Promise for the first canonical response. This creates an input dependency: the generated block specifies the requested block as an input. If the requested result later becomes non-canonical, the dependent block is affected -- generation should be cancelled (if still running) and restarted with the new canonical input.
 
