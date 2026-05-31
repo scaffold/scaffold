@@ -198,6 +198,7 @@ A contract calling a walker import outside an active `walk_*` invocation traps. 
 
 | Import | Signature | Returns |
 |---|---|---|
+| `request_value_type`   | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i32` | the value's type: `0` null, `1` bool, `2` number, `3` string, `4` array, `5` object. Lets a generic builder (one that doesn't know the params shape, e.g. the JSON module) dispatch to the right `request_*` call. |
 | `request_bytes`        | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i64` | packed `(ptr, len)` of the user-supplied bytes (or default) |
 | `request_string`       | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i64` | packed `(ptr, len)` of UTF-8 |
 | `request_number`       | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> f64` | numeric value |

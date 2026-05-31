@@ -147,11 +147,15 @@ export interface ContractEnv {
   record(key: Uint8Array, value: Uint8Array): void;
 
   /**
-   * Read a result from an ancestor block that claims the given verifier.
+   * Read a result from a block that claims the given verifier, appending
+   * that block to `refs` (in call order, interleaved with `put`), then
+   * reading the RECORD_CONTRACT output keyed by `key`.
    *
-   * Finds the first block (in refs for verification, or via search for generation)
-   * that claims an output matching the given verifier, adds it to refs,
-   * then reads the RECORD_CONTRACT output keyed by `key` from that block.
+   * Generation: searches for a block claiming the verifier and appends it
+   * to refs. Verification: refs are consumed positionally -- each
+   * `fetch`/`put` call takes the next ref, and `fetch` checks that ref
+   * claims the requested verifier. Because the contract is deterministic,
+   * the call order matches generation.
    *
    * Throws ContractRejection if no matching block is found.
    */

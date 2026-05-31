@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from '@std/assert';
+import { assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
 import { RECORD_CONTRACT } from '../src/core/Block.ts';
