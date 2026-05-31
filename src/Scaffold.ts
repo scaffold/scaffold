@@ -5,11 +5,7 @@ import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
 import { findRecordOutput } from './contracts/RecordContract.ts';
 import { DEFAULT_KEY } from './contracts/HashContract.ts';
-import {
-  type JsCompileInput,
-  JS_COMPILER_CONTRACT,
-  makeJsCompilerContract,
-} from './contracts/JsCompilerContract.ts';
+import { JS_COMPILER_CONTRACT, makeJsCompilerContract } from './contracts/JsCompilerContract.ts';
 import { Hash } from './util/Hash.ts';
 import { str2bin } from './util/buffer.ts';
 import { NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
@@ -246,27 +242,10 @@ export class Scaffold {
       };
     }
 
-    // 5. Register the standard JS compiler contract so `compile()` (and a
-    //    direct `fetch`/`put` under JS_COMPILER_CONTRACT) work zero-config.
+    // 5. Register the standard JS compiler contract so it can be invoked by
+    //    its well-known hash (JS_COMPILER_CONTRACT) through the normal `put`
+    //    path, with no extra setup.
     this.registerContract(JS_COMPILER_CONTRACT, makeJsCompilerContract());
-  }
-
-  /**
-   * Compile JavaScript source into a contract block and return its hash.
-   *
-   * Drives the standard JS compiler contract via a local `put` (generation),
-   * reading back the new contract block's hash from the RECORD/'default'
-   * result. The compiled contract runs through QuickJS + the wasi-shim with the
-   * `scaffold` global available to its `run()`.
-   */
-  async compile(input: JsCompileInput): Promise<Hash> {
-    const params = str2bin(JSON.stringify({ files: input.files, options: input.options ?? {} }));
-    const block = await this.put({ contract: JS_COMPILER_CONTRACT, params, records: {} });
-    const result = findRecordOutput(block, DEFAULT_KEY);
-    if (!result) {
-      throw new Error('compile: JS compiler produced no result record');
-    }
-    return Hash.fromBytes(result.body);
   }
 
   /**

@@ -7,14 +7,16 @@
 
 import { assert, assertEquals } from '@std/assert';
 import { Scaffold } from '../src/Scaffold.ts';
+import { Hash } from '../src/util/Hash.ts';
 import { DEFAULT_KEY } from '../src/contracts/HashContract.ts';
+import { JS_COMPILER_CONTRACT } from '../src/contracts/JsCompilerContract.ts';
 import { findRecordOutput } from '../src/contracts/RecordContract.ts';
 import { getWellKnownBlocks } from '../src/wellKnown.ts';
 import { loadWasiShim } from './helpers/loadWasiShim.ts';
 import { loadQuickJs } from './helpers/loadQuickJs.ts';
 import { bin2str } from '../src/util/buffer.ts';
 
-Deno.test('Scaffold.compile + invoke: hello-world JS contract', async (t) => {
+Deno.test('JS compiler contract + invoke: hello-world JS contract', async (t) => {
   try {
     await loadWasiShim();
     await loadQuickJs();
@@ -41,9 +43,17 @@ Deno.test('Scaffold.compile + invoke: hello-world JS contract', async (t) => {
       }
     `;
 
-    // 1. Compile -> a contract block hash.
-    const contractHash = await scaffold.compile({ files: { '/main.js': source } });
-    assert(contractHash, 'compile returned a hash');
+    // 1. Invoke the JS compiler contract by its well-known hash, like any
+    //    other contract -- no bespoke compile() method. Its RECORD/'default'
+    //    result is the new contract block's hash.
+    const compileBlock = await scaffold.put({
+      contract: JS_COMPILER_CONTRACT,
+      params: { files: { '/main.js': source } },
+      records: {},
+    });
+    const compileResult = findRecordOutput(compileBlock, DEFAULT_KEY);
+    assert(compileResult, 'compiler produced a result record');
+    const contractHash = Hash.fromBytes(compileResult.body);
 
     // 2. Invoke the compiled contract with a plain object as params -- it is
     //    canonical-JSON encoded, which is what the contract's

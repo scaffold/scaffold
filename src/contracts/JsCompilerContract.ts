@@ -6,9 +6,11 @@
 // wasi_setup that boots the `scaffold` global + author source, and the output
 // namespaces), `put`s that contract block, and returns its hash.
 //
-// Usage (local): `Scaffold.compile({ files })` drives this via `put` and reads
-// the RECORD/'default' result. The compiler references the well-known blob
-// blocks by hash, so it does not re-publish them.
+// Usage (local): invoke it like any contract --
+// `put({ contract: JS_COMPILER_CONTRACT, params: { files }, records: {} })` --
+// and read the RECORD/'default' result (the new contract block's hash). The
+// compiler references the well-known blob blocks by hash, so it does not
+// re-publish them.
 //
 // Source loading: source files come from the compiler's params first (the
 // `{ files }` map), then fall back to `env.request` -- a CLI can answer those
