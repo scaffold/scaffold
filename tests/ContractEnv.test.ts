@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '@std/assert';
+import { assert, assertEquals, assertThrows } from '@std/assert';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { Output, Verifier } from '../src/core/BlockCreationModule.ts';
 import { RECORD_CONTRACT } from '../src/core/Block.ts';
@@ -21,19 +21,6 @@ interface TestBlock {
 
 const h = (name: string): Hash => Hash.digest(name);
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
-
-function makeOutput(
-  contractName: string,
-  params: Uint8Array,
-  value: number,
-  body: Uint8Array,
-): Output {
-  return {
-    verifier: { contract: h(contractName), params },
-    value,
-    body,
-  };
-}
 
 class TestProvider implements VerifyingEnvProvider<TestBlock> {
   readonly blocks = new Map<string, TestBlock>();
