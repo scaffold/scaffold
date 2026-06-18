@@ -394,15 +394,27 @@ export class NodeContext {
     });
 
     // 7. Create built-in DraftStrategy and combine with user strategies.
-    //    Default enableGeneration to registered contracts EXCEPT SIGNATURE
-    //    (signature outputs have no generation semantics -- they're
-    //    consumed by whoever holds the matching private key, not "generated
-    //    against"). Otherwise every autoBalance-produced change output
-    //    would trigger a spurious draft that reserves it against future
-    //    funding needs.
-    const contracts = this._contracts;
+    //    Default enableGeneration to any contract the node can actually
+    //    execute -- registered builtins OR plugin-resolvable on-chain
+    //    contracts (e.g. a compiled WASM contract whose block is in the
+    //    store) -- EXCEPT SIGNATURE. This is the node's "do I serve this
+    //    contract?" gate, and it is load-bearing in two directions:
+    //      - Including plugin-resolvable contracts lets generation-on-
+    //        incentive produce a responder for a `fetch` of a compiled
+    //        contract (otherwise the incentive sits unclaimed and fetch
+    //        hangs -- the contract resolves via plugin, not the registry).
+    //      - Excluding unresolvable verifiers (a `send` under an arbitrary
+    //        unknown hash) stops the node from spawning spurious drafts on
+    //        outputs it cannot execute, which would starve the bounded
+    //        draft pool and perturb multi-level aggregation.
+    //    SIGNATURE is excluded explicitly even though it resolves: signature
+    //    outputs have no generation semantics (they're spent by whoever holds
+    //    the key), and every autoBalance change output would otherwise spawn a
+    //    draft that produces another change output -- an unbounded loop.
     const enableGeneration = config.enableGeneration ??
-      ((hash: Hash) => contracts.has(hash.toHex()) && !Hash.equals(hash, SIGNATURE_CONTRACT));
+      ((hash: Hash) =>
+        !Hash.equals(hash, SIGNATURE_CONTRACT) &&
+        this.contractHost.getContract(hash) !== undefined);
     const draftStrategy = new DraftStrategy(
       { enableGeneration },
       this.generation,

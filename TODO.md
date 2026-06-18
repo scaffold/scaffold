@@ -133,6 +133,21 @@ The reactive action types (`createBlock` with collateral outputs) exist, but the
 ### Trust-gate integration for fetch callbacks
 The [fetch design](docs/design/fetch.md) specifies that `FetchManager` should gate response surfacing on [TrustGate](src/node/TrustGate.ts) — only fire callbacks for blocks that have been locally verified or collateral-backed. [FetchManager.ts](src/node/FetchManager.ts) currently surfaces on canonical resolution alone (trust-gate wiring is in place for `verify: true` but disabled for streaming callbacks). The previous blocker — `collectExtendedOutputs` not walking aggregate subtrees — is resolved (claim resolution now goes through `OutputSpaceModule` everywhere). Re-enabling the trust gate for streaming callbacks is now a follow-up rather than a deep blocker.
 
+### fetch default key vs. responder record key (footgun)
+`fetch({ contract, params, verify: true })` with no `key` defaults the record key to
+**empty bytes** (`normalizeRecordKey(undefined)` in [FetchManager.ts](src/node/FetchManager.ts)),
+but responders write their single result under `RECORD_CONTRACT/'default'` (the convention
+`scaffold.result(...)` and the `put` path use). So the default-key fetch finds no matching record
+on the (verified, canonical) responder block and hangs: `_deliver`'s `verify` branch calls
+`p.onError?.(...)` on a missing record and returns **without rejecting the promise**, and since the
+claimant is stable nothing re-fires. Two things to decide:
+  1. Should `fetch`'s default key be `'default'` to match the result-record convention (so callers
+     don't have to pass `key: DEFAULT_KEY`)? `tests/ScaffoldUsage.test.ts` currently passes it
+     explicitly as the workaround.
+  2. A persistent key-miss on the only canonical claimant can never resolve under `verify: true`;
+     the silent `onError`-and-return should at least surface distinctly (and arguably reject) rather
+     than look identical to "still waiting."
+
 ### Generic JSON codec: host fast-path vs. contract-declared codec
 **Landed:** the generic JSON walker/builder WASM module (`src/contracts/json-wb`, ABI option 1 --
 `request_value_type` drives the builder's dispatch). It is wired as a `json_wb` layer on every
@@ -256,9 +271,16 @@ wire-format change -- `refs` already existed; genesis unaffected. Covered by
 `tests/PutManager.test.ts` ("a block recording the put-returned hash re-verifies") and
 `tests/ContractEnv.test.ts` (positional put/fetch replay).
 
-Note: making the JS compiler invokable via network `fetch` (vs local `put`) additionally needs
-generation-on-incentive -- a node seeing a fetch incentive block runs the contract locally. That is
-the GenerationStrategy / request-routing work below, separate from put verifiability.
+Note: invoking a compiled contract via `fetch` (vs local `put`) now works **locally** -- a node
+seeing its own fetch incentive runs the contract via generation-on-incentive (`DraftStrategy` ->
+`createDraft` -> generator), claims the incentive, and records the keyed result. The enabling change
+was the default `enableGeneration` in [NodeContext.ts](src/node/NodeContext.ts): it now serves any
+contract the node can *execute* (registered builtin OR plugin-resolvable on-chain contract), not
+just registered hashes, while still excluding SIGNATURE and unresolvable verifiers. (Note the live
+path is `DraftStrategy`, not the stubbed `GenerationStrategy` referenced under "Generator
+Implementation" below, which is dead code -- only its own test imports it.) Covered by
+`tests/ScaffoldUsage.test.ts` example 3. What remains is the **cross-network** case: a node fetching
+a contract it cannot resolve locally needs a remote responder, i.e. the request-routing work below.
 
 When a contract calls `ctx.request(otherVerifier)`, it resolves to a Promise for the first canonical response. This creates an input dependency: the generated block specifies the requested block as an input. If the requested result later becomes non-canonical, the dependent block is affected -- generation should be cancelled (if still running) and restarted with the new canonical input.
 
