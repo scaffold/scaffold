@@ -1,6 +1,7 @@
 // The headline flow: compile JavaScript source into a contract, then invoke it.
-// Zero-config -- the default Scaffold registers the JS compiler, seeds the
-// well-known blob blocks, and resolves blobs locally.
+// The JS compiler is not a built-in -- the host seeds the well-known blob
+// blocks and registers the compiler (see `registerJsCompiler`); blobs then
+// resolve from the local store.
 //
 // Prerequisites: deno task build:wasi-shim, vendor:quickjs, build:well-known.
 // Missing artifacts skip the test cleanly.
@@ -12,6 +13,7 @@ import { DEFAULT_KEY } from '../src/contracts/HashContract.ts';
 import { JS_COMPILER_CONTRACT } from '../src/contracts/JsCompilerContract.ts';
 import { findRecordOutput } from '../src/contracts/RecordContract.ts';
 import { getWellKnownBlocks } from '../src/wellKnown.ts';
+import { registerJsCompiler } from './helpers/jsCompiler.ts';
 import { loadWasiShim } from './helpers/loadWasiShim.ts';
 import { loadQuickJs } from './helpers/loadQuickJs.ts';
 import { bin2str } from '../src/util/buffer.ts';
@@ -34,7 +36,11 @@ Deno.test('JS compiler contract + invoke: hello-world JS contract', async (t) =>
     return;
   }
 
-  const scaffold = new Scaffold({ enableLogging: false });
+  const scaffold = new Scaffold({
+    enableLogging: false,
+    wellKnownBlocks: getWellKnownBlocks(),
+  });
+  registerJsCompiler(scaffold);
   try {
     const source = `
       function run() {

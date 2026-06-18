@@ -6,6 +6,16 @@
 // wasi_setup that boots the `scaffold` global + author source, and the output
 // namespaces), `put`s that contract block, and returns its hash.
 //
+// Not a built-in: this file is excluded from the npm bundle (see
+// scripts/build_npm.ts). The library ships no compiler -- a host that wants
+// one registers it explicitly and injects the well-known blob hashes:
+//
+//   scaffold.registerContract(JS_COMPILER_CONTRACT, makeJsCompilerContract(deps))
+//
+// where `deps` resolves the wasi-shim / QuickJS / json-wb blob hashes (from
+// disk under Deno, or as committed constants in the browser; see the dev
+// demo's compilerHashes.ts).
+//
 // Usage (local): invoke it like any contract --
 // `put({ contract: JS_COMPILER_CONTRACT, params: { files }, records: {} })` --
 // and read the RECORD/'default' result (the new contract block's hash). The
@@ -21,7 +31,6 @@ import { Hash } from '../util/Hash.ts';
 import { CONTRACT_CONTRACT, RECORD_CONTRACT } from '../core/Block.ts';
 import { DEFAULT_KEY } from './HashContract.ts';
 import { buildJsContractRecordsFromHashes } from './js-runtime/setup.ts';
-import { getJsonWbBlobHash, getQuickjsBlobHash, getShimBlobHash } from '../wellKnown.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 
 /** Well-known hash identifying the standard JS compiler contract. */
@@ -42,18 +51,14 @@ export interface JsCompilerDeps {
   jsonWbBlobHash(): Hash;
 }
 
-const DEFAULT_DEPS: JsCompilerDeps = {
-  shimBlobHash: getShimBlobHash,
-  quickjsBlobHash: getQuickjsBlobHash,
-  jsonWbBlobHash: getJsonWbBlobHash,
-};
-
 /**
  * Build the JS compiler contract. `run` packages the author's source into a
  * CONTRACT_CONTRACT block via `env.put`, then records the new block's hash as
- * the RECORD/'default' result.
+ * the RECORD/'default' result. `deps` supplies the well-known blob hashes the
+ * compiled contract stacks; the caller chooses how to resolve them (disk under
+ * Deno, committed constants in the browser).
  */
-export function makeJsCompilerContract(deps: JsCompilerDeps = DEFAULT_DEPS): Contract {
+export function makeJsCompilerContract(deps: JsCompilerDeps): Contract {
   return {
     // The compiler emits its result as a RECORD/'default' output.
     outputNamespaces: [RECORD_CONTRACT],

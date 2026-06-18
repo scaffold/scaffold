@@ -41,9 +41,12 @@ Deno.test('js-runtime: scaffold.params/result round-trip (zero-config seeding)',
     return;
   }
 
-  // Default config: seeds well-known blob blocks, installs the default WASM
-  // plugin whose resolveBlob checks the local store first.
-  const scaffold = new Scaffold({ enableLogging: false });
+  // Seed the well-known blob blocks so the stacked contract resolves them from
+  // the local store (the default WASM plugin's resolveBlob checks it first).
+  const scaffold = new Scaffold({
+    enableLogging: false,
+    wellKnownBlocks: getWellKnownBlocks(),
+  });
   try {
     // The contract author's source -- plain JS against the `scaffold` global.
     const source = `

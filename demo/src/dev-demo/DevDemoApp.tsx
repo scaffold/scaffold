@@ -17,6 +17,7 @@ import {
   buildCompilerHashes,
   type CompilerHashes,
   publishEchoContract,
+  registerJsCompiler,
 } from "./compilerHashes.ts";
 import { DemoNav, type DemoRoute } from "./DemoNav.tsx";
 import { type Lang, LANGUAGES } from "./examples/index.ts";
@@ -62,6 +63,17 @@ export function DevDemoApp(
     };
     const s = new Scaffold(config);
     installDebugAPI(s);
+    // Register the JS compiler contract (out-of-bundle; the demo owns its hash
+    // via compilerHashes.ts). Live for direct __scaffold use; the language tabs
+    // still invoke the echo placeholder until Workstream C wires the real
+    // compile path (seed well-known blocks + put/{files} invocation).
+    const jsCompilerHash = registerJsCompiler(s);
+    s.eventLog?.append(
+      "dev-demo",
+      "js_compiler_registered",
+      { hash: jsCompilerHash.toHex() },
+      "info",
+    );
     return s;
   }, []);
 

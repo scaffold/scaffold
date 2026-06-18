@@ -5,9 +5,7 @@ import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
 import { findRecordOutput } from './contracts/RecordContract.ts';
 import { DEFAULT_KEY } from './contracts/HashContract.ts';
-import { JS_COMPILER_CONTRACT, makeJsCompilerContract } from './contracts/JsCompilerContract.ts';
 import { Hash } from './util/Hash.ts';
-import { str2bin } from './util/buffer.ts';
 import { NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
 import { PutManager, PutRequest } from './node/PutManager.ts';
 import { SendHandle, SendManager, SendRequest } from './node/SendManager.ts';
@@ -17,7 +15,6 @@ import type { Verifier } from './core/BlockCreationModule.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
 import { getGenesisBlock } from './genesis.ts';
-import { getWellKnownBlocks } from './wellKnown.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { PushAction } from './node/RoutingModule.ts';
@@ -31,8 +28,10 @@ export interface ScaffoldConfig {
   genesis?: Block;
   /**
    * Blocks to seed into the store after genesis so their blobs resolve
-   * locally without peer fetch. Defaults to the bundled well-known blocks
-   * (the wasi-shim + QuickJS blob blocks). Pass `[]` to disable seeding.
+   * locally without peer fetch. Defaults to none -- the browser bundle ships
+   * no blocks and resolves blobs via peer fetch. A Deno/CLI host can pass the
+   * disk-loaded well-known blocks here (see `wellKnown.ts`, excluded from the
+   * npm build); the dev demo seeds its own.
    */
   wellKnownBlocks?: Block[];
   /** Strategies to register */
@@ -119,7 +118,7 @@ export class Scaffold {
       config.plugins?.[0]?.acceptsProtocols?.[0];
 
     const genesis = config.genesis ?? getGenesisBlock();
-    const wellKnownBlocks = config.wellKnownBlocks ?? getWellKnownBlocks();
+    const wellKnownBlocks = config.wellKnownBlocks ?? [];
 
     this.eventLog = (config.enableLogging !== false)
       ? new EventLog({ console: true })
@@ -242,10 +241,10 @@ export class Scaffold {
       };
     }
 
-    // 5. Register the standard JS compiler contract so it can be invoked by
-    //    its well-known hash (JS_COMPILER_CONTRACT) through the normal `put`
-    //    path, with no extra setup.
-    this.registerContract(JS_COMPILER_CONTRACT, makeJsCompilerContract());
+    // The JS compiler is not a built-in. It lives outside the npm bundle
+    // (src/contracts/JsCompilerContract.ts, excluded from the build); a host
+    // that wants it registers it explicitly via `registerContract`, injecting
+    // the well-known blob hashes. See the dev demo's compilerHashes.ts.
   }
 
   /**

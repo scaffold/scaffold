@@ -6,13 +6,12 @@
 // Patterns covered:
 //   1. `put(HASH_CONTRACT, ...)`     -- publish a content-addressed blob.
 //   2. `put(CONTRACT_CONTRACT, ...)` -- publish a contract block.
-//   3. Compile + invoke a JavaScript contract, zero-config (the headline):
+//   3. Compile + invoke a JavaScript contract (the headline):
 //      `put(JS_COMPILER_CONTRACT, {files})` -> contract hash, then
-//      `put(contractHash, {params})` -> result. No `registerContract`, no
-//      custom `resolveBlob`, no manual blob publishing -- the default Scaffold
-//      auto-registers the built-in contracts (including the JS compiler), seeds
-//      the well-known WASM blocks (wasi-shim, QuickJS, json-wb), and resolves
-//      blobs from the local store.
+//      `put(contractHash, {params})` -> result. The JS compiler is not a
+//      built-in: the host seeds the well-known WASM blocks (wasi-shim, QuickJS,
+//      json-wb) and registers the compiler (see `registerJsCompiler`), then
+//      blobs resolve from the local store.
 //   4. (ignored) the intended `fetch`-based network invocation -- the shape we
 //      are converging on, blocked today on generation-on-incentive.
 //
@@ -28,6 +27,7 @@ import { DEFAULT_KEY } from '../src/contracts/HashContract.ts';
 import { JS_COMPILER_CONTRACT } from '../src/contracts/JsCompilerContract.ts';
 import { findRecordOutput } from '../src/contracts/RecordContract.ts';
 import { getWellKnownBlocks } from '../src/wellKnown.ts';
+import { registerJsCompiler } from './helpers/jsCompiler.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 
@@ -82,7 +82,7 @@ Deno.test('Scaffold.put: publish a contract block via CONTRACT_CONTRACT', async 
   }
 });
 
-Deno.test('Scaffold: compile and invoke a JavaScript contract (zero-config)', async (t) => {
+Deno.test('Scaffold: compile and invoke a JavaScript contract', async (t) => {
   // Skip cleanly on a fresh checkout where the well-known blocks (which carry
   // the wasi-shim / QuickJS / json-wb blobs) haven't been built yet.
   if (getWellKnownBlocks().length === 0) {
@@ -94,11 +94,15 @@ Deno.test('Scaffold: compile and invoke a JavaScript contract (zero-config)', as
     return;
   }
 
-  // Zero-config. The default Scaffold:
-  //   - auto-registers the built-in contracts, including the JS compiler,
+  // The host wires the compiler explicitly:
   //   - seeds the well-known WASM blocks (wasi-shim, QuickJS, json-wb),
+  //   - registers the JS compiler (injecting the blob hashes),
   //   - resolves blobs from the local store (no peer fetch needed).
-  const scaffold = new Scaffold({ enableLogging: false });
+  const scaffold = new Scaffold({
+    enableLogging: false,
+    wellKnownBlocks: getWellKnownBlocks(),
+  });
+  registerJsCompiler(scaffold);
   try {
     // The contract author writes plain JS against the `scaffold` global:
     // `params()` reads the verifier params, `result()` publishes the result.

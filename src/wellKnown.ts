@@ -1,16 +1,17 @@
-// Well-known blocks: a small set of content-addressed blocks every node seeds
-// into its store at construction (alongside genesis), so they resolve offline
-// without peer fetch. Today this is the WASM blob blocks the JS runtime stacks:
-// the wasi-shim and the QuickJS interpreter.
+// Well-known blocks: a small set of content-addressed blocks a Deno/CLI host
+// can seed into its store (alongside genesis) so they resolve offline without
+// peer fetch. Today this is the WASM blob blocks the JS runtime stacks: the
+// wasi-shim, the QuickJS interpreter, and the json-wb codec.
 //
 // The blocks are generated deterministically by `well-known-blocks/*/build.sh`
 // and committed as `well-known-blocks/<name>/dist/block.bin` (+ `hash.json`).
-// This module loads those committed bytes.
+// This module loads those committed bytes via the filesystem.
 //
-// Browser note: this loads via the filesystem (Deno), so in a browser build the
-// blocks must instead be bundled/inlined. When no filesystem is available,
-// `getWellKnownBlocks()` returns `[]` and the node falls back to peer fetch for
-// blobs. See TODO.md / the W3 bundle-form decision.
+// Deno-only: this module reads from disk and is excluded from the npm bundle
+// (see scripts/build_npm.ts). The library no longer seeds well-known blocks
+// automatically -- a Deno/CLI host passes `getWellKnownBlocks()` to
+// `new Scaffold({ wellKnownBlocks })`. The browser ships no blocks and resolves
+// blobs via peer fetch (or the dev demo seeds its own; see compilerHashes.ts).
 
 import { AtomSource, Block, parseBlockPacket } from './core/Block.ts';
 import { Hash } from './util/Hash.ts';

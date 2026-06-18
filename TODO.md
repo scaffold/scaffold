@@ -67,6 +67,14 @@ After today's fixes, `tryMigrate` walks the hierarchy by hand — own → aggreg
 
 The C0 echo fixture in `demo/src/dev-demo/fixtures/echo.wasm` is still valid -- only the publishing dance needs updating.
 
+## JS compiler: out of bundle, wire the real demo path + the as-a-block end-state
+
+The JS compiler was removed from the npm bundle (2026-06-16). `src/contracts/JsCompilerContract.ts` and `src/wellKnown.ts` now live in `src/` but are excluded from `scripts/build_npm.ts`; `Scaffold` no longer auto-registers the compiler or auto-seeds well-known blocks. Hosts register the compiler explicitly with injected blob hashes (tests via `tests/helpers/jsCompiler.ts`, the demo via `compilerHashes.ts:registerJsCompiler`). Follow-ups:
+
+- **Demo: run the real JS compiler on the js/ts tabs (Workstream C).** `registerJsCompiler` registers the compiler and `compilerHashes.ts` holds the blob-hash constants, but the language tabs still invoke the echo placeholder. To switch js/ts to the real compiler the demo must (a) seed the well-known blob blocks (wasi-shim, QuickJS, json-wb) into the Scaffold so the compiled contract's blobs resolve -- load `well-known-blocks/<name>/dist/block.bin` via Vite `?url` and pass them as `wellKnownBlocks`, mirroring `loadEchoBytes`; and (b) invoke via the compiler's `put({ contract, params: { files } })` shape (LanguagePanel currently `fetch`es with raw source bytes, which only fits echo).
+- **Blob-hash constants drift.** `compilerHashes.ts` hardcodes the three `blobHash` values from `well-known-blocks/<name>/dist/hash.json`. There is no automated check that they match after `deno task build:well-known`. Either codegen the constants from `hash.json` or add a build-time assertion.
+- **Compiler as a genuinely published block (the real end-state).** Today the compiler is a native TS contract registered under the synthetic hash `Hash.digest('js-compiler-contract')`, not a content-addressed block fetched from peers. Making it a real block is blocked: the JS runtime `scaffold` global (`src/contracts/js-runtime/prelude.ts`) exposes only `params()`/`result()`, not `put`, so a JS-runtime contract cannot assemble the CONTRACT_CONTRACT block the compiler produces. Resolving this needs either exposing `env.put` to JS-runtime contracts (with the attendant incentive/security design) or authoring the compiler as a WASM contract.
+
 ## Chess Demo Follow-ups
 
 The chess demo in `src/demo/chess/` exercises many protocol primitives (GAME_STATE UTXO threading, getOutput injection, signature-gated generation, terminal payouts via throughput) but defers several things:

@@ -26,6 +26,11 @@ for await (
       './src/node/UnixSocketTransport.ts',
       // Deno-only: reads the built shim WASM via Deno.readFile.
       './src/contracts/wasi-shim/loadShim.ts',
+      // Deno-only: reads the committed well-known blocks/hashes off disk.
+      './src/wellKnown.ts',
+      // Not a built-in: the JS compiler is registered by hosts that want it
+      // (dev demo, CLI, tests), not shipped in the library. See its header.
+      './src/contracts/JsCompilerContract.ts',
     ],
   })
 ) {
