@@ -10,7 +10,17 @@ const flags = parseArgs(Deno.args, {
 });
 
 const entryPoints: EntryPoint[] = [
-  { kind: 'export', name: '.', 'path': './mod.ts' },
+  // The browser library. `./core` is the canonical name; `.` is kept as an
+  // alias so `import { Scaffold } from 'scaffold.io'` keeps working alongside
+  // `import { Scaffold } from 'scaffold.io/core'`.
+  { kind: 'export', name: '.', path: './mod.ts' },
+  { kind: 'export', name: './core', path: './mod.ts' },
+  // The pure, dependency-injected CLI -- importable from the browser as
+  // `scaffold.io/cli`. The shell binary below injects a filesystem-backed
+  // implementation of its deps.
+  { kind: 'export', name: './cli', path: './src/cli/ScaffoldCLI.ts' },
+  // `scaffold` on the user's PATH after `npm i -g scaffold.io` (or `npx`).
+  { kind: 'bin', name: 'scaffold', path: './scripts/cli-bin.ts' },
 ];
 
 for await (

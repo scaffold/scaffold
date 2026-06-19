@@ -39,17 +39,9 @@ export interface ScaffoldConfig {
   /** Transport plugins. When provided, enables P2P networking. */
   plugins?: TransportPlugin[];
   /**
-   * Signaling/relay addresses to dial on `start()`. Each address is dialed
-   * through the configured transport plugin that accepts `bootstrapProtocol`.
-   * Requires at least one `plugins` entry -- a default browser transport is
-   * not yet bundled (see TODO.md). Example: `bootstrap: ['relay.scaffold.io']`.
+   * Signaling/relay addresses to dial on `start()`. Example: `bootstrap: ['ws://relay.scaffold.io']`.
    */
-  bootstrap?: string[];
-  /**
-   * Protocol used to dial `bootstrap` addresses. Defaults to the first
-   * `acceptsProtocols` entry of the first configured plugin.
-   */
-  bootstrapProtocol?: string;
+  bootstrapUrls?: (string | URL)[];
   /**
    * Contract execution plugins. Each takes a contract block and either
    * `accepts` it (returning a `Contract` impl) or passes. Plugins are
@@ -102,8 +94,7 @@ export class Scaffold {
   private readonly fetchManager: FetchManager;
   private readonly networkBridge?: NetworkBridge;
   private readonly _publicKey: Uint8Array;
-  private readonly _bootstrap: string[];
-  private readonly _bootstrapProtocol?: string;
+  private readonly _bootstrapUrls: URL[];
 
   /** Structured event log. Available for debugging and introspection. */
   readonly eventLog: EventLog;
@@ -113,9 +104,7 @@ export class Scaffold {
     const publicKey = secp.getPublicKey(privateKey, true);
     this._publicKey = publicKey;
 
-    this._bootstrap = config.bootstrap ?? [];
-    this._bootstrapProtocol = config.bootstrapProtocol ??
-      config.plugins?.[0]?.acceptsProtocols?.[0];
+    this._bootstrapUrls = config.bootstrapUrls?.map((x) => x instanceof URL ? x : new URL(x)) ?? [];
 
     const genesis = config.genesis ?? getGenesisBlock();
     const wellKnownBlocks = config.wellKnownBlocks ?? [];
@@ -332,20 +321,16 @@ export class Scaffold {
   /** Start network plugins (if configured) and dial any `bootstrap` addresses. */
   start(): void {
     this.networkBridge?.start();
-    if (this._bootstrap.length === 0) return;
+    if (this._bootstrapUrls.length === 0) return;
     if (!this.networkBridge) {
       throw new Error(
         'bootstrap addresses require a transport plugin; pass `plugins: [...]` ' +
           '(a default browser transport is not yet bundled -- see TODO.md)',
       );
     }
-    if (!this._bootstrapProtocol) {
-      throw new Error(
-        'bootstrap addresses require `bootstrapProtocol` (no plugin protocol could be inferred)',
-      );
-    }
-    for (const address of this._bootstrap) {
-      this.networkBridge.bootstrapConnection(this._bootstrapProtocol, address);
+    for (const url of this._bootstrapUrls) {
+      const protocol = url.protocol.replace(/:$/, '');
+      this.networkBridge.bootstrapConnection(protocol, url.host);
     }
   }
 
