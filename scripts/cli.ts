@@ -3,14 +3,53 @@
 // to the pure `ScaffoldCLI`. Install with:
 //   deno install -gA -n scaffold scripts/cli.ts
 import { readAll } from '@std/io';
-import { ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
+import { FsNode, FsNodeType, ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { str2bin } from '../src/util/buffer.ts';
+import { join } from '@std/path/join';
+
+async function openPath(path: string): Promise<FsNode | { type: FsNodeType.Missing }> {
+  let isDirectory: boolean;
+  try {
+    ({ isDirectory } = await Deno.stat(path));
+  } catch (_err) {
+    return { type: FsNodeType.Missing };
+  }
+
+  return makeNode(path, isDirectory);
+}
+
+function makeNode(path: string, isDirectory: boolean): FsNode {
+  if (isDirectory) {
+    return {
+      type: FsNodeType.Directory,
+      async list() {
+        const nodes: ({ name: string } & FsNode)[] = [];
+        for await (const entry of Deno.readDir(path)) {
+          nodes.push({ name: entry.name, ...makeNode(join(path, entry.name), entry.isDirectory) });
+        }
+        return nodes;
+      },
+      open(key) {
+        return openPath(join(path, key));
+      },
+    };
+  } else {
+    return {
+      type: FsNodeType.File,
+      read() {
+        return Deno.readFile(path);
+      },
+      write(data: Uint8Array) {
+        return Deno.writeFile(path, data);
+      },
+    };
+  }
+}
 
 const cli = new ScaffoldCLI({
   constructScaffold: (config) => new Scaffold(config),
-  readFile: (path) => Deno.readFile(path),
-  writeFile: (path, data) => Deno.writeFile(path, data),
+  open: openPath,
   readStdin: () => readAll(Deno.stdin),
   stdout: (data) => {
     Deno.stdout.writeSync(data);

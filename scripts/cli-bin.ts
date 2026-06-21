@@ -6,9 +6,50 @@
 // as the package `bin` (with a shebang), so `npm i -g scaffold.io` puts
 // `scaffold` on the user's PATH.
 import process from 'node:process';
-import { readFile, writeFile } from 'node:fs/promises';
-import { ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
+import { join } from 'node:path';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { FsNode, FsNodeType, ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
 import { Scaffold } from '../src/Scaffold.ts';
+
+async function openPath(path: string): Promise<FsNode | { type: FsNodeType.Missing }> {
+  let isDirectory: boolean;
+  try {
+    const result = await stat(path);
+    isDirectory = result.isDirectory();
+  } catch (_err) {
+    return { type: FsNodeType.Missing };
+  }
+
+  return makeNode(path, isDirectory);
+}
+
+function makeNode(path: string, isDirectory: boolean): FsNode {
+  if (isDirectory) {
+    return {
+      type: FsNodeType.Directory,
+      async list() {
+        const entries = await readdir(path, { withFileTypes: true });
+        return entries.map((x) => ({
+          name: x.name,
+          ...makeNode(join(path, x.name), x.isDirectory()),
+        }));
+      },
+      open(key) {
+        return openPath(join(path, key));
+      },
+    };
+  } else {
+    return {
+      type: FsNodeType.File,
+      read() {
+        return readFile(path);
+      },
+      write(data: Uint8Array) {
+        return writeFile(path, data);
+      },
+    };
+  }
+}
 
 async function readStdin(): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
@@ -28,8 +69,7 @@ async function readStdin(): Promise<Uint8Array> {
 
 const cli = new ScaffoldCLI({
   constructScaffold: (config) => new Scaffold(config),
-  readFile: (path) => readFile(path),
-  writeFile: (path, data) => writeFile(path, data),
+  open: openPath,
   readStdin,
   stdout: (data) => {
     process.stdout.write(data);

@@ -17,18 +17,10 @@ import { DraftStore } from '../core/Draft.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { GenerationService } from './GenerationService.ts';
 import { Hash } from '../util/Hash.ts';
-import { encodeParams } from './draftPublishing.ts';
+import { Query } from '../interfaces/Query.ts';
 
 /** Publish records under a verifier by running its contract generator. */
-export interface PutRequest {
-  /** Verifier-output contract hash. */
-  contract: Hash;
-  /**
-   * Verifier-output params. Pre-encoded bytes, or a key-value object that
-   * `contract.buildParams` will encode (requires the contract to be
-   * registered).
-   */
-  params: Uint8Array | Record<string, unknown>;
+export interface PutRequest extends Query {
   /**
    * Records that answer the generator's `request({RECORD_CONTRACT, key})`
    * calls. Each entry's value is returned as the body to the generator.

@@ -4,6 +4,7 @@ import { Hash } from '../util/Hash.ts';
 import { unimplemented } from '@std/assert/unimplemented';
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
+import { createNode, Node, NodeType } from '../interfaces/Query.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -146,9 +147,10 @@ export class ScaffoldCLI {
 
   /** Read the command payload from a positional file path, or stdin if absent. */
   private async readInput(path?: string): Promise<Uint8Array> {
-    return path === undefined || path === '-'
-      ? await this.deps.readStdin()
-      : await this.deps.readFile(path);
+    if (path === undefined || path === '-') return this.deps.readStdin();
+    const node = await this.deps.open(path);
+    if (node.type === FsNodeType.File) return node.read();
+    throw new Error(`Cannot read file at ${path}`);
   }
 
   /** print help */
@@ -197,6 +199,32 @@ export class ScaffoldCLI {
     return this.deps.constructScaffold(config);
   }
 
+  private async createNodeFromFs(
+    base: { open(name: string): Promise<FsNode | { type: FsNodeType.Missing }> },
+    name: string,
+  ): Promise<Node> {
+    if (name === '.' || name === '..') throw new Error(`Invalid open key ${name}`);
+
+    const node = await base.open(name);
+    if (node.type === FsNodeType.File) {
+      return { type: NodeType.Bytes, value: await node.read() };
+    } else if (node.type === FsNodeType.Directory) {
+      return {
+        type: NodeType.Object,
+        keys: (await node.list()).map((x) => x.name),
+        at: (key, _desc) => this.createNodeFromFs(node, key),
+      };
+    }
+
+    const jsonNode = await base.open(name + '.json');
+    if (jsonNode.type === FsNodeType.File) {
+      const value = JSON.parse(bin2str(await jsonNode.read()));
+      return createNode(value);
+    }
+
+    throw new Error(`Cannot open ${name}`);
+  }
+
   private async put(parsed: ParsedArgs) {
     if (parsed.positional.length !== 3) {
       throw new UsageError(
@@ -209,7 +237,7 @@ export class ScaffoldCLI {
 
     const result = await scaffold.put({
       contract: Hash.fromHex(contractHash),
-      params: { files: { '/main.js': '' } },
+      params: () => this.createNodeFromFs(this.deps, params),
       records: {},
     });
 
@@ -234,7 +262,7 @@ export class ScaffoldCLI {
 
     const result = await scaffold.fetch({
       contract: Hash.fromHex(contractHash),
-      params: { files: { '/main.js': '' } },
+      params: () => this.createNodeFromFs(this.deps, params),
       verify: true,
     });
     this.deps.stdout(result.body);

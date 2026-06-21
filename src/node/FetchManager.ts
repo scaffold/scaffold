@@ -10,7 +10,6 @@ import { BlockVerificationService } from '../core/BlockVerificationService.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import type { TrustGate, TrustStatus } from './TrustGate.ts';
 import { type FieldNode, RecordingWalkerHost } from '../core/RecordingWalkerHost.ts';
-import { encodeParams } from './draftPublishing.ts';
 import { bin2str } from '../util/buffer.ts';
 import { findRecordOutput } from '../contracts/RecordContract.ts';
 import { ScopedLogger } from '../core/EventLog.ts';
@@ -22,13 +21,11 @@ import {
   SupersededError,
   VerificationRejectedError,
 } from './FetchErrors.ts';
+import { Query } from '../interfaces/Query.ts';
 
 // -- Public types ----------------------------------------------------
 
-export interface FetchInput<T = unknown> {
-  contract: Hash;
-  params: Uint8Array | Record<string, unknown>;
-
+export interface FetchInput<T = unknown> extends Query {
   /** Which self-claimed record on the responder block to surface. Default: empty bytes. */
   key?: string | Uint8Array;
 
