@@ -5,6 +5,26 @@ import { unimplemented } from '@std/assert/unimplemented';
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
 
+export enum FsNodeType {
+  Missing = 0,
+  Directory = 1,
+  File = 2,
+}
+
+export interface DirNode {
+  type: FsNodeType.Directory;
+  list(): Promise<({ name: string } & FsNode)[]>;
+  open(name: string): Promise<FsNode | { type: FsNodeType.Missing }>;
+}
+
+export interface FileNode {
+  type: FsNodeType.File;
+  read(): Promise<Uint8Array>;
+  write(data: Uint8Array): Promise<void>;
+}
+
+export type FsNode = DirNode | FileNode;
+
 /**
  * Host capabilities the CLI needs, injected by the caller.
  *
@@ -20,10 +40,8 @@ import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
 export interface ScaffoldCliDeps {
   /** Create a scaffold instance */
   constructScaffold(config: ScaffoldConfig): Scaffold;
-  /** Read a file as bytes. Should reject if the file does not exist. */
-  readFile(path: string): Promise<Uint8Array>;
-  /** Write bytes to a file, creating or truncating it. */
-  writeFile(path: string, data: Uint8Array): Promise<void>;
+  /** Opens a filesystem path */
+  open(path: string): Promise<FsNode | { type: FsNodeType.Missing }>;
   /** Read all of stdin as bytes (empty array if nothing is piped). */
   readStdin(): Promise<Uint8Array>;
   /** Write binary data to stdout. */
