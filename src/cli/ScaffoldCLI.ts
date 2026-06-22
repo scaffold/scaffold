@@ -4,7 +4,8 @@ import { Hash } from '../util/Hash.ts';
 import { unimplemented } from '@std/assert/unimplemented';
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
-import { createNode, Node, NodeType } from '../interfaces/Query.ts';
+import { createReader, Reader } from '../interfaces/Reader.ts';
+import { ValueType } from '../contracts/Contract.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -156,23 +157,27 @@ export class ScaffoldCLI {
   /** print help */
   private usage(program: string) {
     const message = [
-      // TODO(claude): Update the help text
       `${program} -- Scaffold command line`,
       ``,
       `Usage:`,
       `  ${program} <command> [options]`,
       ``,
       `Commands:`,
-      `  put [<file>]        Hash a contract/payload (file or stdin) and print its id`,
-      `  fetch <hash>        Resolve a hash to its data via a node`,
+      `  put <contract_hash> <params_path> <records_path>`,
+      `                      Run a contract over the given params and records,`,
+      `                      publish the block, and print its hash and record outputs`,
+      `  fetch <contract_hash> <params_path>`,
+      `                      Resolve and verify a contract output via a node and`,
+      `                      write the result body to stdout`,
       `  help                Show this help`,
       ``,
       `Options:`,
-      `  -h, --help          Show help`,
-      `  -v, --version       Show version`,
-      `      --params <json> Contract params (fetch)`,
-      `      --connect <url> Node to connect to (fetch)`,
-      `  -o, --output <file> Write output to a file instead of stdout`,
+      `  -h, --help                      Show help`,
+      `  -v, --version                   Show version`,
+      `      --private_key_file <path>   Private key for signing blocks`,
+      `      --bootstrap_urls <a,b,...>  Comma-separated bootstrap node URLs`,
+      `      --genesis_block_file <path> Genesis block (not yet implemented)`,
+      `      --verbosity <level>         Log verbosity (not yet implemented)`,
       ``,
     ].join('\n');
     this.deps.stdout(str2bin(message));
@@ -199,27 +204,27 @@ export class ScaffoldCLI {
     return this.deps.constructScaffold(config);
   }
 
-  private async createNodeFromFs(
+  private async createReaderFromFs(
     base: { open(name: string): Promise<FsNode | { type: FsNodeType.Missing }> },
     name: string,
-  ): Promise<Node> {
+  ): Promise<Reader> {
     if (name === '.' || name === '..') throw new Error(`Invalid open key ${name}`);
 
     const node = await base.open(name);
     if (node.type === FsNodeType.File) {
-      return { type: NodeType.Bytes, value: await node.read() };
+      return { type: ValueType.Bytes, value: await node.read() };
     } else if (node.type === FsNodeType.Directory) {
       return {
-        type: NodeType.Object,
+        type: ValueType.Object,
         keys: (await node.list()).map((x) => x.name),
-        at: (key, _desc) => this.createNodeFromFs(node, key),
+        at: (key, _desc) => this.createReaderFromFs(node, key),
       };
     }
 
     const jsonNode = await base.open(name + '.json');
     if (jsonNode.type === FsNodeType.File) {
       const value = JSON.parse(bin2str(await jsonNode.read()));
-      return createNode(value);
+      return createReader(value);
     }
 
     throw new Error(`Cannot open ${name}`);
@@ -237,7 +242,7 @@ export class ScaffoldCLI {
 
     const result = await scaffold.put({
       contract: Hash.fromHex(contractHash),
-      params: () => this.createNodeFromFs(this.deps, params),
+      params: () => this.createReaderFromFs(this.deps, params),
       records: {},
     });
 
@@ -262,7 +267,7 @@ export class ScaffoldCLI {
 
     const result = await scaffold.fetch({
       contract: Hash.fromHex(contractHash),
-      params: () => this.createNodeFromFs(this.deps, params),
+      params: () => this.createReaderFromFs(this.deps, params),
       verify: true,
     });
     this.deps.stdout(result.body);

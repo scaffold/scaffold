@@ -57,6 +57,11 @@ export enum ValueType {
   String = 3,
   Array = 4,
   Object = 5,
+  // Added for the query-Reader build bridge: a Reader can hold a raw byte value
+  // with no String/Object analog. Appended (not renumbered) to keep the
+  // existing wire values stable. NOTE: the Zig `json-wb` ValueType constants
+  // (src/contracts/json-wb/src/main.zig) must add the matching `Bytes = 6`.
+  Bytes = 6,
 }
 
 /**

@@ -3,7 +3,12 @@
 import { Hash } from '../../util/Hash.ts';
 import { type MaybePromise, maybeThen } from '../../util/MaybePromise.ts';
 import { type ContractEnv, ContractRejection } from '../../core/ContractEnv.ts';
-import type { BuilderHost, ValueDescriptor, WalkerHost } from '../../contracts/Contract.ts';
+import {
+  type BuilderHost,
+  type ValueDescriptor,
+  ValueType,
+  type WalkerHost,
+} from '../../contracts/Contract.ts';
 import type { Output, Verifier } from '../../core/BlockCreationModule.ts';
 import {
   decodeOutput,
@@ -14,6 +19,7 @@ import {
   encodeStringList,
   encodeValueAndBody,
 } from './WasmWireCodec.ts';
+import { Reader } from '../../interfaces/Reader.ts';
 
 /**
  * Empty-bytes reply the bridge returns from `contractMetadata` when the
@@ -207,37 +213,107 @@ export function makeWalkBridge(host: WalkerHost): WalkBridge {
  */
 export interface BuildBridge {
   /** Returns the `ValueType` enum value (i32) of the value at `key`. */
-  requestValueType(key: string, desc: ValueDescriptor): number;
-  requestBytes(key: string, desc: ValueDescriptor): Uint8Array;
+  requestValueType(key: string, desc: ValueDescriptor): MaybePromise<number>;
+  requestBytes(key: string, desc: ValueDescriptor): MaybePromise<Uint8Array>;
   /** Returns UTF-8 encoded bytes of the user-supplied string. */
-  requestString(key: string, desc: ValueDescriptor): Uint8Array;
-  requestNumber(key: string, desc: ValueDescriptor): number;
-  requestBool(key: string, desc: ValueDescriptor): number;
-  requestArrayLength(key: string, desc: ValueDescriptor): number;
+  requestString(key: string, desc: ValueDescriptor): MaybePromise<Uint8Array>;
+  requestNumber(key: string, desc: ValueDescriptor): MaybePromise<number>;
+  requestBool(key: string, desc: ValueDescriptor): MaybePromise<number>;
+  requestArrayLength(key: string, desc: ValueDescriptor): MaybePromise<number>;
   /** Returns the object's keys encoded as a string-list (see WasmWireCodec). */
-  requestObjectKeys(key: string, desc: ValueDescriptor): Uint8Array;
-  beginObject(key: string): void;
+  requestObjectKeys(key: string, desc: ValueDescriptor): MaybePromise<Uint8Array>;
+  beginObject(key: string): MaybePromise<void>;
   endObject(): void;
-  beginArray(key: string): void;
+  beginArray(key: string): MaybePromise<void>;
   endArray(): void;
   validationError(key: string, message: string): void;
 }
 
-export function makeBuildBridge(host: BuilderHost): BuildBridge {
-  const encoder = new TextEncoder();
+const buildEncoder = new TextEncoder();
+const EMPTY_BYTES: Uint8Array = new Uint8Array(0);
+const EMPTY_DESC = {} as ValueDescriptor;
+
+/**
+ * `scaffold_builder.*` handler set backed by a query `Reader` tree.
+ *
+ * `host(descriptor)` lazily yields the root params `Reader`. The bridge keeps a
+ * cursor over the tree in `stack`: `beginObject`/`beginArray` descend (push the
+ * addressed child), `endObject`/`endArray` ascend (pop), and `request*` read a
+ * child of the current node. Following `BuilderHost` (see `DefaultBuilderHost`),
+ * an empty `key` (`''`) addresses the *current* node rather than a child.
+ *
+ * Navigation is `MaybePromise` end to end: an in-memory `Reader`
+ * (`createReader`) resolves synchronously (so `InProcessMockTransport` stays
+ * sync), while a lazy/IO-backed `Reader` resolves async on the JSPI/Atomics
+ * transports.
+ */
+export function makeBuildBridge(host: (descriptor: string) => MaybePromise<Reader>): BuildBridge {
+  // TODO: Rewrite this method
+
+  const stack: Reader[] = [];
+  let root: MaybePromise<Reader> | undefined;
+
+  const current = (): MaybePromise<Reader> => {
+    if (stack.length > 0) return stack[stack.length - 1];
+    if (root === undefined) root = host('');
+    return root;
+  };
+
+  // Resolve the child of the current node addressed by `key`. `''` is the
+  // current node itself; otherwise an object key, or (for arrays) the
+  // stringified index. A leaf/absent parent yields a Null reader.
+  const child = (key: string, desc: ValueDescriptor): MaybePromise<Reader> =>
+    // `at()` is itself MaybePromise, so the composed type nests; maybeThen
+    // flattens it at runtime (sync stays sync; Promise.then unwraps the rest).
+    maybeThen(current(), (node): MaybePromise<Reader> => {
+      if (key === '') return node;
+      const descriptor = JSON.stringify(desc);
+      if (node.type === ValueType.Object) return node.at(key, descriptor);
+      if (node.type === ValueType.Array) return node.at(Number(key), descriptor);
+      return { type: ValueType.Null };
+    }) as MaybePromise<Reader>;
+
   return {
-    requestValueType: (key, desc) => host.requestValueType(key, desc),
-    requestBytes: (key, desc) => host.requestBytes(key, desc),
-    requestString: (key, desc) => encoder.encode(host.requestString(key, desc)),
-    requestNumber: (key, desc) => host.requestNumber(key, desc),
-    requestBool: (key, desc) => host.requestBool(key, desc) ? 1 : 0,
-    requestArrayLength: (key, desc) => host.requestArrayLength(key, desc),
-    requestObjectKeys: (key, desc) => encodeStringList(host.requestObjectKeys(key, desc)),
-    beginObject: (key) => host.beginObject(key),
-    endObject: () => host.endObject(),
-    beginArray: (key) => host.beginArray(key),
-    endArray: () => host.endArray(),
-    validationError: (key, message) => host.validationError(key, message),
+    requestValueType: (key, desc) => maybeThen(child(key, desc), (node) => node.type),
+    requestBytes: (key, desc) =>
+      maybeThen(
+        child(key, desc),
+        (node) => node.type === ValueType.Bytes ? node.value : EMPTY_BYTES,
+      ),
+    requestString: (key, desc) =>
+      maybeThen(
+        child(key, desc),
+        (node) => node.type === ValueType.String ? buildEncoder.encode(node.value) : EMPTY_BYTES,
+      ),
+    requestNumber: (key, desc) =>
+      maybeThen(child(key, desc), (node) => node.type === ValueType.Number ? node.value : 0),
+    requestBool: (key, desc) =>
+      maybeThen(child(key, desc), (node) => node.type === ValueType.Bool && node.value ? 1 : 0),
+    requestArrayLength: (key, desc) =>
+      maybeThen(child(key, desc), (node) => node.type === ValueType.Array ? node.length : 0),
+    requestObjectKeys: (key, desc) =>
+      maybeThen(
+        child(key, desc),
+        (node) => encodeStringList(node.type === ValueType.Object ? node.keys : []),
+      ),
+    beginObject: (key) =>
+      maybeThen(child(key, EMPTY_DESC), (node) => {
+        stack.push(node);
+      }),
+    endObject: () => {
+      stack.pop();
+    },
+    beginArray: (key) =>
+      maybeThen(child(key, EMPTY_DESC), (node) => {
+        stack.push(node);
+      }),
+    endArray: () => {
+      stack.pop();
+    },
+    // A query Reader is read-only -- there is no error channel, so fail fast.
+    validationError: (key, message) => {
+      throw new Error(`contract build validation error at '${key}': ${message}`);
+    },
   };
 }
 
