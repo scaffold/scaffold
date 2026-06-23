@@ -6,7 +6,9 @@
 // worker, and the worker instantiates + invokes.
 
 import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
-import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
+import type { WalkerHost } from '../../../contracts/Contract.ts';
+import type { Reader } from '../../../interfaces/Reader.ts';
+import type { MaybePromise } from '../../../util/MaybePromise.ts';
 import type { WasmTransport } from '../WasmTransport.ts';
 import {
   type BuildBridge,
@@ -102,24 +104,31 @@ function buildHandlers(bridge: BuildBridge): WasmHostHandlers {
     new DataView(buf.buffer).setInt32(0, v, true);
     return buf;
   };
+  // The build bridge is MaybePromise; this transport runs in a worker that
+  // blocks on Atomics.wait, so each handler awaits like the run handlers do.
   return {
-    request_bytes: ([key, descBytes]) =>
-      bridge.requestBytes(key as string, parseValueDescriptor(descBytes as Uint8Array)),
-    request_string: ([key, descBytes]) =>
-      bridge.requestString(key as string, parseValueDescriptor(descBytes as Uint8Array)),
-    request_number: ([key, descBytes]) =>
-      encodeF64(bridge.requestNumber(key as string, parseValueDescriptor(descBytes as Uint8Array))),
-    request_bool: ([key, descBytes]) =>
-      new Uint8Array([
-        bridge.requestBool(key as string, parseValueDescriptor(descBytes as Uint8Array)),
-      ]),
-    request_array_length: ([key, descBytes]) =>
-      encodeI32(
-        bridge.requestArrayLength(key as string, parseValueDescriptor(descBytes as Uint8Array)),
+    request_bytes: async ([key, descBytes]) =>
+      await bridge.requestBytes(key as string, parseValueDescriptor(descBytes as Uint8Array)),
+    request_string: async ([key, descBytes]) =>
+      await bridge.requestString(key as string, parseValueDescriptor(descBytes as Uint8Array)),
+    request_number: async ([key, descBytes]) =>
+      encodeF64(
+        await bridge.requestNumber(key as string, parseValueDescriptor(descBytes as Uint8Array)),
       ),
-    begin_object: ([key]) => bridge.beginObject(key as string),
+    request_bool: async ([key, descBytes]) =>
+      new Uint8Array([
+        await bridge.requestBool(key as string, parseValueDescriptor(descBytes as Uint8Array)),
+      ]),
+    request_array_length: async ([key, descBytes]) =>
+      encodeI32(
+        await bridge.requestArrayLength(
+          key as string,
+          parseValueDescriptor(descBytes as Uint8Array),
+        ),
+      ),
+    begin_object: async ([key]) => await bridge.beginObject(key as string),
     end_object: () => bridge.endObject(),
-    begin_array: ([key]) => bridge.beginArray(key as string),
+    begin_array: async ([key]) => await bridge.beginArray(key as string),
     end_array: () => bridge.endArray(),
     validation_error: ([key, message]) => bridge.validationError(key as string, message as string),
   };
@@ -227,11 +236,17 @@ export class AtomicsWorkerTransport implements WasmTransport {
     return this.runWalk(modules, 'walk_data', data, host);
   }
 
-  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildParams(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this.runBuild(modules, 'build_params', host);
   }
 
-  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildData(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this.runBuild(modules, 'build_data', host);
   }
 
@@ -265,7 +280,7 @@ export class AtomicsWorkerTransport implements WasmTransport {
   private runBuild(
     modules: CompiledModules,
     mode: 'build_params' | 'build_data',
-    host: BuilderHost,
+    host: (descriptor: string) => MaybePromise<Reader>,
   ): Promise<Uint8Array> {
     const bridge = makeBuildBridge(host);
     const handlers = buildHandlers(bridge);

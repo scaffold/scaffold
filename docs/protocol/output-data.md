@@ -408,8 +408,8 @@ equivalent to the WASM host imports:
 interface ContractUI {
     walkParams?(params: Uint8Array, host: WalkerHost): void;
     walkData?(data: Uint8Array, host: WalkerHost): void;
-    buildParams?(host: BuilderHost): Uint8Array;
-    buildData?(host: BuilderHost): Uint8Array;
+    buildParams?(reader: (descriptor: string) => MaybePromise<Reader>): MaybePromise<Uint8Array>;
+    buildData?(reader: (descriptor: string) => MaybePromise<Reader>): MaybePromise<Uint8Array>;
 }
 
 interface ValueDescriptor {
@@ -436,24 +436,26 @@ interface WalkerHost {
     emitListEnd(): void;
 }
 
-interface BuilderHost {
-    requestBytes(key: string, desc: ValueDescriptor): Uint8Array;
-    requestString(key: string, desc: ValueDescriptor): string;
-    requestNumber(key: string, desc: ValueDescriptor): number;
-    requestBool(key: string, desc: ValueDescriptor): boolean;
-    requestArrayLength(key: string, desc: ValueDescriptor): number;
-    beginObject(key: string): void;
-    endObject(): void;
-    beginArray(key: string): void;
-    endArray(): void;
-    validationError(key: string, message: string): void;
-}
+// The builder reads user input from a query `Reader` (src/interfaces/Reader.ts):
+// a lazy, possibly-async tree of typed values discriminated by `ValueType`.
+type Reader =
+    | { type: ValueType.Null }
+    | { type: ValueType.Bool; value: boolean }
+    | { type: ValueType.Number; value: number }
+    | { type: ValueType.Bytes; value: Uint8Array }
+    | { type: ValueType.String; value: string }
+    | { type: ValueType.Array; length: number; at(i: number, descriptor: string): MaybePromise<Reader> }
+    | { type: ValueType.Object; keys: string[]; at(key: string, descriptor: string): MaybePromise<Reader> };
 ```
 
-Each TypeScript method maps 1:1 to a WASM host import. The WASM interface
-passes descriptors as JSON strings; the TypeScript interface passes native
-objects. Contract authors writing in Rust/C use the same function signatures
-through `extern "C"` imports.
+The walker emits a value tree (the contract drives the host); the builder
+*reads* one (the host drives the contract). The runtime adapts the `Reader`
+to the `scaffold_builder.*` imports (see `makeBuildBridge`): it holds a cursor
+over the tree, `begin_*` / `end_*` move it, and `request_*` read children of the
+current node. The WASM interface passes descriptors as JSON strings; the
+TypeScript interface passes native objects. Because a `Reader` may resolve
+asynchronously, builder methods are `MaybePromise`; the in-process transport
+requires synchronous reads while JSPI/Atomics suspend on async ones.
 
 ---
 

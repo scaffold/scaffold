@@ -39,8 +39,18 @@ export type Reader =
   | ArrayReader
   | ObjectReader;
 
-// TODO(claude): How can we make this infer the correct return type for constant inputs?
-export function createReader<T extends unknown>(value: T) {
+// Overloads so a statically-known input infers its concrete Reader variant
+// (e.g. `createReader(5)` is typed `NumberReader`); `unknown`/`any` inputs fall
+// back to the `Reader` union.
+export function createReader(value: undefined | null): NullReader;
+export function createReader(value: boolean): BoolReader;
+export function createReader(value: number): NumberReader;
+export function createReader(value: string): StringReader;
+export function createReader(value: Uint8Array): BytesReader;
+export function createReader(value: readonly unknown[]): ArrayReader;
+export function createReader(value: object): ObjectReader;
+export function createReader(value: unknown): Reader;
+export function createReader(value: unknown): Reader {
   switch (typeof value) {
     case 'undefined':
       return { type: ValueType.Null } satisfies NullReader;

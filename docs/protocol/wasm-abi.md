@@ -198,7 +198,7 @@ A contract calling a walker import outside an active `walk_*` invocation traps. 
 
 | Import | Signature | Returns |
 |---|---|---|
-| `request_value_type`   | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i32` | the value's type: `0` null, `1` bool, `2` number, `3` string, `4` array, `5` object. Lets a generic builder (one that doesn't know the params shape, e.g. the JSON module) dispatch to the right `request_*` call. |
+| `request_value_type`   | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i32` | the value's type: `0` null, `1` bool, `2` number, `3` string, `4` array, `5` object, `6` bytes. Lets a generic builder (one that doesn't know the params shape, e.g. the JSON module) dispatch to the right `request_*` call. |
 | `request_bytes`        | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i64` | packed `(ptr, len)` of the user-supplied bytes (or default) |
 | `request_string`       | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> i64` | packed `(ptr, len)` of UTF-8 |
 | `request_number`       | `(key_ptr, key_len, desc_ptr, desc_len: i32) -> f64` | numeric value |
@@ -212,6 +212,8 @@ A contract calling a walker import outside an active `walk_*` invocation traps. 
 | `validation_error`     | `(key_ptr, key_len, msg_ptr, msg_len: i32) -> ()` | — |
 
 The builder result is the packed `(ptr, len)` returned from `$build_params` / `$build_data` itself — there is no separate `set_result` import.
+
+On the host side these imports are backed by a query **`Reader`** ([`src/interfaces/Reader.ts`](../../src/interfaces/Reader.ts)): a lazy, possibly-async tree of typed values (`null`/`bool`/`number`/`bytes`/`string`/`array`/`object`, discriminated by the same `ValueType` as `request_value_type`). The runtime stores a cursor over that tree; `begin_object` / `begin_array` descend into the addressed child and `end_*` ascend, while `request_*` read a child of the current node (an empty key reads the current node itself). Because a `Reader` may resolve asynchronously, the in-process transport requires a synchronous `Reader` and the JSPI/Atomics transports suspend on async reads. See [`makeBuildBridge`](../../src/plugins/wasm/WasmHostBridge.ts).
 
 ---
 
@@ -583,7 +585,7 @@ These are non-normative: a future implementation may differ as long as the contr
   - On dispatch, the worker waits for both a signal-flag transition and an i32 length code.
   - The `THROW` flag is split into `THROW_REJECT` (carry a reason string in the staging buffer) and `THROW_CRASH`.
 - **Per-instance allocator.** The runtime caches a reference to `$alloc` on instance load. Calling `$alloc` from the worker after wake is a normal export call; no host-thread coordination needed.
-- **Walker / builder host context.** The runtime stores the active `WalkerHost` / `BuilderHost` on the per-call instance state. Walker imports check this state and trap (treated as a crash, not a rejection) if called outside `walk_*`.
+- **Walker / builder host context.** The runtime stores the active `WalkerHost` / builder `Reader` cursor on the per-call instance state. Walker and builder imports check this state and trap (treated as a crash, not a rejection) if called outside `walk_*` / `build_*`.
 - **Imported memory option.** Modules built by toolchains that prefer to receive memory (e.g. some Rust profiles) can `(import "env" "memory" ...)` instead of exporting. The runtime supplies a memory of the requested kind; under Atomics it must be shared.
 
 ---

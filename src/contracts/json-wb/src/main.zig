@@ -44,6 +44,9 @@ const VT_NUMBER: i32 = 2;
 const VT_STRING: i32 = 3;
 const VT_ARRAY: i32 = 4;
 const VT_OBJECT: i32 = 5;
+// A Reader byte value. JSON has no byte literal, so a JSON-sourced Reader never
+// yields this; it falls through to the `else` (null) arm in the dispatch below.
+const VT_BYTES: i32 = 6;
 
 // -- Bump allocator (host writes request replies here via alloc) -----
 

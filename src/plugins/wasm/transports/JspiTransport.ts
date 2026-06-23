@@ -6,7 +6,9 @@
 // transport: shared memory, loadModules, lookup entry via base.imports.
 
 import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
-import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
+import type { WalkerHost } from '../../../contracts/Contract.ts';
+import type { Reader } from '../../../interfaces/Reader.ts';
+import type { MaybePromise } from '../../../util/MaybePromise.ts';
 import type { WasmTransport } from '../WasmTransport.ts';
 import {
   type BuildBridge,
@@ -173,41 +175,65 @@ function flatWalkExports(ctx: InstanceCtx, bridge: WalkBridge): Record<string, E
 }
 
 function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string, ExportEntry> {
-  const packBytes = (bytes: Uint8Array): bigint => {
-    const ptr = allocAndWrite(ctx, bytes);
-    return packPtrLen(ptr, bytes.length);
+  const handlePackedAsync = async (bytes: Uint8Array | Promise<Uint8Array>): Promise<bigint> => {
+    const resolved = await bytes;
+    const ptr = allocAndWrite(ctx, resolved);
+    return packPtrLen(ptr, resolved.length);
   };
-  return asSyncEntries({
-    request_bytes: (kp: number, kl: number, dp: number, dl: number) =>
-      packBytes(
-        bridge.requestBytes(
+  // Build bridge calls are MaybePromise; JSPI suspends on them like the run
+  // path, so each value request is an asyncExport (Suspending-wrapped at wire
+  // time) and the cursor's `end_*` stay sync.
+  return {
+    request_bytes: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      handlePackedAsync(
+        Promise.resolve(
+          bridge.requestBytes(
+            readString(ctx, kp, kl),
+            parseValueDescriptor(readSlice(ctx, dp, dl)),
+          ),
+        ),
+      )
+    ),
+    request_string: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      handlePackedAsync(
+        Promise.resolve(
+          bridge.requestString(
+            readString(ctx, kp, kl),
+            parseValueDescriptor(readSlice(ctx, dp, dl)),
+          ),
+        ),
+      )
+    ),
+    request_number: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      Promise.resolve(
+        bridge.requestNumber(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
+      )
+    ),
+    request_bool: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      Promise.resolve(
+        bridge.requestBool(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
+      )
+    ),
+    request_array_length: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      Promise.resolve(
+        bridge.requestArrayLength(
           readString(ctx, kp, kl),
           parseValueDescriptor(readSlice(ctx, dp, dl)),
         ),
-      ),
-    request_string: (kp: number, kl: number, dp: number, dl: number) =>
-      packBytes(
-        bridge.requestString(
-          readString(ctx, kp, kl),
-          parseValueDescriptor(readSlice(ctx, dp, dl)),
-        ),
-      ),
-    request_number: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestNumber(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
-    request_bool: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestBool(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
-    request_array_length: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestArrayLength(
-        readString(ctx, kp, kl),
-        parseValueDescriptor(readSlice(ctx, dp, dl)),
-      ),
-    begin_object: (kp: number, kl: number) => bridge.beginObject(readString(ctx, kp, kl)),
-    end_object: () => bridge.endObject(),
-    begin_array: (kp: number, kl: number) => bridge.beginArray(readString(ctx, kp, kl)),
-    end_array: () => bridge.endArray(),
-    validation_error: (kp: number, kl: number, mp: number, ml: number) =>
-      bridge.validationError(readString(ctx, kp, kl), readString(ctx, mp, ml)),
-  });
+      )
+    ),
+    begin_object: asyncExport((kp: number, kl: number) =>
+      Promise.resolve(bridge.beginObject(readString(ctx, kp, kl)))
+    ),
+    end_object: syncExport(() => bridge.endObject()),
+    begin_array: asyncExport((kp: number, kl: number) =>
+      Promise.resolve(bridge.beginArray(readString(ctx, kp, kl)))
+    ),
+    end_array: syncExport(() => bridge.endArray()),
+    validation_error: syncExport((kp: number, kl: number, mp: number, ml: number) =>
+      bridge.validationError(readString(ctx, kp, kl), readString(ctx, mp, ml))
+    ),
+  };
 }
 
 interface EntryInfo {
@@ -293,11 +319,17 @@ export class JspiTransport implements WasmTransport {
     return this.runWalk(modules, 'walk_data', data, host);
   }
 
-  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildParams(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this.runBuild(modules, 'build_params', host);
   }
 
-  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildData(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this.runBuild(modules, 'build_data', host);
   }
 
@@ -329,7 +361,7 @@ export class JspiTransport implements WasmTransport {
   private async runBuild(
     modules: CompiledModules,
     mode: 'build_params' | 'build_data',
-    host: BuilderHost,
+    host: (descriptor: string) => MaybePromise<Reader>,
   ): Promise<Uint8Array> {
     const ctx = makeEmptyCtx();
     const bridge = makeBuildBridge(host);
@@ -342,7 +374,9 @@ export class JspiTransport implements WasmTransport {
     if (typeof fn !== 'function') {
       throw new Error(`entry export ${JSON.stringify(entry.exportName)} not callable`);
     }
-    const packed = (fn as () => bigint)();
+    // The build imports may suspend (async Reader), so drive the entry through
+    // `promising` and await it, mirroring `run`.
+    const packed = await promising(fn as () => bigint)();
     const ptr = Number((packed >> 32n) & 0xFFFFFFFFn);
     const len = Number(packed & 0xFFFFFFFFn);
     return readSlice(ctx, ptr, len);

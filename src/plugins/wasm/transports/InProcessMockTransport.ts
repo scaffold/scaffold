@@ -6,7 +6,9 @@
 // references go through JS forwarders so cycles in the graph work.
 
 import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
-import type { BuilderHost, WalkerHost } from '../../../contracts/Contract.ts';
+import type { WalkerHost } from '../../../contracts/Contract.ts';
+import type { Reader } from '../../../interfaces/Reader.ts';
+import type { MaybePromise } from '../../../util/MaybePromise.ts';
 import type { WasmTransport } from '../WasmTransport.ts';
 import {
   type BuildBridge,
@@ -154,45 +156,63 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
     const ptr = allocAndWrite(ctx, bytes);
     return packPtrLen(ptr, bytes.length);
   };
+  // The build bridge is MaybePromise; this transport is synchronous, so every
+  // call must resolve sync (an in-memory `Reader` does). `expectSync` throws on
+  // a Promise, pointing the caller at the JSPI/Atomics transports.
   return asSyncEntries({
     request_bytes: (kp: number, kl: number, dp: number, dl: number) =>
       handlePackedBytes(
-        bridge.requestBytes(
-          readString(ctx, kp, kl),
-          parseValueDescriptor(readSlice(ctx, dp, dl)),
+        expectSync(
+          bridge.requestBytes(
+            readString(ctx, kp, kl),
+            parseValueDescriptor(readSlice(ctx, dp, dl)),
+          ),
         ),
       ),
     request_string: (kp: number, kl: number, dp: number, dl: number) =>
       handlePackedBytes(
-        bridge.requestString(
-          readString(ctx, kp, kl),
-          parseValueDescriptor(readSlice(ctx, dp, dl)),
+        expectSync(
+          bridge.requestString(
+            readString(ctx, kp, kl),
+            parseValueDescriptor(readSlice(ctx, dp, dl)),
+          ),
         ),
       ),
     request_number: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestNumber(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
+      expectSync(
+        bridge.requestNumber(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
+      ),
     request_bool: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestBool(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
+      expectSync(
+        bridge.requestBool(readString(ctx, kp, kl), parseValueDescriptor(readSlice(ctx, dp, dl))),
+      ),
     request_array_length: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestArrayLength(
-        readString(ctx, kp, kl),
-        parseValueDescriptor(readSlice(ctx, dp, dl)),
-      ),
-    request_value_type: (kp: number, kl: number, dp: number, dl: number) =>
-      bridge.requestValueType(
-        readString(ctx, kp, kl),
-        parseValueDescriptor(readSlice(ctx, dp, dl)),
-      ),
-    request_object_keys: (kp: number, kl: number, dp: number, dl: number) =>
-      handlePackedBytes(
-        bridge.requestObjectKeys(
+      expectSync(
+        bridge.requestArrayLength(
           readString(ctx, kp, kl),
           parseValueDescriptor(readSlice(ctx, dp, dl)),
         ),
       ),
-    begin_object: (kp: number, kl: number) => bridge.beginObject(readString(ctx, kp, kl)),
+    request_value_type: (kp: number, kl: number, dp: number, dl: number) =>
+      expectSync(
+        bridge.requestValueType(
+          readString(ctx, kp, kl),
+          parseValueDescriptor(readSlice(ctx, dp, dl)),
+        ),
+      ),
+    request_object_keys: (kp: number, kl: number, dp: number, dl: number) =>
+      handlePackedBytes(
+        expectSync(
+          bridge.requestObjectKeys(
+            readString(ctx, kp, kl),
+            parseValueDescriptor(readSlice(ctx, dp, dl)),
+          ),
+        ),
+      ),
+    begin_object: (kp: number, kl: number) =>
+      expectSync(bridge.beginObject(readString(ctx, kp, kl))),
     end_object: () => bridge.endObject(),
-    begin_array: (kp: number, kl: number) => bridge.beginArray(readString(ctx, kp, kl)),
+    begin_array: (kp: number, kl: number) => expectSync(bridge.beginArray(readString(ctx, kp, kl))),
     end_array: () => bridge.endArray(),
     validation_error: (kp: number, kl: number, mp: number, ml: number) =>
       bridge.validationError(readString(ctx, kp, kl), readString(ctx, mp, ml)),
@@ -283,11 +303,17 @@ export class InProcessMockTransport implements WasmTransport {
     return this.runWalk(modules, 'walk_data', data, host);
   }
 
-  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildParams(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this.runBuild(modules, 'build_params', host);
   }
 
-  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildData(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this.runBuild(modules, 'build_data', host);
   }
 
@@ -323,7 +349,7 @@ export class InProcessMockTransport implements WasmTransport {
   private async runBuild(
     modules: CompiledModules,
     mode: 'build_params' | 'build_data',
-    host: BuilderHost,
+    host: (descriptor: string) => MaybePromise<Reader>,
   ): Promise<Uint8Array> {
     const ctx = makeEmptyCtx();
     const bridge = makeBuildBridge(host);

@@ -5,7 +5,7 @@
 // `WasmContractAdapter` calls.
 
 import type { ContractEnv } from '../../core/ContractEnv.ts';
-import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
+import type { WalkerHost } from '../../contracts/Contract.ts';
 import type { WasmTransport } from './WasmTransport.ts';
 import type { CompiledModules } from './WasmModules.ts';
 import {
