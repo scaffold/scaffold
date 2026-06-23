@@ -7,6 +7,10 @@ export interface Query {
   params: Uint8Array | ((descriptor: string) => MaybePromise<Reader>);
 }
 
+export interface Record extends Query {
+  data: Uint8Array | ((descriptor: string) => MaybePromise<Reader>);
+}
+
 class BinaryContractInputExample implements Query {
   contract = Hash.fromHex('');
   params: Uint8Array;

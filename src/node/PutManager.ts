@@ -17,7 +17,9 @@ import { DraftStore } from '../core/Draft.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { GenerationService } from './GenerationService.ts';
 import { Hash } from '../util/Hash.ts';
-import { Query } from '../interfaces/Query.ts';
+import { Query, Record } from '../interfaces/Query.ts';
+import { MaybePromise } from '../util/MaybePromise.ts';
+import { ObjectReader, Reader } from '../interfaces/Reader.ts';
 
 /** Publish records under a verifier by running its contract generator. */
 export interface PutRequest extends Query {
@@ -25,7 +27,10 @@ export interface PutRequest extends Query {
    * Records that answer the generator's `request({RECORD_CONTRACT, key})`
    * calls. Each entry's value is returned as the body to the generator.
    */
-  records: Record<string, Uint8Array | string>;
+  records: Record[];
+  // records:
+  //   | Record<string, Uint8Array | ((descriptor: string) => MaybePromise<Reader>)>
+  //   | ObjectReader;
 }
 
 export class PutManager {
@@ -40,14 +45,17 @@ export class PutManager {
    * the first block produced. Rejects if the draft is cancelled (e.g. an
    * unmatched request, an unused record, a contract throw).
    */
-  put(request: PutRequest): Promise<Block> {
-    const params = encodeParams(request.contract, request.params, this.contractHost);
+  async put(request: PutRequest): Promise<Block> {
+    const params = await this.contractHost.resolveQueryParams(request);
+    const records = await Promise.all(
+      request.records.map((x) => this.contractHost.resolveRecordData(x)),
+    );
     const verifier = { contract: request.contract, params };
 
     return new Promise<Block>((resolve, reject) => {
       let handle: { draftId: Hash; cancel: () => void };
       try {
-        handle = this.generation.generateForVerifier(verifier, request.records);
+        handle = this.generation.generateForVerifier(verifier, records);
       } catch (e) {
         reject(e);
         return;

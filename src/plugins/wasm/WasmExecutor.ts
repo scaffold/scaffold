@@ -14,6 +14,8 @@ import {
 } from './transports/AtomicsWorkerTransport.ts';
 import { InProcessMockTransport } from './transports/InProcessMockTransport.ts';
 import { JspiTransport } from './transports/JspiTransport.ts';
+import { MaybePromise } from '../../util/MaybePromise.ts';
+import { Reader } from '../../interfaces/Reader.ts';
 
 export type TransportKind = 'auto' | 'atomics' | 'jspi' | 'in-process';
 
@@ -98,11 +100,17 @@ export class WasmExecutor {
     return this._transport.walkData(modules, data, host);
   }
 
-  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildParams(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this._transport.buildParams(modules, host);
   }
 
-  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array> {
+  buildData(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array> {
     return this._transport.buildData(modules, host);
   }
 

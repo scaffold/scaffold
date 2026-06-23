@@ -232,7 +232,7 @@ export class FetchManager {
     }
 
     // 1. Encode params
-    const params = encodeParams(input.contract, input.params, this.deps.contractHost);
+    const params = this.deps.contractHost.resolveQueryParams(input);
 
     // 2. Normalize key
     const recordKey = normalizeRecordKey(input.key);

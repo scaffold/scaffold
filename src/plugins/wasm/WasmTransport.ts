@@ -3,6 +3,8 @@
 import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { BuilderHost, WalkerHost } from '../../contracts/Contract.ts';
 import type { CompiledModules } from './WasmModules.ts';
+import { Reader } from '../../interfaces/Reader.ts';
+import { MaybePromise } from '../../util/MaybePromise.ts';
 
 /**
  * Single contract-execution boundary, independent of how host calls are
@@ -44,10 +46,16 @@ export interface WasmTransport {
   ): Promise<void>;
 
   /** Invoke `base.imports["build_params"]` and return the contract-emitted bytes. */
-  buildParams(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array>;
+  buildParams(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array>;
 
   /** Invoke `base.imports["build_data"]` and return the contract-emitted bytes. */
-  buildData(modules: CompiledModules, host: BuilderHost): Promise<Uint8Array>;
+  buildData(
+    modules: CompiledModules,
+    host: (descriptor: string) => MaybePromise<Reader>,
+  ): Promise<Uint8Array>;
 
   /** Free any pooled resources (workers). Idempotent. */
   close(): Promise<void>;

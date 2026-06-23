@@ -18,7 +18,6 @@ import { DraftManager } from '../core/DraftManager.ts';
 import { DraftStore } from '../core/Draft.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { Hash } from '../util/Hash.ts';
-import { encodeParams } from './draftPublishing.ts';
 
 /** Publish a single output under a verifier. */
 export interface SendRequest {

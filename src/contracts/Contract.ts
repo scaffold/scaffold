@@ -3,6 +3,7 @@
 import type { ContractEnv } from '../core/ContractEnv.ts';
 import type { MaybePromise } from '../util/MaybePromise.ts';
 import type { Hash } from '../util/Hash.ts';
+import { Reader } from '../interfaces/Reader.ts';
 
 // -- Value Descriptors ------------------------------------------------
 
@@ -64,36 +65,6 @@ export enum ValueType {
   Bytes = 6,
 }
 
-/**
- * Host interface for the builder (writing direction).
- * The contract calls these to request field values from the user.
- */
-export interface BuilderHost {
-  /**
-   * The runtime type of the value at `key`, so a generic builder (one that does
-   * not know the params shape ahead of time, e.g. the JSON walker/builder
-   * module) can dispatch to the right `request*` call. Returns `Null` when the
-   * value is absent.
-   */
-  requestValueType(key: string, desc: ValueDescriptor): ValueType;
-  requestBytes(key: string, desc: ValueDescriptor): Uint8Array;
-  requestString(key: string, desc: ValueDescriptor): string;
-  requestNumber(key: string, desc: ValueDescriptor): number;
-  requestBool(key: string, desc: ValueDescriptor): boolean;
-  requestArrayLength(key: string, desc: ValueDescriptor): number;
-  /**
-   * The keys present on the object value at `key`, so a builder can serialize
-   * an object of unknown shape (the analog of `requestArrayLength` for arrays).
-   * Returns `[]` when the value is absent or not an object.
-   */
-  requestObjectKeys(key: string, desc: ValueDescriptor): string[];
-  beginObject(key: string): void;
-  endObject(): void;
-  beginArray(key: string): void;
-  endArray(): void;
-  validationError(key: string, message: string): void;
-}
-
 // -- Contract ---------------------------------------------------------
 
 /**
@@ -130,8 +101,8 @@ export interface Contract {
   walkData?(data: Uint8Array, host: WalkerHost): MaybePromise<void>;
 
   /** Build verifier params bytes from user input. */
-  buildParams?(host: BuilderHost): MaybePromise<Uint8Array>;
+  buildParams?(reader: (descriptor: string) => MaybePromise<Reader>): MaybePromise<Uint8Array>;
 
   /** Build output data bytes from user input. */
-  buildData?(host: BuilderHost): MaybePromise<Uint8Array>;
+  buildData?(reader: (descriptor: string) => MaybePromise<Reader>): MaybePromise<Uint8Array>;
 }

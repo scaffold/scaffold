@@ -19,6 +19,8 @@ import {
   type WaitForGetOutputFn,
   type WaitForInputFn,
 } from './GeneratingEnv.ts';
+import { Query, Record } from '../interfaces/Query.ts';
+import { error } from '../util/functional.ts';
 
 // -- Re-exports -----------------------------------------------------
 
@@ -261,6 +263,30 @@ export class ContractHost<BlockType> {
       includeConstraints: env.getIncludeConstraints(),
       env,
     }));
+  }
+
+  resolveQueryParams(query: Query): MaybePromise<Uint8Array> {
+    const { contract, params } = query;
+    if (params instanceof Uint8Array) return params;
+
+    const resolved = this.getContract(contract) ??
+      error(`Cannot resolve query for contract ${contract.toHex()}`);
+    if (resolved.buildParams === undefined) {
+      throw new Error(`Contract ${contract.toHex()} has no params builder`);
+    }
+    return resolved.buildParams(params);
+  }
+
+  resolveRecordData(record: Record): MaybePromise<Uint8Array> {
+    const { contract, data } = record;
+    if (data instanceof Uint8Array) return data;
+
+    const resolved = this.getContract(contract) ??
+      error(`Cannot resolve query for contract ${contract.toHex()}`);
+    if (resolved.buildData === undefined) {
+      throw new Error(`Contract ${contract.toHex()} has no data builder`);
+    }
+    return resolved.buildData(data);
   }
 }
 

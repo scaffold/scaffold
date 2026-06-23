@@ -19,6 +19,8 @@ import {
   type NormalisedModules,
   parseModules,
 } from './WasmModules.ts';
+import { Reader } from '../../interfaces/Reader.ts';
+import { MaybePromise } from '../../util/MaybePromise.ts';
 
 export interface WasmContractPluginConfig extends WasmExecutorConfig {
   /** Pre-built executor (lets multiple plugins share one). */
@@ -127,12 +129,12 @@ class WasmContractAdapter implements Contract {
     await this._executor.walkData(compiled, data, host);
   }
 
-  async buildParams(host: import('../../contracts/Contract.ts').BuilderHost): Promise<Uint8Array> {
+  async buildParams(host: (descriptor: string) => MaybePromise<Reader>): Promise<Uint8Array> {
     const compiled = await this.compile();
     return await this._executor.buildParams(compiled, host);
   }
 
-  async buildData(host: import('../../contracts/Contract.ts').BuilderHost): Promise<Uint8Array> {
+  async buildData(host: (descriptor: string) => MaybePromise<Reader>): Promise<Uint8Array> {
     const compiled = await this.compile();
     return await this._executor.buildData(compiled, host);
   }
