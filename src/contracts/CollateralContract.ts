@@ -12,7 +12,7 @@ import { type Claim, type ContractEnv, ContractRejection } from '../core/Contrac
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 import { findRecordOutput } from './RecordContract.ts';
-import { ReaderCursor } from '../interfaces/ReaderCursor.ts';
+import { readBytes, readField, readNumber, readString } from '../interfaces/Reader.ts';
 
 // -- Collateral types -------------------------------------------------
 
@@ -311,17 +311,19 @@ export const collateralContract: Contract = {
     }
   },
 
-  buildParams(reader) {
-    return new ReaderCursor(reader).bytes('targetBlock', {
+  async buildParams(reader) {
+    return await readBytes(await reader(''), 'targetBlock', {
       type: 'bytes/hash/sha256/scaffold/block',
       shortDescription: 'Target block hash',
     });
   },
 
   async buildData(reader) {
-    const cursor = new ReaderCursor(reader);
-    await cursor.enter('collateral', { type: 'object', shortDescription: 'Collateral' });
-    const side = await cursor.string('side', {
+    const collateral = await readField(await reader(''), 'collateral', {
+      type: 'object',
+      shortDescription: 'Collateral',
+    });
+    const side = await readString(collateral, 'side', {
       type: 'string/utf8',
       shortDescription: 'Collateral side',
       options: [
@@ -329,15 +331,18 @@ export const collateralContract: Contract = {
         { value: 'against', shortDescription: 'Challenger bond' },
       ],
     });
-    const pubkey = await cursor.bytes('pubkey', {
+    const pubkey = await readBytes(collateral, 'pubkey', {
       type: 'bytes/public_key/ed25519',
       shortDescription: 'Owner public key',
     });
 
     let target: ChallengeTarget | undefined;
     if (side === 'against') {
-      await cursor.enter('target', { type: 'object', shortDescription: 'Challenge target' });
-      const targetType = await cursor.string('type', {
+      const targetNode = await readField(collateral, 'target', {
+        type: 'object',
+        shortDescription: 'Challenge target',
+      });
+      const targetType = await readString(targetNode, 'type', {
         type: 'string/utf8',
         shortDescription: 'Challenge target type',
         options: [
@@ -356,7 +361,7 @@ export const collateralContract: Contract = {
         targetType === 'aggregate' ||
         targetType === 'output_verifier_contract'
       ) {
-        const index = await cursor.number('index', {
+        const index = await readNumber(targetNode, 'index', {
           type: 'i32',
           shortDescription: 'Target index',
         });
@@ -364,10 +369,7 @@ export const collateralContract: Contract = {
       } else {
         target = { type: targetType as 'validity' | 'anchor' } as ChallengeTarget;
       }
-      cursor.exit();
     }
-
-    cursor.exit();
 
     if (side === 'against' && target) {
       return encodeCollateralDetail({ side: 'against', pubkey, target });

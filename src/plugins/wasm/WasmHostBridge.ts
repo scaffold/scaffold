@@ -234,8 +234,8 @@ const EMPTY_DESC = {} as ValueDescriptor;
  * `host(descriptor)` lazily yields the root params `Reader`. The bridge keeps a
  * cursor over the tree in `stack`: `beginObject`/`beginArray` descend (push the
  * addressed child), `endObject`/`endArray` ascend (pop), and `request*` read a
- * child of the current node. Mirroring the TS-side `ReaderCursor`, an empty
- * `key` (`''`) addresses the *current* node rather than a child.
+ * child of the current node. An empty `key` (`''`) addresses the *current* node
+ * rather than a child.
  *
  * Navigation is `MaybePromise` end to end: an in-memory `Reader`
  * (`createReader`) resolves synchronously (so `InProcessMockTransport` stays

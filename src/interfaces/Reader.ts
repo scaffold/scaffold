@@ -1,5 +1,5 @@
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { ValueType } from '../contracts/Contract.ts';
+import { type ValueDescriptor, ValueType } from '../contracts/Contract.ts';
 
 export interface NullReader {
   type: ValueType.Null;
@@ -53,31 +53,74 @@ export function createReader(value: unknown): Reader;
 export function createReader(value: unknown): Reader {
   switch (typeof value) {
     case 'undefined':
-      return { type: ValueType.Null } satisfies NullReader;
+      return { type: ValueType.Null };
     case 'boolean':
-      return { type: ValueType.Bool, value } satisfies BoolReader;
+      return { type: ValueType.Bool, value };
     case 'number':
-      return { type: ValueType.Number, value } satisfies NumberReader;
+      return { type: ValueType.Number, value };
     case 'string':
-      return { type: ValueType.String, value } satisfies StringReader;
+      return { type: ValueType.String, value };
     case 'object':
-      if (value === null) return { type: ValueType.Null } satisfies NullReader;
-      else if (value instanceof Uint8Array) {
-        return { type: ValueType.Bytes, value } satisfies BytesReader;
-      } else if (Array.isArray(value)) {
+      if (value === null) return { type: ValueType.Null };
+      else if (value instanceof Uint8Array) return { type: ValueType.Bytes, value };
+      else if (Array.isArray(value)) {
         return {
           type: ValueType.Array,
           length: value.length,
           at: (idx, _desc): Reader => createReader(value[idx]),
-        } satisfies ArrayReader;
+        };
       } else {
         return {
           type: ValueType.Object,
           keys: Object.keys(value),
           at: (key, _desc): Reader => createReader((value as Record<string, unknown>)[key]),
-        } satisfies ObjectReader;
+        };
       }
     default:
       throw new Error(`Unsupported type ${typeof value}`);
   }
+}
+
+// -- Field readers ---------------------------------------------------
+//
+// Helpers for a TS contract building params/data from a query Reader. The
+// contract just holds child nodes in locals to descend (no cursor); the
+// descriptor is forwarded to `at()` so a RecordingReader can capture it for the
+// UI schema. A missing/wrong-typed field yields that type's empty default.
+
+/** Resolve a named child of an object Reader, or a Null reader otherwise. */
+export function readField(
+  node: Reader,
+  key: string,
+  desc: ValueDescriptor,
+): MaybePromise<Reader> {
+  if (node.type !== ValueType.Object) return { type: ValueType.Null };
+  return node.at(key, JSON.stringify(desc));
+}
+
+export async function readBytes(
+  node: Reader,
+  key: string,
+  desc: ValueDescriptor,
+): Promise<Uint8Array> {
+  const child = await readField(node, key, desc);
+  return child.type === ValueType.Bytes ? child.value : new Uint8Array(0);
+}
+
+export async function readString(
+  node: Reader,
+  key: string,
+  desc: ValueDescriptor,
+): Promise<string> {
+  const child = await readField(node, key, desc);
+  return child.type === ValueType.String ? child.value : '';
+}
+
+export async function readNumber(
+  node: Reader,
+  key: string,
+  desc: ValueDescriptor,
+): Promise<number> {
+  const child = await readField(node, key, desc);
+  return child.type === ValueType.Number ? child.value : 0;
 }

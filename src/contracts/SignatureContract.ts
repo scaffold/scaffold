@@ -3,7 +3,7 @@
 import { SIGNATURE_CONTRACT } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
 import type { Contract } from './Contract.ts';
-import { ReaderCursor } from '../interfaces/ReaderCursor.ts';
+import { readBytes } from '../interfaces/Reader.ts';
 
 /**
  * Create a signature (payment) contract output.
@@ -39,13 +39,12 @@ export const signatureContract: Contract = {
   },
 
   async buildParams(reader) {
-    const cursor = new ReaderCursor(reader);
-    const pk = await cursor.bytes('publicKey', {
+    const pk = await readBytes(await reader(''), 'publicKey', {
       type: 'bytes/public_key/ed25519',
       shortDescription: 'Owner public key',
     });
     if (pk.length > 0 && pk.length !== 33) {
-      cursor.validationError('publicKey', 'Public key must be 33 bytes');
+      throw new Error('publicKey: Public key must be 33 bytes');
     }
     return pk;
   },
