@@ -102,6 +102,9 @@ export interface ContractEnv {
    */
   claimNext(): MaybePromise<Claim>;
 
+  getResult(): MaybePromise<Uint8Array>;
+  setResult(data: Uint8Array): void;
+
   /**
    * Publish a single output under the given verifier with the supplied
    * body and value. Fire-and-forget within the contract: the slot is
@@ -116,35 +119,6 @@ export interface ContractEnv {
    * level. See docs/protocol/computation.md#output-namespaces.
    */
   send(verifier: Verifier, value: number, body?: Uint8Array): void;
-
-  /**
-   * Ask the host for an output under the given verifier. The host (in
-   * generation) or the wire (in verification) supplies `(value, body)`.
-   *
-   * Generation: the host handler chain synthesizes the output. If no
-   * handler matches, the contract blocks until one does (like
-   * `claimNext`). Returns `{value, body}` so the contract can use
-   * them in downstream logic.
-   *
-   * Verification: reads the next output in the contract's namespace
-   * sequence. `verifier` and `body` must match exactly; `value` on the
-   * wire must be `>=` what was emitted at generation time
-   * (solidification may raise `value` but not lower it).
-   *
-   * See docs/protocol/computation.md#output-requirements.
-   */
-  request(
-    verifier: Verifier,
-  ): MaybePromise<{ value: number; body: Uint8Array }>;
-
-  /**
-   * Self-claimed key-value output on this block.
-   * Sugar over `send` for `{ contract: RECORD_CONTRACT, params: key, body: value }` slots.
-   *
-   * Verification: checks the result output exists with the expected value.
-   * Generation: creates the result output and self-claim.
-   */
-  record(key: Uint8Array, value: Uint8Array): void;
 
   /**
    * Read a result from a block that claims the given verifier, appending

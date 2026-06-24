@@ -95,14 +95,7 @@ export class ScaffoldCLI {
    */
   async call(argv: string[]): Promise<number> {
     const program = argv[0] ?? 'scaffold';
-
-    let parsed: ParsedArgs;
-    try {
-      parsed = parseArgv(argv);
-    } catch (err) {
-      this.deps.stderr(`${program}: ${messageOf(err)}`);
-      return EXIT_CODES.USAGE;
-    }
+    const parsed = parseArgv(argv);
 
     if (parsed.version) {
       this.deps.stdout(str2bin(`${this.deps.version}\n`));
@@ -115,34 +108,27 @@ export class ScaffoldCLI {
     }
 
     const action = parsed.positional.shift();
-    try {
-      switch (action) {
-        case undefined:
-          this.usage(program);
-          return EXIT_CODES.USAGE;
+    switch (action) {
+      case undefined:
+        this.usage(program);
+        return EXIT_CODES.USAGE;
 
-        case 'help':
-          this.usage(program);
-          return EXIT_CODES.OK;
+      case 'help':
+        this.usage(program);
+        return EXIT_CODES.OK;
 
-        case 'put':
-          await this.put(parsed);
-          return EXIT_CODES.OK;
+      case 'put':
+        await this.put(parsed);
+        return EXIT_CODES.OK;
 
-        case 'fetch':
-          await this.fetch(parsed);
-          return EXIT_CODES.OK;
+      case 'fetch':
+        await this.fetch(parsed);
+        return EXIT_CODES.OK;
 
-        default:
-          this.deps.stderr(`${program}: unknown command '${action}'\n`);
-          this.usage(program);
-          return EXIT_CODES.USAGE;
-      }
-    } catch (err) {
-      // Never drop the error silently -- surface it to the user.
-      const code = err instanceof UsageError ? EXIT_CODES.USAGE : EXIT_CODES.GENERIC_ERROR;
-      this.deps.stderr(`${program}: ${messageOf(err)}`);
-      return code;
+      default:
+        this.deps.stderr(`${program}: unknown command '${action}'\n`);
+        this.usage(program);
+        return EXIT_CODES.USAGE;
     }
   }
 

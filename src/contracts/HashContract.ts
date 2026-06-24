@@ -21,10 +21,6 @@ import { Hash } from '../util/Hash.ts';
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import { ContractRejection } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
-import { str2bin } from '../util/buffer.ts';
-
-/** Record key on a HASH_CONTRACT-publishing block carrying the blob bytes. */
-export const DEFAULT_KEY = 'default';
 
 export const hashContract: Contract = {
   // request adds a RECORD_CONTRACT slot; partition requires HASH_CONTRACT
@@ -37,15 +33,11 @@ export const hashContract: Contract = {
         `HASH_CONTRACT verifier params must be 32 bytes, got ${env.params().length}`,
       );
     }
-    const expectedHash = Hash.fromBytes(env.params());
-    const { body: plaintext } = await env.request({
-      contract: RECORD_CONTRACT,
-      params: str2bin(DEFAULT_KEY),
-    });
-    const actual = Hash.digest(plaintext);
-    if (!Hash.equals(actual, expectedHash)) {
+    const expected = Hash.fromBytes(env.params());
+    const actual = Hash.digest(await env.getResult());
+    if (!Hash.equals(actual, expected)) {
       throw new ContractRejection(
-        `HASH_CONTRACT preimage mismatch: expected ${expectedHash.toHex()}, got ${actual.toHex()}`,
+        `HASH_CONTRACT preimage mismatch: expected ${expected.toHex()}, got ${actual.toHex()}`,
       );
     }
   },

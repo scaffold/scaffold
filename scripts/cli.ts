@@ -7,6 +7,7 @@ import { FsNode, FsNodeType, ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { str2bin } from '../src/util/buffer.ts';
 import { join } from '@std/path/join';
+import { HELLO_CONTRACT, helloContract } from '../src/contracts/HelloContract.ts';
 
 async function openPath(path: string): Promise<FsNode | { type: FsNodeType.Missing }> {
   let isDirectory: boolean;
@@ -48,7 +49,11 @@ function makeNode(path: string, isDirectory: boolean): FsNode {
 }
 
 const cli = new ScaffoldCLI({
-  constructScaffold: (config) => new Scaffold(config),
+  constructScaffold: (config) => {
+    const scaffold = new Scaffold(config);
+    scaffold.registerContract(HELLO_CONTRACT, helloContract);
+    return scaffold;
+  },
   open: openPath,
   readStdin: () => readAll(Deno.stdin),
   stdout: (data) => {

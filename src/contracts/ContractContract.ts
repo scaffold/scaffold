@@ -9,15 +9,18 @@
 
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import type { Contract } from './Contract.ts';
-import { str2bin } from '../util/buffer.ts';
+import { bin2str, str2bin } from '../util/buffer.ts';
 
 export const contractContract: Contract = {
   outputNamespaces: [RECORD_CONTRACT],
 
   async run(env) {
-    await env.request({ contract: RECORD_CONTRACT, params: str2bin('modules') });
-    await env.request({ contract: RECORD_CONTRACT, params: str2bin('wasi_setup') });
-    await env.request({ contract: RECORD_CONTRACT, params: str2bin('output_namespaces') });
+    const answer = await env.claimNext();
+    const { modules, wasiSetup, outputNamespaces } = JSON.parse(bin2str(answer.body));
+
+    // await env.request({ contract: RECORD_CONTRACT, params: str2bin('modules') });
+    // await env.request({ contract: RECORD_CONTRACT, params: str2bin('wasi_setup') });
+    // await env.request({ contract: RECORD_CONTRACT, params: str2bin('output_namespaces') });
 
     // TODO: Verify records parse as json
     // TODO: Verify that WASM blobs are deterministic (see scripts/wasm-determinism/)

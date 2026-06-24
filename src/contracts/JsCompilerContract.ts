@@ -29,7 +29,6 @@
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 import { CONTRACT_CONTRACT, RECORD_CONTRACT } from '../core/Block.ts';
-import { DEFAULT_KEY } from './HashContract.ts';
 import { buildJsContractRecordsFromHashes } from './js-runtime/setup.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 
@@ -85,7 +84,7 @@ export function makeJsCompilerContract(deps: JsCompilerDeps): Contract {
         contractRecords,
       );
 
-      env.record(str2bin(DEFAULT_KEY), contractHash.toBytes());
+      env.setResult(contractHash.toBytes());
     },
   };
 }

@@ -7,6 +7,8 @@ import { Hash } from '../util/Hash.ts';
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import type { Contract } from './Contract.ts';
 import type { Output, Verifier } from '../core/BlockCreationModule.ts';
+import { readString } from '../interfaces/Reader.ts';
+import { str2bin } from '../util/buffer.ts';
 
 /** Well-known contract hash for the demo hello contract. */
 export const HELLO_CONTRACT: Hash = Hash.digest('scaffold:demo:hello');
@@ -27,7 +29,15 @@ export const helloContract: Contract = {
     await env.claimNext();
     const name = new TextDecoder().decode(env.params());
     const response = new TextEncoder().encode(`Hello, ${name}`);
-    env.record(new TextEncoder().encode('response'), response);
+    env.setResult(response);
+  },
+
+  async buildParams(reader) {
+    const name = await readString(await reader(''), 'name', {
+      type: 'string',
+      shortDescription: 'Your name',
+    });
+    return str2bin(name);
   },
 };
 
