@@ -23,8 +23,9 @@ base.imports:
   type; it then dispatches -- `request_string` / `request_number` /
   `request_bool` for scalars, `request_array_length` to iterate arrays,
   `request_object_keys` (sorted for canonical key order) to recurse objects.
-  The host resolves each request against the value it holds (see
-  `src/core/NestedBuilderHost.ts`), tracking position via `begin_*` / `end_*`.
+  The host resolves each request against the query `Reader` it holds (see
+  `src/plugins/wasm/WasmHostBridge.ts` `makeBuildBridge`), tracking position via
+  `begin_*` / `end_*`.
 
 - **walk** (`walk_params` / `walk_data`): parse JSON bytes and stream
   `scaffold_walker.emit_*` calls (objects -> map_start/end, arrays ->

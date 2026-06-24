@@ -1,5 +1,5 @@
 import { assertEquals } from '@std/assert';
-import { DefaultBuilderHost } from '../src/core/DefaultBuilderHost.ts';
+import { RecordingReader } from '../src/core/RecordingReader.ts';
 import {
   descriptorToJsonSchema,
   fieldsToDefaultObject,
@@ -9,20 +9,20 @@ import { signatureContract } from '../src/contracts/SignatureContract.ts';
 import { collateralContract } from '../src/contracts/CollateralContract.ts';
 import { insuranceContract } from '../src/contracts/InsuranceContract.ts';
 
-Deno.test('descriptorToJsonSchema: signature params produces bytes field', () => {
-  const host = new DefaultBuilderHost();
-  signatureContract.buildParams!(host);
-  const schema = descriptorToJsonSchema(host.getFields());
+Deno.test('descriptorToJsonSchema: signature params produces bytes field', async () => {
+  const recorder = new RecordingReader();
+  await signatureContract.buildParams!(recorder.reader);
+  const schema = descriptorToJsonSchema(recorder.getFields());
 
   assertEquals(schema.type, 'object');
   assertEquals(schema.properties.publicKey.type, 'string');
   assertEquals(schema.properties.publicKey.pattern, '^(0x([0-9a-fA-F]{2})*)?$');
 });
 
-Deno.test('descriptorToJsonSchema: collateral data produces nested structure with enums', () => {
-  const host = new DefaultBuilderHost();
-  collateralContract.buildData!(host);
-  const schema = descriptorToJsonSchema(host.getFields());
+Deno.test('descriptorToJsonSchema: collateral data produces nested structure with enums', async () => {
+  const recorder = new RecordingReader();
+  await collateralContract.buildData!(recorder.reader);
+  const schema = descriptorToJsonSchema(recorder.getFields());
 
   // Side field should have enum options
   const side = schema.properties.collateral.properties.side;
@@ -36,13 +36,13 @@ Deno.test('descriptorToJsonSchema: collateral data produces nested structure wit
   assertEquals(pubkey.pattern, '^(0x([0-9a-fA-F]{2})*)?$');
 });
 
-Deno.test('descriptorToJsonSchema: collateral AGAINST shows target fields', () => {
+Deno.test('descriptorToJsonSchema: collateral AGAINST shows target fields', async () => {
   // Run builder with side=against to get conditional fields
   const values = new Map<string, unknown>();
   values.set('collateral.side', 'against');
-  const host = new DefaultBuilderHost(values);
-  collateralContract.buildData!(host);
-  const schema = descriptorToJsonSchema(host.getFields());
+  const recorder = new RecordingReader(values);
+  await collateralContract.buildData!(recorder.reader);
+  const schema = descriptorToJsonSchema(recorder.getFields());
 
   // Target group should exist
   const target = schema.properties.collateral.properties.target;
@@ -50,36 +50,36 @@ Deno.test('descriptorToJsonSchema: collateral AGAINST shows target fields', () =
   assertEquals(target.properties.type.enum?.length, 5);
 });
 
-Deno.test('descriptorToJsonSchema: insurance data produces pubkey field', () => {
-  const host = new DefaultBuilderHost();
-  insuranceContract.buildData!(host);
-  const schema = descriptorToJsonSchema(host.getFields());
+Deno.test('descriptorToJsonSchema: insurance data produces pubkey field', async () => {
+  const recorder = new RecordingReader();
+  await insuranceContract.buildData!(recorder.reader);
+  const schema = descriptorToJsonSchema(recorder.getFields());
 
   assertEquals(schema.properties.pubkey.type, 'string');
   assertEquals(schema.properties.pubkey.pattern, '^(0x([0-9a-fA-F]{2})*)?$');
 });
 
-Deno.test('fieldsToDefaultObject: signature params defaults to empty hex', () => {
-  const host = new DefaultBuilderHost();
-  signatureContract.buildParams!(host);
-  const obj = fieldsToDefaultObject(host.getFields());
+Deno.test('fieldsToDefaultObject: signature params defaults to empty hex', async () => {
+  const recorder = new RecordingReader();
+  await signatureContract.buildParams!(recorder.reader);
+  const obj = fieldsToDefaultObject(recorder.getFields());
 
   assertEquals(obj.publicKey, '0x');
 });
 
-Deno.test('fieldsToDefaultObject: collateral data defaults to first enum', () => {
-  const host = new DefaultBuilderHost();
-  collateralContract.buildData!(host);
-  const obj = fieldsToDefaultObject(host.getFields());
+Deno.test('fieldsToDefaultObject: collateral data defaults to first enum', async () => {
+  const recorder = new RecordingReader();
+  await collateralContract.buildData!(recorder.reader);
+  const obj = fieldsToDefaultObject(recorder.getFields());
 
   assertEquals(obj.collateral.side, 'for');
   assertEquals(obj.collateral.pubkey, '0x');
 });
 
-Deno.test('yamlToBuilderValues: converts hex strings to Uint8Array', () => {
-  const host = new DefaultBuilderHost();
-  signatureContract.buildParams!(host);
-  const fields = host.getFields();
+Deno.test('yamlToBuilderValues: converts hex strings to Uint8Array', async () => {
+  const recorder = new RecordingReader();
+  await signatureContract.buildParams!(recorder.reader);
+  const fields = recorder.getFields();
 
   const yamlObj = { publicKey: '0xaabbcc' };
   const values = yamlToBuilderValues(yamlObj, fields);
@@ -91,10 +91,10 @@ Deno.test('yamlToBuilderValues: converts hex strings to Uint8Array', () => {
   assertEquals(pk[2], 0xcc);
 });
 
-Deno.test('yamlToBuilderValues: handles empty hex', () => {
-  const host = new DefaultBuilderHost();
-  signatureContract.buildParams!(host);
-  const fields = host.getFields();
+Deno.test('yamlToBuilderValues: handles empty hex', async () => {
+  const recorder = new RecordingReader();
+  await signatureContract.buildParams!(recorder.reader);
+  const fields = recorder.getFields();
 
   const yamlObj = { publicKey: '0x' };
   const values = yamlToBuilderValues(yamlObj, fields);
@@ -103,16 +103,16 @@ Deno.test('yamlToBuilderValues: handles empty hex', () => {
   assertEquals(pk.length, 0);
 });
 
-Deno.test('yamlToBuilderValues: handles nested collateral values', () => {
+Deno.test('yamlToBuilderValues: handles nested collateral values', async () => {
   // Discover fields with side=against and target type=ref (to get index field)
-  const discoverHost = new DefaultBuilderHost(
+  const discover = new RecordingReader(
     new Map<string, unknown>([
       ['collateral.side', 'against'],
       ['collateral.target.type', 'ref'],
     ]),
   );
-  collateralContract.buildData!(discoverHost);
-  const fields = discoverHost.getFields();
+  await collateralContract.buildData!(discover.reader);
+  const fields = discover.getFields();
 
   const yamlObj = {
     collateral: {
@@ -132,11 +132,11 @@ Deno.test('yamlToBuilderValues: handles nested collateral values', () => {
   assertEquals(values.get('collateral.target.index'), 5);
 });
 
-Deno.test('round-trip: builder defaults -> YAML object -> builder values -> re-run builder', () => {
+Deno.test('round-trip: builder defaults -> YAML object -> builder values -> re-run builder', async () => {
   // Step 1: Run builder with defaults
-  const host1 = new DefaultBuilderHost();
-  signatureContract.buildParams!(host1);
-  const fields1 = host1.getFields();
+  const discover = new RecordingReader();
+  await signatureContract.buildParams!(discover.reader);
+  const fields1 = discover.getFields();
   const defaultObj = fieldsToDefaultObject(fields1);
 
   // Step 2: Simulate user setting a value in YAML
@@ -146,8 +146,8 @@ Deno.test('round-trip: builder defaults -> YAML object -> builder values -> re-r
   const values = yamlToBuilderValues(defaultObj, fields1);
 
   // Step 4: Re-run builder with user values
-  const host2 = new DefaultBuilderHost(values);
-  const result = signatureContract.buildParams!(host2);
+  const builder = new RecordingReader(values);
+  const result = await signatureContract.buildParams!(builder.reader);
 
   // The builder should have received the public key bytes
   assertEquals(result.length, 33);

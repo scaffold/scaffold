@@ -12,6 +12,7 @@ import { type Claim, type ContractEnv, ContractRejection } from '../core/Contrac
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 import { findRecordOutput } from './RecordContract.ts';
+import { ReaderCursor } from '../interfaces/ReaderCursor.ts';
 
 // -- Collateral types -------------------------------------------------
 
@@ -310,16 +311,17 @@ export const collateralContract: Contract = {
     }
   },
 
-  buildParams(host) {
-    return host.requestBytes('targetBlock', {
+  buildParams(reader) {
+    return new ReaderCursor(reader).bytes('targetBlock', {
       type: 'bytes/hash/sha256/scaffold/block',
       shortDescription: 'Target block hash',
     });
   },
 
-  buildData(host) {
-    host.beginObject('collateral');
-    const side = host.requestString('side', {
+  async buildData(reader) {
+    const cursor = new ReaderCursor(reader);
+    await cursor.enter('collateral', { type: 'object', shortDescription: 'Collateral' });
+    const side = await cursor.string('side', {
       type: 'string/utf8',
       shortDescription: 'Collateral side',
       options: [
@@ -327,15 +329,15 @@ export const collateralContract: Contract = {
         { value: 'against', shortDescription: 'Challenger bond' },
       ],
     });
-    const pubkey = host.requestBytes('pubkey', {
+    const pubkey = await cursor.bytes('pubkey', {
       type: 'bytes/public_key/ed25519',
       shortDescription: 'Owner public key',
     });
 
     let target: ChallengeTarget | undefined;
     if (side === 'against') {
-      host.beginObject('target');
-      const targetType = host.requestString('type', {
+      await cursor.enter('target', { type: 'object', shortDescription: 'Challenge target' });
+      const targetType = await cursor.string('type', {
         type: 'string/utf8',
         shortDescription: 'Challenge target type',
         options: [
@@ -354,7 +356,7 @@ export const collateralContract: Contract = {
         targetType === 'aggregate' ||
         targetType === 'output_verifier_contract'
       ) {
-        const index = host.requestNumber('index', {
+        const index = await cursor.number('index', {
           type: 'i32',
           shortDescription: 'Target index',
         });
@@ -362,10 +364,10 @@ export const collateralContract: Contract = {
       } else {
         target = { type: targetType as 'validity' | 'anchor' } as ChallengeTarget;
       }
-      host.endObject();
+      cursor.exit();
     }
 
-    host.endObject();
+    cursor.exit();
 
     if (side === 'against' && target) {
       return encodeCollateralDetail({ side: 'against', pubkey, target });

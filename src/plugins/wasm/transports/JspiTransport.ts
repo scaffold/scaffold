@@ -222,6 +222,24 @@ function flatBuildExports(ctx: InstanceCtx, bridge: BuildBridge): Record<string,
         ),
       )
     ),
+    request_value_type: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      Promise.resolve(
+        bridge.requestValueType(
+          readString(ctx, kp, kl),
+          parseValueDescriptor(readSlice(ctx, dp, dl)),
+        ),
+      )
+    ),
+    request_object_keys: asyncExport((kp: number, kl: number, dp: number, dl: number) =>
+      handlePackedAsync(
+        Promise.resolve(
+          bridge.requestObjectKeys(
+            readString(ctx, kp, kl),
+            parseValueDescriptor(readSlice(ctx, dp, dl)),
+          ),
+        ),
+      )
+    ),
     begin_object: asyncExport((kp: number, kl: number) =>
       Promise.resolve(bridge.beginObject(readString(ctx, kp, kl)))
     ),

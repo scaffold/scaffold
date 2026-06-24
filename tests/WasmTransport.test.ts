@@ -7,8 +7,8 @@ import {
   ContractRejection,
   ExecutionMode,
 } from '../src/core/ContractEnv.ts';
-import type { BuilderHost, ValueDescriptor, WalkerHost } from '../src/contracts/Contract.ts';
-import { ValueType } from '../src/contracts/Contract.ts';
+import type { ValueDescriptor, WalkerHost } from '../src/contracts/Contract.ts';
+import { createReader } from '../src/interfaces/Reader.ts';
 import type { WasmTransport } from '../src/plugins/wasm/WasmTransport.ts';
 import { InProcessMockTransport } from '../src/plugins/wasm/transports/InProcessMockTransport.ts';
 import { JspiTransport } from '../src/plugins/wasm/transports/JspiTransport.ts';
@@ -151,36 +151,6 @@ class RecordingWalker implements WalkerHost {
   emitListEnd(): void {}
 }
 
-class FixedBuilder implements BuilderHost {
-  constructor(private readonly answers: Record<string, string>) {}
-  requestBytes(_key: string, _desc: ValueDescriptor): Uint8Array {
-    return new Uint8Array(0);
-  }
-  requestString(key: string, _desc: ValueDescriptor): string {
-    return this.answers[key] ?? '';
-  }
-  requestNumber(): number {
-    return 0;
-  }
-  requestBool(): boolean {
-    return false;
-  }
-  requestArrayLength(): number {
-    return 0;
-  }
-  requestObjectKeys(): string[] {
-    return [];
-  }
-  requestValueType(): ValueType {
-    return ValueType.String;
-  }
-  beginObject(): void {}
-  endObject(): void {}
-  beginArray(): void {}
-  endArray(): void {}
-  validationError(): void {}
-}
-
 // -- Transport factory --------------------------------------------
 
 interface TransportEntry {
@@ -300,8 +270,7 @@ for (const entry of transportEntries()) {
       const transport = entry.create();
       try {
         const modules = await singleModuleStack('builder_test', 'build_params', 'build_params');
-        const builder = new FixedBuilder({ name: 'Joel' });
-        const result = await transport.buildParams(modules, builder);
+        const result = await transport.buildParams(modules, () => createReader({ name: 'Joel' }));
         assertEquals(new TextDecoder().decode(result), 'Joel');
       } finally {
         await transport.close();

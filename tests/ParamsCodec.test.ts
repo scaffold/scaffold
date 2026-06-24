@@ -1,12 +1,12 @@
 // Unit tests for object-params encoding (canonical JSON) and the
-// requestObjectKeys builder primitive.
+// RecordingReader object-key enumeration primitive.
 
 import { assertEquals } from '@std/assert';
 import { canonicalJson } from '../src/node/draftPublishing.ts';
-import { DefaultBuilderHost } from '../src/core/DefaultBuilderHost.ts';
-import type { ValueDescriptor } from '../src/contracts/Contract.ts';
+import { RecordingReader } from '../src/core/RecordingReader.ts';
+import { ValueType } from '../src/contracts/Contract.ts';
 
-const DESC: ValueDescriptor = { type: 'string' } as ValueDescriptor;
+const OBJECT_DESC = JSON.stringify({ type: 'object' });
 
 Deno.test('canonicalJson: sorts object keys recursively for stable bytes', () => {
   const a = canonicalJson({ b: 2, a: 1, nested: { y: 1, x: 2 } });
@@ -19,23 +19,27 @@ Deno.test('canonicalJson: preserves array order', () => {
   assertEquals(canonicalJson({ tags: ['c', 'a', 'b'] }), '{"tags":["c","a","b"]}');
 });
 
-Deno.test('DefaultBuilderHost.requestObjectKeys: enumerates top-level keys', () => {
+Deno.test('RecordingReader: enumerates top-level object keys', () => {
   const values = new Map<string, unknown>([
     ['name', 'World'],
     ['age', 5],
   ]);
-  const host = new DefaultBuilderHost(values);
-  assertEquals(host.requestObjectKeys('', DESC).sort(), ['age', 'name']);
+  const root = new RecordingReader(values).reader('');
+  assertEquals(root.type, ValueType.Object);
+  if (root.type !== ValueType.Object) return;
+  assertEquals([...root.keys].sort(), ['age', 'name']);
 });
 
-Deno.test('DefaultBuilderHost.requestObjectKeys: enumerates nested keys under a path', () => {
+Deno.test('RecordingReader: enumerates nested object keys under a path', async () => {
   const values = new Map<string, unknown>([
     ['collateral.side', 'long'],
     ['collateral.amount', 5],
     ['other', 1],
   ]);
-  const host = new DefaultBuilderHost(values);
-  host.beginObject('collateral');
-  assertEquals(host.requestObjectKeys('', DESC).sort(), ['amount', 'side']);
-  host.endObject();
+  const root = new RecordingReader(values).reader('');
+  if (root.type !== ValueType.Object) throw new Error('expected an object reader');
+  const collateral = await root.at('collateral', OBJECT_DESC);
+  assertEquals(collateral.type, ValueType.Object);
+  if (collateral.type !== ValueType.Object) return;
+  assertEquals([...collateral.keys].sort(), ['amount', 'side']);
 });

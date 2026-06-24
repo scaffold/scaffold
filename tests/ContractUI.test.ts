@@ -1,6 +1,6 @@
-import { assertEquals } from '@std/assert';
+import { assertEquals, assertRejects } from '@std/assert';
 import { type FieldNode, RecordingWalkerHost } from '../src/core/RecordingWalkerHost.ts';
-import { DefaultBuilderHost } from '../src/core/DefaultBuilderHost.ts';
+import { RecordingReader } from '../src/core/RecordingReader.ts';
 import { signatureContract } from '../src/contracts/SignatureContract.ts';
 import { collateralContract } from '../src/contracts/CollateralContract.ts';
 import { insuranceContract } from '../src/contracts/InsuranceContract.ts';
@@ -169,39 +169,37 @@ Deno.test('RecordingWalkerHost: emits insurance data', () => {
 });
 
 // =====================================================================
-// DefaultBuilderHost tests
+// RecordingReader (builder) tests
 // =====================================================================
 
-Deno.test('DefaultBuilderHost: returns default values when no user input', () => {
-  const host = new DefaultBuilderHost();
-  const result = signatureContract.buildParams!(host);
-  // Default is empty bytes
+Deno.test('RecordingReader: returns default values when no user input', async () => {
+  const recorder = new RecordingReader();
+  const result = await signatureContract.buildParams!(recorder.reader);
+  // Default is empty bytes; empty input skips the 33-byte length check.
   assertEquals(result.length, 0);
-  // No validation error for empty bytes (length > 0 check skipped)
-  assertEquals(host.getErrors().length, 0);
 });
 
-Deno.test('DefaultBuilderHost: returns user-provided values', () => {
+Deno.test('RecordingReader: returns user-provided values', async () => {
   const pubkey = new Uint8Array(33).fill(0xab);
   const values = new Map<string, unknown>();
   values.set('publicKey', pubkey);
-  const host = new DefaultBuilderHost(values);
-  const result = signatureContract.buildParams!(host);
+  const recorder = new RecordingReader(values);
+  const result = await signatureContract.buildParams!(recorder.reader);
   assertEquals(bytesEqual(result, pubkey), true);
 });
 
-Deno.test('DefaultBuilderHost: returns first enum option as default for strings', () => {
-  const host = new DefaultBuilderHost();
-  const result = collateralContract.buildData!(host);
+Deno.test('RecordingReader: returns first enum option as default for strings', async () => {
+  const recorder = new RecordingReader();
+  const result = await collateralContract.buildData!(recorder.reader);
   // Default side should be 'for' (first enum option)
   const detail = decodeCollateralDetail(result);
   assertEquals(detail.side, 'for');
 });
 
-Deno.test('DefaultBuilderHost: records field requests in order', () => {
-  const host = new DefaultBuilderHost();
-  collateralContract.buildData!(host);
-  const fields = host.getFields();
+Deno.test('RecordingReader: records field requests in order', async () => {
+  const recorder = new RecordingReader();
+  await collateralContract.buildData!(recorder.reader);
+  const fields = recorder.getFields();
   // With default 'for' side: side, pubkey (no target fields)
   assertEquals(fields.length, 2);
   assertEquals(fields[0].key, 'side');
@@ -212,24 +210,26 @@ Deno.test('DefaultBuilderHost: records field requests in order', () => {
   assertEquals(fields[1].path, ['collateral', 'pubkey']);
 });
 
-Deno.test('DefaultBuilderHost: records validation errors', () => {
+Deno.test('RecordingReader: invalid public key throws a validation error', async () => {
   // Provide a public key that is not 33 bytes and not empty
   const badKey = new Uint8Array(10).fill(0x01);
   const values = new Map<string, unknown>();
   values.set('publicKey', badKey);
-  const host = new DefaultBuilderHost(values);
-  signatureContract.buildParams!(host);
-  const errors = host.getErrors();
-  assertEquals(errors.length, 1);
-  assertEquals(errors[0].key, 'publicKey');
-  assertEquals(errors[0].message, 'Public key must be 33 bytes');
+  const recorder = new RecordingReader(values);
+  await assertRejects(
+    async () => {
+      await signatureContract.buildParams!(recorder.reader);
+    },
+    Error,
+    'Public key must be 33 bytes',
+  );
 });
 
 // =====================================================================
 // Round-trip tests
 // =====================================================================
 
-Deno.test('Round-trip: signature params through walk then build', () => {
+Deno.test('Round-trip: signature params through walk then build', async () => {
   const originalParams = new Uint8Array(33).fill(0x42);
 
   // Walk the original params
@@ -243,13 +243,13 @@ Deno.test('Round-trip: signature params through walk then build', () => {
 
   const values = new Map<string, unknown>();
   values.set('publicKey', walkedValue);
-  const builder = new DefaultBuilderHost(values);
-  const builtParams = signatureContract.buildParams!(builder);
+  const builder = new RecordingReader(values);
+  const builtParams = await signatureContract.buildParams!(builder.reader);
 
   assertEquals(bytesEqual(builtParams, originalParams), true);
 });
 
-Deno.test('Round-trip: collateral FOR data', () => {
+Deno.test('Round-trip: collateral FOR data', async () => {
   const original: CollateralDetail = {
     side: 'for',
     pubkey: new Uint8Array(33).fill(0x11),
@@ -271,8 +271,8 @@ Deno.test('Round-trip: collateral FOR data', () => {
   const values = new Map<string, unknown>();
   values.set('collateral.side', sideNode.value);
   values.set('collateral.pubkey', pubkeyNode.value);
-  const builder = new DefaultBuilderHost(values);
-  const builtData = collateralContract.buildData!(builder);
+  const builder = new RecordingReader(values);
+  const builtData = await collateralContract.buildData!(builder.reader);
 
   // Verify decoded result matches original
   const decoded = decodeCollateralDetail(builtData);
@@ -280,7 +280,7 @@ Deno.test('Round-trip: collateral FOR data', () => {
   assertEquals(bytesEqual(decoded.pubkey, original.pubkey), true);
 });
 
-Deno.test('Round-trip: collateral AGAINST data', () => {
+Deno.test('Round-trip: collateral AGAINST data', async () => {
   const original: CollateralDetail = {
     side: 'against',
     pubkey: new Uint8Array(33).fill(0x22),
@@ -307,8 +307,8 @@ Deno.test('Round-trip: collateral AGAINST data', () => {
   values.set('collateral.pubkey', pubkeyNode.value);
   values.set('collateral.target.type', typeNode.value);
   values.set('collateral.target.index', indexNode.value);
-  const builder = new DefaultBuilderHost(values);
-  const builtData = collateralContract.buildData!(builder);
+  const builder = new RecordingReader(values);
+  const builtData = await collateralContract.buildData!(builder.reader);
 
   // Verify decoded result matches original
   const decoded = decodeCollateralDetail(builtData);
@@ -322,7 +322,7 @@ Deno.test('Round-trip: collateral AGAINST data', () => {
   }
 });
 
-Deno.test('Round-trip: insurance data', () => {
+Deno.test('Round-trip: insurance data', async () => {
   const original: InsuranceDetail = {
     pubkey: new Uint8Array(33).fill(0x33),
   };
@@ -340,8 +340,8 @@ Deno.test('Round-trip: insurance data', () => {
   // Build with walked values
   const values = new Map<string, unknown>();
   values.set('pubkey', pubkeyNode.value);
-  const builder = new DefaultBuilderHost(values);
-  const builtData = insuranceContract.buildData!(builder);
+  const builder = new RecordingReader(values);
+  const builtData = await insuranceContract.buildData!(builder.reader);
 
   // Verify decoded result matches original
   const decoded = decodeInsuranceDetail(builtData);

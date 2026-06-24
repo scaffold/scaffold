@@ -7,8 +7,8 @@ const std = @import("std");
 // build_params/build_data assemble a canonical JSON byte string by querying the
 // host builder: request_value_type tells us each value's type, then we dispatch
 // (request_string/number/bool, or request_array_length / request_object_keys +
-// recurse). The host resolves each request against the value tree it holds
-// (see NestedBuilderHost), tracking position via begin/end object/array.
+// recurse). The host resolves each request against the query Reader it holds
+// (see makeBuildBridge / Reader.ts), tracking position via begin/end object/array.
 //
 // walk_params/walk_data are added separately (they parse JSON and call the
 // scaffold_walker.emit_* host imports).

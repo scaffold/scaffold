@@ -6,7 +6,7 @@
  */
 
 // Note: uses relative import so this works in both Deno (tests) and npm (explorer build) contexts.
-import type { FieldRequest } from "../../src/core/DefaultBuilderHost.ts";
+import type { FieldRequest } from '../../src/core/RecordingReader.ts';
 
 // -- Types ----------------------------------------------------------------
 
@@ -24,14 +24,12 @@ type JsonSchema = Record<string, any>;
  */
 export function descriptorToJsonSchema(fields: FieldRequest[]): JsonSchema {
   const root: JsonSchema = {
-    type: "object",
+    type: 'object',
     additionalProperties: false,
     properties: {},
   };
 
   for (const field of fields) {
-    if (field.kind === "arrayLength") continue;
-
     const fieldSchema = fieldToSchema(field);
     placeAtPath(root, field.path, fieldSchema);
   }
@@ -44,26 +42,24 @@ function fieldToSchema(field: FieldRequest): JsonSchema {
   const desc = field.desc;
 
   switch (field.kind) {
-    case "bytes":
-      schema.type = "string";
-      schema.pattern = "^(0x([0-9a-fA-F]{2})*)?$";
+    case 'bytes':
+      schema.type = 'string';
+      schema.pattern = '^(0x([0-9a-fA-F]{2})*)?$';
       break;
-    case "string":
-      schema.type = "string";
+    case 'string':
+      schema.type = 'string';
       break;
-    case "number":
-      schema.type = "number";
+    case 'number':
+      schema.type = 'number';
       break;
-    case "bool":
-      schema.type = "boolean";
+    case 'bool':
+      schema.type = 'boolean';
       break;
   }
 
   if (desc.options && desc.options.length > 0) {
     schema.enum = desc.options.map((o) => o.value);
-    const enumDescs = desc.options.map((o) =>
-      o.markdownDescription ?? o.shortDescription
-    );
+    const enumDescs = desc.options.map((o) => o.markdownDescription ?? o.shortDescription);
     if (enumDescs.some((d) => d)) {
       schema.markdownEnumDescriptions = enumDescs;
     }
@@ -94,7 +90,7 @@ function placeAtPath(
     if (!current.properties) current.properties = {};
     if (!current.properties[segment]) {
       current.properties[segment] = {
-        type: "object",
+        type: 'object',
         additionalProperties: false,
         properties: {},
       };
@@ -121,7 +117,6 @@ export function fieldsToDefaultObject(
   const root: Record<string, any> = {};
 
   for (const field of fields) {
-    if (field.kind === "arrayLength") continue;
     const value = defaultValueForField(field);
     setNestedValue(root, field.path, value);
   }
@@ -138,13 +133,13 @@ function defaultValueForField(field: FieldRequest): unknown {
   }
 
   switch (field.kind) {
-    case "bytes":
-      return "0x";
-    case "string":
-      return "";
-    case "number":
+    case 'bytes':
+      return '0x';
+    case 'string':
+      return '';
+    case 'number':
       return 0;
-    case "bool":
+    case 'bool':
       return false;
     default:
       return null;
@@ -160,7 +155,7 @@ function setNestedValue(
   let current = obj;
   for (let i = 0; i < path.length - 1; i++) {
     const key = path[i];
-    if (!(key in current) || typeof current[key] !== "object") {
+    if (!(key in current) || typeof current[key] !== 'object') {
       current[key] = {};
     }
     current = current[key];
@@ -185,13 +180,11 @@ export function yamlToBuilderValues(
   const values = new Map<string, unknown>();
 
   for (const field of fields) {
-    if (field.kind === "arrayLength") continue;
-
-    const pathKey = field.path.join(".");
+    const pathKey = field.path.join('.');
     const rawValue = getNestedValue(yamlObj, field.path);
     if (rawValue === undefined) continue;
 
-    if (field.kind === "bytes") {
+    if (field.kind === 'bytes') {
       values.set(pathKey, hexToBytes(rawValue as string));
     } else {
       values.set(pathKey, rawValue);
@@ -202,8 +195,8 @@ export function yamlToBuilderValues(
 }
 
 function hexToBytes(hex: string): Uint8Array {
-  if (!hex || hex === "0x") return new Uint8Array(0);
-  const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
+  if (!hex || hex === '0x') return new Uint8Array(0);
+  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
   if (clean.length === 0) return new Uint8Array(0);
   const bytes = new Uint8Array(clean.length / 2);
   for (let i = 0; i < bytes.length; i++) {
@@ -216,7 +209,7 @@ function hexToBytes(hex: string): Uint8Array {
 function getNestedValue(obj: Record<string, any>, path: string[]): unknown {
   let current: unknown = obj;
   for (const key of path) {
-    if (current == null || typeof current !== "object") return undefined;
+    if (current == null || typeof current !== 'object') return undefined;
     current = (current as Record<string, unknown>)[key];
   }
   return current;

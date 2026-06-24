@@ -14,7 +14,7 @@ import {
   parseModules,
 } from '../src/plugins/wasm/WasmModules.ts';
 import { InProcessMockTransport } from '../src/plugins/wasm/transports/InProcessMockTransport.ts';
-import { NestedBuilderHost } from '../src/core/NestedBuilderHost.ts';
+import { createReader } from '../src/interfaces/Reader.ts';
 import { type FieldNode, RecordingWalkerHost } from '../src/core/RecordingWalkerHost.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 
@@ -65,7 +65,7 @@ async function compileJsonWb(): Promise<CompiledModules> {
 
 async function buildWith(compiled: CompiledModules, value: unknown): Promise<string> {
   const transport = new InProcessMockTransport();
-  const out = await transport.buildParams(compiled, new NestedBuilderHost(value));
+  const out = await transport.buildParams(compiled, () => createReader(value));
   return bin2str(out);
 }
 

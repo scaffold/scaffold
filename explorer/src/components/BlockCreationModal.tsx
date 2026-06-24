@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import type { Scaffold } from "scaffold.io/Scaffold.ts";
 import { Hash } from "scaffold.io/util/Hash.ts";
 import type { Output } from "scaffold.io/core/BlockCreationModule.ts";
-import { DefaultBuilderHost } from "scaffold.io/core/DefaultBuilderHost.ts";
+import { RecordingReader } from "scaffold.io/core/RecordingReader.ts";
 import {
   getContract,
   getContractName,
@@ -156,20 +156,23 @@ interface SchemaResult {
 
 const EMPTY_SCHEMA: SchemaResult = { schema: {}, defaultYaml: "" };
 
-function discoverSchema(
+async function discoverSchema(
   contractHash: Hash,
   field: "params" | "data",
   userValues?: Map<string, unknown>,
-): SchemaResult {
+): Promise<SchemaResult> {
   const contract = getContract(contractHash);
   const buildFn = field === "params"
     ? contract?.buildParams
     : contract?.buildData;
   if (!buildFn) return EMPTY_SCHEMA;
 
-  const host = new DefaultBuilderHost(userValues);
-  buildFn.call(contract, host);
-  const fields = host.getFields();
+  // The builder reads from a RecordingReader (the Reader-interface replacement
+  // for DefaultBuilderHost); it records each requested field for the schema and
+  // supplies user values / defaults. Builders are async (MaybePromise<Uint8Array>).
+  const recorder = new RecordingReader(userValues);
+  await buildFn.call(contract, recorder.reader);
+  const fields = recorder.getFields();
   const schema = descriptorToJsonSchema(fields);
   const defaultObj = fieldsToDefaultObject(fields);
   const defaultYaml = JSON.stringify(defaultObj, null, 2);
@@ -196,7 +199,7 @@ export function BlockCreationModal(
   const [state, dispatch] = useReducer(reducer, initialState);
 
   const handleContractChange = useCallback(
-    (outputId: string, hashHex: string) => {
+    async (outputId: string, hashHex: string) => {
       if (!hashHex) {
         dispatch({
           type: "SET_CONTRACT",
@@ -211,8 +214,8 @@ export function BlockCreationModal(
       }
 
       const contractHash = Hash.fromHex(hashHex);
-      const params = discoverSchema(contractHash, "params");
-      const data = discoverSchema(contractHash, "data");
+      const params = await discoverSchema(contractHash, "params");
+      const data = await discoverSchema(contractHash, "data");
 
       dispatch({
         type: "SET_CONTRACT",
@@ -228,18 +231,18 @@ export function BlockCreationModal(
   );
 
   const handleParamsChange = useCallback(
-    (outputId: string, contractHash: Hash, yaml: string) => {
+    async (outputId: string, contractHash: Hash, yaml: string) => {
       const parsed = parseYaml(yaml);
       if (parsed && contractHash) {
         const contract = getContract(contractHash);
         if (contract?.buildParams) {
-          const host = new DefaultBuilderHost();
-          contract.buildParams(host);
-          const fields = host.getFields();
+          const recorder = new RecordingReader();
+          await contract.buildParams(recorder.reader);
+          const fields = recorder.getFields();
           const userValues = yamlToBuilderValues(parsed, fields);
 
           // Re-run builder with user values to discover dynamic schema
-          const refreshed = discoverSchema(contractHash, "params", userValues);
+          const refreshed = await discoverSchema(contractHash, "params", userValues);
           dispatch({
             type: "UPDATE_OUTPUT",
             id: outputId,
@@ -258,17 +261,17 @@ export function BlockCreationModal(
   );
 
   const handleDataChange = useCallback(
-    (outputId: string, contractHash: Hash, yaml: string) => {
+    async (outputId: string, contractHash: Hash, yaml: string) => {
       const parsed = parseYaml(yaml);
       if (parsed && contractHash) {
         const contract = getContract(contractHash);
         if (contract?.buildData) {
-          const host = new DefaultBuilderHost();
-          contract.buildData(host);
-          const fields = host.getFields();
+          const recorder = new RecordingReader();
+          await contract.buildData(recorder.reader);
+          const fields = recorder.getFields();
           const userValues = yamlToBuilderValues(parsed, fields);
 
-          const refreshed = discoverSchema(contractHash, "data", userValues);
+          const refreshed = await discoverSchema(contractHash, "data", userValues);
           dispatch({
             type: "UPDATE_OUTPUT",
             id: outputId,
@@ -286,7 +289,7 @@ export function BlockCreationModal(
     [parseYaml],
   );
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const outputs: Output[] = [];
 
     for (const entry of state.outputs) {
@@ -299,12 +302,12 @@ export function BlockCreationModal(
       if (contract?.buildParams && entry.paramsYaml) {
         const parsed = parseYaml(entry.paramsYaml);
         if (parsed) {
-          const discoveryHost = new DefaultBuilderHost();
-          contract.buildParams(discoveryHost);
-          const fields = discoveryHost.getFields();
+          const discovery = new RecordingReader();
+          await contract.buildParams(discovery.reader);
+          const fields = discovery.getFields();
           const userValues = yamlToBuilderValues(parsed, fields);
-          const buildHost = new DefaultBuilderHost(userValues);
-          params = new Uint8Array(contract.buildParams(buildHost));
+          const builder = new RecordingReader(userValues);
+          params = new Uint8Array(await contract.buildParams(builder.reader));
         }
       }
 
@@ -313,12 +316,12 @@ export function BlockCreationModal(
       if (contract?.buildData && entry.dataYaml) {
         const parsed = parseYaml(entry.dataYaml);
         if (parsed) {
-          const discoveryHost = new DefaultBuilderHost();
-          contract.buildData(discoveryHost);
-          const fields = discoveryHost.getFields();
+          const discovery = new RecordingReader();
+          await contract.buildData(discovery.reader);
+          const fields = discovery.getFields();
           const userValues = yamlToBuilderValues(parsed, fields);
-          const buildHost = new DefaultBuilderHost(userValues);
-          data = new Uint8Array(contract.buildData(buildHost));
+          const builder = new RecordingReader(userValues);
+          data = new Uint8Array(await contract.buildData(builder.reader));
         }
       }
 

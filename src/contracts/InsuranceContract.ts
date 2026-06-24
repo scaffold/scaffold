@@ -6,6 +6,7 @@ import type { Output } from '../core/BlockCreationModule.ts';
 import { ContractRejection } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
+import { ReaderCursor } from '../interfaces/ReaderCursor.ts';
 
 // -- Insurance types --------------------------------------------------
 
@@ -132,15 +133,15 @@ export const insuranceContract: Contract = {
     });
   },
 
-  buildParams(host) {
-    return host.requestBytes('targetBlock', {
+  buildParams(reader) {
+    return new ReaderCursor(reader).bytes('targetBlock', {
       type: 'bytes/hash/sha256/scaffold/block',
       shortDescription: 'Target block hash',
     });
   },
 
-  buildData(host) {
-    const pubkey = host.requestBytes('pubkey', {
+  async buildData(reader) {
+    const pubkey = await new ReaderCursor(reader).bytes('pubkey', {
       type: 'bytes/public_key/ed25519',
       shortDescription: 'Owner public key',
     });
