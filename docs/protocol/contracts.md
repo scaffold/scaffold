@@ -141,6 +141,16 @@ See [computation](computation.md) for the full specification: dual-mode executio
 
 ## Record Contract (a.k.a. Self Contract)
 
+> Superseded as the result-passing mechanism. Computation results are now
+> **answers** -- self-claimed `{verifier, data}` outputs under the producing
+> contract's *own* verifier, read by `fetch(verifier)` -- not records keyed in a
+> `RECORD_CONTRACT` namespace. See [results.md](results.md). The
+> `require_result(key, value)` / `fetch(verifier, key)` surface is replaced by
+> `setResult(data)` / `getResult()` / `fetch(verifier)`. The self-claim
+> mechanism described below still underlies answers (an answer *is* a
+> self-claimed output); RECORD_CONTRACT itself remains for any genuine
+> per-block key-value use, but result-passing should not rely on it.
+
 **Purpose**: Self-claimed key-value outputs — produced and consumed atomically by the same block. Acts as the producing contract's per-block key-value map.
 
 **Verification**: Every input matching this contract's verifier must be a self-claim (claimed on the same block that produced it).

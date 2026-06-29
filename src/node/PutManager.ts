@@ -22,15 +22,7 @@ import { MaybePromise } from '../util/MaybePromise.ts';
 import { ObjectReader, Reader } from '../interfaces/Reader.ts';
 
 /** Publish records under a verifier by running its contract generator. */
-export interface PutRequest extends Query {
-  /**
-   * Records that answer the generator's `request({RECORD_CONTRACT, key})`
-   * calls. Each entry's value is returned as the body to the generator.
-   */
-  records: Record[];
-  // records:
-  //   | Record<string, Uint8Array | ((descriptor: string) => MaybePromise<Reader>)>
-  //   | ObjectReader;
+export interface PutRequest extends Record {
 }
 
 export class PutManager {

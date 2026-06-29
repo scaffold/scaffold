@@ -53,7 +53,16 @@ export class ContractRejection extends Error {
  * ContractRejection has rejected. Other thrown errors are treated as crashes.
  */
 export interface ContractEnv {
-  /** Current execution mode. */
+  /**
+   * Current execution mode.
+   *
+   * DIRECTION (see docs/protocol/results.md#mode-becomes-a-function): this is
+   * slated to become a method `mode(): ExecutionMode` so the runtime can
+   * observe the call and record that a generator branched on mode (and is
+   * therefore potentially non-unique). A bare property access cannot be
+   * intercepted. The WASM ABI already exposes it as a function. The TS
+   * property + its call sites migration is tracked in TODO.md.
+   */
   readonly mode: ExecutionMode;
 
   /** The contract hash for this invocation. */
@@ -102,8 +111,33 @@ export interface ContractEnv {
    */
   claimNext(): MaybePromise<Claim>;
 
-  getResult(): MaybePromise<Uint8Array>;
+  /**
+   * Produce the answer to this invocation's verifier `V` by *computing* it.
+   * Adds a self-claimed, zero-value output `{V, data}` (an "answer"); in
+   * verification, checks such an output exists with exactly this `data`.
+   *
+   * Use when the answer is a pure function of the contract's inputs. The
+   * answer-producing analogue of `add_output`. See
+   * docs/protocol/results.md#setresultdata-uint8array-void.
+   */
   setResult(data: Uint8Array): void;
+
+  /**
+   * Produce the answer to this invocation's verifier `V` from *host-supplied*
+   * bytes. Commits the bytes as a self-claimed `{V, data}` answer (like
+   * `setResult`) AND returns them for the contract to validate. The
+   * answer-producing analogue of `get_output`.
+   *
+   * Source order: (1) the `data` supplied in a `put(V, data)` context;
+   * (2) piggyback -- copy a prior answer's data from a trusted block serving
+   * `V`; (3) block until a piggybackable block for `V` is ingested.
+   *
+   * NOTE: `getResult` *commits* -- it is not a read-only input channel. A
+   * contract that validates the bytes (e.g. `hash(getResult()) == params`) has
+   * thereby published the answer. Context-dependent: a generator that calls
+   * this may produce a non-unique result. See docs/protocol/results.md.
+   */
+  getResult(): MaybePromise<Uint8Array>;
 
   /**
    * Publish a single output under the given verifier with the supplied
@@ -166,7 +200,7 @@ export interface ContractEnv {
    *
    * See docs/protocol/wasm-abi.md#put.
    */
-  put(verifier: Verifier, records: Record<string, Uint8Array | string>): MaybePromise<Hash>;
+  put(verifier: Verifier, data: Uint8Array): MaybePromise<Hash>;
 
   /**
    * Assert the block's signature matches the given public key.
@@ -179,8 +213,27 @@ export interface ContractEnv {
    *
    * Verification: returns the block's wire-format timestamp.
    * Generation: returns the draft's timestamp or Date.now().
+   *
+   * Context-dependent: leaks wall-clock time into the result, making a
+   * generator that uses it non-unique. Prefer `timestampGte` where only a
+   * lower bound is needed. Slated for possible removal once decay-window
+   * callers migrate. See docs/protocol/results.md#timestampgte-instead-of-timestamp.
    */
   timestamp(): number;
+
+  /**
+   * Assert the block's timestamp is at or after `instant` (ms since epoch).
+   *
+   * Verification: checks `block.timestamp >= instant`, else rejects.
+   * Generation: constrains the draft's timestamp to `>= instant`.
+   *
+   * Unlike `timestamp()`, this asserts a bound rather than leaking the actual
+   * time, so it preserves answer uniqueness: the block hash still varies but
+   * the answer bytes do not depend on the timestamp. Fulfills most uses of
+   * `timestamp()` (decay windows, "not before"). PLANNED -- optional until
+   * the impls and callers migrate; see docs/protocol/results.md and TODO.md.
+   */
+  timestampGte?(instant: number): void;
 
   /**
    * Diagnostic-only sink. Does NOT emit a scaffold output. Implementations

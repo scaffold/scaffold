@@ -184,6 +184,16 @@ explicit at creation time.
 
 ## Self-Claimed Outputs
 
+> The **result model** built on self-claimed outputs -- answers vs. messages,
+> `setResult` / `getResult` / `fetch` / `put`, and the (deferred) answer
+> uniqueness rule -- is specified in [results.md](results.md). This section
+> describes the underlying self-claim mechanism those results are built on.
+> Note the terminology shift: an `{verifier, data}` output that a block
+> *self-claims* is an **answer** (validated by running the verifier's contract,
+> and returned by `fetch`); the older `record(key, value)` /
+> `request(verifier)` contract surface is superseded by
+> `setResult` / `getResult`.
+
 Computation results are stored as **self-claimed outputs** — outputs that a block produces and claims atomically in the same block. The self-claim mechanism is already part of the protocol (see [block creation: output transformation](block-creation.md#output-transformation)).
 
 A self-claimed output uses a well-known SELF contract whose spending condition is: the claiming block must be the producing block. The verifier's `params` field acts as a key, and the output's `data` field acts as the value, creating a key-value store for computation results.

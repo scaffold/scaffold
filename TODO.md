@@ -108,6 +108,48 @@ The chess demo publishes move blocks without FOR collateral, so verification-lay
 
 ## Core Protocol
 
+### Result model migration (record -> data)
+Switching from record-based results to data-based **answers**, specified in
+[docs/protocol/results.md](docs/protocol/results.md). An "answer" is a
+self-claimed data-bearing output `{V, data}`; `fetch(V)` returns `data`. The
+design is settled; the code is mid-refactor (the interface is ahead of the
+impls). Concrete follow-ups:
+- **Wire `setResult` / `getResult` impls.** They exist on `ContractEnv` but
+  `GeneratingEnv` / `VerifyingEnv` / `MockSequenceEnv` (tests/helpers/contractSnapshot.ts)
+  do not yet implement them, so the repo does not typecheck. `getResult` must
+  *commit* the host-supplied answer (put payload -> piggyback -> block), not
+  just return it.
+- **Remove `request` / `record`** from `GeneratingEnv` (already gone from the
+  `ContractEnv` interface) and migrate remaining callers.
+- **`mode` -> `mode(): ExecutionMode`.** Property to method so the runtime can
+  observe the call (purity tracking). Call sites: `WasmHostBridge.ts:77`,
+  `GeneratingEnv`/`VerifyingEnv` definitions, and the `env.mode` assertions in
+  `tests/GeneratingEnv.test.ts:129`, `tests/ContractPlugin.test.ts:151`,
+  `tests/ContractEnv.test.ts:90`, plus the `contractSnapshot.ts` mock. The WASM
+  ABI already treats it as a function.
+- **`timestamp()` -> `timestampGte(instant)`.** Add `timestampGte` (assert a
+  lower bound without leaking the actual time, preserving answer uniqueness),
+  migrate decay-window callers (`CollateralContract.ts:218`,
+  `InsuranceContract.ts:84`, `GameStateContract.ts:110`), then consider removing
+  `timestamp()`.
+- **`fetch(verifier)` drops the record `key` param** -- it returns the answer
+  output's data directly. Update `GeneratingEnv.fetch` / `VerifyingEnv.fetch`
+  and the wasi-shim `fetch` glue (`paths.zig:521`, `env.zig:67`). Subsumes the
+  "fetch default key vs. responder record key" footgun item below.
+
+### Answer uniqueness rule (deferred)
+Per [results.md](docs/protocol/results.md#the-uniqueness-rule-deferred): for a
+verifier `V`, all blocks answering it must carry byte-identical `data`;
+divergent answers **conflict** (consensus-resolved like a double-spend), they do
+not fail local validation. Implement as a new dimension in the conflict module,
+keyed on answer-verifier. Only bites *underdetermined* answers (chosen inputs
+like player moves) -- computed answers are pinned by `run()` already, and an
+answer paid by a single incentive UTXO is linearized by that UTXO's single-spend
+in the meantime. Nice-to-have; safe to defer for the chess demo (moves carry
+incentives). Still-open upstream question: the claim-vs-fetch boundary (which
+resources are pure-function-of-`V` answers vs. context-dependent claim
+resources, e.g. the decay-dependent collateral verdict) -- see results.md.
+
 ### Baseline propagation for cold-start
 `docs/protocol/gossip.md:250-258` and `routing.md:266` reference "baseline propagation" but `RoutingModule.handleSendAction` (src/node/RoutingModule.ts:237-279) only emits `PushAction`s when a peer's `receivedFirst` matches the trigger verifier — there's no fallback when both `claimHistory[V]` and `contractFallback[contract(V)]` are empty. Result: brand-new contracts (e.g. the chess demo's `GAME_STATE_CONTRACT`) have no propagation path on a fresh network. Two options documented in the spec: (a) push-to-all when local node is the origin and no claim-history match exists, with rate-limiting and abuse considerations; (b) peerInfo contract-interest advertisement (already tracked as the long-term "Request Routing" item). Until either lands, `Scaffold.sendBlockToPeer` is the only escape hatch and demos hand-roll fanout.
 
