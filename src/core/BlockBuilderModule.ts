@@ -218,14 +218,23 @@ export class BlockBuilderModule {
     // (consumers fold that in via getBlockTotalWeightVector).
     const chainWeights = composeChainWeights(subtreeInfos);
 
-    // -- 3. Self-claims (RECORD outputs) -----------------------------
+    // -- 3. Self-claims (answers + RECORD outputs) -------------------
     //
-    // Records are atomically produced+consumed on the emitting block.
-    // Downstream assembly handles the claim bookkeeping here, keeping
-    // it out of contract code. See computation.md#self-claimed-outputs.
+    // Self-claimed outputs are atomically produced+consumed on the emitting
+    // block. Downstream assembly handles the claim bookkeeping here, keeping
+    // it out of contract code. See computation.md#self-claimed-outputs and
+    // docs/protocol/results.md. An output is self-claimed if EITHER:
+    //   - it was emitted by setResult/getResult (slot origin 'answer'), an
+    //     answer under the running verifier (arbitrary verifier.contract), OR
+    //   - it is a RECORD_CONTRACT output (the deprecated record surface, still
+    //     used by not-yet-migrated contracts and contract-metadata records).
+    // The two sets are disjoint, so the union exactly reproduces today's
+    // record self-claims plus the new answer self-claims.
     const selfClaimedIndices: number[] = [];
     for (let i = 0; i < draft.outputs.length; i++) {
-      if (HashCtor.equals(draft.outputs[i].verifier.contract, RECORD_CONTRACT)) {
+      const isAnswer = draft.outputSlots?.[i]?.origin === 'answer';
+      const isRecord = HashCtor.equals(draft.outputs[i].verifier.contract, RECORD_CONTRACT);
+      if (isAnswer || isRecord) {
         selfClaimedIndices.push(i);
       }
     }

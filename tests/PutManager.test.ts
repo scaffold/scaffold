@@ -259,3 +259,47 @@ Deno.test('env.put: sub-generator rejection cancels the parent draft', async () 
   );
   await node.close();
 });
+
+// -- Data-based answers (put { data } -> getResult generation) -------
+// Validates the new answer path end-to-end through generation: PutManager
+// installs the `data` payload, the contract's getResult() commits it as a
+// self-claimed answer under the running verifier, and BlockBuilderModule
+// self-claims it via the 'answer' slot origin. See docs/protocol/results.md.
+
+const ANSWER_CONTRACT = Hash.digest('scaffold:test:answer-contract');
+
+const answerContract: Contract = {
+  outputNamespaces: [ANSWER_CONTRACT, AGGREGATION_CONTRACT],
+  async run(env) {
+    // getResult commits the host-supplied payload as the answer under
+    // {ANSWER_CONTRACT, params}. (A real contract would validate the bytes.)
+    await env.getResult();
+    env.send({ contract: AGGREGATION_CONTRACT, params: new Uint8Array(0) }, 0);
+  },
+};
+
+Deno.test('PutManager.put: data publishes a self-claimed answer via getResult', async () => {
+  const node = makeNode();
+  node.registerContract(ANSWER_CONTRACT, answerContract);
+
+  const block = await node.put({
+    contract: ANSWER_CONTRACT,
+    params: str2bin('q'),
+    data: str2bin('the answer'),
+  });
+
+  const td = new TextDecoder();
+  const answer = block.outputs.find((o) =>
+    Hash.equals(o.verifier.contract, ANSWER_CONTRACT) && td.decode(o.verifier.params) === 'q'
+  );
+  assert(answer, 'expected an answer output under {ANSWER_CONTRACT, q}');
+  assertEquals(td.decode(answer.body!), 'the answer');
+  assertEquals(answer.value, 0);
+
+  // The answer is self-claimed: its own-output index is in the block's claims.
+  const idx = block.outputs.indexOf(answer);
+  assert(block.claimIndices.includes(idx), 'answer output must be self-claimed');
+
+  assert(node.context.consensus.isCanonical(block.hash));
+  await node.close();
+});

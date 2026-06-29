@@ -55,7 +55,7 @@ Deno.test('standard contracts declare their output namespaces correctly', () => 
     SIGNATURE_CONTRACT.toHex(),
     RECORD_CONTRACT.toHex(),
   ]);
-  assertEquals(namespaceHexes(host, HELLO_CONTRACT), [RECORD_CONTRACT.toHex()]);
+  assertEquals(namespaceHexes(host, HELLO_CONTRACT), [HELLO_CONTRACT.toHex()]);
 });
 
 Deno.test('custom contract can declare its own output namespace', () => {

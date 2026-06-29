@@ -140,6 +140,22 @@ export interface ContractEnv {
   getResult(): MaybePromise<Uint8Array>;
 
   /**
+   * @deprecated Superseded by `getResult`. Ask the host for an output under
+   * the given verifier (host-supplied `(value, body)` via the handler chain,
+   * origin `'get'`). Retained during the record->answer migration for the
+   * contracts not yet migrated (GameState, Collateral). See
+   * docs/protocol/results.md and TODO.md "Result model migration".
+   */
+  request(verifier: Verifier): MaybePromise<{ value: number; body: Uint8Array }>;
+
+  /**
+   * @deprecated Superseded by `setResult`. Self-claimed key-value output under
+   * `{RECORD_CONTRACT, key}`. Retained during the record->answer migration for
+   * the contracts not yet migrated. See docs/protocol/results.md.
+   */
+  record(key: Uint8Array, value: Uint8Array): void;
+
+  /**
    * Publish a single output under the given verifier with the supplied
    * body and value. Fire-and-forget within the contract: the slot is
    * appended to the namespace and the call returns nothing.
@@ -155,9 +171,16 @@ export interface ContractEnv {
   send(verifier: Verifier, value: number, body?: Uint8Array): void;
 
   /**
-   * Read a result from a block that claims the given verifier, appending
-   * that block to `refs` (in call order, interleaved with `put`), then
-   * reading the RECORD_CONTRACT output keyed by `key`.
+   * Read the answer to `verifier` from a block that claims (and self-claims an
+   * answer under) it, appending that block to `refs` (in call order,
+   * interleaved with `put`).
+   *
+   * With no `key`: returns the data of the self-claimed answer output under
+   * `verifier` (the new data-based result model -- see docs/protocol/results.md).
+   *
+   * @deprecated-arg `key`: when provided, reads the RECORD_CONTRACT output
+   * keyed by `key` on the claiming block (the old record model). Retained
+   * during migration; omit it for answers.
    *
    * Generation: searches for a block claiming the verifier and appends it
    * to refs. Verification: refs are consumed positionally -- each
@@ -167,7 +190,7 @@ export interface ContractEnv {
    *
    * Throws ContractRejection if no matching block is found.
    */
-  fetch(verifier: Verifier, key: Uint8Array): MaybePromise<Uint8Array>;
+  fetch(verifier: Verifier, key?: Uint8Array): MaybePromise<Uint8Array>;
 
   /**
    * Publish a verifier on a new block with fitting records. Resolves with
@@ -200,7 +223,11 @@ export interface ContractEnv {
    *
    * See docs/protocol/wasm-abi.md#put.
    */
-  put(verifier: Verifier, data: Uint8Array): MaybePromise<Hash>;
+  // NOTE: `put` stays records-based in phase 1 (contract registration is
+  // multi-record and read per-key by the WASM loader). Migrating it to
+  // `put(verifier, data)` rides with the contract-registration / WASM work.
+  // See docs/protocol/results.md and TODO.md.
+  put(verifier: Verifier, records: Record<string, Uint8Array | string>): MaybePromise<Hash>;
 
   /**
    * Assert the block's signature matches the given public key.
@@ -295,4 +322,15 @@ export interface GeneratingEnvProvider<BlockType> extends VerifyingEnvProvider<B
     runningParams: Uint8Array,
     outputVerifier: Verifier,
   ): Promise<{ value: number; body: Uint8Array } | null>;
+
+  /**
+   * Source the host-supplied answer bytes for `getResult()` -- the data
+   * installed for the running verifier in a `put(V, data)` context. Returns
+   * `null` if no payload is installed (the env then falls back to piggyback,
+   * else rejects). See docs/protocol/results.md.
+   */
+  resolveGetResult(
+    runningContract: Hash,
+    runningParams: Uint8Array,
+  ): MaybePromise<Uint8Array | null>;
 }

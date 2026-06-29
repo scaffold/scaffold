@@ -2,7 +2,7 @@
 
 import { Hash } from '../util/Hash.ts';
 import { Block, BlockStore } from '../core/Block.ts';
-import type { Verifier } from '../core/BlockCreationModule.ts';
+import type { Output, Verifier } from '../core/BlockCreationModule.ts';
 import { bin2hex } from '../util/hex.ts';
 import { ConsensusService } from '../core/ConsensusService.ts';
 import { OutputClaimService } from '../core/OutputClaimService.ts';
@@ -26,7 +26,11 @@ import { Query } from '../interfaces/Query.ts';
 // -- Public types ----------------------------------------------------
 
 export interface FetchInput<T = unknown> extends Query {
-  /** Which self-claimed record on the responder block to surface. Default: empty bytes. */
+  /**
+   * Omit (data-based result model): surface the self-claimed ANSWER output
+   * under this verifier. When provided (deprecated): surface the
+   * RECORD_CONTRACT output keyed by `key` on the responder block.
+   */
   key?: string | Uint8Array;
 
   /** Verify the response contract locally before resolving. Default: false. */
@@ -137,7 +141,8 @@ class FetchClaimImpl<T = unknown> extends FetchResultImpl<T> implements FetchCla
 
 /** Per-caller view of a shared subscription. */
 interface Projection<T = unknown> {
-  recordKey: Uint8Array;
+  /** undefined = answer mode (read the answer under the verifier); else record key. */
+  recordKey: Uint8Array | undefined;
   verify: boolean;
   onIncentive?: (block: Block, outputIdx: number) => void;
   onClaim?: (claim: FetchClaim<T> | null) => void;
@@ -234,8 +239,8 @@ export class FetchManager {
     // 1. Encode params
     const params = this.deps.contractHost.resolveQueryParams(input);
 
-    // 2. Normalize key
-    const recordKey = normalizeRecordKey(input.key);
+    // 2. Normalize key (undefined => answer mode: read the answer under V).
+    const recordKey = input.key === undefined ? undefined : normalizeRecordKey(input.key);
 
     // 3. Verifier key for dedup
     const verifierKey = computeVerifierKey(input.contract, params);
@@ -524,8 +529,10 @@ export class FetchManager {
     claimIdx: number,
     pickedChanged: boolean,
   ): void {
-    const recordOutput = findRecordOutput(block, p.recordKey);
-    if (!recordOutput) {
+    const recordOutput = p.recordKey === undefined
+      ? findAnswerOutput(block, sub.contract, sub.params)
+      : findRecordOutput(block, p.recordKey);
+    if (!recordOutput || recordOutput.body === undefined) {
       // Responder didn't produce a record for this key. Only notify via
       // onError if we haven't already; treat as exceptional.
       if (p.currentBlockHash === undefined || !Hash.equals(p.currentBlockHash, block.hash)) {
@@ -679,6 +686,27 @@ function byteEquals(a: Uint8Array, b: Uint8Array): boolean {
     if (a[i] !== b[i]) return false;
   }
   return true;
+}
+
+/**
+ * Find the self-claimed answer output under `{contract, params}` on `block`
+ * (the data-based result model): the output whose verifier equals the
+ * subscription's verifier and carries data. See docs/protocol/results.md.
+ */
+function findAnswerOutput(
+  block: Block,
+  contract: Hash,
+  params: Uint8Array,
+): Output | undefined {
+  for (const output of block.outputs) {
+    if (output.body === undefined) continue;
+    if (
+      Hash.equals(output.verifier.contract, contract) && byteEquals(output.verifier.params, params)
+    ) {
+      return output;
+    }
+  }
+  return undefined;
 }
 
 /** Run contract.walkData on record bytes and return a JS object. */

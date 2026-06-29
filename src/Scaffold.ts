@@ -3,8 +3,6 @@ import { Block, HASH_CONTRACT } from './core/Block.ts';
 import type { Contract } from './contracts/Contract.ts';
 import type { ContractPlugin } from './core/ContractPlugin.ts';
 import { wasmContractPlugin } from './plugins/wasm/WasmContractPlugin.ts';
-import { findRecordOutput } from './contracts/RecordContract.ts';
-import { DEFAULT_KEY } from './contracts/HashContract.ts';
 import { Hash } from './util/Hash.ts';
 import { NodeContext, type ValueOverrideFn } from './node/NodeContext.ts';
 import { PutManager, PutRequest } from './node/PutManager.ts';
@@ -238,15 +236,20 @@ export class Scaffold {
 
   /**
    * Resolve a blob from the local store without touching the network.
-   * Scans for a HASH_CONTRACT block carrying a RECORD/'default' output whose
+   * Scans for a HASH_CONTRACT block carrying a self-claimed ANSWER output whose
    * body hashes to `hash`. Returns null when no such block is present.
+   * See docs/protocol/results.md.
    */
   private _resolveBlobLocal(hash: Hash): Uint8Array | null {
     for (const block of this.nodeContext.store.values()) {
-      const record = findRecordOutput(block, DEFAULT_KEY);
-      if (!record) continue;
-      if (Hash.equals(Hash.digest(record.body), hash)) {
-        return record.body;
+      for (const output of block.outputs) {
+        if (
+          output.body !== undefined &&
+          Hash.equals(output.verifier.contract, HASH_CONTRACT) &&
+          Hash.equals(Hash.digest(output.body), hash)
+        ) {
+          return output.body;
+        }
       }
     }
     return null;

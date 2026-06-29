@@ -19,13 +19,20 @@ import type { ClaimRef } from './Node.ts';
 /**
  * A generated output paired with its origin. The origin tag is not on
  * the wire -- it's used at solidification time to decide which outputs
- * may have their `value` overridden (only 'get' slots can). Also drives
- * positional matching for the output-namespace partition check.
- * See docs/protocol/computation.md#output-namespaces.
+ * may have their `value` overridden (only 'get' slots can) and which are
+ * self-claimed answers. Also drives positional matching for the
+ * output-namespace partition check.
+ * See docs/protocol/computation.md#output-namespaces and
+ * docs/protocol/results.md.
+ *
+ * - 'require': `send` -- exact (verifier, value, body) match.
+ * - 'get':     `request` -- value may be raised at solidification.
+ * - 'answer':  `setResult`/`getResult` -- self-claimed, zero-value answer
+ *              under the running verifier; value never overridden.
  */
 export interface OutputSlot {
   readonly output: Output;
-  readonly origin: 'require' | 'get';
+  readonly origin: 'require' | 'get' | 'answer';
 }
 
 // -- Helpers ------------------------------------------------------
@@ -63,8 +70,10 @@ export type WaitForGetOutputFn = (
  * for `verifier` with `records` answering its `request` calls, blocks
  * until the sub-block commits, and propagates `ContractRejection` from
  * the sub-generator. Resolves with the committed sub-block's hash so the
- * calling contract can reference what it created (e.g. record it as a
- * result). See docs/protocol/wasm-abi.md#put.
+ * calling contract can reference what it created.
+ *
+ * NOTE: records-based in phase 1 (contract registration is multi-record).
+ * See docs/protocol/results.md and docs/protocol/wasm-abi.md#put.
  */
 export type PutFn = (
   verifier: Verifier,
@@ -255,7 +264,58 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
     });
   }
 
-  fetch(verifier: Verifier, key: Uint8Array): MaybePromise<Uint8Array> {
+  setResult(data: Uint8Array): void {
+    // The answer to this invocation's verifier: a self-claimed, zero-value
+    // output under the running verifier. Self-claim bookkeeping happens at
+    // solidification (BlockBuilderModule keys off origin 'answer').
+    this._slots.push({
+      output: {
+        verifier: { contract: this._contractHash, params: this._params },
+        value: 0,
+        body: data,
+      },
+      origin: 'answer',
+    });
+  }
+
+  async getResult(): Promise<Uint8Array> {
+    const verifier: Verifier = { contract: this._contractHash, params: this._params };
+    // Source 1: data installed for this verifier in a put(V, data) context.
+    let data = await this._provider.resolveGetResult(this._contractHash, this._params);
+    // Source 2: piggyback -- reproduce a prior answer's data from a block
+    // already serving V. No ref is pushed: the bytes are copied into this
+    // block's own self-claimed answer, keeping it self-contained.
+    if (data === null || data === undefined) {
+      data = await this._piggybackAnswer(verifier);
+    }
+    if (data === null || data === undefined) {
+      // Source 3 (park until a piggybackable block lands) is deferred.
+      throw new ContractRejection(
+        'getResult: no put payload and no piggybackable answer for verifier',
+      );
+    }
+    this._slots.push({ output: { verifier, value: 0, body: data }, origin: 'answer' });
+    return data;
+  }
+
+  private async _piggybackAnswer(verifier: Verifier): Promise<Uint8Array | null> {
+    const blockHash = await this._provider.findBlockClaiming(verifier);
+    if (!blockHash) return null;
+    const block = this._provider.getBlock(blockHash);
+    if (!block) return null;
+    for (const output of this._provider.getOutputs(block)) {
+      if (output.body === undefined) continue;
+      if (
+        Hash.equals(output.verifier.contract, verifier.contract) &&
+        bytesEqual(output.verifier.params, verifier.params)
+      ) {
+        return output.body;
+      }
+    }
+    return null;
+  }
+
+  fetch(verifier: Verifier, key?: Uint8Array): MaybePromise<Uint8Array> {
     return maybeThen(this._provider.findBlockClaiming(verifier), (blockHash) => {
       if (!blockHash) {
         throw new ContractRejection('no block found claiming verifier');
@@ -271,14 +331,29 @@ export class GeneratingEnv<BlockType> implements ContractEnv {
       const outputs = this._provider.getOutputs(block);
       for (const output of outputs) {
         if (output.body === undefined) continue;
-        if (
-          Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
-          bytesEqual(output.verifier.params, key)
-        ) {
-          return output.body;
+        if (key === undefined) {
+          // Answer read: the self-claimed answer output under V.
+          if (
+            Hash.equals(output.verifier.contract, verifier.contract) &&
+            bytesEqual(output.verifier.params, verifier.params)
+          ) {
+            return output.body;
+          }
+        } else {
+          // Deprecated record read: RECORD_CONTRACT output keyed by `key`.
+          if (
+            Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
+            bytesEqual(output.verifier.params, key)
+          ) {
+            return output.body;
+          }
         }
       }
-      throw new ContractRejection('block claims verifier but has no result for key');
+      throw new ContractRejection(
+        key === undefined
+          ? 'block claims verifier but has no answer output'
+          : 'block claims verifier but has no result for key',
+      );
     });
   }
 

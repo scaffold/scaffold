@@ -28,11 +28,7 @@ import { ProtocolContext } from '../core/ProtocolContext.ts';
 import { verifierKey as utxoVerifierKey } from './UtxoIndex.ts';
 import { UtxoIndexService } from './UtxoIndexService.ts';
 import { str2bin } from '../util/buffer.ts';
-import {
-  type PutFn,
-  type WaitForGetOutputFn,
-  type WaitForInputFn,
-} from '../core/GeneratingEnv.ts';
+import { type PutFn, type WaitForGetOutputFn, type WaitForInputFn } from '../core/GeneratingEnv.ts';
 import type { GeneratorHandle, GeneratorProvider } from '../core/Generator.ts';
 import {
   GenerationModule,
@@ -178,6 +174,26 @@ class GeneratingEnvAdapter implements GeneratingEnvProvider<Block> {
       runningParams,
       outputVerifier,
     );
+  }
+
+  /**
+   * Source `getResult()`'s answer payload: the data installed for the running
+   * verifier by a `put(V, data)` call. PutManager installs it under the
+   * conventional empty-string key; consuming it here satisfies the strict
+   * unused-records check. Returns null for records-less or records-keyed
+   * generations (the env then falls back to piggyback). See results.md.
+   */
+  resolveGetResult(
+    runningContract: Hash,
+    runningParams: Uint8Array,
+  ): Uint8Array | null {
+    const vk = adapterVerifierKey(runningContract, runningParams);
+    const entry = this._activeRecords.get(vk);
+    if (!entry) return null;
+    const body = entry.records.get('');
+    if (body === undefined) return null;
+    entry.consumed.add('');
+    return body;
   }
 }
 

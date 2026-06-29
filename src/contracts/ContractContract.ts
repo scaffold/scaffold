@@ -9,18 +9,23 @@
 
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import type { Contract } from './Contract.ts';
-import { bin2str, str2bin } from '../util/buffer.ts';
+import { str2bin } from '../util/buffer.ts';
 
+// NOTE: Phase 1 keeps this on the deprecated record/request surface. The
+// single-blob answer migration (getResult + JSON.parse of the contract spec)
+// is deferred to phase 2 because the per-record metadata is read by the WASM
+// loader (WasmContractPlugin.readOutputNamespaces). See docs/protocol/results.md
+// and TODO.md "Result model migration".
 export const contractContract: Contract = {
   outputNamespaces: [RECORD_CONTRACT],
 
   async run(env) {
-    const answer = await env.claimNext();
-    const { modules, wasiSetup, outputNamespaces } = JSON.parse(bin2str(answer.body));
+    // const answer = await env.claimNext();
+    // const { modules, wasiSetup, outputNamespaces } = JSON.parse(bin2str(answer.body));
 
-    // await env.request({ contract: RECORD_CONTRACT, params: str2bin('modules') });
-    // await env.request({ contract: RECORD_CONTRACT, params: str2bin('wasi_setup') });
-    // await env.request({ contract: RECORD_CONTRACT, params: str2bin('output_namespaces') });
+    await env.request({ contract: RECORD_CONTRACT, params: str2bin('modules') });
+    await env.request({ contract: RECORD_CONTRACT, params: str2bin('wasi_setup') });
+    await env.request({ contract: RECORD_CONTRACT, params: str2bin('output_namespaces') });
 
     // TODO: Verify records parse as json
     // TODO: Verify that WASM blobs are deterministic (see scripts/wasm-determinism/)

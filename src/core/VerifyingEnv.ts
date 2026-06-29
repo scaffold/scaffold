@@ -123,7 +123,13 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
   }
 
   claimNext(): Claim {
-    const inputs = this._getMatchingInputs();
+    // claimNext consumes external, value-bearing inputs only. The value>0 &&
+    // !isSelfClaim filter excludes this block's own zero-value self-claimed
+    // answer (setResult/getResult), which shares the running verifier and
+    // would otherwise be returned ahead of the external incentive. claimAll
+    // stays unfiltered (recordContract asserts all inputs are self-claims).
+    // See docs/protocol/results.md "the claimNext invariant".
+    const inputs = this._getMatchingInputs().filter((c) => c.value > 0 && !c.isSelfClaim);
     if (this._inputCursor >= inputs.length) {
       throw new ContractRejection('no more inputs available');
     }
@@ -187,7 +193,41 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
     this.send({ contract: RECORD_CONTRACT, params: key }, 0, value);
   }
 
-  fetch(verifier: Verifier, key: Uint8Array): Uint8Array {
+  setResult(data: Uint8Array): void {
+    const verifier: Verifier = { contract: this._contractHash, params: this._params };
+    const slot = this._consumeNextInNamespace(this._contractHash);
+    this._checkAnswerSlot(slot, verifier);
+    if (!bytesEqual(slot.body!, data)) {
+      throw new ContractRejection('answer body mismatch at namespace slot');
+    }
+    this._emittedSlots.push({ output: { verifier, value: 0, body: data }, origin: 'answer' });
+  }
+
+  getResult(): Uint8Array {
+    const verifier: Verifier = { contract: this._contractHash, params: this._params };
+    const slot = this._consumeNextInNamespace(this._contractHash);
+    this._checkAnswerSlot(slot, verifier);
+    this._emittedSlots.push({
+      output: { verifier, value: 0, body: slot.body! },
+      origin: 'answer',
+    });
+    return slot.body!;
+  }
+
+  /** Shared validation for setResult/getResult answer slots. */
+  private _checkAnswerSlot(slot: Output, verifier: Verifier): void {
+    if (slot.body === undefined) {
+      throw new ContractRejection('answer slot has no body at namespace slot');
+    }
+    if (!verifierEquals(slot.verifier, verifier)) {
+      throw new ContractRejection('answer verifier mismatch at namespace slot');
+    }
+    if (slot.value !== 0) {
+      throw new ContractRejection('answer must be zero-value at namespace slot');
+    }
+  }
+
+  fetch(verifier: Verifier, key?: Uint8Array): Uint8Array {
     // Find the first ref block that claims the given verifier
     for (const refHash of this._refs) {
       const refBlock = this._provider.getBlock(refHash);
@@ -210,15 +250,27 @@ export class VerifyingEnv<BlockType> implements ContractEnv {
       const refOutputs = this._provider.getOutputs(refBlock);
       for (const output of refOutputs) {
         if (output.body === undefined) continue;
-        if (
-          Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
-          bytesEqual(output.verifier.params, key)
-        ) {
-          return output.body;
+        if (key === undefined) {
+          // Answer read: the self-claimed answer output under V.
+          if (verifierEquals(output.verifier, verifier)) {
+            return output.body;
+          }
+        } else {
+          // Deprecated record read: RECORD_CONTRACT output keyed by `key`.
+          if (
+            Hash.equals(output.verifier.contract, RECORD_CONTRACT) &&
+            bytesEqual(output.verifier.params, key)
+          ) {
+            return output.body;
+          }
         }
       }
-      // Ref claims the verifier but has no matching result key
-      throw new ContractRejection(`ref block claims verifier but has no result for key`);
+      // Ref claims the verifier but has no matching answer/result.
+      throw new ContractRejection(
+        key === undefined
+          ? `ref block claims verifier but has no answer output`
+          : `ref block claims verifier but has no result for key`,
+      );
     }
     throw new ContractRejection(`no ref block found claiming verifier`);
   }

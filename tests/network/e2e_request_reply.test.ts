@@ -160,7 +160,6 @@ Deno.test('e2e: request/reply via claim-history gossip', async () => {
   nodeA.fetch({
     contract: HELLO_CONTRACT,
     params: new TextEncoder().encode('world'),
-    key: 'response',
     onClaim: (c) => {
       if (!c) return;
       const text = new TextDecoder().decode(c.body);

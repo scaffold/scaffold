@@ -17,12 +17,21 @@ import { DraftStore } from '../core/Draft.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { GenerationService } from './GenerationService.ts';
 import { Hash } from '../util/Hash.ts';
-import { Query, Record } from '../interfaces/Query.ts';
+import { Query } from '../interfaces/Query.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { ObjectReader, Reader } from '../interfaces/Reader.ts';
+import { Reader } from '../interfaces/Reader.ts';
 
-/** Publish records under a verifier by running its contract generator. */
-export interface PutRequest extends Record {
+/**
+ * Publish a verifier by running its contract generator. Provide EITHER:
+ *  - `data`: the data-based result model -- a single answer payload the
+ *    contract's `getResult()` consumes, published as the self-claimed answer
+ *    under the verifier (see docs/protocol/results.md); OR
+ *  - `records`: the deprecated multi-record map (contract registration); each
+ *    entry answers a `request({RECORD_CONTRACT, key})` call.
+ */
+export interface PutRequest extends Query {
+  data?: Uint8Array | ((descriptor: string) => MaybePromise<Reader>);
+  records?: { [key: string]: Uint8Array | string };
 }
 
 export class PutManager {
@@ -39,10 +48,25 @@ export class PutManager {
    */
   async put(request: PutRequest): Promise<Block> {
     const params = await this.contractHost.resolveQueryParams(request);
-    const records = await Promise.all(
-      request.records.map((x) => this.contractHost.resolveRecordData(x)),
-    );
     const verifier = { contract: request.contract, params };
+
+    // A single `data` answer payload is installed under the conventional
+    // empty-string key (consumed by the contract's getResult via
+    // GenerationService.resolveGetResult). Otherwise pass the deprecated
+    // multi-record map through verbatim.
+    let records: { [key: string]: Uint8Array | string };
+    if (request.data !== undefined) {
+      const dataBytes = request.data instanceof Uint8Array
+        ? request.data
+        : await this.contractHost.resolveRecordData({
+          contract: request.contract,
+          params,
+          data: request.data,
+        });
+      records = { '': dataBytes };
+    } else {
+      records = request.records ?? {};
+    }
 
     return new Promise<Block>((resolve, reject) => {
       let handle: { draftId: Hash; cancel: () => void };

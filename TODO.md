@@ -111,31 +111,63 @@ The chess demo publishes move blocks without FOR collateral, so verification-lay
 ### Result model migration (record -> data)
 Switching from record-based results to data-based **answers**, specified in
 [docs/protocol/results.md](docs/protocol/results.md). An "answer" is a
-self-claimed data-bearing output `{V, data}`; `fetch(V)` returns `data`. The
-design is settled; the code is mid-refactor (the interface is ahead of the
-impls). Concrete follow-ups:
-- **Wire `setResult` / `getResult` impls.** They exist on `ContractEnv` but
-  `GeneratingEnv` / `VerifyingEnv` / `MockSequenceEnv` (tests/helpers/contractSnapshot.ts)
-  do not yet implement them, so the repo does not typecheck. `getResult` must
-  *commit* the host-supplied answer (put payload -> piggyback -> block), not
-  just return it.
-- **Remove `request` / `record`** from `GeneratingEnv` (already gone from the
-  `ContractEnv` interface) and migrate remaining callers.
-- **`mode` -> `mode(): ExecutionMode`.** Property to method so the runtime can
-  observe the call (purity tracking). Call sites: `WasmHostBridge.ts:77`,
-  `GeneratingEnv`/`VerifyingEnv` definitions, and the `env.mode` assertions in
-  `tests/GeneratingEnv.test.ts:129`, `tests/ContractPlugin.test.ts:151`,
-  `tests/ContractEnv.test.ts:90`, plus the `contractSnapshot.ts` mock. The WASM
-  ABI already treats it as a function.
-- **`timestamp()` -> `timestampGte(instant)`.** Add `timestampGte` (assert a
-  lower bound without leaking the actual time, preserving answer uniqueness),
-  migrate decay-window callers (`CollateralContract.ts:218`,
-  `InsuranceContract.ts:84`, `GameStateContract.ts:110`), then consider removing
-  `timestamp()`.
-- **`fetch(verifier)` drops the record `key` param** -- it returns the answer
-  output's data directly. Update `GeneratingEnv.fetch` / `VerifyingEnv.fetch`
-  and the wasi-shim `fetch` glue (`paths.zig:521`, `env.zig:67`). Subsumes the
-  "fetch default key vs. responder record key" footgun item below.
+self-claimed data-bearing output `{V, data}`; `fetch(V)` returns `data`.
+
+**Phase 1 LANDED.** The TS in-process answer mechanism works end-to-end:
+- `setResult`/`getResult` implemented in `GeneratingEnv`/`VerifyingEnv`;
+  `getResult` *commits* (put payload via `GenerationService.resolveGetResult`
+  -> piggyback -> reject; parking deferred).
+- `BlockBuilderModule` self-claims via a UNION: slot origin `'answer'` (new) OR
+  `verifier.contract === RECORD_CONTRACT` (kept, for not-yet-migrated contracts +
+  contract-metadata records).
+- `claimNext` filters to `value>0 && !isSelfClaim` (excludes the zero-value
+  self-claimed answer); `claimAll` stays unfiltered.
+- `fetch(verifier, key?)` -- key omitted = answer read, key present = deprecated
+  record read. `FetchManager`/`Scaffold._resolveBlobLocal` read the answer under V.
+- Node `put` is dual-path: `{data}` (answer) or `{records}` (deprecated multi-record).
+- HashContract + HelloContract self-namespace (`outputNamespaces: [<own hash>]`).
+- Validated: 69 phase-1 tests pass (tests/{HashContract,ContractHost,ContractEnv,
+  GeneratingEnv,PutManager}.test.ts), incl. new answer-model + data-put-generation tests.
+
+**Phase 1 deliberately KEPT records-based (revisit when migrating):**
+- Contract-level `env.put(verifier, records)` -- only JsCompiler uses it, for
+  multi-record contract registration read per-key by the WASM loader
+  (`WasmContractPlugin.readOutputNamespaces`). Migrate with the WASM/registration work.
+- ContractContract + JsCompilerContract remain on `request`/`record`.
+- `getResult`'s put-payload is sourced from the records map under the conventional
+  empty-string key (`GenerationService.resolveGetResult`); clean up when contract-put
+  goes data-based.
+
+**Phase 2+ follow-ups:**
+- `mode` -> `mode(): ExecutionMode`. Property to method so the runtime can observe
+  the call (purity tracking). Call sites: `WasmHostBridge.ts:77`, `GeneratingEnv`/
+  `VerifyingEnv` definitions, and `env.mode` assertions in `tests/GeneratingEnv.test.ts`,
+  `tests/ContractPlugin.test.ts`, `tests/ContractEnv.test.ts`, plus `contractSnapshot.ts`.
+  (Not done in phase 1 to avoid touching the WASM bridge + many call sites.)
+- `timestamp()` -> `timestampGte(instant)` (signature added to `ContractEnv` as
+  optional; not yet implemented). Migrate decay-window callers (`CollateralContract.ts:218`,
+  `InsuranceContract.ts:84`, `GameStateContract.ts:110`), then consider removing `timestamp()`.
+- Migrate ContractContract + JsCompilerContract to single-blob answers (with the
+  per-record `contractMetadata`/WASM-loader reader change).
+- Migrate the Zig wasi-shim ABI (`fetch` drops the key param: `paths.zig:521`,
+  `env.zig:67`; record/request -> result) + rebuild the wasm.
+- `getResult` parking (source 3); data-less structural incentive claiming.
+- Finally REMOVE `record`/`request`/`fetch`-key once all consumers migrate. Subsumes
+  the "fetch default key vs. responder record key" footgun item below.
+
+### Pre-existing: `SendManager.send` calls undefined `encodeParams` (BLOCKER for fetch/send)
+Discovered while validating the result-model migration. `src/node/SendManager.ts:64`
+calls `encodeParams(request.contract, request.params, this.contractHost)`, but
+`encodeParams` no longer exists -- a leftover from an earlier refactor (it was
+replaced by `ContractHostService.resolveQueryParams` elsewhere). This throws
+`ReferenceError: encodeParams is not defined` at runtime on the first `send`,
+breaking every fetch/incentive path (e.g. `tests/network/e2e_request_reply.test.ts`).
+Predates the result-model work (commit b0afee6 never touched SendManager). Likely a
+1-line fix (`request.params` is already `Uint8Array` on the incentive path), but it's
+out of the result-model scope -- flagging for Joel rather than working around it.
+Also note: `FetchManager.fetch` and `SendManager.send` use `resolveQueryParams`
+synchronously while it's typed `MaybePromise<Uint8Array>` (~12 pre-existing
+`deno check` errors in FetchManager/SendManager); resolve alongside this.
 
 ### Answer uniqueness rule (deferred)
 Per [results.md](docs/protocol/results.md#the-uniqueness-rule-deferred): for a

@@ -906,3 +906,93 @@ Deno.test('VerifyingEnv: contractMetadata skips body-less outputs', () => {
     'no matching output on contract block',
   );
 });
+
+// -- Tests: answers (setResult / getResult / claimNext filter) ------
+// The data-based result model -- see docs/protocol/results.md.
+
+Deno.test('VerifyingEnv: setResult accepts a matching self-claimed answer', () => {
+  const provider = new TestProvider();
+  const contract = h('answer-contract');
+  const params = enc('question');
+  const V: Verifier = { contract, params };
+  const block: TestBlock = {
+    hash: h('answer-block'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: V, value: 0, body: enc('the answer') }],
+    claimIndices: [0],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ contractHash: contract, params, block, provider });
+  env.setResult(enc('the answer')); // matches output[0] -> no throw
+});
+
+Deno.test('VerifyingEnv: setResult rejects a mismatched answer body', () => {
+  const provider = new TestProvider();
+  const contract = h('answer-contract');
+  const params = enc('question');
+  const V: Verifier = { contract, params };
+  const block: TestBlock = {
+    hash: h('answer-block'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: V, value: 0, body: enc('the answer') }],
+    claimIndices: [0],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ contractHash: contract, params, block, provider });
+  assertThrows(() => env.setResult(enc('WRONG')), ContractRejection);
+});
+
+Deno.test('VerifyingEnv: getResult returns the committed answer body', () => {
+  const provider = new TestProvider();
+  const contract = h('answer-contract');
+  const params = enc('question');
+  const V: Verifier = { contract, params };
+  const block: TestBlock = {
+    hash: h('answer-block'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: V, value: 0, body: enc('host data') }],
+    claimIndices: [0],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ contractHash: contract, params, block, provider });
+  assertEquals(env.getResult(), enc('host data'));
+});
+
+Deno.test('VerifyingEnv: claimNext excludes the zero-value self-claimed answer', () => {
+  const provider = new TestProvider();
+  const contract = h('answer-contract');
+  const params = enc('question');
+  const V: Verifier = { contract, params };
+  // Anchor carries the external, value-bearing incentive under V.
+  const anchor: TestBlock = {
+    hash: h('anchor'),
+    anchor: ZERO_HASH,
+    outputs: [{ verifier: V, value: 10, body: new Uint8Array(0) }],
+    claimIndices: [],
+    refs: [],
+  };
+  provider.addBlock(anchor);
+  // The response self-claims a zero-value answer (own output index 0) and
+  // claims the external incentive (extended-vector index 1 -> anchor[0]).
+  const block: TestBlock = {
+    hash: h('response'),
+    anchor: anchor.hash,
+    outputs: [{ verifier: V, value: 0, body: enc('the answer') }],
+    claimIndices: [0, 1],
+    refs: [],
+  };
+  provider.addBlock(block);
+  const env = makeEnv({ contractHash: contract, params, block, provider });
+
+  // claimNext must return the external incentive, not the self-claimed answer.
+  const claim = env.claimNext();
+  assertEquals(claim.value, 10);
+  assertEquals(claim.isSelfClaim, false);
+  // Only one external input -> a second claimNext exhausts.
+  assertThrows(() => env.claimNext(), ContractRejection);
+  // claimAll stays unfiltered: it still sees both the answer and the incentive.
+  assertEquals(env.claimAll().length, 2);
+});
