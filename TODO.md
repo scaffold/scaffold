@@ -182,6 +182,28 @@ incentives). Still-open upstream question: the claim-vs-fetch boundary (which
 resources are pure-function-of-`V` answers vs. context-dependent claim
 resources, e.g. the decay-dependent collateral verdict) -- see results.md.
 
+**2026-07-13 brainstorm findings (gaps in the plan above)** -- see
+[docs/design/global-state-brainstorm.md](docs/design/global-state-brainstorm.md)
+for the full analysis before implementing this item:
+- **Index-completeness contradiction**: uniqueness-as-conflict needs
+  double-spend-grade (complete/global) detection, but the answer index is
+  best-effort by design and clients forget quickly -- split-horizon
+  equivocation (divergent answers to disjoint audiences) costs ~2 coins and is
+  undetectable in principle. The proposed alternative ("seal-or-compute":
+  choice answers must consume a *named*, genesis-lineage single-spend seal;
+  computed answers need no machinery) is written up in the design doc with a
+  stress-tested work list.
+- **Missing invariants for results.md** regardless of direction: (a) answer
+  conflicts must use effective (pessimistic-pending) weight, never declared
+  weight (else answer-sniping via private weight); (b) `V`-identity determinism
+  is a separate invariant from answer-byte determinism (canonicalizer
+  divergence across stacks = honest-honest friendly-fire orphaning).
+- **attacks.md candidates** (new, not currently listed): split-horizon
+  equivocation; self-flag harvest via divergent answers (finder-reward
+  self-dealing, ~1000/event at ~2 cost); fetch-poison orphan cascade;
+  cite-then-hide data withholding; chunk-squatting/region extortion;
+  partition-timed meaning reorg. Registry table in the design doc.
+
 ### Baseline propagation for cold-start
 `docs/protocol/gossip.md:250-258` and `routing.md:266` reference "baseline propagation" but `RoutingModule.handleSendAction` (src/node/RoutingModule.ts:237-279) only emits `PushAction`s when a peer's `receivedFirst` matches the trigger verifier — there's no fallback when both `claimHistory[V]` and `contractFallback[contract(V)]` are empty. Result: brand-new contracts (e.g. the chess demo's `GAME_STATE_CONTRACT`) have no propagation path on a fresh network. Two options documented in the spec: (a) push-to-all when local node is the origin and no claim-history match exists, with rate-limiting and abuse considerations; (b) peerInfo contract-interest advertisement (already tracked as the long-term "Request Routing" item). Until either lands, `Scaffold.sendBlockToPeer` is the only escape hatch and demos hand-roll fanout.
 
