@@ -224,6 +224,65 @@ The real term is zombies (hence work item 4).
 
 ---
 
+## Named seal anatomy
+
+A seal is an ordinary output whose identity is an **outpoint** `{block hash,
+output index}`, never a description (Todd single-use seals, Chia launcher IDs,
+Cardano minting policies — all the same move).
+
+```
+Cell mint — an ordinary block G, running the SEAL contract:
+  G.outputs[k] = {
+    verifier: { contract: SEAL, params: encode(mint) }
+    value:    dust                       // claimable; funds zombie GC
+    authored: true
+  }
+  cellId := the outpoint {G.hash, k}     // the cell's name, forever
+
+Step-n update — answer block Bn:
+  claims:
+    seal_{n-1}                           // exactly ONE lineage input
+    + messages, incentives, ...          // other-verifier inputs, unconstrained
+  outputs:
+    { verifier: {C_state, {cell, n}}, value: 0, data: state_n }  // answer (self-claimed)
+    { verifier: {SEAL, {cell}}, value: dust, authored: true }    // ONE successor seal
+```
+
+SEAL's spending condition: consumed exactly one **authored** input with
+verifier `{SEAL, cellId}` (or whose outpoint *is* `cellId` — mint-form base
+case, avoiding genesis self-reference the Chia way), emitted exactly one
+authored successor, unless terminating. "Exactly one *seal-lineage* input,"
+not "exactly one input" — baton blocks still `claimAll` their messages.
+
+**The `authored` bit is the new primitive** (a cheaper formulation of "seal
+lineage visibility" from the work list). `send` can emit outputs under any
+verifier, so verifier params prove nothing. `authored: true` asserts the
+output was emitted by its own verifier contract running on the emitting block
+(`requireOutput` + namespace ownership) — a locally checkable block-validity
+fact; a forged bit is an invalid block, already the deception game's job.
+Same trust move as the answer model, one slot over: answers are trusted
+because the self-claim forced the contract to run; seals because authored
+emission did. Forgery fails by induction: authoring under `{SEAL, cellId}`
+requires passing SEAL, which requires consuming the previous lineage seal
+(single-spend) — or minting, which creates a *different* cellId.
+
+**Mint uniqueness is never needed:**
+1. A second mint is a different cell, not a second head — the name *is* the
+   mint outpoint, so there is no shared name to collide on. "Which cell do
+   people use" is naming/focal-point territory (hardcoded cellIds, money,
+   dependency), same as contract addresses today.
+2. Apps needing mint-uniqueness relative to something external consume that
+   something at mint (escrow UTXO, world-genesis output, a known key's coin):
+   uniqueness is transported from an existing single-spend, never created.
+3. Multi-party cells gate the mint with co-signatures.
+
+The regress terminates: every seal reduces through single-spends to a mint
+(self-identifying) or a pre-existing UTXO, chaining back to Scaffold's
+genesis. One uniqueness source in the whole design — double-spend detection
+on the spine; seals just route choice-answers through it.
+
+---
+
 ## Runner-up ideas worth keeping
 
 Ranked; each stands alone even if the composite is rejected.
