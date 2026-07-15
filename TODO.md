@@ -198,6 +198,20 @@ The TrustModule tracks collateral and the DisputeStrategy emits `dispute` action
 
 The reactive action types (`createBlock` with collateral outputs) exist, but the decision logic for when and how much to stake is unimplemented. The [CollateralContract](src/contracts/CollateralContract.ts) handles resolution; this is about the posting side.
 
+### Collateral/insurance resolution gaps (found during insurance prior-art/brainstorm review, 2026-07-15)
+
+A red-team pass over [deception.md](docs/protocol/deception.md) / [collateral-resolution.md](docs/protocol/collateral-resolution.md) / [trust.md](docs/protocol/trust.md) plus the two contract implementations surfaced spec-level inconsistencies and unimplemented enforcement. Spec items first (docs are source of truth):
+
+- **Finder's reward ceiling is inconsistent across docs.** deception.md prices the finder's reward as `alpha * R` (R = whole-tree insurance); trust.md caps claims at `encapsulated_weight(W) * N`. Never reconciled. A dust invalid block (throughput ~1) planted in a large tree claims a reward priced on the tree's R — 500-5000x its own stake, and probing is least likely to hit it (descent is throughput-proportional). Fix candidate: `finder_reward = alpha * min(R, encapsulated_weight(W) * N)`, stated in both docs.
+- **Restoration payee eligibility is unspecified.** "Victim restoration outputs mirroring the incorrectly claimed outputs" doesn't say who may receive them. A self-flagger whose sybil owns the invalidly-claimed output collects both the finder's reward AND the restoration — payoff R, not `alpha * R`. That moves publisher indifference from q = 33% to q = 50%, i.e. every equilibrium number (fee, fraud rate, reserve) is under-provisioned ~1.5x. Fix: restoration payable only to the owner-of-record established *before* the invalid block existed, finder excluded from restoration.
+- **No settlement ordering for an underfunded pot.** "Pays what it can" + per-event finder rewards + a shared 10% reserve = first-come drain: a fraudster is structurally the first finder on their own frauds and can empty the pot before honest victims file; rational claimants then race on any suspicion (bank-run dynamics). Fix: pro-rata settlement over a claim window, victims senior to finder's reward.
+- **Solidification runs on the wrong clock.** Insurance is released after unchallenged *time* (claims-made), but losses surface on the *discovery* clock (occurrence), which is unbounded — and the sparse graph forgets the region first. A computationally-invalid block that keeps every hash answerable attracts no challenge (independent validity checking is unprofitable by deception.md's own math), solidifies, and the invalid state is permanent with zero backing. Fix direction: release gated on positive scrutiny evidence (validity re-executions / verdict records), not mere silence; reserve retention pegged to the discovery tail. Ties into deception.md open Q4 and collateral-resolution.md open Q4.
+
+Implementation gaps (may be known WIP, listing for completeness — contracts table below adjusted from "Done"):
+
+- [CollateralContract.ts](src/contracts/CollateralContract.ts): mode-2 preimage check is a literal placeholder (`line 413`) — the FOR signer wins a hash challenge without revealing any preimage. Mode 3 pays `bond + totalForValue` to *each* AGAINST input — no decay-lock at challenge timestamp, no pro-rata split; unbalanceable (or over-paying) with >1 AGAINST. Mode 4 fires for *any* signer who is neither FOR nor AGAINST pubkey, with no actual non-canonicality check — a third-party-signed resolution block nullifies a pending challenge (full refund both sides, no verdict emitted), which also defeats insurance rectification keyed on the `invalid` verdict.
+- [InsuranceContract.ts](src/contracts/InsuranceContract.ts): only two paths exist — owner-signed instant full return (no solidification timer, no canonicality check) and non-owner 95% return. Rectification payout, finder's reward, victim restoration, and the claiming limit are unimplemented; `env.timestamp()` is read but unused.
+
 ### Pre-publish Piggyback (incentive cancellation)
 [PiggybackStrategy](src/node/strategies/PiggybackStrategy.ts) only piggybacks against already-published incentives. The [piggyback design](docs/design/piggyback.md) sketches a "pre-publish" path: when a trusted satisfying block appears before our own incentive has been broadcast, build a local-only piggyback and cancel the enqueued incentive instead of paying. Requires PutManager-side introspection of queued-but-unpublished incentive blocks (not exposed today). Defer until there's user demand or the `publish: false` fetch path needs it.
 
@@ -292,8 +306,8 @@ Standard contracts are specified in [contracts.md](docs/protocol/contracts.md). 
 |----------|------|----------------|--------|
 | Signature | contracts.md | [SignatureContract.ts](src/contracts/SignatureContract.ts) | Done |
 | Aggregation | contracts.md | [AggregationContract.ts](src/contracts/AggregationContract.ts) | Done (threshold-based, uses `requireInput`) |
-| Collateral | contracts.md | [CollateralContract.ts](src/contracts/CollateralContract.ts) | Done |
-| Insurance | collateral-resolution.md | [InsuranceContract.ts](src/contracts/InsuranceContract.ts) | Done |
+| Collateral | contracts.md | [CollateralContract.ts](src/contracts/CollateralContract.ts) | Partial — resolution-mode gaps, see "Collateral/insurance resolution gaps" |
+| Insurance | collateral-resolution.md | [InsuranceContract.ts](src/contracts/InsuranceContract.ts) | Partial — rectification/solidification unimplemented, see "Collateral/insurance resolution gaps" |
 | Record | contracts.md | [RecordContract.ts](src/contracts/RecordContract.ts) | Done (self-claim enforced via `collectInputs().isSelfClaim`) |
 | Timelock | contracts.md | — | Needs implementation (verify anchor chain depth >= minDepth in params) |
 | Computation | contracts.md | ExecutionModule mock registry | Working for TypeScript mocks; needs WASM runtime for real contracts |
