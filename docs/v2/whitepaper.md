@@ -110,15 +110,40 @@ Note that immediately claiming an output on the same block is possible. This is 
 
 Sidenote: There's a couple of different ways we can specify claims. In order from simplest to most powerful:
 1. A simple block hash and output index. This is simple, yet does not prove that the claimed block is included in the anchor chain. Users desire to trust a block's contents, and they do this by seeing that the block's inputs (claims and refs) are insured by well-known blocks.
-2. A 3-tuple of integers: `{ chainIndex, aggregatePath, outputIndex }`. The output is resolved by following `chainIndex` chain anchors, then recursively taking `block.aggregates[(aggregatePath % block.aggregates.length) - 1]` until the path is zero, then selecting the correct output. This works but feels less elegant than the following method.
+2. A 3-tuple of integers: `{ chainHops, treePath, outputIndex }`. The output is resolved by following `chainHops` chain anchors, then recursively taking `block.aggregates[(treePath % block.aggregates.length) - 1]` until the path is zero, then selecting the correct output. This works but feels less elegant than the following method.
 3. A single integer, an index into the entire output vector defined by the block, its anchor chain, and the anchor chain's subtrees. This is the chosen method specified above.
 4. A single integer, an index into the UNCLAIMED output vector. This has the advantage of being unable to address the same claim twice, eliminating the possibility of double-spends. However, the overhead of maintaining a claim mask (potentially very large for a large aggregation) and transforming claim indexes through these likely requires hash inversions for a claim mask merkle tree, which is a lot of machinery for clients to run to simply resolve claims.
+
+Note: option 2 would be implemented something like this:
+```typescript
+// Note locateBlock(block, 0, 0) -> block (a self-claim)
+function locateBlock(block: Block, chainHops: number, treePath: bigint) {
+  for (let i = 0; i < chainHops; i++) {
+    block = block.anchor;
+  }
+  while (treePath !== 0n) {
+    const child = treePath % BigInt(block.children.length);
+    block = block.children[child];
+    treePath /= BigInt(block.children.length);
+  }
+}
+```
+
+### Merkle claimed/unclaimed mask
+
+Option 4 specified indices into an unclaimed output vector, requiring the use of a claim mask to transform indices when resolving them through another block (since the unclaimed output space changes). Option 3 omits this necessity, since it indexes into a global output vector, containing both claimed and unclaimed outputs. The transformation from one block's output space into another's is a simple addition.
+
+Detecting double-spends was a big benefit of the claim mask in option 4. This is mostly useful for aggregation, when an aggregator wants to know that he won't have to pay out double-spend claims. We can still do this, keeping a claimed/unclaimed bitvector in a merkle tree on each block, without affecting claim lookups. Normal clients will never need to index into the merkle tree, while aggregators will likely find it quite useful.
+
+It's very simple; each block's merkle tree encodes a bitvector with a 1 set if that output index is claimed in an aggregate. The bitvector's length is `anchor.output_space_size + SUM(aggregate[*].created_outputs)`. Notably it does not include outputs or claims of the block itself.
 
 ### Outputs
 
 An output describes funds that are only able to be retrieved by a block satisfying the given contract and parameters. Amount must be non-negative (although relaxing this restriction has some interesting mechanics we could investigate in the future).
 
 The sum of output amounts must exactly equal the sum of claimed output amounts.
+
+If the contract conatins an ALLOWED_PRODUCERS property, it should be interpreted as a JSON array of hashes. Only those contracts are allowed to put that output onto a block.
 
 ### Timestamp
 
@@ -128,32 +153,37 @@ Let's say a block wants to lock funds until a date D. Then, its output contract 
 
 ## Conflicts
 
-A block is either 
+A conflict occurs when more than one block claims the same output.
 
-What if the canonicality boost is stored on the block, and invalidity is just a flag.
+Locally, a peer should give each claim a canonicality of `descendant_weight + self_weight - disqualification_penalty - misordering_penalty`
+- How does this work when a descendant is aggregated - is it summed twice?
+- I think we aggregate the maximal cross-section of fees, and use that as the weight.
+- The weight is proportional to throughput, so larger blocks will be prioritized.
+
+`disqualification_penalty = throughput * disqualification_factor`
+`misordering_penalty = throughput * misordering_factor`
+
+An invalid block or a double-spend (just one of the multiple claims) gets marked "disqualified" in some aggregator.
+- Disqualified blocks are no longer elegible to be marked in a double-spend or as invalid.
+- Disqualified block's canonicality gets decremented by the throughput, which gets burned.
+- OR you incentivize a replacement by the same amount (the positive version), but that seems a little more complex. Correct don't do this.
+- Any negative canonicality is flagged and propagates to descendants, which makes the whole downstream uncanonical.
+- Any disqualified block doesn't participate in double-spends, so you can regenerate the claim. The new block behaves exactly the same as it would if it had been generated originally.
+- A misordered aggregations is similar.
 
 
-What if misordered aggregations simply means the block is invalid, and we treat it the same way (except litigation).
+incentive = generation_cost + verification_cost <= throughput <= rectification_amount
+- The rectification_amount should be approximately equal to the value of a correct solution minus the value of an incorrect solution.
 
+Invalidity insurance payout:
+- Burn `throughput` -> `{disqualify, block_hash}`, which disqualifies the block
+- Pays `O(throughput)` for reward
+- Note: the whole block's throughput is used, not just the claim
 
-Each conflict uses these things to evaluate the winner:
-- descendant work by iterating the anchor chains of self and parents
-- Total contract throughout (only the conflicting contract)
-- misordering of claims demotion
-    - For child order c₁…c_k with peer-local descendant weights w: Σ_{i<j} max(0, w_{c_j} − w_{c_i})
-    - Possibly multiplied by some constant factor
-    - Should this be the entire block or just the contract’s claims? Probably just the aggregation contract’s claims, since that’s the only thing that’s going to have a downstream effect.
-    - Computational trick for O(N log N)
-        
-        Define two order-statistics of the sequence:
-        
-        - **T = Σ_{i<j} |w_i − w_j|** — the total pairwise spread. Order-*independent*; computable in O(k log k) by sorting once: with weights sorted ascending as w₍₁₎…w₍ₖ₎, T = Σ_r (2r − k − 1)·w₍ᵣ₎.
-        - **P = Σ_j (2j − k − 1)·w_j** — a signed, position-weighted sum over the sequence *as given*. O(k), one pass.
-        
-        Then, since U counts the positive parts of (w_j − w_i) and T counts absolute values while P counts signed values over the same pairs:
-        
-        **U = (T + P) / 2**
-
+Double-spend insurance payout:
+- Burn `throughput` -> `{disqualify, block_hash}`, which disqualifies the block
+- Pays `O(throughput)` for reward
+- Note: the whole block's throughput is used, not just the claim
 
 # Local behavior
 
@@ -185,8 +215,6 @@ What if the insurance resolution is specified by the contract, based upon presen
 ## Aggregation
 
 Every block except the genesis block has a single aggregation output. An aggregation block is simply a block that claims at least 2 similarly-sized aggregation outputs. This organizes the set of blocks into a forest; a set of trees. As new blocks get created, they get aggregated into a small tree, which will eventually get aggregated into a larger tree, etc.
-
-<!-- claude: "Similarly-sized" needs a definition -- sized by aggregation-output amount (fee)? This is v1's weight-ratio constraint K reappearing with a new metric (dag.md, Balancing: ratio <= K gives O(log N) depth, hence O(log N) proofs and sampling descent). Worth porting that bound and naming the constant. -->
 
 Aggregations serve 4 functions:
 1. Ordering the tree of blocks
@@ -356,7 +384,7 @@ Both can be built upon; you can even incentivize both with the same output. But:
 - The descendant weight isn't really the cost of generation, it's the cost of verification. So have an external pool of funds, which you can request spent on the branch. It gets spent whether or not the branch is canonical.
 - OR most simply, just use the aggregation fee as the work.
 
-Actually you can duplicate responses on all branches without issues, as long as there’s a bottleneck forcing one branch to be chosen. I think this will happen during aggregation. Also this makes possible piggybacking.
+Actually you can duplicate responses on all branches without issues, as long as there’s a bottleneck (a real cost for supporting the wrong branch) forcing one branch to be chosen. I think this will happen during aggregation. Also this makes possible piggybacking.
 <!-- claude: Reads decided -- promotable; this is what licenses piggybacking. But see the random-bytes paragraph in the top half, which wants to *prevent* double-posting work on branches -- reconcile the two (duplicates fine for responses, bad for weight?). -->
 
 
@@ -537,14 +565,6 @@ Negative outputs:
 - I'm not sure this is worth the complexity.
 - Actually what if sending a negative output is like a signal to that contract, and must be immediately offset in the same block?
 
-What if contracts ran both on the claim AND output?
-- This allows claim chains.
-
-Alternately: restrictions on who can create certain outputs
-- Maybe just an ALLOWED_PRODUCERS array on the contract.
-
-Alternately: The contract checks properties of the outputting block
-
 fetch() - returns claimed, valid results
 claim() - returns unclaimed datas, which may be accepted or rejected
 
@@ -554,10 +574,6 @@ fetch(contract_that_accepts_blocks_with_throughput_around_range, range) -> block
 Or maybe a sub-call of another verifier (which could claim a message sent to it)
 
 
-An anchor chain defines a global output vector, not just the unspent ones?
-- No need for merkle claim masks on the lookup path, although they might be useful for merging
-- The claim mask is defined per-block in the anchor's output space.
-
 Hints:
 - Not covered by insurance
 - Means generation can't be automatic
@@ -565,20 +581,6 @@ Hints:
 - Just implement this as separate blocks that lock funds and selectively release it.
 - Double-spend reports are kind of like hints onto the insurance block's release fund.
 
-Each claim is addressed as a chainHops + treePath tuple:
-```typescript
-// Note locateBlock(block, 0, 0) -> block (a self-claim)
-function locateBlock(block: Block, chainHops: number, treePath: bigint) {
-  for (let i = 0; i < chainHops; i++) {
-    block = block.anchor;
-  }
-  while (treePath !== 0n) {
-    const child = treePath % BigInt(block.children.length);
-    block = block.children[child];
-    treePath /= BigInt(block.children.length);
-  }
-}
-```
 
 Block insurance output:
 ```
@@ -617,3 +619,13 @@ claimAll(my_claimer_of, {aggregation_block_hash_N, aggregation_contract_hash, ''
 2. The proof of work only checks verification cost. It's possible to create many blocks that are easy to generate but have high weight. To be verified and included in an aggregation, the fee must be high enough to pay for verification. This aggregation fee is actually the weighing mechanism, more similar to a proof of burn than a proof of work. Anyone can claim them, and claims are prioritized by the size of their own aggregation fee outputs, so with competition the winning claimer will be one who sends their outputs to the next aggregation instead of their own bank account.
 
 <!-- claude: The competition argument (claims prioritized by the claimer's own forwarded fee outputs) disciplines fees on *public* branches -- it is v1's fee-zeroing defense generalized, and it is good. The remaining hole is the *private fork*: no competitors exist there, so the attacker claims their own fees at zero net cost, and "proof of burn" mints weight for free until reveal. v1 dodged this because effective weight was *sampled verification cost*, with the fee as the market price of inclusion rather than the metric (weight-design.md). The scratchpad's fee-commitment idea helps but does not close it -- the attacker reveals only when expecting to win, and on the winning path the committed fee comes home. Suggested resolution: keep sampled verification cost as the weight metric (as the Node state section already implies) and let the fee be the economic floor; then a private fork earns only what its verifiers actually cost to run, which is real proof of work. Either way, this scenario deserves an explicit answer here. -->
+
+## Glossary
+
+Deeply buried: A block that has lots of descendant weight, usually quite old. Typically canonical and would be very difficult to make uncanonical.
+
+## Abandoned ideas
+
+Aggregations recording the descendant weight of each subtree (maybe the descendant weight contained in the aggregation, from other following subtrees) instead of the weight vector. After aggregation, little else should anchor to the children. But I don’t know if this helps; you still have to compute the subtree weight somehow.
+
+Boosting conflict resolution via a canonicality boost, block throughput metric, or claim throughput metric. These boosts have no cost to creating them, allowing an actor to add another claim to a deeply buried output, with an arbitrarily large boost, invalidating a large subset of the graph. Even throughput-based modifiers are suceptible because the account contract can simply be used to generate arbitrarily large throughputs.
