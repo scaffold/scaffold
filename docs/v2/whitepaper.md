@@ -92,23 +92,25 @@ function resolveClaim(block: Block, claim: bigint): { block: Block, outputIndex:
   }
   claim -= outputCount;
 
-  for (const agg of block.aggregates) {
+  for (const agg of block.aggregates.toReversed()) {
     if (claim < agg.outputCount) {
       return resolveClaim(resolveBlock(agg.block), claim);
     }
     claim -= agg.outputCount;
   }
 
-  return resolveClaim(resolveBlock(agg.anchor), claim);
+  return resolveClaim(resolveBlock(block.anchor), claim);
 }
 ```
 
 This is equivalent to indexing into the following implicit output space defined wrt a block:
 ```python
-def generate_output_space(block: Block):
+def generate_tree_space(block: Block):
     yield from block.outputs
     for agg in reversed(block.aggregates):
-        yield from generate_output_space(agg.block)
+        yield from generate_tree_space(agg.block)
+def generate_output_space(block: Block):
+    yield from generate_tree_space(block)
     if not is_genesis(block):
         yield from generate_output_space(block.anchor)
 def resolve_claim(block: Block, claim: int):
@@ -182,8 +184,9 @@ An invalid block or a double-spend (just one of the multiple claims) gets marked
 - Any disqualified block doesn't participate in double-spends, so you can regenerate the claim. The new block behaves exactly the same as it would if it had been generated originally.
 - A misordered aggregations is similar, although its disqualification doesn't get aggregated like an invalidity or double-spend.
 
-Which double-spend gets disqualified?
-- The second one
+A double-spend is an invalidity of the aggregator. All spends following the first one (in the canonical traversal of the tree) are disqualified.
+
+> Note that although negative canonicalities propagate to descendants, invalidities don't. This is because lots of work could be built on an invalid block, and in this case we leave that work alone, while freeing up the original output to be claimed again. On the other hand if the descendant work doesn't exceed the throughput, the canonicality will become negative and that WILL propagate downstream, effectively making the whole branch uncanonical.
 
 incentive = generation_cost + verification_cost <= throughput <= rectification_amount
 - The rectification_amount should be approximately equal to the value of a correct solution minus the value of an incorrect solution.
@@ -202,7 +205,24 @@ Including or not including a double-spend depends on the fees. If the fees are l
 
 ## Consensus
 
-What exactly is the consensus mechanism here? It's relatively easy for clients to duplicate their work and place blocks on multiple branches, since most work doesn't depend on the block hash. In fact this is desirable; it makes possible piggybacking (copying a deeply buried answer). The bottleneck is aggregation.
+Blocks are aggregated into trees. Trees can declare arbitrary weight, so instead of trusting it peers sample and evaluate locally. Peers descend a tree by sampling, at each branch choosing a child proportional to its aggregation fee. Once a leaf is reached, the peer verifies the block and measures the cost (cpu usage, memory, etc). This propagates back up the tree, scaling up by the inverse probability of sampling each child, until the root has an estimate. This can occur multiple times to get a more accurate measurement.
+
+Example code:
+```python
+def sampleSubtree(node, lam) -> Estimate:   # lam = budget knob
+    est = Estimate.empty()                  # n=0, value 0  (additive identity)
+
+    pi0 = inclusion_prob(node.declaredWeights[0], lam)
+    if bernoulli(pi0):
+        est += estimateSelf(node) / pi0
+
+    for k, child in enumerate(node.children):
+        pik = inclusion_prob(node.declaredWeights[k+1], lam)
+        if bernoulli(pik):
+            est += sampleSubtree(child, lam) / pik
+
+    return est
+```
 
 ## The contract interface
 
@@ -253,6 +273,8 @@ Aggregations serve 4 functions:
 
 > Note: This also excludes aggregating the same block is included twice, as it's aggregation output would be double-spent.
 
+The aggregation output's game-theoretic optimal amount is `verification_cost * throughput / AVG(throughput)`
+
 Before creating an aggregation, a peer needs to evaluate the risk/reward tradeoff. The reward is the fees paid via the aggregation outputs. The risk is the insurance they are placing, covering the blocks in their subtrees. They can reduce this risk by probing the subtrees, and if they find an issue they can claim a reward from the current insurer.
 
 It's likely more than one peer may be probing and aggregating a given subtree. The one who becomes canonical and receives the reward is determined by the claim resolution logic, in the same way that any claim winner is determined: by the amount of derived work. Typically this is the first, so quick probers and publishers will be more profitable.
@@ -287,6 +309,8 @@ There's 2 kinds of insurance:
 2. Long-term rectification insurance. This responsibility is passed to aggregators, and never goes away. This supports verification failures, and pays the disqualification burn.
 
 > Note that query-based invalidities mean that generation can't be automatic. Implement this as separate blocks that lock funds and selectively release it.
+
+It's expected that a large fraction of blocks will be forgotten pretty quickly. This is why long-term insurance isn't responsible for data serving.
 
 ## The aggregation contract
 
