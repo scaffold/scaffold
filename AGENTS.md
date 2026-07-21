@@ -26,11 +26,13 @@ Incorrect responses should be eventually corrected, and publishing incorrect res
 4. Eventual immutability:
 Executions are eventually committed to a global block graph. Finalization should be delayed enough to allow verifiers to detect and challenge incorrect executions.
 
-## Philosophy
+## Status
 
-- The elegant, simple solution is always the right one.
-- The protocol documentation is always the source of truth. The implementation is just an implementation.
-- Scaffold is decentralized, so every action must be incentivized.
+Initially, I (Joel) wrote an implementation that became quite complex and buggy, and I stopped development for about a year. Then, in early 2026 AI started to become quite capable and I started again from scratch. I moved much of the old code to legacy/ and legacy2/, and started work afresh in src/. I used Claude extensively, too much in fact, to where I accepted most things without much review and lost understanding of the architecture and code.
+
+I recently (Jul 20, 2026) finished a major simplification: instead of preventing double-spends at aggregation time, simply penalize aggregations that are found to have double-spends. This is the same procedure as is used for invalid blocks, and simplifies both aggregation and claim resolution. I also wrote docs/v2/whitepaper.md to fully document my vision of what Scaffold will look like.
+
+So I'm starting again. I imagine that a lot of the old code will still be applicable, but I'd like to re-architect it from scratch and copy code over so I fully understand and own what's built. I'll start with a minimal entrypoint at src/Scaffold.ts.
 
 ## Docs
 
@@ -42,6 +44,10 @@ The documentation lives in docs/v2/ and is divided into 3 files:
 Don't be afraid to update documentation if needed, but check with me first, and if I give you the go-ahead remember to keep it concise. Don't add unnecessary details or examples.
 
 ## Coding
+
+### Overview
+
+I am the only developer, and there are no users or backwards compatibility concerns. Use git worktrees if applicable but don't commit, push, or use the github CLI.
 
 ### Think Before Coding
 
@@ -59,7 +65,7 @@ Use `assert(expr: unknown, msg?: string): void` and `error(msg: string): never` 
 
 Use the logging system to log recoverable edge cases or notable situations.
 
-The public scaffold API is an exception; we may want to be more lenient in that case.
+The public scaffold API is an exception; we may want to be more lenient and helpful in that case.
 
 ### Never drop errors silently
 
@@ -76,5 +82,3 @@ When you hit a gap, surface it explicitly and offer the options. Joel may want t
 - Pause the main task so Joel can address the gap in another session, then resume work with it fixed.
 
 In every case where you find a gap or bug -- whether you work around it under direction, ignore the test, or pause -- **notify Joel and add an entry to `TODO.v2.md`**. You have absolute freedom (and are expected) to autonomously add things you discover to `TODO.v2.md`. There should be no unreported gaps or bugs that Claude saw and worked around.
-
-This is a team effort and Joel depends on you. Always strive for quality. If you see something, say something.
