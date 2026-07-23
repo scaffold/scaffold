@@ -76,13 +76,11 @@ interface Block {
   chain: { weight: bigint, throughput: bigint }[];
   aggregates: { block: Hash, outputCount: bigint }[];
   claims: bigint[];
+  refs: bigint[];
   outputs: { contractHash: Hash, params: bytearray, data?: bytearray, amount: bigint }[];
-  // Refs?
   timestampMs: number;
 }
 ```
-
-The anchor and chain are specified in §4.2, aggregates in §4.3, claims in §4.5.
 
 **Outputs.** An output describes funds that are only able to be retrieved by a block satisfying the given contract and parameters. Amount must be non-negative (although relaxing this restriction has some interesting mechanics we could investigate in the future — §13). Contract semantics, `ALLOWED_PRODUCERS`, and the `stalling` flag are covered in §9. The conservation rule on outputs is in §5.2.
 
@@ -209,6 +207,10 @@ Detecting double-spends was a big benefit of the claim mask. This is mostly usef
 It's very simple; each block's merkle tree encodes a bitvector with a 1 set if that output index is claimed in an aggregate. The bitvector's length is `anchor.output_space_size + SUM(aggregate[*].created_outputs)`. Notably it does not include outputs or claims of the block itself. The merkle tree root is stored in the aggregation output data.
 
 There are two access paths, and they never meet: **light clients** resolve claims purely additively through the output space and never touch the mask; **aggregators** maintain the mask to detect double-spends before posting insurance (§7), and prove claimed/unclaimed status against it when contests need it.
+
+### 4.7 Refs
+
+Whereas claims point only to unclaimed outputs, refs point to any output. They act as a kind of "activity log" allowing reproducability for the data fed to the contract. The exact semantics of this are still unspecified.
 
 ## 5. Validity and faults
 

@@ -1,11 +1,11 @@
-import { BaseContext } from '../util/BaseContext.ts';
-import { EventLog, ScopedLogger } from './EventLog.ts';
+import { BaseContext } from './util/BaseContext.ts';
+import { EventLog, ScopedLogger } from './core/EventLog.ts';
+import { Config } from './Config.ts';
 
-/** Lean DI container for the protocol layer. Services register via ctx.get(ServiceClass). */
-export class ProtocolContext extends BaseContext {
+export class Context extends BaseContext {
   readonly eventLog?: EventLog;
 
-  constructor(eventLog?: EventLog) {
+  constructor(public config: Config, eventLog?: EventLog) {
     super();
     this.eventLog = eventLog;
   }

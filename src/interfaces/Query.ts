@@ -28,6 +28,6 @@ class ReaderContractInputExample implements Query {
   params: (_descriptor: string) => Reader;
 
   constructor(params: { x: number; y: number }) {
-    this.params = (_descriptor: string) => createReader(params);
+    this.params = () => createReader(params);
   }
 }

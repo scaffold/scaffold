@@ -67,6 +67,10 @@ Use the logging system to log recoverable edge cases or notable situations.
 
 The public scaffold API is an exception; we may want to be more lenient and helpful in that case.
 
+### Be concise
+
+Comments should be used to add information that complements the code or type. Don't comment things that would be obvious from reading the code. Where you do comment, be concise.
+
 ### Never drop errors silently
 
 Any path that catches an exception, drops a malformed input, or silently rejects a request SHOULD emit a log event. Default to `warn` for anything unexpected from outside the node (malformed peer input, failed connections, rejected handshakes) and `debug` for internal conditions that are expected but worth tracing (duplicate messages, deduplication hits, fallback paths). A silent `try { ... } catch { }` or `if (!valid) return;` without a log makes production debugging much harder later -- the cost of adding the log is trivial compared to the cost of not having it when you need it.
