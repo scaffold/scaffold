@@ -5,7 +5,8 @@ export enum AtomType {
   Signal = 1,
   Request = 2,
 }
-export const DRAFT_TYPE = 256;
+export const BLOCK_REF_TYPE = 256;
+export const DRAFT_TYPE = 257;
 
 export enum AtomSource {
   Local = 'local',
@@ -14,19 +15,19 @@ export enum AtomSource {
 }
 
 export interface AtomBase {
-  readonly hash: Hash;
-  readonly type: AtomType;
+  hash: Hash;
+  type: AtomType;
 
-  readonly source: AtomSource;
-  readonly receivedAt: number;
+  source: AtomSource;
+  receivedAt: number;
 
-  readonly raw: Uint8Array;
-  readonly message: Uint8Array;
-  readonly signature?: Uint8Array;
-  readonly signer?: Uint8Array;
+  raw: Uint8Array;
+  message: Uint8Array;
+  signature?: Uint8Array;
+  signer?: Uint8Array;
 
-  readonly fromConnections: string[];
-  readonly toConnections: Set<string>;
+  fromConnections: string[];
+  toConnections: Set<string>;
 }
 
 export interface BlockPayload {
@@ -72,29 +73,70 @@ export function isBlockPayload(p: unknown): p is BlockPayload {
   return blockPayloadShape(p);
 }
 
+export interface ResolvingClaim {
+  producer: Block | BlockRef;
+  outputIdx: bigint;
+  claimer: Node;
+  claimIdx: number;
+  resolved: boolean;
+}
+
 export interface Block extends AtomBase {
-  readonly type: AtomType.Block;
+  type: AtomType.Block;
 
-  readonly payload: BlockPayload;
+  payload: BlockPayload;
 
-  readonly anchor?: Block;
-  readonly claims: { producer: Hash; outputIndex: bigint }[];
+  anchor?: Block | BlockRef;
+  aggregates: { block: Block | BlockRef; outputCount: bigint }[];
+  claims: ResolvingClaim[];
+
+  // These are other nodes referring to this atom by hash
+  anchoringNodes: Block[];
+  aggregatingNodes: Block[];
+  resolvingOutputs: Map<bigint, ResolvingClaim[]>;
+
+  // Listeners fire when any adjacent node is attached or modified.
+  // An adjacent node is an anchor, anchoring node, aggregated node, or aggregating node
+  listeners: Set<(node: Node) => void>;
 }
 
 export interface Signal extends AtomBase {
-  readonly type: AtomType.Signal;
+  type: AtomType.Signal;
 
-  readonly payload: {};
+  payload: {};
 }
 
 export type Atom = Block | Signal;
 
-export interface Draft {
-  readonly type: typeof DRAFT_TYPE;
+// When a block is only known by hash, it's a BlockRef
+export interface BlockRef {
+  hash: Hash;
+  type: typeof BLOCK_REF_TYPE;
 
-  readonly claims: { producer: Hash; outputIndex: bigint }[];
+  // List of connections that know the block behind this ref
+  connections: string[];
+
+  // These are other nodes referring to this block by hash
+  anchoringNodes: Block[];
+  aggregatingNodes: Block[];
+  resolvingOutputs: Map<bigint, ResolvingClaim[]>;
+
+  // Listeners fire when any adjacent node is attached or modified.
+  // An adjacent node is an anchor, anchoring node, aggregated node, or aggregating node
+  listeners: Set<(node: Node) => void>;
+}
+
+export interface Draft {
+  type: typeof DRAFT_TYPE;
+
+  claims: { producer: Hash; outputIndex: bigint }[];
+  refs: { producer: Hash; outputIndex: bigint }[];
+  outputs: { contractHash: Hash; params: Uint8Array; data?: Uint8Array; amount: bigint }[];
 
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts
+
+  builtBlocks: Block[];
+  currentBuild?: { status: 'pending_aggregation'; cancel(): void };
 }
 
 export type Node = Block | Draft;

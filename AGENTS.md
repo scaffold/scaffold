@@ -7,6 +7,7 @@ Scaffold is a browser-first protocol architecture that moves cloud responsibilit
 ## High-Level Overview
 
 Scaffold is intended to support:
+
 - Serverless game-state consensus (deterministic WASM + dispute/penalty mechanics)
 - Social content distribution from peers with signatures and globally consistent latest-state resolution
 - Distributed database semantics
@@ -15,16 +16,16 @@ Scaffold is intended to support:
 ## Goals
 
 1. Browser-native operation:
-Use WASM, WebRTC, and WebSockets. Server-side implementations may exist for performance, but should not have privileged protocol capabilities.
+   Use WASM, WebRTC, and WebSockets. Server-side implementations may exist for performance, but should not have privileged protocol capabilities.
 
 2. Fast request/response that is usually correct:
-The common-case request path should be faster than traditional server round trips, often requiring only one WebRTC P2P round trip with immediate trust signals (for example via collateral).
+   The common-case request path should be faster than traditional server round trips, often requiring only one WebRTC P2P round trip with immediate trust signals (for example via collateral).
 
 3. Economic pressure toward correctness:
-Incorrect responses should be eventually corrected, and publishing incorrect responses should be economically disadvantageous. Risk-averse users should have safety-oriented operating modes.
+   Incorrect responses should be eventually corrected, and publishing incorrect responses should be economically disadvantageous. Risk-averse users should have safety-oriented operating modes.
 
 4. Eventual immutability:
-Executions are eventually committed to a global block graph. Finalization should be delayed enough to allow verifiers to detect and challenge incorrect executions.
+   Executions are eventually committed to a global block graph. Finalization should be delayed enough to allow verifiers to detect and challenge incorrect executions.
 
 ## Status
 
@@ -37,6 +38,7 @@ So I'm starting again. I imagine that a lot of the old code will still be applic
 ## Docs
 
 The documentation lives in docs/v2/ and is divided into 3 files:
+
 1. whitepaper.md - documents the protocol at a high level; should capture all of the incentives and game theory but doesn't need to dive into implementation details too much.
 2. scaffold.md - documents the user-visible interface; both the TypeScript API and the contract's WASM ABI should live here.
 3. implementation.md - documents the architecture and data structures needed to implement a competitive peer that aligns with the incentives outlined in the whitepaper.
@@ -52,6 +54,7 @@ I am the only developer, and there are no users or backwards compatibility conce
 ### Think Before Coding
 
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
+
 - State your assumptions explicitly. If uncertain, ask.
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
@@ -80,9 +83,14 @@ Any path that catches an exception, drops a malformed input, or silently rejects
 If a bug, missing feature, or design gap is preventing you from completing a task or making a test pass, **stop and ask Joel for direction**. Do NOT silently work around it, weaken an assertion, skip the problematic path, or paper over the symptom. A failing test that documents a real gap is more valuable than a passing test that hides a bug we could have fixed.
 
 When you hit a gap, surface it explicitly and offer the options. Joel may want to:
+
 - Mark the test as `ignore` if we aren't going to fix it soon.
 - Accept a failing test that will pass later when we address the issue.
 - Hack a fix for now and document a future v2 TODO to clean it up.
 - Pause the main task so Joel can address the gap in another session, then resume work with it fixed.
 
 In every case where you find a gap or bug -- whether you work around it under direction, ignore the test, or pause -- **notify Joel and add an entry to `TODO.v2.md`**. You have absolute freedom (and are expected) to autonomously add things you discover to `TODO.v2.md`. There should be no unreported gaps or bugs that Claude saw and worked around.
+
+### Other misc instructions
+
+- Don't use `readonly` unless there's a specific reason; it's too verbose to add everywhere.
