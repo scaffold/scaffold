@@ -39,8 +39,37 @@ export interface BlockPayload {
   timestampMs: number;
 }
 
+type Check = (val: unknown) => boolean;
+
+const isBigint: Check = (val) => typeof val === 'bigint';
+const isHash: Check = (val) => val instanceof Hash;
+const isBytes: Check = (val) => val instanceof Uint8Array;
+const isOptionalBytes: Check = (val) => val === undefined || isBytes(val);
+const arrayOf = (check: Check): Check => (val) => Array.isArray(val) && val.every(check);
+
+/** Structural match, rejecting unknown keys so junk can't ride along inside a signed block. */
+const shape = (fields: Record<string, Check>): Check => (val) =>
+  typeof val === 'object' && val !== null && !Array.isArray(val) &&
+  Object.keys(val).every((key) => key in fields) &&
+  Object.entries(fields).every(([key, check]) => check((val as Record<string, unknown>)[key]));
+
+// Structural only: the sign and range rules of wp 5.1 are validity, not shape.
+// `timestampMs` is bounded to finite because NaN/Infinity stringify to null and
+// so cannot survive the wire at all.
+const blockPayloadShape = shape({
+  anchor: isHash,
+  chain: arrayOf(shape({ weight: isBigint, throughput: isBigint })),
+  aggregates: arrayOf(shape({ block: isHash, outputCount: isBigint })),
+  claims: arrayOf(isBigint),
+  refs: arrayOf(isBigint),
+  outputs: arrayOf(
+    shape({ contractHash: isHash, params: isBytes, data: isOptionalBytes, amount: isBigint }),
+  ),
+  timestampMs: (val) => typeof val === 'number' && Number.isFinite(val),
+});
+
 export function isBlockPayload(p: unknown): p is BlockPayload {
-  // TODO(claude): Implement this
+  return blockPayloadShape(p);
 }
 
 export interface Block extends AtomBase {

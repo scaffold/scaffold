@@ -31,6 +31,8 @@ Working list for the v2 rewrite. Architecture rationale lives in docs/v2/impleme
 
 ## Known gaps / deferrals
 
+- [ ] Block codec is tagged JSON (`taggedStringify`/`taggedParse`), which is value-stable but not byte-stable: decoding then re-encoding a received block generally yields different bytes, hence a different hash. `raw` is therefore the only source of block identity -- never rebuild wire bytes from a decoded payload. Replace with a canonical binary codec, then assert `encode(decode(raw)) === raw` at ingestion (wp 4.1)
+- [ ] Ingestion error handling at the funnel edge: `BlockIngestor.deserialize` throws on malformed input and nothing catches it, so no warn is logged for bad peer data (AGENTS.md). Also `AtomStore.ingest` marks the hash `ingestingAtom` before deserializing, so a throw leaves the entry poisoned forever -- later `get(hash)` throws "Cannot get an ingesting fact!" rather than reporting a known-bad atom
 - [ ] Canonicality recompute is O(N) in v0; incremental O(log N) later (the interface must allow the swap)
 - [ ] Delete `src/core/CoreContext.ts` (dead stub) when cutting over old code
 - [ ] docs/v2/scaffold.md is still empty; fill once the facade API firms up

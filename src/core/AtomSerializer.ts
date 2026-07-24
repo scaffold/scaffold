@@ -31,8 +31,8 @@ export class AtomSerializer {
 
     let buf: Uint8Array;
     ingestor.serialize(payload, (size) => {
-      buf = new Uint8Array(size + (ingestor.isSigned ? SIGNATURE_LENGTH + headerSize : headerSize));
-      return buf.subarray(headerSize);
+      buf = new Uint8Array(headerSize + size + (ingestor.isSigned ? SIGNATURE_LENGTH : 0));
+      return buf.subarray(headerSize, headerSize + size);
     });
     const raw = buf!;
 

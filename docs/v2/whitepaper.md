@@ -1,6 +1,6 @@
 # Scaffold
 
-*A protocol for trusted distributed computation.*
+_A protocol for trusted distributed computation._
 
 ## 1. Abstract
 
@@ -18,7 +18,7 @@ Why a forest instead of a chain: a chain serializes all work through a single pr
 
 The storage space required from a node is also O(log N); most blocks can be forgotten freely once its short-term insurance has evaporated.
 
-Compared to optimistic rollups, there is no distinguished sequencer and no L1 to appeal to — the challenge game and its collateral *are* the base layer. There is also no fixed challenge window: detection probability compounds as weight accumulates, and insurance prices the residual risk (§8). Compared to Truebit, disputes resolve through a simple voting system rather than an interactive on-chain referee.
+Compared to optimistic rollups, there is no distinguished sequencer and no L1 to appeal to — the challenge game and its collateral _are_ the base layer. There is also no fixed challenge window: detection probability compounds as weight accumulates, and insurance prices the residual risk (§8). Compared to Truebit, disputes resolve through a simple voting system rather than an interactive on-chain referee.
 
 ## 3. Model and assumptions
 
@@ -39,7 +39,7 @@ Scaffold's native token is the Joule. It serves double duty as the unit of value
 
 ### 3.3 Peer model
 
-Peers gossip blocks; a block is an immutable byte array addressed by hash. Peers execute WASM to generate and verify blocks. Peers connect over WebRTC and WebSocket, although the protocol leaves this open to extension. All peers have the same privileges; server-class peers may exist for performance but have no extra protocol capabilities.
+Peers gossip blocks; a block is a signed, immutable byte array addressed by hash. Peers execute WASM to generate and verify blocks. Peers connect over WebRTC and WebSocket, although the protocol leaves this open to extension. All peers have the same privileges; server-class peers may exist for performance but have no extra protocol capabilities.
 
 Peers synchronize by connecting to at least one trusted peer. Peers should be able to persist blocks locally, notably blocks and aggregators containing their pending UTXOs. Although aggregators are incentivized to serve UTXOs it is not required. Long-term, most blocks are expected to be forgotten.
 
@@ -47,7 +47,7 @@ Peers synchronize by connecting to at least one trusted peer. Peers should be ab
 
 The adversary is byzantine and capital-bounded: it can author arbitrarily invalid blocks and aggregations, double-spend, misdeclare weights and throughputs, withhold data, and reorder, but it cannot forge hashes and cannot prevent honest peers from gossiping with one another. Safety is economic and rests on two assumptions:
 
-1. **Detection.** Every fault class has a *situated, paid* detector: aggregators probe before insuring, strategic deceivers self-report at the moment of risk transfer, and victims challenge claims on their own outputs (§7, §8.1). No fault class may rely on unpaid altruism — random third-party bounty hunting is structurally unprofitable at equilibrium (Appendix E) — so §8.3's detection-delay distribution must be justified from these paid channels alone.
+1. **Detection.** Every fault class has a _situated, paid_ detector: aggregators probe before insuring, strategic deceivers self-report at the moment of risk transfer, and victims challenge claims on their own outputs (§7, §8.1). No fault class may rely on unpaid altruism — random third-party bounty hunting is structurally unprofitable at equilibrium (Appendix E) — so §8.3's detection-delay distribution must be justified from these paid channels alone.
 2. **Honest weight.** The adversary cannot sustainably out-spend the honest economy on verified weight for a contested claim.
 
 !!! TODO: Revisit
@@ -73,11 +73,16 @@ The atomic unit in scaffold is a block. A block is an immutable byte array, typi
 ```typescript
 interface Block {
   anchor: Hash;
-  chain: { weight: bigint, throughput: bigint }[];
-  aggregates: { block: Hash, outputCount: bigint }[];
+  chain: { weight: bigint; throughput: bigint }[];
+  aggregates: { block: Hash; outputCount: bigint }[];
   claims: bigint[];
   refs: bigint[];
-  outputs: { contractHash: Hash, params: bytearray, data?: bytearray, amount: bigint }[];
+  outputs: {
+    contractHash: Hash;
+    params: bytearray;
+    data?: bytearray;
+    amount: bigint;
+  }[];
   timestampMs: number;
 }
 ```
@@ -85,6 +90,10 @@ interface Block {
 **Outputs.** An output describes funds that are only able to be retrieved by a block satisfying the given contract and parameters. Amount must be non-negative (although relaxing this restriction has some interesting mechanics we could investigate in the future — §13). Contract semantics, `ALLOWED_PRODUCERS`, and the `stalling` flag are covered in §9. The conservation rule on outputs is in §5.2.
 
 **Timestamp.** This must be greater than or equal to the timestamps of the anchor and all aggregated blocks. Time semantics and time-locks are covered in §9.7.
+
+**Serialization, signing, and identity.** A block's fields are serialized into a byte array (not necessarily canonically); the author signs a digest of those bytes and the signature is appended; the block hash is the hash of the serialized fields and the signature. The author's public key can be recovered from the signature, which means every block carries an unforgeable binding to the key that produced it.
+
+**Blocks are immutable.** Changing any field requires a new signature, and both the change and the new signature change the hash. Any modifications produce a new block.
 
 ### 4.2 Anchors and the anchor chain
 
@@ -111,10 +120,10 @@ The anchor is a hash to another larger block. The anchor should be a reference t
 Walking the propagation explicitly:
 
 - C2 anchors B. B is on C's anchor chain, at position 0, so C2's 50 lands in `chain[0]`.
-- C0 anchors B0. B0 is *not* on C's anchor chain, so the work propagates to B0's own anchor, A. A is `chain[1]`, so the 5 lands there.
+- C0 anchors B0. B0 is _not_ on C's anchor chain, so the work propagates to B0's own anchor, A. A is `chain[1]`, so the 5 lands there.
 - C1 anchors B1 → B1's anchor is B0 → B0's anchor is A: `chain[1]` again, adding 12.
 - If it had any, C's work would not be included.
-- Hence `[{weight: 50}, {weight: 17}]`. In general: each subtree block's work walks up *its own* anchor chain until it first hits a block on the root's anchor chain, and is attributed at that position.
+- Hence `[{weight: 50}, {weight: 17}]`. In general: each subtree block's work walks up _its own_ anchor chain until it first hits a block on the root's anchor chain, and is attributed at that position.
 
 **Throughput** refers to the amount of coins claimed from the tree represented by that root. Example:
 
@@ -135,7 +144,7 @@ Care is taken to aggregate similarly-sized trees, ensuring the tree is balanced.
 
 The aggregates array is used solely to look up claims (§4.5). The aggregation output of each of the aggregated blocks must be claimed, and only those aggregation outputs. If there's N aggregates, there must be N claimed aggregation outputs. The `outputCount` is the total number of outputs created by the entire subtree, which may be claimed or unclaimed. It must be the sum of the aggregated block's output array length and each of its own aggregate's `outputCount`. A correct `outputCount` is what keeps claim resolution tree-scoped (§4.5), so mis-declaring it is a hard fault (§5.1).
 
-The aggregates array should be ordered in order of descendant weight, highest to lowest (the penalty for misordering is in §5.3 and Appendix C). The mechanics and economics of *creating* aggregations are in §7.
+The aggregates array should be ordered in order of descendant weight, highest to lowest (the penalty for misordering is in §5.3 and Appendix C). The mechanics and economics of _creating_ aggregations are in §7.
 
 ### 4.4 The canonical ordering
 
@@ -159,7 +168,10 @@ This ordering is what assigns priority among conflicting claims: the first spend
 A claim signifies that the block fulfills the contract and parameters specified by the referenced output. A claim is an index, and is resolved recursively by this formula:
 
 ```typescript
-function resolveClaim(block: Block, claim: bigint): { block: Block, outputIndex: number } {
+function resolveClaim(
+  block: Block,
+  claim: bigint,
+): { block: Block; outputIndex: number } {
   const outputCount = BigInt(block.outputs.length);
   if (claim < outputCount) {
     return { block, outputIndex: Number(claim) };
@@ -194,13 +206,13 @@ def resolve_claim(block: Block, claim: int):
 
 Note the output space is ordered, with more recent outputs having lower indices and older outputs having higher indices. Immediately claiming an output on the same block is possible; this is called a self-claim.
 
-> 💡 **Invariant (tree-scoped resolution):** when `resolveClaim` recurses into an aggregate, the guard `claim < agg.outputCount` guarantees the recursion resolves *within that aggregate's tree* and never falls through to the aggregate's anchor — provided `outputCount` is declared correctly. That is exactly why `outputCount` correctness is a validity rule (§5.1), and it's what makes the TypeScript resolver equivalent to `generate_output_space` (whose tree recursion is structurally anchor-free). `resolveBlock` is assumed content-addressed lookup by hash.
+> 💡 **Invariant (tree-scoped resolution):** when `resolveClaim` recurses into an aggregate, the guard `claim < agg.outputCount` guarantees the recursion resolves _within that aggregate's tree_ and never falls through to the aggregate's anchor — provided `outputCount` is declared correctly. That is exactly why `outputCount` correctness is a validity rule (§5.1), and it's what makes the TypeScript resolver equivalent to `generate_output_space` (whose tree recursion is structurally anchor-free). `resolveBlock` is assumed content-addressed lookup by hash.
 
-Alternative claim addressings (block hash + index; `{chainHops, treePath, outputIndex}` tuples; indexing the *unclaimed* vector) were considered and rejected — see Appendix B for the designs and why.
+Alternative claim addressings (block hash + index; `{chainHops, treePath, outputIndex}` tuples; indexing the _unclaimed_ vector) were considered and rejected — see Appendix B for the designs and why.
 
 ### 4.6 The merkle claimed/unclaimed mask
 
-Indexing the *unclaimed* output vector (Appendix B, option 4) would have made double-spends unaddressable, at the cost of heavy claim-mask machinery in every client. Option 3 omits this necessity, since it indexes into a global output vector, containing both claimed and unclaimed outputs. The transformation from one block's output space into another's is a simple addition.
+Indexing the _unclaimed_ output vector (Appendix B, option 4) would have made double-spends unaddressable, at the cost of heavy claim-mask machinery in every client. Option 3 omits this necessity, since it indexes into a global output vector, containing both claimed and unclaimed outputs. The transformation from one block's output space into another's is a simple addition.
 
 Detecting double-spends was a big benefit of the claim mask. This is mostly useful for aggregation, when an aggregator wants to know that he won't have to pay out double-spend claims. We can still do this, keeping a claimed/unclaimed bitvector in a merkle tree on each block, without affecting claim lookups.
 
@@ -223,7 +235,7 @@ A block is valid iff:
 3. **Contracts.** Every claim satisfies the claimed output's contract and parameters (§9); `ALLOWED_PRODUCERS` restrictions are respected; if it aggregates or anchors a stalled block, it claims all of that block's stalling outputs (§9.6).
 4. **Aggregation correctness.** Its aggregates' `outputCount`s and its chain array's weights and throughputs are correctly summed; each aggregated tree is smaller than 60% of the aggregate (§7); no block appears twice (structurally excluded anyway — the duplicate's aggregation output would be double-spent).
 
-Ordering of the aggregates array (heaviest-first, §4.3) is deliberately *not* a validity rule — misordering is a soft penalty (§5.3).
+Ordering of the aggregates array (heaviest-first, §4.3) is deliberately _not_ a validity rule — misordering is a soft penalty (§5.3).
 
 ### 5.2 Conservation and burns
 
@@ -236,7 +248,7 @@ Faults create discrepancies, and the v2 rule is that a discovered fault does not
 **Hard faults** disqualify a block, burn its throughput, and pay the finder out of insurance (§8):
 
 - **Invalidity.** The block fails verification — a claim doesn't satisfy its contract, or a rule of §5.1 is broken.
-- **Double-spend.** More than one block claims the same output. All spends following the first one (in the canonical traversal of the tree) are disqualified. A double-spend is an invalidity *of the aggregator*: the fault is attributed to — and paid by the insurance of — the aggregation that admitted the later claim.
+- **Double-spend.** More than one block claims the same output. All spends following the first one (in the canonical traversal of the tree) are disqualified. A double-spend is an invalidity _of the aggregator_: the fault is attributed to — and paid by the insurance of — the aggregation that admitted the later claim.
 - **Uninsured aggregation.** If an aggregator A does not correctly sum the throughputs of its aggregated blocks, we say the aggregated blocks are "uninsured". The aggregator A fails validation, is disqualified, and the aggregated blocks may be aggregated again. This simply falls out of the invalidity logic, but it should be noted that once an aggregator has been disqualified (fails validation or double-spends), the path is broken: its children and grandchildren are no longer eligible to claim insurance. Although this should hold for all kinds of disqualifications, the most important one is if throughput is not correctly summed. This should be clearly visible from the aggregation path, and any paths without correctly summed throughput are simply invalid. If this did not hold, a very large sub-block could be "hidden" inside an aggregation with low declared throughput, meaning it's never probed; this large sub-block should not be eligible to claim insurance payouts (§10.7).
 
 **Soft penalties** reduce canonicality without disqualification:
@@ -272,18 +284,20 @@ generation_cost + verification_cost <= throughput <= rectification_amount
 The `rectification_amount` should be approximately equal to the value of a correct solution minus the value of an incorrect solution.
 
 Invalidity insurance payout:
+
 - Burn `throughput` -> `{disqualify, block_hash}`, which disqualifies the block
 - Pays `O(throughput)` for reward
 - Note: the whole block's throughput is used, not just the claim
 
 Double-spend insurance payout:
+
 - Burn `throughput` -> `{disqualify, block_hash}`, which disqualifies the block
 - Pays `O(throughput)` for reward
 - Note: the whole block's throughput is used, not just the claim
 
 Including or not including a double-spend depends on the fees. If the fees are large enough to compensate for the payout, we can include both.
 
-> 💡 The reward is pinned as `α · throughput` for a protocol constant α (the finder's share), paid *on top of* the burn: the insurer's total outlay per fault is `(1+α) · throughput`. Self-reporting your own fault is deliberately profitable when the insurer is someone else — that is the deception game, §7 — and never profitable against yourself, because self-aggregating and self-reporting still forfeits the burn, which is never recycled to any player. α is an equilibrium dial, not a safety constant: Appendix E.
+> 💡 The reward is pinned as `α · throughput` for a protocol constant α (the finder's share), paid _on top of_ the burn: the insurer's total outlay per fault is `(1+α) · throughput`. Self-reporting your own fault is deliberately profitable when the insurer is someone else — that is the deception game, §7 — and never profitable against yourself, because self-aggregating and self-reporting still forfeits the burn, which is never recycled to any player. α is an equilibrium dial, not a safety constant: Appendix E.
 
 ## 6. Weight and consensus
 
@@ -318,7 +332,7 @@ def sampleSubtree(node, lam) -> Estimate:   # lam = budget knob
     return est
 ```
 
-This is a **per-slot Horvitz–Thompson estimator**: every slot — the node's own work and each child subtree — is gated behind an independent Bernoulli coin with inclusion probability π derived from its declared weight and the budget knob λ, and each included measurement is scaled by 1/π. The estimator is unbiased for the true total weight *regardless of the declarations*: E[X · 1{included} / π] = X. Declarations control only where the sampling budget goes, never the expectation.
+This is a **per-slot Horvitz–Thompson estimator**: every slot — the node's own work and each child subtree — is gated behind an independent Bernoulli coin with inclusion probability π derived from its declared weight and the budget knob λ, and each included measurement is scaled by 1/π. The estimator is unbiased for the true total weight _regardless of the declarations_: E[X · 1{included} / π] = X. Declarations control only where the sampling budget goes, never the expectation.
 
 That is the entire defense against byzantine declaration. Over-declaring a subtree's weight raises its inclusion probability — it gets probed more, its measured contribution is scaled down by the larger π, and (fees being proportional to declared cost) it pays more — with zero effect on the expected estimate. Under-declaring hides a subtree from probing, but forged declarations can only move variance and lose weight, never gain it. Two refinements follow directly:
 
@@ -340,7 +354,7 @@ canonicality = descendant_weight + self_weight - disqualification_penalty - miso
 
 where `descendant_weight + self_weight` is sampled, verified weight from descendant trees (§6.2), credited at the lower confidence bound, and the penalties are per §5.3–§5.4.
 
-> ❓ **Open (carried from the notes):** how does descendant weight compose across aggregation — when a descendant is aggregated, is its work summed twice (once via its own subtree, once via the aggregate)? Current thinking: aggregate the *maximal cross-section of fees* and use that as the weight. Needs formalization — this is the single definition §6.4 and §6.5 both stand on.
+> ❓ **Open (carried from the notes):** how does descendant weight compose across aggregation — when a descendant is aggregated, is its work summed twice (once via its own subtree, once via the aggregate)? Current thinking: aggregate the _maximal cross-section of fees_ and use that as the weight. Needs formalization — this is the single definition §6.4 and §6.5 both stand on.
 > ❓ **Open (terminology):** the note "the weight is proportional to throughput, so larger blocks will be prioritized" conflates the two units; if it means fees correlate with value-at-risk (per §7's fee curve), say that — and check it against §10.2.
 
 ### 6.4 Fork choice, ordering, fault assignment
@@ -381,11 +395,11 @@ Probing should concentrate on the young frontier: only the youngest blocks of a 
 
 **Competition.** It's likely more than one peer may be probing and aggregating a given subtree. The one who becomes canonical and receives the reward is determined by the claim resolution logic, in the same way that any claim winner is determined: by the amount of derived work. Typically this is the first, so quick probers and publishers will be more profitable.
 
-**The deception game.** If no one publishes invalid blocks, probing earns nothing; if probing earns nothing, aggregators stop probing; if no one probes, fraud is free. A perfectly honest network has zero verification incentive and is maximally vulnerable to the first attacker. Scaffold resolves this by *letting the attacker exist and pricing them*. A rational author can publish an invalid block, post collateral, pay the fee, and wait. If the aggregator probes and catches it (probability q), the block is rejected and the author's remaining collateral is claimed. If the aggregator misses, aggregation transfers the risk — the author's collateral is released, the aggregator's insurance now covers the block — and the author immediately proves their own block invalid, collecting the finder's reward `α·t` from the insurance that just accepted it.
+**The deception game.** If no one publishes invalid blocks, probing earns nothing; if probing earns nothing, aggregators stop probing; if no one probes, fraud is free. A perfectly honest network has zero verification incentive and is maximally vulnerable to the first attacker. Scaffold resolves this by _letting the attacker exist and pricing them_. A rational author can publish an invalid block, post collateral, pay the fee, and wait. If the aggregator probes and catches it (probability q), the block is rejected and the author's remaining collateral is claimed. If the aggregator misses, aggregation transfers the risk — the author's collateral is released, the aggregator's insurance now covers the block — and the author immediately proves their own block invalid, collecting the finder's reward `α·t` from the insurance that just accepted it.
 
 Both sides mix, and the equilibrium (Appendix E) is self-correcting: the fraud rate settles at `p* ≈ v / ((1+α)·t + C)` — exactly high enough that the aggregator's probing pays for itself — and the probe rate settles at `q*` — exactly high enough that deception earns the honest payoff with higher variance, so risk-averse authors stay honest. If aggregators slack, deception turns strictly profitable and deceivers multiply until probing pays again. This is Truebit's forced-errors mechanism made endogenous: instead of the protocol injecting errors and taxing everyone for the jackpot, rational adversaries supply the errors and the jackpot is paid by exactly the aggregator who failed to probe.
 
-Three properties are worth stating. First, equilibrium deception is *victimless by construction*: a rational deceiver invalidly claims their own outputs, because a stranger-victim would hold the fault proof too and race them for the reward — so the equilibrium taxes lazy insurers without touching users. Second, the expected fraud value per block is `p*·(1+α)·t ≈ v`: a block's expected fraud loss equals its verification cost, independent of throughput, which is what makes the risk component of the fee flat in v (below). Third, the game is the counterweight to the aggregation race: §6.4 rewards the fastest aggregator, and without deceivers, skipping the probe is pure speed advantage; with deceivers at rate p*, fast-and-lazy is precisely the strategy that gets farmed.
+Three properties are worth stating. First, equilibrium deception is _victimless by construction_: a rational deceiver invalidly claims their own outputs, because a stranger-victim would hold the fault proof too and race them for the reward — so the equilibrium taxes lazy insurers without touching users. Second, the expected fraud value per block is `p*·(1+α)·t ≈ v`: a block's expected fraud loss equals its verification cost, independent of throughput, which is what makes the risk component of the fee flat in v (below). Third, the game is the counterweight to the aggregation race: §6.4 rewards the fastest aggregator, and without deceivers, skipping the probe is pure speed advantage; with deceivers at rate p*, fast-and-lazy is precisely the strategy that gets farmed.
 
 **The fee.** Competition drives the fee to the aggregator's marginal cost, which has two components with different scaling:
 
@@ -393,9 +407,9 @@ Three properties are worth stating. First, equilibrium deception is *victimless 
 f  ≈  a·v  +  b·t·D
 ```
 
-The first term covers probing and equilibrium fraud losses, and both are proportional to *verification cost*, not throughput: probing costs q·v, and the expected fraud loss is p*·(1+α)·t ≈ v (the equilibrium result above). The second term is capital carry: the insurer locks capital proportional to the block's throughput t for the coverage duration D, and locked capital has a price. For ordinary blocks the v-term dominates and "fee ≈ verification cost" is a good approximation; for high-throughput, cheap-to-verify blocks the capital term dominates — the correct repricing of what would otherwise be under-priced insurance.
+The first term covers probing and equilibrium fraud losses, and both are proportional to _verification cost_, not throughput: probing costs q·v, and the expected fraud loss is p*·(1+α)·t ≈ v (the equilibrium result above). The second term is capital carry: the insurer locks capital proportional to the block's throughput t for the coverage duration D, and locked capital has a price. For ordinary blocks the v-term dominates and "fee ≈ verification cost" is a good approximation; for high-throughput, cheap-to-verify blocks the capital term dominates — the correct repricing of what would otherwise be under-priced insurance.
 
-> ❓ **Open:** the earlier one-parameter form `verification_cost · throughput / AVG(throughput)` conflates the two terms — it averages out to v per block but misprices both tails (charges high-t honest value transfer for *risk* it doesn't add, and ignores coverage duration). Derive a and b from Appendix E and §8.3, including the reserve ratio's effect on b (partial reserves shrink locked capital ~10× at the cost of tail-ruin risk, §8.4).
+> ❓ **Open:** the earlier one-parameter form `verification_cost · throughput / AVG(throughput)` conflates the two terms — it averages out to v per block but misprices both tails (charges high-t honest value transfer for _risk_ it doesn't add, and ignores coverage duration). Derive a and b from Appendix E and §8.3, including the reserve ratio's effect on b (partial reserves shrink locked capital ~10× at the cost of tail-ruin risk, §8.4).
 
 Aggregation contracts specify a single output to a resolution contract.
 
@@ -410,7 +424,7 @@ There are 2 kinds of insurance:
 1. **Short-term serving insurance.** This is always the author's responsibility, and evaporates over a few minutes or hours. This supports inversions of hashes on the block (like refs and the anchor) and query-based validities (like non-uniqueness presentations), and pays a reward to anyone finding an issue.
 2. **Long-term rectification insurance.** This responsibility is passed to aggregators, and never goes away. This supports verification failures, and pays the disqualification burn.
 
-The deeper cut is not duration but adjudicability: serving insurance covers *interactive* claims — data availability and query-based checks, which can't be auto-adjudicated — while rectification insurance covers *provable* faults, which can. The durations fall out as consequences.
+The deeper cut is not duration but adjudicability: serving insurance covers _interactive_ claims — data availability and query-based checks, which can't be auto-adjudicated — while rectification insurance covers _provable_ faults, which can. The durations fall out as consequences.
 
 **Serving collateral mechanics.** The author's serving collateral decays exponentially back to the author, `C(t) = C₀ · e^(−c·(now − block_timestamp))`, and is never transferred to an aggregator. Challenges double as data queries: to descend into a subtree, post a challenge bond on a hash; whoever holds the preimage responds, earning the bond, and the challenger gets the data — verification and graph traversal are one paid operation. If no one responds, unavailability is itself the fault and the challenger claims the decaying collateral. The decay is what makes data-hiding a dominated strategy: an honest self-flagger acts within seconds of risk transfer and collects nearly full value, while a wait-and-reveal attacker's prize rots away.
 
@@ -418,7 +432,7 @@ The deeper cut is not duration but adjudicability: serving insurance covers *int
 
 > Note that query-based invalidities mean that generation can't be automatic. Implement this as separate blocks that lock funds and selectively release them (§9.8).
 
-It's expected that a large fraction of blocks will be forgotten pretty quickly. This is why long-term insurance isn't responsible for data serving — with one necessary exception: **evidence custody**. A rectification claim requires the faulting block's data, and after the serving window the current insurer (who fetched the data to probe before insuring) may be its only custodian — with every incentive to withhold the evidence against themselves. Rectification insurance must therefore also pay on *unanswered availability challenges against insured claims*: the insurer either serves the data on demand, letting the challenger check validity, or the silence itself becomes the provable fault. Without this rule, computational faults become unprovable exactly when victims discover them (§10.3).
+It's expected that a large fraction of blocks will be forgotten pretty quickly. This is why long-term insurance isn't responsible for data serving — with one necessary exception: **evidence custody**. A rectification claim requires the faulting block's data, and after the serving window the current insurer (who fetched the data to probe before insuring) may be its only custodian — with every incentive to withhold the evidence against themselves. Rectification insurance must therefore also pay on _unanswered availability challenges against insured claims_: the insurer either serves the data on demand, letting the challenger check validity, or the silence itself becomes the provable fault. Without this rule, computational faults become unprovable exactly when victims discover them (§10.3).
 
 ### 8.2 Structural coverage via the aggregation chain
 
@@ -427,7 +441,7 @@ The successive aggregations of a block are called the aggregation chain. Multipl
 1. It proves that the block is well-known and trusted. A large, well-known aggregation root with insurance implies trust in the block.
 2. It proves absence of discovered invalidity or double-spends. Both of those are encoded into an aggregation.
 
-> ❓ **Open (recommended):** make coverage *structural* — require every aggregation block to carry an insurance output ≥ f(declared subtree throughput). Coverage then becomes verifiable from the aggregation chain itself ("the aggregation chain is the chain of custody for the insurance"), clients read it off the O(log N) path they already fetch, and the capitalization question of §8.4 gets a partial answer for free.
+> ❓ **Open (recommended):** make coverage _structural_ — require every aggregation block to carry an insurance output ≥ f(declared subtree throughput). Coverage then becomes verifiable from the aggregation chain itself ("the aggregation chain is the chain of custody for the insurance"), clients read it off the O(log N) path they already fetch, and the capitalization question of §8.4 gets a partial answer for free.
 
 **Funding and payouts.** Insurance is parameterized by a target block hash, which is the tree root that it covers. Negative contest resolutions can be claimed, which give payouts. More funds can also be added. Once the target block gets aggregated, it requests the remaining insurance, which gets returned to the insurers, and the fee is distributed to who funded the payouts.
 
@@ -447,11 +461,11 @@ Established result (derivation to be imported): with p the per-block fault rate 
 C(m) ≈ p ∫₀^m [F(a+m) − F(a)] da
 ```
 
-because successive insurers partition each block's post-publication timeline — total expected claims per block are conserved at p across the whole chain; aggregation levels merely redistribute *when* detection lands. Two regimes: quadratic growth for m below the detection horizon N, saturating to the constant p·μ (μ = mean detection delay) beyond it. The plateau is Little's law: undetected faults accumulate at rate p and reside for mean time μ, so a large insurer absorbs a fixed latent stock, not a growing one. Per-block expected claims decline like pμ/m past the horizon — larger aggregations are structurally safer per unit insured.
+because successive insurers partition each block's post-publication timeline — total expected claims per block are conserved at p across the whole chain; aggregation levels merely redistribute _when_ detection lands. Two regimes: quadratic growth for m below the detection horizon N, saturating to the constant p·μ (μ = mean detection delay) beyond it. The plateau is Little's law: undetected faults accumulate at rate p and reside for mean time μ, so a large insurer absorbs a fixed latent stock, not a growing one. Per-block expected claims decline like pμ/m past the horizon — larger aggregations are structurally safer per unit insured.
 
-The catch: **F is endogenous to the probing policy.** A fixed per-aggregation probe budget yields a 1/a hazard tail — divergent μ, logarithmic claim growth, no plateau, and permanently undetected faults, which breaks the validity guarantee outright. The plateau requires front-loaded probing, which the bounty-hunting merge dynamics of §7 naturally provide. And the plateau is a *mean*: an adversary can time a burst of invalid blocks so their detections land on one aggregation — worst case min(m, N) claims — so capital must be sized against adversarial quantiles, not p·μ.
+The catch: **F is endogenous to the probing policy.** A fixed per-aggregation probe budget yields a 1/a hazard tail — divergent μ, logarithmic claim growth, no plateau, and permanently undetected faults, which breaks the validity guarantee outright. The plateau requires front-loaded probing, which the bounty-hunting merge dynamics of §7 naturally provide. And the plateau is a _mean_: an adversary can time a burst of invalid blocks so their detections land on one aggregation — worst case min(m, N) claims — so capital must be sized against adversarial quantiles, not p·μ.
 
-The deception game splits the fault population into two classes with very different F. **Strategic** faults (§7) self-report at the instant of risk transfer — their detection delay past aggregation is essentially zero, front-loading F exactly as this section requires. **Malicious** faults — an attacker who wants the invalid state to *persist* — do not self-report, and at equilibrium no third party is paid to hunt them at random (Appendix E); their detection is victim-driven: the owner of an invalidly claimed output notices when they next try to spend it, and challenge-as-query traversal (§8.1) sweeps active subtrees as a byproduct. Victim-check delays are plausibly heavy-tailed, so the convenient assumption `P(invalid | unchallenged for t) ≈ p·e^(−λt)` — which underwrites releasing insurance capital as blocks solidify — is unjustified for the malicious class and must be derived from victim behavior, not asserted.
+The deception game splits the fault population into two classes with very different F. **Strategic** faults (§7) self-report at the instant of risk transfer — their detection delay past aggregation is essentially zero, front-loading F exactly as this section requires. **Malicious** faults — an attacker who wants the invalid state to _persist_ — do not self-report, and at equilibrium no third party is paid to hunt them at random (Appendix E); their detection is victim-driven: the owner of an invalidly claimed output notices when they next try to spend it, and challenge-as-query traversal (§8.1) sweeps active subtrees as a byproduct. Victim-check delays are plausibly heavy-tailed, so the convenient assumption `P(invalid | unchallenged for t) ≈ p·e^(−λt)` — which underwrites releasing insurance capital as blocks solidify — is unjustified for the malicious class and must be derived from victim behavior, not asserted.
 
 > ✍️ **TODO(you):** import the C(m) derivation, then derive §7's fee constants from it — separately per fault class: the strategic class's F is a spike at the aggregation boundary (the game gives you this for free), the malicious class's F needs the victim-check-rate model above.
 
@@ -459,9 +473,9 @@ The deception game splits the fault population into two classes with very differ
 
 Two properties damp cascades (§5.4): invalidities don't propagate downstream — work built on a fault is left alone — and each block is disqualified at most once. What does propagate is negative canonicality: when a fault's burn exceeds its descendant work, the whole branch below it goes uncanonical, and the insurers of that branch face correlated withdrawal.
 
-The structural solvency concern: long-term rectification liability scales with *cumulative* insured throughput (it never expires), while fee income is a *flow*. Structural coverage with tranching (§8.2) bounds each insurer's exposure to their posted tranche; the system-level question — a coverage ratio κ = posted insurance / latent fault mass, sized at the adversarial quantiles of §8.3 — is unanalyzed.
+The structural solvency concern: long-term rectification liability scales with _cumulative_ insured throughput (it never expires), while fee income is a _flow_. Structural coverage with tranching (§8.2) bounds each insurer's exposure to their posted tranche; the system-level question — a coverage ratio κ = posted insurance / latent fault mass, sized at the adversarial quantiles of §8.3 — is unanalyzed.
 
-**Partial reserves.** An insurer covering N blocks needn't post the full worst case `(1+α)·Σtᵢ`; at equilibrium fraud rates (p* ~ 0.04% in Appendix E's worked example) a ~10% reserve covers the expected fraud a hundred times over. Correlated fraud is *easier to sample-detect*, not harder — at a 33% probe rate, a batch that is 20% invalid escapes with probability ~10⁻²⁸ — but detecting one member doesn't localize the rest (deeper probing costs real v), and a *timed* adversarial reveal can land up to min(m, N) claims on a single insurer (§8.3). The reserve ratio is therefore a risk parameter, not a game parameter — it leaves p*, q*, and f's risk term unchanged while scaling the capital term — but it cannot be left purely to the market: insurer ruin externalizes onto unrestored victims, so the protocol needs a solvency floor, which is what structural coverage plus tranching (§8.2) exists to provide.
+**Partial reserves.** An insurer covering N blocks needn't post the full worst case `(1+α)·Σtᵢ`; at equilibrium fraud rates (p* ~ 0.04% in Appendix E's worked example) a ~10% reserve covers the expected fraud a hundred times over. Correlated fraud is _easier to sample-detect_, not harder — at a 33% probe rate, a batch that is 20% invalid escapes with probability ~10⁻²⁸ — but detecting one member doesn't localize the rest (deeper probing costs real v), and a _timed_ adversarial reveal can land up to min(m, N) claims on a single insurer (§8.3). The reserve ratio is therefore a risk parameter, not a game parameter — it leaves p*, q*, and f's risk term unchanged while scaling the capital term — but it cannot be left purely to the market: insurer ruin externalizes onto unrestored victims, so the protocol needs a solvency floor, which is what structural coverage plus tranching (§8.2) exists to provide.
 
 > ✍️ **TODO(you):** cascade analysis proper: can one deep disqualification's burn exceed the local tranche, and where does the excess land; correlated-withdrawal dynamics after a branch loses canonicality; a solvency invariant clients can check from the aggregation chain.
 
@@ -480,7 +494,7 @@ The contract interface is used both during generation and verification — every
 A contract has a pre-claim step that filters claims. It accepts an env, can request outputs in bulk or incrementally, and finishes by claiming the desired outputs. These are passed to the main generator/verifier step. Alternatives under consideration: a more specific delegate contract that emits some kind of message for the main contract; or a routing method that takes claims and routes them to appropriate contracts.
 
 > ✍️ **TODO(you):** the original draft trails off here — pick one shape for the pre-claim interface and specify it.
-> ❓ **Open (decided in principle, unspecified):** contracts that need a *complete* claim set (tallies, votes, insurance-event collection) hit the completeness-as-negative-statement problem — a resolver can validly claim a subset. For enumerable claim sets: quorum certificates plus non-membership proofs against a committed sorted structure (check whether global output indices already provide the canonical key ordering for free). For non-enumerable sets: optimistic resolution with (commitment, bond, challenge window, challenge types), the window length coming from §8.3's quantile analysis; a QC is the zero-length-window degenerate case, so one interface covers both. Avoid fold/accumulator chains — they serialize contributors (the EUTXO contention failure). Canonicality boosts help liveness here but are not a safety mechanism (Appendix B).
+> ❓ **Open (decided in principle, unspecified):** contracts that need a _complete_ claim set (tallies, votes, insurance-event collection) hit the completeness-as-negative-statement problem — a resolver can validly claim a subset. For enumerable claim sets: quorum certificates plus non-membership proofs against a committed sorted structure (check whether global output indices already provide the canonical key ordering for free). For non-enumerable sets: optimistic resolution with (commitment, bond, challenge window, challenge types), the window length coming from §8.3's quantile analysis; a QC is the zero-length-window degenerate case, so one interface covers both. Avoid fold/accumulator chains — they serialize contributors (the EUTXO contention failure). Canonicality boosts help liveness here but are not a safety mechanism (Appendix B).
 
 ### 9.3 Capabilities
 
@@ -536,18 +550,18 @@ send(my_claimer_of, {aggregation_block_hash_N, aggregation_contract_hash, ''}, v
 
 ### 10.1 The deception game's residual attacks
 
-Publish an invalid block, get it insured by someone who didn't probe, self-report, collect α·t. An earlier draft treated this as a fatal attack; §7 prices it as the mechanism that funds verification. It is not fatal — but it is *conditionally* safe. The equilibrium stands on four legs, and each missing leg is a residual attack:
+Publish an invalid block, get it insured by someone who didn't probe, self-report, collect α·t. An earlier draft treated this as a fatal attack; §7 prices it as the mechanism that funds verification. It is not fatal — but it is _conditionally_ safe. The equilibrium stands on four legs, and each missing leg is a residual attack:
 
 1. **Self-collusion (closed).** Aggregating and self-reporting your own block pays the reward out of your own insurance and forfeits the burn: net ≤ −t. The burn — never recycled to any player — is what forces the game to have a genuine victim-insurer; it must never be waived or redirected.
 2. **Unbounded-throughput deception (open in the spec).** The deceiver's prize α·t scales with throughput, which is free to manufacture, so the downside must scale too: author collateral `C₀ = k·t` (§8.1). With flat collateral the equilibrium probe rate climbs toward 1 for large blocks (q* = 0.33 at t = 10³ but 0.98 at t = 10⁵, Appendix E) and the game stops being cheap; with proportional collateral, q* is throughput-independent.
-3. **Bounty sniping (open, most important).** A computational fault proof is recomputable by anyone from public data — so when the deceiver publishes their claim, the insurer can race them with an identical claim and pay the reward to themselves. Sniping quietly unwinds the mechanism: as the deceiver's race-win probability s falls, q* falls roughly with it (0.33 at s = 1, 0.20 at s = 0.5, 0.05 at s = 0.1) while the fraud rate *rises* — individually-rational front-running by insurers degrades exactly the verification the game exists to buy. Fault claims need sniping resistance: commit-reveal ordering, or a demonstrated first-mover advantage that keeps s near 1 (the self-flagger can pre-compute the claim and publish it in the same breath as the aggregation lands).
+3. **Bounty sniping (open, most important).** A computational fault proof is recomputable by anyone from public data — so when the deceiver publishes their claim, the insurer can race them with an identical claim and pay the reward to themselves. Sniping quietly unwinds the mechanism: as the deceiver's race-win probability s falls, q* falls roughly with it (0.33 at s = 1, 0.20 at s = 0.5, 0.05 at s = 0.1) while the fraud rate _rises_ — individually-rational front-running by insurers degrades exactly the verification the game exists to buy. Fault claims need sniping resistance: commit-reveal ordering, or a demonstrated first-mover advantage that keeps s near 1 (the self-flagger can pre-compute the claim and publish it in the same breath as the aggregation lands).
 4. **Deterrent decay (open).** The collateral decay clock races the aggregator's catch latency (§8.1): if the collateral is gone before probing completes, catching pays nothing, the deceiver's downside vanishes, and q* is forced toward 1.
 
 **Cartels are harmless:** a deceiver who tips a colluding "finder" merely reallocates the reward; the aggregator's loss, the burn, and the equilibrium are unchanged. The victim was always the aggregator who should have probed.
 
 ### 10.2 Throughput griefing
 
-Throughput can be manufactured at no real cost, so anything that *rewards* raw throughput is a lever — this is exactly what killed the canonicality-boost mechanisms (Appendix B). The design's response is to only ever *charge* throughput: burns, penalties, and insurance requirements all scale with the faulting block's own throughput, so self-inflated throughput inflates your own exposure.
+Throughput can be manufactured at no real cost, so anything that _rewards_ raw throughput is a lever — this is exactly what killed the canonicality-boost mechanisms (Appendix B). The design's response is to only ever _charge_ throughput: burns, penalties, and insurance requirements all scale with the faulting block's own throughput, so self-inflated throughput inflates your own exposure.
 
 > ❓ **Open:** audit for remaining places where throughput confers advantage rather than liability — e.g. §6.3's "larger blocks will be prioritized" and the fee-share formulas.
 
@@ -577,7 +591,7 @@ Under-declare a subtree's weight to dodge probing while carrying a big spend: th
 
 ### 10.8 Equilibrium
 
-The standing inequality: `generation_cost + verification_cost <= throughput <= rectification_amount`, with rectification ≈ value(correct) − value(incorrect). The verifier's dilemma — probing must stay profitable when faults are rare, or F's tail fattens (§8.3) — is resolved by the deception game: the equilibrium fault rate p* is *definitionally* the rate at which probing pays for itself, and it self-restores in both directions (§7, Appendix E). The corollary is sharp and should be accepted rather than fought: random third-party bounty hunting has expected value (α−1)·v < 0 at equilibrium. There is no independent-watchdog profession; every fault class must instead have a situated, paid detector (§3.4) — the aggregator before risk transfer, the self-flagger at it, the victim after it.
+The standing inequality: `generation_cost + verification_cost <= throughput <= rectification_amount`, with rectification ≈ value(correct) − value(incorrect). The verifier's dilemma — probing must stay profitable when faults are rare, or F's tail fattens (§8.3) — is resolved by the deception game: the equilibrium fault rate p* is _definitionally_ the rate at which probing pays for itself, and it self-restores in both directions (§7, Appendix E). The corollary is sharp and should be accepted rather than fought: random third-party bounty hunting has expected value (α−1)·v < 0 at equilibrium. There is no independent-watchdog profession; every fault class must instead have a situated, paid detector (§3.4) — the aggregator before risk transfer, the self-flagger at it, the victim after it.
 
 ## 11. Client protocols
 
@@ -654,7 +668,7 @@ function locateBlock(block: Block, chainHops: number, treePath: bigint) {
 
 **Aggregations recording the descendant weight of each subtree** (maybe the descendant weight contained in the aggregation, from other following subtrees) instead of the weight vector. After aggregation, little else should anchor to the children. But it's unclear this helps; you still have to compute the subtree weight somehow.
 
-**Canonicality boosts** — boosting conflict resolution via a canonicality boost, block throughput metric, or claim throughput metric. These boosts have no cost to create, allowing an actor to add another claim to a deeply buried output with an arbitrarily large boost, invalidating a large subset of the graph. Even throughput-based modifiers are susceptible because the account contract can simply be used to generate arbitrarily large throughputs. (Later analysis partially rehabilitated boosts as a *liveness incentive* — an under-collecting resolution has strictly less claimed weight and loses fork choice organically — but they are insufficient as a *safety mechanism*; safety needs the challenge windows / quorum certificates of §9.2.)
+**Canonicality boosts** — boosting conflict resolution via a canonicality boost, block throughput metric, or claim throughput metric. These boosts have no cost to create, allowing an actor to add another claim to a deeply buried output with an arbitrarily large boost, invalidating a large subset of the graph. Even throughput-based modifiers are susceptible because the account contract can simply be used to generate arbitrarily large throughputs. (Later analysis partially rehabilitated boosts as a _liveness incentive_ — an under-collecting resolution has strictly less claimed weight and loses fork choice organically — but they are insufficient as a _safety mechanism_; safety needs the challenge windows / quorum certificates of §9.2.)
 
 **Insurance payout as a boost to the replacement** — increasing the canonicality of a replacement block, instead of decreasing the canonicality of the invalid block (as currently specified). This seems a little more complex, and the resulting aggregation fee would differ from the original block's.
 
@@ -682,14 +696,14 @@ U = ½ ( Σ_{i<j} |w_j − w_i|  +  Σ_{i<j} (w_j − w_i) )  =  (T + P) / 2
 
 where:
 
-- **T = Σ_{i<j} |w_i − w_j|** — the total pairwise spread. Order-*independent*. Each w_j appears positively in the pairs where it is the larger element and negatively where smaller; sorting ascending as w₍₁₎ ≤ … ≤ w₍ₖ₎, every pair contributes later-minus-earlier, giving the coefficient (2r − k − 1) for rank r: T = Σ_r (2r − k − 1)·w₍ᵣ₎. O(k log k), dominated by one sort.
-- **P = Σ_{i<j} (w_j − w_i)** — the signed sum over the sequence *as given*. w_j appears positively in the (j − 1) pairs where it is the later element and negatively in the (k − j) where earlier, so its coefficient is (j − 1) − (k − j) = 2j − k − 1: P = Σ_j (2j − k − 1)·w_j. O(k), one pass.
+- **T = Σ\_{i<j} |w_i − w_j|** — the total pairwise spread. Order-_independent_. Each w_j appears positively in the pairs where it is the larger element and negatively where smaller; sorting ascending as w₍₁₎ ≤ … ≤ w₍ₖ₎, every pair contributes later-minus-earlier, giving the coefficient (2r − k − 1) for rank r: T = Σ_r (2r − k − 1)·w₍ᵣ₎. O(k log k), dominated by one sort.
+- **P = Σ\_{i<j} (w_j − w_i)** — the signed sum over the sequence _as given_. w_j appears positively in the (j − 1) pairs where it is the later element and negatively in the (k − j) where earlier, so its coefficient is (j − 1) − (k − j) = 2j − k − 1: P = Σ_j (2j − k − 1)·w_j. O(k), one pass.
 
 **Sanity checks.** Sorted descending (correct order): every signed pair term ≤ 0, so P = −T and U = 0. Sorted ascending (maximally wrong): P = T and U = T.
 
 **Practical notes.** With 2–10 children (≤ 45 pairs), the naive O(k²) loop is preferable in consensus code for verifiability; the closed form matters for analysis. The pair-sum form is preferred over the per-block envelope alternative Φ = Σ_j min(w₁,…,w_j) (the LP-optimal credit) because the pair-sum applies quadratic pressure to large misordered aggregations, an explicit design goal — but the envelope is the cleaner semantic justification and worth citing in the spec.
 
-> ❓ **Open (load-bearing):** the penalty must be computed against weight *gaps frozen at aggregation creation time*, not against recursively compounded live weights — otherwise the penalty never fades as descendant work accrues, defeating the intended fade-out. Whether post-aggregation descendant work accrues uniformly to all children (gap-freezing) decides whether weights must be snapshotted into the block. Resolve before implementation.
+> ❓ **Open (load-bearing):** the penalty must be computed against weight _gaps frozen at aggregation creation time_, not against recursively compounded live weights — otherwise the penalty never fades as descendant work accrues, defeating the intended fade-out. Whether post-aggregation descendant work accrues uniformly to all children (gap-freezing) decides whether weights must be snapshotted into the block. Resolve before implementation.
 
 ### Appendix D: Notation and glossary
 
@@ -714,25 +728,25 @@ where:
 
 **Symbols.**
 
-| Symbol | Meaning | Where |
-|---|---|---|
-| N | detection horizon (block-units) | §8.3 |
-| m | aggregation size | §8.3 |
-| p | per-block fault rate | §8.3 |
-| μ | mean detection delay | §8.3 |
-| F(t) | detection-delay CDF | §8.3 |
-| λ | sampling budget knob | §6.2 |
-| π | slot inclusion probability | §6.2 |
-| T, P, U | spread / signed sum / hinge penalty | App. C |
-| κ | coverage ratio | §8.4 |
-| A | finality budget | §6.5 |
-| δ | clock synchronization bound | §9.7 |
-| α | finder's share of the fault reward | §5.5, App. E |
-| q | equilibrium probe (verification) rate | §7, App. E |
-| C₀, C(t) | author serving collateral, posted / decayed | §8.1 |
-| c | collateral decay constant | §8.1 |
-| s | self-flagger's payout race-win probability | §10.1, App. E |
-| D | insurance coverage duration | §7 |
+| Symbol   | Meaning                                     | Where         |
+| -------- | ------------------------------------------- | ------------- |
+| N        | detection horizon (block-units)             | §8.3          |
+| m        | aggregation size                            | §8.3          |
+| p        | per-block fault rate                        | §8.3          |
+| μ        | mean detection delay                        | §8.3          |
+| F(t)     | detection-delay CDF                         | §8.3          |
+| λ        | sampling budget knob                        | §6.2          |
+| π        | slot inclusion probability                  | §6.2          |
+| T, P, U  | spread / signed sum / hinge penalty         | App. C        |
+| κ        | coverage ratio                              | §8.4          |
+| A        | finality budget                             | §6.5          |
+| δ        | clock synchronization bound                 | §9.7          |
+| α        | finder's share of the fault reward          | §5.5, App. E  |
+| q        | equilibrium probe (verification) rate       | §7, App. E    |
+| C₀, C(t) | author serving collateral, posted / decayed | §8.1          |
+| c        | collateral decay constant                   | §8.1          |
+| s        | self-flagger's payout race-win probability  | §10.1, App. E |
+| D        | insurance coverage duration                 | §7            |
 
 ### Appendix E: The deception equilibrium
 
@@ -754,11 +768,11 @@ p* = v / ((1+α)·t + C − f)                        (aggregator indifference)
 q*:  q·(−C−g) + (1−q)·(s·α·t − f − g) = r − f     (publisher indifference)
 ```
 
-Worked example (α = 0.5, t = C₀ = 1000, v = f = r = g = 1, s = 1, no decay): **p* ≈ 0.04%, q* ≈ 33%**. Properties, verified numerically:
+Worked example (α = 0.5, t = C₀ = 1000, v = f = r = g = 1, s = 1, no decay): **p\* ≈ 0.04%, q\* ≈ 33%**. Properties, verified numerically:
 
-- **Fraud value-at-risk per block is p*·(1+α)·t ≈ v** — a block's expected fraud loss equals its verification cost, independent of throughput. This is why the fee's risk component is flat in v (§7).
+- **Fraud value-at-risk per block is p\*·(1+α)·t ≈ v** — a block's expected fraud loss equals its verification cost, independent of throughput. This is why the fee's risk component is flat in v (§7).
 - **Random third-party probing is structurally unprofitable:** E = p*·α·t − v ≈ (α−1)·v < 0 for α < 1. The equilibrium fault rate is exactly low enough that only situated detectors — aggregator, self-flagger, victim — get paid.
-- **q* is throughput-independent iff C₀ ∝ t.** With flat collateral, q* rises from 0.33 (t = 10³) to 0.98 (t = 10⁵); with proportional collateral it stays ≈ ⅓ at every scale.
+- **q\* is throughput-independent iff C₀ ∝ t.** With flat collateral, q* rises from 0.33 (t = 10³) to 0.98 (t = 10⁵); with proportional collateral it stays ≈ ⅓ at every scale.
 - **Sniping degrades the equilibrium roughly linearly:** q* = 0.33, 0.20, 0.05 at s = 1, 0.5, 0.1, while p* rises (§10.1).
 - **Decay races catch latency:** at c = 0.3/s, a catch at 10s finds C ≈ 5% of C₀ and forces q* ≈ 0.91; at 30s, q* ≈ 1 (§8.1).
 - **Self-collusion is dominated:** self-aggregating and self-flagging washes the fee and reward but forfeits the burn — net ≤ −t.
