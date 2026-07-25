@@ -1,7 +1,5 @@
 # Scaffold
 
-_A protocol for trusted distributed computation._
-
 ## 1. Abstract
 
 Scaffold is a protocol for trusted distributed computation. Work is published as blocks, which are accepted optimistically and organized into a balanced forest by aggregators. Aggregators sample random blocks in the tree to evaluate its risk, and if they're confident they insure the tree. There's always an active insurance for any given block; if an aggregator finds a fault (invalid computation, double-spend, etc), they present a proof to the currently active insurance and receive a reward. The failing block is disqualified and its throughput burned to allow another claim on the incorrectly claimed outputs. Consensus weight is real, measured verification cost, estimated by unbiased sampling and evaluation of the sampled blocks. The balanced forest gives O(log N) claim resolution, inclusion proofs, and trust decisions. The result is a protocol light enough for browsers to achieve fast consensus.
@@ -12,7 +10,7 @@ Scaffold is a protocol enabling trusted distributed computation: a client wants 
 
 The classical answer is replication. Blockchains have every validator re-execute every transaction, which makes trust unconditional but caps global throughput at the capacity of a single validator and prices every computation at N times its actual cost. The optimistic answer is verify-by-exception: accept results by default, let anyone challenge, and punish provable faults — the approach of optimistic rollups and Truebit-style verification games.
 
-Scaffold takes the optimistic thesis to its limit: **verification is priced, not mandated.** Every block pays a fee on the order of its own verification cost. Aggregators admit blocks into the canonical structure by posting insurance over them, without necessarily requiring that the entire tree is valid. Probers sample subtrees hunting for faults and are paid out of that insurance when they find one — and the supply of faults is itself endogenous: rational authors occasionally publish invalid blocks precisely to farm insurers who didn't probe, and this deception game (§7) is what keeps verification funded when organic faults are rare. Crucially, a discovered fault does not unwind the ledger: the faulting block is disqualified, the output it claimed is freed to be claimed again, and the insurance burns the block's throughput so that total value stays conserved (§5). Work honestly built on top of a fault is left alone. Trust in a block is therefore a quantitative statement — how much verified weight is stacked on it, and how much insurance stands behind it — rather than a binary statement about validation.
+Scaffold prices the risk associated with possibly invalid blocks instead of mandating validity. Every block pays a fee on the order of its own verification cost. Aggregators admit blocks into the canonical structure by posting insurance over them, without necessarily requiring that the entire tree is valid. Probers sample subtrees hunting for faults and are paid out of that insurance when they find one — and the supply of faults is itself endogenous: rational authors occasionally publish invalid blocks precisely to farm insurers who didn't probe, and this deception game (§7) is what keeps verification funded when organic faults are rare. Crucially, a discovered fault does not unwind the ledger: the faulting block is disqualified, the output it claimed is freed to be claimed again, and the insurance burns the block's throughput so that total value stays conserved (§5). Work honestly built on top of a fault is left alone. Trust in a block is therefore a quantitative statement — how much verified weight is stacked on it, and how much insurance stands behind it — rather than a binary statement about validation.
 
 Why a forest instead of a chain: a chain serializes all work through a single proposer, so consensus bandwidth bounds total throughput. In Scaffold, blocks form trees by aggregation — each block is aggregated exactly once, similar-sized trees are merged into larger trees, without bound — and the trees are stitched together by anchors (§4.2). There is no global bottleneck because consensus never examines every block: ordering is structural (§4.4), weight is estimated by sampling (§6), and validity is enforced by exception (§5). These balanced trees are what makes everything cheap: proofs, claim resolution, and trust decisions are all O(log N).
 
@@ -97,10 +95,14 @@ interface Block {
 
 ### 4.2 Anchors and the anchor chain
 
-The anchor is a hash to another larger block. The anchor should be a reference to a well-known prior block that, together with the aggregates, contains all the claimed outputs. There's a couple of constraints on a block B's anchor:
+The anchor is a hash to another, larger block. Following anchors recursively gives the anchor chain: a sequence of tree roots increasing in size, terminating at the genesis block, which is defined to have infinite size. A block's **reach** is what that chain makes addressable — its own tree (§4.3), plus the tree of every block on the chain. Reach is what the anchor exists to buy, and everything a block is structurally responsible for has to fall inside it:
 
-1. It must point to a larger tree than B itself. Following anchors recursively gives you the anchor chain, a sequence of tree roots increasing in size. The genesis block is defined to have infinite size, and is the terminal block of all anchor chains.
-2. Every block claimed or referenced in B must be included in either B or a block in B's anchor chain.
+1. Every output it claims or references, so that §4.5 can resolve the index.
+2. The anchor of every block it aggregates.
+
+The first is the obvious one: you cannot spend what you cannot name. The second is what makes reach compose. A block inherits its aggregates' claims — it has to sum their throughput into its chain array, below — so it needs to see whatever they saw. Constraining only each aggregate's anchor suffices, because every aggregate imposed the same rule on its own aggregates; applied down the tree, it guarantees that every claim made anywhere inside a block's tree resolves inside that block's reach. Without it a buried block could claim from a tree its aggregator cannot see, and throughput the aggregator is obliged to declare would have nowhere to land.
+
+Reach only grows as you anchor: a block inherits its anchor's reach and adds its own tree. The flip side is that two blocks in different trees that nothing has merged yet are in nobody's reach at once, so a block wanting to claim from both simply waits for the aggregation that merges them (§7).
 
 > ❓ **Open (terminology):** "size" is used loosely across the paper — here, in the 60% rule (§7), and in "similarly-sized". Pick one definition (weight? block count? output count?) and use it exactly; see Appendix D.
 
@@ -230,7 +232,7 @@ Whereas claims point only to unclaimed outputs, refs point to any output. They a
 
 A block is valid iff:
 
-1. **Structure.** Its anchor points to a larger tree than itself; every block it claims or references is included in the block itself or a block in its anchor chain; its timestamp is ≥ the timestamps of its anchor and all aggregated blocks.
+1. **Structure.** Its anchor points to a larger tree than itself; every block it claims or references, and the anchor of every block it aggregates, lies in its reach (§4.2); its timestamp is ≥ the timestamps of its anchor and all aggregated blocks.
 2. **Conservation.** The sum of its output amounts exactly equals the sum of its claimed output amounts (§5.2).
 3. **Contracts.** Every claim satisfies the claimed output's contract and parameters (§9); `ALLOWED_PRODUCERS` restrictions are respected; if it aggregates or anchors a stalled block, it claims all of that block's stalling outputs (§9.6).
 4. **Aggregation correctness.** Its aggregates' `outputCount`s and its chain array's weights and throughputs are correctly summed; each aggregated tree is smaller than 60% of the aggregate (§7); no block appears twice (structurally excluded anyway — the duplicate's aggregation output would be double-spent).
@@ -722,6 +724,7 @@ where:
 - **Branch block:** A block with at least one child.
 - **Tree root:** A block that currently has no parents. Typically a very large aggregation. All blocks will eventually be aggregated so this is a temporal designation.
 - **Anchor chain:** The sequence of tree roots reached by following anchors from a block to genesis (§4.2).
+- **Reach:** A block's own tree plus the trees of every block on its anchor chain — everything it may claim, reference, or anchor an aggregate at (§4.2).
 - **Aggregation chain:** The successive aggregations of a block (§8.2). ❓ Confusable with "anchor chain" for first-time readers — consider renaming ("custody chain" fits its §8.2 role).
 - **Canonicality:** A peer-local score on claims: verified weight minus penalties (§6.3).
 - **Disqualified:** Marked as a fault's loser; burned, regenerable, immune to further marking (§5.4).

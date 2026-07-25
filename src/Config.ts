@@ -1,19 +1,6 @@
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 import { secp } from './util/secp.ts';
 
-export enum LogSystem {
-  Main = 'main',
-  Fact = 'fact',
-  Connection = 'connection',
-  Signaler = 'signaler',
-  Worker = 'worker',
-  Verification = 'verification',
-  Generation = 'generation',
-  Constraint = 'constraint',
-  SnapshotState = 'snapshot_state',
-  SnapshotDiff = 'snapshot_diff',
-}
-
 export type Timeout = ReturnType<typeof globalThis.setTimeout>;
 export interface TimeProvider {
   now(): number;

@@ -1,10 +1,17 @@
 # TODO v2
 
-Working list for the v2 rewrite. Architecture rationale lives in docs/v2/implementation.md; whitepaper references are `wp §`.
+## Joel's TODOs
+
+- Draft -> block
+- UTXO -> drafting
+- Special rules for aggregation grouping for now. Simple aggregation (ignore risk etc)
+- Draft prioritization via descendant weight sampling
+- Generic generator / verification hook
+- Network send / receive (global flooding for now)
 
 ## Blocking decisions (gate the block codec)
 
-- [ ] Define "size" for the anchor constraint and 60% balance rule (wp §4.2, App. D)
+- [ ] Define "size" for the anchor constraint and 60% balance rule (wp §4.2, App. D). Note wp §4.2's own weight example contradicts a strict reading: B1 anchors B0 with both leaves, so "must point to a larger tree" cannot mean strictly-larger-at-publication. Anchor selection can't be written until this is pinned
 - [ ] `declaredWeights`: separate block field vs reuse of aggregation fees (wp §6.2)
 - [ ] Gap-freezing: snapshot child weights into aggregation blocks? (wp App. C, resolve-before-implementation)
 - [ ] Structural coverage: require an insurance output on every aggregation? (wp §8.2)
@@ -12,9 +19,7 @@ Working list for the v2 rewrite. Architecture rationale lives in docs/v2/impleme
 
 ## Patterns to adopt (2026-07-21 architecture review)
 
-- [ ] Config split: ProtocolParams (immutable, consensus-critical) / NodePolicy / Providers; economic curves as injected functions; no runtime config mutation; no default-rewriting feature flags
 - [ ] Keep the `BaseContext` service locator; revive the legacy2 `TestContext` allowlist
-- [ ] Packet envelope: immutable wire record; node-local state in per-module indexes keyed by hash (no `FactBase`/`BlockMeta` god-records)
 - [ ] Single ingestion funnel; local emission re-enters it; ingestion commutativity as a standing property test
 - [ ] Module/Service: abstract modules declare dependencies as abstract methods; services override with call-time `ctx.get` (no caching, no setters); service bodies are constructor + overrides only
 - [ ] One reactivity mechanism: typed change events with explicit flush ordering; single debounced viz adapter at the edge
@@ -23,7 +28,6 @@ Working list for the v2 rewrite. Architecture rationale lives in docs/v2/impleme
 
 ## Initial build order
 
-1. [ ] Pure core: hash/codec, `Block` type, `resolveClaim` + output space (property-test vs wp §4.5 generative spec), validity rules (wp §5.1), canonical traversal (wp §4.4), `Estimate` algebra (wp §6.2), hinge penalty (wp App. C test vectors)
 2. [ ] Store + ingestion funnel + event mechanism; commutativity property test
 3. [ ] Consensus: conflict detection, per-conflict fork choice, canonicality with penalties (recompute-on-dirty v0 behind a narrow interface)
 4. [ ] Roles: author, aggregation building + merkle mask (wp §4.6), sampling/probing, insurance/collateral
@@ -36,3 +40,7 @@ Working list for the v2 rewrite. Architecture rationale lives in docs/v2/impleme
 - [ ] Canonicality recompute is O(N) in v0; incremental O(log N) later (the interface must allow the swap)
 - [ ] Delete `src/core/CoreContext.ts` (dead stub) when cutting over old code
 - [ ] docs/v2/scaffold.md is still empty; fill once the facade API firms up
+- [ ] `PlacementService.getCanonicalAggregator` picks the sole aggregator and `todo()`s when a block has more than one. Competing aggregations are a fork (wp §6.4) and choosing between them is fork choice; anchor selection is blocked on consensus for any contested block
+- [ ] Nothing retries a stalled build. `BlockBuilderModule.build` parks the draft in `currentBuild: 'pending_aggregation'` and returns the tips, but subscribing to those tips' `listeners` and re-running the build is reactive-layer work that doesn't exist yet
+- [ ] Anchor selection needs the full anchor chain in memory: a candidate whose chain hits a `BlockRef` is dropped, because an unresolved link can hide an exclude. That conflicts with wp §3.3's "most blocks are expected to be forgotten" -- a light client that forgot its anchor chain can't place at all. Either placement fetches on demand, or reach has to be provable from an O(log N) path
+- [ ] Placement prefers the tightest covering anchor (the freshest block that still reaches everything). That assumes the loose reading of wp §4.2's "larger tree" constraint; under a strict reading a fresh leaf could never anchor at another fresh leaf, and the preference would have to invert. Ties into the "size" decision above

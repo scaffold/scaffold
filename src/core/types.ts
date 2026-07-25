@@ -8,6 +8,9 @@ export enum AtomType {
 export const BLOCK_REF_TYPE = 256;
 export const DRAFT_TYPE = 257;
 
+/** Well-known aggregation contract, takes no params so anyone may claim (wp 7). */
+export const AGGREGATION_CONTRACT = Hash.digest('aggregation-contract');
+
 export enum AtomSource {
   Local = 'local',
   Remote = 'remote',
