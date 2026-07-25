@@ -2,13 +2,14 @@ import { Context } from '../Context.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { error, todo } from '../util/functional.ts';
 import { BlockStore } from './BlockStore.ts';
+import { ClaimIndexService } from './ClaimIndexService.ts';
 import {
   PlacementNode,
   PlacementRequest,
   PlacementResult,
   PlacementService,
 } from './PlacementService2.ts';
-import { AGGREGATION_CONTRACT, AtomType, BlockPayload, Draft } from './types.ts';
+import { AGGREGATION_CONTRACT, AtomSource, AtomType, BlockPayload, Draft } from './types.ts';
 
 export type BuildResult =
   | { ok: true; payload: BlockPayload }
@@ -20,8 +21,14 @@ export type BuildResult =
   | { ok: false; pendingAggregation: PlacementNode[] };
 
 export abstract class BlockBuilderModule {
+  protected abstract getGenesisBlock(): PlacementNode;
   protected abstract place(request: PlacementRequest): PlacementResult;
   protected abstract getBlock(hash: Hash): PlacementNode;
+  protected abstract resolveClaimIndex(
+    claimingBlock: Block | BlockRef,
+    outputBlock: Block,
+    outputIndex: bigint,
+  ): bigint;
 
   build(draft: Draft): BuildResult {
     if (draft.currentBuild !== undefined) {
@@ -38,7 +45,7 @@ export abstract class BlockBuilderModule {
     // covers the draft yet it can't solidify: park it, and retry when an
     // aggregation merging the reported tips lands.
     const placement = this.place({
-      genesis: this.getBlock(ZERO_HASH),
+      genesis: this.getGenesisBlock(),
       includes: [...draft.claims, ...draft.refs].map((c) => this.getBlock(c.producer)),
       aggregates: this.aggregatedBlocks(draft),
       excludes: this.rivalClaimants(draft),
@@ -53,6 +60,10 @@ export abstract class BlockBuilderModule {
       return { ok: false, pendingAggregation: placement.tips };
     }
     const anchor = placement.anchor;
+
+    const mock = { type: AtomType.Block };
+    const claims = draft.claims.map((x) => this.resolveClaimIndex(mock, x.producer, x.outputIndex));
+    const refs = draft.refs.map((x) => this.resolveClaimIndex(mock, x.producer, x.outputIndex));
 
     // -- 2. Aggregation set (wp 4.3, 7) --------------------------------
     // The set itself is already decided -- wp 7 makes `aggregates` a restatement
@@ -144,11 +155,31 @@ export class BlockBuilderService extends BlockBuilderModule {
     super();
   }
 
+  protected override getGenesisBlock() {
+    return this.ctx.get(BlockStore).ingest({
+      source: AtomSource.Genesis,
+      receivedAt: Date.now(),
+      raw: this.ctx.config.genesis,
+    });
+  }
+
   protected override place(request: PlacementRequest): PlacementResult {
     return this.ctx.get(PlacementService).place(request);
   }
 
-  protected override getBlock(hash: Hash): PlacementNode {
+  protected override getBlock(hash: Hash) {
     return this.ctx.get(BlockStore).get(hash);
+  }
+
+  protected override resolveClaimIndex(
+    claimingBlock: Block | BlockRef,
+    outputBlock: Block,
+    outputIndex: bigint,
+  ): bigint {
+    return this.ctx.get(ClaimIndexService).resolveClaimIndex(
+      claimingBlock,
+      outputBlock,
+      outputIndex,
+    );
   }
 }

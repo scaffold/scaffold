@@ -12,6 +12,7 @@ export const DRAFT_TYPE = 257;
 export const AGGREGATION_CONTRACT = Hash.digest('aggregation-contract');
 
 export enum AtomSource {
+  Genesis = 'genesis',
   Local = 'local',
   Remote = 'remote',
   Storage = 'storage',

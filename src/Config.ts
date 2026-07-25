@@ -1,4 +1,6 @@
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
+import { generateGenesis } from './genesis.ts';
+import { Hash } from './util/Hash.ts';
 import { secp } from './util/secp.ts';
 
 export type Timeout = ReturnType<typeof globalThis.setTimeout>;
@@ -18,7 +20,7 @@ export interface EntropyProvider {
 
 // You can modify the Config by mutating ctx.config
 export interface Config {
-  network: string;
+  genesis: Uint8Array;
   debugName: string;
 
   selfPrivateKey: Uint8Array;
@@ -27,12 +29,24 @@ export interface Config {
   entropyProvider: EntropyProvider;
 }
 
-export const defaultNetwork = 'main';
 const rngSeed = 123n;
 
 export const makeDefaultConfig = () => {
+  const privateKeys = {
+    [Hash.digest('scaffold:testnet:alice').toHex()]: 1_000_000n,
+    [Hash.digest('scaffold:testnet:bob').toHex()]: 1_000_000n,
+    [Hash.digest('scaffold:testnet:charlie').toHex()]: 1_000_000n,
+  };
+
+  const genesis = generateGenesis('default', privateKeys);
+
+  for (const [privateKey, amount] of Object.entries(privateKeys)) {
+    console.warn(`Genesis output: ${privateKey} has ${amount}`);
+  }
+  console.warn(`Genesis block hash: ${Hash.digest(genesis).toHex()}`);
+
   const config = {
-    network: defaultNetwork,
+    genesis,
     debugName: '',
     timeProvider: {
       now: () => Date.now(),

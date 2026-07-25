@@ -21,7 +21,7 @@ export class BlockStore {
     return fact;
   }
 
-  ingest({ source, receivedAt, raw }: Pick<AtomBase, 'source' | 'receivedAt' | 'raw'>): Atom {
+  ingest({ source, receivedAt, raw }: Pick<AtomBase, 'source' | 'receivedAt' | 'raw'>): Block {
     const hash = Hash.digest(raw);
     const existing = this.atoms.get(hash.toPrimitive());
     if (existing === ingestingAtom) {

@@ -26,22 +26,29 @@ export interface Ingestor<AtomType extends Atom> {
   ingest(atom: AtomType): void;
 }
 
+export function serializeBlock(
+  payload: BlockPayload,
+  allocator: (size: number) => Uint8Array,
+): Uint8Array {
+  const message = str2bin(taggedStringify(payload));
+
+  const buf = allocator(message.byteLength);
+  assert(
+    buf.byteLength === message.byteLength,
+    `Allocator returned an incorrectly sized buffer!`,
+  );
+  buf.set(message);
+
+  return buf;
+}
+
 export class BlockIngestor implements Ingestor<Block> {
   readonly isSigned = true;
 
   constructor(private ctx: Context) {}
 
   serialize(payload: BlockPayload, allocator: (size: number) => Uint8Array): Uint8Array {
-    const message = str2bin(taggedStringify(payload));
-
-    const buf = allocator(message.byteLength);
-    assert(
-      buf.byteLength === message.byteLength,
-      `Allocator returned an incorrectly sized buffer!`,
-    );
-    buf.set(message);
-
-    return buf;
+    return serializeBlock(payload, allocator);
   }
 
   deserialize(base: AtomBase, ref?: BlockRef): Block {
@@ -121,7 +128,7 @@ export class BlockIngestor implements Ingestor<Block> {
 export class UnknownIngestor implements Ingestor<never> {
   readonly isSigned = false;
 
-  constructor(private ctx: Context) {}
+  constructor() {}
 
   serialize(payload: unknown, allocator: (size: number) => Uint8Array): Uint8Array {
     return todo();

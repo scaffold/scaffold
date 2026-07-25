@@ -1,3 +1,4 @@
+import { EntropyProvider } from '../Config.ts';
 import { Context } from '../Context.ts';
 import { AtomSource } from '../types.ts';
 import { arrEquals } from '../util/buffer.ts';
@@ -12,16 +13,11 @@ export const headerSize = atomMagic.byteLength + 1;
 
 const SIGNATURE_LENGTH = 64 + 1; // We shouldn't export this, since it's an implementation detail
 
-export class AtomSerializer {
-  private factories: { [key in AtomType]: Ingestor<Atom> };
+export abstract class AtomSerializerModule {
+  protected abstract factories: { [key in AtomType]: Ingestor<Atom> };
 
-  constructor(private ctx: Context) {
-    this.factories = {
-      [AtomType.Block]: new BlockIngestor(ctx),
-      [AtomType.Signal]: new UnknownIngestor(ctx),
-      [AtomType.Request]: new UnknownIngestor(ctx),
-    };
-  }
+  protected abstract getPrivateKey(): Uint8Array;
+  protected abstract getEntropyProvider(): EntropyProvider;
 
   serialize<Type extends AtomType>(
     type: Type,
@@ -43,8 +39,8 @@ export class AtomSerializer {
       const size = raw.byteLength - SIGNATURE_LENGTH;
       const sig = secp.sign(
         Hash.digest(raw.subarray(0, size)).toBytes(),
-        this.ctx.config.selfPrivateKey,
-        { lowS: true, extraEntropy: this.ctx.config.entropyProvider.cryptoRandomBytes(32) },
+        this.getPrivateKey(),
+        { lowS: true, extraEntropy: this.getEntropyProvider().cryptoRandomBytes(32) },
       );
       const sigBytes = sig.toCompactRawBytes();
       if (sigBytes.byteLength !== SIGNATURE_LENGTH - 1) {
@@ -112,5 +108,27 @@ export class AtomSerializer {
     };
 
     return ingestor.deserialize(base, ref);
+  }
+}
+
+export class AtomSerializerService extends AtomSerializerModule {
+  protected factories: { [key in AtomType]: Ingestor<Atom> };
+
+  constructor(private ctx: Context) {
+    super();
+
+    this.factories = {
+      [AtomType.Block]: new BlockIngestor(ctx),
+      [AtomType.Signal]: new UnknownIngestor(ctx),
+      [AtomType.Request]: new UnknownIngestor(ctx),
+    };
+  }
+
+  protected getPrivateKey(): Uint8Array {
+    return this.ctx.config.selfPrivateKey;
+  }
+
+  protected getEntropyProvider(): EntropyProvider {
+    return this.ctx.config.entropyProvider;
   }
 }
