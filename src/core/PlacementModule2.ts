@@ -1,6 +1,6 @@
 import { AtomType, Block, BLOCK_REF_TYPE, BlockRef } from './types.ts';
 import { setsIntersect } from '../util/set.ts';
-import { error } from '../util/functional.ts';
+import { assert, error } from '../util/functional.ts';
 import { BROKEN_ANCHOR_CHAIN } from './ForestService.ts';
 
 export interface PlacementNode {
@@ -36,11 +36,13 @@ export interface PlacementRequest<NodeType extends PlacementNode> {
 }
 
 export type PlacementResult<NodeType extends PlacementNode> =
-  | { ok: true; anchor: NodeType }
+  | { ok: true; anchorChain: (NodeType & { type: AtomType.Block })[] }
   | { ok: false; tips: NodeType[] };
 
 export abstract class PlacementModule<NodeType extends PlacementNode> {
-  protected abstract anchorChain(node: NodeType): NodeType[] | typeof BROKEN_ANCHOR_CHAIN;
+  protected abstract anchorChain(
+    node: NodeType,
+  ): (NodeType & { type: AtomType.Block })[] | typeof BROKEN_ANCHOR_CHAIN;
   protected abstract aggregators(node: NodeType): Set<NodeType>;
 
   place(req: PlacementRequest<NodeType>): PlacementResult<NodeType> {
@@ -59,7 +61,7 @@ export abstract class PlacementModule<NodeType extends PlacementNode> {
     // We add the genesis block so later, we can return a block downstream of it on the canonical frontier.
     candidates.add(req.genesis);
 
-    const anchors: NodeType[] = [];
+    const anchorChains: (NodeType & { type: AtomType.Block })[][] = [];
     for (const candidate of candidates) {
       const anchorChain = this.anchorChain(candidate);
       if (anchorChain === BROKEN_ANCHOR_CHAIN) continue;
@@ -69,11 +71,11 @@ export abstract class PlacementModule<NodeType extends PlacementNode> {
         includeChains.every((x) => setsIntersect(chainBlocks, x)) &&
         excludeChains.every((x) => !setsIntersect(chainBlocks, x))
       ) {
-        anchors.push(candidate);
+        anchorChains.push(anchorChain);
       }
     }
 
-    if (anchors.length === 0) {
+    if (anchorChains.length === 0) {
       const tips = includeChains.flatMap((x) =>
         [...x].filter((x) => x.aggregatingNodes.length === 0)
       );
@@ -84,8 +86,8 @@ export abstract class PlacementModule<NodeType extends PlacementNode> {
     // 1. size
     // 2. canonicality, since even losing aggregates are returned from this.aggregators
     // We may also want to consider blocks anchoring to one of these blocks.
-    const anchor = anchors[0];
+    const anchorChain = anchorChains[0];
 
-    return { ok: true, anchor };
+    return { ok: true, anchorChain };
   }
 }

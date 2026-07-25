@@ -2,11 +2,11 @@ import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
 import { AtomType, BLOCK_REF_TYPE } from './types.ts';
 
-interface AggregatorNodeBase {
+export interface AggregatorNodeBase {
   aggregatingNodes: this[];
 }
 
-interface AnchorNodeBase {
+export interface AnchorNodeBase {
   type: AtomType.Block | typeof BLOCK_REF_TYPE;
   anchor?: this;
 }

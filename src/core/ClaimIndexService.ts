@@ -1,6 +1,11 @@
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
-import { BROKEN_ANCHOR_CHAIN, ForestService } from './ForestService.ts';
+import {
+  AggregatorNodeBase,
+  AnchorNodeBase,
+  BROKEN_ANCHOR_CHAIN,
+  ForestService,
+} from './ForestService.ts';
 import { AtomType, Block, BLOCK_REF_TYPE, BlockRef } from './types.ts';
 
 interface ResolveOutputBlock {
@@ -13,6 +18,11 @@ interface ResolveOutputBlock {
   // anchoringNodes: Block[];
   // aggregatingNodes: Block[];
   // resolvingOutputs: Map<bigint, ResolvingClaim[]>;
+}
+
+export interface AnchorChainNode {
+  payload: { outputs: unknown[] };
+  aggregates: { outputCount: bigint }[];
 }
 
 export class ClaimIndexService {
@@ -51,15 +61,15 @@ export class ClaimIndexService {
   }
 
   resolveClaimIndex(
-    claimingBlock: Block | BlockRef,
+    anchorChain: AnchorChainNode[],
     outputBlock: Block,
     outputIndex: bigint,
   ): bigint {
-    const anchorChain = this.ctx.get(ForestService).anchorChain(claimingBlock);
-    if (anchorChain === BROKEN_ANCHOR_CHAIN) throw new Error('Broken anchor chain');
+    // const anchorChain = this.ctx.get(ForestService).anchorChain(claimingBlock);
+    // if (anchorChain === BROKEN_ANCHOR_CHAIN) throw new Error('Broken anchor chain');
 
     for (const chain of this.ctx.get(ForestService).aggregationChains(outputBlock)) {
-      const idx = anchorChain.indexOf(chain[chain.length - 1]);
+      const idx = (anchorChain as object[]).indexOf(chain[chain.length - 1]);
       if (idx !== -1) {
         for (let i = 0; i < idx; ++i) {
           outputIndex += this.countOutputs(anchorChain[i]);
@@ -81,7 +91,10 @@ export class ClaimIndexService {
 
   // Counts the outputs after an aggregate.
   // -1 = all aggregates (use this to count the total outputs introduced by a subtree)
-  countOutputs(block: Block, aggregateIndex = -1): bigint {
+  countOutputs(
+    block: { payload: { outputs: unknown[] }; aggregates: { outputCount: bigint }[] },
+    aggregateIndex = -1,
+  ): bigint {
     let outputCount = BigInt(block.payload.outputs.length);
     for (let i = aggregateIndex; ++i < block.aggregates.length;) {
       outputCount += block.aggregates[i].outputCount;

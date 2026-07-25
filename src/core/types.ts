@@ -133,8 +133,8 @@ export interface BlockRef {
 export interface Draft {
   type: typeof DRAFT_TYPE;
 
-  claims: { producer: Hash; outputIndex: bigint }[];
-  refs: { producer: Hash; outputIndex: bigint }[];
+  claims: { producer: Block; outputIndex: bigint }[];
+  refs: { producer: Block; outputIndex: bigint }[];
   outputs: { contractHash: Hash; params: Uint8Array; data?: Uint8Array; amount: bigint }[];
 
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts

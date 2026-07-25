@@ -6,7 +6,7 @@ import { AtomSerializerModule } from './core/AtomSerializer.ts';
 import { Ingestor, serializeBlock, UnknownIngestor } from './core/Ingestor.ts';
 import { EntropyProvider } from './Config.ts';
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
-import { bin2bigintBe } from './util/bigint.ts';
+import { bigint2binBe, bin2bigintBe } from './util/bigint.ts';
 import { str2bin } from './util/buffer.ts';
 
 export class GenesisBlockIngestor implements Ingestor<never> {
@@ -28,7 +28,7 @@ export class GenesisBlockIngestor implements Ingestor<never> {
 class GenesisSerializer extends AtomSerializerModule {
   protected override factories: { [key in AtomType]: Ingestor<Atom> };
 
-  constructor(private seed: string) {
+  constructor(private seed: Hash) {
     super();
 
     this.factories = {
@@ -39,11 +39,11 @@ class GenesisSerializer extends AtomSerializerModule {
   }
 
   protected override getPrivateKey(): Uint8Array {
-    return Hash.digest(`scaffold:testnet:${this.seed}`).toBytes();
+    return this.seed.toBytes();
   }
 
   protected override getEntropyProvider(): EntropyProvider {
-    return new SeededEntropyProvider(bin2bigintBe(str2bin(this.seed)));
+    return new SeededEntropyProvider(this.seed.toBigint());
   }
 }
 
@@ -60,14 +60,19 @@ export function generateGenesis(
     outputs: [],
     timestampMs: 0,
   };
+
+  const randomness: (Uint8Array | string)[] = [seed];
   for (const [publicKeyHex, amount] of Object.entries(outputToPublicKeys)) {
     const publicKey = hex2bin(publicKeyHex);
     assert(publicKey.byteLength === 33, 'public key must be 33 bytes');
     assert(amount >= 0n, 'amount must be non-negative');
     block.outputs.push({ contractHash: ZERO_HASH, params: publicKey, amount });
+
+    randomness.push(publicKey, bigint2binBe(amount));
   }
 
-  const serializer = new GenesisSerializer(seed);
+  // Create a new seed hash whenever the seed or output set changes, so there's no risk of signing multiple blocks with the same randomness.
+  const serializer = new GenesisSerializer(Hash.digestParts(...randomness));
   return serializer.serialize(AtomType.Block, block);
 }
 
