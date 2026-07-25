@@ -1,11 +1,26 @@
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
-import { AtomType, ResolvingClaim } from './types.ts';
+import { BROKEN_ANCHOR_CHAIN, ForestService } from './ForestService.ts';
+import { AtomType, Block, BLOCK_REF_TYPE, BlockRef } from './types.ts';
+
+interface ResolveOutputBlock {
+  type: AtomType.Block | typeof BLOCK_REF_TYPE;
+
+  anchor: this;
+  aggregates: { block: ThisType<ResolveOutputBlock>; outputCount: bigint }[];
+
+  // These are other nodes referring to this atom by hash
+  // anchoringNodes: Block[];
+  // aggregatingNodes: Block[];
+  // resolvingOutputs: Map<bigint, ResolvingClaim[]>;
+}
 
 export class ClaimIndexService {
   constructor(private ctx: Context) {}
 
-  propagateClaim(claim: ResolvingClaim): void {
+  propagateClaim(
+    claim: { producer: Block | BlockRef; outputIdx: bigint; resolved: boolean },
+  ): void {
     assert(!claim.resolved);
     if (claim.producer.type !== AtomType.Block) return;
 
@@ -33,5 +48,44 @@ export class ClaimIndexService {
     claim.producer = claim.producer.anchor;
     claim.outputIdx = outputIdx;
     this.propagateClaim(claim);
+  }
+
+  resolveClaimIndex(
+    claimingBlock: Block | BlockRef,
+    outputBlock: Block,
+    outputIndex: bigint,
+  ): bigint {
+    const anchorChain = this.ctx.get(ForestService).anchorChain(claimingBlock);
+    if (anchorChain === BROKEN_ANCHOR_CHAIN) throw new Error('Broken anchor chain');
+
+    for (const chain of this.ctx.get(ForestService).aggregationChains(outputBlock)) {
+      const idx = anchorChain.indexOf(chain[chain.length - 1]);
+      if (idx !== -1) {
+        for (let i = 0; i < idx; ++i) {
+          outputIndex += this.countOutputs(anchorChain[i]);
+        }
+
+        for (let i = 1; i < chain.length; ++i) {
+          const child = chain[i - 1];
+          const parent = chain[i];
+          const aggIdx = parent.aggregates.findIndex((agg) => agg.block === child);
+          outputIndex += this.countOutputs(parent, aggIdx);
+        }
+
+        return outputIndex;
+      }
+    }
+
+    throw new Error('No route found');
+  }
+
+  // Counts the outputs after an aggregate.
+  // -1 = all aggregates (use this to count the total outputs introduced by a subtree)
+  countOutputs(block: Block, aggregateIndex = -1): bigint {
+    let outputCount = BigInt(block.payload.outputs.length);
+    for (let i = aggregateIndex; ++i < block.aggregates.length;) {
+      outputCount += block.aggregates[i].outputCount;
+    }
+    return outputCount;
   }
 }

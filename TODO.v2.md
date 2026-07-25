@@ -2,6 +2,7 @@
 
 ## Joel's TODOs
 
+- Genesis block
 - Draft -> block
 - UTXO -> drafting
 - Special rules for aggregation grouping for now. Simple aggregation (ignore risk etc)

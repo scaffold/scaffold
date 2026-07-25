@@ -16,6 +16,7 @@ export class BlockStore {
       throw new Error(`Cannot get an ingesting fact!`);
     } else if (fact === undefined) {
       fact = this.makeRef(hash);
+      this.atoms.set(hash.toPrimitive(), fact);
     }
     return fact;
   }

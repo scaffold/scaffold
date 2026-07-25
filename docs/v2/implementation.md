@@ -62,3 +62,13 @@ Defaults via `makeDefault*() satisfies Partial<...>` plus spread override. No fe
 - Fork choice is per-conflict (whitepaper §6.4); canonicality is sampled verified weight minus penalties (§6.3).
 - v0 recomputes canonicality on dirty behind a narrow interface -- a deliberate O(N) deferral of the incremental O(log N) design. The interface must not leak the recompute so it can be replaced.
 - The UTXO index is maintained incrementally from canonicality change events.
+
+## 7. Block creation
+
+Block creation involves choosing an anchor based on the set of blocks that need to be included, and the set of blocks being aggregated. The inclusion set comes from claims, refs, and aggregate anchors.
+
+1. Enumerate the aggregation set of each inclusion. The aggregation set is produced by recursively getting all the aggregators of a block, adding them to the set, and recursing. This isn't necessarily a chain because a block can have multiple aggregations, but generally at each level one quickly wins and the other competing aggregations won't get re-aggregated, so the aggregation set has size O(log N).
+2. Eliminate inclusions whose chain includes a block we are aggregating. These are included in the new block's reach via aggregation, and won't influence the anchor.
+3. For the remaining chains, enumerate all blocks in every chain. Find one whose anchor chain intersects with every inclusion chain. If there are multiple, you may use a hueristic to decide which one to select as your anchor. If there are none, that means you are trying to include blocks in 2 unaggregated subtrees, so you either need to aggregate them immediately or wait for them to be aggregated.
+
+This method relies on an external process aggregating, either locally or remotely. An alternate approach would be to aggregate subtree roots on-demand. This was considered but rejected because (1) aggregation is disabled by light clients, and (2) aggregation has some specific rules about subtree size, so it's not possible to fix every case. Ultimately, it seems better to have a single aggregation path and have block creation wait for that to complete.

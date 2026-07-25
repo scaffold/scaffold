@@ -1,5 +1,5 @@
 import { Context } from '../Context.ts';
-import { Hash, HashPrimitive } from '../util/Hash.ts';
+import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { error, todo } from '../util/functional.ts';
 import { BlockStore } from './BlockStore.ts';
 import {
@@ -7,7 +7,7 @@ import {
   PlacementRequest,
   PlacementResult,
   PlacementService,
-} from './PlacementModule2.ts';
+} from './PlacementService2.ts';
 import { AGGREGATION_CONTRACT, AtomType, BlockPayload, Draft } from './types.ts';
 
 export type BuildResult =
@@ -38,6 +38,7 @@ export abstract class BlockBuilderModule {
     // covers the draft yet it can't solidify: park it, and retry when an
     // aggregation merging the reported tips lands.
     const placement = this.place({
+      genesis: this.getBlock(ZERO_HASH),
       includes: [...draft.claims, ...draft.refs].map((c) => this.getBlock(c.producer)),
       aggregates: this.aggregatedBlocks(draft),
       excludes: this.rivalClaimants(draft),
