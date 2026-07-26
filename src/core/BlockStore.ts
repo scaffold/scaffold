@@ -1,4 +1,5 @@
 import { Context } from '../Context.ts';
+import { assert } from '../util/functional.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { AtomSerializer } from './AtomSerializer.ts';
 import { Atom, AtomBase, AtomType, Block, BLOCK_REF_TYPE, BlockRef } from './types.ts';
@@ -8,7 +9,15 @@ export const ingestingAtom: unique symbol = Symbol('BlockStore.ingestingAtom');
 export class BlockStore {
   private atoms = new Map<HashPrimitive, Block | BlockRef | typeof ingestingAtom>();
 
+  private ingestionListeners = new Set<(block: Block) => void>();
+
   constructor(private ctx: Context) {}
+
+  onIngest(cb: (block: Block) => void, signal?: AbortSignal) {
+    if (signal?.aborted) return;
+    this.ingestionListeners.add(cb);
+    signal?.addEventListener('abort', () => assert(this.ingestionListeners.delete(cb)));
+  }
 
   get(hash: Hash): Block | BlockRef {
     let fact = this.atoms.get(hash.toPrimitive());
@@ -33,6 +42,9 @@ export class BlockStore {
         existing,
       );
       this.atoms.set(hash.toPrimitive(), atom);
+      for (const listener of this.ingestionListeners) {
+        listener(atom);
+      }
       return atom;
     } else {
       return existing;

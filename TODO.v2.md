@@ -2,7 +2,6 @@
 
 ## Joel's TODOs
 
-- Draft -> block
 - UTXO -> drafting
 - Special rules for aggregation grouping for now. Simple aggregation (ignore risk etc)
 - Draft prioritization via descendant weight sampling

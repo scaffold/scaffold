@@ -19,6 +19,12 @@ import {
   Draft,
 } from './types.ts';
 
+export interface BuildRequest {
+  claims: { producer: Block; outputIndex: bigint }[];
+  refs: { producer: Block; outputIndex: bigint }[];
+  outputs: { contractHash: Hash; params: Uint8Array; data?: Uint8Array; amount: bigint }[];
+}
+
 export type BuildResult =
   | { ok: true; payload: BlockPayload }
   | { ok: false; pendingAggregation: PlacementNode[] };
@@ -34,13 +40,8 @@ export abstract class BlockBuilderModule {
   ): bigint;
   protected abstract countOutputs(block: Block): bigint;
 
-  build(draft: Draft): BuildResult {
-    if (draft.currentBuild !== undefined) {
-      draft.currentBuild.cancel();
-      draft.currentBuild = undefined;
-    }
-
-    const aggregateBlocks = this.aggregatedBlocks(draft);
+  build(req: BuildRequest): BuildResult {
+    const aggregateBlocks = this.aggregatedBlocks(req);
     const aggregates = aggregateBlocks.map((x) => ({
       block: x.hash,
       outputCount: this.countOutputs(x),
@@ -48,24 +49,18 @@ export abstract class BlockBuilderModule {
 
     const placement = this.place({
       genesis: this.getGenesisBlock(),
-      includes: [...draft.claims, ...draft.refs].map((c) => c.producer),
+      includes: [...req.claims, ...req.refs].map((c) => c.producer),
       aggregates: aggregateBlocks,
-      excludes: this.rivalClaimants(draft),
+      excludes: this.rivalClaimants(req),
     });
     if (!placement.ok) {
-      draft.currentBuild = {
-        status: 'pending_aggregation',
-        cancel: () => {
-          draft.currentBuild = undefined;
-        },
-      };
       return { ok: false, pendingAggregation: placement.tips };
     }
 
-    const claims = draft.claims.map((x) =>
+    const claims = req.claims.map((x) =>
       this.resolveClaimIndex(placement.anchorChain, x.producer, x.outputIndex)
     );
-    const refs = draft.refs.map((x) =>
+    const refs = req.refs.map((x) =>
       this.resolveClaimIndex(placement.anchorChain, x.producer, x.outputIndex)
     );
 
@@ -75,15 +70,15 @@ export abstract class BlockBuilderModule {
       aggregates,
       claims,
       refs,
-      outputs: draft.outputs,
+      outputs: req.outputs,
       timestampMs: 0,
     };
     return { ok: true, payload };
   }
 
-  private aggregatedBlocks(draft: Draft): (PlacementNode & { type: AtomType.Block })[] {
+  private aggregatedBlocks(req: BuildRequest): (PlacementNode & { type: AtomType.Block })[] {
     const found: (PlacementNode & { type: AtomType.Block })[] = [];
-    for (const claim of draft.claims) {
+    for (const claim of req.claims) {
       const output = claim.producer.payload.outputs[Number(claim.outputIndex)];
       if (output === undefined) {
         return error(
@@ -97,9 +92,9 @@ export abstract class BlockBuilderModule {
     return found;
   }
 
-  private rivalClaimants(draft: Draft): PlacementNode[] {
+  private rivalClaimants(req: BuildRequest): PlacementNode[] {
     const rivals = new Set<PlacementNode>();
-    for (const claim of draft.claims) {
+    for (const claim of req.claims) {
       for (const rival of claim.producer.resolvingOutputs.get(claim.outputIndex) ?? []) {
         const claimer = rival.claimer;
         if (claimer.type !== AtomType.Block) continue;

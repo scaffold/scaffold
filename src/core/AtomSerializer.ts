@@ -119,8 +119,8 @@ export class AtomSerializerService extends AtomSerializerModule {
 
     this.factories = {
       [AtomType.Block]: new BlockIngestor(ctx),
-      [AtomType.Signal]: new UnknownIngestor(ctx),
-      [AtomType.Request]: new UnknownIngestor(ctx),
+      [AtomType.Signal]: new UnknownIngestor(),
+      [AtomType.Request]: new UnknownIngestor(),
     };
   }
 

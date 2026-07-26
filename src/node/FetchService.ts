@@ -1,5 +1,10 @@
 import { Query } from '../interfaces/Query.ts';
 import { Context } from '../Context.ts';
+import { BlockBuilderService } from '../core/BlockBuilderModule2.ts';
+import { BlockAction, BlockActionType } from '../core/types.ts';
+import { DraftStore } from '../core/DraftStore.ts';
+import { Hash } from '../util/Hash.ts';
+import { arrEquals } from '../util/buffer.ts';
 
 export interface FetchInput<T = unknown> {
   query: Query;
@@ -24,5 +29,31 @@ export class FetchService {
     if (!(input.query.params instanceof Uint8Array)) {
       throw new Error(`Reader-based params are not supported yet`);
     }
+    const params = input.query.params;
+
+    const draft = this.ctx.get(DraftStore).upsert({
+      outputs: [{
+        contractHash: input.query.contract,
+        params: input.query.params,
+        amount: 0n,
+      }],
+    });
+    this.ctx.get(DraftStore).build(draft);
+
+    this.ctx.get(DraftStore).onBuilt(draft, (block) => {
+      if (block === undefined) return;
+      const outputIdx = BigInt(
+        block.payload.outputs.findIndex((output) =>
+          Hash.equals(output.contractHash, input.query.contract) && arrEquals(output.params, params)
+        ),
+      );
+      block.listeners.add((action) => {
+        if (
+          action.type === BlockActionType.LinkClaimingNode && action.claim.outputIdx === outputIdx
+        ) {
+          console.log('claim');
+        }
+      });
+    });
   }
 }
