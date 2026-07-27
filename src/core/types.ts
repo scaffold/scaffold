@@ -151,7 +151,7 @@ export interface BlockRef {
 
 export enum DraftStatusType {
   Populating, // The producer is filling the draft in place. The only phase in which `update` is legal.
-  Locked, // The producer has handed off. Eligible for merging into a building batch; but it will NOT be built on its own.
+  Ready, // The producer has handed off. Eligible for merging into a building batch; but it will NOT be built on its own.
   Building, // No generated blocks are canonical. Building is in progress. The manager will retry on canonicality changes until it succeeds.
   Built, // Building has completed, and the generated block is canonical.
   Cancelled, // This draft has been cancelled.
@@ -159,7 +159,7 @@ export enum DraftStatusType {
 
 export type DraftStatus =
   | { type: DraftStatusType.Populating }
-  | { type: DraftStatusType.Locked }
+  | { type: DraftStatusType.Ready }
   | { type: DraftStatusType.Building; stalledReason: {}; hooks: AbortController }
   | { type: DraftStatusType.Built; block: Block }
   | { type: DraftStatusType.Cancelled; cancelledReason: string };
@@ -174,6 +174,7 @@ export interface Draft {
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts
 
   status: DraftStatus;
+  ioDelta: bigint;
   builtBlocks: Block[];
 
   // Listeners fire when a block is built and becomes canonical, or a previously canonical block becomes uncanonical.

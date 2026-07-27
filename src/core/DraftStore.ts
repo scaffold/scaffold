@@ -1,7 +1,8 @@
+import { D } from 'https://cdn.skypack.dev/-/multiformats@v13.1.0-4P8YZoitWQKmzpZQ0sPx/dist=es2019,mode=imports/optimized/common/digest-ded59942.js';
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
 import { AtomSerializerService } from './AtomSerializer.ts';
-import { BlockBuilderService } from './BlockBuilderModule2.ts';
+import { BlockBuilderService, BuildRequest } from './BlockBuilderModule2.ts';
 import { BlockStore } from './BlockStore.ts';
 import {
   AtomSource,
@@ -38,6 +39,7 @@ export class DraftStore {
         refs: [],
         outputs: [],
         status: { type: DraftStatusType.Populating },
+        ioDelta: 0n,
         builtBlocks: [],
         listeners: new Set(),
       };
@@ -48,19 +50,20 @@ export class DraftStore {
     replace.claims = claims ?? [];
     replace.refs = refs ?? [];
     replace.outputs = outputs ?? [];
+    replace.ioDelta = this.computeIoDelta(replace.claims, replace.outputs);
 
     return replace;
   }
 
   lock(draft: Draft) {
     assert(draft.status.type === DraftStatusType.Populating);
-    draft.status = { type: DraftStatusType.Locked };
+    draft.status = { type: DraftStatusType.Ready };
   }
 
   build(draft: Draft) {
     assert(
       draft.status.type === DraftStatusType.Populating ||
-        draft.status.type === DraftStatusType.Locked,
+        draft.status.type === DraftStatusType.Ready,
     );
     draft.status = {
       type: DraftStatusType.Building,
@@ -81,19 +84,36 @@ export class DraftStore {
     draft.status = { type: DraftStatusType.Cancelled, cancelledReason: 'cancelled' };
   }
 
+  private computeIoDelta(claims: Draft['claims'], outputs: Draft['outputs']): bigint {
+    let acc = 0n;
+    for (const claim of claims) {
+      acc -= claim.producer.payload.outputs[Number(claim.outputIndex)].amount;
+    }
+    for (const output of outputs) {
+      acc += output.amount;
+    }
+    return acc;
+  }
+
   private attemptBuild(draft: Draft) {
     assert(draft.status.type === DraftStatusType.Building);
 
-    const result = this.ctx.get(BlockBuilderService).build(draft);
+    let selectedDrafts: Draft[];
+    if (draft.ioDelta > 0n) {
+      selectedDrafts = [draft, ...this.selectReadyFunds(draft.ioDelta)];
+    } else {
+      selectedDrafts = [draft];
+    }
+
+    const mergedDraft = this.mergeDrafts(selectedDrafts);
+    const result = this.ctx.get(BlockBuilderService).build(mergedDraft);
     if (!result.ok) {
       draft.status.stalledReason = {};
       return;
     }
 
-    const serialized = this.ctx.get(AtomSerializerService).serialize(
-      AtomType.Block,
-      result.payload,
-    );
+    const serialized = this.ctx.get(AtomSerializerService)
+      .serialize(AtomType.Block, result.payload);
     const block = this.ctx.get(BlockStore).ingest({
       source: AtomSource.Local,
       receivedAt: this.ctx.config.timeProvider.now(),
@@ -101,6 +121,49 @@ export class DraftStore {
     });
 
     draft.status.hooks.abort();
-    draft.status = { type: DraftStatusType.Built, block };
+    for (const selDraft of selectedDrafts) {
+      selDraft.status = { type: DraftStatusType.Built, block };
+      for (const listener of selDraft.listeners) {
+        listener(block);
+      }
+    }
+  }
+
+  private selectReadyFunds(amount: bigint) {
+    assert(amount > 0n);
+
+    const candidates: Draft[] = [];
+    for (const draft of this.drafts) {
+      if (draft.status.type === DraftStatusType.Ready && draft.ioDelta < 0n) {
+        candidates.push(draft);
+      }
+    }
+
+    // Sort from high to low (low magnitude to high magnitude)
+    candidates.sort((a, b) => Number(b.ioDelta - a.ioDelta));
+
+    let lim: number;
+    for (lim = 0; lim < candidates.length; lim++) {
+      amount += candidates[lim].ioDelta;
+      if (amount <= 0n) break;
+    }
+
+    const selected: Draft[] = [];
+    for (let i = 0; i < lim; i++) {
+      if (amount - candidates[i].ioDelta <= 0n) {
+        amount -= candidates[i].ioDelta;
+      } else {
+        selected.push(candidates[i]);
+      }
+    }
+    return selected;
+  }
+
+  private mergeDrafts(drafts: Draft[]): BuildRequest {
+    return {
+      claims: drafts.flatMap((d) => d.claims),
+      refs: drafts.flatMap((d) => d.refs),
+      outputs: drafts.flatMap((d) => d.outputs),
+    };
   }
 }
