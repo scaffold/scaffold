@@ -1,12 +1,7 @@
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
-import {
-  AggregatorNodeBase,
-  AnchorNodeBase,
-  BROKEN_ANCHOR_CHAIN,
-  ForestService,
-} from './ForestService.ts';
-import { AtomType, Block, BLOCK_REF_TYPE, BlockRef } from './types.ts';
+import { ForestService } from './ForestService.ts';
+import { AtomType, Block, BLOCK_REF_TYPE, ResolvingClaim, ResolvingRef } from './types.ts';
 
 interface ResolveOutputBlock {
   type: AtomType.Block | typeof BLOCK_REF_TYPE;
@@ -28,9 +23,7 @@ export interface AnchorChainNode {
 export class ClaimIndexService {
   constructor(private ctx: Context) {}
 
-  propagateClaim(
-    claim: { producer: Block | BlockRef; outputIdx: bigint; resolved: boolean },
-  ): void {
+  propagateClaim(claim: ResolvingClaim | ResolvingRef): void {
     assert(!claim.resolved);
     if (claim.producer.type !== AtomType.Block) return;
 

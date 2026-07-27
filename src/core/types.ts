@@ -77,11 +77,26 @@ export function isBlockPayload(p: unknown): p is BlockPayload {
   return blockPayloadShape(p);
 }
 
+export enum OutputResolverType {
+  Claim,
+  Ref,
+}
+
 export interface ResolvingClaim {
+  type: OutputResolverType.Claim;
   producer: Block | BlockRef;
   outputIdx: bigint;
   claimer: Node;
   claimIdx: number;
+  resolved: boolean;
+}
+
+export interface ResolvingRef {
+  type: OutputResolverType.Ref;
+  producer: Block | BlockRef;
+  outputIdx: bigint;
+  reffer: Node;
+  refIdx: number;
   resolved: boolean;
 }
 
@@ -112,11 +127,12 @@ export interface Block extends AtomBase {
   anchor?: Block | BlockRef;
   aggregates: { block: Block | BlockRef; outputCount: bigint }[];
   claims: ResolvingClaim[];
+  refs: ResolvingRef[];
 
   // These are other nodes referring to this atom by hash
   anchoringNodes: Block[];
   aggregatingNodes: Block[];
-  resolvingOutputs: Map<bigint, ResolvingClaim[]>;
+  resolvingOutputs: Map<bigint, (ResolvingClaim | ResolvingRef)[]>;
 
   // Listeners fire when any adjacent node is attached or modified.
   // An adjacent node is an anchor, anchoring node, aggregated node, or aggregating node.
@@ -142,7 +158,7 @@ export interface BlockRef {
   // These are other nodes referring to this block by hash
   anchoringNodes: Block[];
   aggregatingNodes: Block[];
-  resolvingOutputs: Map<bigint, ResolvingClaim[]>;
+  resolvingOutputs: Map<bigint, (ResolvingClaim | ResolvingRef)[]>;
 
   // Listeners fire when any adjacent node is attached or modified.
   // An adjacent node is an anchor, anchoring node, aggregated node, or aggregating node.

@@ -1,7 +1,8 @@
 import { Context } from '../Context.ts';
+import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { AtomSerializer } from './AtomSerializer.ts';
+import { AtomSerializerService } from './AtomSerializer.ts';
 import { Atom, AtomBase, AtomType, Block, BLOCK_REF_TYPE, BlockRef } from './types.ts';
 
 export const ingestingAtom: unique symbol = Symbol('BlockStore.ingestingAtom');
@@ -37,14 +38,12 @@ export class BlockStore {
       throw new Error(`Cannot re-ingest an ingesting or failed atom!`);
     } else if (existing === undefined || existing.type === BLOCK_REF_TYPE) {
       this.atoms.set(hash.toPrimitive(), ingestingAtom);
-      const atom = this.ctx.get(AtomSerializer).deserialize(
+      const atom = this.ctx.get(AtomSerializerService).deserialize(
         { hash, source, receivedAt, raw },
         existing,
       );
       this.atoms.set(hash.toPrimitive(), atom);
-      for (const listener of this.ingestionListeners) {
-        listener(atom);
-      }
+      arrCall(this.ingestionListeners, atom);
       return atom;
     } else {
       return existing;

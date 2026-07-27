@@ -1,4 +1,6 @@
+import { b } from 'https://cdn.skypack.dev/-/multiformats@v13.1.0-4P8YZoitWQKmzpZQ0sPx/dist=es2019,mode=imports/optimized/common/bytes-9b56a652.js';
 import { Context } from '../Context.ts';
+import { arrCall } from '../util/array.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
 import { assert, todo } from '../util/functional.ts';
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
@@ -11,9 +13,11 @@ import {
   AtomBase,
   AtomType,
   Block,
+  BlockActionType,
   BlockPayload,
   BlockRef,
   isBlockPayload,
+  OutputResolverType,
   ResolvingClaim,
 } from './types.ts';
 
@@ -113,8 +117,18 @@ export class BlockIngestor implements Ingestor<Block> {
 
       for (const arr of ref.resolvingOutputs.values()) {
         for (const claim of arr) {
+          claim.producer = block;
           this.ctx.get(ClaimIndexService).propagateClaim(claim);
           multimapPut(claim.producer.resolvingOutputs, claim.outputIdx, claim);
+
+          if (claim.resolved && claim.type === OutputResolverType.Claim) {
+            setTimeout(() => {
+              if (claim.claimer.type === AtomType.Block) {
+                arrCall(claim.claimer.listeners, { type: BlockActionType.LinkClaim, claim });
+              }
+              arrCall(claim.producer.listeners, { type: BlockActionType.LinkClaimingNode, claim });
+            }, 0);
+          }
         }
       }
     }
@@ -122,7 +136,40 @@ export class BlockIngestor implements Ingestor<Block> {
     return block;
   }
 
-  ingest(block: Block): void {}
+  ingest(block: Block): void {
+    for (const link of block.anchoringNodes) {
+      arrCall(link.listeners, { type: BlockActionType.LinkAnchor, anchor: block });
+    }
+
+    if (block.anchor !== undefined) {
+      arrCall(block.anchor.listeners, {
+        type: BlockActionType.LinkAnchoringNode,
+        anchoringNode: block,
+      });
+    }
+
+    for (const link of block.aggregatingNodes) {
+      arrCall(link.listeners, {
+        type: BlockActionType.LinkAggregate,
+        aggregate: block,
+        index: link.aggregates.findIndex((x) => x.block === block),
+      });
+    }
+
+    for (let i = 0; i < block.aggregates.length; i++) {
+      arrCall(block.aggregates[i].block.listeners, {
+        type: BlockActionType.LinkAggregatingNode,
+        aggregatingNode: block,
+        index: i,
+      });
+    }
+
+    // Trigger generation
+    for (let i = 0; i < block.payload.outputs.length; i++) {
+      // if (block.resolvingOutputs.get(BigInt(i))?.length) continue;
+      const output = block.payload.outputs[i];
+    }
+  }
 }
 
 export class UnknownIngestor implements Ingestor<never> {

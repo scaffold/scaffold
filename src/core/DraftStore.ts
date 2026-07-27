@@ -1,5 +1,5 @@
-import { D } from 'https://cdn.skypack.dev/-/multiformats@v13.1.0-4P8YZoitWQKmzpZQ0sPx/dist=es2019,mode=imports/optimized/common/digest-ded59942.js';
 import { Context } from '../Context.ts';
+import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
 import { AtomSerializerService } from './AtomSerializer.ts';
 import { BlockBuilderService, BuildRequest } from './BlockBuilderModule2.ts';
@@ -123,9 +123,7 @@ export class DraftStore {
     draft.status.hooks.abort();
     for (const selDraft of selectedDrafts) {
       selDraft.status = { type: DraftStatusType.Built, block };
-      for (const listener of selDraft.listeners) {
-        listener(block);
-      }
+      arrCall(selDraft.listeners, block);
     }
   }
 
