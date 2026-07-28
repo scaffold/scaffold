@@ -28,7 +28,7 @@ export class FetchService {
     }
     const params = input.query.params;
 
-    const draft = this.ctx.get(DraftStore).upsert({
+    const draft = this.ctx.get(DraftStore).create({
       outputs: [{
         contractHash: input.query.contract,
         params: input.query.params,

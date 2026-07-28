@@ -40,7 +40,7 @@ So I'm starting again. I imagine that a lot of the old code will still be applic
 The documentation lives in docs/v2/ and is divided into 3 files:
 
 1. whitepaper.md - documents the protocol at a high level; should capture all of the incentives and game theory but doesn't need to dive into implementation details too much.
-2. scaffold.md - documents the user-visible interface; both the TypeScript API and the contract's WASM ABI should live here.
+2. interface.md - documents the user-visible interface; both the TypeScript API and the contract's WASM ABI should live here.
 3. implementation.md - documents the architecture and data structures needed to implement a competitive peer that aligns with the incentives outlined in the whitepaper.
 
 Don't be afraid to update documentation if needed, but check with me first, and if I give you the go-ahead remember to keep it concise. Don't add unnecessary details or examples.

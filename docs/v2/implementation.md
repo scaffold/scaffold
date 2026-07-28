@@ -1,6 +1,6 @@
 # Scaffold v2 Implementation Architecture
 
-## 1. Layers
+## Layers
 
 ```
 core  ->  node  ->  roles  ->  api
@@ -15,13 +15,13 @@ I'm not sure where contract execution fits yet.
 
 A lower layer never imports from a higher one.
 
-## 2. Core data model
+## Core data model
 
 - **Packet** -- the immutable wire envelope: raw bytes, content hash, type tag, decoded message, optional signature and recovered signer. Frozen at ingestion. All protocol data travels as packets; a block is one packet type.
 - **Block** -- per whitepaper §4.1: `anchor`, `chain[]`, `aggregates[]`, `claims[]`, `outputs[]`, `timestampMs`.
 - **Node-local state is never stored on the packet or block object.** Each module owns its own index keyed by block hash: reception state in gossip, canonicality in consensus, insurance status in the insurer. No shared mutable records.
 
-## 3. Module/Service pattern
+## Module/Service pattern
 
 - **Module** (core or role logic): abstract class. Dependencies on other modules are declared as abstract methods -- typed holes the compiler forces every subclass to fill. No context access, no setters, no stored references to other modules.
 - **Service** (node wiring): `extends` its module, constructed by the locator. Each abstract method is overridden with a call-time lookup -- `this.ctx.get(OtherService).doSomething(...)` -- never caching the `ctx.get` result at construction. Call-time resolution is what removes construction-order sensitivity.
@@ -34,7 +34,7 @@ Hard rules:
 4. Only services touch `ctx`. Modules are constructible and testable without a context (subclass with fake overrides).
 5. One reactivity mechanism: typed change events on module boundaries with explicit flush ordering (the `onCanonicalityChange` diff-and-flush pattern). Viz/debug subscribes through a single debounced adapter at the edge; no parallel observer systems.
 
-## 4. Ingestion
+## Ingestion
 
 A single funnel for local and remote data:
 
@@ -47,7 +47,7 @@ bytes -> parse envelope -> dedup by hash -> verify signature -> typed handler ->
 - **Ingestion is commutative:** any ingestion order converges to identical node state. This is a standing property test, not an aspiration.
 - Handlers hydrate the envelope only; derived state is computed by modules subscribing to ingestion events.
 
-## 5. Configuration
+## Configuration
 
 Three separate objects, injected at construction:
 
@@ -57,13 +57,13 @@ Three separate objects, injected at construction:
 
 Defaults via `makeDefault*() satisfies Partial<...>` plus spread override. No feature flags that rewrite defaults; tests compose different module sets instead.
 
-## 6. Consensus state
+## Consensus state
 
 - Fork choice is per-conflict (whitepaper §6.4); canonicality is sampled verified weight minus penalties (§6.3).
 - v0 recomputes canonicality on dirty behind a narrow interface -- a deliberate O(N) deferral of the incremental O(log N) design. The interface must not leak the recompute so it can be replaced.
 - The UTXO index is maintained incrementally from canonicality change events.
 
-## 7. Block creation
+## Block creation
 
 Block creation involves choosing an anchor based on the set of blocks that need to be included, and the set of blocks being aggregated. The inclusion set comes from claims, refs, and aggregate anchors.
 

@@ -28,31 +28,34 @@ export class DraftStore {
     signal?.addEventListener('abort', () => assert(draft.listeners.delete(cb)));
   }
 
-  upsert(
+  create(attrs: Partial<Pick<Draft, 'claims' | 'refs' | 'outputs'>>): Draft {
+    const draft: Draft = {
+      type: DRAFT_TYPE,
+      claims: [],
+      refs: [],
+      outputs: [],
+      status: { type: DraftStatusType.Populating },
+      ioDelta: 0n,
+      builtBlocks: [],
+      listeners: new Set(),
+    };
+    this.drafts.add(draft);
+
+    this.update(draft, attrs);
+
+    return draft;
+  }
+
+  update(
+    draft: Draft,
     { claims, refs, outputs }: Partial<Pick<Draft, 'claims' | 'refs' | 'outputs'>>,
-    replace?: Draft,
   ) {
-    if (replace === undefined) {
-      replace = {
-        type: DRAFT_TYPE,
-        claims: [],
-        refs: [],
-        outputs: [],
-        status: { type: DraftStatusType.Populating },
-        ioDelta: 0n,
-        builtBlocks: [],
-        listeners: new Set(),
-      };
-      this.drafts.add(replace);
-    }
-    assert(replace.status.type === DraftStatusType.Populating);
+    assert(draft.status.type === DraftStatusType.Populating);
 
-    replace.claims = claims ?? [];
-    replace.refs = refs ?? [];
-    replace.outputs = outputs ?? [];
-    replace.ioDelta = this.computeIoDelta(replace.claims, replace.outputs);
-
-    return replace;
+    draft.claims = claims ?? [];
+    draft.refs = refs ?? [];
+    draft.outputs = outputs ?? [];
+    draft.ioDelta = this.computeIoDelta(draft.claims, draft.outputs);
   }
 
   lock(draft: Draft) {
