@@ -34,13 +34,33 @@ export interface AtomBase {
   toConnections: Set<string>;
 }
 
+/**
+ * The proposition a claim must satisfy: a contract partially applied to its
+ * params. Mode-neutral -- generating a block finds a witness for it, verifying
+ * one checks the witness.
+ *
+ * Params are canonical bytes here. `Query` (interfaces/Query.ts) is the
+ * unresolved form, whose params may still be a lazy structured builder; a
+ * Predicate is assignable to a Query, never the reverse.
+ */
+export interface Predicate {
+  contract: Hash;
+  params: Uint8Array;
+}
+
+/** A resource produced by a block, governed by the predicate it extends. */
+export interface Output extends Predicate {
+  data?: Uint8Array;
+  amount: bigint;
+}
+
 export interface BlockPayload {
   anchor: Hash;
   chain: { weight: bigint; throughput: bigint }[];
   aggregates: { block: Hash; outputCount: bigint }[];
   claims: bigint[];
   refs: bigint[];
-  outputs: { contractHash: Hash; params: Uint8Array; data?: Uint8Array; amount: bigint }[];
+  outputs: Output[];
   timestampMs: number;
 }
 
@@ -68,7 +88,7 @@ const blockPayloadShape = shape({
   claims: arrayOf(isBigint),
   refs: arrayOf(isBigint),
   outputs: arrayOf(
-    shape({ contractHash: isHash, params: isBytes, data: isOptionalBytes, amount: isBigint }),
+    shape({ contract: isHash, params: isBytes, data: isOptionalBytes, amount: isBigint }),
   ),
   timestampMs: (val) => typeof val === 'number' && Number.isFinite(val),
 });
@@ -180,14 +200,16 @@ export type DraftStatus =
   | { type: DraftStatusType.Built; block: Block }
   | { type: DraftStatusType.Cancelled; cancelledReason: string };
 
-export interface Draft {
-  type: typeof DRAFT_TYPE;
-
+export interface DraftPayload {
   claims: { producer: Block; outputIndex: bigint }[];
   refs: { producer: Block; outputIndex: bigint }[];
-  outputs: { contractHash: Hash; params: Uint8Array; data?: Uint8Array; amount: bigint }[];
+  outputs: Output[];
 
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts
+}
+
+export interface Draft extends DraftPayload {
+  type: typeof DRAFT_TYPE;
 
   status: DraftStatus;
   ioDelta: bigint;

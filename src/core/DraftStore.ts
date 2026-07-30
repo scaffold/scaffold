@@ -10,7 +10,7 @@ import {
   Block,
   Draft,
   DRAFT_TYPE,
-  DraftStatus,
+  DraftPayload,
   DraftStatusType,
 } from './types.ts';
 
@@ -28,7 +28,7 @@ export class DraftStore {
     signal?.addEventListener('abort', () => assert(draft.listeners.delete(cb)));
   }
 
-  create(attrs: Partial<Pick<Draft, 'claims' | 'refs' | 'outputs'>>): Draft {
+  create(attrs?: Partial<DraftPayload>): Draft {
     const draft: Draft = {
       type: DRAFT_TYPE,
       claims: [],
@@ -41,21 +41,20 @@ export class DraftStore {
     };
     this.drafts.add(draft);
 
-    this.update(draft, attrs);
+    if (attrs !== undefined) {
+      this.update(draft, { claims: [], refs: [], outputs: [], ...attrs });
+    }
 
     return draft;
   }
 
-  update(
-    draft: Draft,
-    { claims, refs, outputs }: Partial<Pick<Draft, 'claims' | 'refs' | 'outputs'>>,
-  ) {
+  update(draft: Draft, { claims, refs, outputs }: DraftPayload) {
     assert(draft.status.type === DraftStatusType.Populating);
 
-    draft.claims = claims ?? [];
-    draft.refs = refs ?? [];
-    draft.outputs = outputs ?? [];
-    draft.ioDelta = this.computeIoDelta(draft.claims, draft.outputs);
+    draft.claims = claims;
+    draft.refs = refs;
+    draft.outputs = outputs;
+    draft.ioDelta = this.computeIoDelta(claims, outputs);
   }
 
   lock(draft: Draft) {

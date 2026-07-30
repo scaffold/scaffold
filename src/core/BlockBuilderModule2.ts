@@ -17,12 +17,13 @@ import {
   BlockPayload,
   BlockRef,
   Draft,
+  Output,
 } from './types.ts';
 
 export interface BuildRequest {
   claims: { producer: Block; outputIndex: bigint }[];
   refs: { producer: Block; outputIndex: bigint }[];
-  outputs: { contractHash: Hash; params: Uint8Array; data?: Uint8Array; amount: bigint }[];
+  outputs: Output[];
 }
 
 export type BuildResult =
@@ -85,7 +86,7 @@ export abstract class BlockBuilderModule {
           `build: claim on ${claim.producer.hash.toHex()} output ${claim.outputIndex} is out of range`,
         );
       }
-      if (Hash.equals(output.contractHash, AGGREGATION_CONTRACT)) {
+      if (Hash.equals(output.contract, AGGREGATION_CONTRACT)) {
         found.push(claim.producer);
       }
     }

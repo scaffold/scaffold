@@ -66,7 +66,7 @@ export function generateGenesis(
     const publicKey = hex2bin(publicKeyHex);
     assert(publicKey.byteLength === 33, 'public key must be 33 bytes');
     assert(amount >= 0n, 'amount must be non-negative');
-    block.outputs.push({ contractHash: ZERO_HASH, params: publicKey, amount });
+    block.outputs.push({ contract: ZERO_HASH, params: publicKey, amount });
 
     randomness.push(publicKey, bigint2binBe(amount));
   }

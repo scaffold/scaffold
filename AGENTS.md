@@ -72,7 +72,7 @@ The public scaffold API is an exception; we may want to be more lenient and help
 
 ### Be concise
 
-Comments should be used to add information that complements the code or type. Don't comment things that would be obvious from reading the code. Where you do comment, be concise.
+Comments should be used to add information that complements the code or type. Don't comment things that would be obvious from reading the code. When unsure, lean towards omitting comments. Where you do comment, be concise.
 
 ### Never drop errors silently
 

@@ -19,7 +19,7 @@ import {
   type WaitForGetOutputFn,
   type WaitForInputFn,
 } from './GeneratingEnv.ts';
-import { Query, Record } from '../interfaces/Query.ts';
+import { Query, Statement } from '../interfaces/Query.ts';
 import { error } from '../util/functional.ts';
 
 // -- Re-exports -----------------------------------------------------
@@ -277,7 +277,7 @@ export class ContractHost<BlockType> {
     return resolved.buildParams(params);
   }
 
-  resolveRecordData(record: Record): MaybePromise<Uint8Array> {
+  resolveRecordData(record: Statement): MaybePromise<Uint8Array> {
     const { contract, data } = record;
     if (data instanceof Uint8Array) return data;
 

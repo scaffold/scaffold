@@ -138,12 +138,12 @@ export interface Node {
 // just the graph-vertex contract that ConsensusModule, OutputClaimModule,
 // and weight propagation depend on.
 
-/** Predicate: a Node is a Block. Cheap discriminator. */
+/** Type guard: a Node is a Block. Cheap discriminator. */
 export function isBlock(n: Node): n is Node & { kind: 'block' } {
   return n.kind === 'block';
 }
 
-/** Predicate: a Node is a Draft. Cheap discriminator. */
+/** Type guard: a Node is a Draft. Cheap discriminator. */
 export function isDraft(n: Node): n is Node & { kind: 'draft' } {
   return n.kind === 'draft';
 }

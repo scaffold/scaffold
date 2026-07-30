@@ -2,13 +2,17 @@ import { Hash } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
 import { createReader, Reader } from './Reader.ts';
 
+/** Lazily-built structured params, walked by the contract's `build_params` entry. */
+export type ParamsBuilder = (descriptor: string) => MaybePromise<Reader>;
+
 export interface Query {
   contract: Hash;
-  params: Uint8Array | ((descriptor: string) => MaybePromise<Reader>);
+  params: Uint8Array | ParamsBuilder;
 }
 
-export interface Record extends Query {
-  data: Uint8Array | ((descriptor: string) => MaybePromise<Reader>);
+/** A query plus the data to publish under it. */
+export interface Statement extends Query {
+  data: Uint8Array | ParamsBuilder;
 }
 
 class BinaryContractInputExample implements Query {

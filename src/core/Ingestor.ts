@@ -1,4 +1,3 @@
-import { b } from 'https://cdn.skypack.dev/-/multiformats@v13.1.0-4P8YZoitWQKmzpZQ0sPx/dist=es2019,mode=imports/optimized/common/bytes-9b56a652.js';
 import { Context } from '../Context.ts';
 import { arrCall } from '../util/array.ts';
 import { bin2str, str2bin } from '../util/buffer.ts';
@@ -164,11 +163,8 @@ export class BlockIngestor implements Ingestor<Block> {
       });
     }
 
-    // Trigger generation
-    for (let i = 0; i < block.payload.outputs.length; i++) {
-      // if (block.resolvingOutputs.get(BigInt(i))?.length) continue;
-      const output = block.payload.outputs[i];
-    }
+    // Generation is triggered by ExecutionModule off BlockStore.onIngest, not
+    // from here -- ingestion must not reach up into contract execution.
   }
 }
 
