@@ -3,6 +3,7 @@ import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
 import { assert, error, todo } from '../util/functional.ts';
 import { BlockStore } from './BlockStore.ts';
 import { AnchorChainNode, ClaimIndexService } from './ClaimIndexService.ts';
+import { AggregatorNodeBase } from './ForestService.ts';
 import {
   PlacementNode,
   PlacementRequest,
@@ -15,8 +16,6 @@ import {
   AtomType,
   Block,
   BlockPayload,
-  BlockRef,
-  Draft,
   DRAFT_SELF,
   DraftPayload,
   Output,
@@ -29,11 +28,12 @@ export type BuildResult =
 
 export abstract class BlockBuilderModule {
   protected abstract getGenesisBlock(): PlacementNode;
+  protected abstract nowMs(): number;
   protected abstract place(request: PlacementRequest): PlacementResult;
   protected abstract getBlock(hash: Hash): PlacementNode;
   protected abstract resolveClaimIndex(
     anchorChain: AnchorChainNode[],
-    outputBlock: Block | typeof DRAFT_SELF,
+    outputBlock: AggregatorNodeBase & AnchorChainNode,
     outputIndex: bigint,
   ): bigint;
   protected abstract countOutputs(block: Block): bigint;
@@ -41,7 +41,7 @@ export abstract class BlockBuilderModule {
   build(req: DraftPayload): BuildResult {
     const aggregateBlocks = this.aggregatedBlocks(req);
     const aggregates = aggregateBlocks.map((x) => ({
-      block: x.hash,
+      block: x,
       outputCount: this.countOutputs(x),
     }));
 
@@ -55,26 +55,33 @@ export abstract class BlockBuilderModule {
       return { ok: false, pendingAggregation: placement.tips };
     }
 
-    const mockedAnchorChain: AnchorChainNode[] = [
-      { payload: { outputs: req.outputs }, aggregates },
-      ...placement.anchorChain,
-    ];
+    const mockBlock = { payload: { outputs: req.outputs }, aggregates, aggregatingNodes: [] };
+    const mockedAnchorChain: AnchorChainNode[] = [mockBlock, ...placement.anchorChain];
 
     const claims = req.claims.map((x) =>
-      this.resolveClaimIndex(mockedAnchorChain, x.producer, x.outputIndex)
+      this.resolveClaimIndex(
+        mockedAnchorChain,
+        x.producer === DRAFT_SELF ? mockBlock : x.producer,
+        x.outputIndex,
+      )
     );
     const refs = req.refs.map((x) =>
-      this.resolveClaimIndex(mockedAnchorChain, x.producer, x.outputIndex)
+      this.resolveClaimIndex(
+        mockedAnchorChain,
+        x.producer === DRAFT_SELF ? mockBlock : x.producer,
+        x.outputIndex,
+      )
     );
 
+    const anchor = placement.anchorChain[0];
     const payload: BlockPayload = {
-      anchor: placement.anchorChain[0].hash,
+      anchor: anchor.hash,
       chain: [{ weight: 0n, throughput: 0n }],
-      aggregates,
+      aggregates: aggregates.map((x) => ({ block: x.block.hash, outputCount: x.outputCount })),
       claims,
       refs,
       outputs: req.outputs,
-      timestampMs: 0,
+      timestampMs: this.computeTimestamp(anchor, aggregateBlocks),
     };
     return { ok: true, payload };
   }
@@ -108,6 +115,13 @@ export abstract class BlockBuilderModule {
     }
     return [...rivals.values()];
   }
+
+  private computeTimestamp(anchor: Block, aggregateBlocks: Block[]): number {
+    return aggregateBlocks.reduce(
+      (acc, cur) => Math.max(acc, cur.payload.timestampMs),
+      Math.max(anchor.payload.timestampMs, this.nowMs()),
+    );
+  }
 }
 
 export class BlockBuilderService extends BlockBuilderModule {
@@ -118,9 +132,13 @@ export class BlockBuilderService extends BlockBuilderModule {
   protected override getGenesisBlock() {
     return this.ctx.get(BlockStore).ingest({
       source: AtomSource.Genesis,
-      receivedAt: Date.now(),
+      receivedAt: this.ctx.config.timeProvider.nowMs(),
       raw: this.ctx.config.genesis,
     });
+  }
+
+  protected override nowMs(): number {
+    return this.ctx.config.timeProvider.nowMs();
   }
 
   protected override place(request: PlacementRequest): PlacementResult {
@@ -133,13 +151,10 @@ export class BlockBuilderService extends BlockBuilderModule {
 
   protected override resolveClaimIndex(
     anchorChain: AnchorChainNode[],
-    outputBlock: Block | typeof DRAFT_SELF,
+    outputBlock: AggregatorNodeBase & AnchorChainNode,
     outputIndex: bigint,
   ): bigint {
-    if (outputBlock === DRAFT_SELF) {
-      assert(outputIndex < BigInt(anchorChain[0].payload.outputs.length));
-      return outputIndex;
-    }
+    assert(outputIndex < BigInt(outputBlock.payload.outputs.length));
     return this.ctx.get(ClaimIndexService).resolveClaimIndex(anchorChain, outputBlock, outputIndex);
   }
 

@@ -172,6 +172,8 @@ export interface BlockRef {
   hash: Hash;
   type: typeof BLOCK_REF_TYPE;
 
+  ingestionError?: string;
+
   // List of connections that know the block behind this ref
   connections: string[];
 

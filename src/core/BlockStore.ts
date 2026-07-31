@@ -38,13 +38,22 @@ export class BlockStore {
       throw new Error(`Cannot re-ingest an ingesting or failed atom!`);
     } else if (existing === undefined || existing.type === BLOCK_REF_TYPE) {
       this.atoms.set(hash.toPrimitive(), ingestingAtom);
-      const atom = this.ctx.get(AtomSerializerService).deserialize(
-        { hash, source, receivedAt, raw },
-        existing,
-      );
-      assert(atom.type === AtomType.Block, `BlockStore cannot hold a ${atom.type} atom!`);
+      let atom: Atom;
+      try {
+        atom = this.ctx.get(AtomSerializerService).deserialize(
+          { hash, source, receivedAt, raw },
+          existing,
+        );
+        assert(atom.type === AtomType.Block, `BlockStore cannot hold a ${atom.type} atom!`);
+      } catch (err) {
+        const ref = existing ?? this.makeRef(hash);
+        ref.ingestionError = err instanceof Error ? err.message : String(err);
+        this.atoms.set(hash.toPrimitive(), ref);
+        throw err;
+      }
       this.atoms.set(hash.toPrimitive(), atom);
       arrCall(this.ingestionListeners, atom);
+      this.ctx.get(AtomSerializerService).ingest(atom);
       return atom;
     } else {
       return existing;

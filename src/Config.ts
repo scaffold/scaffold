@@ -7,7 +7,7 @@ import { secp } from './util/secp.ts';
 
 export type Timeout = ReturnType<typeof globalThis.setTimeout>;
 export interface TimeProvider {
-  now(): number;
+  nowMs(): number;
   setImmediate(cb: () => void): void;
   setTimeout(cb: () => void, delayMs: number): Timeout;
   clearTimeout(idx: Timeout): void;
@@ -52,7 +52,7 @@ export const makeDefaultConfig = () => {
     genesis,
     debugName: '',
     timeProvider: {
-      now: () => Date.now(),
+      nowMs: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),
       setTimeout: (cb, delayMs) => setTimeout(cb, delayMs),
       clearTimeout: (idx) => clearTimeout(idx),

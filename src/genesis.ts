@@ -75,5 +75,3 @@ export function generateGenesis(
   const serializer = new GenesisSerializer(Hash.digestParts(...randomness));
   return serializer.serialize(AtomType.Block, block);
 }
-
-// TODO(claude): Create tests/genesis.test.ts and add some tests, including that the genesis block generation is deterministic.

@@ -86,9 +86,16 @@ export abstract class AtomSerializerModule {
 
       const hash = Hash.digest(raw.subarray(0, -SIGNATURE_LENGTH));
       signature = raw.subarray(-SIGNATURE_LENGTH);
-      signer = secp.Signature.fromCompact(signature.subarray(0, SIGNATURE_LENGTH - 1))
-        .addRecoveryBit(signature[SIGNATURE_LENGTH - 1]).recoverPublicKey(hash.toBytes())
-        .toRawBytes();
+      const sig = secp.Signature.fromCompact(signature.subarray(0, SIGNATURE_LENGTH - 1));
+
+      // ECDSA is malleable: (r, n - s) verifies for the same key, so without this anyone
+      // relaying an atom could mint a second raw with a different hash and the same signer.
+      if (sig.hasHighS()) {
+        throw new Error(`Signature is not canonical (high S)!`);
+      }
+
+      signer = sig.addRecoveryBit(signature[SIGNATURE_LENGTH - 1])
+        .recoverPublicKey(hash.toBytes()).toRawBytes();
     } else {
       message = raw.subarray(headerSize);
     }
@@ -107,6 +114,10 @@ export abstract class AtomSerializerModule {
     };
 
     return ingestor.deserialize(base, ref);
+  }
+
+  ingest(atom: Atom): void {
+    this.factories[atom.type].ingest(atom);
   }
 }
 

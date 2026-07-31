@@ -1,4 +1,4 @@
-import { assertEquals } from '@std/assert';
+import { assertEquals, assertStrictEquals } from '@std/assert';
 import { BROKEN_ANCHOR_CHAIN, ForestModule, RefNodeBase } from '../src/core/ForestService.ts';
 import { AtomType, BLOCK_REF_TYPE } from '../src/core/types.ts';
 

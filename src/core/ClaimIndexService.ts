@@ -1,23 +1,11 @@
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
-import { ForestService } from './ForestService.ts';
-import { AtomType, Block, BLOCK_REF_TYPE, ResolvingClaim, ResolvingRef } from './types.ts';
-
-interface ResolveOutputBlock {
-  type: AtomType.Block | typeof BLOCK_REF_TYPE;
-
-  anchor: this;
-  aggregates: { block: ThisType<ResolveOutputBlock>; outputCount: bigint }[];
-
-  // These are other nodes referring to this atom by hash
-  // anchoringNodes: Block[];
-  // aggregatingNodes: Block[];
-  // resolvingOutputs: Map<bigint, ResolvingClaim[]>;
-}
+import { AggregatorNodeBase, ForestService } from './ForestService.ts';
+import { AtomType, Block, BlockRef, ResolvingClaim, ResolvingRef } from './types.ts';
 
 export interface AnchorChainNode {
   payload: { outputs: unknown[] };
-  aggregates: { outputCount: bigint }[];
+  aggregates: { block: Block | BlockRef; outputCount: bigint }[];
 }
 
 export class ClaimIndexService {
@@ -28,6 +16,8 @@ export class ClaimIndexService {
     if (claim.producer.type !== AtomType.Block) return;
 
     let outputIdx = claim.outputIdx;
+    assert(outputIdx >= 0n);
+
     const outputCount = BigInt(claim.producer.payload.outputs.length);
     if (outputIdx < outputCount) {
       claim.resolved = true;
@@ -55,22 +45,34 @@ export class ClaimIndexService {
 
   resolveClaimIndex(
     anchorChain: AnchorChainNode[],
-    outputBlock: Block,
+    outputBlock: AggregatorNodeBase & AnchorChainNode,
     outputIndex: bigint,
   ): bigint {
+    assert(anchorChain.length > 0);
+
     // const anchorChain = this.ctx.get(ForestService).anchorChain(claimingBlock);
     // if (anchorChain === BROKEN_ANCHOR_CHAIN) throw new Error('Broken anchor chain');
 
-    for (const chain of this.ctx.get(ForestService).aggregationChains(outputBlock)) {
-      const idx = (anchorChain as object[]).indexOf(chain[chain.length - 1]);
+    let aggChain: AnchorChainNode[];
+    for (aggChain of this.ctx.get(ForestService).aggregationChains(outputBlock)) {
+      // The last anchor chain node might be a mock.
+      // In this case, the aggregation chain won't include it.
+      // Here, we add it in synthetically.
+      let aggTip = aggChain[aggChain.length - 1];
+      if (anchorChain[0].aggregates.some((x) => x.block === aggTip)) {
+        aggTip = anchorChain[0];
+        aggChain = [...aggChain, aggTip];
+      }
+
+      const idx = anchorChain.indexOf(aggTip);
       if (idx !== -1) {
         for (let i = 0; i < idx; ++i) {
           outputIndex += this.countOutputs(anchorChain[i]);
         }
 
-        for (let i = 1; i < chain.length; ++i) {
-          const child = chain[i - 1];
-          const parent = chain[i];
+        for (let i = 1; i < aggChain.length; ++i) {
+          const child = aggChain[i - 1];
+          const parent = aggChain[i];
           const aggIdx = parent.aggregates.findIndex((agg) => agg.block === child);
           outputIndex += this.countOutputs(parent, aggIdx);
         }

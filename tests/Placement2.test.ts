@@ -1,111 +1,106 @@
 import { assert, assertEquals, assertThrows } from '@std/assert';
-import { Hash } from '../src/util/Hash.ts';
+import { ForestModule } from '../src/core/ForestService.ts';
 import {
   PlacementModule,
-  PlacementNode,
   PlacementRequest,
   PlacementResult,
 } from '../src/core/PlacementModule2.ts';
-import { AtomSource, AtomType, Block, BLOCK_REF_TYPE, BlockRef } from '../src/core/types.ts';
+import { AtomType, BLOCK_REF_TYPE } from '../src/core/types.ts';
 
 // -- Graph fixtures ----------------------------------------------
 //
-// Placement reads three things off the graph: `hash`, `anchor` (the anchor
-// chain) and `aggregatingNodes` (the aggregation chain). The rest of `Block`
-// is filled in so the fixtures type-check.
+// Placement reads three things off the graph: `anchor` (the anchor chain),
+// `aggregatingNodes` (the aggregation chain) and the node's `type`, so the
+// fakes carry only those plus a name to assert on.
 
-function block(name: string, anchor?: Block | BlockRef): Block {
-  return {
-    hash: Hash.digest(name),
-    type: AtomType.Block,
-    source: AtomSource.Local,
-    receivedAt: 0,
-    raw: new Uint8Array(),
-    message: new Uint8Array(),
-    fromConnections: [],
-    toConnections: new Set(),
-    payload: {
-      anchor: anchor?.hash ?? Hash.digest('genesis'),
-      chain: [],
-      aggregates: [],
-      claims: [],
-      refs: [],
-      outputs: [],
-      timestampMs: 0,
-    },
-    anchor,
-    aggregates: [],
-    claims: [],
-    anchoringNodes: [],
-    aggregatingNodes: [],
-    resolvingOutputs: new Map(),
-    listeners: new Set(),
-  };
+interface FakeBlock {
+  type: AtomType.Block;
+  name: string;
+  anchor?: FakeBlock | FakeRef;
+  aggregatingNodes: FakeBlock[];
 }
 
-function ref(name: string): BlockRef {
-  return {
-    hash: Hash.digest(name),
-    type: BLOCK_REF_TYPE,
-    connections: [],
-    anchoringNodes: [],
-    aggregatingNodes: [],
-    resolvingOutputs: new Map(),
-    listeners: new Set(),
-  };
+interface FakeRef {
+  type: typeof BLOCK_REF_TYPE;
+  name: string;
+  aggregatingNodes: FakeBlock[];
 }
 
-/** `parent` aggregates each child, canonically. */
-function aggregates(parent: Block, ...children: PlacementNode[]): Block {
-  for (const child of children) {
-    parent.aggregates.push({ block: child, outputCount: 0n });
-    child.aggregatingNodes.push(parent);
+type FakeNode = FakeBlock | FakeRef;
+
+/** The new block anchors at `anchor` and aggregates each of `children`. */
+const block = (
+  name: string,
+  anchor?: FakeBlock | FakeRef,
+  ...children: FakeNode[]
+): FakeBlock => {
+  const self: FakeBlock = { type: AtomType.Block, name, anchor, aggregatingNodes: [] };
+  for (const child of children) child.aggregatingNodes.push(self);
+  return self;
+};
+
+const ref = (name: string): FakeRef => ({
+  type: BLOCK_REF_TYPE,
+  name,
+  aggregatingNodes: [],
+});
+
+class TestPlacement extends PlacementModule<FakeNode> {
+  private forest = new ForestModule();
+
+  protected override anchorChain(node: FakeNode) {
+    return this.forest.anchorChain<FakeBlock>(node);
   }
-  return parent;
-}
 
-class TestPlacement extends PlacementModule {
-  protected override getCanonicalAggregator(node: PlacementNode): Block | undefined {
-    return node.aggregatingNodes[0];
-  }
-  protected override logger() {
-    return undefined;
+  protected override aggregators(node: FakeNode) {
+    return this.forest.aggregators(node);
   }
 }
 
-const place = (request: Partial<PlacementRequest>): PlacementResult =>
+type Req = Partial<Omit<PlacementRequest<FakeNode>, 'genesis'>>;
+
+const place = (genesis: FakeBlock, request: Req = {}): PlacementResult<FakeNode> =>
   new TestPlacement().place({
+    genesis,
     includes: request.includes ?? [],
     aggregates: request.aggregates ?? [],
     excludes: request.excludes ?? [],
   });
 
-const anchorOf = (result: PlacementResult): string => {
+const chainOf = (result: PlacementResult<FakeNode>): string[] => {
   assert(result.ok, 'expected placement to succeed');
-  return result.anchor.hash.toHex();
+  return result.anchorChain.map((node) => node.name);
 };
 
-const tipsOf = (result: PlacementResult): string[] => {
+const anchorOf = (result: PlacementResult<FakeNode>): string => chainOf(result)[0];
+
+const tipsOf = (result: PlacementResult<FakeNode>): string[] => {
   assert(!result.ok, 'expected placement to stall');
-  return result.tips.map((tip) => tip.hash.toHex()).sort();
+  return result.tips.map((tip) => tip.name).sort();
 };
-
-const hexes = (...nodes: PlacementNode[]): string[] => nodes.map((n) => n.hash.toHex()).sort();
 
 // -- Coverage ----------------------------------------------------
 
 Deno.test('a claim on an unaggregated block anchors at that block', () => {
   const G = block('G');
   const A = block('A', G);
-  assertEquals(anchorOf(place({ includes: [A] })), A.hash.toHex());
+  assertEquals(anchorOf(place(G, { includes: [A] })), 'A');
+});
+
+Deno.test('the result is the anchor chain, anchor first, genesis last', () => {
+  const G = block('G');
+  const A = block('A', G);
+  const B = block('B', A);
+  const C = block('C', B);
+  assertEquals(chainOf(place(G, { includes: [C] })), ['C', 'B', 'A', 'G']);
 });
 
 Deno.test('claims jointly aggregated by Z anchor at Z', () => {
   const G = block('G');
   const X = block('X', G);
   const Y = block('Y', G);
-  aggregates(block('Z', G), X, Y);
-  assertEquals(anchorOf(place({ includes: [X, Y] })), Hash.digest('Z').toHex());
+  block('Z', G, X, Y);
+  assertEquals(anchorOf(place(G, { includes: [X, Y] })), 'Z');
 });
 
 Deno.test('aggregation chains are followed transitively', () => {
@@ -113,17 +108,34 @@ Deno.test('aggregation chains are followed transitively', () => {
   const G = block('G');
   const X = block('X', G);
   const Y = block('Y', G);
-  const Z1 = aggregates(block('Z1', G), X);
-  const Z2 = aggregates(block('Z2', G), Z1, Y);
-  assertEquals(anchorOf(place({ includes: [X, Y] })), Z2.hash.toHex());
+  const Z1 = block('Z1', G, X);
+  block('Z2', G, Z1, Y);
+  assertEquals(anchorOf(place(G, { includes: [X, Y] })), 'Z2');
 });
 
-Deno.test('among covering anchors the tightest wins', () => {
-  // Both P and the aggregation Z that swallowed it reach the claim on P.
+Deno.test('among covering anchors the tightest wins -- selection is unspecified', () => {
+  // Both P and the aggregation Z that swallowed it reach the claim on P, so
+  // both are valid placements. PlacementModule has no selection rule yet (its
+  // own TODO, and TODO.v2.md questions whether "tightest" is even right under
+  // wp 4.2), so this pins today's pick rather than a decided behavior.
   const G = block('G');
   const P = block('P', G);
-  aggregates(block('Z', G), P);
-  assertEquals(anchorOf(place({ includes: [P] })), P.hash.toHex());
+  block('Z', G, P);
+  assertEquals(anchorOf(place(G, { includes: [P] })), 'P');
+});
+
+Deno.test('a candidate whose own chain is broken does not block a covering aggregator', () => {
+  // X anchors a block we hold only by hash, so X cannot be qualified -- but the
+  // aggregation that swallowed X reaches it and has an intact chain.
+  const G = block('G');
+  const X = block('X', ref('unknown'));
+  block('Z', G, X);
+  assertEquals(anchorOf(place(G, { includes: [X] })), 'Z');
+});
+
+Deno.test('a draft with nothing to cover anchors at genesis', () => {
+  const G = block('G');
+  assertEquals(chainOf(place(G)), ['G']);
 });
 
 // -- Stalls ------------------------------------------------------
@@ -131,29 +143,43 @@ Deno.test('among covering anchors the tightest wins', () => {
 Deno.test('claims in disjoint aggregation trees stall on both roots', () => {
   const G = block('G');
   const X = block('X', G);
-  const Zx = aggregates(block('Zx', G), X);
+  const Zx = block('Zx', G, X);
   const Y = block('Y', G);
-  const Zy = aggregates(block('Zy', G), Y);
-  assertEquals(tipsOf(place({ includes: [X, Y] })), hexes(Zx, Zy));
+  const Zy = block('Zy', G, Y);
+  assertEquals(tipsOf(place(G, { includes: [X, Y] })), [Zx.name, Zy.name]);
 });
 
 Deno.test('claims on two unaggregated siblings stall -- no anchor reaches both', () => {
-  // The v2 case with no v1 analogue: P1 and P2 both anchor R, so neither
-  // anchor chain contains the other. Only an aggregation merging them helps.
+  // P1 and P2 both anchor R, so neither anchor chain contains the other. Only
+  // an aggregation merging them helps (wp 4.2).
   const G = block('G');
   const R = block('R', G);
   const P1 = block('P1', R);
   const P2 = block('P2', R);
-  assertEquals(tipsOf(place({ includes: [P1, P2] })), hexes(P1, P2));
+  assertEquals(tipsOf(place(G, { includes: [P1, P2] })), [P1.name, P2.name]);
 });
 
 Deno.test('an anchor chain we hold only by hash cannot be qualified', () => {
+  const G = block('G');
   const P = block('P', ref('unknown'));
-  assertEquals(tipsOf(place({ includes: [P] })), hexes(P));
+  assertEquals(tipsOf(place(G, { includes: [P] })), ['P']);
 });
 
-Deno.test('a draft with nothing to cover is a caller bug', () => {
-  assertThrows(() => place({}), Error);
+Deno.test('an aggregate anchored to a block we hold only by hash stalls on the ref', () => {
+  // The returned tip is the ref itself, which no aggregation can resolve --
+  // the caller has to fetch it.
+  const G = block('G');
+  const C = block('C', ref('missing'));
+  assertEquals(tipsOf(place(G, { includes: [C], aggregates: [C] })), ['missing']);
+});
+
+Deno.test('tips repeat when several stalled claims share an aggregation root', () => {
+  const G = block('G');
+  const X = block('X', G);
+  const Y = block('Y', G);
+  block('Z', G, X, Y);
+  const W = block('W', G);
+  assertEquals(tipsOf(place(G, { includes: [X, Y, W] })), ['W', 'Z', 'Z']);
 });
 
 // -- Aggregating -------------------------------------------------
@@ -167,7 +193,7 @@ Deno.test('aggregating {C,D} along a chain anchors below both', () => {
   const B = block('B', A);
   const C = block('C', B);
   const D = block('D', C);
-  assertEquals(anchorOf(place({ includes: [C, D], aggregates: [C, D] })), B.hash.toHex());
+  assertEquals(anchorOf(place(G, { includes: [C, D], aggregates: [C, D] })), 'B');
 });
 
 Deno.test('aggregating only the tip anchors one step up', () => {
@@ -176,42 +202,87 @@ Deno.test('aggregating only the tip anchors one step up', () => {
   const B = block('B', A);
   const C = block('C', B);
   const D = block('D', C);
-  assertEquals(anchorOf(place({ includes: [D], aggregates: [D] })), C.hash.toHex());
+  assertEquals(anchorOf(place(G, { includes: [D], aggregates: [D] })), 'C');
 });
 
 Deno.test('a claim already inside our own tree does not constrain the anchor', () => {
-  // We aggregate C, which canonically aggregates X, and we also claim X.
-  // X is covered by "included in B", so only C's anchor constrains us.
+  // We aggregate C, which aggregates X, and we also claim X. X is inside our
+  // own tree, so only C's anchor constrains us.
   const G = block('G');
   const X = block('X', G);
-  const C = aggregates(block('C', G), X);
-  assertEquals(anchorOf(place({ includes: [X, C], aggregates: [C] })), G.hash.toHex());
+  const C = block('C', G, X);
+  assertEquals(anchorOf(place(G, { includes: [X, C], aggregates: [C] })), 'G');
 });
 
-Deno.test('claims and aggregates constrain the anchor together', () => {
-  // G <- A <- B <- C. Claiming from A while aggregating C: A must be in reach
-  // (rules out C's own subtree) and C's anchor B must be outside our tree.
+Deno.test('an aggregate anchored inside our own tree imposes no coverage', () => {
+  // We aggregate both B and C, and C anchors B. B is in our tree, so C's
+  // anchor requirement is already satisfied; only B's anchor A constrains us.
   const G = block('G');
   const A = block('A', G);
   const B = block('B', A);
   const C = block('C', B);
-  assertEquals(anchorOf(place({ includes: [A, C], aggregates: [C] })), B.hash.toHex());
+  assertEquals(anchorOf(place(G, { includes: [B, C], aggregates: [B, C] })), 'A');
+});
+
+Deno.test('claims and aggregates constrain the anchor together', () => {
+  // G <- A <- B <- C. Claiming from A while aggregating C: A must be in reach
+  // and C's anchor B must be outside our tree.
+  const G = block('G');
+  const A = block('A', G);
+  const B = block('B', A);
+  const C = block('C', B);
+  assertEquals(anchorOf(place(G, { includes: [A, C], aggregates: [C] })), 'B');
+});
+
+Deno.test('aggregating a block with no anchor is a caller bug', () => {
+  const G = block('G');
+  assertThrows(() => place(G, { aggregates: [G] }), Error, 'Broken anchor');
 });
 
 // -- Excludes ----------------------------------------------------
 
 Deno.test('a rival claimant on our lineage forces a stall', () => {
   // G <- Y <- X. Every anchor reaching X also reaches Y, which already claims
-  // the output we want -- so there is no placement where our claim wins.
+  // the output we want, so there is no placement where our claim wins.
   const G = block('G');
   const Y = block('Y', G);
   const X = block('X', Y);
-  assertEquals(tipsOf(place({ includes: [X], excludes: [Y] })), hexes(X));
+  assertEquals(tipsOf(place(G, { includes: [X], excludes: [Y] })), ['X']);
 });
 
 Deno.test('a rival claimant on another branch is out of reach', () => {
   const G = block('G');
   const Y = block('Y', G);
   const X = block('X', G);
-  assertEquals(anchorOf(place({ includes: [X], excludes: [Y] })), X.hash.toHex());
+  assertEquals(anchorOf(place(G, { includes: [X], excludes: [Y] })), 'X');
+});
+
+Deno.test('a rival is in reach through its aggregators', () => {
+  // Z aggregates our producer X and the rival Y, so anchoring at Z would pull
+  // Y into reach. Anchoring at X keeps it out.
+  const G = block('G');
+  const X = block('X', G);
+  const Y = block('Y', G);
+  block('Z', G, X, Y);
+  assertEquals(anchorOf(place(G, { includes: [X], excludes: [Y] })), 'X');
+});
+
+Deno.test('BUG: a rival inside our own tree does not stop placement', () => {
+  // Expected: a refusal. Actual: ok, anchored at X. We aggregate Z, whose tree
+  // holds the rival Y. wp 4.4 walks aggregates before self, so Y orders ahead
+  // of us and our claim is the disqualified one (wp 5.3) -- in a block that is
+  // itself the aggregation carrying the double-spend. No anchor avoids it, yet
+  // place only tests rivals against the anchor's reach. Basis for expecting
+  // place to own this: it already refuses the mirror case (a rival unavoidably
+  // in reach), and BlockBuilderModule2.rivalClaimants passes every rival it
+  // finds regardless of position.
+  const G = block('G');
+  const X = block('X', G);
+  const Y = block('Y', G);
+  const Z = block('Z', G, Y);
+  assertThrows(
+    () => place(G, { includes: [X, Z], aggregates: [Z], excludes: [Y] }),
+    Error,
+    'excluded block',
+  );
 });

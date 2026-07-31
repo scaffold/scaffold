@@ -45,6 +45,8 @@ export abstract class PlacementModule<NodeType extends PlacementNode> {
   ): (NodeType & { type: AtomType.Block })[] | typeof BROKEN_ANCHOR_CHAIN;
   protected abstract aggregators(node: NodeType): Set<NodeType>;
 
+  // Note this method assumes that the excluded blocks are not present in the aggregates
+  // Failure of this precondition will result in an error
   place(req: PlacementRequest<NodeType>): PlacementResult<NodeType> {
     const aggregates = new Set(req.aggregates);
     const includeChains = [
@@ -54,6 +56,11 @@ export abstract class PlacementModule<NodeType extends PlacementNode> {
       .map((x) => this.aggregators(x))
       .filter((x) => !setsIntersect(aggregates, x));
     const excludeChains = req.excludes.map((x) => this.aggregators(x));
+
+    if (excludeChains.some((x) => setsIntersect(aggregates, x))) {
+      // This isn't merely a stalled build, it's a failing precondition
+      throw new Error('Trying to aggregate an excluded block');
+    }
 
     const candidates = new Set(includeChains.flatMap((x) => [...x]));
     // In the case where there's no include chains, there will be no candidates.

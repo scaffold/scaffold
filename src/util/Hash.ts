@@ -87,7 +87,7 @@ export class Hash implements DevtoolsFormattable {
   public static fromFraction(num: number, den: number) {
     // TODO: Make this more accurate
     if (num < den) {
-      return Hash.fromHex((num / den).toString(16).slice(2).padEnd(64, '0'));
+      return Hash.fromHex((num / den).toString(16).slice(2, 66).padEnd(64, '0'));
     } else {
       return Hash.fromHex('f'.repeat(64));
     }
@@ -129,7 +129,7 @@ export class Hash implements DevtoolsFormattable {
             ? p.toBytes()
             : p instanceof Uint8Array || typeof p === 'string'
             ? Hash.digest(p).toBytes()
-            : arrFromNumber(p, 8)
+            : arrFromNumber(p, 4)
         ),
       ),
     );
@@ -151,7 +151,7 @@ export class Hash implements DevtoolsFormattable {
   }
 
   public toBigint() {
-    const view = new DataView(this.digest.buffer);
+    const view = new DataView(this.digest.buffer, this.digest.byteOffset);
     return (view.getBigUint64(0) << 192n) | (view.getBigUint64(8) << 128n) |
       (view.getBigUint64(16) << 64n) | view.getBigUint64(24);
   }
@@ -173,7 +173,7 @@ export class Hash implements DevtoolsFormattable {
   public countLeadingZeros() {
     let count = 0;
     for (const b of this.digest) {
-      for (let i = 0; i < 8; i++) {
+      for (let i = 8; i-- > 0;) {
         if ((b >> i) & 1) {
           return count;
         }
@@ -231,7 +231,7 @@ export class Hash implements DevtoolsFormattable {
   public static add(h0: Hash, h1: Hash) {
     const res = new Uint8Array(HASH_SIZE);
     let c = 0;
-    for (let i = 0; i < HASH_SIZE; i++) {
+    for (let i = HASH_SIZE; i-- > 0;) {
       c += h0.digest[i] + h1.digest[i];
       res[i] = c;
       c >>>= 8;

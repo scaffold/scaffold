@@ -91,8 +91,8 @@ export class DraftStore {
   private computeIoDelta(claims: Draft['claims'], outputs: Draft['outputs']): bigint {
     let acc = 0n;
     for (const claim of claims) {
-      if (claim.producer === DRAFT_SELF) continue;
-      acc -= claim.producer.payload.outputs[Number(claim.outputIndex)].amount;
+      const outputVec = claim.producer === DRAFT_SELF ? outputs : claim.producer.payload.outputs;
+      acc -= outputVec[Number(claim.outputIndex)].amount;
     }
     for (const output of outputs) {
       acc += output.amount;
@@ -121,7 +121,7 @@ export class DraftStore {
       .serialize(AtomType.Block, result.payload);
     const block = this.ctx.get(BlockStore).ingest({
       source: AtomSource.Local,
-      receivedAt: this.ctx.config.timeProvider.now(),
+      receivedAt: this.ctx.config.timeProvider.nowMs(),
       raw: serialized,
     });
 
