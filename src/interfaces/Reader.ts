@@ -1,5 +1,5 @@
+import { ValueDescriptor, ValueType } from '../core/Contract.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { type ValueDescriptor, ValueType } from '../contracts/Contract.ts';
 
 export interface NullReader {
   type: ValueType.Null;

@@ -1,5 +1,5 @@
-import { Hash } from '../types.ts';
 import { error } from '../util/functional.ts';
+import { Hash } from '../util/Hash.ts';
 import { ContractProvider, WalkerHost } from './Contract.ts';
 import { Predicate } from './types.ts';
 

@@ -55,7 +55,7 @@ export class EnvContractProvider implements ContractProvider {
     signal: AbortSignal,
   ): MaybePromise<void> {
     return this.contract.run({
-      mode: () => ExecutionMode.Generation,
+      mode: () => ExecutionMode.Verification,
       contractHash: () => predicate.contract,
       params: () => predicate.params,
       setResult: (result) => {

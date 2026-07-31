@@ -1,12 +1,11 @@
 import { EntropyProvider } from '../Config.ts';
 import { Context } from '../Context.ts';
-import { AtomSource } from '../types.ts';
 import { arrEquals } from '../util/buffer.ts';
 import { error } from '../util/functional.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 import { BlockIngestor, Ingestor, UnknownIngestor } from './Ingestor.ts';
-import { Atom, AtomBase, AtomRef, AtomType } from './types.ts';
+import { Atom, AtomBase, AtomType } from './types.ts';
 
 const atomMagic = new Uint8Array([83, 67, 70]); // SCF == 0x534346
 export const headerSize = atomMagic.byteLength + 1;

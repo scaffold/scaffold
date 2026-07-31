@@ -16,6 +16,7 @@ import {
 } from './types.ts';
 
 export class DraftStore {
+  // TODO: When should we delete from this set?
   private drafts = new Set<Draft>();
 
   constructor(private ctx: Context) {}

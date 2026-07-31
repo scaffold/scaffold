@@ -3,8 +3,9 @@ import { assert } from '../util/functional.ts';
 import { bin2hex } from '../util/hex.ts';
 import { mapPut } from '../util/map.ts';
 import { BlockStore } from './BlockStore.ts';
+import { DraftStore } from './DraftStore.ts';
 import { CancelError, ExecutionQueue, FlowCtl, Job } from './ExecutionQueue.ts';
-import { Block, Predicate } from './types.ts';
+import { Block, Draft, Predicate } from './types.ts';
 
 declare const predicateKeySymbol: unique symbol;
 type PredicateKey = string & { readonly [predicateKeySymbol]: true };
@@ -51,7 +52,7 @@ export class ExecutionModule {
     exec.availableClaims.push({ block, outputIdx });
 
     if (exec.runningJob === undefined) {
-      const job = new GenerationJob(exec);
+      const job = new GenerationJob(this.ctx, exec);
       exec.runningJob = job;
 
       (async () => {
@@ -69,7 +70,7 @@ export class ExecutionModule {
 }
 
 class GenerationJob implements Job {
-  constructor(private execution: Execution) {}
+  constructor(private ctx: Context, private execution: Execution) {}
 
   priority(): number {
     // Claimable value under this predicate. Dedup falls out of it: two outputs
@@ -90,35 +91,20 @@ class GenerationJob implements Job {
   }
 
   async run(ctl: FlowCtl): Promise<void> {
+    const draft = this.ctx.get(DraftStore).create();
     try {
-      return await this._run(ctl);
+      await this.ctx.get(this.ctx.config.contractProvider).generate(
+        this.execution.predicate,
+        (update) => this.ctx.get(DraftStore).update(draft, update),
+        ctl.signal,
+      );
+      this.ctx.get(DraftStore).build(draft);
     } catch (err) {
       if (!(err instanceof CancelError)) {
         console.error(err);
       }
-    }
-  }
 
-  private _run(ctl: FlowCtl): Promise<void> {
-    // Everything below wants to be inside a try, with the onFinished call in a
-    // finally, so the entry is released on every path.
-    //
-    // 1. Re-read the claimable set for `pending.predicate`. Empty means it was
-    //    all claimed while we sat in the queue: debug, return, no block.
-    //
-    // 2. Load the contract for `predicate.contract` through the plugin chain.
-    //    Not resolvable locally (contract block not fetched yet) -> debug and
-    //    return; ingesting that block re-triggers us.
-    //
-    // 3. Build a GeneratingEnv bound to this predicate and
-    //    `await contract.run(env, signal)`:
-    //      - ContractRejection  -> the contract declined these inputs. debug.
-    //      - any other throw    -> crash. warn.
-    //      - signal aborted     -> return quietly.
-    //
-    // 4. On success hand the env's accumulated claims/refs/outputs to
-    //    DraftStore.create(), then build(). The draft is the sink; the env
-    //    never touches the block builder itself.
-    return Promise.resolve();
+      this.ctx.get(DraftStore).cancel(draft);
+    }
   }
 }

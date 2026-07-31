@@ -1,7 +1,5 @@
 import { Query } from '../interfaces/Query.ts';
 import { Context } from '../Context.ts';
-import { BlockBuilderService } from '../core/BlockBuilderModule2.ts';
-import { BlockAction, BlockActionType } from '../core/types.ts';
 import { DraftStore } from '../core/DraftStore.ts';
 import { Hash } from '../util/Hash.ts';
 import { arrEquals } from '../util/buffer.ts';
@@ -29,11 +27,7 @@ export class FetchService {
     const params = input.query.params;
 
     const draft = this.ctx.get(DraftStore).create({
-      outputs: [{
-        contractHash: input.query.contract,
-        params: input.query.params,
-        amount: 0n,
-      }],
+      outputs: [{ contract: input.query.contract, params: input.query.params, amount: 0n }],
     });
     this.ctx.get(DraftStore).build(draft);
 
@@ -41,7 +35,7 @@ export class FetchService {
     //   if (block === undefined) return;
     //   const outputIdx = BigInt(
     //     block.payload.outputs.findIndex((output) =>
-    //       Hash.equals(output.contractHash, input.query.contract) && arrEquals(output.params, params)
+    //       Hash.equals(output.contract, input.query.contract) && arrEquals(output.params, params)
     //     ),
     //   );
     //   block.listeners.add((action) => {
@@ -59,7 +53,7 @@ export class FetchService {
           const output = block.payload.outputs[Number(claim)];
           if (
             output.data !== undefined &&
-            Hash.equals(output.contractHash, input.query.contract) &&
+            Hash.equals(output.contract, input.query.contract) &&
             arrEquals(output.params, params)
           ) {
             input.onResult({ body: output.data, parse: () => Promise.resolve(output.data) });
