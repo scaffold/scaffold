@@ -20,6 +20,7 @@ import {
   DRAFT_SELF,
   DraftPayload,
   Output,
+  OutputResolverType,
 } from './types.ts';
 
 export type BuildResult =
@@ -100,9 +101,9 @@ export abstract class BlockBuilderModule {
     for (const claim of req.claims) {
       if (claim.producer === DRAFT_SELF) continue;
       for (const rival of claim.producer.resolvingOutputs.get(claim.outputIndex) ?? []) {
-        const claimer = rival.claimer;
-        if (claimer.type !== AtomType.Block) continue;
-        rivals.add(claimer);
+        if (rival.type !== OutputResolverType.Claim) continue;
+        if (rival.claimer.type !== AtomType.Block) continue;
+        rivals.add(rival.claimer);
       }
     }
     return [...rivals.values()];

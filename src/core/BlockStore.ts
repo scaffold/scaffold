@@ -42,6 +42,7 @@ export class BlockStore {
         { hash, source, receivedAt, raw },
         existing,
       );
+      assert(atom.type === AtomType.Block, `BlockStore cannot hold a ${atom.type} atom!`);
       this.atoms.set(hash.toPrimitive(), atom);
       arrCall(this.ingestionListeners, atom);
       return atom;
@@ -57,7 +58,7 @@ export class BlockStore {
       connections: [],
       anchoringNodes: [],
       aggregatingNodes: [],
-      claimingNodes: [],
+      resolvingOutputs: new Map(),
       listeners: new Set(),
     };
   }

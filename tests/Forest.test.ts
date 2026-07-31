@@ -1,0 +1,36 @@
+import { assertEquals } from '@std/assert';
+import { BROKEN_ANCHOR_CHAIN, ForestModule, RefNodeBase } from '../src/core/ForestService.ts';
+import { AtomType, BLOCK_REF_TYPE } from '../src/core/types.ts';
+
+interface FakeNode {
+  type: AtomType.Block;
+  anchor?: FakeNode | RefNodeBase;
+  name: string;
+}
+
+const node = (name: string, anchor?: FakeNode | RefNodeBase): FakeNode => ({
+  type: AtomType.Block,
+  name,
+  anchor,
+});
+
+const ref = (): RefNodeBase => ({ type: BLOCK_REF_TYPE });
+
+Deno.test('basic chain behavior', () => {
+  const g = node('G');
+  const a = node('A', g);
+  const b = node('B', a);
+
+  const chain = new ForestModule().anchorChain(b);
+  if (chain === BROKEN_ANCHOR_CHAIN) throw new Error('unexpected break');
+  assertEquals(chain.map((n) => n.name), ['B', 'A', 'G']);
+});
+
+Deno.test('a chain that hits a ref is broken', () => {
+  const p = node('P', ref());
+  assertEquals(new ForestModule().anchorChain(p), BROKEN_ANCHOR_CHAIN);
+});
+
+Deno.test('a ref passed directly is broken', () => {
+  assertEquals(new ForestModule().anchorChain(ref()), BROKEN_ANCHOR_CHAIN);
+});

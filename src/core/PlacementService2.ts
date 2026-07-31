@@ -17,7 +17,7 @@ export class PlacementService extends PlacementModule<PlacementNode> {
   }
 
   protected override anchorChain(node: PlacementNode) {
-    return this.ctx.get(ForestService).anchorChain(node);
+    return this.ctx.get(ForestService).anchorChain<Block>(node);
   }
 
   protected override aggregators(node: PlacementNode) {

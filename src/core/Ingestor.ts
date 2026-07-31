@@ -18,6 +18,7 @@ import {
   isBlockPayload,
   OutputResolverType,
   ResolvingClaim,
+  ResolvingRef,
 } from './types.ts';
 
 export interface Ingestor<AtomType extends Atom> {
@@ -72,6 +73,7 @@ export class BlockIngestor implements Ingestor<Block> {
         outputCount: x.outputCount,
       })),
       claims: [],
+      refs: [],
       anchoringNodes: [],
       aggregatingNodes: [],
       resolvingOutputs: new Map(),
@@ -86,6 +88,7 @@ export class BlockIngestor implements Ingestor<Block> {
 
     for (let i = 0; i < payload.claims.length; i++) {
       const claim: ResolvingClaim = {
+        type: OutputResolverType.Claim,
         producer: block,
         outputIdx: payload.claims[i],
         claimer: block,
@@ -96,6 +99,21 @@ export class BlockIngestor implements Ingestor<Block> {
 
       block.claims.push(claim);
       multimapPut(claim.producer.resolvingOutputs, claim.outputIdx, claim);
+    }
+
+    for (let i = 0; i < payload.refs.length; i++) {
+      const resolvingRef: ResolvingRef = {
+        type: OutputResolverType.Ref,
+        producer: block,
+        outputIdx: payload.refs[i],
+        reffer: block,
+        refIdx: i,
+        resolved: false,
+      };
+      this.ctx.get(ClaimIndexService).propagateClaim(resolvingRef);
+
+      block.refs.push(resolvingRef);
+      multimapPut(resolvingRef.producer.resolvingOutputs, resolvingRef.outputIdx, resolvingRef);
     }
 
     if (ref !== undefined) {

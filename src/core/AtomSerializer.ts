@@ -5,7 +5,7 @@ import { error } from '../util/functional.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 import { BlockIngestor, Ingestor, UnknownIngestor } from './Ingestor.ts';
-import { Atom, AtomBase, AtomType } from './types.ts';
+import { Atom, AtomBase, AtomType, BlockRef } from './types.ts';
 
 const atomMagic = new Uint8Array([83, 67, 70]); // SCF == 0x534346
 export const headerSize = atomMagic.byteLength + 1;
@@ -61,7 +61,7 @@ export abstract class AtomSerializerModule {
 
   deserialize(
     { hash, source, receivedAt, raw }: Pick<AtomBase, 'hash' | 'source' | 'receivedAt' | 'raw'>,
-    ref?: AtomRef,
+    ref?: BlockRef,
   ): Atom {
     if (raw.byteLength < headerSize) {
       throw new Error(`Message length (${raw.byteLength}) is too short!`);

@@ -6,9 +6,16 @@ export interface AggregatorNodeBase {
   aggregatingNodes: this[];
 }
 
+// Split from AnchorNodeBase rather than folded into it as a union-typed `type`:
+// only a union of object types narrows, and only a narrowed union lets the walk
+// below drop refs without a cast.
+export interface RefNodeBase {
+  type: typeof BLOCK_REF_TYPE;
+}
+
 export interface AnchorNodeBase {
-  type: AtomType.Block | typeof BLOCK_REF_TYPE;
-  anchor?: this;
+  type: AtomType.Block;
+  anchor?: this | RefNodeBase;
 }
 
 export const BROKEN_ANCHOR_CHAIN = Symbol('PlacementModule.brokenAnchorChain');
@@ -16,10 +23,10 @@ export const BROKEN_ANCHOR_CHAIN = Symbol('PlacementModule.brokenAnchorChain');
 export class ForestModule {
   // Returns a set of all nodes in the anchor chain of `node`, including `node` itself.
   anchorChain<NodeType extends AnchorNodeBase>(
-    node: NodeType,
-  ): (NodeType & { type: AtomType.Block })[] | typeof BROKEN_ANCHOR_CHAIN {
-    const path: (NodeType & { type: AtomType.Block })[] = [];
-    let cur: NodeType | undefined = node;
+    node: NodeType | RefNodeBase,
+  ): NodeType[] | typeof BROKEN_ANCHOR_CHAIN {
+    const path: NodeType[] = [];
+    let cur: NodeType | RefNodeBase | undefined = node;
     do {
       if (cur.type === BLOCK_REF_TYPE) return BROKEN_ANCHOR_CHAIN;
       path.push(cur);
