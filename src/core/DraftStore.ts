@@ -2,13 +2,14 @@ import { Context } from '../Context.ts';
 import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
 import { AtomSerializerService } from './AtomSerializer.ts';
-import { BlockBuilderService, BuildRequest } from './BlockBuilderModule2.ts';
+import { BlockBuilderService } from './BlockBuilderModule2.ts';
 import { BlockStore } from './BlockStore.ts';
 import {
   AtomSource,
   AtomType,
   Block,
   Draft,
+  DRAFT_SELF,
   DRAFT_TYPE,
   DraftPayload,
   DraftStatusType,
@@ -89,6 +90,7 @@ export class DraftStore {
   private computeIoDelta(claims: Draft['claims'], outputs: Draft['outputs']): bigint {
     let acc = 0n;
     for (const claim of claims) {
+      if (claim.producer === DRAFT_SELF) continue;
       acc -= claim.producer.payload.outputs[Number(claim.outputIndex)].amount;
     }
     for (const output of outputs) {
@@ -159,7 +161,8 @@ export class DraftStore {
     return selected;
   }
 
-  private mergeDrafts(drafts: Draft[]): BuildRequest {
+  private mergeDrafts(drafts: DraftPayload[]): DraftPayload {
+    // TODO(claude): Remap DRAFT_SELF claims/refs to the merged draft
     return {
       claims: drafts.flatMap((d) => d.claims),
       refs: drafts.flatMap((d) => d.refs),

@@ -17,14 +17,10 @@ import {
   BlockPayload,
   BlockRef,
   Draft,
+  DRAFT_SELF,
+  DraftPayload,
   Output,
 } from './types.ts';
-
-export interface BuildRequest {
-  claims: { producer: Block; outputIndex: bigint }[];
-  refs: { producer: Block; outputIndex: bigint }[];
-  outputs: Output[];
-}
 
 export type BuildResult =
   | { ok: true; payload: BlockPayload }
@@ -36,12 +32,12 @@ export abstract class BlockBuilderModule {
   protected abstract getBlock(hash: Hash): PlacementNode;
   protected abstract resolveClaimIndex(
     anchorChain: AnchorChainNode[],
-    outputBlock: Block,
+    outputBlock: Block | typeof DRAFT_SELF,
     outputIndex: bigint,
   ): bigint;
   protected abstract countOutputs(block: Block): bigint;
 
-  build(req: BuildRequest): BuildResult {
+  build(req: DraftPayload): BuildResult {
     const aggregateBlocks = this.aggregatedBlocks(req);
     const aggregates = aggregateBlocks.map((x) => ({
       block: x.hash,
@@ -50,7 +46,7 @@ export abstract class BlockBuilderModule {
 
     const placement = this.place({
       genesis: this.getGenesisBlock(),
-      includes: [...req.claims, ...req.refs].map((c) => c.producer),
+      includes: [...req.claims, ...req.refs].map((x) => x.producer).filter((x) => x !== DRAFT_SELF),
       aggregates: aggregateBlocks,
       excludes: this.rivalClaimants(req),
     });
@@ -58,11 +54,16 @@ export abstract class BlockBuilderModule {
       return { ok: false, pendingAggregation: placement.tips };
     }
 
+    const mockedAnchorChain: AnchorChainNode[] = [
+      { payload: { outputs: req.outputs }, aggregates },
+      ...placement.anchorChain,
+    ];
+
     const claims = req.claims.map((x) =>
-      this.resolveClaimIndex(placement.anchorChain, x.producer, x.outputIndex)
+      this.resolveClaimIndex(mockedAnchorChain, x.producer, x.outputIndex)
     );
     const refs = req.refs.map((x) =>
-      this.resolveClaimIndex(placement.anchorChain, x.producer, x.outputIndex)
+      this.resolveClaimIndex(mockedAnchorChain, x.producer, x.outputIndex)
     );
 
     const payload: BlockPayload = {
@@ -77,9 +78,10 @@ export abstract class BlockBuilderModule {
     return { ok: true, payload };
   }
 
-  private aggregatedBlocks(req: BuildRequest): (PlacementNode & { type: AtomType.Block })[] {
+  private aggregatedBlocks(req: DraftPayload): (PlacementNode & { type: AtomType.Block })[] {
     const found: (PlacementNode & { type: AtomType.Block })[] = [];
     for (const claim of req.claims) {
+      if (claim.producer === DRAFT_SELF) continue;
       const output = claim.producer.payload.outputs[Number(claim.outputIndex)];
       if (output === undefined) {
         return error(
@@ -93,9 +95,10 @@ export abstract class BlockBuilderModule {
     return found;
   }
 
-  private rivalClaimants(req: BuildRequest): PlacementNode[] {
+  private rivalClaimants(req: DraftPayload): PlacementNode[] {
     const rivals = new Set<PlacementNode>();
     for (const claim of req.claims) {
+      if (claim.producer === DRAFT_SELF) continue;
       for (const rival of claim.producer.resolvingOutputs.get(claim.outputIndex) ?? []) {
         const claimer = rival.claimer;
         if (claimer.type !== AtomType.Block) continue;
@@ -129,9 +132,13 @@ export class BlockBuilderService extends BlockBuilderModule {
 
   protected override resolveClaimIndex(
     anchorChain: AnchorChainNode[],
-    outputBlock: Block,
+    outputBlock: Block | typeof DRAFT_SELF,
     outputIndex: bigint,
   ): bigint {
+    if (outputBlock === DRAFT_SELF) {
+      assert(outputIndex < BigInt(anchorChain[0].payload.outputs.length));
+      return outputIndex;
+    }
     return this.ctx.get(ClaimIndexService).resolveClaimIndex(anchorChain, outputBlock, outputIndex);
   }
 

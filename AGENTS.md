@@ -70,9 +70,9 @@ Use the logging system to log recoverable edge cases or notable situations.
 
 The public scaffold API is an exception; we may want to be more lenient and helpful in that case.
 
-### Be concise
+### Avoid comments
 
-Comments should be used to add information that complements the code or type. Don't comment things that would be obvious from reading the code. When unsure, lean towards omitting comments. Where you do comment, be concise.
+Almost never write docstrings or comments. The only exception is short `//` comments that describe higher-level conditions or guarantees, typically coming from our conversation or some other context that would be lost otherwise. Do not comment things that would be obvious from reading the code.
 
 ### Never drop errors silently
 

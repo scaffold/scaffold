@@ -200,9 +200,11 @@ export type DraftStatus =
   | { type: DraftStatusType.Built; block: Block }
   | { type: DraftStatusType.Cancelled; cancelledReason: string };
 
+export const DRAFT_SELF: unique symbol = Symbol('Draft.Self');
+
 export interface DraftPayload {
-  claims: { producer: Block; outputIndex: bigint }[];
-  refs: { producer: Block; outputIndex: bigint }[];
+  claims: { producer: Block | typeof DRAFT_SELF; outputIndex: bigint }[];
+  refs: { producer: Block | typeof DRAFT_SELF; outputIndex: bigint }[];
   outputs: Output[];
 
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts

@@ -1,4 +1,6 @@
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
+import { ContractPlugin, ContractProvider } from './core/Contract.ts';
+import { DefaultContractProvider } from './DefaultContractProvider.ts';
 import { generateGenesis } from './genesis.ts';
 import { Hash } from './util/Hash.ts';
 import { secp } from './util/secp.ts';
@@ -27,6 +29,7 @@ export interface Config {
 
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
+  contractProvider: ContractPlugin;
 }
 
 const rngSeed = 123n;
@@ -60,6 +63,7 @@ export const makeDefaultConfig = () => {
       randomNumber: () => Math.random(),
       cryptoRandomBytes: secp.etc.randomBytes,
     },
+    contractProvider: DefaultContractProvider,
   } satisfies Partial<Config>;
 
   return config;
