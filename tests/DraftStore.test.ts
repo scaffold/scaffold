@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '@std/assert';
 import { Context } from '../src/Context.ts';
 import { AtomSerializerService } from '../src/core/AtomSerializer.ts';
 import { BlockStore } from '../src/core/BlockStore.ts';
-import { DraftStore } from '../src/core/DraftStore.ts';
+import { DraftStore, SIGNATURE_OUTPUT_PAYLOAD } from '../src/core/DraftStore.ts';
 import {
   AtomSource,
   AtomType,
@@ -10,12 +10,15 @@ import {
   BlockPayload,
   Draft,
   DRAFT_SELF,
+  DRAFT_TYPE,
   DraftPayload,
   DraftStatusType,
   Output,
 } from '../src/core/types.ts';
 import { Hash, ZERO_HASH } from '../src/util/Hash.ts';
 import { makeTestContext } from './helpers/v2.ts';
+import { SIGNATURE_CONTRACT_HASH } from '../src/Config.ts';
+import { secp } from '../src/util/secp.ts';
 
 const out = (amount: bigint): Output => ({
   contract: ZERO_HASH,
@@ -47,8 +50,12 @@ const ingestGenesis = (ctx: Context): Block =>
     raw: ctx.config.genesis,
   });
 
+type ChangePayload = DraftPayload & { type: typeof SIGNATURE_OUTPUT_PAYLOAD };
+
+type BalanceEntry = Draft | ChangePayload;
+
 interface DraftStoreInternals {
-  selectReadyFunds(amount: bigint): Draft[];
+  balanceFunds(draft: Draft): BalanceEntry[];
   mergeDrafts(drafts: DraftPayload[]): DraftPayload;
 }
 
@@ -56,9 +63,32 @@ const internals = (store: DraftStore) => store as unknown as DraftStoreInternals
 
 const surplus = (draft: Draft) => -draft.ioDelta;
 
-const totalSurplus = (drafts: Draft[]) => drafts.reduce((acc, d) => acc + surplus(d), 0n);
-
 const compareBigints = (a: bigint, b: bigint) => a < b ? -1 : a > b ? 1 : 0;
+
+const sumOutputs = (outputs: Output[]) => outputs.reduce((acc, o) => acc + o.amount, 0n);
+
+const selectedDrafts = (entries: BalanceEntry[]): Draft[] =>
+  entries.filter((e): e is Draft => e.type === DRAFT_TYPE);
+
+const changePayloads = (entries: BalanceEntry[]): ChangePayload[] =>
+  entries.filter((e): e is ChangePayload => e.type === SIGNATURE_OUTPUT_PAYLOAD);
+
+// The whole point of balanceFunds: the payload set it returns merges into a balanced
+// block, so its combined ioDelta is zero.
+const netDelta = (entries: BalanceEntry[]): bigint =>
+  entries.reduce(
+    (acc, e) => acc + (e.type === DRAFT_TYPE ? e.ioDelta : sumOutputs(e.outputs)),
+    0n,
+  );
+
+const GENESIS_AMOUNT = 1_000_000n;
+
+// Claims the whole genesis output and pays it straight back out, so it needs no funding.
+const genesisDraft = (store: DraftStore, genesis: Block): Draft =>
+  store.create({
+    claims: [{ producer: genesis, outputIndex: 0n }],
+    outputs: [out(GENESIS_AMOUNT)],
+  });
 
 const builtBlock = (draft: Draft): Block => {
   if (draft.status.type !== DraftStatusType.Built) {
@@ -185,10 +215,10 @@ Deno.test('a draft builds from ready', () => {
 
 Deno.test('update and build are rejected once the draft is built', () => {
   const ctx = makeTestContext();
-  ingestGenesis(ctx);
+  const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
 
-  const draft = store.create({ outputs: [out(1n)] });
+  const draft = genesisDraft(store, genesis);
   store.build(draft);
   assertEquals(draft.status.type, DraftStatusType.Built);
 
@@ -210,11 +240,11 @@ Deno.test('cancel moves a populating draft to cancelled and blocks building', ()
 
 Deno.test('onBuilt fires with the built block', () => {
   const ctx = makeTestContext();
-  ingestGenesis(ctx);
+  const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
 
   const seen: (Block | undefined)[] = [];
-  const draft = store.create({ outputs: [out(1n)] });
+  const draft = genesisDraft(store, genesis);
   store.onBuilt(draft, (block) => seen.push(block));
   store.build(draft);
 
@@ -223,10 +253,10 @@ Deno.test('onBuilt fires with the built block', () => {
 
 Deno.test('onBuilt fires immediately for an already built draft', () => {
   const ctx = makeTestContext();
-  ingestGenesis(ctx);
+  const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
 
-  const draft = store.create({ outputs: [out(1n)] });
+  const draft = genesisDraft(store, genesis);
   store.build(draft);
 
   const seen: (Block | undefined)[] = [];
@@ -237,11 +267,11 @@ Deno.test('onBuilt fires immediately for an already built draft', () => {
 
 Deno.test('onBuilt ignores an already aborted signal', () => {
   const ctx = makeTestContext();
-  ingestGenesis(ctx);
+  const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
 
   const seen: (Block | undefined)[] = [];
-  const draft = store.create({ outputs: [out(1n)] });
+  const draft = genesisDraft(store, genesis);
   const hooks = new AbortController();
   hooks.abort();
   store.onBuilt(draft, (block) => seen.push(block), hooks.signal);
@@ -252,17 +282,38 @@ Deno.test('onBuilt ignores an already aborted signal', () => {
 
 Deno.test('onBuilt unsubscribes when its signal aborts', () => {
   const ctx = makeTestContext();
-  ingestGenesis(ctx);
+  const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
 
   const seen: (Block | undefined)[] = [];
-  const draft = store.create({ outputs: [out(1n)] });
+  const draft = genesisDraft(store, genesis);
   const hooks = new AbortController();
   store.onBuilt(draft, (block) => seen.push(block), hooks.signal);
   hooks.abort();
   store.build(draft);
 
   assertEquals(seen, []);
+});
+
+// The build path ingests with listeners suppressed and replays them afterwards, so a
+// draft is already Built by the time anyone hears about its block.
+Deno.test('a built block is announced only after its drafts are marked built', () => {
+  const ctx = makeTestContext();
+  const genesis = ingestGenesis(ctx);
+  const store = ctx.get(DraftStore);
+
+  const draft = genesisDraft(store, genesis);
+  const order: string[] = [];
+  const statusAtIngest: DraftStatusType[] = [];
+  store.onBuilt(draft, () => order.push('built'));
+  ctx.get(BlockStore).onIngest(() => {
+    order.push('ingest');
+    statusAtIngest.push(draft.status.type);
+  });
+  store.build(draft);
+
+  assertEquals(order, ['built', 'ingest']);
+  assertEquals(statusAtIngest, [DraftStatusType.Built]);
 });
 
 // A block whose anchor is not in the store has a broken anchor chain, so nothing
@@ -312,10 +363,7 @@ Deno.test('cancelling a stalled draft drops its retry hook', () => {
   assertEquals(draft.status.type, DraftStatusType.Cancelled);
 });
 
-// Expected: the retry produces exactly one block and marks the draft Built.
-// Actual: attemptBuild only aborts its retry hook after ingesting, so its own
-// ingestion re-enters the hook and it rebuilds until the stack overflows.
-Deno.test('BUG: a retried build re-enters itself through its own ingestion', () => {
+Deno.test('a retried build re-enters itself through its own ingestion', () => {
   const ctx = makeTestContext();
   const { anchorRaw, orphan } = stallingSetup(ctx);
   const store = ctx.get(DraftStore);
@@ -335,10 +383,64 @@ Deno.test('BUG: a retried build re-enters itself through its own ingestion', () 
   assertEquals(ingested, 2, 'the anchor plus exactly one built block');
 });
 
-// Expected: the ready draft's 1000 surplus funds the deficit, both drafts are
-// built into one balanced block. Actual: selectReadyFunds returns nothing, so the
-// block is published with an output and no claim at all (wp 5.2).
-Deno.test('BUG: a ready draft that exactly covers the deficit is not selected', () => {
+Deno.test('balanceFunds returns the draft alone when it is already balanced', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n]);
+  const store = ctx.get(DraftStore);
+
+  const balanced = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [out(10n)],
+  });
+
+  const selected = internals(store).balanceFunds(balanced);
+
+  assertEquals(selected, [balanced]);
+  assertEquals(netDelta(selected), 0n);
+});
+
+Deno.test('balanceFunds pays its own surplus into a signature change output', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n]);
+  const store = ctx.get(DraftStore);
+
+  const spending = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [out(4n)],
+  });
+
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(selectedDrafts(selected), [spending]);
+  assertEquals(changePayloads(selected).map((p) => p.claims), [[]]);
+  assertEquals(changePayloads(selected).map((p) => p.refs), [[]]);
+  assertEquals(changePayloads(selected).flatMap((p) => p.outputs), [{
+    contract: SIGNATURE_CONTRACT_HASH,
+    params: secp.getPublicKey(ctx.config.selfPrivateKey, true),
+    amount: 6n,
+  }]);
+  assertEquals(netDelta(selected), 0n);
+});
+
+Deno.test('a surplus draft builds a block carrying its change output', () => {
+  const ctx = makeTestContext();
+  const genesis = ingestGenesis(ctx);
+  const store = ctx.get(DraftStore);
+
+  const draft = store.create({
+    claims: [{ producer: genesis, outputIndex: 0n }],
+    outputs: [out(400_000n)],
+  });
+  store.build(draft);
+
+  const block = builtBlock(draft);
+  assertEquals(block.payload.outputs.map((o) => o.amount), [400_000n, 600_000n]);
+  assertEquals(block.payload.outputs[1].contract.toHex(), SIGNATURE_CONTRACT_HASH.toHex());
+  assertEquals(sumOutputs(block.payload.outputs), GENESIS_AMOUNT);
+});
+
+// The ready draft's 1000 surplus funds the deficit, so both build into one block (wp 5.2).
+Deno.test('a ready draft that exactly covers the deficit is selected', () => {
   const ctx = makeTestContext();
   const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
@@ -367,7 +469,7 @@ Deno.test('BUG: a ready draft that exactly covers the deficit is not selected', 
   );
 });
 
-Deno.test('BUG: selectReadyFunds drops the candidate that completes the cover', () => {
+Deno.test('balanceFunds keeps the candidate that completes the cover', () => {
   const ctx = makeTestContext();
   const source = sourceBlock(ctx, [3n, 4n]);
   const store = ctx.get(DraftStore);
@@ -377,15 +479,19 @@ Deno.test('BUG: selectReadyFunds drops the candidate that completes the cover', 
   store.lock(three);
   store.lock(four);
 
-  const selected = internals(store).selectReadyFunds(7n);
+  const spending = store.create({ outputs: [out(7n)] });
+  const selected = internals(store).balanceFunds(spending);
 
-  assertEquals(selected.map(surplus).toSorted(compareBigints), [3n, 4n]);
-  assertEquals(totalSurplus(selected), 7n);
-  assertEquals(new Set(selected).size, 2);
-  assertEquals(selected.includes(three) && selected.includes(four), true);
+  assertEquals(selected[0], spending);
+  assertEquals(
+    selectedDrafts(selected).slice(1).map(surplus).toSorted(compareBigints),
+    [3n, 4n],
+  );
+  assertEquals(changePayloads(selected), []);
+  assertEquals(netDelta(selected), 0n);
 });
 
-Deno.test('BUG: selectReadyFunds returns nothing when one large candidate suffices', () => {
+Deno.test('balanceFunds takes only the large candidate when it suffices', () => {
   const ctx = makeTestContext();
   const source = sourceBlock(ctx, [1n, 2n, 20n]);
   const store = ctx.get(DraftStore);
@@ -397,25 +503,61 @@ Deno.test('BUG: selectReadyFunds returns nothing when one large candidate suffic
   store.lock(two);
   store.lock(twenty);
 
-  const selected = internals(store).selectReadyFunds(20n);
+  const spending = store.create({ outputs: [out(20n)] });
+  const selected = internals(store).balanceFunds(spending);
 
-  assertEquals(selected.map(surplus), [20n]);
-  assertEquals(selected[0], twenty);
+  assertEquals(selectedDrafts(selected), [spending, twenty]);
   assertEquals([one, two].some((d) => selected.includes(d)), false);
+  assertEquals(changePayloads(selected), []);
+  assertEquals(netDelta(selected), 0n);
 });
 
-Deno.test('selectReadyFunds ignores drafts that are not ready or not in surplus', () => {
+Deno.test('a candidate that overshoots the deficit leaves change', () => {
   const ctx = makeTestContext();
-  const source = sourceBlock(ctx, [10n]);
+  const source = sourceBlock(ctx, [8n]);
+  const store = ctx.get(DraftStore);
+
+  const funding = fundingDraft(store, source, 0);
+  store.lock(funding);
+
+  const spending = store.create({ outputs: [out(5n)] });
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(selectedDrafts(selected), [spending, funding]);
+  assertEquals(changePayloads(selected).flatMap((p) => p.outputs).map((o) => o.amount), [3n]);
+  assertEquals(netDelta(selected), 0n);
+});
+
+Deno.test('balanceFunds ignores drafts that are not ready or not in surplus', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n, 10n]);
   const store = ctx.get(DraftStore);
 
   const populating = fundingDraft(store, source, 0);
+  const cancelled = fundingDraft(store, source, 1);
+  store.cancel(cancelled);
   const needing = store.create({ outputs: [out(10n)] });
   store.lock(needing);
 
-  assertEquals(internals(store).selectReadyFunds(10n), []);
+  const spending = store.create({ outputs: [out(10n)] });
+  assertEquals(internals(store).balanceFunds(spending), [spending]);
   assertEquals(populating.status.type, DraftStatusType.Populating);
+  assertEquals(cancelled.status.type, DraftStatusType.Cancelled);
   assertEquals(needing.status.type, DraftStatusType.Ready);
+});
+
+// Nothing covers the deficit, so the merged payload reaches the builder unbalanced and
+// its assert throws straight out of `build()` rather than parking the draft -- see
+// TODO.v2.md.
+Deno.test('a draft nothing can fund throws out of build', () => {
+  const ctx = makeTestContext();
+  ingestGenesis(ctx);
+  const store = ctx.get(DraftStore);
+
+  const draft = store.create({ outputs: [out(1n)] });
+
+  assertThrows(() => store.build(draft));
+  assertEquals(draft.status.type, DraftStatusType.Building);
 });
 
 Deno.test('merging drafts concatenates claims, refs and outputs in order', () => {
@@ -437,10 +579,8 @@ Deno.test('merging drafts concatenates claims, refs and outputs in order', () =>
   assertEquals(merged.outputs, [out(1n), out(2n), out(3n)]);
 });
 
-// Expected: the second draft's outputs land at merged index 2, so its self-claim
-// has to move with them. Actual: it still reads 0 and claims the first draft's
-// output (the TODO(claude) in mergeDrafts).
-Deno.test('BUG: merging does not remap DRAFT_SELF claims', () => {
+// The second draft's outputs land at merged index 2, so its self-claim moves with them.
+Deno.test('merging remaps DRAFT_SELF claims onto the merged output vector', () => {
   const ctx = makeTestContext();
   const store = ctx.get(DraftStore);
 
@@ -455,4 +595,41 @@ Deno.test('BUG: merging does not remap DRAFT_SELF claims', () => {
 
   assertEquals(merged.claims.map((x) => x.outputIndex), [2n]);
   assertEquals(merged.refs.map((x) => x.outputIndex), [2n]);
+  assertEquals(merged.claims.map((x) => x.producer), [DRAFT_SELF]);
+});
+
+Deno.test('merging leaves the first draft self-claims where they are', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [4n]);
+  const store = ctx.get(DraftStore);
+
+  const merged = internals(store).mergeDrafts([
+    {
+      claims: [{ producer: DRAFT_SELF, outputIndex: 1n }, { producer: source, outputIndex: 0n }],
+      refs: [],
+      outputs: [out(1n), out(2n)],
+    },
+    {
+      claims: [{ producer: DRAFT_SELF, outputIndex: 1n }],
+      refs: [],
+      outputs: [out(3n), out(4n)],
+    },
+  ]);
+
+  assertEquals(merged.claims.map((x) => x.outputIndex), [1n, 0n, 3n]);
+  assertEquals(merged.claims.map((x) => x.producer), [DRAFT_SELF, source, DRAFT_SELF]);
+});
+
+Deno.test('merging rejects a self-claim outside the draft it belongs to', () => {
+  const ctx = makeTestContext();
+  const store = ctx.get(DraftStore);
+
+  const merge = (outputIndex: bigint) =>
+    internals(store).mergeDrafts([
+      { claims: [], refs: [], outputs: [out(1n), out(2n)] },
+      { claims: [{ producer: DRAFT_SELF, outputIndex }], refs: [], outputs: [out(3n)] },
+    ]);
+
+  assertThrows(() => merge(1n));
+  assertThrows(() => merge(-1n));
 });

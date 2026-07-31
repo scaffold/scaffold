@@ -31,7 +31,10 @@ export class BlockStore {
     return fact;
   }
 
-  ingest({ source, receivedAt, raw }: Pick<AtomBase, 'source' | 'receivedAt' | 'raw'>): Block {
+  ingest(
+    { source, receivedAt, raw }: Pick<AtomBase, 'source' | 'receivedAt' | 'raw'>,
+    skipIngestion = false,
+  ): Block {
     const hash = Hash.digest(raw);
     const existing = this.atoms.get(hash.toPrimitive());
     if (existing === ingestingAtom) {
@@ -52,12 +55,23 @@ export class BlockStore {
         throw err;
       }
       this.atoms.set(hash.toPrimitive(), atom);
-      arrCall(this.ingestionListeners, atom);
-      this.ctx.get(AtomSerializerService).ingest(atom);
+      if (!skipIngestion) {
+        arrCall(this.ingestionListeners, atom);
+        this.ctx.get(AtomSerializerService).ingest(atom);
+      }
       return atom;
     } else {
+      if (skipIngestion) {
+        throw new Error(`Trying to skip ingestion, but atom ${hash} is already ingested!`);
+      }
       return existing;
     }
+  }
+
+  // TODO: Make the ingestion flow more streamlined; this is kinda ugly
+  doSkippedIngestion(atom: Block) {
+    arrCall(this.ingestionListeners, atom);
+    this.ctx.get(AtomSerializerService).ingest(atom);
   }
 
   private makeRef(hash: Hash): BlockRef {

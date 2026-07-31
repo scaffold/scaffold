@@ -1,5 +1,7 @@
+import { SIGNATURE_CONTRACT_HASH } from '../Config.ts';
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
+import { Hash } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
 import { mapPut } from '../util/map.ts';
 import { BlockStore } from './BlockStore.ts';
@@ -73,16 +75,10 @@ class GenerationJob implements Job {
   constructor(private ctx: Context, private execution: Execution) {}
 
   priority(): number {
-    // Claimable value under this predicate. Dedup falls out of it: two outputs
-    // under one predicate raise a single job's priority rather than creating
-    // two jobs.
-    //
-    // Missing: the filter to triggers that are still unclaimed. And `triggers`
-    // is itself a stand-in -- the real source is a predicate-keyed UTXO index
-    // once v2 has one, since triggers only sees outputs we watched arrive, not
-    // the ones already sitting unspent in the store.
-    //
-    // Number() is lossy past 2^53; this is an ordering, not an amount.
+    // TODO: This needs to reflect the expected profit of the job, whether it's running or not.
+    // Before a job starts, we need to estimate the profit
+    // While a job is running, we need to estimate the profit
+
     let total = 0n;
     for (const { block, outputIdx } of this.execution.availableClaims) {
       total += block.payload.outputs[Number(outputIdx)].amount;
@@ -98,7 +94,13 @@ class GenerationJob implements Job {
         (update) => this.ctx.get(DraftStore).update(draft, update),
         ctl.signal,
       );
-      this.ctx.get(DraftStore).build(draft);
+
+      if (Hash.equals(this.execution.predicate.contract, SIGNATURE_CONTRACT_HASH)) {
+        // The signature contract stores as a store of value; there's no need to immediately publish the claiming block.
+        this.ctx.get(DraftStore).lock(draft);
+      } else {
+        this.ctx.get(DraftStore).build(draft);
+      }
     } catch (err) {
       if (!(err instanceof CancelError)) {
         console.error(err);

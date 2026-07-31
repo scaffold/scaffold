@@ -1,6 +1,8 @@
+import { SIGNATURE_CONTRACT_HASH } from '../Config.ts';
 import { Context } from '../Context.ts';
 import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
+import { secp } from '../util/secp.ts';
 import { AtomSerializerService } from './AtomSerializer.ts';
 import { BlockBuilderService } from './BlockBuilderModule2.ts';
 import { BlockStore } from './BlockStore.ts';
@@ -13,7 +15,11 @@ import {
   DRAFT_TYPE,
   DraftPayload,
   DraftStatusType,
+  Output,
 } from './types.ts';
+
+// Only exported for tests
+export const SIGNATURE_OUTPUT_PAYLOAD: unique symbol = Symbol('SIGNATURE_OUTPUT_PAYLOAD');
 
 export class DraftStore {
   // TODO: When should we delete from this set?
@@ -88,6 +94,7 @@ export class DraftStore {
     draft.status = { type: DraftStatusType.Cancelled, cancelledReason: 'cancelled' };
   }
 
+  // ioDelta = sum(outputs) - sum(claims)
   private computeIoDelta(claims: Draft['claims'], outputs: Draft['outputs']): bigint {
     let acc = 0n;
     for (const claim of claims) {
@@ -103,13 +110,7 @@ export class DraftStore {
   private attemptBuild(draft: Draft) {
     assert(draft.status.type === DraftStatusType.Building);
 
-    let selectedDrafts: Draft[];
-    if (draft.ioDelta > 0n) {
-      selectedDrafts = [draft, ...this.selectReadyFunds(draft.ioDelta)];
-    } else {
-      selectedDrafts = [draft];
-    }
-
+    const selectedDrafts = this.balanceFunds(draft);
     const mergedDraft = this.mergeDrafts(selectedDrafts);
     const result = this.ctx.get(BlockBuilderService).build(mergedDraft);
     if (!result.ok) {
@@ -123,51 +124,94 @@ export class DraftStore {
       source: AtomSource.Local,
       receivedAt: this.ctx.config.timeProvider.nowMs(),
       raw: serialized,
-    });
+    }, true);
 
     draft.status.hooks.abort();
     for (const selDraft of selectedDrafts) {
-      selDraft.status = { type: DraftStatusType.Built, block };
-      arrCall(selDraft.listeners, block);
+      if (selDraft.type === DRAFT_TYPE) {
+        selDraft.status = { type: DraftStatusType.Built, block };
+      }
+    }
+
+    // Trigger downstream listeners, first for the new block then for the draft
+    this.ctx.get(BlockStore).doSkippedIngestion(block);
+    for (const selDraft of selectedDrafts) {
+      if (selDraft.type === DRAFT_TYPE) {
+        arrCall(selDraft.listeners, block);
+      }
     }
   }
 
-  private selectReadyFunds(amount: bigint) {
-    assert(amount > 0n);
+  private balanceFunds(draft: Draft) {
+    const result: (Draft | (DraftPayload & { type: typeof SIGNATURE_OUTPUT_PAYLOAD }))[] = [draft];
 
-    const candidates: Draft[] = [];
-    for (const draft of this.drafts) {
-      if (draft.status.type === DraftStatusType.Ready && draft.ioDelta < 0n) {
-        candidates.push(draft);
+    let amount = draft.ioDelta;
+
+    if (amount > 0n) {
+      const candidates = [...this.drafts]
+        .filter((x) =>
+          x !== draft &&
+          x.status.type === DraftStatusType.Ready &&
+          x.ioDelta < 0n
+        )
+        // Sort from high to low (low magnitude negative to high magnitude negative)
+        .sort((a, b) => Number(b.ioDelta - a.ioDelta));
+
+      let lim: number;
+      for (lim = 0; lim < candidates.length && amount > 0n; lim++) {
+        amount += candidates[lim].ioDelta;
+      }
+
+      for (let i = 0; i < lim; i++) {
+        if (amount - candidates[i].ioDelta <= 0n) {
+          amount -= candidates[i].ioDelta;
+        } else {
+          result.push(candidates[i]);
+        }
       }
     }
 
-    // Sort from high to low (low magnitude to high magnitude)
-    candidates.sort((a, b) => Number(b.ioDelta - a.ioDelta));
-
-    let lim: number;
-    for (lim = 0; lim < candidates.length; lim++) {
-      amount += candidates[lim].ioDelta;
-      if (amount <= 0n) break;
+    if (amount < 0n) {
+      result.push({
+        type: SIGNATURE_OUTPUT_PAYLOAD,
+        claims: [],
+        refs: [],
+        outputs: [{
+          contract: SIGNATURE_CONTRACT_HASH,
+          params: secp.getPublicKey(this.ctx.config.selfPrivateKey, true),
+          amount: -amount,
+        }],
+      });
     }
 
-    const selected: Draft[] = [];
-    for (let i = 0; i < lim; i++) {
-      if (amount - candidates[i].ioDelta <= 0n) {
-        amount -= candidates[i].ioDelta;
-      } else {
-        selected.push(candidates[i]);
-      }
-    }
-    return selected;
+    return result;
   }
 
   private mergeDrafts(drafts: DraftPayload[]): DraftPayload {
-    // TODO(claude): Remap DRAFT_SELF claims/refs to the merged draft
-    return {
-      claims: drafts.flatMap((d) => d.claims),
-      refs: drafts.flatMap((d) => d.refs),
-      outputs: drafts.flatMap((d) => d.outputs),
-    };
+    type Link = DraftPayload['claims'][number];
+
+    const claims: Link[] = [];
+    const refs: Link[] = [];
+    const outputs: Output[] = [];
+
+    for (const draft of drafts) {
+      // A DRAFT_SELF index addresses the draft's own output vector, which moves to
+      // `offset` once the preceding drafts' outputs are in front of it.
+      const offset = BigInt(outputs.length);
+      const remap = (link: Link): Link => {
+        if (link.producer !== DRAFT_SELF) return link;
+        assert(
+          link.outputIndex >= 0n && link.outputIndex < BigInt(draft.outputs.length),
+          `Self link index ${link.outputIndex} out of bounds`,
+        );
+        return { producer: DRAFT_SELF, outputIndex: link.outputIndex + offset };
+      };
+
+      claims.push(...draft.claims.map(remap));
+      refs.push(...draft.refs.map(remap));
+      outputs.push(...draft.outputs);
+    }
+
+    return { claims, refs, outputs };
   }
 }

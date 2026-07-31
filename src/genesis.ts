@@ -7,7 +7,6 @@ import { Ingestor, serializeBlock, UnknownIngestor } from './core/Ingestor.ts';
 import { EntropyProvider } from './Config.ts';
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 import { bigint2binBe, bin2bigintBe } from './util/bigint.ts';
-import { str2bin } from './util/buffer.ts';
 
 export class GenesisBlockIngestor implements Ingestor<never> {
   readonly isSigned = true;

@@ -180,9 +180,6 @@ export class BlockIngestor implements Ingestor<Block> {
         index: i,
       });
     }
-
-    // Generation is triggered by ExecutionModule off BlockStore.onIngest, not
-    // from here -- ingestion must not reach up into contract execution.
   }
 }
 

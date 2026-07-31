@@ -1,6 +1,6 @@
 import { Context } from '../Context.ts';
 import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
-import { assert, error, todo } from '../util/functional.ts';
+import { assert, assertEquals, error } from '../util/functional.ts';
 import { BlockStore } from './BlockStore.ts';
 import { AnchorChainNode, ClaimIndexService } from './ClaimIndexService.ts';
 import { AggregatorNodeBase } from './ForestService.ts';
@@ -39,6 +39,8 @@ export abstract class BlockBuilderModule {
   protected abstract countOutputs(block: Block): bigint;
 
   build(req: DraftPayload): BuildResult {
+    this.checkBalanced(req);
+
     const aggregateBlocks = this.aggregatedBlocks(req);
     const aggregates = aggregateBlocks.map((x) => ({
       block: x,
@@ -84,6 +86,21 @@ export abstract class BlockBuilderModule {
       timestampMs: this.computeTimestamp(anchor, aggregateBlocks),
     };
     return { ok: true, payload };
+  }
+
+  private checkBalanced(req: DraftPayload) {
+    let claimedSum = 0n;
+    for (const claim of req.claims) {
+      const outputs = claim.producer === DRAFT_SELF ? req.outputs : claim.producer.payload.outputs;
+      claimedSum += outputs[Number(claim.outputIndex)].amount;
+    }
+
+    let outputSum = 0n;
+    for (const output of req.outputs) {
+      outputSum += output.amount;
+    }
+
+    assertEquals(claimedSum, outputSum);
   }
 
   private aggregatedBlocks(req: DraftPayload): (PlacementNode & { type: AtomType.Block })[] {

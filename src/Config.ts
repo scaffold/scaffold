@@ -5,6 +5,8 @@ import { generateGenesis } from './genesis.ts';
 import { Hash } from './util/Hash.ts';
 import { secp } from './util/secp.ts';
 
+export const SIGNATURE_CONTRACT_HASH = Hash.digest('signature');
+
 export type Timeout = ReturnType<typeof globalThis.setTimeout>;
 export interface TimeProvider {
   nowMs(): number;

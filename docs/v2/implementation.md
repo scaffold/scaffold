@@ -3,15 +3,18 @@
 ## Layers
 
 ```
-core  ->  node  ->  roles  ->  api
+support/  <-  graph/  <-  contract/  <-  node/  <-  roles/  <-  api/
 ```
 
-- **core** - Pure protocol logic: types, codecs, hashing, claim resolution, validity rules (excluding contract execution), canonical traversal, estimator and penalty math. Lots of pure, functional classes with explicit interfaces.
-- **node** - Stateful machinery every peer needs: block store, ingestion funnel, gossip, consensus (fork choice and canonicality), local indexes.
-- **roles** - Optional capability modules: author, aggregator, prober, insurer.
-- **api** - The public `Scaffold` facade.
-
-I'm not sure where contract execution fits yet.
+- **support/** - Mostly isolated modules, declared abstract if they require injected dependencies. Should mostly only import from other support/ modules and util/; notably should declare their own subset types rather than importing Block / Draft types. Should not import Context. Should be easily testable.
+- **graph/** - Everything required to maintain the Block / Draft node graph and gives node/ the tools it needs to monitor the canonical state and react to changes. Context-wired services, which may be concretized extensions of abstract modules. Should contain as little logic as possible (logic should live in modules/ as much as possible). Testable using a test context.
+- **contract/** - Everything related to contract execution.
+- **contract/static/** - Well-known contracts defined in TypeScript.
+- **contract/wasm/** - Machinery supporting WASM contract execution.
+- **contract/wasm/worker/** - Code running in the WASM worker thread.
+- **node/** - Stateful machinery every peer needs: block store, ingestion funnel, execution, gossip.
+- **roles/** - Optional capability modules: author, aggregator, prober, insurer.
+- **api/** - The public `Scaffold` facade.
 
 A lower layer never imports from a higher one.
 
@@ -72,3 +75,21 @@ Block creation involves choosing an anchor based on the set of blocks that need 
 3. For the remaining chains, enumerate all blocks in every chain. Find one whose anchor chain intersects with every inclusion chain. If there are multiple, you may use a hueristic to decide which one to select as your anchor. If there are none, that means you are trying to include blocks in 2 unaggregated subtrees, so you either need to aggregate them immediately or wait for them to be aggregated.
 
 This method relies on an external process aggregating, either locally or remotely. An alternate approach would be to aggregate subtree roots on-demand. This was considered but rejected because (1) aggregation is disabled by light clients, and (2) aggregation has some specific rules about subtree size, so it's not possible to fix every case. Ultimately, it seems better to have a single aggregation path and have block creation wait for that to complete.
+
+## Node ingestion procedure
+
+A strict procedure is necessary to ensure that observers see a consistent node graph.
+
+1. Block/Draft deserialization or creation, optionally referencing a BlockRef.
+2. Linking and claim propagation. Connect the new node's properties with existing nodes, and existing node's properties with the new node. If replacing a BlockRef, this should update all references to the BlockRef with the new Block. Do not call any listeners or invoke any code paths that expect a consistent graph.
+3. Notify listeners.
+
+TODO: How can we verify that the old BlockRef was entirely replaced and will be garbage collected? If we miss a link somewhere, this will cause bugs because both a BlockRef and Block with the same hash will exist in the graph.
+
+When promoting a Draft to a Block:
+
+1. Serialize the Block
+2. Linking and claim propagation
+3. Mark the Draft as built
+4. Notify new Block listeners
+5. Notify old Draft listeners

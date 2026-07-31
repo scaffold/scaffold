@@ -94,3 +94,4 @@ In every case where you find a gap or bug -- whether you work around it under di
 ### Other misc instructions
 
 - Don't use `readonly` unless there's a specific reason; it's too verbose to add everywhere.
+- Test names should describe the expected behavior, even if they're failing.

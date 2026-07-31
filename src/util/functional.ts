@@ -1,4 +1,4 @@
-export { assert, unimplemented as todo } from '@std/assert';
+export { assert, assertEquals, unimplemented as todo } from '@std/assert';
 
 // deno-lint-ignore ban-types
 export type NotUndefined = {} | null;
