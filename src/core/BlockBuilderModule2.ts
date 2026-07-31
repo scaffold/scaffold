@@ -1,5 +1,5 @@
 import { Context } from '../Context.ts';
-import { Hash, HashPrimitive, ZERO_HASH } from '../util/Hash.ts';
+import { Hash } from '../util/Hash.ts';
 import { assert, assertEquals, error } from '../util/functional.ts';
 import { BlockStore } from './BlockStore.ts';
 import { AnchorChainNode, ClaimIndexService } from './ClaimIndexService.ts';
@@ -88,11 +88,20 @@ export abstract class BlockBuilderModule {
     return { ok: true, payload };
   }
 
+  private claimedOutput(req: DraftPayload, claim: DraftPayload['claims'][number]): Output {
+    const outputs = claim.producer === DRAFT_SELF ? req.outputs : claim.producer.payload.outputs;
+    const output = outputs[Number(claim.outputIndex)];
+    if (output === undefined) {
+      const producer = claim.producer === DRAFT_SELF ? 'self' : claim.producer.hash.toHex();
+      return error(`build: claim on ${producer} output ${claim.outputIndex} is out of range`);
+    }
+    return output;
+  }
+
   private checkBalanced(req: DraftPayload) {
     let claimedSum = 0n;
     for (const claim of req.claims) {
-      const outputs = claim.producer === DRAFT_SELF ? req.outputs : claim.producer.payload.outputs;
-      claimedSum += outputs[Number(claim.outputIndex)].amount;
+      claimedSum += this.claimedOutput(req, claim).amount;
     }
 
     let outputSum = 0n;
@@ -107,13 +116,7 @@ export abstract class BlockBuilderModule {
     const found: (PlacementNode & { type: AtomType.Block })[] = [];
     for (const claim of req.claims) {
       if (claim.producer === DRAFT_SELF) continue;
-      const output = claim.producer.payload.outputs[Number(claim.outputIndex)];
-      if (output === undefined) {
-        return error(
-          `build: claim on ${claim.producer.hash.toHex()} output ${claim.outputIndex} is out of range`,
-        );
-      }
-      if (Hash.equals(output.contract, AGGREGATION_CONTRACT)) {
+      if (Hash.equals(this.claimedOutput(req, claim).contract, AGGREGATION_CONTRACT)) {
         found.push(claim.producer);
       }
     }

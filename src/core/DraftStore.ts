@@ -91,7 +91,10 @@ export class DraftStore {
     if (draft.status.type === DraftStatusType.Building) {
       draft.status.hooks.abort();
     }
-    draft.status = { type: DraftStatusType.Cancelled, cancelledReason: 'cancelled' };
+
+    if (draft.status.type !== DraftStatusType.Built) {
+      draft.status = { type: DraftStatusType.Cancelled, cancelledReason: 'cancelled' };
+    }
   }
 
   // ioDelta = sum(outputs) - sum(claims)

@@ -297,7 +297,7 @@ Deno.test('onBuilt unsubscribes when its signal aborts', () => {
 
 // The build path ingests with listeners suppressed and replays them afterwards, so a
 // draft is already Built by the time anyone hears about its block.
-Deno.test('a built block is announced only after its drafts are marked built', () => {
+Deno.test("built blocks are ingested before the draft's onBuilt is called", () => {
   const ctx = makeTestContext();
   const genesis = ingestGenesis(ctx);
   const store = ctx.get(DraftStore);
@@ -305,14 +305,14 @@ Deno.test('a built block is announced only after its drafts are marked built', (
   const draft = genesisDraft(store, genesis);
   const order: string[] = [];
   const statusAtIngest: DraftStatusType[] = [];
-  store.onBuilt(draft, () => order.push('built'));
+  store.onBuilt(draft, () => order.push('draft_build'));
   ctx.get(BlockStore).onIngest(() => {
-    order.push('ingest');
+    order.push('block_ingest');
     statusAtIngest.push(draft.status.type);
   });
   store.build(draft);
 
-  assertEquals(order, ['built', 'ingest']);
+  assertEquals(order, ['block_ingest', 'draft_build']);
   assertEquals(statusAtIngest, [DraftStatusType.Built]);
 });
 

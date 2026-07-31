@@ -31,6 +31,12 @@ export class BlockStore {
     return fact;
   }
 
+  getAll(): Block[] {
+    return Array.from(this.atoms.values()).filter((atom): atom is Block =>
+      atom !== ingestingAtom && atom.type === AtomType.Block
+    );
+  }
+
   ingest(
     { source, receivedAt, raw }: Pick<AtomBase, 'source' | 'receivedAt' | 'raw'>,
     skipIngestion = false,

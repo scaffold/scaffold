@@ -176,13 +176,17 @@ const okPayload = (result: ReturnType<BlockBuilderModule['build']>) => {
 
 Deno.test('build carries the draft outputs and the placed anchor into the payload', () => {
   const builder = new StubBuilder();
+  const funder = fakeBlock('funder', [out(10n)]);
   const outputs = [out(7n), out(3n)];
 
-  const built = okPayload(builder.build(payload({ outputs })));
+  const built = okPayload(builder.build(payload({
+    claims: [{ producer: funder, outputIndex: 0n }],
+    outputs,
+  })));
 
   assertEquals(built.outputs, outputs);
   assertEquals(built.anchor, builder.anchor.hash);
-  assertEquals(built.claims, []);
+  assertEquals(built.claims, [100n]);
   assertEquals(built.refs, []);
   assertEquals(built.aggregates, []);
 });
@@ -195,7 +199,7 @@ Deno.test('claim and ref producers are placement includes', () => {
   builder.build(payload({
     claims: [{ producer: claimed, outputIndex: 0n }, { producer: DRAFT_SELF, outputIndex: 0n }],
     refs: [{ producer: reffed, outputIndex: 0n }],
-    outputs: [out(5n)],
+    outputs: [out(5n), out(5n)],
   }));
 
   assertEquals(builder.placeRequests.length, 1);
@@ -210,6 +214,7 @@ Deno.test('a claim on an aggregation output rolls that block up', () => {
 
   const built = okPayload(builder.build(payload({
     claims: [{ producer: plain, outputIndex: 0n }, { producer: rolled, outputIndex: 0n }],
+    outputs: [out(2n)],
   })));
 
   assertEquals(built.aggregates, [{ block: rolled.hash, outputCount: 42n }]);
@@ -223,6 +228,7 @@ Deno.test('a claim on a non-aggregation output of an aggregating block is not a 
 
   const built = okPayload(builder.build(payload({
     claims: [{ producer: block, outputIndex: 0n }],
+    outputs: [out(1n)],
   })));
 
   assertEquals(built.aggregates, []);
@@ -246,7 +252,7 @@ Deno.test('a rival claim on a claimed output becomes a placement exclude', () =>
   const rival = fakeBlock('rival');
   rivalClaim(producer, 0n, rival);
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, [rival]);
 });
@@ -257,7 +263,7 @@ Deno.test('a rival claim on a different output is not an exclude', () => {
   const rival = fakeBlock('rival');
   rivalClaim(producer, 1n, rival);
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, []);
 });
@@ -269,7 +275,7 @@ Deno.test('a ref on a claimed output is not an exclude', () => {
   const reffer = fakeBlock('reffer');
   rivalRef(producer, 0n, reffer);
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, []);
 });
@@ -279,7 +285,7 @@ Deno.test('an unbuilt draft claiming the same output is not an exclude', () => {
   const producer = fakeBlock('producer', [out(1n)]);
   rivalClaim(producer, 0n, fakeDraft());
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, []);
 });
@@ -293,6 +299,7 @@ Deno.test('rival claimants are deduplicated across claims', () => {
 
   builder.build(payload({
     claims: [{ producer, outputIndex: 0n }, { producer, outputIndex: 1n }],
+    outputs: [out(2n)],
   }));
 
   assertEquals(builder.placeRequests[0].excludes, [rival]);
@@ -303,7 +310,10 @@ Deno.test('a stalled placement returns the tips and resolves nothing', () => {
   const builder = new StubBuilder({ place: () => ({ ok: false, tips }) });
   const producer = fakeBlock('producer', [out(1n)]);
 
-  const result = builder.build(payload({ claims: [{ producer, outputIndex: 0n }] }));
+  const result = builder.build(payload({
+    claims: [{ producer, outputIndex: 0n }],
+    outputs: [out(1n)],
+  }));
 
   assertEquals(result, { ok: false, pendingAggregation: tips });
   assertEquals(builder.resolveCalls.length, 0);
@@ -311,7 +321,7 @@ Deno.test('a stalled placement returns the tips and resolves nothing', () => {
 
 Deno.test('claim indices resolve against the draft prepended to the anchor chain', () => {
   const builder = new StubBuilder({ countOutputs: () => 9n });
-  const rolled = fakeBlock('rolled', [aggregationOut(1n)]);
+  const rolled = fakeBlock('rolled', [aggregationOut(3n)]);
   const outputs = [out(1n), out(2n)];
 
   builder.build(payload({ claims: [{ producer: rolled, outputIndex: 0n }], outputs }));
@@ -332,6 +342,7 @@ Deno.test('claims resolve before refs and keep their order', () => {
   const built = okPayload(builder.build(payload({
     claims: [{ producer: a, outputIndex: 0n }, { producer: b, outputIndex: 0n }],
     refs: [{ producer: c, outputIndex: 0n }],
+    outputs: [out(2n)],
   })));
 
   assertEquals(built.claims, [100n, 200n]);
@@ -343,7 +354,7 @@ Deno.test('the built timestamp should be >= the anchor timestamp', () => {
   const builder = new StubBuilder();
   builder.anchor.payload.timestampMs = 5_000;
 
-  const built = okPayload(builder.build(payload({ outputs: [out(1n)] })));
+  const built = okPayload(builder.build(payload({ outputs: [out(0n)] })));
 
   assertEquals(built.timestampMs >= 5_000, true, `timestamp ${built.timestampMs} predates anchor`);
 });
@@ -418,7 +429,7 @@ Deno.test('a DRAFT_SELF claim resolves to a bare draft output index', () => {
   const built = okPayload(
     ctx.get(BlockBuilderService).build(payload({
       claims: [{ producer: DRAFT_SELF, outputIndex: 1n }],
-      outputs: [out(1n), out(2n), out(3n)],
+      outputs: [out(0n), out(0n), out(0n)],
     })),
   );
 
