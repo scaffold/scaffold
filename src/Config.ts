@@ -21,15 +21,15 @@ export interface EntropyProvider {
   cryptoRandomBytes(size: number): Uint8Array;
 }
 
+// Ambient environment only: no sensible default, and every context needs it.
+// Per-module tuning lives in a config class next to its module, defaulted there
+// and overridden via ctx.configure().
 // You can modify the Config by mutating ctx.config
 export interface Config {
   genesis: Uint8Array;
   debugName: string;
 
   selfPrivateKey: Uint8Array;
-
-  // Fee carried by the aggregation output every block we build attaches (wp 7)
-  aggregationFee: bigint;
 
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
@@ -58,7 +58,6 @@ export const makeDefaultConfig = () => {
     genesis,
     debugName: '',
     selfPrivateKey: privateKeys[0],
-    aggregationFee: 0n,
     timeProvider: {
       nowMs: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),

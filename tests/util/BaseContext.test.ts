@@ -18,6 +18,29 @@ class Owner {
   }
 }
 
+class Pair {
+  a = 1;
+  b = 2;
+}
+
+class PairUser {
+  sum: number;
+  constructor(ctx: TestContext) {
+    const pair = ctx.get(Pair);
+    this.sum = pair.a + pair.b;
+  }
+}
+
+class PairHolder {
+  private pair: Pair;
+  constructor(ctx: TestContext) {
+    this.pair = ctx.get(Pair);
+  }
+  sum(): number {
+    return this.pair.a + this.pair.b;
+  }
+}
+
 // -- construction and caching --
 
 Deno.test('BaseContext: get constructs lazily and caches by identity', () => {
@@ -177,6 +200,40 @@ Deno.test('BaseContext: a mock disposer is never registered', () => {
   ctx.get(Leaf);
   ctx.destruct();
   assertEquals(disposed, false);
+});
+
+// -- configure --
+
+Deno.test('BaseContext: configure patches a field and leaves the others defaulted', () => {
+  const ctx = new TestContext();
+  ctx.configure(Pair, { a: 42 });
+  assertEquals({ ...ctx.get(Pair) }, { a: 42, b: 2 });
+});
+
+Deno.test('BaseContext: an unconfigured config class keeps its defaults', () => {
+  const ctx = new TestContext();
+  assertEquals({ ...ctx.get(Pair) }, { a: 1, b: 2 });
+});
+
+Deno.test('BaseContext: configure is visible to a dependent constructed later', () => {
+  const ctx = new TestContext();
+  ctx.configure(Pair, { a: 9 });
+  assertEquals(ctx.get(PairUser).sum, 11);
+});
+
+Deno.test('BaseContext: configuring twice merges both patches', () => {
+  const ctx = new TestContext();
+  ctx.configure(Pair, { a: 42 });
+  ctx.configure(Pair, { b: 7 });
+  assertEquals({ ...ctx.get(Pair) }, { a: 42, b: 7 });
+});
+
+// Consumers hold the config object rather than copying fields out of it.
+Deno.test('BaseContext: configure reaches a consumer that already read the config', () => {
+  const ctx = new TestContext();
+  const holder = ctx.get(PairHolder);
+  ctx.configure(Pair, { a: 9 });
+  assertEquals(holder.sum(), 11);
 });
 
 // -- destruction ordering --

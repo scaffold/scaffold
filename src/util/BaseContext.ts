@@ -82,6 +82,15 @@ export abstract class BaseContext {
     this.objs.set(Type, mock);
   }
 
+  /** Override the defaults of a config class. The zero-arg constructor is what
+   * distinguishes config from a service, which always takes a ctx.
+   * Patches merge, and stay visible after a consumer has read the config -- so
+   * consumers must hold the config object and read fields lazily, never copy
+   * them into their own state at construction. */
+  public configure<T extends object>(Type: new () => T, patch: Partial<T>): void {
+    Object.assign(this.get(Type), patch);
+  }
+
   private reset() {
     assert(this.isDestructed);
     assert(this.constructing.size === 0);

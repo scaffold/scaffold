@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '@std/assert';
 import { Context } from '../../src/Context.ts';
 import { AtomSerializer } from '../../src/graph/AtomSerializer.ts';
 import { BlockStore } from '../../src/graph/BlockStore.ts';
-import { DraftStore, EXTRA_OUTPUT_PAYLOAD } from '../../src/graph/DraftStore.ts';
+import { DraftStore, DraftStoreConfig, EXTRA_OUTPUT_PAYLOAD } from '../../src/graph/DraftStore.ts';
 import {
   AtomSource,
   AtomType,
@@ -431,7 +431,8 @@ Deno.test('balanceFunds appends an aggregation output to every draft', () => {
 });
 
 Deno.test('the aggregation fee is paid out of the surplus that would have been change', () => {
-  const ctx = makeTestContext({ aggregationFee: 10n });
+  const ctx = makeTestContext();
+  ctx.configure(DraftStoreConfig, { aggregationFee: 10n });
   const source = sourceBlock(ctx, [100n]);
   const store = ctx.get(DraftStore);
 
@@ -449,7 +450,8 @@ Deno.test('the aggregation fee is paid out of the surplus that would have been c
 
 // Without the fee the funding draft would overshoot by 10 and leave change.
 Deno.test('the aggregation fee counts towards the deficit candidates have to cover', () => {
-  const ctx = makeTestContext({ aggregationFee: 10n });
+  const ctx = makeTestContext();
+  ctx.configure(DraftStoreConfig, { aggregationFee: 10n });
   const source = sourceBlock(ctx, [15n]);
   const store = ctx.get(DraftStore);
 
@@ -466,7 +468,8 @@ Deno.test('the aggregation fee counts towards the deficit candidates have to cov
 
 // An aggregation block sets its own fee, so the config one does not apply to it.
 Deno.test('a draft that brings its own aggregation output does not get a second', () => {
-  const ctx = makeTestContext({ aggregationFee: 10n });
+  const ctx = makeTestContext();
+  ctx.configure(DraftStoreConfig, { aggregationFee: 10n });
   const source = sourceBlock(ctx, [10n]);
   const store = ctx.get(DraftStore);
 

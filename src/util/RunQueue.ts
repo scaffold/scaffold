@@ -1,5 +1,10 @@
-import { assert, error } from '../util/functional.ts';
-import { MaybePromise } from '../util/MaybePromise.ts';
+import { assert, error } from './functional.ts';
+import { MaybePromise } from './MaybePromise.ts';
+
+export interface RunQueueConfig {
+  maxRunning: number;
+  maxYielding: number;
+}
 
 export class CancelError extends Error {
   constructor(message: string) {
@@ -8,14 +13,14 @@ export class CancelError extends Error {
   }
 }
 
-export interface FlowCtl {
-  signal: AbortSignal; // Do we even need this or should we expect jobs to preemptively yield?
-  yield(): MaybePromise<void>;
-}
-
 export interface Job {
   priority(): number; // Higher values run first
   run(ctl: FlowCtl): Promise<void>; // Should not throw, except for `CancelError`
+}
+
+export interface FlowCtl {
+  signal: AbortSignal; // Do we even need this or should we expect jobs to preemptively yield?
+  yield(): MaybePromise<void>;
 }
 
 export enum JobState {
@@ -50,7 +55,7 @@ Assuming jobs call yield() frequently enough:
   All running lower-priority jobs will be cancelled by aborting their provided signal and throwing CancelError if blocked in a yield call. They will be moved back to the pending state.
 In all cases, the number of jobs in those states will be limited by the thresholds.
 */
-export class ExecutionQueue implements Disposable {
+export class RunQueue implements Disposable {
   private jobs = new Map<Job, JobHandle>();
   private counts: JobCounts = {
     [JobState.Pending]: 0,
@@ -60,9 +65,7 @@ export class ExecutionQueue implements Disposable {
     [JobState.Removed]: 0,
   };
 
-  // TODO: Move to config somewhere
-  maxYielding = 12;
-  maxRunning = 4;
+  constructor(private config: RunQueueConfig) {}
 
   run(job: Job, signal?: AbortSignal): Promise<void> {
     assert(!this.jobs.has(job));

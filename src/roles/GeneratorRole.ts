@@ -1,4 +1,3 @@
-import { SIGNATURE_CONTRACT_HASH } from '../Config.ts';
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
@@ -6,8 +5,15 @@ import { bin2hex } from '../util/hex.ts';
 import { mapPut } from '../util/map.ts';
 import { BlockStore } from '../graph/BlockStore.ts';
 import { DraftStore } from '../graph/DraftStore.ts';
-import { CancelError, ExecutionQueue, FlowCtl, Job } from './ExecutionQueue.ts';
+import {
+  CancelError,
+  ExecutionQueue,
+  ExecutionQueueConfig,
+  FlowCtl,
+  Job,
+} from '../peer/ExecutionQueue.ts';
 import { Block, Draft, Predicate } from '../graph/types.ts';
+import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
 
 declare const predicateKeySymbol: unique symbol;
 type PredicateKey = string & { readonly [predicateKeySymbol]: true };
@@ -19,19 +25,12 @@ interface Execution {
   predicate: Predicate;
 
   // Generators should shift claims from this array
-  availableClaims: { block: Block; outputIdx: bigint }[];
+  availableClaims: { block: Block; outputIdx: number }[];
 
   runningJob?: Job;
 }
 
-/**
- * Turns newly-ingested outputs into contract executions.
- *
- * The unit of work is a *predicate*, not an output. A single execution sweeps
- * every matching UTXO through `claimAll`, so many outputs -- on this block, on
- * blocks ingested seconds apart -- collapse into one job.
- */
-export class ExecutionModule {
+export class GeneratorRole {
   private pending = new Map<PredicateKey, Execution>();
 
   constructor(private ctx: Context) {
@@ -40,12 +39,12 @@ export class ExecutionModule {
 
   private onIngest(block: Block) {
     for (let i = 0; i < block.payload.outputs.length; i++) {
-      this.trigger(block, BigInt(i));
+      this.trigger(block, i);
     }
   }
 
-  private trigger(block: Block, outputIdx: bigint) {
-    const output = block.payload.outputs[Number(outputIdx)];
+  private trigger(block: Block, outputIdx: number) {
+    const output = block.payload.outputs[outputIdx];
 
     const predicate: Predicate = { contract: output.contract, params: output.params };
     const key = predicateKey(predicate);
@@ -81,7 +80,7 @@ class GenerationJob implements Job {
 
     let total = 0n;
     for (const { block, outputIdx } of this.execution.availableClaims) {
-      total += block.payload.outputs[Number(outputIdx)].amount;
+      total += block.payload.outputs[outputIdx].amount;
     }
     return Number(total);
   }
@@ -95,7 +94,7 @@ class GenerationJob implements Job {
         ctl.signal,
       );
 
-      if (Hash.equals(this.execution.predicate.contract, SIGNATURE_CONTRACT_HASH)) {
+      if (Hash.equals(this.execution.predicate.contract, SIGNATURE_CONTRACT)) {
         // The signature contract stores as a store of value; there's no need to immediately publish the claiming block.
         this.ctx.get(DraftStore).lock(draft);
       } else {

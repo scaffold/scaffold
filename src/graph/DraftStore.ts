@@ -28,6 +28,11 @@ type ExtraPayload = DraftPayload & { type: typeof EXTRA_OUTPUT_PAYLOAD };
 // A block is merged from drafts plus whatever payloads the merge has to mint itself.
 type MergeEntry = Draft | ExtraPayload;
 
+export class DraftStoreConfig {
+  // Fee carried by the aggregation output every block we build attaches (wp 7)
+  aggregationFee = 0n;
+}
+
 export class DraftStore {
   // TODO: When should we delete from this set?
   private drafts = new Set<Draft>();
@@ -234,7 +239,7 @@ export class DraftStore {
       outputs: [{
         contract: AGGREGATION_CONTRACT,
         params: new Uint8Array(),
-        amount: this.ctx.config.aggregationFee,
+        amount: this.ctx.get(DraftStoreConfig).aggregationFee,
       }],
     };
   }
