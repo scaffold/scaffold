@@ -132,13 +132,8 @@ Deno.test('generateGenesis accepts an empty funding set', () => {
   assertEquals(block.payload.outputs, []);
 });
 
-// BUG: makeDefaultConfig() throws instead of returning a config.
-// src/Config.ts:39-41 keys the funding map by Hash.digest(...).toHex(), a 32-byte
-// private key, but generateGenesis requires 33-byte compressed public keys, so the
-// assert at src/genesis.ts:67 fires. Expected: a config a Context can be built from.
-// The returned object is also missing `selfPrivateKey`, which `Config` requires.
-Deno.test('BUG: makeDefaultConfig returns a usable config', () => {
-  const config: Partial<Config> = makeDefaultConfig();
+Deno.test('makeDefaultConfig returns a usable config', () => {
+  const config: Config = makeDefaultConfig();
   assertExists(config.genesis);
   assertExists(config.selfPrivateKey);
 });

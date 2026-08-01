@@ -399,12 +399,9 @@ Deno.test('memoize: distinct arguments get distinct results', () => {
   assertEquals(calls, 2);
 });
 
-// BUG: memoize caches on truthiness (`if (!res)`), so any memoized function
-// whose result is falsy re-runs on every call. Expected 1 invocation, actual 3.
-// Basis: memoize's contract is compute-once per argument, and this is live --
-// `bin2str` in src/util/buffer.ts memoizes a decoder that returns '' for an
-// empty buffer. Fix is `cache.has(arg)`.
-Deno.test('BUG: memoize caches falsy results', () => {
+// memoize's contract is compute-once per argument, including falsy results --
+// `bin2str` in src/util/buffer.ts memoizes a decoder that returns '' for an empty buffer.
+Deno.test('memoize caches falsy results', () => {
   let calls = 0;
   const f = memoize((_arg: object) => (calls++, 0));
   const key = {};

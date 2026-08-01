@@ -22,17 +22,17 @@ export const match = <T, R>(
 };
 
 // TODO: Move to decorators.ts
-export const memoize = <ArgType extends Object, ReturnType>(
+export const memoize = <ArgType extends WeakKey, ReturnType extends {} | null>(
   func: (arg: ArgType) => ReturnType,
 ) => {
   const cache = new WeakMap<ArgType, ReturnType>();
   return (arg: ArgType): ReturnType => {
     let res = cache.get(arg);
-    if (!res) {
+    if (res === undefined) {
       res = func(arg);
       cache.set(arg, res);
     }
-    return res!;
+    return res;
   };
 };
 

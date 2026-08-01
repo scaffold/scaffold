@@ -4,7 +4,7 @@ import { bin2str, str2bin } from '../util/buffer.ts';
 import { assert, todo } from '../util/functional.ts';
 import { Hash, ZERO_HASH } from '../util/Hash.ts';
 import { taggedParse, taggedStringify } from '../util/json.ts';
-import { mapPut, multimapPut } from '../util/map.ts';
+import { mapPop, mapPut, multimapPut } from '../util/map.ts';
 import { BlockStore } from './BlockStore.ts';
 import { ClaimIndexService } from './ClaimIndexService.ts';
 import {
@@ -12,6 +12,7 @@ import {
   AtomBase,
   AtomType,
   Block,
+  BLOCK_REF_TYPE,
   BlockActionType,
   BlockPayload,
   BlockRef,
@@ -48,6 +49,8 @@ export function serializeBlock(
 
 export class BlockIngestor implements Ingestor<Block> {
   readonly isSigned = true;
+
+  private newlyResolved = new Map<Block, (ResolvingClaim | ResolvingRef)[]>();
 
   constructor(private ctx: Context) {}
 
@@ -87,7 +90,7 @@ export class BlockIngestor implements Ingestor<Block> {
     }
 
     for (let i = 0; i < payload.claims.length; i++) {
-      const claim: ResolvingClaim = {
+      const resolvingClaim: ResolvingClaim = {
         type: OutputResolverType.Claim,
         producer: block,
         outputIdx: payload.claims[i],
@@ -95,10 +98,8 @@ export class BlockIngestor implements Ingestor<Block> {
         claimIdx: i,
         resolved: false,
       };
-      this.ctx.get(ClaimIndexService).propagateClaim(claim);
-
-      block.claims.push(claim);
-      multimapPut(claim.producer.resolvingOutputs, claim.outputIdx, claim);
+      block.claims.push(resolvingClaim);
+      this.propagateResolving(resolvingClaim, block);
     }
 
     for (let i = 0; i < payload.refs.length; i++) {
@@ -110,10 +111,8 @@ export class BlockIngestor implements Ingestor<Block> {
         refIdx: i,
         resolved: false,
       };
-      this.ctx.get(ClaimIndexService).propagateClaim(resolvingRef);
-
       block.refs.push(resolvingRef);
-      multimapPut(resolvingRef.producer.resolvingOutputs, resolvingRef.outputIdx, resolvingRef);
+      this.propagateResolving(resolvingRef, block);
     }
 
     if (ref !== undefined) {
@@ -135,17 +134,7 @@ export class BlockIngestor implements Ingestor<Block> {
       for (const arr of ref.resolvingOutputs.values()) {
         for (const claim of arr) {
           claim.producer = block;
-          this.ctx.get(ClaimIndexService).propagateClaim(claim);
-          multimapPut(claim.producer.resolvingOutputs, claim.outputIdx, claim);
-
-          if (claim.resolved && claim.type === OutputResolverType.Claim) {
-            setTimeout(() => {
-              if (claim.claimer.type === AtomType.Block) {
-                arrCall(claim.claimer.listeners, { type: BlockActionType.LinkClaim, claim });
-              }
-              arrCall(claim.producer.listeners, { type: BlockActionType.LinkClaimingNode, claim });
-            }, 0);
-          }
+          this.propagateResolving(claim, block);
         }
       }
     }
@@ -179,6 +168,28 @@ export class BlockIngestor implements Ingestor<Block> {
         aggregatingNode: block,
         index: i,
       });
+    }
+
+    for (const prop of mapPop(this.newlyResolved, block) ?? []) {
+      assert(prop.resolved);
+
+      if (prop.type === OutputResolverType.Claim) {
+        if (prop.claimer.type === AtomType.Block) {
+          arrCall(prop.claimer.listeners, { type: BlockActionType.LinkClaim, claim: prop });
+        }
+        arrCall(prop.producer.listeners, { type: BlockActionType.LinkClaimingNode, claim: prop });
+      }
+    }
+    assert(this.newlyResolved.size === 0);
+  }
+
+  private propagateResolving(propagation: ResolvingClaim | ResolvingRef, currentBlock: Block) {
+    this.ctx.get(ClaimIndexService).propagateClaim(propagation);
+    assert(propagation.resolved || propagation.producer.type === BLOCK_REF_TYPE);
+    multimapPut(propagation.producer.resolvingOutputs, propagation.outputIdx, propagation);
+
+    if (propagation.resolved) {
+      multimapPut(this.newlyResolved, currentBlock, propagation);
     }
   }
 }

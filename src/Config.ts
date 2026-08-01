@@ -3,6 +3,7 @@ import { ContractPlugin, ContractProvider } from './core/Contract.ts';
 import { DefaultContractProvider } from './DefaultContractProvider.ts';
 import { generateGenesis } from './genesis.ts';
 import { Hash } from './util/Hash.ts';
+import { bin2hex } from './util/hex.ts';
 import { secp } from './util/secp.ts';
 
 export const SIGNATURE_CONTRACT_HASH = Hash.digest('signature');
@@ -37,22 +38,25 @@ export interface Config {
 const rngSeed = 123n;
 
 export const makeDefaultConfig = () => {
-  const privateKeys = {
-    [Hash.digest('scaffold:testnet:alice').toHex()]: 1_000_000n,
-    [Hash.digest('scaffold:testnet:bob').toHex()]: 1_000_000n,
-    [Hash.digest('scaffold:testnet:charlie').toHex()]: 1_000_000n,
-  };
+  const privateKeys = ['alice', 'bob', 'charlie'].map((name) =>
+    Hash.digest(`scaffold:testnet:${name}`).toBytes()
+  );
 
-  const genesis = generateGenesis('default', privateKeys);
+  const funding = Object.fromEntries(
+    privateKeys.map((key) => [bin2hex(secp.getPublicKey(key, true)), 1_000_000n]),
+  );
 
-  for (const [privateKey, amount] of Object.entries(privateKeys)) {
-    console.warn(`Genesis output: ${privateKey} has ${amount}`);
+  const genesis = generateGenesis('default', funding);
+
+  for (const [publicKey, amount] of Object.entries(funding)) {
+    console.warn(`Genesis output: ${publicKey} has ${amount}`);
   }
   console.warn(`Genesis block hash: ${Hash.digest(genesis).toHex()}`);
 
   const config = {
     genesis,
     debugName: '',
+    selfPrivateKey: privateKeys[0],
     timeProvider: {
       nowMs: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),
@@ -66,7 +70,7 @@ export const makeDefaultConfig = () => {
       cryptoRandomBytes: secp.etc.randomBytes,
     },
     contractProvider: DefaultContractProvider,
-  } satisfies Partial<Config>;
+  } satisfies Config;
 
   return config;
 };

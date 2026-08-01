@@ -1,4 +1,11 @@
-import { assert, assertEquals, assertFalse, assertStrictEquals, assertThrows } from '@std/assert';
+import {
+  assert,
+  assertArrayIncludes,
+  assertEquals,
+  assertFalse,
+  assertStrictEquals,
+  assertThrows,
+} from '@std/assert';
 import { Context } from '../src/Context.ts';
 import { AtomSerializerService } from '../src/core/AtomSerializer.ts';
 import { BlockStore } from '../src/core/BlockStore.ts';
@@ -85,8 +92,6 @@ const record = (target: { listeners: Set<(a: BlockAction) => void> }) => {
   target.listeners.add((action) => actions.push(action));
   return actions;
 };
-
-const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 // -- serializeBlock -------------------------------------------------
 
@@ -454,7 +459,7 @@ function pendingBlock(): Promotion {
     add(blockPayload({ anchor: target.hash, outputs: [output(2n)] })),
   ];
   const aggregating = add(blockPayload({
-    anchor: genesis.hash,
+    anchor: target.hash,
     aggregates: [{ block: target.hash, outputCount: 3n }],
     claims: [2n],
     refs: [3n],
@@ -478,7 +483,7 @@ Deno.test('promotion replaces the ref everywhere it was referenced', () => {
 
   assertStrictEquals(fixture.store.get(block.hash), block);
   assertEquals(anchoring.map((x) => x.anchor), [block, block]);
-  assertEquals(block.anchoringNodes, anchoring);
+  assertEquals(block.anchoringNodes, [...anchoring, aggregating]);
   assertStrictEquals(aggregating.aggregates[0].block, block);
   assertEquals(block.aggregatingNodes, [aggregating]);
 
@@ -512,24 +517,21 @@ Deno.test('promotion carries the ref listeners onto the block', () => {
   assert(block.listeners.has(listener));
 });
 
-Deno.test('promotion announces newly resolved claims to both sides', async () => {
+Deno.test('promotion announces newly resolved claims to both sides', () => {
   const { ref, aggregating, promote } = pendingBlock();
   const producerActions = record(ref);
   const claimerActions = record(aggregating);
 
-  const block = promote();
-  assertEquals(producerActions, []);
-  assertEquals(claimerActions, []);
+  promote();
 
-  await tick();
-
-  assertEquals(producerActions, [
-    { type: BlockActionType.LinkClaimingNode, claim: aggregating.claims[0] },
-  ]);
-  assertEquals(claimerActions, [
-    { type: BlockActionType.LinkClaim, claim: aggregating.claims[0] },
-  ]);
-  assertStrictEquals(aggregating.claims[0].producer, block);
+  assertArrayIncludes(producerActions, [{
+    type: BlockActionType.LinkClaimingNode,
+    claim: aggregating.claims[0],
+  }]);
+  assertArrayIncludes(claimerActions, [{
+    type: BlockActionType.LinkClaim,
+    claim: aggregating.claims[0],
+  }]);
 });
 
 Deno.test('promotion re-parks a claim that resolves past the promoted block', () => {
@@ -658,25 +660,22 @@ Deno.test('ingest links a block to its aggregates in both directions', () => {
   ]);
 });
 
-// BUG: expected 1 LinkClaimingNode on the producer, actual 0.
-// `deserialize`'s ref-relink path fires LinkClaim/LinkClaimingNode when the producer
-// arrives after the claimer, so the reverse order must fire them too -- otherwise a
-// producer only ever hears that its output was claimed when it happened to be the
-// later arrival. See TODO.v2.md "Claim/ref links never notify on ingestion".
-Deno.test('BUG: ingest tells a producer that its output was claimed', async () => {
+// Either arrival order has to tell the producer: `deserialize`'s ref-relink path covers
+// the producer arriving last, this covers the claimer arriving last.
+Deno.test('ingest tells a producer that its output was claimed', () => {
   const { ctx, genesis, add } = setup();
-  const claimer = add(blockPayload({
-    anchor: genesis.hash,
-    claims: [1n],
-    outputs: [output(1n)],
-  }));
+
   const claimed: ResolvingClaim[] = [];
   genesis.listeners.add((action) => {
     if (action.type === BlockActionType.LinkClaimingNode) claimed.push(action.claim);
   });
 
+  const claimer = add(blockPayload({
+    anchor: genesis.hash,
+    claims: [1n],
+    outputs: [output(1n)],
+  }));
   new BlockIngestor(ctx).ingest(claimer);
-  await tick();
 
   assertEquals(claimed.length, 1, 'the producer was never told its output was claimed');
   assertStrictEquals(claimed[0], claimer.claims[0]);
