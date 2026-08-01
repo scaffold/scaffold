@@ -114,7 +114,7 @@ interface StubOptions {
   resolveClaimIndex?: (
     anchorChain: AnchorChainNode[],
     outputBlock: AggregatorNodeBase & AnchorChainNode,
-    outputIndex: bigint,
+    outputIndex: number,
   ) => bigint;
   countOutputs?: (block: Block) => bigint;
 }
@@ -122,7 +122,7 @@ interface StubOptions {
 interface ResolveCall {
   anchorChain: AnchorChainNode[];
   outputBlock: AggregatorNodeBase & AnchorChainNode;
-  outputIndex: bigint;
+  outputIndex: number;
 }
 
 class StubBuilder extends BlockBuilderBase {
@@ -156,7 +156,7 @@ class StubBuilder extends BlockBuilderBase {
   protected override resolveClaimIndex(
     anchorChain: AnchorChainNode[],
     outputBlock: AggregatorNodeBase & AnchorChainNode,
-    outputIndex: bigint,
+    outputIndex: number,
   ): bigint {
     this.resolveCalls.push({ anchorChain, outputBlock, outputIndex });
     return this.options.resolveClaimIndex?.(anchorChain, outputBlock, outputIndex) ??
@@ -180,7 +180,7 @@ Deno.test('build carries the draft outputs and the placed anchor into the payloa
   const outputs = [out(7n), out(3n)];
 
   const built = okPayload(builder.build(payload({
-    claims: [{ producer: funder, outputIndex: 0n }],
+    claims: [{ producer: funder, outputIndex: 0 }],
     outputs,
   })));
 
@@ -197,8 +197,8 @@ Deno.test('claim and ref producers are placement includes', () => {
   const reffed = fakeBlock('reffed', [out(5n)]);
 
   builder.build(payload({
-    claims: [{ producer: claimed, outputIndex: 0n }, { producer: DRAFT_SELF, outputIndex: 0n }],
-    refs: [{ producer: reffed, outputIndex: 0n }],
+    claims: [{ producer: claimed, outputIndex: 0 }, { producer: DRAFT_SELF, outputIndex: 0 }],
+    refs: [{ producer: reffed, outputIndex: 0 }],
     outputs: [out(5n), out(5n)],
   }));
 
@@ -213,7 +213,7 @@ Deno.test('a claim on an aggregation output rolls that block up', () => {
   const plain = fakeBlock('plain', [out(1n)]);
 
   const built = okPayload(builder.build(payload({
-    claims: [{ producer: plain, outputIndex: 0n }, { producer: rolled, outputIndex: 0n }],
+    claims: [{ producer: plain, outputIndex: 0 }, { producer: rolled, outputIndex: 0 }],
     outputs: [out(2n)],
   })));
 
@@ -227,7 +227,7 @@ Deno.test('a claim on a non-aggregation output of an aggregating block is not a 
   const block = fakeBlock('mixed', [out(1n), aggregationOut(1n)]);
 
   const built = okPayload(builder.build(payload({
-    claims: [{ producer: block, outputIndex: 0n }],
+    claims: [{ producer: block, outputIndex: 0 }],
     outputs: [out(1n)],
   })));
 
@@ -240,7 +240,7 @@ Deno.test('a claim index past the producer outputs is a hard error', () => {
   const block = fakeBlock('short', [out(1n)]);
 
   assertThrows(
-    () => builder.build(payload({ claims: [{ producer: block, outputIndex: 1n }] })),
+    () => builder.build(payload({ claims: [{ producer: block, outputIndex: 1 }] })),
     Error,
     'out of range',
   );
@@ -252,7 +252,7 @@ Deno.test('a rival claim on a claimed output becomes a placement exclude', () =>
   const rival = fakeBlock('rival');
   rivalClaim(producer, 0n, rival);
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0 }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, [rival]);
 });
@@ -263,7 +263,7 @@ Deno.test('a rival claim on a different output is not an exclude', () => {
   const rival = fakeBlock('rival');
   rivalClaim(producer, 1n, rival);
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0 }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, []);
 });
@@ -275,7 +275,7 @@ Deno.test('a ref on a claimed output is not an exclude', () => {
   const reffer = fakeBlock('reffer');
   rivalRef(producer, 0n, reffer);
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0 }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, []);
 });
@@ -285,7 +285,7 @@ Deno.test('an unbuilt draft claiming the same output is not an exclude', () => {
   const producer = fakeBlock('producer', [out(1n)]);
   rivalClaim(producer, 0n, fakeDraft());
 
-  builder.build(payload({ claims: [{ producer, outputIndex: 0n }], outputs: [out(1n)] }));
+  builder.build(payload({ claims: [{ producer, outputIndex: 0 }], outputs: [out(1n)] }));
 
   assertEquals(builder.placeRequests[0].excludes, []);
 });
@@ -298,7 +298,7 @@ Deno.test('rival claimants are deduplicated across claims', () => {
   rivalClaim(producer, 1n, rival);
 
   builder.build(payload({
-    claims: [{ producer, outputIndex: 0n }, { producer, outputIndex: 1n }],
+    claims: [{ producer, outputIndex: 0 }, { producer, outputIndex: 1 }],
     outputs: [out(2n)],
   }));
 
@@ -311,7 +311,7 @@ Deno.test('a stalled placement returns the tips and resolves nothing', () => {
   const producer = fakeBlock('producer', [out(1n)]);
 
   const result = builder.build(payload({
-    claims: [{ producer, outputIndex: 0n }],
+    claims: [{ producer, outputIndex: 0 }],
     outputs: [out(1n)],
   }));
 
@@ -324,7 +324,7 @@ Deno.test('claim indices resolve against the draft prepended to the anchor chain
   const rolled = fakeBlock('rolled', [aggregationOut(3n)]);
   const outputs = [out(1n), out(2n)];
 
-  builder.build(payload({ claims: [{ producer: rolled, outputIndex: 0n }], outputs }));
+  builder.build(payload({ claims: [{ producer: rolled, outputIndex: 0 }], outputs }));
 
   const { anchorChain } = builder.resolveCalls[0];
   assertEquals(anchorChain.length, 2);
@@ -340,8 +340,8 @@ Deno.test('claims resolve before refs and keep their order', () => {
   const c = fakeBlock('c', [out(1n)]);
 
   const built = okPayload(builder.build(payload({
-    claims: [{ producer: a, outputIndex: 0n }, { producer: b, outputIndex: 0n }],
-    refs: [{ producer: c, outputIndex: 0n }],
+    claims: [{ producer: a, outputIndex: 0 }, { producer: b, outputIndex: 0 }],
+    refs: [{ producer: c, outputIndex: 0 }],
     outputs: [out(2n)],
   })));
 
@@ -389,7 +389,7 @@ Deno.test('a claim on the anchor resolves past the draft outputs', () => {
 
   const built = okPayload(
     ctx.get(BlockBuilder).build(payload({
-      claims: [{ producer: genesis, outputIndex: 0n }],
+      claims: [{ producer: genesis, outputIndex: 0 }],
       outputs,
     })),
   );
@@ -405,7 +405,7 @@ Deno.test('a built claim index round-trips back to the claimed output', () => {
 
   const built = okPayload(
     ctx.get(BlockBuilder).build(payload({
-      claims: [{ producer: genesis, outputIndex: 0n }],
+      claims: [{ producer: genesis, outputIndex: 0 }],
       outputs: [out(1_000_000n)],
     })),
   );
@@ -428,7 +428,7 @@ Deno.test('a DRAFT_SELF claim resolves to a bare draft output index', () => {
 
   const built = okPayload(
     ctx.get(BlockBuilder).build(payload({
-      claims: [{ producer: DRAFT_SELF, outputIndex: 1n }],
+      claims: [{ producer: DRAFT_SELF, outputIndex: 1 }],
       outputs: [out(0n), out(0n), out(0n)],
     })),
   );
@@ -442,7 +442,7 @@ Deno.test('a DRAFT_SELF claim past the draft outputs is rejected', () => {
 
   assertThrows(() =>
     ctx.get(BlockBuilder).build(payload({
-      claims: [{ producer: DRAFT_SELF, outputIndex: 2n }],
+      claims: [{ producer: DRAFT_SELF, outputIndex: 2 }],
       outputs: [out(1n), out(2n)],
     }))
   );
@@ -455,7 +455,7 @@ Deno.test.ignore('the built chain throughput ignores what the block claims', () 
 
   const built = okPayload(
     ctx.get(BlockBuilder).build(payload({
-      claims: [{ producer: genesis, outputIndex: 0n }],
+      claims: [{ producer: genesis, outputIndex: 0 }],
       outputs: [out(1_000_000n)],
     })),
   );
@@ -473,7 +473,7 @@ Deno.test('building an aggregation cannot resolve its own aggregate claim', () =
 
   const built = okPayload(
     ctx.get(BlockBuilder).build(payload({
-      claims: [{ producer: rolled, outputIndex: 0n }],
+      claims: [{ producer: rolled, outputIndex: 0 }],
       outputs: [out(10n)],
     })),
   );

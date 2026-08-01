@@ -114,7 +114,7 @@ export class DraftStore {
     let acc = 0n;
     for (const claim of claims) {
       const outputVec = claim.producer === DRAFT_SELF ? outputs : claim.producer.payload.outputs;
-      acc -= outputVec[Number(claim.outputIndex)].amount;
+      acc -= outputVec[claim.outputIndex].amount;
     }
     for (const output of outputs) {
       acc += output.amount;
@@ -266,7 +266,7 @@ export class DraftStore {
       const remap = (link: Link): Link => {
         if (link.producer !== DRAFT_SELF) return link;
         assert(
-          link.outputIndex >= 0n && link.outputIndex < BigInt(draft.outputs.length),
+          link.outputIndex >= 0 && link.outputIndex < draft.outputs.length,
           `Self link index ${link.outputIndex} out of bounds`,
         );
         return { producer: DRAFT_SELF, outputIndex: link.outputIndex + outputs.length };

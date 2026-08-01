@@ -98,7 +98,7 @@ const GENESIS_AMOUNT = 1_000_000n;
 // Claims the whole genesis output and pays it straight back out, so it needs no funding.
 const genesisDraft = (store: DraftStore, genesis: Block): Draft =>
   store.create({
-    claims: [{ producer: genesis, outputIndex: 0n }],
+    claims: [{ producer: genesis, outputIndex: 0 }],
     outputs: [out(GENESIS_AMOUNT)],
   });
 
@@ -112,7 +112,7 @@ const builtBlock = (draft: Draft): Block => {
 // A draft holding `amounts.length` claims on a purpose-built source block, so its
 // ioDelta is exactly -sum(amounts).
 const fundingDraft = (store: DraftStore, source: Block, index: number): Draft =>
-  store.create({ claims: [{ producer: source, outputIndex: BigInt(index) }] });
+  store.create({ claims: [{ producer: source, outputIndex: index }] });
 
 const sourceBlock = (ctx: Context, amounts: bigint[]): Block =>
   ingest(ctx, serialize(ctx, blockPayload({ outputs: amounts.map((amount) => out(amount)) })));
@@ -143,7 +143,7 @@ Deno.test('the io delta is outputs minus claimed amounts', () => {
   const source = sourceBlock(ctx, [1_000n]);
 
   const spending = ctx.get(DraftStore).create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(400n)],
   });
   assertEquals(spending.ioDelta, -600n);
@@ -152,7 +152,7 @@ Deno.test('the io delta is outputs minus claimed amounts', () => {
   assertEquals(needing.ioDelta, 400n);
 
   const balanced = ctx.get(DraftStore).create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(1_000n)],
   });
   assertEquals(balanced.ioDelta, 0n);
@@ -164,8 +164,8 @@ Deno.test('the io delta ignores DRAFT_SELF claims', () => {
 
   const draft = ctx.get(DraftStore).create({
     claims: [
-      { producer: source, outputIndex: 0n },
-      { producer: DRAFT_SELF, outputIndex: 0n },
+      { producer: source, outputIndex: 0 },
+      { producer: DRAFT_SELF, outputIndex: 0 },
     ],
     outputs: [out(1_000n), out(1_000n)],
   });
@@ -198,7 +198,7 @@ Deno.test('a draft builds from populating and reaches built', () => {
   const store = ctx.get(DraftStore);
 
   const draft = store.create({
-    claims: [{ producer: genesis, outputIndex: 0n }],
+    claims: [{ producer: genesis, outputIndex: 0 }],
     outputs: [out(1_000_000n)],
   });
   store.build(draft);
@@ -216,7 +216,7 @@ Deno.test('a draft builds from ready', () => {
   const store = ctx.get(DraftStore);
 
   const draft = store.create({
-    claims: [{ producer: genesis, outputIndex: 0n }],
+    claims: [{ producer: genesis, outputIndex: 0 }],
     outputs: [out(1_000_000n)],
   });
   store.lock(draft);
@@ -349,7 +349,7 @@ Deno.test('a stalled build parks the draft in building', () => {
   const store = ctx.get(DraftStore);
 
   const draft = store.create({
-    claims: [{ producer: orphan, outputIndex: 0n }],
+    claims: [{ producer: orphan, outputIndex: 0 }],
     outputs: [out(50n)],
   });
   store.build(draft);
@@ -364,7 +364,7 @@ Deno.test('cancelling a stalled draft drops its retry hook', () => {
   const store = ctx.get(DraftStore);
 
   const draft = store.create({
-    claims: [{ producer: orphan, outputIndex: 0n }],
+    claims: [{ producer: orphan, outputIndex: 0 }],
     outputs: [out(50n)],
   });
   store.build(draft);
@@ -381,7 +381,7 @@ Deno.test('a retried build re-enters itself through its own ingestion', () => {
   const store = ctx.get(DraftStore);
 
   const draft = store.create({
-    claims: [{ producer: orphan, outputIndex: 0n }],
+    claims: [{ producer: orphan, outputIndex: 0 }],
     outputs: [out(50n)],
   });
   store.build(draft);
@@ -401,7 +401,7 @@ Deno.test('balanceFunds adds no funding to a draft that is already balanced', ()
   const store = ctx.get(DraftStore);
 
   const balanced = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(10n)],
   });
 
@@ -420,7 +420,7 @@ Deno.test('balanceFunds appends an aggregation output to every draft', () => {
   const store = ctx.get(DraftStore);
 
   const balanced = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(10n)],
   });
 
@@ -437,7 +437,7 @@ Deno.test('the aggregation fee is paid out of the surplus that would have been c
   const store = ctx.get(DraftStore);
 
   const spending = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(90n)],
   });
 
@@ -474,7 +474,7 @@ Deno.test('a draft that brings its own aggregation output does not get a second'
   const store = ctx.get(DraftStore);
 
   const aggregating = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(6n), aggregationOut(4n)],
   });
 
@@ -493,7 +493,7 @@ Deno.test('a ready aggregation draft rides along instead of a minted output', ()
   const store = ctx.get(DraftStore);
 
   const aggregating = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [aggregationOut(4n)],
   });
   store.lock(aggregating);
@@ -514,11 +514,11 @@ Deno.test('a second aggregation draft is not pulled in to cover a deficit', () =
   const store = ctx.get(DraftStore);
 
   const first = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [aggregationOut()],
   });
   const second = store.create({
-    claims: [{ producer: source, outputIndex: 1n }],
+    claims: [{ producer: source, outputIndex: 1 }],
     outputs: [aggregationOut()],
   });
   store.lock(first);
@@ -537,7 +537,7 @@ Deno.test('a draft carrying two aggregation outputs is rejected', () => {
   const store = ctx.get(DraftStore);
 
   const doubled = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [aggregationOut(4n), aggregationOut(6n)],
   });
 
@@ -550,7 +550,7 @@ Deno.test('balanceFunds pays its own surplus into a signature change output', ()
   const store = ctx.get(DraftStore);
 
   const spending = store.create({
-    claims: [{ producer: source, outputIndex: 0n }],
+    claims: [{ producer: source, outputIndex: 0 }],
     outputs: [out(4n)],
   });
 
@@ -573,7 +573,7 @@ Deno.test('a surplus draft builds a block carrying its change output', () => {
   const store = ctx.get(DraftStore);
 
   const draft = store.create({
-    claims: [{ producer: genesis, outputIndex: 0n }],
+    claims: [{ producer: genesis, outputIndex: 0 }],
     outputs: [out(400_000n)],
   });
   store.build(draft);
@@ -592,7 +592,7 @@ Deno.test('a ready draft that exactly covers the deficit is selected', () => {
   const store = ctx.get(DraftStore);
 
   const funding = store.create({
-    claims: [{ producer: genesis, outputIndex: 0n }],
+    claims: [{ producer: genesis, outputIndex: 0 }],
     outputs: [out(999_000n)],
   });
   store.lock(funding);
@@ -715,16 +715,16 @@ Deno.test('merging drafts concatenates claims, refs and outputs in order', () =>
   const store = ctx.get(DraftStore);
 
   const merged = internals(store).mergeDrafts([
-    { claims: [{ producer: source, outputIndex: 0n }], refs: [], outputs: [out(1n)] },
+    { claims: [{ producer: source, outputIndex: 0 }], refs: [], outputs: [out(1n)] },
     {
-      claims: [{ producer: source, outputIndex: 1n }],
-      refs: [{ producer: source, outputIndex: 0n }],
+      claims: [{ producer: source, outputIndex: 1 }],
+      refs: [{ producer: source, outputIndex: 0 }],
       outputs: [out(2n), out(3n)],
     },
   ]);
 
-  assertEquals(merged.claims.map((x) => x.outputIndex), [0n, 1n]);
-  assertEquals(merged.refs.map((x) => x.outputIndex), [0n]);
+  assertEquals(merged.claims.map((x) => x.outputIndex), [0, 1]);
+  assertEquals(merged.refs.map((x) => x.outputIndex), [0]);
   assertEquals(merged.outputs, [out(1n), out(2n), out(3n)]);
 });
 
@@ -736,14 +736,14 @@ Deno.test('merging remaps DRAFT_SELF claims onto the merged output vector', () =
   const merged = internals(store).mergeDrafts([
     { claims: [], refs: [], outputs: [out(1n), out(2n)] },
     {
-      claims: [{ producer: DRAFT_SELF, outputIndex: 0n }],
-      refs: [{ producer: DRAFT_SELF, outputIndex: 0n }],
+      claims: [{ producer: DRAFT_SELF, outputIndex: 0 }],
+      refs: [{ producer: DRAFT_SELF, outputIndex: 0 }],
       outputs: [out(3n)],
     },
   ]);
 
-  assertEquals(merged.claims.map((x) => x.outputIndex), [2n]);
-  assertEquals(merged.refs.map((x) => x.outputIndex), [2n]);
+  assertEquals(merged.claims.map((x) => x.outputIndex), [2]);
+  assertEquals(merged.refs.map((x) => x.outputIndex), [2]);
   assertEquals(merged.claims.map((x) => x.producer), [DRAFT_SELF]);
 });
 
@@ -754,18 +754,18 @@ Deno.test('merging leaves the first draft self-claims where they are', () => {
 
   const merged = internals(store).mergeDrafts([
     {
-      claims: [{ producer: DRAFT_SELF, outputIndex: 1n }, { producer: source, outputIndex: 0n }],
+      claims: [{ producer: DRAFT_SELF, outputIndex: 1 }, { producer: source, outputIndex: 0 }],
       refs: [],
       outputs: [out(1n), out(2n)],
     },
     {
-      claims: [{ producer: DRAFT_SELF, outputIndex: 1n }],
+      claims: [{ producer: DRAFT_SELF, outputIndex: 1 }],
       refs: [],
       outputs: [out(3n), out(4n)],
     },
   ]);
 
-  assertEquals(merged.claims.map((x) => x.outputIndex), [1n, 0n, 3n]);
+  assertEquals(merged.claims.map((x) => x.outputIndex), [1, 0, 3]);
   assertEquals(merged.claims.map((x) => x.producer), [DRAFT_SELF, source, DRAFT_SELF]);
 });
 
@@ -773,12 +773,12 @@ Deno.test('merging rejects a self-claim outside the draft it belongs to', () => 
   const ctx = makeTestContext();
   const store = ctx.get(DraftStore);
 
-  const merge = (outputIndex: bigint) =>
+  const merge = (outputIndex: number) =>
     internals(store).mergeDrafts([
       { claims: [], refs: [], outputs: [out(1n), out(2n)] },
       { claims: [{ producer: DRAFT_SELF, outputIndex }], refs: [], outputs: [out(3n)] },
     ]);
 
-  assertThrows(() => merge(1n));
-  assertThrows(() => merge(-1n));
+  assertThrows(() => merge(1));
+  assertThrows(() => merge(-1));
 });

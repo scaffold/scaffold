@@ -85,7 +85,7 @@ export abstract class BlockBuilderBase {
 
   private claimedOutput(req: DraftPayload, claim: DraftPayload['claims'][number]): Output {
     const outputs = claim.producer === DRAFT_SELF ? req.outputs : claim.producer.payload.outputs;
-    const output = outputs[Number(claim.outputIndex)];
+    const output = outputs[claim.outputIndex];
     if (output === undefined) {
       const producer = claim.producer === DRAFT_SELF ? 'self' : claim.producer.hash.toHex();
       return error(`build: claim on ${producer} output ${claim.outputIndex} is out of range`);
