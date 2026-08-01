@@ -1,5 +1,5 @@
 import { Context } from '../Context.ts';
-import { ContractProvider } from './Contract.ts';
+import { ContractProvider } from './ContractProvider.ts';
 import { EnvContractProvider } from './env/EnvContractProvider.ts';
 import { RoutingContractProvider } from './RoutingContractProvider.ts';
 

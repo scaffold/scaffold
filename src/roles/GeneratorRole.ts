@@ -96,8 +96,8 @@ class GenerationJob implements Job {
   async run(ctl: FlowCtl): Promise<void> {
     const draft = this.ctx.get(DraftStore).create();
     try {
-      await this.ctx.get(this.ctx.config.contractProvider)
-        .generate(this.execution.predicate, draft, ctl.signal);
+      await this.ctx.get(this.ctx.config.contractPlugin)
+        .generate(this.execution.predicate, draft, ctl);
 
       if (Hash.equals(this.execution.predicate.contract, SIGNATURE_CONTRACT)) {
         // The signature contract stores as a store of value; there's no need to immediately publish the claiming block.

@@ -1,7 +1,9 @@
 import { Context } from '../../Context.ts';
 import { Block, Output, Predicate } from '../../graph/types.ts';
 import { arrEquals } from '../../util/buffer.ts';
+import { todo } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
+import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 
 export class VerificationEnv implements ContractEnv {
@@ -9,7 +11,7 @@ export class VerificationEnv implements ContractEnv {
     private ctx: Context,
     private predicate: Predicate,
     private block: Block,
-    private signal: AbortSignal,
+    private flowCtl: FlowCtl,
   ) {}
 
   mode() {
@@ -25,7 +27,7 @@ export class VerificationEnv implements ContractEnv {
   }
 
   claim() {
-    return new Promise<Uint8Array>(() => {});
+    return todo();
   }
 
   setResult(result: Uint8Array) {

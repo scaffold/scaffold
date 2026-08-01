@@ -42,7 +42,7 @@ export function makeTestConfig(options: TestConfigOptions = {}): Config {
       clearInterval: (idx) => clearInterval(idx),
     },
     entropyProvider: new SeededEntropyProvider(123n),
-    contractProvider: DefaultContractProvider,
+    contractPlugin: DefaultContractProvider,
   };
 }
 

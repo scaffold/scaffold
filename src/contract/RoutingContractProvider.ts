@@ -1,9 +1,10 @@
 import { Context } from '../Context.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { ContractProvider } from './Contract.ts';
+import { ContractProvider } from './ContractProvider.ts';
 import { MissingContractProvider } from './MissingContractProvider.ts';
 import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
+import { FlowCtl } from '../util/RunQueue.ts';
 
 export class RoutingContractProvider implements ContractProvider {
   private map = new Map<HashPrimitive, ContractProvider>();
@@ -21,17 +22,17 @@ export class RoutingContractProvider implements ContractProvider {
   generate(
     predicate: Predicate,
     draft: Draft,
-    signal: AbortSignal,
+    flowCtl: FlowCtl,
   ): MaybePromise<void> {
-    return this.getProvider(predicate).generate(predicate, draft, signal);
+    return this.getProvider(predicate).generate(predicate, draft, flowCtl);
   }
 
   verify(
     predicate: Predicate,
     block: Block,
-    signal: AbortSignal,
+    flowCtl: FlowCtl,
   ): MaybePromise<void> {
-    return this.getProvider(predicate).verify(predicate, block, signal);
+    return this.getProvider(predicate).verify(predicate, block, flowCtl);
   }
 
   debugName?(predicate: Predicate): string | undefined {

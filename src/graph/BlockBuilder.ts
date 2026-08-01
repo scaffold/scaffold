@@ -29,7 +29,7 @@ export abstract class BlockBuilderBase {
   protected abstract resolveClaimIndex(
     anchorChain: AnchorChainNode[],
     outputBlock: AggregatorNodeBase & AnchorChainNode,
-    outputIndex: bigint,
+    outputIndex: number,
   ): bigint;
   protected abstract countOutputs(block: Block): bigint;
 
@@ -122,7 +122,7 @@ export abstract class BlockBuilderBase {
     const rivals = new Set<PlacementNode>();
     for (const claim of req.claims) {
       if (claim.producer === DRAFT_SELF) continue;
-      for (const rival of claim.producer.resolvingOutputs.get(claim.outputIndex) ?? []) {
+      for (const rival of claim.producer.resolvingOutputs.get(BigInt(claim.outputIndex)) ?? []) {
         if (rival.type !== OutputResolverType.Claim) continue;
         if (rival.claimer.type !== AtomType.Block) continue;
         rivals.add(rival.claimer);
@@ -167,10 +167,11 @@ export class BlockBuilder extends BlockBuilderBase {
   protected override resolveClaimIndex(
     anchorChain: AnchorChainNode[],
     outputBlock: AggregatorNodeBase & AnchorChainNode,
-    outputIndex: bigint,
+    outputIndex: number,
   ): bigint {
-    assert(outputIndex < BigInt(outputBlock.payload.outputs.length));
-    return this.ctx.get(ClaimIndex).resolveClaimIndex(anchorChain, outputBlock, outputIndex);
+    assert(outputIndex < outputBlock.payload.outputs.length);
+    return this.ctx.get(ClaimIndex)
+      .resolveClaimIndex(anchorChain, outputBlock, BigInt(outputIndex));
   }
 
   protected override countOutputs(block: Block): bigint {

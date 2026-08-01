@@ -1,7 +1,7 @@
-import { Context } from '../Context.ts';
 import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
 import { Hash } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
+import { FlowCtl } from '../util/RunQueue.ts';
 import { Reader } from './Reader.ts';
 import { WalkerHost } from './values.ts';
 
@@ -9,13 +9,13 @@ export interface ContractProvider {
   generate(
     predicate: Predicate,
     draft: Draft,
-    signal: AbortSignal,
+    flowCtl: FlowCtl,
   ): MaybePromise<void>;
 
   verify(
     predicate: Predicate,
     block: Block,
-    signal: AbortSignal,
+    flowCtl: FlowCtl,
   ): MaybePromise<void>;
 
   walkParams?(
@@ -41,8 +41,4 @@ export interface ContractProvider {
   ): MaybePromise<Uint8Array>;
 
   debugName?(predicate: Predicate): string | undefined;
-}
-
-export interface ContractPlugin {
-  new (ctx: Context): ContractProvider;
 }

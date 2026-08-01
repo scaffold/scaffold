@@ -1,5 +1,6 @@
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
-import { ContractPlugin } from './contract/Contract.ts';
+import { Context } from './Context.ts';
+import { ContractProvider } from './contract/ContractProvider.ts';
 import { DefaultContractProvider } from './contract/DefaultContractProvider.ts';
 import { generateGenesis } from './graph/genesis.ts';
 import { Hash } from './util/Hash.ts';
@@ -21,6 +22,10 @@ export interface EntropyProvider {
   cryptoRandomBytes(size: number): Uint8Array;
 }
 
+export interface ContractPlugin {
+  new (ctx: Context): ContractProvider;
+}
+
 // Ambient environment only: no sensible default, and every context needs it.
 // Per-module tuning lives in a config class next to its module, defaulted there
 // and overridden via ctx.configure().
@@ -33,7 +38,7 @@ export interface Config {
 
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
-  contractProvider: ContractPlugin;
+  contractPlugin: ContractPlugin;
 }
 
 const rngSeed = 123n;
@@ -70,6 +75,6 @@ export function makeDefaultConfig(): Config {
       randomNumber: () => Math.random(),
       cryptoRandomBytes: secp.etc.randomBytes,
     },
-    contractProvider: DefaultContractProvider,
+    contractPlugin: DefaultContractProvider,
   };
 }

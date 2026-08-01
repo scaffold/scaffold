@@ -1,6 +1,6 @@
 import { error } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
-import { ContractProvider } from './Contract.ts';
+import { ContractProvider } from './ContractProvider.ts';
 import { Predicate } from '../graph/types.ts';
 
 const predError = (predicate: Predicate) =>

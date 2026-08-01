@@ -263,14 +263,13 @@ export class DraftStore {
     for (const draft of drafts) {
       // A DRAFT_SELF index addresses the draft's own output vector, which moves to
       // `offset` once the preceding drafts' outputs are in front of it.
-      const offset = BigInt(outputs.length);
       const remap = (link: Link): Link => {
         if (link.producer !== DRAFT_SELF) return link;
         assert(
           link.outputIndex >= 0n && link.outputIndex < BigInt(draft.outputs.length),
           `Self link index ${link.outputIndex} out of bounds`,
         );
-        return { producer: DRAFT_SELF, outputIndex: link.outputIndex + offset };
+        return { producer: DRAFT_SELF, outputIndex: link.outputIndex + outputs.length };
       };
 
       claims.push(...draft.claims.map(remap));

@@ -129,8 +129,8 @@ export type DraftStatus =
 export const DRAFT_SELF: unique symbol = Symbol('Draft.Self');
 
 export interface DraftPayload {
-  claims: { producer: Block | typeof DRAFT_SELF; outputIndex: bigint }[];
-  refs: { producer: Block | typeof DRAFT_SELF; outputIndex: bigint }[];
+  claims: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[];
+  refs: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[];
   outputs: Output[];
 
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts
