@@ -21,10 +21,12 @@ export interface ContractEnv {
 
 export interface Contract {
   run(env: ContractEnv, signal: AbortSignal): MaybePromise<void>;
+
+  debug?(params: Uint8Array, ctx: Context): string;
 }
 
 export class EnvContractProvider implements ContractProvider {
-  constructor(ctx: Context, private contract: Contract) {}
+  constructor(private ctx: Context, private contract: Contract) {}
 
   generate(
     predicate: Predicate,
@@ -78,5 +80,9 @@ export class EnvContractProvider implements ContractProvider {
         }
       },
     }, signal);
+  }
+
+  debugName?(predicate: Predicate): string | undefined {
+    return this.contract.debug?.(predicate.params, this.ctx);
   }
 }

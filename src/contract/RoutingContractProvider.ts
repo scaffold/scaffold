@@ -10,11 +10,11 @@ export class RoutingContractProvider implements ContractProvider {
 
   constructor(
     _ctx: Context,
-    contracts: { name: Hash; provider: ContractProvider }[],
+    contracts: { hash: Hash; provider: ContractProvider }[],
     private base: ContractProvider = new MissingContractProvider(),
   ) {
-    for (const { name, provider } of contracts) {
-      this.map.set(name.toPrimitive(), provider);
+    for (const { hash, provider } of contracts) {
+      this.map.set(hash.toPrimitive(), provider);
     }
   }
 
@@ -32,6 +32,10 @@ export class RoutingContractProvider implements ContractProvider {
     signal: AbortSignal,
   ): MaybePromise<void> {
     return this.getProvider(predicate).verify(predicate, block, signal);
+  }
+
+  debugName?(predicate: Predicate): string | undefined {
+    return this.getProvider(predicate).debugName?.(predicate);
   }
 
   private getProvider(predicate: Predicate): ContractProvider {

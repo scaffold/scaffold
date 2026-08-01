@@ -6,7 +6,6 @@ import { AnchorChainNode, ClaimIndex } from './ClaimIndex.ts';
 import { AggregatorNodeBase } from '../logic/Forest.ts';
 import { Placement, PlacementNode, PlacementRequest, PlacementResult } from './Placement.ts';
 import {
-  AGGREGATION_CONTRACT,
   AtomSource,
   AtomType,
   Block,
@@ -16,6 +15,7 @@ import {
   Output,
   OutputResolverType,
 } from './types.ts';
+import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
 
 export type BuildResult =
   | { ok: true; payload: BlockPayload }

@@ -5,9 +5,6 @@ import { BlockPayload, Output } from './payload.ts';
 export { AtomSource, AtomType, BLOCK_REF_TYPE, DRAFT_TYPE } from '../logic/tags.ts';
 export { type BlockPayload, isBlockPayload, type Output, type Predicate } from './payload.ts';
 
-/** Well-known aggregation contract, takes no params so anyone may claim (wp 7). */
-export const AGGREGATION_CONTRACT = Hash.digest('aggregation-contract');
-
 export interface AtomBase {
   hash: Hash;
   type: AtomType;

@@ -39,6 +39,8 @@ export interface ContractProvider {
     contract: Hash,
     reader: (descriptor: string) => MaybePromise<Reader>,
   ): MaybePromise<Uint8Array>;
+
+  debugName?(predicate: Predicate): string | undefined;
 }
 
 export interface ContractPlugin {

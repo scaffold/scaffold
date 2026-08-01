@@ -17,6 +17,7 @@ import { str2bin } from '../../src/util/buffer.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { makeTestContext } from '../helpers/v2.ts';
+import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
 
 const CONTRACT = Hash.digest('demo');
 const PARAMS = str2bin('world');
@@ -102,11 +103,13 @@ Deno.test('fetch publishes the query as an unclaimed zero-amount output', () => 
 
   assertEquals(h.ingested.length, 1);
   const payload = h.ingested[0].payload;
-  assertEquals(payload.outputs.length, 1);
+  // The query output, then the aggregation output every built block carries.
+  assertEquals(payload.outputs.length, 2);
   assertEquals(Hash.equals(payload.outputs[0].contract, CONTRACT), true);
   assertEquals(bin2hex(payload.outputs[0].params), bin2hex(PARAMS));
   assertEquals(payload.outputs[0].amount, 0n);
   assertEquals(payload.outputs[0].data, undefined);
+  assertEquals(Hash.equals(payload.outputs[1].contract, AGGREGATION_CONTRACT), true);
   assertEquals(payload.claims, []);
   assertEquals(payload.refs, []);
   assertEquals(payload.aggregates, []);

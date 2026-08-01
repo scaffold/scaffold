@@ -6,7 +6,6 @@ import { BlockStore } from '../../src/graph/BlockStore.ts';
 import { AnchorChainNode } from '../../src/graph/ClaimIndex.ts';
 import { PlacementNode, PlacementRequest, PlacementResult } from '../../src/graph/Placement.ts';
 import {
-  AGGREGATION_CONTRACT,
   AtomSource,
   AtomType,
   Block,
@@ -25,6 +24,7 @@ import { error } from '../../src/util/functional.ts';
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { makeTestContext } from '../helpers/v2.ts';
 import { AggregatorNodeBase } from '../../src/logic/Forest.ts';
+import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
 
 const out = (amount: bigint, contract = ZERO_HASH): Output => ({
   contract,

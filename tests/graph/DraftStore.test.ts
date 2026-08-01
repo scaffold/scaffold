@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '@std/assert';
 import { Context } from '../../src/Context.ts';
 import { AtomSerializer } from '../../src/graph/AtomSerializer.ts';
 import { BlockStore } from '../../src/graph/BlockStore.ts';
-import { DraftStore, SIGNATURE_OUTPUT_PAYLOAD } from '../../src/graph/DraftStore.ts';
+import { DraftStore, EXTRA_OUTPUT_PAYLOAD } from '../../src/graph/DraftStore.ts';
 import {
   AtomSource,
   AtomType,
@@ -17,14 +17,17 @@ import {
 } from '../../src/graph/types.ts';
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { makeTestContext } from '../helpers/v2.ts';
-import { SIGNATURE_CONTRACT_HASH } from '../../src/Config.ts';
 import { secp } from '../../src/util/secp.ts';
+import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
+import { SIGNATURE_CONTRACT } from '../../src/contract/static/Signature.ts';
 
-const out = (amount: bigint): Output => ({
-  contract: ZERO_HASH,
+const out = (amount: bigint, contract = ZERO_HASH): Output => ({
+  contract,
   params: new Uint8Array(),
   amount,
 });
+
+const aggregationOut = (amount = 0n) => out(amount, AGGREGATION_CONTRACT);
 
 const blockPayload = (attrs: Partial<BlockPayload> = {}): BlockPayload => ({
   anchor: ZERO_HASH,
@@ -50,9 +53,9 @@ const ingestGenesis = (ctx: Context): Block =>
     raw: ctx.config.genesis,
   });
 
-type ChangePayload = DraftPayload & { type: typeof SIGNATURE_OUTPUT_PAYLOAD };
+type ExtraPayload = DraftPayload & { type: typeof EXTRA_OUTPUT_PAYLOAD };
 
-type BalanceEntry = Draft | ChangePayload;
+type BalanceEntry = Draft | ExtraPayload;
 
 interface DraftStoreInternals {
   balanceFunds(draft: Draft): BalanceEntry[];
@@ -70,8 +73,17 @@ const sumOutputs = (outputs: Output[]) => outputs.reduce((acc, o) => acc + o.amo
 const selectedDrafts = (entries: BalanceEntry[]): Draft[] =>
   entries.filter((e): e is Draft => e.type === DRAFT_TYPE);
 
-const changePayloads = (entries: BalanceEntry[]): ChangePayload[] =>
-  entries.filter((e): e is ChangePayload => e.type === SIGNATURE_OUTPUT_PAYLOAD);
+const extraPayloads = (entries: BalanceEntry[]): ExtraPayload[] =>
+  entries.filter((e): e is ExtraPayload => e.type === EXTRA_OUTPUT_PAYLOAD);
+
+const isAggregation = (payload: ExtraPayload): boolean =>
+  payload.outputs.every((o) => Hash.equals(o.contract, AGGREGATION_CONTRACT));
+
+const changePayloads = (entries: BalanceEntry[]): ExtraPayload[] =>
+  extraPayloads(entries).filter((p) => !isAggregation(p));
+
+const aggregationPayloads = (entries: BalanceEntry[]): ExtraPayload[] =>
+  extraPayloads(entries).filter(isAggregation);
 
 // The whole point of balanceFunds: the payload set it returns merges into a balanced
 // block, so its combined ioDelta is zero.
@@ -103,7 +115,7 @@ const fundingDraft = (store: DraftStore, source: Block, index: number): Draft =>
   store.create({ claims: [{ producer: source, outputIndex: BigInt(index) }] });
 
 const sourceBlock = (ctx: Context, amounts: bigint[]): Block =>
-  ingest(ctx, serialize(ctx, blockPayload({ outputs: amounts.map(out) })));
+  ingest(ctx, serialize(ctx, blockPayload({ outputs: amounts.map((amount) => out(amount)) })));
 
 Deno.test('a new draft starts populating and empty', () => {
   const ctx = makeTestContext();
@@ -193,7 +205,7 @@ Deno.test('a draft builds from populating and reaches built', () => {
 
   const block = builtBlock(draft);
   assertEquals(block.payload.anchor, genesis.hash);
-  assertEquals(block.payload.outputs, [out(1_000_000n)]);
+  assertEquals(block.payload.outputs, [out(1_000_000n), aggregationOut()]);
   assertEquals(block.claims[0].producer, genesis);
   assertEquals(block.claims[0].outputIdx, 0n);
 });
@@ -383,7 +395,7 @@ Deno.test('a retried build re-enters itself through its own ingestion', () => {
   assertEquals(ingested, 2, 'the anchor plus exactly one built block');
 });
 
-Deno.test('balanceFunds returns the draft alone when it is already balanced', () => {
+Deno.test('balanceFunds adds no funding to a draft that is already balanced', () => {
   const ctx = makeTestContext();
   const source = sourceBlock(ctx, [10n]);
   const store = ctx.get(DraftStore);
@@ -395,7 +407,60 @@ Deno.test('balanceFunds returns the draft alone when it is already balanced', ()
 
   const selected = internals(store).balanceFunds(balanced);
 
-  assertEquals(selected, [balanced]);
+  assertEquals(selectedDrafts(selected), [balanced]);
+  assertEquals(changePayloads(selected), []);
+  assertEquals(netDelta(selected), 0n);
+});
+
+// Every block we build carries one, addressed to the aggregation contract with no
+// params so any aggregator can claim it (wp 7).
+Deno.test('balanceFunds appends an aggregation output to every draft', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n]);
+  const store = ctx.get(DraftStore);
+
+  const balanced = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [out(10n)],
+  });
+
+  const selected = internals(store).balanceFunds(balanced);
+
+  assertEquals(aggregationPayloads(selected).map((p) => p.outputs), [[aggregationOut()]]);
+  assertEquals(selected.at(-1), aggregationPayloads(selected)[0]);
+});
+
+Deno.test('the aggregation fee is paid out of the surplus that would have been change', () => {
+  const ctx = makeTestContext({ aggregationFee: 10n });
+  const source = sourceBlock(ctx, [100n]);
+  const store = ctx.get(DraftStore);
+
+  const spending = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [out(90n)],
+  });
+
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(aggregationPayloads(selected).map((p) => p.outputs), [[aggregationOut(10n)]]);
+  assertEquals(changePayloads(selected), []);
+  assertEquals(netDelta(selected), 0n);
+});
+
+// Without the fee the funding draft would overshoot by 10 and leave change.
+Deno.test('the aggregation fee counts towards the deficit candidates have to cover', () => {
+  const ctx = makeTestContext({ aggregationFee: 10n });
+  const source = sourceBlock(ctx, [15n]);
+  const store = ctx.get(DraftStore);
+
+  const funding = fundingDraft(store, source, 0);
+  store.lock(funding);
+
+  const spending = store.create({ outputs: [out(5n)] });
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(selectedDrafts(selected), [spending, funding]);
+  assertEquals(changePayloads(selected), []);
   assertEquals(netDelta(selected), 0n);
 });
 
@@ -415,7 +480,7 @@ Deno.test('balanceFunds pays its own surplus into a signature change output', ()
   assertEquals(changePayloads(selected).map((p) => p.claims), [[]]);
   assertEquals(changePayloads(selected).map((p) => p.refs), [[]]);
   assertEquals(changePayloads(selected).flatMap((p) => p.outputs), [{
-    contract: SIGNATURE_CONTRACT_HASH,
+    contract: SIGNATURE_CONTRACT,
     params: secp.getPublicKey(ctx.config.selfPrivateKey, true),
     amount: 6n,
   }]);
@@ -434,8 +499,9 @@ Deno.test('a surplus draft builds a block carrying its change output', () => {
   store.build(draft);
 
   const block = builtBlock(draft);
-  assertEquals(block.payload.outputs.map((o) => o.amount), [400_000n, 600_000n]);
-  assertEquals(block.payload.outputs[1].contract.toHex(), SIGNATURE_CONTRACT_HASH.toHex());
+  assertEquals(block.payload.outputs.map((o) => o.amount), [400_000n, 600_000n, 0n]);
+  assertEquals(block.payload.outputs[1].contract.toHex(), SIGNATURE_CONTRACT.toHex());
+  assertEquals(block.payload.outputs[2].contract.toHex(), AGGREGATION_CONTRACT.toHex());
   assertEquals(sumOutputs(block.payload.outputs), GENESIS_AMOUNT);
 });
 
@@ -540,7 +606,10 @@ Deno.test('balanceFunds ignores drafts that are not ready or not in surplus', ()
   store.lock(needing);
 
   const spending = store.create({ outputs: [out(10n)] });
-  assertEquals(internals(store).balanceFunds(spending), [spending]);
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(selectedDrafts(selected), [spending]);
+  assertEquals(changePayloads(selected), []);
   assertEquals(populating.status.type, DraftStatusType.Populating);
   assertEquals(cancelled.status.type, DraftStatusType.Cancelled);
   assertEquals(needing.status.type, DraftStatusType.Ready);

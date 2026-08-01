@@ -1,5 +1,6 @@
-import { SIGNATURE_CONTRACT_HASH } from '../Config.ts';
 import { Context } from '../Context.ts';
+import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
+import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
 import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
 import { secp } from '../util/secp.ts';
@@ -19,7 +20,7 @@ import {
 } from './types.ts';
 
 // Only exported for tests
-export const SIGNATURE_OUTPUT_PAYLOAD: unique symbol = Symbol('SIGNATURE_OUTPUT_PAYLOAD');
+export const EXTRA_OUTPUT_PAYLOAD: unique symbol = Symbol('EXTRA_OUTPUT_PAYLOAD');
 
 export class DraftStore {
   // TODO: When should we delete from this set?
@@ -146,9 +147,12 @@ export class DraftStore {
   }
 
   private balanceFunds(draft: Draft) {
-    const result: (Draft | (DraftPayload & { type: typeof SIGNATURE_OUTPUT_PAYLOAD }))[] = [draft];
+    const result: (Draft | (DraftPayload & { type: typeof EXTRA_OUTPUT_PAYLOAD }))[] = [draft];
 
-    let amount = draft.ioDelta;
+    // The aggregation output is funded like any other output, so the fee is part of
+    // the deficit the candidates below have to cover.
+    const fee = this.ctx.config.aggregationFee;
+    let amount = draft.ioDelta + fee;
 
     if (amount > 0n) {
       const candidates = [...this.drafts]
@@ -176,16 +180,29 @@ export class DraftStore {
 
     if (amount < 0n) {
       result.push({
-        type: SIGNATURE_OUTPUT_PAYLOAD,
+        type: EXTRA_OUTPUT_PAYLOAD,
         claims: [],
         refs: [],
         outputs: [{
-          contract: SIGNATURE_CONTRACT_HASH,
+          contract: SIGNATURE_CONTRACT,
           params: secp.getPublicKey(this.ctx.config.selfPrivateKey, true),
           amount: -amount,
         }],
       });
     }
+
+    // Every block we build carries exactly one aggregation output, last, so any
+    // aggregator can claim it (wp 7). Params are empty: the contract takes none.
+    result.push({
+      type: EXTRA_OUTPUT_PAYLOAD,
+      claims: [],
+      refs: [],
+      outputs: [{
+        contract: AGGREGATION_CONTRACT,
+        params: new Uint8Array(),
+        amount: fee,
+      }],
+    });
 
     return result;
   }

@@ -9,4 +9,8 @@ export const demoContract: Contract = {
     const response = new TextEncoder().encode(`Hello, ${name}`);
     env.setResult(response);
   },
+
+  debug(params) {
+    return `demo(${new TextDecoder().decode(params)})`;
+  },
 };

@@ -6,8 +6,6 @@ import { Hash } from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import { secp } from './util/secp.ts';
 
-export const SIGNATURE_CONTRACT_HASH = Hash.digest('signature');
-
 export type Timeout = ReturnType<typeof globalThis.setTimeout>;
 export interface TimeProvider {
   nowMs(): number;
@@ -29,6 +27,9 @@ export interface Config {
   debugName: string;
 
   selfPrivateKey: Uint8Array;
+
+  // Fee carried by the aggregation output every block we build attaches (wp 7)
+  aggregationFee: bigint;
 
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
@@ -57,6 +58,7 @@ export const makeDefaultConfig = () => {
     genesis,
     debugName: '',
     selfPrivateKey: privateKeys[0],
+    aggregationFee: 0n,
     timeProvider: {
       nowMs: () => Date.now(),
       setImmediate: (cb) => setTimeout(cb, 0),

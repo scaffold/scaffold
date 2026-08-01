@@ -60,6 +60,7 @@
     "run-server": "deno run $DENO_FLAGS --check --allow-all scripts/server.ts",
     "run-signaling-server": "deno run $DENO_FLAGS --check --allow-all scripts/signalingServer.ts",
     "test": "deno task build:wasi-shim && deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/",
+    "test:v2": "deno test $DENO_FLAGS --allow-all --seed=123 --trace-leaks tests/util/ tests/logic/ tests/graph/ tests/peer/",
     "test-avro": "mocha --ui tdd --reporter dot",
     "coverage": "deno test --coverage --allow-all --seed=123 ; deno coverage --lcov --output=lcov.info",
     "generate-genesis": "deno run --allow-all scripts/generate_genesis.ts",

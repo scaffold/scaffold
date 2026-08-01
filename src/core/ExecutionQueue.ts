@@ -111,7 +111,7 @@ export class ExecutionQueue implements Disposable {
 
     // const sortedJobs = [...this.jobs.entries()].sort((a, b) => b[0].priority() - a[0].priority());
 
-    // TODO(claude): Implement this
+    // TODO: Implement this
     for (const [job, handle] of this.jobs.entries()) {
       if (handle.state === JobState.Pending) {
         this.launch(job, handle);
@@ -130,7 +130,7 @@ export class ExecutionQueue implements Disposable {
         ? AbortSignal.any([handle.cancel.signal, handle.userSignal])
         : handle.cancel.signal,
       yield: () => {
-        // TODO(claude): Implement this
+        // TODO: Implement this
         // Either return immediately if this is still a high-priority job (in the top 4), or return a promise if another job should start and this one yield (if it's in the top 16=4+12), or throw a `CancelError` if the job should be cancelled.
       },
     };

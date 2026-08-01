@@ -19,6 +19,7 @@ export interface TestConfigOptions {
   funding?: Record<string, bigint>;
   seed?: string;
   selfPrivateKey?: Uint8Array;
+  aggregationFee?: bigint;
 }
 
 export function makeTestConfig(options: TestConfigOptions = {}): Config {
@@ -33,6 +34,7 @@ export function makeTestConfig(options: TestConfigOptions = {}): Config {
     genesis: generateGenesis(options.seed ?? 'test', outputToPublicKeys),
     debugName: 'test',
     selfPrivateKey: options.selfPrivateKey ?? testPrivateKey('alice'),
+    aggregationFee: options.aggregationFee ?? 0n,
     timeProvider: {
       nowMs: () => 0,
       setImmediate: (cb) => setTimeout(cb, 0),
