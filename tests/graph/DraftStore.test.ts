@@ -464,6 +464,83 @@ Deno.test('the aggregation fee counts towards the deficit candidates have to cov
   assertEquals(netDelta(selected), 0n);
 });
 
+// An aggregation block sets its own fee, so the config one does not apply to it.
+Deno.test('a draft that brings its own aggregation output does not get a second', () => {
+  const ctx = makeTestContext({ aggregationFee: 10n });
+  const source = sourceBlock(ctx, [10n]);
+  const store = ctx.get(DraftStore);
+
+  const aggregating = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [out(6n), aggregationOut(4n)],
+  });
+
+  const selected = internals(store).balanceFunds(aggregating);
+
+  assertEquals(selectedDrafts(selected), [aggregating]);
+  assertEquals(extraPayloads(selected), []);
+  assertEquals(netDelta(selected), 0n);
+});
+
+// What an aggregation block looks like from here: it claims the markers of the trees
+// it merges and emits its own, so it arrives as a surplus draft (wp 7).
+Deno.test('a ready aggregation draft rides along instead of a minted output', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n]);
+  const store = ctx.get(DraftStore);
+
+  const aggregating = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [aggregationOut(4n)],
+  });
+  store.lock(aggregating);
+
+  const spending = store.create({ outputs: [out(6n)] });
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(selectedDrafts(selected), [spending, aggregating]);
+  assertEquals(extraPayloads(selected), []);
+  assertEquals(netDelta(selected), 0n);
+});
+
+// Two markers would make the block aggregatable into two trees at once, breaking the
+// one-aggregation-per-block invariant the forest rests on (wp 4.3).
+Deno.test('a second aggregation draft is not pulled in to cover a deficit', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n, 10n]);
+  const store = ctx.get(DraftStore);
+
+  const first = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [aggregationOut()],
+  });
+  const second = store.create({
+    claims: [{ producer: source, outputIndex: 1n }],
+    outputs: [aggregationOut()],
+  });
+  store.lock(first);
+  store.lock(second);
+
+  const spending = store.create({ outputs: [out(20n)] });
+  const selected = internals(store).balanceFunds(spending);
+
+  assertEquals(selectedDrafts(selected), [spending, first]);
+  assertEquals(netDelta(selected), 10n, 'underfunded rather than carrying a second marker');
+});
+
+Deno.test('a draft carrying two aggregation outputs is rejected', () => {
+  const ctx = makeTestContext();
+  const source = sourceBlock(ctx, [10n]);
+  const store = ctx.get(DraftStore);
+
+  const doubled = store.create({
+    claims: [{ producer: source, outputIndex: 0n }],
+    outputs: [aggregationOut(4n), aggregationOut(6n)],
+  });
+
+  assertThrows(() => internals(store).balanceFunds(doubled));
+});
+
 Deno.test('balanceFunds pays its own surplus into a signature change output', () => {
   const ctx = makeTestContext();
   const source = sourceBlock(ctx, [10n]);

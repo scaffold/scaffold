@@ -3,6 +3,7 @@ import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
 import { arrCall } from '../util/array.ts';
 import { assert } from '../util/functional.ts';
+import { Hash } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 import { AtomSerializer } from './AtomSerializer.ts';
 import { BlockBuilder } from './BlockBuilder.ts';
@@ -21,6 +22,11 @@ import {
 
 // Only exported for tests
 export const EXTRA_OUTPUT_PAYLOAD: unique symbol = Symbol('EXTRA_OUTPUT_PAYLOAD');
+
+type ExtraPayload = DraftPayload & { type: typeof EXTRA_OUTPUT_PAYLOAD };
+
+// A block is merged from drafts plus whatever payloads the merge has to mint itself.
+type MergeEntry = Draft | ExtraPayload;
 
 export class DraftStore {
   // TODO: When should we delete from this set?
@@ -146,20 +152,23 @@ export class DraftStore {
     }
   }
 
+  // Structure first, funds second. Satisfying wp 7 can only add value to the block
+  // -- an aggregation draft earns fees, a minted output costs one -- so the deficit
+  // is known before any funding candidate is chosen, and the two phases don't circle.
   private balanceFunds(draft: Draft) {
-    const result: (Draft | (DraftPayload & { type: typeof EXTRA_OUTPUT_PAYLOAD }))[] = [draft];
+    const result: MergeEntry[] = [draft];
 
-    // The aggregation output is funded like any other output, so the fee is part of
-    // the deficit the candidates below have to cover.
-    const fee = this.ctx.config.aggregationFee;
-    let amount = draft.ioDelta + fee;
+    const aggregation = this.providesAggregation(draft) ? undefined : this.takeAggregation();
+    let amount = draft.ioDelta + (aggregation === undefined ? 0n : this.entryDelta(aggregation));
 
     if (amount > 0n) {
       const candidates = [...this.drafts]
         .filter((x) =>
           x !== draft &&
           x.status.type === DraftStatusType.Ready &&
-          x.ioDelta < 0n
+          x.ioDelta < 0n &&
+          // A second one would make the block aggregatable twice (wp 4.3, 7)
+          !this.providesAggregation(x)
         )
         // Sort from high to low (low magnitude negative to high magnitude negative)
         .sort((a, b) => Number(b.ioDelta - a.ioDelta));
@@ -191,20 +200,49 @@ export class DraftStore {
       });
     }
 
-    // Every block we build carries exactly one aggregation output, last, so any
-    // aggregator can claim it (wp 7). Params are empty: the contract takes none.
-    result.push({
+    if (aggregation !== undefined) {
+      result.push(aggregation);
+    }
+
+    const markers = result.flatMap((x) => x.outputs)
+      .filter((x) => Hash.equals(x.contract, AGGREGATION_CONTRACT));
+    assert(
+      markers.length === 1,
+      `A block carries exactly one aggregation output, merged ${markers.length}`,
+    );
+
+    return result;
+  }
+
+  private providesAggregation(payload: DraftPayload): boolean {
+    return payload.outputs.some((x) => Hash.equals(x.contract, AGGREGATION_CONTRACT));
+  }
+
+  // wp 7: every block but the genesis carries one. An aggregation block brings its
+  // own, a ready one rides along on whatever we publish next, otherwise we mint one.
+  private takeAggregation(): MergeEntry {
+    for (const candidate of this.drafts) {
+      if (candidate.status.type !== DraftStatusType.Ready) continue;
+      if (this.providesAggregation(candidate)) return candidate;
+    }
+
+    return {
       type: EXTRA_OUTPUT_PAYLOAD,
       claims: [],
       refs: [],
+      // No params: the contract takes none, so any aggregator can claim it (wp 7)
       outputs: [{
         contract: AGGREGATION_CONTRACT,
         params: new Uint8Array(),
-        amount: fee,
+        amount: this.ctx.config.aggregationFee,
       }],
-    });
+    };
+  }
 
-    return result;
+  private entryDelta(entry: MergeEntry): bigint {
+    return entry.type === DRAFT_TYPE
+      ? entry.ioDelta
+      : this.computeIoDelta(entry.claims, entry.outputs);
   }
 
   private mergeDrafts(drafts: DraftPayload[]): DraftPayload {
