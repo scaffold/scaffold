@@ -1,5 +1,5 @@
 import { Context } from '../Context.ts';
-import { Block, DraftPayload, Predicate } from '../graph/types.ts';
+import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
 import { Hash } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
 import { Reader } from './Reader.ts';
@@ -8,7 +8,7 @@ import { WalkerHost } from './values.ts';
 export interface ContractProvider {
   generate(
     predicate: Predicate,
-    update: (draftPayload: DraftPayload) => void,
+    draft: Draft,
     signal: AbortSignal,
   ): MaybePromise<void>;
 

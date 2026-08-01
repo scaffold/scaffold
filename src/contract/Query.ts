@@ -1,23 +1,21 @@
 import { Hash } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { Reader } from './Reader.ts';
+import { createReader, Reader } from './Reader.ts';
 
 /** Lazily-built structured params, walked by the contract's `build_params` entry. */
-export type ParamsBuilder = (descriptor: string) => MaybePromise<Reader>;
+export type Builder = (descriptor: string) => MaybePromise<Reader>;
 
 export interface Query {
   contract: Hash;
-  params: Uint8Array | ParamsBuilder;
+  params: Uint8Array | Builder;
 }
 
-/** A query plus the data to publish under it. */
 export interface Statement extends Query {
-  data: Uint8Array | ParamsBuilder;
+  data: Uint8Array | Builder;
 }
 
-/*
-class BinaryContractInputExample implements Query {
-  contract = Hash.fromHex('');
+export class BinaryContractInputExample implements Query {
+  contract = Hash.digest('binary contract');
   params: Uint8Array;
 
   constructor(params: { x: number; y: number }) {
@@ -28,12 +26,20 @@ class BinaryContractInputExample implements Query {
   }
 }
 
-class ReaderContractInputExample implements Query {
-  contract = Hash.fromHex('');
+export class ReaderContractInputExample implements Query {
+  contract = Hash.digest('reader contract');
   params: (_descriptor: string) => Reader;
 
   constructor(params: { x: number; y: number }) {
     this.params = () => createReader(params);
   }
 }
+
+/*
+ctx.get(Fetch).fetch({
+  ...new BinaryContractInputExample({ x: 1, y: 2 }),
+  onResult: (result) => {
+    console.log(result, bin2str(result!.body));
+  },
+});
 */

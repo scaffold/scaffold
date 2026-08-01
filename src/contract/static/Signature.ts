@@ -1,7 +1,7 @@
 import { Hash } from '../../util/Hash.ts';
 import { bin2hex } from '../../util/hex.ts';
 import { secp } from '../../util/secp.ts';
-import { Contract } from '../EnvContractProvider.ts';
+import { Contract } from '../env/Contract.ts';
 
 export const SIGNATURE_CONTRACT = Hash.digest('signature');
 
@@ -14,7 +14,8 @@ const publicKeysToName = new Map(['alice', 'bob', 'charlie'].map(
 ));
 
 export const signatureContract: Contract = {
-  run(env) {
+  async run(env) {
+    await env.claim();
   },
 
   debug(params) {

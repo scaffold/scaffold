@@ -148,6 +148,9 @@ export class DraftStore {
       }
     }
 
+    console.log(`Built block ${block.hash.toHex()}:`, result.payload);
+    debugger;
+
     // Trigger downstream listeners, first for the new block then for the draft
     this.ctx.get(BlockStore).doSkippedIngestion(block);
     for (const selDraft of selectedDrafts) {

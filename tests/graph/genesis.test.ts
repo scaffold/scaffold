@@ -12,6 +12,7 @@ import { generateGenesis } from '../../src/graph/genesis.ts';
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { makeTestContext, testPrivateKey, testPublicKey } from '../helpers/v2.ts';
+import { SIGNATURE_CONTRACT } from '../../src/contract/static/Signature.ts';
 
 /** Funding map keyed by public key, with insertion order fixed by the tuple list. */
 const funding = (entries: [string, bigint][]): Record<string, bigint> =>
@@ -106,7 +107,7 @@ Deno.test('genesis outputs land in insertion order with the right amounts', () =
     bin2hex(testPublicKey('charlie')),
   ]);
   for (const output of outputs) {
-    assertEquals(Hash.equals(output.contract, ZERO_HASH), true);
+    assertEquals(Hash.equals(output.contract, SIGNATURE_CONTRACT), true);
     assertEquals(output.data, undefined);
   }
 });

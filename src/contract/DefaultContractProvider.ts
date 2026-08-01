@@ -1,6 +1,6 @@
 import { Context } from '../Context.ts';
 import { ContractProvider } from './Contract.ts';
-import { EnvContractProvider } from './EnvContractProvider.ts';
+import { EnvContractProvider } from './env/EnvContractProvider.ts';
 import { RoutingContractProvider } from './RoutingContractProvider.ts';
 
 import { AGGREGATION_CONTRACT, aggregationContract } from './static/Aggregation.ts';

@@ -3,7 +3,7 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
 import { ContractProvider } from './Contract.ts';
 import { MissingContractProvider } from './MissingContractProvider.ts';
-import { Block, DraftPayload, Predicate } from '../graph/types.ts';
+import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
 
 export class RoutingContractProvider implements ContractProvider {
   private map = new Map<HashPrimitive, ContractProvider>();
@@ -20,10 +20,10 @@ export class RoutingContractProvider implements ContractProvider {
 
   generate(
     predicate: Predicate,
-    update: (draftPayload: DraftPayload) => void,
+    draft: Draft,
     signal: AbortSignal,
   ): MaybePromise<void> {
-    return this.getProvider(predicate).generate(predicate, update, signal);
+    return this.getProvider(predicate).generate(predicate, draft, signal);
   }
 
   verify(

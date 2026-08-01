@@ -38,7 +38,7 @@ export interface Config {
 
 const rngSeed = 123n;
 
-export const makeDefaultConfig = () => {
+export function makeDefaultConfig(): Config {
   const privateKeys = ['alice', 'bob', 'charlie'].map((name) =>
     Hash.digest(`scaffold:testnet:${name}`).toBytes()
   );
@@ -54,7 +54,7 @@ export const makeDefaultConfig = () => {
   }
   console.warn(`Genesis block hash: ${Hash.digest(genesis).toHex()}`);
 
-  const config = {
+  return {
     genesis,
     debugName: '',
     selfPrivateKey: privateKeys[0],
@@ -71,7 +71,5 @@ export const makeDefaultConfig = () => {
       cryptoRandomBytes: secp.etc.randomBytes,
     },
     contractProvider: DefaultContractProvider,
-  } satisfies Config;
-
-  return config;
-};
+  };
+}

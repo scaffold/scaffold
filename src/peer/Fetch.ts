@@ -6,8 +6,7 @@ import { arrEquals } from '../util/buffer.ts';
 import { BlockStore } from '../graph/BlockStore.ts';
 import { Block, DraftStatusType } from '../graph/types.ts';
 
-export interface FetchInput {
-  query: Query;
+export interface FetchInput extends Query {
   signal?: AbortSignal;
   onResult: (result: FetchResult | null) => void;
 }
@@ -21,13 +20,12 @@ export class Fetch {
   constructor(private ctx: Context) {}
 
   /** Public API: subscribe to a verifier with per-caller projection. */
-  fetch(input: FetchInput) {
-    if (input.signal?.aborted) return;
+  fetch({ contract, params, signal, onResult }: FetchInput) {
+    if (signal?.aborted) return;
 
-    if (!(input.query.params instanceof Uint8Array)) {
+    if (!(params instanceof Uint8Array)) {
       throw new Error(`Reader-based params are not supported yet`);
     }
-    const { contract, params } = input.query;
 
     const testBlock = (block: Block): boolean => {
       for (const claim of block.payload.claims) {
@@ -38,7 +36,7 @@ export class Fetch {
             Hash.equals(output.contract, contract) &&
             arrEquals(output.params, params)
           ) {
-            input.onResult({ body: output.data, parse: () => Promise.resolve(output.data) });
+            onResult({ body: output.data, parse: () => Promise.resolve(output.data) });
             return true;
           }
         }
@@ -55,7 +53,7 @@ export class Fetch {
     });
     this.ctx.get(DraftStore).build(draft);
 
-    input.signal?.addEventListener('abort', () => this.ctx.get(DraftStore).cancel(draft));
+    signal?.addEventListener('abort', () => this.ctx.get(DraftStore).cancel(draft));
 
     // this.ctx.get(DraftStore).onBuilt(draft, (block) => {
     //   if (block === undefined) return;
@@ -73,6 +71,6 @@ export class Fetch {
     //   });
     // }, input.signal);
 
-    this.ctx.get(BlockStore).onIngest(testBlock, input.signal);
+    this.ctx.get(BlockStore).onIngest(testBlock, signal);
   }
 }

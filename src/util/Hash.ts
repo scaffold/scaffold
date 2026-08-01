@@ -41,32 +41,32 @@ export const HASH_HEX_SIZE = HASH_SIZE * 2;
 export const HASH_BITS = HASH_SIZE * 8;
 export const HASH_REGEX = /^[a-fA-F0-9]{64}$/;
 
-const nonPrintableRegex = /[^\u0020-\u007E]/g;
-
 export class Hash implements DevtoolsFormattable {
-  // TODO: Remove; only for debugging
-  private name: string;
-
   private hex: string;
 
   private constructor(private digest: Uint8Array) {
     if (digest.byteLength !== HASH_SIZE) {
       throw new Error(`Invalid digest length`);
     }
-    this.hex = bin2hex(this.digest);
-
-    this.name = bin2str(this.digest).slice(-16).replace(nonPrintableRegex, '');
+    this.hex = bin2hex(digest);
   }
 
-  public static fromBytes(bytes: Uint8Array) {
+  [Symbol.for('Deno.customInspect')](
+    inspect: typeof Deno.inspect,
+    options: Deno.InspectOptions,
+  ): string {
+    return `Hash(${inspect(this.toHex(), options)})`;
+  }
+
+  static fromBytes(bytes: Uint8Array) {
     return new Hash(bytes);
   }
 
-  public static fromHex(hex: string) {
+  static fromHex(hex: string) {
     return new Hash(hex2bin(hex));
   }
 
-  public static fromBigint(num: bigint) {
+  static fromBigint(num: bigint) {
     if ((num >> 256n) !== 0n) {
       throw new Error(`Cannot convert bigint to Hash - out of range!`);
     }
@@ -79,12 +79,12 @@ export class Hash implements DevtoolsFormattable {
     return new Hash(arr);
   }
 
-  public static fromPrimitive(primitive: HashPrimitive) {
+  static fromPrimitive(primitive: HashPrimitive) {
     return Hash.fromHex(primitive);
     // return Hash.fromBigint(primitive);
   }
 
-  public static fromFraction(num: number, den: number) {
+  static fromFraction(num: number, den: number) {
     // TODO: Make this more accurate
     if (num < den) {
       return Hash.fromHex((num / den).toString(16).slice(2, 66).padEnd(64, '0'));
@@ -93,7 +93,7 @@ export class Hash implements DevtoolsFormattable {
     }
   }
 
-  public static fromLiteral32(num: number) {
+  static fromLiteral32(num: number) {
     const b0 = (num >>> 0) & 0xff;
     const b1 = (num >>> 8) & 0xff;
     const b2 = (num >>> 16) & 0xff;
@@ -104,14 +104,14 @@ export class Hash implements DevtoolsFormattable {
     );
   }
 
-  public static fromLiteralStr(str: string) {
+  static fromLiteralStr(str: string) {
     if (str.length > HASH_SIZE) {
       throw new Error(`String ${str} is more than ${HASH_SIZE} characters`);
     }
     return new Hash(new TextEncoder().encode(str.padStart(HASH_SIZE, '\0')));
   }
 
-  public static digest(data: Uint8Array | string) {
+  static digest(data: Uint8Array | string) {
     if (typeof data === 'string') {
       // TODO: Is it faster moving `new TextEncoder()` outside the class and reusing the instance?
       data = str2bin(data);
@@ -121,7 +121,7 @@ export class Hash implements DevtoolsFormattable {
 
   // TODO: Eliminate this monstrosity
   // It's slightly insecure because we don't lenght-prefix the parts
-  public static digestParts(...parts: (Hash | Uint8Array | string | number)[]) {
+  static digestParts(...parts: (Hash | Uint8Array | string | number)[]) {
     return Hash.digest(
       arrConcat(
         ...parts.map((p) =>
@@ -135,34 +135,34 @@ export class Hash implements DevtoolsFormattable {
     );
   }
 
-  public static random() {
+  static random() {
     const data = new Uint8Array(HASH_SIZE);
     crypto.getRandomValues(data);
     return new Hash(data);
   }
 
-  public toBytes() {
+  toBytes() {
     return this.digest;
   }
 
-  public toHex() {
+  toHex() {
     return this.hex;
     // return bin2hex(this.digest);
   }
 
-  public toBigint() {
+  toBigint() {
     const view = new DataView(this.digest.buffer, this.digest.byteOffset);
     return (view.getBigUint64(0) << 192n) | (view.getBigUint64(8) << 128n) |
       (view.getBigUint64(16) << 64n) | view.getBigUint64(24);
   }
 
   // TODO: Use global Map + FinalizationRegistry to make the Hash object a unique primitive
-  public toPrimitive() {
+  toPrimitive() {
     return this.toHex();
     // return this.toBigint();
   }
 
-  public static composePrimitives(
+  static composePrimitives(
     a: HashPrimitive & (string | bigint),
     b: HashPrimitive & (string | bigint),
   ) {
@@ -170,7 +170,7 @@ export class Hash implements DevtoolsFormattable {
     // return (a << 1n) ^ b;
   }
 
-  public countLeadingZeros() {
+  countLeadingZeros() {
     let count = 0;
     for (const b of this.digest) {
       for (let i = 8; i-- > 0;) {
@@ -183,7 +183,7 @@ export class Hash implements DevtoolsFormattable {
     return count;
   }
 
-  public population() {
+  population() {
     let pop = 0;
     for (const b of this.digest) {
       for (let i = 0; i < 8; i++) {
@@ -193,7 +193,7 @@ export class Hash implements DevtoolsFormattable {
     return pop;
   }
 
-  public weightedPopulation(weightStart: number, weightEnd: number) {
+  weightedPopulation(weightStart: number, weightEnd: number) {
     const inc = (weightEnd - weightStart) / 256;
     let pop = 0;
     for (const b of this.digest) {
@@ -205,7 +205,7 @@ export class Hash implements DevtoolsFormattable {
     return pop;
   }
 
-  public increment() {
+  increment() {
     const b = new Uint8Array(this.digest);
     for (let i = HASH_SIZE; i-- > 0;) {
       b[i]++;
@@ -216,11 +216,11 @@ export class Hash implements DevtoolsFormattable {
     return Hash.fromBytes(b);
   }
 
-  public bit(index: number) {
+  bit(index: number) {
     return (this.digest[index >>> 3] >>> (index & 7)) & 1;
   }
 
-  public static xor(h0: Hash, h1: Hash) {
+  static xor(h0: Hash, h1: Hash) {
     const res = new Uint8Array(HASH_SIZE);
     for (let i = 0; i < HASH_SIZE; i++) {
       res[i] = h0.digest[i] ^ h1.digest[i];
@@ -228,7 +228,7 @@ export class Hash implements DevtoolsFormattable {
     return Hash.fromBytes(res);
   }
 
-  public static add(h0: Hash, h1: Hash) {
+  static add(h0: Hash, h1: Hash) {
     const res = new Uint8Array(HASH_SIZE);
     let c = 0;
     for (let i = HASH_SIZE; i-- > 0;) {
@@ -239,12 +239,12 @@ export class Hash implements DevtoolsFormattable {
     return Hash.fromBytes(res);
   }
 
-  public static combine(...hashes: Hash[]) {
+  static combine(...hashes: Hash[]) {
     // TODO: Maybe there's a faster way to do this? Addition?
     return Hash.digest(arrConcat(...hashes.map((h) => h.toBytes())));
   }
 
-  public static equals(h0: Hash, h1: Hash) {
+  static equals(h0: Hash, h1: Hash) {
     if (h0 === h1) {
       return true;
     }
@@ -256,7 +256,7 @@ export class Hash implements DevtoolsFormattable {
     return true;
   }
 
-  public static compare(h0: Hash, h1: Hash) {
+  static compare(h0: Hash, h1: Hash) {
     for (let i = 0; i < HASH_SIZE; i++) {
       if (h0.digest[i] < h1.digest[i]) {
         return -1;

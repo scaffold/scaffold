@@ -33,7 +33,9 @@ interface Execution {
 export class GeneratorRole {
   private pending = new Map<PredicateKey, Execution>();
 
-  constructor(private ctx: Context) {
+  constructor(private ctx: Context) {}
+
+  run() {
     this.ctx.get(BlockStore).onIngest((block) => this.onIngest(block));
   }
 
@@ -53,20 +55,26 @@ export class GeneratorRole {
     exec.availableClaims.push({ block, outputIdx });
 
     if (exec.runningJob === undefined) {
-      const job = new GenerationJob(this.ctx, exec);
-      exec.runningJob = job;
-
-      (async () => {
-        await this.ctx.get(ExecutionQueue).run(job);
-        this.ctx.get(ExecutionQueue).remove(job);
-        exec.runningJob = undefined;
-
-        if (exec.availableClaims.length === 0) {
-          const deleted = this.pending.delete(key);
-          assert(deleted);
-        }
-      })();
+      this.startJob(key, exec);
     }
+  }
+
+  private startJob(key: PredicateKey, exec: Execution) {
+    const job = new GenerationJob(this.ctx, exec);
+    exec.runningJob = job;
+
+    (async () => {
+      await this.ctx.get(ExecutionQueue).run(job);
+      this.ctx.get(ExecutionQueue).remove(job);
+      exec.runningJob = undefined;
+
+      if (exec.availableClaims.length === 0) {
+        const deleted = this.pending.delete(key);
+        assert(deleted);
+      } else {
+        this.startJob(key, exec);
+      }
+    })();
   }
 }
 
@@ -88,11 +96,8 @@ class GenerationJob implements Job {
   async run(ctl: FlowCtl): Promise<void> {
     const draft = this.ctx.get(DraftStore).create();
     try {
-      await this.ctx.get(this.ctx.config.contractProvider).generate(
-        this.execution.predicate,
-        (update) => this.ctx.get(DraftStore).update(draft, update),
-        ctl.signal,
-      );
+      await this.ctx.get(this.ctx.config.contractProvider)
+        .generate(this.execution.predicate, draft, ctl.signal);
 
       if (Hash.equals(this.execution.predicate.contract, SIGNATURE_CONTRACT)) {
         // The signature contract stores as a store of value; there's no need to immediately publish the claiming block.

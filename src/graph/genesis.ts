@@ -7,6 +7,7 @@ import { Ingestor, serializeBlock, UnknownIngestor } from './Ingestor.ts';
 import { EntropyProvider } from '../Config.ts';
 import { SeededEntropyProvider } from '../../plugins/SeededEntropyProvider.ts';
 import { bigint2binBe } from '../util/bigint.ts';
+import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
 
 export class GenesisBlockIngestor implements Ingestor<never> {
   readonly isSigned = true;
@@ -65,7 +66,7 @@ export function generateGenesis(
     const publicKey = hex2bin(publicKeyHex);
     assert(publicKey.byteLength === 33, 'public key must be 33 bytes');
     assert(amount >= 0n, 'amount must be non-negative');
-    block.outputs.push({ contract: ZERO_HASH, params: publicKey, amount });
+    block.outputs.push({ contract: SIGNATURE_CONTRACT, params: publicKey, amount });
 
     randomness.push(publicKey, bigint2binBe(amount));
   }

@@ -97,7 +97,8 @@ const answerOutput = (data: Uint8Array, params = PARAMS): Output => ({
 Deno.test('fetch publishes the query as an unclaimed zero-amount output', () => {
   const h = harness();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: () => {},
   });
 
@@ -119,7 +120,8 @@ Deno.test('fetch publishes the query as an unclaimed zero-amount output', () => 
 Deno.test('fetch delivers an answer ingested after the call', () => {
   const h = harness();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: h.collect(),
   });
 
@@ -132,7 +134,8 @@ Deno.test('fetch delivers an answer ingested after the call', () => {
 Deno.test("fetch ignores another peer's query block for the same predicate", () => {
   const h = harness();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: h.collect(),
   });
 
@@ -144,7 +147,8 @@ Deno.test("fetch ignores another peer's query block for the same predicate", () 
 Deno.test('fetch ignores an unclaimed answer output', () => {
   const h = harness();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: h.collect(),
   });
 
@@ -158,7 +162,8 @@ Deno.test('fetch ignores an unclaimed answer output', () => {
 Deno.test('fetch ignores answers under a different predicate', () => {
   const h = harness();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: h.collect(),
   });
 
@@ -173,7 +178,8 @@ Deno.test('fetch ignores answers under a different predicate', () => {
 Deno.test('fetch delivers the answer at the claimed output index', () => {
   const h = harness();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: h.collect(),
   });
 
@@ -187,7 +193,8 @@ Deno.test('fetch stops delivering once the signal aborts', () => {
   const h = harness();
   const controller = new AbortController();
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     signal: controller.signal,
     onResult: h.collect(),
   });
@@ -204,7 +211,8 @@ Deno.test('fetch rejects Reader-based params', () => {
   assertThrows(
     () =>
       h.ctx.get(Fetch).fetch({
-        query: { contract: CONTRACT, params: () => str2bin('x') as never },
+        contract: CONTRACT,
+        params: () => str2bin('x') as never,
         onResult: () => {},
       }),
     Error,
@@ -216,7 +224,8 @@ Deno.test('FetchResult.parse resolves the unparsed body', async () => {
   const h = harness();
   const parsed: unknown[] = [];
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: (result) => parsed.push(result === null ? null : result.parse()),
   });
 
@@ -237,7 +246,8 @@ Deno.test('BUG: fetch delivers an answer already in the store', () => {
   h.publish([answerOutput(ANSWER)], [0n]);
 
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     onResult: h.collect(),
   });
 
@@ -256,7 +266,8 @@ Deno.test('BUG: fetch on an already-aborted signal publishes nothing', () => {
   controller.abort();
 
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     signal: controller.signal,
     onResult: h.collect(),
   });
@@ -276,7 +287,8 @@ Deno.test('BUG: aborting the fetch signal cancels the draft it created', () => {
   const controller = new AbortController();
 
   h.ctx.get(Fetch).fetch({
-    query: { contract: CONTRACT, params: PARAMS },
+    contract: CONTRACT,
+    params: PARAMS,
     signal: controller.signal,
     onResult: () => {},
   });
