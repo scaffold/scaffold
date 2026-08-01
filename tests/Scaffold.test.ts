@@ -9,7 +9,7 @@ import {
 import { Output } from '../src/core/BlockCreationModule.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { NodeContext } from '../src/node/NodeContext.ts';
-import { WELL_KNOWN_PRIVATE_KEY } from '../src/genesis.ts';
+import { WELL_KNOWN_PRIVATE_KEY } from '../src/graph/genesis.ts';
 import { makeAggregationOutput } from '../src/contracts/AggregationContract.ts';
 
 // -- Helpers --------------------------------------------------------

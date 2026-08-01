@@ -18,7 +18,7 @@
 
 import { assert } from '@std/assert';
 import { Scaffold } from '../../src/Scaffold.ts';
-import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../../src/genesis.ts';
+import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../../src/graph/genesis.ts';
 import { makeHelloRequest } from '../../src/contracts/HelloContract.ts';
 import { makeSignatureOutput } from '../../src/contracts/SignatureContract.ts';
 import { makeAggregationOutput } from '../../src/contracts/AggregationContract.ts';

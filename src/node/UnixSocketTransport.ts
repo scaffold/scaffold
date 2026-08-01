@@ -37,7 +37,7 @@ import {
   TransportService,
   TransportSession,
 } from '../interfaces/transport.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 export interface UnixSocketTransportOptions {
   socketPath?: string;

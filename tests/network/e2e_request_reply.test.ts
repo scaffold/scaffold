@@ -24,7 +24,7 @@
 
 import { assertEquals } from '@std/assert';
 import { Scaffold } from '../../src/Scaffold.ts';
-import { computeDemoGenesis, demoPrivateKey } from '../../src/genesis.ts';
+import { computeDemoGenesis, demoPrivateKey } from '../../src/graph/genesis.ts';
 import {
   HELLO_CONTRACT,
   helloContract,

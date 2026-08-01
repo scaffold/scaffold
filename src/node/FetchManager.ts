@@ -12,7 +12,7 @@ import type { TrustGate, TrustStatus } from './TrustGate.ts';
 import { type FieldNode, RecordingWalkerHost } from '../core/RecordingWalkerHost.ts';
 import { bin2str } from '../util/buffer.ts';
 import { findRecordOutput } from '../contracts/RecordContract.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 import type { SendHandle, SendRequest } from './SendManager.ts';
 import {
   FetchAbortError,
@@ -21,7 +21,7 @@ import {
   SupersededError,
   VerificationRejectedError,
 } from './FetchErrors.ts';
-import { Query } from '../interfaces/Query.ts';
+import { Query } from '../contract/Query.ts';
 
 // -- Public types ----------------------------------------------------
 

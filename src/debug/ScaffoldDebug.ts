@@ -8,7 +8,7 @@
 import { Scaffold } from '../Scaffold.ts';
 import { Hash } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
-import { EventLog, LogEntry, LogQuery } from '../core/EventLog.ts';
+import { EventLog, LogEntry, LogQuery } from '../logic/EventLog.ts';
 import { ZERO_HASH } from '../util/Hash.ts';
 import { getAggregationData } from '../contracts/AggregationContract.ts';
 

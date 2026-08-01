@@ -3,20 +3,29 @@
 ## Layers
 
 ```
-support/  <-  graph/  <-  contract/  <-  node/  <-  roles/  <-  api/
+logic/  <-  graph/  <-  contract/  <-  peer/  <-  roles/  <-  api/
 ```
 
-- **support/** - Mostly isolated modules, declared abstract if they require injected dependencies. Should mostly only import from other support/ modules and util/; notably should declare their own subset types rather than importing Block / Draft types. Should not import Context. Should be easily testable.
-- **graph/** - Everything required to maintain the Block / Draft node graph and gives node/ the tools it needs to monitor the canonical state and react to changes. Context-wired services, which may be concretized extensions of abstract modules. Should contain as little logic as possible (logic should live in modules/ as much as possible). Testable using a test context.
+- **logic/** - Protocol logic with no wiring: pure walks, codecs, and abstract modules whose injected dependencies are declared as abstract methods. The membership test is types, not abstractness -- a logic/ module must not import the Block / Draft interfaces, only its own structural subset types and the node kind tags. Should not import Context. Testable with hand-built literals.
+- **graph/** - Everything required to maintain the Block / Draft node graph, and gives peer/ the tools it needs to monitor the canonical state and react to changes. Context-wired services, which may be concretized extensions of logic/ modules. Should contain as little logic as possible. An abstract module that reads Block / Draft fields belongs here, next to its service, not in logic/. Contains in-memory state of the graph. Testable using a test context.
 - **contract/** - Everything related to contract execution.
 - **contract/static/** - Well-known contracts defined in TypeScript.
 - **contract/wasm/** - Machinery supporting WASM contract execution.
 - **contract/wasm/worker/** - Code running in the WASM worker thread.
-- **node/** - Stateful machinery every peer needs: block store, ingestion funnel, execution, gossip.
+- **peer/** - Stateful machinery every peer needs: block persistence, ingestion funnel, execution, gossip. Named peer/ rather than node/ because a Node is a graph node (`Block | Draft`).
 - **roles/** - Optional capability modules: author, aggregator, prober, insurer.
 - **api/** - The public `Scaffold` facade.
 
-A lower layer never imports from a higher one.
+Each of these is a directory inside src/. A lower layer never imports from a higher one. util/ sits below
+logic/ and holds language-level helpers with no protocol knowledge. `Config` and `Context` sit at the src/
+root as the composition root: every layer may import them, and they are exempt from the ordering.
+
+Filenames carry no `Module` / `Service` suffix, and neither does the wired class: the name every caller
+reaches for is a bare noun, so `ctx.get(...)` reads the same for all of them -- `ctx.get(BlockStore)`,
+`ctx.get(Forest)`, `ctx.get(Placement)`. Only the logic/ half of a pair is suffixed, with `Base`, because
+that is the one place the two halves must be told apart: `logic/Placement.ts` exports `PlacementBase`,
+`graph/Placement.ts` exports `Placement extends PlacementBase`. A concept with no logic/ half is just the
+bare noun (`BlockStore`, `ClaimIndex`). tests/ mirrors the same directories.
 
 ## Core data model
 
@@ -26,14 +35,17 @@ A lower layer never imports from a higher one.
 
 ## Module/Service pattern
 
-- **Module** (core or role logic): abstract class. Dependencies on other modules are declared as abstract methods -- typed holes the compiler forces every subclass to fill. No context access, no setters, no stored references to other modules.
-- **Service** (node wiring): `extends` its module, constructed by the locator. Each abstract method is overridden with a call-time lookup -- `this.ctx.get(OtherService).doSomething(...)` -- never caching the `ctx.get` result at construction. Call-time resolution is what removes construction-order sensitivity.
+The pattern keeps the names Module and Service; the classes are suffixed `Base` / unsuffixed per the
+naming rule above.
+
+- **Module** (`XBase`, core or role logic): abstract class. Dependencies on other modules are declared as abstract methods -- typed holes the compiler forces every subclass to fill. No context access, no setters, no stored references to other modules.
+- **Service** (`X`, node wiring): `extends` its module, constructed by the locator. Each abstract method is overridden with a call-time lookup -- `this.ctx.get(Other).doSomething(...)` -- never caching the `ctx.get` result at construction. Call-time resolution is what removes construction-order sensitivity.
 
 Hard rules:
 
 1. **A call-graph cycle is a design bug.** Downward dependencies are queries through declared holes; upward dependencies are event subscriptions. If two modules need synchronous queries in both directions, they are one module or hide a third concern to extract. Lazy resolution is for legitimate deferral, not for closing loops cheaply (v1's `computingCanonical` re-entrancy guard is what a runtime cycle looks like).
 2. Service constructors are effect-free (wiring only). `NodeContext` does one eager `ctx.get` pass over all services at startup -- safe because lazy method binding makes it order-insensitive. No post-construction setters.
-3. A service body is a constructor plus overrides of abstract methods, nothing else. Any other method on a `*Service` is a review flag: protocol logic belongs in the module (the v1 `GenerationService` lesson).
+3. A service body is a constructor plus overrides of abstract methods, nothing else. Any other method on a service is a review flag: protocol logic belongs in the module (the v1 `GenerationService` lesson).
 4. Only services touch `ctx`. Modules are constructible and testable without a context (subclass with fake overrides).
 5. One reactivity mechanism: typed change events on module boundaries with explicit flush ordering (the `onCanonicalityChange` diff-and-flush pattern). Viz/debug subscribes through a single debounced adapter at the edge; no parallel observer systems.
 

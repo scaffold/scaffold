@@ -57,7 +57,7 @@ import { BlockRecordSet } from '../reactive/BlockRecordSet.ts';
 import { verifierKey } from './UtxoIndex.ts';
 import { DraftStrategy } from './strategies/DraftStrategy.ts';
 import { PiggybackStrategy } from './strategies/PiggybackStrategy.ts';
-import { EventLog } from '../core/EventLog.ts';
+import { EventLog } from '../logic/EventLog.ts';
 import { CollateralResolutionIndexService } from './CollateralResolutionIndexService.ts';
 import { TrustGateService } from './TrustGateService.ts';
 import { autoBalance } from './AutoBalance.ts';

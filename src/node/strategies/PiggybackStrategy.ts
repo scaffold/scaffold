@@ -23,7 +23,7 @@ import { Hash, HashPrimitive } from '../../util/Hash.ts';
 import { Block, BlockStore, RECORD_CONTRACT, SIGNATURE_CONTRACT } from '../../core/Block.ts';
 import { BlockSpec, ClaimEntry, Output } from '../../core/BlockCreationModule.ts';
 import { OutputSpaceModule } from '../../core/OutputSpace.ts';
-import { ScopedLogger } from '../../core/EventLog.ts';
+import { ScopedLogger } from '../../logic/EventLog.ts';
 import { Action, ReactiveEvent, Strategy } from '../ReactiveLayer.ts';
 import { TrustStatus } from '../TrustGate.ts';
 import { UtxoEntry, verifierKey } from '../UtxoIndex.ts';

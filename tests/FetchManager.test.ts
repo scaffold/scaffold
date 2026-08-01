@@ -3,7 +3,7 @@ import { Hash } from '../src/util/Hash.ts';
 import { Scaffold, ScaffoldConfig } from '../src/Scaffold.ts';
 import { composeGenesisPacket } from '../src/core/Block.ts';
 import { makeSignatureOutput } from '../src/contracts/SignatureContract.ts';
-import { WELL_KNOWN_PRIVATE_KEY, WELL_KNOWN_PUBLIC_KEY } from '../src/genesis.ts';
+import { WELL_KNOWN_PRIVATE_KEY, WELL_KNOWN_PUBLIC_KEY } from '../src/graph/genesis.ts';
 import { FetchClaim, FetchHandle, FetchManager, FetchResult } from '../src/node/FetchManager.ts';
 import {
   FetchAbortError,

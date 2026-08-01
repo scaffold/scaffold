@@ -274,7 +274,7 @@ export interface ContractEnv {
   debug?(message: string): void;
 }
 
-/** @deprecated Use Contract interface from './Contract.ts' instead. */
+/** @deprecated Use Contract interface from '../contract/Contract.ts' instead. */
 export type ContractFn = (env: ContractEnv) => MaybePromise<void>;
 
 // -- Internal providers -------------------------------------------

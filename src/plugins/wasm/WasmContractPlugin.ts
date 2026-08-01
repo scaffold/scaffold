@@ -19,7 +19,7 @@ import {
   type NormalisedModules,
   parseModules,
 } from './WasmModules.ts';
-import { Reader } from '../../interfaces/Reader.ts';
+import { Reader } from '../../contract/Reader.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 
 export interface WasmContractPluginConfig extends WasmExecutorConfig {

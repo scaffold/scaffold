@@ -3,7 +3,7 @@
 import { SIGNATURE_CONTRACT } from '../core/Block.ts';
 import type { Output } from '../core/BlockCreationModule.ts';
 import type { Contract } from './Contract.ts';
-import { readBytes } from '../interfaces/Reader.ts';
+import { readBytes } from '../contract/Reader.ts';
 
 /**
  * Create a signature (payment) contract output.

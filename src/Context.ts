@@ -1,5 +1,5 @@
 import { BaseContext } from './util/BaseContext.ts';
-import { EventLog, ScopedLogger } from './core/EventLog.ts';
+import { EventLog, ScopedLogger } from './logic/EventLog.ts';
 import { Config } from './Config.ts';
 
 export class Context extends BaseContext {

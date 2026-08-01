@@ -1,6 +1,6 @@
 // Protocol spec: docs/protocol/output-data.md
 
-import type { Reader } from '../interfaces/Reader.ts';
+import type { Reader } from '../contract/Reader.ts';
 import { type ValueDescriptor, ValueType } from '../contracts/Contract.ts';
 
 /** A leaf field a contract's builder requested, recorded for UI-schema generation. */

@@ -9,7 +9,7 @@ import { DraftManager } from '../core/DraftManager.ts';
 import { Coordinator } from '../core/Coordinator.ts';
 import { RoutingService } from './RoutingService.ts';
 import { PushAction } from './RoutingModule.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 /** Shape of fields accepted by GenerationService.enqueueGeneration. */
 export interface GenerationFields {

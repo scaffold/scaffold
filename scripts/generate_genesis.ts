@@ -4,12 +4,12 @@
  *
  * Usage: deno task generate-genesis
  *
- * Outputs the hex string that should be pasted into src/genesis.ts
+ * Outputs the hex string that should be pasted into src/graph/genesis.ts
  * as the GENESIS_PACKET_HEX constant.
  */
 
 import { bin2hex } from '../src/util/hex.ts';
-import { computeGenesisBlock, WELL_KNOWN_KEYS } from '../src/genesis.ts';
+import { computeGenesisBlock, WELL_KNOWN_KEYS } from '../src/graph/genesis.ts';
 
 const packet = computeGenesisBlock();
 const hex = bin2hex(packet.raw);

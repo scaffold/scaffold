@@ -8,7 +8,7 @@ import {
   ExecutionMode,
 } from '../src/core/ContractEnv.ts';
 import type { ValueDescriptor, WalkerHost } from '../src/contracts/Contract.ts';
-import { createReader } from '../src/interfaces/Reader.ts';
+import { createReader } from '../src/contract/Reader.ts';
 import type { WasmTransport } from '../src/plugins/wasm/WasmTransport.ts';
 import { InProcessMockTransport } from '../src/plugins/wasm/transports/InProcessMockTransport.ts';
 import { JspiTransport } from '../src/plugins/wasm/transports/JspiTransport.ts';

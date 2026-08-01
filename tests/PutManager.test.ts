@@ -4,7 +4,7 @@
 
 import { assert, assertEquals, assertRejects } from '@std/assert';
 import { Scaffold } from '../src/Scaffold.ts';
-import { computeDemoGenesis, demoPrivateKey } from '../src/genesis.ts';
+import { computeDemoGenesis, demoPrivateKey } from '../src/graph/genesis.ts';
 import { AGGREGATION_CONTRACT, Block, RECORD_CONTRACT } from '../src/core/Block.ts';
 import { Hash } from '../src/util/Hash.ts';
 import { str2bin } from '../src/util/buffer.ts';

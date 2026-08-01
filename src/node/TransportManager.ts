@@ -6,7 +6,7 @@
 
 import { Block } from '../core/Block.ts';
 import { bin2hex } from '../util/hex.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 import {
   AnonymousTransportDriver,
   AuthenticatedTransportDriver,

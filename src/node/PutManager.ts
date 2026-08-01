@@ -17,9 +17,9 @@ import { DraftStore } from '../core/Draft.ts';
 import { ContractHostService } from '../core/ContractHostService.ts';
 import { GenerationService } from './GenerationService.ts';
 import { Hash } from '../util/Hash.ts';
-import { Query } from '../interfaces/Query.ts';
+import { Query } from '../contract/Query.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { Reader } from '../interfaces/Reader.ts';
+import { Reader } from '../contract/Reader.ts';
 
 /**
  * Publish a verifier by running its contract generator. Provide EITHER:

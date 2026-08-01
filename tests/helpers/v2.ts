@@ -1,9 +1,9 @@
 import { SeededEntropyProvider } from '../../plugins/SeededEntropyProvider.ts';
 import { Config } from '../../src/Config.ts';
 import { Context } from '../../src/Context.ts';
-import { DefaultContractProvider } from '../../src/DefaultContractProvider.ts';
-import { EventLog } from '../../src/core/EventLog.ts';
-import { generateGenesis } from '../../src/genesis.ts';
+import { DefaultContractProvider } from '../../src/contract/DefaultContractProvider.ts';
+import { EventLog } from '../../src/logic/EventLog.ts';
+import { generateGenesis } from '../../src/graph/genesis.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { secp } from '../../src/util/secp.ts';

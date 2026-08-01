@@ -3,7 +3,7 @@
 import type { ContractEnv } from '../../core/ContractEnv.ts';
 import type { WalkerHost } from '../../contracts/Contract.ts';
 import type { CompiledModules } from './WasmModules.ts';
-import { Reader } from '../../interfaces/Reader.ts';
+import { Reader } from '../../contract/Reader.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 
 /**

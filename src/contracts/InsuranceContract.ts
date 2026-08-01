@@ -6,7 +6,7 @@ import type { Output } from '../core/BlockCreationModule.ts';
 import { ContractRejection } from '../core/ContractEnv.ts';
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
-import { readBytes } from '../interfaces/Reader.ts';
+import { readBytes } from '../contract/Reader.ts';
 
 // -- Insurance types --------------------------------------------------
 

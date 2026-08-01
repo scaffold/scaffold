@@ -1,5 +1,5 @@
 import { Prng, randomSeeded } from '@std/random';
-import { EntropyProvider } from '../src/interfaces/EntropyProvider.ts';
+import { EntropyProvider } from '../src/logic/EntropyProvider.ts';
 
 export class SeededEntropyProvider implements EntropyProvider {
   private rng: Prng;

@@ -1,7 +1,7 @@
 import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
-import { ContractPlugin, ContractProvider } from './core/Contract.ts';
-import { DefaultContractProvider } from './DefaultContractProvider.ts';
-import { generateGenesis } from './genesis.ts';
+import { ContractPlugin } from './contract/Contract.ts';
+import { DefaultContractProvider } from './contract/DefaultContractProvider.ts';
+import { generateGenesis } from './graph/genesis.ts';
 import { Hash } from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import { secp } from './util/secp.ts';

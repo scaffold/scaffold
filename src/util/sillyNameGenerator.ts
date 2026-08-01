@@ -1,5 +1,5 @@
 import { animals, colors, uniqueNamesGenerator } from 'unique-names-generator';
-import { EntropyProvider } from '../interfaces/EntropyProvider.ts';
+import { EntropyProvider } from '../logic/EntropyProvider.ts';
 
 export const generateSillyName = (entropyProvider: EntropyProvider) =>
   uniqueNamesGenerator({

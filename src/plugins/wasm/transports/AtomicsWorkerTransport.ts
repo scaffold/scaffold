@@ -7,7 +7,7 @@
 
 import { type ContractEnv, ContractRejection } from '../../../core/ContractEnv.ts';
 import type { WalkerHost } from '../../../contracts/Contract.ts';
-import type { Reader } from '../../../interfaces/Reader.ts';
+import type { Reader } from '../../../contract/Reader.ts';
 import type { MaybePromise } from '../../../util/MaybePromise.ts';
 import type { WasmTransport } from '../WasmTransport.ts';
 import {

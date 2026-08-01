@@ -14,7 +14,7 @@ import { SignalEnvelope } from './SignalingService.ts';
 import { jsonSignalSerializer, SignalAtom } from '../core/SignalAtom.ts';
 import { AtomSource } from '../core/Atom.ts';
 import { TransportPlugin } from '../interfaces/transport.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 /** Simple set-based block awareness tracker. */
 class SetAwareness implements BlockAwareness {

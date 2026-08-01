@@ -15,7 +15,7 @@ import {
 import { InProcessMockTransport } from './transports/InProcessMockTransport.ts';
 import { JspiTransport } from './transports/JspiTransport.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
-import { Reader } from '../../interfaces/Reader.ts';
+import { Reader } from '../../contract/Reader.ts';
 
 export type TransportKind = 'auto' | 'atomics' | 'jspi' | 'in-process';
 

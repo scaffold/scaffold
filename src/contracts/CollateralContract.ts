@@ -12,7 +12,7 @@ import { type Claim, type ContractEnv, ContractRejection } from '../core/Contrac
 import type { Contract } from './Contract.ts';
 import { Hash } from '../util/Hash.ts';
 import { findRecordOutput } from './RecordContract.ts';
-import { readBytes, readField, readNumber, readString } from '../interfaces/Reader.ts';
+import { readBytes, readField, readNumber, readString } from '../contract/Reader.ts';
 
 // -- Collateral types -------------------------------------------------
 

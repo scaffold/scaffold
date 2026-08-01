@@ -4,7 +4,7 @@ import { Hash } from '../util/Hash.ts';
 import { unimplemented } from '@std/assert/unimplemented';
 import { RECORD_CONTRACT } from '../core/Block.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
-import { createReader, Reader } from '../interfaces/Reader.ts';
+import { createReader, Reader } from '../contract/Reader.ts';
 import { ValueType } from '../contracts/Contract.ts';
 
 export enum FsNodeType {

@@ -19,7 +19,7 @@ import {
   type WaitForGetOutputFn,
   type WaitForInputFn,
 } from './GeneratingEnv.ts';
-import { Query, Statement } from '../interfaces/Query.ts';
+import { Query, Statement } from '../contract/Query.ts';
 import { error } from '../util/functional.ts';
 
 // -- Re-exports -----------------------------------------------------

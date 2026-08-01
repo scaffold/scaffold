@@ -3,7 +3,7 @@
 import type { ContractEnv } from '../core/ContractEnv.ts';
 import type { MaybePromise } from '../util/MaybePromise.ts';
 import type { Hash } from '../util/Hash.ts';
-import { Reader } from '../interfaces/Reader.ts';
+import { Reader } from '../contract/Reader.ts';
 
 // -- Value Descriptors ------------------------------------------------
 

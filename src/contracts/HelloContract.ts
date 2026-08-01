@@ -6,7 +6,7 @@
 import { Hash } from '../util/Hash.ts';
 import type { Contract } from './Contract.ts';
 import type { Output, Verifier } from '../core/BlockCreationModule.ts';
-import { readString } from '../interfaces/Reader.ts';
+import { readString } from '../contract/Reader.ts';
 import { str2bin } from '../util/buffer.ts';
 
 /** Well-known contract hash for the demo hello contract. */

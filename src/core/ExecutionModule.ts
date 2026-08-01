@@ -4,10 +4,10 @@ import { assert } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
 import { bin2hex } from '../util/hex.ts';
 import { mapPut } from '../util/map.ts';
-import { BlockStore } from './BlockStore.ts';
-import { DraftStore } from './DraftStore.ts';
+import { BlockStore } from '../graph/BlockStore.ts';
+import { DraftStore } from '../graph/DraftStore.ts';
 import { CancelError, ExecutionQueue, FlowCtl, Job } from './ExecutionQueue.ts';
-import { Block, Draft, Predicate } from './types.ts';
+import { Block, Draft, Predicate } from '../graph/types.ts';
 
 declare const predicateKeySymbol: unique symbol;
 type PredicateKey = string & { readonly [predicateKeySymbol]: true };

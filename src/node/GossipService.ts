@@ -9,7 +9,7 @@ import {
 } from './GossipModule.ts';
 import { UtxoIndex, verifierKey } from './UtxoIndex.ts';
 import { ProtocolContext } from '../core/ProtocolContext.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 class GossipProviderAdapter implements GossipProvider {
   constructor(

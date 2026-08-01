@@ -14,7 +14,7 @@ import {
   encryptSignal,
   uint8ToBase64,
 } from '../util/crypto.ts';
-import { ScopedLogger } from '../core/EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 // -- Wire format --------------------------------------------------------
 

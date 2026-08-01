@@ -14,7 +14,7 @@ import {
   encodeStringList,
   encodeValueAndBody,
 } from './WasmWireCodec.ts';
-import { Reader } from '../../interfaces/Reader.ts';
+import { Reader } from '../../contract/Reader.ts';
 
 /**
  * Empty-bytes reply the bridge returns from `contractMetadata` when the

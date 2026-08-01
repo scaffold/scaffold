@@ -12,12 +12,12 @@ import { FetchHandle, FetchInput, FetchManager, FetchResult } from './node/Fetch
 import type { Verifier } from './core/BlockCreationModule.ts';
 import { Strategy } from './node/ReactiveLayer.ts';
 import { BlockRecordSet } from './reactive/BlockRecordSet.ts';
-import { getGenesisBlock } from './genesis.ts';
+import { getGenesisBlock } from './graph/genesis.ts';
 import { NetworkBridge } from './node/NetworkBridge.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { PushAction } from './node/RoutingModule.ts';
 import { bin2hex } from './util/hex.ts';
-import { EventLog, ScopedLogger } from './core/EventLog.ts';
+import { EventLog, ScopedLogger } from './logic/EventLog.ts';
 
 export interface ScaffoldConfig {
   /** Private key for signing blocks. Defaults to a random key. */

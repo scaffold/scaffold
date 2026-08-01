@@ -1,4 +1,4 @@
-import { EntropyProvider } from '../interfaces/EntropyProvider.ts';
+import { EntropyProvider } from '../logic/EntropyProvider.ts';
 import { searchSorted } from './sorted.ts';
 
 export class QuantileSampler {

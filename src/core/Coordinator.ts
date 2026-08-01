@@ -15,7 +15,7 @@ export type VerificationResult =
   | { verified: true; treeHash: Hash; terminalHash: Hash }
   | { verified: false; treeHash: Hash; reason: string }
   | { verified: false; treeHash: undefined; reason: string };
-import { ScopedLogger } from './EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 /** Result of processing a block received event. */
 export interface BlockReceivedResult {

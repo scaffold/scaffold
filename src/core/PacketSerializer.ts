@@ -18,7 +18,7 @@ import {
   PacketType,
   SIGNATURE_SIZE,
 } from './Packet.ts';
-import { ScopedLogger } from './EventLog.ts';
+import { ScopedLogger } from '../logic/EventLog.ts';
 
 // -- Interface ------------------------------------------------------
 

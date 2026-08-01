@@ -32,7 +32,7 @@
 
 import { parseArgs } from '@std/cli/parse-args';
 import { Scaffold } from '../src/Scaffold.ts';
-import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../src/genesis.ts';
+import { computeDemoGenesis, demoPrivateKey, demoPublicKey } from '../src/graph/genesis.ts';
 import { HELLO_CONTRACT, helloContract } from '../src/contracts/HelloContract.ts';
 import { WebsocketServerTransport } from '../plugins/deno/WebsocketServerTransport.ts';
 import { WebsocketClientTransport } from '../plugins/WebsocketClientTransport.ts';
