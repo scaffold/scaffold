@@ -1,4 +1,4 @@
-import { error } from './functional.ts';
+import { assert, error } from './functional.ts';
 
 const trapRecursion = true;
 
@@ -84,7 +84,8 @@ export const multimapPop = <K, V>(map: MapSpec<K, V[]>, key: K, val: V) => {
   if (arr.length > 1) {
     arr.splice(idx, 1);
   } else {
-    map.delete(key);
+    const deleted = map.delete(key);
+    assert(deleted);
   }
 };
 

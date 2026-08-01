@@ -2,8 +2,9 @@ import { Context } from '../Context.ts';
 import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
 import { arrCall } from '../util/array.ts';
-import { assert } from '../util/functional.ts';
+import { assert, error } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
+import { multimapPut } from '../util/map.ts';
 import { secp } from '../util/secp.ts';
 import { AtomSerializer } from './AtomSerializer.ts';
 import { BlockBuilder } from './BlockBuilder.ts';
@@ -18,6 +19,7 @@ import {
   DraftPayload,
   DraftStatusType,
   Output,
+  OutputResolverType,
 } from './types.ts';
 
 // Only exported for tests
@@ -289,9 +291,62 @@ export class DraftStore {
   }
 
   private updatePlacedClaims(draft: Draft, claims: DraftPayload['claims']) {
-    // TODO
-    // For newly claimed outputs, add a resolvingOutputs entry
-    // For newly unclaimed outputs, remove the resolvingOutputs entry
+    const len = Math.max(draft.claims.length, claims.length);
+    for (let i = 0; i < len; i++) {
+      const rem: { producer: Block | typeof DRAFT_SELF; outputIndex: number } | undefined =
+        draft.claims[i];
+      const add: { producer: Block | typeof DRAFT_SELF; outputIndex: number } | undefined =
+        claims[i];
 
+      // Skip indices with no change
+      if (
+        rem !== undefined &&
+        add !== undefined &&
+        rem.producer === add.producer &&
+        rem.outputIndex === add.outputIndex
+      ) continue;
+
+      if (rem !== undefined && rem.producer !== DRAFT_SELF) {
+        // Delete claim
+
+        const outputIdx = BigInt(rem.outputIndex);
+        const arr = rem.producer.resolvingOutputs.get(outputIdx);
+        if (arr === undefined) {
+          throw new Error(`Cannot delete claim - output does not exist: ${rem.outputIndex}`);
+        }
+
+        const idx = arr.findLastIndex((x) =>
+          x.type === OutputResolverType.Claim &&
+          x.producer === rem.producer &&
+          x.outputIdx === outputIdx &&
+          x.claimer === draft &&
+          x.claimIdx === i &&
+          x.resolved === true
+        );
+        if (idx === -1) {
+          throw new Error(`Cannot delete claim - claim does not exist`);
+        }
+
+        if (arr.length > 1) {
+          arr.splice(idx, 1);
+        } else {
+          const deleted = rem.producer.resolvingOutputs.delete(outputIdx);
+          assert(deleted);
+        }
+      }
+
+      if (add !== undefined && add.producer !== DRAFT_SELF) {
+        // Add claim
+
+        multimapPut(add.producer.resolvingOutputs, BigInt(add.outputIndex), {
+          type: OutputResolverType.Claim,
+          producer: add.producer,
+          outputIdx: BigInt(add.outputIndex),
+          claimer: draft,
+          claimIdx: i,
+          resolved: true,
+        });
+      }
+    }
   }
 }

@@ -20,5 +20,5 @@ ctx.get(GeneratorRole).run();
 // });
 
 ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
-// ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
+ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
