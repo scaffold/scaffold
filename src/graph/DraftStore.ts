@@ -71,6 +71,7 @@ export class DraftStore {
   update(draft: Draft, { claims, refs, outputs }: DraftPayload) {
     assert(draft.status.type === DraftStatusType.Populating);
 
+    this.updatePlacedClaims(draft, claims);
     draft.claims = claims;
     draft.refs = refs;
     draft.outputs = outputs;
@@ -107,6 +108,8 @@ export class DraftStore {
     if (draft.status.type !== DraftStatusType.Built) {
       draft.status = { type: DraftStatusType.Cancelled, cancelledReason: 'cancelled' };
     }
+
+    this.updatePlacedClaims(draft, []);
   }
 
   // ioDelta = sum(outputs) - sum(claims)
@@ -141,15 +144,19 @@ export class DraftStore {
       raw: serialized,
     }, true);
 
-    draft.status.hooks.abort();
     for (const selDraft of selectedDrafts) {
       if (selDraft.type === DRAFT_TYPE) {
+        if (draft.status.type === DraftStatusType.Building) {
+          draft.status.hooks.abort();
+        }
+
         selDraft.status = { type: DraftStatusType.Built, block };
+
+        this.updatePlacedClaims(selDraft, []);
       }
     }
 
     console.log(`Built block ${block.hash.toHex()}:`, result.payload);
-    debugger;
 
     // Trigger downstream listeners, first for the new block then for the draft
     this.ctx.get(BlockStore).doSkippedIngestion(block);
@@ -242,6 +249,7 @@ export class DraftStore {
       outputs: [{
         contract: AGGREGATION_CONTRACT,
         params: new Uint8Array(),
+        data: new Uint8Array(),
         amount: this.ctx.get(DraftStoreConfig).aggregationFee,
       }],
     };
@@ -278,5 +286,12 @@ export class DraftStore {
     }
 
     return { claims, refs, outputs };
+  }
+
+  private updatePlacedClaims(draft: Draft, claims: DraftPayload['claims']) {
+    // TODO
+    // For newly claimed outputs, add a resolvingOutputs entry
+    // For newly unclaimed outputs, remove the resolvingOutputs entry
+
   }
 }

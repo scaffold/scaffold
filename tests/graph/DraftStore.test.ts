@@ -21,13 +21,14 @@ import { secp } from '../../src/util/secp.ts';
 import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../../src/contract/static/Signature.ts';
 
-const out = (amount: bigint, contract = ZERO_HASH): Output => ({
+const out = (amount: bigint, contract = ZERO_HASH, data?: Uint8Array): Output => ({
   contract,
   params: new Uint8Array(),
+  ...(data !== undefined ? { data } : {}),
   amount,
 });
 
-const aggregationOut = (amount = 0n) => out(amount, AGGREGATION_CONTRACT);
+const aggregationOut = (amount = 0n) => out(amount, AGGREGATION_CONTRACT, new Uint8Array());
 
 const blockPayload = (attrs: Partial<BlockPayload> = {}): BlockPayload => ({
   anchor: ZERO_HASH,

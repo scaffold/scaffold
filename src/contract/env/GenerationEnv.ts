@@ -1,7 +1,15 @@
+import { assert } from '../../util/functional.ts';
 import { Context } from '../../Context.ts';
 import { DraftStore } from '../../graph/DraftStore.ts';
 import { OutputIndex } from '../../graph/OutputIndex.ts';
-import { Block, Draft, DRAFT_SELF, DraftPayload, Predicate } from '../../graph/types.ts';
+import {
+  Block,
+  Draft,
+  DRAFT_SELF,
+  DraftPayload,
+  OutputResolverType,
+  Predicate,
+} from '../../graph/types.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 
@@ -36,7 +44,12 @@ export class GenerationEnv implements ContractEnv {
           controller.abort();
 
           this.claims.push(output);
+          debugger;
           this.updateDraft();
+
+          const newClaims = (output.producer.resolvingOutputs.get(BigInt(output.outputIndex)) ?? [])
+            .filter((x) => x.type === OutputResolverType.Claim);
+          assert(newClaims.length > 0);
 
           resolve(output.output.data);
         }
