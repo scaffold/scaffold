@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '@std/assert';
+import { assertEquals } from '@std/assert';
 import { AtomSerializer } from '../../src/graph/AtomSerializer.ts';
 import { BlockStore } from '../../src/graph/BlockStore.ts';
 import { DraftStore } from '../../src/graph/DraftStore.ts';
@@ -18,6 +18,8 @@ import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { makeTestContext } from '../helpers/v2.ts';
 import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
+import { HELLO_CONTRACT } from '../../src/contract/static/Hello.ts';
+import { createSource } from '../../src/contract/createSource.ts';
 import { neverAbort } from '../../src/util/abortable.ts';
 
 const CONTRACT = Hash.digest('demo');
@@ -95,9 +97,9 @@ const answerOutput = (data: Uint8Array, params = PARAMS): Output => ({
   amount: 0n,
 });
 
-Deno.test('fetch publishes the query as an unclaimed zero-amount output', () => {
+Deno.test('fetch publishes the query as an unclaimed zero-amount output', async () => {
   const h = harness();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: () => {},
@@ -118,9 +120,9 @@ Deno.test('fetch publishes the query as an unclaimed zero-amount output', () => 
   assertEquals(payload.anchor.toHex(), h.genesis.hash.toHex());
 });
 
-Deno.test('fetch delivers an answer ingested after the call', () => {
+Deno.test('fetch delivers an answer ingested after the call', async () => {
   const h = harness();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: h.collect(),
@@ -132,9 +134,9 @@ Deno.test('fetch delivers an answer ingested after the call', () => {
   assertEquals(h.results[0], ANSWER);
 });
 
-Deno.test("fetch ignores another peer's query block for the same predicate", () => {
+Deno.test("fetch ignores another peer's query block for the same predicate", async () => {
   const h = harness();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: h.collect(),
@@ -145,9 +147,9 @@ Deno.test("fetch ignores another peer's query block for the same predicate", () 
   assertEquals(h.results, []);
 });
 
-Deno.test('fetch ignores an unclaimed answer output', () => {
+Deno.test('fetch ignores an unclaimed answer output', async () => {
   const h = harness();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: h.collect(),
@@ -160,9 +162,9 @@ Deno.test('fetch ignores an unclaimed answer output', () => {
   assertEquals(h.results, []);
 });
 
-Deno.test('fetch ignores answers under a different predicate', () => {
+Deno.test('fetch ignores answers under a different predicate', async () => {
   const h = harness();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: h.collect(),
@@ -176,9 +178,9 @@ Deno.test('fetch ignores answers under a different predicate', () => {
   assertEquals(h.results.length, 1);
 });
 
-Deno.test('fetch delivers the answer at the claimed output index', () => {
+Deno.test('fetch delivers the answer at the claimed output index', async () => {
   const h = harness();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: h.collect(),
@@ -190,10 +192,10 @@ Deno.test('fetch delivers the answer at the claimed output index', () => {
   assertEquals(h.results[0], ANSWER);
 });
 
-Deno.test('fetch stops delivering once the signal aborts', () => {
+Deno.test('fetch stops delivering once the signal aborts', async () => {
   const h = harness();
   const controller = new AbortController();
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     signal: controller.signal,
@@ -207,24 +209,24 @@ Deno.test('fetch stops delivering once the signal aborts', () => {
   assertEquals(h.results.length, 1);
 });
 
-Deno.test('fetch rejects Reader-based params', () => {
+Deno.test('fetch builds structured params through the contract', async () => {
   const h = harness();
-  assertThrows(
-    () =>
-      h.ctx.get(Fetch).fetch({
-        contract: CONTRACT,
-        params: () => str2bin('x') as never,
-        onResult: () => {},
-      }),
-    Error,
-    'Reader-based params are not supported yet',
-  );
+  await h.ctx.get(Fetch).fetch({
+    contract: HELLO_CONTRACT,
+    params: () => createSource({ name: 'world' }),
+    onResult: () => {},
+  });
+
+  assertEquals(h.ingested.length, 1);
+  const output = h.ingested[0].payload.outputs[0];
+  assertEquals(Hash.equals(output.contract, HELLO_CONTRACT), true);
+  assertEquals(bin2hex(output.params), bin2hex(PARAMS));
 });
 
 Deno.test('FetchResult.parse resolves the unparsed body', async () => {
   const h = harness();
   const parsed: unknown[] = [];
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: (result) => parsed.push(result === null ? null : result.parse()),
@@ -242,11 +244,11 @@ Deno.test('FetchResult.parse resolves the unparsed body', async () => {
 // answer is delivered (the codebase's own subscribe idiom, `DraftStore.onBuilt`, fires
 // immediately when the state is already satisfied, and wp 11.2 has clients resolving
 // from local state). Actual: onResult is never called.
-Deno.test('BUG: fetch delivers an answer already in the store', () => {
+Deno.test('BUG: fetch delivers an answer already in the store', async () => {
   const h = harness();
   h.publish([answerOutput(ANSWER)], [0n]);
 
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     onResult: h.collect(),
@@ -261,12 +263,12 @@ Deno.test('BUG: fetch delivers an answer already in the store', () => {
 // input.signal, so an abandoned fetch still puts a query output on the graph
 // permanently. Expected: nothing is published, matching BlockStore.onIngest and
 // DraftStore.onBuilt, which both return early on an aborted signal. Actual: one block.
-Deno.test('BUG: fetch on an already-aborted signal publishes nothing', () => {
+Deno.test('BUG: fetch on an already-aborted signal publishes nothing', async () => {
   const h = harness();
   const controller = new AbortController();
   controller.abort();
 
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     signal: controller.signal,
@@ -283,11 +285,11 @@ Deno.test('BUG: fetch on an already-aborted signal publishes nothing', () => {
 // since a build that stalled on placement keeps retrying on every ingestion (the
 // onIngest subscription DraftStore.build registers) for a fetch the caller abandoned.
 // Actual: cancel is never called.
-Deno.test('BUG: aborting the fetch signal cancels the draft it created', () => {
+Deno.test('BUG: aborting the fetch signal cancels the draft it created', async () => {
   const h = harness();
   const controller = new AbortController();
 
-  h.ctx.get(Fetch).fetch({
+  await h.ctx.get(Fetch).fetch({
     contract: CONTRACT,
     params: PARAMS,
     signal: controller.signal,

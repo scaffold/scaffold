@@ -18,7 +18,7 @@ export class HelloContractQuery extends ObjectQuery implements Query {
   }
 }
 
-ctx.get(Fetch).fetch({
+await ctx.get(Fetch).fetch({
   ...new HelloContractQuery({ name: 'Joel' }),
   onResult: (result) => {
     console.log(bin2str(result!.body));

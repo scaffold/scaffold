@@ -1,13 +1,8 @@
 import { Query } from '../contract/Query.ts';
 import { Context } from '../Context.ts';
 import { DraftStore } from '../graph/DraftStore.ts';
-import { Hash } from '../util/Hash.ts';
-import { arrEquals } from '../util/buffer.ts';
-import { BlockStore } from '../graph/BlockStore.ts';
-import { Block, DraftStatusType } from '../graph/types.ts';
 import { OutputIndex } from '../graph/OutputIndex.ts';
 import { neverAbort } from '../util/abortable.ts';
-import { createSource } from '../contract/createSource.ts';
 
 export interface FetchInput extends Query {
   signal?: AbortSignal;
@@ -22,7 +17,7 @@ export interface FetchResult {
 export class Fetch {
   constructor(private ctx: Context) {}
 
-  /** Public API: subscribe to a verifier with per-caller projection. */
+  // TODO: Make this non-async?
   async fetch({ contract, params, signal, onResult }: FetchInput) {
     if (signal?.aborted) return;
 
