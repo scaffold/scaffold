@@ -46,7 +46,6 @@ export class GenerationEnv implements ContractEnv {
           controller.abort();
 
           this.claims.push(output);
-          debugger;
           this.updateDraft();
 
           const newClaims = (output.producer.resolvingOutputs.get(BigInt(output.outputIndex)) ?? [])
