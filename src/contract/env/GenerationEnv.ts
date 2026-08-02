@@ -62,11 +62,24 @@ export class GenerationEnv implements ContractEnv {
     this.updateDraft();
   }
 
+  finalize() {
+    const controller = new AbortController();
+    debugger;
+    this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
+      if (output.output.data === undefined && output.claims.length === 0) {
+        this.claims.push(output);
+      }
+    }, controller.signal);
+    controller.abort();
+
+    this.updateDraft();
+  }
+
   private updateDraft() {
     const payload: DraftPayload = { claims: [...this.claims], refs: [], outputs: [] };
 
     if (this.result !== undefined) {
-      payload.claims.push({ producer: DRAFT_SELF, outputIndex: 0 });
+      payload.claims.push({ producer: DRAFT_SELF, outputIndex: payload.outputs.length });
       payload.outputs.push({
         contract: this.predicate.contract,
         params: this.predicate.params,

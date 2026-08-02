@@ -18,6 +18,7 @@ import {
 } from '../../src/graph/types.ts';
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { makeTestContext } from '../helpers/v2.ts';
+import { neverAbort } from '../../src/util/abortable.ts';
 
 function setup() {
   const ctx = makeTestContext();
@@ -137,7 +138,7 @@ Deno.test('BlockStore.ingest: re-ingested bytes do not re-notify listeners', () 
   const { store, serialize, ingest } = setup();
 
   const seen: Block[] = [];
-  store.onIngest((block) => seen.push(block));
+  store.onIngest((block) => seen.push(block), neverAbort);
 
   const raw = serialize();
   ingest(raw);
@@ -176,7 +177,7 @@ Deno.test('BlockStore.ingest: the block is retrievable from inside an onIngest l
   let seen: Block | undefined;
   store.onIngest((block) => {
     seen = store.get(block.hash) as Block;
-  });
+  }, neverAbort);
 
   const block = ingest(serialize());
 
@@ -187,7 +188,7 @@ Deno.test('BlockStore.onIngest: fires for every ingested block in order', () => 
   const { store, serialize, ingest, ingestGenesis } = setup();
 
   const seen: Block[] = [];
-  store.onIngest((block) => seen.push(block));
+  store.onIngest((block) => seen.push(block), neverAbort);
 
   const genesis = ingestGenesis();
   const first = ingest(serialize({ timestampMs: 1 }));

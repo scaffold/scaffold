@@ -18,6 +18,7 @@ import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { makeTestContext } from '../helpers/v2.ts';
 import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
+import { neverAbort } from '../../src/util/abortable.ts';
 
 const CONTRACT = Hash.digest('demo');
 const PARAMS = str2bin('world');
@@ -62,7 +63,7 @@ function harness(): Harness {
   });
 
   const ingested: Block[] = [];
-  store.onIngest((block) => ingested.push(block));
+  store.onIngest((block) => ingested.push(block), neverAbort);
 
   let timestampMs = 0;
   const publish = (outputs: Output[], claims: bigint[]): Block => {

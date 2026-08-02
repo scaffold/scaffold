@@ -14,10 +14,10 @@ export class BlockStore {
 
   constructor(private ctx: Context) {}
 
-  onIngest(cb: (block: Block) => void, signal?: AbortSignal) {
-    if (signal?.aborted) return;
+  onIngest(cb: (block: Block) => void, signal: AbortSignal) {
+    if (signal.aborted) return;
     this.ingestionListeners.add(cb);
-    signal?.addEventListener('abort', () => assert(this.ingestionListeners.delete(cb)));
+    signal.addEventListener('abort', () => assert(this.ingestionListeners.delete(cb)));
   }
 
   get(hash: Hash): Block | BlockRef {

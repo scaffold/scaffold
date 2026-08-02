@@ -11,14 +11,14 @@ import { bin2str, str2bin } from '../src/util/buffer.ts';
 const ctx = new Context(makeDefaultConfig());
 ctx.get(GeneratorRole).run();
 
-// ctx.get(Fetch).fetch({
-//   contract: DEMO_CONTRACT,
-//   params: str2bin('Joel'),
-//   onResult: (result) => {
-//     console.log(result, bin2str(result!.body));
-//   },
-// });
+ctx.get(Fetch).fetch({
+  contract: DEMO_CONTRACT,
+  params: str2bin('Joel'),
+  onResult: (result) => {
+    console.log(result, bin2str(result!.body));
+  },
+});
 
-ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
-ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
+// ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
+// ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));

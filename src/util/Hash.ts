@@ -44,18 +44,31 @@ export const HASH_REGEX = /^[a-fA-F0-9]{64}$/;
 export class Hash implements DevtoolsFormattable {
   private hex: string;
 
+  private name?: string;
+  private static names = new Map<HashPrimitive, string>();
+
   private constructor(private digest: Uint8Array) {
     if (digest.byteLength !== HASH_SIZE) {
       throw new Error(`Invalid digest length`);
     }
     this.hex = bin2hex(digest);
+    this.name = Hash.names.get(this.toPrimitive());
   }
 
   [Symbol.for('Deno.customInspect')](
     inspect: typeof Deno.inspect,
     options: Deno.InspectOptions,
   ): string {
-    return `Hash(${inspect(this.toHex(), options)})`;
+    if (this.name !== undefined) {
+      return `Hash(${inspect(this.name, options)} -> ${inspect(this.toHex(), options)})`;
+    } else {
+      return `Hash(${inspect(this.toHex(), options)})`;
+    }
+  }
+
+  setName(name: string) {
+    Hash.names.set(this.toPrimitive(), name);
+    this.name = name;
   }
 
   static fromBytes(bytes: Uint8Array) {
@@ -112,11 +125,11 @@ export class Hash implements DevtoolsFormattable {
   }
 
   static digest(data: Uint8Array | string) {
-    if (typeof data === 'string') {
-      // TODO: Is it faster moving `new TextEncoder()` outside the class and reusing the instance?
-      data = str2bin(data);
+    const hash = new Hash(hasher(typeof data === 'string' ? str2bin(data) : data));
+    if (typeof data === 'string' && data.length <= 16) {
+      hash.setName(data);
     }
-    return new Hash(hasher(data));
+    return hash;
   }
 
   // TODO: Eliminate this monstrosity

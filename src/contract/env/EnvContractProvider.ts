@@ -10,20 +10,24 @@ import { FlowCtl } from '../../util/RunQueue.ts';
 export class EnvContractProvider implements ContractProvider {
   constructor(private ctx: Context, private contract: Contract) {}
 
-  generate(
+  async generate(
     predicate: Predicate,
     draft: Draft,
     flowCtl: FlowCtl,
-  ): MaybePromise<void> {
-    return this.contract.run(new GenerationEnv(this.ctx, predicate, draft, flowCtl), flowCtl);
+  ) {
+    const env = new GenerationEnv(this.ctx, predicate, draft, flowCtl);
+    await this.contract.run(env, flowCtl);
+    env.finalize();
   }
 
-  verify(
+  async verify(
     predicate: Predicate,
     block: Block,
     flowCtl: FlowCtl,
-  ): MaybePromise<void> {
-    return this.contract.run(new VerificationEnv(this.ctx, predicate, block, flowCtl), flowCtl);
+  ) {
+    const env = new VerificationEnv(this.ctx, predicate, block, flowCtl);
+    await this.contract.run(env, flowCtl);
+    env.finalize();
   }
 
   debugName?(predicate: Predicate): string | undefined {

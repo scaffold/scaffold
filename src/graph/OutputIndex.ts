@@ -11,16 +11,22 @@ export interface OutputLocation {
   claims: ResolvingClaim[];
 }
 
-export class OutputIndex {
+export class OutputIndex implements Disposable {
+  private disposeController = new AbortController();
+
   constructor(private ctx: Context) {
     for (const block of ctx.get(BlockStore).getAll()) this.updateIndex(block);
-    ctx.get(BlockStore).onIngest((block) => this.updateIndex(block));
+    ctx.get(BlockStore).onIngest((block) => this.updateIndex(block), this.disposeController.signal);
   }
 
-  onOutput(predicate: Predicate, cb: (output: OutputLocation) => void, signal?: AbortSignal) {
+  [Symbol.dispose]() {
+    this.disposeController.abort();
+  }
+
+  onOutput(predicate: Predicate, cb: (output: OutputLocation) => void, signal: AbortSignal) {
     // TODO: Hit index for faster lookups
 
-    if (signal?.aborted) return;
+    if (signal.aborted) return;
 
     const checkBlock = (block: Block) => {
       for (let i = 0; i < block.payload.outputs.length; i++) {
@@ -32,13 +38,13 @@ export class OutputIndex {
           .filter((x) => x.type === OutputResolverType.Claim);
 
         cb({ producer: block, outputIndex: i, output, claims });
-        if (signal?.aborted) return;
+        if (signal.aborted) return;
       }
     };
 
     for (const block of this.ctx.get(BlockStore).getAll()) {
       checkBlock(block);
-      if (signal?.aborted) return;
+      if (signal.aborted) return;
     }
 
     this.ctx.get(BlockStore).onIngest((block) => checkBlock(block), signal);

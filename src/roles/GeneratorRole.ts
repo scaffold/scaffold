@@ -30,13 +30,21 @@ interface Execution {
   runningJob?: Job;
 }
 
-export class GeneratorRole {
+export class GeneratorRole implements Disposable {
   private pending = new Map<PredicateKey, Execution>();
+  private disposeController = new AbortController();
 
   constructor(private ctx: Context) {}
 
+  [Symbol.dispose]() {
+    this.disposeController.abort();
+  }
+
   run() {
-    this.ctx.get(BlockStore).onIngest((block) => this.onIngest(block));
+    this.ctx.get(BlockStore).onIngest(
+      (block) => this.onIngest(block),
+      this.disposeController.signal,
+    );
   }
 
   private onIngest(block: Block) {
@@ -46,6 +54,12 @@ export class GeneratorRole {
   }
 
   private trigger(block: Block, outputIdx: number) {
+    // Skip self-claimed outputs
+    if (block.payload.claims.includes(BigInt(outputIdx))) return;
+
+    // Skip otherwise claimed outputs
+    if (block.resolvingOutputs.get(BigInt(outputIdx))?.length) return;
+
     const output = block.payload.outputs[outputIdx];
 
     const predicate: Predicate = { contract: output.contract, params: output.params };

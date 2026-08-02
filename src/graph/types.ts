@@ -1,6 +1,6 @@
 import { Hash } from '../util/Hash.ts';
 import { AtomSource, AtomType, BLOCK_REF_TYPE, DRAFT_TYPE } from '../logic/tags.ts';
-import { BlockPayload, Output } from './payload.ts';
+import { BlockPayload, Output, Predicate } from './payload.ts';
 
 export { AtomSource, AtomType, BLOCK_REF_TYPE, DRAFT_TYPE } from '../logic/tags.ts';
 export { type BlockPayload, isBlockPayload, type Output, type Predicate } from './payload.ts';

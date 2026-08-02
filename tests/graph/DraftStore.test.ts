@@ -20,6 +20,7 @@ import { makeTestContext } from '../helpers/v2.ts';
 import { secp } from '../../src/util/secp.ts';
 import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../../src/contract/static/Signature.ts';
+import { neverAbort } from '../../src/util/abortable.ts';
 
 const out = (amount: bigint, contract = ZERO_HASH, data?: Uint8Array): Output => ({
   contract,
@@ -258,7 +259,7 @@ Deno.test('onBuilt fires with the built block', () => {
 
   const seen: (Block | undefined)[] = [];
   const draft = genesisDraft(store, genesis);
-  store.onBuilt(draft, (block) => seen.push(block));
+  store.onBuilt(draft, (block) => seen.push(block), neverAbort);
   store.build(draft);
 
   assertEquals(seen, [builtBlock(draft)]);
@@ -273,7 +274,7 @@ Deno.test('onBuilt fires immediately for an already built draft', () => {
   store.build(draft);
 
   const seen: (Block | undefined)[] = [];
-  store.onBuilt(draft, (block) => seen.push(block));
+  store.onBuilt(draft, (block) => seen.push(block), neverAbort);
 
   assertEquals(seen, [builtBlock(draft)]);
 });
@@ -318,11 +319,11 @@ Deno.test("built blocks are ingested before the draft's onBuilt is called", () =
   const draft = genesisDraft(store, genesis);
   const order: string[] = [];
   const statusAtIngest: DraftStatusType[] = [];
-  store.onBuilt(draft, () => order.push('draft_build'));
+  store.onBuilt(draft, () => order.push('draft_build'), neverAbort);
   ctx.get(BlockStore).onIngest(() => {
     order.push('block_ingest');
     statusAtIngest.push(draft.status.type);
-  });
+  }, neverAbort);
   store.build(draft);
 
   assertEquals(order, ['block_ingest', 'draft_build']);
@@ -389,7 +390,7 @@ Deno.test('a retried build re-enters itself through its own ingestion', () => {
   assertEquals(draft.status.type, DraftStatusType.Building);
 
   let ingested = 0;
-  ctx.get(BlockStore).onIngest(() => ingested++);
+  ctx.get(BlockStore).onIngest(() => ingested++, neverAbort);
   ingest(ctx, anchorRaw);
 
   assertEquals(draft.status.type, DraftStatusType.Built);

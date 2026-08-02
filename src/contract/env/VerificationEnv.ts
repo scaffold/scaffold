@@ -49,4 +49,6 @@ export class VerificationEnv implements ContractEnv {
       throw new Error(`Contract verification failed: Result output data does not match`);
     }
   }
+
+  finalize() {}
 }

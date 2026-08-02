@@ -10,8 +10,8 @@ export const BLOCK_REF_TYPE = 256;
 export const DRAFT_TYPE = 257;
 
 export enum AtomSource {
-  Genesis = 'genesis',
-  Local = 'local',
-  Remote = 'remote',
-  Storage = 'storage',
+  Genesis,
+  Local,
+  Remote,
+  Storage,
 }

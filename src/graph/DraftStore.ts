@@ -41,13 +41,13 @@ export class DraftStore {
 
   constructor(private ctx: Context) {}
 
-  onBuilt(draft: Draft, cb: (block?: Block) => void, signal?: AbortSignal) {
-    if (signal?.aborted) return;
+  onBuilt(draft: Draft, cb: (block?: Block) => void, signal: AbortSignal) {
+    if (signal.aborted) return;
     draft.listeners.add(cb);
     if (draft.status.type === DraftStatusType.Built) {
       cb(draft.status.block);
     }
-    signal?.addEventListener('abort', () => assert(draft.listeners.delete(cb)));
+    signal.addEventListener('abort', () => assert(draft.listeners.delete(cb)));
   }
 
   create(attrs?: Partial<DraftPayload>): Draft {

@@ -4,9 +4,7 @@ import { Contract } from '../env/Contract.ts';
 export const DEMO_CONTRACT = Hash.digest('demo');
 
 export const demoContract: Contract = {
-  async run(env) {
-    await env.claim();
-
+  run(env) {
     const name = new TextDecoder().decode(env.params());
     const response = new TextEncoder().encode(`Hello, ${name}`);
     env.setResult(response);
