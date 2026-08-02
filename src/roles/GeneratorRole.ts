@@ -21,7 +21,7 @@ export class GeneratorRole implements Disposable {
 
   run() {
     // Make sure the OutputIndex's onIngest is registered first.
-    // This is necessary so incoming outputs are first available to things blocking on a specific output (like ContractEnv.claim), then secondly launch a job.
+    // This is necessary so incoming outputs are first available to things blocking on a specific output (like ContractEnv.claim), then secondly launch a generation job.
     this.ctx.get(OutputIndex);
 
     this.ctx.get(BlockStore).onIngest(
