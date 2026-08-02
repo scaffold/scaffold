@@ -1,17 +1,22 @@
 import { Hash } from '../util/Hash.ts';
-import { MaybePromise } from '../util/MaybePromise.ts';
-import { createReader, Reader } from './Reader.ts';
-
-/** Lazily-built structured params, walked by the contract's `build_params` entry. */
-export type Builder = (descriptor: string) => MaybePromise<Reader>;
+import { createSource } from './createSource.ts';
+import { SourceRoot } from './values.ts';
 
 export interface Query {
   contract: Hash;
-  params: Uint8Array | Builder;
+  params: Uint8Array | SourceRoot;
 }
 
 export interface Statement extends Query {
-  data: Uint8Array | Builder;
+  data: Uint8Array | SourceRoot;
+}
+
+export class ObjectQuery implements Query {
+  public params: SourceRoot;
+
+  constructor(public contract: Hash, params: unknown) {
+    this.params = () => createSource(params);
+  }
 }
 
 export class BinaryContractInputExample implements Query {
@@ -28,10 +33,10 @@ export class BinaryContractInputExample implements Query {
 
 export class ReaderContractInputExample implements Query {
   contract = Hash.digest('reader contract');
-  params: (_descriptor: string) => Reader;
+  params: SourceRoot;
 
   constructor(params: { x: number; y: number }) {
-    this.params = () => createReader(params);
+    this.params = () => createSource(params);
   }
 }
 

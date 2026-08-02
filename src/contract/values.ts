@@ -1,13 +1,13 @@
 import { MaybePromise } from '../util/MaybePromise.ts';
 
 export enum ValueType {
-  Null = 0,
-  Bool = 1,
-  Number = 2,
-  String = 3,
-  Bytes = 4,
-  List = 5,
-  Struct = 6,
+  Unit,
+  Bool,
+  Number,
+  String,
+  Bytes,
+  List,
+  Struct,
 }
 
 /** Describes a field's type, purpose, and allowed values. */
@@ -29,31 +29,68 @@ export interface EnumOption {
   markdownDescription?: string;
 }
 
-// Maps should be represented as a list of key-value pairs
-export interface BuilderHost {
-  readNull(key: string | number, desc: ValueDescriptor): MaybePromise<void>;
-  readBool(key: string | number, desc: ValueDescriptor): MaybePromise<boolean>;
-  readNumber(key: string | number, desc: ValueDescriptor): MaybePromise<number>;
-  readString(key: string | number, desc: ValueDescriptor): MaybePromise<string>;
-  readBytes(key: string | number, desc: ValueDescriptor): MaybePromise<Uint8Array>;
+// Types for building (WASM asks host for values)
 
-  enterList(key: string | number, count: number): MaybePromise<number>;
-  exitList(): void;
-
-  enterStruct(key: string | number): void;
-  exitStruct(): void;
+export interface UnitSource {
+  type: ValueType.Unit;
+}
+export interface BoolSource {
+  type: ValueType.Bool;
+  value: boolean;
+}
+export interface NumberSource {
+  type: ValueType.Number;
+  value: number;
+}
+export interface StringSource {
+  type: ValueType.String;
+  value: string;
+}
+export interface BytesSource {
+  type: ValueType.Bytes;
+  value: Uint8Array;
+}
+export interface ListSource {
+  type: ValueType.List;
+  length?: number;
+  at(index: number, descriptor?: string): MaybePromise<Source | undefined>;
+}
+export interface StructSource {
+  type: ValueType.Struct;
+  at(key: string, descriptor?: string): MaybePromise<Source | undefined>;
 }
 
-export interface WalkerHost {
-  emitNull(key: string | number, desc: ValueDescriptor): void;
-  emitBool(key: string | number, value: boolean, desc: ValueDescriptor): void;
-  emitNumber(key: string | number, value: number, desc: ValueDescriptor): void;
-  emitString(key: string | number, value: string, desc: ValueDescriptor): void;
-  emitBytes(key: string | number, value: Uint8Array, desc: ValueDescriptor): void;
+export type Source =
+  | UnitSource
+  | BoolSource
+  | NumberSource
+  | StringSource
+  | BytesSource
+  | ListSource
+  | StructSource;
+// Maps should be represented as a list of key-value pairs.
+// The descriptor can and should be used to specify the exact semantics of encodings like this.
 
-  enterList(key: string | number, count: number): boolean; // Return false to skip this branch
-  exitList(): void;
+export type SourceRoot = (descriptor?: string) => MaybePromise<Source | undefined>;
 
-  enterStruct(key: string | number): boolean; // Return false to skip this branch
-  exitStruct(): void;
+// Types for walking (WASM tells host values)
+
+export interface ValueSink {
+  setUnit(): void;
+  setBool(value: boolean): void;
+  setNumber(value: number): void;
+  setString(value: string): void;
+  setBytes(value: Uint8Array): void;
+  setList(length?: number): ListSink | undefined; // Host should return undefined if they're not interested in descending into this collection
+  setStruct(): StructSink | undefined; // Host should return undefined if they're not interested in descending into this collection
 }
+
+export interface ListSink {
+  at(index: number, descriptor?: string): ValueSink;
+}
+
+export interface StructSink {
+  at(key: string, descriptor?: string): ValueSink;
+}
+
+export type SinkRoot = (descriptor?: string) => ValueSink;

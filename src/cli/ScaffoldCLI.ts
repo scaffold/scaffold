@@ -1,11 +1,10 @@
 import { parseArgs } from '@std/cli/parse-args';
 import { Scaffold, ScaffoldConfig } from '../Scaffold.ts';
 import { Hash } from '../util/Hash.ts';
-import { unimplemented } from '@std/assert/unimplemented';
-import { RECORD_CONTRACT } from '../core/Block.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
-import { createReader, Reader } from '../contract/Reader.ts';
-import { ValueType } from '../contracts/Contract.ts';
+import { createSource } from '../contract/createSource.ts';
+import { Source, ValueType } from '../contract/values.ts';
+import { todo } from '../util/functional.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -178,39 +177,48 @@ export class ScaffoldCLI {
       config.privateKey = await this.readInput(args.private_key_file);
     }
     if (args.genesis_block_file !== undefined) {
-      unimplemented('genesis_block_file option not yet implemented');
+      todo('genesis_block_file option not yet implemented');
     }
     if (args.bootstrap_urls !== undefined) {
       config.bootstrapUrls = args.bootstrap_urls.split(',');
     }
     if (args.verbosity !== undefined) {
-      unimplemented('verbosity option not yet implemented');
+      todo('verbosity option not yet implemented');
     }
 
     return this.deps.constructScaffold(config);
   }
 
-  private async createReaderFromFs(
+  private async createSourceFromFs(
     base: { open(name: string): Promise<FsNode | { type: FsNodeType.Missing }> },
     name: string,
-  ): Promise<Reader> {
+  ): Promise<Source> {
     if (name === '.' || name === '..') throw new Error(`Invalid open key ${name}`);
 
     const node = await base.open(name);
     if (node.type === FsNodeType.File) {
       return { type: ValueType.Bytes, value: await node.read() };
     } else if (node.type === FsNodeType.Directory) {
+      const list = await node.list();
       return {
-        type: ValueType.Object,
-        keys: (await node.list()).map((x) => x.name),
-        at: (key, _desc) => this.createReaderFromFs(node, key),
+        type: ValueType.List,
+        length: list.length,
+        at: (idx, _desc) => ({
+          type: ValueType.Struct,
+          at: (key, _desc) =>
+            key === 'key'
+              ? { type: ValueType.String, value: list[idx].name }
+              : key === 'value'
+              ? this.createSourceFromFs(node, key)
+              : undefined,
+        }),
       };
     }
 
     const jsonNode = await base.open(name + '.json');
     if (jsonNode.type === FsNodeType.File) {
       const value = JSON.parse(bin2str(await jsonNode.read()));
-      return createReader(value);
+      return createSource(value);
     }
 
     throw new Error(`Cannot open ${name}`);
@@ -228,14 +236,12 @@ export class ScaffoldCLI {
 
     const result = await scaffold.put({
       contract: Hash.fromHex(contractHash),
-      params: () => this.createReaderFromFs(this.deps, params),
+      params: () => this.createSourceFromFs(this.deps, params),
       records: {},
     });
 
     const output = {
       hash: result.hash.toHex(),
-      records: result.outputs.filter((x) => Hash.equals(x.verifier.contract, RECORD_CONTRACT))
-        .map((x) => [bin2str(x.verifier.params), bin2str(x.body ?? EMPTY_ARR)]),
     };
 
     this.deps.stdout(str2bin(JSON.stringify(output, null, 2) + '\n'));
@@ -253,7 +259,7 @@ export class ScaffoldCLI {
 
     const result = await scaffold.fetch({
       contract: Hash.fromHex(contractHash),
-      params: () => this.createReaderFromFs(this.deps, params),
+      params: () => this.createSourceFromFs(this.deps, params),
       verify: true,
     });
     this.deps.stdout(result.body);

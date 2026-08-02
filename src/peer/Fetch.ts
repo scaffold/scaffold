@@ -7,6 +7,7 @@ import { BlockStore } from '../graph/BlockStore.ts';
 import { Block, DraftStatusType } from '../graph/types.ts';
 import { OutputIndex } from '../graph/OutputIndex.ts';
 import { neverAbort } from '../util/abortable.ts';
+import { createSource } from '../contract/createSource.ts';
 
 export interface FetchInput extends Query {
   signal?: AbortSignal;
@@ -22,11 +23,11 @@ export class Fetch {
   constructor(private ctx: Context) {}
 
   /** Public API: subscribe to a verifier with per-caller projection. */
-  fetch({ contract, params, signal, onResult }: FetchInput) {
+  async fetch({ contract, params, signal, onResult }: FetchInput) {
     if (signal?.aborted) return;
 
     if (!(params instanceof Uint8Array)) {
-      throw new Error(`Reader-based params are not supported yet`);
+      params = await this.ctx.get(this.ctx.config.contractPlugin).buildParams(contract, params);
     }
 
     let hasResult = false;

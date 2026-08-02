@@ -5,8 +5,7 @@ import { ContractProvider } from './ContractProvider.ts';
 import { MissingContractProvider } from './MissingContractProvider.ts';
 import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
 import { FlowCtl } from '../util/RunQueue.ts';
-import { WalkerHost } from './values.ts';
-import { Reader } from './Reader.ts';
+import { SinkRoot, SourceRoot } from './values.ts';
 
 export class RoutingContractProvider implements ContractProvider {
   private map = new Map<HashPrimitive, ContractProvider>();
@@ -21,50 +20,28 @@ export class RoutingContractProvider implements ContractProvider {
     }
   }
 
-  generate(
-    predicate: Predicate,
-    draft: Draft,
-    flowCtl: FlowCtl,
-  ): MaybePromise<void> {
+  generate(predicate: Predicate, draft: Draft, flowCtl: FlowCtl): MaybePromise<void> {
     return this.getProvider(predicate.contract).generate(predicate, draft, flowCtl);
   }
 
-  verify(
-    predicate: Predicate,
-    block: Block,
-    flowCtl: FlowCtl,
-  ): MaybePromise<void> {
+  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void> {
     return this.getProvider(predicate.contract).verify(predicate, block, flowCtl);
   }
 
-  buildParams(
-    contract: Hash,
-    reader: (descriptor: string) => MaybePromise<Reader>,
-  ): MaybePromise<Uint8Array> {
-    return this.getProvider(contract).buildParams(contract, reader);
+  buildParams(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {
+    return this.getProvider(contract).buildParams(contract, source);
   }
 
-  buildData(
-    contract: Hash,
-    reader: (descriptor: string) => MaybePromise<Reader>,
-  ): MaybePromise<Uint8Array> {
-    return this.getProvider(contract).buildData(contract, reader);
+  buildData(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {
+    return this.getProvider(contract).buildData(contract, source);
   }
 
-  walkParams(
-    contract: Hash,
-    params: Uint8Array,
-    host: WalkerHost,
-  ): MaybePromise<void> {
-    return this.getProvider(contract).walkParams(contract, params, host);
+  walkParams(contract: Hash, params: Uint8Array, sink: SinkRoot): MaybePromise<void> {
+    return this.getProvider(contract).walkParams(contract, params, sink);
   }
 
-  walkData(
-    contract: Hash,
-    data: Uint8Array,
-    host: WalkerHost,
-  ): MaybePromise<void> {
-    return this.getProvider(contract).walkData(contract, data, host);
+  walkData(contract: Hash, data: Uint8Array, sink: SinkRoot): MaybePromise<void> {
+    return this.getProvider(contract).walkData(contract, data, sink);
   }
 
   debug?(predicate: Predicate): string | undefined {

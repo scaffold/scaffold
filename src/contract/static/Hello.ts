@@ -1,6 +1,8 @@
+import { bin2str, str2bin } from '../../util/buffer.ts';
+import { assert } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
 import { Contract } from '../env/Contract.ts';
-import { readString } from '../Reader.ts';
+import { ValueType } from '../values.ts';
 
 export const HELLO_CONTRACT = Hash.digest('hello');
 
@@ -12,11 +14,15 @@ export const helloContract: Contract = {
   },
 
   async buildParams(reader) {
-    const name = await readString(await reader('parameters for the hello contract'), 'name', {
-      type: 'string',
-      shortDescription: 'Your name',
-    });
-    return str2bin(name);
+    const x = await reader();
+    assert(x?.type === ValueType.Struct);
+    const name = await x.at('name');
+    assert(name?.type === ValueType.String);
+    return str2bin(name.value);
+  },
+
+  walkParams(params, sink) {
+    sink().setStruct()?.at('name').setString(bin2str(params));
   },
 
   debug(params) {
