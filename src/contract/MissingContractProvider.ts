@@ -11,8 +11,8 @@ const contractError = (contract: Hash) =>
 export class MissingContractProvider implements ContractProvider {
   generate = predError;
   verify = predError;
-  walkParams = contractError;
-  walkData = contractError;
   buildParams = contractError;
   buildData = contractError;
+  walkParams = contractError;
+  walkData = contractError;
 }

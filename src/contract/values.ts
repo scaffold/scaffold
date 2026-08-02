@@ -1,15 +1,13 @@
+import { MaybePromise } from '../util/MaybePromise.ts';
+
 export enum ValueType {
   Null = 0,
   Bool = 1,
   Number = 2,
   String = 3,
-  Array = 4,
-  Object = 5,
-  // Added for the query-Reader build bridge: a Reader can hold a raw byte value
-  // with no String/Object analog. Appended (not renumbered) to keep the
-  // existing wire values stable. NOTE: the Zig `json-wb` ValueType constants
-  // (src/contracts/json-wb/src/main.zig) must add the matching `Bytes = 6`.
-  Bytes = 6,
+  Bytes = 4,
+  List = 5,
+  Struct = 6,
 }
 
 /** Describes a field's type, purpose, and allowed values. */
@@ -31,13 +29,31 @@ export interface EnumOption {
   markdownDescription?: string;
 }
 
+// Maps should be represented as a list of key-value pairs
+export interface BuilderHost {
+  readNull(key: string | number, desc: ValueDescriptor): MaybePromise<void>;
+  readBool(key: string | number, desc: ValueDescriptor): MaybePromise<boolean>;
+  readNumber(key: string | number, desc: ValueDescriptor): MaybePromise<number>;
+  readString(key: string | number, desc: ValueDescriptor): MaybePromise<string>;
+  readBytes(key: string | number, desc: ValueDescriptor): MaybePromise<Uint8Array>;
+
+  enterList(key: string | number, count: number): MaybePromise<number>;
+  exitList(): void;
+
+  enterStruct(key: string | number): void;
+  exitStruct(): void;
+}
+
 export interface WalkerHost {
-  emitBytes(key: string, value: Uint8Array, desc: ValueDescriptor): void;
-  emitString(key: string, value: string, desc: ValueDescriptor): void;
-  emitNumber(key: string, value: number, desc: ValueDescriptor): void;
-  emitBool(key: string, value: boolean, desc: ValueDescriptor): void;
-  emitMapStart(key: string): boolean; // Return false to skip this branch
-  emitMapEnd(): void;
-  emitListStart(key: string, count: number): boolean; // Return false to skip this branch
-  emitListEnd(): void;
+  emitNull(key: string | number, desc: ValueDescriptor): void;
+  emitBool(key: string | number, value: boolean, desc: ValueDescriptor): void;
+  emitNumber(key: string | number, value: number, desc: ValueDescriptor): void;
+  emitString(key: string | number, value: string, desc: ValueDescriptor): void;
+  emitBytes(key: string | number, value: Uint8Array, desc: ValueDescriptor): void;
+
+  enterList(key: string | number, count: number): boolean; // Return false to skip this branch
+  exitList(): void;
+
+  enterStruct(key: string | number): boolean; // Return false to skip this branch
+  exitStruct(): void;
 }

@@ -114,7 +114,7 @@ export class RunQueue implements Disposable {
 
     // const sortedJobs = [...this.jobs.entries()].sort((a, b) => b[0].priority() - a[0].priority());
 
-    // TODO: Implement this
+    // TODO: Implement this correctly
     for (const [job, handle] of this.jobs.entries()) {
       if (handle.state === JobState.Pending) {
         this.launch(job, handle);

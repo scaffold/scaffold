@@ -5,33 +5,12 @@ import { bin2hex } from '../util/hex.ts';
 import { mapPut } from '../util/map.ts';
 import { BlockStore } from '../graph/BlockStore.ts';
 import { DraftStore } from '../graph/DraftStore.ts';
-import {
-  CancelError,
-  ExecutionQueue,
-  ExecutionQueueConfig,
-  FlowCtl,
-  Job,
-} from '../peer/ExecutionQueue.ts';
+import { CancelError, ExecutionQueue, FlowCtl, Job } from '../peer/ExecutionQueue.ts';
 import { Block, Draft, Predicate } from '../graph/types.ts';
 import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
-
-declare const predicateKeySymbol: unique symbol;
-type PredicateKey = string & { readonly [predicateKeySymbol]: true };
-
-const predicateKey = (predicate: Predicate): PredicateKey =>
-  `${predicate.contract.toHex()}:${bin2hex(predicate.params)}` as PredicateKey;
-
-interface Execution {
-  predicate: Predicate;
-
-  // Generators should shift claims from this array
-  availableClaims: { block: Block; outputIdx: number }[];
-
-  runningJob?: Job;
-}
+import { OutputIndex } from '../graph/OutputIndex.ts';
 
 export class GeneratorRole implements Disposable {
-  private pending = new Map<PredicateKey, Execution>();
   private disposeController = new AbortController();
 
   constructor(private ctx: Context) {}
@@ -41,6 +20,10 @@ export class GeneratorRole implements Disposable {
   }
 
   run() {
+    // Make sure the OutputIndex's onIngest is registered first.
+    // This is necessary so incoming outputs are first available to things blocking on a specific output (like ContractEnv.claim), then secondly launch a job.
+    this.ctx.get(OutputIndex);
+
     this.ctx.get(BlockStore).onIngest(
       (block) => this.onIngest(block),
       this.disposeController.signal,
@@ -62,69 +45,46 @@ export class GeneratorRole implements Disposable {
 
     const output = block.payload.outputs[outputIdx];
 
-    const predicate: Predicate = { contract: output.contract, params: output.params };
-    const key = predicateKey(predicate);
-
-    const exec = mapPut(this.pending, key, () => ({ predicate, availableClaims: [] }));
-    exec.availableClaims.push({ block, outputIdx });
-
-    if (exec.runningJob === undefined) {
-      this.startJob(key, exec);
-    }
-  }
-
-  private startJob(key: PredicateKey, exec: Execution) {
-    const job = new GenerationJob(this.ctx, exec);
-    exec.runningJob = job;
-
-    (async () => {
-      await this.ctx.get(ExecutionQueue).run(job);
-      this.ctx.get(ExecutionQueue).remove(job);
-      exec.runningJob = undefined;
-
-      if (exec.availableClaims.length === 0) {
-        const deleted = this.pending.delete(key);
-        assert(deleted);
-      } else {
-        this.startJob(key, exec);
-      }
-    })();
+    const job = new GenerationJob(this.ctx, output);
+    this.ctx.get(ExecutionQueue).run(job)
+      .then(() => this.ctx.get(ExecutionQueue).remove(job));
   }
 }
 
 class GenerationJob implements Job {
-  constructor(private ctx: Context, private execution: Execution) {}
+  private draft?: Draft;
+
+  constructor(private ctx: Context, private predicate: Predicate) {}
 
   priority(): number {
     // TODO: This needs to reflect the expected profit of the job, whether it's running or not.
     // Before a job starts, we need to estimate the profit
     // While a job is running, we need to estimate the profit
+    // While a job isn't running, we don't hold a draft. So we'll have to estimate the profit without it.
 
-    let total = 0n;
-    for (const { block, outputIdx } of this.execution.availableClaims) {
-      total += block.payload.outputs[outputIdx].amount;
-    }
-    return Number(total);
+    return 0;
   }
 
   async run(ctl: FlowCtl): Promise<void> {
-    const draft = this.ctx.get(DraftStore).create();
+    assert(this.draft === undefined);
+    this.draft = this.ctx.get(DraftStore).create();
     try {
-      await this.ctx.get(this.ctx.config.contractPlugin)
-        .generate(this.execution.predicate, draft, ctl);
+      await this.ctx.get(this.ctx.config.contractPlugin).generate(this.predicate, this.draft, ctl);
 
-      if (Hash.equals(this.execution.predicate.contract, SIGNATURE_CONTRACT)) {
+      if (Hash.equals(this.predicate.contract, SIGNATURE_CONTRACT)) {
         // The signature contract stores as a store of value; there's no need to immediately publish the claiming block.
-        this.ctx.get(DraftStore).lock(draft);
+        this.ctx.get(DraftStore).lock(this.draft);
       } else {
-        this.ctx.get(DraftStore).build(draft);
+        this.ctx.get(DraftStore).build(this.draft);
       }
     } catch (err) {
       if (!(err instanceof CancelError)) {
         console.error(err);
       }
 
-      this.ctx.get(DraftStore).cancel(draft);
+      this.ctx.get(DraftStore).cancel(this.draft);
+    } finally {
+      this.draft = undefined;
     }
   }
 }

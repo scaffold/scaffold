@@ -18,27 +18,27 @@ export interface ContractProvider {
     flowCtl: FlowCtl,
   ): MaybePromise<void>;
 
-  walkParams?(
+  buildParams(
+    contract: Hash,
+    reader: (descriptor: string) => MaybePromise<Reader>,
+  ): MaybePromise<Uint8Array>;
+
+  buildData(
+    contract: Hash,
+    reader: (descriptor: string) => MaybePromise<Reader>,
+  ): MaybePromise<Uint8Array>;
+
+  walkParams(
     contract: Hash,
     params: Uint8Array,
     host: WalkerHost,
   ): MaybePromise<void>;
 
-  walkData?(
+  walkData(
     contract: Hash,
     data: Uint8Array,
     host: WalkerHost,
   ): MaybePromise<void>;
 
-  buildParams?(
-    contract: Hash,
-    reader: (descriptor: string) => MaybePromise<Reader>,
-  ): MaybePromise<Uint8Array>;
-
-  buildData?(
-    contract: Hash,
-    reader: (descriptor: string) => MaybePromise<Reader>,
-  ): MaybePromise<Uint8Array>;
-
-  debugName?(predicate: Predicate): string | undefined;
+  debug?(predicate: Predicate): string | undefined;
 }

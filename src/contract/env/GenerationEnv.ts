@@ -22,7 +22,9 @@ export class GenerationEnv implements ContractEnv {
     private predicate: Predicate,
     private draft: Draft,
     private flowCtl: FlowCtl,
-  ) {}
+  ) {
+    this.updateDraft();
+  }
 
   mode() {
     return ExecutionMode.Generation;
@@ -63,20 +65,15 @@ export class GenerationEnv implements ContractEnv {
   }
 
   finalize() {
-    const controller = new AbortController();
-    debugger;
-    this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
-      if (output.output.data === undefined && output.claims.length === 0) {
-        this.claims.push(output);
-      }
-    }, controller.signal);
-    controller.abort();
-
     this.updateDraft();
   }
 
   private updateDraft() {
-    const payload: DraftPayload = { claims: [...this.claims], refs: [], outputs: [] };
+    const payload: DraftPayload = {
+      claims: [...this.getAvailableIncentive(), ...this.claims],
+      refs: [],
+      outputs: [],
+    };
 
     if (this.result !== undefined) {
       payload.claims.push({ producer: DRAFT_SELF, outputIndex: payload.outputs.length });
@@ -89,5 +86,22 @@ export class GenerationEnv implements ContractEnv {
     }
 
     this.ctx.get(DraftStore).update(this.draft, payload);
+  }
+
+  private getAvailableIncentive() {
+    const claims: { producer: Block; outputIndex: number }[] = [];
+
+    const controller = new AbortController();
+    this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
+      if (
+        output.output.data === undefined &&
+        output.claims.every((x) => x.claimer === this.draft)
+      ) {
+        claims.push(output);
+      }
+    }, controller.signal);
+    controller.abort();
+
+    return claims;
   }
 }
