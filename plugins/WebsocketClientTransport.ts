@@ -16,6 +16,8 @@ import {
   TransportService,
   TransportSession,
 } from '../src/interfaces/transport.ts';
+import { assert } from '../src/util/functional.ts';
+import { isUnshared } from './util.ts';
 
 export class WebsocketClientTransport implements TransportPlugin {
   readonly emitsProtocol = undefined;
@@ -62,8 +64,14 @@ function dial(
 
   socket.onopen = () => {
     const provider: ConnectionProvider = {
-      sendReliable: (data: Uint8Array) => socket.send(data),
-      sendFast: (data: Uint8Array) => socket.send(data),
+      sendReliable: (data: Uint8Array) => {
+        assert(isUnshared(data)); // WebSocket.send doesn't support SharedArrayBuffer
+        socket.send(data);
+      },
+      sendFast: (data: Uint8Array) => {
+        assert(isUnshared(data)); // WebSocket.send doesn't support SharedArrayBuffer
+        socket.send(data);
+      },
       shutdown: () => {
         try {
           socket.close();

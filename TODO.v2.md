@@ -24,6 +24,7 @@ Stretch #3:
 - Descendant weight propagation
 - Weight feeds into draft prioritization
 - Eventual consensus (2 peers publishing contesting blocks should eventually converge)
+- Piggybacking
 
 ## Blocking decisions (gate the block codec)
 
@@ -107,3 +108,9 @@ Surfaced while moving the v2 files into `src/{logic,graph,contract,peer}/`; none
 - [ ] `Forest`, `RoutingContractProvider` and `EnvContractProvider` all accept a `Context` and discard it
 - [ ] `Fetch.fetch` became `async` when it gained `buildParams` support, but no caller awaits it -- `scripts/test.ts` fires it and drops the promise. On the `Uint8Array` params path the body still runs to completion synchronously, so nothing has broken yet; on the `SourceRoot` path the subscription and the query draft are deferred to a microtask and any throw becomes an unhandled rejection with no caller to surface it. That is exactly what killed `tests/peer/Fetch.test.ts` on adf24f6 (`assertThrows` cannot see an async throw; the escaped rejection cancelled the rest of the file). Tests now await; decide whether the public API should return a promise at all, or subscribe synchronously and build params in the background
 - [ ] The three `BUG:` comments in `tests/peer/Fetch.test.ts` cite line numbers that no longer match `src/peer/Fetch.ts`, and their tests now _pass_ asserting the correct behavior -- `fetch` gained a `BlockStore.getAll()` prescan that fixes "an answer already in the store". The corresponding `Fetch.fetch` entry under Known gaps is at least partly stale; re-derive which of the three leaks are still real. Paths were corrected during the restructure, line numbers were dropped rather than guessed
+
+## Typed-array / SharedArrayBuffer follow-ups (2026-08-03)
+
+- [ ] `plugins/WebsocketClientTransport.ts:65-66` and `plugins/browser/WebrtcTransport.ts:75-76` have the same `Uint8Array<ArrayBufferLike>` -> `send()` type error that `plugins/deno/WebsocketServerTransport.ts` just fixed with a local `unshareBuffer`. They only escaped notice because `deno run --check scripts/signalingServer.ts` walks just that one entrypoint's module graph. Hoist `unshareBuffer`/`isUnshared` into `src/util/buffer.ts` and use it at all six call sites
+- [ ] `ConnectionProvider.sendReliable`/`sendFast` use method shorthand, so TypeScript checks their parameters bivariantly even under `strict` -- that is the only reason a `(data: Uint8Array<ArrayBuffer>) => void` implementation is assignable. Switching them to property syntax (`sendReliable: (data: Uint8Array) => void`) would make the variance sound but forces the narrowing up through `TransportBase` and `Gossip`. Decide which way once the transport API settles
+- [ ] `error()` in `src/util/functional.ts` does not participate in never-returning control-flow analysis, because TypeScript only applies that to a callee whose *variable* carries an explicit type annotation. `const error = (msg: string): never =>` annotates the arrow, not the const, so `if (!ok) error('...')` fails to narrow the fall-through. Every current call site is in expression position (`?? error(...)`, `return error(...)`) so nothing is broken today. One-line fix: `export const error: (msg: string) => never = (msg) => { throw new Error(msg); };`

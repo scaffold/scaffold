@@ -26,3 +26,5 @@
 // };
 
 export { decodeHex as hex2bin, encodeHex as bin2hex } from '@std/encoding';
+
+// TODO: Use the new Uint8Array.fromHex()?

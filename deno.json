@@ -8,29 +8,19 @@
     "useUnknownInCatchVariables": true,
     "noImplicitOverride": true,
     "strict": true,
-    "lib": [
-      "dom",
-      "deno.ns",
-      "deno.unstable"
-    ]
+    "lib": ["dom", "deno.ns", "deno.unstable"]
   },
-  "exclude": [
-    "dist/",
-    "coverage/",
-    ".claude/",
-    "avro/"
-  ],
+  "exclude": ["dist/", "coverage/", ".claude/", "avro/"],
   "lint": {
     "exclude": ["viz"],
     "rules": {
-      "tags": [
-        "recommended"
-      ],
+      "tags": ["recommended"],
       "include": [
         "camelcase",
         "default-param-last",
         "eqeqeq",
         "guard-for-in",
+        "no-console",
         "no-const-assign",
         "no-eval",
         "no-external-import",

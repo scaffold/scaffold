@@ -30,16 +30,6 @@ export class Transport extends TransportBase implements AsyncDisposable {
     await this.stop();
   }
 
-  run() {
-    for (const plugin of this.ctx.config.transportPlugins) {
-      this.startTransport(plugin);
-    }
-
-    for (const url of this.ctx.config.bootstrapUrls) {
-      this.connect(url instanceof URL ? url : new URL(url));
-    }
-  }
-
   onConnection(cb: ConnectionListener, signal: AbortSignal): void {
     subscribe(this.connectionListeners, cb, signal);
   }

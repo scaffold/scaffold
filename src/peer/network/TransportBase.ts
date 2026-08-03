@@ -26,10 +26,10 @@ export abstract class TransportBase {
   protected abstract getLogger(): ScopedLogger | undefined;
   protected abstract getTimeProvider(): TimeProvider;
 
-  startTransport(plugin: TransportPlugin) {
+  startTransport(plugin: TransportPlugin, onAnnounce?: (signal: string) => void) {
     let service: TransportService;
     try {
-      service = plugin.start(this.createAnonymousTransportDriver(plugin));
+      service = plugin.start(this.createAnonymousTransportDriver(plugin, onAnnounce));
     } catch (err) {
       this.getLogger()?.error('pluginStartFailed', {
         protocol: plugin.emitsProtocol,
@@ -58,7 +58,7 @@ export abstract class TransportBase {
     for (const { plugin, service } of this.transports) {
       if (plugin.acceptsProtocols.includes(protocol) && service.dialAddress !== undefined) {
         this.getLogger()?.info('bootstrapDial', { protocol, address: url.href });
-        service.dialAddress(url.href);
+        service.dialAddress(url);
         return;
       }
     }
@@ -101,13 +101,17 @@ export abstract class TransportBase {
     this.transports = [];
   }
 
-  private createAnonymousTransportDriver(plugin: TransportPlugin): AnonymousTransportDriver {
+  private createAnonymousTransportDriver(
+    plugin: TransportPlugin,
+    onAnnounce?: (signal: string) => void,
+  ): AnonymousTransportDriver {
     return {
       broadcastAddress: (address: string) => {
         this.getLogger()?.info('addressAnnounced', {
           protocol: plugin.emitsProtocol,
           address,
         });
+        onAnnounce?.(address);
         this.onAddressAnnounced(address, plugin.emitsProtocol);
       },
 

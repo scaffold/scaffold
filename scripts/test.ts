@@ -1,16 +1,22 @@
+import { WebsocketClientTransport } from '../plugins/WebsocketClientTransport.ts';
 import { makeDefaultConfig } from '../src/Config.ts';
-import { Context } from '../src/Context.ts';
-import { createSource } from '../src/contract/createSource.ts';
-import { BinaryContractInputExample, ObjectQuery, Query } from '../src/contract/Query.ts';
+import { ObjectQuery, Query } from '../src/contract/Query.ts';
 import { HELLO_CONTRACT } from '../src/contract/static/Hello.ts';
-import { DraftStore } from '../src/graph/DraftStore.ts';
-import { Fetch } from '../src/peer/Fetch.ts';
-import { Send } from '../src/peer/Send.ts';
 import { GeneratorRole } from '../src/roles/GeneratorRole.ts';
+import { Scaffold } from '../src/Scaffold.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 
-const ctx = new Context(makeDefaultConfig());
-ctx.get(GeneratorRole);
+const scaffold = new Scaffold({
+  ...makeDefaultConfig(),
+  roles: [GeneratorRole],
+});
+
+scaffold.startTransport(new WebsocketClientTransport(), (signal) => {
+  // deno-lint-ignore no-console
+  console.log(`WebSocket client announce: ${signal}`);
+});
+
+scaffold.connect('ws://127.0.0.1:8314/');
 
 export class HelloContractQuery extends ObjectQuery implements Query {
   constructor(params: { name: string }) {
@@ -18,7 +24,7 @@ export class HelloContractQuery extends ObjectQuery implements Query {
   }
 }
 
-await ctx.get(Fetch).fetch({
+await scaffold.fetch({
   ...new HelloContractQuery({ name: 'Joel' }),
   onResult: (result) => {
     console.log(bin2str(result!.body));

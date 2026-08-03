@@ -1,6 +1,10 @@
 import { MaybePromise } from '../src/util/MaybePromise.ts';
 
-export const orderSignals = (fn: (signal: string) => MaybePromise<void>) => {
+export function isUnshared(data: Uint8Array): data is Uint8Array<ArrayBuffer> {
+  return !(data.buffer instanceof SharedArrayBuffer);
+}
+
+export function orderSignals(fn: (signal: string) => MaybePromise<void>) {
   const dispatchers: (() => MaybePromise<void>)[] = [];
   let isLocked = false;
   let nextSignalIdx = 0;
@@ -15,4 +19,4 @@ export const orderSignals = (fn: (signal: string) => MaybePromise<void>) => {
       isLocked = false;
     }
   };
-};
+}

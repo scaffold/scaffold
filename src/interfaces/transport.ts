@@ -36,7 +36,7 @@ export interface ConnectionDriver {
 /** Driver provided by Scaffold to plugins for anonymous (unauthenticated) connections. */
 export interface AnonymousTransportDriver {
   /** Emit a reachable address so other peers can bootstrap to us. */
-  broadcastAddress(signal: string): void;
+  broadcastAddress(url: URL): void;
 
   /** Register a newly-opened anonymous connection with Scaffold. */
   createAnonymousConnection(connection: ConnectionProvider): ConnectionDriver;
@@ -68,7 +68,7 @@ export interface TransportService {
   announceAddresses?(): void;
 
   /** Scaffold hands the plugin a bootstrap address to dial anonymously. */
-  dialAddress?(signal: string): void;
+  dialAddress?(url: URL): void;
 
   /** Scaffold begins an authenticated handshake with a specific peer. */
   initializeAuthenticatedTransport?(
@@ -81,7 +81,7 @@ export interface TransportService {
 // -- Plugin (user-provided entry point) --------------------------------
 
 export interface TransportPlugin {
-  /** Signaling protocol this plugin emits signals/addresses for. */
+  /** Signaling protocol this plugin emits signals/addresses for, example: `ws:`. */
   readonly emitsProtocol?: string;
 
   /** Signaling protocols this plugin consumes. */

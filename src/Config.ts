@@ -2,6 +2,7 @@ import { SeededEntropyProvider } from '../plugins/SeededEntropyProvider.ts';
 import { Context } from './Context.ts';
 import { ContractProvider } from './contract/ContractProvider.ts';
 import { DefaultContractProvider } from './contract/DefaultContractProvider.ts';
+import { makeDefaultGenesis } from './genesis.ts';
 import { generateGenesis } from './graph/genesis.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { Hash } from './util/Hash.ts';
@@ -40,29 +41,12 @@ export interface Config {
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
   contractPlugin: ContractPlugin;
-
-  transportPlugins: TransportPlugin[];
-  bootstrapUrls: (string | URL)[];
 }
 
 const rngSeed = 123n;
 
 export function makeDefaultConfig(): Config {
-  const privateKeys = ['alice', 'bob', 'charlie'].map((name) =>
-    Hash.digest(`scaffold:testnet:${name}`).toBytes()
-  );
-
-  const funding = Object.fromEntries(
-    privateKeys.map((key) => [bin2hex(secp.getPublicKey(key, true)), 1_000_000n]),
-  );
-
-  const genesis = generateGenesis('default', funding);
-
-  for (const [publicKey, amount] of Object.entries(funding)) {
-    console.warn(`Genesis output: ${publicKey} has ${amount}`);
-  }
-  console.warn(`Genesis block hash: ${Hash.digest(genesis).toHex()}`);
-
+  const { genesis, privateKeys } = makeDefaultGenesis();
   return {
     genesis,
     debugName: '',
@@ -80,7 +64,5 @@ export function makeDefaultConfig(): Config {
       cryptoRandomBytes: secp.etc.randomBytes,
     },
     contractPlugin: DefaultContractProvider,
-    transportPlugins: [],
-    bootstrapUrls: [],
   };
 }
