@@ -18,8 +18,6 @@ export class Gossip extends GossipBase implements Disposable {
     transport.onData((conn, data) => this.recvData(conn, data), signal);
     transport.onConnection((conn) => this.backfill(conn), signal);
     this.ctx.get(BlockStore).onIngest((block) => this.floodBlock(block), signal);
-
-    transport.run();
   }
 
   [Symbol.dispose]() {

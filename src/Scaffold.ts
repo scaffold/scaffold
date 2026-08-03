@@ -22,7 +22,11 @@ export class Scaffold {
     await this.ctx.destruct();
   }
 
-  startTransport(plugin: TransportPlugin, onAnnounce?: (signal: string) => void) {
+  getContext(): Context {
+    return this.ctx;
+  }
+
+  startTransport(plugin: TransportPlugin, onAnnounce?: (url: URL) => void) {
     this.ctx.get(Transport).startTransport(plugin, onAnnounce);
   }
 

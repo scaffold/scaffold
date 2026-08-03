@@ -20,13 +20,13 @@ class RecordingTransport extends TransportBase {
   ready: Connection[] = [];
   received: { conn: Connection; data: Uint8Array }[] = [];
   closed: Connection[] = [];
-  announced: { address: string; protocol?: string }[] = [];
+  announced: string[] = [];
   dataError?: Error;
 
   constructor(plugins: TransportPlugin[], bootstrapUrls: URL[], private log?: ScopedLogger) {
     super();
     for (const plugin of plugins) {
-      this.startTransport(plugin);
+      this.startTransport(plugin, (url) => this.announced.push(url.href));
     }
     for (const url of bootstrapUrls) {
       this.connect(url);
@@ -44,10 +44,6 @@ class RecordingTransport extends TransportBase {
 
   protected override onConnectionClosed(conn: Connection): void {
     this.closed.push(conn);
-  }
-
-  protected override onAddressAnnounced(address: string, protocol?: string): void {
-    this.announced.push({ address, protocol });
   }
 
   protected override getLogger(): ScopedLogger | undefined {
@@ -81,26 +77,32 @@ function setup(
 const warned = (eventLog: EventLog, event: string): boolean =>
   eventLog.query({ event, level: 'warn' }).length > 0;
 
-Deno.test('every plugin is started and asked to announce its addresses', () => {
+Deno.test('every plugin is started', () => {
   const first = new MockTransportPlugin();
   const second = new MockTransportPlugin();
   setup({ plugins: [first, second] });
 
   assertEquals([first.startedCount, second.startedCount], [1, 1]);
-  assertEquals([first.announceCount, second.announceCount], [1, 1]);
 });
 
-Deno.test('an announced address is reported with the announcing plugin protocol', () => {
+Deno.test('an announced address is reported to the announce callback', () => {
   const { plugin, transport } = setup();
-  plugin.anonymousDriver!.broadcastAddress('mock://listening');
+  plugin.anonymousDriver!.announceAddresses([new URL('mock://listening')]);
 
-  assertEquals(transport.announced, [{ address: 'mock://listening', protocol: 'mock' }]);
-  assertEquals(transport.announced, [{ address: 'mock://listening', protocol: 'mock' }]);
+  assertEquals(transport.announced, ['mock://listening']);
 });
 
-Deno.test('a bootstrap url is dialed by the plugin that accepts its protocol', () => {
+Deno.test('re-announcing the same address set does not report it again', () => {
+  const { plugin, transport } = setup();
+  plugin.anonymousDriver!.announceAddresses([new URL('mock://listening')]);
+  plugin.anonymousDriver!.announceAddresses([new URL('mock://listening')]);
+
+  assertEquals(transport.announced, ['mock://listening']);
+});
+
+Deno.test('a bootstrap url is dialed by the plugin whose acceptsUrl claims it', () => {
   const mock = new MockTransportPlugin();
-  const other = new MockTransportPlugin({ emitsProtocol: 'other', acceptsProtocols: ['other'] });
+  const other = new MockTransportPlugin({ acceptsScheme: 'other' });
   setup({ plugins: [mock, other], bootstrapUrls: ['other://host:1234/'] });
 
   assertEquals(mock.dialCalls, []);
@@ -113,11 +115,23 @@ Deno.test('a bootstrap url is dialed with its scheme and path intact', () => {
   assertEquals(plugin.dialCalls, ['mock://host:1234/some/path']);
 });
 
+// The two namespaces are separate: a signaling protocol id is not a URL scheme.
+Deno.test('a signaling protocol id does not route a bootstrap url', () => {
+  const plugin = new MockTransportPlugin({ acceptsProtocols: ['nosuch'], acceptsScheme: 'mock' });
+
+  assertThrows(
+    () => setup({ plugins: [plugin], bootstrapUrls: ['nosuch://host/'] }),
+    Error,
+    'No plugin accepts url nosuch://host/',
+  );
+  assertEquals(plugin.dialCalls, []);
+});
+
 Deno.test('a bootstrap url no plugin accepts is rejected', () => {
   assertThrows(
     () => setup({ bootstrapUrls: ['nosuch://host/'] }),
     Error,
-    'No plugin accepts protocol nosuch',
+    'No plugin accepts url nosuch://host/',
   );
 });
 
@@ -280,6 +294,7 @@ Deno.test('stopping closes every connection and stops every plugin', async () =>
 
 Deno.test('a plugin that fails to stop is logged rather than failing the shutdown', async () => {
   const failing: TransportPlugin = {
+    name: 'MockTransportPlugin',
     emitsProtocol: 'failing',
     acceptsProtocols: ['failing'],
     start: () => ({ stop: () => Promise.reject(new Error('stop blew up')) }),
@@ -296,21 +311,4 @@ Deno.test('a plugin that fails to stop is logged rather than failing the shutdow
 
   assertEquals(working.stoppedCount, 1);
   assert(warned(eventLog, 'pluginStopFailed'));
-});
-
-Deno.test('a plugin that fails to start is logged and aborts startup', () => {
-  const eventLog = new EventLog();
-  const failing: TransportPlugin = {
-    acceptsProtocols: [],
-    start: () => {
-      throw new Error('listener bind failed');
-    },
-  };
-
-  assertThrows(
-    () => new RecordingTransport([failing], [], new ScopedLogger(eventLog, 'transport')),
-    Error,
-    'listener bind failed',
-  );
-  assertEquals(eventLog.query({ event: 'pluginStartFailed', level: 'error' }).length, 1);
 });

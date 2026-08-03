@@ -1,7 +1,9 @@
 import { LoggingProvider } from '../src/interfaces/LoggingProvider.ts';
 import { LogEvent } from '../src/interfaces/logging.ts';
 import { str2bin } from '../src/util/buffer.ts';
+import { assert } from '../src/util/functional.ts';
 import { jsonSafeStringify } from '../src/util/json.ts';
+import { isUnshared } from './util.ts';
 
 export class WebsocketLoggingProvider implements LoggingProvider {
   private ws: WebSocket;
@@ -12,6 +14,7 @@ export class WebsocketLoggingProvider implements LoggingProvider {
     this.ws.binaryType = 'arraybuffer';
     this.ws.onopen = () => {
       for (const payload of this.queue ?? []) {
+        assert(isUnshared(payload));
         this.ws.send(payload);
       }
       this.queue = undefined;
@@ -28,6 +31,7 @@ export class WebsocketLoggingProvider implements LoggingProvider {
     );
 
     if (this.queue === undefined) {
+      assert(isUnshared(packet));
       this.ws.send(packet);
     } else {
       this.queue.push(packet);

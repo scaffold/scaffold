@@ -54,10 +54,6 @@ export class Transport extends TransportBase implements AsyncDisposable {
     arrCall(this.closedListeners, conn);
   }
 
-  protected override onAddressAnnounced(_address: string, _protocol?: string): void {
-    // Logged and recorded in announcedAddresses by the base; nothing consumes it yet.
-  }
-
   protected override getLogger(): ScopedLogger | undefined {
     return this.ctx.logger('transport');
   }

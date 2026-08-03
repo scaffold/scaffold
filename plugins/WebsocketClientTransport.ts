@@ -20,13 +20,18 @@ import { assert } from '../src/util/functional.ts';
 import { isUnshared } from './util.ts';
 
 export class WebsocketClientTransport implements TransportPlugin {
-  readonly emitsProtocol = undefined;
-  readonly acceptsProtocols = ['websocket'];
+  name = 'WebsocketClientTransport';
+  emitsProtocol = undefined;
+  acceptsProtocols = ['websocket'];
+
+  acceptsUrl(url: URL): boolean {
+    return url.protocol === 'ws:' || url.protocol === 'wss:';
+  }
 
   start(anonymousDriver: AnonymousTransportDriver): TransportService {
     return {
-      dialAddress: (address: string) => {
-        dial(address, (conn) => anonymousDriver.createAnonymousConnection(conn));
+      dialAddress: (url: URL) => {
+        dial(url.href, (conn) => anonymousDriver.createAnonymousConnection(conn));
       },
       initializeAuthenticatedTransport: (
         driver: AuthenticatedTransportDriver,

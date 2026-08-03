@@ -35,8 +35,8 @@ export interface ConnectionDriver {
 
 /** Driver provided by Scaffold to plugins for anonymous (unauthenticated) connections. */
 export interface AnonymousTransportDriver {
-  /** Emit a reachable address so other peers can bootstrap to us. */
-  broadcastAddress(url: URL): void;
+  /** Announce the current set of reachable address so other peers can bootstrap to us. */
+  announceAddresses(urls: URL[]): void;
 
   /** Register a newly-opened anonymous connection with Scaffold. */
   createAnonymousConnection(connection: ConnectionProvider): ConnectionDriver;
@@ -64,16 +64,11 @@ export interface TransportSession {
 // -- Service (running state of a plugin) -------------------------------
 
 export interface TransportService {
-  /** Scaffold asks the plugin to emit its reachable addresses via broadcastAddress. */
-  announceAddresses?(): void;
-
   /** Scaffold hands the plugin a bootstrap address to dial anonymously. */
   dialAddress?(url: URL): void;
 
   /** Scaffold begins an authenticated handshake with a specific peer. */
-  initializeAuthenticatedTransport?(
-    driver: AuthenticatedTransportDriver,
-  ): TransportSession;
+  initializeAuthenticatedTransport?(driver: AuthenticatedTransportDriver): TransportSession;
 
   stop(): Promise<void>;
 }
@@ -81,11 +76,17 @@ export interface TransportService {
 // -- Plugin (user-provided entry point) --------------------------------
 
 export interface TransportPlugin {
-  /** Signaling protocol this plugin emits signals/addresses for, example: `ws:`. */
-  readonly emitsProtocol?: string;
+  name: string;
 
-  /** Signaling protocols this plugin consumes. */
-  readonly acceptsProtocols: string[];
+  /** Anonymous. A predicate, not a list: the URL is always a concrete local
+   *  value, so nothing needs to enumerate this. */
+  acceptsUrl?(url: URL): boolean;
+
+  /** Signaling protocol this plugin emits signals/addresses for (attached to sendSignal). */
+  emitsProtocol?: string;
+
+  /** Signaling protocols this plugin consumes (attached to recvSignal). */
+  acceptsProtocols: string[];
 
   start(anonymousDriver: AnonymousTransportDriver): TransportService;
 }

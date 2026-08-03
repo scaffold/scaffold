@@ -21,25 +21,20 @@ export abstract class TransportBase {
   protected abstract onConnectionReady(conn: Connection): void;
   protected abstract onConnectionData(conn: Connection, data: Uint8Array): void;
   protected abstract onConnectionClosed(conn: Connection): void;
-  protected abstract onAddressAnnounced(address: string, protocol?: string): void;
 
   protected abstract getLogger(): ScopedLogger | undefined;
   protected abstract getTimeProvider(): TimeProvider;
 
-  startTransport(plugin: TransportPlugin, onAnnounce?: (signal: string) => void) {
-    let service: TransportService;
-    try {
-      service = plugin.start(this.createAnonymousTransportDriver(plugin, onAnnounce));
-    } catch (err) {
-      this.getLogger()?.error('pluginStartFailed', {
-        protocol: plugin.emitsProtocol,
-        error: String(err),
-      });
-      throw err;
-    }
-    this.transports.push({ plugin, service });
+  startTransport(plugin: TransportPlugin, onAnnounce?: (url: URL) => void) {
+    const service = plugin.start(this.createAnonymousTransportDriver(plugin, onAnnounce));
 
-    service.announceAddresses?.();
+    if ((plugin.acceptsUrl === undefined) !== (service.dialAddress === undefined)) {
+      throw new Error(
+        `Transport plugin ${plugin.name} must define either both acceptsUrl and dialAddress, or neither`,
+      );
+    }
+
+    this.transports.push({ plugin, service });
   }
 
   async stopTransport(plugin: TransportPlugin) {
@@ -53,18 +48,16 @@ export abstract class TransportBase {
   }
 
   connect(url: URL): void {
-    const protocol = url.protocol.replace(/:$/, '');
-
     for (const { plugin, service } of this.transports) {
-      if (plugin.acceptsProtocols.includes(protocol) && service.dialAddress !== undefined) {
-        this.getLogger()?.info('bootstrapDial', { protocol, address: url.href });
+      if (plugin.acceptsUrl?.(url) && service.dialAddress !== undefined) {
+        this.getLogger()?.info('bootstrapDial', { url });
         service.dialAddress(url);
         return;
       }
     }
 
-    this.getLogger()?.error('bootstrapUnroutable', { protocol, address: url.href });
-    throw new Error(`No plugin accepts protocol ${protocol} and is dialable`);
+    this.getLogger()?.error('bootstrapUnroutable', { url });
+    throw new Error(`No plugin accepts url ${url} and is dialable`);
   }
 
   getOpenConnections(): Set<Connection> {
@@ -103,16 +96,33 @@ export abstract class TransportBase {
 
   private createAnonymousTransportDriver(
     plugin: TransportPlugin,
-    onAnnounce?: (signal: string) => void,
+    onAnnounce?: (url: URL, unannounce: AbortSignal) => void,
   ): AnonymousTransportDriver {
+    let announcedUrls: { url: URL; unannounce: AbortController }[] = [];
+
     return {
-      broadcastAddress: (address: string) => {
-        this.getLogger()?.info('addressAnnounced', {
+      announceAddresses: (urls: URL[]) => {
+        this.getLogger()?.info('addressesAnnounced', {
           protocol: plugin.emitsProtocol,
-          address,
+          urls,
         });
-        onAnnounce?.(address);
-        this.onAddressAnnounced(address, plugin.emitsProtocol);
+
+        const newUrls = new Map(urls.map((u) => [u.toString(), u]));
+
+        announcedUrls = announcedUrls.filter((x) => {
+          if (newUrls.delete(x.url.toString())) {
+            return true;
+          } else {
+            x.unannounce.abort();
+            return false;
+          }
+        });
+
+        for (const url of newUrls.values()) {
+          const unannounce = new AbortController();
+          announcedUrls.push({ url, unannounce });
+          onAnnounce?.(url, unannounce.signal);
+        }
       },
 
       createAnonymousConnection: (provider: ConnectionProvider) => {

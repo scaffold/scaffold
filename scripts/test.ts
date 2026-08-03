@@ -2,14 +2,27 @@ import { WebsocketClientTransport } from '../plugins/WebsocketClientTransport.ts
 import { makeDefaultConfig } from '../src/Config.ts';
 import { ObjectQuery, Query } from '../src/contract/Query.ts';
 import { HELLO_CONTRACT } from '../src/contract/static/Hello.ts';
+import { DraftStore } from '../src/graph/DraftStore.ts';
 import { GeneratorRole } from '../src/roles/GeneratorRole.ts';
 import { Scaffold } from '../src/Scaffold.ts';
+import { neverAbort } from '../src/util/abortable.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 
 const scaffold = new Scaffold({
   ...makeDefaultConfig(),
   roles: [GeneratorRole],
 });
+
+/*
+const draftStore = scaffold.getContext().get(DraftStore);
+const draft = draftStore.create();
+draftStore.onBuilt(
+  draft,
+  (block) => console.log(bin2str(block?.raw ?? new Uint8Array())),
+  neverAbort,
+);
+draftStore.build(draft);
+*/
 
 scaffold.startTransport(new WebsocketClientTransport(), (signal) => {
   // deno-lint-ignore no-console

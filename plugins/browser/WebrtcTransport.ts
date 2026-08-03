@@ -18,8 +18,9 @@ import { Hash } from '../../src/util/Hash.ts';
 const defaultMaxMsgSize = 65536;
 
 export class WebrtcTransport implements TransportPlugin {
-  readonly emitsProtocol = 'webrtc';
-  readonly acceptsProtocols = ['webrtc'];
+  name = 'WebrtcTransport';
+  emitsProtocol = 'webrtc';
+  acceptsProtocols = ['webrtc'];
 
   private iceServersPromise: Promise<{ urls: string; order: number }[]>;
 

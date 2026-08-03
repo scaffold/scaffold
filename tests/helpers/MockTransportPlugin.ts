@@ -38,23 +38,32 @@ export interface MockAuthSession {
 }
 
 export class MockTransportPlugin implements TransportPlugin {
+  name = 'MockTransportPlugin';
   readonly emitsProtocol: string | undefined;
   readonly acceptsProtocols: string[];
+  acceptsUrl?: (url: URL) => boolean;
 
   anonymousDriver?: AnonymousTransportDriver;
   startedCount = 0;
   stoppedCount = 0;
-  announceCount = 0;
   readonly dialCalls: string[] = [];
   readonly authSessions: MockAuthSession[] = [];
 
   constructor(
-    options: { emitsProtocol?: string | null; acceptsProtocols?: string[] } = {},
+    options: {
+      emitsProtocol?: string | null;
+      acceptsProtocols?: string[];
+      /** URL scheme this plugin dials; null leaves `acceptsUrl` undefined. */
+      acceptsScheme?: string | null;
+    } = {},
   ) {
     this.emitsProtocol = options.emitsProtocol === null
       ? undefined
       : (options.emitsProtocol ?? 'mock');
     this.acceptsProtocols = options.acceptsProtocols ?? ['mock'];
+
+    const scheme = options.acceptsScheme === null ? undefined : (options.acceptsScheme ?? 'mock');
+    if (scheme !== undefined) this.acceptsUrl = (url: URL) => url.protocol === `${scheme}:`;
   }
 
   start(anonymousDriver: AnonymousTransportDriver): TransportService {
@@ -62,11 +71,8 @@ export class MockTransportPlugin implements TransportPlugin {
     this.anonymousDriver = anonymousDriver;
 
     return {
-      announceAddresses: () => {
-        this.announceCount += 1;
-      },
-      dialAddress: (address: string) => {
-        this.dialCalls.push(address);
+      dialAddress: (url: URL) => {
+        this.dialCalls.push(url.href);
       },
       initializeAuthenticatedTransport: (driver: AuthenticatedTransportDriver) => {
         const sentSignals: string[] = [];

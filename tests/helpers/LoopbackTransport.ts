@@ -89,6 +89,7 @@ export class LoopbackNetwork {
 }
 
 export class LoopbackTransportPlugin implements TransportPlugin {
+  name = 'LoopbackTransport';
   emitsProtocol = 'loopback';
   acceptsProtocols = ['loopback'];
 
@@ -104,12 +105,16 @@ export class LoopbackTransportPlugin implements TransportPlugin {
     network.register(address, this);
   }
 
+  acceptsUrl(url: URL): boolean {
+    return url.protocol === 'loopback:';
+  }
+
   start(anonymousDriver: AnonymousTransportDriver): TransportService {
     this.driver = anonymousDriver;
+    anonymousDriver.announceAddresses([new URL(this.address)]);
 
     return {
-      announceAddresses: () => anonymousDriver.broadcastAddress(this.address),
-      dialAddress: (address: string) => this.dial(address),
+      dialAddress: (url: URL) => this.dial(url),
       stop: () => {
         this.stoppedCount += 1;
         return Promise.resolve();
@@ -117,8 +122,8 @@ export class LoopbackTransportPlugin implements TransportPlugin {
     };
   }
 
-  private dial(address: string): void {
-    const remote = this.network.find(address);
+  private dial(url: URL): void {
+    const remote = this.network.find(url.href);
 
     const localProvider = new LoopbackProvider(this.maxMsgSize);
     const remoteProvider = new LoopbackProvider(remote.maxMsgSize);

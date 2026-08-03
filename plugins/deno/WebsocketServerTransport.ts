@@ -26,11 +26,12 @@ interface PendingAuthConn {
 }
 
 export class WebsocketServerTransport implements TransportPlugin {
-  readonly emitsProtocol = 'websocket';
-  readonly acceptsProtocols: string[] = [];
+  name = 'WebsocketServerTransport';
+  emitsProtocol = 'websocket';
+  acceptsProtocols: string[] = [];
 
   constructor(
-    private readonly config: {
+    private config: {
       port?: number;
       publicHostnames?: string[];
     } = {},
@@ -89,14 +90,11 @@ export class WebsocketServerTransport implements TransportPlugin {
       },
     });
 
+    originsPromise.then((origins) =>
+      anonymousDriver.announceAddresses(origins.map((x) => new URL(x)))
+    );
+
     return {
-      announceAddresses: () => {
-        originsPromise.then((origins) => {
-          for (const origin of origins) {
-            anonymousDriver.broadcastAddress(`${origin}/`);
-          }
-        });
-      },
       initializeAuthenticatedTransport: (
         driver: AuthenticatedTransportDriver,
       ): TransportSession => {

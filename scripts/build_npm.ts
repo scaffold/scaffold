@@ -29,11 +29,12 @@ for await (
     globstar: true,
     exclude: [
       './plugins/deno/**/*.ts',
+      './src/plugins/wasm/**/*.ts',
       './src/demo/**/*.ts',
       './src/worker/**/*.ts',
-      './src/util/QueueMuxer.ts',
-      // Deno-only: uses Deno.listen/Deno.connect with unix transport.
-      './src/node/UnixSocketTransport.ts',
+      './src/core/**/*.ts',
+      './src/contracts/**/*.ts',
+      './src/node/**/*.ts',
       // Deno-only: reads the built shim WASM via Deno.readFile.
       './src/contracts/wasi-shim/loadShim.ts',
       // Deno-only: reads the committed well-known blocks/hashes off disk.
@@ -44,6 +45,8 @@ for await (
     ],
   })
 ) {
+  console.log(`Entry: ${entry.path}`);
+
   let rel = relative('.', entry.path);
   if (rel.startsWith('src/')) rel = rel.slice(4);
   rel = rel.startsWith('.') ? rel : `./${rel}`;

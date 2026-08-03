@@ -5,6 +5,7 @@ import { DefaultContractProvider } from '../../src/contract/DefaultContractProvi
 import { EventLog } from '../../src/logic/EventLog.ts';
 import { generateGenesis } from '../../src/graph/genesis.ts';
 import { TransportPlugin } from '../../src/interfaces/transport.ts';
+import { Transport } from '../../src/peer/network/Transport.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { secp } from '../../src/util/secp.ts';
@@ -46,13 +47,21 @@ export function makeTestConfig(options: TestConfigOptions = {}): Config {
     },
     entropyProvider: new SeededEntropyProvider(123n),
     contractPlugin: DefaultContractProvider,
-    transportPlugins: options.transportPlugins ?? [],
-    bootstrapUrls: options.bootstrapUrls ?? [],
   };
 }
 
 export function makeTestContext(
   options: TestConfigOptions & { eventLog?: EventLog } = {},
 ): Context {
-  return new Context(makeTestConfig(options), options.eventLog);
+  const ctx = new Context(makeTestConfig(options), options.eventLog);
+
+  const plugins = options.transportPlugins ?? [];
+  const urls = options.bootstrapUrls ?? [];
+  if (plugins.length > 0 || urls.length > 0) {
+    const transport = ctx.get(Transport);
+    for (const plugin of plugins) transport.startTransport(plugin);
+    for (const url of urls) transport.connect(url instanceof URL ? url : new URL(url));
+  }
+
+  return ctx;
 }

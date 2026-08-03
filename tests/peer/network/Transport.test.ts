@@ -56,9 +56,9 @@ const holds = (node: Node, block: Block): boolean =>
 Deno.test('a block published on one node reaches a node connected to it', async () => {
   const network = new LoopbackNetwork();
   const a = makeNode(network, 'loopback://a');
+  // Listener first: b dials a during its own construction.
   const b = makeNode(network, 'loopback://b', ['loopback://a']);
 
-  // Listener first: b dials a during its own construction.
   a.ctx.get(Gossip);
   b.ctx.get(Gossip);
   await settle();
