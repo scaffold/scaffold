@@ -100,18 +100,7 @@ export abstract class AtomSerializerBase {
       message = raw.subarray(headerSize);
     }
 
-    const base: AtomBase = {
-      hash,
-      type,
-      source,
-      receivedAt,
-      raw,
-      message,
-      signature,
-      signer,
-      fromConnections: [],
-      toConnections: new Set(),
-    };
+    const base: AtomBase = { hash, type, source, receivedAt, raw, message, signature, signer };
 
     return ingestor.deserialize(base, ref);
   }

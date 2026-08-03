@@ -41,8 +41,6 @@ function mkBlock(
     receivedAt: 0,
     raw: new Uint8Array(),
     message: new Uint8Array(),
-    fromConnections: [],
-    toConnections: new Set(),
     payload: {
       anchor: anchor?.hash ?? ZERO_HASH,
       chain: [],

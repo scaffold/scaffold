@@ -4,6 +4,7 @@ import { Context } from '../../src/Context.ts';
 import { DefaultContractProvider } from '../../src/contract/DefaultContractProvider.ts';
 import { EventLog } from '../../src/logic/EventLog.ts';
 import { generateGenesis } from '../../src/graph/genesis.ts';
+import { TransportPlugin } from '../../src/interfaces/transport.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { secp } from '../../src/util/secp.ts';
@@ -19,6 +20,8 @@ export interface TestConfigOptions {
   funding?: Record<string, bigint>;
   seed?: string;
   selfPrivateKey?: Uint8Array;
+  transportPlugins?: TransportPlugin[];
+  bootstrapUrls?: (string | URL)[];
 }
 
 export function makeTestConfig(options: TestConfigOptions = {}): Config {
@@ -43,8 +46,8 @@ export function makeTestConfig(options: TestConfigOptions = {}): Config {
     },
     entropyProvider: new SeededEntropyProvider(123n),
     contractPlugin: DefaultContractProvider,
-    transportPlugins: [],
-    bootstrapUrls: [],
+    transportPlugins: options.transportPlugins ?? [],
+    bootstrapUrls: options.bootstrapUrls ?? [],
   };
 }
 

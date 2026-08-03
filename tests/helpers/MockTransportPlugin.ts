@@ -16,6 +16,7 @@ import {
 export class MockConnectionProvider implements ConnectionProvider {
   readonly sent: Uint8Array[] = [];
   shutdownCalled = false;
+  maxMsgSize?: number;
 
   sendReliable(data: Uint8Array): void {
     this.sent.push(data);
