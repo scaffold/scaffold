@@ -6,7 +6,7 @@
 logic/  <-  graph/  <-  contract/  <-  peer/  <-  roles/  <-  api/
 ```
 
-- **logic/** - Protocol logic with no wiring: pure walks, codecs, and abstract modules whose injected dependencies are declared as abstract methods. The membership test is types, not abstractness -- a logic/ module must not import the Block / Draft interfaces, only its own structural subset types and the node kind tags. Should not import Context. Testable with hand-built literals.
+- **logic/** - Protocol logic with no wiring: pure walks, codecs, and abstract modules whose injected dependencies are declared as abstract methods. The membership test is types, not abstractness -- a logic/ module must not import the Block / Draft interfaces, only its own structural subset types and the node kind tags. Should not import Context. Testable with hand-built literals. TODO: Move this to graph/ as *Base.ts files?
 - **graph/** - Everything required to maintain the Block / Draft node graph, and gives peer/ the tools it needs to monitor the canonical state and react to changes. Context-wired services, which may be concretized extensions of logic/ modules. Should contain as little logic as possible. An abstract module that reads Block / Draft fields belongs here, next to its service, not in logic/. Contains in-memory state of the graph. Testable using a test context.
 - **contract/** - Everything related to contract execution.
 - **contract/static/** - Well-known contracts defined in TypeScript.
@@ -19,6 +19,8 @@ logic/  <-  graph/  <-  contract/  <-  peer/  <-  roles/  <-  api/
 Each of these is a directory inside src/. A lower layer never imports from a higher one. util/ sits below
 logic/ and holds language-level helpers with no protocol knowledge. `Config` and `Context` sit at the src/
 root as the composition root: every layer may import them, and they are exempt from the ordering.
+
+Additionally, this files in each of these can be parititoned into XyzBase.ts and Xyz.ts files. Roughly, the `Base` classes should be abstract and hold most of the logic, calling dependencies via abstract methods. They should have minimal interfaces and be easily testable. The non-`Base` classes are concrete and connected with the rest of the system, typically via `Context`. They should hold as little logic as possible, and are typically tested in higher-level integration tests.
 
 Filenames carry no `Module` / `Service` suffix, and neither does the wired class: the name every caller
 reaches for is a bare noun, so `ctx.get(...)` reads the same for all of them -- `ctx.get(BlockStore)`,

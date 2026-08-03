@@ -32,7 +32,7 @@ function harness(): Harness {
 
   const built: Block[] = [];
   ctx.get(BlockStore).onIngest((block) => built.push(block), neverAbort);
-  ctx.get(GeneratorRole).run();
+  ctx.get(GeneratorRole);
 
   // An empty draft still carries the aggregation output `DraftStore` mints for it (wp 7).
   const publish = (): Block => {

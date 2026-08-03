@@ -1,8 +1,6 @@
 import { Context } from '../Context.ts';
 import { assert } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
-import { bin2hex } from '../util/hex.ts';
-import { mapPut } from '../util/map.ts';
 import { BlockStore } from '../graph/BlockStore.ts';
 import { DraftStore } from '../graph/DraftStore.ts';
 import { CancelError, ExecutionQueue, FlowCtl, Job } from '../peer/ExecutionQueue.ts';
@@ -13,24 +11,22 @@ import { OutputIndex } from '../graph/OutputIndex.ts';
 export class GeneratorRole implements Disposable {
   private disposeController = new AbortController();
 
-  constructor(private ctx: Context) {}
-
-  [Symbol.dispose]() {
-    this.disposeController.abort();
-  }
-
-  run() {
+  constructor(private ctx: Context) {
     // Make sure the OutputIndex's onIngest is registered first.
     // This is necessary so incoming outputs are first available to things blocking on a specific output (like ContractEnv.claim), then secondly launch a generation job.
     this.ctx.get(OutputIndex);
 
     this.ctx.get(BlockStore).onIngest(
-      (block) => this.onIngest(block),
+      (block) => this.ingestBlock(block),
       this.disposeController.signal,
     );
   }
 
-  private onIngest(block: Block) {
+  [Symbol.dispose]() {
+    this.disposeController.abort();
+  }
+
+  private ingestBlock(block: Block) {
     for (let i = 0; i < block.payload.outputs.length; i++) {
       this.trigger(block, i);
     }

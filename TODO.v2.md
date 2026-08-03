@@ -2,11 +2,28 @@
 
 ## Joel's TODOs
 
-- UTXO -> drafting
-- Special rules for aggregation grouping for now. Simple aggregation (ignore risk etc)
-- Draft prioritization via descendant weight sampling
-- Generic generator / verification hook
-- Network send / receive (global flooding for now)
+TODO:
+
+- Clean up Scaffold.ts
+- Build a new npm package
+- Simple broadcast-to-all flooding networking
+- Make the CLI able to publish a contract
+- Make the CLI work on the website
+
+Stretch:
+
+- Get rid of old worthless AI code files
+
+Stretch #2:
+
+- Plug in WASM again
+
+Stretch #3:
+
+- Tree sampling
+- Descendant weight propagation
+- Weight feeds into draft prioritization
+- Eventual consensus (2 peers publishing contesting blocks should eventually converge)
 
 ## Blocking decisions (gate the block codec)
 
@@ -77,4 +94,4 @@ Surfaced while moving the v2 files into `src/{logic,graph,contract,peer}/`; none
 - [ ] `RoutingContractProvider` forwards only `generate`/`verify`; `walkParams`/`walkData`/`buildParams`/`buildData` are silently dropped, so UI-schema walking is unavailable through the router
 - [ ] `Forest`, `RoutingContractProvider` and `EnvContractProvider` all accept a `Context` and discard it
 - [ ] `Fetch.fetch` became `async` when it gained `buildParams` support, but no caller awaits it -- `scripts/test.ts` fires it and drops the promise. On the `Uint8Array` params path the body still runs to completion synchronously, so nothing has broken yet; on the `SourceRoot` path the subscription and the query draft are deferred to a microtask and any throw becomes an unhandled rejection with no caller to surface it. That is exactly what killed `tests/peer/Fetch.test.ts` on adf24f6 (`assertThrows` cannot see an async throw; the escaped rejection cancelled the rest of the file). Tests now await; decide whether the public API should return a promise at all, or subscribe synchronously and build params in the background
-- [ ] The three `BUG:` comments in `tests/peer/Fetch.test.ts` cite line numbers that no longer match `src/peer/Fetch.ts`, and their tests now *pass* asserting the correct behavior -- `fetch` gained a `BlockStore.getAll()` prescan that fixes "an answer already in the store". The corresponding `Fetch.fetch` entry under Known gaps is at least partly stale; re-derive which of the three leaks are still real. Paths were corrected during the restructure, line numbers were dropped rather than guessed
+- [ ] The three `BUG:` comments in `tests/peer/Fetch.test.ts` cite line numbers that no longer match `src/peer/Fetch.ts`, and their tests now _pass_ asserting the correct behavior -- `fetch` gained a `BlockStore.getAll()` prescan that fixes "an answer already in the store". The corresponding `Fetch.fetch` entry under Known gaps is at least partly stale; re-derive which of the three leaks are still real. Paths were corrected during the restructure, line numbers were dropped rather than guessed

@@ -43,6 +43,8 @@ export function makeTestConfig(options: TestConfigOptions = {}): Config {
     },
     entropyProvider: new SeededEntropyProvider(123n),
     contractPlugin: DefaultContractProvider,
+    transportPlugins: [],
+    bootstrapUrls: [],
   };
 }
 

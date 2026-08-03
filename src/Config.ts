@@ -3,6 +3,7 @@ import { Context } from './Context.ts';
 import { ContractProvider } from './contract/ContractProvider.ts';
 import { DefaultContractProvider } from './contract/DefaultContractProvider.ts';
 import { generateGenesis } from './graph/genesis.ts';
+import { TransportPlugin } from './interfaces/transport.ts';
 import { Hash } from './util/Hash.ts';
 import { bin2hex } from './util/hex.ts';
 import { secp } from './util/secp.ts';
@@ -39,6 +40,9 @@ export interface Config {
   timeProvider: TimeProvider;
   entropyProvider: EntropyProvider;
   contractPlugin: ContractPlugin;
+
+  transportPlugins: TransportPlugin[];
+  bootstrapUrls: (string | URL)[];
 }
 
 const rngSeed = 123n;
@@ -76,5 +80,7 @@ export function makeDefaultConfig(): Config {
       cryptoRandomBytes: secp.etc.randomBytes,
     },
     contractPlugin: DefaultContractProvider,
+    transportPlugins: [],
+    bootstrapUrls: [],
   };
 }

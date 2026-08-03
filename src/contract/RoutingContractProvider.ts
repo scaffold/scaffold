@@ -20,6 +20,10 @@ export class RoutingContractProvider implements ContractProvider {
     }
   }
 
+  addStaticContractProvider(hash: Hash, provider: ContractProvider) {
+    this.map.set(hash.toPrimitive(), provider);
+  }
+
   generate(predicate: Predicate, draft: Draft, flowCtl: FlowCtl): MaybePromise<void> {
     return this.getProvider(predicate.contract).generate(predicate, draft, flowCtl);
   }

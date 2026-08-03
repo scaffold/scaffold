@@ -16,9 +16,6 @@ export interface AtomBase {
   message: Uint8Array;
   signature?: Uint8Array;
   signer?: Uint8Array;
-
-  fromConnections: string[];
-  toConnections: Set<string>;
 }
 
 export enum OutputResolverType {

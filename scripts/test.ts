@@ -10,7 +10,7 @@ import { GeneratorRole } from '../src/roles/GeneratorRole.ts';
 import { bin2str, str2bin } from '../src/util/buffer.ts';
 
 const ctx = new Context(makeDefaultConfig());
-ctx.get(GeneratorRole).run();
+ctx.get(GeneratorRole);
 
 export class HelloContractQuery extends ObjectQuery implements Query {
   constructor(params: { name: string }) {
