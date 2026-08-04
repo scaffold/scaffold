@@ -13,7 +13,9 @@ import {
   TransportService,
   TransportSession,
 } from '../../src/interfaces/transport.ts';
+import { assert } from '../../src/util/functional.ts';
 import { Hash } from '../../src/util/Hash.ts';
+import { isUnshared } from '../util.ts';
 
 const defaultMaxMsgSize = 65536;
 
@@ -73,8 +75,14 @@ export class WebrtcTransport implements TransportPlugin {
 
       const provider: ConnectionProvider = {
         maxMsgSize,
-        sendReliable: (data: Uint8Array) => reliableChannel!.send(data),
-        sendFast: (data: Uint8Array) => fastChannel!.send(data),
+        sendReliable: (data: Uint8Array) => {
+          assert(isUnshared(data));
+          reliableChannel!.send(data);
+        },
+        sendFast: (data: Uint8Array) => {
+          assert(isUnshared(data));
+          fastChannel!.send(data);
+        },
         shutdown: () => conn.close(),
       };
 

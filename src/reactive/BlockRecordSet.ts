@@ -1,5 +1,5 @@
 import { Hash, HashPrimitive } from '../util/Hash.ts';
-import { Block } from '../core/Block.ts';
+import { Block } from '../graph/types.ts';
 import { ReactiveRecordSet, ReactiveRecordSetConfig } from './ReactiveRecordSet.ts';
 
 /**

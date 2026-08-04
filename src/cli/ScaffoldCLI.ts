@@ -5,6 +5,7 @@ import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
 import { createSource } from '../contract/createSource.ts';
 import { Source, ValueType } from '../contract/values.ts';
 import { todo } from '../util/functional.ts';
+import { makeDefaultConfig } from '../Config.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -169,24 +170,29 @@ export class ScaffoldCLI {
   }
 
   private async constructScaffold(args: ParsedArgs): Promise<Scaffold> {
-    const config: ScaffoldConfig = {};
+    const config: ScaffoldConfig = makeDefaultConfig();
 
     // string: ['private_key_file', 'genesis_block_file', 'bootstrap_urls', 'verbosity'],
 
     if (args.private_key_file !== undefined) {
-      config.privateKey = await this.readInput(args.private_key_file);
+      config.selfPrivateKey = await this.readInput(args.private_key_file);
     }
     if (args.genesis_block_file !== undefined) {
       todo('genesis_block_file option not yet implemented');
-    }
-    if (args.bootstrap_urls !== undefined) {
-      config.bootstrapUrls = args.bootstrap_urls.split(',');
     }
     if (args.verbosity !== undefined) {
       todo('verbosity option not yet implemented');
     }
 
-    return this.deps.constructScaffold(config);
+    const scaffold = this.deps.constructScaffold(config);
+
+    if (args.bootstrap_urls !== undefined) {
+      for (const url of args.bootstrap_urls.split(',')) {
+        scaffold.connect(url);
+      }
+    }
+
+    return scaffold;
   }
 
   private async createSourceFromFs(
@@ -234,6 +240,7 @@ export class ScaffoldCLI {
 
     const scaffold = await this.constructScaffold(parsed);
 
+    /*
     const result = await scaffold.put({
       contract: Hash.fromHex(contractHash),
       params: () => this.createSourceFromFs(this.deps, params),
@@ -245,6 +252,7 @@ export class ScaffoldCLI {
     };
 
     this.deps.stdout(str2bin(JSON.stringify(output, null, 2) + '\n'));
+    */
   }
 
   private async fetch(parsed: ParsedArgs) {
@@ -257,15 +265,10 @@ export class ScaffoldCLI {
 
     const scaffold = await this.constructScaffold(parsed);
 
-    const result = await scaffold.fetch({
+    scaffold.fetch({
       contract: Hash.fromHex(contractHash),
       params: () => this.createSourceFromFs(this.deps, params),
-      verify: true,
+      onResult: (result) => this.deps.stdout(result?.body ?? new Uint8Array()),
     });
-    this.deps.stdout(result.body);
   }
-}
-
-function messageOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }

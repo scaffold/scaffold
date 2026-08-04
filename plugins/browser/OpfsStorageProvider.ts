@@ -1,5 +1,7 @@
 import { Hash } from '../../src/util/Hash.ts';
 import { StorageProvider } from '../../src/interfaces/StorageProvider.ts';
+import { assert } from '../../src/util/functional.ts';
+import { isUnshared } from '../util.ts';
 
 declare global {
   interface FileSystemDirectoryHandle {
@@ -22,6 +24,7 @@ export class OpfsStorageProvider implements StorageProvider {
     if (value !== undefined) {
       const fileHdl = await nsHdl.getFileHandle(key.toHex(), { create: true });
       const writable = await fileHdl.createWritable(); /* {mode:"exclusive"} */
+      assert(isUnshared(value));
       await writable.write(value);
     } else {
       await nsHdl.removeEntry(key.toHex());

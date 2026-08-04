@@ -4,6 +4,7 @@ import { TransportPlugin } from './interfaces/transport.ts';
 import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
 import { Send, SendInput } from './peer/Send.ts';
+import { todo } from './util/functional.ts';
 
 export interface ScaffoldConfig extends Config {
   roles?: { new (ctx: Context): object }[];
@@ -40,6 +41,10 @@ export class Scaffold {
 
   fetch(input: FetchInput): Promise<void> {
     return this.ctx.get(Fetch).fetch(input);
+  }
+
+  put(): never {
+    return todo();
   }
 
   send(send: SendInput): void {
