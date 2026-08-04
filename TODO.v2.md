@@ -4,7 +4,6 @@
 
 TODO:
 
-- Make the CLI able to publish a contract
 - Make the CLI work on the website
 
 Stretch #2:
@@ -131,4 +130,4 @@ Surfaced debugging why `scripts/test.ts` blocks never reached `scripts/signaling
 - [x] `Gossip` was never constructed. Nothing in `src/`, `plugins/` or `scripts/` called `ctx.get(Gossip)`, and `BaseContext` only builds on demand, so its constructor -- which is the sole registration of `transport.onData`, `transport.onConnection` -> `backfill`, and `BlockStore.onIngest` -> `floodBlock` -- never ran. Both peers connected, neither ever sent a block. Fixed (2026-08-03) by `ctx.get(Gossip)` in the `Scaffold` constructor, before roles and before any transport can start
 - [ ] Genesis is only ingested by `BlockBuilder.getGenesisBlock()`, so a node that never builds a block never has genesis in its `BlockStore`. The signaling server's `Gossip.backfill` therefore sends 0 blocks to every peer that connects, and it only acquired genesis because the client flooded it. Two passive peers would never converge. Genesis should be ingested during `Scaffold` construction, not lazily on first build
 - [ ] `Scaffold` builds `new Context(config)` with no `EventLog`, so `ctx.logger()` returns `undefined` for every subsystem and every log call made through the public API is a no-op. `bootstrapDial`, `connectionOpened`, `backfill` and `blockSent` all already existed and would have named the bug immediately; none were reachable. `ScaffoldConfig` needs a way to supply an `EventLog` (or `Context.eventLog` needs to stop being constructor-only)
-- [ ] `GossipBase.floodBlock` attributes a block to `ingestingFrom` whenever that field is set, but the field stays set for the whole synchronous fan-out of `BlockStore.ingest`. Any listener that synchronously builds and ingests a *new* block during a remote ingest would have that new block marked as received from the sending connection and never flooded back to it. `GeneratorRole` goes through `ExecutionQueue` so nothing hits this today
+- [ ] `GossipBase.floodBlock` attributes a block to `ingestingFrom` whenever that field is set, but the field stays set for the whole synchronous fan-out of `BlockStore.ingest`. Any listener that synchronously builds and ingests a _new_ block during a remote ingest would have that new block marked as received from the sending connection and never flooded back to it. `GeneratorRole` goes through `ExecutionQueue` so nothing hits this today

@@ -25,6 +25,10 @@ export const helloContract: Contract = {
     sink().setStruct()?.at('name').setString(bin2str(params));
   },
 
+  walkData(data, sink) {
+    sink().setStruct()?.at('message').setString(bin2str(data));
+  },
+
   debug(params) {
     return `hello(${new TextDecoder().decode(params)})`;
   },

@@ -14,7 +14,6 @@ const entryPoints: EntryPoint[] = [
   // alias so `import { Scaffold } from 'scaffold.io'` keeps working alongside
   // `import { Scaffold } from 'scaffold.io/core'`.
   { kind: 'export', name: '.', path: './mod.ts' },
-  { kind: 'export', name: './core', path: './mod.ts' },
   // The pure, dependency-injected CLI -- importable from the browser as
   // `scaffold.io/cli`. The shell binary below injects a filesystem-backed
   // implementation of its deps.

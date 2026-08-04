@@ -1,11 +1,13 @@
 import { Config } from './Config.ts';
 import { Context } from './Context.ts';
+import { createSource } from './contract/createSource.ts';
 import { Genesis } from './graph/Genesis.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
 import { Send, SendInput } from './peer/Send.ts';
 import { todo } from './util/functional.ts';
+import { Hash } from './util/Hash.ts';
 
 export interface ScaffoldConfig extends Config {
   roles?: { new (ctx: Context): object }[];
@@ -41,6 +43,18 @@ export class Scaffold {
 
   connect(url: string | URL) {
     this.ctx.get(Transport).connect(url instanceof URL ? url : new URL(url));
+  }
+
+  async serializeParams(contract: Hash | string, params: unknown): Promise<Uint8Array> {
+    if (typeof contract === 'string') contract = Hash.fromHex(contract);
+    return await this.ctx.get(this.ctx.config.contractPlugin)
+      .buildParams(contract, () => createSource(params));
+  }
+
+  async serializeData(contract: Hash | string, data: unknown): Promise<Uint8Array> {
+    if (typeof contract === 'string') contract = Hash.fromHex(contract);
+    return await this.ctx.get(this.ctx.config.contractPlugin)
+      .buildData(contract, () => createSource(data));
   }
 
   fetch(input: FetchInput): Promise<void> {

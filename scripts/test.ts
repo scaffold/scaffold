@@ -40,7 +40,8 @@ export class HelloContractQuery extends ObjectQuery implements Query {
 
 await scaffold.fetch({
   ...new HelloContractQuery({ name: 'Joel' }),
-  onResult: (result) => {
+  onResult: async (result) => {
+    console.log(await result!.parse());
     console.log(bin2str(result!.body));
   },
 });

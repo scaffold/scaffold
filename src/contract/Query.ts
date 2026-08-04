@@ -3,7 +3,7 @@ import { createSource } from './createSource.ts';
 import { SourceRoot } from './values.ts';
 
 export interface Query {
-  contract: Hash;
+  contract: Hash | string;
   params: Uint8Array | SourceRoot;
 }
 
