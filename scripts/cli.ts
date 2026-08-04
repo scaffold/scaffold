@@ -1,18 +1,23 @@
-// Deno entry point for the `scaffold` binary. Like scripts/cli-bin.ts (the Node
-// shim), this only builds a filesystem-backed `ScaffoldCliDeps` and delegates
-// to the pure `ScaffoldCLI`. Install with:
+// deno-lint-ignore-file no-external-import -- this is the OS boundary; the
+// `node:` specifiers are exactly what dnt needs to emit the npm `bin`.
+// The only entry point for the `scaffold` shell binary, and the only file that
+// touches filesystem/process APIs: it builds a `ScaffoldCliDeps` backed by the
+// real OS and hands control to the pure `ScaffoldCLI`.
+//
+// Written against `node:` builtins, which both runtimes execute natively:
+//   npm i -g scaffold.io                        (dnt emits this as the `bin`)
 //   deno install -gA -n scaffold scripts/cli.ts
-import { readAll } from '@std/io';
+import process from 'node:process';
+import { join } from 'node:path';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { FsNode, FsNodeType, ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
 import { Scaffold } from '../src/Scaffold.ts';
-import { str2bin } from '../src/util/buffer.ts';
-import { join } from '@std/path/join';
-import { HELLO_CONTRACT, helloContract } from '../src/contracts/HelloContract.ts';
 
 async function openPath(path: string): Promise<FsNode | { type: FsNodeType.Missing }> {
   let isDirectory: boolean;
   try {
-    ({ isDirectory } = await Deno.stat(path));
+    const result = await stat(path);
+    isDirectory = result.isDirectory();
   } catch (_err) {
     return { type: FsNodeType.Missing };
   }
@@ -25,11 +30,11 @@ function makeNode(path: string, isDirectory: boolean): FsNode {
     return {
       type: FsNodeType.Directory,
       async list() {
-        const nodes: ({ name: string } & FsNode)[] = [];
-        for await (const entry of Deno.readDir(path)) {
-          nodes.push({ name: entry.name, ...makeNode(join(path, entry.name), entry.isDirectory) });
-        }
-        return nodes;
+        const entries = await readdir(path, { withFileTypes: true });
+        return entries.map((x) => ({
+          name: x.name,
+          ...makeNode(join(path, x.name), x.isDirectory()),
+        }));
       },
       open(key) {
         return openPath(join(path, key));
@@ -39,32 +44,51 @@ function makeNode(path: string, isDirectory: boolean): FsNode {
     return {
       type: FsNodeType.File,
       read() {
-        return Deno.readFile(path);
+        return readFile(path);
       },
       write(data: Uint8Array) {
-        return Deno.writeFile(path, data);
+        return writeFile(path, data);
       },
     };
   }
 }
 
+async function readStdin(): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(chunk as Uint8Array);
+  }
+  let total = 0;
+  for (const c of chunks) total += c.length;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
 const cli = new ScaffoldCLI({
-  constructScaffold: (config) => {
-    const scaffold = new Scaffold(config);
-    scaffold.registerContract(HELLO_CONTRACT, helloContract);
-    return scaffold;
-  },
+  constructScaffold: (config) => new Scaffold(config),
   open: openPath,
-  readStdin: () => readAll(Deno.stdin),
+  readStdin,
   stdout: (data) => {
-    Deno.stdout.writeSync(data);
+    process.stdout.write(data);
   },
   stderr: (line) => {
-    Deno.stderr.writeSync(str2bin(line + '\n'));
+    process.stderr.write(line + '\n');
   },
-  env: (name) => Deno.env.get(name),
+  env: (name) => process.env[name],
+  // TODO(@joel): inject the real package version at build time instead of
+  // hardcoding it here (see TODO.md "CLI: report the real binary version").
   version: '0.0.1',
 });
 
-const code = await cli.call(['scaffold', ...Deno.args]);
-Deno.exit(code);
+// No top-level await: dnt also emits a CommonJS build, where it is unavailable.
+cli.call(['scaffold', ...process.argv.slice(2)])
+  .then((code) => process.exit(code))
+  .catch((err: unknown) => {
+    process.stderr.write(`scaffold: ${err instanceof Error ? err.stack : String(err)}\n`);
+    process.exit(1);
+  });

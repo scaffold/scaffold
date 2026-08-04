@@ -3,9 +3,9 @@ export { assert, assertEquals, unimplemented as todo } from '@std/assert';
 // deno-lint-ignore ban-types
 export type NotUndefined = {} | null;
 
-export const error = (msg: string): never => {
+export function error(msg: string): never {
   throw new Error(msg);
-};
+}
 
 export const neverPromise = new Promise<never>(() => {});
 

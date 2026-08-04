@@ -26,6 +26,10 @@ import { makeTestContext, testPrivateKey, testPublicKey } from '../helpers/v2.ts
 
 const MAGIC = new Uint8Array([83, 67, 70]);
 const SIG_LENGTH = 65;
+// The trailing signature is noble's recovered format: [recovery, r (32), s (32)].
+const REC_OFFSET = 0;
+const R_OFFSET = 1;
+const S_OFFSET = 33;
 const SECP_N = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
 
 const blockPayload = (overrides: Partial<BlockPayload> = {}): BlockPayload => ({
@@ -160,7 +164,8 @@ Deno.test('the recovery byte is in range 0..3', () => {
   const service = makeService();
   for (let i = 0; i < 16; i++) {
     const raw = service.serialize(AtomType.Block, blockPayload({ timestampMs: i }));
-    assert(raw[raw.byteLength - 1] <= 3, `recovery byte ${raw[raw.byteLength - 1]} out of range`);
+    const recovery = raw[raw.byteLength - SIG_LENGTH + REC_OFFSET];
+    assert(recovery <= 3, `recovery byte ${recovery} out of range`);
   }
 });
 
@@ -289,7 +294,7 @@ Deno.test('deserialize rejects an out-of-range recovery byte', () => {
 
   for (const bit of [4, 7, 255]) {
     const tampered = new Uint8Array(raw);
-    tampered[tampered.byteLength - 1] = bit;
+    tampered[tampered.byteLength - SIG_LENGTH + REC_OFFSET] = bit;
     assertThrows(() => service.deserialize(received(tampered)), Error);
   }
 });
@@ -311,7 +316,7 @@ Deno.test('a corrupted signature recovers a different signer rather than throwin
   const signer = service.deserialize(received(raw)).signer!;
 
   const tampered = new Uint8Array(raw);
-  tampered[tampered.byteLength - SIG_LENGTH] ^= 1;
+  tampered[tampered.byteLength - SIG_LENGTH + R_OFFSET] ^= 1;
   const other = service.deserialize(received(tampered)).signer!;
   assertEquals(other.byteLength, 33);
   assertNotEquals(bin2hex(other), bin2hex(signer));
@@ -326,9 +331,9 @@ Deno.test('a high-S variant of a signed raw is rejected', () => {
 
   const variant = new Uint8Array(raw);
   const sigStart = variant.byteLength - SIG_LENGTH;
-  const s = bin2bigintBe(variant.subarray(sigStart + 32, sigStart + 64));
-  variant.set(bigint2binBe(SECP_N - s, 32), sigStart + 32);
-  variant[variant.byteLength - 1] ^= 1;
+  const s = bin2bigintBe(variant.subarray(sigStart + S_OFFSET, sigStart + S_OFFSET + 32));
+  variant.set(bigint2binBe(SECP_N - s, 32), sigStart + S_OFFSET);
+  variant[sigStart + REC_OFFSET] ^= 1;
 
   assertNotEquals(Hash.digest(variant).toHex(), Hash.digest(raw).toHex());
   assertThrows(() => service.deserialize(received(variant)), Error, 'high S');

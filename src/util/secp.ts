@@ -1,24 +1,10 @@
-// declare global {
-//   interface Crypto {
-//     randomUUID: () => string;
-//   }
-// }
-
 import * as secp from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { hmac } from '@noble/hashes/hmac.js';
 
-// Uncaught RangeError: WebAssembly.Compile is disallowed on the main thread, if the buffer size is larger than 4KB. Use WebAssembly.compile, or compile on a worker thread.
-// import { crypto } from 'std-latest/crypto/mod.ts';
-import { HmacSha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
-
-secp.etc.hmacSha256Sync = (key: Uint8Array, ...msgs: Uint8Array[]) => {
-  const algo = new HmacSha256(key as never); // We need this cast because Message doesn't include the Uint8Array type, but it should (I think).
-  msgs.forEach((msg) => algo.update(msg as never));
-  return new Uint8Array(algo.digest());
-};
+// secp256k1 v3 carries no hash implementation of its own -- the synchronous
+// sign/verify/recover paths throw until these are wired up.
+secp.hashes.sha256 = sha256;
+secp.hashes.hmacSha256 = (key, message) => hmac(sha256, key, message);
 
 export { secp };
-
-// // We need this until https://github.com/paulmillr/noble-secp256k1/pull/100
-// import { etc } from 'https://deno.land/x/secp256k1@2.0.0/index.ts';
-
-// export default { ...secp, etc };

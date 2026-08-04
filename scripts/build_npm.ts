@@ -1,7 +1,7 @@
+// deno-lint-ignore-file no-console -- build script; its output is the UI.
 import { build, emptyDir, EntryPoint } from '@deno/dnt';
 import { parseArgs } from '@std/cli/parse-args';
 import { error } from '../src/util/functional.ts';
-import { walk } from '@std/fs/walk';
 import { expandGlob } from '@std/fs/expand-glob';
 import { relative } from '@std/path/relative';
 
@@ -20,7 +20,7 @@ const entryPoints: EntryPoint[] = [
   // implementation of its deps.
   { kind: 'export', name: './cli', path: './src/cli/ScaffoldCLI.ts' },
   // `scaffold` on the user's PATH after `npm i -g scaffold.io` (or `npx`).
-  { kind: 'bin', name: 'scaffold', path: './scripts/cli-bin.ts' },
+  { kind: 'bin', name: 'scaffold', path: './scripts/cli.ts' },
 ];
 
 for await (
@@ -29,24 +29,9 @@ for await (
     globstar: true,
     exclude: [
       './plugins/deno/**/*.ts',
-      './src/plugins/wasm/**/*.ts',
-      './src/demo/**/*.ts',
-      './src/worker/**/*.ts',
-      './src/core/**/*.ts',
-      './src/contracts/**/*.ts',
-      './src/node/**/*.ts',
-      // Deno-only: reads the built shim WASM via Deno.readFile.
-      './src/contracts/wasi-shim/loadShim.ts',
-      // Deno-only: reads the committed well-known blocks/hashes off disk.
-      './src/wellKnown.ts',
-      // Not a built-in: the JS compiler is registered by hosts that want it
-      // (dev demo, CLI, tests), not shipped in the library. See its header.
-      './src/contracts/JsCompilerContract.ts',
     ],
   })
 ) {
-  console.log(`Entry: ${entry.path}`);
-
   let rel = relative('.', entry.path);
   if (rel.startsWith('src/')) rel = rel.slice(4);
   rel = rel.startsWith('.') ? rel : `./${rel}`;
@@ -54,10 +39,15 @@ for await (
   entryPoints.push({ kind: 'export', name: rel, path: entry.path });
 }
 
+console.log(`Building ${entryPoints.length} entry points...`);
+
 await emptyDir('./npm');
 
 await build({
-  importMap: 'deno.json',
+  // `configFile`, not `importMap` -- the latter is read as a plain import map,
+  // which doesn't expand bare specifiers to their sub paths (`@std/cli` would
+  // not cover `@std/cli/parse-args`).
+  configFile: './deno.json',
   entryPoints,
   outDir: './npm',
   compilerOptions: {
@@ -87,6 +77,11 @@ await build({
       url: 'https://github.com/SublimeNet/sublime/issues',
     },
     homepage: 'https://github.com/SublimeNet/sublime#readme',
+    // The bin entry (scripts/cli.ts) imports `node:*`, so the build needs
+    // Node's types to check it.
+    devDependencies: {
+      '@types/node': '^22.10.2',
+    },
   },
 
   postBuild() {

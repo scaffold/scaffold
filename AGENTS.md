@@ -29,11 +29,11 @@ Scaffold is intended to support:
 
 ## Status
 
-Initially, I (Joel) wrote an implementation that became quite complex and buggy, and I stopped development for about a year. Then, in early 2026 AI started to become quite capable and I started again from scratch. I moved much of the old code to legacy/ and legacy2/, and started work afresh in src/. I used Claude extensively, too much in fact, to where I accepted most things without much review and lost understanding of the architecture and code.
+Initially, I (Joel) wrote an implementation that became quite complex and buggy, and I stopped development for about a year. This happened a few times; the old versions are in legacy/, legacy2/, and legacy3/.
 
 I recently (Jul 20, 2026) finished a major simplification: instead of preventing double-spends at aggregation time, simply penalize aggregations that are found to have double-spends. This is the same procedure as is used for invalid blocks, and simplifies both aggregation and claim resolution. I also wrote docs/v2/whitepaper.md to fully document my vision of what Scaffold will look like.
 
-So I'm starting again. I imagine that a lot of the old code will still be applicable, but I'd like to re-architect it from scratch and copy code over so I fully understand and own what's built. I'll start with a minimal entrypoint at src/Scaffold.ts.
+There are no users or deployed testnet at the moment. Wire compatibility or backwards compatibility is not a concern.
 
 ## Docs
 

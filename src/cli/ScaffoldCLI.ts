@@ -32,9 +32,9 @@ export type FsNode = DirNode | FileNode;
  *
  * Keeping these behind an interface is what lets `ScaffoldCLI` run unchanged in
  * Node, Deno, and the browser: only the thin shim that constructs the deps is
- * platform-specific. See `scripts/cli-bin.ts` (Node, the shell binary) and
- * `scripts/cli.ts` (Deno) for the filesystem-backed implementations; a browser
- * host can back them with OPFS, an in-memory map, fetch, etc.
+ * platform-specific. See `scripts/cli.ts` for the filesystem-backed
+ * implementation shared by both shell runtimes; a browser host can back them
+ * with OPFS, an in-memory map, fetch, etc.
  *
  * The interface stays intentionally small and free of Node/Deno types so the
  * module itself imports nothing platform-specific.

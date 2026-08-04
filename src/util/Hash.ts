@@ -1,39 +1,19 @@
-// Uncaught RangeError: WebAssembly.Compile is disallowed on the main thread, if the buffer size is larger than 4KB. Use WebAssembly.compile, or compile on a worker thread.
-// import { crypto } from 'std-latest/crypto/mod.ts';
-
-import { Sha256 } from 'https://deno.land/std@0.160.0/hash/sha256.ts';
-import { Sha3_256, Shake256 } from 'https://deno.land/std@0.160.0/hash/sha3.ts';
-// TODO: https://jsr.io/@std/crypto
+// @noble/hashes rather than WebCrypto or @std/crypto because digesting has to
+// be synchronous: `crypto.subtle.digest` is async-only, and @std/crypto's sync
+// path is WASM, which cannot be compiled on the main thread above 4KB.
+import { sha3_256, shake256 } from '@noble/hashes/sha3.js';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { bin2hex, hex2bin } from './hex.ts';
-import { arrConcat, arrFromNumber, bin2str, str2bin } from './buffer.ts';
-// import { sha256 } from '@noble/hashes/sha256';
+import { arrConcat, arrFromNumber, str2bin } from './buffer.ts';
 import { DevtoolsFormattable } from '../../plugins/browser/devtoolsFormatterPlugin.ts';
 import { assert } from './functional.ts';
 
 // TODO: Try blake?
 
 const hasher = {
-  // 'sha2': (data: Uint8Array) => {
-  //   return new Uint8Array(crypto.subtle.digestSync('SHA-256', data));
-  // },
-  // 'sha3': (data: Uint8Array) => {
-  //   return new Uint8Array(crypto.subtle.digestSync('SHA3-256', data));
-  // },
-  'sha2': (data: Uint8Array) => {
-    const algo = new Sha256();
-    algo.update(data as never); // We need this cast because Message doesn't include the Uint8Array type, but it should (I think).
-    return new Uint8Array(algo.digest());
-  },
-  'sha3': (data: Uint8Array) => {
-    const algo = new Sha3_256();
-    algo.update(data as never);
-    return new Uint8Array(algo.digest());
-  },
-  'shake': (data: Uint8Array) => {
-    const algo = new Shake256(256);
-    algo.update(data as never);
-    return new Uint8Array(algo.digest());
-  },
+  'sha2': sha256,
+  'sha3': sha3_256,
+  'shake': (data: Uint8Array) => shake256(data, { dkLen: HASH_SIZE }),
 }.sha3;
 
 export const HASH_SIZE = 32;
@@ -56,8 +36,8 @@ export class Hash implements DevtoolsFormattable {
   }
 
   [Symbol.for('Deno.customInspect')](
-    inspect: typeof Deno.inspect,
-    options: Deno.InspectOptions,
+    inspect: (value: unknown, options: unknown) => string,
+    options: unknown,
   ): string {
     if (this.name !== undefined) {
       return `Hash(${inspect(this.name, options)} -> ${inspect(this.toHex(), options)})`;

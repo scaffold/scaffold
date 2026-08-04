@@ -36,24 +36,15 @@ export abstract class AtomSerializerBase {
 
     if (ingestor.isSigned) {
       const size = raw.byteLength - SIGNATURE_LENGTH;
-      const sig = secp.sign(
-        Hash.digest(raw.subarray(0, size)).toBytes(),
-        this.getPrivateKey(),
-        { lowS: true, extraEntropy: this.getEntropyProvider().cryptoRandomBytes(32) },
-      );
-      const sigBytes = sig.toCompactRawBytes();
-      if (sigBytes.byteLength !== SIGNATURE_LENGTH - 1) {
+      const sig = secp.sign(raw.subarray(0, size), this.getPrivateKey(), {
+        lowS: true,
+        format: 'recovered',
+        extraEntropy: this.getEntropyProvider().cryptoRandomBytes(32),
+      });
+      if (sig.byteLength !== SIGNATURE_LENGTH) {
         throw new Error(`Internal error: Unexpected signature length!`);
       }
-      raw.set(sigBytes, size);
-
-      if (
-        sig.recovery !== 0 && sig.recovery !== 1 &&
-        sig.recovery !== 2 && sig.recovery !== 3
-      ) {
-        throw new Error(`Invalid signature recovery bit ${sig.recovery}!`);
-      }
-      raw[raw.byteLength - 1] = sig.recovery;
+      raw.set(sig, size);
     }
 
     return raw;
@@ -84,9 +75,9 @@ export abstract class AtomSerializerBase {
 
       message = raw.subarray(headerSize, -SIGNATURE_LENGTH);
 
-      const hash = Hash.digest(raw.subarray(0, -SIGNATURE_LENGTH));
       signature = raw.subarray(-SIGNATURE_LENGTH);
-      const sig = secp.Signature.fromCompact(signature.subarray(0, SIGNATURE_LENGTH - 1));
+      // Throws on an out-of-range recovery byte or a non-canonical r/s.
+      const sig = secp.Signature.fromBytes(signature, 'recovered');
 
       // ECDSA is malleable: (r, n - s) verifies for the same key, so without this anyone
       // relaying an atom could mint a second raw with a different hash and the same signer.
@@ -94,8 +85,7 @@ export abstract class AtomSerializerBase {
         throw new Error(`Signature is not canonical (high S)!`);
       }
 
-      signer = sig.addRecoveryBit(signature[SIGNATURE_LENGTH - 1])
-        .recoverPublicKey(hash.toBytes()).toRawBytes();
+      signer = secp.recoverPublicKey(signature, raw.subarray(0, -SIGNATURE_LENGTH));
     } else {
       message = raw.subarray(headerSize);
     }
