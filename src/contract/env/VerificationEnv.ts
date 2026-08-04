@@ -3,6 +3,7 @@ import { Block, Output, Predicate } from '../../graph/types.ts';
 import { arrEquals } from '../../util/buffer.ts';
 import { todo } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
+import { MaybePromise } from '../../util/MaybePromise.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 
@@ -27,6 +28,10 @@ export class VerificationEnv implements ContractEnv {
   }
 
   claim() {
+    return todo();
+  }
+
+  getResult(): MaybePromise<Uint8Array> {
     return todo();
   }
 

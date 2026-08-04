@@ -7,7 +7,8 @@
 // implementations.
 
 import { todo } from '../../util/functional.ts';
-import { hostFn, HostImports } from './WasmTransport2.ts';
+import { ContractEnv } from '../env/ContractEnv.ts';
+import { hostFn, HostImports } from './WasmTransport.ts';
 
 /**
  * `scaffold_env.*` -- the contract surface, identical under generation and
@@ -49,7 +50,10 @@ export function runImports(env: ContractEnv): HostImports {
 
     set_result: hostFn(['bytes'], 'void', false, (data) => env.setResult(data)),
 
-    get_result: hostFn([], 'bytes', true, () => env.getResult()),
+    get_result: hostFn([], 'bytes', true, () => {
+      // env.getResult()
+      return todo();
+    }),
 
     fetch: hostFn(['bytes'], 'bytes', true, (_predicate) => {
       // decodePredicate -> env.fetch
@@ -64,16 +68,25 @@ export function runImports(env: ContractEnv): HostImports {
       return todo();
     }),
 
-    sign: hostFn(['bytes'], 'void', false, (pubkey) => env.sign(pubkey)),
+    sign: hostFn(['bytes'], 'void', false, (pubkey) => {
+      // env.sign(pubkey)
+      return todo();
+    }),
 
-    timestamp_gte: hostFn(['i64'], 'void', false, (instant) => env.timestampGte(Number(instant))),
+    timestamp_gte: hostFn(['i64'], 'void', false, (instant) => {
+      // env.timestampGte(Number(instant))
+      return todo();
+    }),
 
     // Diagnostic only; never traps, and silently drops when the env has no sink.
-    debug: hostFn(['str'], 'void', false, (message) => env.debug?.(message)),
+    debug: hostFn(['str'], 'void', false, (message) => {
+      // env.debug?.(message)
+      return todo();
+    }),
 
     // The transport turns the throw into a guest trap.
     reject: hostFn(['str'], 'void', false, (reason) => {
-      throw new ContractRejection(reason);
+      throw new Error(reason);
     }),
   };
 }

@@ -1,4 +1,4 @@
-import { assert } from '../../util/functional.ts';
+import { assert, todo } from '../../util/functional.ts';
 import { Context } from '../../Context.ts';
 import { DraftStore } from '../../graph/DraftStore.ts';
 import { OutputIndex } from '../../graph/OutputIndex.ts';
@@ -12,6 +12,7 @@ import {
 } from '../../graph/types.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
+import { MaybePromise } from '../../util/MaybePromise.ts';
 
 export class GenerationEnv implements ContractEnv {
   private claims: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[] = [];
@@ -56,6 +57,10 @@ export class GenerationEnv implements ContractEnv {
         }
       }, controller.signal);
     });
+  }
+
+  getResult(): MaybePromise<Uint8Array> {
+    return todo();
   }
 
   setResult(result: Uint8Array) {

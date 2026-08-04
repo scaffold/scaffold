@@ -14,5 +14,6 @@ export interface ContractEnv {
 
   claim(): MaybePromise<Uint8Array>;
 
+  getResult(): MaybePromise<Uint8Array>;
   setResult(result: Uint8Array): void;
 }
