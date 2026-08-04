@@ -3,7 +3,7 @@ import { Config } from '../../src/Config.ts';
 import { Context } from '../../src/Context.ts';
 import { DefaultContractProvider } from '../../src/contract/DefaultContractProvider.ts';
 import { EventLog } from '../../src/logic/EventLog.ts';
-import { generateGenesis } from '../../src/graph/genesis.ts';
+import { generateGenesis } from '../../src/genesis.ts';
 import { TransportPlugin } from '../../src/interfaces/transport.ts';
 import { Transport } from '../../src/peer/network/Transport.ts';
 import { Hash } from '../../src/util/Hash.ts';

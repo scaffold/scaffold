@@ -1,5 +1,6 @@
 import { Config } from './Config.ts';
 import { Context } from './Context.ts';
+import { Genesis } from './graph/Genesis.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
@@ -15,6 +16,9 @@ export class Scaffold {
 
   constructor(config: ScaffoldConfig) {
     this.ctx = new Context(config);
+
+    // Make sure the genesis block is loaded
+    this.ctx.get(Genesis);
 
     for (const role of config.roles ?? []) this.ctx.get(role);
   }

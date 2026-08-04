@@ -8,7 +8,7 @@ import {
 import { type Config, makeDefaultConfig } from '../../src/Config.ts';
 import { BlockStore } from '../../src/graph/BlockStore.ts';
 import { AtomSource, type Block } from '../../src/graph/types.ts';
-import { generateGenesis } from '../../src/graph/genesis.ts';
+import { generateGenesis } from '../../src/genesis.ts';
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
 import { makeTestContext, testPrivateKey, testPublicKey } from '../helpers/v2.ts';

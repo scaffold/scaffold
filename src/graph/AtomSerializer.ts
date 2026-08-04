@@ -2,7 +2,6 @@ import { EntropyProvider } from '../Config.ts';
 import { Context } from '../Context.ts';
 import { arrEquals } from '../util/buffer.ts';
 import { error } from '../util/functional.ts';
-import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { secp } from '../util/secp.ts';
 import { BlockIngestor, Ingestor, UnknownIngestor } from './Ingestor.ts';
 import { Atom, AtomBase, AtomType, BlockRef } from './types.ts';

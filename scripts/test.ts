@@ -3,6 +3,7 @@ import { makeDefaultConfig } from '../src/Config.ts';
 import { ObjectQuery, Query } from '../src/contract/Query.ts';
 import { HELLO_CONTRACT } from '../src/contract/static/Hello.ts';
 import { DraftStore } from '../src/graph/DraftStore.ts';
+import { Gossip } from '../src/peer/network/Gossip.ts';
 import { GeneratorRole } from '../src/roles/GeneratorRole.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 import { neverAbort } from '../src/util/abortable.ts';
@@ -10,7 +11,7 @@ import { bin2str, str2bin } from '../src/util/buffer.ts';
 
 const scaffold = new Scaffold({
   ...makeDefaultConfig(),
-  roles: [GeneratorRole],
+  roles: [GeneratorRole, Gossip],
 });
 
 /*
@@ -47,3 +48,5 @@ await scaffold.fetch({
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
+
+// setTimeout(() => scaffold.close(), 1000);

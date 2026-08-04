@@ -6,6 +6,7 @@ import { createSource } from '../contract/createSource.ts';
 import { Source, ValueType } from '../contract/values.ts';
 import { todo } from '../util/functional.ts';
 import { makeDefaultConfig } from '../Config.ts';
+import { GeneratorRole } from '../roles/GeneratorRole.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -16,7 +17,7 @@ export enum FsNodeType {
 export interface DirNode {
   type: FsNodeType.Directory;
   list(): Promise<({ name: string } & FsNode)[]>;
-  open(name: string): Promise<FsNode | { type: FsNodeType.Missing }>;
+  open(name: string): Promise<FsNode | FsMissing>;
 }
 
 export interface FileNode {
@@ -26,6 +27,11 @@ export interface FileNode {
 }
 
 export type FsNode = DirNode | FileNode;
+
+export interface FsMissing {
+  type: FsNodeType.Missing;
+  error: Error;
+}
 
 /**
  * Host capabilities the CLI needs, injected by the caller.
@@ -43,7 +49,7 @@ export interface ScaffoldCliDeps {
   /** Create a scaffold instance */
   constructScaffold(config: ScaffoldConfig): Scaffold;
   /** Opens a filesystem path */
-  open(path: string): Promise<FsNode | { type: FsNodeType.Missing }>;
+  open(path: string): Promise<FsNode | FsMissing>;
   /** Read all of stdin as bytes (empty array if nothing is piped). */
   readStdin(): Promise<Uint8Array>;
   /** Write binary data to stdout. */
@@ -172,6 +178,8 @@ export class ScaffoldCLI {
   private async constructScaffold(args: ParsedArgs): Promise<Scaffold> {
     const config: ScaffoldConfig = makeDefaultConfig();
 
+    config.roles = [GeneratorRole];
+
     // string: ['private_key_file', 'genesis_block_file', 'bootstrap_urls', 'verbosity'],
 
     if (args.private_key_file !== undefined) {
@@ -196,7 +204,7 @@ export class ScaffoldCLI {
   }
 
   private async createSourceFromFs(
-    base: { open(name: string): Promise<FsNode | { type: FsNodeType.Missing }> },
+    base: { open(name: string): Promise<FsNode | FsMissing> },
     name: string,
   ): Promise<Source> {
     if (name === '.' || name === '..') throw new Error(`Invalid open key ${name}`);
@@ -225,9 +233,11 @@ export class ScaffoldCLI {
     if (jsonNode.type === FsNodeType.File) {
       const value = JSON.parse(bin2str(await jsonNode.read()));
       return createSource(value);
+    } else if (jsonNode.type === FsNodeType.Directory) {
+      throw new Error(`Cannot open ${name}: name.json is a directory`);
     }
 
-    throw new Error(`Cannot open ${name}`);
+    throw new Error(`Cannot open ${name}:\n  ${node.error.message}\n  ${jsonNode.error.message}`);
   }
 
   private async put(parsed: ParsedArgs) {
@@ -265,10 +275,13 @@ export class ScaffoldCLI {
 
     const scaffold = await this.constructScaffold(parsed);
 
-    scaffold.fetch({
+    await scaffold.fetch({
       contract: Hash.fromHex(contractHash),
       params: () => this.createSourceFromFs(this.deps, params),
-      onResult: (result) => this.deps.stdout(result?.body ?? new Uint8Array()),
+      onResult: (result) => {
+        this.deps.stdout(result?.body ?? new Uint8Array());
+        this.deps.stdout(new Uint8Array([10]));
+      },
     });
   }
 }

@@ -16,6 +16,7 @@ import {
   OutputResolverType,
 } from './types.ts';
 import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
+import { Genesis } from './Genesis.ts';
 
 export type BuildResult =
   | { ok: true; payload: BlockPayload }
@@ -145,11 +146,7 @@ export class BlockBuilder extends BlockBuilderBase {
   }
 
   protected override getGenesisBlock() {
-    return this.ctx.get(BlockStore).ingest({
-      source: AtomSource.Genesis,
-      receivedAt: this.ctx.config.timeProvider.nowMs(),
-      raw: this.ctx.config.genesis,
-    });
+    return this.ctx.get(Genesis).getGenesis();
   }
 
   protected override nowMs(): number {

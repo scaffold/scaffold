@@ -8,18 +8,20 @@
 //   npm i -g scaffold.io                        (dnt emits this as the `bin`)
 //   deno install -gA -n scaffold scripts/cli.ts
 import process from 'node:process';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { FsNode, FsNodeType, ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
+import { FsMissing, FsNode, FsNodeType, ScaffoldCLI } from '../src/cli/ScaffoldCLI.ts';
 import { Scaffold } from '../src/Scaffold.ts';
 
-async function openPath(path: string): Promise<FsNode | { type: FsNodeType.Missing }> {
+async function openPath(path: string): Promise<FsNode | FsMissing> {
+  path = resolve(path);
+
   let isDirectory: boolean;
   try {
     const result = await stat(path);
     isDirectory = result.isDirectory();
-  } catch (_err) {
-    return { type: FsNodeType.Missing };
+  } catch (err) {
+    return { type: FsNodeType.Missing, error: err instanceof Error ? err : new Error(String(err)) };
   }
 
   return makeNode(path, isDirectory);

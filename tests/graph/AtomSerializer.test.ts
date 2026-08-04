@@ -17,7 +17,7 @@ import {
   BlockPayload,
   Signal,
 } from '../../src/graph/types.ts';
-import { generateGenesis } from '../../src/graph/genesis.ts';
+import { generateGenesis } from '../../src/genesis.ts';
 import { bigint2binBe, bin2bigintBe } from '../../src/util/bigint.ts';
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
