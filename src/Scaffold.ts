@@ -3,6 +3,7 @@ import { Context } from './Context.ts';
 import { createSource } from './contract/createSource.ts';
 import { Genesis } from './graph/Genesis.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
+import { EventLog } from './logic/EventLog.ts';
 import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
 import { Send, SendInput } from './peer/Send.ts';
@@ -17,7 +18,7 @@ export class Scaffold {
   private ctx: Context;
 
   constructor(config: ScaffoldConfig) {
-    this.ctx = new Context(config);
+    this.ctx = new Context(config, new EventLog({ console: true }));
 
     // Make sure the genesis block is loaded
     this.ctx.get(Genesis);

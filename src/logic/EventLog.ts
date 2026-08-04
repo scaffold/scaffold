@@ -6,6 +6,8 @@
  * by system, event name, block hash, and sequence range.
  */
 
+import { arrCall } from '../util/array.ts';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export interface LogEntry {
@@ -87,13 +89,7 @@ export class EventLog {
       this._consoleEmit(entry);
     }
 
-    for (const cb of this.subscribers) {
-      try {
-        cb(entry);
-      } catch {
-        // subscriber error must not affect other subscribers or the append
-      }
-    }
+    arrCall(this.subscribers, entry);
 
     return entry.seq;
   }

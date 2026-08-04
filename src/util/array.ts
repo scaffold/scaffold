@@ -11,6 +11,12 @@ export const arrCall = <Args extends unknown[]>(
   ...args: Args
 ) => {
   for (const cb of arr) {
-    cb(...args);
+    try {
+      cb(...args);
+    } catch (err) {
+      // Subscriber error must not affect other subscribers or the append
+      // TODO: Better error handling (maybe pass in a logger instance)
+      console.error(err);
+    }
   }
 };

@@ -14,7 +14,6 @@
 // and functions, never the env.
 
 import { MaybePromise } from '../../util/MaybePromise.ts';
-import { CompiledModules } from './WasmModules.ts';
 
 export type ValueKind = 'bytes' | 'str' | 'i32' | 'i64' | 'void';
 
@@ -74,7 +73,7 @@ export interface WasmTransport {
    * a crash.
    */
   invoke(
-    modules: CompiledModules,
+    modules: unknown, /* CompiledModules */
     entry: string,
     imports: HostImports,
     opts?: { arg?: Uint8Array; signal?: AbortSignal },
