@@ -1,5 +1,5 @@
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { ListSink, SinkRoot, StructSink, ValueSink } from './values.ts';
+import { ListSink, MapSink, SinkRoot, ValueSink } from './values.ts';
 
 class CloningSink<KeyType extends string | number> implements ValueSink {
   constructor(private obj: { [key in KeyType]: unknown }, private key: KeyType) {}
@@ -19,11 +19,11 @@ class CloningSink<KeyType extends string | number> implements ValueSink {
   setBytes(value: Uint8Array) {
     this.obj[this.key] = value;
   }
-  setList(length?: number): ListSink {
-    const arr = this.obj[this.key] = length !== undefined ? new Array(length) : [];
+  setList(): ListSink {
+    const arr = this.obj[this.key] = [];
     return { at: (idx, _desc) => new CloningSink<number>(arr, idx) };
   }
-  setStruct(): StructSink {
+  setMap(): MapSink {
     const obj = this.obj[this.key] = {};
     return { at: (key, _desc) => new CloningSink<string>(obj, key) };
   }

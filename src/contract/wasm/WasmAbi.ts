@@ -12,10 +12,10 @@ import { ContractRejection } from '../ContractRejection.ts';
 import { ContractEnv } from '../env/ContractEnv.ts';
 import {
   ListSink,
+  MapSink,
   SinkRoot,
   Source,
   SourceRoot,
-  StructSink,
   ValueSink,
   ValueType,
 } from '../values.ts';
@@ -64,12 +64,12 @@ export function runImports(env: ContractEnv, onDebug?: (message: string) => void
 // Empty key/descriptor strings mean "none" on the wire.
 const desc = (d: string) => d === '' ? undefined : d;
 
-type WalkFrame = { kind: 'list'; sink: ListSink } | { kind: 'struct'; sink: StructSink };
+type WalkFrame = { kind: 'list'; sink: ListSink } | { kind: 'map'; sink: MapSink };
 
 /**
  * `scaffold_walker.*` -- the walk_params/walk_data surface. All sync: v2
  * sinks are synchronous. Select-then-emit: each slot is selected exactly once
- * (root / struct_at / list_at) and consumed by exactly one set_* / begin_*.
+ * (root / map_at / list_at) and consumed by exactly one set_* / begin_*.
  * When begin_* returns 0 the host declined to descend and the guest must skip
  * the whole subtree: no child selects, no end_*. Any protocol violation
  * crashes the guest; call finish() after the entry returns to catch an
@@ -89,9 +89,9 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
     selected = undefined;
     return s;
   };
-  const topStruct = (): StructSink => {
+  const topMap = (): MapSink => {
     const frame = frames.at(-1) ?? error('walk: no open container');
-    assert(frame.kind === 'struct', 'walk: open container is not a struct');
+    assert(frame.kind === 'map', 'walk: open container is not a map');
     return frame.sink;
   };
   const topList = (): ListSink => {
@@ -99,7 +99,7 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
     assert(frame.kind === 'list', 'walk: open container is not a list');
     return frame.sink;
   };
-  const begin = (s: StructSink | ListSink | undefined, kind: WalkFrame['kind']): number => {
+  const begin = (s: MapSink | ListSink | undefined, kind: WalkFrame['kind']): number => {
     if (s === undefined) return 0;
     frames.push({ kind, sink: s } as WalkFrame);
     return 1;
@@ -116,8 +116,8 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
       root = undefined;
       select(r(desc(descriptor)));
     }),
-    struct_at: hostFn(['str', 'str'], 'void', false, (key, descriptor) => {
-      select(topStruct().at(key, desc(descriptor)));
+    map_at: hostFn(['str', 'str'], 'void', false, (key, descriptor) => {
+      select(topMap().at(key, desc(descriptor)));
     }),
     list_at: hostFn(['i32', 'str'], 'void', false, (index, descriptor) => {
       select(topList().at(index, desc(descriptor)));
@@ -127,15 +127,10 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
     set_number: hostFn(['f64'], 'void', false, (value) => take().setNumber(value)),
     set_string: hostFn(['str'], 'void', false, (value) => take().setString(value)),
     set_bytes: hostFn(['bytes'], 'void', false, (value) => take().setBytes(value)),
-    begin_struct: hostFn([], 'i32', false, () => begin(take().setStruct(), 'struct')),
-    end_struct: hostFn([], 'void', false, () => end('struct')),
+    begin_map: hostFn([], 'i32', false, () => begin(take().setMap(), 'map')),
+    end_map: hostFn([], 'void', false, () => end('map')),
     // length < 0 encodes "unknown".
-    begin_list: hostFn(
-      ['i32'],
-      'i32',
-      false,
-      (length) => begin(take().setList(length < 0 ? undefined : length), 'list'),
-    ),
+    begin_list: hostFn([], 'i32', false, () => begin(take().setList(), 'list')),
     end_list: hostFn([], 'void', false, () => end('list')),
     fail: hostFn(['str'], 'void', false, (message) => error(`walk failed: ${message}`)),
   };
@@ -152,7 +147,7 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
 
 /**
  * `scaffold_builder.*` -- the build_params/build_data surface. A cursor over
- * the pull-model Source tree: navigation (root / struct_at / list_at)
+ * the pull-model Source tree: navigation (root / map_at / list_at)
  * resolves a source, selects it, and returns its ValueType tag, or -1 for
  * absent. get_* reads the selected scalar; enter/exit descend into and out of
  * the selected container. Navigation may block (Source.at is MaybePromise);
@@ -161,7 +156,7 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
 export function buildImports(source: SourceRoot): HostImports {
   let root: SourceRoot | undefined = source;
   let selected: Source | undefined;
-  const frames: (Source & { type: ValueType.List | ValueType.Struct })[] = [];
+  const frames: (Source & { type: ValueType.List | ValueType.Map })[] = [];
 
   const expect = <T extends Source['type']>(type: T): Extract<Source, { type: T }> => {
     const s = selected ?? error('build: no source selected');
@@ -179,9 +174,9 @@ export function buildImports(source: SourceRoot): HostImports {
       root = undefined;
       return maybeThen(r(desc(descriptor)), selectResolved);
     }),
-    struct_at: hostFn(['str', 'str'], 'i32', true, (key, descriptor) => {
+    map_at: hostFn(['str', 'str'], 'i32', true, (key, descriptor) => {
       const frame = frames.at(-1) ?? error('build: no open container');
-      assert(frame.type === ValueType.Struct, 'build: open container is not a Struct');
+      assert(frame.type === ValueType.Map, 'build: open container is not a Map');
       return maybeThen(frame.at(key, desc(descriptor)), selectResolved);
     }),
     list_at: hostFn(['i32', 'str'], 'i32', true, (index, descriptor) => {
@@ -192,7 +187,7 @@ export function buildImports(source: SourceRoot): HostImports {
     enter: hostFn([], 'void', false, () => {
       const s = selected ?? error('build: no source selected');
       assert(
-        s.type === ValueType.List || s.type === ValueType.Struct,
+        s.type === ValueType.List || s.type === ValueType.Map,
         'build: selected source is not a container',
       );
       frames.push(s);

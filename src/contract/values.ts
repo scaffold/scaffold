@@ -9,7 +9,7 @@ export enum ValueType {
   String = 3,
   Bytes = 4,
   List = 5,
-  Struct = 6,
+  Map = 6,
 }
 
 /** Describes a field's type, purpose, and allowed values. */
@@ -57,8 +57,13 @@ export interface ListSource {
   length?: number;
   at(index: number, descriptor?: string): MaybePromise<Source | undefined>;
 }
-export interface StructSource {
-  type: ValueType.Struct;
+export interface MapSource {
+  type: ValueType.Map;
+  length?: number;
+  entry(
+    index: number,
+    descriptor?: string,
+  ): MaybePromise<{ key: string; value: Source } | undefined>;
   at(key: string, descriptor?: string): MaybePromise<Source | undefined>;
 }
 
@@ -69,7 +74,7 @@ export type Source =
   | StringSource
   | BytesSource
   | ListSource
-  | StructSource;
+  | MapSource;
 // Maps should be represented as a list of key-value pairs.
 // The descriptor can and should be used to specify the exact semantics of encodings like this.
 
@@ -83,15 +88,15 @@ export interface ValueSink {
   setNumber(value: number): void;
   setString(value: string): void;
   setBytes(value: Uint8Array): void;
-  setList(length?: number): ListSink | undefined; // Host should return undefined if they're not interested in descending into this collection
-  setStruct(): StructSink | undefined; // Host should return undefined if they're not interested in descending into this collection
+  setList(): ListSink | undefined; // Host should return undefined if they're not interested in descending into this collection
+  setMap(): MapSink | undefined; // Host should return undefined if they're not interested in descending into this collection
 }
 
 export interface ListSink {
   at(index: number, descriptor?: string): ValueSink;
 }
 
-export interface StructSink {
+export interface MapSink {
   at(key: string, descriptor?: string): ValueSink;
 }
 

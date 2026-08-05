@@ -32,7 +32,7 @@ const dummySink: ValueSink = {
   setString: () => {},
   setBytes: () => {},
   setList: () => undefined,
-  setStruct: () => undefined,
+  setMap: () => undefined,
 };
 
 interface WasmHarness {

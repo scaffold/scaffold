@@ -15,18 +15,18 @@ export const helloContract: Contract = {
 
   async buildParams(reader) {
     const x = await reader();
-    assert(x?.type === ValueType.Struct);
+    assert(x?.type === ValueType.Map);
     const name = await x.at('name');
     assert(name?.type === ValueType.String);
     return str2bin(name.value);
   },
 
   walkParams(params, sink) {
-    sink().setStruct()?.at('name').setString(bin2str(params));
+    sink().setMap()?.at('name').setString(bin2str(params));
   },
 
   walkData(data, sink) {
-    sink().setStruct()?.at('message').setString(bin2str(data));
+    sink().setMap()?.at('message').setString(bin2str(data));
   },
 
   debug(params) {

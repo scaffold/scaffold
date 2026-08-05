@@ -4,7 +4,7 @@ import { Hash } from '../util/Hash.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
 import { createSource } from '../contract/createSource.ts';
 import { Source, ValueType } from '../contract/values.ts';
-import { todo } from '../util/functional.ts';
+import { assert, todo } from '../util/functional.ts';
 import { makeDefaultConfig } from '../Config.ts';
 import { GeneratorRole } from '../roles/GeneratorRole.ts';
 
@@ -206,8 +206,8 @@ export class ScaffoldCLI {
   private async createSourceFromFs(
     base: { open(name: string): Promise<FsNode | FsMissing> },
     name: string,
-  ): Promise<Source> {
-    if (name === '.' || name === '..') throw new Error(`Invalid open key ${name}`);
+  ): Promise<Source | undefined> {
+    if (name === '.' || name === '..') return undefined;
 
     const node = await base.open(name);
     if (node.type === FsNodeType.File) {
@@ -215,17 +215,19 @@ export class ScaffoldCLI {
     } else if (node.type === FsNodeType.Directory) {
       const list = await node.list();
       return {
-        type: ValueType.List,
+        type: ValueType.Map,
         length: list.length,
-        at: (idx, _desc) => ({
-          type: ValueType.Struct,
-          at: (key, _desc) =>
-            key === 'key'
-              ? { type: ValueType.String, value: list[idx].name }
-              : key === 'value'
-              ? this.createSourceFromFs(node, key)
-              : undefined,
-        }),
+        entry: async (idx, _desc) => {
+          const item = list[idx];
+          if (item === undefined) return undefined;
+          const value = await this.createSourceFromFs(node, item.name);
+          assert(
+            value !== undefined,
+            `FsNode.open() failed to open key returned from FsNode.list(): ${item.name}`,
+          );
+          return { key: item.name, value };
+        },
+        at: (key, _desc) => this.createSourceFromFs(node, key),
       };
     }
 
@@ -236,8 +238,6 @@ export class ScaffoldCLI {
     } else if (jsonNode.type === FsNodeType.Directory) {
       throw new Error(`Cannot open ${name}: name.json is a directory`);
     }
-
-    throw new Error(`Cannot open ${name}:\n  ${node.error.message}\n  ${jsonNode.error.message}`);
   }
 
   private async put(parsed: ParsedArgs) {

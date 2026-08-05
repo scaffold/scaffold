@@ -3,7 +3,7 @@ import { ContractRejection } from '../../../src/contract/ContractRejection.ts';
 import { createSink } from '../../../src/contract/createSink.ts';
 import { createSource } from '../../../src/contract/createSource.ts';
 import { ContractEnv, ExecutionMode } from '../../../src/contract/env/ContractEnv.ts';
-import { StructSource, ValueSink, ValueType } from '../../../src/contract/values.ts';
+import { MapSource, ValueSink, ValueType } from '../../../src/contract/values.ts';
 import { buildImports, runImports, walkImports } from '../../../src/contract/wasm/WasmAbi.ts';
 import { HostImports } from '../../../src/contract/wasm/WasmTransport.ts';
 import { str2bin } from '../../../src/util/buffer.ts';
@@ -54,14 +54,14 @@ Deno.test('runImports debug reaches the bound sink', () => {
   assertEquals(messages, ['hi']);
 });
 
-Deno.test('walkImports drives a struct into a sink', async () => {
+Deno.test('walkImports drives a map into a sink', async () => {
   const value = await createSink((sink) => {
     const walker = walkImports(sink);
     call(walker.imports, 'root', '');
-    assertEquals(call(walker.imports, 'begin_struct'), 1);
-    call(walker.imports, 'struct_at', 'name', '');
+    assertEquals(call(walker.imports, 'begin_map'), 1);
+    call(walker.imports, 'map_at', 'name', '');
     call(walker.imports, 'set_string', 'joel');
-    call(walker.imports, 'end_struct');
+    call(walker.imports, 'end_map');
     walker.finish();
   });
   assertEquals(value, { name: 'joel' });
@@ -89,13 +89,13 @@ const declineSink: ValueSink = {
   setString: () => {},
   setBytes: () => {},
   setList: () => undefined,
-  setStruct: () => undefined,
+  setMap: () => undefined,
 };
 
 Deno.test('a declined descent returns 0 and leaves a balanced walk', () => {
   const walker = walkImports(() => declineSink);
   call(walker.imports, 'root', '');
-  assertEquals(call(walker.imports, 'begin_struct'), 0);
+  assertEquals(call(walker.imports, 'begin_map'), 0);
   walker.finish();
 });
 
@@ -120,17 +120,17 @@ Deno.test('walkImports rejects selecting the root twice', async () => {
   );
 });
 
-Deno.test('walkImports rejects struct_at inside a list', async () => {
+Deno.test('walkImports rejects map_at inside a list', async () => {
   await assertRejects(
     () =>
       createSink((sink) => {
         const walker = walkImports(sink);
         call(walker.imports, 'root', '');
         call(walker.imports, 'begin_list', 2);
-        call(walker.imports, 'struct_at', 'key', '');
+        call(walker.imports, 'map_at', 'key', '');
       }),
     Error,
-    'not a struct',
+    'not a map',
   );
 });
 
@@ -140,7 +140,7 @@ Deno.test('finish catches a container the guest left open', async () => {
       createSink((sink) => {
         const walker = walkImports(sink);
         call(walker.imports, 'root', '');
-        call(walker.imports, 'begin_struct');
+        call(walker.imports, 'begin_map');
         walker.finish();
       }),
     Error,
@@ -152,11 +152,11 @@ Deno.test('finish catches a guest that never walked', () => {
   assertThrows(() => walkImports(() => declineSink).finish(), Error, 'never selected the root');
 });
 
-Deno.test('buildImports navigates a struct source', async () => {
+Deno.test('buildImports navigates a map source', async () => {
   const imports = buildImports(() => createSource({ name: 'joel' }));
-  assertEquals(await call(imports, 'root', ''), ValueType.Struct);
+  assertEquals(await call(imports, 'root', ''), ValueType.Map);
   call(imports, 'enter');
-  assertEquals(await call(imports, 'struct_at', 'name', ''), ValueType.String);
+  assertEquals(await call(imports, 'map_at', 'name', ''), ValueType.String);
   assertEquals(call(imports, 'get_string'), 'joel');
   call(imports, 'exit');
 });
@@ -175,22 +175,23 @@ Deno.test('buildImports reads list length and scalar values', async () => {
 });
 
 Deno.test('an absent source resolves to -1', async () => {
-  const source: StructSource = { type: ValueType.Struct, at: () => undefined };
+  const source: MapSource = { type: ValueType.Map, entry: () => undefined, at: () => undefined };
   const imports = buildImports(() => source);
-  assertEquals(await call(imports, 'root', ''), ValueType.Struct);
+  assertEquals(await call(imports, 'root', ''), ValueType.Map);
   call(imports, 'enter');
-  assertEquals(await call(imports, 'struct_at', 'missing', ''), -1);
+  assertEquals(await call(imports, 'map_at', 'missing', ''), -1);
 });
 
 Deno.test('an async source resolves through navigation', async () => {
-  const source: StructSource = {
-    type: ValueType.Struct,
+  const source: MapSource = {
+    type: ValueType.Map,
+    entry: () => Promise.resolve({ key: 'key', value: createSource('deferred') }),
     at: () => Promise.resolve(createSource('deferred')),
   };
   const imports = buildImports(() => source);
-  assertEquals(await call(imports, 'root', ''), ValueType.Struct);
+  assertEquals(await call(imports, 'root', ''), ValueType.Map);
   call(imports, 'enter');
-  assertEquals(await call(imports, 'struct_at', 'key', ''), ValueType.String);
+  assertEquals(await call(imports, 'map_at', 'key', ''), ValueType.String);
   assertEquals(call(imports, 'get_string'), 'deferred');
 });
 

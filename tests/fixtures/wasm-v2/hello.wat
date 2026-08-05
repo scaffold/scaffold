@@ -2,20 +2,20 @@
 ;;   run:          set_result("Hello, " + params)
 ;;   walk_params:  {name: <params as string>}
 ;;   walk_data:    {message: <data as string>}
-;;   build_params: source struct's "name" field as the params bytes
+;;   build_params: source map's "name" field as the params bytes
 ;; One module carries every entry point's imports; only the active entry's
 ;; namespace is live during an invoke (the rest trap if called).
 (module
   (import "scaffold_env" "params" (func $params (result i64)))
   (import "scaffold_env" "set_result" (func $set_result (param i32 i32)))
   (import "scaffold_walker" "root" (func $w_root (param i32 i32)))
-  (import "scaffold_walker" "begin_struct" (func $w_begin_struct (result i32)))
-  (import "scaffold_walker" "struct_at" (func $w_struct_at (param i32 i32 i32 i32)))
+  (import "scaffold_walker" "begin_map" (func $w_begin_map (result i32)))
+  (import "scaffold_walker" "map_at" (func $w_map_at (param i32 i32 i32 i32)))
   (import "scaffold_walker" "set_string" (func $w_set_string (param i32 i32)))
-  (import "scaffold_walker" "end_struct" (func $w_end_struct))
+  (import "scaffold_walker" "end_map" (func $w_end_map))
   (import "scaffold_builder" "root" (func $b_root (param i32 i32) (result i32)))
   (import "scaffold_builder" "enter" (func $b_enter))
-  (import "scaffold_builder" "struct_at" (func $b_struct_at (param i32 i32 i32 i32) (result i32)))
+  (import "scaffold_builder" "map_at" (func $b_map_at (param i32 i32 i32 i32) (result i32)))
   (import "scaffold_builder" "get_string" (func $b_get_string (result i64)))
   (memory (export "memory") 1)
   (data (i32.const 8) "Hello, ")
@@ -43,24 +43,24 @@
 
   (func (export "walk_params") (param $ptr i32) (param $len i32)
     (call $w_root (i32.const 0) (i32.const 0))
-    (if (i32.eqz (call $w_begin_struct)) (then (return)))
-    (call $w_struct_at (i32.const 16) (i32.const 4) (i32.const 0) (i32.const 0))
+    (if (i32.eqz (call $w_begin_map)) (then (return)))
+    (call $w_map_at (i32.const 16) (i32.const 4) (i32.const 0) (i32.const 0))
     (call $w_set_string (local.get $ptr) (local.get $len))
-    (call $w_end_struct))
+    (call $w_end_map))
 
   (func (export "walk_data") (param $ptr i32) (param $len i32)
     (call $w_root (i32.const 0) (i32.const 0))
-    (if (i32.eqz (call $w_begin_struct)) (then (return)))
-    (call $w_struct_at (i32.const 24) (i32.const 7) (i32.const 0) (i32.const 0))
+    (if (i32.eqz (call $w_begin_map)) (then (return)))
+    (call $w_map_at (i32.const 24) (i32.const 7) (i32.const 0) (i32.const 0))
     (call $w_set_string (local.get $ptr) (local.get $len))
-    (call $w_end_struct))
+    (call $w_end_map))
 
   (func (export "build_params") (result i64)
-    ;; root must be a Struct (6); its "name" field must be a String (3).
+    ;; root must be a Map (6); its "name" field must be a String (3).
     (if (i32.ne (call $b_root (i32.const 0) (i32.const 0)) (i32.const 6))
       (then unreachable))
     (call $b_enter)
-    (if (i32.ne (call $b_struct_at (i32.const 16) (i32.const 4) (i32.const 0) (i32.const 0))
+    (if (i32.ne (call $b_map_at (i32.const 16) (i32.const 4) (i32.const 0) (i32.const 0))
       (i32.const 3))
       (then unreachable))
     (call $b_get_string)))
