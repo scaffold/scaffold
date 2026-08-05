@@ -108,3 +108,67 @@ Two contract blocks deploy the same WASM blob, differing only in the
 A contract that uses only scalar f32/f64 arithmetic plus copysign is
 fully covered. SIMD contracts are entirely rejected until the type
 tracker arrives.
+
+## WasmGC
+
+The `0xfb` ban is a resource-exhaustion decision, not a "GC is
+nondeterministic" decision, and it is liftable. Recorded here so it
+isn't relitigated from scratch.
+
+Most of what makes a collector nondeterministic is absent from WasmGC by
+construction. The MVP offers no way to obtain an address, no
+reference-to-integer conversion (`i31` only goes the other way), and no
+byte view of a struct. Finalizers, weak references, heap introspection,
+allocation control and shared cross-thread references are all deferred
+post-MVP. Consequences: GC timing is unobservable (core wasm has no
+clock and we expose none), object layout is unobservable, and a language
+needing identity hash codes is *forced* to store a counter-assigned
+field rather than hash an address. `ref.eq` is identity comparison, and
+`i31` refs with equal values compare equal. A NaN in a struct or array
+field cannot leak its bits without `reinterpret` (banned) or an
+`f64.store` (already canonicalized), so float fields need no new
+canonicalization points.
+
+What is actually nondeterministic:
+
+- **Allocation failure.** The GC MVP spec defines no OOM semantics at
+  all. Engines differ (wasmtime traps with "allocation too large"; V8
+  does its own thing), and the failure point depends on heap limits,
+  per-object header overhead and collector efficiency.
+- **Engine static limits.** V8's `wasm-limits.h` carries
+  `kV8MaxWasmStructFields = 999`, `kV8MaxWasmArrayInitLength = 999` and
+  `kV8MaxRttSubtypingDepth = 31`, explicitly marked as not standardized.
+  This diverges at *validation* time, so a module could be accepted by
+  one peer and rejected by another before it ever runs.
+- **Stack depth.** Pre-existing, but GC'd languages traverse linked
+  structures recursively and hit engine limits far more often.
+
+The `memory.grow` abstain guard does not transfer. `memory.grow` returns
+-1, a value we can branch on; allocation failure traps, and wasm traps
+are uncatchable from inside wasm -- exception handling does not catch
+traps either. Letting it trap and having the host classify OOM would
+make consensus depend on three engines agreeing on how they report OOM.
+
+Lifting the ban therefore means pre-emptive metering:
+
+1. A protocol cost model: a struct of type T costs H + sum of field
+   sizes, H a fixed notional header, independent of any engine's real
+   layout. Same footing as EVM gas.
+2. An allocation counter injected before each `struct.new` /
+   `array.new*`, charged against a protocol budget set below the
+   smallest engine limit, then `abstain` + `unreachable`. Array cost
+   needs the runtime length off the operand stack, so this is codegen,
+   not a peephole insert.
+3. Protocol static limits below every engine's (struct fields, array
+   init length, subtyping depth), rejected at validation.
+
+All three need the type section parsed -- rec groups, subtyping chains,
+field types, resolving the type index at each allocation site. That is
+the same type-aware pass integer SIMD needs above.
+
+The remaining argument against is not mechanical: under WasmGC the
+allocator stops being bytes we hashed and becomes the host engine's
+collector, which we cannot audit or version-pin, so a V8 behaviour
+change becomes a consensus fork. Against that, lifting it unblocks
+Kotlin, Dart, Scala, OCaml, Java (TeaVM) and Scheme (Hoot), all of which
+ship no GC of their own and are correspondingly smaller.

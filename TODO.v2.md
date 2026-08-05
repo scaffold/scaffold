@@ -2,6 +2,8 @@
 
 ## Joel's TODOs
 
+Just launch the website
+
 Andrew/Austin/Bob MVP
 
 - WASM module linking, enabling the wasi shim
@@ -20,12 +22,8 @@ Andrew/Austin/Bob MVP
 Later
 
 - Piggybacking
-
-Idea: lists, maps, and structs are all represented as a collection:
-
-- ListValue.asCollection(): { at(index: number): Value }
-- MapValue.asCollection(): { at(key: string): Value; at(index: number): KeyValuePairValue }
-- StructValue.asCollection(): { at(field: string): Value; at(index: number): KeyValuePairValue }
+- Switch `outputs[*].contractHash: Hash` to `outputs[*].contract: bigint`. This gives the contract insurance and trust in the same way as a claim or ref.
+- Maybe switch claims/refs/contracts to negative values, leaving positive values for denoting outputs counting up from the genesis.
 
 ## Blocking decisions (gate the block codec)
 
