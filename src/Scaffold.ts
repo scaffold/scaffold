@@ -1,9 +1,11 @@
 import { Config } from './Config.ts';
 import { Context } from './Context.ts';
 import { createSource } from './contract/createSource.ts';
+import { WasmConfig } from './contract/wasm/WasmConfig.ts';
 import { Genesis } from './graph/Genesis.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
 import { EventLog } from './logic/EventLog.ts';
+import { fetchBlob } from './peer/blobFetch.ts';
 import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
 import { Send, SendInput } from './peer/Send.ts';
@@ -19,6 +21,7 @@ export class Scaffold {
 
   constructor(config: ScaffoldConfig) {
     this.ctx = new Context(config, new EventLog({ console: true }));
+    this.ctx.configure(WasmConfig, { fetchBlob });
 
     // Make sure the genesis block is loaded
     this.ctx.get(Genesis);

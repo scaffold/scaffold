@@ -52,7 +52,7 @@ export class EnvContractProvider implements ContractProvider {
     return this.contract.walkData(data, sink);
   }
 
-  debugName?(predicate: Predicate): string | undefined {
+  debug?(predicate: Predicate): string | undefined {
     return this.contract.debug?.(predicate.params, this.ctx);
   }
 }

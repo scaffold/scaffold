@@ -6,6 +6,8 @@ import { RoutingContractProvider } from './RoutingContractProvider.ts';
 import { AGGREGATION_CONTRACT, aggregationContract } from './static/Aggregation.ts';
 import { SIGNATURE_CONTRACT, signatureContract } from './static/Signature.ts';
 import { HELLO_CONTRACT, helloContract } from './static/Hello.ts';
+import { BLOB_CONTRACT, blobContract } from './static/Blob.ts';
+import { WasmContractProvider } from './wasm/WasmContractProvider.ts';
 
 export class DefaultContractProvider extends RoutingContractProvider implements ContractProvider {
   constructor(ctx: Context) {
@@ -18,6 +20,9 @@ export class DefaultContractProvider extends RoutingContractProvider implements 
     }, {
       hash: HELLO_CONTRACT,
       provider: new EnvContractProvider(ctx, helloContract),
-    }]);
+    }, {
+      hash: BLOB_CONTRACT,
+      provider: new EnvContractProvider(ctx, blobContract),
+    }], new WasmContractProvider(ctx));
   }
 }

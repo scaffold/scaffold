@@ -1,13 +1,15 @@
 import { MaybePromise } from '../util/MaybePromise.ts';
 
+// The numeric values are wire ABI: scaffold_builder navigation imports return
+// them to the guest. Never reorder.
 export enum ValueType {
-  Unit,
-  Bool,
-  Number,
-  String,
-  Bytes,
-  List,
-  Struct,
+  Unit = 0,
+  Bool = 1,
+  Number = 2,
+  String = 3,
+  Bytes = 4,
+  List = 5,
+  Struct = 6,
 }
 
 /** Describes a field's type, purpose, and allowed values. */

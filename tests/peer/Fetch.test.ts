@@ -1,21 +1,13 @@
 import { assertEquals } from '@std/assert';
-import { AtomSerializer } from '../../src/graph/AtomSerializer.ts';
 import { BlockStore } from '../../src/graph/BlockStore.ts';
 import { DraftStore } from '../../src/graph/DraftStore.ts';
-import {
-  AtomSource,
-  AtomType,
-  type Block,
-  type BlockPayload,
-  type Draft,
-  type DraftPayload,
-  type Output,
-} from '../../src/graph/types.ts';
+import { type Block, type Draft, type DraftPayload, type Output } from '../../src/graph/types.ts';
 import { Context } from '../../src/Context.ts';
 import { Fetch } from '../../src/peer/Fetch.ts';
 import { str2bin } from '../../src/util/buffer.ts';
 import { Hash } from '../../src/util/Hash.ts';
 import { bin2hex } from '../../src/util/hex.ts';
+import { makePublishHarness } from '../helpers/blocks.ts';
 import { makeTestContext } from '../helpers/v2.ts';
 import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
 import { HELLO_CONTRACT } from '../../src/contract/static/Hello.ts';
@@ -57,30 +49,10 @@ function harness(): Harness {
   const drafts = new RecordingDraftStore(ctx);
   ctx.mock(DraftStore, drafts);
 
-  const store = ctx.get(BlockStore);
-  const genesis = store.ingest({
-    source: AtomSource.Genesis,
-    receivedAt: 0,
-    raw: ctx.config.genesis,
-  });
+  const { genesis, publish } = makePublishHarness(ctx);
 
   const ingested: Block[] = [];
-  store.onIngest((block) => ingested.push(block), neverAbort);
-
-  let timestampMs = 0;
-  const publish = (outputs: Output[], claims: bigint[]): Block => {
-    const payload: BlockPayload = {
-      anchor: genesis.hash,
-      chain: [{ weight: 0n, throughput: 0n }],
-      aggregates: [],
-      claims,
-      refs: [],
-      outputs,
-      timestampMs: ++timestampMs,
-    };
-    const raw = ctx.get(AtomSerializer).serialize(AtomType.Block, payload);
-    return store.ingest({ source: AtomSource.Remote, receivedAt: timestampMs, raw });
-  };
+  ctx.get(BlockStore).onIngest((block) => ingested.push(block), neverAbort);
 
   const results: (Uint8Array | null)[] = [];
   const collect = () => (result: { body: Uint8Array } | null) =>

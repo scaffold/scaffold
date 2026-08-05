@@ -15,12 +15,13 @@
 
 import { MaybePromise } from '../../util/MaybePromise.ts';
 
-export type ValueKind = 'bytes' | 'str' | 'i32' | 'i64' | 'void';
+export type ValueKind = 'bytes' | 'str' | 'i32' | 'i64' | 'f64' | 'void';
 
 type KindValue<K extends ValueKind> = K extends 'bytes' ? Uint8Array
   : K extends 'str' ? string
   : K extends 'i32' ? number
   : K extends 'i64' ? bigint
+  : K extends 'f64' ? number
   : void;
 
 type KindArgs<P extends ValueKind[]> = { [I in keyof P]: KindValue<P[I]> };
@@ -53,12 +54,12 @@ export const hostFn = <P extends ValueKind[], R extends ValueKind>(
   result: R,
   blocking: boolean,
   call: (...args: KindArgs<P>) => MaybePromise<KindValue<R>>,
-): HostImport => ({ params, result, blocking, call } satisfies HostImport);
+): HostImport => ({ params, result, blocking, call });
 
 export interface WasmTransport {
   /**
-   * Instantiate `modules`, wire `imports` into the guest's `scaffold_*`
-   * namespaces, and call the export named by `modules.base.imports[entry]`.
+   * Instantiate `module` fresh, wire each `imports` table in under its
+   * namespace, and call the export named `entry`.
    *
    * `arg` is the entry's single bytes argument where it takes one (walk_params
    * takes the params blob); the resolved value is its bytes result where it
@@ -69,13 +70,13 @@ export interface WasmTransport {
    * transport terminates its worker, JSPI and in-process can at best refuse to
    * resume. Everything upstream (ExecutionQueue) can only ask.
    *
-   * Throws ContractRejection when the guest calls `reject`. Any other throw is
-   * a crash.
+   * Throws ContractRejection when the guest calls `reject`, even if the guest
+   * caught the resulting trap. Any other throw is a crash.
    */
   invoke(
-    modules: unknown, /* CompiledModules */
+    module: WebAssembly.Module,
     entry: string,
-    imports: HostImports,
+    imports: Record<string, HostImports>,
     opts?: { arg?: Uint8Array; signal?: AbortSignal },
   ): Promise<Uint8Array | undefined>;
 

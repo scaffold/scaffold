@@ -1,0 +1,66 @@
+;; The full-surface fixture, mirroring the static helloContract:
+;;   run:          set_result("Hello, " + params)
+;;   walk_params:  {name: <params as string>}
+;;   walk_data:    {message: <data as string>}
+;;   build_params: source struct's "name" field as the params bytes
+;; One module carries every entry point's imports; only the active entry's
+;; namespace is live during an invoke (the rest trap if called).
+(module
+  (import "scaffold_env" "params" (func $params (result i64)))
+  (import "scaffold_env" "set_result" (func $set_result (param i32 i32)))
+  (import "scaffold_walker" "root" (func $w_root (param i32 i32)))
+  (import "scaffold_walker" "begin_struct" (func $w_begin_struct (result i32)))
+  (import "scaffold_walker" "struct_at" (func $w_struct_at (param i32 i32 i32 i32)))
+  (import "scaffold_walker" "set_string" (func $w_set_string (param i32 i32)))
+  (import "scaffold_walker" "end_struct" (func $w_end_struct))
+  (import "scaffold_builder" "root" (func $b_root (param i32 i32) (result i32)))
+  (import "scaffold_builder" "enter" (func $b_enter))
+  (import "scaffold_builder" "struct_at" (func $b_struct_at (param i32 i32 i32 i32) (result i32)))
+  (import "scaffold_builder" "get_string" (func $b_get_string (result i64)))
+  (memory (export "memory") 1)
+  (data (i32.const 8) "Hello, ")
+  (data (i32.const 16) "name")
+  (data (i32.const 24) "message")
+  (global $next (mut i32) (i32.const 64))
+  (func $alloc (export "alloc") (param $len i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (global.get $next))
+    (global.set $next (i32.add (local.get $ptr) (local.get $len)))
+    (local.get $ptr))
+
+  (func (export "run")
+    (local $packed i64)
+    (local $ptr i32)
+    (local $len i32)
+    (local $dst i32)
+    (local.set $packed (call $params))
+    (local.set $ptr (i32.wrap_i64 (i64.shr_u (local.get $packed) (i64.const 32))))
+    (local.set $len (i32.wrap_i64 (local.get $packed)))
+    (local.set $dst (call $alloc (i32.add (local.get $len) (i32.const 7))))
+    (memory.copy (local.get $dst) (i32.const 8) (i32.const 7))
+    (memory.copy (i32.add (local.get $dst) (i32.const 7)) (local.get $ptr) (local.get $len))
+    (call $set_result (local.get $dst) (i32.add (local.get $len) (i32.const 7))))
+
+  (func (export "walk_params") (param $ptr i32) (param $len i32)
+    (call $w_root (i32.const 0) (i32.const 0))
+    (if (i32.eqz (call $w_begin_struct)) (then (return)))
+    (call $w_struct_at (i32.const 16) (i32.const 4) (i32.const 0) (i32.const 0))
+    (call $w_set_string (local.get $ptr) (local.get $len))
+    (call $w_end_struct))
+
+  (func (export "walk_data") (param $ptr i32) (param $len i32)
+    (call $w_root (i32.const 0) (i32.const 0))
+    (if (i32.eqz (call $w_begin_struct)) (then (return)))
+    (call $w_struct_at (i32.const 24) (i32.const 7) (i32.const 0) (i32.const 0))
+    (call $w_set_string (local.get $ptr) (local.get $len))
+    (call $w_end_struct))
+
+  (func (export "build_params") (result i64)
+    ;; root must be a Struct (6); its "name" field must be a String (3).
+    (if (i32.ne (call $b_root (i32.const 0) (i32.const 0)) (i32.const 6))
+      (then unreachable))
+    (call $b_enter)
+    (if (i32.ne (call $b_struct_at (i32.const 16) (i32.const 4) (i32.const 0) (i32.const 0))
+      (i32.const 3))
+      (then unreachable))
+    (call $b_get_string)))

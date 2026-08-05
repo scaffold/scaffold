@@ -2,21 +2,30 @@
 
 ## Joel's TODOs
 
-TODO:
+Andrew/Austin/Bob MVP
 
-- Make the CLI work on the website
-
-Stretch #2:
-
-- Plug in WASM again
-
-Stretch #3:
-
-- Tree sampling
+- WASM module linking, enabling the wasi shim
+- Scaffold.put
+- Scaffold.put a contract on the website (typescript; with CLI command in a comment)
+- Full e2e contract execution (zig, python, js)
+- Test gossip on a larger network
+- Fix incentives, enough for global state (consensus)
+- Random tree weight sampling (and verification)
 - Descendant weight propagation
 - Weight feeds into draft prioritization
 - Eventual consensus (2 peers publishing contesting blocks should eventually converge)
+- VerificationRole
+- InsuranceRole (acts via a simple `send()`)
+
+Later
+
 - Piggybacking
+
+Idea: lists, maps, and structs are all represented as a collection:
+
+- ListValue.asCollection(): { at(index: number): Value }
+- MapValue.asCollection(): { at(key: string): Value; at(index: number): KeyValuePairValue }
+- StructValue.asCollection(): { at(field: string): Value; at(index: number): KeyValuePairValue }
 
 ## Blocking decisions (gate the block codec)
 
@@ -99,7 +108,7 @@ Surfaced while moving the v2 files into `src/{logic,graph,contract,peer}/`; none
 - [ ] `contract/Contract.ts` exports `ContractProvider`/`ContractPlugin` but not `Contract` -- the `Contract` interface (`run(env, signal)`) lives in `contract/EnvContractProvider.ts`. Settle the naming before more contract code lands
 - [ ] `AtomSerializerBase` is abstract and injection-shaped but needs `AtomBase`/`Atom`/`BlockRef`, so it stayed in `graph/`. Genericizing `Ingestor<A>` over the atom and ref types would let the module drop to `logic/`, next to `Placement` and `Forest`
 - [ ] `BlockBuilderBase` is likewise abstract but reads `Block.payload`, `Block.resolvingOutputs` and the specialized `PlacementNode = Block | BlockRef`, so module and service share one `graph/BlockBuilder.ts`. Same for `ClaimIndex`, which has real logic but mutates `Block` throughout
-- [ ] `RoutingContractProvider` forwards only `generate`/`verify`; `walkParams`/`walkData`/`buildParams`/`buildData` are silently dropped, so UI-schema walking is unavailable through the router
+- [x] `RoutingContractProvider` forwards only `generate`/`verify`; `walkParams`/`walkData`/`buildParams`/`buildData` are silently dropped, so UI-schema walking is unavailable through the router. Stale as of 2026-08-04: all six methods (plus `debug?`) forward, and the WASM base provider exercises them end to end
 - [ ] `Forest`, `RoutingContractProvider` and `EnvContractProvider` all accept a `Context` and discard it
 - [ ] `Fetch.fetch` became `async` when it gained `buildParams` support, but no caller awaits it -- `scripts/test.ts` fires it and drops the promise. On the `Uint8Array` params path the body still runs to completion synchronously, so nothing has broken yet; on the `SourceRoot` path the subscription and the query draft are deferred to a microtask and any throw becomes an unhandled rejection with no caller to surface it. That is exactly what killed `tests/peer/Fetch.test.ts` on adf24f6 (`assertThrows` cannot see an async throw; the escaped rejection cancelled the rest of the file). Tests now await; decide whether the public API should return a promise at all, or subscribe synchronously and build params in the background
 - [ ] The three `BUG:` comments in `tests/peer/Fetch.test.ts` cite line numbers that no longer match `src/peer/Fetch.ts`, and their tests now _pass_ asserting the correct behavior -- `fetch` gained a `BlockStore.getAll()` prescan that fixes "an answer already in the store". The corresponding `Fetch.fetch` entry under Known gaps is at least partly stale; re-derive which of the three leaks are still real. Paths were corrected during the restructure, line numbers were dropped rather than guessed
@@ -122,6 +131,20 @@ Surfaced getting `scripts/build_npm.ts` green again.
 - [ ] The generated package exports keep the `.ts` extension in their subpath names (`scaffold.io/util/Hash.ts`), which is what `demo/src/` imports today but is not how npm consumers expect subpaths to read. Stripping it is a one-line change in `build_npm.ts` plus a sweep of `demo/src/`; deferred because `demo/` currently imports v1 paths (`node/ReactiveLayer.ts`, `debug/ScaffoldDebug.ts`, `contracts/RecordContract.ts`) that no longer exist in `src/`, so it cannot build against the current tree regardless
 - [ ] `demo/vite.config.ts` is stale in three ways after the hash/secp migration: its `denoUrlRewriter` plugin rewrites `deno.land/std@0.160.0/hash/*` URLs that no longer appear anywhere in `src/`, its `@noble/secp256k1` alias still points at the vendored `2.2.3` path (now `3.1.0`), and there is no alias for the new `@noble/hashes` dependency. Not fixed because `demo/` already cannot build against the current tree (see the `.ts` export entry above); fix all of it in one pass whenever the demo is revived
 - [ ] The v1 tests at the `tests/` root still call `secp.utils.randomPrivateKey()`, renamed to `randomSecretKey()` in secp v3. Not updated because those files are already dead against the current tree -- `tests/AggregationContract.test.ts` imports `src/core/Packet.ts`, which no longer exists, so `deno test tests/` fails at module resolution before any of them run. Only `deno task test:v2` is live. Mechanical rename whenever those tests are revived or deleted
+
+## WASM contract execution (2026-08-04)
+
+Surfaced landing `src/contract/wasm/` (manifest-blob contracts, the WasmAbi tables, three transports, unbounded worker pool). None block the current test suite.
+
+- [ ] `ContractEnv.getResult()` is `todo()` in both envs, so the wasm `get_result` import and `blobContract` generation are wired but unusable -- both need a local blob store fed by `Scaffold.put` (also `todo()`). Until then a peer's BLOB_CONTRACT query output triggers a generation job on us that dies on `todo()` via `GenerationJob`'s `console.error` catch
+- [ ] `VerificationEnv.claim()` is `todo()` and `ContractProvider.verify` has no caller at all, so wasm verification (`EnvContractProvider.verify` -> `WasmContract.run` under a `VerificationEnv`) is wired but dead code until a verification role lands; any claiming contract, wasm or TS, cannot verify even then
+- [ ] `RunQueue.dispatch` launches every pending job and `FlowCtl.yield()` is empty, so `maxRunning`/`maxYielding` bound nothing. The wasm worker pool is deliberately unbounded on the strength of that bound existing -- once scheduling is implemented, at most `maxRunning + maxYielding` workers are live; today it is one worker per concurrently-admitted job
+- [ ] Only the Atomics worker transport can hard-kill a guest (`worker.terminate()`). JSPI checks the signal around each blocking import but a guest suspended on a promise that never settles stays suspended forever; in-process cannot stop at all. Also `Contract.buildParams`/`walk*` carry no `FlowCtl`, so wasm walk/build invokes run unsignalled -- bounded only by ctx destruct -- and a hung walk parks its worker until then
+- [ ] Fire-and-forget imports under the worker transport (`reject`, `set_result`, `debug`, the walker emits) cannot trap the guest at the faulting instruction: the host error is recorded on the main thread and thrown when the invoke settles, so a rejecting guest runs to completion first (its later `set_result`s still hit the env) before `generate`/`verify` sees the `ContractRejection`. Deliberate -- the recorded error always wins -- but a deviation from the other transports' immediate trap
+- [ ] Every first use of a wasm contract whose blobs are not already in the local store mints up to two blob query blocks (manifest, then module), and the compiled `WebAssembly.Module` cache is per-`WasmContract`, so per-context. A local blob/put store would dedupe the queries and could persist compilations across contexts
+- [ ] `AtomicsWorkerTransport` structured-clones `exec.arg` (the walk input / entry argument), and cloning a `Uint8Array` view copies its entire backing buffer -- params that are subarrays of a block's raw bytes drag the whole block across the thread boundary. Copy the view (`arg.slice()`) before posting if this shows up in a profile
+- [ ] `WasmConfig.workerUrl` defaults to `new URL('./worker/main.ts', import.meta.url)`, which works under Deno (tests) and Vite dev (source alias) but not in production bundles: Vite only rewrites the literal `new Worker(new URL(...))` pattern, so browser builds must pass `workerUrl` (or a prebuilt worker bundle -- the stale `bundle-worker` task still points at the legacy `src/worker/worker.ts`); dnt/Node has no `Worker` global, so `'auto'` falls back to JSPI/in-process there
+- [ ] `blobFetch` keeps waiting on a digest mismatch (logged `warn blobMismatch`) rather than failing, because a correct content-addressed answer may still arrive -- but that means a spoofed blob answer stalls a wasm load indefinitely instead of erroring. Revisit when block verification can reject the bad block itself
 
 ## Flood-gossip wiring (2026-08-03)
 

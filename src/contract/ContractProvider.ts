@@ -1,4 +1,4 @@
-import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
+import { Block, Draft, Predicate } from '../graph/types.ts';
 import { Hash } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
 import { FlowCtl } from '../util/RunQueue.ts';

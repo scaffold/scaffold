@@ -3,7 +3,7 @@ import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
 import { ContractProvider } from './ContractProvider.ts';
 import { MissingContractProvider } from './MissingContractProvider.ts';
-import { Block, Draft, DraftPayload, Predicate } from '../graph/types.ts';
+import { Block, Draft, Predicate } from '../graph/types.ts';
 import { FlowCtl } from '../util/RunQueue.ts';
 import { SinkRoot, SourceRoot } from './values.ts';
 
