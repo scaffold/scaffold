@@ -8,6 +8,7 @@ import { EventLog } from './logic/EventLog.ts';
 import { fetchBlob } from './peer/blobFetch.ts';
 import { Fetch, FetchInput } from './peer/Fetch.ts';
 import { Transport } from './peer/network/Transport.ts';
+import { Put, PutInput } from './peer/Put.ts';
 import { Send, SendInput } from './peer/Send.ts';
 import { todo } from './util/functional.ts';
 import { Hash } from './util/Hash.ts';
@@ -65,8 +66,8 @@ export class Scaffold {
     return this.ctx.get(Fetch).fetch(input);
   }
 
-  put(): never {
-    return todo();
+  put(input: PutInput): Promise<void> {
+    return this.ctx.get(Put).put(input);
   }
 
   send(send: SendInput): void {

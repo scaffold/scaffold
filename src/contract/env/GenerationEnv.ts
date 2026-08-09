@@ -14,6 +14,7 @@ import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 import { PutRequest } from '../ContractProvider.ts';
+import { arrEquals } from '../../util/buffer.ts';
 
 export class GenerationEnv implements ContractEnv {
   private claims: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[] = [];
@@ -22,10 +23,13 @@ export class GenerationEnv implements ContractEnv {
   constructor(
     private ctx: Context,
     private predicate: Predicate,
-    private put: PutRequest | undefined,
+    put: PutRequest | undefined,
     private draft: Draft,
     private flowCtl: FlowCtl,
   ) {
+    if (put !== undefined) {
+      this.result = put.body;
+    }
     this.updateDraft();
   }
 
@@ -62,16 +66,20 @@ export class GenerationEnv implements ContractEnv {
   }
 
   getResult(): MaybePromise<Uint8Array> {
-    if (this.put === undefined) {
-      throw new Error(`Ingenerable: No result provided`);
+    if (this.result !== undefined) {
+      return this.result;
     } else {
-      return this.put.result;
+      throw new Error(`Ingenerable: No result provided`);
     }
   }
 
   setResult(result: Uint8Array) {
-    this.result = result;
-    this.updateDraft();
+    if (this.result === undefined) {
+      this.result = result;
+      this.updateDraft();
+    } else if (!arrEquals(this.result, result)) {
+      throw new Error(`Result changed: ${this.result} -> ${result}`);
+    }
   }
 
   finalize() {

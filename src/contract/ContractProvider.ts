@@ -5,7 +5,7 @@ import { FlowCtl } from '../util/RunQueue.ts';
 import { SinkRoot, SourceRoot } from './values.ts';
 
 export interface PutRequest {
-  result: Uint8Array;
+  body: Uint8Array;
 }
 
 export interface ContractProvider {

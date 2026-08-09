@@ -7,7 +7,6 @@ Just launch the website
 Andrew/Austin/Bob MVP
 
 - WASM module linking, enabling the wasi shim
-- Scaffold.put
 - Scaffold.put a contract on the website (typescript; with CLI command in a comment)
 - Full e2e contract execution (zig, python, js)
 - Test gossip on a larger network

@@ -10,7 +10,7 @@ import { ExecutionQueue } from './ExecutionQueue.ts';
 import { Block, Draft } from '../graph/types.ts';
 
 export interface PutInput extends Query {
-  result: Uint8Array;
+  body: Uint8Array;
   signal?: AbortSignal;
   onBlock?: (block?: Block) => void;
 }
@@ -23,7 +23,7 @@ export class Put {
   constructor(private ctx: Context) {}
 
   // TODO: Make this non-async?
-  async put({ contract, params, result, signal, onBlock }: PutInput) {
+  async put({ contract, params, body, signal, onBlock }: PutInput) {
     signal ??= neverAbort;
 
     if (signal.aborted) return;
@@ -40,7 +40,7 @@ export class Put {
       ? (draft: Draft) => this.ctx.get(DraftStore).onBuilt(draft, onBlock, signal)
       : undefined;
 
-    const job = new GenerationJob(this.ctx, { contract, params }, { result }, onDraft);
+    const job = new GenerationJob(this.ctx, { contract, params }, { body }, onDraft);
     this.ctx.get(ExecutionQueue).run(job)
       .then(() => this.ctx.get(ExecutionQueue).remove(job));
   }
