@@ -12,7 +12,7 @@ export interface FetchInput extends Query {
 }
 
 export interface FetchResult {
-  readonly body: Uint8Array;
+  body: Uint8Array;
   parse(): Promise<unknown>;
 }
 

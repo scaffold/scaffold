@@ -1,6 +1,6 @@
 import { Context } from '../../Context.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
-import { ContractProvider } from '.././ContractProvider.ts';
+import { ContractProvider, PutRequest } from '.././ContractProvider.ts';
 import { Block, Draft, Predicate } from '../../graph/types.ts';
 import { GenerationEnv } from './GenerationEnv.ts';
 import { VerificationEnv } from './VerificationEnv.ts';
@@ -12,8 +12,13 @@ import { Hash } from '../../util/Hash.ts';
 export class EnvContractProvider implements ContractProvider {
   constructor(private ctx: Context, private contract: Contract) {}
 
-  async generate(predicate: Predicate, draft: Draft, flowCtl: FlowCtl) {
-    const env = new GenerationEnv(this.ctx, predicate, draft, flowCtl);
+  async generate(
+    predicate: Predicate,
+    put: PutRequest | undefined,
+    draft: Draft,
+    flowCtl: FlowCtl,
+  ) {
+    const env = new GenerationEnv(this.ctx, predicate, put, draft, flowCtl);
     await this.contract.run(env, flowCtl);
     env.finalize();
   }

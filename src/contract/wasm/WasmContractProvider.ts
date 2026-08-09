@@ -3,7 +3,7 @@ import { Hash, HashPrimitive } from '../../util/Hash.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { Block, Draft, Predicate } from '../../graph/types.ts';
-import { ContractProvider } from '../ContractProvider.ts';
+import { ContractProvider, PutRequest } from '../ContractProvider.ts';
 import { EnvContractProvider } from '../env/EnvContractProvider.ts';
 import { SinkRoot, SourceRoot } from '../values.ts';
 import { WasmContract } from './WasmContract.ts';
@@ -16,8 +16,13 @@ export class WasmContractProvider implements ContractProvider {
 
   constructor(private ctx: Context) {}
 
-  generate(predicate: Predicate, draft: Draft, flowCtl: FlowCtl): MaybePromise<void> {
-    return this.providerFor(predicate.contract).generate(predicate, draft, flowCtl);
+  generate(
+    predicate: Predicate,
+    put: PutRequest | undefined,
+    draft: Draft,
+    flowCtl: FlowCtl,
+  ): MaybePromise<void> {
+    return this.providerFor(predicate.contract).generate(predicate, put, draft, flowCtl);
   }
 
   verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void> {

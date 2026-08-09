@@ -4,8 +4,17 @@ import { MaybePromise } from '../util/MaybePromise.ts';
 import { FlowCtl } from '../util/RunQueue.ts';
 import { SinkRoot, SourceRoot } from './values.ts';
 
+export interface PutRequest {
+  result: Uint8Array;
+}
+
 export interface ContractProvider {
-  generate(predicate: Predicate, draft: Draft, flowCtl: FlowCtl): MaybePromise<void>;
+  generate(
+    predicate: Predicate,
+    put: PutRequest | undefined,
+    draft: Draft,
+    flowCtl: FlowCtl,
+  ): MaybePromise<void>;
   verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void>;
 
   buildParams(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array>;

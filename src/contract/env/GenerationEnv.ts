@@ -13,6 +13,7 @@ import {
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
+import { PutRequest } from '../ContractProvider.ts';
 
 export class GenerationEnv implements ContractEnv {
   private claims: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[] = [];
@@ -21,6 +22,7 @@ export class GenerationEnv implements ContractEnv {
   constructor(
     private ctx: Context,
     private predicate: Predicate,
+    private put: PutRequest | undefined,
     private draft: Draft,
     private flowCtl: FlowCtl,
   ) {
@@ -60,7 +62,11 @@ export class GenerationEnv implements ContractEnv {
   }
 
   getResult(): MaybePromise<Uint8Array> {
-    return todo();
+    if (this.put === undefined) {
+      throw new Error(`Ingenerable: No result provided`);
+    } else {
+      return this.put.result;
+    }
   }
 
   setResult(result: Uint8Array) {

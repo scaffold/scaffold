@@ -21,11 +21,11 @@ class CloningSink<KeyType extends string | number> implements ValueSink {
   }
   setList(): ListSink {
     const arr = this.obj[this.key] = [];
-    return { at: (idx, _desc) => new CloningSink<number>(arr, idx) };
+    return { at: (idx, _desc) => new CloningSink<number>(arr, idx), close: () => {} };
   }
   setMap(): MapSink {
     const obj = this.obj[this.key] = {};
-    return { at: (key, _desc) => new CloningSink<string>(obj, key) };
+    return { at: (key, _desc) => new CloningSink<string>(obj, key), close: () => {} };
   }
 }
 

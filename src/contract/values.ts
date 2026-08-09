@@ -94,10 +94,12 @@ export interface ValueSink {
 
 export interface ListSink {
   at(index: number, descriptor?: string): ValueSink;
+  close(): void; // Called after all entries have been set
 }
 
 export interface MapSink {
   at(key: string, descriptor?: string): ValueSink;
+  close(): void; // Called after all entries have been set
 }
 
 export type SinkRoot = (descriptor?: string) => ValueSink;

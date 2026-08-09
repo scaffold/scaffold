@@ -1,7 +1,7 @@
 import { Context } from '../Context.ts';
 import { Hash, HashPrimitive } from '../util/Hash.ts';
 import { MaybePromise } from '../util/MaybePromise.ts';
-import { ContractProvider } from './ContractProvider.ts';
+import { ContractProvider, PutRequest } from './ContractProvider.ts';
 import { MissingContractProvider } from './MissingContractProvider.ts';
 import { Block, Draft, Predicate } from '../graph/types.ts';
 import { FlowCtl } from '../util/RunQueue.ts';
@@ -24,8 +24,13 @@ export class RoutingContractProvider implements ContractProvider {
     this.map.set(hash.toPrimitive(), provider);
   }
 
-  generate(predicate: Predicate, draft: Draft, flowCtl: FlowCtl): MaybePromise<void> {
-    return this.getProvider(predicate.contract).generate(predicate, draft, flowCtl);
+  generate(
+    predicate: Predicate,
+    put: PutRequest | undefined,
+    draft: Draft,
+    flowCtl: FlowCtl,
+  ): MaybePromise<void> {
+    return this.getProvider(predicate.contract).generate(predicate, put, draft, flowCtl);
   }
 
   verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void> {

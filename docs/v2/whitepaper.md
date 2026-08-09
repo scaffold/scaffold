@@ -423,8 +423,8 @@ Aggregation contracts specify a single output to a resolution contract.
 
 There are 2 kinds of insurance:
 
-1. **Short-term serving insurance.** This is always the author's responsibility, and evaporates over a few minutes or hours. This supports inversions of hashes on the block (like refs and the anchor) and query-based validities (like non-uniqueness presentations), and pays a reward to anyone finding an issue.
-2. **Long-term rectification insurance.** This responsibility is passed to aggregators, and never goes away. This supports verification failures, and pays the disqualification burn.
+1. **Short-term serving insurance.** This is always the author's responsibility, and evaporates over a few minutes or hours. This supports inversions of hashes on the block (like refs and the anchor) and query-based validities (like non-uniqueness presentations), and pays a reward to anyone finding an issue. An invalidity proof requires only a path to the data that is requested.
+2. **Long-term rectification insurance.** This responsibility is passed to aggregators, and never goes away. An invalidity proof requires the full proof of invalidity (the block and any other supporting blocks); as aggregators responsibility to keep and serve the block data is likely evaporated. This supports verification failures, and pays the disqualification burn.
 
 The deeper cut is not duration but adjudicability: serving insurance covers _interactive_ claims — data availability and query-based checks, which can't be auto-adjudicated — while rectification insurance covers _provable_ faults, which can. The durations fall out as consequences.
 
