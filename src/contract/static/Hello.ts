@@ -8,8 +8,8 @@ export const HELLO_CONTRACT = Hash.digest('hello');
 
 export const helloContract: Contract = {
   run(env) {
-    const name = new TextDecoder().decode(env.params());
-    const response = new TextEncoder().encode(`Hello, ${name}`);
+    const name = bin2str(env.params());
+    const response = str2bin(`Hello, ${name}`);
     env.setResult(response);
   },
 
@@ -30,6 +30,6 @@ export const helloContract: Contract = {
   },
 
   debug(params) {
-    return `hello(${new TextDecoder().decode(params)})`;
+    return `hello(${bin2str(params)})`;
   },
 };

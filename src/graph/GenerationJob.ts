@@ -17,13 +17,17 @@ export class GenerationJob implements Job {
     private onDraft?: (draft: Draft) => void,
   ) {}
 
+  profit(): bigint {
+    return this.draft !== undefined ? -this.draft.ioDelta : 0n;
+  }
+
   priority(): number {
     // TODO: This needs to reflect the expected profit of the job, whether it's running or not.
     // Before a job starts, we need to estimate the profit
     // While a job is running, we need to estimate the profit
     // While a job isn't running, we don't hold a draft. So we'll have to estimate the profit without it.
 
-    return 0;
+    return Number(this.profit());
   }
 
   async run(ctl: FlowCtl): Promise<void> {
@@ -34,7 +38,10 @@ export class GenerationJob implements Job {
       await this.ctx.get(this.ctx.config.contractPlugin)
         .generate(this.predicate, this.put, this.draft, ctl);
 
-      if (Hash.equals(this.predicate.contract, SIGNATURE_CONTRACT)) {
+      if (this.draft.ioDelta > 0n) {
+        // Not profitable
+        this.ctx.get(DraftStore).cancel(this.draft);
+      } else if (Hash.equals(this.predicate.contract, SIGNATURE_CONTRACT)) {
         // The signature contract stores as a store of value; there's no need to immediately publish the claiming block.
         this.ctx.get(DraftStore).lock(this.draft);
       } else {

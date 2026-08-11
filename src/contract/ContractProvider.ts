@@ -5,7 +5,7 @@ import { FlowCtl } from '../util/RunQueue.ts';
 import { SinkRoot, SourceRoot } from './values.ts';
 
 export interface PutRequest {
-  body: Uint8Array;
+  body?: Uint8Array;
 }
 
 export interface ContractProvider {
@@ -15,7 +15,7 @@ export interface ContractProvider {
     draft: Draft,
     flowCtl: FlowCtl,
   ): MaybePromise<void>;
-  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void>;
+  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<boolean>;
 
   buildParams(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array>;
   buildData(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array>;

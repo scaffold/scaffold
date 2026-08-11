@@ -25,7 +25,7 @@ export class WasmContractProvider implements ContractProvider {
     return this.providerFor(predicate.contract).generate(predicate, put, draft, flowCtl);
   }
 
-  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void> {
+  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<boolean> {
     return this.providerFor(predicate.contract).verify(predicate, block, flowCtl);
   }
 

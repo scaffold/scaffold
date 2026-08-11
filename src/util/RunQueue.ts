@@ -13,9 +13,9 @@ export class CancelError extends Error {
   }
 }
 
-export interface Job {
+export interface Job<ResultType = unknown> {
   priority(): number; // Higher values run first
-  run(ctl: FlowCtl): Promise<void>; // Should not throw, except for `CancelError`
+  run(ctl: FlowCtl): Promise<ResultType>; // Should not throw, except for `CancelError`
 }
 
 export interface FlowCtl {
@@ -43,7 +43,8 @@ interface JobHandle {
   state: JobState;
   cancel?: AbortController;
   userSignal?: AbortSignal;
-  onDone(): void;
+  onDone(result: unknown): void;
+  onError(error: unknown): void;
 }
 
 /*
@@ -67,13 +68,14 @@ export class RunQueue implements Disposable {
 
   constructor(private config: RunQueueConfig) {}
 
-  run(job: Job, signal?: AbortSignal): Promise<void> {
+  run<ResultType>(job: Job<ResultType>, signal?: AbortSignal): Promise<ResultType> {
     assert(!this.jobs.has(job));
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.jobs.set(job, {
         state: JobState.Pending,
         userSignal: signal,
         onDone: resolve,
+        onError: reject,
       });
       this.counts[JobState.Pending]++;
       this.dispatch();
@@ -138,13 +140,16 @@ export class RunQueue implements Disposable {
       },
     };
 
-    job.run(flowCtl)
-      .catch((err) => console.error(err))
-      .finally(() => {
-        this.updateState(handle, JobState.Running, JobState.Completed);
-        handle.onDone();
-        this.dispatch();
-      });
+    job.run(flowCtl).then((result) => {
+      this.updateState(handle, JobState.Running, JobState.Completed);
+      handle.onDone(result);
+      this.dispatch();
+    }, (error) => {
+      console.error(error);
+      this.updateState(handle, JobState.Running, JobState.Completed);
+      handle.onError(error);
+      this.dispatch();
+    });
   }
 
   private updateState(handle: JobHandle, oldState: JobState, newState: JobState): void {

@@ -15,7 +15,7 @@ const publicKeysToName = new Map(['alice', 'bob', 'charlie'].map(
 
 export const signatureContract: Contract = {
   async run(env) {
-    await env.claim();
+    await env.claimOne();
   },
 
   debug(params) {

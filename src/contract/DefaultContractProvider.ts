@@ -8,6 +8,7 @@ import { SIGNATURE_CONTRACT, signatureContract } from './static/Signature.ts';
 import { HELLO_CONTRACT, helloContract } from './static/Hello.ts';
 import { BLOB_CONTRACT, blobContract } from './static/Blob.ts';
 import { WasmContractProvider } from './wasm/WasmContractProvider.ts';
+import { EXACT_BLOCK_CONTRACT, exactBlockContract } from './static/ExactBlock.ts';
 
 export class DefaultContractProvider extends RoutingContractProvider implements ContractProvider {
   constructor(ctx: Context) {
@@ -23,6 +24,9 @@ export class DefaultContractProvider extends RoutingContractProvider implements 
     }, {
       hash: BLOB_CONTRACT,
       provider: new EnvContractProvider(ctx, blobContract),
+    }, {
+      hash: EXACT_BLOCK_CONTRACT,
+      provider: new EnvContractProvider(ctx, exactBlockContract),
     }], new WasmContractProvider(ctx));
   }
 }

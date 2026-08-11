@@ -40,6 +40,6 @@ export class GeneratorRole implements Disposable {
 
     const job = new GenerationJob(this.ctx, output);
     this.ctx.get(ExecutionQueue).run(job)
-      .then(() => this.ctx.get(ExecutionQueue).remove(job));
+      .then(() => this.ctx.get(ExecutionQueue).remove(job), (err) => console.error(err));
   }
 }

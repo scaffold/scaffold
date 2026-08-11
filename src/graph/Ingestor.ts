@@ -52,7 +52,15 @@ export class BlockIngestor implements Ingestor<Block> {
 
   private newlyResolved = new Map<Block, (ResolvingClaim | ResolvingRef)[]>();
 
+  private claimResolutionListeners = new Set<(claim: ResolvingClaim) => void>();
+
   constructor(private ctx: Context) {}
+
+  onClaimResolution(cb: (claim: ResolvingClaim) => void, signal: AbortSignal) {
+    if (signal.aborted) return;
+    this.claimResolutionListeners.add(cb);
+    signal.addEventListener('abort', () => assert(this.claimResolutionListeners.delete(cb)));
+  }
 
   serialize(payload: BlockPayload, allocator: (size: number) => Uint8Array): Uint8Array {
     return serializeBlock(payload, allocator);
@@ -178,6 +186,8 @@ export class BlockIngestor implements Ingestor<Block> {
           arrCall(prop.claimer.listeners, { type: BlockActionType.LinkClaim, claim: prop });
         }
         arrCall(prop.producer.listeners, { type: BlockActionType.LinkClaimingNode, claim: prop });
+
+        arrCall(this.claimResolutionListeners, prop);
       }
     }
     assert(this.newlyResolved.size === 0);

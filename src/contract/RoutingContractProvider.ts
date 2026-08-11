@@ -33,7 +33,7 @@ export class RoutingContractProvider implements ContractProvider {
     return this.getProvider(predicate.contract).generate(predicate, put, draft, flowCtl);
   }
 
-  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<void> {
+  verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<boolean> {
     return this.getProvider(predicate.contract).verify(predicate, block, flowCtl);
   }
 

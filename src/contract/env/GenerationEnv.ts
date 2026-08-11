@@ -15,6 +15,7 @@ import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 import { PutRequest } from '../ContractProvider.ts';
 import { arrEquals } from '../../util/buffer.ts';
+import { Hash } from '../../util/Hash.ts';
 
 export class GenerationEnv implements ContractEnv {
   private claims: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[] = [];
@@ -37,12 +38,33 @@ export class GenerationEnv implements ContractEnv {
     return ExecutionMode.Generation;
   }
 
+  blockHash(): never {
+    throw new Error('Ingenerable');
+  }
+
   contractHash() {
     return this.predicate.contract;
   }
 
   params() {
     return this.predicate.params;
+  }
+
+  getResult() {
+    if (this.result !== undefined) {
+      return this.result;
+    } else {
+      throw new Error(`Ingenerable: No result provided`);
+    }
+  }
+
+  setResult(result: Uint8Array) {
+    if (this.result === undefined) {
+      this.result = result;
+      this.updateDraft();
+    } else if (!arrEquals(this.result, result)) {
+      throw new Error(`Result changed: ${this.result} -> ${result}`);
+    }
   }
 
   claim() {
@@ -63,23 +85,6 @@ export class GenerationEnv implements ContractEnv {
         }
       }, controller.signal);
     });
-  }
-
-  getResult(): MaybePromise<Uint8Array> {
-    if (this.result !== undefined) {
-      return this.result;
-    } else {
-      throw new Error(`Ingenerable: No result provided`);
-    }
-  }
-
-  setResult(result: Uint8Array) {
-    if (this.result === undefined) {
-      this.result = result;
-      this.updateDraft();
-    } else if (!arrEquals(this.result, result)) {
-      throw new Error(`Result changed: ${this.result} -> ${result}`);
-    }
   }
 
   finalize() {

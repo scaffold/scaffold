@@ -16,7 +16,7 @@ export interface Predicate {
 
 /** A resource produced by a block, governed by the predicate it extends. */
 export interface Output extends Predicate {
-  data?: Uint8Array;
+  data?: Uint8Array; // TODO: Rename to "body"?
   amount: bigint;
 }
 

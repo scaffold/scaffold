@@ -3,7 +3,7 @@ import { MaybePromise } from '../../util/MaybePromise.ts';
 import { ContractProvider, PutRequest } from '.././ContractProvider.ts';
 import { Block, Draft, Predicate } from '../../graph/types.ts';
 import { GenerationEnv } from './GenerationEnv.ts';
-import { VerificationEnv } from './VerificationEnv.ts';
+import { VerificationEnv, VerificationFailure } from './VerificationEnv.ts';
 import { Contract } from './Contract.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { SinkRoot, SourceRoot } from '../values.ts';
@@ -24,9 +24,17 @@ export class EnvContractProvider implements ContractProvider {
   }
 
   async verify(predicate: Predicate, block: Block, flowCtl: FlowCtl) {
-    const env = new VerificationEnv(this.ctx, predicate, block, flowCtl);
-    await this.contract.run(env, flowCtl);
-    env.finalize();
+    try {
+      const env = new VerificationEnv(this.ctx, predicate, block, flowCtl);
+      await this.contract.run(env, flowCtl);
+      env.finalize();
+      return true;
+    } catch (err) {
+      if (err instanceof VerificationFailure) {
+        return false;
+      }
+      throw err;
+    }
   }
 
   buildParams(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {

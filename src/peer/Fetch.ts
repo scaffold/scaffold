@@ -21,7 +21,8 @@ export class Fetch {
 
   // TODO: Make this non-async?
   async fetch({ contract, params, signal, onResult }: FetchInput) {
-    if (signal?.aborted) return;
+    signal ??= neverAbort;
+    if (signal.aborted) return;
 
     if (typeof contract === 'string') {
       contract = Hash.fromHex(contract);
@@ -49,7 +50,7 @@ export class Fetch {
           ),
       });
       hasResult = true;
-    }, signal ?? neverAbort);
+    }, signal);
 
     if (!hasResult) {
       const draft = this.ctx.get(DraftStore).create({
@@ -57,7 +58,7 @@ export class Fetch {
       });
       this.ctx.get(DraftStore).build(draft);
 
-      signal?.addEventListener('abort', () => this.ctx.get(DraftStore).cancel(draft));
+      signal.addEventListener('abort', () => this.ctx.get(DraftStore).cancel(draft));
     }
   }
 }

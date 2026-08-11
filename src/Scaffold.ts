@@ -1,6 +1,7 @@
 import { Config } from './Config.ts';
 import { Context } from './Context.ts';
 import { createSource } from './contract/createSource.ts';
+import { Source, SourceRoot } from './contract/values.ts';
 import { WasmConfig } from './contract/wasm/WasmConfig.ts';
 import { Genesis } from './graph/Genesis.ts';
 import { TransportPlugin } from './interfaces/transport.ts';
@@ -12,6 +13,7 @@ import { Put, PutInput } from './peer/Put.ts';
 import { Send, SendInput } from './peer/Send.ts';
 import { todo } from './util/functional.ts';
 import { Hash } from './util/Hash.ts';
+import { MaybePromise } from './util/MaybePromise.ts';
 
 export interface ScaffoldConfig extends Config {
   roles?: { new (ctx: Context): object }[];
@@ -50,16 +52,22 @@ export class Scaffold {
     this.ctx.get(Transport).connect(url instanceof URL ? url : new URL(url));
   }
 
-  async serializeParams(contract: Hash | string, params: unknown): Promise<Uint8Array> {
+  serializeParamsSource(contract: Hash | string, params: SourceRoot): MaybePromise<Uint8Array> {
     if (typeof contract === 'string') contract = Hash.fromHex(contract);
-    return await this.ctx.get(this.ctx.config.contractPlugin)
-      .buildParams(contract, () => createSource(params));
+    return this.ctx.get(this.ctx.config.contractPlugin).buildParams(contract, params);
   }
 
-  async serializeData(contract: Hash | string, data: unknown): Promise<Uint8Array> {
+  serializeDataSource(contract: Hash | string, data: SourceRoot): MaybePromise<Uint8Array> {
     if (typeof contract === 'string') contract = Hash.fromHex(contract);
-    return await this.ctx.get(this.ctx.config.contractPlugin)
-      .buildData(contract, () => createSource(data));
+    return this.ctx.get(this.ctx.config.contractPlugin).buildData(contract, data);
+  }
+
+  serializeParamsObj(contract: Hash | string, params: unknown): MaybePromise<Uint8Array> {
+    return this.serializeParamsSource(contract, () => createSource(params));
+  }
+
+  serializeDataObj(contract: Hash | string, data: unknown): MaybePromise<Uint8Array> {
+    return this.serializeDataSource(contract, () => createSource(data));
   }
 
   fetch(input: FetchInput): Promise<void> {

@@ -7,6 +7,13 @@ import { MaybePromise } from '../../util/MaybePromise.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
 
+export class VerificationFailure extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'VerificationFailure';
+  }
+}
+
 export class VerificationEnv implements ContractEnv {
   constructor(
     private ctx: Context,
@@ -19,6 +26,10 @@ export class VerificationEnv implements ContractEnv {
     return ExecutionMode.Verification;
   }
 
+  blockHash(): Hash {
+    return this.block.hash;
+  }
+
   contractHash() {
     return this.predicate.contract;
   }
@@ -27,11 +38,7 @@ export class VerificationEnv implements ContractEnv {
     return this.predicate.params;
   }
 
-  claim() {
-    return todo();
-  }
-
-  getResult(): MaybePromise<Uint8Array> {
+  getResult() {
     return todo();
   }
 
@@ -53,6 +60,10 @@ export class VerificationEnv implements ContractEnv {
     if (!arrEquals(resultOutputs[0].data!, result)) {
       throw new Error(`Contract verification failed: Result output data does not match`);
     }
+  }
+
+  claim() {
+    return todo();
   }
 
   finalize() {}

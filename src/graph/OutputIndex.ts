@@ -26,8 +26,9 @@ interface PredicateEntry {
 }
 
 export class OutputIndex implements Disposable {
-  private disposeController = new AbortController();
   private index = new Map<string, PredicateEntry>();
+
+  private disposeController = new AbortController();
 
   constructor(private ctx: Context) {
     for (const block of ctx.get(BlockStore).getAll()) this.ingestBlock(block);
