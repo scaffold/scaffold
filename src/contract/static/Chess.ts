@@ -1,4 +1,4 @@
-import { assert } from '../../util/functional.ts';
+import { assert, todo } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
 import { hex2bin } from '../../util/hex.ts';
 import { Predicate } from '../../graph/types.ts';
@@ -15,7 +15,15 @@ import {
   STATUS_WHITE_WON,
   WHITE,
 } from './chess/ChessRules.ts';
-import { decodeAction, decodeSeed, decodeState, encodeState, matchId } from './chess/ChessCodec.ts';
+import {
+  decodeAction,
+  decodeSeed,
+  decodeState,
+  encodeAction,
+  encodeSeed,
+  encodeState,
+  matchId,
+} from './chess/ChessCodec.ts';
 
 export const CHESS_CONTRACT = Hash.digest('chess');
 
@@ -117,7 +125,7 @@ export const chessContract: Contract = {
 
   async buildParams(source) {
     const root = await source();
-    assert(root?.type === ValueType.Map);
+    assert(root.type === ValueType.Map);
     const mode = await root.at('mode');
     assert(mode?.type === ValueType.String);
     const match = await root.at('match');
@@ -130,6 +138,68 @@ export const chessContract: Contract = {
     const map = sink().setMap();
     map?.at('mode').setString(String(reader.read(0)));
     map?.at('match').setString(String(reader.read(1)));
+    map?.close();
+  },
+
+  // A block's result is the seed that opens a match, or the action that plays it.
+  async buildBody(source) {
+    const root = await source();
+    assert(root.type === ValueType.Map);
+
+    if (todo('chess body: tell a seed from an action')) {
+      const white = await root.at('white');
+      assert(white?.type === ValueType.String);
+      const black = await root.at('black');
+      assert(black?.type === ValueType.String);
+      return encodeSeed({ white: white.value, black: black.value });
+    } else {
+      const type = await root.at('type');
+      assert(type?.type === ValueType.String);
+      if (type.value === 'timeout') return encodeAction({ type: 'timeout' });
+
+      assert(type.value === 'move');
+      const from = await root.at('from');
+      assert(from?.type === ValueType.Number);
+      const to = await root.at('to');
+      assert(to?.type === ValueType.Number);
+      const promotion = await root.at('promotion');
+      assert(promotion?.type === ValueType.Number);
+      return encodeAction({
+        type: 'move',
+        move: { from: from.value, to: to.value, promotion: promotion.value },
+      });
+    }
+  },
+
+  // An output's body is the match state; a result output's is the seed or the action.
+  walkBody(body, sink) {
+    const map = sink().setMap();
+
+    if (todo('chess body: tell a state from a seed from an action')) {
+      const state = decodeState(body);
+      map?.at('board').setBytes(state.game.board);
+      map?.at('toMove').setNumber(state.game.toMove);
+      map?.at('castling').setNumber(state.game.castling);
+      map?.at('enPassant').setNumber(state.game.enPassant);
+      map?.at('halfmoveClock').setNumber(state.game.halfmoveClock);
+      map?.at('fullmove').setNumber(state.game.fullmove);
+      map?.at('status').setNumber(state.game.status);
+      map?.at('white').setString(state.white);
+      map?.at('black').setString(state.black);
+    } else if (todo('chess body: tell a seed from an action')) {
+      const seed = decodeSeed(body);
+      map?.at('white').setString(seed.white);
+      map?.at('black').setString(seed.black);
+    } else {
+      const action = decodeAction(body);
+      map?.at('type').setString(action.type);
+      if (action.type === 'move') {
+        map?.at('from').setNumber(action.move.from);
+        map?.at('to').setNumber(action.move.to);
+        map?.at('promotion').setNumber(action.move.promotion);
+      }
+    }
+
     map?.close();
   },
 

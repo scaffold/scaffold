@@ -7,6 +7,7 @@ import { ExecutionQueue } from './ExecutionQueue.ts';
 import { Block, Draft, Predicate } from '../graph/types.ts';
 import { assert } from '../util/functional.ts';
 import { Query } from '../contract/Query.ts';
+import { SourceRoot } from '../contract/values.ts';
 
 /*
 TODO: What's a good interface for Scaffold.put?
@@ -16,9 +17,9 @@ TODO: What's a good interface for Scaffold.put?
 
 export interface PutInput extends Query {
   claimBlocks?: Hash[];
-  result?: Uint8Array;
-  outputs: { predicate: Predicate; body: Uint8Array; amount: bigint }[];
-  capabilities: {}[];
+  result?: Uint8Array | SourceRoot;
+  outputs?: { predicate: Predicate; body: Uint8Array; amount: bigint }[];
+  capabilities?: {}[];
 
   signal?: AbortSignal;
   onBlock?: (block?: Block) => void;
@@ -27,13 +28,16 @@ export interface PutInput extends Query {
 export class Put {
   constructor(private ctx: Context) {}
 
-  async put({ contract, params, claimBlocks, result, outputs, signal, onBlock }: PutInput) {
+  async put(
+    { contract, params, claimBlocks, result, outputs, capabilities, signal, onBlock }: PutInput,
+  ) {
     signal ??= neverAbort;
     if (signal.aborted) return;
 
     // Temporary constraints on the interface for now
-    assert(outputs.length === 0);
     assert(claimBlocks === undefined);
+    assert(outputs === undefined);
+    assert(capabilities === undefined);
 
     if (typeof contract === 'string') {
       contract = Hash.fromHex(contract);
@@ -41,6 +45,9 @@ export class Put {
 
     if (!(params instanceof Uint8Array)) {
       params = await this.ctx.get(this.ctx.config.contractPlugin).buildParams(contract, params);
+    }
+    if (result !== undefined && !(result instanceof Uint8Array)) {
+      result = await this.ctx.get(this.ctx.config.contractPlugin).buildBody(contract, result);
     }
 
     const onDraft = onBlock

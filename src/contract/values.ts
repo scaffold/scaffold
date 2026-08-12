@@ -78,7 +78,7 @@ export type Source =
 // Maps should be represented as a list of key-value pairs.
 // The descriptor can and should be used to specify the exact semantics of encodings like this.
 
-export type SourceRoot = (descriptor?: string) => MaybePromise<Source | undefined>;
+export type SourceRoot = (descriptor?: string) => MaybePromise<Source>;
 
 // Types for walking (WASM tells host values)
 

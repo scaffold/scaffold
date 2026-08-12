@@ -50,7 +50,7 @@ export abstract class TransportBase {
   connect(url: URL): void {
     for (const { plugin, service } of this.transports) {
       if (plugin.acceptsUrl?.(url) && service.dialAddress !== undefined) {
-        this.getLogger()?.info('bootstrapDial', { url });
+        this.getLogger()?.info('bootstrapDial', { url: url.toString() });
         service.dialAddress(url);
         return;
       }
@@ -104,7 +104,7 @@ export abstract class TransportBase {
       announceAddresses: (urls: URL[]) => {
         this.getLogger()?.info('addressesAnnounced', {
           protocol: plugin.emitsProtocol,
-          urls,
+          urls: urls.map((x) => x.toString()),
         });
 
         const newUrls = new Map(urls.map((u) => [u.toString(), u]));

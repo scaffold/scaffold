@@ -4,6 +4,27 @@
 
 Just launch the website
 
+- Run the signaling server
+- More efficient gossip
+- Make the CLI work
+- Remove subscription box
+- Implement status bar (# of peers, blocks, etc)
+- Rewrite "There's only three methods" to reflect the new interfaces.
+- Hide "A contract development environment" section and top menu "Explorer" link
+- More landing page content about applications and what it can be used for (see https://iii.dev/ for inspiration)
+- Update github link to https://github.com/scaffold/scaffold
+- Update install command
+- Get rid of `0xdda8ecfd22ea`
+- Update bottom links (remove Explorer, discord, bluesky, RSS)
+- Update 404 page
+- Update getting started page
+- Update concepts page
+- Update FAQ page
+- Update "writing contracts" page
+- Update "how it works"
+- Update community page (just github and github discussions)
+- Write blog post
+
 Andrew/Austin/Bob MVP
 
 - WASM module linking, enabling the wasi shim
@@ -163,8 +184,14 @@ Surfaced porting `legacy3/demo/chess/` into `src/contract/static/chess/` and wir
 - [ ] No join handshake, so a match is asymmetric: the pot is white's stake alone and black risks nothing, because matching it needs both players to sign one block. This is what the params-prefix mechanism looks built for -- black publishes a stake output under a sibling predicate, and one execution reading only the shared prefix validates both claims -- so revisit once `claimAll` and multi-signer blocks exist
 - [ ] The timeout is a per-move deadline, not legacy3's accumulating clock, because `waitUntil` bounds how early a block may be and nothing bounds how late. A player who misses the deadline can still move if the opponent has not yet published the timeout claim; the two blocks race for the same output and canonicality settles it. An upper-bound primitive (or exposing the block timestamp to the executing contract) would let the clock come back
 - [ ] A timeout generator parks: `GenerationEnv.waitUntil` claims the match output first and then sleeps until the deadline, so on a node playing both sides -- the demo -- the opponent's parked draft holds the output the mover's own draft needs, and the local move stalls. Across nodes it is a harmless race. Deadline-derived-from-claim ordering is forced (the deadline comes from `claimed.blockTimestampMs`), so the fix belongs in draft scheduling, not the contract
-- [ ] `chessContract` supplies no `walkBody`, because a chess output's body has three shapes with nothing to discriminate them: the state (on the value-carrying output), the seed naming both players, and the action (both on amount-0 self-claimed result outputs). A host walking a chess output cannot tell which it holds. Either the result outputs need their own params slot or `walkBody` needs the output's predicate, not just its bytes
+- [ ] `chessContract.buildBody`/`walkBody` branch on `todo()`: a chess output's body has three shapes with nothing to discriminate them -- the state (on the value-carrying output), the seed naming both players, and the action (both on amount-0 self-claimed result outputs). Each branch is written and correct; only the condition picking between them is missing, and both entry points throw until it exists. Either the result outputs need their own params slot or `walkBody` needs the output's predicate, not just its bytes. The three ignored body tests in `tests/contract/static/Chess.test.ts` turn on when it does
 - [ ] Two classes mean "this block is invalid": `ContractRejection` (thrown by the wasm path) and `VerificationFailure` (the only one `EnvContractProvider.verify` catches). `chessContract` throws `VerificationFailure` to land on the catching path, while `blobContract` and `exactBlockContract` throw plain `Error`s that `verify` re-throws as a hard error instead of returning an invalid verdict. Settle on one class and make both providers catch it
+
+## Static contract params/body codecs (2026-08-12)
+
+- [ ] `counterContract.buildBody`/`walkBody` branch on `todo()` for the same reason chess does: the chain's `{ sum }` and an increment's `{ inc }` are two body shapes under two predicates, and the codecs only see the bytes. Both branches are written; the two ignored body tests in `tests/contract/static/Counter.test.ts` turn on with the condition
+- [ ] `aggregationContract`, `exactBlockContract` and `signatureContract` supply no `buildBody`/`walkBody`, because none of them gives an output body a meaning: aggregation sends `EMPTY_ARR`, exact_block never sends, and a signature output's body is whatever the sender put there. `Fetch.parse()` therefore throws for any output under those predicates. Decide whether an unmeaning body should walk as raw bytes by default rather than being an error
+- [ ] Every static contract's params walk as a map of named fields, and byte-valued fields (`blob.hash`, `exact_block.block`, `signature.publicKey`) build from bytes only -- a source built from JSON carries hex strings and is rejected, so `scaffold put`/`fetch` need a params directory holding raw bytes, not a `params.json`. No contract passes descriptors either, so a host has the field names but no types or enums to build a form from -- v2 descriptors are bare strings, and nothing consumes them yet
 
 ## Surfaced by the `data` -> `body` rename (2026-08-12)
 

@@ -20,7 +20,7 @@
         "default-param-last",
         "eqeqeq",
         "guard-for-in",
-        "no-console",
+        "// no-console",
         "no-const-assign",
         "no-eval",
         "no-external-import",

@@ -110,7 +110,7 @@ await build({
     Deno.copyFileSync('README.md', 'npm/README.md');
     Deno.copyFileSync('LICENSE', 'npm/LICENSE');
 
-    if (!flags.minify) return;
+    if (!flags.minify) return chmodBins();
 
     // Minify each emitted file in place. Deliberately not a bundle: the package
     // has 100+ export subpaths, and bundling per entry point would duplicate
@@ -145,8 +145,20 @@ await build({
     console.log(
       `Minified ${emitted.length} files: ${fmtKb(before)} -> ${fmtKb(after)}`,
     );
+
+    chmodBins();
   },
 });
+
+// dnt writes the shebang but leaves the bin at 0644. A registry install papers
+// over it (npm chmods bin targets itself), but `file:`/`npm link` installs
+// symlink straight into this tree, so the missing bit surfaces as EACCES.
+function chmodBins() {
+  const pkg = JSON.parse(Deno.readTextFileSync('npm/package.json'));
+  for (const target of Object.values(pkg.bin ?? {}) as string[]) {
+    Deno.chmodSync(`npm/${target}`, 0o755);
+  }
+}
 
 async function dirSize(dir: string) {
   let total = 0;

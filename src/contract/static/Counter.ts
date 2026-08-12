@@ -1,8 +1,10 @@
 import { Predicate } from '../../graph/types.ts';
 import { bin2str, str2bin } from '../../util/buffer.ts';
+import { assert, todo } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
 import { Contract } from '../env/Contract.ts';
 import { ParamsReader, serializeParams } from '../env/util/params.ts';
+import { ValueType } from '../values.ts';
 
 export const COUNTER_CONTRACT = Hash.digest('counter');
 
@@ -67,6 +69,53 @@ export const counterContract: Contract = {
 
     const newState: CounterState = { sum: newSum };
     env.send(counterChainPredicate, totalAmount, str2bin(JSON.stringify(newState)));
+  },
+
+  async buildParams(source) {
+    const root = await source();
+    assert(root.type === ValueType.Map);
+    const mode = await root.at('mode');
+    assert(mode?.type === ValueType.String);
+    const kind = await root.at('kind');
+    assert(kind?.type === ValueType.String);
+    return serializeParams([mode.value, kind.value]);
+  },
+
+  walkParams(params, sink) {
+    const reader = new ParamsReader({ params: (truncate) => params.subarray(0, truncate) });
+    const map = sink().setMap();
+    map?.at('mode').setString(String(reader.read(0)));
+    map?.at('kind').setString(String(reader.read(1)));
+    map?.close();
+  },
+
+  async buildBody(source) {
+    const root = await source();
+    assert(root.type === ValueType.Map);
+
+    if (todo('counter body: tell a chain body from an increment body')) {
+      const sum = await root.at('sum');
+      assert(sum?.type === ValueType.Number);
+      const state: CounterState = { sum: sum.value };
+      return str2bin(JSON.stringify(state));
+    } else {
+      const inc = await root.at('inc');
+      assert(inc?.type === ValueType.Number);
+      return str2bin(JSON.stringify({ inc: inc.value }));
+    }
+  },
+
+  walkBody(body, sink) {
+    const parsed = JSON.parse(bin2str(body));
+    const map = sink().setMap();
+
+    if (todo('counter body: tell a chain body from an increment body')) {
+      map?.at('sum').setNumber(parsed.sum);
+    } else {
+      map?.at('inc').setNumber(parsed.inc);
+    }
+
+    map?.close();
   },
 
   debug(params) {

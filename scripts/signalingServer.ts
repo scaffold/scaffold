@@ -20,11 +20,7 @@ scaffold.getContext().get(BlockStore).onIngest(
 );
 
 scaffold.startTransport(new WebsocketServerTransport({ port }), (signal) => {
-  // deno-lint-ignore no-console
   console.log(`WebSocket announce: ${signal}`);
 });
 
-// deno-lint-ignore no-console
 console.log(`signaling hub listening ws://127.0.0.1:${port}/`);
-
-// setTimeout(() => scaffold.close(), 1000);

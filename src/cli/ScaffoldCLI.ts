@@ -3,10 +3,12 @@ import { Scaffold, ScaffoldConfig } from '../Scaffold.ts';
 import { Hash } from '../util/Hash.ts';
 import { bin2str, EMPTY_ARR, str2bin } from '../util/buffer.ts';
 import { createSource } from '../contract/createSource.ts';
-import { Source, ValueType } from '../contract/values.ts';
+import { Source, SourceRoot, ValueType } from '../contract/values.ts';
 import { assert, todo } from '../util/functional.ts';
 import { makeDefaultConfig } from '../Config.ts';
 import { GeneratorRole } from '../roles/GeneratorRole.ts';
+import { WebsocketClientTransport } from '../../plugins/WebsocketClientTransport.ts';
+import { Gossip } from '../peer/network/Gossip.ts';
 
 export enum FsNodeType {
   Missing = 0,
@@ -155,8 +157,8 @@ export class ScaffoldCLI {
       `  ${program} <command> [options]`,
       ``,
       `Commands:`,
-      `  put <contract_hash> <params_path> <records_path>`,
-      `                      Run a contract over the given params and records,`,
+      `  put <contract_hash> <params_path> <body_path>`,
+      `                      Run a contract over the given params and body,`,
       `                      publish the block, and print its hash and record outputs`,
       `  fetch <contract_hash> <params_path>`,
       `                      Resolve and verify a contract output via a node and`,
@@ -195,6 +197,8 @@ export class ScaffoldCLI {
     const scaffold = this.deps.constructScaffold(config);
 
     if (args.bootstrap_urls !== undefined) {
+      scaffold.getContext().get(Gossip);
+      scaffold.startTransport(new WebsocketClientTransport());
       for (const url of args.bootstrap_urls.split(',')) {
         scaffold.connect(url);
       }
@@ -206,9 +210,7 @@ export class ScaffoldCLI {
   private async createSourceFromFs(
     base: { open(name: string): Promise<FsNode | FsMissing> },
     name: string,
-  ): Promise<Source | undefined> {
-    if (name === '.' || name === '..') return undefined;
-
+  ): Promise<Source> {
     const node = await base.open(name);
     if (node.type === FsNodeType.File) {
       return { type: ValueType.Bytes, value: await node.read() };
@@ -221,13 +223,12 @@ export class ScaffoldCLI {
           const item = list[idx];
           if (item === undefined) return undefined;
           const value = await this.createSourceFromFs(node, item.name);
-          assert(
-            value !== undefined,
-            `FsNode.open() failed to open key returned from FsNode.list(): ${item.name}`,
-          );
           return { key: item.name, value };
         },
-        at: (key, _desc) => this.createSourceFromFs(node, key),
+        at: (key, _desc) => {
+          if (key === '.' || key === '..') return undefined;
+          return this.createSourceFromFs(node, key);
+        },
       };
     }
 
@@ -236,33 +237,44 @@ export class ScaffoldCLI {
       const value = JSON.parse(bin2str(await jsonNode.read()));
       return createSource(value);
     } else if (jsonNode.type === FsNodeType.Directory) {
-      throw new Error(`Cannot open ${name}: name.json is a directory`);
+      throw new Error(`Cannot open ${name}: ${name}.json is a directory`);
+    }
+
+    throw new Error(`Cannot open ${name} or ${name}.json: No such file or directory`);
+  }
+
+  private createSourceFromArg(arg: string): SourceRoot {
+    if (/^\.*\//.test(arg)) {
+      return () => this.createSourceFromFs(this.deps, arg);
+    } else {
+      return () => ({ type: ValueType.String, value: arg });
     }
   }
 
   private async put(parsed: ParsedArgs) {
     if (parsed.positional.length !== 3) {
       throw new UsageError(
-        '`scaffold put [contract_hash] [params_path] [records_path]` takes 3 positional arguments',
+        '`scaffold put [contract_hash] [params_path] [body_path]` takes 3 positional arguments',
       );
     }
-    const [contractHash, params, records] = parsed.positional;
+    const [contractHash, params, body] = parsed.positional;
 
     const scaffold = await this.constructScaffold(parsed);
 
-    /*
-    const result = await scaffold.put({
+    await scaffold.put({
       contract: Hash.fromHex(contractHash),
-      params: () => this.createSourceFromFs(this.deps, params),
-      records: {},
+      params: this.createSourceFromArg(params),
+      result: this.createSourceFromArg(body),
+      onBlock: (block) => {
+        const output = block !== undefined
+          ? {
+            type: 'put_canonical',
+            hash: block.hash.toHex(),
+          }
+          : { type: 'put_pending' };
+        this.deps.stdout(str2bin(JSON.stringify(output, null, 2) + '\n'));
+      },
     });
-
-    const output = {
-      hash: result.hash.toHex(),
-    };
-
-    this.deps.stdout(str2bin(JSON.stringify(output, null, 2) + '\n'));
-    */
   }
 
   private async fetch(parsed: ParsedArgs) {
@@ -277,7 +289,7 @@ export class ScaffoldCLI {
 
     await scaffold.fetch({
       contract: Hash.fromHex(contractHash),
-      params: () => this.createSourceFromFs(this.deps, params),
+      params: this.createSourceFromArg(params),
       onResult: (result) => {
         this.deps.stdout(result?.body ?? new Uint8Array());
         this.deps.stdout(new Uint8Array([10]));

@@ -1,5 +1,5 @@
 import { bin2str, str2bin } from '../../util/buffer.ts';
-import { assert } from '../../util/functional.ts';
+import { assert, error } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
 import { Contract } from '../env/Contract.ts';
 import { ValueType } from '../values.ts';
@@ -13,20 +13,33 @@ export const helloContract: Contract = {
     env.setResult(response);
   },
 
-  async buildParams(reader) {
-    const x = await reader();
-    assert(x?.type === ValueType.Map);
-    const name = await x.at('name');
-    assert(name?.type === ValueType.String);
+  async buildParams(source) {
+    const root = await source();
+    const name = root.type === ValueType.Map
+      ? (await root.at('name')) ?? error('Hello params missing "name" property')
+      : root;
+    assert(name.type === ValueType.String);
     return str2bin(name.value);
   },
 
   walkParams(params, sink) {
-    sink().setMap()?.at('name').setString(bin2str(params));
+    const map = sink().setMap();
+    map?.at('name').setString(bin2str(params));
+    map?.close();
+  },
+
+  async buildBody(source) {
+    const root = await source();
+    assert(root.type === ValueType.Map);
+    const message = await root.at('message');
+    assert(message?.type === ValueType.String);
+    return str2bin(message.value);
   },
 
   walkBody(body, sink) {
-    sink().setMap()?.at('message').setString(bin2str(body));
+    const map = sink().setMap();
+    map?.at('message').setString(bin2str(body));
+    map?.close();
   },
 
   debug(params) {

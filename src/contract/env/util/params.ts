@@ -12,6 +12,14 @@ export function serializeParams(objs: unknown[]): Uint8Array {
   }));
 }
 
+export function deserializeParams(params: Uint8Array): unknown[] {
+  // TODO: Implement this more directly
+  const reader = new ParamsReader({ params: (truncate: number) => params.subarray(0, truncate) });
+  const values: unknown[] = [];
+  while (reader.read(values.length) !== undefined) values.push(reader.read(values.length));
+  return values;
+}
+
 export class ParamsReader {
   private values: unknown[] = [];
   private end = 0;

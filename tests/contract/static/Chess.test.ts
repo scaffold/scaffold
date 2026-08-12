@@ -8,6 +8,12 @@ import {
 import { ParamsReader } from '../../../src/contract/env/util/params.ts';
 import { createSink } from '../../../src/contract/createSink.ts';
 import { createSource } from '../../../src/contract/createSource.ts';
+import {
+  encodeAction,
+  encodeSeed,
+  encodeState,
+} from '../../../src/contract/static/chess/ChessCodec.ts';
+import { initialGameState } from '../../../src/contract/static/chess/ChessRules.ts';
 
 const MATCH = 'ab'.repeat(32);
 const OTHER_MATCH = 'cd'.repeat(32);
@@ -48,6 +54,42 @@ Deno.test('walking params exposes the mode and match id', async () => {
     chessContract.walkParams!(chessPredicate(CHESS_NEW, MATCH).params, sink)
   );
   assertEquals(walked, { mode: CHESS_NEW, match: MATCH });
+});
+
+// Both body codecs need a way to tell a state, a seed and an action apart.
+Deno.test({
+  name: 'an action body round-trips through its move',
+  ignore: true,
+  fn: async () => {
+    const move = { type: 'move', from: 12, to: 28, promotion: 0 };
+    const built = await chessContract.buildBody!(() => createSource(move));
+    assertEquals(built, encodeAction({ type: 'move', move: { from: 12, to: 28, promotion: 0 } }));
+    assertEquals(await createSink((sink) => chessContract.walkBody!(built, sink)), move);
+  },
+});
+
+Deno.test({
+  name: 'a seed body round-trips through both players',
+  ignore: true,
+  fn: async () => {
+    const seed = { white: 'aa'.repeat(33), black: 'bb'.repeat(33) };
+    const built = await chessContract.buildBody!(() => createSource(seed));
+    assertEquals(built, encodeSeed(seed));
+    assertEquals(await createSink((sink) => chessContract.walkBody!(built, sink)), seed);
+  },
+});
+
+Deno.test({
+  name: 'a state body walks its game and its players',
+  ignore: true,
+  fn: async () => {
+    const state = { game: initialGameState(), white: 'aa'.repeat(33), black: 'bb'.repeat(33) };
+    const walked = await createSink((sink) =>
+      chessContract.walkBody!(encodeState(state), sink)
+    ) as { toMove: number; white: string };
+    assertEquals(walked.toMove, state.game.toMove);
+    assertEquals(walked.white, state.white);
+  },
 });
 
 Deno.test('debug names the mode and the head of the match id', () => {

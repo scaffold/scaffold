@@ -29,7 +29,6 @@ draftStore.build(draft);
 */
 
 scaffold.startTransport(new WebsocketClientTransport(), (signal) => {
-  // deno-lint-ignore no-console
   console.log(`WebSocket client announce: ${signal}`);
 });
 
@@ -55,8 +54,6 @@ await scaffold.fetch({
 //   contract: BLOB_CONTRACT,
 //   params: Hash.digest('abc').toBytes(),
 //   result: str2bin('abc'),
-//   outputs: [],
-//   capabilities: [],
 //   onBlock: (block) => {
 //     console.log('put', block?.hash);
 //   },
