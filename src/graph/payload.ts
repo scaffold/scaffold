@@ -16,7 +16,7 @@ export interface Predicate {
 
 /** A resource produced by a block, governed by the predicate it extends. */
 export interface Output extends Predicate {
-  data?: Uint8Array; // TODO: Rename to "body"?
+  body?: Uint8Array;
   amount: bigint;
 }
 
@@ -54,7 +54,7 @@ const blockPayloadShape = shape({
   claims: arrayOf(isBigint),
   refs: arrayOf(isBigint),
   outputs: arrayOf(
-    shape({ contract: isHash, params: isBytes, data: isOptionalBytes, amount: isBigint }),
+    shape({ contract: isHash, params: isBytes, body: isOptionalBytes, amount: isBigint }),
   ),
   timestampMs: (val) => typeof val === 'number' && Number.isFinite(val),
 });

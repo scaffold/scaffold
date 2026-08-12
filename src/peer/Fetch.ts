@@ -34,9 +34,9 @@ export class Fetch {
 
     let hasResult = false;
     this.ctx.get(OutputIndex).onOutput({ contract, params }, (output) => {
-      const body = output.output.data;
+      const body = output.output.body;
 
-      // Only outputs with data
+      // Only outputs with a body
       if (body === undefined) return;
 
       // Only self-claimed outputs
@@ -46,7 +46,7 @@ export class Fetch {
         body,
         parse: () =>
           createSink((sink) =>
-            this.ctx.get(this.ctx.config.contractPlugin).walkData(contract, body, sink)
+            this.ctx.get(this.ctx.config.contractPlugin).walkBody(contract, body, sink)
           ),
       });
       hasResult = true;

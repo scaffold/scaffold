@@ -258,10 +258,10 @@ Deno.test('fetch: key normalization (string → utf8 bytes)', async () => {
 // -- Error type smoke tests ------------------------------------------
 
 Deno.test('FetchResult.parse: unsupported contract rejects', async () => {
-  // Direct unit-test of the error path: a custom contract with no walkData.
+  // Direct unit-test of the error path: a custom contract with no walkBody.
   const sf = new Scaffold(defaultConfig());
   const contract = Hash.digest('no-walker');
-  // Register a contract that has `run` but no walkData / buildParams.
+  // Register a contract that has `run` but no walkBody / buildParams.
   sf.registerContract(contract, {
     async run() {},
   });

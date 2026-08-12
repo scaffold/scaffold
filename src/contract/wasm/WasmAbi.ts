@@ -69,7 +69,7 @@ const desc = (d: string) => d === '' ? undefined : d;
 type WalkFrame = { kind: 'list'; sink: ListSink } | { kind: 'map'; sink: MapSink };
 
 /**
- * `scaffold_walker.*` -- the walk_params/walk_data surface. All sync: v2
+ * `scaffold_walker.*` -- the walk_params/walk_body surface. All sync: v2
  * sinks are synchronous. Select-then-emit: each slot is selected exactly once
  * (root / map_at / list_at) and consumed by exactly one set_* / begin_*.
  * When begin_* returns 0 the host declined to descend and the guest must skip
@@ -148,7 +148,7 @@ export function walkImports(sink: SinkRoot): { imports: HostImports; finish(): v
 }
 
 /**
- * `scaffold_builder.*` -- the build_params/build_data surface. A cursor over
+ * `scaffold_builder.*` -- the build_params/build_body surface. A cursor over
  * the pull-model Source tree: navigation (root / map_at / list_at)
  * resolves a source, selects it, and returns its ValueType tag, or -1 for
  * absent. get_* reads the selected scalar; enter/exit descend into and out of

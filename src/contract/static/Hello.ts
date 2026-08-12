@@ -25,8 +25,8 @@ export const helloContract: Contract = {
     sink().setMap()?.at('name').setString(bin2str(params));
   },
 
-  walkData(data, sink) {
-    sink().setMap()?.at('message').setString(bin2str(data));
+  walkBody(body, sink) {
+    sink().setMap()?.at('message').setString(bin2str(body));
   },
 
   debug(params) {

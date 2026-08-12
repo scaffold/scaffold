@@ -54,7 +54,7 @@ export class VerificationEnv implements ContractEnv {
       const output = this.block.payload.outputs[Number(claim)];
       if (!Hash.equals(output.contract, this.predicate.contract)) continue;
       if (!arrEquals(output.params, this.predicate.params)) continue;
-      if (output.data === undefined) continue;
+      if (output.body === undefined) continue;
       resultOutputs.push(output);
     }
 
@@ -62,8 +62,8 @@ export class VerificationEnv implements ContractEnv {
       throw new Error(`Contract verification failed: Not exactly one result output`);
     }
 
-    if (!arrEquals(resultOutputs[0].data!, result)) {
-      throw new Error(`Contract verification failed: Result output data does not match`);
+    if (!arrEquals(resultOutputs[0].body!, result)) {
+      throw new Error(`Contract verification failed: Result output body does not match`);
     }
   }
 

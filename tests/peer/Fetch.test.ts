@@ -62,10 +62,10 @@ function harness(): Harness {
 }
 
 /** The shape `EnvContractProvider.generate` produces for `setResult`. */
-const answerOutput = (data: Uint8Array, params = PARAMS): Output => ({
+const answerOutput = (body: Uint8Array, params = PARAMS): Output => ({
   contract: CONTRACT,
   params,
-  data,
+  body,
   amount: 0n,
 });
 
@@ -84,7 +84,7 @@ Deno.test('fetch publishes the query as an unclaimed zero-amount output', async 
   assertEquals(Hash.equals(payload.outputs[0].contract, CONTRACT), true);
   assertEquals(bin2hex(payload.outputs[0].params), bin2hex(PARAMS));
   assertEquals(payload.outputs[0].amount, 0n);
-  assertEquals(payload.outputs[0].data, undefined);
+  assertEquals(payload.outputs[0].body, undefined);
   assertEquals(Hash.equals(payload.outputs[1].contract, AGGREGATION_CONTRACT), true);
   assertEquals(payload.claims, []);
   assertEquals(payload.refs, []);
@@ -128,7 +128,7 @@ Deno.test('fetch ignores an unclaimed answer output', async () => {
   });
 
   // An answer is asserted by self-claiming it (`EnvContractProvider.verify`); an
-  // unclaimed {predicate, data} output states nothing.
+  // unclaimed {predicate, body} output states nothing.
   h.publish([answerOutput(ANSWER)], []);
 
   assertEquals(h.results, []);
@@ -143,7 +143,7 @@ Deno.test('fetch ignores answers under a different predicate', async () => {
   });
 
   h.publish([answerOutput(ANSWER, str2bin('elsewhere'))], [0n]);
-  h.publish([{ contract: Hash.digest('other'), params: PARAMS, data: ANSWER, amount: 0n }], [0n]);
+  h.publish([{ contract: Hash.digest('other'), params: PARAMS, body: ANSWER, amount: 0n }], [0n]);
   assertEquals(h.results, []);
 
   h.publish([answerOutput(ANSWER)], [0n]);

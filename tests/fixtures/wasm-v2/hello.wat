@@ -1,7 +1,7 @@
 ;; The full-surface fixture, mirroring the static helloContract:
 ;;   run:          set_result("Hello, " + params)
 ;;   walk_params:  {name: <params as string>}
-;;   walk_data:    {message: <data as string>}
+;;   walk_body:    {message: <data as string>}
 ;;   build_params: source map's "name" field as the params bytes
 ;; One module carries every entry point's imports; only the active entry's
 ;; namespace is live during an invoke (the rest trap if called).
@@ -48,7 +48,7 @@
     (call $w_set_string (local.get $ptr) (local.get $len))
     (call $w_end_map))
 
-  (func (export "walk_data") (param $ptr i32) (param $len i32)
+  (func (export "walk_body") (param $ptr i32) (param $len i32)
     (call $w_root (i32.const 0) (i32.const 0))
     (if (i32.eqz (call $w_begin_map)) (then (return)))
     (call $w_map_at (i32.const 24) (i32.const 7) (i32.const 0) (i32.const 0))

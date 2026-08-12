@@ -38,7 +38,7 @@ export function makePublishHarness(ctx: Context): PublishHarness {
 
   const publishBlob = (bytes: Uint8Array): Hash => {
     const hash = Hash.digest(bytes);
-    publish([{ contract: BLOB_CONTRACT, params: hash.toBytes(), data: bytes, amount: 0n }], [0n]);
+    publish([{ contract: BLOB_CONTRACT, params: hash.toBytes(), body: bytes, amount: 0n }], [0n]);
     return hash;
   };
 

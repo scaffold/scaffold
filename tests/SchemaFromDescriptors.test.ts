@@ -21,7 +21,7 @@ Deno.test('descriptorToJsonSchema: signature params produces bytes field', async
 
 Deno.test('descriptorToJsonSchema: collateral data produces nested structure with enums', async () => {
   const recorder = new RecordingReader();
-  await collateralContract.buildData!(recorder.reader);
+  await collateralContract.buildBody!(recorder.reader);
   const schema = descriptorToJsonSchema(recorder.getFields());
 
   // Side field should have enum options
@@ -41,7 +41,7 @@ Deno.test('descriptorToJsonSchema: collateral AGAINST shows target fields', asyn
   const values = new Map<string, unknown>();
   values.set('collateral.side', 'against');
   const recorder = new RecordingReader(values);
-  await collateralContract.buildData!(recorder.reader);
+  await collateralContract.buildBody!(recorder.reader);
   const schema = descriptorToJsonSchema(recorder.getFields());
 
   // Target group should exist
@@ -52,7 +52,7 @@ Deno.test('descriptorToJsonSchema: collateral AGAINST shows target fields', asyn
 
 Deno.test('descriptorToJsonSchema: insurance data produces pubkey field', async () => {
   const recorder = new RecordingReader();
-  await insuranceContract.buildData!(recorder.reader);
+  await insuranceContract.buildBody!(recorder.reader);
   const schema = descriptorToJsonSchema(recorder.getFields());
 
   assertEquals(schema.properties.pubkey.type, 'string');
@@ -69,7 +69,7 @@ Deno.test('fieldsToDefaultObject: signature params defaults to empty hex', async
 
 Deno.test('fieldsToDefaultObject: collateral data defaults to first enum', async () => {
   const recorder = new RecordingReader();
-  await collateralContract.buildData!(recorder.reader);
+  await collateralContract.buildBody!(recorder.reader);
   const obj = fieldsToDefaultObject(recorder.getFields());
 
   assertEquals(obj.collateral.side, 'for');
@@ -111,7 +111,7 @@ Deno.test('yamlToBuilderValues: handles nested collateral values', async () => {
       ['collateral.target.type', 'ref'],
     ]),
   );
-  await collateralContract.buildData!(discover.reader);
+  await collateralContract.buildBody!(discover.reader);
   const fields = discover.getFields();
 
   const yamlObj = {

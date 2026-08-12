@@ -46,9 +46,9 @@ async function compileJsonWb(): Promise<CompiledModules> {
       version: MODULES_VERSION,
       imports: {
         build_params: 'main:build_params',
-        build_data: 'main:build_data',
+        build_body: 'main:build_body',
         walk_params: 'main:walk_params',
-        walk_data: 'main:walk_data',
+        walk_body: 'main:walk_body',
       },
     },
     layers: [{

@@ -57,7 +57,7 @@ Deno.test('a wasm contract serves structured params and parseable results end-to
     entries: {
       run: 'run',
       walk_params: 'walk_params',
-      walk_data: 'walk_data',
+      walk_body: 'walk_body',
       build_params: 'build_params',
     },
   }));

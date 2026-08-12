@@ -78,7 +78,7 @@ interface Block {
   outputs: {
     contractHash: Hash;
     params: bytearray;
-    data?: bytearray;
+    body?: bytearray;
     amount: bigint;
   }[];
   timestampMs: number;
@@ -218,7 +218,7 @@ Indexing the _unclaimed_ output vector (Appendix B, option 4) would have made do
 
 Detecting double-spends was a big benefit of the claim mask. This is mostly useful for aggregation, when an aggregator wants to know that he won't have to pay out double-spend claims. We can still do this, keeping a claimed/unclaimed bitvector in a merkle tree on each block, without affecting claim lookups.
 
-It's very simple; each block's merkle tree encodes a bitvector with a 1 set if that output index is claimed in an aggregate. The bitvector's length is `anchor.output_space_size + SUM(aggregate[*].created_outputs)`. Notably it does not include outputs or claims of the block itself. The merkle tree root is stored in the aggregation output data.
+It's very simple; each block's merkle tree encodes a bitvector with a 1 set if that output index is claimed in an aggregate. The bitvector's length is `anchor.output_space_size + SUM(aggregate[*].created_outputs)`. Notably it does not include outputs or claims of the block itself. The merkle tree root is stored in the aggregation output body.
 
 There are two access paths, and they never meet: **light clients** resolve claims purely additively through the output space and never touch the mask; **aggregators** maintain the mask to detect double-spends before posting insurance (§7), and prove claimed/unclaimed status against it when contests need it.
 
@@ -500,7 +500,7 @@ A contract has a pre-claim step that filters claims. It accepts an env, can requ
 
 ### 9.3 Capabilities
 
-A query can also contain a set of capabilities along with the params and data:
+A query can also contain a set of capabilities along with the params and body:
 
 - Signature capability (specific private key -> void)
 - Requestor contract hash

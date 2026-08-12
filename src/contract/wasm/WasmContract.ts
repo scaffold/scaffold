@@ -37,24 +37,24 @@ export class WasmContract implements Contract {
     return this.build('build_params', source);
   }
 
-  buildData(source: SourceRoot): Promise<Uint8Array> {
-    return this.build('build_data', source);
+  buildBody(source: SourceRoot): Promise<Uint8Array> {
+    return this.build('build_body', source);
   }
 
   walkParams(params: Uint8Array, sink: SinkRoot): Promise<void> {
     return this.walk('walk_params', params, sink);
   }
 
-  walkData(data: Uint8Array, sink: SinkRoot): Promise<void> {
-    return this.walk('walk_data', data, sink);
+  walkBody(body: Uint8Array, sink: SinkRoot): Promise<void> {
+    return this.walk('walk_body', body, sink);
   }
 
-  private async walk(entry: WasmEntryPoint, data: Uint8Array, sink: SinkRoot): Promise<void> {
+  private async walk(entry: WasmEntryPoint, bytes: Uint8Array, sink: SinkRoot): Promise<void> {
     const { manifest, module } = await this.load();
     const walker = walkImports(sink);
     await this.transport().invoke(module, this.entryExport(manifest, entry), {
       scaffold_walker: walker.imports,
-    }, { arg: data });
+    }, { arg: bytes });
     walker.finish();
   }
 

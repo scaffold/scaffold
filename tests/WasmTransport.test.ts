@@ -29,7 +29,7 @@ import {
  */
 async function singleModuleStack(
   name: string,
-  mode: 'run' | 'walk_params' | 'walk_data' | 'build_params' | 'build_data',
+  mode: 'run' | 'walk_params' | 'walk_body' | 'build_params' | 'build_body',
   entryExport: string,
 ): Promise<CompiledModules> {
   const url = new URL(`./fixtures/wasm/${name}.wasm`, import.meta.url);

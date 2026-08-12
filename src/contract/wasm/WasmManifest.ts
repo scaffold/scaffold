@@ -10,9 +10,9 @@ import { Hash, HASH_REGEX } from '../../util/Hash.ts';
 export const WASM_ENTRY_POINTS = [
   'run',
   'walk_params',
-  'walk_data',
+  'walk_body',
   'build_params',
-  'build_data',
+  'build_body',
 ] as const;
 export type WasmEntryPoint = typeof WASM_ENTRY_POINTS[number];
 

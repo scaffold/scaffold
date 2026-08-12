@@ -44,11 +44,11 @@ export class EnvContractProvider implements ContractProvider {
     return this.contract.buildParams(source);
   }
 
-  buildData(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {
-    if (this.contract.buildData === undefined) {
-      throw new Error(`buildData is not supplied for contract ${contract.toHex()}`);
+  buildBody(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {
+    if (this.contract.buildBody === undefined) {
+      throw new Error(`buildBody is not supplied for contract ${contract.toHex()}`);
     }
-    return this.contract.buildData(source);
+    return this.contract.buildBody(source);
   }
 
   walkParams(contract: Hash, params: Uint8Array, sink: SinkRoot): MaybePromise<void> {
@@ -58,11 +58,11 @@ export class EnvContractProvider implements ContractProvider {
     return this.contract.walkParams(params, sink);
   }
 
-  walkData(contract: Hash, data: Uint8Array, sink: SinkRoot): MaybePromise<void> {
-    if (this.contract.walkData === undefined) {
-      throw new Error(`walkData is not supplied for contract ${contract.toHex()}`);
+  walkBody(contract: Hash, body: Uint8Array, sink: SinkRoot): MaybePromise<void> {
+    if (this.contract.walkBody === undefined) {
+      throw new Error(`walkBody is not supplied for contract ${contract.toHex()}`);
     }
-    return this.contract.walkData(data, sink);
+    return this.contract.walkBody(body, sink);
   }
 
   debug?(predicate: Predicate): string | undefined {

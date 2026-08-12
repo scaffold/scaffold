@@ -25,10 +25,10 @@ import {
 import { SIGNATURE_CONTRACT } from '../../src/contract/static/Signature.ts';
 import { neverAbort } from '../../src/util/abortable.ts';
 
-const out = (amount: bigint, contract = ZERO_HASH, data?: Uint8Array): Output => ({
+const out = (amount: bigint, contract = ZERO_HASH, body?: Uint8Array): Output => ({
   contract,
   params: new Uint8Array(),
-  ...(data !== undefined ? { data } : {}),
+  ...(body !== undefined ? { body } : {}),
   amount,
 });
 

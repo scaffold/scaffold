@@ -80,7 +80,7 @@ export class GenerationEnv implements ContractEnv {
     return new Promise<ClaimResult>((resolve) => {
       const controller = new AbortController();
       this.ctx.get(OutputIndex).onOutput(output ?? this.predicate, (location) => {
-        if (location.output.data === undefined) return;
+        if (location.output.body === undefined) return;
         if (location.claims.length !== 0) return;
 
         if (from !== undefined) {
@@ -104,7 +104,7 @@ export class GenerationEnv implements ContractEnv {
 
         resolve({
           fromBlockHash: location.producer.hash,
-          body: location.output.data,
+          body: location.output.body,
           amount: location.output.amount,
           blockTimestampMs: location.producer.payload.timestampMs,
         });
@@ -117,7 +117,7 @@ export class GenerationEnv implements ContractEnv {
 
     const controller = new AbortController();
     this.ctx.get(OutputIndex).onOutput(output ?? this.predicate, (location) => {
-      if (location.output.data === undefined) return;
+      if (location.output.body === undefined) return;
       if (location.claims.length !== 0) return;
 
       if (from !== undefined) {
@@ -137,7 +137,7 @@ export class GenerationEnv implements ContractEnv {
 
       results.push({
         fromBlockHash: location.producer.hash,
-        body: location.output.data,
+        body: location.output.body,
         amount: location.output.amount,
         blockTimestampMs: location.producer.payload.timestampMs,
       });
@@ -162,7 +162,7 @@ export class GenerationEnv implements ContractEnv {
   }
 
   send(to: Predicate, amount: bigint, body?: Uint8Array): void {
-    this.outputs.push({ contract: to.contract, params: to.params, data: body, amount });
+    this.outputs.push({ contract: to.contract, params: to.params, body, amount });
   }
 
   waitUntil(timestampMs: number): MaybePromise<void> {
@@ -201,7 +201,7 @@ export class GenerationEnv implements ContractEnv {
       payload.outputs.push({
         contract: this.predicate.contract,
         params: this.predicate.params,
-        data: this.result,
+        body: this.result,
         amount: 0n,
       });
     }
@@ -215,7 +215,7 @@ export class GenerationEnv implements ContractEnv {
     const controller = new AbortController();
     this.ctx.get(OutputIndex).onOutput(this.predicate, (output) => {
       if (
-        output.output.data === undefined &&
+        output.output.body === undefined &&
         output.claims.every((x) => x.claimer === this.draft)
       ) {
         claims.push(output);

@@ -11,10 +11,10 @@ export interface Contract {
   run(env: ContractEnv, flowCtl: FlowCtl): MaybePromise<void>;
 
   buildParams?(source: SourceRoot): MaybePromise<Uint8Array>;
-  buildData?(source: SourceRoot): MaybePromise<Uint8Array>;
+  buildBody?(source: SourceRoot): MaybePromise<Uint8Array>;
 
   walkParams?(params: Uint8Array, sink: SinkRoot): MaybePromise<void>;
-  walkData?(data: Uint8Array, sink: SinkRoot): MaybePromise<void>;
+  walkBody?(body: Uint8Array, sink: SinkRoot): MaybePromise<void>;
 
   debug?(params: Uint8Array, ctx: Context): string;
 }

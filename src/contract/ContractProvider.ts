@@ -18,10 +18,10 @@ export interface ContractProvider {
   verify(predicate: Predicate, block: Block, flowCtl: FlowCtl): MaybePromise<boolean>;
 
   buildParams(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array>;
-  buildData(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array>;
+  buildBody(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array>;
 
   walkParams(contract: Hash, params: Uint8Array, sink: SinkRoot): MaybePromise<void>;
-  walkData(contract: Hash, data: Uint8Array, sink: SinkRoot): MaybePromise<void>;
+  walkBody(contract: Hash, body: Uint8Array, sink: SinkRoot): MaybePromise<void>;
 
   debug?(predicate: Predicate): string | undefined;
 }

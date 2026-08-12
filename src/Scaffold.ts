@@ -57,17 +57,17 @@ export class Scaffold {
     return this.ctx.get(this.ctx.config.contractPlugin).buildParams(contract, params);
   }
 
-  serializeDataSource(contract: Hash | string, data: SourceRoot): MaybePromise<Uint8Array> {
+  serializeBodySource(contract: Hash | string, body: SourceRoot): MaybePromise<Uint8Array> {
     if (typeof contract === 'string') contract = Hash.fromHex(contract);
-    return this.ctx.get(this.ctx.config.contractPlugin).buildData(contract, data);
+    return this.ctx.get(this.ctx.config.contractPlugin).buildBody(contract, body);
   }
 
   serializeParamsObj(contract: Hash | string, params: unknown): MaybePromise<Uint8Array> {
     return this.serializeParamsSource(contract, () => createSource(params));
   }
 
-  serializeDataObj(contract: Hash | string, data: unknown): MaybePromise<Uint8Array> {
-    return this.serializeDataSource(contract, () => createSource(data));
+  serializeBodyObj(contract: Hash | string, body: unknown): MaybePromise<Uint8Array> {
+    return this.serializeBodySource(contract, () => createSource(body));
   }
 
   fetch(input: FetchInput): Promise<void> {

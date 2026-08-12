@@ -108,7 +108,7 @@ Deno.test('genesis outputs land in insertion order with the right amounts', () =
   ]);
   for (const output of outputs) {
     assertEquals(Hash.equals(output.contract, SIGNATURE_CONTRACT), true);
-    assertEquals(output.data, undefined);
+    assertEquals(output.body, undefined);
   }
 });
 

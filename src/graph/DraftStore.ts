@@ -265,7 +265,7 @@ export class DraftStore {
       outputs: [{
         contract: AGGREGATION_CONTRACT,
         params: serializeAggregationParams({ level: 0 }),
-        data: EMPTY_ARR,
+        body: EMPTY_ARR,
         amount: this.ctx.get(DraftStoreConfig).aggregationFee,
       }],
       minTimestampMs: -Infinity,

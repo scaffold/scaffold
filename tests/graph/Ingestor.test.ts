@@ -29,10 +29,10 @@ import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { taggedParse, taggedStringify } from '../../src/util/json.ts';
 import { makeTestContext, testPublicKey } from '../helpers/v2.ts';
 
-const output = (amount: bigint, data?: Uint8Array): Output =>
-  data === undefined
+const output = (amount: bigint, body?: Uint8Array): Output =>
+  body === undefined
     ? { contract: ZERO_HASH, params: testPublicKey('bob'), amount }
-    : { contract: ZERO_HASH, params: testPublicKey('bob'), data, amount };
+    : { contract: ZERO_HASH, params: testPublicKey('bob'), body, amount };
 
 const blockPayload = (over: Partial<BlockPayload> = {}): BlockPayload => ({
   anchor: ZERO_HASH,
@@ -191,7 +191,7 @@ Deno.test('isBlockPayload rejects wire-lookalike types', () => {
   assertFalse(
     isBlockPayload(blockPayload({ outputs: [{ ...output(1n), params: 'ab' as never }] })),
   );
-  assertFalse(isBlockPayload(blockPayload({ outputs: [{ ...output(1n), data: null as never }] })));
+  assertFalse(isBlockPayload(blockPayload({ outputs: [{ ...output(1n), body: null as never }] })));
   assertFalse(
     isBlockPayload(blockPayload({ aggregates: [{ block: ZERO_HASH, outputCount: 1 as never }] })),
   );

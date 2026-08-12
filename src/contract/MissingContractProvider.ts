@@ -12,7 +12,7 @@ export class MissingContractProvider implements ContractProvider {
   generate = predError;
   verify = predError;
   buildParams = contractError;
-  buildData = contractError;
+  buildBody = contractError;
   walkParams = contractError;
-  walkData = contractError;
+  walkBody = contractError;
 }

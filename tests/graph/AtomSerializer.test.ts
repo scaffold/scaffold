@@ -217,7 +217,7 @@ Deno.test('a block payload survives the round trip by value', () => {
         {
           contract: ZERO_HASH,
           params: new Uint8Array(),
-          data: new Uint8Array([255, 0, 128]),
+          body: new Uint8Array([255, 0, 128]),
           amount: 0n,
         },
       ],
@@ -235,8 +235,8 @@ Deno.test('a block payload survives the round trip by value', () => {
   assertEquals(atom.payload.refs, [1n]);
   assertEquals(atom.payload.outputs[0].amount, 2n ** 80n + 7n);
   assertEquals(atom.payload.outputs[0].params, new Uint8Array([1, 2, 3]));
-  assertEquals(atom.payload.outputs[0].data, undefined);
-  assertEquals(atom.payload.outputs[1].data, new Uint8Array([255, 0, 128]));
+  assertEquals(atom.payload.outputs[0].body, undefined);
+  assertEquals(atom.payload.outputs[1].body, new Uint8Array([255, 0, 128]));
   assertEquals(atom.payload.timestampMs, 1234567);
 });
 

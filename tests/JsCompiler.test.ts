@@ -74,14 +74,14 @@ Deno.test('JS compiler contract + invoke: hello-world JS contract', async (t) =>
     assertEquals(result && bin2str(result.body), JSON.stringify({ message: 'hello World' }));
 
     // 3. The compiled contract carries the generic json-wb codec layer, so its
-    //    walkData (the json-wb walker) decodes the result bytes into an object
+    //    walkBody (the json-wb walker) decodes the result bytes into an object
     //    -- exercised here directly to prove the declared codec is live, not
     //    just the host-side JSON fast path.
     const impl = scaffold.context.contractHost.getContract(contractHash);
-    assert(impl?.walkData, 'compiled contract should expose walkData (json-wb layer)');
+    assert(impl?.walkBody, 'compiled contract should expose walkBody (json-wb layer)');
     const { RecordingWalkerHost } = await import('../src/core/RecordingWalkerHost.ts');
     const walker = new RecordingWalkerHost();
-    await impl.walkData!(result!.body, walker);
+    await impl.walkBody!(result!.body, walker);
     const tree = walker.getTree();
     // Top-level object emitted under the empty key.
     assertEquals(tree.length, 1);

@@ -41,16 +41,16 @@ export class RoutingContractProvider implements ContractProvider {
     return this.getProvider(contract).buildParams(contract, source);
   }
 
-  buildData(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {
-    return this.getProvider(contract).buildData(contract, source);
+  buildBody(contract: Hash, source: SourceRoot): MaybePromise<Uint8Array> {
+    return this.getProvider(contract).buildBody(contract, source);
   }
 
   walkParams(contract: Hash, params: Uint8Array, sink: SinkRoot): MaybePromise<void> {
     return this.getProvider(contract).walkParams(contract, params, sink);
   }
 
-  walkData(contract: Hash, data: Uint8Array, sink: SinkRoot): MaybePromise<void> {
-    return this.getProvider(contract).walkData(contract, data, sink);
+  walkBody(contract: Hash, body: Uint8Array, sink: SinkRoot): MaybePromise<void> {
+    return this.getProvider(contract).walkBody(contract, body, sink);
   }
 
   debug?(predicate: Predicate): string | undefined {

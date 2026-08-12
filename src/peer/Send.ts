@@ -12,7 +12,7 @@ export class Send {
   constructor(private ctx: Context) {}
 
   /** Public API: subscribe to a verifier with per-caller projection. */
-  send({ contract, params, data, amount, signal }: SendInput) {
+  send({ contract, params, body, amount, signal }: SendInput) {
     if (signal?.aborted) return;
 
     if (typeof contract === 'string') {
@@ -23,12 +23,12 @@ export class Send {
       throw new Error(`Reader-based params are not supported yet`);
     }
 
-    if (data !== undefined && !(data instanceof Uint8Array)) {
-      throw new Error(`Reader-based data are not supported yet`);
+    if (body !== undefined && !(body instanceof Uint8Array)) {
+      throw new Error(`Reader-based bodies are not supported yet`);
     }
 
     const draft = this.ctx.get(DraftStore).create({
-      outputs: [{ contract, params, data, amount }],
+      outputs: [{ contract, params, body, amount }],
     });
     this.ctx.get(DraftStore).build(draft);
 

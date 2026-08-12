@@ -55,7 +55,7 @@ Deno.test('RecordingWalkerHost: emits nested map structure for FOR collateral', 
     pubkey: new Uint8Array(33).fill(0x01),
   };
   const data = encodeCollateralDetail(detail);
-  collateralContract.walkData!(data, host);
+  collateralContract.walkBody!(data, host);
   const tree = host.getTree();
   assertEquals(tree.length, 1);
   assertEquals(tree[0].kind, 'map');
@@ -83,7 +83,7 @@ Deno.test('RecordingWalkerHost: emits conditional fields for against side', () =
     target: { type: 'ref', index: 3 },
   };
   const data = encodeCollateralDetail(detail);
-  collateralContract.walkData!(data, host);
+  collateralContract.walkBody!(data, host);
   const tree = host.getTree();
   assertEquals(tree.length, 1);
   assertEquals(tree[0].kind, 'map');
@@ -117,7 +117,7 @@ Deno.test('RecordingWalkerHost: emits list fields for aggregation data', () => {
     aggregateWeights: [5, 15],
   };
   const data = encodeAggregationData(aggData);
-  aggregationContract.walkData!(data, host);
+  aggregationContract.walkBody!(data, host);
   const tree = host.getTree();
 
   // claimMask list, newOutputCount number, aggregateOutputCounts list,
@@ -157,7 +157,7 @@ Deno.test('RecordingWalkerHost: emits insurance data', () => {
     pubkey: new Uint8Array(33).fill(0xcc),
   };
   const data = encodeInsuranceDetail(detail);
-  insuranceContract.walkData!(data, host);
+  insuranceContract.walkBody!(data, host);
   const tree = host.getTree();
   assertEquals(tree.length, 1);
   assertEquals(tree[0].kind, 'bytes');
@@ -190,7 +190,7 @@ Deno.test('RecordingReader: returns user-provided values', async () => {
 
 Deno.test('RecordingReader: returns first enum option as default for strings', async () => {
   const recorder = new RecordingReader();
-  const result = await collateralContract.buildData!(recorder.reader);
+  const result = await collateralContract.buildBody!(recorder.reader);
   // Default side should be 'for' (first enum option)
   const detail = decodeCollateralDetail(result);
   assertEquals(detail.side, 'for');
@@ -198,7 +198,7 @@ Deno.test('RecordingReader: returns first enum option as default for strings', a
 
 Deno.test('RecordingReader: records field requests in order', async () => {
   const recorder = new RecordingReader();
-  await collateralContract.buildData!(recorder.reader);
+  await collateralContract.buildBody!(recorder.reader);
   const fields = recorder.getFields();
   // With default 'for' side: side, pubkey (no target fields)
   assertEquals(fields.length, 2);
@@ -258,7 +258,7 @@ Deno.test('Round-trip: collateral FOR data', async () => {
 
   // Walk to extract values
   const walker = new RecordingWalkerHost();
-  collateralContract.walkData!(originalData, walker);
+  collateralContract.walkBody!(originalData, walker);
   const tree = walker.getTree();
 
   // Extract from walked tree
@@ -272,7 +272,7 @@ Deno.test('Round-trip: collateral FOR data', async () => {
   values.set('collateral.side', sideNode.value);
   values.set('collateral.pubkey', pubkeyNode.value);
   const builder = new RecordingReader(values);
-  const builtData = await collateralContract.buildData!(builder.reader);
+  const builtData = await collateralContract.buildBody!(builder.reader);
 
   // Verify decoded result matches original
   const decoded = decodeCollateralDetail(builtData);
@@ -290,7 +290,7 @@ Deno.test('Round-trip: collateral AGAINST data', async () => {
 
   // Walk to extract values
   const walker = new RecordingWalkerHost();
-  collateralContract.walkData!(originalData, walker);
+  collateralContract.walkBody!(originalData, walker);
   const tree = walker.getTree();
 
   // Extract from walked tree
@@ -308,7 +308,7 @@ Deno.test('Round-trip: collateral AGAINST data', async () => {
   values.set('collateral.target.type', typeNode.value);
   values.set('collateral.target.index', indexNode.value);
   const builder = new RecordingReader(values);
-  const builtData = await collateralContract.buildData!(builder.reader);
+  const builtData = await collateralContract.buildBody!(builder.reader);
 
   // Verify decoded result matches original
   const decoded = decodeCollateralDetail(builtData);
@@ -330,7 +330,7 @@ Deno.test('Round-trip: insurance data', async () => {
 
   // Walk to extract values
   const walker = new RecordingWalkerHost();
-  insuranceContract.walkData!(originalData, walker);
+  insuranceContract.walkBody!(originalData, walker);
   const tree = walker.getTree();
 
   // Extract walked pubkey
@@ -341,7 +341,7 @@ Deno.test('Round-trip: insurance data', async () => {
   const values = new Map<string, unknown>();
   values.set('pubkey', pubkeyNode.value);
   const builder = new RecordingReader(values);
-  const builtData = await insuranceContract.buildData!(builder.reader);
+  const builtData = await insuranceContract.buildBody!(builder.reader);
 
   // Verify decoded result matches original
   const decoded = decodeInsuranceDetail(builtData);
