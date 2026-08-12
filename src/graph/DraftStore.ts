@@ -1,7 +1,11 @@
 import { Context } from '../Context.ts';
-import { AGGREGATION_CONTRACT } from '../contract/static/Aggregation.ts';
+import {
+  AGGREGATION_CONTRACT,
+  serializeAggregationParams,
+} from '../contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../contract/static/Signature.ts';
 import { arrCall } from '../util/array.ts';
+import { EMPTY_ARR } from '../util/buffer.ts';
 import { assert, error } from '../util/functional.ts';
 import { Hash } from '../util/Hash.ts';
 import { multimapPut } from '../util/map.ts';
@@ -248,8 +252,9 @@ export class DraftStore {
   // own, a ready one rides along on whatever we publish next, otherwise we mint one.
   private takeAggregation(): MergeEntry {
     for (const candidate of this.drafts) {
-      if (candidate.status.type !== DraftStatusType.Ready) continue;
-      if (this.providesAggregation(candidate)) return candidate;
+      if (candidate.status.type === DraftStatusType.Ready && this.providesAggregation(candidate)) {
+        return candidate;
+      }
     }
 
     return {
@@ -259,8 +264,8 @@ export class DraftStore {
       // No params: the contract takes none, so any aggregator can claim it (wp 7)
       outputs: [{
         contract: AGGREGATION_CONTRACT,
-        params: new Uint8Array(),
-        data: new Uint8Array(),
+        params: serializeAggregationParams({ level: 0 }),
+        data: EMPTY_ARR,
         amount: this.ctx.get(DraftStoreConfig).aggregationFee,
       }],
       minTimestampMs: -Infinity,
