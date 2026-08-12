@@ -18,7 +18,10 @@ import {
 import { Hash, ZERO_HASH } from '../../src/util/Hash.ts';
 import { makeTestContext } from '../helpers/v2.ts';
 import { secp } from '../../src/util/secp.ts';
-import { AGGREGATION_CONTRACT } from '../../src/contract/static/Aggregation.ts';
+import {
+  AGGREGATION_CONTRACT,
+  serializeAggregationParams,
+} from '../../src/contract/static/Aggregation.ts';
 import { SIGNATURE_CONTRACT } from '../../src/contract/static/Signature.ts';
 import { neverAbort } from '../../src/util/abortable.ts';
 
@@ -29,7 +32,10 @@ const out = (amount: bigint, contract = ZERO_HASH, data?: Uint8Array): Output =>
   amount,
 });
 
-const aggregationOut = (amount = 0n) => out(amount, AGGREGATION_CONTRACT, new Uint8Array());
+const aggregationOut = (amount = 0n, level = 0): Output => ({
+  ...out(amount, AGGREGATION_CONTRACT, new Uint8Array()),
+  params: serializeAggregationParams({ level }),
+});
 
 const blockPayload = (attrs: Partial<BlockPayload> = {}): BlockPayload => ({
   anchor: ZERO_HASH,
@@ -39,6 +45,14 @@ const blockPayload = (attrs: Partial<BlockPayload> = {}): BlockPayload => ({
   refs: [],
   outputs: [],
   timestampMs: 0,
+  ...attrs,
+});
+
+const draftPayload = (attrs: Partial<DraftPayload> = {}): DraftPayload => ({
+  claims: [],
+  refs: [],
+  outputs: [],
+  minTimestampMs: -Infinity,
   ...attrs,
 });
 
@@ -182,7 +196,7 @@ Deno.test('update is rejected once the draft is locked', () => {
   store.lock(draft);
 
   assertEquals(draft.status.type, DraftStatusType.Ready);
-  assertThrows(() => store.update(draft, { claims: [], refs: [], outputs: [out(1n)] }));
+  assertThrows(() => store.update(draft, draftPayload({ outputs: [out(1n)] })));
 });
 
 Deno.test('lock is rejected twice', () => {
@@ -236,7 +250,7 @@ Deno.test('update and build are rejected once the draft is built', () => {
   store.build(draft);
   assertEquals(draft.status.type, DraftStatusType.Built);
 
-  assertThrows(() => store.update(draft, { claims: [], refs: [], outputs: [] }));
+  assertThrows(() => store.update(draft, draftPayload()));
   assertThrows(() => store.build(draft));
 });
 
@@ -357,7 +371,7 @@ Deno.test('a stalled build parks the draft in building', () => {
   store.build(draft);
 
   assertEquals(draft.status.type, DraftStatusType.Building);
-  assertThrows(() => store.update(draft, { claims: [], refs: [], outputs: [] }));
+  assertThrows(() => store.update(draft, draftPayload()));
 });
 
 Deno.test('cancelling a stalled draft drops its retry hook', () => {
@@ -717,12 +731,12 @@ Deno.test('merging drafts concatenates claims, refs and outputs in order', () =>
   const store = ctx.get(DraftStore);
 
   const merged = internals(store).mergeDrafts([
-    { claims: [{ producer: source, outputIndex: 0 }], refs: [], outputs: [out(1n)] },
-    {
+    draftPayload({ claims: [{ producer: source, outputIndex: 0 }], outputs: [out(1n)] }),
+    draftPayload({
       claims: [{ producer: source, outputIndex: 1 }],
       refs: [{ producer: source, outputIndex: 0 }],
       outputs: [out(2n), out(3n)],
-    },
+    }),
   ]);
 
   assertEquals(merged.claims.map((x) => x.outputIndex), [0, 1]);
@@ -736,12 +750,12 @@ Deno.test('merging remaps DRAFT_SELF claims onto the merged output vector', () =
   const store = ctx.get(DraftStore);
 
   const merged = internals(store).mergeDrafts([
-    { claims: [], refs: [], outputs: [out(1n), out(2n)] },
-    {
+    draftPayload({ outputs: [out(1n), out(2n)] }),
+    draftPayload({
       claims: [{ producer: DRAFT_SELF, outputIndex: 0 }],
       refs: [{ producer: DRAFT_SELF, outputIndex: 0 }],
       outputs: [out(3n)],
-    },
+    }),
   ]);
 
   assertEquals(merged.claims.map((x) => x.outputIndex), [2]);
@@ -755,16 +769,14 @@ Deno.test('merging leaves the first draft self-claims where they are', () => {
   const store = ctx.get(DraftStore);
 
   const merged = internals(store).mergeDrafts([
-    {
+    draftPayload({
       claims: [{ producer: DRAFT_SELF, outputIndex: 1 }, { producer: source, outputIndex: 0 }],
-      refs: [],
       outputs: [out(1n), out(2n)],
-    },
-    {
+    }),
+    draftPayload({
       claims: [{ producer: DRAFT_SELF, outputIndex: 1 }],
-      refs: [],
       outputs: [out(3n), out(4n)],
-    },
+    }),
   ]);
 
   assertEquals(merged.claims.map((x) => x.outputIndex), [1, 0, 3]);
@@ -777,8 +789,8 @@ Deno.test('merging rejects a self-claim outside the draft it belongs to', () => 
 
   const merge = (outputIndex: number) =>
     internals(store).mergeDrafts([
-      { claims: [], refs: [], outputs: [out(1n), out(2n)] },
-      { claims: [{ producer: DRAFT_SELF, outputIndex }], refs: [], outputs: [out(3n)] },
+      draftPayload({ outputs: [out(1n), out(2n)] }),
+      draftPayload({ claims: [{ producer: DRAFT_SELF, outputIndex }], outputs: [out(3n)] }),
     ]);
 
   assertThrows(() => merge(1));

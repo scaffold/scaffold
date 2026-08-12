@@ -64,6 +64,7 @@ const fakeDraft = (): Draft => ({
   claims: [],
   refs: [],
   outputs: [],
+  minTimestampMs: -Infinity,
   status: { type: DraftStatusType.Populating },
   ioDelta: 0n,
   builtBlocks: [],
@@ -74,6 +75,7 @@ const payload = (attrs: Partial<DraftPayload> = {}): DraftPayload => ({
   claims: [],
   refs: [],
   outputs: [],
+  minTimestampMs: -Infinity,
   ...attrs,
 });
 
