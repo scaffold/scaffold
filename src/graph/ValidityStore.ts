@@ -16,19 +16,18 @@ export class ValidityStore {
   constructor(private ctx: Context) {
     for (const block of ctx.get(BlockStore).getAll()) {
       for (const claim of block.claims) {
-        if (claim.resolved) this.resolveClaim(claim)
+        if (claim.resolved) this.resolveClaim(claim);
       }
     }
-    ctx.get(BlockIngestor).onClaimResolution(claim => this.resolveClaim(claim), this.disposeController.signal);
+    ctx.get(BlockIngestor).onClaimResolution(
+      (claim) => this.resolveClaim(claim),
+      this.disposeController.signal,
+    );
   }
 
   [Symbol.dispose]() {
     this.disposeController.abort();
   }
-
-
-
-
 
   onValidity(cb: (block: Block, isValid: boolean) => void, signal: AbortSignal) {
     if (signal.aborted) return;
@@ -37,26 +36,18 @@ export class ValidityStore {
   }
 
   isValid(block: Block) {
-    return mapPut(this.validities,block, () => new Promise(resolve=>{
+    return mapPut(this.validities, block, () =>
+      new Promise((resolve) => {
+      }));
 
-    })
-
-
-      {
-
-
-    const job = new VerificationJob(this.ctx);
-    this.ctx.get(ExecutionQueue).run(job)
-      .then(() => this.ctx.get(ExecutionQueue).remove(job));
-
-    });
+    // const job = new VerificationJob(this.ctx);
+    // this.ctx.get(ExecutionQueue).run(job)
+    //   .then(() => this.ctx.get(ExecutionQueue).remove(job));
   }
 
   private resolveClaim(claim: ResolvingClaim) {
-
   }
 
-  private getPredicates(block:Block) {
-
+  private getPredicates(block: Block) {
   }
 }

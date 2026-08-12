@@ -87,6 +87,7 @@
     "jsondiffpatch": "npm:jsondiffpatch@^0.7.3",
     "unique-names-generator": "npm:unique-names-generator@^4.7.1",
     "@std/yaml": "jsr:@std/yaml@^1.0.5",
+    "esbuild": "npm:esbuild@^0.24.2",
     "zod": "npm:zod@^3.23.8",
     "postgres": "npm:postgres@^3.4.4"
   }
