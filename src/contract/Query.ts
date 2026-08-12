@@ -8,7 +8,7 @@ export interface Query {
 }
 
 export interface Statement extends Query {
-  data: Uint8Array | SourceRoot;
+  data?: Uint8Array | SourceRoot;
 }
 
 export class ObjectQuery implements Query {

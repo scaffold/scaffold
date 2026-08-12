@@ -35,7 +35,9 @@ export function runImports(env: ContractEnv, onDebug?: (message: string) => void
 
     params: hostFn([], 'bytes', false, () => env.params()),
 
-    claim: hostFn([], 'bytes', true, () => env.claim()),
+    // Only the unfiltered claim is on the wire so far; `from`/`output` predicates
+    // need a predicate codec, and land with claim_all.
+    claim: hostFn([], 'bytes', true, () => maybeThen(env.claimOne(), (claim) => claim.body)),
 
     get_result: hostFn([], 'bytes', true, () => env.getResult()),
 

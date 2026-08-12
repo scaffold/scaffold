@@ -23,7 +23,7 @@ export class Send {
       throw new Error(`Reader-based params are not supported yet`);
     }
 
-    if (!(data instanceof Uint8Array)) {
+    if (data !== undefined && !(data instanceof Uint8Array)) {
       throw new Error(`Reader-based data are not supported yet`);
     }
 

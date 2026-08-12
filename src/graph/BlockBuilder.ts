@@ -79,7 +79,7 @@ export abstract class BlockBuilderBase {
       claims,
       refs,
       outputs: req.outputs,
-      timestampMs: this.computeTimestamp(anchor, aggregateBlocks),
+      timestampMs: this.computeTimestamp(req.minTimestampMs, anchor, aggregateBlocks),
     };
     return { ok: true, payload };
   }
@@ -132,10 +132,14 @@ export abstract class BlockBuilderBase {
     return [...rivals.values()];
   }
 
-  private computeTimestamp(anchor: Block, aggregateBlocks: Block[]): number {
+  private computeTimestamp(
+    minTimestampMs: number,
+    anchor: Block,
+    aggregateBlocks: Block[],
+  ): number {
     return aggregateBlocks.reduce(
       (acc, cur) => Math.max(acc, cur.payload.timestampMs),
-      Math.max(anchor.payload.timestampMs, this.nowMs()),
+      Math.max(this.nowMs(), minTimestampMs, anchor.payload.timestampMs),
     );
   }
 }

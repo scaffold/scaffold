@@ -3,8 +3,11 @@ import { MaybePromise } from '../../util/MaybePromise.ts';
 import { ContractEnv } from './ContractEnv.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
 import { SinkRoot, SourceRoot } from '../values.ts';
+import { Hash } from '../../util/Hash.ts';
 
 export interface Contract {
+  // outputNamespaces: Hash[];
+
   run(env: ContractEnv, flowCtl: FlowCtl): MaybePromise<void>;
 
   buildParams?(source: SourceRoot): MaybePromise<Uint8Array>;

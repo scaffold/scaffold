@@ -56,6 +56,7 @@ export class DraftStore {
       claims: [],
       refs: [],
       outputs: [],
+      minTimestampMs: -Infinity,
       status: { type: DraftStatusType.Populating },
       ioDelta: 0n,
       builtBlocks: [],
@@ -64,19 +65,26 @@ export class DraftStore {
     this.drafts.add(draft);
 
     if (attrs !== undefined) {
-      this.update(draft, { claims: [], refs: [], outputs: [], ...attrs });
+      this.update(draft, {
+        claims: [],
+        refs: [],
+        outputs: [],
+        minTimestampMs: -Infinity,
+        ...attrs,
+      });
     }
 
     return draft;
   }
 
-  update(draft: Draft, { claims, refs, outputs }: DraftPayload) {
+  update(draft: Draft, { claims, refs, outputs, minTimestampMs }: DraftPayload) {
     assert(draft.status.type === DraftStatusType.Populating);
 
     this.updatePlacedClaims(draft, claims);
     draft.claims = claims;
     draft.refs = refs;
     draft.outputs = outputs;
+    draft.minTimestampMs = minTimestampMs;
     draft.ioDelta = this.computeIoDelta(claims, outputs);
   }
 
@@ -214,6 +222,7 @@ export class DraftStore {
           params: secp.getPublicKey(this.ctx.config.selfPrivateKey, true),
           amount: -amount,
         }],
+        minTimestampMs: -Infinity,
       });
     }
 
@@ -254,6 +263,7 @@ export class DraftStore {
         data: new Uint8Array(),
         amount: this.ctx.get(DraftStoreConfig).aggregationFee,
       }],
+      minTimestampMs: -Infinity,
     };
   }
 
@@ -287,7 +297,12 @@ export class DraftStore {
       outputs.push(...draft.outputs);
     }
 
-    return { claims, refs, outputs };
+    return {
+      claims,
+      refs,
+      outputs,
+      minTimestampMs: Math.max(...drafts.map((x) => x.minTimestampMs)),
+    };
   }
 
   private updatePlacedClaims(draft: Draft, claims: DraftPayload['claims']) {

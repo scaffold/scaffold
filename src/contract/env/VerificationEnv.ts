@@ -5,7 +5,7 @@ import { todo } from '../../util/functional.ts';
 import { Hash } from '../../util/Hash.ts';
 import { MaybePromise } from '../../util/MaybePromise.ts';
 import { FlowCtl } from '../../util/RunQueue.ts';
-import { ContractEnv, ExecutionMode } from './ContractEnv.ts';
+import { ClaimResult, ContractEnv, ExecutionMode, PutOptions } from './ContractEnv.ts';
 
 export class VerificationFailure extends Error {
   constructor(message: string) {
@@ -15,6 +15,8 @@ export class VerificationFailure extends Error {
 }
 
 export class VerificationEnv implements ContractEnv {
+  private readParamsBytes = 0;
+
   constructor(
     private ctx: Context,
     private predicate: Predicate,
@@ -34,8 +36,11 @@ export class VerificationEnv implements ContractEnv {
     return this.predicate.contract;
   }
 
-  params() {
-    return this.predicate.params;
+  params(truncate?: number) {
+    if (truncate !== undefined && truncate > this.readParamsBytes) {
+      this.readParamsBytes = truncate;
+    }
+    return this.predicate.params.subarray(0, truncate);
   }
 
   getResult() {
@@ -62,8 +67,43 @@ export class VerificationEnv implements ContractEnv {
     }
   }
 
-  claim() {
+  claimOne(_from?: Predicate, _output?: Predicate): MaybePromise<ClaimResult> {
     return todo();
+  }
+
+  claimAll(_from?: Predicate, _output?: Predicate): MaybePromise<ClaimResult[]> {
+    return todo();
+  }
+
+  fetch(_from: Predicate, _output?: Predicate): MaybePromise<Uint8Array> {
+    return todo();
+  }
+
+  require(_opts: PutOptions): void {
+    return todo();
+  }
+
+  put(_opts: PutOptions): MaybePromise<Hash> {
+    return todo();
+  }
+
+  send(_to: Predicate, _amount: bigint): void {
+    return todo();
+  }
+
+  waitUntil(timestampMs: number): void {
+    if (this.block.payload.timestampMs < timestampMs) {
+      throw new Error('Block is too early');
+    }
+  }
+
+  sign(publicKey: Uint8Array): void {
+    if (this.block.signer === undefined) {
+      throw new Error('block is not signed');
+    }
+    if (!arrEquals(publicKey, this.block.signer)) {
+      throw new Error('block signer does not match required public key');
+    }
   }
 
   finalize() {}

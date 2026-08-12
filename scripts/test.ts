@@ -2,6 +2,7 @@ import { WebsocketClientTransport } from '../plugins/WebsocketClientTransport.ts
 import { makeDefaultConfig } from '../src/Config.ts';
 import { ObjectQuery, Query } from '../src/contract/Query.ts';
 import { BLOB_CONTRACT } from '../src/contract/static/Blob.ts';
+import { COUNTER_CONTRACT, counterInitPredicate } from '../src/contract/static/Counter.ts';
 import { HELLO_CONTRACT } from '../src/contract/static/Hello.ts';
 import { DraftStore } from '../src/graph/DraftStore.ts';
 import { Gossip } from '../src/peer/network/Gossip.ts';
@@ -48,14 +49,18 @@ scaffold.connect('ws://127.0.0.1:8314/');
 //   },
 // });
 
-await scaffold.put({
-  contract: BLOB_CONTRACT,
-  params: Hash.digest('abc').toBytes(),
-  body: str2bin('abc'),
-  onBlock: (block) => {
-    console.log('put', block?.hash);
-  },
-});
+// await scaffold.put({
+//   contract: BLOB_CONTRACT,
+//   params: Hash.digest('abc').toBytes(),
+//   result: str2bin('abc'),
+//   outputs: [],
+//   capabilities: [],
+//   onBlock: (block) => {
+//     console.log('put', block?.hash);
+//   },
+// });
+
+scaffold.send({ ...counterInitPredicate, amount: 0n });
 
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));

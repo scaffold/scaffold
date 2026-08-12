@@ -29,7 +29,7 @@ export class GeneratorRole implements Disposable {
     }
   }
 
-  private trigger(block: Block, outputIdx: number) {
+  private async trigger(block: Block, outputIdx: number) {
     // Skip self-claimed outputs
     if (block.payload.claims.includes(BigInt(outputIdx))) return;
 
@@ -39,7 +39,12 @@ export class GeneratorRole implements Disposable {
     const output = block.payload.outputs[outputIdx];
 
     const job = new GenerationJob(this.ctx, output);
-    this.ctx.get(ExecutionQueue).run(job)
-      .then(() => this.ctx.get(ExecutionQueue).remove(job), (err) => console.error(err));
+    try {
+      await this.ctx.get(ExecutionQueue).run(job);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      this.ctx.get(ExecutionQueue).remove(job);
+    }
   }
 }

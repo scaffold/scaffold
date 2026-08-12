@@ -129,6 +129,7 @@ export interface DraftPayload {
   claims: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[];
   refs: { producer: Block | typeof DRAFT_SELF; outputIndex: number }[];
   outputs: Output[];
+  minTimestampMs: number;
 
   // Note: Generally, drafts shouldn't refer (anchor or claim) other drafts
 }

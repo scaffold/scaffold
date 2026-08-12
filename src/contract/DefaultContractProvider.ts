@@ -9,6 +9,8 @@ import { HELLO_CONTRACT, helloContract } from './static/Hello.ts';
 import { BLOB_CONTRACT, blobContract } from './static/Blob.ts';
 import { WasmContractProvider } from './wasm/WasmContractProvider.ts';
 import { EXACT_BLOCK_CONTRACT, exactBlockContract } from './static/ExactBlock.ts';
+import { CHESS_CONTRACT, chessContract } from './static/Chess.ts';
+import { COUNTER_CONTRACT, counterContract } from './static/Counter.ts';
 
 export class DefaultContractProvider extends RoutingContractProvider implements ContractProvider {
   constructor(ctx: Context) {
@@ -27,6 +29,12 @@ export class DefaultContractProvider extends RoutingContractProvider implements 
     }, {
       hash: EXACT_BLOCK_CONTRACT,
       provider: new EnvContractProvider(ctx, exactBlockContract),
+    }, {
+      hash: COUNTER_CONTRACT,
+      provider: new EnvContractProvider(ctx, counterContract),
+    }, {
+      hash: CHESS_CONTRACT,
+      provider: new EnvContractProvider(ctx, chessContract),
     }], new WasmContractProvider(ctx));
   }
 }

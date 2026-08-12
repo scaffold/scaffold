@@ -11,12 +11,15 @@ export interface ClaimResult {
   fromBlockHash: Hash;
   body: Uint8Array;
   amount: bigint;
+  blockTimestampMs: number;
 }
 
 export interface PutOptions {
-  contracts: { predicate: Predicate; claimBlocks: Hash[]; result?: Uint8Array }[];
-  outputs: { predicate: Predicate; body: Uint8Array; amount: bigint }[];
-  capabilities: {}[];
+  predicate: Predicate;
+  claimBlocks?: Hash[];
+  result?: Uint8Array;
+  outputs?: { predicate: Predicate; body: Uint8Array; amount: bigint }[];
+  capabilities?: {}[];
 }
 
 export interface ContractEnv {
@@ -26,13 +29,15 @@ export interface ContractEnv {
   blockHash(): Hash;
 
   contractHash(): Hash;
-  params(): Uint8Array;
+  params(truncate?: number): Uint8Array;
 
-  getResult(): Uint8Array;
-  setResult(result: Uint8Array): void;
+  // These set and return self-claimed outputs with amount === 0
+  getResult(key?: Predicate): Uint8Array;
+  setResult(result: Uint8Array, key?: Predicate): void;
 
   // The `output` predicate is the unclaimed output, defaulting to the currently executing predicate
   // The `from` predicate is a filter for blocks to claim from
+  // Returned outputs always have amount > 0
   // You can use the EXACT_BLOCK_CONTRACT to only allow claims from a specific block
   // TODO: Make sure contracts have an OUTPUT_NAMESPACES property so outputs are correctly partitioned
   claimOne(from?: Predicate, output?: Predicate): MaybePromise<ClaimResult>;
@@ -43,7 +48,15 @@ export interface ContractEnv {
 
   fetch(from: Predicate, output?: Predicate): MaybePromise<Uint8Array>;
 
+  // This requires that the predicate is claimed by the same block
+  require(opts: PutOptions): void;
+
+  // This creates a new separate block
   put(opts: PutOptions): MaybePromise<Hash>;
 
-  send(contract: Hash, params: Uint8Array, amount: bigint): void;
+  // Requires amount > 0
+  send(to: Predicate, amount: bigint, body?: Uint8Array): void;
+
+  waitUntil(timestampMs: number): MaybePromise<void>;
+  sign(publicKey: Uint8Array): void;
 }

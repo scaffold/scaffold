@@ -5,6 +5,7 @@ import { WasmConfig } from '../../../src/contract/wasm/WasmConfig.ts';
 import { WasmContract } from '../../../src/contract/wasm/WasmContract.ts';
 import { encodeManifest, WasmManifest } from '../../../src/contract/wasm/WasmManifest.ts';
 import { str2bin } from '../../../src/util/buffer.ts';
+import { todo } from '../../../src/util/functional.ts';
 import { Hash } from '../../../src/util/Hash.ts';
 import { neverAbort } from '../../../src/util/abortable.ts';
 import { FlowCtl } from '../../../src/util/RunQueue.ts';
@@ -19,7 +20,12 @@ const stubEnv = (): ContractEnv & { results: Uint8Array[] } => {
     mode: () => ExecutionMode.Generation,
     contractHash: () => Hash.digest('stub'),
     params: () => str2bin('params'),
-    claim: () => str2bin('claimed'),
+    blockHash: () => Hash.digest('block'),
+    claimOne: () => ({ fromBlockHash: Hash.digest('block'), body: str2bin('claimed'), amount: 0n }),
+    claimAll: () => todo(),
+    fetch: () => todo(),
+    put: () => todo(),
+    send: () => todo(),
     getResult: () => str2bin('result'),
     setResult: (r) => void results.push(r),
   };
