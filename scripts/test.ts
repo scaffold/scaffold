@@ -41,13 +41,15 @@ scaffold.connect('ws://127.0.0.1:8314/');
 //   }
 // }
 
-// await scaffold.fetch({
-//   ...new HelloContractQuery({ name: 'Joel' }),
-//   onResult: async (result) => {
-//     console.log(await result!.parse());
-//     console.log(bin2str(result!.body));
-//   },
-// });
+await scaffold.fetch({
+  // ...new HelloContractQuery({ name: 'Joel' }),
+  contract: HELLO_CONTRACT,
+  params: await scaffold.serializeParamsObj(HELLO_CONTRACT, { name: 'Joel' }),
+  onResult: async (result) => {
+    console.log(await result!.parse());
+    console.log(bin2str(result!.body));
+  },
+});
 
 // await scaffold.put({
 //   contract: BLOB_CONTRACT,
@@ -60,7 +62,7 @@ scaffold.connect('ws://127.0.0.1:8314/');
 //   },
 // });
 
-scaffold.send({ ...counterInitPredicate, amount: 0n });
+// scaffold.send({ ...counterInitPredicate, amount: 0n });
 
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
 // ctx.get(DraftStore).build(ctx.get(DraftStore).create({}));
